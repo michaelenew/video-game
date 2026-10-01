@@ -65,7 +65,7 @@ pub mod hornback;
 
 pub mod mireback;
 
-// pub mod sandmaw;
+pub mod sandmaw;
 
 // pub mod pair;
 
@@ -127,7 +127,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::HORNBACK => Some(&hornback::SPECIES),
         SpeciesId::MIREBACK => Some(&mireback::SPECIES),
 
-        // SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
+        SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
 
         // SpeciesId::PAIR => Some(&pair::SPECIES),
 
@@ -217,6 +217,13 @@ pub struct MoveDecl {
     /// from its own hooks, played and timed as a move -- the Mireback's
     /// swallow, its gag. It scores nothing.
     pub never_chosen: bool,
+    /// **Its species tests its hit itself**: the move has no cylinder, so
+    /// [`crate::monster::Monster::hit_volume`] and the telegraph have nothing
+    /// for it, and the species' frame hook decides who it reaches and draws
+    /// the same shape through its `marks`. A shape that is not a cylinder --
+    /// the Sandmaw's cone of spray, its tail's half-ring -- or a reach a solid
+    /// can stop, which only the world can ask about.
+    pub own_hit: bool,
 }
 
 impl MoveDecl {
@@ -230,6 +237,7 @@ impl MoveDecl {
             stops_at_aim: false,
             harmless: false,
             never_chosen: false,
+            own_hit: false,
         }
     }
 
@@ -250,6 +258,11 @@ impl MoveDecl {
 
     pub const fn never_chosen(mut self) -> MoveDecl {
         self.never_chosen = true;
+        self
+    }
+
+    pub const fn own_hit(mut self) -> MoveDecl {
+        self.own_hit = true;
         self
     }
 
@@ -283,6 +296,10 @@ pub struct Stock {
     pub topple: usize,
     pub dead: usize,
 }
+
+/// What a species does with the press of a fighter inside it: the world, the
+/// creature's slot, the fighter and what they sent; what they may still do.
+pub type FromInside = fn(&mut crate::state::World, usize, usize, crate::Input) -> crate::Input;
 
 /// What a species brings to a fight besides its body and its pack: the
 /// shared machinery of bestiary P4, P5 and P7, and the hooks a creature's own
@@ -324,6 +341,12 @@ pub struct FightDecl {
     /// was: the Ridgeback's shake turns its shoulders far enough that the
     /// rule would cost a braced rider their footing.
     pub rolls_over: bool,
+    /// **The steepest face that is still somewhere to stand**: the species'
+    /// own knob, by index, holding the cosine of that slope. A part whose top
+    /// face tilts further from level is a wall, not a floor -- the Sandmaw's
+    /// column, six metres of worm leaning out of the sand. `None`, every top
+    /// face is a surface whichever way it tilts, as it always was.
+    pub steepest: Option<u16>,
     /// Called when it walks into a solid, with the push that got it out: the
     /// Hornback's charge into a rock is a stun.
     pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
@@ -374,6 +397,34 @@ pub struct FightDecl {
     /// the arena. Read by the renderer and the overlay, from the snapshot, so
     /// what is drawn is what the fight will do. See [`Mark`].
     pub marks: Option<fn(&crate::state::World, &mut Marks)>,
+
+    // ---- a body that is not always there (the Sandmaw) ----
+    /// **Which parts have no body this frame** -- no hurtbox, not solid, not
+    /// mountable, not drawn -- and **which nobody can stand on** though they
+    /// are there: a bit per part each. Handed the creature and its rig as
+    /// built; `None` is every part always there. The Sandmaw under the sand,
+    /// and only ridden when it is beached.
+    pub presence:
+        Option<fn(&crate::monster::Monster, &crate::beast::Rig) -> crate::beast::Presence>,
+    /// **What it looks like, when its posture says so**: a pose (sampled from
+    /// its own clips, `beast::sample`) in place of the shared choice between
+    /// idle, walk and gallop and the stock states -- `None` from the hook is
+    /// the shared choice. A worm swimming slowly under the sand is still
+    /// under it.
+    pub clip: Option<fn(&crate::monster::Monster) -> Option<crate::beast::Pose>>,
+    /// **How far it hears this frame**, times its row's loudness: hunger, or
+    /// deafness. `None` is one.
+    pub hearing: Option<fn(&crate::monster::Monster, &crate::lore::Lore) -> Fx>,
+    /// **A fighter inside one of its hollow parts pressed something**: the
+    /// world, the creature's slot, the fighter and what they sent, and it
+    /// returns what they may still do. The Sandmaw's swallow reads the escape
+    /// off it and lets them do nothing else.
+    pub from_inside: Option<FromInside>,
+    /// **A move's radius this frame**, from the radius its knobs give: a
+    /// consequence that changes the size of a move for the rest of the
+    /// fight -- the Sandmaw's broken tooth ring, which shrinks its rise-bite.
+    /// Read by the hit volume, so the telegraph and the hit change together.
+    pub radius: Option<fn(&crate::monster::Monster, u8, Fx) -> Fx>,
 }
 
 /// Something a species draws beyond its hazards and its telegraph.
@@ -405,6 +456,17 @@ pub enum MarkLook {
     Iron,
     /// Embers: a thing that is coming back.
     Embers,
+    /// **Raised sand**: a mound over something moving under the floor, the
+    /// height of the column it is drawn as. The Sandmaw's wake.
+    Sand,
+    /// A fin cutting through the sand: a dark blade standing over the head.
+    Fin,
+    /// **A noise it heard**: a ring in the sand where it was made, fading as
+    /// `progress` runs to one. Only noises the creature heard are drawn.
+    Heard,
+    /// **What it can feel**: a faint disc on the floor, the radius the
+    /// simulation feels a body within.
+    Feel,
 }
 
 /// [`FightDecl::appetite`]: the creature, a move, the shared brain's score
@@ -467,6 +529,7 @@ impl FightDecl {
         collides: false,
         lands_on_bodies: false,
         rolls_over: false,
+        steepest: None,
         bumped: None,
         frame: None,
         shown: None,
@@ -478,6 +541,11 @@ impl FightDecl {
         struck: None,
         landed: None,
         marks: None,
+        presence: None,
+        clip: None,
+        hearing: None,
+        from_inside: None,
+        radius: None,
     };
 }
 

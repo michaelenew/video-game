@@ -132,6 +132,14 @@ pub fn all(lore: &Lore) -> impl Iterator<Item = Noise> + '_ {
         .filter_map(|c| Noise::from_cell(*c))
 }
 
+/// The noise in one cell of the ring, by the cell's index, if it holds one.
+/// What a species that marks which noises it heard keeps its bits against.
+pub fn nth(lore: &Lore, cell: usize) -> Option<Noise> {
+    lore.noise_cells()
+        .get(cell)
+        .and_then(|c| Noise::from_cell(*c))
+}
+
 /// Does this fight hear at all?
 pub fn heard_here(lore: &Lore) -> bool {
     !lore.noise_cells().is_empty()

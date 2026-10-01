@@ -27,7 +27,7 @@ pub mod hornback;
 
 pub mod mireback;
 
-// pub mod sandmaw;
+pub mod sandmaw;
 
 // pub mod pair;
 
@@ -96,7 +96,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         SpeciesId::HORNBACK => Some(&hornback::CARD),
         SpeciesId::MIREBACK => Some(&mireback::CARD),
 
-        // SpeciesId::SANDMAW => Some(&sandmaw::CARD),
+        SpeciesId::SANDMAW => Some(&sandmaw::CARD),
 
         // SpeciesId::PAIR => Some(&pair::CARD),
 

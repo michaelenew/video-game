@@ -6549,6 +6549,60 @@ Elementalist. For a person: is 45 % threatening oppressive in the hands, does
 the flop's ring read early enough, is her one-minute fight her identity, and
 the document's own §12.
 
+### 2026-10-01 — The Sandmaw: the worm that hunts by ear, tuned by harness
+
+**Changed** A creature: the worm under the sand, in the Pan (`--hunt
+sandmaw`), with a noise ring it hears, a feel radius, a sinkhole, a beach and
+a swallow, a hunter plan and report lines of its own
+([creatures/sandmaw.md](creatures/sandmaw.md) §13). Against the document's
+first guesses: health 13 000 (from 5 200); the spit 6 active (from 10); the
+swallow's tell 30 frames (from 24) and a blow inside the open ring gags it;
+strain bled at 1 % a frame (from 2) and the interrupt at 700 (from 900); the
+beach 240 frames (from 180). Generic, every one off in `FightDecl::PLAIN`: a
+creature's parts can have no body this frame (`presence`), its posture can
+pick its clip, its hearing has a multiplier, a swallowed fighter's input is
+the species' to read, a move can test its own hit, and a face steeper than
+the species' own `Steepest` -- or below the floor -- is no surface.
+
+**Why** The harness, pass by pass, and the hunter more than the worm. At
+9 000 health the scripted hunter won one in twelve: it baited and then stood
+on its own landing; it stamped back and forth at the rim, which is the
+loudest thing in the Pan; it dodged a long bite with its invulnerability spent
+before the bite was; it swung at a swallowing mouth from where the neck
+was in the way. With those taught it won half, and the spit's ten active
+frames were the ten invulnerable ones of the dodge exactly -- six makes it a
+timing. The gag at 24 frames was a two-frame window for a fifteen-frame
+reaction; at 30 it is a reaction. A stand nobody hit was most of the fight:
+the hunter swung only inside windows over before the worm could act, and a
+standing worm can always act. Taught to poke a stand (every move from a stand
+has a 20–30 frame tell), it won 11 of 12 in under two and a half minutes, so
+the health went up. Before any of this the worm rose with its tells out of
+the sand, the hunter climbed its standing column and its rising tail, and a
+knob added to the Oven shifted every baked value after it -- the move table
+read wrong numbers until the bake was rebuilt from nothing.
+
+**Found** 24 hunts per class: Champion 19 won in 202 s, Bulwark 23 in 229 s,
+Reaver 6 (the spit lands half the time), Elementalist 4 in over nine minutes
+though she beaches it at every rise with a stone, Blood mage 0, Dual mage 0
+(the last two as against the Ridgeback and the Mireback: the hunter does not
+play their bars or pools). Zero unanswerable hits and zero quiet-unfelt bites
+in every class. Threatening 49 % perceived against 35; walk-up 7 % against
+20; a beach every two minutes, not every one; felt is 83 % of what it acts
+on. Coop 12 of 12 in 95 s; temper 3, 6 of 12.
+
+**Reverted** The interrupt at 750 and the beach at 240 on their own, with
+health at 10 000: no change to the beaches at all, because nobody was hitting
+the stands; kept once the hunter did. The gag swing aimed at the head's
+flat position: the look turned round toward the worm and the swing found the
+neck. Throwing the swing two frames before the dip's end: with three frames
+of slop, half the swings came out after the grab.
+
+**Verdict** built; tier 2 for the Champion and the Bulwark, harder for the
+Reaver, a long fight for the Elementalist. For a person: is a stand
+"threatening" (it can act at once) or "a window" (every move from it is a
+long tell) -- the threat and walk-up bands turn on it; is a stone beach every
+rise her identity; and the document's own §12.
+
 ### 2026-10-01 — The Hornback herd: rocks, lanes and a bull, tuned by harness
 
 **Changed** A creature: eight cows and a bull in the low meadow (`--hunt

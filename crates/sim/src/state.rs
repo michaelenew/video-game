@@ -1682,6 +1682,19 @@ impl World {
             }
             thaw(p, wire[i].turned(p.carry_yaw))
         });
+        // **A fighter held inside a creature** sends their keys to it first
+        // (`FightDecl::from_inside`): what they may still do is its say.
+        let mut inputs = inputs;
+        for (i, input) in inputs.iter_mut().enumerate() {
+            let p = self.players[i];
+            if !inside(&p, &self.monsters) {
+                continue;
+            }
+            let slot = monster::mount_slot(p.mount).min(MAX_MONSTERS - 1);
+            if let Some(hook) = self.monsters[slot].and_then(|m| m.sp().fight.from_inside) {
+                *input = hook(self, slot, i, *input);
+            }
+        }
         // Who is held in an impact freeze this frame. Worked out once, before
         // anybody moves, because three separate passes below have to agree
         // about it: the step, what a move does on its first active frame, and
@@ -10398,13 +10411,18 @@ impl World {
     pub fn heard_by(&self, m: &Monster, head: V3) -> Option<monster::Heard> {
         let sp = m.sp();
         let window = m.glance_frames().max(1) as u32;
+        // Hunger, or deafness: its species' say on how far it hears now.
+        let hearing = sp.fight.hearing.map(|f| f(m, &self.lore));
         let mut best: Option<(Fx, monster::Heard)> = None;
         for n in crate::noise::all(&self.lore) {
             if self.frame.wrapping_sub(n.born) > window {
                 continue;
             }
-            let spare =
-                crate::noise::loudness(sp, &n).sub(crate::math::wide_len(n.pos().sub(head)));
+            let loud = match hearing {
+                Some(mul) => crate::noise::loudness(sp, &n).mul(mul),
+                None => crate::noise::loudness(sp, &n),
+            };
+            let spare = loud.sub(crate::math::wide_len(n.pos().sub(head)));
             if spare.raw() <= 0 || best.is_some_and(|(b, _)| b.raw() >= spare.raw()) {
                 continue;
             }
