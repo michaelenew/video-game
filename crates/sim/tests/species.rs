@@ -162,6 +162,13 @@ fn every_registered_species_is_a_well_formed_table() {
             "{name}: moves"
         );
         for m in sp.moves {
+            // A move its body plays no clip for (`MoveDecl::unanimated`) --
+            // the brood's bites, whose clip number is a critter's stock pose --
+            // is never one its body throws.
+            if m.unanimated {
+                assert!(m.never_chosen, "{name}: {} unanimated but chosen", m.name);
+                continue;
+            }
             assert!(m.clip < sp.clips.len(), "{name}: {} plays no clip", m.name);
             assert!(
                 sp.clips[m.clip].phased,

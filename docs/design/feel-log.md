@@ -6753,3 +6753,48 @@ mate being in its own windup that withheld them.
 eight won). For a person: is the tail flick readable at speed; is the glint a
 crutch; is threatening the right measure of a fight where one of two is
 always free; and the document's own §12.
+### 2026-10-01 — The Broodmother: a clock with legs, tuned by harness
+
+**Changed** A creature: the spider in the Hollows (`--hunt broodmother`), six
+sacs on clocks that burst into brood (the Gnawers' gnawer, under her own pack
+mind), the leg stab and its flurry, the lunge, the screech that always leads to
+the sac slam, the web shot and line with patches and strands, the list, the
+clutch, the collapse, the enraged fight; a hunter with three plans and its own
+lines ([creatures/broodmother.md](creatures/broodmother.md) §13). Against the
+document: a sac 250 at x2 (two Champion hits, from 150 and three); her hide
+x0.45, legs x0.7; a pop inside the slam no longer flinches her out of it; no
+broodling starts a windup while she lies in the slam; the brood die with her.
+
+**Why** The window was not usable. The hunter waited at the footprint's edge
+radially out from its middle, so it stood five to seven metres from the sac it
+wanted; it walked straight through the footprint on a chord and dodged out at
+the crash; it stuck on a shelf and an abdomen corner for whole windows; it
+walked on a steer taken from the walk's direction while looking at the sac,
+which walked it sideways. With those taught (the edge straight out from the
+flank level with the sac, a tangent round the footprint, a step in on the crash
+counted off the tell, a sidestep when a walk does not move it), it reached the
+sac and landed two hits a window -- and the first pop flinched her out of the
+recovery, which closed the window it was earned in. Three hits never fitted;
+two do. Once it popped sacs, the fights it won were short, so the hide went up.
+Every hidden bite it took in a window came from a crouch begun off the screen
+while the camera was on a sac: no windups while she is down.
+
+**Found** 24 hunts per class, balanced: Champion 7 in 143 s; every other class
+0 (the hunter does not play the Elementalist's stone, the Reaver's throw, the
+Blood mage's pools or the Dual mage's bars and float). The Champion's three
+plans: balanced 7, brood only 1, mother only 0 -- the split is what the fight
+is. Threatening 44 %; walk-up 33 %; 30 pops in 113 slam windows. Unanswerable
+1-2 in 24 for four classes, every one a broodling's hamstring or dart with its
+lane under the hunter for 7-14 frames. Coop 12 of 12 in 66 s.
+
+**Reverted** The slam's recovery at 115 (from 90): no more pops, because the
+hunter still arrived late. The brood cap at 6: the Champion won less, not
+more. The Elementalist's free pop from the floor: from in front her abdomen is
+on the shot's line, so it hit her and not the sac (§7 means it from a stone).
+The window's sac chosen by lowest health: the walk to it cost the window; the
+nearest, a metre added per hundred of health left, is kept.
+
+**Verdict** built, short of tier 3 in the length of a won fight and of zero
+unanswerable hits. For a person: whether the colours read (the sacs are the
+brightest things in the cave), and whether the screech reads as a tell or as a
+script (§12, 4).

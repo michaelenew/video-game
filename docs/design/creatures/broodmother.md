@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 3
 ---
 
@@ -571,3 +572,85 @@ is how a sidegrade should look from the other mode.
 7. **Is the Reaver's copy turning to broodlings identity or a hole?** The
    sidegrade in §11 is one answer; changing `aim::shadow_faces` to prefer the
    creature over critters is another, and it would be true of every pack fight.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt broodmother`, the Hollows. The species is
+`sim/src/species/broodmother/` (the table; `fight.rs` for the sac clocks, the
+pops, the guard, the web, the strands and the arc; `mind.rs` for her own
+scoring and the brood's pack mind over the gnawers'; `legs.rs` for the eight
+planted feet, the stab's foot and the list), the arena
+`sim/src/arena/broodmother.rs`, the clips `anim/src/beast/broodmother/`, the
+look (sacs tinted on their clocks) and the cave's dressing in `game`, the plan
+and its lines `hunt/src/plans/broodmother.rs` with its bin `hunt --bin brood`,
+the reach probe `sim/src/reachcheck.rs`, and the rules pinned as sentences in
+`sim/tests/broodmother.rs`. The plan is
+[plans/broodmother.md](../plans/broodmother.md); the passes are in
+[feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin brood -- --all --repeats 24 --balanced`
+(the balanced plan; the scripted hunter plays §9 with a fifteen-frame
+reaction):
+
+```text
+                won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable   pops / slam windows
+  Champion      7/24   143 s        308                  44 /  9 / 14 / 33 %                 2              30 / 113
+  Bulwark       0/24     --          --                  48 /  9 / 13 / 30 %                 2               9 / 148
+  Reaver        0/24     --          --                  47 /  9 / 14 / 31 %                 1               9 / 128
+  Elementalist  0/24     --          --                  49 /  8 / 12 / 32 %                 0               0 / 101
+  Blood mage    0/24     --          --                  48 /  8 / 13 / 31 %                 0               0 / 170
+  Dual mage     0/24     --          --                  48 /  8 / 13 / 32 %                 1               0 /  94
+
+  the three Champion plans, 24 each: balanced 7 won in 143 s; brood only 1 in 176 s; mother only 0
+  coop, two Champions 12/12 in 66 s
+```
+
+**Against the targets.** Balanced wins about a third for the Champion, and
+beats both one-sided plans by a distance -- the fight is the division of
+attention it was designed as. Threatening 44 %, as asked. Short of the target:
+won fights last two and a half minutes, not three to six; the walk-up share is
+a third, not a fifth (her stride is long and the hunter keeps a post beside a
+leg, §3); pops are a quarter per slam window, not one. **Unanswerable hits are
+not zero**: one or two in 24 for four classes, every one a broodling's
+hamstring or dart whose crouch began off the hunter's screen while the lane it
+draws had been under them for 7 to 14 frames, short of the report's fifteen
+(the gnawers' own rule, as the Gnawers have it). The rest of the roster loses:
+the hunter does not play the Elementalist's free pop from a stone, the
+Reaver's throw into the window, the Blood mage's pools or the Dual mage's bars
+and float -- the same gaps the harness has against the Ridgeback, the Mireback
+and the Sandmaw, so their zeros measure the plan.
+
+**What changed from the sections above.**
+
+- **A sac's health is 250 at x2** (`SacHealth`, `VulnSac`), which a Champion
+  tears with two hits of her chain, where §1 asked 150 and a three-hit chain:
+  three never fitted the window with the walk in. Her hide is x0.45 and her
+  legs x0.7 (`VulnHide`, `VulnLeg`) for a longer fight.
+- **A pop in the slam does not flinch her out of it**: the window runs its
+  length, and the strain past the bar is kept for the next move she starts
+  (§4's "two in one window buys the interrupt").
+- **No broodling starts a windup while she lies in the slam**, as through the
+  screech: the fighter in the window has the camera on a sac, and a crouch
+  begun then was a bite from off the screen. The guard's bill is paid as she
+  lifts. The guard no longer retargets a broodling already committed.
+- **With her dead, the brood die with her**, so the hunt ends on the mother.
+- **§12's first question is answered by a test, and `aim.rs` is unchanged**:
+  `a_skillshot_on_the_crosshair_meets_the_sac_under_it`. Bodies stay off the
+  ray; the ray finds what is behind the sac, and the straight line from the
+  caster to that point still meets the sac -- with the vault behind it or
+  without. Question 6 (should the slam crush her brood) is not built: it does
+  not.
+- **Signs, not marks**, for everything on her floor -- the glob's lane, the
+  web line's lane and the ring at its anchor, the slam's footprint drawn faint
+  through the screech, a red sac's landing ring, the strands -- so the report's
+  "marked" rule counts them. Marks were not folded into signs; that is a
+  change to every creature and was not cheap.
+- **Generic seams it added**, each off for every other creature:
+  `MoveDecl::then` (the screech's declared chain to the slam, run by the shared
+  tick), `MoveDecl::unanimated` (the gnawer moves at the head of her table,
+  which her body never plays), `FightDecl::repose` (a last word on the pose:
+  her planted feet, the stabbing foot, the list), and in `game` a species
+  `Tint` beside the look (parts painted from the fight's state).
+- **Measured, not argued**: `beastcheck --species broodmother` prints each sac's
+  and shin's lowest corner standing and in the move that brings it lowest; the
+  reach probe (`sim::reachcheck`) is what §1's three rules are tested with.

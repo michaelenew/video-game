@@ -793,11 +793,14 @@ impl Report {
             self.lo = V3::new(self.lo.x.min(now.pos.x), Fx::ZERO, self.lo.z.min(now.pos.z));
             self.hi = V3::new(self.hi.x.max(now.pos.x), Fx::ZERO, self.hi.z.max(now.pos.z));
 
-            // A move beginning. `left` still equal to the whole startup is the
-            // one frame it can be said to have started on.
+            // A move beginning: a windup this frame that was not under way
+            // last frame. (Its `left` is the whole startup unless its species
+            // hurried it -- the Broodmother's enraged lunge -- or chained it
+            // on from a hook, her flurry, straight out of the last stab.)
             if let Doing::Startup { kind, left } = now.doing {
                 let m = sp.attack(kind);
-                if left == m.startup && was.doing.attacking() != Some(kind) {
+                let begun = !matches!(was.doing, Doing::Startup { kind: k, .. } if k == kind);
+                if left <= m.startup && begun {
                     self.starts[kind as usize] += 1;
                     if m.damage > 0 {
                         self.committed += 1;
