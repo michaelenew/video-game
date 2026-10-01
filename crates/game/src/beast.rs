@@ -734,13 +734,17 @@ pub fn signs(
             .filter(|t| !(t.live && beast.is_some_and(|b| b.hit_used)))
     });
 
+    let terrain = sim.cur.terrain();
     for (mark, of, mut transform, mut visible, mut material) in marks.iter_mut() {
         let Some(t) = coming[of.0] else {
             *visible = Visibility::Hidden;
             continue;
         };
         let anchor = fx3(t.anchor);
-        let at = Vec3::new(anchor.x, FLOOR, anchor.z);
+        // On the floor it lands on: zero in every arena with a flat floor, the
+        // plateau's top on the Cliffs.
+        let ground = terrain.floor_below(t.anchor).to_f32_for_render();
+        let at = Vec3::new(anchor.x, ground + FLOOR, anchor.z);
         let along = fx3(t.along).with_y(0.0).normalize_or_zero();
         let r = t.radius.to_f32_for_render();
         let sweep = t.sweep.to_f32_for_render();

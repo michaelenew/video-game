@@ -115,7 +115,9 @@ fn every_registered_arena_is_well_formed() {
                 a.name
             );
         }
-        // Everybody starts inside the arena, on the floor, out of the walls.
+        // Everybody starts inside the arena, on the ground under their mark
+        // -- the floor, or the top of what it stands on (the Cliffs'
+        // plateau) -- and out of the walls: a body put there is not moved.
         let mut marks: Vec<_> = a.spawns.versus.to_vec();
         if let Some(h) = a.spawns.hunt {
             marks.extend(h.hunters);
@@ -123,11 +125,14 @@ fn every_registered_arena_is_well_formed() {
         }
         for mark in marks {
             assert!(a.inside(mark.at), "{}: a mark outside it: {mark:?}", a.name);
-            assert_eq!(
-                a.ground_under(mark.at),
-                Fx::ZERO,
-                "{}: a mark in a solid",
-                a.name
+            let ground = a.ground_under(mark.at);
+            let stood = V3::new(mark.at.x, ground, mark.at.z);
+            let r = a.resolve(stood, V3::ZERO, true);
+            assert!(
+                r.pos == stood && r.grounded,
+                "{}: a mark in a solid: {mark:?} -> {:?}",
+                a.name,
+                r.pos
             );
             let unit = mark.facing.len();
             assert!(
@@ -158,8 +163,10 @@ fn every_registered_arena_is_well_formed() {
 /// middle of a rollback.
 #[test]
 fn an_unregistered_arena_is_the_proving_ground() {
-    assert!(arena::lookup(ArenaId::GALEWING).is_none());
-    assert_eq!(ArenaId::GALEWING.get().id, ArenaId::PROVING_GROUND);
+    // An id nobody will ever register: the creature arenas are being
+    // filled in one branch at a time.
+    assert!(arena::lookup(ArenaId(200)).is_none());
+    assert_eq!(ArenaId(200).get().id, ArenaId::PROVING_GROUND);
     let w = World::hunt_in(
         [Class::Bulwark; MAX_PLAYERS],
         [Some(SpeciesId::RIDGEBACK), None],
@@ -394,7 +401,9 @@ fn a_trip_is_a_fresh_fight_on_the_same_frame() {
 fn a_trip_to_an_unregistered_creature_goes_nowhere() {
     let mut w = World::with_classes([Class::Bulwark; MAX_PLAYERS]);
     let mut same = w.clone();
-    let ask = Input::default().travelling(Travel::hunt(SpeciesId::GALEWING));
+    // An id the travel byte carries (five bits) that nobody will ever
+    // register: past every planned creature.
+    let ask = Input::default().travelling(Travel::hunt(SpeciesId(30)));
     w.advance([ask, Input::default()]);
     same.advance([Input::default(); MAX_PLAYERS]);
     assert_eq!(w.checksum(), same.checksum());

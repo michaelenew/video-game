@@ -403,13 +403,19 @@ impl CameraRig {
         // It stops applying once the rig is climbing into the head: up there
         // the eye is at the fighter's eyes, which is above the floor by
         // definition, and a clamp that still fired would be fighting the climb.
+        //
+        // **Under the feet, not over the eye.** A creature's back counts only
+        // where it is no higher than the fighter's feet (and a step's slack, for
+        // a back that tilts under a rider): a bird passing a few metres over the
+        // eye is not a floor, and taking it for one put the camera on its back.
+        let ceiling = fx_of(feet + body * 0.5);
         let underfoot = beasts.iter().flatten().fold(GROUND, |floor, b| {
             let eye = sim::V3::new(
                 fx_of(self.focus[0] + offset[0]),
                 sim::Fx::ZERO,
                 fx_of(self.focus[2] + offset[2]),
             );
-            floor.max(b.top_under(eye).to_f32_for_render())
+            floor.max(b.top_under(eye, ceiling).to_f32_for_render())
         });
         let lowest = underfoot + FLOOR_CLEARANCE;
         offset[1] = offset[1].max((lowest - self.focus[1]) * (1.0 - sky));

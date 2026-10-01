@@ -1247,12 +1247,16 @@ impl Monster {
         })
     }
 
-    /// World height of the highest solid part beneath a point, or zero.
+    /// World height of the highest solid part top over a point that is **no
+    /// higher than `below`**, or zero.
     ///
     /// The companion to `arena::ground_under`, and used for the same thing: the
     /// camera treats a surface as something to rest on rather than something to
-    /// dodge, and the creature's back is a surface.
-    pub fn top_under(&self, world: V3) -> Fx {
+    /// dodge, and the creature's back is a surface. The ceiling is the point:
+    /// the camera asks for the surface under the fighter's own feet, and a
+    /// creature passing *over* the eye -- a bird a few metres up -- is not a
+    /// floor to put the camera on (galewing.md §6).
+    pub fn top_under(&self, world: V3, below: Fx) -> Fx {
         let rig = self.rig();
         let sp = self.sp();
         let mut best = Fx::ZERO;
@@ -1270,7 +1274,7 @@ impl Monster {
                 continue;
             }
             let top = rig.part_to_world(index, V3::new(p.x, sh.max.y, p.z)).y;
-            if top.raw() > best.raw() {
+            if top.raw() > best.raw() && top.raw() <= below.raw() {
                 best = top;
             }
         }
