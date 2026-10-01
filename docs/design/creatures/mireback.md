@@ -611,8 +611,15 @@ two guttings a fight; zero to three swallows.
 
 **Against the targets.** The Champion wins five in eight, against about two
 in three, in two minutes (two to four asked). Zero unanswerable hits except one
-in 24 for three classes, each a flop out of tar laid after it committed (the
-report's own rule). Self-burn is about where §9 wants it, a little high. Warts
+in 24 for three classes, each counted by the report's own rule as a flop out
+of tar laid after it committed. **They were the measure's, and it is fixed
+(2026-10-01, [plans/polish-fights.md](../plans/polish-fights.md))**: the tar
+was the crash's own ring of pools -- laid on the crash frame, or merged into an
+old pool that grew under the hunter -- or, in coop, old tar a floating Dual
+mage came down into during the windup. Neither stopped an escape. The rule
+now asks for tar that was not on the floor at the commit and was under them
+the frame before the crash, which is §6's sentence; zero since, six classes,
+solo and coop. Self-burn is about where §9 wants it, a little high. Warts
 are being burst. **What is off:** threatening is 45 % against 35, and walk-up
 32 against 25 -- the toad spends its time winding up long moves, and the
 openings are long ones; the poke window is small because nearly everything it

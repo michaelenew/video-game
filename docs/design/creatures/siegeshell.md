@@ -725,11 +725,14 @@ in three to five minutes. **Short of the target**: the windows. The shell is
 near the asked four tenths threatening; the floor is not -- under a tenth --
 because the ground hunter spends the back half of the fight at a broken leg
 buckling it (as §4 says it should), and a broken leg throws nothing. The stamp
-and the drag are rare for the same reason. **Unanswerable hits are not zero**:
-every one counted is a parasite's bite from a windup begun off the hunter's
-screen while it watched an ankle or an anchor, the Broodmother's brood's case
-exactly; the Siegeshell's own three kinds (a stamp with no disc, a ring on the
-helpless, two channels inside the gap) are zero in every run.
+and the drag are rare for the same reason. **Unanswerable hits were not zero**
+when built: every one counted was a parasite's bite from a windup begun off
+the hunter's screen while it watched an ankle or an anchor, the Broodmother's
+brood's case exactly; the Siegeshell's own three kinds (a stamp with no disc,
+a ring on the helpless, two channels inside the gap) are zero in every run.
+**Fixed 2026-10-01 for every pack** ([critters.md](../critters.md) §2): a
+bite begun off your screen lands only through a marker that has been under
+you for a reaction. Zero since, six classes, alone and as a pair.
 
 What the build decided beside the document:
 

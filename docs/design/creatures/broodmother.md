@@ -610,11 +610,16 @@ beats both one-sided plans by a distance -- the fight is the division of
 attention it was designed as. Threatening 44 %, as asked. Short of the target:
 won fights last two and a half minutes, not three to six; the walk-up share is
 a third, not a fifth (her stride is long and the hunter keeps a post beside a
-leg, §3); pops are a quarter per slam window, not one. **Unanswerable hits are
-not zero**: one or two in 24 for four classes, every one a broodling's
-hamstring or dart whose crouch began off the hunter's screen while the lane it
-draws had been under them for 7 to 14 frames, short of the report's fifteen
-(the gnawers' own rule, as the Gnawers have it). The rest of the roster loses:
+leg, §3); pops are a quarter per slam window, not one. **Unanswerable hits were
+not zero** when built: one or two in 24 for four classes, every one a
+broodling's hamstring, dart or pile-on whose crouch began off the hunter's
+screen -- behind one of the Hollows' pillars, or below the bottom of the
+screen of a hunter looking up at a sac -- while the lane it draws had been
+under them for 3 to 14 frames, short of the report's fifteen. **Fixed
+2026-10-01 for every pack** ([critters.md](../critters.md) §2,
+[plans/polish-fights.md](../plans/polish-fights.md)): a bite begun off your
+screen lands only through a marker that has been under you for a reaction.
+Zero since, six classes, solo and coop. The rest of the roster loses:
 the hunter does not play the Elementalist's free pop from a stone, the
 Reaver's throw into the window, the Blood mage's pools or the Dual mage's bars
 and float -- the same gaps the harness has against the Ridgeback, the Mireback

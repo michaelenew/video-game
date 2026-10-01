@@ -6996,3 +6996,50 @@ parasites as they were: one pair in twelve.
 one in twenty, of the floor's threatening share, and of zero unanswerable
 hits. For a person: the beat as rhythm or chore (§12, 6), 0.8 m/s as walking
 (§12, 5), and the Reaver.
+
+### 2026-10-01 — A bite from off the screen is answered by its marker, or not at all
+
+**Changed** Every pack (`sim::pack`): a windup that began off a fighter's
+screen lands on that fighter only if its marker -- the body's own lane, or a
+fight's sign for something coming -- has been under them for a reaction
+(fifteen frames); otherwise it goes through them (`pack::watch`,
+`pack::unanswered`, [critters.md](critters.md) §2). A body that has committed
+keeps the fighter it wound up at through the next glance. The screen's half
+width is one number, `tuning::SCREEN_HALF_VIEW`, which the fight report now
+reads too. In the report, a hidden commit is asked of the fighter the bite
+reached rather than of its target, and a move that marks itself spent without
+reaching anybody (the scramble) is no hit. The Mireback's own rule, a flop
+from fresh tar, now asks for tar that was not on the floor at the commit and
+was under them the frame before the crash.
+
+**Why** The contract's one hard number. The Broodmother's brood and the
+Siegeshell's parasites dealt one or two unanswerable bites in 24 hunts for
+most classes, and the Siegeshell's pairs about one a hunt. Every one was a
+hamstring, dart or pile-on whose windup began **behind one of the Hollows'
+pillars**, or **below the bottom of the screen of a hunter looking up at a
+sac**, with the lane reaching them 3 to 14 frames before the bite. The
+Veilstalker and the Pair never wind up off the screen; a pack cannot be held
+to that, because the hamstring is *for* your back. So the rule is the
+report's own two clauses, kept by the referee rather than the brain: nothing
+the pack decides reads the camera, only the exchange asks whether a hit counts.
+
+**What the harness caught** Fixed the brood, and coop still counted three in
+the Gnawers' Dual mage pair: a pile-on retargeted at the next glance to the
+other hunter (hence "keeps its target"), then bites that reached the hunter
+who had seen them counted against the one who had not (hence "asked of the
+fighter it reached"), then a scramble up a stone that reached nobody. The
+Mireback's flops "from fresh tar" were the crash's own ring of pools -- laid on
+the crash frame, or merged into an old pool that grew under the hunter -- and,
+in coop, Dual mages floating down into old tar during the windup: tar that was
+on the floor to be seen.
+
+**Found** Zero unanswerable, six classes, solo 24 and coop 12, for the
+Gnawers, the Hornback, the Mireback, the Broodmother and the Siegeshell. The
+Gnawers' and the Hornback's solo numbers did not move a frame (no hit of
+theirs was ever caught by the rule); the Broodmother's Champion won 5 of 24
+rather than 7 (two hamstrings fewer, on different seeds), the Siegeshell's
+pairs as before.
+
+**Verdict** kept. For a person: whether a bite going through you from behind
+reads as luck or as the rule it is -- the lane under you is the only warning
+you were owed, and you were not under it long enough to have had it.

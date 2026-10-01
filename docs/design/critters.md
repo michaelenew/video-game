@@ -96,7 +96,10 @@ it. `pack::perch_on` puts one there.
 
 - **One glance for the pack**, every `GlanceFrames`: each fighter's position,
   velocity and facing (`pack::Seen` -- nothing about buttons), projected by
-  `Lead`. Each critter is after the nearest fighter still standing.
+  `Lead`. Each critter is after the nearest fighter still standing -- **except
+  one that has committed**, which keeps the fighter it wound up at (added
+  2026-10-01, [plans/polish-fights.md](plans/polish-fights.md)): a windup that
+  swung to the other hunter at the next glance was a tell that lied to both.
 - **A ring, not a chase.** Members without a move out are given places on a ring
   of `RingRadius` round their fighter's lead point, the best `RearBias` toward
   the back; a place with a solid between it and the fighter (`aim::line_clear`)
@@ -173,6 +176,25 @@ are not one body's telegraph -- a stampede lane, the lees in it, the ring on
 the rock a charge will stop at -- each saying *coming*, *live*, *clear*,
 *stops*, *no* or *faint*; the renderer and the hunter's plan read the same list.
 
+**A bite begun off your screen is answered by its marker** (added 2026-10-01,
+[plans/polish-fights.md](plans/polish-fights.md)). The pack keeps a referee's
+book the brain never reads (`Pack::winding`, `unseen`, `marked`, kept by
+`pack::watch` at the end of every frame): for each windup, whether it began
+off each fighter's screen (`aim::in_view` with the look they are seeing
+through, inside `tuning::SCREEN_HALF_VIEW`), and for each fighter, how many
+frames running they have stood under a drawn marker -- a body's lane
+(`pack::telegraph`) or a fight's sign for something coming (`World::signs`).
+**A windup begun off a fighter's screen lands on that fighter only if its
+marker has been under them for `HUMAN_REACTION_FRAMES`**; otherwise the bite
+goes through them (`pack::unanswered`, asked by the exchange beside
+`PackMind::spares`). These are the report's two clauses of "unanswerable",
+so every pack -- the Gnawers, the Broodmother's brood, the Siegeshell's
+parasites, the herd -- deals none by construction. The hamstring is still
+*for* your back: it lands through the lane drawn under you, as it always
+could. What it cannot do is land from behind a pillar, or below the bottom of
+the screen of a hunter looking up at a sac, with a lane that reached them
+seven frames before.
+
 **What a species supplies** is `pack::PackMind`, every method defaulted to the
 generic pack above: `appetite` (how much a critter wants a move now -- the
 default is the monster's tent on range and bearing times its appetite),
@@ -247,8 +269,10 @@ The queen (1.1 m) is touched by everything wherever a fighter is.
   with two or more, "tokens live", scatters, routs, regroups and breaks -- and,
   since the Gnawers, **crouches interrupted**, **behind you**, **swings over**
   (a swing within half a metre above a crown that touched nothing) and **hidden
-  commits** (a hit from a windup begun off its target's screen, by
-  `aim::in_view` and the hunter's last look; counted as unanswerable). A fight
+  commits** (a hit from a windup begun off the screen of the fighter it
+  reached, by `aim::in_view` and that hunter's last look, with no marker under
+  them for fifteen frames; counted as unanswerable -- and since 2026-10-01
+  zero by construction, §2). A fight
   that is only a pack gets the shared measures too: the four windows, swings,
   damage both ways and the play sequence. A species' card can add its own lines
   (`plans::Card::tally`). Critter

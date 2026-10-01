@@ -176,6 +176,14 @@ pub struct Pack {
     /// field to the world. Twelve 32-bit words: the Hornback's bull, the
     /// largest ask in the bestiary, is about forty bytes.
     pub memo: [i32; MEMO],
+    /// **The referee's book** ([`watch`]), which the brain never reads: the
+    /// bodies that were winding up when it last looked, one bit a slot; for
+    /// each fighter, the bodies whose windup began off that fighter's screen;
+    /// and how many frames running each fighter has stood under a marker
+    /// drawn for something coming.
+    pub winding: u16,
+    pub unseen: [u16; MAX_PLAYERS],
+    pub marked: [u8; MAX_PLAYERS],
 }
 
 impl Pack {
@@ -204,6 +212,9 @@ impl Pack {
             home,
             seen: [Seen::default(); MAX_PLAYERS],
             memo: [0; MEMO],
+            winding: 0,
+            unseen: [0; MAX_PLAYERS],
+            marked: [0; MAX_PLAYERS],
         }
     }
 
@@ -1024,6 +1035,105 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The referee: a bite from off the screen is answered by its marker
+// ---------------------------------------------------------------------------
+
+/// **Keep the referee's book**, once a frame, when everything has moved
+/// (`World::advance`, last): which windups began this frame off whose screen,
+/// and who has stood how long under a marker.
+///
+/// The contract (bestiary §1.4) says a hit must be answerable on sight or by
+/// where you stand. A pack's bodies are small and many, and some of them are
+/// meant to come from behind -- the hamstring is *for* your back -- so the
+/// rule cannot be that they never wind up off the screen. It is that **a
+/// windup begun off a fighter's screen lands on that fighter only if its
+/// marker has been under them for a reaction** ([`t::HUMAN_REACTION_FRAMES`]):
+/// the lane on the floor is the tell, and a tell you had less than a
+/// reaction to see is no tell. Otherwise the bite goes through where they
+/// stand and does nothing ([`unanswered`]).
+///
+/// This is the referee, not the brain. Nothing the pack decides reads it: it
+/// winds up, throws and recovers exactly as it would have, and only the
+/// exchange asks whether the hit counts. That is why it may ask the question
+/// the way the fight report does -- with the camera the fighter is actually
+/// looking through (`aim::in_view`, A5) -- where the pack's own choices see
+/// only what it glanced. The report's two clauses of "unanswerable" (a
+/// commit off the screen; no marker for fifteen frames) are this rule's two
+/// halves, so a pack that keeps it deals none.
+///
+/// A marker is a body's own drawn lane ([`telegraph`]) or a fight's floor
+/// sign for something coming (`World::signs`), as the report counts it.
+pub fn watch(
+    pack: &mut Pack,
+    critters: &Critters,
+    looks: &[crate::input::Input; MAX_PLAYERS],
+    scene: &crate::aim::Scene,
+    signs: &crate::sign::Signs,
+) {
+    let sp = critters.sp();
+    let mut winding = 0u16;
+    for (i, c) in critters.iter().enumerate() {
+        let bit = 1u16 << i;
+        if !(c.alive() && matches!(c.state, is::STARTUP | is::ACTIVE)) {
+            for u in pack.unseen.iter_mut() {
+                *u &= !bit;
+            }
+            continue;
+        }
+        if c.state != is::STARTUP {
+            continue;
+        }
+        winding |= bit;
+        if pack.winding & bit != 0 {
+            continue;
+        }
+        // Begun this frame: on whose screen?
+        let at = c.body(sp).middle();
+        for (who, u) in pack.unseen.iter_mut().enumerate() {
+            let seen = scene.players[who].health <= 0
+                || crate::aim::in_view(who, looks[who], at, t::SCREEN_HALF_VIEW, scene);
+            if seen {
+                *u &= !bit;
+            } else {
+                *u |= bit;
+            }
+        }
+    }
+    pack.winding = winding;
+    for (who, p) in scene.players.iter().enumerate() {
+        let under_lane = (0..MAX_CRITTERS)
+            .filter(|i| critters[*i].alive())
+            .filter_map(|i| telegraph(Some(pack), critters, i))
+            .any(|m| {
+                let a = V3::new(m.anchor.x, Fx::ZERO, m.anchor.z);
+                let b = a.add(m.along.scale(m.sweep));
+                crate::math::flat_segment_gap(p.pos, a, b).raw()
+                    <= m.radius.add(t::body_radius()).raw()
+            });
+        let marked = under_lane
+            || signs.iter().any(|s| {
+                matches!(
+                    s.says,
+                    crate::sign::Says::Coming | crate::sign::Says::Live | crate::sign::Says::Faint
+                ) && s.covers(p.pos)
+            });
+        pack.marked[who] = if marked {
+            pack.marked[who].saturating_add(1)
+        } else {
+            0
+        };
+    }
+}
+
+/// **Does critter `i`'s hit go through fighter `who`** for want of a tell?
+/// Its windup began off their screen, and its marker has not been under them
+/// for a reaction. See [`watch`].
+pub fn unanswered(pack: &Pack, i: usize, who: usize) -> bool {
+    let who = who.min(MAX_PLAYERS - 1);
+    pack.unseen[who] & (1u16 << i) != 0 && (pack.marked[who] as u16) < t::HUMAN_REACTION_FRAMES
+}
+
 /// Where the pack thinks fighter `who` will be: the glance, projected by
 /// `Lead`. What [`Look::lead`] answers, for a species' own rules that hold
 /// the pack rather than a look at it.
@@ -1062,8 +1172,14 @@ fn glance(pack: &mut Pack, critters: &mut Critters, w: &World) {
             crate::state::Action::Stagger { .. } | crate::state::Action::Held { .. }
         );
     }
-    // Each critter is after the nearest fighter still standing.
-    for c in critters.iter_mut().filter(|c| c.alive()) {
+    // Each critter is after the nearest fighter still standing -- except one
+    // that has committed, which keeps the fighter it committed at: a windup
+    // that swung to somebody else halfway through would be a tell that lied
+    // to both of them.
+    for c in critters
+        .iter_mut()
+        .filter(|c| c.alive() && !(c.attacking() && pack_alive(&pack.seen, c.target)))
+    {
         let mut best: Option<(usize, Fx)> = None;
         for (i, s) in pack.seen.iter().enumerate() {
             if !s.alive {
@@ -1167,6 +1283,11 @@ fn glance(pack: &mut Pack, critters: &mut Critters, w: &World) {
         s.ring_base = base;
         s.arc = arc;
     }
+}
+
+/// Is fighter `who` still standing, as the glance saw them?
+fn pack_alive(seen: &[Seen; MAX_PLAYERS], who: u8) -> bool {
+    seen.get(who as usize).is_some_and(|s| s.alive)
 }
 
 /// Where a ring place is, as things stand: the place's bearing from the

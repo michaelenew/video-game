@@ -1037,6 +1037,16 @@ pub struct MireTally {
     /// had to decide.
     pub unanswerable: u32,
     in_tar_at_commit: [bool; sim::state::MAX_PLAYERS],
+    /// The tar on the floor when it committed, as it lay then.
+    tar_at_commit: Vec<sim::hazard::Placed>,
+    /// **In tar that was not on the floor when it committed**, on the last
+    /// frame before it crashed. Not at the hit: the ring the crash itself
+    /// throws down -- or a pool that ring merges into and grows -- is under
+    /// whoever it lands on by the same frame, and stopped nobody getting
+    /// out. And not tar they walked (or floated down) into: that was on the
+    /// floor to see when they had to decide. What the rule is about is tar
+    /// laid after the commit that slowed an escape.
+    in_fresh_tar: [bool; sim::state::MAX_PLAYERS],
     /// The lore's counters, as the hunt ended.
     lore: [u32; 32],
     frames: u32,
@@ -1100,6 +1110,16 @@ impl Tally for MireTally {
                 for (i, p) in after.players.iter().enumerate() {
                     self.in_tar_at_commit[i] = in_tar(p);
                 }
+                self.tar_at_commit = ground
+                    .floor
+                    .iter()
+                    .filter(|h| h.kind == fight::TAR)
+                    .copied()
+                    .collect();
+            }
+            for (i, p) in after.players.iter().enumerate() {
+                self.in_fresh_tar[i] =
+                    in_tar(p) && !self.tar_at_commit.iter().any(|h| h.holds(p.pos));
             }
         }
         for (i, (was, p)) in before.players.iter().zip(after.players.iter()).enumerate() {
@@ -1120,7 +1140,7 @@ impl Tally for MireTally {
                     ..
                 } = now.doing
                 {
-                    if !self.in_tar_at_commit[i] && tarred {
+                    if !self.in_tar_at_commit[i] && self.in_fresh_tar[i] {
                         self.unanswerable += 1;
                     }
                 }

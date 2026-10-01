@@ -676,7 +676,14 @@ report's pack lines are [critters.md](../critters.md) §5's and its own are
 ```
 
 **Against the targets.** Zero unanswerable hits of both kinds, and zero hidden
-commits, for every class. The windows are near what §9 asks (30/25/20/25):
+commits, for every class -- held by rule since 2026-10-01 rather than by luck
+of the plan: the same gnawer, borrowed by the Broodmother and the Siegeshell,
+bit from behind a pillar and from below a hunter's screen, so every pack now
+lands a bite begun off your screen only through a marker under you for a
+reaction ([critters.md](../critters.md) §2). The numbers here did not move a
+frame. In coop the report used to count three in twelve Dual mage pairs: a
+pile-on that swung to the other hunter at the next glance (a committed body
+keeps its target now), and a scramble that reached nobody. The windows are near what §9 asks (30/25/20/25):
 threatening on the mark, poke high and the two long windows short, because a
 free token reads as a poke's window. Won nine in ten or better for five
 classes. **Short and easy**: 33 to 57 seconds against one to two minutes, and

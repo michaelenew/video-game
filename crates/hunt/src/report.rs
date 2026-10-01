@@ -203,9 +203,10 @@ pub struct Report {
     /// The creature's own lines, if its card has any.
     pub extra: Option<Box<dyn Tally>>,
 
-    /// For a pack: whether each body's windup began on its target's screen,
-    /// and each fighter's swing so far (passed over a body, struck one).
-    seen_commit: [bool; critter::MAX_CRITTERS],
+    /// For a pack: whether each body's windup began on each fighter's
+    /// screen, and each fighter's swing so far (passed over a body, struck
+    /// one).
+    seen_commit: [[bool; MAX_PLAYERS]; critter::MAX_CRITTERS],
     /// Frames each fighter's spot has been under a floor sign the fight drew
     /// for something coming (`World::signs`).
     marked_for: [u32; MAX_PLAYERS],
@@ -225,7 +226,7 @@ pub const BEHIND_NEAR: Fx = Fx::from_raw(3 << 16);
 /// Half the width of what the camera shows, in turns: a little over fifty
 /// degrees either side, a 16:9 screen at the default field of view. What
 /// "on screen" means to the hidden-commit count.
-pub const HALF_VIEW: Fx = Fx::from_raw(9100);
+pub const HALF_VIEW: Fx = sim::tuning::SCREEN_HALF_VIEW;
 
 /// **A creature's own report lines**: fed every frame beside the shared
 /// measures, printed under the creature's name. A species' card offers one
@@ -388,7 +389,7 @@ impl Report {
             pack: PackTally::default(),
             ground: GroundTally::default(),
             extra: card.tally.map(|make| make()),
-            seen_commit: [true; critter::MAX_CRITTERS],
+            seen_commit: [[true; MAX_PLAYERS]; critter::MAX_CRITTERS],
             marked_for: [0; MAX_PLAYERS],
             swing_over: [false; MAX_PLAYERS],
             swing_struck: [false; MAX_PLAYERS],
@@ -522,19 +523,23 @@ impl Report {
             .zip(after.critters.iter())
             .enumerate()
         {
-            // A windup beginning: was it on its target's screen?
+            // A windup beginning: was it on each fighter's screen? Each, not
+            // only its target's: in coop a bite meant for one lands on
+            // whoever walks into it, and it is that fighter's screen the
+            // question is about.
             if a.alive()
                 && a.state == critter::is::STARTUP
                 && b.state != critter::is::STARTUP
                 && sp.attack(a.act).damage > 0
             {
-                let who = (a.target as usize).min(MAX_PLAYERS - 1);
-                self.seen_commit[i] = match bots.iter().find(|h| h.who == who) {
-                    Some(h) => {
-                        sim::aim::in_view(who, h.last, a.body(sp).middle(), HALF_VIEW, &scene)
-                    }
-                    None => true,
-                };
+                for who in 0..MAX_PLAYERS {
+                    self.seen_commit[i][who] = match bots.iter().find(|h| h.who == who) {
+                        Some(h) => {
+                            sim::aim::in_view(who, h.last, a.body(sp).middle(), HALF_VIEW, &scene)
+                        }
+                        None => true,
+                    };
+                }
             }
             // Its hit landing, from a windup nobody could see begin.
             let landed = a.state == critter::is::ACTIVE
@@ -546,8 +551,28 @@ impl Report {
             // for `REACTION` frames when it landed. A stampede's cows wind up
             // behind the camera as often as not; the lane drawn under your
             // feet through the bellow is the tell.
-            let who = (a.target as usize).min(MAX_PLAYERS - 1);
-            if landed && !self.seen_commit[i] && self.marked_for[who] < REACTION as u32 {
+            //
+            // Asked of the fighter it reached: its target, unless the volume
+            // reached only somebody else. A move that marks itself spent
+            // without reaching or hurting anybody -- the scramble, which
+            // climbs rather than bites -- was no hit on anybody.
+            let target = (a.target as usize).min(MAX_PLAYERS - 1);
+            let reached = |who: usize| {
+                let p = &after.players[who];
+                a.reaches(sp, p.pos, p.hurt_height(), sim::tuning::body_radius())
+            };
+            let hurt = |who: usize| after.players[who].health < before.players[who].health;
+            let who = if reached(target) {
+                Some(target)
+            } else {
+                (0..MAX_PLAYERS)
+                    .find(|w| reached(*w))
+                    .or(hurt(target).then_some(target))
+            };
+            if let Some(who) = who.filter(|_| landed)
+                && !self.seen_commit[i][who]
+                && self.marked_for[who] < REACTION as u32
+            {
                 self.pack.hidden += 1;
                 self.unanswerable += 1;
             }
@@ -661,7 +686,7 @@ impl Report {
                     aboard: false,
                     range: nearest,
                     hit: None,
-                    hidden: !self.seen_commit[index],
+                    hidden: !self.seen_commit[index][(a.target as usize).min(MAX_PLAYERS - 1)],
                 });
             }
         }
