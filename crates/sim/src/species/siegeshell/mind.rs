@@ -670,7 +670,9 @@ pub fn foot_in_move(m: &Monster, c: leg::Channel) -> Option<V3> {
         (leg::STAMP, leg::STARTUP) => {
             // Up and over, then down for the last `StampDrop` of it: it arrives
             // on the first frame it is out.
-            let rise = Fx::ONE.sub(Knob::StampDrop.fx()).clamp(crate::arena::SKIN, Fx::ONE);
+            let rise = Fx::ONE
+                .sub(Knob::StampDrop.fx())
+                .clamp(crate::arena::SKIN, Fx::ONE);
             let lift = Knob::StampLift.fx();
             if t.raw() < rise.raw() {
                 let k = ease(t.div(rise));

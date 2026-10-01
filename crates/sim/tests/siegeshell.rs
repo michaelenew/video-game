@@ -476,7 +476,216 @@ fn probe_walk() {
         step(&mut w, Input::default());
         if f % 1200 == 0 {
             let b = *w.monster().unwrap();
-            eprintln!("f{f} x {:?} doing {:?} speed {:?} hp {} siege {} p0 {:?} hp0 {}", b.pos.x, b.doing, b.speed, b.health, fight::at_siege_line(&b), w.players[0].pos, w.players[0].health);
+            eprintln!(
+                "f{f} x {:?} doing {:?} speed {:?} hp {} siege {} p0 {:?} hp0 {}",
+                b.pos.x,
+                b.doing,
+                b.speed,
+                b.health,
+                fight::at_siege_line(&b),
+                w.players[0].pos,
+                w.players[0].health
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The ride
+// ---------------------------------------------------------------------------
+
+/// Put the fighter on a part's top, the way landing on it would, at a point
+/// in its own frame (its middle when `at` is `None`).
+fn board(w: &mut World, part: usize, at: Option<V3>) {
+    let beast = *w.monster().unwrap();
+    let sh = beast.sp().shape(part);
+    let mid = sh.min.add(sh.max).scale(Fx::ratio(1, 2));
+    let spot = at.unwrap_or(V3::new(mid.x, sh.max.y, mid.z));
+    w.players[0].pos = beast.world_of(part, V3::new(spot.x, sh.max.y.add(Fx::ratio(1, 8)), spot.z));
+    w.players[0].vel = V3::new(Fx::ZERO, Fx::ratio(-1, 1), Fx::ZERO);
+    w.players[0].grounded = false;
+    step(w, Input::default());
+    assert!(
+        w.players[0].aboard(),
+        "fixture: did not land on {}",
+        beast.sp().parts[part].name
+    );
+}
+
+/// Is the rider still aboard after the creature throws `kind` (mirrored or
+/// not), holding `input`?
+fn rides_out(part: usize, kind: u8, mirror: bool, input: Input) -> bool {
+    let mut w = hunt();
+    for _ in 0..3 {
+        walk_only(&mut w);
+        step(&mut w, Input::default());
+    }
+    board(&mut w, part, None);
+    let total = ss::SPECIES.attack(kind).total();
+    {
+        let b = w.monster_mut().unwrap();
+        b.doing = Doing::Startup {
+            kind,
+            left: ss::SPECIES.attack(kind).startup,
+        };
+        b.brain.mirror = mirror;
+        b.brain.think_left = u16::MAX;
+    }
+    for _ in 0..total {
+        fight::leg::clear(w.monster_mut().unwrap());
+        step(&mut w, input);
+        if !w.players[0].aboard() {
+            return false;
+        }
+    }
+    true
+}
+
+#[test]
+fn the_shrug_throws_a_loose_rider_off_its_side_and_a_braced_one_holds() {
+    let brace = Input::new(Input::CROUCH);
+    for part in [ss::rim_part(1, 1), ss::FLANK_LOWER_R] {
+        assert!(
+            !rides_out(part, ss::SHRUG, false, Input::default()),
+            "a shrug left a loose rider on the {}",
+            ss::PARTS[part].name
+        );
+        assert!(
+            rides_out(part, ss::SHRUG, false, brace),
+            "a braced rider was thrown off the {} by a shrug",
+            ss::PARTS[part].name
+        );
+    }
+    // The other side, and the middle, are calm.
+    for part in [ss::rim_part(1, -1), ss::PLATEAU_MID, ss::CROWN_PART] {
+        assert!(
+            rides_out(part, ss::SHRUG, false, Input::default()),
+            "a shrug threw a loose rider off the {}",
+            ss::PARTS[part].name
+        );
+    }
+    // Mirrored, it throws the left.
+    assert!(!rides_out(
+        ss::rim_part(1, -1),
+        ss::SHRUG,
+        true,
+        Input::default()
+    ));
+}
+
+#[test]
+fn the_shiver_throws_even_a_braced_rider_off_the_crown_and_not_off_the_plateau() {
+    let brace = Input::new(Input::CROUCH);
+    assert!(
+        !rides_out(ss::CROWN_PART, ss::SHIVER, false, brace),
+        "a braced rider held through a shiver"
+    );
+    assert!(
+        rides_out(ss::PLATEAU_FORE, ss::SHIVER, false, Input::default()),
+        "a shiver threw a rider off the plateau"
+    );
+}
+
+#[test]
+fn the_walk_never_throws_a_rider() {
+    for part in [
+        ss::rim_part(0, -1),
+        ss::FLANK_UPPER_R,
+        ss::PLATEAU_AFT,
+        ss::CROWN_PART,
+    ] {
+        let mut w = hunt();
+        for _ in 0..3 {
+            walk_only(&mut w);
+            step(&mut w, Input::default());
+        }
+        board(&mut w, part, None);
+        for f in 0..1200 {
+            walk_only(&mut w);
+            step(&mut w, Input::default());
+            assert!(
+                w.players[0].aboard(),
+                "the walk threw a rider off the {} on frame {f}",
+                ss::PARTS[part].name
+            );
+        }
+    }
+}
+
+/// The hardest a point on a part's top accelerates, in the part's frame, the
+/// way the grip test reads it, through a move.
+fn peak_throw(kind: u8, part: usize) -> f32 {
+    let mut b = Monster::new(SpeciesId::SIEGESHELL);
+    let a = ss::SPECIES.attack(kind);
+    let sh = b.sp().shape(part);
+    let mid = sh.min.add(sh.max).scale(Fx::ratio(1, 2));
+    let local = V3::new(mid.x, sh.max.y, mid.z);
+    let mut at = Vec::new();
+    let mut frames = Vec::new();
+    let total = a.total() as i32;
+    for f in 0..total {
+        let (doing, _) = if f < a.startup as i32 {
+            (
+                Doing::Startup {
+                    kind,
+                    left: (a.startup as i32 - f) as u16,
+                },
+                0,
+            )
+        } else if f < (a.startup + a.active) as i32 {
+            (
+                Doing::Active {
+                    kind,
+                    left: ((a.startup + a.active) as i32 - f) as u16,
+                },
+                0,
+            )
+        } else {
+            (
+                Doing::Recovery {
+                    kind,
+                    left: (total - f) as u16,
+                },
+                0,
+            )
+        };
+        b.doing = doing;
+        let rig = b.rig();
+        at.push(rig.part_to_world(part, local));
+        frames.push(rig.of(part));
+    }
+    let dt = 1.0 / 60.0;
+    let mut best = 0.0f32;
+    for i in 1..at.len() - 1 {
+        let acc = at[i + 1].sub(at[i].scale(Fx::from_int(2))).add(at[i - 1]);
+        let l = frames[i].rot.unapply(acc);
+        let (x, y, z) = (
+            l.x.to_f32_for_render(),
+            l.y.to_f32_for_render().max(0.0),
+            l.z.to_f32_for_render(),
+        );
+        best = best.max((x * x + y * y + z * z).sqrt() / (dt * dt));
+    }
+    best
+}
+
+#[test]
+#[ignore]
+fn probe_throws() {
+    for (kind, name) in [(ss::SHRUG, "shrug"), (ss::SHIVER, "shiver")] {
+        for part in [
+            ss::rim_part(1, 1),
+            ss::FLANK_LOWER_R,
+            ss::FLANK_UPPER_R,
+            ss::PLATEAU_MID,
+            ss::CROWN_PART,
+            ss::rim_part(1, -1),
+        ] {
+            eprintln!(
+                "{name} {:20} {:.0}",
+                ss::PARTS[part].name,
+                peak_throw(kind, part)
+            );
         }
     }
 }

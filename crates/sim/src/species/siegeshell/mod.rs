@@ -20,10 +20,10 @@
 //! so it is solid from the plastron up and every tread is a top you can stand
 //! on: the rim at 14 m, the flank at 16 and 18, the plateau at 20, the crown
 //! at 22 with three anchors standing 2.5 m on it. The rim and the flank of each
-//! side hang off that side's own bone, hinged at the plateau's edge, so a shrug
-//! rolls one side and leaves the plateau and the crown where they are -- which
-//! is the whole of why the crown is calm in a shrug and the rim is not, read
-//! off the grip test rather than written down.
+//! side hang off that side's own bone, hinged low under the plateau, so a
+//! shrug rolls one side and leaves the plateau and the crown where they are --
+//! which is the whole of why the crown is calm in a shrug and the rim is not,
+//! read off the grip test rather than written down.
 //!
 //! **The legs hang off the root, not the shell**, from a hip just under the
 //! rim's outer edge, and are placed by [`gait::repose`] every frame: the clips
@@ -190,9 +190,19 @@ const fn skeleton() -> [Bone; COUNT] {
         v((0, 1), (BUILD.root_up, 100), (0, 1)),
         0,
     ); COUNT];
-    // The two sides of the shell, hinged at the plateau's edges, at its top.
-    out[SHELL_L] = bone("shell.l", ROOT, v((0, 1), (1100, 100), (-550, 100)), -1);
-    out[SHELL_R] = bone("shell.r", ROOT, v((0, 1), (1100, 100), (550, 100)), 1);
+    // The two sides of the shell, hinged low under the plateau (`HINGE`).
+    out[SHELL_L] = bone(
+        "shell.l",
+        ROOT,
+        v((0, 1), (HINGE.0, 100), (-HINGE.1, 100)),
+        -1,
+    );
+    out[SHELL_R] = bone(
+        "shell.r",
+        ROOT,
+        v((0, 1), (HINGE.0, 100), (HINGE.1, 100)),
+        1,
+    );
     // The crown's bone at the plateau's top, in its middle.
     out[CROWN] = bone("crown", ROOT, v((0, 1), (1100, 100), (0, 1)), 0);
     // The neck leaves the front of the shell low, and the head hangs below it.
@@ -346,20 +356,26 @@ const fn anchor(name: &'static str, i: usize) -> Part {
     .breakable()
 }
 
-/// A box on one side's shell bone, mirrored for the right: x from `x0` to
-/// `x1`, outward from the hinge `out0` to `out1`, its top `top` below the
-/// hinge's height -- all in centimetres -- down to the belly.
+/// Where each side of the shell hinges, from the root, in centimetres: low
+/// and near the middle, under the plateau, so the rim and both flank treads
+/// swing on much the same lever and a shrug throws all three alike.
+pub const HINGE: (i32, i32) = (0, -600);
+
+/// A box on one side's shell bone, mirrored for the right: x from `x.0` to
+/// `x.1`, out from the middle line from `out.0` to `out.1`, its top `top`
+/// above the root -- all in centimetres -- and down to the belly.
 const fn side_box(name: &'static str, side: i32, x: (i32, i32), out: (i32, i32), top: i32) -> Part {
+    let (up, across) = HINGE;
     let (z0, z1) = if side < 0 {
-        (-out.1, -out.0)
+        (-(out.1 - across), -(out.0 - across))
     } else {
-        (out.0, out.1)
+        (out.0 - across, out.1 - across)
     };
     part(
         name,
         if side < 0 { SHELL_L } else { SHELL_R },
-        v((x.0, 100), (-1100, 100), (z0, 100)),
-        v((x.1, 100), (-top, 100), (z1, 100)),
+        v((x.0, 100), (-up, 100), (z0, 100)),
+        v((x.1, 100), (top - up, 100), (z1, 100)),
         Knob::VulnShell as u16,
     )
     .mountable()
@@ -409,10 +425,10 @@ const fn body_parts() -> [Part; PART_COUNT] {
     )
     .mountable();
     // The flank: two treads a side, 18 m and 16 m.
-    out[FLANK_UPPER_L] = side_box("flank, upper left", -1, (-1400, 1200), (0, 200), 200);
-    out[FLANK_UPPER_R] = side_box("flank, upper right", 1, (-1400, 1200), (0, 200), 200);
-    out[FLANK_LOWER_L] = side_box("flank, lower left", -1, (-1500, 1300), (200, 400), 400);
-    out[FLANK_LOWER_R] = side_box("flank, lower right", 1, (-1500, 1300), (200, 400), 400);
+    out[FLANK_UPPER_L] = side_box("flank, upper left", -1, (-1400, 1200), (550, 750), 900);
+    out[FLANK_UPPER_R] = side_box("flank, upper right", 1, (-1400, 1200), (550, 750), 900);
+    out[FLANK_LOWER_L] = side_box("flank, lower left", -1, (-1500, 1300), (750, 950), 700);
+    out[FLANK_LOWER_R] = side_box("flank, lower right", 1, (-1500, 1300), (750, 950), 700);
     // The rim at 14 m: three segments a side.
     let rims = [
         "rim, fore left",
@@ -424,8 +440,8 @@ const fn body_parts() -> [Part; PART_COUNT] {
     ];
     let mut seg = 0;
     while seg < 3 {
-        out[rim_part(seg, -1)] = side_box(rims[2 * seg], -1, RIM_X[seg], (400, 650), 600);
-        out[rim_part(seg, 1)] = side_box(rims[2 * seg + 1], 1, RIM_X[seg], (400, 650), 600);
+        out[rim_part(seg, -1)] = side_box(rims[2 * seg], -1, RIM_X[seg], (950, 1200), 500);
+        out[rim_part(seg, 1)] = side_box(rims[2 * seg + 1], 1, RIM_X[seg], (950, 1200), 500);
         seg += 1;
     }
     // The plastron: the underside, 9 m up. Soft -- nobody reaches it, and

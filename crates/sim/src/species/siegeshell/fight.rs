@@ -543,7 +543,9 @@ pub fn head_reach() -> Fx {
 /// anchor opens that anchor for the stumble (§4, the Opening); an open
 /// anchor closes when the stumble ends; an anchor broken is taken in.
 fn events(w: &mut World, slot: usize) {
-    let Some(mut m) = w.monsters[slot] else { return };
+    let Some(mut m) = w.monsters[slot] else {
+        return;
+    };
     let f = body::flags(&m);
     if f & body::STUMBLE_NEW != 0 {
         body::set(&mut m, body::STUMBLE_NEW, false);
@@ -577,9 +579,7 @@ pub fn anchor_tended(w: &World, m: &Monster) -> Option<usize> {
             let sh = m.sp().shape(part);
             let mid = rig.part_to_world(part, sh.min.add(sh.max).scale(Fx::ratio(1, 2)));
             w.players.iter().any(|p| {
-                p.health > 0
-                    && p.aboard()
-                    && math::wide_flat_dist(p.pos, mid).raw() <= near.raw()
+                p.health > 0 && p.aboard() && math::wide_flat_dist(p.pos, mid).raw() <= near.raw()
             })
         })
 }
@@ -740,8 +740,12 @@ pub fn plough_lane(w: &World, m: &Monster) -> Option<(V3, V3, Fx, [Fx; 5])> {
     };
     let mut stops = [length; 5];
     for (j, stop) in stops.iter_mut().enumerate() {
-        let off = half.mul(Fx::from_int(j as i32 * 2 - 4)).div(Fx::from_int(4));
-        let start = from.add(across.scale(off)).add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+        let off = half
+            .mul(Fx::from_int(j as i32 * 2 - 4))
+            .div(Fx::from_int(4));
+        let start = from
+            .add(across.scale(off))
+            .add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
         // The first solid along the strip, found by halving: a line clear to
         // a point is clear to every point before it.
         let mut lo = Fx::ZERO;
@@ -766,7 +770,9 @@ pub fn plough_lane(w: &World, m: &Monster) -> Option<(V3, V3, Fx, [Fx; 5])> {
 /// under one as it lands; the plough's rubble on whoever its front passes,
 /// short of a solid; the beam on the wall.
 fn body_hits(w: &mut World, slot: usize) {
-    let Some(mut m) = w.monsters[slot] else { return };
+    let Some(mut m) = w.monsters[slot] else {
+        return;
+    };
     let (kind, left) = match m.doing {
         Doing::Active { kind, left } => (kind, left),
         Doing::Startup { .. } => {
@@ -836,8 +842,12 @@ fn body_hits(w: &mut World, slot: usize) {
         super::BEAM if gone == 0 => {
             // The beam lands on the wall: a breach. The first brings the gate
             // down into the valley's end; the second is the end.
-            let whole = crate::objective::stat(m.sp(), WALL, crate::objective::ObjectiveField::Health);
-            let share = Fx::from_int(whole).mul(Knob::BreachShare.fx()).to_int().max(1);
+            let whole =
+                crate::objective::stat(m.sp(), WALL, crate::objective::ObjectiveField::Health);
+            let share = Fx::from_int(whole)
+                .mul(Knob::BreachShare.fx())
+                .to_int()
+                .max(1);
             crate::objective::strike(&mut w.lore, WALL, share);
             let s = w.lore.word(word::SIEGE);
             w.lore.set_word(word::SIEGE, s.wrapping_add(1));
@@ -895,9 +905,16 @@ fn hatch(w: &mut World, slot: usize) {
     let span = |lo: Fx, hi: Fx, r: u32| {
         let keep = crate::tuning::body_radius();
         let w = hi.sub(lo).sub(keep.add(keep)).max(Fx::ZERO);
-        lo.add(keep).add(w.mul(Fx::from_int((r % 1000) as i32)).div(Fx::from_int(1000)))
+        lo.add(keep).add(
+            w.mul(Fx::from_int((r % 1000) as i32))
+                .div(Fx::from_int(1000)),
+        )
     };
-    let local = V3::new(span(sh.min.x, sh.max.x, n >> 4), sh.max.y, span(sh.min.z, sh.max.z, n >> 14));
+    let local = V3::new(
+        span(sh.min.x, sh.max.x, n >> 4),
+        sh.max.y,
+        span(sh.min.z, sh.max.z, n >> 14),
+    );
     let at = m.world_of(part, local);
     if let Some(i) = crate::pack::spawn(&mut pack, &mut w.critters, 0, at, (n >> 20) as u16) {
         let herd = w.monsters;
@@ -911,7 +928,9 @@ fn hatch(w: &mut World, slot: usize) {
 /// `StragglerFrames`, once roused anybody on the shell, or a parasite on the
 /// shell hurt. Told to the pack on the body, which its mind can read.
 fn roost(w: &mut World, slot: usize) {
-    let Some(mut m) = w.monsters[slot] else { return };
+    let Some(mut m) = w.monsters[slot] else {
+        return;
+    };
     let mut call = called(&m);
     let belly = SPECIES.shape(super::PLASTRON);
     let tail = Fx::from_int(-16);
@@ -930,7 +949,11 @@ fn roost(w: &mut World, slot: usize) {
         let behind = local.x.raw() < tail.sub(Knob::Straggler.fx()).raw();
         let half = |i: usize, w: &World| -> u16 {
             let word = w.lore.word(i);
-            if who == 0 { (word & 0xFFFF) as u16 } else { (word >> 16) as u16 }
+            if who == 0 {
+                (word & 0xFFFF) as u16
+            } else {
+                (word >> 16) as u16
+            }
         };
         let set = |i: usize, v: u16, w: &mut World| {
             let word = w.lore.word(i);
@@ -941,8 +964,16 @@ fn roost(w: &mut World, slot: usize) {
             };
             w.lore.set_word(i, word);
         };
-        let u = if under { half(word::ROOST, w).saturating_add(1) } else { 0 };
-        let b = if behind { half(word::STRAGGLE, w).saturating_add(1) } else { 0 };
+        let u = if under {
+            half(word::ROOST, w).saturating_add(1)
+        } else {
+            0
+        };
+        let b = if behind {
+            half(word::STRAGGLE, w).saturating_add(1)
+        } else {
+            0
+        };
         set(word::ROOST, u, w);
         set(word::STRAGGLE, b, w);
         if u >= Knob::RoostFrames.raw().max(1) as u16
@@ -952,11 +983,12 @@ fn roost(w: &mut World, slot: usize) {
             call = true;
         }
     }
-    if w
-        .critters
-        .iter()
-        .any(|c| c.alive() && c.mounted() && (c.health as i32) < crate::critter::stat(&SPECIES, c.kind, crate::critter::CritterField::Health))
-    {
+    if w.critters.iter().any(|c| {
+        c.alive()
+            && c.mounted()
+            && (c.health as i32)
+                < crate::critter::stat(&SPECIES, c.kind, crate::critter::CritterField::Health)
+    }) {
         call = true;
     }
     m.own[body::PACK] = i32::from(call);
@@ -1184,7 +1216,9 @@ fn body_signs(w: &World, m: &Monster, out: &mut Signs) {
             // A fifth of the lane's width, for each of its five strips.
             let strip = Fx::from_raw(half.raw() * 2 / 5);
             for (j, stop) in stops.iter().enumerate() {
-                let off = half.mul(Fx::from_int(j as i32 * 2 - 4)).div(Fx::from_int(5));
+                let off = half
+                    .mul(Fx::from_int(j as i32 * 2 - 4))
+                    .div(Fx::from_int(5));
                 let at = from.add(across.scale(off));
                 if live {
                     out.push(Sign::strip(Says::Live, at, along, flown.min(*stop), strip));
