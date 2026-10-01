@@ -40,4 +40,6 @@ pub const LOOK: Look = Look {
     head: sandmaw::HEAD_PART,
     spikes: None,
     critters: &[],
+    horns: None,
+    stance: None,
 };

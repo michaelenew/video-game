@@ -3615,6 +3615,22 @@ fn step_player(
     // movement that happens in the animal's frame rather than the world's.
     // **The dead do not ride.** A fighter killed on its back falls off it,
     // rather than being carried round the arena for the rest of the hunt.
+    // **On a critter's back** (the Hornback's cow): its own, smaller tick --
+    // see `step_critter_rider`. The dead, and a back that has gone, are
+    // fallen off.
+    if let Some(i) = critter::ridden(p.mount) {
+        let crowd = scene.critters;
+        let back = crowd.get(i).copied().filter(|c| c.rideable(crowd.sp()));
+        match back {
+            Some(c) if p.health > 0 => {
+                return step_critter_rider(p, who, input, &c, crowd.sp(), scene, &out);
+            }
+            _ => {
+                p.mount = monster::NO_PART;
+                p.grounded = false;
+            }
+        }
+    }
     if p.aboard() && p.health <= 0 {
         if let Some(beast) = ridden(p, herd) {
             p.pos = beast.world_of(mount_part(p.mount), p.local);
@@ -4282,6 +4298,10 @@ fn step_player(
                 break;
             }
         }
+    }
+    // And any back a critter offers (`CritterKind::mountable`).
+    if !p.aboard() {
+        meet_the_critters(p, scene.critters);
     }
     if p.grounded {
         // Driven into the floor. The hit that spiked them did its damage in
@@ -8680,56 +8700,7 @@ fn step_rider(
         return;
     }
 
-    step_mechanic(p, scene.arena);
-    // Aboard, the Champion reads the standing row of its grid, so the chain is
-    // live on the creature's back and cancels the same way it does on the
-    // floor. There is no takeoff up here: jumping is how you *leave*, and a
-    // move that spent the jump on an attack would take that away.
-    chain_cancel(p, input);
-    queue_the_shadow(p, input);
-    // And the Reaver's strike on arrival, for a shadow left standing on the
-    // creature's back -- the same cut as on the floor.
-    shadow::swing_out_of_the_carry(p, input);
-    let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
-
-    // Resolved instead of the countdown, exactly as on the ground -- see
-    // `step_player`.
-    if let Some((kind, held)) = p.action.channelling() {
-        p.action = step_channel(p, who, kind, held, input, scene);
-    } else {
-        p.action = match countdown(p, want_guard, input) {
-            Some(next) => next,
-            None => {
-                if input.has(Input::SPECIAL)
-                    && p.class != Class::Champion
-                    && p.can_throw(SLOT_SPECIAL, out)
-                {
-                    begin_move(p, who, SLOT_SPECIAL, input, scene, false)
-                } else if pressed_mechanic {
-                    match keyed_move(p).filter(|slot| p.can_throw(*slot, out)) {
-                        Some(slot) => begin_move(p, who, slot, input, scene, false),
-                        None => {
-                            mechanic_action(p, who, input, scene);
-                            Action::Free
-                        }
-                    }
-                }
-                // Aboard, your feet are on something solid, so the Champion reads
-                // the standing row of its grid. A Rush started up here goes
-                // nowhere useful -- there is no ground under it to dash along --
-                // but nothing needs to say so: `grounded` is true aboard, so the
-                // standing row is what `clicked_move` picks anyway.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, out)) {
-                    begin_champion(p, kind);
-                    begin_move(p, who, kind, input, scene, false)
-                } else if want_guard {
-                    Action::Guard { held: 0 }
-                } else {
-                    Action::Free
-                }
-            }
-        };
-    }
+    rider_acts(p, who, input, scene, out, pressed_mechanic);
 
     // Jumping is how you leave, and it carries the surface's own velocity with
     // you -- which is what makes stepping off the back of a charging animal a
@@ -8847,6 +8818,71 @@ fn step_rider(
     }
 }
 
+/// **What a rider does with their buttons**, on whatever they are riding --
+/// a monster's part (`step_rider`) or a critter's back (`step_critter_rider`):
+/// the mechanic, the chain, the shadow, a guard, and the moves, resolved
+/// instead of the countdown exactly as on the ground. Shared so the two rides
+/// cannot drift apart.
+fn rider_acts(
+    p: &mut Player,
+    who: usize,
+    input: Input,
+    scene: &Scene,
+    out: &[bool; moves::MAX_SLOTS],
+    pressed_mechanic: bool,
+) {
+    step_mechanic(p, scene.arena);
+    // Aboard, the Champion reads the standing row of its grid, so the chain is
+    // live on the creature's back and cancels the same way it does on the
+    // floor. There is no takeoff up here: jumping is how you *leave*, and a
+    // move that spent the jump on an attack would take that away.
+    chain_cancel(p, input);
+    queue_the_shadow(p, input);
+    // And the Reaver's strike on arrival, for a shadow left standing on the
+    // creature's back -- the same cut as on the floor.
+    shadow::swing_out_of_the_carry(p, input);
+    let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
+
+    // Resolved instead of the countdown, exactly as on the ground -- see
+    // `step_player`.
+    if let Some((kind, held)) = p.action.channelling() {
+        p.action = step_channel(p, who, kind, held, input, scene);
+    } else {
+        p.action = match countdown(p, want_guard, input) {
+            Some(next) => next,
+            None => {
+                if input.has(Input::SPECIAL)
+                    && p.class != Class::Champion
+                    && p.can_throw(SLOT_SPECIAL, out)
+                {
+                    begin_move(p, who, SLOT_SPECIAL, input, scene, false)
+                } else if pressed_mechanic {
+                    match keyed_move(p).filter(|slot| p.can_throw(*slot, out)) {
+                        Some(slot) => begin_move(p, who, slot, input, scene, false),
+                        None => {
+                            mechanic_action(p, who, input, scene);
+                            Action::Free
+                        }
+                    }
+                }
+                // Aboard, your feet are on something solid, so the Champion reads
+                // the standing row of its grid. A Rush started up here goes
+                // nowhere useful -- there is no ground under it to dash along --
+                // but nothing needs to say so: `grounded` is true aboard, so the
+                // standing row is what `clicked_move` picks anyway.
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, out)) {
+                    begin_champion(p, kind);
+                    begin_move(p, who, kind, input, scene, false)
+                } else if want_guard {
+                    Action::Guard { held: 0 }
+                } else {
+                    Action::Free
+                }
+            }
+        };
+    }
+}
+
 /// Walking speed on the creature's back, after whatever the move you are
 /// throwing costs you.
 fn rider_speed(p: &Player) -> Fx {
@@ -8920,6 +8956,167 @@ fn mount_on(p: &mut Player, slot: usize, beast: &Monster, part: usize, top: Fx) 
     p.air_stalls = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
+}
+
+// ---------------------------------------------------------------------------
+// Riding a critter
+//
+// The Hornback's cow (`docs/design/creatures/hornback.md` §10, item 2): a
+// critter whose kind is `mountable` has a back -- the top of its box -- that a
+// fighter lands on and rides, carried through the pitch and lift its species
+// gives it (`PackMind::surface`, `Critter::back_point`). The rule is the
+// monster ride's: **the position on the back is authoritative**, and the grip
+// is tested against what the surface does under the feet, so a buck is
+// acceleration rather than a flag. Smaller than `step_rider`: one box, no
+// parts to step between, no clips to cut.
+// ---------------------------------------------------------------------------
+
+/// Land on a critter's back, if one is under a falling fighter.
+fn meet_the_critters(p: &mut Player, crowd: &Critters) {
+    if p.vel.y.raw() > 0 || p.action.stunned() || p.health <= 0 {
+        return;
+    }
+    let sp = crowd.sp();
+    for (i, c) in crowd.iter().enumerate() {
+        if !c.rideable(sp) {
+            continue;
+        }
+        let body = c.body(sp);
+        let local = body.to_local(p.pos);
+        // Any of the body over its back: a critter is narrow, and a person
+        // jumps onto it from against its flank.
+        let grace = t::body_radius();
+        let on = local.x.abs().raw() <= body.half_len.add(grace).raw()
+            && local.z.abs().raw() <= body.half_wid.add(grace).raw()
+            && local.y.raw() <= body.height.raw()
+            && local.y.raw() >= body.height.sub(t::mount_snap()).raw();
+        if !on {
+            continue;
+        }
+        p.mount = critter::mount_of(i);
+        p.local = V3::new(local.x, Fx::ZERO, local.z);
+        p.pos = c.back_point(sp, p.local);
+        p.vel = V3::ZERO;
+        p.grounded = true;
+        p.air_dodged = false;
+        p.jump_hold = 0;
+        p.air_stall = 0;
+        p.air_stalls = 0;
+        p.grip_vel = V3::ZERO;
+        p.grip_settle = t::mount_settle() as u8;
+        return;
+    }
+}
+
+/// One tick of a fighter on a critter's back. See the section's notes.
+fn step_critter_rider(
+    p: &mut Player,
+    who: usize,
+    input: Input,
+    c: &critter::Critter,
+    sp: &'static crate::species::Species,
+    scene: &Scene,
+    out: &[bool; moves::MAX_SLOTS],
+) {
+    let held = p.local;
+    let landing = c.back_point(sp, held);
+    let rate = Fx::from_int(crate::TICK_HZ as i32);
+    let surface = landing.sub(p.pos).scale(rate);
+    let accel = surface.sub(p.grip_vel).scale(rate);
+    p.grip_vel = surface;
+    p.pos = landing;
+    p.grounded = true;
+    p.vel = V3::ZERO;
+
+    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    p.mechanic_held = input.has(Input::MECHANIC);
+    let look = V3::from_turns(input.aim_turns());
+    if p.action.actionable() || p.action.stunned() || p.action.channelling().is_some() {
+        p.facing = look;
+    } else if p.action.guarding() {
+        p.facing = p
+            .facing
+            .add(look.sub(p.facing).scale(t::guard_turn_rate()))
+            .normalized();
+    }
+    p.crouching = input.has(Input::CROUCH) && p.action.actionable();
+
+    // **The grip.** The back dropping away from under the feet faster than
+    // the grip holds -- the rump kicking up and stopping, the whole animal
+    // lurching sideways -- throws the rider. Pressing up into the feet does
+    // not: being shoved onto something is not being thrown off it.
+    let felt = crate::math::big_len(V3::new(accel.x, accel.y.min(Fx::ZERO), accel.z));
+    let grip = if p.crouching {
+        t::grip().mul(t::brace_grip())
+    } else {
+        t::grip()
+    };
+    if p.grip_settle > 0 {
+        p.grip_settle -= 1;
+    } else if felt.raw() > grip.raw() {
+        // Off the side they stand on, at the full kick, and up.
+        let body = c.body(sp);
+        let side = if held.z.raw() < 0 {
+            Fx::ONE.neg()
+        } else {
+            Fx::ONE
+        };
+        let out_dir = body.dir_to_world(V3::new(Fx::ZERO, Fx::ZERO, side));
+        p.mount = monster::NO_PART;
+        p.vel = V3::new(out_dir.x, Fx::ZERO, out_dir.z)
+            .normalized()
+            .scale(t::throw_kick())
+            .add(V3::new(Fx::ZERO, t::throw_lift(), Fx::ZERO));
+        p.grounded = false;
+        p.air_dodged = false;
+        p.jump_hold = 0;
+        p.action = Action::HitStun {
+            left: t::throw_stun(),
+        };
+        p.wound(t::throw_damage());
+        return;
+    }
+
+    rider_acts(p, who, input, scene, out, pressed_mechanic);
+
+    // Jumping is how you leave, with what the back was doing, capped.
+    if input.has(Input::SPACE) && p.action.actionable() {
+        let mob = p.class.mobility();
+        p.mount = monster::NO_PART;
+        let carried = carry_off(surface);
+        p.vel = carried.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
+        p.grounded = false;
+        p.air_dodged = false;
+        p.jump_hold = t::jump_hold_frames();
+        return;
+    }
+
+    // Walking on its back, in its own frame; off the edge, a fall.
+    let (ax, az) = input.move_axis();
+    let speed = rider_speed(p);
+    let body = c.body(sp);
+    let wish = body.dir_to_local(move_dir(input.aim_turns(), ax, az));
+    let next = V3::new(
+        held.x.add(wish.x.mul(speed).mul(DT)),
+        Fx::ZERO,
+        held.z.add(wish.z.mul(speed).mul(DT)),
+    );
+    let walked = next.sub(held).flat_len();
+    p.stride = p
+        .stride
+        .wrapping_add(walked.div(stride_length(p)).raw().clamp(0, 65535) as u16);
+    let grace = t::body_radius();
+    if next.x.abs().raw() > body.half_len.add(grace).raw()
+        || next.z.abs().raw() > body.half_wid.add(grace).raw()
+    {
+        p.mount = monster::NO_PART;
+        p.pos = c.back_point(sp, next);
+        p.vel = carry_off(surface);
+        p.grounded = false;
+        return;
+    }
+    p.local = next;
+    p.pos = c.back_point(sp, next);
 }
 
 /// **Put a fighter inside a creature's hollow part** (`beast::Shape::hollow`):
@@ -9763,6 +9960,12 @@ impl World {
                 if !body.reaches(sp, victim.pos, victim.hurt_height(), t::body_radius()) {
                     continue;
                 }
+                if sp
+                    .pack
+                    .is_some_and(|decl| decl.mind.spares(&brain, &self.critters, c, i))
+                {
+                    continue;
+                }
                 let away = V3::new(
                     victim.pos.x.sub(anchor.x),
                     Fx::ZERO,
@@ -9866,6 +10069,12 @@ impl World {
                 Fx::ONE
             })
             .to_int();
+            // A guard breaker, by the versus rule's own flag -- or a Bulwark
+            // Slam carrying weight, which is what a loaded shield is for.
+            let breaks = m.unblockable
+                || (attacker.class == Class::Bulwark
+                    && kind == SLOT_COMMITTED
+                    && bulwark::weight(&attacker).raw() > 0);
             let mut any = false;
             for c in 0..critter::MAX_CRITTERS {
                 let body = self.critters[c];
@@ -9873,6 +10082,43 @@ impl World {
                     continue;
                 }
                 self.critters[c].set(bit, true);
+                // **A guard, if the body has one** (`PackMind::guarded`): a
+                // turned blow does nothing to it, and the swing recoils.
+                let guarded = match sp.pack {
+                    Some(decl) => decl.mind.guarded(
+                        &mut brain,
+                        &mut self.critters,
+                        c,
+                        &pack::Blow {
+                            who: i,
+                            from: attacker.pos,
+                            hitbox: &box_out,
+                            damage: worth,
+                            breaks,
+                        },
+                    ),
+                    None => pack::Guarded::Lands,
+                };
+                if let pack::Guarded::Bounces { recoil, push } = guarded {
+                    let back = V3::new(
+                        attacker.pos.x.sub(body.pos.x),
+                        Fx::ZERO,
+                        attacker.pos.z.sub(body.pos.z),
+                    )
+                    .normalized();
+                    let p = &mut self.players[i];
+                    p.action = Action::HitStun { left: recoil };
+                    p.stun_total = recoil;
+                    // Pushed back the distance asked, over the recoil: a
+                    // blocker's pushback, the other way round.
+                    let rate =
+                        Fx::from_int(crate::TICK_HZ as i32).div(Fx::from_int(recoil.max(1) as i32));
+                    p.vel.x = back.x.mul(push).mul(rate);
+                    p.vel.z = back.z.mul(push).mul(rate);
+                    freeze(p, impact_freeze(t::creature_freeze(), true));
+                    any = true;
+                    continue;
+                }
                 let dir = if m.knockback.raw() < 0 {
                     attacker.pos.sub(body.pos)
                 } else {
@@ -10222,7 +10468,12 @@ impl World {
                 let step = speed.mul(crate::DT).min(far);
                 p.pos = p.pos.add(crate::math::wide_normalized(gap).scale(step));
             }
-            if u.lift.raw() > p.vel.y.raw() && !p.aboard() {
+            // **Only a lift lifts.** With no lift underfoot this is zero, and
+            // zero is above every falling body's speed: the first version set
+            // every falling fighter's fall to nothing, every frame, in any
+            // fight with a hazard on the floor -- a hook's launch came down at
+            // walking pace (found by the Hornback, whose boulders are hazards).
+            if u.lift.raw() > 0 && u.lift.raw() > p.vel.y.raw() && !p.aboard() {
                 p.vel.y = u.lift;
                 p.grounded = false;
             }
@@ -10396,6 +10647,17 @@ impl World {
                 objective::strike(&mut self.lore, o.index, damage);
             }
         }
+    }
+
+    /// **The fight's own floor signs** this frame: its species'
+    /// `FightDecl::signs`, or none. What the renderer draws besides the
+    /// bodies' telegraphs (`crate::sign`).
+    pub fn signs(&self) -> crate::sign::Signs {
+        let mut out = crate::sign::Signs::NONE;
+        if let Some(f) = self.lore.owner.and_then(|s| s.get().fight.signs) {
+            f(self, &mut out);
+        }
+        out
     }
 
     /// **What the fight's species draws besides its hazards and telegraphs**

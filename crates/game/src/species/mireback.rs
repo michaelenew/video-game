@@ -36,4 +36,6 @@ pub const LOOK: Look = Look {
     head: mireback::JAW_PART,
     spikes: None,
     critters: &[],
+    horns: None,
+    stance: None,
 };

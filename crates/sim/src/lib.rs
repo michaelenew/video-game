@@ -33,6 +33,7 @@ pub mod oven;
 pub mod pack;
 pub mod perception;
 pub mod shadow;
+pub mod sign;
 pub mod species;
 pub mod state;
 pub mod stones;

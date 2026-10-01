@@ -3,7 +3,9 @@
 //!
 //! Two ways in. **At start**, `--hunt <creature>` (or `?hunt=<creature>`) and
 //! `--arena <name>` (or `?arena=<name>`) choose the first fight; `--hunt` on
-//! its own is the Ridgeback, as it always was. **In game**, `H` swaps between
+//! its own is the Ridgeback, as it always was. A creature's second mode is
+//! its name, a dash and the mode: `--hunt hornback-escort` (or
+//! `?hunt=hornback-escort`) is the Hornback's crossing. **In game**, `H` swaps between
 //! hunting and fighting each other and `Shift+H` steps to the next registered
 //! creature, and `T` steps the creature being hunted to its next temper on
 //! offer (world W2) -- and those three go through the simulation, as a
@@ -47,6 +49,13 @@ pub fn start(
     place: Option<&str>,
     temper: Option<&str>,
 ) -> Start {
+    // A creature's second mode is its name, a dash, and the mode:
+    // `hornback-escort` is the Hornback on its crossing.
+    if let Some((species, arena)) = creature.and_then(mode) {
+        let mut s = start(hunt, Some(species.name), place, temper);
+        s.arena = s.arena.or(Some(arena));
+        return s;
+    }
     let hunt = hunt.then(|| match creature {
         None => SpeciesId::RIDGEBACK,
         Some(name) => species::named(name).map_or_else(
@@ -79,6 +88,26 @@ pub fn start(
         arena,
         temper,
     }
+}
+
+/// **A creature's other mode**, spelled `<creature>-<mode>`: the creature,
+/// and one of the arenas that names it -- by its own name, or by `escort` for
+/// the one with something to defend in it (bestiary P7). `hornback-escort`
+/// and `hornback-crossing` are both the Hornback's crossing. `None` for a
+/// plain creature's name, or a mode it does not have.
+pub fn mode(name: &str) -> Option<(&'static species::Species, ArenaId)> {
+    if species::named(name).is_some() {
+        return None;
+    }
+    let (who, how) = name.split_once(['-', '_', ' '])?;
+    let sp = species::named(who)?;
+    let how = how.to_lowercase();
+    arena::all()
+        .filter(|a| a.creature == Some(sp.id))
+        .find(|a| {
+            a.slug() == how.replace(['-', ' '], "_") || (how == "escort" && !a.sites.is_empty())
+        })
+        .map(|a| (sp, a.id))
 }
 
 /// The world a start describes.
@@ -207,6 +236,28 @@ mod tests {
             let o = Options::from_args(["--arena", spelled].map(String::from));
             assert_eq!(read(&o).arena, Some(ArenaId::PROVING_GROUND), "{spelled}");
         }
+    }
+
+    #[test]
+    fn a_creatures_escort_mode_is_its_name_a_dash_and_escort() {
+        for o in [
+            Options::from_args(["--hunt", "hornback-escort"].map(String::from)),
+            Options::from_query("?hunt=hornback-escort"),
+            Options::from_args(["--hunt", "hornback", "--arena", "crossing"].map(String::from)),
+        ] {
+            assert_eq!(
+                read(&o),
+                Start {
+                    hunt: Some(SpeciesId::HORNBACK),
+                    arena: Some(ArenaId::HORNBACK_CROSSING),
+                    temper: 0,
+                }
+            );
+        }
+        // A mode it does not have is the creature's name not found.
+        let o = Options::from_query("?hunt=ridgeback-escort");
+        assert_eq!(read(&o).hunt, Some(SpeciesId::RIDGEBACK));
+        assert_eq!(read(&o).arena, None);
     }
 
     #[test]

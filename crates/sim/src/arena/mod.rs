@@ -54,7 +54,7 @@ pub mod range;
 
 pub mod gnawers;
 
-// pub mod hornback;
+pub mod hornback;
 
 pub mod mireback;
 
@@ -96,6 +96,8 @@ impl ArenaId {
     /// A dev arena with one of everything an arena can have, at the largest
     /// size any creature asks for: see [`range`].
     pub const RANGE: ArenaId = ArenaId(11);
+    /// The Hornback's second arena: the crossing, its defend variant (P7).
+    pub const HORNBACK_CROSSING: ArenaId = ArenaId(12);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -105,7 +107,7 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 12;
+pub const COUNT: usize = 13;
 
 /// The most solids an arena may have. Every query walks all of them, several
 /// times a frame per body, so this is what keeps a large arena inside the
@@ -125,7 +127,10 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::GNAWERS => Some(&gnawers::ARENA),
 
-        // ArenaId::HORNBACK => Some(&hornback::ARENA),
+        ArenaId::HORNBACK => Some(&hornback::ARENA),
+
+        ArenaId::HORNBACK_CROSSING => Some(&hornback::CROSSING),
+
         ArenaId::MIREBACK => Some(&mireback::ARENA),
 
         ArenaId::SANDMAW => Some(&sandmaw::ARENA),
