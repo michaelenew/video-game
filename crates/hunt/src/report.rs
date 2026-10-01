@@ -184,6 +184,9 @@ pub struct Report {
     commit_range: [Fx; MAX_PLAYERS],
     /// Where the creature stood when it committed.
     commit_at: V3,
+    /// The same, for every creature slot after the first (the Pair's second
+    /// cat).
+    commit_more: [(u8, [Fx; MAX_PLAYERS], V3); MAX_SLOTS - 1],
 
     pub timeline: Vec<Beat>,
 
@@ -210,6 +213,9 @@ pub struct Report {
     swing_struck: [bool; MAX_PLAYERS],
 }
 
+/// Creature slots a world has.
+const MAX_SLOTS: usize = monster::MAX_MONSTERS;
+
 /// How far above a crown a swing counts as passing over it.
 pub const OVER: Fx = Fx::from_raw(1 << 15);
 
@@ -228,6 +234,13 @@ pub const HALF_VIEW: Fx = Fx::from_raw(9100);
 pub trait Tally: Send + Sync {
     /// One tick, the world before and after it.
     fn observe(&mut self, before: &World, after: &World);
+    /// One tick, with the hunters that played it: what a creature whose
+    /// measures ask what was on a hunter's screen needs (the Pair's). Calls
+    /// [`Tally::observe`] unless a tally says otherwise.
+    fn observe_with(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        let _ = bots;
+        self.observe(before, after);
+    }
     /// Its lines: a name, a value, and why it is counted.
     fn lines(&self) -> Vec<(String, String, String)>;
     /// Hits its own rule says were unanswerable that the shared rule could
@@ -362,6 +375,7 @@ impl Report {
             commit_kind: monster::NO_PART,
             commit_range: [Fx::ZERO; MAX_PLAYERS],
             commit_at: V3::ZERO,
+            commit_more: [(monster::NO_PART, [Fx::ZERO; MAX_PLAYERS], V3::ZERO); MAX_SLOTS - 1],
             timeline: Vec::new(),
             pack: PackTally::default(),
             ground: GroundTally::default(),
@@ -732,83 +746,110 @@ impl Report {
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
         if let Some(extra) = self.extra.as_mut() {
-            extra.observe(before, after);
+            extra.observe_with(before, after, bots);
         }
         self.observe_pack(before, after, bots);
         self.observe_ground(before, after);
-        // The first creature. A fight against two (the Pair) reports on the
-        // first; a report per creature is that fight's to add.
-        let (Some(&was), Some(&now)) = (before.monster(), after.monster()) else {
+        // **Every creature**, slot by slot: two for the Pair, one for the
+        // rest -- for whom this reads exactly as it did when it read only
+        // the first. The fight's own measures are summed over its bodies;
+        // the windows read the pair as free when either is.
+        let sp = self.species;
+        let slots: Vec<usize> = (0..MAX_SLOTS)
+            .filter(|s| {
+                let (b, a) = (before.monsters[*s], after.monsters[*s]);
+                b.is_some_and(|m| m.species == sp.id) && a.is_some_and(|m| m.species == sp.id)
+            })
+            .collect();
+        let Some(&first) = slots.first() else {
             return;
         };
-        let sp = self.species;
+        let now0 = after.monsters[first].expect("checked above");
         self.frames = after.frame;
-        let fighting = now.brain.grace == 0;
+        let fighting = now0.brain.grace == 0;
         if fighting {
             self.fought += 1;
         }
-        if now.alive() && fighting {
-            self.threat[Threat::of(now.frames_until_free() as i32) as usize] += 1;
+        // The smaller of the bodies' `frames_until_free`, among the living:
+        // a pair is free to act when either of them is.
+        let free = slots
+            .iter()
+            .filter_map(|s| after.monsters[*s])
+            .filter(|m| m.alive())
+            .map(|m| m.frames_until_free())
+            .min();
+        if let (Some(free), true) = (free, fighting) {
+            self.threat[Threat::of(free as i32) as usize] += 1;
         }
 
-        // Where the fight is happening.
-        if self.frames == 1 {
-            self.lo = now.pos;
-            self.hi = now.pos;
-        }
-        self.lo = V3::new(self.lo.x.min(now.pos.x), Fx::ZERO, self.lo.z.min(now.pos.z));
-        self.hi = V3::new(self.hi.x.max(now.pos.x), Fx::ZERO, self.hi.z.max(now.pos.z));
+        for &slot in &slots {
+            let was = before.monsters[slot].expect("checked above");
+            let now = after.monsters[slot].expect("checked above");
+            // Where the fight is happening.
+            if self.frames == 1 && slot == first {
+                self.lo = now.pos;
+                self.hi = now.pos;
+            }
+            self.lo = V3::new(self.lo.x.min(now.pos.x), Fx::ZERO, self.lo.z.min(now.pos.z));
+            self.hi = V3::new(self.hi.x.max(now.pos.x), Fx::ZERO, self.hi.z.max(now.pos.z));
 
-        // A move beginning: a windup this frame that was not under way last
-        // frame. (Its `left` is the whole startup unless its species hurried
-        // it -- the Broodmother's enraged lunge -- or chained it on from a
-        // hook, her flurry.)
-        if let Doing::Startup { kind, left } = now.doing {
-            let m = sp.attack(kind);
-            let begun = !matches!(was.doing, Doing::Startup { kind: k, .. } if k == kind);
-            if left <= m.startup && begun {
-                self.starts[kind as usize] += 1;
-                if m.damage > 0 {
-                    self.committed += 1;
-                    if m.startup as usize >= REACTION {
-                        self.reactable += 1;
+            // A move beginning: a windup this frame that was not under way
+            // last frame. (Its `left` is the whole startup unless its species
+            // hurried it -- the Broodmother's enraged lunge -- or chained it
+            // on from a hook, her flurry, straight out of the last stab.)
+            if let Doing::Startup { kind, left } = now.doing {
+                let m = sp.attack(kind);
+                let begun = !matches!(was.doing, Doing::Startup { kind: k, .. } if k == kind);
+                if left <= m.startup && begun {
+                    self.starts[kind as usize] += 1;
+                    if m.damage > 0 {
+                        self.committed += 1;
+                        if m.startup as usize >= REACTION {
+                            self.reactable += 1;
+                        }
                     }
-                }
-                if kind == self.run_kind {
-                    self.run_len += 1;
-                } else {
-                    self.run_kind = kind;
-                    self.run_len = 1;
-                }
-                self.longest_repeat = self.longest_repeat.max(self.run_len);
+                    if kind == self.run_kind {
+                        self.run_len += 1;
+                    } else {
+                        self.run_kind = kind;
+                        self.run_len = 1;
+                    }
+                    self.longest_repeat = self.longest_repeat.max(self.run_len);
 
-                self.commit_kind = kind;
-                self.commit_at = now.pos;
-                let mut nearest = Fx::MAX;
-                for i in 0..MAX_PLAYERS {
-                    let d = V3::new(
-                        after.players[i].pos.x.sub(now.pos.x),
-                        Fx::ZERO,
-                        after.players[i].pos.z.sub(now.pos.z),
-                    )
-                    .flat_len();
-                    self.commit_range[i] = d;
-                    nearest = nearest.min(d);
+                    let mut nearest = Fx::MAX;
+                    let mut range = [Fx::ZERO; MAX_PLAYERS];
+                    for (i, r) in range.iter_mut().enumerate() {
+                        let d = V3::new(
+                            after.players[i].pos.x.sub(now.pos.x),
+                            Fx::ZERO,
+                            after.players[i].pos.z.sub(now.pos.z),
+                        )
+                        .flat_len();
+                        *r = d;
+                        nearest = nearest.min(d);
+                    }
+                    self.set_commit(slot, kind, range, now.pos);
+                    self.timeline.push(Beat {
+                        frame: after.frame,
+                        kind,
+                        intent: bots.first().map(|b| b.intent()).unwrap_or(NOBODY),
+                        aboard: after.players.iter().any(|p| p.aboard()),
+                        range: nearest,
+                        hit: None,
+                        hidden: false,
+                    });
                 }
-                self.timeline.push(Beat {
-                    frame: after.frame,
-                    kind,
-                    intent: bots.first().map(|b| b.intent()).unwrap_or(NOBODY),
-                    aboard: after.players.iter().any(|p| p.aboard()),
-                    range: nearest,
-                    hit: None,
-                    hidden: false,
-                });
             }
         }
 
-        // Openings: contiguous windows where it cannot answer.
-        let open = now.doing.open();
+        // Openings: contiguous windows where it cannot answer -- every body
+        // that is alive punishable at once.
+        let living: Vec<monster::Monster> = slots
+            .iter()
+            .filter_map(|s| after.monsters[*s])
+            .filter(|m| m.alive())
+            .collect();
+        let open = !living.is_empty() && living.iter().all(|m| m.doing.open());
         if open {
             self.open_frames += 1;
             self.run_open += 1;
@@ -820,30 +861,47 @@ impl Report {
         }
         self.was_open = open;
 
-        if matches!(now.doing, Doing::Prowl) && fighting {
+        let idle = !living.is_empty() && living.iter().all(|m| matches!(m.doing, Doing::Prowl));
+        if idle && fighting {
             self.idle_frames += 1;
         }
-        if matches!(now.doing, Doing::Toppled { .. }) && !matches!(was.doing, Doing::Toppled { .. })
-        {
-            self.topples += 1;
-        }
-        for part in sp.breakables() {
-            let (then, next) = (was.part_health(part), now.part_health(part));
-            if then > 0 && next <= 0 {
-                self.legs_broken += 1;
+        let mut toppled = false;
+        let mut connected = [false; MAX_SLOTS];
+        for &slot in &slots {
+            let was = before.monsters[slot].expect("checked above");
+            let now = after.monsters[slot].expect("checked above");
+            if matches!(now.doing, Doing::Toppled { .. })
+                && !matches!(was.doing, Doing::Toppled { .. })
+            {
+                self.topples += 1;
             }
-            let into = (then - next).max(0);
-            self.foot_damage += into;
-            if next < then {
-                self.worst_foot = self.worst_foot.max(sp.part_health() - next);
+            toppled |= matches!(now.doing, Doing::Toppled { .. });
+            for part in sp.breakables() {
+                let (then, next) = (was.part_health(part), now.part_health(part));
+                if then > 0 && next <= 0 {
+                    self.legs_broken += 1;
+                }
+                let into = (then - next).max(0);
+                self.foot_damage += into;
+                if next < then {
+                    self.worst_foot = self.worst_foot.max(sp.part_health() - next);
+                }
             }
-        }
-        if now.poise > was.poise {
-            self.ridge_hits += 1;
-        }
-        self.dealt += (was.health - now.health).max(0);
-        if now.health < was.health {
-            self.connected += 1;
+            if now.poise > was.poise {
+                self.ridge_hits += 1;
+            }
+            self.dealt += (was.health - now.health).max(0);
+            if now.health < was.health {
+                self.connected += 1;
+            }
+            // Riding: a bucking move seen begin is a reason to leave even once
+            // it has been cut short (see below).
+            if now.doing.attacking().is_some_and(self.card.bucks)
+                && !matches!(now.doing, Doing::Recovery { .. })
+            {
+                self.last_buck = after.frame;
+            }
+            connected[slot] = !was.hit_used && now.hit_used;
         }
         for i in 0..MAX_PLAYERS {
             let (a, b) = (&before.players[i], &after.players[i]);
@@ -861,11 +919,6 @@ impl Report {
         // after their own hit on the ridge flinched it out of the slam, left
         // because of the slam. Counted from the last frame one was running,
         // for as long as it takes to see it.
-        if now.doing.attacking().is_some_and(self.card.bucks)
-            && !matches!(now.doing, Doing::Recovery { .. })
-        {
-            self.last_buck = after.frame;
-        }
         let aboard = after.players.iter().any(|p| p.aboard());
         if aboard {
             self.ride_frames += 1;
@@ -920,7 +973,7 @@ impl Report {
             let back = after.players[i].health - before.players[i].health;
             if back > 0 {
                 self.drank += back;
-                if matches!(now.doing, Doing::Toppled { .. }) {
+                if toppled {
                     self.drank_toppled += back;
                 }
             }
@@ -933,30 +986,39 @@ impl Report {
         // as the move in progress landing. A fight without a floor counts as
         // it always did.
         let floored = !sp.fight.hazards.is_empty();
-        let connected = !was.hit_used && now.hit_used;
+        // Which body's move it was: the one that connected this frame, or
+        // the first body for a loss nothing connected for.
+        let by = slots
+            .iter()
+            .copied()
+            .find(|s| connected[*s])
+            .unwrap_or(first);
+        let any_connected = connected.iter().any(|c| *c);
         for i in 0..MAX_PLAYERS {
             let lost = before.players[i].health - after.players[i].health;
             if lost <= 0 {
                 continue;
             }
             self.taken += lost;
-            if floored && !connected {
+            if floored && !any_connected {
                 continue;
             }
             self.hits_taken += 1;
-            if self.commit_kind == monster::NO_PART {
+            let (kind, range, at) = self.commit_of(by);
+            if kind == monster::NO_PART {
                 continue;
             }
+            let now = after.monsters[by].expect("checked above");
             let p = &after.players[i];
             // A rider bucked off during the move's active window lost health
             // to the fall, not to the volume: that is `thrown`, above.
             let bucked = before.players[i].aboard();
             self.timeline.push(Beat {
                 frame: after.frame,
-                kind: self.commit_kind,
+                kind,
                 intent: bots.first().map(|b| b.intent()).unwrap_or(NOBODY),
                 aboard: p.aboard(),
-                range: self.commit_range[i],
+                range: range[i],
                 hidden: false,
                 hit: Some(HunterState {
                     bucked,
@@ -966,12 +1028,12 @@ impl Report {
                     health: p.health,
                 }),
             });
-            let m = sp.attack(self.commit_kind);
+            let m = sp.attack(kind);
             // A buck's fall is not a hit; it is the ride's own cost, and it
             // is counted under `thrown`. Only damage while a volume is out
             // is the move's.
             if matches!(now.doing, Doing::Active { .. }) && m.damage > 0 && !bucked {
-                self.landed[self.commit_kind as usize] += 1;
+                self.landed[kind as usize] += 1;
             }
             // **Unanswerable**: too fast to answer on sight, *and* it reached
             // somewhere the hunter could not have known was inside it.
@@ -997,17 +1059,40 @@ impl Report {
                 .add(m.hit_radius)
                 .add(sim::tuning::body_radius());
             let from_commit = V3::new(
-                after.players[i].pos.x.sub(self.commit_at.x),
+                after.players[i].pos.x.sub(at.x),
                 Fx::ZERO,
-                after.players[i].pos.z.sub(self.commit_at.z),
+                after.players[i].pos.z.sub(at.z),
             )
             .flat_len();
+            // Health nothing connected for -- a Blood mage paying for her
+            // own spells -- is not the move's, however far away it was.
             if (m.startup as usize) < REACTION
-                && self.commit_range[i].raw() > reach.raw()
+                && any_connected
+                && range[i].raw() > reach.raw()
                 && from_commit.raw() > reach.raw()
             {
                 self.unanswerable += 1;
             }
+        }
+    }
+
+    /// What creature `slot` last committed to: the move, how far each hunter
+    /// was, and where it stood. Slot zero's is the fields the pack shares.
+    fn commit_of(&self, slot: usize) -> (u8, [Fx; MAX_PLAYERS], V3) {
+        if slot == 0 {
+            (self.commit_kind, self.commit_range, self.commit_at)
+        } else {
+            self.commit_more[slot - 1]
+        }
+    }
+
+    fn set_commit(&mut self, slot: usize, kind: u8, range: [Fx; MAX_PLAYERS], at: V3) {
+        if slot == 0 {
+            self.commit_kind = kind;
+            self.commit_range = range;
+            self.commit_at = at;
+        } else {
+            self.commit_more[slot - 1] = (kind, range, at);
         }
     }
 

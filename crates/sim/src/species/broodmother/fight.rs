@@ -274,6 +274,7 @@ pub fn presence(m: &Monster, _rig: &crate::beast::Rig) -> crate::beast::Presence
     crate::beast::Presence {
         buried,
         unmountable: 0,
+        passable: 0,
     }
 }
 

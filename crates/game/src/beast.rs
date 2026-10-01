@@ -54,6 +54,9 @@ struct Skin {
     weak: Handle<StandardMaterial>,
     limb: Handle<StandardMaterial>,
     broken: Handle<StandardMaterial>,
+    /// The hide of every body after the first, in a fight of more than one:
+    /// the same paint, darker, so two of a kind can be told apart and named.
+    second: Handle<StandardMaterial>,
     /// The species' [`crate::species::Tint`] paints, in its order; empty for
     /// one without.
     stages: Vec<Handle<StandardMaterial>>,
@@ -106,6 +109,7 @@ pub fn setup(
             weak: material(&mut materials, look.weak),
             limb: material(&mut materials, look.breakable),
             broken: material(&mut materials, look.broken),
+            second: material(&mut materials, darker(look.armour)),
             stages: crate::species::tint(sp.id)
                 .map(|t| {
                     t.stages
@@ -153,6 +157,14 @@ pub fn setup_signs(
     mut marks: ResMut<Assets<MarkMaterial>>,
 ) {
     make_signs(&mut commands, &mut meshes, &mut materials, &mut marks);
+}
+
+/// A hide two shades down, for the second of two bodies.
+fn darker(paint: Paint) -> Paint {
+    Paint {
+        rgb: paint.rgb.map(|c| c * 0.45),
+        ..paint
+    }
 }
 
 /// Put every part where the simulation says it is.
@@ -221,7 +233,7 @@ pub fn place(
         let tinted = crate::species::tint(beast.species)
             .and_then(|t| (t.stage)(&sim.cur, index))
             .and_then(|i| skin_of.stages.get(i));
-        let wanted = tinted.unwrap_or_else(|| skin(skin_of, &beast, index));
+        let wanted = tinted.unwrap_or_else(|| skin(skin_of, &beast, slot, index));
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -247,7 +259,7 @@ pub fn place(
             scale: Vec3::splat(width),
         };
         *visible = Visibility::Inherited;
-        let wanted = &hide.of(beast.species).armour;
+        let wanted = hide_of(hide.of(beast.species), slot);
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -278,7 +290,21 @@ fn joint_width(sp: &kinds::Species, look: &Look, bone: usize) -> Option<f32> {
     narrowest.map(|w| w.to_f32_for_render() * 0.95)
 }
 
-fn skin<'a>(hide: &'a Skin, beast: &Monster, index: usize) -> &'a Handle<StandardMaterial> {
+/// The plain hide of the body in `slot`.
+fn hide_of(hide: &Skin, slot: usize) -> &Handle<StandardMaterial> {
+    if slot == 0 {
+        &hide.armour
+    } else {
+        &hide.second
+    }
+}
+
+fn skin<'a>(
+    hide: &'a Skin,
+    beast: &Monster,
+    slot: usize,
+    index: usize,
+) -> &'a Handle<StandardMaterial> {
     let sp = beast.sp();
     if sp.is_weak_point(index) {
         &hide.weak
@@ -287,7 +313,7 @@ fn skin<'a>(hide: &'a Skin, beast: &Monster, index: usize) -> &'a Handle<Standar
     } else if sp.parts[index].shape.breakable {
         &hide.limb
     } else {
-        &hide.armour
+        hide_of(hide, slot)
     }
 }
 

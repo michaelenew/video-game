@@ -603,6 +603,7 @@ pub fn update(
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
     mut step: StepQuery,
+    mut seen_full: Local<(u32, [i32; sim::monster::MAX_MONSTERS])>,
 ) {
     for mut text in step.iter_mut() {
         *text = Text::new(step_readout(&sim));
@@ -674,7 +675,22 @@ pub fn update(
     }
     if let Some(beast) = sim.cur.monster() {
         if let Ok(mut node) = quarry.single_mut() {
-            let share = beast.health.max(0) as f32 / beast.sp().health().max(1) as f32;
+            // Every body in the fight on the one bar: two cats are one hunt.
+            // Each body's full is the most it has been seen with since the
+            // hunt began, which covers a pool its fight sets for itself (the
+            // Pair's, with two hunters).
+            if sim.cur.frame < seen_full.0 {
+                seen_full.1 = [0; sim::monster::MAX_MONSTERS];
+            }
+            seen_full.0 = sim.cur.frame;
+            let (mut now, mut full) = (0, 0);
+            for (slot, m) in sim.cur.monsters.iter().enumerate() {
+                let Some(m) = m else { continue };
+                seen_full.1[slot] = seen_full.1[slot].max(m.health).max(m.sp().health());
+                now += m.health.max(0);
+                full += seen_full.1[slot];
+            }
+            let share = now as f32 / full.max(1) as f32;
             node.width = Val::Percent(100.0 * share);
         }
         if let Ok(mut node) = poise.single_mut() {

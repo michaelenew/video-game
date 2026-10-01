@@ -123,6 +123,12 @@ pub struct Shape {
     /// keeping them in rather than its solids pushing them out, no jumping
     /// off and no buck. Neither solid nor mountable.
     pub hollow: bool,
+    /// **Its top is a slope, not a floor**: solid, and nobody stands on it.
+    /// A body that comes down on it is pushed off the side rather than held
+    /// up, whatever the least penetration says -- the Pair's backs, which
+    /// are a hop high and are not a ride (`docs/design/creatures/the-pair.md`
+    /// §3). Off, a solid top is somewhere to stand, as it always was.
+    pub sheds: bool,
 }
 
 /// One part of a species: its box, its name, and what hitting it means.
@@ -154,6 +160,7 @@ pub const fn part(name: &'static str, bone: usize, min: V3, max: V3, vuln: u16) 
             solid: true,
             breakable: false,
             hollow: false,
+            sheds: false,
         },
         weak: false,
         vuln,
@@ -180,6 +187,12 @@ impl Part {
     pub const fn hollow(mut self) -> Part {
         self.shape.hollow = true;
         self.shape.solid = false;
+        self.shape.mountable = false;
+        self
+    }
+    /// Solid, and nobody stands on it. See [`Shape::sheds`].
+    pub const fn sheds(mut self) -> Part {
+        self.shape.sheds = true;
         self.shape.mountable = false;
         self
     }
@@ -378,6 +391,9 @@ pub struct Rig {
     /// **Parts nobody can stand on this frame**, though they are there to
     /// hit and to walk into: the Sandmaw, which is only ridden beached.
     pub unmountable: u64,
+    /// **Parts there to hit, and nothing to walk into this frame**: a body in
+    /// the air over you. The Pair mid-leap, which a dodge toward passes under.
+    pub passable: u64,
 }
 
 /// What of a creature is there this frame: see [`Rig::buried`] and
@@ -386,6 +402,8 @@ pub struct Rig {
 pub struct Presence {
     pub buried: u64,
     pub unmountable: u64,
+    /// See [`Rig::passable`].
+    pub passable: u64,
 }
 
 impl Rig {
@@ -394,9 +412,15 @@ impl Rig {
         self.buried & (1u64 << (part as u64 & 63)) == 0
     }
 
+    /// Does this part push a body out of it this frame -- there, and not
+    /// passed under?
+    pub fn blocks(&self, part: usize) -> bool {
+        (self.buried | self.passable) & (1u64 << (part as u64 & 63)) == 0
+    }
+
     /// Can this part be stood on this frame, as far as its creature says?
     pub fn boardable(&self, part: usize) -> bool {
-        (self.buried | self.unmountable) & (1u64 << (part as u64 & 63)) == 0
+        (self.buried | self.unmountable | self.passable) & (1u64 << (part as u64 & 63)) == 0
     }
 
     /// Place every bone. One forward pass, parents before children.
@@ -435,6 +459,7 @@ impl Rig {
             species,
             buried: 0,
             unmountable: 0,
+            passable: 0,
         }
     }
 

@@ -6697,6 +6697,62 @@ in 121 s, one). The Hornback was tuned with the fix throughout.
 **Verdict** fixed; the undertow is a fifth narrower, and whether the Bulwark's
 hole should be closed this way is still sandmaw.md §12 question 4.
 
+### 2026-10-01 — The Pair: two cats, one of them always behind you, tuned by harness
+
+**Changed** A creature with two bodies: the Pair, in the Den (`--hunt pair`),
+with a pair brain in the lore (roles, the swap, the feint, the ambush, the
+twin pounce and its crash, the stagger, the bond and the interpose, the howl
+and the enrage), sight and a scarred eye, a hunter with a **view**, and report
+lines of its own ([creatures/the-pair.md](creatures/the-pair.md) §13).
+Against the document's first guesses: health 2 400 a cat (3 600 with two
+hunters); the pounce 30 / 14 / 50 for 110 at 1.4 m, the flick at frame 13,
+the mark settling at frame 12; the dive leaving at 22 and live 6; the twin
+pounce 46 / 6 / 50, leaving at 40; the ambush 120, its lane 2.5 m past you
+and laid at the commit; the swat 1.0–2.6 m and planted; the feint licensed by
+a mate 0.17 turns round and on its feet. Generic, every one off in
+`FightDecl::PLAIN` and both pins and every other creature's reports
+byte-identical: `bodies`, `keeps_height`, `pace`, `glance`, `lob_height`,
+`Part::sheds`, `Presence::passable`, a lobbed volume's skid, a report that
+reads every creature, and `Tally::observe_with`. The report's unanswerable
+now needs a connection: a Blood mage's own price was being charged to the
+last commit.
+
+**Why** The contract, mostly, and the harness's view made it checkable.
+Every pass that found an unanswerable hit found the same thing in a new
+place: a marker that was not on the screen for fifteen frames before the hit.
+A pounce at 24 frames after a frame-ten flick left a fifteen-frame reaction
+no dodge under the arc; a dive or twin pounce live for sixteen frames could
+not be cleared by ten invulnerable ones; a circle drawn inside a platform
+could not be stood in; a lane that stopped at your feet or swung on during
+its tell; a cat attacking a stale sample, so its lane began under a fighter
+who had since walked behind it; a swat committed at a sample half a metre
+out of date. Then the tuning: at 2 200 health the Champion and the Bulwark
+won eleven in twelve in two minutes; at 3 000, one in five. The cats lost
+the hunter behind every platform until sight was taken from the crown as
+well as the middle, and stood still in a stalemate at a hold distance just
+outside every move's range until the pounce's span reached it.
+
+**Found** 24 hunts per class: Champion 16 won in 159 s, Bulwark 12 in 186 s,
+Reaver 4, Elementalist 4 in over four minutes, Blood mage 0, Dual mage 0
+(as against every creature: the hunter does not play their pools or bars).
+Zero unanswerable hits, by both clauses, in all 144, coop and temper 3.
+Threatening 78–81 % against 45: the pair is free when either cat is. Both
+cats in view three quarters of the fight; the twin pounce two or three times
+a hunt, nearly always crashed; feints three or four a hunt and almost never
+bitten. Several moves land under one in ten against a hunter that answers
+every marker perfectly.
+
+**Reverted** The hunter refusing any punish with the other cat within 5 m of
+the one it would hit: it won one hunt in forty-eight; kept as "a free cat
+within 3.5 m of where you would stand". Health 3 000 and 2 600, either side
+of where it landed. The feint's licence at the mate's angle alone (0.17 turns,
+still *free*): feints went from eight to nine in twelve hunts; it was the
+mate being in its own windup that withheld them.
+
+**Verdict** built; tier 3 for the four classes the harness plays (three in
+eight won). For a person: is the tail flick readable at speed; is the glint a
+crutch; is threatening the right measure of a fight where one of two is
+always free; and the document's own §12.
 ### 2026-10-01 — The Broodmother: a clock with legs, tuned by harness
 
 **Changed** A creature: the spider in the Hollows (`--hunt broodmother`), six

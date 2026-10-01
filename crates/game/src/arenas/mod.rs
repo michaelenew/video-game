@@ -31,7 +31,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 pub mod broodmother;
 
@@ -88,7 +88,8 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
 
         ArenaId::SANDMAW => &sandmaw::DRESSING,
 
-        // ArenaId::PAIR => &pair::DRESSING,
+        ArenaId::PAIR => &pair::DRESSING,
+
         ArenaId::BROODMOTHER => &broodmother::DRESSING,
 
         // ArenaId::VEILSTALKER => &veilstalker::DRESSING,
