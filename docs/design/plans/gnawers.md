@@ -6,16 +6,14 @@ implements: ../creatures/gnawers.md
 
 # Gnawers — action plan
 
-> **State, 2026-10-01 (evening).** M1–M6 built and committed: species,
-> mind and rules (`crates/sim/src/species/gnawers/`), the Commons arena, the
-> look, generic critter telegraphs, the hunter plan and the report's pack
-> measures and Gnawers lines, 28 rule tests in `crates/sim/tests/gnawers.rs`.
-> Knobs are set by `bake_tuning --set` from a list kept in the session
-> scratchpad (every knob, since inserting an own knob shifts indices).
-> Harness (12 seeds): Champion, Reaver, Elementalist, Blood mage, Bulwark win
-> 11–12 of 12 in 25–55 s; the Dual mage 1/12 (the scripted hunter does not
-> play her bars -- it loses the Ridgeback too). Next: M7 tuning toward the
-> 1–2 minute band, M8 poses and screenshots, M9 docs and the browser.
+> **State, 2026-10-01 (night).** M1–M9 built. Harness (24 seeds each):
+> Champion, Reaver, Elementalist, Blood mage, Bulwark win every hunt in
+> 33–57 s, zero unanswerable hits, zero hidden commits; the Dual mage 2/24
+> (the scripted hunter does not play her bars -- it loses the Ridgeback too).
+> Coop and temper III are won. Open: the fights are shorter and easier than
+> §9's one-to-two-minute band; the questions for a person are in
+> [gnawers.md §13](../creatures/gnawers.md). Knobs are set by
+> `bake_tuning --set`.
 
 The specification is [`../creatures/gnawers.md`](../creatures/gnawers.md); the
 recipe is [`../critters.md`](../critters.md) §6. Parity bar:
@@ -43,11 +41,11 @@ recipe is [`../critters.md`](../critters.md) §6. Parity bar:
       hunter's §9 plan; the §9 report lines (swings over, behind you,
       hamstrings, pile-ons, crouches interrupted, howls, scatter windows,
       leader dead at, hidden commits), the pack's four windows.
-- [ ] **M7 · Tuning by harness.** Champion plus every class §7 singles out,
+- [x] **M7 · Tuning by harness.** Champion plus every class §7 singles out,
       many seeds, until §9's targets hold; relationships pinned in
       `tests/gnawers.rs`; feel-log entries.
-- [ ] **M8 · Reading it.** Per-move critter poses (crouch, scuttle, leap, rear
+- [x] **M8 · Reading it.** Per-move critter poses (crouch, scuttle, leap, rear
       to howl, low maul, dig), screenshots of each telegraph (`SHOT_MOVE`).
-- [ ] **M9 · World, docs, browser.** Trophy and tempers; gnawers.md marked
+- [x] **M9 · World, docs, browser.** Trophy and tempers; gnawers.md marked
       built with "Where it landed"; README map, manual tables; web smoke with
       `?hunt=gnawers`; merge main, checks, push.

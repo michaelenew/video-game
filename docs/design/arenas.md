@@ -57,7 +57,7 @@ walls, the aiming ray (`aim::Scene::arena`), the camera (`Surroundings::arena`)
 and the renderer. The hash writes the arena only when it is not the proving
 ground, so a fight there hashes as it always did.
 
-## 2 · The two arenas there are
+## 2 · The arenas there are
 
 - **The proving ground** (`arena/proving_ground.rs`): the first arena, ported
   as data. 28 m square, 1.5 m walls, two 1.5 m platforms. Versus, the training
@@ -71,6 +71,11 @@ ground, so a fight there hashes as it always did.
   Broodmother); grass and 2 m boulders. `--arena range`. It is where
   `tests/arena.rs` asks its questions and where `tests/budget.rs` measures the
   worst case.
+- **The Commons** (`arena/gnawers.rs`, 2026-10-01): the Gnawers' den, the first
+  creature arena. A 36 × 30 m meadow, a 3 m bank along the north with the den a
+  notch in it, low walls and a six-metre hedge round the rest, a fallen trunk
+  the pack scrambles and two boulders too tall to climb. See
+  [creatures/gnawers.md](creatures/gnawers.md) §11.
 
 ## 3 · The picker (W0)
 
