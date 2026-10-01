@@ -552,6 +552,8 @@ crate::species_knobs! {
     // seen_fast_speed, fast_appetite
     SeenFastSpeed,   "mind",  "A sample this fast was a dodge",          Fixed, 0, fx(30,1);
     FastAppetite,    "mind",  "Ambush, at a fast sample",                Int, 0, 8000;
+    SearchAfter,     "mind",  "Lost you, searches round where it saw you after", Frames, 0, 600;
+    SearchTurn,      "mind",  "Searching, circles at (turns/s)",          Fixed, 0, fx(1,1);
     // perch_reach
     PerchReach,      "perch", "Perches on a top within",                 Fixed, 0, fx(20,1);
     PerchFar,        "perch", "Perches when the target is beyond",       Fixed, 0, fx(20,1);
@@ -570,6 +572,10 @@ crate::species_knobs! {
     DiveLand,        "leap",  "Dive lands at active frame",              Frames, 0, 60;
     PerchLand,       "leap",  "Perch lands at active frame",             Frames, 0, 60;
     DropLand,        "leap",  "Drop lands at active frame",              Frames, 0, 60;
+    LandShort,       "leap",  "A leap's body lands this short of its mark", Fixed, 0, fx(3,1);
+    PerchArc,        "leap",  "The perch's leap clears its top by",      Fixed, 0, fx(3,1);
+    DiveArc,         "leap",  "The dive's leap rises by",                Fixed, 0, fx(3,1);
+    FallSpeed,       "leap",  "Off an edge, comes down at (m/s)",        Fixed, 0, fx(40,1);
     // the rake's hold
     HoldMin,         "rake",  "The paw stays up at least",               Frames, 0, 120;
     HoldMax,         "rake",  "The paw stays up at most",                Frames, 0, 120;

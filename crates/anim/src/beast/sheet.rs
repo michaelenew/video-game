@@ -170,6 +170,26 @@ fn colour_of(sp: &Species, part: usize) -> [u8; 3] {
     }
 }
 
+/// How much bigger than the Ridgeback's scale a species is drawn: one for
+/// anything thirteen metres long or more, and enough to fill the cell for a
+/// smaller animal -- a four-metre cat at the Ridgeback's scale is a dozen
+/// pixels of boxes nobody can check a pose in.
+fn zoom(sp: &'static Species) -> f32 {
+    let rig = beast_at(sp, &beast::Pose::rest(sp.bones.len()));
+    let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+    for part in 0..sp.parts.len() {
+        let sh = sp.shape(part);
+        for x in [sh.min.x, sh.max.x] {
+            let at = rig.part_to_world(part, V3::new(x, Fx::ZERO, Fx::ZERO));
+            let at = at.x.to_f32_for_render();
+            lo = lo.min(at);
+            hi = hi.max(at);
+        }
+    }
+    let extent = (hi - lo).max(0.1);
+    (13.0 / extent).max(1.0)
+}
+
 fn draw_creature(c: &mut Canvas, sp: &'static Species, pose: &beast::Pose, lens: Lens, alpha: f32) {
     let rig = beast_at(sp, pose);
     for part in 0..sp.parts.len() {
@@ -197,8 +217,10 @@ pub fn contact_sheet(sp: &'static Species, clip: usize) -> Canvas {
     let height = trail_top + TRAIL_H;
     let mut c = Canvas::new(width, height, BACKDROP);
 
-    // Metres to pixels, chosen so a thirteen-metre animal fits a cell.
-    let scale = CELL_W as f32 / 16.0;
+    // Metres to pixels, chosen so a thirteen-metre animal fits a cell -- and a
+    // smaller one is drawn bigger (`zoom`).
+    let zoom = zoom(sp);
+    let scale = CELL_W as f32 / 16.0 * zoom;
 
     for (view, top) in [(View::Side, side_top), (View::Top, top_top)] {
         for (n, frame) in picks.iter().enumerate() {
@@ -260,7 +282,7 @@ pub fn contact_sheet(sp: &'static Species, clip: usize) -> Canvas {
     );
     let ox = width as f32 * 0.45;
     let oy = trail_top as f32 + TRAIL_H as f32 * 0.88;
-    let big = TRAIL_H as f32 / 7.5;
+    let big = TRAIL_H as f32 / 7.5 * zoom.min(2.0);
     c.rect(0, oy as i32, width as i32, oy as i32 + 1, FLOOR);
     let apex = oy - 4.14 * big;
     for x in (0..width).step_by(4) {
@@ -340,7 +362,7 @@ pub fn states(sp: &'static Species) -> Canvas {
     let cell_h = 300;
     let rows = shown.len().div_ceil(cols);
     let mut c = Canvas::new(cols * cell_w, rows * cell_h, BACKDROP);
-    let scale = cell_w as f32 / 17.0;
+    let scale = cell_w as f32 / 17.0 * zoom(sp);
     for (n, (name, beast)) in shown.iter().enumerate() {
         let (col, row) = (n % cols, n / cols);
         let x0 = col * cell_w;

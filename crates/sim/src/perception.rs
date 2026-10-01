@@ -97,6 +97,21 @@ pub fn in_line_of_sight(p: &Perceiver) -> bool {
     crate::aim::sight_clear(p.head, middle, p.scene)
 }
 
+/// [`in_line_of_sight`], or a clear line to the top of the fighter's head: a
+/// body behind something waist-high is still seen. The Pair, who see over a
+/// platform's edge a standing fighter's head and shoulders behind it, and
+/// not through a standing stone.
+pub fn in_sight_over_cover(p: &Perceiver) -> bool {
+    if in_line_of_sight(p) {
+        return true;
+    }
+    let crown = p
+        .quarry
+        .pos
+        .add(V3::new(Fx::ZERO, crate::tuning::body_height(), Fx::ZERO));
+    crate::aim::sight_clear(p.head, crown, p.scene)
+}
+
 /// Felt: within the row's `FeelRadius` of its head in the floor plane, with
 /// feet no more than `FeelHeight` off the floor under them. The Sandmaw's
 /// undertow is thrown at what it feels.

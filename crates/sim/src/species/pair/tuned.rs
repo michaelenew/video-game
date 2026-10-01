@@ -7,7 +7,7 @@
 //! the Pair's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 481] = [
+pub const KNOBS: [i32; 487] = [
            65536, // pair.size_(x) = 1
             2200, // pair.health = 2200
              500, // pair.breakable_part_health = 500
@@ -91,6 +91,8 @@ pub const KNOBS: [i32; 481] = [
           196608, // pair_·_pair.twin_pounce_crashes_cats_this_close = 3
           655360, // pair_·_mind.a_sample_this_fast_was_a_dodge = 10
             1500, // pair_·_mind.ambush,_at_a_fast_sample = 1500
+              60, // pair_·_mind.lost_you,_searches_round_where_it_saw_you_after = 60
+            9830, // pair_·_mind.searching,_circles_at_(turns/s) = 0.15
           655360, // pair_·_perch.perches_on_a_top_within = 10
           524288, // pair_·_perch.perches_when_the_target_is_beyond = 8
            98304, // pair_·_perch.a_top_this_wide_is_somewhere_to_perch = 1.5
@@ -106,6 +108,10 @@ pub const KNOBS: [i32; 481] = [
                8, // pair_·_leap.dive_lands_at_active_frame = 8
               12, // pair_·_leap.perch_lands_at_active_frame = 12
               10, // pair_·_leap.drop_lands_at_active_frame = 10
+           58982, // pair_·_leap.a_leap's_body_lands_this_short_of_its_mark = 0.9
+           52429, // pair_·_leap.the_perch's_leap_clears_its_top_by = 0.8
+           26214, // pair_·_leap.the_dive's_leap_rises_by = 0.4
+          589824, // pair_·_leap.off_an_edge,_comes_down_at_(m/s) = 9
                6, // pair_·_rake.the_paw_stays_up_at_least = 6
               30, // pair_·_rake.the_paw_stays_up_at_most = 30
              350, // pair_·_scar.into_one_head,_scars_an_eye = 350
