@@ -390,18 +390,21 @@ fn splay(m: &Monster, mut p: Pose, root: &Placed, leg: usize) -> Pose {
     let t = root.rot.unapply(knee.sub(hip_at));
     let yaw = math::atan2_turns(t.z, t.x);
     let thigh = math::atan2_turns(t.y, V3::new(t.x, Fx::ZERO, t.z).flat_len());
-    // The shin on out along the floor, its far end a shin's half-thickness up.
+    // The shin folded back in under the thigh, along the floor, its far end
+    // a shin's half-thickness up: the knee is the outermost thing, and the
+    // first tread is what a fighter walking in meets first.
     let low = cm(80);
     let sink = knee_y.sub(low).clamp(Fx::ZERO, l2);
     let lie = l2.mul(l2).sub(sink.mul(sink)).max(Fx::ZERO).sqrt();
-    let foot = V3::new(knee.x, low, knee.z).add(out.scale(lie));
+    let foot = V3::new(knee.x, low, knee.z).sub(out.scale(lie));
     let u = root.rot.unapply(foot.sub(knee));
-    let shin = math::atan2_turns(u.y, V3::new(u.x, Fx::ZERO, u.z).flat_len());
+    let along = u.x.mul(cos_turns(yaw)).add(u.z.mul(sin_turns(yaw)));
+    let shin = math::atan2_turns(u.y, along);
     p.bone[bones::hip(leg)] = V3::new(Fx::ZERO, yaw, Fx::ZERO);
     p.bone[bones::thigh(leg)] = V3::new(thigh, Fx::ZERO, Fx::ZERO);
     p.bone[bones::shin(leg)] = V3::new(shin.sub(thigh), Fx::ZERO, Fx::ZERO);
-    // The foot folded back under the shin, lying on its side.
-    p.bone[bones::ankle(leg)] = V3::new(shin.neg().sub(math::QUARTER_TURN), Fx::ZERO, Fx::ZERO);
+    // The foot level, its pad flat under the folded shin.
+    p.bone[bones::ankle(leg)] = V3::new(shin.neg(), Fx::ZERO, Fx::ZERO);
     p
 }
 

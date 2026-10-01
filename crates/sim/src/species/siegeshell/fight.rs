@@ -451,6 +451,8 @@ fn set_up(w: &mut World, slot: usize) {
         }
     }
     m.health = health_of(m).max(1);
+    // No beat yet: the ring is long out.
+    w.lore.set_word(word::RING, 0xFFFF);
     let f = w.lore.word(word::FLAGS);
     w.lore.set_word(word::FLAGS, f | flag::SET_UP);
 }
@@ -534,7 +536,7 @@ pub fn ring_radius(age: u16) -> Fx {
 /// Is the ring out this frame?
 pub fn ring_live(w: &World) -> bool {
     let (_, age, _) = ring(w);
-    age >= 1 && (age as i32) <= Knob::RingFrames.raw() && w.frame > 1
+    age >= 1 && (age as i32) <= Knob::RingFrames.raw()
 }
 
 /// The legs of a tripod.
@@ -556,7 +558,7 @@ fn reachable(p: &state::Player) -> bool {
 fn footfall(w: &mut World, slot: usize) {
     let Some(m) = w.monsters[slot] else { return };
     let (t, age, mut struck) = ring(w);
-    if age == 0 && w.frame > 1 {
+    if age == 0 {
         // The pads, on the frame they land.
         let pad = Knob::PadRadius.fx().add(crate::tuning::body_radius());
         for i in 0..MAX_PLAYERS {
