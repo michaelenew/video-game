@@ -24,7 +24,7 @@ use sim::state::{Action, Phase};
 use sim::{Input, V3, World};
 
 use crate::report::{Tally, Threat};
-use crate::{Intent, Plan, REACTION, heavy, steer, turns_to_aim};
+use crate::{Hands, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
 
 /// Quiet: standing still, waiting for the wake.
 pub const QUIET: Intent = Intent("Quiet");
@@ -150,6 +150,8 @@ pub struct Sandmaw {
     slop: i32,
     rng: u32,
     hop: Fx,
+    /// Its class (`crate::class`).
+    hands: Hands,
 }
 
 impl Sandmaw {
@@ -179,6 +181,7 @@ impl Sandmaw {
                 ^ seed.wrapping_mul(0x27D4_EB2F))
                 | 1,
             hop,
+            hands: Hands::new(who, seed),
         };
         s.roll_slop();
         s
@@ -298,7 +301,7 @@ impl Sandmaw {
             return Input::default();
         }
         if me.aboard() {
-            return self.ride(&me, &beast);
+            return self.ride(w, &me, &beast);
         }
         // **Strayed out over the rim**: back in, over it.
         let b = w.arena().bounds;
@@ -485,7 +488,7 @@ impl Sandmaw {
                 }
                 // A spray this close is not walked out of: the dodge, loud
                 // as it is, on the last frames before it comes.
-                Some(self.out_or_dodge(me, out, beast.pos, left, live, a.active))
+                Some(self.out_or_dodge(w, me, out, beast.pos, left, live, a.active))
             }
             // The tail: under it.
             sandmaw::LASH => {
@@ -536,7 +539,7 @@ impl Sandmaw {
                 }
                 self.intent = EVADE;
                 let out = away_from(t.anchor, me.pos, V3::from_turns(beast.yaw));
-                Some(self.out_or_dodge(me, out, beast.pos, left, live, a.active))
+                Some(self.out_or_dodge(w, me, out, beast.pos, left, live, a.active))
             }
             // The dive: away from the hole.
             sandmaw::SOUND | sandmaw::DIVE => {
@@ -554,8 +557,10 @@ impl Sandmaw {
 
     /// Walking out, or -- in the last frames before a hit it cannot walk out
     /// of -- the dodge out.
+    #[allow(clippy::too_many_arguments)]
     fn out_or_dodge(
         &mut self,
+        w: &World,
         me: &sim::state::Player,
         out: V3,
         look_at: V3,
@@ -574,7 +579,8 @@ impl Sandmaw {
         };
         if real_left <= lead && self.dodge_left == 0 && me.action.actionable() {
             self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
-            return walking(me, out, look_at, Input::SHIFT);
+            let dodge = walking(me, out, look_at, Input::SHIFT);
+            return self.hands.leave(w, me, out, dodge);
         }
         walking(me, out, look_at, 0)
     }
@@ -583,11 +589,10 @@ impl Sandmaw {
     /// facing it -- in front at the throat, ready to hit into the swallow's
     /// open mouth. Beached: onto its back.
     fn punish(&mut self, w: &World, me: &sim::state::Player, beast: &Monster) -> Input {
-        let _ = w;
         self.bait_at = None;
         self.quiet_for = 0;
         if let Doing::Toppled { left } = beast.doing {
-            return self.climb(me, beast, left);
+            return self.climb(w, me, beast, left);
         }
         let ahead = V3::from_turns(beast.yaw);
         let rel = flat(me.pos.sub(beast.pos));
@@ -649,7 +654,7 @@ impl Sandmaw {
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let poke_busy = (poke.startup + poke.active + poke.recovery) as i32;
         let heavy_busy = crate::heavy_commitment(me.class) as i32;
-        let reach = poke.reach.add(Fx::ONE);
+        let reach = self.hands.reach(me).add(Fx::ONE);
         let near = wide_flat_dist(target, me.pos).raw() <= reach.raw();
         let swing = if self.cooldown == 0 && me.action.actionable() && near {
             if window > heavy_busy + EXIT {
@@ -680,11 +685,17 @@ impl Sandmaw {
             let yaw = atan2_turns(d.z, d.x);
             input.bits |= steer(yaw, dir);
         }
+        if swing != 0 {
+            return self.hands.hit(w, me, target, input, Some(window));
+        }
+        if !near && let Some(go) = self.hands.close_in(w, me, target, window) {
+            return go;
+        }
         input
     }
 
     /// **Beached**: up onto its back from beside the middle of it.
-    fn climb(&mut self, me: &sim::state::Player, beast: &Monster, left: u16) -> Input {
+    fn climb(&mut self, w: &World, me: &sim::state::Player, beast: &Monster, left: u16) -> Input {
         let middle = part_at(beast, sandmaw::SEG_ROOT);
         let to = flat(middle.sub(me.pos));
         self.intent = CLIMB;
@@ -693,7 +704,7 @@ impl Sandmaw {
             .y
             .add(sandmaw::SPECIES.shape(sandmaw::SEG_ROOT).max.y);
         if (left as i32) < REACTION as i32 + 20 || back.raw() >= self.hop.raw() {
-            return self.punish_beached(me, beast);
+            return self.punish_beached(w, me, beast);
         }
         let close = to.flat_len().raw() < Fx::from_int(3).raw();
         if close && me.grounded && self.leap_left == 0 {
@@ -705,7 +716,7 @@ impl Sandmaw {
     }
 
     /// Beached but not climbing: hit what is in reach from the sand.
-    fn punish_beached(&mut self, me: &sim::state::Player, beast: &Monster) -> Input {
+    fn punish_beached(&mut self, w: &World, me: &sim::state::Player, beast: &Monster) -> Input {
         let target = [
             sandmaw::HEAD_PART,
             sandmaw::SEG_N3,
@@ -716,10 +727,9 @@ impl Sandmaw {
         .map(|p| part_at(beast, p))
         .min_by_key(|p| wide_flat_dist(*p, me.pos).raw())
         .unwrap_or(beast.pos);
-        let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let to = flat(target.sub(me.pos));
         self.intent = PUNISH;
-        if to.flat_len().raw() > poke.reach.raw() {
+        if to.flat_len().raw() > self.hands.reach(me).raw() {
             return walking(me, to.normalized(), target, 0);
         }
         let swing = if self.cooldown == 0 && me.action.actionable() {
@@ -728,12 +738,17 @@ impl Sandmaw {
         } else {
             0
         };
-        looking(me, target, swing)
+        let input = looking(me, target, swing);
+        if swing != 0 {
+            let window = beast.frames_until_free() as i32 - REACTION as i32;
+            return self.hands.hit(w, me, target, input, Some(window));
+        }
+        input
     }
 
     /// **Aboard**: to the middle of the back, at the vents, crouched through
     /// the writhe -- and off when they clamp.
-    fn ride(&mut self, me: &sim::state::Player, beast: &Monster) -> Input {
+    fn ride(&mut self, w: &World, me: &sim::state::Player, beast: &Monster) -> Input {
         let along = V3::from_turns(beast.yaw);
         if self.leap_left > 0
             || matches!(
@@ -771,6 +786,9 @@ impl Sandmaw {
         let mut input = looking(me, vent, swing | walk);
         if walk == 0 {
             input.bits |= Input::CROUCH;
+        }
+        if swing != 0 {
+            return self.hands.hit(w, me, vent, input, None);
         }
         input
     }
@@ -891,6 +909,14 @@ impl Plan for Sandmaw {
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 

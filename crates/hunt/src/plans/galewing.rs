@@ -33,7 +33,7 @@ use sim::state::{Action, Phase, Player};
 use sim::{Class, Input, V3, World};
 
 use crate::report::{HALF_VIEW, Tally};
-use crate::{Hunter, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
+use crate::{Hands, Hunter, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
 
 pub const HOME: Intent = Intent("Home");
 pub const DODGE: Intent = Intent("Dodge");
@@ -104,6 +104,13 @@ pub struct Galewing {
     gamble: Gamble,
     /// Climbing the tower: the ledge it is going for, or none.
     climbing: Option<usize>,
+    /// Its class (`crate::class`); and what this frame's choice was for it:
+    /// the point a swing went at, in what window, which way a dodge went,
+    /// and where it waits.
+    hands: Hands,
+    aimed: Option<(V3, Option<i32>)>,
+    out: Option<V3>,
+    waiting: Option<(V3, V3, i32)>,
 }
 
 impl Galewing {
@@ -126,6 +133,10 @@ impl Galewing {
             hop,
             gamble,
             climbing: None,
+            hands: Hands::new(who, seed),
+            aimed: None,
+            out: None,
+            waiting: None,
         };
         p.roll_slop();
         p
@@ -328,6 +339,9 @@ impl Plan for Galewing {
         let Some(s) = bird(&seen) else {
             return Input::default();
         };
+        self.aimed = None;
+        self.out = None;
+        self.waiting = None;
         let mut input = if fight::carried(&w.lore) == Some(self.who) {
             self.legs(&me, &now)
         } else if me.aboard() {
@@ -337,6 +351,33 @@ impl Plan for Galewing {
         };
         if self.leap_left > 0 {
             input = input.with(Input::SPACE);
+        }
+        // The class's turn: what the choice was for, in its own hands. What
+        // it throws at a point it aims at that point -- a shot is not craned
+        // down below it, so the clamp below does not apply to one.
+        let planned = input;
+        const ATTACKS: u16 =
+            Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL | Input::MECHANIC;
+        if input.bits & ATTACKS != 0
+            && let Some((at, window)) = self.aimed
+        {
+            input = self.hands.hit(w, &me, at, input, window);
+        } else if input.bits & Input::SHIFT != 0
+            && let Some(out) = self.out
+        {
+            input = self.hands.leave(w, &me, out, input);
+        } else if let Some((at, Some(window))) = self.aimed
+            && wide_flat_dist(at, me.pos).raw() > self.hands.reach(&me).add(Fx::ONE).raw()
+            && let Some(go) = self.hands.close_in(w, &me, at, window)
+        {
+            input = go;
+        } else if let Some((beast, at, safe)) = self.waiting
+            && let Some(own) = self.hands.idle(w, &me, beast, at, safe)
+        {
+            input = own;
+        }
+        if input != planned {
+            return input;
         }
         // **Never craned at the sky from the floor**, unless shooting at it:
         // under a bird standing over you, the part you swing at is metres
@@ -352,11 +393,20 @@ impl Plan for Galewing {
     fn intent(&self) -> Intent {
         self.intent
     }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
+    }
 }
 
 impl Galewing {
     /// Swing: if it can, at `at`, else nothing.
     fn swing(&mut self, me: &Player, at: V3, bits: u16) -> Input {
+        self.aimed = Some((at, self.aimed.and_then(|(_, w)| w)));
         let yaw = yaw_of(at.sub(me.pos));
         let mut b = bits;
         if self.cooldown == 0 && me.action.actionable() {
@@ -497,6 +547,7 @@ impl Galewing {
                     self.roll_slop();
                     self.dodge_left = 20;
                     self.intent = DODGE;
+                    self.out = Some(away);
                     return Some(wire(me, yaw, None, steer(yaw, away) | Input::SHIFT));
                 }
                 self.intent = DODGE;
@@ -645,6 +696,8 @@ impl Galewing {
         let crashed = fight::crashed(s);
         let (part, at) = nearest_wing(s, me.pos, false);
         self.intent = WING;
+        // The window it can see: what is left of the crash or the dwell.
+        self.aimed = Some((at, Some(s.frames_until_free() as i32 - REACTION as i32)));
         if crashed {
             // Up the wing: walk at the root, along the wing.
             let (root, _) = nearest_wing(s, me.pos, true);
@@ -786,6 +839,11 @@ impl Galewing {
         let look = V3::new(s.pos.x, me.pos.y, s.pos.z);
         if wide_flat_dist(me.pos, home).raw() > HOME_SLACK.raw() {
             return walk(me, home, Some(look), 0);
+        }
+        // At home with the bird down and nothing begun: the class's own
+        // business.
+        if !fight::aloft(s) && s.doing.attacking().is_none() {
+            self.waiting = Some((s.pos, part_at(s, gw::BACK), i32::MAX));
         }
         wire(me, yaw_of(look.sub(me.pos)), None, 0)
     }

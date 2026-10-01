@@ -29,10 +29,12 @@
 //! every plan shares: the reaction delay, the keyboard, the jump, and the loop
 //! that plays a hunt and hands back a [`Report`].
 
+pub mod class;
 pub mod duel;
 pub mod plans;
 pub mod report;
 
+pub use class::{Hands, Uses};
 pub use duel::{Duelist, Level};
 pub use report::{Outcome, Report};
 
@@ -74,6 +76,16 @@ pub trait Plan {
     fn act(&mut self, w: &World) -> Input;
     /// What it is trying to do this frame, for the report's play sequence.
     fn intent(&self) -> Intent;
+    /// **Its class, in its hands** (`crate::class`), for a plan that has
+    /// wired one in: [`Hunter::act`] gives every frame's input to
+    /// [`Hands::finish`] after the plan, and the report counts what it did.
+    fn hands(&mut self) -> Option<&mut Hands> {
+        None
+    }
+    /// The same, to read.
+    fn hands_ref(&self) -> Option<&Hands> {
+        None
+    }
 }
 
 /// One scripted fighter, playing its creature's plan.
@@ -121,8 +133,18 @@ impl Hunter {
     }
 
     pub fn act(&mut self, w: &World) -> Input {
-        self.last = self.plan.act(w);
+        let raw = self.plan.act(w);
+        let me = w.players[self.who];
+        self.last = match self.plan.hands() {
+            Some(hands) => hands.finish(w, &me, raw),
+            None => raw,
+        };
         self.last
+    }
+
+    /// What it did with its class, if its plan plays one (`crate::class`).
+    pub fn uses(&self) -> Option<Uses> {
+        self.plan.hands_ref().map(|h| h.uses)
     }
 
     pub fn intent(&self) -> Intent {

@@ -172,54 +172,9 @@ impl Duelist {
                 }
                 bias
             }
-            Class::DualMage => self.dual_bias(me, t),
+            Class::DualMage => dual_bias(me, t.kind),
             Class::Champion => 100,
         }
-    }
-
-    /// The Dual mage's two bars: never widen the gap past the band, prefer
-    /// what closes it, and do not stumble into ascension with nobody to hit.
-    fn dual_bias(&self, me: &Player, t: Tool) -> i32 {
-        let Some((dark, light)) = sim::dual::bars(me) else {
-            return 100;
-        };
-        // An auto pushes its own bar and changes what she carries; every cast
-        // -- the lance included, whatever colour the table names it -- pushes
-        // the bar she is carrying.
-        let (push, force) = match moves::dual::force(t.kind) {
-            Some(f) if moves::dual::is_an_auto(t.kind) => (sim::tuning::meter_auto_push(), f),
-            _ if moves::dual::is_the_finisher(t.kind) => {
-                (sim::tuning::meter_finisher_push(), state::carrying(me))
-            }
-            _ => (sim::tuning::meter_cast_push(), state::carrying(me)),
-        };
-        let top = Fx::from_int(sim::tuning::meter_max());
-        let push = Fx::from_int(push);
-        let (d, l) = match force {
-            Force::Dark => (dark.add(push).min(top), light),
-            Force::Light => (dark, light.add(push).min(top)),
-        };
-        let band = Fx::from_int(sim::tuning::meter_band());
-        let gap_now = dark.sub(light).abs();
-        let gap = d.sub(l).abs();
-        if gap.raw() > band.raw() && gap.raw() > gap_now.raw() {
-            // It burns her. Never.
-            return 0;
-        }
-        let wings = Fx::from_int(sim::tuning::tier_wings());
-        let lower = d.min(l);
-        let red = me.health * 100 / me.full_health().max(1);
-        if lower.raw() >= wings.raw() && !sim::dual::ascending(me) && red < 60 {
-            // Ascension costs a great deal of health, and pays it back only
-            // in hits. Not from behind.
-            return 0;
-        }
-        let lower_side = if dark.raw() <= light.raw() {
-            Force::Dark
-        } else {
-            Force::Light
-        };
-        if force == lower_side { 300 } else { 60 }
     }
 
     /// One frame of the class's own play.
@@ -635,4 +590,55 @@ impl Duelist {
         let ahead = Fx::from_int(self.lag as i32 + frames).mul(sim::DT);
         seen.them.pos.add(flat(seen.them.vel).scale(ahead))
     }
+}
+
+/// The Dual mage's two bars as they would be after `kind` is thrown: an auto
+/// pushes its own bar, every cast -- the lance included, whatever colour the
+/// table names it -- the bar she is carrying. With the force it pushed.
+pub(crate) fn dual_after(me: &Player, kind: u8) -> Option<(Fx, Fx, Force)> {
+    let (dark, light) = sim::dual::bars(me)?;
+    let (push, force) = match moves::dual::force(kind) {
+        Some(f) if moves::dual::is_an_auto(kind) => (sim::tuning::meter_auto_push(), f),
+        _ if moves::dual::is_the_finisher(kind) => {
+            (sim::tuning::meter_finisher_push(), state::carrying(me))
+        }
+        _ => (sim::tuning::meter_cast_push(), state::carrying(me)),
+    };
+    let top = Fx::from_int(sim::tuning::meter_max());
+    let push = Fx::from_int(push);
+    Some(match force {
+        Force::Dark => (dark.add(push).min(top), light, force),
+        Force::Light => (dark, light.add(push).min(top), force),
+    })
+}
+
+/// The Dual mage's two bars, weighed for one move: never widen the gap past
+/// the band, prefer what closes it, and do not stumble into ascension with
+/// nobody to hit.
+pub(crate) fn dual_bias(me: &Player, kind: u8) -> i32 {
+    let (Some((dark, light)), Some((d, l, force))) = (sim::dual::bars(me), dual_after(me, kind))
+    else {
+        return 100;
+    };
+    let band = Fx::from_int(sim::tuning::meter_band());
+    let gap_now = dark.sub(light).abs();
+    let gap = d.sub(l).abs();
+    if gap.raw() > band.raw() && gap.raw() > gap_now.raw() {
+        // It burns her. Never.
+        return 0;
+    }
+    let wings = Fx::from_int(sim::tuning::tier_wings());
+    let lower = d.min(l);
+    let red = me.health * 100 / me.full_health().max(1);
+    if lower.raw() >= wings.raw() && !sim::dual::ascending(me) && red < 60 {
+        // Ascension costs a great deal of health, and pays it back only
+        // in hits. Not from behind.
+        return 0;
+    }
+    let lower_side = if dark.raw() <= light.raw() {
+        Force::Dark
+    } else {
+        Force::Light
+    };
+    if force == lower_side { 300 } else { 60 }
 }
