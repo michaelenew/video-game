@@ -24,6 +24,11 @@
 //!   through.
 //! - **The calm-down**, the ford, and the coop numbers.
 //! - **The ride**: see [`ride`].
+//! - **The crossing** (§11): where the arena has a cart, the herd walks
+//!   beside the road ahead of it and crosses in waves on a schedule, each
+//!   drawn on the road `CartLaneWarn` before it runs; and the bull charges
+//!   the cart when the cart is nearer the herd than any hunter and nobody has
+//!   hit it lately.
 
 use super::mind::{
     self, HerdState, bits, bull, cow, half, herd_centre, herd_state, horns_whole, lane_frame,
@@ -38,6 +43,7 @@ use crate::critter::{Critter, CritterField, MAX_CRITTERS, flag, is, stat, stat_f
 use crate::fixed::Fx;
 use crate::hazard::{self, Hazard};
 use crate::math::V3;
+use crate::objective;
 use crate::pack::{Pack, mood, yaw_of};
 use crate::state::{Action, MAX_PLAYERS, World};
 use crate::stones::MAX_STONES;
@@ -51,10 +57,12 @@ pub mod word {
     /// Each critter's ride clock: frames a fighter has been on its back.
     /// Sixteen bits a body, two to a word, from word 1.
     pub const RIDE: usize = 1;
-    /// The crossing's migration: frames to the next wave.
+    /// The crossing's migration: frames since the last wave ran (low half),
+    /// and how many have run (high half).
     pub const WAVE: usize = 6;
-    /// The crossing's lane on the road: where it is and which way it runs,
-    /// while it is drawn ahead of a wave.
+    /// The crossing's next wave while it is drawn: where it crosses the road,
+    /// in centimetres along x biased by half the sixteen bits (low half), and
+    /// [`super::wave`] bits (high half).
     pub const WAVE_AT: usize = 7;
 }
 
@@ -287,6 +295,7 @@ pub fn frame(w: &mut World) {
         bull_begins(w, &ground, &mut pack, b);
     }
     bull_runs(w, &ground, &mut pack, b, was_state, was_act);
+    crossing(w, &ground, &mut pack);
     stampede(w, &ground, &mut pack);
     cows(w, &mut pack);
     glance(w, &mut pack, b);
@@ -559,7 +568,19 @@ fn stun(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize, hit: Stopper
                 }
             }
         }
-        Stopper::Arena(_) | Stopper::Raised(_) => {}
+        Stopper::Raised(s) => {
+            // The cart: the charge's whole blow, once a charge.
+            if let Some(o) = the_cart(w).filter(|o| o.solid() == s) {
+                let bit = 1u16 << b;
+                let mut state = o.state;
+                if state.struck_by_critters & bit == 0 {
+                    state.struck_by_critters |= bit;
+                    objective::set(&mut w.lore, o.index, state);
+                    objective::strike(&mut w.lore, o.index, sp.attack(CHARGE).damage);
+                }
+            }
+        }
+        Stopper::Arena(_) => {}
     }
 }
 
@@ -587,15 +608,7 @@ fn call_the_herd(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize) {
     let tail = stat_fx(sp, COW, CritterField::Length);
     let at = middle.add(dir.scale(back.sub(tail)));
     // ...to the arena's edge, or the face of something that fills the lane.
-    let mut len = to_the_edge(ground, at, dir).add(knob_fx(Knob::EdgeMargin));
-    let width = knob_fx(Knob::LaneWidth);
-    for s in ground.solids().filter(|s| stops(ground, s)) {
-        let (lo_a, _, lo_c, hi_c) = mind::shadow(at, dir, s.min, s.max);
-        let half = width.mul(Fx::ratio(1, 2));
-        if lo_c.raw() <= half.neg().raw() && hi_c.raw() >= half.raw() && lo_a.raw() > 0 {
-            len = len.min(lo_a);
-        }
-    }
+    let len = lane_reach(w, ground, at, dir);
     mind::set_lane(pack, at, dir, len);
     for t in 0..MAX_PLAYERS {
         mind::set_trampled(pack, t, false);
@@ -614,6 +627,178 @@ fn call_the_herd(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize) {
     }
 }
 
+/// **How far a lane from `at` along `dir` runs**: to the arena's edge and
+/// `EdgeMargin` past it, or to the face of a solid that fills its whole width.
+/// The cart is not one: a wave runs into it rather than round it.
+fn lane_reach(w: &World, ground: &Terrain, at: V3, dir: V3) -> Fx {
+    let mut len = to_the_edge(ground, at, dir).add(knob_fx(Knob::EdgeMargin));
+    let width = knob_fx(Knob::LaneWidth);
+    let cart = the_cart(w).map(|o| o.solid());
+    for s in ground
+        .solids()
+        .filter(|s| stops(ground, s) && Some(**s) != cart)
+    {
+        let (lo_a, _, lo_c, hi_c) = mind::shadow(at, dir, s.min, s.max);
+        let half = width.mul(Fx::ratio(1, 2));
+        if lo_c.raw() <= half.neg().raw() && hi_c.raw() >= half.raw() && lo_a.raw() > 0 {
+            len = len.min(lo_a);
+        }
+    }
+    len
+}
+
+/// The defended thing standing in this fight, if it has one: the crossing's
+/// cart, still whole and still on its road.
+pub fn the_cart(w: &World) -> Option<objective::Standing> {
+    objective::standing(&w.lore, w.arena.get()).find(|o| !o.state.broken && !o.state.arrived)
+}
+
+/// Bits of the high half of [`word::WAVE_AT`].
+pub mod wave {
+    /// A wave is drawn on the road, to run when the clock comes round.
+    pub const DRAWN: u32 = 1;
+    /// It runs toward +z (from the herd's side south of the road).
+    pub const NORTHWARD: u32 = 2;
+}
+
+/// **The wave drawn on the road**, if one is: where its lane starts, which
+/// way it runs, how far, and how wide -- the lane the cows will run when the
+/// clock comes round, worked out the way a bellow's is. What the floor sign,
+/// the hunter and the run itself all read.
+pub fn wave_lane(w: &World) -> Option<(V3, V3, Fx, Fx)> {
+    let v = w.lore.word(word::WAVE_AT);
+    let bits = v >> 16;
+    if bits & wave::DRAWN == 0 {
+        return None;
+    }
+    let x = Fx::ratio((v & 0xFFFF) as i32 - 0x8000, 100);
+    let (z, dir) = if bits & wave::NORTHWARD != 0 {
+        (knob_fx(Knob::WaveFrom).neg(), Fx::ONE)
+    } else {
+        (knob_fx(Knob::WaveFrom), Fx::ONE.neg())
+    };
+    let at = V3::new(x, Fx::ZERO, z);
+    let dir = V3::new(Fx::ZERO, Fx::ZERO, dir);
+    let ground = w.terrain();
+    Some((
+        at,
+        dir,
+        lane_reach(w, &ground, at, dir),
+        knob_fx(Knob::LaneWidth),
+    ))
+}
+
+/// Frames until the drawn wave runs, if one is drawn.
+pub fn wave_in(w: &World) -> Option<i32> {
+    wave_lane(w)?;
+    let since = (w.lore.word(word::WAVE) & 0xFFFF) as i32;
+    Some((knob(Knob::CartLanePeriod) - since).max(0))
+}
+
+/// **The crossing** (§11), each frame of a fight with a cart in it.
+///
+/// - **The bull's quarry**: the cart, when it is nearer the herd than any
+///   hunter and nobody's blow is still on the bull's mind (its strain): the
+///   memo's [`memo::SINCE`] high half holds the cart's place on the road, plus
+///   one, for the mind to aim at; nought otherwise.
+/// - **The migration**: the herd's home walks beside the road ahead of the
+///   cart, on whichever side it is. `CartLaneWarn` before each wave the lane
+///   is drawn across the road `WaveAhead` past the cart and the herd gathers
+///   behind its start; when the clock comes round the cows run it, as a
+///   bellow's stampede, and gather on the far side for the next.
+fn crossing(w: &mut World, ground: &Terrain, pack: &mut Pack) {
+    let _ = ground;
+    let Some(cart) = the_cart(w) else {
+        set_half(pack, memo::SINCE, 1, 0);
+        return;
+    };
+    let middle = herd_centre(pack, &w.critters);
+    let flat = |a: V3, b: V3| V3::new(a.x.sub(b.x), Fx::ZERO, a.z.sub(b.z)).flat_len();
+    let to_cart = flat(cart.at, middle);
+    let nearer = w
+        .players
+        .iter()
+        .filter(|p| p.health > 0)
+        .all(|p| flat(p.pos, middle).raw() > to_cart.raw());
+    let held = pack.memo[memo::STRAIN] > 0;
+    let quarry = pack.mood == mood::HUNTING && nearer && !held;
+    let along = crate::lore::to_cm(cart.state.along()) as i32;
+    set_half(pack, memo::SINCE, 1, if quarry { along + 1 } else { 0 });
+
+    if matches!(pack.mood, mood::BROKEN | mood::ROUTED) {
+        return;
+    }
+    let word = w.lore.word(word::WAVE);
+    let (since, count) = ((word & 0xFFFF) as i32, word >> 16);
+    let period = knob(Knob::CartLanePeriod).max(1);
+    let warn = knob(Knob::CartLanePeriod)
+        .min(knob(Knob::CartLaneWarn))
+        .max(0);
+    let state = herd_state(pack);
+    let busy = matches!(state, HerdState::Stampede | HerdState::Returning);
+    let south = middle.z.raw() < 0;
+    let side = if south { Fx::ONE.neg() } else { Fx::ONE };
+    let drawn = wave_lane(w);
+    // Home: beside the road ahead of the cart, or behind the drawn lane's start.
+    if !busy {
+        let x = match drawn {
+            Some((at, ..)) => at.x,
+            None => cart.at.x.add(knob_fx(Knob::WaveAhead)),
+        };
+        let behind = stat_fx(&super::SPECIES, COW, CritterField::Length);
+        pack.home = V3::new(x, Fx::ZERO, side.mul(knob_fx(Knob::WaveFrom).add(behind)));
+    }
+    let mut since = (since + 1).min(0xFFFF);
+    if drawn.is_none() && since >= period - warn {
+        // Draw it: across the road ahead of the cart, from the herd's side.
+        let ahead = cart.at.x.add(knob_fx(Knob::WaveAhead));
+        let (lo, hi) = (ground.bounds.lo_x, ground.bounds.hi_x);
+        let x = ahead.clamp(lo, hi);
+        let cm = (crate::lore::to_cm(x) as i32 + 0x8000).clamp(0, 0xFFFF) as u32;
+        let bits = wave::DRAWN | if south { wave::NORTHWARD } else { 0 };
+        w.lore.set_word(word::WAVE_AT, cm | bits << 16);
+    }
+    if since >= period {
+        match wave_lane(w) {
+            Some((at, dir, len, _)) if !busy => {
+                // Run it: the bellow's stampede, on this lane, with no windup
+                // left -- the drawing was the windup.
+                mind::set_lane(pack, at, dir, len);
+                for t in 0..MAX_PLAYERS {
+                    mind::set_trampled(pack, t, false);
+                }
+                set_herd(pack, HerdState::Stampede);
+                set_half(pack, memo::CLOCKS, 0, knob(Knob::RunFrames));
+                for c in w.critters.iter_mut() {
+                    if !with_herd(c) || c.state != is::PROWL {
+                        continue;
+                    }
+                    c.state = is::STARTUP;
+                    c.act = STAMPEDE;
+                    c.timer = 1;
+                    c.set(flag::HIT_USED, false);
+                }
+                // Home is the far side now.
+                let far = knob_fx(Knob::WaveFrom).add(stat_fx(
+                    &super::SPECIES,
+                    COW,
+                    CritterField::Length,
+                ));
+                pack.home = V3::new(at.x, Fx::ZERO, side.neg().mul(far));
+                w.lore.set_word(word::WAVE_AT, 0);
+                since = 0;
+                w.lore
+                    .set_word(word::WAVE, (count + 1) << 16 | since as u32);
+                return;
+            }
+            // Still running the last, or a bellow's: it waits.
+            Some(_) => since = period,
+            None => since = 0,
+        }
+    }
+    w.lore.set_word(word::WAVE, count << 16 | since as u32);
+}
+
 /// The obstacles in a lane: every solid that stops a cow, every stone, and
 /// the bull standing in it -- each as a footprint box.
 pub(super) fn obstacles(w: &World, ground: &Terrain) -> ([Option<(V3, V3)>; 24], usize) {
@@ -625,7 +810,11 @@ pub(super) fn obstacles(w: &World, ground: &Terrain) -> ([Option<(V3, V3)>; 24],
             n += 1;
         }
     };
-    for s in ground.solids().filter(|s| stops(ground, s)) {
+    let cart = the_cart(w).map(|o| o.solid());
+    for s in ground
+        .solids()
+        .filter(|s| stops(ground, s) && Some(**s) != cart)
+    {
         push(s.min, s.max);
     }
     for stone in crate::stones::gather(&w.players).iter().flatten() {

@@ -4,15 +4,17 @@
 //!     cargo run -p hunt --bin fight -- --class bulwark --trace --repeats 5
 //!     cargo run -p hunt --bin fight -- --species ridgeback
 //!     cargo run -p hunt --bin fight -- --temper 3 --repeats 10
+//!     cargo run -p hunt --bin fight -- --species hornback --arena crossing
 //!
 //! Any species with a plan (`crates/hunt/src/plans/`); the Ridgeback by
 //! default. `--temper <n>` fights it at a temper (`sim::temper`), as tuned by
-//! default.
+//! default. `--arena <name>` fights it somewhere other than its own arena:
+//! the Hornback's crossing is `--arena crossing`.
 //!
 //! The point is not the outcome. It is the eight or nine numbers underneath
 //! it, which are what turn "the fight feels off" into a thing you can point at.
 
-use hunt::{Outcome, play_tempered};
+use hunt::Outcome;
 
 fn arg(flag: &str) -> Option<String> {
     let mut args = std::env::args().skip(1);
@@ -47,6 +49,13 @@ fn main() {
         },
         None => sim::species::SpeciesId::RIDGEBACK,
     };
+    let arena = arg("--arena").map(|name| match sim::arena::named(&name) {
+        Some(a) => a.id,
+        None => {
+            eprintln!("no arena is called {name}");
+            std::process::exit(2);
+        }
+    });
     let temper: u8 = arg("--temper")
         .and_then(|n| n.parse().ok())
         .unwrap_or(0)
@@ -72,8 +81,9 @@ fn main() {
     let mut landed = [0u32; sim::species::MAX_MOVES];
     let mut names: Vec<&'static str> = Vec::new();
     for run in 0..repeats.max(1) {
-        let report = play_tempered(
+        let report = hunt::play_in(
             species,
+            arena,
             temper,
             [class; sim::state::MAX_PLAYERS],
             partners,

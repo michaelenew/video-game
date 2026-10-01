@@ -23,6 +23,13 @@
 //! And the Elementalist's own play (§7): a charge whose lane ends in no solid
 //! gets a stone raised into it after the head drops.
 //!
+//! **The crossing** (§11) is the same plan with one more rule over where to
+//! stand: beside the cart, between it and the bull, so the cart rolls and the
+//! bull's nearest threat is a hunter; past the cart's escort distance -- so it
+//! stops -- whenever a lane drawn on the road is about to take it; and out of
+//! line with the cart while a charge winds up, so the lane the bull locks is
+//! away from the road.
+//!
 //! **Riding is plan v2** (§9): after a bellow, one hunt in three it catches a
 //! returning cow and jumps off behind the bull, so the ride's numbers exist.
 //!
@@ -54,6 +61,9 @@ pub const WALK: Intent = Intent("Walk");
 pub const WEDGE: Intent = Intent("Wedge");
 pub const RAISE: Intent = Intent("Raise");
 pub const RIDE: Intent = Intent("Ride");
+pub const ESCORT: Intent = Intent("Escort");
+pub const STOP: Intent = Intent("Stop");
+pub const BAIT: Intent = Intent("Bait");
 
 /// How far in front of the rock it stands: two to four metres (§9 step 1).
 const OFF_ROCK: Fx = Fx::from_raw(3 << 16);
@@ -95,6 +105,15 @@ const JUMP_HOLD: u32 = 30;
 const SPENT_NEAR: Fx = Fx::from_raw(3 << 16);
 /// What standing at the bank costs, in metres of walking, over a boulder.
 const BANK_COST: Fx = Fx::from_raw(6 << 16);
+/// Escorting, it stands this far off the road on the bull's side...
+const BESIDE_CART: Fx = Fx::from_raw(3 << 16);
+/// ...and this far ahead of the cart along it: off the line from the bull
+/// through the cart, by more than the cart rolls while a charge comes.
+const CART_LEAD: Fx = Fx::ratio(45, 10);
+/// The cart is stopped when a lane drawn on the road is this near its front.
+const STOP_SHORT: Fx = Fx::from_raw(4 << 16);
+/// Stopping it, it stands this far past the escort distance.
+const PAST_ESCORT: Fx = Fx::ratio(15, 10);
 /// How far a stone is raised in front of the Elementalist into a lane.
 const STONE_AHEAD: Fx = Fx::from_raw(5 << 16);
 
@@ -362,6 +381,10 @@ impl Plan for Hornback {
             Fx::ONE
         };
 
+        // **The crossing**: where to stand to roll the cart or stop it.
+        let cart = h::rules::the_cart(w);
+        let escort = cart.map(|o| self.escort(w, &seen, &bull, &o));
+
         // 7. **On the floor, nothing; up, walk.**
         let down = matches!(me.action, Action::Stagger { .. } | Action::HitStun { .. });
         if self.was_down && !down {
@@ -374,7 +397,7 @@ impl Plan for Hornback {
         }
 
         // Not roused yet: walk at the herd until it is.
-        if seen.calm {
+        if seen.calm && escort.is_none() {
             self.intent = ROUSE;
             let to = flat(bull.pos.sub(me.pos));
             return Input::aimed(steer(bull_yaw, to), bull_aim);
@@ -416,7 +439,7 @@ impl Plan for Hornback {
             return Input::aimed(Input::CROUCH, bull_aim);
         }
         self.rode = 0;
-        if self.rides && seen.returning && me.grounded && free {
+        if self.rides && escort.is_none() && seen.returning && me.grounded && free {
             // A cow coming home past: stand in its way and jump as it
             // arrives, so it runs under the feet.
             let near = seen
@@ -528,6 +551,18 @@ impl Plan for Hornback {
             return Input::aimed(0, bull_aim);
         }
 
+        // The crossing: a lane is about to take the cart -- leave it, so it
+        // stops, before anything else.
+        if let (Some((at, true)), Some(o)) = (escort, cart) {
+            let sp_h = sim::species::lookup(sim::species::SpeciesId::HORNBACK).unwrap();
+            let near =
+                sim::objective::stat_fx(sp_h, o.index, sim::objective::ObjectiveField::Escort);
+            if flat(me.pos.sub(o.at)).flat_len().raw() <= near.add(Fx::ratio(1, 2)).raw() {
+                self.intent = STOP;
+                return Input::aimed(steer(bull_yaw, flat(at.sub(me.pos))), bull_aim);
+            }
+        }
+
         // 3. **The stun**: to the head, and hit it; leave with time to spare.
         if bull.stunned {
             let from = *self
@@ -592,6 +627,36 @@ impl Plan for Hornback {
         let in_lane = along.raw() > 0 && across.abs().raw() < half_wid.add(LANE_SLACK).raw();
         if !charging {
             self.raised_for = false;
+        }
+        // Escorting, and the cart behind it in the lane being wound up: walk
+        // across the bull's line before it locks, so the lane misses the road
+        // (§11).
+        if charging && bull.state == is::STARTUP && bull.timer > lock {
+            if let Some(o) = cart {
+                let rel_cart = flat(o.at.sub(bull.pos));
+                let ext = o.site.extent();
+                let wide = half_wid.add(ext.x.max(ext.z)).add(LANE_SLACK);
+                let behind = rel_cart.dot(bull.facing).raw() > 0
+                    && rel_cart.dot(side).abs().raw() < wide.raw();
+                if behind {
+                    self.intent = BAIT;
+                    // Across the line, and away from the cart: out of the
+                    // escort's reach, so the cart stops where it is.
+                    let away = if rel_cart.dot(side).raw() >= 0 {
+                        side.scale(Fx::ONE.neg())
+                    } else {
+                        side
+                    };
+                    let off = flat(me.pos.sub(o.at));
+                    let off = if off.flat_len().raw() > 0 {
+                        off.normalized()
+                    } else {
+                        away
+                    };
+                    let way = away.add(away).add(off).normalized();
+                    return Input::aimed(steer(bull_yaw, way), bull_aim);
+                }
+            }
         }
         if charging && in_lane {
             let dropped = bull.state == is::ACTIVE || bull.timer <= lock;
@@ -731,7 +796,11 @@ impl Plan for Hornback {
             // cannot, punish.
             if !open && !(close && !free) {
                 self.intent = ROUND;
-                if let Some(post) = self.post(w, &me, &bull, side) {
+                let post = match escort {
+                    Some((at, _)) => Some(at),
+                    None => self.post(w, &me, &bull, side),
+                };
+                if let Some(post) = post {
                     let to = flat(post.sub(me.pos));
                     // Out of its reach first, then to the post: from in front
                     // of it, sideways off the line its hook and its charge
@@ -787,6 +856,16 @@ impl Plan for Hornback {
             return Input::looking_at(button, bull_aim, bull_pitch);
         }
 
+        // The crossing: beside the cart, or clear of it to stop it.
+        if let Some((at, stopping)) = escort {
+            let to = flat(at.sub(me.pos));
+            self.intent = if stopping { STOP } else { ESCORT };
+            if to.flat_len().raw() > AT_POST.mul(Fx::ratio(1, 2)).raw() {
+                return Input::aimed(steer(bull_yaw, to), bull_aim);
+            }
+            return Input::aimed(0, bull_aim);
+        }
+
         // 1. **A rock at your back**, on the line from the bull through you.
         let post = self.post(w, &me, &bull, side);
         if let Some(post) = post {
@@ -808,6 +887,84 @@ impl Plan for Hornback {
 }
 
 impl Hornback {
+    /// **Where to stand on the crossing** (§11), and whether that is to stop
+    /// the cart: beside it toward the bull while it may roll, past its escort
+    /// distance while a lane drawn on the road is within `STOP_SHORT` of its
+    /// front -- a stampede's or a wave's, as drawn.
+    fn escort(
+        &self,
+        w: &World,
+        seen: &Seen,
+        bull: &Bull,
+        cart: &sim::objective::Standing,
+    ) -> (V3, bool) {
+        let sp = sim::species::lookup(sim::species::SpeciesId::HORNBACK).unwrap();
+        let near = sim::objective::stat_fx(sp, cart.index, sim::objective::ObjectiveField::Escort);
+        let ext = cart.site.extent();
+        let road = cart.dir;
+        let across = V3::new(road.z.neg(), Fx::ZERO, road.x);
+        let ahead = cart.at.add(road.scale(ext.x.add(STOP_SHORT)));
+        let lanes = seen.signs.iter().filter(|s| {
+            s.shape == Shape::Strip
+                && matches!(s.says, Says::Coming | Says::Live)
+                && s.width.raw() > Fx::from_int(6).raw()
+        });
+        let mut stop = false;
+        for lane in lanes {
+            for k in [-1, 0, 1] {
+                let p = ahead.add(across.scale(ext.z.mul(Fx::from_int(k))));
+                stop |= lane.covers(p)
+                    || lane.covers(cart.at.add(across.scale(ext.z.mul(Fx::from_int(k)))));
+            }
+        }
+        // Toward the bull and the herd -- nearer both than the cart is, so
+        // the bull's threat is a hunter -- or the herd's side if it is gone.
+        let mut herd = V3::ZERO;
+        let mut n = 0;
+        for (alive, at, ..) in seen.cows.iter().filter(|c| c.0) {
+            let _ = alive;
+            herd = herd.add(flat(*at));
+            n += 1;
+        }
+        let mut to = if bull.alive {
+            flat(bull.pos.sub(cart.at)).normalized()
+        } else {
+            V3::ZERO
+        };
+        if n > 0 {
+            let middle = herd.scale(Fx::ONE.div(Fx::from_int(n)));
+            to = to.add(flat(middle.sub(cart.at)).normalized());
+        }
+        let toward = if to.flat_len().raw() > 0 {
+            to.normalized()
+        } else {
+            across
+        };
+        let _ = w;
+        if stop {
+            let back = road.scale(Fx::from_int(2).neg());
+            (
+                cart.at.add(toward.scale(near.add(PAST_ESCORT))).add(back),
+                true,
+            )
+        } else {
+            // Off the road on the bull's side, and ahead: never on the line
+            // from the bull through the cart, so a charge at the hunter runs
+            // past the cart's front rather than into it.
+            let out = if toward.dot(across).raw() >= 0 {
+                across
+            } else {
+                across.scale(Fx::ONE.neg())
+            };
+            (
+                cart.at
+                    .add(out.scale(BESIDE_CART))
+                    .add(road.scale(CART_LEAD)),
+                false,
+            )
+        }
+    }
+
     /// **Where to stand** (§9 step 1): in front of a rock, `OFF_ROCK` off
     /// it, on the line from the bull through you -- the nearest such place,
     /// but not one beside the bull nor one whose way there passes it, and
@@ -872,6 +1029,13 @@ pub struct Lines {
     charge_dodging: bool,
     charge_hit: bool,
     lee_checked: bool,
+    /// The crossing (§11): waves run, the cart's damage by what did it, and
+    /// frames it stood stopped with a lane drawn ahead.
+    waves: u32,
+    cart_by_charge: i32,
+    cart_by_herd: i32,
+    held_short: u32,
+    crossing: bool,
 }
 
 impl crate::report::Tally for Lines {
@@ -879,6 +1043,31 @@ impl crate::report::Tally for Lines {
         let (Some(was), Some(now)) = (before.pack, after.pack) else {
             return;
         };
+        // The crossing: what struck the cart this frame, and the waves.
+        let taken = |w: &World| {
+            sim::objective::standing(&w.lore, w.arena())
+                .next()
+                .map(|o| (o.state.taken, o.state.along))
+        };
+        if let (Some((t0, a0)), Some((t1, a1))) = (taken(before), taken(after)) {
+            self.crossing = true;
+            if t1 > t0 {
+                let by_bull = after.critters.iter().any(|c| {
+                    c.kind == h::BULL && c.act == h::CHARGE && (c.attacking() || h::stunned(c))
+                });
+                if by_bull {
+                    self.cart_by_charge += t1 - t0;
+                } else {
+                    self.cart_by_herd += t1 - t0;
+                }
+            }
+            if a1 == a0 && h::rules::wave_lane(after).is_some() {
+                self.held_short += 1;
+            }
+            if h::rules::wave_lane(before).is_some() && h::rules::wave_lane(after).is_none() {
+                self.waves += 1;
+            }
+        }
         let sp = after.critters.sp();
         for (b, a) in before.critters.iter().zip(after.critters.iter()) {
             let began = a.state == is::STARTUP && b.state != is::STARTUP;
@@ -1014,7 +1203,7 @@ impl crate::report::Tally for Lines {
 
     fn lines(&self) -> Vec<(String, String, String)> {
         let row = |name: &str, value: String, why: &str| (name.to_string(), value, why.to_string());
-        vec![
+        let mut out = vec![
             row(
                 "charges",
                 format!(
@@ -1073,7 +1262,21 @@ impl crate::report::Tally for Lines {
                 ),
                 "plan v2: a ride home",
             ),
-        ]
+        ];
+        if self.crossing {
+            out.push(row(
+                "crossing",
+                format!(
+                    "{} waves / cart took {} from charges, {} from the herd / {:.1}s held short of a drawn lane",
+                    self.waves,
+                    self.cart_by_charge,
+                    self.cart_by_herd,
+                    self.held_short as f32 / 60.0
+                ),
+                "stop it short of every lane; bait charges off the road",
+            ));
+        }
+        out
     }
 }
 

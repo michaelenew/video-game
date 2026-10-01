@@ -278,10 +278,30 @@ pub fn play_tempered(
     partners: usize,
     limit: u32,
     seed: u32,
+    watch: impl FnMut(&World),
+) -> Report {
+    play_in(species, None, temper, classes, partners, limit, seed, watch)
+}
+
+/// [`play_tempered`] in an arena other than the creature's own: what
+/// `fight --arena` runs -- the Hornback's crossing, mostly.
+#[allow(clippy::too_many_arguments)]
+pub fn play_in(
+    species: SpeciesId,
+    arena: Option<sim::arena::ArenaId>,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
     mut watch: impl FnMut(&World),
 ) -> Report {
     let card = plans::card(species).expect("no hunter plan is registered for that species");
-    let mut w = World::hunt_of(classes, species).tempered(temper);
+    let w = match arena {
+        Some(place) => World::hunt_in(classes, [Some(species), None], place),
+        None => World::hunt_of(classes, species),
+    };
+    let mut w = w.tempered(temper);
     for beast in w.monsters.iter_mut().flatten() {
         beast.brain.rng = seed | 1;
     }

@@ -34,7 +34,7 @@ mod tuned;
 pub use mind::word as memo;
 pub use mind::{
     HerdState, Mind, bellow_lane, charge_lane, guard_arc, herd_state, horn_health, horns_whole,
-    in_lane, in_lee, lane_frame, stunned, wary_of,
+    in_lane, in_lee, lane_frame, quarry, stunned, wary_of,
 };
 
 use crate::arena::Material;
@@ -222,6 +222,8 @@ crate::species_knobs! {
     CartLanePeriod,  "crossing", "A migration wave every",                Frames, 0,  3600;
     CartLaneWarn,    "crossing", "Drawn on the road this long before",    Frames, 0,  900;
     ReturnSpeed,     "stampede", "Comes home at",                         Fixed,  0,  fx(20,1);
+    WaveAhead,       "crossing", "A wave crosses the road ahead of the cart by", Fixed, 0, fx(40,1);
+    WaveFrom,        "crossing", "The herd gathers off the road by",      Fixed,  0,  fx(20,1);
 }
 
 /// Raw helper for the knob bounds above.

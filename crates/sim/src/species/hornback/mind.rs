@@ -66,8 +66,9 @@ pub mod word {
     /// Where the charge's lane ends, in centimetres: the solid that will stop
     /// it, or the end of its run.
     pub const RUN_END: usize = 10;
-    /// Two clocks: frames since the guard last turned a blow (the hook it
-    /// wants after one), and the crossing's wave clock.
+    /// Frames since the guard last turned a blow (the hook it wants after
+    /// one); and the crossing's quarry -- the cart's place on its road in
+    /// centimetres, plus one, while the bull is after it (nought otherwise).
     pub const SINCE: usize = 11;
 }
 
@@ -495,6 +496,37 @@ pub fn edge(arena: &crate::arena::Terrain, s: &crate::arena::Solid) -> bool {
         || s.min.z.raw() >= b.hi_z.raw()
 }
 
+/// **The bull's quarry, when it is not a hunter**: the crossing's cart, while
+/// the rules say the bull is after it (§11) -- nearer the herd than anybody,
+/// and nobody's blow on its mind.
+pub fn quarry(pack: &Pack, arena: &crate::arena::Terrain) -> Option<V3> {
+    let at = half(pack, word::SINCE, 1);
+    if at == 0 {
+        return None;
+    }
+    let site = arena.arena.sites.get(super::OBJECTIVES[0].site as usize)?;
+    Some(site.at(Fx::ratio(at - 1, 100)).0)
+}
+
+/// The range tent and the arc of a move's own row, against a point rather
+/// than a fighter: [`default_appetite`]'s arithmetic for the cart.
+fn tent_at(c: &Critter, a: &Attack, at: V3) -> i32 {
+    let to = V3::new(at.x.sub(c.pos.x), Fx::ZERO, at.z.sub(c.pos.z));
+    let d = to.flat_len();
+    let span = a.range_span;
+    let off = d.sub(a.ideal_range).abs();
+    if span.raw() <= 0 || off.raw() > span.raw() || d.raw() == 0 {
+        return 0;
+    }
+    if c.facing().dot(to.normalized()).raw() < a.aim_cos.sub(a.aim_span).raw() {
+        return 0;
+    }
+    Fx::from_int(a.weight.max(1))
+        .mul(Fx::ONE.sub(off.div(span)))
+        .to_int()
+        .max(1)
+}
+
 impl Mind {
     fn bull_appetite(&self, look: &Look, i: usize, m: CritterMove, a: &Attack) -> i32 {
         let pack = look.pack;
@@ -502,7 +534,17 @@ impl Mind {
         let c = &look.critters[i];
         let who = target_of(c);
         let seen = &pack.seen[who];
-        if pack.mood != mood::HUNTING || !seen.alive {
+        if pack.mood != mood::HUNTING {
+            return 0;
+        }
+        if let Some(cart) = quarry(pack, look.arena) {
+            // After the cart, it only charges it.
+            if m.kind != CHARGE || half(pack, word::WARY, 1) > 0 {
+                return 0;
+            }
+            return tent_at(c, a, cart);
+        }
+        if !seen.alive {
             return 0;
         }
         let lead = look.lead(who);
@@ -639,9 +681,16 @@ impl Mind {
         if !c.alive() {
             return hold;
         }
+        let cart = quarry(pack, look.arena);
         if c.state != is::PROWL {
             // The windup turns to its target until it locks; everything else
             // stands where the move or the blow put it.
+            if let (Some(cart), true) = (cart, want.face.is_some()) {
+                return Steer {
+                    face: Some(cart),
+                    ..want
+                };
+            }
             return want;
         }
         let walk = knob_fx(Knob::BullWalk);
@@ -669,6 +718,28 @@ impl Mind {
                 to: post,
                 speed: walk.mul(Fx::ratio(1, 2)),
                 face: near,
+            };
+        }
+        if let Some(cart) = cart {
+            // **After the cart**: at the charge's range from it, on the herd's
+            // side, facing it.
+            let middle = herd_centre(pack, look.critters);
+            let from = V3::new(middle.x.sub(cart.x), Fx::ZERO, middle.z.sub(cart.z));
+            let from = if from.flat_len().raw() > 0 {
+                from.normalized()
+            } else {
+                c.facing().scale(Fx::ONE.neg())
+            };
+            let post = cart.add(from.scale(sp.attack(CHARGE).ideal_range));
+            let gap = V3::new(post.x.sub(c.pos.x), Fx::ZERO, post.z.sub(c.pos.z)).flat_len();
+            return Steer {
+                to: post,
+                speed: if gap.raw() > knob_fx(Knob::TrotBeyond).raw() {
+                    trot
+                } else {
+                    walk
+                },
+                face: Some(cart),
             };
         }
         let lead = look.lead(who);
@@ -959,6 +1030,8 @@ impl PackMind for Mind {
             pack.grace = sp.pack_raw(crate::pack::PackKnob::Grace).max(0) as u16;
         }
         let next = match (pack.mood, state) {
+            // A crossing's wave runs whether the herd is roused or not.
+            (mood::CALM, HerdState::Stampede) => HerdState::Stampede,
             (mood::CALM, _) => HerdState::Grazing,
             (_, HerdState::Grazing) => HerdState::Alarmed,
             (_, HerdState::Alarmed) if low => HerdState::Rallied,

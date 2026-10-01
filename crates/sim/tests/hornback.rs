@@ -1118,3 +1118,201 @@ fn a_rider_on_a_cow_is_out_of_its_stampede() {
         "only a buck's fall, if anything ({lost})"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The crossing (§11)
+// ---------------------------------------------------------------------------
+
+fn crossing(class: Class) -> World {
+    let mut w = World::hunt_in(
+        [class; MAX_PLAYERS],
+        [Some(SpeciesId::HORNBACK), None],
+        sim::arena::ArenaId::HORNBACK_CROSSING,
+    );
+    w.players[1].health = 0;
+    w
+}
+
+/// Put the cart this far along its road.
+fn cart_to(w: &mut World, along: Fx) {
+    let mut o = sim::objective::get(&w.lore, 0);
+    o.along = along.raw() as u32;
+    sim::objective::set(&mut w.lore, 0, o);
+}
+
+fn cart(w: &World) -> sim::objective::Standing {
+    sim::objective::standing(&w.lore, w.arena())
+        .next()
+        .expect("a cart")
+}
+
+/// Stand player one beside the cart, off the road.
+fn escort(w: &mut World) {
+    let at = cart(w).at;
+    w.players[0].pos = V3::new(at.x, Fx::ZERO, at.z.sub(Fx::from_int(3)));
+}
+
+#[test]
+fn the_crossing_has_a_cart_that_rolls_only_while_escorted() {
+    let mut w = crossing(Class::Champion);
+    settle(&mut w);
+    // Far from it, it stands.
+    w.players[0].pos = at(-20, -15);
+    let from = cart(&w).state.along;
+    for _ in 0..60 {
+        keep_up(&mut w);
+        w.advance(idle());
+    }
+    assert_eq!(cart(&w).state.along, from, "unescorted, the cart stands");
+    // Beside it, it rolls.
+    for _ in 0..60 {
+        keep_up(&mut w);
+        escort(&mut w);
+        w.advance(idle());
+    }
+    assert!(cart(&w).state.along > from, "escorted, it rolls");
+    assert_eq!(cart(&w).state.health, 1500, "and it is P7's 1500");
+}
+
+#[test]
+fn a_wave_is_drawn_across_the_road_ahead_of_the_cart_before_it_runs() {
+    let mut w = crossing(Class::Champion);
+    settle(&mut w);
+    // Keep the herd calm: the hunter off the road at the far west end. The
+    // migration runs on its timetable whether the herd is roused or not.
+    w.players[0].pos = at(-38, -16);
+    let mut drawn_at = None;
+    let mut ran_at = None;
+    for f in 0..(knob(Knob::CartLanePeriod) * 2) as u32 {
+        keep_up(&mut w);
+        w.advance(idle());
+        if drawn_at.is_none() {
+            if let Some((at_, dir, len, width)) = h::rules::wave_lane(&w) {
+                drawn_at = Some(f);
+                let c = cart(&w);
+                // Across the road, ahead of the cart by `WaveAhead`.
+                assert_eq!(dir.x, Fx::ZERO, "it runs across the road");
+                let ahead = at_.x.sub(c.at.x);
+                assert!(
+                    ahead.sub(knob_fx(Knob::WaveAhead)).abs().raw() < Fx::ratio(1, 10).raw(),
+                    "{} m ahead of the cart",
+                    ahead.to_f32_for_render()
+                );
+                // It reaches across: the road's middle is in it.
+                let (along, across) = h::lane_frame(at_, dir, V3::new(at_.x, Fx::ZERO, Fx::ZERO));
+                assert!(along.raw() > 0 && along.raw() < len.raw());
+                assert!(across.abs().raw() < width.raw());
+            }
+        }
+        if ran_at.is_none() && h::herd_state(&w.pack.unwrap()) == h::HerdState::Stampede {
+            ran_at = Some(f);
+        }
+    }
+    let (drawn, ran) = (drawn_at.expect("a wave drawn"), ran_at.expect("a wave run"));
+    assert!(drawn > 0 && drawn < ran, "drawn before it runs");
+    let warn = knob(Knob::CartLaneWarn) as u32;
+    assert!(
+        ran - drawn >= warn && ran - drawn <= warn + 1,
+        "drawn {} frames ahead, not {warn}",
+        ran - drawn
+    );
+    assert!(warn >= 300, "five seconds' warning, at least");
+}
+
+#[test]
+fn a_wave_runs_into_the_cart_rather_than_round_it() {
+    let mut w = crossing(Class::Champion);
+    settle(&mut w);
+    w.players[0].pos = at(-38, -16);
+    // Wait for the wave to be drawn, then roll the cart into it.
+    while h::rules::wave_lane(&w).is_none() {
+        keep_up(&mut w);
+        w.advance(idle());
+    }
+    let (lane, ..) = h::rules::wave_lane(&w).unwrap();
+    let start = sim::objective::standing(&w.lore, w.arena())
+        .next()
+        .unwrap()
+        .site
+        .route[0]
+        .0;
+    let along = lane.x.sub(Fx::ratio(start, 100));
+    cart_to(&mut w, along);
+    for _ in 0..(knob(Knob::CartLaneWarn) + 240) {
+        keep_up(&mut w);
+        w.advance(idle());
+    }
+    let taken = cart(&w).state.taken;
+    let cow = w.critters.sp().attack(h::STAMPEDE).damage;
+    assert!(
+        taken >= cow,
+        "the herd ran into the cart standing in its lane ({taken})"
+    );
+}
+
+#[test]
+fn the_bull_charges_the_cart_when_it_is_nearer_the_herd_than_any_hunter() {
+    let mut w = crossing(Class::Champion);
+    alarmed(&mut w);
+    cart_to(&mut w, Fx::from_int(30));
+    let c = cart(&w).at;
+    // The herd beside the road ahead; the hunter far behind the cart.
+    w.players[0].pos = at(-38, -16);
+    let home = w.pack.unwrap().home;
+    for i in cows(&w) {
+        w.critters[i].pos = home;
+    }
+    let ideal = w.critters.sp().attack(h::CHARGE).ideal_range;
+    stand_bull(&mut w, c.add(V3::new(Fx::ZERO, Fx::ZERO, ideal)), c);
+    let mut charged = false;
+    let mut hit = false;
+    for _ in 0..600 {
+        keep_up(&mut w);
+        w.players[0].pos = at(-38, -16);
+        w.advance(idle());
+        let b = w.critters[bull(&w)];
+        charged |= b.act == h::CHARGE && b.attacking();
+        if cart(&w).state.taken > 0 {
+            hit = h::stunned(&b);
+            break;
+        }
+    }
+    assert!(charged, "it charged the cart");
+    let taken = cart(&w).state.taken;
+    assert!(
+        (290..=310).contains(&taken),
+        "a charge is three hundred to the cart ({taken})"
+    );
+    assert!(hit, "and the cart is a solid: it stuns the bull");
+}
+
+#[test]
+fn a_hit_on_the_bull_or_a_hunter_nearer_the_herd_holds_it_off_the_cart() {
+    let mut w = crossing(Class::Champion);
+    alarmed(&mut w);
+    cart_to(&mut w, Fx::from_int(30));
+    w.players[0].pos = at(-38, -16);
+    w.advance(idle());
+    let pack = w.pack.unwrap();
+    assert!(h::quarry(&pack, &w.terrain()).is_some(), "after the cart");
+    // A blow on its mind: the strain.
+    let mut p = w.pack.unwrap();
+    p.memo[h::memo::STRAIN] = 200;
+    w.pack = Some(p);
+    w.advance(idle());
+    assert!(
+        h::quarry(&w.pack.unwrap(), &w.terrain()).is_none(),
+        "a hit holds its interest"
+    );
+    // A hunter nearer the herd than the cart.
+    let mut p = w.pack.unwrap();
+    p.memo[h::memo::STRAIN] = 0;
+    w.pack = Some(p);
+    let herd = cows(&w)[0];
+    w.players[0].pos = w.critters[herd].pos.add(at(0, -3));
+    w.advance(idle());
+    assert!(
+        h::quarry(&w.pack.unwrap(), &w.terrain()).is_none(),
+        "a hunter nearer the herd is the threat"
+    );
+}

@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 448] = [
+pub const KNOBS: [i32; 450] = [
            65536, // hornback.size_(x) = 1
             3500, // hornback.health = 3500
              500, // hornback.breakable_part_health = 500
@@ -140,6 +140,8 @@ pub const KNOBS: [i32; 448] = [
              900, // hornback_·_crossing.a_migration_wave_every = 900
              300, // hornback_·_crossing.drawn_on_the_road_this_long_before = 300
           327680, // hornback_·_stampede.comes_home_at = 5
+          786432, // hornback_·_crossing.a_wave_crosses_the_road_ahead_of_the_cart_by = 12
+          720896, // hornback_·_crossing.the_herd_gathers_off_the_road_by = 11
               36, // hornback.paw_&_charge.startup = 36
               40, // hornback.paw_&_charge.active = 40
               50, // hornback.paw_&_charge.recovery = 50

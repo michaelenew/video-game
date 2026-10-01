@@ -13,6 +13,8 @@
 //!   with one horn gone.
 //! - **A cow's rear wedge**, faint, under anybody standing in it.
 //! - **The hook's horn**: the side the horn comes from, brighter.
+//! - **The crossing's next wave** (§11): its lane across the road, with its
+//!   lees, filling through the warning.
 
 use super::mind::{self, HerdState, bellow_lane, herd_state, horns_whole};
 use super::rules::{self, Stopper};
@@ -48,33 +50,15 @@ pub fn signs(w: &World, out: &mut Signs) {
                     Fx::ONE.sub(Fx::ratio(b.timer as i32, startup))
                 });
             let says = if running { Says::Live } else { Says::Coming };
-            out.push(Sign::strip(says, at, dir, len, width).filled(fill));
-            let (blocks, n) = rules::obstacles(w, &ground);
-            let half = width.mul(Fx::ratio(1, 2));
-            for (min, max) in blocks[..n].iter().flatten() {
-                let (lo_a, hi_a, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
-                // Only what stands in the lane casts a lee in it.
-                if hi_a.raw() < 0
-                    || lo_a.raw() > len.raw()
-                    || hi_c.raw() < half.neg().raw()
-                    || lo_c.raw() > half.raw()
-                {
-                    continue;
-                }
-                let lo_c = lo_c.max(half.neg());
-                let hi_c = hi_c.min(half);
-                let mid = lo_c.add(hi_c).mul(Fx::ratio(1, 2));
-                let from = rules::lane_point(at, dir, lo_a.max(Fx::ZERO), mid);
-                let to = hi_a.add(knob_fx(Knob::LeeLength)).min(len);
-                out.push(Sign::strip(
-                    Says::Clear,
-                    from,
-                    dir,
-                    to.sub(lo_a.max(Fx::ZERO)),
-                    hi_c.sub(lo_c),
-                ));
-            }
+            lane(w, &ground, (at, dir, len, width), says, fill, out);
         }
+    }
+
+    // ---- the crossing's next wave, drawn on the road ----
+    if let (Some(drawn), Some(left)) = (rules::wave_lane(w), rules::wave_in(w)) {
+        let warn = super::knob(Knob::CartLaneWarn).max(1);
+        let fill = Fx::ONE.sub(Fx::ratio(left.min(warn), warn));
+        lane(w, &ground, drawn, Says::Coming, fill, out);
     }
 
     let Some(b) = mind::the_bull(&w.critters) else {
@@ -180,4 +164,42 @@ pub fn signs(w: &World, out: &mut Signs) {
         }
     }
     let _ = BULL;
+}
+
+/// A stampede's lane and the lee of every solid standing in it: the same
+/// rectangles the rules hold the cows out of (`rules::stampede`).
+fn lane(
+    w: &World,
+    ground: &crate::arena::Terrain,
+    (at, dir, len, width): (V3, V3, Fx, Fx),
+    says: Says,
+    fill: Fx,
+    out: &mut Signs,
+) {
+    out.push(Sign::strip(says, at, dir, len, width).filled(fill));
+    let (blocks, n) = rules::obstacles(w, ground);
+    let half = width.mul(Fx::ratio(1, 2));
+    for (min, max) in blocks[..n].iter().flatten() {
+        let (lo_a, hi_a, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
+        // Only what stands in the lane casts a lee in it.
+        if hi_a.raw() < 0
+            || lo_a.raw() > len.raw()
+            || hi_c.raw() < half.neg().raw()
+            || lo_c.raw() > half.raw()
+        {
+            continue;
+        }
+        let lo_c = lo_c.max(half.neg());
+        let hi_c = hi_c.min(half);
+        let mid = lo_c.add(hi_c).mul(Fx::ratio(1, 2));
+        let from = rules::lane_point(at, dir, lo_a.max(Fx::ZERO), mid);
+        let to = hi_a.add(knob_fx(Knob::LeeLength)).min(len);
+        out.push(Sign::strip(
+            Says::Clear,
+            from,
+            dir,
+            to.sub(lo_a.max(Fx::ZERO)),
+            hi_c.sub(lo_c),
+        ));
+    }
 }

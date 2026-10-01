@@ -1113,6 +1113,16 @@ impl Report {
         h / (self.species.moves.len() as f32).log2()
     }
 
+    /// A defended thing that ended the hunt, if one did: its name, whether it
+    /// broke, and whether it arrived (P7).
+    pub fn objective_ended(&self) -> Option<(&str, bool, bool)> {
+        self.ground
+            .objectives
+            .iter()
+            .find(|o| o.3 || o.4)
+            .map(|o| (o.0.as_str(), o.3, o.4))
+    }
+
     /// The whole thing, as text.
     pub fn render(&self) -> String {
         let mut out = String::new();
@@ -1120,10 +1130,14 @@ impl Report {
         let seconds = self.frames as f32 / 60.0;
         out.push_str(&format!(
             "  {}  --  {} frames, {:.1} s\n",
-            match self.outcome {
-                Outcome::Killed(f) => format!("killed at frame {f}"),
-                Outcome::Died => "the hunters went down".to_string(),
-                Outcome::Unresolved => "nobody won inside the budget".to_string(),
+            match (self.outcome, self.objective_ended()) {
+                (Outcome::Killed(f), Some((name, _, true))) => {
+                    format!("{name} arrived at frame {f}")
+                }
+                (Outcome::Killed(f), _) => format!("killed at frame {f}"),
+                (Outcome::Died, Some((name, true, _))) => format!("{name} broke"),
+                (Outcome::Died, _) => "the hunters went down".to_string(),
+                (Outcome::Unresolved, _) => "nobody won inside the budget".to_string(),
             },
             self.frames,
             seconds
