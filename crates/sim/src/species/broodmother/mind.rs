@@ -90,8 +90,8 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
                 line
             }
         }
-        // She cannot stab with no sound leg near enough.
-        STAB if stab_leg(m, m.lead_point(m.sp().attack(STAB).startup)).is_none() => 0,
+        // A stab only at somebody standing at a foot, or under her.
+        STAB if !stab_reaches(m, m.lead_point(m.sp().attack(STAB).startup)) => 0,
         _ => score,
     }
 }
@@ -115,35 +115,62 @@ fn recall(m: &Monster) -> i32 {
     (m.own[body::WEBBED] as u32 >> 8) as i32
 }
 
-/// **Which of her legs stabs at `at`**: the sound leg whose foot is nearest
-/// it, and not one already used in this flurry. A broken leg does not stab.
-pub fn stab_leg(m: &Monster, at: V3) -> Option<usize> {
-    let rig = m.rig();
+/// Is a point under her -- the abdomen's footprint, or her middle -- where
+/// only the middle legs, driven inward, reach?
+pub fn under_her(m: &Monster, at: V3) -> bool {
+    under_abdomen(m, at) || math::wide_flat_dist(at, m.pos).raw() <= Knob::StabFar.fx().raw()
+}
+
+/// **Where leg `leg` stabs**, for a target at `at`. **Outward**, at its own
+/// foot: the disc a step in from where the foot stands -- a leg drives down
+/// where it is, so the answer is positional: do not stand at a foot. **Inward**,
+/// a middle leg driven under her, for a target under her: at the target, kept
+/// off her middle.
+pub fn stab_disc(m: &Monster, leg: usize, at: V3) -> V3 {
+    let middle = V3::new(m.pos.x, Fx::ZERO, m.pos.z);
+    if super::middle_leg(leg) && under_her(m, at) {
+        let from = V3::new(at.x.sub(m.pos.x), Fx::ZERO, at.z.sub(m.pos.z));
+        let far = math::wide_flat_len(from);
+        let keep = Knob::StabFar.fx();
+        if far.raw() >= keep.raw() {
+            return V3::new(at.x, Fx::ZERO, at.z);
+        }
+        let dir = if far.raw() > 0 {
+            math::wide_normalized(from)
+        } else {
+            V3::from_turns(m.yaw.add(crate::math::QUARTER_TURN))
+        };
+        return middle.add(dir.scale(keep));
+    }
+    let home = super::legs::home(m, leg);
+    let out = V3::new(home.x.sub(m.pos.x), Fx::ZERO, home.z.sub(m.pos.z));
+    let far = math::wide_flat_len(out);
+    if far.raw() <= 0 {
+        return home;
+    }
+    middle.add(math::wide_normalized(out).scale(far.sub(Knob::StabNear.fx()).max(Fx::ZERO)))
+}
+
+/// **Which of her legs stabs at `at`**: the sound leg whose disc is nearest
+/// it -- a middle leg driven inward if `at` is under her -- and not one
+/// already used in this flurry. A broken leg does not stab. With its disc.
+pub fn stab_leg(m: &Monster, at: V3) -> Option<(usize, V3)> {
     let used = (m.own[body::STAB] as u32 >> 16) & 0xFF;
     (0..LEG_COUNT)
         .filter(|leg| !m.broken(shin_part(*leg)) && used & 1 << leg == 0)
-        .min_by_key(|leg| {
-            let foot = rig.bone[super::bones::tibia(*leg)].local_to_world(V3::new(
-                super::tibia_length(),
-                Fx::ZERO,
-                Fx::ZERO,
-            ));
-            math::wide_flat_dist(foot, at).raw()
-        })
+        .map(|leg| (leg, stab_disc(m, leg, at)))
+        .min_by_key(|(_, disc)| math::wide_flat_dist(*disc, at).raw())
 }
 
-/// **Where a stab lands**: toward `at`, but on a disc `StabNear` to `StabFar`
-/// from her middle -- a leg drives down beside her, not across the cave.
-pub fn stab_disc(m: &Monster, at: V3) -> V3 {
-    let to = V3::new(at.x.sub(m.pos.x), Fx::ZERO, at.z.sub(m.pos.z));
-    let far = math::wide_flat_len(to);
-    let reach = far.clamp(Knob::StabNear.fx(), Knob::StabFar.fx());
-    let dir = if far.raw() > 0 {
-        math::wide_normalized(to)
-    } else {
-        V3::from_turns(m.yaw)
-    };
-    V3::new(m.pos.x, Fx::ZERO, m.pos.z).add(dir.scale(reach))
+/// Is a stab worth throwing at `at`: some sound leg's disc within reach of
+/// it, `StabSlack` to spare?
+pub fn stab_reaches(m: &Monster, at: V3) -> bool {
+    let a = m.sp().attack(STAB);
+    let reach = a
+        .hit_radius
+        .add(crate::tuning::body_radius())
+        .add(Knob::StabSlack.fx());
+    stab_leg(m, at).is_some_and(|(_, disc)| math::wide_flat_dist(disc, at).raw() <= reach.raw())
 }
 
 /// The web anchor a line would go to: the one that puts her target in the
@@ -177,9 +204,9 @@ pub fn anchor_for(m: &Monster, mind: &Mind) -> Option<V3> {
 pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
     match kind {
         STAB => {
-            m.own[body::STAB] = 0;
+            m.own[body::STAB] &= !0x00FF_FFFF;
             let lead = m.lead_point(m.sp().attack(STAB).startup);
-            let leg = stab_leg(m, lead).unwrap_or(0);
+            let (leg, disc) = stab_leg(m, lead).unwrap_or((0, lead));
             let most = if fight::enraged(m) {
                 Knob::EnrageFlurry.raw()
             } else {
@@ -189,8 +216,10 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
             // How many follow: a draw on the brain's own dice, which the brain
             // advanced choosing this move.
             let follow = (m.brain.rng % most as u32) as i32;
-            m.own[body::STAB] = (leg as i32 + 1) | follow << 8 | 1 << (16 + leg);
-            let disc = stab_disc(m, lead);
+            m.own[body::STAB] = (m.own[body::STAB] & !0x00FF_FFFF)
+                | (leg as i32 + 1)
+                | follow << 8
+                | 1 << (16 + leg);
             m.aim_at(disc);
         }
         LUNGE if fight::enraged(m) => {

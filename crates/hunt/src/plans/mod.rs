@@ -31,7 +31,7 @@ pub mod sandmaw;
 
 // pub mod pair;
 
-// pub mod broodmother;
+pub mod broodmother;
 
 // pub mod veilstalker;
 
@@ -99,8 +99,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         SpeciesId::SANDMAW => Some(&sandmaw::CARD),
 
         // SpeciesId::PAIR => Some(&pair::CARD),
-
-        // SpeciesId::BROODMOTHER => Some(&broodmother::CARD),
+        SpeciesId::BROODMOTHER => Some(&broodmother::CARD),
 
         // SpeciesId::VEILSTALKER => Some(&veilstalker::CARD),
 

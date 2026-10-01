@@ -31,6 +31,15 @@ pub fn foot(m: &Monster, rig: &Rig, leg: usize) -> V3 {
     rig.bone[bones::tibia(leg)].local_to_world(V3::new(tip, Fx::ZERO, Fx::ZERO))
 }
 
+/// Where leg `leg`'s foot stands when she is not stabbing with it: the foot
+/// of her stock pose, its stab's layer left out.
+pub fn home(m: &Monster, leg: usize) -> V3 {
+    let mut still = *m;
+    still.own[body::STAB] &= !0xFF;
+    let rig = still.rig();
+    foot(&still, &rig, leg)
+}
+
 /// `acos`, in turns, from the two arguments of `atan2`.
 fn acos_turns(c: Fx) -> Fx {
     let c = c.clamp(Fx::ONE.neg(), Fx::ONE);

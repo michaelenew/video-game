@@ -638,10 +638,9 @@ crate::species_knobs! {
     EnrageLunge,     "arc",     "Enraged, the lunge winds up for",       Frames, 0, 60;
     EnrageLines,     "arc",     "Enraged, web lines (x appetite)",       Fixed, 0, fx(4,1);
     // the stab
-    StabNear,        "stab",    "A stab's disc, nearest the body",       Fixed, 0, fx(6,1);
-    StabFar,         "stab",    "A stab's disc, furthest out",           Fixed, 0, fx(8,1);
+    StabNear,        "stab",    "An outward stab lands in from its foot", Fixed, 0, fx(6,1);
+    StabFar,         "stab",    "An inward stab keeps off her middle by", Fixed, 0, fx(8,1);
     Flurry,          "stab",    "Stabs in a flurry at most",             Int,   0, 6;
-    FlurryEvery,     "stab",    "Each flurry stab winds up",             Frames, 0, 60;
     // screech_lockout
     // under(m)
     UnderAppetite,   "mind",    "Under(m): the slam, somebody under her", Int,  0, 8000;
@@ -653,6 +652,7 @@ crate::species_knobs! {
     LineAppetite,    "mind",    "The web line, at a target far off",     Int,   0, 4000;
     ListRoll,        "legs",    "Listing, she rolls toward it (turns)",  Fixed, 0, fx(1,8);
     StabLift,        "stab",    "The stabbing foot rises to",            Fixed, 0, fx(6,1);
+    StabSlack,       "stab",    "Stabs at a target this near a disc",    Fixed, 0, fx(4,1);
 }
 
 const OWN: &[KnobDecl] = Knob::DECLS;

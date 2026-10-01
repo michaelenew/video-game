@@ -372,7 +372,7 @@ fn a_broken_leg_never_stabs() {
     let rig = m.rig();
     for leg in 0..bm::LEG_COUNT {
         let at = bm::legs::foot(&m, &rig, leg);
-        let chosen = bm::mind::stab_leg(&m, at).expect("a sound leg");
+        let (chosen, _) = bm::mind::stab_leg(&m, at).expect("a sound leg");
         assert!(
             !bm::middle_leg(chosen),
             "a broken leg {chosen} was given a stab"

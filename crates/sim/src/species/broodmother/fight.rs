@@ -412,13 +412,14 @@ fn reset_sac(m: &mut Monster, i: usize) {
 }
 
 /// **The flurry**: on the last frame of a stab's hit, if more are due,
-/// another leg -- one not yet used, and sound -- winds up at once, `FlurryEvery`
-/// frames behind it. Out of a stab altogether, the stab's words are cleared.
+/// another leg -- one not yet used, and sound -- winds up at once, its own
+/// windup (the flurry stab's row) behind it. Out of a stab altogether, the stab's words are cleared.
 fn flurry(m: &mut Monster) {
     use super::{FLURRY, STAB};
     let kind = m.doing.attacking();
     if !matches!(kind, Some(STAB | FLURRY)) {
-        m.own[body::STAB] = 0;
+        // Out of a stab: its words cleared, the anchors' kept.
+        m.own[body::STAB] &= !0x00FF_FFFF;
         return;
     }
     let Doing::Active { left: 0, .. } = m.doing else {
@@ -429,14 +430,17 @@ fn flurry(m: &mut Monster) {
     if left == 0 {
         return;
     }
-    let windup = Knob::FlurryEvery.raw().max(1) as u16;
+    let windup = m.sp().attack(FLURRY).startup.max(1);
     let lead = m.lead_point(windup);
-    let Some(leg) = super::mind::stab_leg(m, lead) else {
+    if !super::mind::stab_reaches(m, lead) {
+        return;
+    }
+    let Some((leg, disc)) = super::mind::stab_leg(m, lead) else {
         return;
     };
     let used = (words >> 16) & 0xFF | 1 << leg;
-    m.own[body::STAB] = (leg as i32 + 1) | ((left - 1) << 8 | used << 16) as i32;
-    let disc = super::mind::stab_disc(m, lead);
+    let keep = words & 0xFF00_0000;
+    m.own[body::STAB] = (keep | (leg as u32 + 1) | (left - 1) << 8 | used << 16) as i32;
     m.aim_at(disc);
     m.doing = Doing::Startup {
         kind: FLURRY,
