@@ -16,8 +16,19 @@ milestone by milestone, so a successor can pick it up from the checkboxes.
 
 ## State
 
-Started 2026-10-01 on `claude/creature-veilstalker`. M0 (this plan) is
-written; nothing is built yet.
+Started 2026-10-01 on `claude/creature-veilstalker`. Built and committed:
+the species, its veil/trail/paint/fire/smoke/quills/mimic/retreat (M1-M5),
+its clips (M6), its hunter and report (M7, first passes), its look, the
+veil rendering and the Ashwood (M8, screenshots taken). Now: tuning against
+the harness across classes, then docs, web smoke, merge.
+
+**Tuning method** (for a successor): the baked file is the truth. A
+scratch script reads every `// id = value` comment out of
+`crates/sim/src/species/veilstalker/tuned.rs`, resets it to the empty
+bootstrap, bakes once to learn the ids, and bakes again with `--set` for
+every id plus any override file of `id=value` lines -- so adding an own
+knob (which shifts the move rows' indices) keeps every value. Rewrite it
+from that description if it is gone.
 
 ## Decisions taken before building
 
@@ -63,44 +74,44 @@ written; nothing is built yet.
 ## Milestones
 
 ### M1 · The body and the veil
-- [ ] `species/veilstalker/`: bones, parts (four hide regions), legs, the
+- [x] `species/veilstalker/`: bones, parts (four hide regions), legs, the
       move table, clips, own knobs; bootstrap `tuned.rs`/`baked.rs`; register;
       first guesses baked.
-- [ ] `fight.rs`: lore words, `shown`, the re-cloak fade, shimmer.
-- [ ] `aim::in_view_from`.
-- [ ] Test: `a_cloaked_body_is_hit_exactly_like_a_visible_one`.
+- [x] `fight.rs`: lore words, `shown`, the re-cloak fade, shimmer.
+- [x] `aim::in_view_from`.
+- [x] Test: `a_cloaked_body_is_hit_exactly_like_a_visible_one`.
 
 ### M2 · The Ashwood and the trail
-- [ ] `arena/veilstalker.rs`: 36 × 36 snow, ash pits, stream, six trunks,
+- [x] `arena/veilstalker.rs`: 36 × 36 snow, ash pits, stream, six trunks,
       four braziers (sites), the 3 m cordwood wall with a ledge.
-- [ ] Footfall ring stamped by the gait and by every real decloak.
-- [ ] Test: `every_footfall_is_in_the_ring_and_a_rollback_lays_the_same_trail`.
+- [x] Footfall ring stamped by the gait and by every real decloak.
+- [x] Test: `every_footfall_is_in_the_ring_and_a_rollback_lays_the_same_trail`.
 
 ### M3 · The strikes
-- [ ] Lunge, spear (lane locks at 12), rake + second swipe, pounce from a
+- [x] Lunge, spear (lane locks at 12), rake + second swipe, pounce from a
       perch (climb), quills (own hit, five in a fan, stopped by solids).
-- [ ] Tests: decloak floor (sim + `feel.rs`).
+- [x] Tests: decloak floor (sim + `feel.rs`).
 
 ### M4 · Paint, mottle, fire
-- [ ] Paint ring; regions and mottle; smoke (P4, grows, burns off);
+- [x] Paint ring; regions and mottle; smoke (P4, grows, burns off);
       braziers (tip once, coals 8 s); outlines; panic and its lockout.
-- [ ] Tests: paint, mottle, panic, smoke.
+- [x] Tests: paint, mottle, panic, smoke.
 
 ### M5 · The brain
-- [ ] Glance of the look; view gate; edge; bait; exposure; leave; stalk;
+- [x] Glance of the look; view gate; edge; bait; exposure; leave; stalk;
       bound; mimic and its quiet; retreat and the recoil break; coop.
-- [ ] Tests: view gate, mimic, retreat; determinism green.
+- [x] Tests: view gate, mimic, retreat; determinism green.
 
 ### M6 · Animation
-- [ ] `anim/src/beast/veilstalker/`: idle, slink, bound, every move, flinch,
+- [x] `anim/src/beast/veilstalker/`: idle, slink, bound, every move, flinch,
       stumble, panic roll, dead; bake; contact sheets looked at.
 
 ### M7 · The hunter and the report
-- [ ] `hunt/src/plans/veilstalker.rs`: the view, §9's plan, the lines.
+- [x] `hunt/src/plans/veilstalker.rs`: the view, §9's plan, the lines.
 - [ ] Twelve+ seeds per class; tune toward tier 4; feel-log entries.
 
 ### M8 · Drawn
-- [ ] Look; veil rendering (shimmer, prints, paint, breath, ghost, quills);
+- [x] Look; veil rendering (shimmer, prints, paint, breath, ghost, quills);
       the Ashwood's dressing; screenshots of every telegraph.
 
 ### M9 · Finished

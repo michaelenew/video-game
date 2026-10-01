@@ -77,6 +77,8 @@ const SWEEP_WIDE: Fx = Fx::ratio(1, 10);
 const WATCH_PITCH: i16 = -2400;
 /// How many frames early or late its timed presses can be.
 const SLOP_EARLY: i32 = 3;
+/// A judged arrival is off by up to one frame in this many of the wait.
+const JUDGE: i32 = 10;
 const SLOP_LATE: i32 = 3;
 /// What the renderer shows faintly enough that a person still sees it: a
 /// shimmer is, a part fading out of its last frames is not.
@@ -123,6 +125,8 @@ struct Decloak {
     empty: bool,
     /// Already answered.
     done: bool,
+    /// How far off its judgement of the arrival is, in frames: drawn once.
+    judged: i32,
 }
 
 pub struct Veilstalker {
@@ -184,6 +188,20 @@ impl Veilstalker {
         let back = REACTION.min(self.filled.saturating_sub(1));
         let idx = (self.at + len - 1 - back) % len;
         &self.memory[idx]
+    }
+
+    /// **A timed press is off by a share of the wait**: the further ahead a
+    /// person has to judge an arrival, the further off the judgement -- a
+    /// tenth of the frames being judged, either way, on top of the fixed
+    /// three. Without it the hunter dodges a lunge on the same frame of its
+    /// flight from any distance, which nobody does.
+    fn judged(&mut self, wait: i32) -> i32 {
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 17;
+        self.rng ^= self.rng << 5;
+        let spread = (wait.max(0) / JUDGE) as u32;
+        let off = (self.rng % (2 * spread + 1)) as i32 - spread as i32;
+        self.slop + off
     }
 
     fn roll_slop(&mut self) {
@@ -456,6 +474,7 @@ impl Plan for Veilstalker {
                     rear: a.rear,
                     empty: !feet,
                     done: false,
+                    judged: i32::MIN,
                 });
                 self.roll_slop();
             }
@@ -623,6 +642,17 @@ impl Veilstalker {
             self.intent = HOLD;
             return Some(self.turn_and(me, toward, V3::ZERO, 0));
         }
+        // The judgement of when it arrives is made once, as the silhouette
+        // is read, and kept.
+        if self.decloak.is_some_and(|d| d.judged == i32::MIN) {
+            let a = vs::SPECIES.attack(d.rear);
+            let wait = a.startup as i32 - since;
+            let j = self.judged(wait.max(0) + REACTION as i32);
+            if let Some(d) = self.decloak.as_mut() {
+                d.judged = j;
+            }
+        }
+        let judged = self.decloak.map_or(self.slop, |d| d.judged);
         let a = vs::SPECIES.attack(d.rear);
         let marks = markers(seen);
         let mine = marks
@@ -638,7 +668,7 @@ impl Veilstalker {
                 let speed = a.advance.mul(sim::DT).max(Fx::ratio(1, 100));
                 let fly = dist.sub(reach).max(Fx::ZERO).div(speed).to_int();
                 let arrive = a.startup as i32 + fly.min(a.active as i32 - 1);
-                let go = arrive - 3 + self.slop;
+                let go = arrive - 3 + judged;
                 if since >= go && self.dodge_left == 0 && me.action.actionable() {
                     self.intent = DODGE;
                     self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
@@ -735,7 +765,7 @@ impl Veilstalker {
                     let there = wide_flat_dist(behind, me.pos).raw() < Fx::ratio(4, 10).raw();
                     return Some(self.turn_and(me, toward, if there { V3::ZERO } else { dir }, 0));
                 }
-                let go = arrive - 3 + self.slop;
+                let go = arrive - 3 + judged;
                 if since >= go && self.dodge_left == 0 && me.action.actionable() {
                     self.intent = DODGE;
                     self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;

@@ -615,6 +615,7 @@ crate::species_knobs! {
     ExposedNear,     "mind",   "Exposed and stalking, runs from a target within", Fixed, 0, fx(20,1);
     EngagementStrikes,"mind",  "Strikes an engagement, at most",          Int, 1, 9;
     ViewMargin,      "mind",   "View gate, seen from this far either side too", Fixed, 0, fx(4,1);
+    ViewSweep,       "mind",   "View gate, and through this much turn of the look (turns)", Fixed, 0, fx(1,8);
     // veil_edge_bias
     EdgeBias,        "mind",   "Edge of the view, more appetite",        Int, 0, 8000;
     // veil_bait_appetite

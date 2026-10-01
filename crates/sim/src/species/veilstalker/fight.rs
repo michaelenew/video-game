@@ -892,7 +892,10 @@ fn setup(w: &mut World, slot: usize) {
         m.own[body::FLAGS] |= flag::COOP;
     }
     m.own[body::FLAGS] |= flag::STALKING;
-    let stalk = stalk_frames(m);
+    // The first stalk begins when the hunt's grace ends, not under it: the
+    // grace is the hunter's moment to get their bearings, and a stalk run
+    // down inside it is an opening look the hunter never had to sit through.
+    let stalk = stalk_frames(m) + m.sp().hunt_grace() as u32;
     w.lore.set_word(word::FLAGS, flags_now);
     w.lore.set_word(word::STALK, stalk);
 }
@@ -2212,6 +2215,16 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
     };
     let cone = Knob::ViewCone.fx();
     let point_of = middle_of(m);
+    // **And where it will stand when it has stopped.** A strike thrown out
+    // of a bound is decloaked while it skids, and a decloak that slides
+    // behind a trunk halfway through is one nobody saw: the gate asks of the
+    // whole of it, from here to where the braking leaves it -- speed squared
+    // over twice the braking rate, along its heading.
+    let stopping = m
+        .speed
+        .mul(m.speed)
+        .div(m.sp().brake().add(m.sp().brake()).max(Fx::ONE));
+    let stops_at = point_of.add(V3::from_turns(m.yaw).scale(stopping));
     let fire = in_fire_at(w, m.pos, Knob::FireShy.fx().min(Fx::ONE)).is_some();
     let cloud_now = cloud(w);
     let inside =
@@ -2226,7 +2239,9 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
         }
         let (at, yaw) = led_look(&w.lore, i);
         let aloft = Fx::ZERO;
-        if plainly_in_view(at, yaw, point_of, cone, &scene) {
+        if plainly_in_view(at, yaw, point_of, cone, &scene)
+            && plainly_in_view(at, yaw, stops_at, cone, &scene)
+        {
             bits |= view::IN_VIEW;
         } else if aim::off_look(at, aloft, yaw, point_of, &scene).raw() <= cone.raw() {
             bits |= view::HIDDEN;
@@ -2281,8 +2296,13 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
     // Decloaks by where they were on the screen, counted as each begins.
     if let Doing::Startup { kind, left } = m.doing {
         if strikes(kind) && left == SPECIES.attack(kind).startup {
-            let n = w.lore.word(word::STRIKES);
-            w.lore.set_word(word::STRIKES, n + 1);
+            // A mimic is no strike of the engagement's: nothing about it
+            // shows the animal, so nothing would end the engagement it
+            // counted toward.
+            if kind != MIMIC {
+                let n = w.lore.word(word::STRIKES);
+                w.lore.set_word(word::STRIKES, n + 1);
+            }
             let target = (m.brain.target as usize).min(1);
             let share = w.lore.word(word::VIEW + target) >> 16;
             let third = (share * 3 / 0x10000).min(2);
@@ -2306,9 +2326,17 @@ fn plainly_in_view(at: V3, yaw: Fx, point: V3, cone: Fx, scene: &Scene) -> bool 
         V3::ZERO
     };
     let side = across.scale(Knob::ViewMargin.fx());
-    [at, at.add(side), at.sub(side)]
-        .iter()
-        .all(|from| aim::in_view_from(*from, Fx::ZERO, yaw, point, cone, scene))
+    // **And through a little turn of the look**: the eye sits behind the
+    // shoulder, so a camera that sweeps a few degrees swings it sideways, and
+    // a decloak beside a trunk that one glance saw clear is behind it at the
+    // next. A person's look is never still; the gate asks of the whole of
+    // its wander, not of one sample of it.
+    let sweep = Knob::ViewSweep.fx();
+    [yaw, yaw.add(sweep), yaw.sub(sweep)].iter().all(|yaw| {
+        [at, at.add(side), at.sub(side)]
+            .iter()
+            .all(|from| aim::in_view_from(*from, Fx::ZERO, *yaw, point, cone, scene))
+    })
 }
 
 /// Where it would play a mimic for a hunter who stood at `at` looking along

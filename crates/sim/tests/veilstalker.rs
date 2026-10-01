@@ -371,7 +371,11 @@ fn every_footfall_is_in_the_ring_and_a_rollback_lays_the_same_trail() {
         let foot = vs::SPECIES.legs[((now.stride as u32 / half) % 2) as usize].foot;
         let at = now.world_of(foot, V3::ZERO);
         let snow = after.arena().floor_at(at.x, at.z) == sim::arena::Material::Snow;
-        if crossed && walking && snow {
+        // On the snow *floor*: a foot that reaches over the cordwood wall as
+        // the body is stopped against it comes down on the wall's top, which
+        // is not snow and keeps no print.
+        let down = after.terrain().ground_under(at).raw() == 0;
+        if crossed && walking && snow && down {
             stamped += 1;
             assert!(
                 fight::prints(after).any(|p| p.age == 0),
