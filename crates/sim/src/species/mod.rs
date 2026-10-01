@@ -318,6 +318,12 @@ pub struct FightDecl {
     /// ground. Off, the collision is least penetration as it always was,
     /// which keeps the Ridgeback bit-identical.
     pub lands_on_bodies: bool,
+    /// **It rolls onto its back**, so a part's top face can point at the
+    /// floor -- and a face pointing at the floor is nobody's to stand on.
+    /// Off, every top face is a surface whichever way it points, as it always
+    /// was: the Ridgeback's shake turns its shoulders far enough that the
+    /// rule would cost a braced rider their footing.
+    pub rolls_over: bool,
     /// Called when it walks into a solid, with the push that got it out: the
     /// Hornback's charge into a rock is a stun.
     pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
@@ -448,6 +454,7 @@ impl FightDecl {
         hears: false,
         collides: false,
         lands_on_bodies: false,
+        rolls_over: false,
         bumped: None,
         frame: None,
         shown: None,

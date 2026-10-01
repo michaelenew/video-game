@@ -74,6 +74,9 @@ const SWING_GAP: u16 = 24;
 /// Swings in a string before it stops and backs off: the swell punishes
 /// the third.
 const STRING: u8 = 2;
+/// Frames between the Elementalist's pillars: one burns for a while, and a
+/// second while it does is a press that does nothing.
+const FIRE_GAP: u16 = 90;
 /// Frames of an opening kept back to get out in.
 const EXIT: i32 = 10;
 /// Do not bother correcting for less than this.
@@ -124,6 +127,8 @@ pub struct Mireback {
     greed: bool,
     /// Frames before it will set off for a brazier again, after giving up.
     rest_left: u16,
+    /// Frames before the Elementalist plants another pillar.
+    fire_left: u16,
 }
 
 impl Mireback {
@@ -150,6 +155,7 @@ impl Mireback {
             was_open: false,
             greed: false,
             rest_left: 0,
+            fire_left: 0,
         }
     }
 
@@ -285,7 +291,7 @@ fn wart(beast: &Monster, from: V3) -> Option<V3> {
         .map(|w| {
             let sh = mireback::SPECIES.shape(*w);
             let mid = sh.min.add(sh.max).scale(HALF);
-            rig.part_to_world(*w, V3::new(mid.x, sh.min.y, mid.z))
+            rig.part_to_world(*w, V3::new(mid.x, mid.y, mid.z))
         })
         .min_by_key(|at| wide_flat_dist(*at, from).raw())
 }
@@ -375,6 +381,7 @@ impl Mireback {
         self.dodge_left = self.dodge_left.saturating_sub(1);
         self.commit_left = self.commit_left.saturating_sub(1);
         self.rest_left = self.rest_left.saturating_sub(1);
+        self.fire_left = self.fire_left.saturating_sub(1);
         let me = w.players[self.who];
         if !me.grounded || me.aboard() || me.action.actionable() {
             self.leap_left = self.leap_left.saturating_sub(1);
@@ -536,6 +543,39 @@ impl Mireback {
             return Input::aimed(steer(aim, self.clean_way(seen, me.pos, away)), wire);
         }
 
+        // 0b. **Her own fire.** The Elementalist does not need a brazier: a
+        //     pillar planted in tar under the toad, or tar joined to it,
+        //     from wherever she stands -- the doc's "she decides when the
+        //     floor is cleared".
+        if me.class == sim::Class::Elementalist && self.fire_left == 0 && me.action.actionable() {
+            let reach = sim::moves::get(me.class, sim::state::SLOT_SPECIAL).reach;
+            let foot = fight::foot_radius(beast);
+            let pool = seen
+                .floor
+                .iter()
+                .filter(|h| h.kind == fight::TAR)
+                .filter(|h| wide_flat_dist(h.a, beast.pos).raw() < h.radius.add(foot).raw())
+                .filter(|h| !h.covers_flat(me.pos))
+                .map(|h| {
+                    // The nearest point of the pool to her, a little inside it.
+                    let toward = flat(me.pos.sub(h.a));
+                    let inside = h.radius.sub(Fx::ratio(1, 2)).max(Fx::ZERO);
+                    let spot = if toward.flat_len().raw() > 0 {
+                        h.a.add(toward.normalized().scale(inside))
+                    } else {
+                        h.a
+                    };
+                    (spot, wide_flat_dist(spot, me.pos))
+                })
+                .filter(|(_, d)| d.raw() <= reach.raw())
+                .min_by_key(|(_, d)| d.raw());
+            if let Some((spot, _)) = pool {
+                self.fire_left = FIRE_GAP;
+                self.intent = KINDLE;
+                return looking(me, flat(spot), Input::SPECIAL);
+            }
+        }
+
         // 1. Kindle: a brazier whose tar is joined to the toad. Kept to the
         //    one it chose while that one is still a fuse, and given up if it
         //    is taking too long to get there.
@@ -644,6 +684,12 @@ impl Mireback {
                     .scale(fight::foot_radius(beast)),
             ),
         };
+        // Where on it to put the crosshair: the sac where it hangs, or its
+        // flank at the height of a fighter's chest.
+        let target_point = match sac {
+            Some(s) if wide_flat_dist(s, me.pos).raw() < Fx::from_int(6).raw() => s,
+            _ => V3::new(target.x, Fx::ratio(15, 10), target.z),
+        };
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let strike = poke.reach.add(Fx::ratio(1, 2));
         let to_target = flat(target.sub(me.pos));
@@ -691,7 +737,8 @@ impl Mireback {
             } else {
                 0
             };
-            return Input::aimed(walk | swing | hop, target_wire);
+            let _ = target_wire;
+            return looking(me, target_point, walk | swing | hop);
         }
 
         // Hold the flank, on clean floor.
@@ -897,8 +944,20 @@ impl Mireback {
         } else {
             0
         };
-        Input::aimed(swing, face)
+        let _ = face;
+        looking(me, target, swing)
     }
+}
+
+/// Buttons, with the crosshair put on a point: the yaw toward it and the
+/// pitch the camera needs (`aim::look_onto`). What a person does with the
+/// mouse, and what a shot or a swing at something not at chest height needs.
+fn looking(me: &sim::state::Player, at: V3, bits: u16) -> Input {
+    let d = flat(at.sub(me.pos));
+    let yaw = atan2_turns(d.z, d.x);
+    let wire = turns_to_aim(yaw.sub(me.carry_yaw));
+    let pitch = sim::aim::look_onto(me.pos, wire, me.aloft, at);
+    Input::looking_at(bits, wire, pitch)
 }
 
 trait SlowNow {

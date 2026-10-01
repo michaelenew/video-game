@@ -1038,6 +1038,11 @@ impl Rig {
             if !part.shape.mountable {
                 continue;
             }
+            // **A face pointing at the floor is not a surface**, for a species
+            // that rolls onto its back (`FightDecl::rolls_over`).
+            if self.species.fight.rolls_over && self.of(index).rot.r[1].y.raw() <= 0 {
+                continue;
+            }
             let sh = self.species.shape(index);
             let local = self.world_to_part(index, world);
             let over = local.x.raw() > sh.min.x.sub(lip).raw()

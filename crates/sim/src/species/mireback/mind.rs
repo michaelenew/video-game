@@ -185,6 +185,17 @@ pub fn appetite(m: &Monster, kind: u8, base: i32, mind: &Mind) -> i32 {
 /// within reach of where it last saw you. With none, it closes on you as any
 /// creature does.
 pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
+    // **Fire near it first**: it walks away from the nearest burning thing,
+    // the slow way out when the flop is not ready.
+    if let Some(fire) = fire_near(m, mind) {
+        let away = V3::new(m.pos.x.sub(fire.x), Fx::ZERO, m.pos.z.sub(fire.z));
+        if away.flat_len().raw() > 0 {
+            return Some(
+                m.pos
+                    .add(math::wide_normalized(away).scale(Knob::FleeReach.fx())),
+            );
+        }
+    }
     let reach = Knob::TarReach.fx();
     let mut sum = V3::ZERO;
     let mut weight = Fx::ZERO;

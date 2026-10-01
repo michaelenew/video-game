@@ -171,6 +171,7 @@ pub static FIGHT: FightDecl = FightDecl {
     },
     hazards: &HAZARDS,
     lands_on_bodies: true,
+    rolls_over: true,
     frame: Some(frame),
     appetite: Some(mind::appetite),
     prowl_to: Some(mind::prowl_to),
