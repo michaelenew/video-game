@@ -77,6 +77,10 @@ pub const SECTIONS: &[Section] = &[
                 "Fight in another arena: proving_ground (the default), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
+                "cargo run -p game -- --hunt <creature> --temper <n>",
+                "Start the hunt at a temper, 0 to 3, whatever you have earned, and let T offer every temper. A temper is the same creature cleverer: it glances more often, leads you further, picks its best move more surely, and stays methodical as it tires. Its health and its hide do not change.",
+            ),
+            e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",
                 "Peer-to-peer against someone else. Rollback netcode, no server.",
             ),
@@ -110,6 +114,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "?arena=<name>",
                 "Fight in another arena, exactly as --arena does: proving_ground or range.",
+            ),
+            e(
+                "?temper=<n>",
+                "Start the hunt at a temper, 0 to 3, exactly as --temper does, earned or not.",
             ),
             e(
                 "?bot=<level>",
@@ -378,6 +386,10 @@ pub const SECTIONS: &[Section] = &[
                 "Hunt the next creature there is, in its own arena. Creatures not built yet are skipped. Online, both players go together.",
             ),
             e(
+                "T",
+                "Hunt the same creature again at the next temper you have earned, and round to as tuned. Beating a creature earns its trophy at that temper and offers the next one up; the list on the right shows both. Your trophies are kept on this machine (a file beside your settings, or this browser's storage), and online each player keeps their own.",
+            ),
+            e(
                 "Land on it",
                 "There is no mount button. Jump onto the tail, or drop onto its back from a platform, and you are on it.",
             ),
@@ -624,8 +636,8 @@ pub const SECTIONS: &[Section] = &[
                 "Play a scripted hunt and report on it: how much of what the creature throws can be answered on sight, how long the openings are, how varied its moves are, and how long anyone stays on its back.",
             ),
             e(
-                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n> --species <name>",
-                "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/).",
+                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n> --species <name> --temper <n>",
+                "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/), at a temper (0 to 3).",
             ),
             e(
                 "cargo run -p net --bin soak",

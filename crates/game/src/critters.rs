@@ -349,7 +349,7 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
     // The ring each fighter has been given, and the den.
     for seen in pack.seen.iter().filter(|s| s.alive && s.ring_places > 0) {
         for slot in 0..seen.ring_places {
-            let at = fx3(sim::pack::ring_point(sp, seen, slot));
+            let at = fx3(sim::pack::ring_point(&pack, seen, slot));
             gizmos.circle(Isometry3d::new(at + Vec3::Y * 0.02, flat), 0.15, RING);
         }
     }

@@ -1,8 +1,9 @@
 //! Where the desktop and the browser differ.
 //!
 //! Five things, and only five. Three of them are here: **how a run is
-//! configured**, **where its settings are kept**, and **what a crash looks
-//! like**. [`crate::online`] owns the fourth, whether there is a peer. The
+//! configured**, **where its settings are kept** (and the trophy record beside
+//! them, which is kept the same way for the same reason), and **what a crash
+//! looks like**. [`crate::online`] owns the fourth, whether there is a peer. The
 //! fifth — whether there is a checkout to commit a tuning session to — belongs
 //! to the two files that want one, [`crate::bake`] and [`crate::hub`], which
 //! carry their own browser half and are the two exemptions in
@@ -232,31 +233,55 @@ mod host {
         super::Options::from_args(std::env::args().skip(1))
     }
 
-    /// Where the settings file lives.
+    /// Where one of the player's files lives: `~/.config/arena/<file>`.
     ///
-    /// `ARENA_SETTINGS` overrides it, which is what makes this testable and
-    /// what lets two people on one machine keep separate settings without a
-    /// profile system.
-    fn path() -> Option<PathBuf> {
-        if let Some(explicit) = super::env("ARENA_SETTINGS") {
+    /// An environment variable overrides each one (`ARENA_SETTINGS`,
+    /// `ARENA_TROPHIES`), which is what makes this testable and what lets two
+    /// people on one machine keep separate settings without a profile system.
+    fn path(file: &str, overridden_by: &str) -> Option<PathBuf> {
+        if let Some(explicit) = super::env(overridden_by) {
             return Some(PathBuf::from(explicit));
         }
         let home = std::env::var("HOME").ok()?;
-        Some(PathBuf::from(home).join(".config/arena/settings.conf"))
+        Some(PathBuf::from(home).join(".config/arena").join(file))
     }
 
-    pub fn load_settings() -> Option<String> {
-        std::fs::read_to_string(path()?).ok()
+    pub fn read_from(p: &std::path::Path) -> Option<String> {
+        std::fs::read_to_string(p).ok()
     }
 
-    pub fn save_settings(text: &str) {
-        let Some(p) = path() else { return };
+    pub fn write_to(p: &std::path::Path, text: &str, what: &str) {
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Err(e) = std::fs::write(&p, text) {
-            eprintln!("could not save settings to {}: {e}", p.display());
+        if let Err(e) = std::fs::write(p, text) {
+            eprintln!("could not save {what} to {}: {e}", p.display());
         }
+    }
+
+    pub fn load_settings() -> Option<String> {
+        read_from(&path("settings.conf", "ARENA_SETTINGS")?)
+    }
+
+    pub fn save_settings(text: &str) {
+        let Some(p) = path("settings.conf", "ARENA_SETTINGS") else {
+            return;
+        };
+        write_to(&p, text, "settings");
+    }
+
+    /// The trophy record ([`crate::trophies`]): a file beside the settings,
+    /// in its own format, so a person can read which creatures they have
+    /// beaten and delete the file to start again.
+    pub fn load_trophies() -> Option<String> {
+        read_from(&path("trophies.conf", "ARENA_TROPHIES")?)
+    }
+
+    pub fn save_trophies(text: &str) {
+        let Some(p) = path("trophies.conf", "ARENA_TROPHIES") else {
+            return;
+        };
+        write_to(&p, text, "trophies");
     }
 
     /// Nothing to install: a panic already prints to the terminal the game was
@@ -303,6 +328,21 @@ mod host {
         }
     }
 
+    /// The trophy record's key: beside the settings, never in them, so
+    /// clearing one does not clear the other.
+    const TROPHY_KEY: &str = "arena.trophies";
+
+    pub fn load_trophies() -> Option<String> {
+        storage()?.get_item(TROPHY_KEY).ok()?
+    }
+
+    pub fn save_trophies(text: &str) {
+        if let Some(store) = storage() {
+            // As above: a full store loses the record, not the match.
+            let _ = store.set_item(TROPHY_KEY, text);
+        }
+    }
+
     /// Put the panic message where the player can read it.
     ///
     /// Without this a panic in the browser is a blank canvas and
@@ -325,7 +365,7 @@ mod host {
 }
 
 use host::read_options;
-pub use host::{load_settings, report_panics, save_settings};
+pub use host::{load_settings, load_trophies, report_panics, save_settings, save_trophies};
 
 // ---------------------------------------------------------------------------
 
@@ -402,6 +442,32 @@ mod tests {
         let args = Options::from_args(["--shot-pitch", "-0.3", "-h"].map(String::from));
         assert_eq!(args.value("SHOT_PITCH"), Some("-0.3"));
         assert!(args.flag("-h"));
+    }
+
+    /// The trophy record survives the desktop's store: written to a file and
+    /// read back, the same text. (The browser's half is local storage, which
+    /// a host test cannot reach; it holds the same text under its own key,
+    /// and `./scripts/web-smoke.sh` is what loads it.)
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_trophy_record_round_trips_through_the_desktop_store() {
+        use crate::trophies::Trophies;
+        use sim::species::SpeciesId;
+        let dir = std::env::temp_dir().join(format!("arena-trophies-{}", std::process::id()));
+        let file = dir.join("nested/trophies.conf");
+        assert_eq!(
+            host::read_from(&file),
+            None,
+            "a store that was never written"
+        );
+        let mut record = Trophies::default();
+        record.record(SpeciesId::RIDGEBACK, 0);
+        record.record(SpeciesId::RIDGEBACK, 1);
+        record.record(SpeciesId::SIEGESHELL, 0);
+        host::write_to(&file, &record.to_text(), "trophies");
+        let back = Trophies::from_text(&host::read_from(&file).expect("written"));
+        assert_eq!(back, record);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

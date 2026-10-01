@@ -67,32 +67,59 @@ pub struct Input {
 }
 
 /// Where a [`Input::travel`] request goes. One byte.
+///
+/// `0` is no request and `1` is versus. A hunt sets the top bit, keeps the
+/// species in the low five and its **temper** in the two between
+/// (`crate::temper`): `1tt sssss`. So the temper travels with the creature, on
+/// the same frame, and a rollback that crosses the start of a tempered hunt
+/// replays it at the same temper -- there is no second message to agree on.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
 pub struct Travel(pub u8);
+
+// Five bits of species in a hunt's travel byte: every id there is has to fit.
+const _: () = assert!(crate::species::COUNT <= Travel::SPECIES as usize + 1);
 
 /// What a [`Travel`] byte means.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Destination {
     /// Fight each other, in the proving ground.
     Versus,
-    /// Hunt a creature, in its own arena.
-    Hunt(SpeciesId),
+    /// Hunt a creature, in its own arena, at a temper.
+    Hunt(SpeciesId, u8),
 }
 
 impl Travel {
     pub const NONE: Travel = Travel(0);
     pub const VERSUS: Travel = Travel(1);
     const HUNT: u8 = 0x80;
+    const SPECIES: u8 = 0x1F;
+    const TEMPER_SHIFT: u8 = 5;
+    const TEMPER: u8 = 0x03;
 
+    /// Hunt a creature as tuned.
     pub const fn hunt(species: SpeciesId) -> Travel {
-        Travel(Travel::HUNT | (species.0 & !Travel::HUNT))
+        Travel::tempered(species, 0)
+    }
+
+    /// Hunt a creature at a temper. A temper past what two bits hold is the
+    /// highest they do.
+    pub const fn tempered(species: SpeciesId, temper: u8) -> Travel {
+        let t = if temper > Travel::TEMPER {
+            Travel::TEMPER
+        } else {
+            temper
+        };
+        Travel(Travel::HUNT | t << Travel::TEMPER_SHIFT | (species.0 & Travel::SPECIES))
     }
 
     pub const fn destination(self) -> Option<Destination> {
         match self.0 {
             0 => None,
             1 => Some(Destination::Versus),
-            b if b & Travel::HUNT != 0 => Some(Destination::Hunt(SpeciesId(b & !Travel::HUNT))),
+            b if b & Travel::HUNT != 0 => Some(Destination::Hunt(
+                SpeciesId(b & Travel::SPECIES),
+                (b >> Travel::TEMPER_SHIFT) & Travel::TEMPER,
+            )),
             _ => None,
         }
     }

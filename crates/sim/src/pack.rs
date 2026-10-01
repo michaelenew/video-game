@@ -141,6 +141,9 @@ pub struct Seen {
 pub struct Pack {
     /// Whose table: the species that brought it.
     pub species: SpeciesId,
+    /// How clever it is this hunt: see [`crate::temper`]. Its glance, its lead
+    /// and its critters' cadence are read through it.
+    pub temper: u8,
     /// One of [`mood`].
     pub mood: u8,
     /// The creature slot of the monster that owns it, or [`NONE`].
@@ -177,6 +180,7 @@ impl Pack {
         let sp = species.get();
         Pack {
             species,
+            temper: 0,
             mood: if sp.pack_raw(PackKnob::Alarm) == 0 {
                 mood::HUNTING
             } else {
@@ -201,6 +205,28 @@ impl Pack {
 
     pub fn sp(&self) -> &'static Species {
         self.species.get()
+    }
+
+    // The three numbers a temper overrides on a pack (`crate::temper`): read
+    // here, never off the species, so a tempered pack is the same code.
+
+    /// Frames between the pack's glances, after its temper.
+    pub fn glance_frames(&self) -> u16 {
+        let own = self
+            .sp()
+            .pack_raw(PackKnob::GlanceFrames)
+            .clamp(1, u16::MAX as i32);
+        crate::temper::glance(own as u16, self.temper)
+    }
+
+    /// How far ahead it leads a fighter, in frames, after its temper.
+    pub fn lead_frames(&self) -> i32 {
+        crate::temper::lead_frames(self.sp().pack_raw(PackKnob::Lead), self.temper)
+    }
+
+    /// How often a critter decides, after its temper: it follows the glance.
+    pub fn think_every(&self) -> u32 {
+        crate::temper::cadence(self.sp().pack_raw(PackKnob::ThinkEvery), self.temper) as u32
     }
 
     /// How many tokens there are right now, the rally included.
@@ -304,7 +330,7 @@ pub struct Look<'a> {
 impl Look<'_> {
     /// Where the pack thinks a fighter will be: the glance, projected by `Lead`.
     pub fn lead(&self, target: usize) -> V3 {
-        lead_point(self.sp, &self.pack.seen[target.min(MAX_PLAYERS - 1)])
+        lead_point(self.pack, &self.pack.seen[target.min(MAX_PLAYERS - 1)])
     }
 }
 
@@ -657,7 +683,7 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
     // ---- the glance ----
     if pack.glance_left == 0 {
         glance(pack, critters, w);
-        pack.glance_left = sp.pack_raw(PackKnob::GlanceFrames).max(1) as u16;
+        pack.glance_left = pack.glance_frames();
     }
     pack.glance_left -= 1;
 
@@ -701,7 +727,7 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
     decl.mind.frame(pack, critters, w.herd, w.frame);
 
     // ---- each body ----
-    let every = sp.pack_raw(PackKnob::ThinkEvery).max(1) as u32;
+    let every = pack.think_every();
     let mut wants = [None; MAX_CRITTERS];
     for i in 0..MAX_CRITTERS {
         if !critters[i].present() {
@@ -757,8 +783,8 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
 }
 
 /// Where a fighter will be, by the pack's reckoning.
-fn lead_point(sp: &Species, seen: &Seen) -> V3 {
-    let frames = sp.pack_raw(PackKnob::Lead).max(0);
+fn lead_point(pack: &Pack, seen: &Seen) -> V3 {
+    let frames = pack.lead_frames();
     let ahead = seen.vel.scale(Fx::from_int(frames).mul(DT));
     V3::new(seen.pos.x.add(ahead.x), seen.pos.y, seen.pos.z.add(ahead.z))
 }
@@ -833,7 +859,7 @@ fn glance(pack: &mut Pack, critters: &mut Critters, w: &World) {
         } else {
             front.wrapping_add(1 << 15)
         };
-        let lead = lead_point(sp, &seen);
+        let lead = lead_point(pack, &seen);
         let at = |k: usize| {
             let yaw = base.wrapping_add(step.wrapping_mul(k as u16));
             lead.add(V3::from_turns(Fx::from_raw(yaw as i32)).scale(radius))
@@ -892,7 +918,8 @@ fn glance(pack: &mut Pack, critters: &mut Critters, w: &World) {
 
 /// Where a ring place is, as things stand: the place's bearing from the
 /// fighter's lead point, at the ring's radius.
-pub fn ring_point(sp: &Species, seen: &Seen, slot: u8) -> V3 {
+pub fn ring_point(pack: &Pack, seen: &Seen, slot: u8) -> V3 {
+    let sp = pack.sp();
     let places = seen.ring_places.max(2) as u32;
     let step = if seen.arc {
         ((1u32 << 15) / (places - 1).max(1)) as u16
@@ -900,7 +927,7 @@ pub fn ring_point(sp: &Species, seen: &Seen, slot: u8) -> V3 {
         ((1u32 << 16) / places) as u16
     };
     let yaw = seen.ring_base.wrapping_add(step.wrapping_mul(slot as u16));
-    lead_point(sp, seen)
+    lead_point(pack, seen)
         .add(V3::from_turns(Fx::from_raw(yaw as i32)).scale(sp.pack_fx(PackKnob::RingRadius)))
 }
 
@@ -1048,7 +1075,7 @@ fn plain_steer(look: &Look, i: usize) -> Steer {
                     .add(sp.pack_fx(PackKnob::LeaderHangback));
                 lead.add(back.scale(out))
             } else if c.slot != NO_SLOT {
-                ring_point(sp, seen, c.slot)
+                ring_point(look.pack, seen, c.slot)
             } else {
                 // Placed nowhere: hold at the ring's radius, where it is.
                 let off = c.pos.sub(lead);

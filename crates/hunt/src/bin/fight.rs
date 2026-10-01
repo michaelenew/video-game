@@ -3,14 +3,16 @@
 //!     cargo run -p hunt --bin fight
 //!     cargo run -p hunt --bin fight -- --class bulwark --trace --repeats 5
 //!     cargo run -p hunt --bin fight -- --species ridgeback
+//!     cargo run -p hunt --bin fight -- --temper 3 --repeats 10
 //!
 //! Any species with a plan (`crates/hunt/src/plans/`); the Ridgeback by
+//! default. `--temper <n>` fights it at a temper (`sim::temper`), as tuned by
 //! default.
 //!
 //! The point is not the outcome. It is the eight or nine numbers underneath
 //! it, which are what turn "the fight feels off" into a thing you can point at.
 
-use hunt::{Outcome, play_species};
+use hunt::{Outcome, play_tempered};
 
 fn arg(flag: &str) -> Option<String> {
     let mut args = std::env::args().skip(1);
@@ -45,6 +47,10 @@ fn main() {
         },
         None => sim::species::SpeciesId::RIDGEBACK,
     };
+    let temper: u8 = arg("--temper")
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0)
+        .min(sim::temper::HIGHEST);
     let repeats: u32 = arg("--repeats").and_then(|n| n.parse().ok()).unwrap_or(1);
     let partners: usize = arg("--hunters").and_then(|n| n.parse().ok()).unwrap_or(1);
     let limit: u32 = arg("--frames")
@@ -57,12 +63,14 @@ fn main() {
     let mut killed = 0;
     let mut total = 0u32;
     for run in 0..repeats.max(1) {
-        let report = play_species(
+        let report = play_tempered(
             species,
+            temper,
             [class; sim::state::MAX_PLAYERS],
             partners,
             limit,
             seed.wrapping_add(run.wrapping_mul(0x9E37_79B9)),
+            |_| {},
         );
         if repeats == 1 {
             println!("{}", report.render());

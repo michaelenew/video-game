@@ -1298,9 +1298,53 @@ impl World {
     }
 
     /// The same fight from the top: these classes, the same creatures, the
-    /// same arena. What a reset or a class change starts.
+    /// same arena, the same temper. What a reset or a class change starts.
     pub fn restarted(&self, classes: [Class; MAX_PLAYERS]) -> World {
-        World::hunt_in(classes, self.hunted(), self.arena)
+        World::hunt_in(classes, self.hunted(), self.arena).tempered(self.temper())
+    }
+
+    /// The same fight with every creature in it at temper `n` -- its bodies
+    /// and its pack alike (`crate::temper`). Clamped to the highest there is.
+    /// A versus match has nothing to temper and comes back unchanged, which
+    /// is the whole of why a temper cannot reach versus.
+    ///
+    /// Part of the hunt's **initial state**: called as the world is built,
+    /// before its first frame, by whatever builds it -- the picker's travel
+    /// on the wire, or a restart -- so both peers start the same fight.
+    pub fn tempered(mut self, n: u8) -> World {
+        let n = n.min(crate::temper::HIGHEST);
+        for m in self.monsters.iter_mut().flatten() {
+            m.temper = n;
+        }
+        if let Some(p) = self.pack.as_mut() {
+            p.temper = n;
+        }
+        self
+    }
+
+    /// The hunt's temper: its first creature's, or its pack's. Zero in versus.
+    pub fn temper(&self) -> u8 {
+        self.monster()
+            .map(|m| m.temper)
+            .or(self.pack.map(|p| p.temper))
+            .unwrap_or(0)
+    }
+
+    /// **The hunt just won, if it was**: the creatures it was against, and the
+    /// temper they were at. `Some` from the frame the last of them falls (or a
+    /// defended thing wins it, bestiary P7) until the round's pause runs out,
+    /// and `None` in versus, in a hunt still going, and in one lost.
+    ///
+    /// What a trophy is written from (world W1). The record itself is the
+    /// player's and not the fight's, so it is kept outside the snapshot by the
+    /// game; this is only the question it asks.
+    pub fn hunt_won(&self) -> Option<([Option<SpeciesId>; MAX_MONSTERS], u8)> {
+        match self.phase {
+            Phase::RoundOver { winner, .. } if self.hunting() && winner != QUARRY => {
+                Some((self.hunted(), self.temper()))
+            }
+            _ => None,
+        }
     }
 
     /// The creatures this fight is against, one per slot, as `hunt_with`
@@ -1354,9 +1398,9 @@ impl World {
         let classes = self.players.map(|p| p.class);
         let world = match to.destination()? {
             Destination::Versus => World::with_classes(classes),
-            Destination::Hunt(species) => {
+            Destination::Hunt(species, temper) => {
                 crate::species::lookup(species)?;
-                World::hunt_of(classes, species)
+                World::hunt_of(classes, species).tempered(temper)
             }
         };
         Some(World {
@@ -2456,6 +2500,11 @@ impl World {
                 // One for a creature, with its slot and species above the
                 // first byte: the Ridgeback in slot zero is still just one.
                 h.write_u32(1 | (slot as u32) << 8 | (m.species.0 as u32) << 16);
+                // Its temper, only when it has one: a hunt as tuned hashes
+                // exactly as it did before there were tempers.
+                if m.temper != 0 {
+                    h.write_u32(0x7E | (m.temper as u32) << 8);
+                }
                 hash_v3(&mut h, &m.pos);
                 h.write_i32(m.yaw.raw());
                 h.write_i32(m.yaw_rate.raw());
@@ -2509,6 +2558,9 @@ impl World {
         // without small bodies hashes exactly as it did before there were any.
         if let Some(p) = &self.pack {
             h.write_u32(0xC0 | (p.species.0 as u32) << 8);
+            if p.temper != 0 {
+                h.write_u32(0x7E | (p.temper as u32) << 8);
+            }
             for v in [p.mood, p.owner, p.leader, p.boost, p.mustered, p.lost] {
                 h.write_u32(v as u32);
             }
@@ -9989,7 +10041,7 @@ impl World {
     /// loudness to this species, less its distance. `None` if nothing reached.
     pub fn heard_by(&self, m: &Monster, head: V3) -> Option<monster::Heard> {
         let sp = m.sp();
-        let window = sp.glance_frames().max(1) as u32;
+        let window = m.glance_frames().max(1) as u32;
         let mut best: Option<(Fx, monster::Heard)> = None;
         for n in crate::noise::all(&self.lore) {
             if self.frame.wrapping_sub(n.born) > window {

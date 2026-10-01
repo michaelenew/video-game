@@ -48,6 +48,8 @@ fn spoken(key: &str) -> Vec<&'static str> {
         // half of the keyboard, the way they have no mouse at all.
         "KeyM" => vec!["M"],
         "KeyP" => vec!["P"],
+        // The temper: the same creature, cleverer (world W2).
+        "KeyT" => vec!["T"],
         "KeyQ" => vec!["Q"],
         "KeyR" => vec!["R", "F and R"],
         "KeyF" => vec!["F", "F and R"],
