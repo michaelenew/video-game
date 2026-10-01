@@ -661,16 +661,30 @@ from twelve single runs each, which print the report's lines:
 
 ```text
                 plan A won   mean     plan B won   mean     out of reach (A / B)   unanswerable, unseen tells
-  Champion        4/24      482 s       7/24      491 s          67 / 69 %                  0
+  Champion        4/24      482 s       7/24      491 s          67 / 65 %                  0
   Bulwark         0/24        --        2/24      752 s          55 / 53 %                  0
-  Reaver          0/24        --        2/24     1009 s          56 / 56 %                  0
-  Elementalist    0/24        --        0/24        --            6 /  5 %                  0
-  Blood mage      0/24        --        0/24        --           52 / 45 %                  0
-  Dual mage       0/24        --        0/24        --           58 / 56 %                  0
+  Reaver          9/24      650 s      10/24      585 s          55 / 53 %                  0
+  Elementalist   18/24      177 s      16/24      214 s           5 /  4 %                  0
+  Blood mage      0/24        --        0/24        --           51 / 49 %                  0
+  Dual mage       0/24        --        0/24        --           56 / 55 %                  0
+
+  (2026-10-01, every class played; before it the Reaver won 0 and 2, the
+   Elementalist 0 and 0)
 
   windows, every class: threatening 79-80 %, poke 6-7, way in 9, walk up 5
   coop, two Champions: 0/12
 ```
+
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8). **The Elementalist** wins 18 and 16: when
+the bird is down -- crashed, dwelling after a Stoop -- a pillar goes under it
+(279 in plan A's 24) and her bolts at its wings are aimed. **The Reaver** wins 9
+and 10 from 0 and 2: her shadow goes to the downed bird's wing (846), a lotus
+opens on it and is dragged home through it (799), and she cashes the marks (235)
+-- a bird on the floor is a target that stays beside her shadow. **The Blood
+mage and the Dual mage still win nothing**: out of reach half the fight, and
+the windows when it is not are too few for the Dual mage's bars (goaded up 2671
+times at home, back down by the next window) or for pools worth a spike.
 
 **Against the targets.** The Champion is at tier 4: plan A wins a sixth in
 eight minutes, and plan B -- the ride -- wins more often (7 against 4) and
@@ -688,11 +702,11 @@ unseen tells** for every class and both plans. Short of the targets:
   it circles, and it circles most of the fight.
 - **The carry and the barrel roll are rarely or never seen**: the scripted
   hunter crouches under every pass, and plan B's rides end in the first lap.
-- **The rest of the roster loses** to the scripted hunter, which plays the
-  Champion's fight. The Elementalist's air plan (a hop and an Air bolt at the
-  circling bird) puts it in reach 95 % of the time and still loses: it does not
-  dodge from the air. The Blood mage's pools, the Dual mage's wings and the
-  Reaver's shadow are not played, as against every other creature.
+- **The rest of the roster lost** to the scripted hunter until 2026-10-01,
+  when it played the Champion's fight with every class. With each class's own
+  (above), the Elementalist and the Reaver win; the Blood mage, the Dual mage
+  (whose wings the hunt never reaches: ascension is not played) and the
+  Bulwark do not. The Elementalist's air plan is the plan's, as before.
 - **Coop loses** (0 of 12, against 14 400 health): the second Champion runs
   the same plan beside the first, which the plan was not written for.
 

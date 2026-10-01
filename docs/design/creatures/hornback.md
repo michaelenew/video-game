@@ -684,11 +684,15 @@ with a fifteen-frame reaction; the herd's own report lines are §9's
 ```text
                 won    mean    health left   threat / poke / way in / walk up   unanswerable
   Champion     22/24   109 s    678 of 1000      38 /  8 / 20 / 34 %                  0
-  Reaver       16/24   159 s    325 of  750      37 /  7 / 24 / 32 %                  0
-  Elementalist 23/24    89 s    752 of 1000      33 /  7 / 18 / 42 %                  0
-  Blood mage    5/24   292 s     46 of 1000      35 /  7 / 30 / 29 %                  0
-  Bulwark      19/24   191 s    584 of 1250      36 /  7 / 28 / 29 %                  0
-  Dual mage     1/24   589 s     81 of 1000      29 /  6 / 46 / 20 %                  0
+  Reaver       15/24   163 s    231 of  750      36 /  7 / 26 / 31 %                  1
+  Elementalist 24/24    36 s    869 of 1000      34 /  7 / 15 / 45 %                  0
+  Blood mage   21/24   109 s    366 of 1000      39 /  8 / 20 / 32 %                  1
+  Bulwark      20/24   170 s    586 of 1250      36 /  7 / 27 / 30 %                  1
+  Dual mage    14/24   219 s    383 of 1000      37 /  8 / 28 / 27 %                  1
+
+  (2026-10-01, every class played; before it: Reaver 16 in 159 s, Elementalist
+   23 in 89 s, Blood mage 5 in 292 s, Bulwark 19 in 191 s, Dual mage 1 in 589 s,
+   none unanswerable. The charges-into-a-solid lines below are from before.)
 
   coop, two Champions 12/12 in 122 s; two Bulwarks 11/12 in 249 s
   temper 3, Champion  10/12 in 95 s, 698 left, threatening 38 %
@@ -702,20 +706,38 @@ with a fifteen-frame reaction; the herd's own report lines are §9's
     Elementalist     114 of 178  (64 %)       13075 / 10350                   0      43 / 24                         50         2
     Bulwark          144 of 329  (44 %)       16761 / 19680                  22      48 / 48                         12        28
 
-  the crossing, 12 runs   won (arrived / bull down)   mean
-    Champion             11 / 12                          56 s
-    Reaver                9 / 12                          56 s
-    Elementalist          7 / 12                          68 s
-    Blood mage            8 / 12                          60 s
-    Bulwark               9 / 12                          58 s
-    Dual mage            11 / 12                          55 s
+  the crossing, 12 runs   won (arrived / bull down)   mean     before (2026-10-01)
+    Champion             11 / 12                          56 s       11 in 56 s
+    Reaver                9 / 12                          56 s        9 in 56 s
+    Elementalist         11 / 12                          49 s        7 in 68 s
+    Blood mage            4 / 12                          58 s        8 in 60 s
+    Bulwark               8 / 12                          59 s        9 in 58 s
+    Dual mage             9 / 12                          67 s       11 in 55 s
     two Champions         1 / 12                          54 s
 
   herd cost: its rules 1.5-2.7 us a frame, the whole frame 21-26 us mean, in release
 ```
 
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8). **The Blood mage** wins 21 of 24 from 5 --
+the plan's Black spike into the stun, now measured against the pools that pay
+for it (134 spikes in the 24, every one on a pool), and the scythe where the
+plan had pressed her Haemorrhage. **The Dual mage** wins 14 from 1, her bars
+level and goaded up at her post (1387 goads), Judgements and Sweeps into the
+stun. **The Elementalist** wins every hunt in 36 s with nine tenths of her
+health: a pillar under a bull that stands in it (86), bolts from her post.
+**The Bulwark** takes the hook and the shoulder on his shield now (133 guards)
+and wins one more, twenty seconds sooner. **The Reaver** sends her shadow to
+the bull (137) and is where she was; the herd's bodies take no marks, so she
+never cashes. **Four classes take one unanswerable hit in 24** where none did:
+the one traced, the Blood mage's, was the bull's windup begun out of her sight
+as she walked to her post -- a course of the fight the Champion's hunts never
+take. **On the crossing** the Elementalist arrives more often and the Blood mage
+and the Dual mage less: a hunter fighting the bull harder is a hunter further
+from the cart.
+
 **Against the targets.** Zero unanswerable hits and zero hidden commits for every
-class. **At least one charge in three goes into a solid** for every class the
+class, as first measured (one each for four classes since, above). **At least one charge in three goes into a solid** for every class the
 plan plays well -- the Champion on the line, the Elementalist (who raises a stone
 into a lane with nothing at its end) at two in three -- and the stun is where
 the fight's damage goes: four fifths of the Champion's. The charge lands under
@@ -727,12 +749,12 @@ Bulwark and the Reaver (160–190 s). The windows: threatening 33–38 % against
 ~30, walk up 29–42 % against ~30, and the poke window small (7–8 %) because a
 bull that can act is a charge or a hook, never a poke's worth of nothing.
 
-**The Blood mage and the Dual mage do not win it.** The Dual mage's is the known
-harness gap (the plan cannot play her two bars; see the Gnawers' §13). The Blood
-mage's is the plan: her damage is a 22-point sweep, and against a 2000-health bull
-whose openings are the stuns, she spends them on Black spikes while her health
-holds a third, and the rest of the fight she cannot afford. A person playing her
-would bring pools under a stunned bull; the plan does not.
+**The Blood mage and the Dual mage did not win it** before 2026-10-01: the
+plan could not play the Dual mage's two bars, and spent the Blood mage's
+stuns on Black spikes on bare floor. With their classes played they win 21
+and 14 (above). **The Elementalist's fight is now trivial** -- 36 s, nine
+tenths of her health -- which is §12's question about her answered by the
+numbers: a person's to decide whether that is her identity or a hole.
 
 **What differs from the text above**, each a decision to review:
 

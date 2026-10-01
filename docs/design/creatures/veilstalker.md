@@ -672,10 +672,13 @@ off by a tenth of the wait it judged (below).
                 won    mean win   threat / poke / way in / walk up   unanswerable (blind)
   Champion      6/24    336 s         45 /  8 /  6 / 40 %                0
   Bulwark       8/24    463 s         44 /  7 /  7 / 43 %                0
-  Reaver        3/24    433 s         46 /  8 /  6 / 40 %                0
-  Elementalist  5/24    347 s         24 /  7 /  8 / 62 %                0
-  Blood mage    0/24      --          34 / 10 /  9 / 47 %                0
-  Dual mage     0/24      --          48 /  9 /  6 / 38 %                0
+  Reaver        6/24    491 s         43 /  8 /  6 / 43 %                0
+  Elementalist 22/24    208 s         25 /  8 /  9 / 59 %                0
+  Blood mage    0/24      --          46 /  7 /  6 / 41 %                0
+  Dual mage     0/24      --          50 /  9 /  7 / 34 %                0
+
+  (2026-10-01, every class played; before it the Reaver won 3 in 433 s and the
+   Elementalist 5 in 347 s)
 
   coop, two Champions 12/12 in 303 s;  temper 3, Champion 5/12 in 344 s
 
@@ -695,6 +698,19 @@ almost never at the edge; one or two retreats broken by a burst in the recoil
 in a long hunt; panics rare (the Champion tips a brazier now and then) and no
 cloud burnt off -- the harness's Champion carries no fire.
 
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8), held to the plan's camera. **§7's worry is
+confirmed: the Elementalist wins 22 of 24**, in three and a half minutes,
+keeping nearly half her health -- a pillar under the animal whenever it is seen
+in a recovery (128 in the 24) and her bolts aimed at what the screen shows.
+Whether her fire burns off a smoke cloud is still not played: the class layer
+throws fire at the animal, not at the clouds. **The Reaver** doubles to 6,
+sending her shadow to it on the way in to a recovery (74) and cashing marks
+now and then. **The Blood mage and the Dual mage still win nothing**: an
+animal seen a strike at a time is too few windows for the Dual mage's bars to
+climb (163 goads) or the Blood mage's pools to pay. Still zero blind hits and
+zero unanswerable for every class.
+
 **Against the targets.** **Zero blind hits and zero unanswerable** in all
 144 hunts of the six classes, in coop and at temper 3. Twenty-two of the 144
 won, about one in six and a half -- tier 4 -- in five and a half to eight
@@ -711,10 +727,10 @@ off:**
   walks out of every circle; one in five against the Elementalist on a trunk
   top). They are answered as designed; whether a person answers them as well
   is the playing question.
-- **The Blood mage and the Dual mage lose every hunt**, as against every
-  creature: the harness does not play their pools or their bars.
-- **The Elementalist's fire is not played**: the harness casts no fire at
-  the clouds or the hide, so §7's worry (her fight too easy) is untested.
+- **The Blood mage and the Dual mage lose every hunt**, with their pools and
+  bars played since 2026-10-01 (above).
+- **The Elementalist's fire is played at the hide** since 2026-10-01, and
+  §7's worry holds: 22 of 24. It is still not thrown at the clouds.
 
 **Changed from this document while building**, beyond the numbers:
 

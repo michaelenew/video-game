@@ -588,12 +588,17 @@ Numbers from `cargo run -p hunt --bin fight -- --species mireback --class <c>
 
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable
-  Champion     15/24   121 s        478                  45 / 9 / 14 / 32 %                  1
-  Bulwark      12/24   130 s        385                  46 / 9 / 13 / 32 %                  1
-  Reaver       13/24   180 s        298                  45 / 9 / 13 / 33 %                  1
-  Elementalist 24/24    44 s        719                  32 / 7 / 11 / 49 %                  0
-  Blood mage    1/24   122 s        245                  46 / 9 / 14 / 32 %                  0
-  Dual mage     0/24     --          --                  44 / 9 / 13 / 34 %                  0
+  Champion     21/24   120 s        454                  44 / 9 / 14 / 33 %                  1
+  Bulwark      16/24    98 s        530                  46 / 8 / 13 / 33 %                  0
+  Reaver       22/24    89 s        441                  43 / 8 / 13 / 37 %                  2
+  Elementalist 24/24    41 s        653                  34 / 7 / 11 / 48 %                  0
+  Blood mage    5/24   149 s        118                  42 / 8 / 13 / 36 %                  3
+  Dual mage     0/24     --          --                  39 / 8 / 13 / 40 %                  0
+
+  (2026-10-01, every class played. As first measured the rows read
+   15 / 12 / 13 / 24 / 1 / 0 won and 1 / 1 / 1 / 0 / 0 / 0 unanswerable; on main
+   the hour before the class layer, after the shared rule and the cast's
+   other merges, 21 / 16 / 23 / 24 / 5 / 0 won and 1 / 0 / 1 / 0 / 1 / 2.)
 
   coop, two Champions 10/12 in 84 s;  temper 3, Champion 6/12 in 115 s
   swallow_greed (--gamble), Champion 7/12 in 113 s -- the same as the plan without it
@@ -609,6 +614,22 @@ peaks at 18–45 % in a won fight and 28–52 % in a lost one; self-burn is 25�
 least one wart burst in 14 of the 15 wins, the first at 0.6–2 minutes; one or
 two guttings a fight; zero to three swallows.
 
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8). **The rows had moved before it**: the
+Champion wins 21 of 24 and the Bulwark 16 on main, against the 15 and 12 this
+section first recorded, and the unanswerable counts moved with them -- the
+Mantis made the shared rule ask whether the hurt hunter was inside the move's
+reach, and the cast's other merges landed in between, so which moved them is
+not separable here. With the classes played: **the Dual mage still wins
+nothing**, and now for a reason of the toad's: her hop is the one that reaches
+the rim, she climbs onto it, and her punch passes over the warts from the
+crown (one burst in a fourteen-minute hunt, 1058 swings to 48 connecting).
+**The Blood mage** wins 5, the same as before, spiking the pools her Grasps
+leave under it (19 spikes, 21 Grasps in the 24) and losing her red to the
+price; her unanswerable hits rose from one to three. **The Reaver** wins
+22 in 89 s, her shadow at the flank (95 sent, 37 lotuses). **The
+Elementalist** is where she was: every hunt, in 41 s.
+
 **Against the targets.** The Champion wins five in eight, against about two
 in three, in two minutes (two to four asked). Zero unanswerable hits except one
 in 24 for three classes, each a flop out of tar laid after it committed (the
@@ -623,9 +644,9 @@ leaves tar before it, which is the answer); the Backwash hits for nothing by
 design (it tars), so the generic "landed" never counts it. **The Elementalist
 makes it a tier-1 fight** (§12 question 3): her pillar lights every flop ring
 under it, and she wins every hunt in under a minute. **The Dual mage and the
-Blood mage** lose nearly all of them, as they do against the Ridgeback: the
-scripted hunter does not play their bars or their pools, which is the
-harness's limit, not a finding about the toad.
+Blood mage** lose nearly all of them -- since 2026-10-01 with their bars and
+pools played (above): the Dual mage on the crown, missing the warts; the Blood
+mage out-paid by her own costs.
 
 **The body, as `beastcheck --species mireback` prints it**: rim 5.18 m
 standing (the Dual mage's 5.97 hop only), the dome 5.78, the crown and its

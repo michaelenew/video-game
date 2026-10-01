@@ -821,6 +821,40 @@ when each hit landed, is what found the five-throws-in-a-second re-landing and
 the flinch that threw the rider who caused it — both of which a person would
 have reported as "the ride feels random".
 
+### 2026-10-01: every class
+
+**The scripted hunter now plays all six classes** (`hunt::class`; the method
+and the whole cast are [bestiary.md](bestiary.md) §8). Before, it pressed the
+Champion's poke, heavy and dodge whatever it held. 24 hunts a class,
+`cargo run -p hunt --bin fight -- --class <c> --repeats 24`:
+
+```text
+                won    mean   health left (a win)   threat / poke / way in / walk up   unanswerable   before
+  Champion     14/24   64 s        329                  46 / 13 / 19 / 21 %                0          14/24
+  Bulwark       0/24    --          --                  48 / 12 / 18 / 22 %                0           0/24
+  Reaver       12/24   64 s        336                  41 / 14 / 22 / 22 %                0           5/24
+  Elementalist  7/24  127 s        451                  51 / 10 / 15 / 24 %                0           0/24
+  Blood mage    0/24    --          --                  53 / 11 / 16 / 20 %                0           0/24
+  Dual mage     0/24    --          --                  52 / 11 / 16 / 21 %                0           0/24
+
+  the class, over the 24:  Reaver -- shadows sent 67, lotuses 24, dashes 27, Executioners cashed 24
+                           Elementalist -- pillars 172, bolts 1792
+                           Blood mage -- blinks 33, Grasps 11, cuts 62, spikes 1
+                           Dual mage -- hands turned 307, goads 351, finishers 137
+```
+
+The Champion's and the Bulwark's hunts are bit for bit what they were
+(`tests/pin.rs`). **The Reaver** more than doubles: a shadow beside the foot
+throws every swing twice, and a dash to it is the way in and out. **The
+Elementalist** wins a third, slowly -- her pillars break feet from range, and
+the ride is where she loses time: her bolt on the ridge is a bolt at her own
+feet. **The Dual mage** is on the back more than anybody (her hop clears the
+tail) and lands nothing there: her punch passes over the ridge from where the
+plan stands her to work it, 0.6 m behind the strip, where the Champion's sword
+arcs down onto it. **The Blood mage** breaks no foot: her scythe is a third of
+a sword against a foot of 500, and a pool under a foot is too small to be
+worth a spike.
+
 ### Still open
 
 - **Is it too lethal?** A decent player's hunt is over in a minute, won or
@@ -862,8 +896,12 @@ have reported as "the ride feels random".
   walk forward past the shoulders, on the part of the back the shake is most
   violent on. Whether anyone chooses it over the ridge is a question for a
   person.
-- **The Elementalist cannot win**, as before: the scripted hunter's plan is a
-  melee plan.
+- **The Elementalist wins seven in 24 now** (2026-10-01), with the plan's
+  ground game and her own pillars; the ride is still a melee plan's.
+- **The Blood mage and the Dual mage win nothing** (2026-10-01): the Blood
+  mage's damage breaks no foot, and the Dual mage's punch misses the ridge
+  from the plan's work spot. Whether either is the creature's question or the
+  class's is a person's.
 - **Coop.** Both players can fight it and both can be on it at once, but the
   numbers are set for one, and a monster tuned for two is a different monster.
 

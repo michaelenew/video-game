@@ -697,11 +697,14 @@ knows a cat only while the cat or its marker is on that screen.
 ```text
                 won    mean win   threat / poke / way in / walk up   both in view   unanswerable
   Champion     16/24    159 s         78 /  7 /  7 /  8 %                75 %             0
-  Bulwark      12/24    186 s         81 /  6 /  6 /  7 %                74 %             0
-  Reaver        4/24    218 s         80 /  6 /  7 /  7 %                74 %             0
-  Elementalist  4/24    259 s         81 /  6 /  7 /  6 %                72 %             0
-  Blood mage    0/24      --          80 /  6 /  7 /  7 %                75 %             0
-  Dual mage     0/24      --          80 /  7 /  7 /  6 %                77 %             0
+  Bulwark      12/24    186 s         80 /  6 /  6 /  7 %                74 %             0
+  Reaver        7/24    111 s         79 /  7 /  7 /  7 %                67 %             0
+  Elementalist 24/24     46 s         79 /  6 /  5 / 10 %                57 %             0
+  Blood mage    0/24      --          81 /  6 /  6 /  6 %                75 %             0
+  Dual mage     4/24    128 s         80 /  6 /  7 /  7 %                70 %             0
+
+  (2026-10-01, every class played; before it the Reaver won 4 in 218 s, the
+   Elementalist 4 in 259 s, the Blood mage and the Dual mage none)
 
   coop, two Champions 11/12 in 149 s;  temper 3, Champion 9/12 in 159 s
 
@@ -719,6 +722,21 @@ three quarters of the fight; a cat without sight of its target a third of it;
 two or three twin pounces a hunt, nearly all crashed; one or two scars a hunt,
 and a scarred cat struck from its blind side six to eighteen times; the death
 gap six to nine seconds when the hunter wins.
+
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8), held to the plan's camera: the class acts
+only on what is on its screen and moves the mouse off it by a flick at most.
+**The Elementalist wins every hunt, in 46 s**: a pillar under a cat in a
+recovery or a quiet moment (150 in the 24) and bolts aimed at it -- the cats do
+not leave the fire, and nothing on the Den answers her from nine metres. She
+also has both cats in view least (57 %): her crosshair goes to the floor under
+the one she burns. **The Reaver** wins 7 from 4, sending her shadow beside a cat
+(423), dashing to it in and out (227) and cashing the marks it leaves (54).
+**The Dual mage** wins 4, goading her bars up while she watches both (1447).
+**The Blood mage still wins nothing**: 262 blinks and 80 Grasps in the 24, and
+a cat's 2400 against a scythe of 22. A Bulwark guarding the cats' answers was
+tried and took him from 12 wins to 3 -- one shield, two cats -- and is not
+kept. Still zero unanswerable, by both clauses, for every class.
 
 **Against the targets.** **Zero unanswerable hits**, by both clauses, in all
 144 hunts of the six classes, coop and temper 3. The four classes the harness
@@ -739,9 +757,9 @@ a half to four and a half minutes (three to six asked). Every move is used.
 - **Feints are rare**: three or four a hunt, and almost never bitten. The
   harness reads the tail perfectly, so whether the flick is readable at
   speed (§12 question 2) is still a person's question.
-- **The Blood mage and the Dual mage lose every hunt**, as against every
-  creature: the scripted hunter does not play their pools or their bars, a
-  limit of the harness, not a finding about the cats.
+- **The Blood mage loses every hunt and the Dual mage wins 4**, with their
+  pools and bars played since 2026-10-01 (above); **the Elementalist wins
+  every one in 46 s** -- the Den's open question now, not the harness's.
 - **Temper 3 barely moves it**: the glance tightens (`temper::glance`
   reaches the cats through `FightDecl::glance`), but a cat already glancing
   every seven frames has little left to gain.

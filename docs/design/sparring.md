@@ -119,6 +119,12 @@ one that weighs its moves by the state of the mechanic.
 | Blood mage | **Blinks to a pool beside you and sweeps**, or to one far from you when she is low. Weighs Black spike by whether a pool is at your feet, the scythe by her grey, and her costly moves down when her red is short. |
 | Dual mage | **Keeps her bars level.** A move that would push the gap past the band — where she burns — is never thrown; one on the low side is three times as likely; lopsided, she walks in whatever her plan, because the autos that mend it are thrown up close. **No ascension from behind** — it costs a great deal of health. The **second jump** off the tier, and all-in while the wings are out. |
 
+The creature hunter plays its class the same way since 2026-10-01
+(`crates/hunt/src/class.rs`, [bestiary.md](bestiary.md) §8): it learns its
+buttons with `duel::Kit::learn` and keeps the Dual mage's bars with the rule
+above (`duel::dual_bias`), and refuses her ascension besides -- a hunt cannot
+pay for six seconds of wings.
+
 ## Measured
 
 `cargo run -p hunt --bin duel` plays every pairing for three minutes;
