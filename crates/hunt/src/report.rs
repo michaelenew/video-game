@@ -203,6 +203,9 @@ pub struct Report {
     /// For a pack: whether each body's windup began on its target's screen,
     /// and each fighter's swing so far (passed over a body, struck one).
     seen_commit: [bool; critter::MAX_CRITTERS],
+    /// Frames each fighter's spot has been under a floor sign the fight drew
+    /// for something coming (`World::signs`).
+    marked_for: [u32; MAX_PLAYERS],
     swing_over: [bool; MAX_PLAYERS],
     swing_struck: [bool; MAX_PLAYERS],
 }
@@ -358,6 +361,7 @@ impl Report {
             ground: GroundTally::default(),
             extra: card.tally.map(|make| make()),
             seen_commit: [true; critter::MAX_CRITTERS],
+            marked_for: [0; MAX_PLAYERS],
             swing_over: [false; MAX_PLAYERS],
             swing_struck: [false; MAX_PLAYERS],
         }
@@ -508,10 +512,29 @@ impl Report {
             let landed = a.state == critter::is::ACTIVE
                 && a.has(critter::flag::HIT_USED)
                 && !(b.state == critter::is::ACTIVE && b.has(critter::flag::HIT_USED));
-            if landed && !self.seen_commit[i] {
+            // **Or a marker under them.** The definition the creature
+            // documents give (Hornback §6): a hit is unanswerable when its
+            // tell was not seen *and* no marker had been on the fighter's spot
+            // for `REACTION` frames when it landed. A stampede's cows wind up
+            // behind the camera as often as not; the lane drawn under your
+            // feet through the bellow is the tell.
+            let who = (a.target as usize).min(MAX_PLAYERS - 1);
+            if landed && !self.seen_commit[i] && self.marked_for[who] < REACTION as u32 {
                 self.pack.hidden += 1;
                 self.unanswerable += 1;
             }
+        }
+        // How long each fighter's spot has been under a fight's own floor
+        // sign that warns of something (`World::signs`).
+        let signs = after.signs();
+        for (i, p) in after.players.iter().enumerate() {
+            let marked = signs.iter().any(|s| {
+                matches!(
+                    s.says,
+                    sim::sign::Says::Coming | sim::sign::Says::Live | sim::sign::Says::Faint
+                ) && s.covers(p.pos)
+            });
+            self.marked_for[i] = if marked { self.marked_for[i] + 1 } else { 0 };
         }
         // Swings over a crown, once per swing; and bodies behind.
         for i in 0..MAX_PLAYERS {

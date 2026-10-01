@@ -23,7 +23,7 @@ pub mod gnats;
 
 pub mod gnawers;
 
-// pub mod hornback;
+pub mod hornback;
 
 // pub mod mireback;
 
@@ -83,7 +83,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
 
         SpeciesId::GNAWERS => Some(&gnawers::CARD),
 
-        // SpeciesId::HORNBACK => Some(&hornback::CARD),
+        SpeciesId::HORNBACK => Some(&hornback::CARD),
 
         // SpeciesId::MIREBACK => Some(&mireback::CARD),
 

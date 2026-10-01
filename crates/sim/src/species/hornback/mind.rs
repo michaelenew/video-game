@@ -704,6 +704,18 @@ impl Mind {
         let post = lead.add(from.scale(knob_fx(Knob::Standoff)));
         let gap = V3::new(lead.x.sub(c.pos.x), Fx::ZERO, lead.z.sub(c.pos.z)).flat_len();
         if gap.raw() < knob_fx(Knob::Standoff).raw() {
+            // Too near for the charge and too far for the hook: it backs off,
+            // facing you, to where it rests. Inside the hook's reach it stands
+            // its ground.
+            let close = sp.attack(HOOK).ideal_range.add(sp.attack(HOOK).range_span);
+            if gap.raw() > close.raw() {
+                let away = V3::new(c.pos.x.sub(lead.x), Fx::ZERO, c.pos.z.sub(lead.z)).normalized();
+                return Steer {
+                    to: lead.add(away.scale(knob_fx(Knob::Standoff))),
+                    speed: sp.back(),
+                    face: Some(lead),
+                };
+            }
             return Steer {
                 to: c.pos,
                 speed: Fx::ZERO,
@@ -749,9 +761,11 @@ impl Mind {
                 // Winding the stampede up: into the lane, and facing down it.
                 (is::STARTUP, STAMPEDE) => match bellow_lane(pack) {
                     Some((at, dir, _, width)) => {
-                        let half_w = crate::critter::stat_fx(sp, COW, CritterField::Width)
-                            .mul(Fx::ratio(1, 2));
-                        let room = width.mul(Fx::ratio(1, 2)).sub(half_w);
+                        let reach = sp
+                            .attack(STAMPEDE)
+                            .hit_radius
+                            .add(crate::tuning::body_radius());
+                        let room = width.mul(Fx::ratio(1, 2)).sub(reach).max(Fx::ZERO);
                         let (along, across) = lane_frame(at, dir, c.pos);
                         let side = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
                         let to = at

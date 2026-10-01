@@ -10153,7 +10153,12 @@ impl World {
                 let step = speed.mul(crate::DT).min(far);
                 p.pos = p.pos.add(crate::math::wide_normalized(gap).scale(step));
             }
-            if u.lift.raw() > p.vel.y.raw() && !p.aboard() {
+            // **Only a lift lifts.** With no lift underfoot this is zero, and
+            // zero is above every falling body's speed: the first version set
+            // every falling fighter's fall to nothing, every frame, in any
+            // fight with a hazard on the floor -- a hook's launch came down at
+            // walking pace (found by the Hornback, whose boulders are hazards).
+            if u.lift.raw() > 0 && u.lift.raw() > p.vel.y.raw() && !p.aboard() {
                 p.vel.y = u.lift;
                 p.grounded = false;
             }

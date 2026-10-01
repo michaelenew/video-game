@@ -678,7 +678,16 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
     };
     let half_w = stat_fx(sp, COW, CritterField::Width).mul(Fx::ratio(1, 2));
     let half_l = stat_fx(sp, COW, CritterField::Length).mul(Fx::ratio(1, 2));
-    let room = width.mul(Fx::ratio(1, 2)).sub(half_w);
+    // A running cow is held this far inside the lane's edges and outside a
+    // lee: its hit's own reach across, and a fighter's width -- so the lane
+    // drawn is the whole of where the stampede can hit, and nothing standing
+    // inside a lee drawn clear can be reached from outside it.
+    let keep = sp
+        .attack(STAMPEDE)
+        .hit_radius
+        .add(t::body_radius())
+        .max(half_w);
+    let room = width.mul(Fx::ratio(1, 2)).sub(keep).max(Fx::ZERO);
     let side = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
     let (blocks, n) = obstacles(w, ground);
     // Who is on the floor in the lane, to be stepped round.
@@ -689,6 +698,18 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
         }
     }
     let round = knob_fx(Knob::TrampleFallen);
+    // **Abreast** (§4): three across at eight cows, two below six, one below
+    // four -- each running cow's place across the lane, by its rank among the
+    // herd still running, spread over the band its hits may reach from.
+    let herd = w.critters.iter().filter(|c| with_herd(c)).count() as i32;
+    let abreast = if herd >= 6 {
+        3
+    } else if herd >= 4 {
+        2
+    } else {
+        1
+    };
+    let mut rank = 0;
     let mut running = 0;
     let mut waiting = 0;
     for i in 0..MAX_CRITTERS {
@@ -716,7 +737,14 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
         // Where it wants to be across the lane: here, unless a lee or a
         // body on the floor is ahead of it.
         let ahead = half_l.add(half_l).add(knob_fx(Knob::LeeLength));
-        let mut want = across.clamp(room.neg(), room);
+        let place = rank % abreast;
+        rank += 1;
+        let mut want = if abreast > 1 {
+            room.neg()
+                .add(room.add(room).mul(Fx::ratio(place, abreast - 1)))
+        } else {
+            Fx::ZERO
+        };
         for (min, max) in blocks[..n].iter().flatten() {
             let (lo_a, hi_a, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
             let grow = half_w.add(half_l);
@@ -725,9 +753,9 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
             {
                 continue;
             }
-            if want.raw() > lo_c.sub(half_w).raw() && want.raw() < hi_c.add(half_w).raw() {
-                let left = hi_c.add(half_w);
-                let right = lo_c.sub(half_w);
+            if want.raw() > lo_c.sub(keep).raw() && want.raw() < hi_c.add(keep).raw() {
+                let left = hi_c.add(keep);
+                let right = lo_c.sub(keep);
                 want = if want.sub(right).abs().raw() <= left.sub(want).abs().raw()
                     && right.raw() >= room.neg().raw()
                     || left.raw() > room.raw()
@@ -779,10 +807,10 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
         across = across.clamp(room.neg(), room);
         for (min, max) in blocks[..n].iter().flatten() {
             let probe = rules_point(at, dir, along, across);
-            if mind::in_lee(at, dir, *min, *max, probe, half_w) {
+            if mind::in_lee(at, dir, *min, *max, probe, keep) {
                 let (_, _, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
-                let left = hi_c.add(half_w).add(crate::arena::SKIN);
-                let right = lo_c.sub(half_w).sub(crate::arena::SKIN);
+                let left = hi_c.add(keep).add(crate::arena::SKIN);
+                let right = lo_c.sub(keep).sub(crate::arena::SKIN);
                 // The nearer side that is still in the lane; either, if
                 // neither is.
                 let fits_left = left.raw() <= room.raw();
