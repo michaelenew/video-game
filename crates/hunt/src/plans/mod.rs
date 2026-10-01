@@ -25,7 +25,7 @@ pub mod gnats;
 
 // pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -51,6 +51,8 @@ pub struct Card {
     /// one of these is under way is a rider who read it and left.
     pub bucks: fn(kind: u8) -> bool,
     pub words: Words,
+    /// Its own report lines, if it has any: see [`crate::report::Tally`].
+    pub tally: Option<fn() -> Box<dyn crate::report::Tally>>,
 }
 
 /// What the report calls the creature's parts, in its own words.
@@ -80,8 +82,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         // SpeciesId::GNAWERS => Some(&gnawers::CARD),
 
         // SpeciesId::HORNBACK => Some(&hornback::CARD),
-
-        // SpeciesId::MIREBACK => Some(&mireback::CARD),
+        SpeciesId::MIREBACK => Some(&mireback::CARD),
 
         // SpeciesId::SANDMAW => Some(&sandmaw::CARD),
 

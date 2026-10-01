@@ -192,6 +192,25 @@ pub struct Report {
     /// what falling cost them (bestiary P4, P6, P7). Printed only when there
     /// is something in it, so a fight with none of it reads as it always did.
     pub ground: GroundTally,
+
+    /// **Its own lines** (P8): what the species' card counts that no other
+    /// creature has -- the Mireback's tar and fire. `None` for a card with
+    /// none, which prints exactly what it always did.
+    pub extra: Option<Box<dyn Tally>>,
+}
+
+/// **A species' own report lines**: made by its card (`plans::Card::tally`),
+/// shown every tick of the hunt after the shared measures, and printed after
+/// the shared sections.
+pub trait Tally: Send + Sync {
+    fn observe(&mut self, before: &World, after: &World);
+    /// Hits its own rule says were unanswerable that the shared rule could
+    /// not see: added to the report's count when the hunt ends.
+    fn unanswerable(&self) -> u32 {
+        0
+    }
+    /// Its section of the report.
+    fn render(&self, report: &Report) -> String;
 }
 
 /// What the report counts about the hunt's lore: the defended things, falls,
@@ -304,6 +323,7 @@ impl Report {
             timeline: Vec::new(),
             pack: PackTally::default(),
             ground: GroundTally::default(),
+            extra: card.tally.map(|make| make()),
         }
     }
 
@@ -429,6 +449,9 @@ impl Report {
 
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        if let Some(extra) = self.extra.as_mut() {
+            extra.observe(before, after);
+        }
         self.observe_pack(before, after);
         self.observe_ground(before, after);
         // The first creature. A fight against two (the Pair) reports on the
@@ -701,6 +724,9 @@ impl Report {
         }
         if self.shortest_opening == u32::MAX {
             self.shortest_opening = 0;
+        }
+        if let Some(extra) = self.extra.as_ref() {
+            self.unanswerable += extra.unanswerable();
         }
         self.spread = self.hi.sub(self.lo).flat_len();
         self.outcome = match w.phase {
@@ -1176,6 +1202,9 @@ impl Report {
                 format!("{}", self.drank_toppled),
                 self.card.words.toppled_pool,
             );
+        }
+        if let Some(extra) = self.extra.as_ref() {
+            out.push_str(&extra.render(self));
         }
         out
     }
