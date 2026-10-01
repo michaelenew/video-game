@@ -6,15 +6,14 @@ implements: ../creatures/galewing.md
 
 # Galewing — action plan
 
-> **State, 2026-10-01 (in progress).** Branch `claude/creature-galewing`.
-> The species, its flight, every move, the wings, the crash, the perch and
-> the ride are built and pinned by `crates/sim/tests/galewing.rs`; its clips
-> are authored and baked; its hunter and report lines run
-> (`cargo run -p hunt --bin fight -- --species galewing`); it is drawn
-> (look, the Cliffs, the sun overhead) and the aim and camera changes are
-> in. Next: tuning across classes (M10), the docs and the finish (M11). A successor resumes from the
-> first unchecked box; the decisions below are binding unless a milestone's
-> note says one was revisited.
+> **State, 2026-10-01 (built).** Branch `claude/creature-galewing`, merged
+> with main (the Mantis). Every milestone is done: the species, its flight,
+> moves, wings, crash, perch and ride, pinned by `crates/sim/tests/galewing.rs`
+> and `crates/view/tests/galewing.rs`; clips baked; drawn on the Cliffs with
+> the sun overhead; the aim and camera changes; plans A and B with the report's
+> lines; the docs. Open, for a person: the out-of-reach share (two thirds for
+> the melee classes, not a third), the classes past the Champion, the carry
+> and the roll the scripted hunter rarely meets (creatures/galewing.md §13).
 >
 > **Tuning method**: the baked file is the truth. A scratch script reads
 > every `// id = value` comment out of
@@ -140,7 +139,7 @@ move's aim height), the pitch, and the posture flags with the bank.
       more); the other classes lose to the scripted hunter, and the
       out-of-reach share is two thirds for the melee classes, not a third
       (creatures/galewing.md §13).
-- [ ] **M11 · Finished.** Trophy, tempers, docs (built + where it landed),
+- [x] **M11 · Finished.** Trophy, tempers, docs (built + where it landed),
       README map, manual, web smoke, merge main, checks, push.
 
 ## Open

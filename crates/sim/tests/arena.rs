@@ -401,8 +401,9 @@ fn a_trip_is_a_fresh_fight_on_the_same_frame() {
 fn a_trip_to_an_unregistered_creature_goes_nowhere() {
     let mut w = World::with_classes([Class::Bulwark; MAX_PLAYERS]);
     let mut same = w.clone();
-    // An id nobody will ever register.
-    let ask = Input::default().travelling(Travel::hunt(SpeciesId(200)));
+    // An id the travel byte carries (five bits) that nobody will ever
+    // register: past every planned creature.
+    let ask = Input::default().travelling(Travel::hunt(SpeciesId(30)));
     w.advance([ask, Input::default()]);
     same.advance([Input::default(); MAX_PLAYERS]);
     assert_eq!(w.checksum(), same.checksum());

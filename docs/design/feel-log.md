@@ -6891,3 +6891,67 @@ his Slam on a whiff is worth twice anybody's.
 **Verdict** built. For a person: the Bulwark mirror is the easiest fight rather
 than the hardest (§12, 9), the fight length (§12, 7), and whether the notches
 read as fair (§12, 1).
+
+### 2026-10-01 — The Galewing: the fight overhead, tuned by harness
+
+**Changed** A flyer: the Galewing, on the Cliffs (`--hunt galewing`), with its
+flight in its frame hook, a circle that drifts over its target, one air move
+decided per approach, the Stoop, the talon pass and its carry, the Downwash
+and its lees, the feather volley, the Screech and the buffet on the floor,
+wing bars and poise, the crash, the perch on the tower, and the sky ride with
+its wingbeats, roll and swoop ([creatures/galewing.md](creatures/galewing.md)
+§13). Falls use the built rule (free to 9 m, 25 a metre). Shared, and
+bit-identical where nothing flies: `swing_path` against the surface underfoot,
+`top_under` below the feet, `Terrain::floor_below`, `aim::on_screen`, spawning
+on the ground under a mark, and the floor markers drawn on the floor rather
+than at zero.
+
+**Why** The contract first. Every unseen tell the report found was the
+instrument or the hunter, not the bird: a lane drawn on the tower's top because
+its start was beside the tower (now on its target's floor); a hunter under a
+standing bird craning up at its chest, the floor off the bottom of the screen
+(now it fights level); a Blood mage's own price and a fall in old hitstun
+counted as hits (now only a fresh stun from a move that does damage); a disc
+whose middle was inside a ledge; and floor markers counted hidden behind a
+ledge when they are drawn over it. Then the tuning: the Stoop is the fight's
+damage, and its landing rate was exactly the hunter's dodge slop -- three
+frames either side put it at three in ten and the Champion at one win in
+thirty; two late and three early is a sixth.
+
+**Found** 24 hunts per class and plan: Champion 4 (A) and 7 (B) in about
+eight minutes, Bulwark 0 and 2, Reaver 0 and 2, the mages 0. Zero
+unanswerable and unseen in all of them. Out of reach is two thirds for the
+melee classes and six per cent for the Elementalist, against a third.
+Threatening four fifths. A rider on its roots toppled it every time it stood
+-- a kill in forty seconds -- until a crash was made to wait for the next
+flight.
+
+**Reverted** Wind regained at 1.0 a second (from 1.5): ten points off out of
+reach, half the Champion's wins gone. A five-second dwell on the floor after
+a Stoop: the same trade, with more buffets landed. Plan B boarding the moment
+the bird was down: it stopped hitting, and won nothing; it boards at the
+gather now.
+
+**Verdict** built; tier 4 for the Champion. For a person: is two thirds out
+of reach a waiting room (§12 2); does twenty centimetres under the talons read
+as a skill (§12 3); does a level horizon through the roll feel like riding a
+bird (§12 4); and the classes past the Champion, which the harness does not
+play.
+
+### 2026-10-01 — A swing on a creature's back is level with the back (A4)
+
+**Changed** `aim::swing_path` measures a standing swing's dead zone against
+the up of the surface underfoot (`aim::underfoot_up`): the floor's `+y`
+everywhere off a creature, the mounted part's own up on one. Built for the
+Galewing's banked back ([creatures/galewing.md](creatures/galewing.md) §6,
+bestiary A4).
+
+**Found** Bit-identical on the floor; the Ridgeback's scripted hunts that
+ride (`crates/hunt/tests/pin.rs`: Champion 0x2545F491 and 7, Bulwark 101)
+moved, as bestiary A4 says they would -- the back tilts under a rider through
+the shake and the walk, and a swing on it now follows the back. Re-pinned.
+The noise-driven `ridgeback_pin.rs` and the Dual mage's hunt are unchanged.
+
+**Verdict** kept; for a person on the Ridgeback's back: does a swing that
+follows the back through the shake feel like aiming, or like the animal
+moving your sword.

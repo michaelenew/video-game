@@ -640,3 +640,88 @@ is worth more than the hang. Neither side of it beats the next creature.
    42 m/s², under a tenth of grip, so leaving it out changes little; putting it
    in would make a steep bank slide you along the wing. Which of those feels like
    a bird is a question for a person on one.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt galewing`, the Cliffs. The species is
+`sim/src/species/galewing/` (the table; `fight.rs` for the lore, the moves'
+own hits, the wings, the crash, the carry, the perch, the ride and the signs;
+`flight.rs` for the flight controller, the circle, every approach, the beat
+and the bank; `mind.rs` for its scoring), the arena `sim/src/arena/galewing.rs`,
+the clips `anim/src/beast/galewing/`, the look (the wing roots pale, a cracked
+wing rust, a broken one dark: a `Tint`) and the Cliffs' dressing with the sun
+overhead in `game`, the plan and its lines `hunt/src/plans/galewing.rs`, and
+the rules pinned as sentences in `sim/tests/galewing.rs` and
+`view/tests/galewing.rs`. The plan is [plans/galewing.md](../plans/galewing.md);
+the passes are in [feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin fight -- --species galewing --class <c>
+--repeats 24` (plan A) and `... --gamble` (plan B, the rider); out of reach
+from twelve single runs each, which print the report's lines:
+
+```text
+                plan A won   mean     plan B won   mean     out of reach (A / B)   unanswerable, unseen tells
+  Champion        4/24      482 s       7/24      491 s          67 / 69 %                  0
+  Bulwark         0/24        --        2/24      752 s          55 / 53 %                  0
+  Reaver          0/24        --        2/24     1009 s          56 / 56 %                  0
+  Elementalist    0/24        --        0/24        --            6 /  5 %                  0
+  Blood mage      0/24        --        0/24        --           52 / 45 %                  0
+  Dual mage       0/24        --        0/24        --           58 / 56 %                  0
+
+  windows, every class: threatening 79-80 %, poke 6-7, way in 9, walk up 5
+  coop, two Champions: 0/12
+```
+
+**Against the targets.** The Champion is at tier 4: plan A wins a sixth in
+eight minutes, and plan B -- the ride -- wins more often (7 against 4) and
+loses its rider to throws and the roll. **Zero unanswerable hits and zero
+unseen tells** for every class and both plans. Short of the targets:
+
+- **Out of reach is two thirds for the melee classes, not a third** (§12's
+  second question, answered "too much" by the numbers). It is counted from
+  where the fighter stands -- a grounded bird across the plateau is out of
+  reach too -- and the levers §12 names moved it little: a slower wind
+  (1.0 a second) perches it more and took ten points off, and lost the
+  Champion half his wins; a longer dwell on the floor after a Stoop did the
+  same. Left at the first guesses for a person to decide.
+- **The windows are four fifths threatening**: the bird is threatening while
+  it circles, and it circles most of the fight.
+- **The carry and the barrel roll are rarely or never seen**: the scripted
+  hunter crouches under every pass, and plan B's rides end in the first lap.
+- **The rest of the roster loses** to the scripted hunter, which plays the
+  Champion's fight. The Elementalist's air plan (a hop and an Air bolt at the
+  circling bird) puts it in reach 95 % of the time and still loses: it does not
+  dodge from the air. The Blood mage's pools, the Dual mage's wings and the
+  Reaver's shadow are not played, as against every other creature.
+- **Coop loses** (0 of 12, against 14 400 health): the second Champion runs
+  the same plan beside the first, which the plan was not written for.
+
+**What changed from the sections above.**
+
+- **Falls are the built rule (F3b)**: free to 9 m, 25 a metre. The edge and
+  the tower top cost 75, a talon drop 75 (with 40 for the grab), a throw at
+  20 m 275, at 24 m 375; the swoop is free. §1, §2 and §10 are rewritten to it.
+- **The plateau is a 12 m solid**, the shelf twelve metres down: the floor of
+  the game is at zero. Marks spawn on the ground under them.
+- **Its circle drifts over its target**, and **it decides once per approach**
+  which air move the approach is for: a fixed circle round the tower left a
+  hunter inside it never in the line-up arc, and without the one decision the
+  long moves always pre-empted the mid ones.
+- **It dwells on the floor after a Stoop** (2.5 s, the Screech and the buffet
+  its price), **perches with one wing broken**, and **follows the terrain**
+  round its circle (the tower and the rock face).
+- **A crash cannot follow a crash** before it has been back up to its circle:
+  without it a rider on the roots toppled it every time it stood.
+- **Low is measured from the plateau**, so passing over the tower is not low;
+  **nothing on it is solid through the Stoop's dive**, so the body does not
+  barge the fighter out of the circle a frame before the hit.
+- **The camera and the aim** (§6): `swing_path` measures its dead zone against
+  the surface underfoot (`aim::underfoot_up`; bit-identical on the floor);
+  `top_under` asks below the fighter's feet; the drawn eye is the aiming eye
+  looking up, pinned on the plateau and aboard. **`aim::on_screen`** is the
+  cone of `in_view` alone, for floor markers, which are drawn over everything.
+- **Floor markers lie on the floor**: the shared telegraphs were drawn at zero,
+  under the plateau; they and the bird's lanes lie on the floor their target
+  stands on.
+- **Question 5 (the Bulwark's guard against the volley)** is not built: the
+  volley is unguardable, one answer per move.
