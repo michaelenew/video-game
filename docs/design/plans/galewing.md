@@ -6,10 +6,24 @@ implements: ../creatures/galewing.md
 
 # Galewing — action plan
 
-> **State, 2026-10-01 (started).** Branch `claude/creature-galewing`. Nothing
-> built yet beyond this plan. A successor resumes from the first unchecked
-> box; the decisions below are binding unless a milestone's note says one
-> was revisited.
+> **State, 2026-10-01 (in progress).** Branch `claude/creature-galewing`.
+> The species, its flight, every move, the wings, the crash, the perch and
+> the ride are built and pinned by `crates/sim/tests/galewing.rs`; its clips
+> are authored and baked; its hunter and report lines run
+> (`cargo run -p hunt --bin fight -- --species galewing`). Next: drawing it
+> in the game (look, the Cliffs' dressing, the sun overhead), the aim and
+> camera changes (M7), more tuning, the docs. A successor resumes from the
+> first unchecked box; the decisions below are binding unless a milestone's
+> note says one was revisited.
+>
+> **Tuning method**: the baked file is the truth. A scratch script reads
+> every `// id = value` comment out of
+> `crates/sim/src/species/galewing/tuned.rs`, resets it to the empty
+> bootstrap, bakes once to learn the ids, and bakes again with `--set` for
+> every id plus any override file of `id=value` lines -- so adding an own
+> knob (which shifts the move rows' indices) keeps every value. Rewrite it
+> from that description if it is gone (the Veilstalker's plan has the same
+> note).
 
 The specification is [`../creatures/galewing.md`](../creatures/galewing.md);
 the recipes are [`../species.md`](../species.md), [`../arenas.md`](../arenas.md)
@@ -54,28 +68,55 @@ the recipes are [`../species.md`](../species.md), [`../arenas.md`](../arenas.md)
 
 ## Lore layout
 
-(Filled in as built; `tests/lore.rs` checks it fits.)
+Twelve own cells (48 words; 38 used), no hazards, noises or objectives:
+flight state (position, speed, climb, heading, turn rate), flags, wind,
+rest, dwell, the carried fighter, the talon lane and its pivot, the
+Downwash's point, the volley's lane and feathers, who the Screech and the
+buffet reached, the ride's lap and phase, the clipped glide, what the frame
+hook saw for the brain, report counters, the circle it is flying, and the
+approach's intended move. `fight::word` lists them. On the body
+(`Monster::own`): the two wing bars, the carry's leg damage (or a lobbed
+move's aim height), the pitch, and the posture flags with the bank.
+
+## Decided while building
+
+- **The circle drifts over its target** (`flight::drift`): a fixed circle
+  round the tower left a hunter inside it never in the line-up arc. Of the
+  circles with the target on its rim, eight ways round, the one inside the
+  arena and nearest the circle site; drifting at `CircleDrift`.
+- **One decision per approach** (`fight::intend`): as the target comes into
+  the arc it draws the air move this approach is for; the brain throws it
+  when its range fits and its score clears `Patience`. Without it the
+  long moves always pre-empted the mid ones, since the arc is entered far.
+- **The ground dwell**: after a Stoop it stays on the floor `GroundDwell`
+  frames (the buffet and the Screech its price) before it gathers itself.
+- **Low** is measured from the plateau (the `circle` site's height), not
+  the ground under it: passing over the tower is not low.
+- **A bird coming down has no body to shove with**: every part is passable
+  through a Stoop's dive and hit (`fight::presence`).
+- **Terrain following**: round its circle it keeps `TowerOver` above
+  whatever is under it or ahead of it, climbing hard to clear the rock face.
 
 ## Milestones
 
-- [ ] **M1 · The body.** Species table (bones, parts, moves, clips, own
+- [x] **M1 · The body.** Species table (bones, parts, moves, clips, own
       knobs), bootstrap files, registry lines, first guesses baked.
-- [ ] **M2 · The Cliffs.** Arena table: plateau, shelf, stairs, tower with
+- [x] **M2 · The Cliffs.** Arena table: plateau, shelf, stairs, tower with
       eight ledges, four stones, the rock face. Registry lines. Spawn on the
       ground under a mark. `beastcheck` / arena tests.
-- [ ] **M3 · Flight.** Flight controller (3D, bank-limited turn, climb and
+- [x] **M3 · Flight.** Flight controller (3D, bank-limited turn, climb and
       sink limits, mass), circling, perching, the approach of each air move,
       landing and taking off, the crash fall. Rider yaw carry.
-- [ ] **M4 · The moves.** Stoop, talon pass and carry, Downwash and lee,
+- [x] **M4 · The moves.** Stoop, talon pass and carry, Downwash and lee,
       volley, Screech, buffet, the grounded hop. Signs. Brain: line-up arc,
       wind, place, follow-ups, hurt, lockouts. Move tests.
-- [ ] **M5 · Wings.** Bars, poise, crash and ramps, one wing / two wings.
+- [x] **M5 · Wings.** Bars, poise, crash and ramps, one wing / two wings.
       Wing tests.
-- [ ] **M6 · The sky ride.** Take-off with riders, laps, wingbeat heave,
+- [x] **M6 · The sky ride.** Take-off with riders, laps, wingbeat heave,
       roll, swoop, riding a broken wing down. Ride tests.
 - [ ] **M7 · Aim and camera.** `swing_path` against the surface's up;
       `top_under` below the feet; guard tests; pins unchanged.
-- [ ] **M8 · Animation.** Factory clips, bake, contact sheets.
+- [x] **M8 · Animation.** (first pass; review in the game) Factory clips, bake, contact sheets.
 - [ ] **M9 · Drawn.** Look, Cliffs dressing, sun overhead, SHOT_MOVE
       screenshots.
 - [ ] **M10 · The hunt.** Plans A and B, report lines, tuning passes,
