@@ -16,7 +16,7 @@ pub mod ridgeback;
 /// The dev pack's paint (`sim::species::gnats`).
 pub mod gnats;
 
-// pub mod gnawers;
+pub mod gnawers;
 
 // pub mod hornback;
 
@@ -109,7 +109,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
 
         SpeciesId::GNATS => &gnats::LOOK,
 
-        // SpeciesId::GNAWERS => &gnawers::LOOK,
+        SpeciesId::GNAWERS => &gnawers::LOOK,
 
         // SpeciesId::HORNBACK => &hornback::LOOK,
 

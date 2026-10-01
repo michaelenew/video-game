@@ -398,7 +398,8 @@ type MarkParts = (
     &'static mut MeshMaterial3d<MarkMaterial>,
 );
 
-/// Which creature slot a marker or a spike belongs to.
+/// Which creature slot a marker or a spike belongs to -- or, past
+/// `MAX_MONSTERS`, which critter slot a marker is drawn for.
 #[derive(Component)]
 pub struct Of(pub usize);
 
@@ -476,7 +477,9 @@ fn make_signs(
         .find_map(|s| crate::species::look(s.id).spikes)
         .map(|s| s.paint);
     let bone = paint.map(|p| material(materials, p));
-    for slot in 0..MAX_MONSTERS {
+    // A set of markers per creature slot, then one per critter slot: a pack's
+    // bites are drawn the same way a creature's are (`SIGN_SLOTS`).
+    for slot in 0..SIGN_SLOTS {
         for (mark, mesh, material) in [
             (Mark::Area, &disc, &signs.area),
             (Mark::AreaEnd, &disc, &signs.area),
@@ -494,7 +497,7 @@ fn make_signs(
                 Of(slot),
             ));
         }
-        let Some(bone) = bone.as_ref() else {
+        let Some(bone) = bone.as_ref().filter(|_| slot < MAX_MONSTERS) else {
             continue;
         };
         for i in 0..SPIKES {
@@ -534,7 +537,22 @@ pub fn signs(
 ) {
     let alive: [Option<Monster>; MAX_MONSTERS] =
         std::array::from_fn(|slot| sim.cur.monsters[slot].filter(|b| b.alive()));
-    let coming: [Option<sim::monster::Telegraph>; MAX_MONSTERS] = std::array::from_fn(|slot| {
+    // The pack's bites after the creatures': **the same markers, from the same
+    // kind of answer** -- `Critter::telegraph` asks the critter's own hit
+    // volume where its bite will be, as `Monster::telegraph` does. Drawn over
+    // everything, as every marker is (`OnTop`), which for a knee-high biter at
+    // your heels is the point: the character's own body would hide it.
+    let crowd = &sim.cur.critters;
+    let coming: [Option<sim::monster::Telegraph>; SIGN_SLOTS] = std::array::from_fn(|slot| {
+        if slot >= MAX_MONSTERS {
+            let c = crowd.get(slot - MAX_MONSTERS)?;
+            if sim.cur.pack.is_none() || !c.alive() {
+                return None;
+            }
+            return c
+                .telegraph(crowd.sp())
+                .filter(|t| !(t.live && c.has(sim::critter::flag::HIT_USED)));
+        }
         let beast = alive[slot];
         beast
             .and_then(|b| b.telegraph())
@@ -617,12 +635,17 @@ pub fn signs(
     // The spikes. Only a move a species' look says throws a volley has any:
     // the Ridgeback's spray.
     for (spike, of, mut transform, mut visible) in spikes.iter_mut() {
-        let volley = alive[of.0].zip(coming[of.0]).and_then(|(beast, t)| {
-            crate::species::look(beast.species)
-                .spikes
-                .filter(|s| s.kind == t.kind)
-                .map(|s| (beast, t, s.along))
-        });
+        let volley = alive
+            .get(of.0)
+            .copied()
+            .flatten()
+            .zip(coming[of.0])
+            .and_then(|(beast, t)| {
+                crate::species::look(beast.species)
+                    .spikes
+                    .filter(|s| s.kind == t.kind)
+                    .map(|s| (beast, t, s.along))
+            });
         let Some((beast, t, along)) = volley else {
             *visible = Visibility::Hidden;
             continue;
@@ -696,6 +719,10 @@ pub fn signs(
         *visible = Visibility::Inherited;
     }
 }
+
+/// How many sets of floor markers there are: one per creature slot, then one
+/// per critter slot.
+const SIGN_SLOTS: usize = MAX_MONSTERS + sim::critter::MAX_CRITTERS;
 
 /// Just off the floor, so the marker is not fighting it for the same depth.
 const FLOOR: f32 = 0.03;

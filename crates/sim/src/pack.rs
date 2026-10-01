@@ -128,6 +128,10 @@ pub struct Seen {
     pub down: bool,
     /// Slowed: what the Gnawers' pile-on waits for.
     pub slowed: bool,
+    /// On the floor for a moment: staggered, knocked down or held -- not the
+    /// flicker of hitstun every bite leaves, which `down` counts too. The
+    /// Gnawers' pile-on waits for this or a slow.
+    pub staggered: bool,
     /// The ring this fighter has: how many places it was cut into, and the
     /// bearing of place zero, in turns. Worked out at the glance.
     pub ring_places: u8,
@@ -277,7 +281,7 @@ fn owner_holds(pack: &Pack, herd: &Herd) -> usize {
 }
 
 /// Give a token back: it rests before it can be handed again.
-fn give_back(pack: &mut Pack, c: &mut Critter) {
+pub fn give_back(pack: &mut Pack, c: &mut Critter) {
     if !c.has(flag::TOKEN) {
         return;
     }
@@ -369,6 +373,35 @@ pub trait PackMind {
     /// Broodmother's sacs bursting are her pack's spawns ([`spawn`]).
     fn frame(&self, pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         let _ = (pack, critters, herd, frame);
+    }
+
+    /// **The body critter `c` stands in this frame**, given its kind's own
+    /// box. The default is the box. A species whose animal changes shape with
+    /// what it is doing -- the Gnawers' Big One rearing to howl -- says so
+    /// here, and [`Critter::body`] is still the one description everything
+    /// reads. Must be a pure function of the critter.
+    fn body(&self, c: &Critter, plain: crate::critter::Body) -> crate::critter::Body {
+        let _ = c;
+        plain
+    }
+
+    /// **Critter `i`'s move just connected with fighter `who`** (`victim`),
+    /// after the hit itself: `blocked` if it was taken on a guard, `parried`
+    /// if it was parried. What a bite does besides its damage -- the
+    /// Gnawers' hamstring slows and latches; three of a pile-on knock you
+    /// down. Nothing, for a pack that says nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn landed(
+        &self,
+        pack: &mut Pack,
+        critters: &mut Critters,
+        i: usize,
+        who: usize,
+        victim: &mut Player,
+        blocked: bool,
+        parried: bool,
+    ) {
+        let _ = (pack, critters, i, who, victim, blocked, parried);
     }
 
     /// Critter `i` just took `dealt`.
@@ -808,6 +841,10 @@ fn glance(pack: &mut Pack, critters: &mut Critters, w: &World) {
         s.alive = p.health > 0;
         s.down = p.action.stunned();
         s.slowed = p.slowed > 0;
+        s.staggered = matches!(
+            p.action,
+            crate::state::Action::Stagger { .. } | crate::state::Action::Held { .. }
+        );
     }
     // Each critter is after the nearest fighter still standing.
     for c in critters.iter_mut().filter(|c| c.alive()) {
@@ -1109,7 +1146,10 @@ fn drive(sp: &Species, c: &mut Critter, want: Steer) {
     let target_vel = match c.state {
         // A move that travels carries the body along the facing.
         is::ACTIVE => c.facing().scale(sp.attack(c.act).advance),
-        is::PROWL if c.alive() => {
+        // A windup goes where its species steers it, which by default is
+        // nowhere (`plain_steer` holds it still): the Gnawers' pile-on closes
+        // its ring as it crouches.
+        is::PROWL | is::STARTUP if c.alive() => {
             let to = want.to.sub(c.pos);
             let to = V3::new(to.x, Fx::ZERO, to.z);
             // Close enough that one more frame at this speed would carry it

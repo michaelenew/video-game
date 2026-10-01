@@ -275,13 +275,21 @@ impl Critter {
     /// read. See the module docs for why it is a box.
     pub fn body(&self, sp: &Species) -> Body {
         let half = Fx::ratio(1, 2);
-        Body {
+        let plain = Body {
             foot: self.pos,
             cos: cos_turns(self.yaw_turns()),
             sin: sin_turns(self.yaw_turns()),
             half_len: stat_fx(sp, self.kind, CritterField::Length).mul(half),
             half_wid: stat_fx(sp, self.kind, CritterField::Width).mul(half),
             height: stat_fx(sp, self.kind, CritterField::Height),
+        };
+        // A species may change the shape with what the body is doing -- the
+        // Gnawers' Big One rears to a fighter's height to howl -- and since
+        // this is the one description, the change is true of the hit test,
+        // the aiming ray, the overlay and the renderer at once.
+        match sp.pack {
+            Some(decl) => decl.mind.body(self, plain),
+            None => plain,
         }
     }
 

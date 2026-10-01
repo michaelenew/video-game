@@ -23,7 +23,7 @@ pub mod proving_ground;
 
 pub mod range;
 
-// pub mod gnawers;
+pub mod gnawers;
 
 // pub mod hornback;
 
@@ -78,7 +78,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
     match id {
         ArenaId::RANGE => &range::DRESSING,
 
-        // ArenaId::GNAWERS => &gnawers::DRESSING,
+        ArenaId::GNAWERS => &gnawers::DRESSING,
 
         // ArenaId::HORNBACK => &hornback::DRESSING,
 
