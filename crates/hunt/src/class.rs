@@ -80,6 +80,9 @@ const LOTUS_DRAG: u16 = 24;
 const FLICK: Fx = Fx::ratio(3, 100);
 /// Frames past a move's own that make a window long: a creature down.
 const LONG_WINDOW: i32 = 45;
+/// How far out the crosshair's ray is asked about, checking where a cast
+/// would land: further than anything in a kit reaches.
+const SIGHT_REACH: Fx = Fx::from_int(30);
 /// Further than this from what it hits is thrown from range.
 const RANGED: Fx = Fx::from_int(4);
 /// Marks on the creature worth cashing with the Executioner.
@@ -439,7 +442,7 @@ impl Hands {
                 && let Some(b) = self.button(me, SLOT_SPECIAL)
             {
                 self.uses.pillars += 1;
-                return self.look_keeping(me, plan, floor_under(me, at), b);
+                return self.look_keeping(me, plan, self.spot(w, me, floor_under(me, at), true), b);
             }
             let heavy = moves::get(me.class, SLOT_COMMITTED);
             if window >= fits(&heavy, far)
@@ -448,11 +451,11 @@ impl Hands {
                 && let Some(b) = self.button(me, SLOT_COMMITTED)
             {
                 self.uses.cataclysms += 1;
-                return self.look_keeping(me, plan, at, b);
+                return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
             }
         }
         self.uses.shots += 1;
-        self.look_keeping(me, plan, at, Input::LEFT)
+        self.look_keeping(me, plan, self.spot(w, me, at, false), Input::LEFT)
     }
 
     /// The Reaver: **the lotus on a shadow standing at the work**, dragged home
@@ -507,6 +510,7 @@ impl Hands {
             && window >= (spike.startup + spike.active) as i32 + SPARE
             && let Some(pool) = self.pool_under(w, at)
             && flat(pool.sub(me.pos)).flat_len().raw() < spike.reach.sub(Fx::ratio(5, 10)).raw()
+            && !self.on_top(w, me, pool)
             && self.ready(w, me, moves::blood::BLACK_SPIKE)
             && let Some(b) = self.button(me, moves::blood::BLACK_SPIKE)
         {
@@ -527,7 +531,7 @@ impl Hands {
             && let Some(b) = self.button(me, moves::blood::HAEMORRHAGE)
         {
             self.uses.cuts += 1;
-            return self.look_keeping(me, plan, at, b);
+            return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
         }
         // **The scythe, not the plan's heavy**, in its reach: a plan's heavy
         // is her Haemorrhage, four in a hundred of her red for thirty against
@@ -621,7 +625,7 @@ impl Hands {
                 } else {
                     at
                 };
-                return self.look_keeping(me, plan, point, b);
+                return self.look_keeping(me, plan, self.spot(w, me, point, true), b);
             }
         }
         if plan.bits & (Input::LEFT | Input::RIGHT) == 0 {
@@ -710,7 +714,7 @@ impl Hands {
             {
                 self.uses.sent += 1;
                 self.rest();
-                return Some(self.look(me, floor_under(me, at), b));
+                return Some(self.look(me, self.spot(w, me, floor_under(me, at), true), b));
             }
             return None;
         }
@@ -764,7 +768,7 @@ impl Hands {
         {
             self.uses.pillars += 1;
             self.rest();
-            return Some(self.look(me, floor_under(me, at), b));
+            return Some(self.look(me, self.spot(w, me, floor_under(me, at), true), b));
         }
         let bolt = moves::get(me.class, SLOT_POKE);
         if safe > (bolt.startup + bolt.active + bolt.recovery) as i32
@@ -773,7 +777,7 @@ impl Hands {
         {
             self.uses.shots += 1;
             self.rest();
-            return Some(self.look(me, at, Input::LEFT));
+            return Some(self.look(me, self.spot(w, me, at, false), Input::LEFT));
         }
         None
     }
@@ -802,6 +806,7 @@ impl Hands {
             && safe > (spike.startup + spike.active + spike.recovery) as i32
             && let Some(pool) = pool
             && flat(pool.sub(me.pos)).flat_len().raw() < spike.reach.sub(Fx::ratio(5, 10)).raw()
+            && !self.on_top(w, me, pool)
             && self.ready(w, me, moves::blood::BLACK_SPIKE)
             && let Some(b) = self.button(me, moves::blood::BLACK_SPIKE)
         {
@@ -819,7 +824,7 @@ impl Hands {
         {
             self.uses.cuts += 1;
             self.rest();
-            return Some(self.look(me, at, b));
+            return Some(self.look(me, self.spot(w, me, at, false), b));
         }
         None
     }
@@ -1201,6 +1206,64 @@ impl Hands {
             looked.aim,
             looked.pitch,
         )
+    }
+
+    /// Would the crosshair, put on `at`, land on the top of a creature's
+    /// part? Since aim A3 (`aiming.md`, the Siegeshell) the top of a part
+    /// you could stand on, seen from above, is a place: a pillar aimed
+    /// through a beached worm at the floor under it is planted on its back,
+    /// over nothing, and a bolt aimed at it flies to a point above it. A
+    /// player sees where the marker would go and moves the mouse; this asks
+    /// the same ray (`aim::sight`).
+    fn on_top(&self, w: &World, me: &Player, at: V3) -> bool {
+        if me.aboard() {
+            return false;
+        }
+        let stones = sim::stones::gather(&w.players);
+        let ground = w.terrain();
+        let scene = sim::aim::Scene {
+            stones: &stones,
+            players: &w.players,
+            effects: &w.effects,
+            quarry: &w.monsters,
+            critters: &w.critters,
+            arena: &ground,
+        };
+        let look = self.look(me, at, 0);
+        sim::aim::sight(self.who, look, SIGHT_REACH, &scene).aboard
+    }
+
+    /// **Where to put the crosshair** for something aimed at `at`: there, unless
+    /// that lands on top of the creature (see [`Hands::on_top`]). Then, for a
+    /// thing planted on the floor, the floor nearer her, half a metre at a
+    /// time -- the pillar's base spreads into what stands beside it; for a
+    /// shot, lower on its near side, so the ray goes through the body to
+    /// the ground behind it as it always did.
+    fn spot(&self, w: &World, me: &Player, at: V3, grounded: bool) -> V3 {
+        if !self.on_top(w, me, at) {
+            return at;
+        }
+
+        let back = flat(me.pos.sub(at)).normalized();
+        let floor = me.pos.y.min(at.y);
+        for k in 1..=8 {
+            let step = Fx::ratio(k, 2);
+            let p = if grounded {
+                at.add(back.scale(step))
+            } else {
+                V3::new(
+                    at.x,
+                    at.y.sub(step.mul(Fx::ratio(8, 10)))
+                        .max(floor.add(Fx::ratio(3, 10))),
+                    at.z,
+                )
+                .add(back.scale(step.mul(Fx::ratio(4, 10))))
+            };
+            if !self.on_top(w, me, p) {
+                return p;
+            }
+        }
+        at
     }
 
     /// Is `at` on its screen, for a plan that keeps a camera? Always, for
