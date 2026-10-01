@@ -377,7 +377,7 @@ fn full_hollows(mut w: World) -> World {
         |x: i32, z: i32| sim::V3::new(sim::Fx::from_int(x), sim::Fx::ZERO, sim::Fx::from_int(z));
     w.advance([Input::default(); MAX_PLAYERS]);
     if let Some(pack) = w.pack.as_mut() {
-        let cap = Knob::BroodCap.raw().max(0) as i32;
+        let cap = Knob::BroodCap.raw().max(0);
         for k in 0..cap {
             sim::pack::spawn(
                 pack,
