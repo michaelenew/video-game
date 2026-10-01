@@ -131,11 +131,15 @@ pub fn toggle(w: &World) -> Travel {
 }
 
 /// `Shift+H`: the next registered creature after the one being hunted, in its
-/// own arena. From a versus match, the first one.
+/// own arena. From a versus match, the first one. The dev species (the gnats
+/// and the sentinel, `SpeciesId::is_dev`) are not in the cycle; `--hunt`
+/// reaches them by name.
 pub fn next(w: &World) -> Travel {
     let to = match w.monster() {
         Some(m) => species::after(m.species).id,
-        None => species::all().next().map_or(SpeciesId::RIDGEBACK, |s| s.id),
+        None => species::shown()
+            .next()
+            .map_or(SpeciesId::RIDGEBACK, |s| s.id),
     };
     Travel::hunt(to)
 }
@@ -155,12 +159,13 @@ pub fn numeral(t: u8) -> &'static str {
     ["-", "I", "II", "III"][(t as usize).min(3)]
 }
 
-/// The picker's list, as the HUD shows it: every registered creature, its
-/// trophies, the tempers on offer, and which one is being hunted now.
+/// The picker's list, as the HUD shows it: every creature a player is shown,
+/// its trophies, the tempers on offer, and which one is being hunted now. A
+/// dev species is listed only while it is the one being hunted.
 pub fn listing(w: &World, trophies: &Trophies, any: bool) -> String {
     let hunted = w.hunted().into_iter().flatten().next();
     let mut out = String::from("H hunt/versus   Shift+H next   T temper\n");
-    for sp in species::all() {
+    for sp in species::all().filter(|s| !s.id.is_dev() || hunted == Some(s.id)) {
         let here = hunted == Some(sp.id);
         let won: Vec<&str> = (0..sim::temper::TEMPERS)
             .filter(|t| trophies.beaten(sp.id, *t))
@@ -359,5 +364,41 @@ mod tests {
         let list = listing(&hunt.tempered(1), &trophies, false);
         assert!(list.contains("> Ridgeback"), "{list}");
         assert!(list.contains("now I"), "{list}");
+    }
+
+    #[test]
+    fn the_list_and_the_cycle_hold_every_creature_and_no_dev_species() {
+        let trophies = Trophies::default();
+        let versus = World::with_classes([Class::Bulwark; 2]);
+        let list = listing(&versus, &trophies, false);
+        for sp in species::all() {
+            assert_eq!(
+                list.contains(sp.name),
+                !sp.id.is_dev(),
+                "{} in the list:\n{list}",
+                sp.name
+            );
+        }
+        // Shift+H, from versus and round the cycle, visits every one.
+        let mut w = versus;
+        let mut seen = Vec::new();
+        for _ in 0..species::COUNT {
+            let Some(sim::input::Destination::Hunt(s, _)) = next(&w).destination() else {
+                panic!("Shift+H went nowhere");
+            };
+            assert!(!s.is_dev(), "Shift+H offered {s:?}");
+            seen.push(s);
+            w = World::hunt_of([Class::Bulwark; 2], s);
+        }
+        for sp in species::shown() {
+            assert!(seen.contains(&sp.id), "Shift+H never reached {}", sp.name);
+        }
+        // A dev species reached by name is listed while it is hunted.
+        let gnats = World::hunt_of([Class::Bulwark; 2], SpeciesId::GNATS);
+        assert!(listing(&gnats, &trophies, false).contains("> Gnats"));
+        assert_ne!(
+            next(&gnats).destination(),
+            Some(sim::input::Destination::Hunt(SpeciesId::GNATS, 0))
+        );
     }
 }

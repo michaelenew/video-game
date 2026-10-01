@@ -333,9 +333,11 @@ one shifts every later index in the baked file.
 - **One pack per fight**, ten bodies. Two packs would be the Pair of packs; none
   is planned.
 - **The dev pack is a registered species** (id 11, after the ten creatures),
-  so it is in the Oven, the picker's `Shift+H` cycle and the report, the way
-  the range is an arena. It has no arena of its own and is hunted in the
-  proving ground.
+  so it is in the Oven and the report, the way the range is an arena. It has
+  no arena of its own and is hunted in the proving ground. *Since
+  2026-10-01* it is **not** in the picker's `Shift+H` cycle or the trophy
+  list (`SpeciesId::is_dev`, [review.md](review.md) `REV-C1`): `--hunt gnats`
+  reaches it.
 - **`aim::look_onto` keeps six rounds**; `look_onto_closely` settles a steep
   look. Six leave the sparring bot a metre high forty degrees down; changing it
   moves the bot's pinned fights, so that is a change for whoever means to.
