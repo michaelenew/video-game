@@ -658,6 +658,19 @@ is not beached.
 
 **Changed from this document while building**, beyond the numbers:
 
+- **The undertow is 2.4 m in radius**, from 3 (4.8 m across, from 6), since
+  the Hornback fixed the floor's lift (2026-10-01). Until then every falling
+  fighter in a fight with anything on the floor fell at almost nothing a frame,
+  so a hop floated out of the sinkhole on any class. Without the float a hop
+  leaves the sand at the half-speed walk it took off from (3.5 m/s), and the
+  Bulwark's carries 2.5 m from the centre, not §7's 4.7; the Champion's 3.2, the
+  Dual mage's 4.4. §7 names the radius as the lever for him, and 2.4 is the
+  largest that keeps **jumping the way out for every class**
+  (`a_hop_from_the_undertow_centre_clears_its_edge_on_every_class`). The
+  sinkhole's "jump from it" is a slow (0 to 1), not a boost, so it cannot be
+  the lever. Re-run at 2.4 with the fix, 12 hunts each: the Champion 9/12 in
+  190 s (65 / 12 / 15 / 8 %), the Bulwark 12/12 in 215 s, zero unanswerable.
+
 - **Health 13 000**, from 5 200: a stand is eight seconds of a free throat,
   and the scripted hunter at 9 000 and 10 000 won in two minutes and a half.
 - **The spit is 6 active**, from 10: the dodge's ten invulnerable frames

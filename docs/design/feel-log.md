@@ -6670,3 +6670,30 @@ now.
 
 **Verdict** built; the two-hunter crossing is a plan question first, and perhaps
 a rule's (should a hunter standing in a lane count as escorting?).
+
+### 2026-10-01 — The floor's lift held every falling fighter up; the Sandmaw's undertow retuned
+
+**Changed** `World::feel_the_floor` lifts a fighter only where something lifts
+(`u.lift > 0`). The first version compared the lift underfoot -- zero, with no
+lift anywhere -- against the fighter's fall, found zero above every fall, and set
+the fall to nothing each frame, in every fight with a hazard on the floor: a
+falling body came down at one frame's gravity a frame. Found by the Hornback,
+whose boulders are hazards (a hook's launch drifted down; nobody could land on a
+cow). The Sandmaw's undertow 2.4 m in radius, from 3.
+
+**Why** The Sandmaw's rule that a hop from the undertow's middle clears its edge
+on every class held only because of the float. With real falls a hop leaves the
+sand at the half-speed walk it took off from, and the Bulwark's carries 2.5 m. Its
+"jump from it" knob is a slow capped at one, so 1.6 did nothing; the document
+names the radius as the Bulwark's lever.
+
+**Found** Sandmaw, 12 hunts each at 2.4: the Champion 9/12 in 190 s, the Bulwark
+12/12 in 215 s, zero unanswerable (its §13 has 19/24 in 202 s and 23/24 in 229
+s). Mireback, 12 Champion hunts: 11/12 in 138 s, one unanswerable (its §13: 15/24
+in 121 s, one). The Hornback was tuned with the fix throughout.
+
+**Reverted** The sinkhole's jump at 1.2, 1.4 and 1.6: clamped to one, no change.
+
+**Verdict** fixed; the undertow is a fifth narrower, and whether the Bulwark's
+hole should be closed this way is still sandmaw.md §12 question 4.
+
