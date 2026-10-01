@@ -187,7 +187,12 @@ fn every_registered_species_stands_and_moves() {
         assert!(rig.origin.y.raw() == 0, "{} is off the floor", sp.name);
         let mut hurt = beast;
         hurt.take_hit(0, 100);
-        assert!(hurt.health < beast.health, "{} cannot be hurt", sp.name);
+        assert!(
+            hurt.health < beast.health,
+            "{} cannot be hurt -- a species fresh from its first bake has every hide knob \
+             at the bottom of its range, which is zero; set them in the Oven and bake",
+            sp.name
+        );
     }
 }
 

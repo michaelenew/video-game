@@ -6,9 +6,17 @@ rebuilt: 2026-09-13
 hardened: 2026-09-23
 sharpened: 2026-09-25
 hunts: 2026-09-25
+species: 2026-10-01
 ---
 
 # Monsters — the Ridgeback
+
+> **Since 2026-10-01 the Ridgeback is a species**: its skeleton, parts, legs,
+> moves, clips and knobs are a table in `crates/sim/src/species/ridgeback/`, and
+> the machinery described here reads that table rather than constants. Nothing
+> about the fight changed — it is pinned bit for bit — but where a number lives
+> did: its knobs are under "Ridgeback" in the Oven, baked to their own
+> `tuned.rs`. How a second creature joins is [species.md](species.md).
 
 The first monster, end to end: a body you can stand on, eight moves, a control
 algorithm that decides between them, and a way to measure whether the fight is
@@ -542,8 +550,9 @@ every machine, which is the only property determinism asks for.
 ### The animation
 
 Authored through the same factory the fighters go through — sparse keys, an ease
-per gap, a spring per channel — in `crates/anim/src/beast/`, and baked to
-`crates/sim/src/beast_baked.rs` by `cargo run -p anim --bin bake_beast`. The
+per gap, a spring per channel — in `crates/anim/src/beast/ridgeback/`, and baked
+to `crates/sim/src/species/ridgeback/baked.rs` by `cargo run -p anim --bin
+bake_beast`. The
 house style is Monster Hunter's, and it is three rules:
 
 1. **The windup is the move.** Most of the frames are before the hit and the

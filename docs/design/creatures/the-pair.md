@@ -515,7 +515,8 @@ and be hit correctly, that is a place the rig was not data. The known suspects:
 - **Mountability as a species flag, and a new part flag `sheds`**, so a top
   face resolves as a slope and nobody stands on a cat. The tread-becomes-floor
   rule in `Rig::resolve` has to read the flag rather than assume.
-- **Clips per species.** `beast_baked.rs` is one table; it becomes one per
+- **Clips per species.** *(Built with P1, 2026-10-01: one table per species,
+  `species/<species>/baked.rs`.)* `beast_baked.rs` is one table; it becomes one per
   species (or a species offset into one), baked by `bake_beast` for both. The
   32-sample phases stay: a cat's shortest phase is 3 frames and its longest
   under 60.
@@ -594,7 +595,9 @@ calls the existing `aim::clear_between`.
 
 **Milestones.** Each ends in something checkable.
 
-1. **M1 · Two slots.** `monsters: [Option<Monster>; 2]`, `PairBrain` zeroed,
+1. **M1 · Two slots.** *(The two slots and the mount packing were built with
+   P1, 2026-10-01 — see [species.md](../species.md) §3; `PairBrain` is still
+   this creature's.)* `monsters: [Option<Monster>; 2]`, `PairBrain` zeroed,
    the mount packing. Check: `cargo test --workspace`, and the fight report's
    twelve Ridgeback seeds print the same numbers as before.
 2. **M2 · The cat as data.** A species entry on the Ridgeback's topology with

@@ -160,8 +160,10 @@ Say the Pair, whose id is `SpeciesId::PAIR` and whose lines are waiting.
    ```
 
 3. **Bake its knobs**: `cargo run -p sim --bin bake_tuning`. It starts from the
-   Ridgeback's common numbers and the bottom of every other range; set its
-   moves' frame data and hit volumes in the Oven (F7) and bake again.
+   Ridgeback's common numbers and the bottom of every other range -- every hide
+   multiplier zero, every move zero frames -- so set its hide, its moves' frame
+   data and hit volumes in the Oven (F7) and bake again. Until then
+   `tests/species.rs` says it cannot be hurt, and the creature never attacks.
 4. **Its animation.** `crates/anim/src/beast/pair/` with an `Authored` impl
    (copy the Ridgeback's) and its recipes; uncomment its two lines in
    `anim/src/beast/mod.rs`; `cargo run -p anim --bin bake_beast -- --species
@@ -178,6 +180,10 @@ Say the Pair, whose id is `SpeciesId::PAIR` and whose lines are waiting.
    is well formed and that the creature stands, moves and can be hurt;
    `tests/oven.rs` that its bake is current. The Ridgeback's pins must not
    move.
+
+This recipe was dry-run on 2026-10-01 with a copy of the Ridgeback registered as
+the Pair: steps 1 to 6 and the checks in 8 compiled, baked and measured with no
+edit outside its own files and its registry lines.
 
 What you should **not** need to touch: `monster.rs`, `beast.rs`, `state.rs`,
 `oven.rs`, the report. If you do, it is a place the rig was not data yet — fix
