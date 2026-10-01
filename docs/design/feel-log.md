@@ -6537,8 +6537,8 @@ Coop 10 of 12; temper 3, 6 of 12. `swallow_greed` changes nothing measurable.
 
 **Reverted** Self-burn capped at two pools: it did not slow the
 Elementalist, and the Champion lost two more hunts. The hunter dodging five
-frames early instead of three: it dodged into the crash. The brain thinking
-every 32 frames instead of 40: more flops, no more decisions. The face-up
+frames early instead of three, and the brain thinking every 32 frames
+instead of 40: neither moved the numbers the right way. The face-up
 rule for mounting in the shared rig: it threw a braced rider off the
 Ridgeback's shoulders mid-shake, so it is the Mireback's flag now. Pushing a
 body down out of a creature that lands on it: up was right for the toad and
