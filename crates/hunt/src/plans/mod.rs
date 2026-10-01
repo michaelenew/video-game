@@ -41,6 +41,10 @@ pub mod mireback;
 
 // pub mod siegeshell;
 
+/// Make a hunter: which fighter it drives, the hunt's seed, and how high its
+/// class jumps.
+pub type MakePlan = fn(who: usize, seed: u32, hop: Fx) -> Box<dyn Plan + Send + Sync>;
+
 /// A creature's entry in the harness.
 #[derive(Clone, Copy)]
 pub struct Card {
@@ -59,7 +63,7 @@ pub struct Card {
     /// **A second plan that takes a gamble the first will not**, if its
     /// document asks whether the gamble pays: `fight --gamble` plays it.
     /// The Mireback's `swallow_greed`, which lets the tongue land late.
-    pub gamble: Option<fn(who: usize, seed: u32, hop: Fx) -> Box<dyn Plan + Send + Sync>>,
+    pub gamble: Option<MakePlan>,
 }
 
 /// What the report calls the creature's parts, in its own words.
