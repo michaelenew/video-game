@@ -6,9 +6,16 @@ implements: ../creatures/gnawers.md
 
 # Gnawers — action plan
 
-> **State.** Started 2026-10-01. Nothing built yet beyond the foundation
-> (critters, pack brain, `aim::stands_at`, `critcheck`). Update this paragraph
-> after every milestone: what is built, what the harness says, what is next.
+> **State, 2026-10-01 (evening).** M1–M6 built and committed: species,
+> mind and rules (`crates/sim/src/species/gnawers/`), the Commons arena, the
+> look, generic critter telegraphs, the hunter plan and the report's pack
+> measures and Gnawers lines, 28 rule tests in `crates/sim/tests/gnawers.rs`.
+> Knobs are set by `bake_tuning --set` from a list kept in the session
+> scratchpad (every knob, since inserting an own knob shifts indices).
+> Harness (12 seeds): Champion, Reaver, Elementalist, Blood mage, Bulwark win
+> 11–12 of 12 in 25–55 s; the Dual mage 1/12 (the scripted hunter does not
+> play her bars -- it loses the Ridgeback too). Next: M7 tuning toward the
+> 1–2 minute band, M8 poses and screenshots, M9 docs and the browser.
 
 The specification is [`../creatures/gnawers.md`](../creatures/gnawers.md); the
 recipe is [`../critters.md`](../critters.md) §6. Parity bar:
@@ -16,23 +23,23 @@ recipe is [`../critters.md`](../critters.md) §6. Parity bar:
 
 ## Milestones
 
-- [ ] **M1 · Species, arena, ring.** `species/gnawers/` (moves, kinds, pack,
+- [x] **M1 · Species, arena, ring.** `species/gnawers/` (moves, kinds, pack,
       mind), bootstrapped and baked `tuned.rs`, four registry lines, the
       Commons arena with a den in the bank, a look. A hunt shows six gnawers
       ringing at 5 m, rear first; size/alloc/determinism tests pass.
-- [ ] **M2 · Aim check.** gnawers.md §1a against what the foundation built
+- [x] **M2 · Aim check.** gnawers.md §1a against what the foundation built
       (`aim::stands_at`, `aim::stoop`, `first_along`); `critcheck --species
       gnawers` for the gnawer and the Big One; every auto touches at 2 m.
-- [ ] **M3 · Bites and tokens.** Dart-bite (crouch tracks, locks at
+- [x] **M3 · Bites and tokens.** Dart-bite (crouch tracks, locks at
       `dart_lock`), hamstring (rear third only, slow, latch shed by a dodge),
       tokens, a generic `PackMind::landed` hook, generic critter floor
       telegraphs in the renderer (drawn over the character).
-- [ ] **M4 · The pack's behaviours.** Pile-on (sequenced leaps, three landed
+- [x] **M4 · The pack's behaviours.** Pile-on (sequenced leaps, three landed
       is a knockdown), scatter (Big One only 3 m), morale/den/regroup, treed,
       the arc at three.
-- [ ] **M5 · The Big One.** Maul (stops at 1.0 m), howl (rally, lockout,
+- [x] **M5 · The Big One.** Maul (stops at 1.0 m), howl (rally, lockout,
       cancelled by any hit, desperation), hang-back, strain stumble window.
-- [ ] **M6 · Safe spots, hunter, report.** Scramble, gnaw; the scripted
+- [x] **M6 · Safe spots, hunter, report.** Scramble, gnaw; the scripted
       hunter's §9 plan; the §9 report lines (swings over, behind you,
       hamstrings, pile-ons, crouches interrupted, howls, scatter windows,
       leader dead at, hidden commits), the pack's four windows.
