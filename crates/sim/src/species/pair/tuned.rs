@@ -7,7 +7,7 @@
 //! the Pair's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 491] = [
+pub const KNOBS: [i32; 494] = [
            65536, // pair.size_(x) = 1
             2200, // pair.health = 2200
              500, // pair.breakable_part_health = 500
@@ -105,6 +105,9 @@ pub const KNOBS: [i32; 491] = [
           196608, // pair_·_perch.dive,_cannot_reach_inside_this_of_the_lip = 3
             2000, // pair_·_perch.dive,_appetite_from_a_perch = 2000
               24, // pair_·_leap.pounce_leaves_the_ground_at_startup_frame = 24
+              12, // pair_·_leap.pounce's_mark_follows_you_until_startup_frame = 12
+              28, // pair_·_leap.twin's_mark_follows_you_until_startup_frame = 28
+              12, // pair_·_leap.dive's_mark_follows_you_until_startup_frame = 12
                6, // pair_·_leap.pounce_lands_at_active_frame = 6
               22, // pair_·_leap.dive_leaves_the_lip_at_startup_frame = 22
               40, // pair_·_leap.twin_leaves_the_ground_at_startup_frame = 40

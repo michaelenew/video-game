@@ -327,6 +327,19 @@ pub fn flight(kind: u8) -> (i32, i32) {
     (leave, (a.startup as i32 - leave + land).max(1))
 }
 
+/// **Until which frame of its startup a leap's mark follows you**: the
+/// windup follows, and then it settles -- long enough before the hit that a
+/// mark that has come to rest under you has been on your screen fifteen
+/// frames (`the-pair.md` §6, "unanswerable").
+pub fn track_until(kind: u8) -> i32 {
+    match kind {
+        POUNCE => Knob::PounceTrack.raw(),
+        TWIN => Knob::TwinTrack.raw(),
+        DIVE => Knob::DiveTrack.raw(),
+        _ => 0,
+    }
+}
+
 /// Is this cat in the air: past the frame its leap left the ground, and not
 /// yet down?
 pub fn airborne(m: &Monster) -> bool {
@@ -530,7 +543,7 @@ pub fn frame(w: &mut World) {
         herd[s] = Some(m);
     }
     stuck(&herd, &mut lore, &living, &players, &ground);
-    twin(&mut herd, &mut lore, &living, &sees);
+    twin(&mut herd, &mut lore, &living, &sees, &ground);
     stagger(&mut herd, &living, now);
     apart(&mut herd, &living, &field);
 
@@ -857,6 +870,44 @@ pub fn aim_leap(m: &mut Monster, kind: u8, horizon: u16) {
     m.aim_at(m.pos.add(dir.scale(reach)));
 }
 
+/// **A mark is on the floor its target stands on**, never inside a solid: a
+/// lead that ran into the side of a platform puts the mark against that side,
+/// out of it, where a body standing beside it is -- not on the floor inside
+/// the stone, where nobody can see it and its volume would reach through the
+/// wall. A target up on the top is aimed at the top.
+pub fn on_open_floor(at: V3, stands: Fx, ground: &crate::arena::Terrain) -> V3 {
+    let mut at = V3::new(at.x, Fx::ZERO, at.z);
+    let clear = Knob::LandShort.fx();
+    for solid in ground.solids() {
+        if solid.hangs() || solid.max.y.raw() <= stands.add(clear).raw() {
+            continue;
+        }
+        if !solid.over(at.x, at.z, Fx::ZERO) {
+            continue;
+        }
+        let out = |v: Fx, lo: Fx, hi: Fx| {
+            let a = lo.sub(clear).sub(v);
+            let b = hi.add(clear).sub(v);
+            if a.abs().raw() < b.abs().raw() { a } else { b }
+        };
+        let px = out(at.x, solid.min.x, solid.max.x);
+        let pz = out(at.z, solid.min.z, solid.max.z);
+        if px.abs().raw() <= pz.abs().raw() {
+            at.x = at.x.add(px);
+        } else {
+            at.z = at.z.add(pz);
+        }
+    }
+    at
+}
+
+/// Aim a leap, and keep its mark on open floor.
+fn aim_leap_on(m: &mut Monster, kind: u8, horizon: u16, ground: &crate::arena::Terrain) {
+    aim_leap(m, kind, horizon);
+    let at = on_open_floor(m.aimed_at(), m.brain.seen.y, ground);
+    m.aim_at(at);
+}
+
 /// A xorshift step on a cat's own generator, for the draws made for it: the
 /// rake's hold, the feint.
 pub fn draw(m: &mut Monster) -> u32 {
@@ -917,7 +968,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
                 };
                 m.hit_used = false;
                 m.brain.last_move = POUNCE;
-                aim_leap(m, POUNCE, tell);
+                aim_leap_on(m, POUNCE, tell, ground);
             }
         }
         if let Doing::Recovery { kind, left } = m.doing {
@@ -950,9 +1001,9 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
     if let (Some((kind, e)), Doing::Startup { left, .. }) = (elapsed(m), m.doing) {
         if matches!(kind, POUNCE | DIVE) {
             let (leave, air) = flight(kind);
-            if e < leave {
+            if e < track_until(kind).min(leave) {
                 let to_land = left as i32 - (SPECIES.attack(kind).startup as i32 - leave) + air;
-                aim_leap(m, kind, to_land.max(0) as u16);
+                aim_leap_on(m, kind, to_land.max(0) as u16, ground);
             }
         }
     }
@@ -1185,6 +1236,7 @@ fn twin(
     lore: &mut Lore,
     living: &[usize],
     sees: &[bool; MAX_MONSTERS],
+    ground: &crate::arena::Terrain,
 ) {
     let wait = lore.word(word::TWIN_WAIT);
     if wait > 0 {
@@ -1198,14 +1250,15 @@ fn twin(
     let tw = SPECIES.attack(TWIN);
     let mid_of = |ma: &Monster, mb: &Monster, horizon: i32| {
         let h = horizon.max(0) as u16;
-        math::lerp3(ma.lead_point(h), mb.lead_point(h), math::half(Fx::ONE))
+        let mid = math::lerp3(ma.lead_point(h), mb.lead_point(h), math::half(Fx::ONE));
+        on_open_floor(mid, ma.brain.seen.y, ground)
     };
 
     if ma.doing.attacking() == Some(TWIN) && mb.doing.attacking() == Some(TWIN) {
         // Coiled: the one mark follows the target until they leave.
         if let (Some((_, e)), Doing::Startup { left, .. }) = (elapsed(&ma), ma.doing) {
             let (leave, air) = flight(TWIN);
-            if e < leave {
+            if e < track_until(TWIN).min(leave) {
                 let to_land = left as i32 - (tw.startup as i32 - leave) + air;
                 let mid = mid_of(&ma, &mb, to_land);
                 for s in [a, b] {

@@ -436,3 +436,35 @@ fn debug_dodge_distance() {
         println!("{f} {:.2} {:?}", w.players[0].pos.sub(start).x.to_f32_for_render(), w.players[0].action);
     }
 }
+
+#[test]
+#[ignore]
+fn debug_feet_in_view() {
+    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
+    for _ in 0..30 {
+        w.advance([Input::default(); MAX_PLAYERS]);
+    }
+    let stones = sim::stones::gather(&w.players);
+    let ground = w.terrain();
+    let scene = sim::aim::Scene {
+        stones: &stones,
+        players: &w.players,
+        effects: &w.effects,
+        quarry: &w.monsters,
+        critters: &w.critters,
+        arena: &ground,
+    };
+    let p = w.players[0].pos;
+    for pitch in [-3000i16, -1500, 0, 1500, 3000] {
+        let look = Input::looking_at(0, 0, pitch);
+        let mut row = String::new();
+        for back in [-3i32, -2, -1, 0, 1, 2, 4] {
+            let at = p.add(V3::new(Fx::ratio(back * 5, 10), Fx::ZERO, Fx::ZERO));
+            row.push_str(&format!(
+                "{:>6}",
+                sim::aim::in_view(0, look, at, Fx::from_raw(9100), &scene)
+            ));
+        }
+        println!("pitch {pitch}: {row}");
+    }
+}

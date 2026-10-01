@@ -243,7 +243,7 @@ impl Solid {
     }
 
     /// Does its footprint cover this point, grown by `pad` all round?
-    fn over(&self, x: Fx, z: Fx, pad: Fx) -> bool {
+    pub fn over(&self, x: Fx, z: Fx, pad: Fx) -> bool {
         x.raw() > self.min.x.sub(pad).raw()
             && x.raw() < self.max.x.add(pad).raw()
             && z.raw() > self.min.z.sub(pad).raw()

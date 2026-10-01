@@ -571,6 +571,9 @@ crate::species_knobs! {
     DiveAppetite,    "perch", "Dive, appetite from a perch",             Int, 0, 8000;
     // the leaps
     PounceLeave,     "leap",  "Pounce leaves the ground at startup frame", Frames, 0, 120;
+    PounceTrack,     "leap",  "Pounce's mark follows you until startup frame", Frames, 0, 120;
+    TwinTrack,       "leap",  "Twin's mark follows you until startup frame", Frames, 0, 120;
+    DiveTrack,       "leap",  "Dive's mark follows you until startup frame", Frames, 0, 120;
     PounceLand,      "leap",  "Pounce lands at active frame",            Frames, 0, 60;
     DiveLeave,       "leap",  "Dive leaves the lip at startup frame",    Frames, 0, 120;
     TwinLeave,       "leap",  "Twin leaves the ground at startup frame", Frames, 0, 120;

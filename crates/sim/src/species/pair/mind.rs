@@ -320,6 +320,12 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
     let slot = fight::slot_of(m);
     let lore = mind.lore;
     let st = fight::state_of(lore, slot);
+    // A leap's mark on open floor, never inside a solid it would reach
+    // through (`fight::on_open_floor`).
+    if matches!(kind, POUNCE | DIVE) {
+        let at = fight::on_open_floor(m.aimed_at(), m.brain.seen.y, mind.ground);
+        m.aim_at(at);
+    }
     match kind {
         POUNCE => {
             // **The feint and the ambush are one move made by two animals.**

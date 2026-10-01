@@ -238,10 +238,17 @@ pub fn marker_covers(m: &Monster, at: V3, margin: Fx) -> bool {
     gap.raw() <= t.radius.add(sim::tuning::body_radius()).add(margin).raw()
 }
 
-/// A look as the wire carries it, with the crosshair put on a point.
+/// A look as the wire carries it: level while it is watching -- the floor
+/// round its own feet on the screen, where the markers are -- and the
+/// crosshair put on a point when it is throwing something at it.
 fn wire(me: &Player, yaw: Fx, at: V3, bits: u16) -> Input {
     let aim = turns_to_aim(yaw.sub(me.carry_yaw));
-    let pitch = sim::aim::look_onto(me.pos, aim, me.aloft, at);
+    let throwing = Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::MECHANIC | Input::SPECIAL;
+    let pitch = if bits & throwing != 0 {
+        sim::aim::look_onto(me.pos, aim, me.aloft, at)
+    } else {
+        0
+    };
     Input::looking_at(bits, aim, pitch)
 }
 
