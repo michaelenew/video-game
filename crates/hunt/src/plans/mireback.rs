@@ -1009,6 +1009,7 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
         toppled_pool: "off the pool under a gutted Mireback",
     },
     tally: Some(|| Box::new(MireTally::default())),
+    gamble: Some(greedy),
 };
 
 // ---------------------------------------------------------------------------
