@@ -6,8 +6,14 @@ implements: ../creatures/mantis.md
 
 # Mantis — action plan
 
-> **State, 2026-10-01 (started).** Reading done; M1 in progress. Branch
-> `claude/creature-mantis`, worktree `/home/user/wt/mantis`.
+> **State, 2026-10-01 (built, tuning).** M1-M6 done: species, Shrine, the
+> guard seam at every hit site, the delay-line eyes, every move, blades,
+> stages, habit and Ready with the notches, prayer and haste, animation
+> baked and reviewed, its look and dressing, 19 tests in
+> `crates/sim/tests/mantis.rs`, a budget scene. M7 (measured) in progress:
+> the duellist's plan and its ablations (`MANTIS_PLAN`, `MANTIS_HABIT`) run;
+> tuning toward 1 in 20. Then M8: screenshots, docs, manual, web, merge.
+> Branch `claude/creature-mantis`, worktree `/home/user/wt/mantis`.
 
 The specification is [`../creatures/mantis.md`](../creatures/mantis.md); the
 recipes are [`../species.md`](../species.md), [`../arenas.md`](../arenas.md),
@@ -50,18 +56,18 @@ contract [`../bestiary.md`](../bestiary.md) §1. Also read
 
 ## Milestones
 
-- [ ] **M1 · Body, Shrine, guard.** Species table, bootstrap files, registry
+- [x] **M1 · Body, Shrine, guard.** Species table, bootstrap files, registry
       lines, the Shrine; `FightDecl::guard` and the hit sites; guard tests;
       `beastcheck --species mantis` with the cone's top against every hop.
-- [ ] **M2 · Its eyes and the coil.** Sight ring, D's wander, deeds; coil and
+- [x] **M2 · Its eyes and the coil.** Sight ring, D's wander, deeds; coil and
       lunge with the lane and the stop at a solid. Sight and coil tests.
-- [ ] **M3 · The rest of the set.** Pair, counter, Leap/Dive, flare, pivot,
+- [x] **M3 · The rest of the set.** Pair, counter, Leap/Dive, flare, pivot,
       prayer and haste; per-move tests.
-- [ ] **M4 · Blades and desperation.** One-sided guard, hurt and desperate
+- [x] **M4 · Blades and desperation.** One-sided guard, hurt and desperate
       stages, coop numbers.
-- [ ] **M5 · The habit.** Ring, Ready, the notches (marks), the flag and the
+- [x] **M5 · The habit.** Ring, Ready, the notches (marks), the flag and the
       geometric guess; the three habit tests.
-- [ ] **M6 · Animation.** Clips in `anim/src/beast/mantis/`, baked, sheets
+- [x] **M6 · Animation.** Clips in `anim/src/beast/mantis/`, baked, sheets
       reviewed.
 - [ ] **M7 · Measured.** The duellist's plan and three ablations, report lines
       and the guarded band, tuning passes, feel log.

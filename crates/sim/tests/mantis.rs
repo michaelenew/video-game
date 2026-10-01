@@ -995,3 +995,43 @@ fn a_guess_it_gets_wrong_is_forgotten() {
         }
     ));
 }
+
+// ---------------------------------------------------------------------------
+// §11 · In the world
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_dead_mantis_is_a_won_hunt_with_its_trophy_and_its_temper() {
+    // The trophy is written from `hunt_won` (world W1), and a temper is the
+    // same duellist fought cleverer (W2): both name the Mantis, in the Shrine.
+    let _knobs = lock();
+    let mut w = hunt(Class::Champion).tempered(2);
+    assert_eq!(w.arena().id, sim::arena::ArenaId::MANTIS);
+    assert_eq!(w.hunt_won(), None);
+    w.monster_mut().unwrap().health = 0;
+    w.advance([Input::default(); MAX_PLAYERS]);
+    let (beaten, at) = w.hunt_won().expect("a dead Mantis is a won hunt");
+    assert_eq!(beaten[0], Some(SpeciesId::MANTIS));
+    assert_eq!(at, 2);
+}
+
+#[test]
+fn the_hunt_opens_with_it_at_prayer() {
+    // Its idle life is the prayer (§11): the first decision of the fight is
+    // whether to break it.
+    let _knobs = lock();
+    let mut w = hunt(Class::Champion);
+    w.advance([Input::default(); MAX_PLAYERS]);
+    assert!(matches!(
+        it(&w).doing,
+        Doing::Active {
+            kind: mantis::PRAYER,
+            ..
+        }
+    ));
+    // Two hunters: its two-hunter health.
+    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::MANTIS);
+    w.advance([Input::default(); MAX_PLAYERS]);
+    assert_eq!(it(&w).health, Knob::CoopHealth.raw());
+    assert!(fight::coop(&it(&w)));
+}
