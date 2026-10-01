@@ -55,6 +55,7 @@ pub static FIGHT: FightDecl = FightDecl {
     pace: Some(pace),
     glance: Some(glance),
     presence: Some(presence),
+    lob_height: Some(lob_height),
     ..FightDecl::PLAIN
 };
 
@@ -97,6 +98,32 @@ pub mod flag {
     pub const SLOT_SHIFT: i32 = 12;
     /// Two hunters: it glances quicker.
     pub const COOP: i32 = 1 << 14;
+    /// How high its mark is, in units of [`MARK_STEP`], eight bits from here.
+    pub const MARK_SHIFT: i32 = 16;
+}
+
+/// The height of a mark, in centimetres a step: eight bits of five
+/// centimetres is twelve and three quarter metres, any top a cat reaches.
+const MARK_STEP: i32 = 5;
+
+/// How high the mark of the leap in progress is: the top under its aim.
+pub fn lob_height(m: &Monster) -> Fx {
+    let steps = (m.own[body::FLAGS] >> flag::MARK_SHIFT) & 0xFF;
+    lore::from_cm((steps * MARK_STEP) as i16)
+}
+
+/// Set the mark's height.
+fn set_mark_height(m: &mut Monster, y: Fx) {
+    let steps = (lore::to_cm(y) as i32 / MARK_STEP).clamp(0, 0xFF);
+    m.own[body::FLAGS] = (m.own[body::FLAGS] & !(0xFF << flag::MARK_SHIFT)) | (steps << flag::MARK_SHIFT);
+}
+
+/// Put a leap's mark at `at`, on open floor or the top it is on, and
+/// remember how high that is.
+pub fn mark_at(m: &mut Monster, at: V3, ground: &crate::arena::Terrain, field: &crate::stones::Field) {
+    let at = on_open_floor(at, m.brain.seen.y, ground);
+    m.aim_at(at);
+    set_mark_height(m, ground_at(at, ground, field));
 }
 
 /// The pair brain's words in the hunt's lore (`Lore::word`): the shared
@@ -543,7 +570,7 @@ pub fn frame(w: &mut World) {
         herd[s] = Some(m);
     }
     stuck(&herd, &mut lore, &living, &players, &ground);
-    twin(&mut herd, &mut lore, &living, &sees, &ground);
+    twin(&mut herd, &mut lore, &living, &sees, &ground, &field);
     stagger(&mut herd, &living, now);
     apart(&mut herd, &living, &field);
 
@@ -901,11 +928,16 @@ pub fn on_open_floor(at: V3, stands: Fx, ground: &crate::arena::Terrain) -> V3 {
     at
 }
 
-/// Aim a leap, and keep its mark on open floor.
-fn aim_leap_on(m: &mut Monster, kind: u8, horizon: u16, ground: &crate::arena::Terrain) {
+/// Aim a leap, and keep its mark on open floor or the top it is on.
+fn aim_leap_on(
+    m: &mut Monster,
+    kind: u8,
+    horizon: u16,
+    ground: &crate::arena::Terrain,
+    field: &crate::stones::Field,
+) {
     aim_leap(m, kind, horizon);
-    let at = on_open_floor(m.aimed_at(), m.brain.seen.y, ground);
-    m.aim_at(at);
+    mark_at(m, m.aimed_at(), ground, field);
 }
 
 /// A xorshift step on a cat's own generator, for the draws made for it: the
@@ -968,7 +1000,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
                 };
                 m.hit_used = false;
                 m.brain.last_move = POUNCE;
-                aim_leap_on(m, POUNCE, tell, ground);
+                aim_leap_on(m, POUNCE, tell, ground, field);
             }
         }
         if let Doing::Recovery { kind, left } = m.doing {
@@ -1003,7 +1035,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
             let (leave, air) = flight(kind);
             if e < track_until(kind).min(leave) {
                 let to_land = left as i32 - (SPECIES.attack(kind).startup as i32 - leave) + air;
-                aim_leap_on(m, kind, to_land.max(0) as u16, ground);
+                aim_leap_on(m, kind, to_land.max(0) as u16, ground, field);
             }
         }
     }
@@ -1237,6 +1269,7 @@ fn twin(
     living: &[usize],
     sees: &[bool; MAX_MONSTERS],
     ground: &crate::arena::Terrain,
+    field: &crate::stones::Field,
 ) {
     let wait = lore.word(word::TWIN_WAIT);
     if wait > 0 {
@@ -1262,7 +1295,7 @@ fn twin(
                 let to_land = left as i32 - (tw.startup as i32 - leave) + air;
                 let mid = mid_of(&ma, &mb, to_land);
                 for s in [a, b] {
-                    herd[s].as_mut().expect("living").aim_at(mid);
+                    mark_at(herd[s].as_mut().expect("living"), mid, ground, field);
                 }
             }
         }
@@ -1327,7 +1360,7 @@ fn twin(
         m.brain.repeat_left = SPECIES.variety_frames();
         m.brain.think_left = 0;
         m.brain.mirror = false;
-        m.aim_at(mid);
+        mark_at(m, mid, ground, field);
     }
 }
 

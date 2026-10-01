@@ -221,11 +221,9 @@ pub fn marker_points(m: &Monster, near: V3) -> Option<[V3; 3]> {
         t.anchor
     };
     let toward = unit(near.sub(closest), V3::ZERO).scale(t.radius.min(wide_flat_dist(near, closest)));
-    Some([
-        flat(t.anchor),
-        flat(end),
-        flat(closest.add(toward)),
-    ])
+    // On whatever the circle is drawn on: the floor, or a top.
+    let up = |p: V3| V3::new(p.x, t.anchor.y, p.z);
+    Some([up(t.anchor), up(end), up(closest.add(toward))])
 }
 
 /// Does this cat's floor marker cover a body standing here?
@@ -810,6 +808,15 @@ impl Pair {
                 dir = unit(dir.add(unit(me.pos.sub(at), ahead)), ahead);
             }
         }
+        // Looking for one it cannot see, it stands still unless the one it
+        // can see is too close: backing blind into the other is the
+        // mistake the fight is teaching.
+        if (lost || stale.is_some()) && self.intent == FIND {
+            let close = nearest.is_some_and(|(_, at, _)| wide_flat_dist(at, me.pos).raw() < KEEP.raw());
+            if !close {
+                dir = V3::ZERO;
+            }
+        }
         let dir = if dir.flat_len().raw() > 0 {
             keep_in(w, me.pos, dir)
         } else {
@@ -897,7 +904,14 @@ impl Tally for PairTally {
         let stones = sim::stones::gather(&after.players);
         let ground = after.terrain();
         let scene = scene_of(after, &stones, &ground);
-        let look = |who: usize| bots.iter().find(|h| h.who == who).map(|h| h.last);
+        // Where each hunter's camera points: its yaw, level. A swing thrown
+        // with the crosshair a few degrees up is not a camera turned to the
+        // sky, and the floor round a fighter's feet is on the screen.
+        let look = |who: usize| {
+            bots.iter()
+                .find(|h| h.who == who)
+                .map(|h| Input::aimed(0, h.last.aim))
+        };
         let alive: Vec<usize> = (0..MAX_MONSTERS)
             .filter(|s| after.monsters[*s].is_some_and(|m| m.alive()))
             .collect();

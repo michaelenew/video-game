@@ -1407,11 +1407,17 @@ impl Monster {
             } else {
                 at
             };
+            // On the top its aim is on, for a species that says
+            // (`FightDecl::lob_height`); on the floor otherwise.
+            let up = match self.sp().fight.lob_height {
+                Some(f) => f(self),
+                None => Fx::ZERO,
+            };
             return Some((
-                V3::new(at.x, Fx::ZERO, at.z),
+                V3::new(at.x, up, at.z),
                 m.hit_radius,
-                m.hit_low,
-                m.hit_high,
+                up.add(m.hit_low),
+                up.add(m.hit_high),
             ));
         }
         let flown = if decl.stops_at_aim {

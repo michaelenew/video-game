@@ -323,8 +323,9 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
     // A leap's mark on open floor, never inside a solid it would reach
     // through (`fight::on_open_floor`).
     if matches!(kind, POUNCE | DIVE) {
-        let at = fight::on_open_floor(m.aimed_at(), m.brain.seen.y, mind.ground);
-        m.aim_at(at);
+        // Stones are not in the brain's window; the frame hook puts the
+        // mark on one before anything is live.
+        fight::mark_at(m, m.aimed_at(), mind.ground, &[None; crate::stones::MAX_STONES]);
     }
     match kind {
         POUNCE => {

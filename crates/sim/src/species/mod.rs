@@ -439,6 +439,10 @@ pub struct FightDecl {
     /// temper: the Pair glance quicker with two hunters. `None` is its
     /// knob.
     pub glance: Option<fn(&crate::monster::Monster) -> u16>,
+    /// **How high a lobbed move lands**: the top its aim point is on -- a cat
+    /// pouncing onto a platform lands on the platform, and its circle is
+    /// drawn there. `None` is the floor.
+    pub lob_height: Option<fn(&crate::monster::Monster) -> Fx>,
 }
 
 /// Something a species draws beyond its hazards and its telegraph.
@@ -563,6 +567,7 @@ impl FightDecl {
         keeps_height: false,
         pace: None,
         glance: None,
+        lob_height: None,
     };
 }
 
