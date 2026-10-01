@@ -938,3 +938,22 @@ fn once_crashed_it_cannot_crash_again_before_it_has_flown() {
     fight::struck(m, gw::ROOT_L, 100);
     assert_eq!(m.poise, before, "a spent bird's poise filled again");
 }
+
+/// **A dead Galewing is a won hunt, with its trophy and its temper** (world
+/// W1, W2): the trophy is written from `hunt_won`, and a temper is the same
+/// bird fought cleverer -- it glances more often -- on the Cliffs.
+#[test]
+fn a_dead_galewing_is_a_won_hunt_with_its_trophy_and_its_temper() {
+    let calm = hunt();
+    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GALEWING).tempered(2);
+    w.players[1].health = 0;
+    w.advance([Input::default(); MAX_PLAYERS]);
+    assert_eq!(w.arena().id, sim::arena::ArenaId::GALEWING);
+    assert!(beast(&w).glance_frames() < beast(&calm).glance_frames());
+    assert_eq!(w.hunt_won(), None);
+    w.monsters[0].as_mut().unwrap().health = 0;
+    w.advance([Input::default(); MAX_PLAYERS]);
+    let (beaten, at) = w.hunt_won().expect("a dead bird is a won hunt");
+    assert_eq!(beaten[0], Some(SpeciesId::GALEWING));
+    assert_eq!(at, 2);
+}

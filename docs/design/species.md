@@ -294,6 +294,21 @@ same terms -- every one off in `PLAIN`, and no other creature's code moved:
 | `Tally::until_free(w, slot, free)` | a species' own correction to `frames_until_free` for the windows: the Veilstalker adds its decloak floor, so a stalk is free but not threatening until it is in reach and in view; identity for everybody else |
 | `MonsterField::Cooldown` range to 900 | the smoke's fifteen seconds |
 
+**The seams a flyer adds** (the Galewing, 2026-10-01). Flight itself is in
+the species' frame hook (it owns its position in its lore and the shared walk's
+drift is discarded while it is aloft), so the shared ones are few, and on the
+floor every one of them is what it was:
+
+| Seam | What it is for |
+| --- | --- |
+| spawn on `ground_under(mark)` | versus and hunt marks stand on the ground under them, not at zero: the Cliffs' plateau is a 12 m solid. Zero everywhere a mark has stood before |
+| `Terrain::floor_below(p)` | the highest top under a point *no higher than it* -- where a floor marker lies (the renderer's shared telegraphs, the bird's lanes), unlike `ground_under`, for which a tower beside you is under you |
+| `aim::underfoot_up`, `swing_path(.., up)` | A4: a standing swing's dead zone measured against the surface underfoot (`aim.rs`); `+y` on the floor, bit-identical there |
+| `aim::on_screen` | `in_view`'s cone alone, for what is drawn over everything (the floor markers) |
+| `Monster::top_under(p, below)` | the camera's floor is the highest creature top *below the fighter's feet*: a bird over the eye is not a floor |
+| `tests/species.rs`, `keeps_height` | a species that keeps its own height may stand above the ground (never under it) |
+| `game::arenas::sun` | the key light's place per arena: overhead on the Cliffs, so the bird's shadow is on the plateau |
+
 ## 6 · Decided while building, for a person to review
 
 - **Sizes are maximums, not generics.** `MAX_BONES` 40, `MAX_PARTS` 48,

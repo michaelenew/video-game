@@ -87,6 +87,15 @@ ground, so a fight there hashes as it always did.
   its middle with a site for the cart (bestiary P7), three boulders beside it.
   `arena::for_species` still answers the first arena that names the creature
   (the meadow); the crossing is reached by name.
+- **The Cliffs** (`arena/galewing.rs`, 2026-10-01): the Galewing's. A 44 × 44 m
+  plateau that is a **12 m solid** standing on the floor -- the floor of the
+  game is at zero, so a drop has to be a solid -- with the shelf four metres
+  wide round three sides of it twelve metres down, six stairs of 2 m steps back
+  up, a rock face eight metres above it on the north, the perch tower (6 m
+  square, 12 m above the plateau, eight ledges 1.5 m apart spiralling round it)
+  and four standing stones. Two sites, `circle` and `perch`, tell the bird where
+  things are. The sun is overhead (`game::arenas::sun`). See
+  [creatures/galewing.md](creatures/galewing.md) §11.
 
 ## 3 · The picker (W0)
 

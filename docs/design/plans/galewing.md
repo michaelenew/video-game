@@ -96,6 +96,17 @@ move's aim height), the pitch, and the posture flags with the bank.
   through a Stoop's dive and hit (`fight::presence`).
 - **Terrain following**: round its circle it keeps `TowerOver` above
   whatever is under it or ahead of it, climbing hard to clear the rock face.
+- **Spent**: once crashed it cannot crash again before it has been back up
+  to its circle -- without it a rider on the roots toppled it every time it
+  stood, a forty-second kill.
+- **Floor markers on the floor**: the renderer's shared telegraphs were drawn
+  at zero (under the plateau, invisible); they are drawn on
+  `Terrain::floor_below` the anchor. The bird's own lanes lie on the floor
+  their target stands on, not on the tower beside them.
+- **The hunter**: a dodge three frames early to two late (the Stoop's hit rate
+  is that window and nothing else), never craning up from the floor, plan B
+  boarding at the gather and swinging aboard only where the swing fits
+  between beats.
 
 ## Milestones
 
@@ -124,8 +135,11 @@ move's aim height), the pitch, and the posture flags with the bank.
       SHOT_MOVE screenshots (`fight::ready_for`) looked at. Floor markers
       are drawn on `Terrain::floor_below` their anchor -- they were drawn at
       zero, under the plateau, for every shared telegraph.
-- [ ] **M10 · The hunt.** Plans A and B, report lines, tuning passes,
-      feel log.
+- [x] **M10 · The hunt.** Plans A and B, report lines, tuning passes,
+      feel log. The Champion is at tier 4 (plan A about a sixth, plan B
+      more); the other classes lose to the scripted hunter, and the
+      out-of-reach share is two thirds for the melee classes, not a third
+      (creatures/galewing.md §13).
 - [ ] **M11 · Finished.** Trophy, tempers, docs (built + where it landed),
       README map, manual, web smoke, merge main, checks, push.
 
