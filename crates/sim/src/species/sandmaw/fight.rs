@@ -694,7 +694,7 @@ fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
     }
     // A blow into the open mouth through the swallow's tell gags it -- and
     // if it was already reeling, puts it over.
-    if matches!(m.doing, Doing::Startup { kind: SWALLOW, .. }) && HEAD_PARTS.contains(&part) {
+    if matches!(m.doing, Doing::Startup { kind: SWALLOW, .. }) && into_the_mouth(m, part) {
         if m.strain >= m.cc_bar() {
             beach(m, route::GAG);
         } else {
@@ -724,6 +724,22 @@ fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
         return true;
     }
     beached(m) || part == TEETH
+}
+
+/// **Is a blow on this part a blow into the open mouth?** The head's own
+/// parts are; so is anything whose middle is inside the ring, which is 4 m
+/// across when it is open -- the throat behind the teeth among them, which
+/// is what a swing at a mouth coming down onto you meets first.
+fn into_the_mouth(m: &Monster, part: usize) -> bool {
+    if HEAD_PARTS.contains(&part) {
+        return true;
+    }
+    let middle = |p: usize| {
+        let sh = SPECIES.shape(p);
+        m.world_of(p, sh.min.add(sh.max).scale(math::half(Fx::ONE)))
+    };
+    let gap = math::wide_len(middle(part).sub(middle(TEETH)));
+    gap.raw() <= Knob::MouthOpen.fx().raw()
 }
 
 // ---------------------------------------------------------------------------

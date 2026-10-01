@@ -502,6 +502,7 @@ crate::species_knobs! {
     SpitOutDistance, "swallow", "Spat out beside the hole at",          Fixed, 0, fx(10,1);
     GagFrames,       "swallow", "Gagged for",                           Frames,0, 240;
     GagTeeth,        "swallow", "Into the open mouth (x damage)",       Fixed, 0, fx(4,1);
+    MouthOpen,       "swallow", "The open ring, half across",           Fixed, 0, fx(4,1);
     // sound
     RiderThrow,      "sound",   "Riders thrown, damage",                Int,   0, 400;
     RootPush,        "sound",   "A root holds it up for",               Frames,0, 240;

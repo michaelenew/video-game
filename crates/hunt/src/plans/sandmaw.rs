@@ -52,6 +52,8 @@ pub const LEAVE: Intent = Intent("Leave");
 pub const GULP: Intent = Intent("Gulp");
 /// Into the open mouth.
 pub const GAG: Intent = Intent("Gag");
+/// Behind the shield from the spit.
+pub const GUARD: Intent = Intent("Guard");
 /// Behind a boulder from the spit.
 pub const COVER: Intent = Intent("Cover");
 
@@ -63,6 +65,15 @@ const LEAP_HOLD: u16 = 32;
 /// How near the wake has to come before it baits: inside the landing's
 /// hearing, outside the feel.
 const BAIT_NEAR: Fx = Fx::ratio(12, 1);
+/// A poke this long or shorter is a swing at the mouth, not a cast.
+const GAG_REACH: Fx = Fx::from_int(3);
+/// Frames after the swing's startup that the swallow's dip still has to go:
+/// the swing lands as the ring nears the bottom, with room for being late.
+const GAG_LATE: i32 = 5;
+/// The longest swing thrown at a standing worm that is free to act.
+const STAND_POKE: i32 = 20;
+/// How high the open ring is when it reaches a fighter.
+const MOUTH_LOW: Fx = Fx::ratio(9, 10);
 /// Frames of quiet before a bait.
 const QUIET_FIRST: u32 = 40;
 /// Bait anyway after this long quiet: the search is coming.
@@ -461,9 +472,20 @@ impl Sandmaw {
                 } else {
                     side.scale(Fx::ONE.neg())
                 };
+                // A shield in hand is a solid the Bulwark carries: up, facing
+                // it, until the spray is over in the present.
+                let to_go = if live {
+                    left as i32
+                } else {
+                    left as i32 + a.active as i32
+                };
+                if me.shield().is_some_and(|s| s.in_hand()) && to_go > REACTION as i32 {
+                    self.intent = GUARD;
+                    return Some(looking(me, fight::head_flat(beast), Input::RIGHT));
+                }
                 // A spray this close is not walked out of: the dodge, loud
                 // as it is, on the last frames before it comes.
-                Some(self.out_or_dodge(me, out, beast.pos, left, live))
+                Some(self.out_or_dodge(me, out, beast.pos, left, live, a.active))
             }
             // The tail: under it.
             sandmaw::LASH => {
@@ -484,18 +506,37 @@ impl Sandmaw {
                 if wide_flat_dist(t.anchor, me.pos).raw() > t.radius.add(body).add(MARGIN).raw() {
                     return None;
                 }
-                let teeth = part_at(beast, sandmaw::TEETH);
+                // **The mouth comes to you**: it dips down onto where you
+                // stand, so a fighter in front with a swing in hand stays
+                // put and throws it to meet the ring at the bottom of the
+                // dip -- timed the way a person who has seen it twice times
+                // it, off when it began, not off where the head is now.
                 let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-                let lands = (poke.startup as i32) + 1 < left as i32 - REACTION as i32;
-                let near = wide_flat_dist(teeth, me.pos).raw() <= poke.reach.add(Fx::ONE).raw();
-                if !live && lands && near && me.action.actionable() {
+                let ahead = V3::from_turns(beast.yaw);
+                let rel = flat(me.pos.sub(beast.pos));
+                let facing = rel.flat_len().raw() > 0
+                    && ahead.dot(rel.normalized()).raw() > FRONT_COS.raw();
+                let melee = poke.reach.raw() <= GAG_REACH.raw();
+                let real_left = left as i32 - REACTION as i32 - self.slop;
+                let swing_at = poke.startup as i32 + GAG_LATE;
+                if !live && facing && melee && real_left >= swing_at - 1 {
                     self.intent = GAG;
-                    self.cooldown = SWING_GAP;
-                    return Some(looking(me, teeth, Input::LEFT));
+                    // Where the ring will be at the bottom of the dip: at
+                    // the waist, a step past you along its reach -- the neck
+                    // arcs over a fighter in front and the mouth comes down
+                    // on the far side. Not where it is in what was seen.
+                    let mouth = flat(me.pos)
+                        .add(ahead)
+                        .add(V3::new(Fx::ZERO, MOUTH_LOW, Fx::ZERO));
+                    if real_left <= swing_at && me.action.actionable() {
+                        self.cooldown = SWING_GAP;
+                        return Some(looking(me, mouth, Input::LEFT));
+                    }
+                    return Some(looking(me, mouth, 0));
                 }
                 self.intent = EVADE;
                 let out = away_from(t.anchor, me.pos, V3::from_turns(beast.yaw));
-                Some(self.out_or_dodge(me, out, beast.pos, left, live))
+                Some(self.out_or_dodge(me, out, beast.pos, left, live, a.active))
             }
             // The dive: away from the hole.
             sandmaw::SOUND | sandmaw::DIVE => {
@@ -520,13 +561,18 @@ impl Sandmaw {
         look_at: V3,
         left: u16,
         live: bool,
+        active: u16,
     ) -> Input {
+        // Late enough that the invulnerable frames still cover the last of
+        // its active ones: a long bite outlasts a dodge thrown early.
+        let cover = sim::tuning::dodge_iframes() as i32 - active as i32 - 1;
+        let lead = DODGE_LEAD.min(cover.max(0));
         let real_left = if live {
             0
         } else {
             left as i32 - REACTION as i32 - self.slop
         };
-        if real_left <= DODGE_LEAD && self.dodge_left == 0 && me.action.actionable() {
+        if real_left <= lead && self.dodge_left == 0 && me.action.actionable() {
             self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
             return walking(me, out, look_at, Input::SHIFT);
         }
@@ -607,6 +653,13 @@ impl Sandmaw {
                 heavy(me.class)
             } else if window > poke_busy + EXIT {
                 self.cooldown = SWING_GAP;
+                Input::LEFT
+            } else if matches!(beast.doing, Doing::Prowl) && poke_busy <= STAND_POKE {
+                // **Standing and choosing**: free to act, so nothing is
+                // safe -- but everything it can do from here has a tell
+                // longer than a quick swing, and a stand nobody hits is
+                // a stand wasted. One poke, then a gap to watch it in.
+                self.cooldown = SWING_GAP + poke_busy as u16;
                 Input::LEFT
             } else {
                 0
@@ -771,8 +824,8 @@ impl Sandmaw {
     }
 }
 
-/// A direction kept off the rim: turned back in toward the middle of the
-/// Pan when it would walk out of it.
+/// A direction kept off the rim: turned along it, to the side of the
+/// middle, when it would walk out of the Pan.
 fn keep_in(w: &World, at: V3, dir: V3) -> V3 {
     let b = w.arena().bounds;
     let room = Fx::from_int(4);
@@ -781,10 +834,18 @@ fn keep_in(w: &World, at: V3, dir: V3) -> V3 {
         || ahead.x.raw() > b.hi_x.sub(room).raw()
         || ahead.z.raw() < b.lo_z.add(room).raw()
         || ahead.z.raw() > b.hi_z.sub(room).raw();
-    if out {
-        flat(V3::ZERO.sub(at)).normalized()
+    if !out {
+        return dir;
+    }
+    // Along the rim rather than back from it: turned straight back, the
+    // next frame's step is clear again and it walks back out, a fighter
+    // stamping on one spot -- which, here, is the loudest thing there is.
+    let across = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
+    let middle = flat(V3::ZERO.sub(at));
+    if across.dot(middle).raw() >= 0 {
+        across
     } else {
-        dir
+        across.scale(Fx::ONE.neg())
     }
 }
 
@@ -985,15 +1046,24 @@ impl Tally for SandTally {
         }
         let lost = before.players[0].health - me.health;
         let doing_was = was.doing.attacking();
-        if lost > 0 && m.doing.attacking() == Some(sandmaw::SPIT) && me.pos.y.raw() > 0 {
+        let on_rock = matches!(
+            ground.material_under(me.pos),
+            sim::arena::Material::Rock | sim::arena::Material::Stone
+        );
+        if lost > 0 && m.doing.attacking() == Some(sandmaw::SPIT) && on_rock {
             self.island_spits += 1;
         }
         // A bite: on a quiet hunter? And did its marker cover them?
         let bit = lost > 0 && matches!(m.doing, Doing::Active { kind: sandmaw::RISE, .. });
         let _ = doing_was;
         if bit {
-            let quiet = after.frame.saturating_sub(self.last_noise[0]) >= 60;
-            let from_felt = fight::acted_on(&after.lore).is_some_and(|a| a.felt());
+            // Quiet: nothing of theirs for a second, and what it came up at
+            // was not a noise they made -- a bite at a noise made just
+            // before the second began is the noise working, not silence.
+            let acted = fight::acted_on(&after.lore);
+            let their_noise = acted.is_some_and(|a| a.heard() && a.who == 0);
+            let quiet = !their_noise && after.frame.saturating_sub(self.last_noise[0]) >= 60;
+            let from_felt = acted.is_some_and(|a| a.felt());
             if quiet {
                 if from_felt {
                     self.quiet_felt += 1;
