@@ -2974,7 +2974,15 @@ fn aim_toward(v: sim::V3) -> u16 {
 /// posing and framing. Against a creature it is the real hunter, because a
 /// fixed beat played at a monster would be a demonstration of nothing.
 fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
-    if w.hunting() {
+    if let Some(beast) = w.monster() {
+        // A plan is for one creature. Against another, the plan for that one,
+        // if it has one; otherwise the fixed beat below.
+        if hunter.species != beast.species {
+            match hunt::Hunter::for_species(beast.species, hunter.who) {
+                Some(fresh) => *hunter = fresh,
+                None => return demo_input(w, w.frame),
+            }
+        }
         hunter.watch(w);
         return hunter.act(w);
     }

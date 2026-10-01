@@ -1231,8 +1231,7 @@ pub fn set_view(k: ViewKnob, raw: i32) {
 static SPECIES_CELLS: LazyLock<[[AtomicI32; MAX_SPECIES_KNOBS]; species::COUNT]> =
     LazyLock::new(|| {
         std::array::from_fn(|id| {
-            let seed = species::lookup(SpeciesId(id as u8)).map_or(&[][..], |s| s.tuned);
-            std::array::from_fn(|i| AtomicI32::new(seed.get(i).copied().unwrap_or(0)))
+            std::array::from_fn(|i| AtomicI32::new(species_baked(SpeciesId(id as u8), i)))
         })
     });
 
@@ -1246,10 +1245,33 @@ pub fn set_species_raw(id: SpeciesId, index: usize, raw: i32) {
 }
 
 /// What a species' baked file holds for one of its knobs.
+///
+/// **A species that has never been baked starts somewhere sensible**: the
+/// numbers every creature has are the Ridgeback's, and its own knobs and its
+/// moves' fields start at the bottom of their ranges. That is what lets a new
+/// species begin with an empty `tuned.rs` -- `pub const KNOBS: [i32; 0] = [];`
+/// -- and have `bake_tuning` write the whole file the first time. See
+/// `docs/design/species.md`.
 fn species_baked(id: SpeciesId, index: usize) -> i32 {
-    species::lookup(id)
-        .and_then(|s| s.tuned.get(index).copied())
-        .unwrap_or(0)
+    let Some(s) = species::lookup(id) else {
+        return 0;
+    };
+    if let Some(v) = s.tuned.get(index) {
+        return *v;
+    }
+    let common = species::Common::ALL.len();
+    if index < common {
+        return species::ridgeback::SPECIES
+            .tuned
+            .get(index)
+            .copied()
+            .unwrap_or(0);
+    }
+    if index < common + s.own.len() {
+        return s.own[index - common].lo;
+    }
+    let field = (index - common - s.own.len()) % MONSTER_FIELDS;
+    MonsterField::ALL.get(field).map_or(0, |f| f.range().0)
 }
 
 pub fn scalar(s: Scalar) -> i32 {

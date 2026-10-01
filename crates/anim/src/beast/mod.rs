@@ -46,8 +46,32 @@
 //!   the shoulders paying for it, and the counter-rotation is most of what
 //!   makes a sweep read as weight rather than as a rotating prop.
 
-pub mod ridgeback;
 pub mod sheet;
+
+// One line per species with an animation module, each followed by a blank
+// line: see `authored` below.
+
+pub mod ridgeback;
+
+// pub mod gnawers;
+
+// pub mod hornback;
+
+// pub mod mireback;
+
+// pub mod sandmaw;
+
+// pub mod pair;
+
+// pub mod broodmother;
+
+// pub mod veilstalker;
+
+// pub mod mantis;
+
+// pub mod galewing;
+
+// pub mod siegeshell;
 
 use crate::ease::Ease;
 use crate::spring::Spring;

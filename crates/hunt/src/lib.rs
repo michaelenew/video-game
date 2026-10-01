@@ -79,23 +79,34 @@ pub trait Plan {
 /// One scripted fighter, playing its creature's plan.
 pub struct Hunter {
     pub who: usize,
+    /// The creature its plan is for.
+    pub species: SpeciesId,
     plan: Box<dyn Plan + Send + Sync>,
 }
 
 impl Hunter {
     /// A hunter for the Ridgeback, with its default timing and no idea how
-    /// high it jumps. What the running game's scripted partner uses.
+    /// high it jumps. What the running game's scripted partner starts as.
     pub fn new(who: usize) -> Hunter {
         Hunter {
             who,
+            species: SpeciesId::RIDGEBACK,
             plan: Box::new(plans::ridgeback::Ridgeback::new(who)),
         }
+    }
+
+    /// A hunter for whatever species, if it has a plan: default timing, and
+    /// no idea how high it jumps -- what the running game swaps in when the
+    /// creature in front of it changes.
+    pub fn for_species(species: SpeciesId, who: usize) -> Option<Hunter> {
+        plans::card(species).map(|card| Hunter::of(card, who, 0, Fx::ZERO))
     }
 
     /// A hunter playing a species' plan, seeded and knowing its own hop.
     pub fn of(card: &plans::Card, who: usize, seed: u32, hop: Fx) -> Hunter {
         Hunter {
             who,
+            species: card.species,
             plan: (card.plan)(who, seed, hop),
         }
     }

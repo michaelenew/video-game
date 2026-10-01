@@ -22,6 +22,8 @@
 //! copy*, neither of which varies with how busy the machine is.
 
 use sim::class::{ALL_CLASSES, Class};
+use sim::monster::MAX_MONSTERS;
+use sim::species::SpeciesId;
 use sim::state::MAX_PLAYERS;
 use sim::{Input, TICK_HZ, World};
 
@@ -53,7 +55,8 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
 /// rather than a one-off. Four kilobytes keeps the whole ring inside a core's
 /// L2 cache, which is what makes a save a memcpy nobody notices.
 ///
-/// Currently a little over 1.8 KiB. Raising this is a real decision -- it means
+/// About 2.8 KiB since the world gained a second creature slot for the Pair
+/// (2026-10-01: 2,856 bytes, from 2,680). Raising this is a real decision -- it means
 /// every frame and every rollback got heavier -- so change it deliberately, the
 /// way `knobs.rs` wants a reason, rather than to make a red test green.
 const SNAPSHOT_CAP: usize = 4096;
@@ -236,12 +239,16 @@ fn a_snapshot_is_a_small_flat_copy() {
 /// A way to set up a match, and what to call it when it is the one over budget.
 type Scenario = (&'static str, fn(Class) -> World);
 
-/// The two shapes a match comes in, since the creature is most of the work when
-/// it is present and none of it when it is not.
-fn scenarios() -> [Scenario; 2] {
+/// The shapes a match comes in, since the creature is most of the work when it
+/// is present and none of it when it is not -- and two creatures, the most the
+/// world holds, are twice that.
+fn scenarios() -> [Scenario; 3] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
+        ("two creatures", |c| {
+            World::hunt_with([c; MAX_PLAYERS], [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS])
+        }),
     ]
 }
 

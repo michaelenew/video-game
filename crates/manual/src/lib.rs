@@ -494,7 +494,7 @@ pub const SECTIONS: &[Section] = &[
             e("Revert", "Everything back to what is committed."),
             e(
                 "Bake",
-                "Write crates/sim/src/tuned.rs, commit it and push on the current branch.",
+                "Write crates/sim/src/tuned.rs and every creature's own tuned.rs, commit them and push on the current branch.",
             ),
             e(
                 "cargo run -p sim --bin bake_tuning",
@@ -573,11 +573,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p anim --bin bake_beast",
-                "Re-bake the Ridgeback's pose table from its recipes in crates/anim/src/beast/clips.rs. Its parts are simulation geometry, so this one writes into crates/sim.",
+                "Re-bake every creature's pose table from its recipes in crates/anim/src/beast/<species>/, each into its own crates/sim/src/species/<species>/baked.rs. Its parts are simulation geometry, so this one writes into crates/sim. --species <name> for just one.",
             ),
             e(
                 "cargo run -p anim --bin preview_beast -- <clip>",
-                "Draw the Ridgeback as a contact sheet PNG, into target/beast-preview: the creature from the side, from above, and every frame overlaid. --all for every clip, --states for the poses the simulation produces rather than the baked ones. Green is a surface you can stand on, red is a weak point, and the dashed line is how high a full hop reaches.",
+                "Draw a creature as a contact sheet PNG, into target/beast-preview: the creature from the side, from above, and every frame overlaid. --all for every clip, --states for the poses the simulation produces rather than the baked ones, --species <name> for a creature other than the Ridgeback. Green is a surface you can stand on, red is a weak point, and the dashed line is how high a full hop reaches.",
             ),
             e(
                 "cargo run -p sim --bin essence",
@@ -589,7 +589,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p sim --bin beastcheck",
-                "What the creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry.",
+                "What a creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry. --species <name> for a creature other than the Ridgeback; everything it prints is read off the species' table.",
             ),
             e(
                 "cargo run -p anim --bin preview -- <clip>",
@@ -604,8 +604,8 @@ pub const SECTIONS: &[Section] = &[
                 "Play a scripted hunt and report on it: how much of what the creature throws can be answered on sight, how long the openings are, how varied its moves are, and how long anyone stays on its back.",
             ),
             e(
-                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n>",
-                "The same, with a different class, several seeds, or the play sequence printed move by move.",
+                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n> --species <name>",
+                "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/).",
             ),
             e(
                 "cargo run -p net --bin soak",

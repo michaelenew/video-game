@@ -527,8 +527,13 @@ pub const CYCLE_SAMPLES: usize = 32;
 ///
 /// `at` runs 0 to 1. For an attack, use [`sample_phase`] instead: an attack's
 /// three phases are laid out end to end and each is read on its own.
+///
+/// A clip the species has not baked yet -- a new species before its first
+/// `bake_beast` -- reads as the rest pose.
 pub fn sample(species: &Species, clip: usize, at: Fx) -> Pose {
-    let (start, count) = species.span[clip];
+    let Some(&(start, count)) = species.span.get(clip) else {
+        return Pose::rest(species.bones.len());
+    };
     read(
         species,
         start as usize,
@@ -540,7 +545,9 @@ pub fn sample(species: &Species, clip: usize, at: Fx) -> Pose {
 
 /// Read one phase of an attack: 0 startup, 1 active, 2 recovery.
 pub fn sample_phase(species: &Species, clip: usize, which: u8, at: Fx) -> Pose {
-    let (start, count) = species.span[clip];
+    let Some(&(start, count)) = species.span.get(clip) else {
+        return Pose::rest(species.bones.len());
+    };
     let count = count as usize;
     if !species.clips[clip].phased || count < PHASE_SAMPLES * 3 {
         return sample(species, clip, at);
