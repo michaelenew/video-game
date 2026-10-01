@@ -333,8 +333,15 @@ impl PackMind for Mind {
         // Coop: more bodies, and a token more, while two are hunting. The
         // bodies once, from the den; the token held on as a standing rally
         // underneath any howl's.
+        // A brood (a pack a monster owns, `Pack::owner`) is topped up by its
+        // owner rather than from a den: the Broodmother's sacs.
         let two = pack.seen.iter().filter(|s| s.alive).count() >= 2;
-        if two && pack.memo[word::BITS] as u32 & COOP_DONE == 0 && pack.mood != mood::BROKEN {
+        let denned = pack.owner == crate::pack::NONE;
+        if two
+            && denned
+            && pack.memo[word::BITS] as u32 & COOP_DONE == 0
+            && pack.mood != mood::BROKEN
+        {
             pack.memo[word::BITS] |= COOP_DONE as i32;
             for k in 0..knob(Knob::CoopGnawers).max(0) {
                 let side = Fx::from_int(k - 1);

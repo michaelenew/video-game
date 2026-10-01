@@ -65,8 +65,14 @@ fn what_is_drawn_is_what_the_hunter_and_the_report_call_visible() {
             }
         },
     );
-    assert!(cloaked_centre > 600, "only {cloaked_centre} cloaked frames to check");
-    assert!(seen_frames > 60, "only {seen_frames} frames it was seen at all");
+    assert!(
+        cloaked_centre > 600,
+        "only {cloaked_centre} cloaked frames to check"
+    );
+    assert!(
+        seen_frames > 60,
+        "only {seen_frames} frames it was seen at all"
+    );
     // And what the report calls a blind hit -- a decloak on screen under the
     // reaction floor at commit -- never happened.
     assert_eq!(report.unanswerable, 0, "a blind hit");

@@ -26,7 +26,7 @@ pub mod sandmaw;
 
 pub mod pair;
 
-// pub mod broodmother;
+pub mod broodmother;
 
 pub mod veilstalker;
 
@@ -91,6 +91,17 @@ pub struct Look {
     pub stance: Option<Stance>,
 }
 
+/// **Parts painted by the fight's own state**, beyond whole and broken: the
+/// Broodmother's sacs, pale to red on their clocks. A set of paints, and which
+/// of them a part wears this frame -- the world and the part, to an index into
+/// `stages`, or `None` for the usual paint. Found by [`tint`], beside the look
+/// rather than in it, so a look without one says nothing.
+#[derive(Clone, Copy, Debug)]
+pub struct Tint {
+    pub stages: &'static [Paint],
+    pub stage: fn(&sim::World, usize) -> Option<usize>,
+}
+
 /// [`Look::horns`]: the world and a critter's slot, to which of its two horns
 /// are whole, or `None` for a body with none.
 pub type HornsFn = fn(&sim::World, usize) -> Option<[bool; 2]>;
@@ -145,7 +156,8 @@ pub fn look(id: SpeciesId) -> &'static Look {
 
         SpeciesId::PAIR => &pair::LOOK,
 
-        // SpeciesId::BROODMOTHER => &broodmother::LOOK,
+        SpeciesId::BROODMOTHER => &broodmother::LOOK,
+
         SpeciesId::VEILSTALKER => &veilstalker::LOOK,
 
         // SpeciesId::MANTIS => &mantis::LOOK,
@@ -154,5 +166,13 @@ pub fn look(id: SpeciesId) -> &'static Look {
 
         // SpeciesId::SIEGESHELL => &siegeshell::LOOK,
         _ => &ridgeback::LOOK,
+    }
+}
+
+/// A species' [`Tint`], if it has one.
+pub fn tint(id: SpeciesId) -> Option<&'static Tint> {
+    match id {
+        SpeciesId::BROODMOTHER => Some(&broodmother::TINT),
+        _ => None,
     }
 }

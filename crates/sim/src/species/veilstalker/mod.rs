@@ -666,6 +666,8 @@ crate::species_knobs! {
     WallLook,        "retreat","Bounding away, looks ahead for a wall",  Fixed, 0, fx(10,1);
     WallTurn,        "retreat","Bounding away, turns off a wall at (turns/frame)", Fixed, 0, fx(1,8);
     PerchDrop,       "perch",  "Comes down this far out from its perch", Fixed, 0, fx(10,1);
+    PostWidth,       "mind",   "Walks round a solid no wider than",      Fixed, 0, fx(10,1);
+    PostClear,       "mind",   "And this far off its side",              Fixed, 0, fx(5,1);
     CoopHealth,      "coop",   "Two hunters, health",                    Int, 0, 30000;
     CoopStalk,       "coop",   "Two hunters, the stalk (x)",             Fixed, 0, fx(1,1);
 }

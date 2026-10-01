@@ -32,6 +32,7 @@ pub mod objective;
 pub mod oven;
 pub mod pack;
 pub mod perception;
+pub mod reachcheck;
 pub mod shadow;
 pub mod sign;
 pub mod species;

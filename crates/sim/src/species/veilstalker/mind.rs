@@ -253,7 +253,66 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
         };
         at.add(V3::from_turns(a.add(turn)).scale(range))
     };
-    avoid_fire(m, mind, Some(inside(goal, mind)))
+    let goal = avoid_fire(m, mind, Some(inside(goal, mind)));
+    goal.map(|g| round_posts(m, mind, g))
+}
+
+/// **It walks round a trunk, not into it.** The circle it stalks on is drawn
+/// round the hunter, and a trunk standing on the chord between where it is and
+/// where it wants to be stopped it dead against the bark, pressing on for as
+/// long as the hunter stood still -- twenty minutes, once. A solid no wider
+/// than `PostWidth` on the way, nearer the line than its own half-width and
+/// `PostClear`, is passed on the side it is already on.
+fn round_posts(m: &Monster, mind: &Mind, goal: V3) -> V3 {
+    let line = fight::flat(goal.sub(m.pos));
+    if line.flat_len().raw() <= 0 {
+        return goal;
+    }
+    let dir = math::wide_normalized(line);
+    let across = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
+    let mut best: Option<(Fx, V3)> = None;
+    for s in mind.ground.solids() {
+        let half = math::half(s.max.x.sub(s.min.x)).max(math::half(s.max.z.sub(s.min.z)));
+        if half.add(half).raw() > Knob::PostWidth.fx().raw()
+            || s.max.y.raw() <= SPECIES.margin().raw()
+        {
+            continue;
+        }
+        let c = V3::new(
+            math::half(s.min.x.add(s.max.x)),
+            Fx::ZERO,
+            math::half(s.min.z.add(s.max.z)),
+        );
+        let ahead = dir.dot(fight::flat(c.sub(m.pos)));
+        if ahead.raw() <= 0 || ahead.raw() > math::wide_flat_dist(m.pos, goal).raw() {
+            continue;
+        }
+        let clear = half.add(SPECIES.margin()).add(Knob::PostClear.fx());
+        if math::flat_segment_gap(c, m.pos, goal).raw() >= clear.raw() {
+            continue;
+        }
+        if best.is_some_and(|(a, _)| a.raw() <= ahead.raw()) {
+            continue;
+        }
+        let side = if across.dot(fight::flat(m.pos.sub(c))).raw() >= 0 {
+            across
+        } else {
+            across.scale(Fx::ONE.neg())
+        };
+        // Past the post's shoulder, and never inside a stride: a way-point
+        // that close is one the walk counts as arrived at, and it turns to
+        // face the hunter -- into the bark -- and stands there.
+        let by = c.add(side.scale(clear)).add(dir.scale(clear));
+        let off = fight::flat(by.sub(m.pos));
+        let far = SPECIES.gait_stride().add(SPECIES.gait_stride());
+        let by = if math::wide_flat_len(off).raw() < far.raw() && off.flat_len().raw() > 0 {
+            m.pos.add(math::wide_normalized(off).scale(far))
+        } else {
+            by
+        };
+        best = Some((ahead, by));
+    }
+    best.map_or(goal, |(_, by)| inside(by, mind))
 }
 
 /// A goal kept inside the walls, a wall-look in from them.

@@ -69,7 +69,7 @@ pub mod sandmaw;
 
 pub mod pair;
 
-// pub mod broodmother;
+pub mod broodmother;
 
 pub mod veilstalker;
 
@@ -131,7 +131,8 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::PAIR => Some(&pair::SPECIES),
 
-        // SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
+        SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
+
         SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
 
         // SpeciesId::MANTIS => Some(&mantis::SPECIES),
@@ -223,6 +224,18 @@ pub struct MoveDecl {
     /// the Sandmaw's cone of spray, its tail's half-ring -- or a reach a solid
     /// can stop, which only the world can ask about.
     pub own_hit: bool,
+    /// **A move that always leads to another**: when its recovery ends, this
+    /// one starts at once, with no pause to think and no choice. Declared in
+    /// the move table, as `Move::aim()` is for a fighter's moves, so the chain
+    /// is a fact about the move rather than something its species remembers to
+    /// do. The Broodmother's screech, which is always followed by the slam.
+    pub then: Option<u8>,
+    /// **Its body plays no clip for it**: a move only something else throws --
+    /// the brood's bites, whose `clip` is a critter's stock pose
+    /// (`critter::pose`) rather than one of the creature's clips, or a sac
+    /// bursting. The animation factory does not phase any clip by it. Always
+    /// with `never_chosen`.
+    pub unanimated: bool,
 }
 
 impl MoveDecl {
@@ -237,7 +250,20 @@ impl MoveDecl {
             harmless: false,
             never_chosen: false,
             own_hit: false,
+            then: None,
+            unanimated: false,
         }
+    }
+
+    pub const fn unanimated(mut self) -> MoveDecl {
+        self.unanimated = true;
+        self.never_chosen = true;
+        self
+    }
+
+    pub const fn then(mut self, next: u8) -> MoveDecl {
+        self.then = Some(next);
+        self
     }
 
     pub const fn lobbed(mut self) -> MoveDecl {
@@ -300,6 +326,9 @@ pub struct Stock {
 /// creature's slot, the fighter and what they sent; what they may still do.
 pub type FromInside = fn(&mut crate::state::World, usize, usize, crate::Input) -> crate::Input;
 
+/// A body drawn that is not in the world, and how strongly: `FightDecl::apparition`.
+pub type Apparition = fn(&crate::state::World) -> Option<(crate::monster::Monster, Fx)>;
+
 /// What a species brings to a fight besides its body and its pack: the
 /// shared machinery of bestiary P4, P5 and P7, and the hooks a creature's own
 /// file plugs into. Every field defaults to nothing ([`FightDecl::PLAIN`]), and
@@ -361,7 +390,7 @@ pub struct FightDecl {
     /// placed and drawn as a creature is -- its parts and its floor marker --
     /// with no hurtbox, nothing to stand on and no brain. The Veilstalker's
     /// mimic, a decloak with nothing in it. `None` is none.
-    pub apparition: Option<fn(&crate::state::World) -> Option<(crate::monster::Monster, Fx)>>,
+    pub apparition: Option<Apparition>,
     /// **What it draws on the floor besides its bodies' telegraphs**: a
     /// stampede's lane and its lees, the solid a charge will stop at, a
     /// guard. See [`crate::sign`]. `None` draws nothing more.
@@ -451,6 +480,15 @@ pub struct FightDecl {
     /// pouncing onto a platform lands on the platform, and its circle is
     /// drawn there. `None` is the floor.
     pub lob_height: Option<fn(&crate::monster::Monster) -> Fx>,
+    // ---- a body with more legs than a clip can say ----
+    /// **Its own say on the pose**, after the shared layers: handed the
+    /// creature and the pose so far, it returns the pose to build the rig
+    /// from. For what the baked clips cannot know -- which of eight legs a
+    /// stab was given to and where it lands, a side sitting low on two broken
+    /// legs with every foot kept where it stood. A pure function of the
+    /// creature, as the pose is. `None` is the pose as it is. The
+    /// Broodmother's legs.
+    pub repose: Option<fn(&crate::monster::Monster, crate::beast::Pose) -> crate::beast::Pose>,
 }
 
 /// Something a species draws beyond its hazards and its telegraph.
@@ -578,6 +616,7 @@ impl FightDecl {
         pace: None,
         glance: None,
         lob_height: None,
+        repose: None,
     };
 }
 

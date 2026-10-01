@@ -722,10 +722,7 @@ impl Veilstalker {
             }
             // **The pounce**: out of its circle, which does not follow.
             vs::POUNCE => {
-                let t = marks.iter().find(|t| t.kind == vs::POUNCE).copied();
-                let Some(t) = t else {
-                    return None;
-                };
+                let t = marks.iter().find(|t| t.kind == vs::POUNCE).copied()?;
                 if !covers(&t, me.pos, MARGIN) {
                     if since > a.startup as i32 + a.active as i32 {
                         self.mark_done();

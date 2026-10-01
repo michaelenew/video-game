@@ -63,6 +63,9 @@ struct Skin {
     /// behind it, displaced; this is its stated fallback -- a silhouette at
     /// the same strength -- and costs nothing `view`'s budget can see.
     veil: [Handle<StandardMaterial>; VEIL_LEVELS],
+    /// The species' [`crate::species::Tint`] paints, in its order; empty for
+    /// one without.
+    stages: Vec<Handle<StandardMaterial>>,
 }
 
 /// How many strengths a part shown at less than whole is drawn in.
@@ -156,6 +159,14 @@ pub fn setup(
             broken: material(&mut materials, look.broken),
             second: material(&mut materials, darker(look.armour)),
             veil: std::array::from_fn(|level| veil_material(&mut materials, look.armour, level)),
+            stages: crate::species::tint(sp.id)
+                .map(|t| {
+                    t.stages
+                        .iter()
+                        .map(|p| material(&mut materials, *p))
+                        .collect()
+                })
+                .unwrap_or_default(),
         });
     }
     let hide = Hide { skins };
@@ -272,10 +283,13 @@ pub fn place(
         *visible = Visibility::Inherited;
 
         let skin_of = hide.of(beast.species);
+        let tinted = crate::species::tint(beast.species)
+            .and_then(|t| (t.stage)(&sim.cur, index))
+            .and_then(|i| skin_of.stages.get(i));
         let wanted = if shown.raw() < sim::Fx::ONE.raw() {
             &skin_of.veil[veil_level(shown.to_f32_for_render())]
         } else {
-            skin(skin_of, &beast, slot.min(MAX_MONSTERS - 1), index)
+            tinted.unwrap_or_else(|| skin(skin_of, &beast, slot.min(MAX_MONSTERS - 1), index))
         };
         if material.0 != *wanted {
             material.0 = wanted.clone();
