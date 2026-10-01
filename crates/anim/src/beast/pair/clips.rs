@@ -684,10 +684,12 @@ fn dive() -> Recipe {
         Clip::Dive,
         vec![
             Key::eased(0.0, Pose::standing(), Ease::IN),
-            Key::eased(mark(Clip::Dive, 0, 0.6), over, Ease::HOLD),
-            Key::eased(mark(Clip::Dive, 0, 0.95), over, Ease::STRIKE),
-            Key::eased(mark(Clip::Dive, 1, 0.3), falling, Ease::IN),
-            Key::eased(mark(Clip::Dive, 1, 0.55), landed(), Ease::OUT),
+            Key::eased(mark(Clip::Dive, 0, 0.5), over, Ease::HOLD),
+            // Off the lip at twenty-two (`DiveLeave`), down on the first
+            // live frame.
+            Key::eased(at_frame(Clip::Dive, 22.0), over, Ease::STRIKE),
+            Key::eased(at_frame(Clip::Dive, 26.0), falling, Ease::IN),
+            Key::eased(mark(Clip::Dive, 1, 0.1), landed(), Ease::OUT),
             Key::eased(mark(Clip::Dive, 2, 0.5), landed(), Ease::SMOOTH),
             Key::at(1.0, Pose::standing()),
         ],

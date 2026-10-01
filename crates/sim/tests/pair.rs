@@ -414,3 +414,18 @@ fn debug_flick() {
           (1..4).map(|b| q.bone[pair::bones::TAIL1 + b - 1].x.to_f32_for_render()).collect::<Vec<_>>());
     }
 }
+
+#[test]
+#[ignore]
+fn debug_dodge_distance() {
+    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
+    for _ in 0..30 {
+        w.advance([Input::default(); MAX_PLAYERS]);
+    }
+    let start = w.players[0].pos;
+    for f in 0..30 {
+        let i = if f < 2 { Input::aimed(Input::SHIFT | Input::W, 0) } else { Input::default() };
+        w.advance([i, Input::default()]);
+        println!("{f} {:.2} {:?}", w.players[0].pos.sub(start).x.to_f32_for_render(), w.players[0].action);
+    }
+}

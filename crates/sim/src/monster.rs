@@ -992,6 +992,7 @@ impl Monster {
             let here = presence(self, &rig);
             rig.buried = here.buried;
             rig.unmountable = here.unmountable;
+            rig.passable = here.passable;
         }
         rig
     }
@@ -1177,7 +1178,7 @@ impl Monster {
         let rig = self.rig();
         let sp = self.sp();
         sp.parts.iter().enumerate().any(|(index, part)| {
-            if !part.shape.solid || !rig.there(index) {
+            if !part.shape.solid || !rig.blocks(index) {
                 return false;
             }
             let sh = sp.shape(index);
@@ -1201,7 +1202,7 @@ impl Monster {
         let sp = self.sp();
         let mut best = Fx::ZERO;
         for (index, part) in sp.parts.iter().enumerate() {
-            if !part.shape.solid || !rig.there(index) {
+            if !part.shape.solid || !rig.blocks(index) {
                 continue;
             }
             let sh = sp.shape(index);
@@ -1231,7 +1232,7 @@ impl Rig {
 
         for (index, part) in self.species.parts.iter().enumerate() {
             let part = part.shape;
-            if !part.solid || !self.there(index) {
+            if !part.solid || !self.blocks(index) {
                 continue;
             }
             let sh = self.species.shape(index);

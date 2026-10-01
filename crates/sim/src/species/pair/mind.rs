@@ -101,6 +101,23 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
     if !ours {
         return 0;
     }
+    // **The Striker strikes from behind.** Until it is round the far side of
+    // the target from its partner, all it throws is the tail at whoever
+    // comes close -- or the ambush at a body it saw move fast.
+    if role == flag::STRIKER && st & state::PARTNER != 0 && !matches!(kind, TRIP | PERCH) {
+        let mate = fight::pos_of(lore, 1 - slot);
+        let round = fight::cos_between(
+            fight::flat(m.pos.sub(target)),
+            fight::flat(mate.sub(target)),
+        );
+        let behind = round.raw() <= fight::cos_turns(Knob::BehindAngle.fx()).raw();
+        let v = m.brain.seen_vel;
+        let fast = math::wide_flat_len(V3::new(v.x, Fx::ZERO, v.z)).raw()
+            > Knob::SeenFastSpeed.fx().raw();
+        if !behind && !(kind == AMBUSH && fast) {
+            return 0;
+        }
+    }
     let signature = matches!(
         (role, kind),
         (flag::HOLDER, RAKE | SWAT) | (flag::STRIKER, AMBUSH | TRIP)

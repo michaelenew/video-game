@@ -391,6 +391,9 @@ pub struct Rig {
     /// **Parts nobody can stand on this frame**, though they are there to
     /// hit and to walk into: the Sandmaw, which is only ridden beached.
     pub unmountable: u64,
+    /// **Parts there to hit, and nothing to walk into this frame**: a body in
+    /// the air over you. The Pair mid-leap, which a dodge toward passes under.
+    pub passable: u64,
 }
 
 /// What of a creature is there this frame: see [`Rig::buried`] and
@@ -399,6 +402,8 @@ pub struct Rig {
 pub struct Presence {
     pub buried: u64,
     pub unmountable: u64,
+    /// See [`Rig::passable`].
+    pub passable: u64,
 }
 
 impl Rig {
@@ -407,9 +412,15 @@ impl Rig {
         self.buried & (1u64 << (part as u64 & 63)) == 0
     }
 
+    /// Does this part push a body out of it this frame -- there, and not
+    /// passed under?
+    pub fn blocks(&self, part: usize) -> bool {
+        (self.buried | self.passable) & (1u64 << (part as u64 & 63)) == 0
+    }
+
     /// Can this part be stood on this frame, as far as its creature says?
     pub fn boardable(&self, part: usize) -> bool {
-        (self.buried | self.unmountable) & (1u64 << (part as u64 & 63)) == 0
+        (self.buried | self.unmountable | self.passable) & (1u64 << (part as u64 & 63)) == 0
     }
 
     /// Place every bone. One forward pass, parents before children.
@@ -448,6 +459,7 @@ impl Rig {
             species,
             buried: 0,
             unmountable: 0,
+            passable: 0,
         }
     }
 

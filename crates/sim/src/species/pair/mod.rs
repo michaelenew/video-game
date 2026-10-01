@@ -567,6 +567,7 @@ crate::species_knobs! {
     // the leaps
     PounceLeave,     "leap",  "Pounce leaves the ground at startup frame", Frames, 0, 120;
     PounceLand,      "leap",  "Pounce lands at active frame",            Frames, 0, 60;
+    DiveLeave,       "leap",  "Dive leaves the lip at startup frame",    Frames, 0, 120;
     TwinLeave,       "leap",  "Twin leaves the ground at startup frame", Frames, 0, 120;
     TwinLand,        "leap",  "Twin lands at active frame",              Frames, 0, 60;
     DiveLand,        "leap",  "Dive lands at active frame",              Frames, 0, 60;

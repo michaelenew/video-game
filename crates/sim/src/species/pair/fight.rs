@@ -54,6 +54,7 @@ pub static FIGHT: FightDecl = FightDecl {
     marks: Some(marks),
     pace: Some(pace),
     glance: Some(glance),
+    presence: Some(presence),
     ..FightDecl::PLAIN
 };
 
@@ -308,6 +309,7 @@ pub fn flight(kind: u8) -> (i32, i32) {
     let leave = match kind {
         POUNCE => Knob::PounceLeave.raw(),
         TWIN => Knob::TwinLeave.raw(),
+        DIVE => Knob::DiveLeave.raw(),
         _ => a.startup as i32,
     }
     .min(a.startup as i32);
@@ -330,6 +332,17 @@ pub fn airborne(m: &Monster) -> bool {
     };
     let (leave, air) = flight(kind);
     e > leave && e <= leave + air
+}
+
+/// **A cat in the air is passed under**: there to hit, nothing to walk
+/// into, from the frame its leap leaves the ground to the frame it lands. A
+/// dodge toward a pounce goes under the arc (`the-pair.md` §2), and a body
+/// whose legs were solid at head height would turn it aside.
+fn presence(m: &Monster, _rig: &crate::beast::Rig) -> crate::beast::Presence {
+    crate::beast::Presence {
+        passable: if airborne(m) { u64::MAX } else { 0 },
+        ..Default::default()
+    }
 }
 
 // ---------------------------------------------------------------------------

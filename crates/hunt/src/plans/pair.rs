@@ -70,8 +70,11 @@ const SLOP_LATE: i32 = 3;
 const LEAP_HOLD: u16 = 24;
 /// How far past a marker's edge counts as out of it.
 const MARGIN: Fx = Fx::ratio(5, 10);
+/// How near a leap's circle has to be to count as aimed at it: the circle
+/// keeps following until the cat leaves the ground.
+const FOLLOWS: Fx = Fx::from_int(3);
 /// Where it likes to stand from the nearer cat: outside the paws.
-const KEEP: Fx = Fx::ratio(70, 10);
+const KEEP: Fx = Fx::ratio(50, 10);
 /// Two cats wider apart than this, seen from it, is one too many to watch.
 const SPREAD: Fx = Fx::ratio(18, 100);
 /// A cat it has not seen for this long is one it goes looking for.
@@ -81,9 +84,11 @@ const SWING_GAP: u16 = 18;
 /// Frames of an opening kept back to get out in.
 const EXIT: i32 = 8;
 /// Frames after a dodge before another.
-const DODGE_REST: u16 = 18;
+const DODGE_REST: u16 = 2;
 /// The pounce's tail is up by this frame of its coil.
 const FLICK: i32 = 13;
+/// A cat last seen this far off is no threat to a swing at the other.
+const FAR: Fx = Fx::from_int(9);
 /// Frames between the Elementalist's stones.
 const STONE_GAP: u16 = 240;
 
@@ -337,6 +342,35 @@ impl Plan for Pair {
             return Input::default();
         }
 
+        if std::env::var_os("PAIR_DEBUG").is_some() {
+            let show = |m: &Option<Monster>| {
+                m.map(|m| {
+                    format!(
+                        "{:?} r{} ({:.1},{:.1}) d{:.1} aim ({:.1},{:.1}) cov {}",
+                        m.doing,
+                        fight::role(&m),
+                        m.pos.x.to_f32_for_render(),
+                        m.pos.z.to_f32_for_render(),
+                        wide_flat_dist(m.pos, me.pos).to_f32_for_render(),
+                        m.aimed_at().x.to_f32_for_render(),
+                        m.aimed_at().z.to_f32_for_render(),
+                        marker_covers(&m, me.pos, MARGIN)
+                    )
+                })
+            };
+            eprintln!(
+                "{} me ({:.1},{:.1}) hp {} {:?} look {:.2} | {:?} | {:?} | intent {:?}",
+                w.frame,
+                me.pos.x.to_f32_for_render(),
+                me.pos.z.to_f32_for_render(),
+                me.health,
+                me.action,
+                self.look.to_f32_for_render(),
+                show(&cats[0]),
+                show(&cats[1]),
+                self.intent
+            );
+        }
         if self.leap_left > 0 {
             let dir = keep_in(w, me.pos, self.leap_dir);
             return self.turn_and(w, &me, None, dir, Input::SPACE);
@@ -421,7 +455,10 @@ impl Pair {
                         }
                         continue;
                     }
-                    if !marker_covers(m, me.pos, MARGIN) || e < FLICK {
+                    // **Aimed at it, near enough**: the circle follows it
+                    // until the cat leaves the ground, so a circle a few
+                    // metres off now is on it by then.
+                    if !marker_covers(m, me.pos, FOLLOWS) || e < FLICK {
                         continue;
                     }
                     if self.dodge_left == 0 && me.action.actionable() {
@@ -435,11 +472,11 @@ impl Pair {
                 // have left the ground -- sideways, off the line they come
                 // in on.
                 pair::TWIN => {
-                    if !marker_covers(m, me.pos, MARGIN) {
+                    if !marker_covers(m, me.pos, FOLLOWS) {
                         continue;
                     }
                     let leave = Knob::TwinLeave.raw();
-                    let go = leave + 1 - REACTION as i32 + self.slop.max(0);
+                    let go = leave + 3 - REACTION as i32 + self.slop.max(0);
                     if e < go {
                         self.intent = LATE;
                         return Some(self.turn_and(w, me, Some(middle(m)), V3::ZERO, 0));
@@ -513,24 +550,30 @@ impl Pair {
                     };
                     return Some(self.turn_and(w, me, Some(middle(m)), out, bits));
                 }
-                // The dive: under the lip, if it can get there; out if not.
+                // The dive: under the lip if it is near; otherwise out of
+                // the circle, dodged once it has left the lip and can no
+                // longer follow.
                 pair::DIVE => {
-                    if !marker_covers(m, me.pos, MARGIN) {
+                    if !marker_covers(m, me.pos, FOLLOWS) {
                         continue;
                     }
                     let to = flat(m.pos.sub(me.pos));
-                    if to_live > 12 {
+                    let lip = Knob::DiveLip.fx().add(Fx::from_int(2));
+                    if to.flat_len().raw() < lip.raw() {
                         self.intent = LIP;
                         return Some(self.turn_and(w, me, Some(middle(m)), unit(to, V3::ZERO), 0));
                     }
                     self.intent = EVADE;
-                    let bits = if self.dodge_left == 0 && me.action.actionable() && to_live <= 3 {
+                    let go = Knob::DiveLeave.raw() + 3 - REACTION as i32 + self.slop.max(0);
+                    let side = V3::new(to.z.neg(), Fx::ZERO, to.x);
+                    let side = keep_in(w, me.pos, unit(side, V3::ZERO));
+                    let bits = if self.dodge_left == 0 && me.action.actionable() && e >= go {
                         self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
                         Input::SHIFT
                     } else {
                         0
                     };
-                    return Some(self.turn_and(w, me, Some(middle(m)), unit(to, V3::ZERO), bits));
+                    return Some(self.turn_and(w, me, Some(middle(m)), side, bits));
                 }
                 _ => {}
             }
@@ -551,7 +594,7 @@ impl Pair {
         let poke_busy = (poke.startup + poke.active + poke.recovery) as i32;
         let heavy_busy = crate::heavy_commitment(me.class) as i32;
         let reach = poke.reach.add(Fx::ONE);
-        let mut best: Option<(usize, Monster, i32)> = None;
+        let mut best: Option<(usize, Monster, i32, i32)> = None;
         for (s, m) in cats.iter().enumerate() {
             let Some(m) = m else { continue };
             let open = matches!(
@@ -569,7 +612,13 @@ impl Pair {
                 Some(o) => {
                     let down = matches!(o.doing, Doing::Toppled { .. } | Doing::Stumble { .. });
                     let in_sight = cats[other].is_some();
-                    down || in_sight && !marker_covers(&o, me.pos, MARGIN)
+                    // Out of sight, it is where it was last seen: far enough,
+                    // recently enough, is safe enough.
+                    let far = self.known[other].is_some_and(|(at, f)| {
+                        seen.frame.saturating_sub(f) < STALE
+                            && wide_flat_dist(at, me.pos).raw() > FAR.raw()
+                    });
+                    down || in_sight && !marker_covers(&o, me.pos, MARGIN) || !in_sight && far
                 }
             };
             if !safe {
@@ -579,14 +628,26 @@ impl Pair {
             if window <= poke_busy + EXIT {
                 continue;
             }
+            // The other one busy for long enough that a big swing is over
+            // before it could start anything: dead, down, or in a recovery.
+            let other_busy = match seen.cats[other].filter(|o| o.alive()) {
+                None => i32::MAX,
+                Some(o) if cats[other].is_some() => match o.doing {
+                    Doing::Recovery { .. } | Doing::Toppled { .. } | Doing::Stumble { .. } => {
+                        o.frames_until_free() as i32
+                    }
+                    _ => 0,
+                },
+                Some(_) => 0,
+            };
             // The wounded one first, at the bond.
             let wounded = fight::below(m, Knob::BondHealth.fx(), false);
             let score = window + if wounded { 200 } else { 0 };
-            if best.is_none_or(|(_, _, b)| score > b) {
-                best = Some((s, *m, score));
+            if best.is_none_or(|(_, _, b, _)| score > b) {
+                best = Some((s, *m, score, other_busy));
             }
         }
-        let (_, m, _) = best?;
+        let (_, m, _, other_busy) = best?;
         let target = middle(&m);
         let d = wide_flat_dist(target, me.pos);
         let window = m.frames_until_free() as i32 - REACTION as i32;
@@ -616,7 +677,7 @@ impl Pair {
             && self.facing(me, target, Fx::ratio(3, 100));
         let swing = if ready {
             self.cooldown = SWING_GAP;
-            if window - walk_frames > heavy_busy + EXIT {
+            if window - walk_frames > heavy_busy + EXIT && other_busy > heavy_busy - REACTION as i32 {
                 heavy(me.class)
             } else {
                 Input::LEFT
