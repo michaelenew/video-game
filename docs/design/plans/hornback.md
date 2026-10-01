@@ -6,17 +6,13 @@ implements: ../creatures/hornback.md
 
 # Hornback herd — action plan
 
-> **State, 2026-10-01 (evening).** M1–M4 and M6 built and playing: the
-> species, both arenas (the meadow; the crossing is a stub), boulders as
-> solid hazards, the charge's swept stop and stun, cracks, wary, the
-> stampede held to its lane and lees, hook/trample/shoulder/guard/horns,
-> kicks, the hunter's §9 plan and the report lines. Harness (12 seeds):
-> Champion 12/12 in ~112 s, Elementalist 12/12, Bulwark 12/12 (slow,
-> ~220 s), Reaver 6/12, Blood mage 0/12 (low damage; the plan only
-> sweeps), Dual mage 0/12 (known harness gap). Bull health is 2500 (doc
-> 3500). Next: M5 riding, M8 drawing, M7 the crossing, M9 docs; then the
-> Reaver/Blood mage/Bulwark tuning. `crates/sim/examples/hb_probe.rs` and
-> `crates/hunt/examples/hb_watch.rs` are local scratch tools, uncommitted.
+> **State, 2026-10-01 (built).** Every milestone below is built; the
+> numbers and the decisions to review are the spec's §13. Open: the Blood
+> mage's plan (5/24: it does not use her pools), the Dual mage (1/24, the
+> known harness gap), the two-hunter crossing (1/12), the Bulwark and the
+> Reaver long (160–190 s), and the carter's key (trophies are one per
+> creature and temper). `crates/sim/examples/hb_probe.rs` and
+> `crates/hunt/examples/` are local scratch tools, uncommitted.
 
 The specification is [`../creatures/hornback.md`](../creatures/hornback.md);
 the recipes are [`../critters.md`](../critters.md) §6,
@@ -51,11 +47,11 @@ the recipes are [`../critters.md`](../critters.md) §6,
       stun, cracks, wary, the edge pull-up, stones and shields. Charge tests.
 - [x] **M4 · The close game.** Hook, Trample, Shoulder, Guard and horns, cow
       kicks, strain. Their tests.
-- [ ] **M5 · Riding a cow.** Mountable critter, the buck, grip. Buck test,
+- [x] **M5 · Riding a cow.** Mountable critter, the buck, grip. Buck test,
       `beastcheck`-style print of a cow's back against every hop.
-- [ ] **M6 · The brain, the hunter, the report.** Scoring, interpose,
+- [x] **M6 · The brain, the hunter, the report.** Scoring, interpose,
       desperation, the §9 plan and report lines; tuning passes.
-- [ ] **M7 · The crossing.** The cart (P7), its arena, the escort plan.
-- [ ] **M8 · Reading it.** Stock poses, horns, telegraph screenshots.
-- [ ] **M9 · World, docs, browser.** Trophy and tempers; doc "Where it
+- [x] **M7 · The crossing.** The cart (P7), its arena, the escort plan.
+- [x] **M8 · Reading it.** Stock poses, horns, telegraph screenshots.
+- [x] **M9 · World, docs, browser.** Trophy and tempers; doc "Where it
       landed"; README, manual; web smoke; merge main; checks; push.

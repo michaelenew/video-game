@@ -32,7 +32,7 @@ the re-baked pose table is the same table.
 | `clips`, `stock` | `ClipDecl` (name, looping, phased) per clip, and which clips stand for idle, walk, gallop, flinch, stumble, topple and dead. |
 | `span`, `rows`, `row` | The baked pose table, from the species' own `baked.rs`. |
 | `own`, `tuned`, `tuned_path` | Its own knobs, and its own baked tuning file. |
-| `fight` | What it brings to the fight besides its body and pack: its hazard kinds, its defended things, its perception filter and whether it hears, whether it collides with solids, the layout of its share of the hunt's lore, and its hooks (`frame`, `bumped`, `shown`). `FightDecl::PLAIN` for none of it, which is the Ridgeback. See [hazards.md](hazards.md). |
+| `fight` | What it brings to the fight besides its body and pack: its hazard kinds, its defended things, its perception filter and whether it hears, whether it collides with solids, the layout of its share of the hunt's lore, and its hooks (`frame`, `bumped`, `shown`, and `signs` -- the shapes it draws on the floor, `sim::sign`, added with the Hornback). `FightDecl::PLAIN` for none of it, which is the Ridgeback. See [hazards.md](hazards.md). |
 
 `Monster` keeps a `SpeciesId` (one byte) in the snapshot and reads the rest
 through `Monster::sp()`. `beast::Rig` carries the `&'static Species` it was built

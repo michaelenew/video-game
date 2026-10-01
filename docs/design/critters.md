@@ -148,6 +148,31 @@ before), `pack::give_back` and `pack::lead_of` public for a species' own
 rules, and `pack::frames_until_free` -- the soonest hit a pack could land,
 what the report's four windows are cut by in a fight that is only a pack.
 
+**Added with the Hornback**, each generic and each defaulted to nothing:
+`PackMind::mirrored` (a move's row is authored for one side and thrown to the
+other: the hook from either horn), `PackMind::guarded` (a fighter's blow on a
+critter, before it lands -- `pack::Blow` in, `pack::Guarded::{Lands, Bounces,
+Breaks}` out: the bull's guard and its horns), `PackMind::telegraph` and
+`pack::telegraph` (what a windup will really do, as its species worked it out --
+the charge's lane cut short at the rock it will meet; the renderer's marker and
+the overlay read it), `PackMind::surface` (how a mountable back is moving,
+pitch and heave: the buck), `PackMind::frames_until_free` (a species' own
+answer to the report's window, when the generic soonest-hit is wrong for it)
+and `PackMind::spares` (a critter's hit passes over a fighter: one cow tramples
+a fallen hunter, the rest step round). **Riding a critter**:
+`CritterKind::mountable`, `critter::mount_of` / `ridden` (a mount slot's two
+high bits say "a critter"), `Critter::back_point` and `rideable`; the ride is
+the Ridgeback's grip test against what the back does under the feet
+(`state::rider_acts`, shared with the monster ride, and `step_critter_rider`),
+and `critcheck::lands_on` checks that every class can jump onto a kind.
+Critter health runs to 8000; the stock poses run from the Gnawers' six to
+fourteen (paw, hook, lean, brace, bellow, kick, buck, gallop); `beastcheck`
+prints a mountable kind's back. **Floor signs** (`sim::sign`,
+`FightDecl::signs`, `World::signs`): a species draws shapes on the floor that
+are not one body's telegraph -- a stampede lane, the lees in it, the ring on
+the rock a charge will stop at -- each saying *coming*, *live*, *clear*,
+*stops*, *no* or *faint*; the renderer and the hunter's plan read the same list.
+
 **What a species supplies** is `pack::PackMind`, every method defaulted to the
 generic pack above: `appetite` (how much a critter wants a move now -- the
 default is the monster's tent on range and bearing times its appetite),
@@ -274,10 +299,13 @@ one shifts every later index in the baked file.
   `Pack::rally`; scatter, rout, regroup and the leader's death are knobs; the
   den is `Pack::home` (set it in `frame` if it is not where they mustered).
   Scramble and gnaw are the species' own.
-- **Hornback**: the bull is a kind with a role and its extra state in
-  `Pack::memo`; the herd's five states and flocking are `PackMind::frame` and
-  `steer`; cows that push are `yields`. The charge's swept stop, solids with a
-  health, and a ride on a critter are its own to build.
+- **Hornback** (built 2026-10-01): the bull is a kind with a role and its
+  extra state in `Pack::memo`; the herd's five states and flocking are
+  `PackMind::frame` and `steer`; the charge's swept stop, the stampede's lane
+  and the boulders (hazard cells that stand as solids) are its rules
+  (`FightDecl::frame`); the ride on a cow is the generic critter ride above.
+  Cows push fighters on the floor out of their boxes in the species' rules,
+  not by `yields`, so an airborne hunter can land on a back.
 - **Broodmother**: her species has a body and `pack: Some`; the brood never
   routs (`RoutShare` 0); `OwnerTokens` is her share of the budget; her sacs
   spawn through `pack::spawn` from `PackMind::frame`, which is handed the herd
