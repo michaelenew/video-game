@@ -20,6 +20,7 @@ use crate::bulwark;
 use crate::camera;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
+use crate::critter::{self, Critters};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::dual;
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, quarry_victim};
@@ -31,6 +32,7 @@ use crate::monster::{
     self, Doing, Herd, MAX_MONSTERS, Monster, Quarry, mount_of, mount_part, mount_slot,
 };
 use crate::moves;
+use crate::pack::{self, Pack};
 use crate::shadow;
 use crate::species::SpeciesId;
 use crate::stones::{self, Field};
@@ -585,6 +587,12 @@ pub struct Player {
     /// the telegraph worth nothing. You commit to a place when you commit to
     /// the move.
     pub aim_path: Path,
+    /// **How far below the shoulder a standing swing meets something short**,
+    /// in metres (zero or below), from `aim::stoop`. Zero whenever only
+    /// fighters are about. A swing's path carries it already; the Dual mage's
+    /// wing, which lies flat at the shoulder when she stands, reads it here so
+    /// that it comes down onto a gnawer as a punch would. See `aim::stoop`.
+    pub stoop: Fx,
     /// Which of the Elementalist's structure slots holds the stone she raised
     /// with the mechanic key still down, or [`NO_STONE`].
     ///
@@ -1048,6 +1056,7 @@ impl Default for Player {
             ride_clip: u8::MAX,
             beam_reach: Fx::ZERO,
             aim_path: Path::default(),
+            stoop: Fx::ZERO,
             channelled: Fx::ZERO,
             charging_stone: NO_STONE,
             f_held: false,
@@ -1095,6 +1104,14 @@ pub struct World {
     /// change of arena has to land on the same frame for both peers and roll
     /// back with everything else. See `docs/design/arenas.md`.
     pub arena: ArenaId,
+    /// **Small bodies** -- a pack's critters, up to [`critter::MAX_CRITTERS`]
+    /// of them, and whose they are. Every slot empty outside a pack fight. See
+    /// `crate::critter` and `docs/design/critters.md`.
+    pub critters: Critters,
+    /// The brain that drives them, when there is a pack: one per fight. A
+    /// creature that is only a pack (the Gnawers) has this and no monster; a
+    /// creature that owns one (the Broodmother) has both.
+    pub pack: Option<Pack>,
 }
 
 impl World {
@@ -1114,6 +1131,8 @@ impl World {
             gusts: [None; MAX_GUSTS],
             monsters: [None; MAX_MONSTERS],
             arena: ArenaId::PROVING_GROUND,
+            critters: Critters::NONE,
+            pack: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1161,7 +1180,21 @@ impl World {
         let mut w = World::with_classes(classes);
         w.arena = arena::lookup(place).map_or(ArenaId::PROVING_GROUND, |a| a.id);
         for (slot, species) in herd.iter().enumerate() {
-            w.monsters[slot] = species.map(Monster::new);
+            let Some(id) = species else { continue };
+            let sp = id.get();
+            // A body, if it has one; a pack, if it brings one. The first pack
+            // named is the fight's -- one per world -- and a body that brings
+            // it owns it.
+            if sp.has_body() {
+                w.monsters[slot] = Some(Monster::new(*id));
+            }
+            if sp.pack.is_some() && w.pack.is_none() {
+                let mut pack = Pack::new(*id, V3::ZERO);
+                if sp.has_body() {
+                    pack.owner = slot as u8;
+                }
+                w.pack = Some(pack);
+            }
         }
         w.reset_positions();
         w
@@ -1175,11 +1208,20 @@ impl World {
     /// The same fight from the top: these classes, the same creatures, the
     /// same arena. What a reset or a class change starts.
     pub fn restarted(&self, classes: [Class; MAX_PLAYERS]) -> World {
-        World::hunt_in(
-            classes,
-            self.monsters.map(|m| m.map(|m| m.species)),
-            self.arena,
-        )
+        World::hunt_in(classes, self.hunted(), self.arena)
+    }
+
+    /// The creatures this fight is against, one per slot, as `hunt_with`
+    /// takes them: the bodies in their slots, and a pack that has no body in
+    /// the first slot nobody holds.
+    pub fn hunted(&self) -> [Option<SpeciesId>; MAX_MONSTERS] {
+        let mut herd = self.monsters.map(|m| m.map(|m| m.species));
+        if let Some(pack) = self.pack.filter(|p| p.owner == pack::NONE) {
+            if let Some(free) = herd.iter_mut().find(|s| s.is_none()) {
+                *free = Some(pack.species);
+            }
+        }
+        herd
     }
 
     /// Where the fight is.
@@ -1212,7 +1254,7 @@ impl World {
     /// Is there anything to hunt? The one condition friendly fire, targets and
     /// the round's end all read: a creature's presence rather than a flag.
     pub fn hunting(&self) -> bool {
-        self.monsters.iter().any(Option::is_some)
+        self.monsters.iter().any(Option::is_some) || self.pack.is_some()
     }
 
     /// The first creature, for the code and tools that are about one: the
@@ -1283,6 +1325,32 @@ impl World {
             beast.brain.grace = sp.hunt_grace();
             hunter_spawn.get_or_insert(sp.hunter_spawn());
             *place = Some(beast);
+        }
+        // The pack, mustered where its species says: in a knot at its own
+        // spawn distance, facing the hunters, or beside the monster that owns
+        // it. Its home -- the den it runs for -- is where it mustered.
+        if let Some(old) = self.pack {
+            let sp = old.species.get();
+            let owner = self
+                .monsters
+                .get(old.owner as usize)
+                .and_then(|m| m.as_ref());
+            let (home, facing) = match (owner, here.hunt_marks()) {
+                (Some(beast), _) => (beast.pos, V3::from_turns(beast.yaw)),
+                (None, Some(marks)) => {
+                    let mark = marks.creatures[0];
+                    (V3::new(mark.at.x, Fx::ZERO, mark.at.z), mark.facing)
+                }
+                (None, None) => (
+                    V3::new(sp.pack_fx(pack::PackKnob::Spawn), Fx::ZERO, Fx::ZERO),
+                    V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO),
+                ),
+            };
+            self.pack = pack::muster(old.species, home, facing, &mut self.critters).map(|mut p| {
+                p.owner = old.owner;
+                p
+            });
+            hunter_spawn.get_or_insert(sp.hunter_spawn());
         }
         if let Some(back) = hunter_spawn {
             for (i, p) in self.players.iter_mut().enumerate() {
@@ -1375,6 +1443,36 @@ impl World {
             *place = Some(beast);
         }
 
+        // The pack, after the creatures for the same reason riders are: a
+        // critter standing on one is carried by a pose that is final for this
+        // frame. It sees the fighters' bodies and nothing of their buttons --
+        // see `pack::Seen`.
+        if let Some(mut brain) = self.pack {
+            let seen = self.players;
+            let beasts = self.monsters;
+            let effects = self.effects;
+            let nobody = Critters::NONE;
+            let scene = Scene {
+                stones: &field,
+                players: &seen,
+                effects: &effects,
+                quarry: &beasts,
+                critters: &nobody,
+                arena: self.arena.get(),
+            };
+            pack::step(
+                &mut brain,
+                &mut self.critters,
+                &pack::World {
+                    players: &seen,
+                    herd: &beasts,
+                    scene: &scene,
+                    frame: self.frame,
+                },
+            );
+            self.pack = Some(brain);
+        }
+
         // **The creature's turn goes into the look, here and nowhere else.**
         //
         // A rider's look angle is the aim on the wire plus whatever the animal
@@ -1412,6 +1510,7 @@ impl World {
         // fighter mutably -- and snapshotting is right anyway: both players
         // aim against the same world, so neither ordering wins.
         let beast = self.monsters;
+        let crowd = self.critters;
         let seen = self.players;
         let effects = self.effects;
         // Who has hold of somebody, worked out before anybody moves. The
@@ -1434,6 +1533,7 @@ impl World {
                 players: &seen,
                 effects: &effects,
                 quarry: &beast,
+                critters: &crowd,
                 arena: self.arena.get(),
             };
             step_player(p, i, input, &field, &beast, &scene, carrying[i]);
@@ -1878,6 +1978,7 @@ impl World {
 
         if self.hunting() {
             self.trade_with_the_creature();
+            self.trade_with_the_pack();
         }
 
         self.step_shadows();
@@ -1889,7 +1990,11 @@ impl World {
             &mut self.players,
             &standing,
             versus,
-            &mut self.monsters,
+            pack::Prey {
+                herd: &mut self.monsters,
+                critters: &mut self.critters,
+                pack: &mut self.pack,
+            },
             self.arena.get(),
         );
         debris::step(
@@ -1897,7 +2002,11 @@ impl World {
             &mut self.players,
             &standing,
             versus,
-            &mut self.monsters,
+            pack::Prey {
+                herd: &mut self.monsters,
+                critters: &mut self.critters,
+                pack: &mut self.pack,
+            },
             self.arena.get(),
         );
         let mut bursts: gust::Bursts = [None; gust::MAX_GUSTS];
@@ -1906,7 +2015,11 @@ impl World {
             &mut self.players,
             &standing,
             versus,
-            &mut self.monsters,
+            pack::Prey {
+                herd: &mut self.monsters,
+                critters: &mut self.critters,
+                pack: &mut self.pack,
+            },
             self.arena.get(),
             &mut bursts,
         );
@@ -1949,8 +2062,11 @@ impl World {
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
-            // The hunt is won when every creature in it is down.
-            let winner = if !self.monsters.iter().flatten().any(Monster::alive) {
+            // The hunt is won when every creature in it is down, and every
+            // small body dead or gone.
+            let winner = if !self.monsters.iter().flatten().any(Monster::alive)
+                && pack::beaten(&self.critters)
+            {
                 0
             } else if !standing {
                 QUARRY
@@ -2143,6 +2259,11 @@ impl World {
             h.write_u32(p.r_held as u32);
             h.write_u32(p.side_b_held as u32);
             h.write_u32(p.breaking as u32);
+            // Only when a swing stooped: a fight with nothing short in it
+            // hashes as it did before anything could be.
+            if p.stoop != Fx::ZERO {
+                h.write_i32(p.stoop.raw());
+            }
             for f in &p.repeat_lock {
                 h.write_u32(*f as u32);
             }
@@ -2214,6 +2335,46 @@ impl World {
         // arenas were data, and the pinned hunts still mean what they say.
         if self.arena != ArenaId::PROVING_GROUND {
             h.write_u32(0xA0 | (self.arena.0 as u32) << 8);
+        }
+        // The pack and its bodies, last, and only when there is one: a fight
+        // without small bodies hashes exactly as it did before there were any.
+        if let Some(p) = &self.pack {
+            h.write_u32(0xC0 | (p.species.0 as u32) << 8);
+            for v in [p.mood, p.owner, p.leader, p.boost, p.mustered, p.lost] {
+                h.write_u32(v as u32);
+            }
+            for v in [p.mood_left, p.boost_left, p.glance_left, p.grace] {
+                h.write_u32(v as u32);
+            }
+            for r in &p.rest {
+                h.write_u32(*r as u32);
+            }
+            h.write_u32(p.rng);
+            hash_v3(&mut h, &p.home);
+            for s in &p.seen {
+                hash_v3(&mut h, &s.pos);
+                hash_v3(&mut h, &s.vel);
+                h.write_u32(s.facing as u32);
+                h.write_u32(s.alive as u32 | (s.down as u32) << 1 | (s.slowed as u32) << 2);
+                h.write_u32(s.ring_places as u32 | (s.ring_base as u32) << 8);
+                h.write_u32(s.arc as u32);
+            }
+            for m in &p.memo {
+                h.write_i32(*m);
+            }
+        }
+        if self.pack.is_some() || self.critters.any() {
+            h.write_u32(self.critters.species.0 as u32);
+            for c in self.critters.iter() {
+                hash_v3(&mut h, &c.pos);
+                hash_v3(&mut h, &c.vel);
+                h.write_u32(c.yaw as u32 | (c.health as u16 as u32) << 16);
+                h.write_u32(c.timer as u32 | (c.clock as u32) << 16);
+                h.write_u32(u32::from_le_bytes([c.kind, c.state, c.act, c.flags]));
+                h.write_u32(u32::from_le_bytes([c.role, c.slot, c.target, c.mount]));
+                h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
+                h.write_u32(c.perch[2] as u16 as u32 | (c.seared as u32) << 16);
+            }
         }
         h.finish()
     }
@@ -2423,6 +2584,14 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             moves::Shape::None => return None,
             // The original: a disc at arm's length, along the line the
             // swing came out on -- the facing's yaw, the camera's pitch.
+            //
+            // A flat disc has no top and no bottom, so a stoop to meet
+            // something short (`aim::stoop`) has nothing to bring down -- it
+            // would only pull the disc in toward her. Pointed at a short body,
+            // it goes out level along the facing, at its whole reach.
+            moves::Shape::Cylinder if p.stoop.raw() < 0 => {
+                return Some(disc(p.pos.add(p.facing.scale(m.reach))));
+            }
             moves::Shape::Cylinder => return Some(disc(p.pos.add(p.aim_dir().scale(m.reach)))),
             moves::Shape::Swing(plane) => {
                 // The hand stays near the body and the head of the weapon
@@ -2460,7 +2629,17 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 let (through, _) = swing_progress(&m, left);
                 let start = t::thrust_extend();
                 let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
-                (hub, hub.add(p.aim_dir().scale(out)), false)
+                // Stooped to meet something short (`aim::stoop`), the point
+                // still reaches as far across the floor as it would have level:
+                // a spear lowered at a gnawer is lowered, not shortened.
+                let dir = p.aim_dir();
+                let across = dir.flat_len();
+                let out = if p.stoop.raw() < 0 && across.raw() > 0 {
+                    out.div(across)
+                } else {
+                    out
+                };
+                (hub, hub.add(dir.scale(out)), false)
             }
             // A section of a torus lying flat: a thin curved blade that opens
             // from nothing to its whole span over the active window, with its
@@ -2473,7 +2652,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             // it, and a straight line through that either misses the inside of
             // the curve or claims the outside of it.
             moves::Shape::Wing => {
-                let ring = moves::wing(p.pos, p.facing, p.aim_dir(), p.grounded, &m);
+                let ring = moves::wing(p.pos, p.facing, p.aim_dir(), p.grounded, p.stoop, &m);
                 // Its own progression rather than `swing_progress`, and for a
                 // reason that matters: that one saturates a frame early, so a
                 // wing would reach the front on the frame *before* its last one
@@ -5066,6 +5245,7 @@ fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
 /// reach in its own row.
 fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: &Scene) {
     let m = moves::get(p.class, kind);
+    p.stoop = Fx::ZERO;
     p.aim_path = match m.aim() {
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, reach, scene),
@@ -5077,7 +5257,19 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
         // swing only reads the direction. The dead zone is a standing rule:
         // off the ground you are above what you are hitting, and the swing
         // follows the camera the whole way.
-        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, p.grounded, reach, m.hand),
+        aim::Kind::Swing => {
+            // How tall the thing under the crosshair is: what a standing
+            // swing dips to meet when it is short. Only asked standing, and
+            // only in a fight with small bodies in it -- everywhere else the
+            // answer is a fighter's height and the swing is what it was.
+            let stands = if p.grounded && scene.critters.any() {
+                aim::stands_at(who, input, scene)
+            } else {
+                aim::Stand::fighter()
+            };
+            p.stoop = aim::stoop(input, p.grounded, stands);
+            aim::swing_path(p.pos, p.facing, input, p.grounded, reach, m.hand, stands)
+        }
         aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
         // From the stone she is holding churning, flat along her look. Her
         // own feet when there is none, which the crack's slot cannot reach
@@ -5944,6 +6136,7 @@ impl World {
             players: &self.players,
             effects: &self.effects,
             quarry: &self.monsters,
+            critters: &self.critters,
             arena: self.arena.get(),
         };
         let facing = aim::shadow_faces(at, owner, reach, !self.hunting(), &scene)
@@ -6202,6 +6395,14 @@ impl World {
             };
             let turning = !effect.returning();
             let going_out = !effect.lotus_coming_back();
+            // A thrown thing on its first frame: no critter has been cut by
+            // this one yet, whatever the last of its kind did.
+            if effect.age == 0 && effect.kind.once_a_pass() {
+                let bit = critter::seared_bit(effect.owner, effect.slot);
+                for c in self.critters.iter_mut() {
+                    c.seared &= !bit;
+                }
+            }
             effect.age += 1;
             // The frame the blade turns it forgets everyone it cut on the way
             // out, so the way back can cut them again. "Damage on both passes"
@@ -6440,6 +6641,7 @@ impl World {
             players: &self.players,
             effects: &self.effects,
             quarry: &self.monsters,
+            critters: &self.critters,
             arena: self.arena.get(),
         };
         // **Is there anything to pull on?** Asked along the arms' own path with
@@ -6749,6 +6951,14 @@ impl World {
                             }
                         }
                     }
+                    // The small bodies: each blade's own slab, and a critter is
+                    // cut once by the whole flower (`Critter::seared`), so
+                    // twelve blades are not twelve cuts.
+                    self.gore_critters_by(
+                        effect,
+                        EffectReach::Slab(was, at, radius, half_thick),
+                        share,
+                    );
                 }
             }
 
@@ -6781,6 +6991,13 @@ impl World {
                         self.players[effect.owner as usize].heal(owed);
                         effect.take_hit(0, quarry_victim(slot));
                     }
+                }
+                // And the small bodies in it, on the burst's first frame only:
+                // a burst is one pass, and they have no bit in its memory.
+                if effect.age == 1 {
+                    let dealt = self.gore_critters(effect, effect.pos, radius, Fx::ONE);
+                    let owed = effect.leeched(dealt);
+                    self.players[effect.owner as usize].heal(owed);
                 }
             }
 
@@ -6830,6 +7047,16 @@ impl World {
                     }
                     // The one pass it gets at the creature, on the same frames.
                     self.feed_the_caster(effect, 0, far, radius);
+                    // And at a small body anywhere along the line -- the same
+                    // line `on_the_line` holds a fighter to. It cuts; it does
+                    // not hold one (`docs/design/critters.md`).
+                    let dealt = self.gore_critters_by(
+                        effect,
+                        EffectReach::Line(effect.pos, far, radius),
+                        Fx::ONE,
+                    );
+                    let owed = effect.leeched(dealt);
+                    self.players[effect.owner as usize].heal(owed);
                     if effect.caught().is_none() && effect.age >= thrown_for {
                         effect.life = effect.age;
                     }
@@ -7423,9 +7650,87 @@ impl World {
     /// Land an effect on whichever part of the creature is inside it, once per
     /// part of the effect. Returns what went in after the hide, or nought.
     fn gore_the_creature(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) -> i32 {
-        self.gore_each(effect, part, at, radius, Fx::ONE)
+        let creatures: i32 = self
+            .gore_each(effect, part, at, radius, Fx::ONE)
             .iter()
-            .sum()
+            .sum();
+        creatures + self.gore_critters(effect, at, radius, Fx::ONE)
+    }
+
+    /// An effect landing on the small bodies inside it: an upright column at
+    /// `at`, `radius` wide and a fighter tall, against each critter's box --
+    /// the same column the creature's parts are tested against.
+    ///
+    /// **A blade cuts a critter once per throw**: the critter remembers it
+    /// (`Critter::seared`), because an effect's memory of what it has struck
+    /// has no bits to spare for ten more victims. So a blade out and home is
+    /// one cut on a critter, where it is two on a fighter. A field ticks, as
+    /// it does on everything. See `docs/design/critters.md`.
+    fn gore_critters(&mut self, effect: &mut Effect, at: V3, radius: Fx, share: Fx) -> i32 {
+        self.gore_critters_by(effect, EffectReach::Column(at, radius), share)
+    }
+
+    /// [`Self::gore_critters`] for any of the shapes an effect reaches with.
+    fn gore_critters_by(&mut self, effect: &mut Effect, reach: EffectReach, share: Fx) -> i32 {
+        if !self.critters.any() || self.pack.is_none() {
+            return 0;
+        }
+        let once = effect.kind.once_a_pass();
+        let bit = critter::seared_bit(effect.owner, effect.slot);
+        let sp = self.critters.sp();
+        let raw = Fx::from_int(effect.damage())
+            .mul(share)
+            .mul(preying(effect.class, false))
+            .to_int();
+        let mut total = 0;
+        for c in 0..critter::MAX_CRITTERS {
+            let body = self.critters[c];
+            if !body.alive() || (once && body.seared & bit != 0) {
+                continue;
+            }
+            let shape = body.body(sp);
+            let (inside, from) = match reach {
+                EffectReach::Column(at, radius) => {
+                    (shape.touched_by_column(at, radius, t::body_height()), at)
+                }
+                EffectReach::Line(a, b, radius) => {
+                    (shape.gap_to_segment(a, b).raw() <= radius.raw(), a)
+                }
+                EffectReach::Slab(a, b, radius, half) => {
+                    (shape.touched_by_slab(a, b, radius, half), effect.pos)
+                }
+            };
+            if !inside {
+                continue;
+            }
+            if once {
+                self.critters[c].seared |= bit;
+            }
+            let away = body.pos.sub(from);
+            let away = V3::new(away.x, Fx::ZERO, away.z).normalized();
+            let dealt = pack::hurt(
+                &mut self.pack,
+                &mut self.critters,
+                c,
+                raw,
+                away,
+                Fx::ZERO,
+                Fx::ZERO,
+            );
+            if dealt > 0 {
+                let m = effect.source();
+                self.drink_over(effect.owner as usize, &m, from, from, None, effect.age);
+                self.spill(
+                    effect.owner,
+                    effect.class,
+                    effect.slot,
+                    floor_under(body.pos),
+                    dealt,
+                );
+            }
+            total += dealt;
+        }
+        total
     }
 
     /// Every creature, in slot order, and what each took.
@@ -7496,6 +7801,16 @@ impl World {
         }
         dealt
     }
+}
+
+/// The shape an effect reaches a small body with: an upright column on the
+/// floor (a field, a burst, a blade's bubble), a line (a tether looking for
+/// something), or a level blade's slab (the Guillotine).
+#[derive(Clone, Copy)]
+enum EffectReach {
+    Column(V3, Fx),
+    Line(V3, V3, Fx),
+    Slab(V3, V3, Fx, Fx),
 }
 
 /// Bind a grabbed fighter, then haul them to their captor's arm's length.
@@ -8421,6 +8736,7 @@ impl World {
         let seen = self.players;
         let effects = self.effects;
         let beast = self.monsters;
+        let crowd = self.critters;
         // In a hunt the two of you are on the same side, so the only thing
         // worth shooting is the creature. One condition, in one place.
         let versus = !self.hunting();
@@ -8429,6 +8745,7 @@ impl World {
             players: &seen,
             effects: &effects,
             quarry: &beast,
+            critters: &crowd,
             arena: self.arena.get(),
         };
         let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
@@ -8475,6 +8792,19 @@ impl World {
                     self.players[i].hit_used = true;
                 }
             }
+            Some(Contact::Critter { index, .. }) => {
+                let along = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
+                pack::hurt(
+                    &mut self.pack,
+                    &mut self.critters,
+                    index,
+                    m.damage,
+                    along,
+                    m.knockback,
+                    Fx::ZERO,
+                );
+                self.players[i].hit_used = true;
+            }
             // `Terrain` cannot arrive: the beam does not ask for it, and the
             // arena is where the crosshair's own ray already stopped. The arm
             // is spelled out rather than wildcarded so that whatever is added
@@ -8508,12 +8838,14 @@ impl World {
         let seen = self.players;
         let effects = self.effects;
         let beast = self.monsters;
+        let crowd = self.critters;
         let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
             effects: &effects,
             quarry: &beast,
+            critters: &crowd,
             arena: self.arena.get(),
         };
         let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
@@ -8607,6 +8939,19 @@ impl World {
                     self.players[i].hit_used = true;
                 }
             }
+            Some(Contact::Critter { index, .. }) => {
+                let along = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
+                pack::hurt(
+                    &mut self.pack,
+                    &mut self.critters,
+                    index,
+                    m.damage,
+                    along,
+                    m.knockback,
+                    Fx::ZERO,
+                );
+                self.players[i].hit_used = true;
+            }
             // `Terrain` cannot arrive: the beam does not ask for it, and the
             // arena is where the crosshair's own ray already stopped. The arm
             // is spelled out rather than wildcarded so that whatever is added
@@ -8642,12 +8987,14 @@ impl World {
         let seen = self.players;
         let effects = self.effects;
         let beast = self.monsters;
+        let crowd = self.critters;
         let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
             effects: &effects,
             quarry: &beast,
+            critters: &crowd,
             arena: self.arena.get(),
         };
         let met = aim::first_along(
@@ -8692,6 +9039,18 @@ impl World {
                 if let Some(beast) = self.monsters[slot].as_mut() {
                     beast.take_hit(part, m.damage);
                 }
+                self.players[i].hit_used = true;
+            }
+            Some(Contact::Critter { index, .. }) => {
+                pack::hurt(
+                    &mut self.pack,
+                    &mut self.critters,
+                    index,
+                    m.damage,
+                    dir,
+                    m.knockback,
+                    Fx::ZERO,
+                );
                 self.players[i].hit_used = true;
             }
             _ => {}
@@ -8772,6 +9131,10 @@ impl World {
                 self.players[i].parried = PARRY_FLOURISH;
             }
         }
+        // The small bodies standing in it are thrown about with everybody
+        // else: the Gnawers' doc has the Quake emptying a horseshoe of them.
+        let mut erupting = *effect;
+        self.gore_critters(&mut erupting, effect.pos, effect.field_radius(), Fx::ONE);
         let owner = effect.owner as usize;
         if owner < MAX_PLAYERS {
             let field = stones::gather(&self.players);
@@ -8996,6 +9359,194 @@ impl World {
         for slot in 0..MAX_MONSTERS {
             self.trade_with(slot);
         }
+    }
+
+    /// **Press a move's button**, for the tools that measure moves rather than
+    /// play them (`crate::critcheck`): fighter `who` starts move `kind` this
+    /// instant, aimed by `look`, through the same `begin_move` a press goes
+    /// through -- the same aim, the same costs -- without having to know which
+    /// keys a class binds it to.
+    pub fn press(&mut self, who: usize, kind: u8, look: Input) {
+        let field = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let beasts = self.monsters;
+        let crowd = self.critters;
+        let scene = Scene {
+            stones: &field,
+            players: &seen,
+            effects: &effects,
+            quarry: &beasts,
+            critters: &crowd,
+            arena: self.arena.get(),
+        };
+        let p = &mut self.players[who.min(MAX_PLAYERS - 1)];
+        let aerial = !p.grounded;
+        p.action = begin_move(p, who, kind, look, &scene, aerial);
+    }
+
+    /// Both directions of the exchange with the pack's small bodies.
+    ///
+    /// **A fighter's swing is tested against every critter's box by
+    /// [`critter::Body::touched_by`]**, the volume being [`hitbox`] -- the one
+    /// description of an attack the overlay draws -- and each body it touches
+    /// is struck **once per swing**, not once per frame and not only the
+    /// first: a sweep through a heap catches the heap. The memory of who has
+    /// been struck is on the critter (`flag::STRUCK`), cleared when the swing
+    /// ends or a multi-hit rearms, so the creature's `hit_used` rule (one
+    /// connection per swing) is left as it was.
+    fn trade_with_the_pack(&mut self) {
+        let Some(mut brain) = self.pack else { return };
+        let sp = brain.sp();
+
+        // What the critters have out. Every fighter in a volume is hit.
+        for c in 0..critter::MAX_CRITTERS {
+            let body = self.critters[c];
+            if !body.alive()
+                || body.state != critter::is::ACTIVE
+                || body.has(critter::flag::HIT_USED)
+            {
+                continue;
+            }
+            let m = sp.attack(body.act);
+            let Some((anchor, _, _, _)) = body.hit_volume(sp) else {
+                continue;
+            };
+            let mut landed = false;
+            for i in 0..MAX_PLAYERS {
+                let victim = self.players[i];
+                if victim.health <= 0 || victim.action.invulnerable() {
+                    continue;
+                }
+                if !body.reaches(sp, victim.pos, victim.hurt_height(), t::body_radius()) {
+                    continue;
+                }
+                let away = V3::new(
+                    victim.pos.x.sub(anchor.x),
+                    Fx::ZERO,
+                    victim.pos.z.sub(anchor.z),
+                )
+                .normalized();
+                let away = if away.flat_len().raw() == 0 {
+                    body.facing()
+                } else {
+                    away
+                };
+                let facing_it =
+                    victim.facing.dot(away.scale(Fx::ONE.neg())).raw() >= t::guard_arc_cos().raw();
+                let guarding = !m.unblockable && victim.action.guarding() && facing_it;
+                let parried = !m.unblockable
+                    && matches!(victim.action, Action::Guard { held } if held < t::parry_window())
+                    && facing_it;
+                apply_hit(
+                    &mut self.players[i],
+                    Hit {
+                        damage: m.damage,
+                        hitstun: m.hitstun,
+                        blockstun: m.blockstun,
+                        knockback: m.knockback,
+                        launch: m.launch,
+                        grabs: m.root,
+                        by: QUARRY,
+                        dir: away,
+                        blocked: guarding,
+                        parried,
+                        interrupts: true,
+                    },
+                );
+                if parried {
+                    // A parried critter is knocked out of it, as any hit would.
+                    let flinch = critter::stat(sp, body.kind, critter::CritterField::FlinchFrames);
+                    let hit = &mut self.critters[c];
+                    hit.state = critter::is::FLINCH;
+                    hit.timer = (t::parry_stagger() as i32).max(flinch) as u16;
+                }
+                if !parried && !guarding {
+                    let now = self.monsters;
+                    fall_off(&mut self.players[i], &now);
+                }
+                freeze(
+                    &mut self.players[i],
+                    impact_freeze(t::creature_freeze(), guarding && !parried),
+                );
+                landed = true;
+            }
+            if landed {
+                self.critters[c].set(critter::flag::HIT_USED, true);
+            }
+        }
+
+        // What the fighters have out.
+        for i in 0..MAX_PLAYERS {
+            let attacker = self.players[i];
+            let bit = critter::flag::STRUCK << i;
+            let swing = hitbox(&attacker).filter(|_| attacker.health > 0);
+            // A new swing, or one that has rearmed: nobody has been struck by
+            // it yet.
+            if swing.is_none() || !attacker.hit_used {
+                for c in self.critters.iter_mut() {
+                    c.set(bit, false);
+                }
+            }
+            let Some(box_out) = swing else { continue };
+            let Some(kind) = attacker.action.attack_kind() else {
+                continue;
+            };
+            // The beam and the heavy already had their answers, on the frame
+            // they fired, through `aim::first_along`.
+            if bolt::throws_a_beam(&attacker, kind) || throws_a_cataclysm(&attacker, kind) {
+                continue;
+            }
+            let m = moves::get(attacker.class, kind);
+            let worth = Fx::from_int(
+                bulwark::slam_damage(&attacker, kind, m.damage) + strike_bonus(&attacker, kind),
+            )
+            .mul(preying(attacker.class, false))
+            .mul(grey_power(&attacker, &m))
+            .mul(depth(&attacker))
+            .mul(if box_out.tipper {
+                t::wing_tipper()
+            } else {
+                Fx::ONE
+            })
+            .to_int();
+            let mut any = false;
+            for c in 0..critter::MAX_CRITTERS {
+                let body = self.critters[c];
+                if !body.alive() || body.has(bit) || !body.body(sp).touched_by(&box_out) {
+                    continue;
+                }
+                self.critters[c].set(bit, true);
+                let dir = if m.knockback.raw() < 0 {
+                    attacker.pos.sub(body.pos)
+                } else {
+                    body.pos.sub(attacker.pos)
+                };
+                let dir = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+                let before = body.health as i32;
+                pack::struck(
+                    &mut brain,
+                    &mut self.critters,
+                    c,
+                    worth,
+                    dir,
+                    m.knockback.abs(),
+                    m.launch.max(Fx::ZERO),
+                );
+                let dealt = before.min(worth).max(0);
+                if dealt > 0 {
+                    self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
+                    self.spill(i as u8, attacker.class, kind, floor_under(body.pos), dealt);
+                    self.players[i].heal(m.leeched(dealt));
+                    dual::landed_a_hit(&mut self.players[i]);
+                }
+                any = true;
+            }
+            if any {
+                self.players[i].hit_used = true;
+            }
+        }
+        self.pack = Some(brain);
     }
 
     /// Both directions of the exchange with the creature in one slot.

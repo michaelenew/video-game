@@ -83,6 +83,7 @@
 
 use crate::arena::{self, Arena};
 use crate::class::{Mechanic, Structure};
+use crate::critter::Critters;
 use crate::effects::{EffectKind, Effects};
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::input::Input;
@@ -198,6 +199,8 @@ pub struct Scene<'a> {
     pub effects: &'a Effects,
     /// Every creature slot. A versus match is all of them empty.
     pub quarry: &'a Herd,
+    /// Every small body (`crate::critter`). All empty outside a pack fight.
+    pub critters: &'a Critters,
     /// Where the fight is: its solids are terrain to every ray here.
     pub arena: &'a Arena,
 }
@@ -222,14 +225,111 @@ pub fn origin(pos: V3) -> V3 {
 /// somebody below flew level out of the platform and over their head, and the
 /// only way to land one was to aim at a patch of floor well in front of them.
 /// Measuring from the ground the ray met makes the rule true from any height.
-pub fn standing_middle(ground: V3) -> V3 {
+pub fn standing_middle(ground: V3, height: Fx) -> V3 {
     V3::new(
         ground.x,
-        ground.y.add(t::body_height().div(Fx::from_int(2))),
+        ground.y.add(height.div(Fx::from_int(2))),
         ground.z,
     )
 }
 
+/// **How tall "there" is**: the height of the last body the crosshair's ray
+/// passed through on its way to the place it met -- a fighter's standing
+/// height when it passed through none, or only fighters.
+///
+/// Bodies are still not on the ray. Nothing here stops it short, and the place
+/// the player is pointing at is still the floor behind whoever stands on it;
+/// the only thing a body now contributes is *how tall the thing standing there
+/// is*. It was a constant, the middle of a fighter, because the only things
+/// that stood were fighters -- and a knee-high gnawer then had every skillshot
+/// aimed through it raised to a fighter's middle and sent over its back, and
+/// every standing swing pointed at it held level over its head. See
+/// `docs/design/creatures/gnawers.md` §1a and `docs/design/aiming.md`.
+///
+/// **Where only fighters stand, every answer is what it was**: they report
+/// `body_height`, standing rather than crouched -- crouch is the move table's
+/// `hits_crouching`, decided by property, not by this. A creature's skeleton
+/// is not a body here either: a Ridgeback is a place you aim *at*, and what a
+/// shot meets on it is [`first_along`]'s question.
+///
+/// The ray runs to the terrain it meets, with no reach sphere: what is under
+/// the crosshair is a question about the world, not about the move asking.
+pub fn stands_at(who: usize, look: Input, scene: &Scene) -> Stand {
+    let caster = &scene.players[who];
+    let eye = crate::camera::eye(caster.pos, look, caster.aloft);
+    let dir = look.look_dir();
+    let near = near_clip(eye, dir, origin(caster.pos));
+    let limit = nearest_terrain(eye, dir, near, Fx::MAX, scene, false).map_or(Fx::MAX, |(d, _)| d);
+    stands_along(who, eye, dir, near, limit, scene)
+}
+
+/// What [`stands_at`] found: how tall the thing standing there is, and where
+/// its feet are -- `None` when the ray passed through nobody, and "there" is a
+/// fighter's height by definition.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Stand {
+    pub height: Fx,
+    pub at: Option<V3>,
+}
+
+impl Stand {
+    /// Nobody in particular: a fighter's standing height, which is what
+    /// "there" was before anything shorter could stand in it.
+    pub fn fighter() -> Stand {
+        Stand {
+            height: t::body_height(),
+            at: None,
+        }
+    }
+}
+
+/// [`stands_at`] along a ray already cast: the last body between `near` and
+/// `limit`.
+fn stands_along(who: usize, eye: V3, dir: V3, near: Fx, limit: Fx, scene: &Scene) -> Stand {
+    let mut last: Option<(Fx, Stand)> = None;
+    let mut keep = |hit: Option<Fx>, stand: Stand| {
+        if let Some(d) = hit {
+            if d.raw() >= near.raw()
+                && d.raw() <= limit.raw()
+                && last.is_none_or(|(b, _)| d.raw() > b.raw())
+            {
+                last = Some((d, stand));
+            }
+        }
+    };
+    for (i, p) in scene.players.iter().enumerate() {
+        if i == who || p.health <= 0 {
+            continue;
+        }
+        keep(
+            crate::math::ray_hits_cylinder(eye, dir, p.pos, t::body_radius(), t::body_height()),
+            Stand {
+                height: t::body_height(),
+                at: Some(p.pos),
+            },
+        );
+    }
+    if scene.critters.any() {
+        let sp = scene.critters.sp();
+        for c in scene.critters.iter().filter(|c| c.alive()) {
+            let body = c.body(sp);
+            let hit = crate::math::ray_hits_box(
+                body.to_local(eye),
+                body.dir_to_local(dir),
+                body.min(),
+                body.max(),
+            );
+            keep(
+                hit,
+                Stand {
+                    height: body.height,
+                    at: Some(body.foot),
+                },
+            );
+        }
+    }
+    last.map_or(Stand::fighter(), |(_, s)| s)
+}
 /// Which arm a move comes out of.
 ///
 /// Most moves have no answer worth giving -- a two-handed overhead, a gesture
@@ -415,8 +515,7 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
     let dir = look.look_dir();
     let cast = origin(caster.pos);
 
-    // The near clip: the front of the character model, along the ray.
-    let near = cast.sub(eye).dot(dir).sub(t::body_radius()).max(Fx::ZERO);
+    let near = near_clip(eye, dir, cast);
     // The far clip: the ability's own range, as a sphere about the caster
     // rather than a length along the ray, because the range belongs to the
     // ability and the ability starts at the fighter. Met from within or
@@ -425,33 +524,7 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
     let sphere = reach_hit(eye, dir, cast, reach);
     let limit = sphere.unwrap_or(Fx::MAX);
 
-    let mut best: Option<(Fx, Met)> = None;
-    let mut keep = |hit: Option<Fx>, met: Met| {
-        if let Some(d) = hit {
-            if d.raw() >= near.raw()
-                && d.raw() <= limit.raw()
-                && best.is_none_or(|(b, _)| d.raw() < b.raw())
-            {
-                best = Some((d, met));
-            }
-        }
-    };
-
-    // Terrain. Ground is whatever faces upward, which is what decides whether
-    // a skillshot flies level over the spot or straight at it.
-    keep(floor_hit(eye, dir), Met::Ground);
-    for solid in scene.arena.solids().iter() {
-        let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
-        keep(hit, facing(hit, eye, dir, solid.max.y));
-    }
-    for stone in scene.stones.iter().flatten() {
-        let hit = stone_hit(eye, dir, stone);
-        let met = match lids {
-            true => facing(hit, eye, dir, stone.top()),
-            false => Met::Solid,
-        };
-        keep(hit, met);
-    }
+    let best = nearest_terrain(eye, dir, near, limit, scene, lids);
     // **Bodies are not on this list, and that is deliberate.** See the note on
     // this function: the ray is asking which *place* the player is pointing at,
     // and a creature is a thing standing in a place rather than the place
@@ -480,6 +553,51 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
             met: Met::Reach,
         },
     }
+}
+
+/// The near clip: the front of the character model, along the ray.
+fn near_clip(eye: V3, dir: V3, cast: V3) -> Fx {
+    cast.sub(eye).dot(dir).sub(t::body_radius()).max(Fx::ZERO)
+}
+
+/// The first piece of terrain -- the floor, the arena's solids, the stones --
+/// between `near` and `limit` along the ray, and whether it faces up.
+fn nearest_terrain(
+    eye: V3,
+    dir: V3,
+    near: Fx,
+    limit: Fx,
+    scene: &Scene,
+    lids: bool,
+) -> Option<(Fx, Met)> {
+    let mut best: Option<(Fx, Met)> = None;
+    let mut keep = |hit: Option<Fx>, met: Met| {
+        if let Some(d) = hit {
+            if d.raw() >= near.raw()
+                && d.raw() <= limit.raw()
+                && best.is_none_or(|(b, _)| d.raw() < b.raw())
+            {
+                best = Some((d, met));
+            }
+        }
+    };
+
+    // Terrain. Ground is whatever faces upward, which is what decides whether
+    // a skillshot flies level over the spot or straight at it.
+    keep(floor_hit(eye, dir), Met::Ground);
+    for solid in scene.arena.solids().iter() {
+        let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
+        keep(hit, facing(hit, eye, dir, solid.max.y));
+    }
+    for stone in scene.stones.iter().flatten() {
+        let hit = stone_hit(eye, dir, stone);
+        let met = match lids {
+            true => facing(hit, eye, dir, stone.top()),
+            false => Met::Solid,
+        };
+        keep(hit, met);
+    }
+    best
 }
 
 /// Does a hit land on the upward face of a shape whose top is at `top`?
@@ -536,14 +654,24 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
 /// max-range sphere is part of the raycast, so a shot that meets nothing ends
 /// on the sphere and a shot that meets something ends on that.
 pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
-    let from = origin(scene.players[who].pos);
+    let caster = &scene.players[who];
+    let from = origin(caster.pos);
     let seen = sight_for_attack(who, look, reach, scene);
     let to = match seen.met {
         // Aimed at the floor, which is never really the target: raised to the
-        // middle of a fighter standing there, so it goes through whoever is on
-        // that spot instead of burying itself in the dirt. See
-        // [`standing_middle`].
-        Met::Ground => standing_middle(seen.at),
+        // middle of whatever stands there -- a fighter's, unless the crosshair
+        // passed through something shorter on its way ([`stands_at`]) -- so it
+        // goes through whoever is on that spot instead of burying itself in
+        // the dirt. See [`standing_middle`].
+        Met::Ground => {
+            let eye = crate::camera::eye(caster.pos, look, caster.aloft);
+            let dir = look.look_dir();
+            let near = near_clip(eye, dir, from);
+            standing_middle(
+                seen.at,
+                stands_along(who, eye, dir, near, seen.dist, scene).height,
+            )
+        }
         // A wall, a stone -- lid or side -- the edge of the range: the point
         // itself, because that is the thing the player is looking at. See
         // [`sight_for_attack`] for why a stone's lid is not ground here.
@@ -579,6 +707,12 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// degree from there, so there is no step at the boundary. `N` is
 /// [`crate::tuning::swing_level_to`].
 ///
+/// **`stands` is how tall the thing under the crosshair is** ([`stands_at`]).
+/// Standing, a swing pointed at something shorter than a fighter dips by the
+/// angle that meets its middle at the swing's reach; for a fighter it is a
+/// fighter's height and nothing changes. It reads the crosshair, not the pack:
+/// point over a gnawer at the Big One's head and it swings level.
+///
 /// **`hand` moves where it starts, never where it points.** A punch thrown with
 /// one arm leaves from that shoulder rather than from the middle of the chest,
 /// which is the difference between a hitbox that comes out of the arm the player
@@ -596,13 +730,21 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// in this file is: the look direction is one of the two ingredients of the
 /// mistake this module exists to prevent, so the places that turn it into a
 /// line are all in one file where they can be compared.
-pub fn swing_path(pos: V3, facing: V3, look: Input, grounded: bool, reach: Fx, hand: Hand) -> Path {
+pub fn swing_path(
+    pos: V3,
+    facing: V3,
+    look: Input,
+    grounded: bool,
+    reach: Fx,
+    hand: Hand,
+    stands: Stand,
+) -> Path {
     // From the hand: an overhead begins at the chest and a rising cut is aimed
     // from there, and a one-armed move begins a shoulder's width to one side of
     // both. Where along the body a given weapon actually hinges is
     // `moves::swing_hub`'s business; which side of it is [`Hand`].
     let from = hand_origin(pos, facing, hand);
-    let tilt = swing_tilt(look, grounded);
+    let tilt = swing_tilt(pos, look, grounded, reach, stands);
     let flat = cos_turns(tilt);
     let dir = V3::new(facing.x.mul(flat), sin_turns(tilt), facing.z.mul(flat));
     Path {
@@ -624,13 +766,51 @@ pub fn swing_path(pos: V3, facing: V3, look: Input, grounded: bool, reach: Fx, h
 /// genuinely above what you are hitting, so the swing follows the camera all
 /// the way down -- the same split `moves::swing_base` already makes for the
 /// plane a weapon sweeps in.
-fn swing_tilt(look: Input, grounded: bool) -> Fx {
+/// **How far below the shoulder a standing swing meets what it was pointed
+/// at**, as a drop in metres (zero or less): `cast height x (1 - h / fighter)`
+/// for a body `h` tall, the same share of its height a level swing meets a
+/// fighter at, and exactly zero where only fighters stand. A swing's path dips
+/// by the angle that drop makes over the distance ([`swing_path`]); a volume
+/// that lies flat at the shoulder instead of following the path's pitch -- the
+/// Dual mage's wing -- comes down by the drop itself, so both meet the body at
+/// the same height.
+pub fn stoop(look: Input, grounded: bool, stands: Stand) -> Fx {
+    let short = t::body_height().sub(stands.height);
+    if !grounded || short.raw() <= 0 || look.pitch_turns().raw() > 0 {
+        return Fx::ZERO;
+    }
+    t::cast_height().mul(short).div(t::body_height()).neg()
+}
+
+fn swing_tilt(pos: V3, look: Input, grounded: bool, reach: Fx, stands: Stand) -> Fx {
     let pitch = look.pitch_turns();
     if !grounded {
         return pitch;
     }
     let dead = Fx::ratio(t::swing_level_to(), 360);
-    pitch.max(Fx::ZERO).add(pitch.add(dead).min(Fx::ZERO))
+    let tilt = pitch.max(Fx::ZERO).add(pitch.add(dead).min(Fx::ZERO));
+    // **Pointed at something short, the level swing dips to meet it.** A level
+    // swing meets a fighter a little above their middle -- it leaves the hand
+    // at cast height -- and it should meet a short body at the same share of
+    // its height: so the line is tilted to arrive, at the body, as far below
+    // cast height as the body is short of a fighter, in that proportion. Over
+    // the distance to the body, or the swing's reach if that is shorter.
+    //
+    // Zero for a fighter, so a fight between fighters is exactly what it was.
+    // Only looking down -- nobody points up at a gnawer -- and never shallower
+    // than the dead zone's own answer, so past the zone's edge the swing
+    // follows the camera as it always did and there is no step at the edge.
+    let drop = stoop(look, grounded, stands).neg();
+    if drop.raw() <= 0 || reach.raw() <= 0 {
+        return tilt;
+    }
+    let run = stands
+        .at
+        .map_or(reach, |at| at.sub(pos).flat_len().min(reach));
+    if run.raw() <= 0 {
+        return tilt;
+    }
+    tilt.min(crate::math::atan2_turns(drop, run).neg())
 }
 
 /// Is the crosshair on the thing standing at `at`?
@@ -682,9 +862,30 @@ pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) ->
 /// taken as given rather than solved for, since the eye sits straight behind
 /// the body along it -- and a point directly underfoot has no yaw of its own.
 pub fn look_onto(pos: V3, aim: u16, aloft: Fx, at: V3) -> i16 {
+    settle_look(pos, aim, aloft, at, LOOK_ROUNDS)
+}
+
+/// [`look_onto`], settled for as many rounds as a steep look needs.
+///
+/// Six rounds are enough at the angles a fight is played at, and the sparring
+/// bot's pinned fights were tuned on them, so that stays. Looking steeply down
+/// they are not: the camera climbs over the body as the pitch falls, each round
+/// moves the eye by most of what the last moved the pitch, and at forty-odd
+/// degrees down six rounds leave the crosshair a metre above the point -- over
+/// a knee-high body entirely. `critcheck` puts the crosshair on a gnawer at
+/// three metres, which is exactly there, so it asks this.
+pub fn look_onto_closely(pos: V3, aim: u16, aloft: Fx, at: V3) -> i16 {
+    settle_look(pos, aim, aloft, at, LOOK_ROUNDS_CLOSELY)
+}
+
+/// Rounds of [`look_onto_closely`]: enough that the steepest look the camera
+/// allows has stopped moving by a unit of the wire's angle.
+const LOOK_ROUNDS_CLOSELY: usize = 32;
+
+fn settle_look(pos: V3, aim: u16, aloft: Fx, at: V3, rounds: usize) -> i16 {
     let (down, up) = crate::camera::limits();
     let mut pitch = Fx::ZERO;
-    for _ in 0..LOOK_ROUNDS {
+    for _ in 0..rounds {
         let eye = crate::camera::eye(pos, Input::looking_at(0, aim, pitch.raw() as i16), aloft);
         let to = at.sub(eye);
         pitch = crate::math::atan2_turns(to.y, to.flat_len()).clamp(down.neg(), up);
@@ -838,6 +1039,17 @@ fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
         ));
     }
     nearest.map(|d| d.div(reach))
+}
+
+/// **Is there nothing solid on the straight line from `a` to `b`?** The arena
+/// and the stones; never the floor, never a body.
+///
+/// The pack's question when it cuts a ring round a fighter: a place with a wall
+/// between it and the fighter is no place to stand, which is what makes a wall
+/// at your back work against the Gnawers (`crate::pack`). Ray-against-shape
+/// work in service of a decision about where something goes, so it lives here.
+pub fn line_clear(a: V3, b: V3, scene: &Scene) -> bool {
+    nothing_between(a, b, scene)
 }
 
 /// One line of [`clear_between`], against the terrain and the structures on it.
@@ -1116,6 +1328,12 @@ pub enum Contact {
     Terrain {
         dist: Fx,
     },
+    /// A small body: which slot of `World::critters`. Asked for by
+    /// [`Targets::quarry`], with the creatures -- a critter is quarry.
+    Critter {
+        index: usize,
+        dist: Fx,
+    },
 }
 
 impl Contact {
@@ -1125,6 +1343,7 @@ impl Contact {
             | Contact::Stone { dist, .. }
             | Contact::Fire { dist }
             | Contact::Quarry { dist, .. }
+            | Contact::Critter { dist, .. }
             | Contact::Terrain { dist } => dist,
         }
     }
@@ -1241,6 +1460,28 @@ pub fn first_along(
                 .and_then(|b| b.part_struck_along(from, dir, limit, girth))
             {
                 keep(Contact::Quarry { slot, part, dist });
+            }
+        }
+        // **And the small bodies** (A2 in `docs/design/bestiary.md`): a shot's
+        // path runs into a critter's box as it runs into a creature's part.
+        // What it meets changed, not how it is aimed -- the crosshair's ray
+        // still goes through them.
+        if scene.critters.any() {
+            let sp = scene.critters.sp();
+            let fat = V3::new(girth, girth, girth);
+            for (index, c) in scene.critters.iter().enumerate() {
+                if !c.alive() {
+                    continue;
+                }
+                let body = c.body(sp);
+                if let Some(dist) = crate::math::ray_hits_box(
+                    body.to_local(from),
+                    body.dir_to_local(dir),
+                    body.min().sub(fat),
+                    body.max().add(fat),
+                ) {
+                    keep(Contact::Critter { index, dist });
+                }
             }
         }
     }

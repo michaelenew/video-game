@@ -51,9 +51,10 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
         arena: w.arena(),
     };
-    let middle = sim::aim::standing_middle(target);
+    let middle = sim::aim::standing_middle(target, sim::tuning::body_height());
     let miss = |pitch: i16| {
         let look = Input::looking_at(0, 0, pitch);
         let path = sim::aim::skillshot_path(0, look, m.reach, &scene);
@@ -263,6 +264,7 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             players: &players,
             effects: &effects,
             quarry: &w.monsters,
+            critters: &sim::critter::Critters::NONE,
             arena: w.arena(),
         };
         (-40..=80)

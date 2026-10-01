@@ -53,6 +53,7 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
         arena: w.arena(),
     };
     // Their middle, measured from *their* feet. Not from the world's floor: a
@@ -85,9 +86,15 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
         let look = Input::looking_at(0, LOOK_RIGHT, pitch);
         let one = &players[0];
         let path = match m.aim() {
-            sim::aim::Kind::Swing => {
-                sim::aim::swing_path(one.pos, one.facing, look, one.grounded, reach, m.hand)
-            }
+            sim::aim::Kind::Swing => sim::aim::swing_path(
+                one.pos,
+                one.facing,
+                look,
+                one.grounded,
+                reach,
+                m.hand,
+                sim::aim::Stand::fighter(),
+            ),
             _ => sim::aim::skillshot_path(0, look, reach, &scene),
         };
         let dir = path.dir();

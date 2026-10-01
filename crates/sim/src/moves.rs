@@ -1698,13 +1698,16 @@ pub struct Wing {
 /// means only its height moves, because a ring lying in the aim's plane is
 /// still a ring. The same split `swing_base` already makes for a cut thrown in
 /// the air.
-pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, m: &Move) -> Wing {
+pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, stoop: Fx, m: &Move) -> Wing {
     use crate::tuning as t;
     let middle = crate::aim::origin(pos)
         .add(facing.scale(m.reach.mul(t::wing_ahead())))
         .sub(crate::aim::across(facing, m.hand).scale(m.reach.mul(t::wing_offside())));
+    // Standing, it lies at the shoulder -- unless the swing stooped to meet
+    // something short (`aim::stoop`, a drop in metres, zero among fighters),
+    // and then it comes down by that much.
     let at = if grounded {
-        middle
+        V3::new(middle.x, middle.y.add(stoop), middle.z)
     } else {
         V3::new(middle.x, middle.y.add(aim_dir.y.mul(m.reach)), middle.z)
     };

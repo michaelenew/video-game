@@ -1156,6 +1156,11 @@ pub enum Tunable {
     Common(crate::species::Common),
     Own(u16),
     Move(u8, MonsterField),
+    /// One of the pack's own numbers, for a species that brings a pack:
+    /// `crate::pack::PackKnob`, by index.
+    Pack(u16),
+    /// One field of one kind of critter in its pack.
+    Critter(u8, crate::critter::CritterField),
 }
 
 impl Tunable {
@@ -1165,6 +1170,8 @@ impl Tunable {
             Tunable::Common(c) => c as usize,
             Tunable::Own(k) => crate::species::Common::ALL.len() + k as usize,
             Tunable::Move(slot, f) => species.move_index(slot as usize, f),
+            Tunable::Pack(k) => species.pack_base() + k as usize,
+            Tunable::Critter(kind, f) => species.critter_index(kind as usize, f),
         }
     }
 
@@ -1173,6 +1180,17 @@ impl Tunable {
             Tunable::Common(c) => crate::species::Common::DECLS[c as usize],
             Tunable::Own(k) => species.own[k as usize],
             Tunable::Move(_, f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+            Tunable::Pack(k) => crate::pack::PackKnob::DECLS[k as usize],
+            Tunable::Critter(_, f) => {
                 let (lo, hi) = f.range();
                 KnobDecl {
                     family: "",
@@ -1270,8 +1288,19 @@ fn species_baked(id: SpeciesId, index: usize) -> i32 {
     if index < common + s.own.len() {
         return s.own[index - common].lo;
     }
-    let field = (index - common - s.own.len()) % MONSTER_FIELDS;
-    MonsterField::ALL.get(field).map_or(0, |f| f.range().0)
+    let pack = s.pack_base();
+    if index < pack {
+        let field = (index - common - s.own.len()) % MONSTER_FIELDS;
+        return MonsterField::ALL.get(field).map_or(0, |f| f.range().0);
+    }
+    let packs = crate::pack::PackKnob::DECLS;
+    if index < pack + packs.len() {
+        return packs[index - pack].lo;
+    }
+    let field = (index - pack - packs.len()) % crate::critter::CRITTER_FIELDS;
+    crate::critter::CritterField::ALL
+        .get(field)
+        .map_or(0, |f| f.range().0)
 }
 
 pub fn scalar(s: Scalar) -> i32 {
@@ -1425,6 +1454,9 @@ impl Knob {
                     Tunable::Move(slot, _) => {
                         format!("{} · {}", s.name, s.moves[slot as usize].name)
                     }
+                    Tunable::Critter(kind, _) => {
+                        format!("{} · {}", s.name, s.kind(kind).name)
+                    }
                     _ => species::common::family(s, &t.decl(s)),
                 }
             }
@@ -1464,6 +1496,12 @@ impl Knob {
                         "{}.{}.{}",
                         slug(s.name),
                         slug(s.moves[slot as usize].name),
+                        slug(f.label())
+                    ),
+                    Tunable::Critter(kind, f) => format!(
+                        "{}.{}.{}",
+                        slug(s.name),
+                        slug(s.kind(kind).name),
                         slug(f.label())
                     ),
                     _ => format!(
@@ -1597,6 +1635,17 @@ pub fn species_knobs(s: &Species) -> Vec<Knob> {
             out.push(Knob::Species(s.id, Tunable::Move(slot as u8, *field)));
         }
     }
+    // A pack's: its own numbers, then a row per kind of critter.
+    if let Some(pack) = s.pack {
+        for k in 0..crate::pack::PackKnob::ALL.len() {
+            out.push(Knob::Species(s.id, Tunable::Pack(k as u16)));
+        }
+        for kind in 0..pack.kinds.len() {
+            for field in crate::critter::CritterField::ALL {
+                out.push(Knob::Species(s.id, Tunable::Critter(kind as u8, *field)));
+            }
+        }
+    }
     out
 }
 
@@ -1672,8 +1721,14 @@ pub fn emit_species(s: &Species) -> String {
          //! Edit these in the running game (F7) and bake; the palette is the editor.\n\
          //!\n\
          //! The numbers every creature has come first (`species::Common`), then\n\
-         //! the {name}'s own, then one row per move (`oven::MonsterField`).\n\n",
-        name = s.name
+         //! the {name}'s own, then one row per move (`oven::MonsterField`).{pack}\n\n",
+        name = s.name,
+        pack = if s.pack.is_some() {
+            "\n//! Then its pack's own (`pack::PackKnob`), and one row per kind of\n\
+             //! critter (`critter::CritterField`)."
+        } else {
+            ""
+        }
     );
     let knobs = species_knobs(s);
     out.push_str(&format!(

@@ -133,6 +133,7 @@ fn crosshair_on_the_shadow(w: &World, yaw: u16) -> Option<i16> {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
         arena: w.arena(),
     };
     let at = shadow(w).pos;

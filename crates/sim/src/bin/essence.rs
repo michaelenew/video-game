@@ -113,6 +113,7 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
         arena: w.arena(),
     };
     // A skillshot is pointed at the body's middle; a grounded move at its
@@ -121,7 +122,7 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
     let middle = if grounded {
         target
     } else {
-        sim::aim::standing_middle(target)
+        sim::aim::standing_middle(target, sim::tuning::body_height())
     };
     let miss = |pitch: i16| {
         let look = Input::looking_at(0, 0, pitch);

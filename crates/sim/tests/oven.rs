@@ -50,9 +50,17 @@ fn the_registry_covers_every_stored_value() {
     // Every species' store: its baked file holds exactly its knobs, and they
     // fit the room the Oven keeps for one.
     for s in sim::species::all() {
+        // A species that brings a pack keeps the pack's own numbers and a
+        // row per kind of critter after its moves (`docs/design/critters.md`).
+        let pack = s.pack.map_or(0, |p| {
+            sim::pack::PackKnob::ALL.len() + p.kinds.len() * sim::critter::CritterField::ALL.len()
+        });
         assert_eq!(
             s.knob_count(),
-            sim::species::Common::ALL.len() + s.own.len() + s.moves.len() * MonsterField::ALL.len(),
+            sim::species::Common::ALL.len()
+                + s.own.len()
+                + s.moves.len() * MonsterField::ALL.len()
+                + pack,
         );
         assert_eq!(
             s.tuned.len(),

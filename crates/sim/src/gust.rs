@@ -77,8 +77,8 @@ use crate::class::Class;
 use crate::effects::Effects;
 use crate::fixed::Fx;
 use crate::math::V3;
-use crate::monster::Herd;
 use crate::moves::{self, Move, elementalist};
+use crate::pack;
 use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
@@ -313,7 +313,7 @@ pub fn step(
     players: &mut [Player; MAX_PLAYERS],
     effects: &Effects,
     versus: bool,
-    quarry: &mut Herd,
+    prey: pack::Prey,
     arena: &Arena,
     bursts: &mut Bursts,
 ) {
@@ -332,11 +332,13 @@ pub fn step(
         let girth = shot.girth();
         let swell = shot.swell();
         let seen = *players;
+        let crowd = *prey.critters;
         let scene = Scene {
             stones: &stones,
             players: &seen,
             effects,
-            quarry: &*quarry,
+            quarry: &*prey.herd,
+            critters: &crowd,
             arena,
         };
         if shot.gale.ignites()
@@ -417,9 +419,26 @@ pub fn step(
                 part,
                 dist,
             }) => {
-                if let Some(beast) = quarry[which].as_mut() {
+                if let Some(beast) = prey.herd[which].as_mut() {
                     beast.take_hit(part, shot.worth(m.damage));
                 }
+                if burst_radius.is_some() {
+                    burst_at(leg.at(dist), None);
+                }
+                *slot = None;
+                continue;
+            }
+            Some(Contact::Critter { index, dist }) => {
+                let along = V3::new(shot.dir.x, Fx::ZERO, shot.dir.z).normalized();
+                pack::hurt(
+                    prey.pack,
+                    prey.critters,
+                    index,
+                    shot.worth(m.damage),
+                    along,
+                    m.knockback.mul(swell),
+                    Fx::ZERO,
+                );
                 if burst_radius.is_some() {
                     burst_at(leg.at(dist), None);
                 }
