@@ -1148,7 +1148,8 @@ impl MonsterField {
 
     pub const fn range(self) -> (i32, i32) {
         match self {
-            MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 120),
+            // To four seconds: the Mireback's wallow grinds for two and a half.
+            MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 240),
             MonsterField::Cooldown => (0, 600),
             MonsterField::Root => (0, 300),
             MonsterField::Travel => (0, fx(90, 1)),

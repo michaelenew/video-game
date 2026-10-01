@@ -116,6 +116,13 @@ pub struct Shape {
     /// Breaking it costs the creature something. Only these carry a health of
     /// their own; see [`MAX_BREAKABLE`].
     pub breakable: bool,
+    /// **A place you are inside rather than on**: the Mireback's stomach.
+    /// Nobody lands on it; a fighter is put there by the species
+    /// (`state::put_inside`) and rides it by the ride's own rule -- their
+    /// place in the part's frame is the one that counts -- with its walls
+    /// keeping them in rather than its solids pushing them out, no jumping
+    /// off and no buck. Neither solid nor mountable.
+    pub hollow: bool,
 }
 
 /// One part of a species: its box, its name, and what hitting it means.
@@ -146,6 +153,7 @@ pub const fn part(name: &'static str, bone: usize, min: V3, max: V3, vuln: u16) 
             mountable: false,
             solid: true,
             breakable: false,
+            hollow: false,
         },
         weak: false,
         vuln,
@@ -166,6 +174,13 @@ impl Part {
     /// It has a health, and breaking it costs the creature something.
     pub const fn breakable(mut self) -> Part {
         self.shape.breakable = true;
+        self
+    }
+    /// You are inside it, not on it. See [`Shape::hollow`].
+    pub const fn hollow(mut self) -> Part {
+        self.shape.hollow = true;
+        self.shape.solid = false;
+        self.shape.mountable = false;
         self
     }
     /// Damage here fills the poise pool.
