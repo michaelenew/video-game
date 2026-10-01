@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 317] = [
+pub const KNOBS: [i32; 318] = [
            65536, // gnawers.size_(x) = 1
             7000, // gnawers.health = 7000
              500, // gnawers.breakable_part_health = 500
@@ -79,8 +79,8 @@ pub const KNOBS: [i32; 317] = [
              200, // gnawers_·_big_one.the_same,_below_half_health = 200
                3, // gnawers_·_big_one.strain_bled_per_frame = 3
               90, // gnawers_·_big_one.stumble_length = 90
-          183501, // gnawers_·_dart-bite.crouches_this_far_from_its_target = 2.8
-           32768, // gnawers_·_dart-bite.only_from_in_front_of_its_target_(cos) = 0.5
+          137626, // gnawers_·_dart-bite.crouches_this_far_from_its_target = 2.1
+           45875, // gnawers_·_dart-bite.bites_and_mauls_only_from_in_front_(cos) = 0.7
               60, // gnawers_·_dart-bite.gives_the_token_back_if_not_there_in = 60
           -32768, // gnawers_·_hamstring.rear_third,_beyond_(cos) = -0.5
            39322, // gnawers_·_hamstring.speed_while_hamstrung_(x) = 0.6
@@ -103,6 +103,7 @@ pub const KNOBS: [i32; 317] = [
               40, // gnawers_·_gnaw.felled,_the_fighter_on_it_staggers = 40
           104858, // gnawers_·_scramble.scrambles_up_a_top_no_higher_than = 1.6
            65536, // gnawers_·_scramble.scrambles_from_this_near_its_side = 1
+          262144, // gnawers_·_morale.a_rout_turns_on_a_fighter_this_near_the_den = 4
                3, // gnawers_·_coop.more_gnawers_for_two_hunters = 3
                1, // gnawers_·_coop.more_tokens_for_two_hunters = 1
               24, // gnawers.dart-bite.startup = 24
@@ -120,7 +121,7 @@ pub const KNOBS: [i32; 317] = [
            98304, // gnawers.dart-bite.knockback = 1.5
                0, // gnawers.dart-bite.launch = 0
                0, // gnawers.dart-bite.unblockable = off
-          655360, // gnawers.dart-bite.advance_while_active = 10
+          524288, // gnawers.dart-bite.advance_while_active = 8
           327680, // gnawers.dart-bite.ideal_range = 5
           131072, // gnawers.dart-bite.range_tolerance = 2
            52429, // gnawers.dart-bite.wants_the_target_at_(cos) = 0.8
@@ -284,7 +285,7 @@ pub const KNOBS: [i32; 317] = [
               10, // gnawers_·_pack.lead_on_the_target_(frames) = 10
                4, // gnawers_·_pack.a_critter_decides_every_(frames) = 4
                2, // gnawers_·_pack.attack_tokens = 2
-              30, // gnawers_·_pack.a_returned_token_rests_(frames) = 30
+              90, // gnawers_·_pack.a_returned_token_rests_(frames) = 90
                0, // gnawers_·_pack.tokens_the_owner's_moves_hold = 0
           327680, // gnawers_·_pack.ring_radius = 5
              600, // gnawers_·_pack.rear_bias = 600

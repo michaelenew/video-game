@@ -569,15 +569,34 @@ pub struct CritterMove {
     /// inferred, as a fighter's line of effect is: the gnawers' bite does, its
     /// pile-on does not.
     pub token: bool,
+    /// **A death does not stop its windup.** Every other windup is dropped
+    /// when the pack takes fright (`pack::killed`); a frenzy is not. The
+    /// Gnawers' pile-on: a sweep that kills one leaper in the heap does not
+    /// call the rest off, which is what makes the heap a sweep target.
+    pub committed: bool,
 }
 
 impl CritterMove {
     pub const fn token(kind: u8) -> CritterMove {
-        CritterMove { kind, token: true }
+        CritterMove {
+            kind,
+            token: true,
+            committed: false,
+        }
     }
 
     pub const fn free(kind: u8) -> CritterMove {
-        CritterMove { kind, token: false }
+        CritterMove {
+            kind,
+            token: false,
+            committed: false,
+        }
+    }
+
+    /// The same move, kept through a fright. See [`CritterMove::committed`].
+    pub const fn committed(mut self) -> CritterMove {
+        self.committed = true;
+        self
     }
 }
 

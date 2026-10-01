@@ -393,10 +393,14 @@ impl Report {
                 && a.has(critter::flag::HIT_USED)
                 && !(b.state == critter::is::ACTIVE && b.has(critter::flag::HIT_USED))
             {
-                t.hits_taken += 1;
-                t.damage_taken += sp.attack(a.act).damage;
-                if (a.act as usize) < MAX_MOVES {
-                    self.landed[a.act as usize] += 1;
+                // A move with no damage marks itself spent too (a scramble
+                // arriving, a howl coming out); only a bite is a hit taken.
+                if sp.attack(a.act).damage > 0 {
+                    t.hits_taken += 1;
+                    t.damage_taken += sp.attack(a.act).damage;
+                    if (a.act as usize) < MAX_MOVES {
+                        self.landed[a.act as usize] += 1;
+                    }
                 }
             }
             // A move starting: counted with the creature's own, by the

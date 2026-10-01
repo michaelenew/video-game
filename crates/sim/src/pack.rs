@@ -572,10 +572,16 @@ pub fn killed(pack: &mut Pack, critters: &mut Critters, i: usize) {
             pack.mood_left = frames;
         }
     }
-    // Afraid, nobody finishes winding up.
+    // Afraid, nobody finishes winding up -- but a move its kind declares
+    // committed.
     if pack.mood != mood::HUNTING {
         for c in critters.iter_mut() {
-            if c.state == is::STARTUP {
+            let kept = sp
+                .kind(c.kind)
+                .moves
+                .iter()
+                .any(|m| m.kind == c.act && m.committed);
+            if c.state == is::STARTUP && !kept {
                 c.state = is::PROWL;
                 c.timer = 0;
                 give_back(pack, c);
@@ -664,52 +670,80 @@ pub fn hurt(
     dealt
 }
 
-/// **Frames until the pack can start another attack**, as things stand: the
+/// **Frames until the soonest hit the pack could land**, as things stand: the
 /// pack's answer to `Monster::frames_until_free`, which the fight report
-/// divides the fight by (the Gnawers' §9). A pack is many bodies, so its
-/// window is the soonest any of them could go:
+/// divides the fight by into its four windows (the Gnawers' §9: "the soonest
+/// any token holder, or anybody in a pile-on, could land"). A pack is many
+/// bodies, so its window is the soonest any of them could hit:
 ///
-/// - zero while anybody is winding up or out with a move that hurts;
-/// - the grace, or the scatter, while either lasts -- nothing attacks until
-///   it is over; never, routed or broken;
-/// - with a token free, the cadence a body decides on;
-/// - with every token out, the soonest one comes back: a holder's recovery
-///   and the rest after it, or a resting token's rest.
+/// - a hit out and unspent: now;
+/// - a windup: the frames left in it;
+/// - a body holding a token and not yet winding up (closing in): its move's
+///   whole windup;
+/// - a token free: the cadence a body decides on, and the quickest windup a
+///   token buys;
+/// - every token out: the soonest one comes back -- a holder's recovery and
+///   the rest after it, or a resting token's rest -- and then the same;
+/// - the grace, or a scatter: what is left of it first. Routed or broken,
+///   never.
+///
+/// Moves that need no token (the Gnawers' pile-on, the Big One's maul) wait
+/// for something -- a slow, a fighter in reach -- that this cannot see
+/// coming, so they count only once they are winding up.
 pub fn frames_until_free(pack: &Pack, critters: &Critters, herd: &Herd) -> u16 {
     let sp = pack.sp();
-    let hurts = |c: &Critter| sp.attack(c.act).damage > 0;
-    if critters
-        .iter()
-        .any(|c| c.alive() && c.attacking() && hurts(c))
-    {
-        return 0;
+    let hurts = |act: u8| sp.attack(act).damage > 0;
+    let mut soonest = u32::MAX;
+    for c in critters.iter().filter(|c| c.alive()) {
+        let left = match c.state {
+            is::ACTIVE if hurts(c.act) && !c.has(flag::HIT_USED) => 0,
+            is::STARTUP if hurts(c.act) => c.timer as u32,
+            is::PROWL if c.has(flag::TOKEN) && hurts(c.act) => sp.attack(c.act).startup as u32,
+            _ => continue,
+        };
+        soonest = soonest.min(left);
     }
-    if !critters.iter().any(Critter::alive) {
+    if soonest < u32::MAX || !critters.iter().any(Critter::alive) {
+        return soonest.min(u16::MAX as u32) as u16;
+    }
+    let before = match pack.mood {
+        mood::ROUTED | mood::BROKEN | mood::CALM => return u16::MAX,
+        mood::SCATTERED => pack.mood_left as u32,
+        _ => 0,
+    }
+    .max(pack.grace as u32);
+    // The quickest windup a token buys, among the bodies still standing.
+    let quickest = critters
+        .iter()
+        .filter(|c| c.alive())
+        .flat_map(|c| sp.kind(c.kind).moves.iter())
+        .filter(|m| m.token && hurts(m.kind))
+        .map(|m| sp.attack(m.kind).startup as u32)
+        .min();
+    let Some(quickest) = quickest else {
         return u16::MAX;
-    }
-    match pack.mood {
-        mood::ROUTED | mood::BROKEN => return u16::MAX,
-        mood::SCATTERED => return pack.mood_left,
-        mood::CALM => return u16::MAX,
-        _ => {}
-    }
-    if pack.grace > 0 {
-        return pack.grace;
-    }
-    if tokens_out(pack, critters, herd) < pack.token_cap() {
-        return pack.think_every() as u16;
-    }
-    let rest = sp.pack_raw(PackKnob::TokenRest).max(0) as u16;
-    let back = critters
-        .iter()
-        .filter(|c| c.alive() && c.has(flag::TOKEN))
-        .map(|c| match c.state {
-            is::RECOVERY | is::FLINCH => c.timer.saturating_add(rest),
-            // Holding one some other way (a latch): not coming back soon.
-            _ => u16::MAX,
-        });
-    let resting = pack.rest.iter().copied().filter(|r| *r > 0);
-    back.chain(resting).min().unwrap_or(0)
+    };
+    let then = pack.think_every() + quickest;
+    let back = if tokens_out(pack, critters, herd) < pack.token_cap() {
+        0
+    } else {
+        let rest = sp.pack_raw(PackKnob::TokenRest).max(0) as u32;
+        let held = critters
+            .iter()
+            .filter(|c| c.alive() && c.has(flag::TOKEN))
+            .map(|c| match c.state {
+                is::RECOVERY | is::FLINCH => c.timer as u32 + rest,
+                _ => u32::MAX,
+            });
+        let resting = pack
+            .rest
+            .iter()
+            .copied()
+            .filter(|r| *r > 0)
+            .map(|r| r as u32);
+        held.chain(resting).min().unwrap_or(0)
+    };
+    (before.max(back) + then).min(u16::MAX as u32) as u16
 }
 
 /// Is the pack beaten: nobody left in the fight?

@@ -64,7 +64,7 @@ const REGIONS: [Region; 3] = [
     },
 ];
 
-const SOLIDS: [Solid; 10] = [
+const SOLIDS: [Solid; 9] = [
     // Low walls on three sides, just outside the floor.
     Solid::cm([-1900, 0, -1600], [-1800, 150, 1500], Stone),
     Solid::cm([1800, 0, -1600], [1900, 150, 1500], Stone),
@@ -73,10 +73,11 @@ const SOLIDS: [Solid; 10] = [
     // the den's mouth...
     Solid::cm([-1900, 0, 1100], [-150, 300, 1600], Rock),
     Solid::cm([150, 0, 1100], [1900, 300, 1600], Rock),
-    // ...which is a hole three metres wide and three and a half deep, with
-    // the bank over it and behind it.
+    // ...which is a notch three metres wide and three and a half deep, open
+    // to the sky: a lintel over it hid whatever stood in it from a camera
+    // above and behind (the report's hidden commits), and the pack is fought
+    // there when a rout is cornered. The hole itself is the dark at its back.
     Solid::cm([-150, 0, 1450], [150, 300, 1600], Rock),
-    Solid::cm([-150, 200, 1100], [150, 300, 1450], Rock),
     // A fallen trunk, west of the middle: a platform they scramble.
     Solid::cm([-1150, 0, -550], [-350, 150, -450], Wood),
     // Two standing boulders, east: backs to stand against, too tall to climb.

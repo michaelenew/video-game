@@ -73,7 +73,7 @@ pub const GNAWER_KIND: CritterKind = CritterKind {
     moves: &[
         CritterMove::token(DART),
         CritterMove::token(HAMSTRING),
-        CritterMove::free(PILE_ON),
+        CritterMove::free(PILE_ON).committed(),
         CritterMove::free(GNAW),
         CritterMove::token(SCRAMBLE),
     ],
@@ -117,7 +117,7 @@ crate::species_knobs! {
     StrainBleed,     "big one",   "Strain bled per frame",               Int,     0,  50;
     StumbleFrames,   "big one",   "Stumble length",                      Frames,  0,  300;
     DartFrom,        "dart-bite", "Crouches this far from its target",   Fixed,   0,  fx(10,1);
-    DartArc,         "dart-bite", "Only from in front of its target (cos)", Fixed, fx(-1,1), fx(1,1);
+    FrontArc,        "dart-bite", "Bites and mauls only from in front (cos)", Fixed, fx(-1,1), fx(1,1);
     DartGiveUp,      "dart-bite", "Gives the token back if not there in", Frames, 0,  240;
     RearCos,         "hamstring", "Rear third, beyond (cos)",            Fixed,   fx(-1,1), fx(1,1);
     HamstringSlow,   "hamstring", "Speed while hamstrung (x)",           Fixed,   0,  fx(1,1);
@@ -140,6 +140,7 @@ crate::species_knobs! {
     FallStagger,     "gnaw",      "Felled, the fighter on it staggers",  Frames,  0,  240;
     ScrambleTop,     "scramble",  "Scrambles up a top no higher than",   Fixed,   0,  fx(4,1);
     ScrambleFrom,    "scramble",  "Scrambles from this near its side",   Fixed,   0,  fx(4,1);
+    CorneredAt,      "morale",    "A rout turns on a fighter this near the den", Fixed, 0, fx(20,1);
     CoopGnawers,     "coop",      "More gnawers for two hunters",        Int,     0,  4;
     CoopTokens,      "coop",      "More tokens for two hunters",         Int,     0,  4;
 }

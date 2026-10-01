@@ -189,6 +189,18 @@ pub(super) fn off_footprint(s: &crate::arena::Solid, at: V3) -> Fx {
     V3::new(dx, Fx::ZERO, dz).flat_len()
 }
 
+/// **Is the critter in front of its target**, inside `FrontArc` of the
+/// facing the glance saw? The dart-bite and the maul commit only from there:
+/// they are the moves you face, and it keeps their windups on the screen of
+/// the fighter they are for (the report's hidden commits). Facing is
+/// something the glance saw, so this reads nothing it could not see.
+fn in_front(c: &Critter, seen: &crate::pack::Seen) -> bool {
+    let from = V3::new(c.pos.x.sub(seen.pos.x), Fx::ZERO, c.pos.z.sub(seen.pos.z));
+    let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
+    from.flat_len().raw() > 0
+        && facing.dot(from.normalized()).raw() >= knob_fx(Knob::FrontArc).raw()
+}
+
 /// Is the critter on the level its target stands on -- both on the floor, or
 /// both on one top? A bite from below a platform at somebody on it is a bite
 /// at the platform's side.
@@ -215,7 +227,7 @@ impl PackMind for Mind {
             // and the crouch once the body has closed to it.
             DART => 0,
             MAUL => {
-                if !same_level(c, seen.pos) || treed(pack, who) {
+                if !same_level(c, seen.pos) || treed(pack, who) || !in_front(c, seen) {
                     return 0;
                 }
                 default_appetite(look, i, m, a)
@@ -319,6 +331,30 @@ impl PackMind for Mind {
         };
         if coop > 0 && pack.boost_left == 0 {
             pack.rally(coop as u8, u16::MAX);
+        }
+
+        // **Cornered at the den, a rout turns.** A fighter who follows it to
+        // the mouth has stopped the regroup clock (`RegroupClear`), and one
+        // who walks into it is fought: the survivors come out of the rout
+        // where they stand, counted again against who is left, without the
+        // free howl a regroup brings. Decided while building: the harness
+        // found a routed pack that never fought was a free win at the den.
+        if pack.mood == mood::ROUTED {
+            let bay = knob_fx(Knob::CorneredAt);
+            let cornered = pack.seen.iter().any(|s| {
+                s.alive
+                    && V3::new(s.pos.x.sub(pack.home.x), Fx::ZERO, s.pos.z.sub(pack.home.z))
+                        .flat_len()
+                        .raw()
+                        <= bay.raw()
+            });
+            if cornered {
+                pack.mood = mood::HUNTING;
+                pack.mood_left = 0;
+                pack.lost = 0;
+                pack.mustered = critters.iter().filter(|c| c.alive()).count() as u8;
+                pack.memo[word::BITS] &= !(WAS_ROUTED as i32);
+            }
         }
 
         // Coming back from a rout, behind a howl, for free.
@@ -532,8 +568,11 @@ impl PackMind for Mind {
                     let near =
                         seen.pos.sub(c.pos).flat_len().raw() <= knob_fx(Knob::LeaderComesIn).raw();
                     if (set_up(pack, who) && near) || few {
+                        // In from the front, where the maul is thrown from.
+                        let front = V3::from_turns(Fx::from_raw(seen.facing as i32));
+                        let spot = lead.add(front.scale(sp.attack(MAUL).ideal_range));
                         return Steer {
-                            to: away(lead, sp.attack(MAUL).ideal_range),
+                            to: spot,
                             speed: run,
                             face: Some(lead),
                         };
@@ -697,8 +736,11 @@ fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
             continue;
         }
         if gap.raw() <= from.add(crate::arena::SKIN).raw() {
-            // There: the crouch.
+            // There: the crouch. Belly to the floor -- it stops where it is
+            // rather than sliding the last metre in on its momentum, so the
+            // body you see crouch is the body still there to be hit.
             body.role &= !(role::CLOSING | role::STEPS);
+            body.vel = V3::new(Fx::ZERO, body.vel.y, Fx::ZERO);
             body.state = is::STARTUP;
             body.act = DART;
             body.timer = sp.attack(DART).startup.max(1);
@@ -754,11 +796,7 @@ fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         // Facing is something the glance saw, so this reads nothing it could
         // not see -- and it keeps the crouch on the screen of the fighter it
         // is for (the report's hidden commits).
-        let from = V3::new(c.pos.x.sub(seen.pos.x), Fx::ZERO, c.pos.z.sub(seen.pos.z));
-        let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
-        if from.flat_len().raw() == 0
-            || facing.dot(from.normalized()).raw() < knob_fx(Knob::DartArc).raw()
-        {
+        if !in_front(&c, &seen) {
             continue;
         }
         // Individuals are noisy: the same coin the generic pack throws.

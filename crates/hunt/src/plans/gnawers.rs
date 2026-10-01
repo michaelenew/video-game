@@ -37,6 +37,12 @@ pub const SWING: Intent = Intent("Swing");
 pub const SHED: Intent = Intent("Shed");
 pub const LEADER: Intent = Intent("Leader");
 pub const WAIT: Intent = Intent("Wait");
+pub const HOP: Intent = Intent("Hop");
+
+/// A maul crouched this near is jumped.
+const MAUL_NEAR: Fx = Fx::ratio(45, 10);
+/// How long the jump is held: long enough to be over the lunge when it comes.
+const HOP_HOLD: u32 = 20;
 
 /// How far off a wall's face it stands: its own body and a little.
 const OFF_WALL: Fx = Fx::ratio(7, 10);
@@ -54,6 +60,8 @@ const WINDOW: u32 = 60;
 const SLOW_POKE: u16 = 9;
 /// It dodges toward the Big One when it is further than this.
 const DASH_FROM: Fx = Fx::ratio(45, 10);
+/// A raised tail this near is a crouch coming: the swing waits for it.
+const WATCH_TAILS: Fx = Fx::from_raw(6 << 16);
 /// How far it steps out to meet a raised tail or a crouch.
 const STEP_IN: Fx = Fx::ratio(15, 10);
 /// A gnawer this near is close enough to matter to where it stands.
@@ -94,6 +102,10 @@ pub struct Gnawers {
     was_alive: usize,
     /// Frames it has felt slowed: a person notices on a delay too.
     slowed_for: u32,
+    /// Frames left holding the jump.
+    hop_left: u32,
+    /// Which hand the last swing was: the Dual mage alternates.
+    hand: bool,
     rng: u32,
 }
 
@@ -111,6 +123,8 @@ impl Gnawers {
             window: 0,
             was_alive: 0,
             slowed_for: 0,
+            hop_left: 0,
+            hand: false,
             rng: seed | 1,
         }
     }
@@ -169,6 +183,26 @@ fn find_post(w: &World, from: V3) -> Option<V3> {
     best.map(|(_, s)| s)
 }
 
+/// The button for the auto. The Dual mage's two hands are two bars, and a
+/// hand thrown alone runs one of them away until she burns (`sim::dual`), so
+/// she alternates, the way a person playing her does.
+fn auto_button(class: sim::Class, toggle: bool) -> u16 {
+    match class {
+        sim::Class::DualMage if toggle => Input::RIGHT,
+        _ => Input::LEFT,
+    }
+}
+
+/// The move a left click throws on the floor: the class's auto. Slot zero
+/// everywhere but the Blood mage, whose auto is the fifth row of her table
+/// (`sim::moves::blood`).
+fn auto_slot(class: sim::Class) -> u8 {
+    match class {
+        sim::Class::BloodMage => sim::moves::blood::SWEEP,
+        _ => 0,
+    }
+}
+
 fn flat(v: V3) -> V3 {
     V3::new(v.x, Fx::ZERO, v.z)
 }
@@ -224,7 +258,7 @@ impl Plan for Gnawers {
             Some(V3::new(sum.x.div(n), Fx::ZERO, sum.z.div(n)))
         };
 
-        let poke = sim::moves::get(me.class, 0);
+        let poke = sim::moves::get(me.class, auto_slot(me.class));
         let reach = poke.reach.max(Fx::ONE);
         let free = me.action.actionable();
 
@@ -245,12 +279,9 @@ impl Plan for Gnawers {
         } else {
             self.slowed_for = 0;
         }
-        let latched = w
-            .critters
-            .iter()
-            .any(|c| gnawers::latched(c) && c.target as usize == self.who);
-        if (self.slowed_for >= 6 || latched && self.slowed_for >= 6) && self.dodge_left == 0 && free
-        {
+        // A latch comes with its slow, so the one rule answers both: felt a
+        // reaction after it began, like everything else.
+        if self.slowed_for as usize >= REACTION && self.dodge_left == 0 && free {
             self.intent = SHED;
             self.dodge_left = sim::tuning::dodge_frames() as u32 + 20;
             let away = centroid.map_or(me.facing.scale(Fx::ONE.neg()), |c| {
@@ -265,6 +296,22 @@ impl Plan for Gnawers {
             return Input::aimed(steer(pack_yaw, away) | Input::SHIFT, pack_aim);
         }
 
+        // **Jump the maul** (§2): a crouched Big One close by, winding the
+        // heavy lunge at the legs. Every class's hop clears a metre; held,
+        // so the feet are up when it arrives.
+        if self.hop_left > 0 {
+            self.hop_left -= 1;
+            return Input::aimed(Input::SPACE, pack_aim);
+        }
+        if let Some(big) = leader {
+            let mauling = big.crouching && big.act == gnawers::MAUL;
+            if mauling && dist(&big).raw() < MAUL_NEAR.raw() && me.grounded && free {
+                self.intent = HOP;
+                self.hop_left = HOP_HOLD;
+                return Input::aimed(Input::SPACE, pack_aim);
+            }
+        }
+
         // 5 and 6. **The Big One**, when it is the thing to hit: a death's
         // scatter, a howl winding up, a stumble, or a pack too thin to hide it.
         // A routed pack is running for its den, and it is seen to: after it,
@@ -274,7 +321,8 @@ impl Plan for Gnawers {
             .is_some_and(|p| matches!(p.mood, sim::pack::mood::ROUTED | sim::pack::mood::BROKEN));
         if let Some(big) = leader {
             let howling = big.crouching && big.act == gnawers::HOWL;
-            if self.window > 0 || howling || big.down || running {
+            let alone = members.is_empty();
+            if self.window > 0 || howling || big.down || running || alone {
                 self.intent = LEADER;
                 let (yaw, aim, pitch) = look_at(big.at, big.middle);
                 let gap = dist(&big);
@@ -297,7 +345,8 @@ impl Plan for Gnawers {
                 }
                 if self.cooldown == 0 && free {
                     self.cooldown = SWING_GAP + self.roll() % 4;
-                    return Input::looking_at(Input::LEFT, aim, pitch);
+                    self.hand = !self.hand;
+                    return Input::looking_at(auto_button(me.class, self.hand), aim, pitch);
                 }
                 return Input::looking_at(0, aim, pitch);
             }
@@ -315,11 +364,19 @@ impl Plan for Gnawers {
             .min_by_key(|s| dist(s).raw())
             .copied()
             .or_else(|| {
-                members
+                // A raised tail coming in is a crouch about to be thrown: keep
+                // the swing for it rather than spend it on whatever is near.
+                if members
                     .iter()
-                    .filter(|s| in_reach(s))
+                    .any(|s| s.tail && dist(s).raw() < WATCH_TAILS.raw())
+                {
+                    return None;
+                }
+                // Any body in reach, the Big One included -- out of its maul,
+                // which the hop just cleared, it is sixty frames of recovery.
+                seen.iter()
+                    .filter(|s| s.alive && in_reach(s) && !(s.leader && s.crouching))
                     .min_by_key(|s| dist(s).raw())
-                    .copied()
             });
         if let Some(t) = threat {
             let (yaw, aim, pitch) = look_at(t.at, t.middle);
@@ -331,7 +388,8 @@ impl Plan for Gnawers {
             if self.cooldown == 0 && free {
                 self.intent = SWING;
                 self.cooldown = SWING_GAP + self.roll() % 4;
-                return Input::looking_at(Input::LEFT, aim, pitch);
+                self.hand = !self.hand;
+                return Input::looking_at(auto_button(me.class, self.hand), aim, pitch);
             }
             return Input::looking_at(0, aim, pitch);
         }
