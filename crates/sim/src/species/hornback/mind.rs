@@ -823,7 +823,12 @@ impl Mind {
                     .add(V3::from_turns(turn).scale(Fx::ONE.add(Fx::ONE)));
                 (spot, run, knob_fx(Knob::CohesionRun))
             }
-            HerdState::Returning => (pack.home, run, knob_fx(Knob::CohesionRun)),
+            // Coming home at a trot: a ride, and a route.
+            HerdState::Returning => (
+                pack.home,
+                knob_fx(Knob::ReturnSpeed),
+                knob_fx(Knob::CohesionRun),
+            ),
             HerdState::Rallied => {
                 let at = bull.map_or(pack.home, |b| b.pos);
                 let turn = Fx::from_raw(

@@ -221,6 +221,7 @@ crate::species_knobs! {
     CoopHealth,      "coop",     "Bull's health for two hunters (x)",     Fixed,  fx(1,1), fx(3,1);
     CartLanePeriod,  "crossing", "A migration wave every",                Frames, 0,  3600;
     CartLaneWarn,    "crossing", "Drawn on the road this long before",    Frames, 0,  900;
+    ReturnSpeed,     "stampede", "Comes home at",                         Fixed,  0,  fx(20,1);
 }
 
 /// Raw helper for the knob bounds above.

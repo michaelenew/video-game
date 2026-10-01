@@ -78,6 +78,19 @@ const HOOK_THROUGH: Fx = Fx::ratio(32, 10);
 const HOOK_NEAR: Fx = Fx::from_raw(5 << 16);
 /// A post nearer the bull than this, or a way there passing nearer, costs.
 const KEEP_OFF: Fx = Fx::from_raw(7 << 16);
+/// A rider jumps off this long before the second buck.
+const LEAVE_BEFORE: u32 = 24;
+/// A returning cow this near is one to catch.
+const CATCH_FROM: Fx = Fx::from_raw(9 << 16);
+/// How far ahead of a cow its path is read, in seconds.
+const CATCH_LEAD: Fx = Fx::from_raw(1 << 16);
+/// Standing this near its path, it is in the way.
+const CATCH_OFF: Fx = Fx::ratio(5, 10);
+/// Jump when it arrives within this many seconds, and not sooner than this.
+const CATCH_JUMP: Fx = Fx::ratio(7, 10);
+const CATCH_SOON: Fx = Fx::ratio(3, 10);
+/// Frames the jump is held.
+const JUMP_HOLD: u32 = 30;
 /// A post this near the one the bull is wary of is the same rock.
 const SPENT_NEAR: Fx = Fx::from_raw(3 << 16);
 /// What standing at the bank costs, in metres of walking, over a boulder.
@@ -104,7 +117,9 @@ struct Bull {
 #[derive(Clone, Copy, Default)]
 struct Seen {
     bull: Bull,
-    cows: [(bool, V3, u8, u8); MAX_CRITTERS],
+    /// Each cow: alive, where, its velocity, its state and move.
+    cows: [(bool, V3, V3, u8, u8); MAX_CRITTERS],
+    returning: bool,
     signs: Signs,
     calm: bool,
     stampede: bool,
@@ -134,6 +149,10 @@ pub struct Hornback {
     raised_for: bool,
     /// Rides it means to take: one hunt in three (§9).
     rides: bool,
+    /// Frames on a cow's back this ride.
+    rode: u32,
+    /// Frames of a jump still held.
+    jumping: u32,
     rng: u32,
 }
 
@@ -159,6 +178,8 @@ impl Hornback {
             spent: None,
             raised_for: false,
             rides: rng % 3 == 0,
+            rode: 0,
+            jumping: 0,
             rng,
         }
     }
@@ -280,6 +301,7 @@ impl Plan for Hornback {
         if let Some(pack) = w.pack {
             seen.calm = pack.mood == sim::pack::mood::CALM;
             seen.stampede = h::herd_state(&pack) == h::HerdState::Stampede;
+            seen.returning = h::herd_state(&pack) == h::HerdState::Returning;
         }
         for (i, c) in w.critters.iter().enumerate() {
             if c.kind == h::BULL && c.present() {
@@ -295,7 +317,7 @@ impl Plan for Hornback {
                     stunned: h::stunned(c),
                 };
             } else {
-                seen.cows[i] = (c.alive(), c.pos, c.state, c.act);
+                seen.cows[i] = (c.alive() && c.kind == h::COW, c.pos, c.vel, c.state, c.act);
             }
         }
         self.memory[self.at] = seen;
@@ -376,6 +398,58 @@ impl Plan for Hornback {
             };
             let away = out.add(out).add(back).normalized();
             return Input::aimed(steer(bull_yaw, away), bull_aim);
+        }
+
+        // **Plan v2, the ride home** (§9): aboard, brace through the first
+        // buck and jump before the second -- or before the cow carries you
+        // past the bull's nose.
+        if let Some(_cow) = h::ride::rider_of(&me) {
+            self.intent = RIDE;
+            self.rode += 1;
+            let first = h::knob(h::Knob::RidePatience).max(0) as u32;
+            let second = first + h::knob(h::Knob::SecondBuck).max(0) as u32;
+            let late = self.rode + LEAVE_BEFORE >= second;
+            let hook_ahead = gap.raw() < HOOK_NEAR.add(Fx::from_int(2)).raw() && nose_cos.raw() > 0;
+            if (late || hook_ahead) && free {
+                return Input::aimed(Input::SPACE, bull_aim);
+            }
+            return Input::aimed(Input::CROUCH, bull_aim);
+        }
+        self.rode = 0;
+        if self.rides && seen.returning && me.grounded && free {
+            // A cow coming home past: stand in its way and jump as it
+            // arrives, so it runs under the feet.
+            let near = seen
+                .cows
+                .iter()
+                .filter(|(alive, at, vel, state, _)| {
+                    *alive
+                        && *state == is::PROWL
+                        && vel.flat_len().raw() > Fx::ONE.raw()
+                        && flat(at.sub(me.pos)).flat_len().raw() < CATCH_FROM.raw()
+                })
+                .min_by_key(|(_, at, ..)| flat(at.sub(me.pos)).flat_len().raw())
+                .copied();
+            if let Some((_, at, vel, ..)) = near {
+                let speed = vel.flat_len();
+                let ahead = at.add(flat(vel).scale(CATCH_LEAD));
+                let off =
+                    sim::math::flat_segment_gap(me.pos, at, ahead.add(flat(vel).scale(CATCH_LEAD)));
+                let arrives = flat(me.pos.sub(at)).flat_len().div(speed.max(Fx::ONE));
+                self.intent = RIDE;
+                if off.raw() < CATCH_OFF.raw()
+                    && arrives.raw() < CATCH_JUMP.raw()
+                    && arrives.raw() > CATCH_SOON.raw()
+                {
+                    self.jumping = JUMP_HOLD;
+                    return Input::aimed(Input::SPACE, bull_aim);
+                }
+                return Input::aimed(steer(bull_yaw, flat(ahead.sub(me.pos))), bull_aim);
+            }
+        }
+        if self.jumping > 0 {
+            self.jumping -= 1;
+            return Input::aimed(Input::SPACE, bull_aim);
         }
 
         // 4. **The bellow**: the lane drawn through it. To the nearest lee,
