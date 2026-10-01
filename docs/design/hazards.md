@@ -175,6 +175,15 @@ draw a part shown at nothing, and the report and the scripted hunter can read
 the same function. How a part shown at *some* is drawn -- a shimmer -- is the
 Veilstalker's look to add.
 
+**As built** (the Veilstalker, 2026-10-01): it used all 24 cells -- five for six
+hazards (coals ×4, its smoke cloud, a flash), eight for 32 footfalls, one
+for four paint marks, and ten of its own words (the glances, the view, the
+quills, the mimic, the braziers, the perch, the report's counters). The smoke is the one floor hazard that
+`blocks_sight`, and fire turns it into a flash (`ignites_into`). A creature's
+view of a hunter is `aim::in_view_from`, from where the hunter stood and the
+way they faced, a glance old; the drawn shimmer is a translucent silhouette
+in four strengths.
+
 Packs keep their own glance (`pack::Seen`) and perceive every fighter; no pack
 creature asked otherwise.
 

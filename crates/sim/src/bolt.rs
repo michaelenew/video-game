@@ -253,7 +253,7 @@ pub fn step(
                             from: shot.pos,
                             unblockable: false,
                             who: shot.owner,
-                            class: class,
+                            class,
                             kind: crate::monster::Blow::NO_MOVE,
                         },
                     );

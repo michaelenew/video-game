@@ -249,6 +249,14 @@ pub trait Tally: Send + Sync {
     fn unanswerable(&self) -> u32 {
         0
     }
+    /// **The frames until creature `slot` can next hit**, for the windows,
+    /// given its `frames_until_free`: a creature that must first decloak, or
+    /// close from a stalk, says how long that takes. Defaults to `free`, so
+    /// every creature that says nothing is measured as it always was.
+    fn until_free(&self, w: &World, slot: usize, free: u16) -> u16 {
+        let _ = (w, slot);
+        free
+    }
 }
 
 /// What the report counts about the hunt's lore: the defended things, falls,
@@ -774,9 +782,15 @@ impl Report {
         // a pair is free to act when either of them is.
         let free = slots
             .iter()
-            .filter_map(|s| after.monsters[*s])
-            .filter(|m| m.alive())
-            .map(|m| m.frames_until_free())
+            .filter_map(|s| after.monsters[*s].map(|m| (*s, m)))
+            .filter(|(_, m)| m.alive())
+            .map(|(s, m)| {
+                let free = m.frames_until_free();
+                match self.extra.as_ref() {
+                    Some(extra) => extra.until_free(after, s, free),
+                    None => free,
+                }
+            })
             .min();
         // **Guarded**, the fifth band (the Mantis, `mantis.md` §9): its guard
         // or its prayer is up and a hunter is inside it, so a frontal hit is

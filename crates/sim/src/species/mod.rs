@@ -71,7 +71,7 @@ pub mod pair;
 
 pub mod broodmother;
 
-// pub mod veilstalker;
+pub mod veilstalker;
 
 pub mod mantis;
 
@@ -133,7 +133,8 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
 
-        // SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
+        SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
+
         SpeciesId::MANTIS => Some(&mantis::SPECIES),
 
         // SpeciesId::GALEWING => Some(&galewing::SPECIES),
@@ -325,6 +326,9 @@ pub struct Stock {
 /// creature's slot, the fighter and what they sent; what they may still do.
 pub type FromInside = fn(&mut crate::state::World, usize, usize, crate::Input) -> crate::Input;
 
+/// A body drawn that is not in the world, and how strongly: `FightDecl::apparition`.
+pub type Apparition = fn(&crate::state::World) -> Option<(crate::monster::Monster, Fx)>;
+
 /// What a species brings to a fight besides its body and its pack: the
 /// shared machinery of bestiary P4, P5 and P7, and the hooks a creature's own
 /// file plugs into. Every field defaults to nothing ([`FightDecl::PLAIN`]), and
@@ -382,6 +386,11 @@ pub struct FightDecl {
     /// renderer draws it at, and what the report and the scripted hunter call
     /// visible. `None` is always fully. The Veilstalker's veil.
     pub shown: Option<fn(&crate::state::World, usize, usize) -> Fx>,
+    /// **A body drawn that is not in the world**, and how strongly: posed,
+    /// placed and drawn as a creature is -- its parts and its floor marker --
+    /// with no hurtbox, nothing to stand on and no brain. The Veilstalker's
+    /// mimic, a decloak with nothing in it. `None` is none.
+    pub apparition: Option<Apparition>,
     /// **What it draws on the floor besides its bodies' telegraphs**: a
     /// stampede's lane and its lees, the solid a charge will stop at, a
     /// guard. See [`crate::sign`]. `None` draws nothing more.
@@ -625,6 +634,7 @@ impl FightDecl {
         bumped: None,
         frame: None,
         shown: None,
+        apparition: None,
         signs: None,
         appetite: None,
         prowl_to: None,

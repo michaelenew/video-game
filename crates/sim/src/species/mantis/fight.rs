@@ -948,6 +948,18 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
     }
 }
 
+/// The lunge on its way: into a solid -- one in the lane as it ran -- it
+/// stops dead and staggers. A lane with nothing in it runs its length.
+fn lunge_runs(m: &mut Monster, scene: &crate::aim::Scene) {
+    if aim_lane(m, scene) {
+        let along = V3::from_turns(m.yaw);
+        let left_to_go = m.aimed_at().sub(m.pos).dot(along);
+        if left_to_go.raw() <= 0 {
+            stagger(m, STAGGER, Knob::LungeStagger.frames());
+        }
+    }
+}
+
 /// **Its body this frame**: the lunge's release and its stop, the leap and
 /// the dive, the flare's hop, walking and turning with its guard up.
 fn body_moves(m: &mut Monster, lore: &mut Lore, t: u32, scene: &crate::aim::Scene) {
@@ -967,17 +979,7 @@ fn body_moves(m: &mut Monster, lore: &mut Lore, t: u32, scene: &crate::aim::Scen
             }
             aim_lane(m, scene);
         }
-        Doing::Active { kind: LUNGE, .. } => {
-            // Into a solid -- one in the lane as it ran -- it stops dead and
-            // staggers. A lane with nothing in it runs its length.
-            if aim_lane(m, scene) {
-                let along = V3::from_turns(m.yaw);
-                let left_to_go = m.aimed_at().sub(m.pos).dot(along);
-                if left_to_go.raw() <= 0 {
-                    stagger(m, STAGGER, Knob::LungeStagger.frames());
-                }
-            }
-        }
+        Doing::Active { kind: LUNGE, .. } => lunge_runs(m, scene),
         _ => {}
     }
 

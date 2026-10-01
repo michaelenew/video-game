@@ -192,7 +192,7 @@ pub fn step(
                             from: piece.pos,
                             unblockable: false,
                             who: piece.owner,
-                            class: class,
+                            class,
                             kind: crate::monster::Blow::NO_MOVE,
                         },
                     );

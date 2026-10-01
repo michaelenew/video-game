@@ -430,7 +430,7 @@ pub fn step(
                             from: shot.pos,
                             unblockable: m.unblockable,
                             who: shot.owner,
-                            class: class,
+                            class,
                             kind: shot.gale.slot(),
                         },
                     );

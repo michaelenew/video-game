@@ -57,9 +57,57 @@ struct Skin {
     /// The hide of every body after the first, in a fight of more than one:
     /// the same paint, darker, so two of a kind can be told apart and named.
     second: Handle<StandardMaterial>,
+    /// **A part shown at less than whole** (`World::shown`, the
+    /// Veilstalker's veil): the hide as a pale, see-through shimmer, in
+    /// [`VEIL_LEVELS`] steps of strength. The design's shimmer is the frame
+    /// behind it, displaced; this is its stated fallback -- a silhouette at
+    /// the same strength -- and costs nothing `view`'s budget can see.
+    veil: [Handle<StandardMaterial>; VEIL_LEVELS],
     /// The species' [`crate::species::Tint`] paints, in its order; empty for
     /// one without.
     stages: Vec<Handle<StandardMaterial>>,
+}
+
+/// How many strengths a part shown at less than whole is drawn in.
+const VEIL_LEVELS: usize = 4;
+
+/// The veil material for a part shown at `s`, nought to one.
+fn veil_level(s: f32) -> usize {
+    ((s * VEIL_LEVELS as f32).ceil() as usize).clamp(1, VEIL_LEVELS) - 1
+}
+
+/// The shimmer: the hide lightened toward the snow and see-through, lit a
+/// little from inside so it reads against a white floor as well as a dark
+/// trunk.
+fn veil_material(
+    materials: &mut Assets<StandardMaterial>,
+    paint: Paint,
+    level: usize,
+) -> Handle<StandardMaterial> {
+    let k = (level + 1) as f32 / VEIL_LEVELS as f32;
+    let [r, g, b] = paint.rgb;
+    let lift = |c: f32| c + (1.0 - c) * 0.35 * (1.0 - k);
+    materials.add(StandardMaterial {
+        base_color: Color::srgba(lift(r), lift(g), lift(b), 0.12 + 0.55 * k),
+        emissive: LinearRgba::rgb(0.06 * k, 0.07 * k, 0.09 * k),
+        alpha_mode: AlphaMode::Blend,
+        perceptual_roughness: 0.3,
+        ..default()
+    })
+}
+
+/// How many bodies are drawn: every creature slot, and one more for a body
+/// that is drawn and not in the world (`World::apparition`, the mimic).
+const BODIES: usize = MAX_MONSTERS + 1;
+
+/// The body drawn in pool `slot`, and how strongly: a creature, or -- in the
+/// last pool -- the apparition.
+fn body_in(world: &sim::World, slot: usize) -> Option<(Monster, Option<sim::Fx>)> {
+    if slot < MAX_MONSTERS {
+        world.monsters[slot].map(|m| (m, None))
+    } else {
+        world.apparition().map(|(m, s)| (m, Some(s)))
+    }
 }
 
 #[derive(Resource)]
@@ -110,6 +158,7 @@ pub fn setup(
             limb: material(&mut materials, look.breakable),
             broken: material(&mut materials, look.broken),
             second: material(&mut materials, darker(look.armour)),
+            veil: std::array::from_fn(|level| veil_material(&mut materials, look.armour, level)),
             stages: crate::species::tint(sp.id)
                 .map(|t| {
                     t.stages
@@ -127,7 +176,7 @@ pub fn setup(
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let ball = meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap());
     let (parts, bones) = most();
-    for slot in 0..MAX_MONSTERS {
+    for slot in 0..BODIES {
         for index in 0..parts {
             commands.spawn((
                 Mesh3d(cube.clone()),
@@ -190,21 +239,25 @@ pub fn place(
         Without<Limb>,
     >,
 ) {
-    let herd = &sim.cur.monsters;
-
     for (limb, mut transform, mut visible, mut material) in limbs.iter_mut() {
         let (slot, index) = (limb.0, limb.1);
-        let Some(beast) = herd[slot].filter(|b| index < b.sp().parts.len()) else {
+        let Some((beast, strength)) =
+            body_in(&sim.cur, slot).filter(|(b, _)| index < b.sp().parts.len())
+        else {
             *visible = Visibility::Hidden;
             continue;
         };
         // **What the simulation says can be seen of it** (`World::shown`):
         // the Veilstalker's veil, owned by the snapshot because a decloak is a
-        // tell. A part shown at nothing is not drawn; how a part shown at
-        // some is drawn -- a shimmer, a dithered silhouette -- is the
-        // creature's look to add. Every creature without a veil is shown
-        // whole, as it always was.
-        if sim.cur.shown(slot, index).raw() <= 0 {
+        // tell. A part shown at nothing is not drawn; a part shown at some is
+        // drawn as a shimmer at that strength. Every creature without a veil
+        // is shown whole, as it always was. The apparition is shown at its
+        // own strength.
+        let shown = match strength {
+            Some(s) => s,
+            None => sim.cur.shown(slot, index),
+        };
+        if shown.raw() <= 0 {
             *visible = Visibility::Hidden;
             continue;
         }
@@ -233,7 +286,11 @@ pub fn place(
         let tinted = crate::species::tint(beast.species)
             .and_then(|t| (t.stage)(&sim.cur, index))
             .and_then(|i| skin_of.stages.get(i));
-        let wanted = tinted.unwrap_or_else(|| skin(skin_of, &beast, slot, index));
+        let wanted = if shown.raw() < sim::Fx::ONE.raw() {
+            &skin_of.veil[veil_level(shown.to_f32_for_render())]
+        } else {
+            tinted.unwrap_or_else(|| skin(skin_of, &beast, slot.min(MAX_MONSTERS - 1), index))
+        };
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -243,10 +300,20 @@ pub fn place(
     // it disappears inside them and only shows in the wedge a bend opens up.
     for (knuckle, mut transform, mut visible, mut material) in knuckles.iter_mut() {
         let (slot, bone) = (knuckle.0, knuckle.1);
-        let Some(beast) = herd[slot] else {
+        let Some((beast, strength)) = body_in(&sim.cur, slot) else {
             *visible = Visibility::Hidden;
             continue;
         };
+        // A joint is drawn only where the body round it is drawn whole: a
+        // ball inside a shimmer reads as a bead hanging in the air.
+        let whole = strength.is_none_or(|s| s.raw() >= sim::Fx::ONE.raw())
+            && (0..beast.sp().parts.len())
+                .filter(|p| beast.sp().parts[*p].shape.bone == bone)
+                .all(|p| strength.is_some() || sim.cur.shown(slot, p).raw() >= sim::Fx::ONE.raw());
+        if !whole {
+            *visible = Visibility::Hidden;
+            continue;
+        }
         let look = crate::species::look(beast.species);
         let Some(width) = joint_width(beast.sp(), look, bone) else {
             *visible = Visibility::Hidden;
@@ -259,7 +326,7 @@ pub fn place(
             scale: Vec3::splat(width),
         };
         *visible = Visibility::Inherited;
-        let wanted = hide_of(hide.of(beast.species), slot);
+        let wanted = hide_of(hide.of(beast.species), slot.min(MAX_MONSTERS - 1));
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -584,7 +651,13 @@ pub fn signs(
     // everything, as every marker is (`OnTop`), which for a knee-high biter at
     // your heels is the point: the character's own body would hide it.
     let crowd = &sim.cur.critters;
+    let ghost = sim.cur.apparition();
     let coming: [Option<sim::monster::Telegraph>; SIGN_SLOTS] = std::array::from_fn(|slot| {
+        // The last set: a body drawn that is not in the world marks the
+        // floor its rear would, exactly as a real one does.
+        if slot == SIGN_SLOTS - 1 {
+            return ghost.and_then(|(m, _)| m.telegraph());
+        }
         if slot >= MAX_MONSTERS {
             let c = crowd.get(slot - MAX_MONSTERS)?;
             if sim.cur.pack.is_none() || !c.alive() {
@@ -763,8 +836,8 @@ pub fn signs(
 }
 
 /// How many sets of floor markers there are: one per creature slot, then one
-/// per critter slot.
-const SIGN_SLOTS: usize = MAX_MONSTERS + sim::critter::MAX_CRITTERS;
+/// per critter slot, then one for an apparition (`World::apparition`).
+const SIGN_SLOTS: usize = MAX_MONSTERS + sim::critter::MAX_CRITTERS + 1;
 
 /// Just off the floor, so the marker is not fighting it for the same depth.
 const FLOOR: f32 = 0.03;

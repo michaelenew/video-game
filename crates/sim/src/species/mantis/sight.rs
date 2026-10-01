@@ -217,7 +217,7 @@ pub fn record(w: &mut World) {
         let floor = ground.ground_under(p.pos);
         let aloft = !p.grounded && p.pos.y.sub(floor).raw() > Knob::AloftAbove.fx().raw();
         // The sample, every `every` frames.
-        if stamp.is_multiple_of(every) {
+        if stamp % every == 0 {
             let slot = ((stamp / every) as usize) % RING;
             let mut flags = flag::TAKEN;
             if p.health > 0 {
