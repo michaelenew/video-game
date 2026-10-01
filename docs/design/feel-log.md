@@ -6221,3 +6221,41 @@ and `scripts/screenshot.sh` renders the Elementalist standing beside a stone.
 
 **Verdict** built, unplayed. C1–C5 are a person's, in order, and C2 first.
 
+
+### 2026-10-01 — Species: the Ridgeback becomes a table (bestiary P1 and P8)
+
+**Changed** Nothing a player can feel, on purpose. Every creature is a
+`Species` table now — skeleton, parts with flags, legs, moves with flags, clips,
+knobs — and the Ridgeback is the first (`crates/sim/src/species/ridgeback/`).
+The four special cases by name became declared flags: the sweep
+`mirrors_to_target_side`, the shake is `scaled_by` its force, the ridge and the
+nape are `weak_point`s, the feet are `breakable`. The world holds two creatures
+(the Pair's slot). The Oven's seventy Ridgeback scalars and its move table moved
+to the Ridgeback's own baked file; the numbers every creature has are
+`species::Common`, read per species. The hunter's plan and the report's words
+are the Ridgeback's card in `crates/hunt/src/plans/`; the anim recipes, the
+pose table and the renderer's paint are per species too. See
+[species.md](species.md).
+
+**Why** Ten creatures are next, built two at a time on separate branches. Each
+lives in its own files and touches four registries by uncommenting two lines
+that are already there.
+
+**Found** The bit-identical bar held without a single number moving: two pins
+hash every frame of a hunt (every class against noise, and the scripted hunter
+over four seeds) and match the code before the change; the fight report for
+every class, twelve seeds each, solo and duo, diffs empty; the re-baked pose
+table is the same table. The snapshot grew from 2,680 to 2,856 bytes for the
+second slot; one creature shrank from 184 to 180, because health is kept for
+breakable parts only. `beastcheck` reads its routes off the table now rather
+than naming six, and prints the same heights where the two overlap. The recipe
+for adding a creature was dry-run with a copy of the Ridgeback registered as the
+Pair: it compiled, baked and was measured with no edit outside its own files
+and registry lines — and the species test caught that a creature fresh from its
+first bake has every hide knob at zero, which is now what its failure says.
+
+**Reverted** Nothing.
+
+**Verdict** built; the Ridgeback is unchanged by construction. A person should
+look at §6 of species.md: the shared ranges on the common knobs, a broken part
+always stumbling, and the report reading only the first creature.

@@ -3,7 +3,10 @@
 //! ```text
 //! cargo run -p anim --bin preview_beast -- shake
 //! cargo run -p anim --bin preview_beast -- --all
+//! cargo run -p anim --bin preview_beast -- --species ridgeback --all
 //! ```
+//!
+//! Any species: everything drawn is read off its table.
 //!
 //! The fighters' sheet draws a stick figure, because a fighter's *silhouette*
 //! is what an opponent reads. The creature's parts are boxes and the boxes are
@@ -23,10 +26,11 @@
 //!   arbitrarily large acceleration, which is what throws riders.
 
 use crate::png::Canvas;
-use sim::beast::{self, Clip};
+use sim::beast;
 use sim::fixed::Fx;
 use sim::math::V3;
-use sim::monster::{self, Doing, Monster};
+use sim::monster::{Doing, Monster};
+use sim::species::Species;
 
 const BACKDROP: [u8; 3] = [22, 24, 28];
 const PANEL: [u8; 3] = [30, 33, 38];
@@ -65,31 +69,32 @@ enum View {
 }
 
 /// Every sample of a clip, as poses the rig can be built from.
-fn poses(clip: Clip) -> Vec<beast::Pose> {
-    let (_, count) = sim::beast_baked::SPAN[clip.index()];
+fn poses(sp: &Species, clip: usize) -> Vec<beast::Pose> {
+    let (_, count) = sp.span[clip];
     let count = count.max(1) as usize;
     (0..count)
         .map(|i| {
             let at = Fx::from_int(i as i32).div(Fx::from_int(count.max(2) as i32 - 1));
-            if clip.phased() {
+            if sp.clips[clip].phased {
                 let which = (i * 3 / count).min(2) as u8;
                 let inside = i % (count / 3).max(1);
                 let span = (count / 3).max(2) - 1;
                 beast::sample_phase(
+                    sp,
                     clip,
                     which,
                     Fx::from_int(inside as i32).div(Fx::from_int(span as i32)),
                 )
             } else {
-                beast::sample(clip, at)
+                beast::sample(sp, clip, at)
             }
         })
         .collect()
 }
 
 /// The creature posed by one sample, with the layers the game adds on top.
-fn beast_at(pose: &beast::Pose) -> beast::Rig {
-    beast::Rig::build(V3::ZERO, Fx::ZERO, pose)
+fn beast_at(sp: &'static Species, pose: &beast::Pose) -> beast::Rig {
+    beast::Rig::build(sp, V3::ZERO, Fx::ZERO, pose)
 }
 
 fn f(v: Fx) -> f32 {
@@ -108,8 +113,8 @@ impl Lens {
 
 /// Draw one part's box as a wireframe.
 fn draw_part(c: &mut Canvas, rig: &beast::Rig, part: usize, lens: Lens, alpha: f32) {
-    let sh = monster::shape(part);
-    let colour = colour_of(part);
+    let sh = rig.species.shape(part);
+    let colour = colour_of(rig.species, part);
     let corner = |i: usize| {
         let x = if i & 1 == 0 { sh.min.x } else { sh.max.x };
         let y = if i & 2 == 0 { sh.min.y } else { sh.max.y };
@@ -152,29 +157,30 @@ fn draw_part(c: &mut Canvas, rig: &beast::Rig, part: usize, lens: Lens, alpha: f
     }
 }
 
-fn colour_of(part: usize) -> [u8; 3] {
-    if monster::is_weak_point(part) {
+fn colour_of(sp: &Species, part: usize) -> [u8; 3] {
+    let shape = sp.parts[part].shape;
+    if sp.is_weak_point(part) {
         WEAK
-    } else if beast::SHAPES[part].mountable {
+    } else if shape.mountable {
         MOUNTABLE
-    } else if beast::SHAPES[part].breakable {
+    } else if shape.breakable {
         LEG
     } else {
         ARMOUR
     }
 }
 
-fn draw_creature(c: &mut Canvas, pose: &beast::Pose, lens: Lens, alpha: f32) {
-    let rig = beast_at(pose);
-    for part in 0..monster::PARTS {
+fn draw_creature(c: &mut Canvas, sp: &'static Species, pose: &beast::Pose, lens: Lens, alpha: f32) {
+    let rig = beast_at(sp, pose);
+    for part in 0..sp.parts.len() {
         draw_part(c, &rig, part, lens, alpha);
     }
 }
 
 /// Draw a clip as a sheet: a side row, a top-down row, and an overlay of every
 /// frame so the arcs are visible as arcs.
-pub fn contact_sheet(clip: Clip) -> Canvas {
-    let frames = poses(clip);
+pub fn contact_sheet(sp: &'static Species, clip: usize) -> Canvas {
+    let frames = poses(sp, clip);
     let picks: Vec<usize> = if frames.len() <= COLS * 2 {
         (0..frames.len()).collect()
     } else {
@@ -230,6 +236,7 @@ pub fn contact_sheet(clip: Clip) -> Canvas {
             }
             draw_creature(
                 &mut c,
+                sp,
                 &frames[*frame],
                 Lens {
                     view,
@@ -267,7 +274,7 @@ pub fn contact_sheet(clip: Clip) -> Canvas {
             oy,
             scale: big,
         };
-        draw_creature(&mut c, pose, lens, alpha);
+        draw_creature(&mut c, sp, pose, lens, alpha);
     }
     crate::sheet::digits(&mut c, 6, trail_top + 6, frames.len(), LABEL);
     c
@@ -277,74 +284,56 @@ pub fn contact_sheet(clip: Clip) -> Canvas {
 ///
 /// Not a clip: the poses the *simulation* produces, layers and all, which is
 /// what a player sees and is not the same thing as a baked sample. A broken leg
-/// is a lean the clips know nothing about.
-pub fn states() -> Canvas {
-    let mut lame = Monster::new();
-    for leg in beast::LEGS {
-        if leg.front {
-            lame.part_health[leg.foot] = 0;
+/// is a lean the clips know nothing about. Read off the species' table:
+/// standing, walking, galloping, each of its moves at its first active frame,
+/// down on a knee, toppled, and with its front feet broken.
+pub fn states(sp: &'static Species) -> Canvas {
+    let with = |doing: Doing| {
+        let mut beast = Monster::new(sp.id);
+        beast.doing = doing;
+        beast
+    };
+    let mut lame = Monster::new(sp.id);
+    for leg in sp.legs.iter().filter(|l| l.front) {
+        if let Some(slot) = sp.break_slot(leg.foot) {
+            lame.breaks[slot] = 0;
         }
     }
-    let mut walking = Monster::new();
+    let mut walking = Monster::new(sp.id);
     walking.stride = 24_000;
-    walking.speed = sim::tuning::monster_walk();
-    let mut running = Monster::new();
+    walking.speed = sp.walk();
+    let mut running = Monster::new(sp.id);
     running.stride = 40_000;
-    running.speed = sim::tuning::gallop_speed();
-    let shown: Vec<(&str, Monster)> = vec![
-        ("standing", Monster::new()),
-        ("walking", walking),
-        ("galloping", running),
-        (
-            "bite, thrown",
-            with(Doing::Active {
-                kind: monster::BITE,
-                left: 1,
-            }),
-        ),
-        (
-            "slam, reared",
-            with(Doing::Startup {
-                kind: monster::SLAM,
-                left: 6,
-            }),
-        ),
-        (
-            "sweep, through",
-            with(Doing::Active {
-                kind: monster::SWEEP,
-                left: 2,
-            }),
-        ),
-        (
-            "kick, thrown",
-            with(Doing::Active {
-                kind: monster::KICK,
-                left: 2,
-            }),
-        ),
-        (
-            "spray, cocked",
-            with(Doing::Startup {
-                kind: monster::SPRAY,
-                left: 4,
-            }),
-        ),
-        (
-            "stumbling",
-            with(Doing::Stumble {
-                left: sim::tuning::stumble_frames() / 2,
-                front: true,
-            }),
-        ),
-        (
-            "toppled",
-            with(Doing::Toppled {
-                left: sim::tuning::topple_frames() / 2,
-            }),
-        ),
-        ("both forefeet broken", lame),
+    running.speed = sp.gallop();
+    let mut shown: Vec<(String, Monster)> = vec![
+        ("standing".to_string(), Monster::new(sp.id)),
+        ("walking".to_string(), walking),
+        ("galloping".to_string(), running),
     ];
+    for (kind, decl) in sp.moves.iter().enumerate() {
+        let left = sp.attack(kind as u8).active;
+        shown.push((
+            format!("{}, out", decl.name.to_lowercase()),
+            with(Doing::Active {
+                kind: kind as u8,
+                left,
+            }),
+        ));
+    }
+    shown.push((
+        "stumbling".to_string(),
+        with(Doing::Stumble {
+            left: sp.stumble_frames() / 2,
+            front: true,
+        }),
+    ));
+    shown.push((
+        "toppled".to_string(),
+        with(Doing::Toppled {
+            left: sp.topple_frames() / 2,
+        }),
+    ));
+    shown.push(("front feet broken".to_string(), lame));
 
     let cols = 3;
     let cell_w = 420;
@@ -388,17 +377,11 @@ pub fn states() -> Canvas {
             oy,
             scale,
         };
-        for part in 0..monster::PARTS {
+        for part in 0..sp.parts.len() {
             draw_part(&mut c, &rig, part, lens, 1.0);
         }
         crate::sheet::digits(&mut c, x0 + 6, y0 + 6, n, LABEL);
         let _ = name;
     }
     c
-}
-
-fn with(doing: Doing) -> Monster {
-    let mut beast = Monster::new();
-    beast.doing = doing;
-    beast
 }

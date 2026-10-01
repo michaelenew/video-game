@@ -1,8 +1,15 @@
-//! The Ridgeback's animation, authored.
+//! The creatures' animation, authored.
 //!
 //! Same factory as the fighters go through -- sparse keys, an ease per gap, a
-//! spring per channel, bake the result -- pointed at a different skeleton. The
-//! rig is `sim::beast`: eighteen bones, three angles each, and a hip offset.
+//! spring per channel, bake the result -- pointed at a different skeleton: a
+//! species' own, from `sim::species`, with three angles per bone and a hip
+//! offset.
+//!
+//! **One folder per species.** This file is the factory; what a creature looks
+//! like is its own module -- `ridgeback/` for the Ridgeback -- which implements
+//! [`Authored`]: its recipes, how loose each of its bones is, the pose it
+//! stands in, and where its baked table goes (`crates/sim/src/species/<name>/
+//! baked.rs`). Two species never bake into the same file.
 //!
 //! ```text
 //! keys + eases + looseness  --[springs, offline]-->  one pose per sample
@@ -12,7 +19,7 @@
 //! the creature being simulation geometry rather than decoration.
 //!
 //! **The table is in phase, not in frames.** An attack bakes as three runs of
-//! twelve samples -- startup, active, recovery -- each read on its own at
+//! thirty-two samples -- startup, active, recovery -- each read on its own at
 //! runtime. Retuning a move's frame counts in the Oven then stretches its
 //! animation with it, instead of leaving the contact pose on the wrong frame.
 //! The solve underneath is still continuous across the whole move at its
@@ -39,78 +46,118 @@
 //!   the shoulders paying for it, and the counter-rotation is most of what
 //!   makes a sweep read as weight rather than as a rotating prop.
 
-pub mod clips;
 pub mod sheet;
+
+// One line per species with an animation module, each followed by a blank
+// line: see `authored` below.
+
+pub mod ridgeback;
+
+// pub mod gnawers;
+
+// pub mod hornback;
+
+// pub mod mireback;
+
+// pub mod sandmaw;
+
+// pub mod pair;
+
+// pub mod broodmother;
+
+// pub mod veilstalker;
+
+// pub mod mantis;
+
+// pub mod galewing;
+
+// pub mod siegeshell;
 
 use crate::ease::Ease;
 use crate::spring::Spring;
 use crate::{DT, SUBSTEPS};
-use sim::beast::{BONES, CHANNELS, CLIPS, CYCLE_SAMPLES, Clip, PHASE_SAMPLES};
+use sim::beast::{CYCLE_SAMPLES, MAX_BONES, PHASE_SAMPLES, channels};
+use sim::species::{Species, SpeciesId};
+
+// ---------------------------------------------------------------------------
+// A species, as authored
+// ---------------------------------------------------------------------------
+
+/// What a species' animation module supplies to the factory.
+pub trait Authored: Sync {
+    /// The species it animates.
+    fn species(&self) -> &'static Species;
+    /// Every clip it has a recipe for.
+    fn recipes(&self) -> Vec<Recipe>;
+    /// Which group a bone belongs to, and how far down its own chain it sits:
+    /// depth is what makes the tip of a tail trail the base of it without
+    /// anyone keying that.
+    fn group_of(&self, bone: usize) -> (Group, u8);
+    /// The pose it stands in, which is also what an unauthored clip holds.
+    fn standing(&self) -> Pose;
+    /// Where its baked table goes, from the repository root.
+    fn baked_path(&self) -> &'static str;
+}
+
+/// The animation module registered for a species, if it has one.
+///
+/// Every planned creature already has a line here, commented out and one blank
+/// line from the next, for the reason `sim::species` gives.
+pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
+    match id {
+        SpeciesId::RIDGEBACK => Some(&ridgeback::RIDGEBACK),
+
+        // SpeciesId::GNAWERS => Some(&gnawers::GNAWERS),
+
+        // SpeciesId::HORNBACK => Some(&hornback::HORNBACK),
+
+        // SpeciesId::MIREBACK => Some(&mireback::MIREBACK),
+
+        // SpeciesId::SANDMAW => Some(&sandmaw::SANDMAW),
+
+        // SpeciesId::PAIR => Some(&pair::PAIR),
+
+        // SpeciesId::BROODMOTHER => Some(&broodmother::BROODMOTHER),
+
+        // SpeciesId::VEILSTALKER => Some(&veilstalker::VEILSTALKER),
+
+        // SpeciesId::MANTIS => Some(&mantis::MANTIS),
+
+        // SpeciesId::GALEWING => Some(&galewing::GALEWING),
+
+        // SpeciesId::SIEGESHELL => Some(&siegeshell::SIEGESHELL),
+        _ => None,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Poses, in degrees
 // ---------------------------------------------------------------------------
 
-/// One pose of the creature. Angles in **degrees**, because that is how a
-/// person describes a body; the emitter turns them into turns and then into
-/// fixed point.
+/// One pose of a creature. Angles in **degrees**, because that is how a person
+/// describes a body; the emitter turns them into turns and then into fixed
+/// point.
 ///
 /// Sign conventions match the rig: `pitch` is nose-up, `yaw` is toward the
 /// creature's own right, `roll` is about the bone's own length. The mirror
-/// lives in the skeleton, so `forelegs(-20.0, 30.0)` puts *both* forelegs in
-/// the same shape and a symmetric pose is a symmetric set of numbers.
+/// lives in the skeleton, so a symmetric pose is a symmetric set of numbers.
+///
+/// The builders that know a particular animal's anatomy -- the Ridgeback's
+/// neck, tail and legs -- live in that species' module, as a trait on this.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pose {
     pub hips: [f32; 3],
-    pub bone: [[f32; 3]; BONES],
+    pub bone: [[f32; 3]; MAX_BONES],
+    /// How many of `bone` the species has.
+    pub bones: usize,
 }
-
-impl Default for Pose {
-    fn default() -> Pose {
-        Pose::rest()
-    }
-}
-
-/// The spine, nose to tail, as bone indices -- the chain most things bend.
-pub const SPINE_CHAIN: [usize; 6] = [
-    sim::beast::ROOT,
-    sim::beast::SPINE,
-    sim::beast::CHEST,
-    sim::beast::NECK,
-    sim::beast::NECK2,
-    sim::beast::HEAD,
-];
-
-pub const TAIL_CHAIN: [usize; 4] = [
-    sim::beast::TAIL1,
-    sim::beast::TAIL2,
-    sim::beast::TAIL3,
-    sim::beast::TAIL4,
-];
-
-/// `(hip, knee)` per leg, in `sim::beast::LEGS` order: front left, front right,
-/// hind left, hind right.
-/// The foot part on each leg, in the same order. What `plant` measures the
-/// lower segment's length from.
-pub const LEG_PARTS: [usize; 4] = [
-    sim::monster::FOREFOOT_L,
-    sim::monster::FOREFOOT_R,
-    sim::monster::HINDFOOT_L,
-    sim::monster::HINDFOOT_R,
-];
-
-pub const LEG_BONES: [(usize, usize); 4] = [
-    (sim::beast::SHOULDER_L, sim::beast::FOREARM_L),
-    (sim::beast::SHOULDER_R, sim::beast::FOREARM_R),
-    (sim::beast::THIGH_L, sim::beast::SHIN_L),
-    (sim::beast::THIGH_R, sim::beast::SHIN_R),
-];
 
 impl Pose {
-    pub const fn rest() -> Pose {
+    pub const fn rest(bones: usize) -> Pose {
         Pose {
             hips: [0.0; 3],
-            bone: [[0.0; 3]; BONES],
+            bone: [[0.0; 3]; MAX_BONES],
+            bones,
         }
     }
 
@@ -125,168 +172,12 @@ impl Pose {
         self
     }
 
-    pub fn root(self, pitch: f32, yaw: f32, roll: f32) -> Pose {
-        self.set(sim::beast::ROOT, pitch, yaw, roll)
-    }
-    pub fn spine(self, pitch: f32, yaw: f32, roll: f32) -> Pose {
-        self.set(sim::beast::SPINE, pitch, yaw, roll)
-    }
-    pub fn chest(self, pitch: f32, yaw: f32, roll: f32) -> Pose {
-        self.set(sim::beast::CHEST, pitch, yaw, roll)
-    }
-    pub fn head(self, pitch: f32, yaw: f32, roll: f32) -> Pose {
-        self.set(sim::beast::HEAD, pitch, yaw, roll)
-    }
-
-    /// Bend the neck as a **curve** rather than a hinge: the amount is shared
-    /// across both neck bones and the head, weighted toward the base.
-    ///
-    /// Every early version of the bite had the neck as one rigid bar swinging
-    /// from the shoulder, which reads as a digger rather than as an animal.
-    /// Sharing the angle is the whole fix and it belongs here rather than in
-    /// each key.
-    pub fn neck(mut self, pitch: f32, yaw: f32) -> Pose {
-        let share = [0.45, 0.35, 0.20];
-        for (bone, k) in [sim::beast::NECK, sim::beast::NECK2, sim::beast::HEAD]
-            .into_iter()
-            .zip(share)
-        {
-            self.bone[bone][0] += pitch * k;
-            self.bone[bone][1] += yaw * k;
-        }
-        self
-    }
-
-    /// Lift the whole tail and swing it, spread along its length and growing
-    /// toward the tip -- which is what a tail does and what makes the tip carry
-    /// the speed.
-    ///
-    /// **Positive `lift` raises the tail**, which is the opposite sign to the
-    /// rig's own pitch: the tail extends *backwards* from its bones, so nose-up
-    /// on a tail bone points the tail at the sky. The flip lives here rather
-    /// than in every key, the same way the left-right mirror lives in the
-    /// skeleton rather than in every pose.
-    pub fn tail(mut self, lift: f32, yaw: f32) -> Pose {
-        // The increments sum to one, so `tail(0.0, 60.0)` means sixty degrees
-        // at the tip and the bend is spread rather than hinged at one joint.
-        let share = [0.18, 0.24, 0.28, 0.30];
-        for (bone, k) in TAIL_CHAIN.into_iter().zip(share) {
-            self.bone[bone][0] -= lift * k;
-            self.bone[bone][1] += yaw * k;
-        }
-        self
-    }
-
-    /// Lift or drop the tail **from its root**, so the whole thing swings as one
-    /// beam rather than curling.
-    ///
-    /// Different from [`tail`](Pose::tail) in the place it matters: `tail`
-    /// spreads the bend toward the tip, which is a whip, and this puts it all at
-    /// the base, which is the tail being *carried* somewhere.
-    pub fn tail_from_base(mut self, lift: f32) -> Pose {
-        self.bone[sim::beast::TAIL1][0] -= lift;
-        self
-    }
-
-    /// Swing the whole tail about its **root**, so it travels as one beam.
-    ///
-    /// The difference from [`tail`](Pose::tail) is the whole of what a sweep
-    /// feels like to ride. `tail` spreads the bend toward the tip, which whips
-    /// the tip and leaves the base almost still -- so the tip carries the speed
-    /// the hitbox needs, and somebody standing on the base feels nothing.
-    /// Swinging from the root moves the base too, which is what throws them.
-    pub fn tail_swing_base(mut self, yaw: f32) -> Pose {
-        self.bone[sim::beast::TAIL1][1] += yaw;
-        self
-    }
-
-    /// Roll the tail about its own length, from the root.
-    ///
-    /// What tips a rider off it. A tail that only yaws carries somebody
-    /// standing on it round in an arc, which they ride; one that rolls takes
-    /// the floor out from under them, which they do not.
-    pub fn tail_roll(mut self, roll: f32) -> Pose {
-        self.bone[sim::beast::TAIL1][2] += roll;
-        self
-    }
-
-    /// Curl the tail up or down without swinging it. Positive is up.
-    pub fn tail_lift(self, lift: f32) -> Pose {
-        self.tail(lift, 0.0)
-    }
-
-    /// One leg, by index into [`LEG_BONES`].
-    pub fn leg(mut self, which: usize, swing: f32, knee: f32) -> Pose {
-        let (hip, shin) = LEG_BONES[which];
-        self.bone[hip][0] = swing;
-        self.bone[shin][0] = knee;
-        self
-    }
-
-    /// Spread a leg out from under the body.
-    pub fn leg_spread(mut self, which: usize, spread: f32) -> Pose {
-        let (hip, _) = LEG_BONES[which];
-        // Positive is away from the midline on both sides, the same convention
-        // the fighters' skeleton uses. `SIDE` carries the mirror.
-        self.bone[hip][2] = spread * sim::beast::SIDE[hip] as f32;
-        self
-    }
-
-    pub fn forelegs(self, swing: f32, knee: f32) -> Pose {
-        self.leg(0, swing, knee).leg(1, swing, knee)
-    }
-
-    pub fn hindlegs(self, swing: f32, knee: f32) -> Pose {
-        self.leg(2, swing, knee).leg(3, swing, knee)
-    }
-
-    /// The stance an animal stands in. Not the zero pose: with every channel at
-    /// zero the legs are straight poles, and nothing with a knee stands like
-    /// that.
-    ///
-    /// The feet are **solved onto the floor** rather than angled toward it, so
-    /// that every clip built on this one starts from four feet actually on the
-    /// ground. The forefeet sit a little ahead of the shoulder and the hind
-    /// feet a little behind the hip, which is where a standing quadruped puts
-    /// them and is what gives the legs somewhere to bend.
-    pub fn standing() -> Pose {
-        Pose::rest()
-            .tail_lift(4.0)
-            .plant_fore(0.16, 0.0)
-            .plant_hind(-0.24, 0.0)
-    }
-
-    /// The same pose on the other side.
-    pub fn mirrored(&self) -> Pose {
-        let mut out = *self;
-        out.hips[2] = -self.hips[2];
-        for b in 0..BONES {
-            // Yaw and roll flip; pitch is the same on both sides, which is the
-            // whole reason the angles are named rather than raw Euler.
-            out.bone[b][1] = -self.bone[b][1];
-            out.bone[b][2] = -self.bone[b][2];
-        }
-        for pair in [(0usize, 1usize), (2, 3)] {
-            let (a, b) = pair;
-            for (x, y) in [LEG_BONES[a], LEG_BONES[b]]
-                .into_iter()
-                .zip([LEG_BONES[b], LEG_BONES[a]])
-            {
-                out.bone[x.0] = self.bone[y.0];
-                out.bone[x.1] = self.bone[y.1];
-                out.bone[x.0][1] = -self.bone[y.0][1];
-                out.bone[x.0][2] = -self.bone[y.0][2];
-            }
-        }
-        out
-    }
-
     pub fn blend(&self, other: &Pose, t: f32) -> Pose {
         let mut out = *self;
         for i in 0..3 {
             out.hips[i] = self.hips[i] + (other.hips[i] - self.hips[i]) * t;
         }
-        for b in 0..BONES {
+        for b in 0..self.bones {
             for c in 0..3 {
                 out.bone[b][c] = self.bone[b][c] + (other.bone[b][c] - self.bone[b][c]) * t;
             }
@@ -298,13 +189,13 @@ impl Pose {
     pub fn to_sim(&self) -> sim::beast::Pose {
         let turns = |d: f32| sim::Fx::from_raw((d / 360.0 * 65536.0).round() as i32);
         let metres = |v: f32| sim::Fx::from_raw((v * 65536.0).round() as i32);
-        let mut out = sim::beast::Pose::rest();
+        let mut out = sim::beast::Pose::rest(self.bones);
         out.hips = sim::V3::new(
             metres(self.hips[0]),
             metres(self.hips[1]),
             metres(self.hips[2]),
         );
-        for b in 0..BONES {
+        for b in 0..self.bones {
             out.bone[b] = sim::V3::new(
                 turns(self.bone[b][0]),
                 turns(self.bone[b][1]),
@@ -316,34 +207,42 @@ impl Pose {
 
     /// **Put a foot on the floor**, and solve the leg for it.
     ///
-    /// `reach` is how far forward of the hip the foot lands, and `clear` is how
-    /// far above the floor. Both in metres.
+    /// `which` is the leg, by its index in the species' `legs`. `reach` is how
+    /// far forward of the hip the foot lands, and `clear` is how far above the
+    /// floor. Both in metres.
     ///
     /// This is the creature's answer to the fighters' `plant_l/r`, and it
     /// exists for the same reason: the things that are *arithmetic* should not
-    /// be keyed by hand. Every version of these clips authored as hip and knee
-    /// angles had feet through the floor somewhere -- a foreleg half a metre
-    /// under on the frame a bite lands, an animal levitating at the top of a
-    /// rear -- because where a foot ends up is two angles, a body pitch and a
-    /// hip offset multiplied together, and nobody can hold that in their head
-    /// across twelve keys.
+    /// be keyed by hand. Every version of the Ridgeback's clips authored as hip
+    /// and knee angles had feet through the floor somewhere -- a foreleg half a
+    /// metre under on the frame a bite lands, an animal levitating at the top
+    /// of a rear -- because where a foot ends up is two angles, a body pitch
+    /// and a hip offset multiplied together, and nobody can hold that in their
+    /// head across twelve keys.
     ///
     /// Two-bone inverse kinematics in the sagittal plane, solved against the
     /// hip's **actual** world position -- built through the simulation's own
     /// forward kinematics, so it accounts for whatever the spine and hips are
     /// doing in this pose. Which means the order matters: set the body first,
     /// then plant.
-    pub fn plant(mut self, which: usize, reach: f32, clear: f32) -> Pose {
-        let (hip_bone, knee_bone) = LEG_BONES[which];
-        let rig = sim::beast::Rig::build(sim::V3::ZERO, sim::Fx::ZERO, &self.to_sim());
+    pub fn plant_leg(
+        mut self,
+        species: &'static Species,
+        which: usize,
+        reach: f32,
+        clear: f32,
+    ) -> Pose {
+        let leg = species.legs[which];
+        let (hip_bone, knee_bone) = (leg.hip, leg.knee);
+        let rig = sim::beast::Rig::build(species, sim::V3::ZERO, sim::Fx::ZERO, &self.to_sim());
         let f = |v: sim::Fx| v.to_f32_for_render();
         let hip = rig.bone[hip_bone].at;
 
         // Segment lengths: hip to knee is the bone offset, knee to sole is how
         // far the foot's box hangs below its own bone.
-        let knee_offset = sim::beast::rest(knee_bone);
+        let knee_offset = species.rest(knee_bone);
         let l1 = (f(knee_offset.x).powi(2) + f(knee_offset.y).powi(2)).sqrt();
-        let foot = sim::monster::shape(LEG_PARTS[which]);
+        let foot = species.shape(leg.foot);
         let l2 = -f(foot.min.y);
 
         let dx = reach;
@@ -365,7 +264,7 @@ impl Pose {
 
         // Back into each bone's *local* pitch: subtract what it is already
         // carrying from everything above it.
-        let parent = rig.bone[sim::beast::PARENTS[hip_bone]].rot;
+        let parent = rig.bone[species.bones[hip_bone].parent].rot;
         let up = parent.r[1];
         let carried = (-f(up.x)).atan2(f(up.y));
         let deg = |r: f32| r.to_degrees();
@@ -374,29 +273,22 @@ impl Pose {
         self
     }
 
-    /// Plant both front feet, or both back ones.
-    pub fn plant_fore(self, reach: f32, clear: f32) -> Pose {
-        self.plant(0, reach, clear).plant(1, reach, clear)
-    }
-
-    pub fn plant_hind(self, reach: f32, clear: f32) -> Pose {
-        self.plant(2, reach, clear).plant(3, reach, clear)
-    }
-
     /// Flat, in the order the baked table stores: hips, then three per bone.
-    pub fn channels(&self) -> [f32; CHANNELS] {
-        let mut out = [0.0; CHANNELS];
+    pub fn channels(&self) -> Vec<f32> {
+        let mut out = vec![0.0; channels(self.bones)];
         out[..3].copy_from_slice(&self.hips);
-        for b in 0..BONES {
+        for b in 0..self.bones {
             out[3 + b * 3..6 + b * 3].copy_from_slice(&self.bone[b]);
         }
         out
     }
 
-    pub fn from_channels(c: &[f32; CHANNELS]) -> Pose {
-        let mut p = Pose::rest();
+    /// The inverse of [`Pose::channels`]: the row's length says how many
+    /// bones it has.
+    pub fn from_channels(c: &[f32]) -> Pose {
+        let mut p = Pose::rest((c.len().saturating_sub(3) / 3).min(MAX_BONES));
         p.hips.copy_from_slice(&c[..3]);
-        for b in 0..BONES {
+        for b in 0..p.bones {
             p.bone[b].copy_from_slice(&c[3 + b * 3..6 + b * 3]);
         }
         p
@@ -408,34 +300,14 @@ impl Pose {
 // ---------------------------------------------------------------------------
 
 /// Which part of the animal a bone belongs to, for the purposes of how loose it
-/// is.
+/// is. A species says which group each of its bones is in (see
+/// [`Authored::group_of`]).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Group {
     Body,
     Neck,
     Tail,
     Legs,
-}
-
-/// The group and the depth of each bone: depth is how far down its own chain it
-/// sits, and it is what makes the tip of the tail trail the base of it without
-/// anyone keying that.
-pub fn group_of(bone: usize) -> (Group, u8) {
-    use sim::beast::*;
-    match bone {
-        ROOT => (Group::Body, 0),
-        SPINE => (Group::Body, 1),
-        CHEST => (Group::Body, 2),
-        NECK => (Group::Neck, 0),
-        NECK2 => (Group::Neck, 1),
-        HEAD => (Group::Neck, 2),
-        TAIL1 => (Group::Tail, 0),
-        TAIL2 => (Group::Tail, 1),
-        TAIL3 => (Group::Tail, 2),
-        TAIL4 => (Group::Tail, 3),
-        SHOULDER_L | SHOULDER_R | THIGH_L | THIGH_R => (Group::Legs, 0),
-        _ => (Group::Legs, 1),
-    }
 }
 
 /// One part's response, in units an author can picture: how many frames it runs
@@ -606,7 +478,8 @@ impl Key {
 
 #[derive(Clone, Debug)]
 pub struct Recipe {
-    pub clip: Clip,
+    /// Which of the species' clips, by index.
+    pub clip: usize,
     pub keys: Vec<Key>,
     pub looseness: Looseness,
     /// Why the clip is shaped the way it is. Data rather than a comment so a
@@ -615,9 +488,9 @@ pub struct Recipe {
 }
 
 impl Recipe {
-    pub fn new(clip: Clip, keys: Vec<Key>, looseness: Looseness) -> Recipe {
+    pub fn new(clip: impl Into<usize>, keys: Vec<Key>, looseness: Looseness) -> Recipe {
         Recipe {
-            clip,
+            clip: clip.into(),
             keys,
             looseness,
             notes: String::new(),
@@ -634,27 +507,32 @@ impl Recipe {
     /// An attack is solved across its **real** length, read live from the move
     /// table, so the springs see the timing the player will. It is then
     /// resampled into phases, which is what keeps the table tunable.
-    pub fn frames(&self) -> u16 {
-        match move_of(self.clip) {
-            Some(kind) => sim::monster::attack(kind).total().max(3),
-            None => match self.clip {
-                Clip::Topple => sim::tuning::topple_frames(),
-                Clip::Stumble => sim::tuning::stumble_frames(),
-                Clip::Flinch => sim::tuning::flinch_frames(),
-                Clip::Dead => 1,
+    pub fn frames(&self, species: &Species) -> u16 {
+        let stock = species.stock;
+        match move_of(species, self.clip) {
+            Some(kind) => species.attack(kind).total().max(3),
+            None => if self.clip == stock.topple {
+                species.topple_frames()
+            } else if self.clip == stock.stumble {
+                species.stumble_frames()
+            } else if self.clip == stock.flinch {
+                species.flinch_frames()
+            } else if self.clip == stock.dead {
+                1
+            } else {
                 // A cycle's own length in frames is arbitrary -- it is indexed
                 // by ground covered, not by time -- so it is solved over a
                 // sensible number and sampled round the wheel.
-                _ => 48,
+                48
             }
             .max(3),
         }
     }
 
     /// The three phase boundaries of an attack, as fractions of the clip.
-    fn phase_cuts(&self) -> Option<[f32; 2]> {
-        let kind = move_of(self.clip)?;
-        let m = sim::monster::attack(kind);
+    fn phase_cuts(&self, species: &Species) -> Option<[f32; 2]> {
+        let kind = move_of(species, self.clip)?;
+        let m = species.attack(kind);
         let total = m.total().max(1) as f32;
         Some([
             m.startup as f32 / total,
@@ -672,11 +550,11 @@ impl Recipe {
 /// moves its animation with it instead of desynchronising it.
 ///
 /// `phase` is 0 startup, 1 active, 2 recovery; `u` runs 0 to 1 inside it.
-pub fn mark(clip: Clip, phase: u8, u: f32) -> f32 {
-    let Some(kind) = move_of(clip) else {
+pub fn mark(species: &Species, clip: usize, phase: u8, u: f32) -> f32 {
+    let Some(kind) = move_of(species, clip) else {
         return u;
     };
-    let m = sim::monster::attack(kind);
+    let m = species.attack(kind);
     let total = m.total().max(1) as f32;
     let (from, span) = match phase {
         0 => (0.0, m.startup as f32),
@@ -686,19 +564,14 @@ pub fn mark(clip: Clip, phase: u8, u: f32) -> f32 {
     (from + span * u.clamp(0.0, 1.0)) / total
 }
 
-fn move_of(clip: Clip) -> Option<u8> {
-    use sim::monster::*;
-    Some(match clip {
-        Clip::Bite => BITE,
-        Clip::Stomp => STOMP,
-        Clip::Sweep => SWEEP,
-        Clip::Charge => CHARGE,
-        Clip::Slam => SLAM,
-        Clip::Shake => SHAKE,
-        Clip::Kick => KICK,
-        Clip::Spray => SPRAY,
-        _ => return None,
-    })
+/// The move that plays a clip, if one does: read off the species' move table,
+/// so a clip is an attack exactly when a move says it is.
+fn move_of(species: &Species, clip: usize) -> Option<u8> {
+    species
+        .moves
+        .iter()
+        .position(|m| m.clip == clip)
+        .map(|k| k as u8)
 }
 
 // ---------------------------------------------------------------------------
@@ -707,21 +580,22 @@ fn move_of(clip: Clip) -> Option<u8> {
 
 #[derive(Clone, Debug)]
 pub struct Baked {
-    pub clip: Clip,
+    pub clip: usize,
     /// One pose per sample, in the layout the runtime reads: for an attack,
     /// three phases of [`PHASE_SAMPLES`] laid end to end; for anything else,
     /// one run.
     pub samples: Vec<Pose>,
 }
 
-fn channel_springs(looseness: &Looseness) -> [Spring; CHANNELS] {
-    let mut springs = [Spring::new(0.0, 20.0, 1.0); CHANNELS];
+fn channel_springs(beast: &dyn Authored, looseness: &Looseness) -> Vec<Spring> {
+    let bones = beast.species().bones.len();
+    let mut springs = vec![Spring::new(0.0, 20.0, 1.0); channels(bones)];
     let (f, d) = looseness.body.spring();
     for s in springs.iter_mut().take(3) {
         *s = Spring::new(0.0, f, d);
     }
-    for bone in 0..BONES {
-        let (group, depth) = group_of(bone);
+    for bone in 0..bones {
+        let (group, depth) = beast.group_of(bone);
         let (f, d) = looseness.group(group).at_depth(depth, group).spring();
         for c in 0..3 {
             springs[3 + bone * 3 + c] = Spring::new(0.0, f, d);
@@ -733,7 +607,7 @@ fn channel_springs(looseness: &Looseness) -> [Spring; CHANNELS] {
 /// Read the key track at a fractional position through the clip.
 fn sample_keys(keys: &[Key], at: f32, looping: bool) -> Pose {
     if keys.is_empty() {
-        return Pose::rest();
+        return Pose::rest(0);
     }
     if keys.len() == 1 {
         return keys[0].pose;
@@ -772,11 +646,13 @@ fn sample_keys(keys: &[Key], at: f32, looping: bool) -> Pose {
 }
 
 /// Run the springs and produce the samples.
-pub fn bake(recipe: &Recipe) -> Baked {
-    assert!(!recipe.keys.is_empty(), "{}: no keys", recipe.clip.name());
-    let frames = recipe.frames();
-    let looping = recipe.clip.looping();
-    let mut springs = channel_springs(&recipe.looseness);
+pub fn bake(beast: &dyn Authored, recipe: &Recipe) -> Baked {
+    let species = beast.species();
+    let clip = species.clips[recipe.clip];
+    assert!(!recipe.keys.is_empty(), "{}: no keys", clip.name);
+    let frames = recipe.frames(species);
+    let looping = clip.looping;
+    let mut springs = channel_springs(beast, &recipe.looseness);
 
     // Start settled on the first key, so a one-shot does not open with a lurch
     // out of an arbitrary rest pose.
@@ -802,10 +678,7 @@ pub fn bake(recipe: &Recipe) -> Baked {
             }
         }
         if frame >= preroll {
-            let mut c = [0.0; CHANNELS];
-            for (i, s) in springs.iter().enumerate() {
-                c[i] = s.value;
-            }
+            let c: Vec<f32> = springs.iter().map(|s| s.value).collect();
             solved.push(Pose::from_channels(&c));
         }
     }
@@ -827,7 +700,7 @@ pub fn bake(recipe: &Recipe) -> Baked {
         solved[i].blend(&solved[j], scaled - scaled.floor())
     };
 
-    let samples = match recipe.phase_cuts() {
+    let samples = match recipe.phase_cuts(species) {
         Some([a, b]) => {
             let mut out = Vec::with_capacity(PHASE_SAMPLES * 3);
             for (from, to) in [(0.0, a), (a, b), (b, 1.0)] {
@@ -838,7 +711,7 @@ pub fn bake(recipe: &Recipe) -> Baked {
             }
             out
         }
-        None if recipe.clip == Clip::Dead => vec![read(1.0)],
+        None if recipe.clip == species.stock.dead => vec![read(1.0)],
         None => {
             let count = CYCLE_SAMPLES;
             let steps = if looping { count } else { count - 1 };
@@ -852,26 +725,28 @@ pub fn bake(recipe: &Recipe) -> Baked {
     }
 }
 
-/// Bake every clip, filling in a held standing pose for anything unauthored.
-pub fn bake_all() -> (Vec<Baked>, Vec<Clip>) {
-    let recipes = clips::all();
-    let mut out = Vec::with_capacity(CLIPS);
+/// Bake every clip of a species, filling in a held standing pose for anything
+/// unauthored. The second list is the clips that had no recipe, by index.
+pub fn bake_all(beast: &dyn Authored) -> (Vec<Baked>, Vec<usize>) {
+    let species = beast.species();
+    let recipes = beast.recipes();
+    let mut out = Vec::with_capacity(species.clips.len());
     let mut missing = Vec::new();
-    for clip in Clip::ALL {
+    for (clip, decl) in species.clips.iter().enumerate() {
         match recipes.iter().find(|r| r.clip == clip) {
-            Some(r) => out.push(bake(r)),
+            Some(r) => out.push(bake(beast, r)),
             None => {
                 missing.push(clip);
-                let count = if clip.phased() {
+                let count = if decl.phased {
                     PHASE_SAMPLES * 3
-                } else if clip == Clip::Dead {
+                } else if clip == species.stock.dead {
                     1
                 } else {
                     CYCLE_SAMPLES
                 };
                 out.push(Baked {
                     clip,
-                    samples: vec![Pose::standing(); count],
+                    samples: vec![beast.standing(); count],
                 });
             }
         }
@@ -900,49 +775,55 @@ fn raw_m(metres: f32) -> i32 {
 /// what changed when an animation is retuned. One line per sample, because a
 /// pose spread over twenty lines turns a two-frame change into forty lines of
 /// noise.
-pub fn emit(baked: &[Baked]) -> String {
+pub fn emit(beast: &dyn Authored, baked: &[Baked]) -> String {
+    let species = beast.species();
+    let slug = species.slug();
+    let width = channels(species.bones.len());
     let mut out = String::new();
-    out.push_str(
-        "//! Baked creature poses. GENERATED -- do not edit by hand.\n\
+    out.push_str(&format!(
+        "//! The {name}'s baked poses. GENERATED -- do not edit by hand.\n\
          //!\n\
          //! Written by `cargo run -p anim --bin bake_beast`. The recipes live in\n\
-         //! `crates/anim/src/beast/clips.rs`; edit those.\n\
+         //! `crates/anim/src/beast/{slug}/`; edit those.\n\
          //!\n\
          //! Each row is one sample: three numbers for the hips in metres, then\n\
-         //! pitch, yaw and roll for each of the eighteen bones, all as raw 16.16\n\
+         //! pitch, yaw and roll for each of the {bones} bones, all as raw 16.16\n\
          //! bits. A clip is a span of rows, and an attack's rows are three equal\n\
          //! runs -- startup, active, recovery -- read by phase. Retuning a move's\n\
          //! frame counts in the Oven therefore stretches its animation with it\n\
          //! rather than leaving the contact pose on the wrong frame.\n\n\
-         use crate::beast::{CHANNELS, CLIPS};\n\n",
-    );
+         use super::{{CLIP_COUNT, bones}};\n\n\
+         pub const CHANNELS: usize = crate::beast::channels(bones::COUNT);\n\n",
+        name = species.name,
+        bones = species.bones.len(),
+    ));
 
     let rows: usize = baked.iter().map(|b| b.samples.len()).sum();
     out.push_str(&format!("pub const ROWS: usize = {rows};\n\n"));
     out.push_str(
-        "/// `(first row, how many)` per clip, in `beast::Clip::ALL` order.\n\
-         pub const SPAN: [(u16, u16); CLIPS] = [\n",
+        "/// `(first row, how many)` per clip, in `Clip::ALL` order.\n\
+         pub const SPAN: [(u16, u16); CLIP_COUNT] = [\n",
     );
     let mut start = 0usize;
     for b in baked {
         out.push_str(&format!(
             "    ({start}, {}), // {}\n",
             b.samples.len(),
-            b.clip.name()
+            species.clips[b.clip].name
         ));
         start += b.samples.len();
     }
     out.push_str("];\n\n#[rustfmt::skip]\npub static FRAMES: [[i32; CHANNELS]; ROWS] = [\n");
     for b in baked {
         for (i, pose) in b.samples.iter().enumerate() {
-            let mut cells: Vec<String> = Vec::with_capacity(CHANNELS);
+            let mut cells: Vec<String> = Vec::with_capacity(width);
             for (c, v) in pose.channels().iter().enumerate() {
                 cells.push(if c < 3 { raw_m(*v) } else { raw(*v) }.to_string());
             }
             out.push_str(&format!(
                 "    [{}], // {} {i}\n",
                 cells.join(","),
-                b.clip.name()
+                species.clips[b.clip].name
             ));
         }
     }

@@ -66,7 +66,7 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: w.monster.as_ref(),
+        quarry: &w.monsters,
     };
     let middle = V3::new(
         target.x,

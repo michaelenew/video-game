@@ -483,12 +483,17 @@ The Ridgeback goes through the same factory and almost none of the same code,
 and the difference is worth stating because it decides where everything lives.
 
 ```
-crates/sim/src/beast.rs          The frame: eighteen bones, eighteen part boxes
-crates/anim/src/beast/mod.rs     The factory, pointed at that frame
-crates/anim/src/beast/clips.rs   The content
-crates/sim/src/beast_baked.rs    GENERATED -- the table the game reads
+crates/sim/src/beast.rs                         The frame: bones, part boxes, the rig
+crates/sim/src/species/ridgeback/mod.rs         The Ridgeback's eighteen bones and parts
+crates/anim/src/beast/mod.rs                    The factory, pointed at a species
+crates/anim/src/beast/ridgeback/clips.rs        The content
+crates/sim/src/species/ridgeback/baked.rs       GENERATED -- the table the game reads
 cargo run -p anim --bin bake_beast
 ```
+
+Since 2026-10-01 every creature is a species: its table, its recipes and its
+baked file are its own, and the factory serves them all. See
+[species.md](species.md).
 
 **Its skeleton is in `sim`, not in `view`.** A fighter's hitboxes are described
 separately from their skeleton (`state::hitbox`), so the skeleton is pure
@@ -525,7 +530,7 @@ Three things about authoring a quadruped that were not obvious:
 - **The legs are a phase function, not keys.** Four legs times two joints times
   eight keys is sixty-four numbers nobody can hold in their head, and what makes
   a gait read is the *relationship* between them -- which a function states and
-  a table of numbers only implies. `stride` in `beast/clips.rs`.
+  a table of numbers only implies. `stride` in `beast/ridgeback/clips.rs`.
 - **A walk and a gallop are different cycles**, not one cycle at two speeds. A
   walk is a four-beat lateral sequence with three feet down at all times; a
   gallop is a gather and a throw with real suspension. Using the same footfall

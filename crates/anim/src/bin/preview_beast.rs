@@ -16,36 +16,51 @@
 //! Colours: green is a surface you can stand on, red is a weak point, sand is a
 //! breakable foot, grey is armour.
 
-use sim::beast::Clip;
-
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dir = std::path::Path::new("target/beast-preview");
     std::fs::create_dir_all(dir).expect("could not make target/beast-preview");
 
-    let want: Vec<Clip> = if args.iter().any(|a| a == "--all") || args.is_empty() {
-        Clip::ALL.to_vec()
+    let named = args
+        .iter()
+        .position(|a| a == "--species")
+        .and_then(|i| args.get(i + 1));
+    let sp = match named {
+        Some(name) => sim::species::named(name).unwrap_or_else(|| {
+            eprintln!("no species is called {name}");
+            std::process::exit(2);
+        }),
+        None => &sim::species::ridgeback::SPECIES,
+    };
+    let rest: Vec<&String> = args
+        .iter()
+        .filter(|a| Some(*a) != named && *a != "--species")
+        .collect();
+
+    let all: Vec<usize> = (0..sp.clips.len()).collect();
+    let want: Vec<usize> = if rest.iter().any(|a| *a == "--all") || rest.is_empty() {
+        all
     } else {
-        args.iter()
+        rest.iter()
             .filter(|a| !a.starts_with("--"))
-            .filter_map(|name| Clip::ALL.into_iter().find(|c| c.name() == name))
+            .filter_map(|name| sp.clips.iter().position(|c| c.name == name.as_str()))
             .collect()
     };
 
-    if args.iter().any(|a| a == "--states") || args.is_empty() {
-        let path = dir.join("states.png");
-        anim::beast::sheet::states()
+    if rest.iter().any(|a| *a == "--states") || rest.is_empty() {
+        let path = dir.join(format!("{}-states.png", sp.slug()));
+        anim::beast::sheet::states(sp)
             .write(&path)
             .expect("could not write the sheet");
         println!(
-            "{}  standing, walking, galloping, bite, slam, sweep, stumbling, toppled, lamed",
+            "{}  standing, walking, galloping, every move out, stumbling, toppled, lamed",
             path.display()
         );
     }
 
     for clip in want {
-        let path = dir.join(format!("{}.png", clip.name()));
-        anim::beast::sheet::contact_sheet(clip)
+        let path = dir.join(format!("{}-{}.png", sp.slug(), sp.clips[clip].name));
+        anim::beast::sheet::contact_sheet(sp, clip)
             .write(&path)
             .expect("could not write the sheet");
         println!("{}", path.display());

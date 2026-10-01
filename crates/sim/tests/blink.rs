@@ -57,7 +57,7 @@ fn pitch_onto(w: &World, at: V3) -> i16 {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: w.monster.as_ref(),
+        quarry: &w.monsters,
     };
     (-40..=80)
         .map(|step| -(step * 200) as i16)
@@ -347,7 +347,7 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: None,
+        quarry: &[None; sim::monster::MAX_MONSTERS],
     };
     let middle = sim::aim::standing_middle(w.players[1].pos);
     let pitch = (-40..=80)
@@ -407,12 +407,12 @@ fn all_four_arms_on_the_creature_haul_her_to_it() {
     // Along a lane clear of the arena's two platforms, which sit either side
     // of the middle: a haul into the side of one stops there, correctly.
     let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
-    let mut beast = w.monster.expect("a hunt has a creature");
+    let mut beast = w.monster().copied().expect("a hunt has a creature");
     beast.pos = V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(7));
     beast.yaw = Fx::ratio(1, 2);
     beast.doing = Doing::Prowl;
     beast.brain.think_left = u16::MAX;
-    w.monster = Some(beast);
+    w.monsters[0] = Some(beast);
     w.players[0].pos = V3::new(Fx::from_int(-4), Fx::ZERO, Fx::from_int(7));
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-8));
     let grasp = sim::moves::get(Class::BloodMage, b::GRASP);

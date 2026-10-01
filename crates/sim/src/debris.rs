@@ -26,7 +26,7 @@ use crate::aim::{self, Contact, Path, Scene, Targets};
 use crate::effects::Effects;
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::{V3, frame_about};
-use crate::monster::Monster;
+use crate::monster::Herd;
 use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
@@ -123,7 +123,7 @@ pub fn step(
     players: &mut [Player; MAX_PLAYERS],
     effects: &Effects,
     versus: bool,
-    quarry: &mut Option<Monster>,
+    quarry: &mut Herd,
 ) {
     let stones = stones::gather(players);
     for slot in shrapnel.iter_mut() {
@@ -139,7 +139,7 @@ pub fn step(
                 stones: &stones,
                 players: &seen,
                 effects,
-                quarry: quarry.as_ref(),
+                quarry: &*quarry,
             };
             aim::first_along(
                 leg,
@@ -173,8 +173,10 @@ pub fn step(
                 *slot = None;
                 continue;
             }
-            Some(Contact::Quarry { part, .. }) => {
-                if let Some(beast) = quarry.as_mut() {
+            Some(Contact::Quarry {
+                slot: which, part, ..
+            }) => {
+                if let Some(beast) = quarry[which].as_mut() {
                     beast.take_hit(part, t::debris_damage());
                 }
                 *slot = None;

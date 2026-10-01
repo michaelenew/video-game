@@ -50,7 +50,7 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: w.monster.as_ref(),
+        quarry: &w.monsters,
     };
     let middle = sim::aim::standing_middle(target);
     let miss = |pitch: i16| {
@@ -261,7 +261,7 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             stones: &stones,
             players: &players,
             effects: &effects,
-            quarry: w.monster.as_ref(),
+            quarry: &w.monsters,
         };
         (-40..=80)
             .map(|step| -(step * 200) as i16)

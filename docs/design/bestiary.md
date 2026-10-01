@@ -156,6 +156,10 @@ creature's document says which ones it depends on.
 
 ### P1 · Species (every creature needs it)
 
+**Built 2026-10-01**, with the Ridgeback bit-identical and the world holding two
+creatures. What was built, the decisions, and the recipe for adding a creature
+are in [species.md](species.md).
+
 `Monster` has no species field. The bones, parts, legs, clips and moves are
 `const` arrays, and a handful of moves are special-cased by name (`kind ==
 SHAKE`, `kind == SWEEP`; the weak points are `RIDGE || NAPE`; the hunter bot
@@ -227,6 +231,10 @@ learn to defend.
 
 ### P8 · The harness per creature
 
+**Built 2026-10-01**: a `Plan` and a `Card` per species in `crates/hunt/src/plans/`,
+the report's lines read off the species table, `fight --species`. See
+[species.md](species.md).
+
 `crates/hunt` plays one plan against one creature and reads Ridgeback parts by
 name. It needs a **plan per species** (the scripted hunter learns each fight the
 way a person does, and each creature's document says what that plan is) and a
@@ -236,8 +244,10 @@ says the unmeasured bugs are the ones a person reports as "it feels random".
 
 ## 4 · The budget
 
-The snapshot is capped at 4 KiB and is about 1.8 KiB today. Estimates, to be
-replaced by `size_of` once each is built:
+The snapshot is capped at 4 KiB. It was 2,680 bytes before P1 (the "1.8 KiB"
+this paragraph first said was stale) and is **2,856 bytes** since, the second
+creature slot included; one `Monster` is 180 bytes. Estimates, to be replaced by
+`size_of` once each is built:
 
 | Fight | What is in the snapshot | Estimate, from its document |
 | --- | --- | --- |

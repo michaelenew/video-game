@@ -10,11 +10,17 @@
 //! style of the rest of the feel harness: relationships, not values.
 
 use sim::fixed::Fx;
-use sim::monster::{self, Doing, MOVES};
+use sim::monster::{self, Doing};
+use sim::species::{MAX_MOVES, Species};
 use sim::state::{MAX_PLAYERS, Phase, QUARRY};
 use sim::{V3, World};
 
+use crate::plans::Card;
 use crate::{Hunter, Intent, REACTION};
+
+/// Before the first move of a hunt: what the play sequence names the hunter's
+/// intent when there is no hunter to ask.
+const NOBODY: Intent = Intent("Circle");
 
 /// What the reaction threshold means, for the failure message of the test that
 /// checks it. Kept next to the measure so the explanation cannot drift from it.
@@ -59,16 +65,20 @@ pub struct HunterState {
 }
 
 pub struct Report {
+    /// Which creature, and what its card calls things. Every per-move and
+    /// per-part line below is read off the species' own table.
+    pub species: &'static Species,
+    card: &'static Card,
     pub frames: u32,
     pub outcome: Outcome,
 
     /// Every move it started, by index, and how many of those could be answered
-    /// on sight.
-    pub starts: [u32; MOVES],
+    /// on sight. Room for the species with the most moves; the rest stay zero.
+    pub starts: [u32; MAX_MOVES],
     /// How many times each move actually connected with a hunter. Beside
     /// `starts` this is the move's hit rate, which is what says whether a
     /// move's telegraph is doing its job or whether it is a free throw.
-    pub landed: [u32; MOVES],
+    pub landed: [u32; MAX_MOVES],
     pub reactable: u32,
     pub committed: u32,
     pub longest_repeat: u32,
@@ -129,10 +139,14 @@ pub struct Report {
     pub stored: i32,
     pub spent: i32,
     pub unanswerable: u32,
+    /// Hits on a weak point: the poise pool filling. The Ridgeback's ridge
+    /// and nape.
     pub ridge_hits: u32,
     pub topples: u32,
+    /// Breakable parts broken: the Ridgeback's feet.
     pub legs_broken: u32,
-    /// Damage put into the four feet, and into the worst-hit one of them.
+    /// Damage put into the breakable parts -- the Ridgeback's four feet -- and
+    /// into the worst-hit one of them.
     ///
     /// It exists because "legs broken: 0" is two completely different findings
     /// -- the hunter never swung at a leg, or it swung at them constantly and
@@ -169,19 +183,15 @@ pub struct Report {
     pub timeline: Vec<Beat>,
 }
 
-impl Default for Report {
-    fn default() -> Report {
-        Report::new()
-    }
-}
-
 impl Report {
-    pub fn new() -> Report {
+    pub fn new(card: &'static Card) -> Report {
         Report {
+            species: card.species.get(),
+            card,
             frames: 0,
             outcome: Outcome::Unresolved,
-            starts: [0; MOVES],
-            landed: [0; MOVES],
+            starts: [0; MAX_MOVES],
+            landed: [0; MAX_MOVES],
             reactable: 0,
             committed: 0,
             longest_repeat: 0,
@@ -233,9 +243,12 @@ impl Report {
 
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
-        let (Some(was), Some(now)) = (before.monster, after.monster) else {
+        // The first creature. A fight against two (the Pair) reports on the
+        // first; a report per creature is that fight's to add.
+        let (Some(&was), Some(&now)) = (before.monster(), after.monster()) else {
             return;
         };
+        let sp = self.species;
         self.frames = after.frame;
         let fighting = now.brain.grace == 0;
         if fighting {
@@ -256,7 +269,7 @@ impl Report {
         // A move beginning. `left` still equal to the whole startup is the one
         // frame it can be said to have started on.
         if let Doing::Startup { kind, left } = now.doing {
-            let m = monster::attack(kind);
+            let m = sp.attack(kind);
             if left == m.startup && was.doing.attacking() != Some(kind) {
                 self.starts[kind as usize] += 1;
                 if m.damage > 0 {
@@ -289,7 +302,7 @@ impl Report {
                 self.timeline.push(Beat {
                     frame: after.frame,
                     kind,
-                    intent: bots.first().map(|b| b.intent).unwrap_or(Intent::Circle),
+                    intent: bots.first().map(|b| b.intent()).unwrap_or(NOBODY),
                     aboard: after.players.iter().any(|p| p.aboard()),
                     range: nearest,
                     hit: None,
@@ -317,16 +330,15 @@ impl Report {
         {
             self.topples += 1;
         }
-        for part in 0..monster::PARTS {
-            if was.part_health[part] > 0 && now.part_health[part] <= 0 {
+        for part in sp.breakables() {
+            let (then, next) = (was.part_health(part), now.part_health(part));
+            if then > 0 && next <= 0 {
                 self.legs_broken += 1;
             }
-            let into = (was.part_health[part] - now.part_health[part]).max(0);
+            let into = (then - next).max(0);
             self.foot_damage += into;
-            if now.part_health[part] < was.part_health[part] {
-                self.worst_foot = self
-                    .worst_foot
-                    .max(sim::tuning::limb_health() - now.part_health[part]);
+            if next < then {
+                self.worst_foot = self.worst_foot.max(sp.part_health() - next);
             }
         }
         if now.poise > was.poise {
@@ -352,10 +364,7 @@ impl Report {
         // after their own hit on the ridge flinched it out of the slam, left
         // because of the slam. Counted from the last frame one was running,
         // for as long as it takes to see it.
-        if now
-            .doing
-            .attacking()
-            .is_some_and(|k| matches!(k, monster::SWEEP | monster::SLAM | monster::SHAKE))
+        if now.doing.attacking().is_some_and(self.card.bucks)
             && !matches!(now.doing, Doing::Recovery { .. })
         {
             self.last_buck = after.frame;
@@ -437,7 +446,7 @@ impl Report {
             self.timeline.push(Beat {
                 frame: after.frame,
                 kind: self.commit_kind,
-                intent: bots.first().map(|b| b.intent).unwrap_or(Intent::Circle),
+                intent: bots.first().map(|b| b.intent()).unwrap_or(NOBODY),
                 aboard: p.aboard(),
                 range: self.commit_range[i],
                 hit: Some(HunterState {
@@ -448,7 +457,7 @@ impl Report {
                     health: p.health,
                 }),
             });
-            let m = monster::attack(self.commit_kind);
+            let m = sp.attack(self.commit_kind);
             // A buck's fall is not a hit; it is the ride's own cost, and it
             // is counted under `thrown`. Only damage while a volume is out
             // is the move's.
@@ -531,18 +540,15 @@ impl Report {
     /// share because they say different things and it is easy to read one as
     /// the other.
     pub fn reactable_moves(&self) -> usize {
-        (0..MOVES)
-            .map(|k| monster::attack(k as u8))
+        self.species
+            .attacks()
             .filter(|m| m.damage > 0 && m.startup as usize >= REACTION)
             .count()
     }
 
-    /// How many of the six do damage at all. The shake does not.
+    /// How many of its moves do damage at all. The Ridgeback's shake does not.
     pub fn damaging_moves(&self) -> usize {
-        (0..MOVES)
-            .map(|k| monster::attack(k as u8))
-            .filter(|m| m.damage > 0)
-            .count()
+        self.species.attacks().filter(|m| m.damage > 0).count()
     }
 
     /// Moves it started per minute. The rhythm of the fight, as one number.
@@ -614,7 +620,7 @@ impl Report {
             let p = *n as f32 / total as f32;
             h -= p * p.log2();
         }
-        h / (MOVES as f32).log2()
+        h / (self.species.moves.len() as f32).log2()
     }
 
     /// The whole thing, as text.
@@ -634,8 +640,8 @@ impl Report {
         ));
 
         out.push_str("\nWHAT IT DID                thrown   landed   frames\n");
-        for (kind, count) in self.starts.iter().enumerate() {
-            let m = monster::attack(kind as u8);
+        for (kind, count) in self.starts[..self.species.moves.len()].iter().enumerate() {
+            let m = self.species.attack(kind as u8);
             out.push_str(&format!(
                 "  {:<16}        {:>3}      {:>3}   {:>2}/{:>2}/{:>2}   {}\n",
                 m.name,
@@ -714,7 +720,7 @@ impl Report {
         line(
             &mut out,
             "move coverage",
-            format!("{}/{}", self.coverage(), MOVES),
+            format!("{}/{}", self.coverage(), self.species.moves.len()),
             "moves it ever used",
         );
         line(
@@ -759,7 +765,7 @@ impl Report {
             &mut out,
             "mean ride",
             format!("{:.0}f", self.mean_ride()),
-            "long enough to reach the ridge?",
+            self.card.words.ride_for,
         );
         line(
             &mut out,
@@ -781,7 +787,7 @@ impl Report {
         );
         line(
             &mut out,
-            "ridge hits",
+            self.card.words.weak_hits,
             format!("{}", self.ridge_hits),
             "damage on the weak point",
         );
@@ -791,17 +797,18 @@ impl Report {
             format!("{}", self.topples),
             "poise broken",
         );
-        line(&mut out, "legs broken", format!("{}", self.legs_broken), "");
+        let words = &self.card.words;
+        line(&mut out, words.broken, format!("{}", self.legs_broken), "");
         line(
             &mut out,
-            "damage into feet",
+            words.into_breakables,
             format!("{}", self.foot_damage),
-            "the ground game",
+            words.into_breakables_why,
         );
         line(
             &mut out,
-            "worst foot",
-            format!("{} of {}", self.worst_foot, sim::tuning::limb_health()),
+            words.worst,
+            format!("{} of {}", self.worst_foot, self.species.part_health()),
             "how close one came to going",
         );
 
@@ -871,7 +878,7 @@ impl Report {
                 &mut out,
                 "drank while toppled",
                 format!("{}", self.drank_toppled),
-                "off the pool under a Ridgeback on its side",
+                self.card.words.toppled_pool,
             );
         }
         out
@@ -887,7 +894,7 @@ impl Report {
                 out.push_str(&format!(
                     "  {:>5}    -> {:<13} {}; hunter was {:?}{}{}{}, {} health left\n",
                     beat.frame,
-                    monster::attack(beat.kind).name,
+                    self.species.attack(beat.kind).name,
                     if hit.bucked {
                         "bucked it off"
                     } else {
@@ -904,7 +911,7 @@ impl Report {
             out.push_str(&format!(
                 "  {:>5}  {:<16} at {:>6?} m   hunter: {:?}{}\n",
                 beat.frame,
-                monster::attack(beat.kind).name,
+                self.species.attack(beat.kind).name,
                 beat.range,
                 beat.intent,
                 if beat.aboard { "  [aboard]" } else { "" }

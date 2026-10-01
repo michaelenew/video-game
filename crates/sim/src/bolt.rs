@@ -33,7 +33,7 @@ use crate::aim::{self, Contact, Path, Scene, Targets};
 use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
-use crate::monster::Monster;
+use crate::monster::Herd;
 use crate::state::{Action, Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
@@ -178,7 +178,7 @@ pub fn step(
     players: &mut [Player; MAX_PLAYERS],
     effects: &crate::effects::Effects,
     versus: bool,
-    quarry: &mut Option<Monster>,
+    quarry: &mut Herd,
 ) {
     let stones = stones::gather(players);
     for slot in flight.iter_mut() {
@@ -197,7 +197,7 @@ pub fn step(
                 stones: &stones,
                 players: &seen,
                 effects,
-                quarry: quarry.as_ref(),
+                quarry: &*quarry,
             };
             aim::first_along(
                 leg,
@@ -234,8 +234,10 @@ pub fn step(
                 *slot = None;
                 continue;
             }
-            Some(Contact::Quarry { part, .. }) => {
-                if let Some(beast) = quarry.as_mut() {
+            Some(Contact::Quarry {
+                slot: which, part, ..
+            }) => {
+                if let Some(beast) = quarry[which].as_mut() {
                     beast.take_hit(part, t::fire_bolt_damage());
                 }
                 *slot = None;

@@ -1,5 +1,8 @@
 //! Every animation the Ridgeback has, as poses and timing.
 //!
+//! Baked into `crates/sim/src/species/ridgeback/baked.rs` by
+//! `cargo run -p anim --bin bake_beast`.
+//!
 //! The shape of a move is a promise to the player about what is coming, so
 //! these are written against the move table rather than against frame numbers:
 //! [`mark`] turns "the start of the active window" into wherever that currently
@@ -19,9 +22,10 @@
 //!    of where to stand. The sweep's tail lies on the floor through its
 //!    recovery, and that is a staircase.
 
-use super::{Key, Looseness, Pose, Recipe, mark};
+use super::{RidgebackPose, mark};
+use crate::beast::{Key, Looseness, Pose, Recipe};
 use crate::ease::Ease;
-use sim::beast::Clip;
+use sim::species::ridgeback::Clip;
 
 pub fn all() -> Vec<Recipe> {
     vec![
@@ -852,6 +856,6 @@ pub fn missing() -> Vec<Clip> {
     let have = all();
     Clip::ALL
         .into_iter()
-        .filter(|c| !have.iter().any(|r| r.clip == *c))
+        .filter(|c| !have.iter().any(|r| r.clip == c.index()))
         .collect()
 }

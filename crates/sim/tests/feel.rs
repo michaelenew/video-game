@@ -1334,7 +1334,7 @@ fn every_class_has_a_move_that_carries_the_body() {
                         stones: &stones,
                         players: &players,
                         effects: &effects,
-                        quarry: None,
+                        quarry: &[None; sim::monster::MAX_MONSTERS],
                     };
                     (-40..=80)
                         .map(|step| -(step * 200) as i16)

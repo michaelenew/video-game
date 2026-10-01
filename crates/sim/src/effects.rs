@@ -58,8 +58,17 @@ pub type Effects = [Option<Effect>; MAX_EFFECTS];
 /// this index is for is only the bookkeeping of *what has already been hit*,
 /// which is the same question for all three.
 pub const VICTIMS: usize = MAX_PLAYERS + 1;
-/// Where the creature sits in that numbering.
+/// Where the creature sits in that numbering: the first creature's slot.
 pub const QUARRY_VICTIM: usize = MAX_PLAYERS;
+
+/// Where a creature in a given slot of `World::monsters` sits in that
+/// numbering. The first is [`QUARRY_VICTIM`]; the second has its own bits
+/// above everything the first three victims use -- see `Effect::bit`, which
+/// keeps the first creature's bits exactly where they were before there could
+/// be two, so a one-creature hunt remembers what it hit bit for bit as it did.
+pub const fn quarry_victim(slot: usize) -> usize {
+    QUARRY_VICTIM + slot
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EffectKind {
@@ -257,8 +266,8 @@ const _: () = assert!(
 /// The top of the word, above every (part, victim) bit a lotus can need.
 const POOL_BITS: usize = u64::BITS as usize - MAX_EFFECTS;
 const _: () = assert!(
-    LOTUS_BLADES * VICTIMS <= POOL_BITS,
-    "the pool bits overlap the hit bits"
+    LOTUS_BLADES * (VICTIMS + 1) <= POOL_BITS,
+    "the pool bits overlap the hit bits, the second creature's included"
 );
 
 impl EffectKind {
@@ -1074,7 +1083,13 @@ impl Effect {
     // -- Bookkeeping --------------------------------------------------------
 
     fn bit(part: usize, victim: usize) -> u64 {
-        1u64 << (part * VICTIMS + victim)
+        if victim < VICTIMS {
+            1u64 << (part * VICTIMS + victim)
+        } else {
+            // The second creature: one bit per part, above every
+            // (part, victim) bit the first three victims can need.
+            1u64 << (LOTUS_BLADES * VICTIMS + part)
+        }
     }
 
     /// Has this part already caught this victim?

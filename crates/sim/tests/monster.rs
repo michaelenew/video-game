@@ -6,6 +6,7 @@
 use sim::fixed::Fx;
 use sim::math::{atan2_turns, wrap_turns};
 use sim::monster::{self, Doing, Monster, Quarry};
+use sim::species::ridgeback;
 use sim::state::{MAX_PLAYERS, Phase};
 use sim::{Class, Input, V3, World};
 
@@ -32,11 +33,11 @@ fn run(w: &mut World, frames: u32, a: Input) {
 /// right there, so they get back on. What is being tested is that the buck
 /// removed them, not where they were standing a second later.
 fn thrown_during(w: &mut World, kind: u8, input: Input) -> bool {
-    w.monster.as_mut().expect("a hunt has a creature").doing = Doing::Startup {
+    w.monster_mut().expect("a hunt has a creature").doing = Doing::Startup {
         kind,
-        left: monster::attack(kind).startup,
+        left: ridgeback::SPECIES.attack(kind).startup,
     };
-    for _ in 0..monster::attack(kind).total() {
+    for _ in 0..ridgeback::SPECIES.attack(kind).total() {
         w.advance([input, Input::default()]);
         if !w.players[0].aboard() {
             return true;
@@ -49,7 +50,7 @@ fn thrown_during(w: &mut World, kind: u8, input: Input) -> bool {
 /// about being carried rather than about surviving whatever it decided to do.
 fn walk_only(w: &mut World, frames: u32) {
     for _ in 0..frames {
-        let beast = w.monster.as_mut().expect("a hunt has a creature");
+        let beast = w.monster_mut().expect("a hunt has a creature");
         beast.doing = Doing::Prowl;
         // Its pause between moves, held open. Left to itself it would start
         // something on the first frame, and a creature mid-move neither steers
@@ -63,8 +64,8 @@ fn walk_only(w: &mut World, frames: u32) {
 
 /// Put a fighter on the creature's back, the way landing on it would.
 fn board(w: &mut World, part: usize) {
-    let beast = w.monster.expect("a hunt has a creature");
-    let shape = monster::shape(part);
+    let beast = w.monster().copied().expect("a hunt has a creature");
+    let shape = ridgeback::SPECIES.shape(part);
     let mid = shape.min.add(shape.max).scale(Fx::ratio(1, 2));
     let spot = V3::new(mid.x, shape.max.y.add(Fx::ratio(1, 8)), mid.z);
     w.players[0].pos = beast.world_of(part, spot);
@@ -82,7 +83,7 @@ fn board(w: &mut World, part: usize) {
 fn body_space_and_world_space_are_exact_inverses() {
     // Everything about the ride rests on this. If the round trip drifted, a
     // rider would creep across the creature's back every frame it turned.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.pos = V3::new(Fx::from_int(3), Fx::ZERO, Fx::from_int(-2));
     beast.yaw = Fx::ratio(37, 100);
     let s = beast.rig();
@@ -123,20 +124,20 @@ fn an_angle_survives_the_trip_through_a_direction_and_back() {
 fn the_ridge_is_the_only_place_worth_hitting() {
     // The whole reason to climb. If the armour ever stopped mattering, the
     // fight would be a damage race on the nearest surface.
-    let ridge = monster::vulnerability(monster::RIDGE);
+    let ridge = ridgeback::SPECIES.vulnerability(ridgeback::RIDGE);
     for part in [
-        monster::HEAD,
-        monster::NECK,
-        monster::BARREL,
-        monster::TAIL_BASE,
-        monster::TAIL_TIP,
-        monster::FORELEG_L,
-        monster::HINDLEG_R,
+        ridgeback::HEAD,
+        ridgeback::NECK_PART,
+        ridgeback::BARREL,
+        ridgeback::TAIL_BASE,
+        ridgeback::TAIL_TIP,
+        ridgeback::FORELEG_L,
+        ridgeback::HINDLEG_R,
     ] {
         assert!(
-            monster::vulnerability(part).raw() < ridge.raw(),
+            ridgeback::SPECIES.vulnerability(part).raw() < ridge.raw(),
             "{} is as soft as the ridge",
-            monster::PART_NAMES[part]
+            ridgeback::PARTS[part].name
         );
     }
 }
@@ -150,17 +151,17 @@ fn both_weak_points_are_out_of_reach_from_the_ground() {
     // their own bone's frame now, and a local `y` is not a height: the same
     // number means one thing on a level spine and another the moment anything
     // is pitched.
-    let beast = Monster::new();
+    let beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let rig = beast.rig();
-    for part in [monster::RIDGE, monster::NAPE] {
-        let shape = monster::shape(part);
+    for part in [ridgeback::RIDGE, ridgeback::NAPE] {
+        let shape = ridgeback::SPECIES.shape(part);
         let low = rig
             .part_to_world(part, V3::new(shape.min.x, shape.min.y, Fx::ZERO))
             .y;
         assert!(
             low.raw() > sim::tuning::body_height().raw(),
             "the {} starts at {:?} m, inside a standing fighter's reach",
-            monster::PART_NAMES[part],
+            ridgeback::PARTS[part].name,
             low
         );
     }
@@ -172,14 +173,18 @@ fn the_nape_pays_better_than_the_ridge_and_is_harder_to_get_to() {
     // arrives; the nape is another walk forward, past the shoulders, and it is
     // worth the trip.
     assert!(
-        monster::vulnerability(monster::NAPE).raw() > monster::vulnerability(monster::RIDGE).raw(),
+        ridgeback::SPECIES.vulnerability(ridgeback::NAPE).raw()
+            > ridgeback::SPECIES.vulnerability(ridgeback::RIDGE).raw(),
         "the nape is no softer than the ridge, so there is no reason to walk to it"
     );
-    let beast = Monster::new();
+    let beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let rig = beast.rig();
-    let forward = |part: usize| rig.part_to_world(part, monster::shape(part).max).x;
+    let forward = |part: usize| {
+        rig.part_to_world(part, ridgeback::SPECIES.shape(part).max)
+            .x
+    };
     assert!(
-        forward(monster::NAPE) > forward(monster::RIDGE),
+        forward(ridgeback::NAPE) > forward(ridgeback::RIDGE),
         "the nape is not further forward than the ridge, so it is not further to walk"
     );
 }
@@ -191,23 +196,23 @@ fn the_nape_pays_better_than_the_ridge_and_is_harder_to_get_to() {
 #[test]
 fn landing_on_a_mountable_part_puts_you_on_it() {
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     assert!(w.players[0].aboard(), "landing on the back did not mount");
-    assert_eq!(w.players[0].mount as usize, monster::BARREL);
+    assert_eq!(w.players[0].mount as usize, ridgeback::BARREL);
 }
 
 #[test]
 fn a_rider_is_carried_by_the_creature_rather_than_left_behind() {
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     // Something on the ground for it to walk at, so that it actually goes
     // somewhere and the test is about being carried rather than about standing
     // on a stationary object.
     w.players[1].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(12));
     let held = w.players[0].local;
-    let before = w.monster.unwrap().pos;
+    let before = w.monster().copied().unwrap().pos;
     walk_only(&mut w, 150);
-    let after = w.monster.unwrap();
+    let after = w.monster().copied().unwrap();
     assert!(w.players[0].aboard(), "fell off while doing nothing");
     let travelled = after.pos.sub(before).flat_len();
     assert!(
@@ -227,11 +232,11 @@ fn the_creature_turning_carries_the_riders_aim_with_it() {
     // This is what makes movement relative to the surface. Without it, holding
     // forward walks you off the side as soon as the animal turns.
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     w.players[1].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(12));
-    let start = w.monster.unwrap().yaw;
+    let start = w.monster().copied().unwrap().yaw;
     walk_only(&mut w, 150);
-    let turned = wrap_turns(w.monster.unwrap().yaw.sub(start));
+    let turned = wrap_turns(w.monster().copied().unwrap().yaw.sub(start));
     assert!(
         turned.abs().raw() > Fx::ratio(1, 50).raw(),
         "the creature did not turn, so this proves nothing"
@@ -257,7 +262,7 @@ fn the_creature_turning_carries_the_camera_too() {
     // the two are still the same angle after the animal has swung a long way
     // round, nothing is being added in one place and forgotten in another.
     let mut w = hunt_as(Class::Elementalist);
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     w.players[1].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(12));
     walk_only(&mut w, 150);
     let carried = w.players[0].carry_yaw;
@@ -291,7 +296,7 @@ fn the_creature_turning_carries_the_camera_too() {
 #[test]
 fn jumping_is_how_you_leave() {
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     run(&mut w, 1, Input::new(Input::SPACE));
     assert!(!w.players[0].aboard(), "jumping did not leave the ride");
     assert!(w.players[0].vel.y.raw() > 0, "the jump had no rise in it");
@@ -301,9 +306,9 @@ fn jumping_is_how_you_leave() {
 fn the_slam_beats_even_a_brace() {
     // The move you are meant to leave for rather than answer.
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     assert!(
-        thrown_during(&mut w, monster::SLAM, Input::new(Input::CROUCH)),
+        thrown_during(&mut w, ridgeback::SLAM, Input::new(Input::CROUCH)),
         "a rider braced through a rear-and-slam, which is supposed to be the \
          one nothing holds through"
     );
@@ -312,12 +317,12 @@ fn the_slam_beats_even_a_brace() {
 #[test]
 fn walking_off_the_edge_drops_you() {
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
+    board(&mut w, ridgeback::BARREL);
     // Straight off the side, in the creature's own frame. The aim has to point
     // along the animal's own axis, because movement is camera-relative and the
     // camera is wherever the fighter is looking.
-    w.players[0].local.z = monster::shape(monster::BARREL).max.z;
-    let side = V3::from_turns(w.monster.unwrap().yaw.add(Fx::from_raw(1 << 14)));
+    w.players[0].local.z = ridgeback::SPECIES.shape(ridgeback::BARREL).max.z;
+    let side = V3::from_turns(w.monster().copied().unwrap().yaw.add(Fx::from_raw(1 << 14)));
     let aim = (atan2_turns(side.z, side.x).raw() as u32 & 0xFFFF) as u16;
     for _ in 0..30 {
         w.advance([Input::aimed(Input::W, aim), Input::default()]);
@@ -334,21 +339,22 @@ fn the_tail_and_the_back_are_one_animal_to_walk_around() {
     // the only route between them is a jump nobody would think to try, and the
     // climb dead-ends on the tail.
     let mut w = hunt();
-    board(&mut w, monster::TAIL_BASE);
-    assert_eq!(w.players[0].mount as usize, monster::TAIL_BASE);
-    let beast = w.monster.unwrap();
+    board(&mut w, ridgeback::TAIL_BASE);
+    assert_eq!(w.players[0].mount as usize, ridgeback::TAIL_BASE);
+    let beast = w.monster().copied().unwrap();
     let aim = sim::math::atan2_turns(V3::from_turns(beast.yaw).z, V3::from_turns(beast.yaw).x);
     let forward = Input::aimed(Input::W, (aim.raw() as u32 & 0xFFFF) as u16);
     for _ in 0..90 {
         // Held in its pause between moves, so this is a test of the staircase
         // rather than of surviving a slam halfway up it.
-        w.monster
+        w.monster()
+            .copied()
             .as_mut()
             .expect("a hunt has a creature")
             .brain
             .think_left = u16::MAX;
         w.advance([forward, Input::default()]);
-        if w.players[0].mount as usize == monster::BARREL {
+        if w.players[0].mount as usize == ridgeback::BARREL {
             return;
         }
     }
@@ -356,7 +362,7 @@ fn the_tail_and_the_back_are_one_animal_to_walk_around() {
         "walked forward off the tail for a second and a half and never reached \
          the back -- ended on {}",
         if w.players[0].aboard() {
-            monster::PART_NAMES[w.players[0].mount as usize]
+            ridgeback::PARTS[w.players[0].mount as usize].name
         } else {
             "the floor"
         }
@@ -369,7 +375,7 @@ fn the_tail_and_the_back_are_one_animal_to_walk_around() {
 
 /// How far it turns in `frames` of a given state, toward a target off to one side.
 fn turned_during(doing: Doing, frames: u32) -> Fx {
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let far = Quarry {
         pos: V3::new(Fx::from_int(6), Fx::ZERO, Fx::from_int(6)),
         vel: V3::ZERO,
@@ -397,10 +403,10 @@ fn the_hit_locks_its_facing_and_the_windup_follows_you() {
     // walked out of made "walk away" the answer to every forward move, and the
     // design asks for a dodge, a jump or a real change of direction instead.
     // See `docs/design/monsters.md` §"Threat modes".
-    let bite = monster::attack(monster::BITE);
+    let bite = ridgeback::SPECIES.attack(ridgeback::BITE);
     let hit = turned_during(
         Doing::Active {
-            kind: monster::BITE,
+            kind: ridgeback::BITE,
             left: bite.active,
         },
         bite.active as u32,
@@ -411,7 +417,7 @@ fn the_hit_locks_its_facing_and_the_windup_follows_you() {
     );
     let windup = turned_during(
         Doing::Startup {
-            kind: monster::BITE,
+            kind: ridgeback::BITE,
             left: bite.startup,
         },
         20,
@@ -428,10 +434,10 @@ fn the_hit_locks_its_facing_and_the_windup_follows_you() {
     );
     // A move aimed behind it does not follow: turning its head toward the
     // target would swing the tail away from them.
-    let sweep = monster::attack(monster::SWEEP);
+    let sweep = ridgeback::SPECIES.attack(ridgeback::SWEEP);
     let rear = turned_during(
         Doing::Startup {
-            kind: monster::SWEEP,
+            kind: ridgeback::SWEEP,
             left: sweep.startup,
         },
         20,
@@ -444,7 +450,7 @@ fn the_hit_locks_its_facing_and_the_windup_follows_you() {
 
 #[test]
 fn it_turns_toward_a_target_but_not_instantly() {
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let behind = Quarry {
         pos: V3::new(Fx::from_int(-8), Fx::ZERO, Fx::ZERO),
         vel: V3::ZERO,
@@ -478,7 +484,7 @@ fn it_turns_toward_a_target_but_not_instantly() {
 fn it_acts_on_what_it_last_looked_at_rather_than_on_the_present() {
     // The whole difficulty model. If it tracked continuously there would be no
     // such thing as a good read, because there would be nothing to read.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let seen = Quarry {
         pos: V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO),
         vel: V3::ZERO,
@@ -499,7 +505,7 @@ fn it_acts_on_what_it_last_looked_at_rather_than_on_the_present() {
         beast.brain.seen, remembered,
         "it noticed a move inside its own glance window"
     );
-    for _ in 0..sim::tuning::glance_frames() + 1 {
+    for _ in 0..ridgeback::SPECIES.glance_frames() + 1 {
         beast.step(&[moved]);
     }
     assert_ne!(beast.brain.seen, remembered, "it never looked again");
@@ -509,21 +515,21 @@ fn it_acts_on_what_it_last_looked_at_rather_than_on_the_present() {
 fn a_flinch_never_interrupts_a_live_hitbox() {
     // A creature whose hit can be cancelled by being hit is a creature you
     // never have to trade with, and trading is most of the ground game.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.doing = Doing::Active {
-        kind: monster::BITE,
+        kind: ridgeback::BITE,
         left: 3,
     };
     // Enough to flinch it, and short of what breaks its poise *or* its nerve.
     // Two things do interrupt a live hitbox -- a topple and a big enough burst
     // -- and both of them have to be earned. An ordinary hit does not.
-    let flinching = sim::tuning::flinch_threshold();
+    let flinching = ridgeback::SPECIES.flinch_threshold();
     assert!(
         flinching < beast.interrupt_bar(),
         "a single flinching hit is already enough to interrupt, so there is no \
          window in which trading works"
     );
-    beast.take_hit(monster::BARREL, flinching);
+    beast.take_hit(ridgeback::BARREL, flinching);
     assert!(
         matches!(beast.doing, Doing::Active { .. }),
         "an active frame was cancelled by an ordinary hit: {:?}",
@@ -536,13 +542,13 @@ fn enough_damage_in_a_short_enough_window_does_interrupt_it() {
     // The other half, and the reason there is a threshold rather than a flat
     // rule: a burst big enough to stop a charge is a decision worth building a
     // kit around. See `docs/design/monsters.md` §4.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.doing = Doing::Active {
-        kind: monster::CHARGE,
+        kind: ridgeback::CHARGE,
         left: 12,
     };
     let bar = beast.interrupt_bar();
-    beast.take_hit(monster::BARREL, bar * 4);
+    beast.take_hit(ridgeback::BARREL, bar * 4);
     assert!(
         matches!(beast.doing, Doing::Flinch { .. }),
         "a burst past the interrupt threshold left the charge running: {:?}",
@@ -558,8 +564,8 @@ fn enough_damage_in_a_short_enough_window_does_interrupt_it() {
 fn both_thresholds_fall_as_it_is_worn_down() {
     // The arc of a hunt in one property: methodical while the animal is fresh,
     // frantic once it is not.
-    let fresh = Monster::new();
-    let mut spent = Monster::new();
+    let fresh = Monster::new(sim::species::SpeciesId::RIDGEBACK);
+    let mut spent = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     spent.health = fresh.health / 10;
     assert!(
         spent.cc_bar() < fresh.cc_bar() && spent.interrupt_bar() < fresh.interrupt_bar(),
@@ -571,15 +577,15 @@ fn both_thresholds_fall_as_it_is_worn_down() {
 fn crowd_control_does_nothing_to_a_creature_that_is_not_hurting() {
     // The whole point of a threshold. A knock-up thrown at a fresh Ridgeback is
     // a wasted button; the same knock-up after a burst is a trip.
-    let mut fresh = Monster::new();
+    let mut fresh = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let lift = monster::Control::launching(Fx::from_int(12));
     assert!(
         !fresh.take_control(lift).anything(),
         "a fresh creature took crowd control cold"
     );
 
-    let mut reeling = Monster::new();
-    reeling.take_hit(monster::BARREL, reeling.cc_bar() * 4);
+    let mut reeling = Monster::new(sim::species::SpeciesId::RIDGEBACK);
+    reeling.take_hit(ridgeback::BARREL, reeling.cc_bar() * 4);
     assert!(
         reeling.susceptible(),
         "a burst four times the threshold did not make it susceptible"
@@ -598,11 +604,11 @@ fn crowd_control_does_nothing_to_a_creature_that_is_not_hurting() {
 
 #[test]
 fn enough_ridge_damage_puts_it_on_the_ground() {
-    let mut beast = Monster::new();
-    let tough = sim::tuning::flinch_threshold();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
+    let tough = ridgeback::SPECIES.flinch_threshold();
     for _ in 0..40 {
         beast.doing = Doing::Prowl;
-        beast.take_hit(monster::RIDGE, tough);
+        beast.take_hit(ridgeback::RIDGE, tough);
         if matches!(beast.doing, Doing::Toppled { .. }) {
             return;
         }
@@ -612,13 +618,13 @@ fn enough_ridge_damage_puts_it_on_the_ground() {
 
 #[test]
 fn armour_means_the_barrel_is_not_a_shortcut_to_the_ridge() {
-    let mut by_ridge = Monster::new();
-    let mut by_barrel = Monster::new();
+    let mut by_ridge = Monster::new(sim::species::SpeciesId::RIDGEBACK);
+    let mut by_barrel = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     for _ in 0..10 {
         by_ridge.doing = Doing::Prowl;
         by_barrel.doing = Doing::Prowl;
-        by_ridge.take_hit(monster::RIDGE, 100);
-        by_barrel.take_hit(monster::BARREL, 100);
+        by_ridge.take_hit(ridgeback::RIDGE, 100);
+        by_barrel.take_hit(ridgeback::BARREL, 100);
     }
     assert!(
         by_ridge.health < by_barrel.health,
@@ -651,7 +657,7 @@ fn hunters_cannot_hurt_each_other_while_there_is_something_else_to_fight() {
     for _ in 0..60 {
         // Held still: this is about the fighters. It opens a hunt with a
         // spray at whoever is furthest out, and that would be its damage.
-        let beast = w.monster.as_mut().expect("a hunt has a creature");
+        let beast = w.monster_mut().expect("a hunt has a creature");
         beast.doing = Doing::Prowl;
         beast.brain.think_left = u16::MAX;
         w.advance([Input::new(Input::LEFT), Input::default()]);
@@ -665,8 +671,8 @@ fn hunters_cannot_hurt_each_other_while_there_is_something_else_to_fight() {
 #[test]
 fn the_hunt_ends_when_the_creature_does() {
     let mut w = hunt();
-    w.monster.as_mut().unwrap().health = 1;
-    w.players[0].pos = w.monster.unwrap().pos;
+    w.monster_mut().unwrap().health = 1;
+    w.players[0].pos = w.monster().copied().unwrap().pos;
     for _ in 0..240 {
         w.advance([Input::new(Input::LEFT), Input::default()]);
         if let Phase::RoundOver { winner, .. } = w.phase {
@@ -680,8 +686,8 @@ fn the_hunt_ends_when_the_creature_does() {
 #[test]
 fn a_dead_creature_does_not_keep_anyone_standing_on_it() {
     let mut w = hunt();
-    board(&mut w, monster::BARREL);
-    w.monster.as_mut().unwrap().health = 0;
+    board(&mut w, ridgeback::BARREL);
+    w.monster_mut().unwrap().health = 0;
     run(&mut w, 1, Input::default());
     assert!(!w.players[0].aboard(), "still riding a corpse");
 }
@@ -697,12 +703,12 @@ fn nothing_it_throws_can_reach_its_own_back() {
     // It is also why the bucks have to carry the real cost, and they do: see
     // `the_slam_beats_even_a_brace` and the shake's pair.
     let mut w = hunt();
-    for part in [monster::BARREL, monster::SHOULDERS, monster::HAUNCH] {
+    for part in [ridgeback::BARREL, ridgeback::SHOULDERS, ridgeback::HAUNCH] {
         board(&mut w, part);
         let rider = w.players[0].pos;
-        let mut beast = w.monster.expect("a hunt has a creature");
-        for kind in 0..monster::MOVES as u8 {
-            if monster::attack(kind).damage == 0 {
+        let mut beast = w.monster().copied().expect("a hunt has a creature");
+        for kind in 0..ridgeback::MOVE_COUNT as u8 {
+            if ridgeback::SPECIES.attack(kind).damage == 0 {
                 continue;
             }
             beast.doing = Doing::Active { kind, left: 1 };
@@ -713,8 +719,8 @@ fn nothing_it_throws_can_reach_its_own_back() {
                     sim::tuning::body_radius()
                 ),
                 "{} reaches somebody standing on the {}",
-                monster::MOVE_NAMES[kind as usize],
-                monster::PART_NAMES[part]
+                ridgeback::MOVES[kind as usize].name,
+                ridgeback::PARTS[part].name
             );
         }
     }
@@ -723,7 +729,7 @@ fn nothing_it_throws_can_reach_its_own_back() {
 /// A body standing at a point in the creature's body space -- `+x` toward the
 /// head -- and whether the move it has out reaches them.
 fn reaches_from(kind: u8, mirror: bool, x: Fx, z: Fx) -> bool {
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.doing = Doing::Active { kind, left: 1 };
     beast.brain.mirror = mirror;
     let at = beast.rig().to_world(V3::new(x, Fx::ZERO, z));
@@ -738,19 +744,20 @@ fn nowhere_behind_it_is_safe_to_stand() {
     // things cover it now: the kick, aimed there, and a sweep whose volume
     // rides the tail's motion from rest rather than sitting four metres
     // behind it. Both, because each has a different answer.
-    let root = monster::shape(monster::TAIL_BASE);
-    let astern = sim::beast::rest(sim::beast::ROOT)
+    let root = ridgeback::SPECIES.shape(ridgeback::TAIL_BASE);
+    let astern = ridgeback::SPECIES
+        .rest(ridgeback::bones::ROOT)
         .x
         .add(root.min.x)
         .sub(sim::tuning::body_radius());
     for z in [Fx::ZERO, Fx::ONE, Fx::ONE.neg()] {
         assert!(
-            reaches_from(monster::KICK, false, astern, z),
+            reaches_from(ridgeback::KICK, false, astern, z),
             "the kick does not reach somebody standing {z:?} m off the tail root"
         );
         let mirror = z.raw() < 0;
         assert!(
-            reaches_from(monster::SWEEP, mirror, astern, z),
+            reaches_from(ridgeback::SWEEP, mirror, astern, z),
             "the sweep does not reach somebody standing {z:?} m off the tail root"
         );
     }
@@ -763,8 +770,11 @@ fn the_sweep_goes_to_the_side_you_are_on() {
     // creature picks the side when it commits, and plays the clip that way
     // round. Without this the left flank was the side the tail never came to.
     let flank = |z: Fx| -> V3 {
-        let hip = monster::shape(monster::HINDFOOT_L);
-        let x = sim::beast::rest(sim::beast::ROOT).x.add(hip.min.x);
+        let hip = ridgeback::SPECIES.shape(ridgeback::HINDFOOT_L);
+        let x = ridgeback::SPECIES
+            .rest(ridgeback::bones::ROOT)
+            .x
+            .add(hip.min.x);
         V3::new(x, Fx::ZERO, z)
     };
     // **At mid range**, which is what the sweep is for since 2026-09-25. Right
@@ -772,19 +782,19 @@ fn the_sweep_goes_to_the_side_you_are_on() {
     // that is the tail being a tail rather than the side being wrong.
     let left = flank(Fx::from_int(-5));
     let right = flank(Fx::from_int(5));
-    assert!(reaches_from(monster::SWEEP, false, right.x, right.z));
-    assert!(!reaches_from(monster::SWEEP, false, left.x, left.z));
-    assert!(reaches_from(monster::SWEEP, true, left.x, left.z));
-    assert!(!reaches_from(monster::SWEEP, true, right.x, right.z));
+    assert!(reaches_from(ridgeback::SWEEP, false, right.x, right.z));
+    assert!(!reaches_from(ridgeback::SWEEP, false, left.x, left.z));
+    assert!(reaches_from(ridgeback::SWEEP, true, left.x, left.z));
+    assert!(!reaches_from(ridgeback::SWEEP, true, right.x, right.z));
 
     // And it is the target's side that decides, at the moment of choosing.
     for (z, expect) in [(Fx::from_int(-5), true), (Fx::from_int(5), false)] {
-        let mut beast = Monster::new();
+        let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
         beast.brain.think_left = 0;
         beast.brain.seen = beast.rig().to_world(flank(z));
         // Only the sweep can score from there: it wants a target behind.
-        for kind in 0..monster::MOVES as u8 {
-            if kind != monster::SWEEP {
+        for kind in 0..ridgeback::MOVE_COUNT as u8 {
+            if kind != ridgeback::SWEEP {
                 beast.brain.cooldown[kind as usize] = u16::MAX;
             }
         }
@@ -798,7 +808,7 @@ fn the_sweep_goes_to_the_side_you_are_on() {
         beast.step(&[behind]);
         assert_eq!(
             beast.doing.attacking(),
-            Some(monster::SWEEP),
+            Some(ridgeback::SWEEP),
             "it did not sweep at somebody on its flank"
         );
         assert_eq!(
@@ -821,17 +831,18 @@ fn it_can_still_reach_somebody_standing_where_it_is_looking() {
     // being added to an anchor already authored in body space, and the bite
     // whiffed at its ideal range on every throw. A test that measures where
     // the volume is cannot say whether it is where it should be.
-    let beast = w.monster.expect("a hunt has a creature");
-    let ideal = monster::attack(monster::BITE).ideal_range;
+    let beast = w.monster().copied().expect("a hunt has a creature");
+    let ideal = ridgeback::SPECIES.attack(ridgeback::BITE).ideal_range;
     w.players[0].pos = beast.rig().to_world(V3::new(ideal, Fx::ZERO, Fx::ZERO));
     w.players[0].grounded = true;
     let before = w.players[0].health;
-    w.monster.as_mut().expect("a hunt has a creature").doing = Doing::Startup {
-        kind: monster::BITE,
-        left: monster::attack(monster::BITE).startup,
+    w.monster_mut().expect("a hunt has a creature").doing = Doing::Startup {
+        kind: ridgeback::BITE,
+        left: ridgeback::SPECIES.attack(ridgeback::BITE).startup,
     };
-    for _ in 0..monster::attack(monster::BITE).total() {
-        w.monster
+    for _ in 0..ridgeback::SPECIES.attack(ridgeback::BITE).total() {
+        w.monster()
+            .copied()
             .as_mut()
             .expect("a hunt has a creature")
             .brain
@@ -854,7 +865,7 @@ fn a_hunt_is_reproducible() {
     // easiest thing in a simulation to make non-deterministic by accident.
     let checksum = |seed: u32| {
         let mut w = hunt();
-        w.monster.as_mut().unwrap().brain.rng = seed;
+        w.monster_mut().unwrap().brain.rng = seed;
         for i in 0..900u32 {
             let bits = if i % 37 < 6 { Input::LEFT } else { Input::W };
             w.advance([Input::aimed(bits, (i * 700) as u16), Input::default()]);
@@ -909,19 +920,19 @@ fn re_simulating_a_hunt_from_a_snapshot_lands_in_the_same_place() {
 /// test about a hazard is about the hazard rather than about chasing.
 fn parked() -> World {
     let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
-    let mut beast = w.monster.expect("a hunt has a creature");
+    let mut beast = w.monster().copied().expect("a hunt has a creature");
     beast.pos = V3::new(w.players[0].pos.x.add(Fx::from_int(6)), Fx::ZERO, Fx::ZERO);
     beast.yaw = Fx::from_raw(1 << 15);
     beast.doing = Doing::Prowl;
     beast.brain.think_left = u16::MAX;
-    w.monster = Some(beast);
+    w.monsters[0] = Some(beast);
     w.players[0].pos = V3::new(w.players[0].pos.x, Fx::ZERO, Fx::ZERO);
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
     w
 }
 
 fn beast_health(w: &World) -> i32 {
-    w.monster.expect("a hunt has a creature").health
+    w.monster().copied().expect("a hunt has a creature").health
 }
 
 #[test]
@@ -965,10 +976,13 @@ fn a_topple_is_a_disable_and_a_flinch_is_not() {
     // hit hard enough, and it is excluded for exactly the reason hitstun is.
     let state = |doing: Doing| {
         let mut w = parked();
-        let mut beast = w.monster.expect("a hunt has a creature");
+        let mut beast = w.monster().copied().expect("a hunt has a creature");
         beast.doing = doing;
-        w.monster = Some(beast);
-        w.monster.expect("a hunt has a creature").disabled()
+        w.monsters[0] = Some(beast);
+        w.monster()
+            .copied()
+            .expect("a hunt has a creature")
+            .disabled()
     };
     assert!(!state(Doing::Prowl), "a prowling creature is disabled");
     assert!(
@@ -1002,27 +1016,28 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
     let blade = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
     let up = Doing::Prowl;
     let knee = Doing::Stumble {
-        left: sim::tuning::stumble_frames(),
+        left: ridgeback::SPECIES.stumble_frames(),
         front: true,
     };
 
     // Throw from behind it, at a hind foot; report the damage and which foot.
     let throw = |doing: Doing, stand_at: Fx| -> (i32, Option<usize>) {
         let mut w = parked();
-        let feet_before = w.monster.expect("a hunt has a creature").part_health;
+        let feet_before =
+            ridgeback::FEET.map(|p| w.monster().expect("a hunt has a creature").part_health(p));
         let before = beast_health(&w);
         let flight = sim::tuning::bloodletter_flight();
         for f in 0..(blade.startup + blade.active + flight + 4) {
             // Held down, and held still: the creature would otherwise stand up,
             // walk off, or decide to bite. Held on the *first* frame of the
             // stumble, so its pose is the standing one.
-            let mut beast = w.monster.expect("a hunt has a creature");
+            let mut beast = w.monster().copied().expect("a hunt has a creature");
             beast.doing = doing;
             beast.pos = V3::ZERO;
             beast.yaw = Fx::from_raw(1 << 15);
             beast.speed = Fx::ZERO;
             beast.brain.think_left = u16::MAX;
-            w.monster = Some(beast);
+            w.monsters[0] = Some(beast);
             // In line with the left hind leg rather than the spine: a blade
             // thrown down the centreline passes between the legs and grazes
             // whichever one the animal's breathing happens to sway into it.
@@ -1032,11 +1047,11 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
             // origin pointed the other way.
             w.advance([Input::aimed(held, 1 << 15), Input::default()]);
         }
-        let feet_after = w.monster.expect("a hunt has a creature").part_health;
-        let foot = monster::BREAKABLE
-            .iter()
-            .copied()
-            .find(|p| feet_after[*p] < feet_before[*p]);
+        let feet_after =
+            ridgeback::FEET.map(|p| w.monster().expect("a hunt has a creature").part_health(p));
+        let foot = (0..ridgeback::FEET.len())
+            .find(|i| feet_after[*i] < feet_before[*i])
+            .map(|i| ridgeback::FEET[i]);
         (before - beast_health(&w), foot)
     };
 
@@ -1100,7 +1115,7 @@ fn rides_out(part: usize, kind: u8, brace: bool) -> bool {
     // treads overlap so the climb has no seams -- and a body standing in an
     // overlap is standing on the higher of the two, which is correct and is not
     // the haunch. Standing on the haunch means standing on the back of it.
-    if part == monster::HAUNCH {
+    if part == ridgeback::HAUNCH {
         w.players[0].local.x = w.players[0].local.x.sub(Fx::ratio(6, 10));
     }
     let held = if brace {
@@ -1116,17 +1131,17 @@ fn the_shake_throws_a_loose_rider_off_the_back_and_a_braced_one_holds() {
     // The move's whole job, on the two parts the climb is *for*: the ridge lies
     // along the barrel and the nape is off the shoulders, so those are where a
     // rider who is getting paid is standing.
-    for part in [monster::BARREL, monster::SHOULDERS] {
+    for part in [ridgeback::BARREL, ridgeback::SHOULDERS] {
         assert!(
-            !rides_out(part, monster::SHAKE, false),
+            !rides_out(part, ridgeback::SHAKE, false),
             "a shake did nothing to someone standing loose on the {}",
-            monster::PART_NAMES[part]
+            ridgeback::PARTS[part].name
         );
         assert!(
-            rides_out(part, monster::SHAKE, true),
+            rides_out(part, ridgeback::SHAKE, true),
             "bracing on the {} did not hold through a shake, so crouch is not \
              an answer where it needs to be one",
-            monster::PART_NAMES[part]
+            ridgeback::PARTS[part].name
         );
     }
 }
@@ -1136,17 +1151,17 @@ fn the_hips_and_the_tail_root_are_the_calm_places_to_stand() {
     // A gradient rather than a flag, and it is what makes *where* you stand on
     // the animal a decision. Both are near an axis the shake turns about, and
     // both are a long walk from anything worth hitting -- which is the trade.
-    for part in [monster::HAUNCH, monster::TAIL_BASE] {
+    for part in [ridgeback::HAUNCH, ridgeback::TAIL_BASE] {
         assert!(
-            rides_out(part, monster::SHAKE, false),
+            rides_out(part, ridgeback::SHAKE, false),
             "the {} is as violent as the back, so retreating to it buys nothing",
-            monster::PART_NAMES[part]
+            ridgeback::PARTS[part].name
         );
     }
     // Out along the tail is a different matter: that is where a sweep has a
     // lever on you.
     assert!(
-        !rides_out(monster::TAIL_MID, monster::SWEEP, false),
+        !rides_out(ridgeback::TAIL_MID, ridgeback::SWEEP, false),
         "a tail sweep did not throw somebody standing out along the tail"
     );
 }
@@ -1156,18 +1171,18 @@ fn the_moves_that_are_aimed_at_the_ground_do_not_throw_a_braced_rider() {
     // Otherwise bracing is not a decision, it is a thing you hold down. The
     // slam is the exception on purpose and has its own test.
     for kind in [
-        monster::BITE,
-        monster::STOMP,
-        monster::CHARGE,
-        monster::SWEEP,
-        monster::KICK,
+        ridgeback::BITE,
+        ridgeback::STOMP,
+        ridgeback::CHARGE,
+        ridgeback::SWEEP,
+        ridgeback::KICK,
     ] {
-        for part in [monster::BARREL, monster::SHOULDERS, monster::HAUNCH] {
+        for part in [ridgeback::BARREL, ridgeback::SHOULDERS, ridgeback::HAUNCH] {
             assert!(
                 rides_out(part, kind, true),
                 "{} threw a braced rider off the {}",
-                monster::MOVE_NAMES[kind as usize],
-                monster::PART_NAMES[part]
+                ridgeback::MOVES[kind as usize].name,
+                ridgeback::PARTS[part].name
             );
         }
     }
@@ -1183,13 +1198,13 @@ fn you_can_jump_the_shake_if_you_commit_before_the_whip() {
     // A jump lasts about as long as the whip does, so committing during the
     // startup clears the whole thing, and committing once it has begun is a
     // jump that never leaves. See `docs/design/monsters.md` §3.
-    let startup = monster::attack(monster::SHAKE).startup;
+    let startup = ridgeback::SPECIES.attack(ridgeback::SHAKE).startup;
     let window = |lead: u16| -> u32 {
         let mut w = hunt();
-        board(&mut w, monster::BARREL);
-        let total = monster::attack(monster::SHAKE).total();
-        w.monster.as_mut().expect("a hunt has a creature").doing = Doing::Startup {
-            kind: monster::SHAKE,
+        board(&mut w, ridgeback::BARREL);
+        let total = ridgeback::SPECIES.attack(ridgeback::SHAKE).total();
+        w.monster_mut().expect("a hunt has a creature").doing = Doing::Startup {
+            kind: ridgeback::SHAKE,
             left: startup,
         };
         let mut run = 0;
@@ -1276,7 +1291,7 @@ fn a_move_it_has_just_thrown_cannot_come_straight_back() {
     // What makes baiting one worth doing. Without a lockout the answer to every
     // buck is another buck, and a rider who read the shake and jumped it has
     // earned nothing at all.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.brain.think_left = 0;
     let aboard = [Quarry {
         pos: beast.pos,
@@ -1290,18 +1305,18 @@ fn a_move_it_has_just_thrown_cannot_come_straight_back() {
     for _ in 0..4 {
         beast.step(&aboard);
     }
-    let shake = monster::attack(monster::SHAKE);
+    let shake = ridgeback::SPECIES.attack(ridgeback::SHAKE);
     assert!(
         shake.cooldown > shake.total(),
         "the shake's lockout is shorter than the shake, so it can chain"
     );
     beast.doing = Doing::Startup {
-        kind: monster::SHAKE,
+        kind: ridgeback::SHAKE,
         left: shake.startup,
     };
-    beast.brain.cooldown[monster::SHAKE as usize] = shake.cooldown;
+    beast.brain.cooldown[ridgeback::SHAKE as usize] = shake.cooldown;
     assert_eq!(
-        beast.appetite(monster::SHAKE, 1),
+        beast.appetite(ridgeback::SHAKE, 1),
         0,
         "a move on its lockout still scored"
     );
@@ -1312,14 +1327,19 @@ fn a_move_it_has_just_thrown_cannot_come_straight_back() {
 // ---------------------------------------------------------------------------
 
 /// The lowest point any part of the creature reaches, through a whole clip.
-fn lowest(clip: sim::beast::Clip) -> (Fx, usize) {
-    let (_, count) = sim::beast_baked::SPAN[clip.index()];
+fn lowest(clip: ridgeback::Clip) -> (Fx, usize) {
+    let (_, count) = ridgeback::SPECIES.span[clip.index()];
     let mut worst = (Fx::MAX, 0);
     for i in 0..count.max(1) {
         let at = Fx::from_int(i as i32).div(Fx::from_int((count.max(2) - 1) as i32));
-        let rig = sim::beast::Rig::build(V3::ZERO, Fx::ZERO, &sim::beast::sample(clip, at));
-        for part in 0..monster::PARTS {
-            let sh = monster::shape(part);
+        let rig = sim::beast::Rig::build(
+            &ridgeback::SPECIES,
+            V3::ZERO,
+            Fx::ZERO,
+            &sim::beast::sample(&ridgeback::SPECIES, clip.index(), at),
+        );
+        for part in 0..ridgeback::PART_COUNT {
+            let sh = ridgeback::SPECIES.shape(part);
             for x in [sh.min.x, sh.max.x] {
                 for y in [sh.min.y, sh.max.y] {
                     for z in [sh.min.z, sh.max.z] {
@@ -1348,13 +1368,13 @@ fn the_creature_keeps_itself_roughly_out_of_the_floor() {
     // `cargo run -p anim --bin preview_beast` draws it, which is how you tell
     // the two apart.
     let floor = Fx::from_int(1).neg();
-    for clip in sim::beast::Clip::ALL {
+    for clip in ridgeback::Clip::ALL {
         let (low, part) = lowest(clip);
         assert!(
             low.raw() > floor.raw(),
             "the {} clip puts the {} {:?} m into the floor",
             clip.name(),
-            monster::PART_NAMES[part],
+            ridgeback::PARTS[part].name,
             low
         );
     }
@@ -1366,14 +1386,14 @@ fn a_creature_on_broken_legs_is_lower_but_still_standing_on_them() {
     // it has to be a *lean* rather than the whole animal sinking -- the hips
     // take the average of the two ends and the pitch says which end went, so
     // three broken feet cannot add up to a creature buried to its knees.
-    let mut lame = Monster::new();
-    for leg in sim::beast::LEGS {
-        lame.part_health[leg.foot] = 0;
+    let mut lame = Monster::new(sim::species::SpeciesId::RIDGEBACK);
+    for leg in ridgeback::LEGS {
+        lame.breaks[ridgeback::SPECIES.break_slot(leg.foot).unwrap()] = 0;
     }
     let rig = lame.rig();
     let mut low = Fx::MAX;
-    for part in 0..monster::PARTS {
-        let sh = monster::shape(part);
+    for part in 0..ridgeback::PART_COUNT {
+        let sh = ridgeback::SPECIES.shape(part);
         low = low.min(rig.part_to_world(part, sh.min).y);
     }
     assert!(
@@ -1381,11 +1401,11 @@ fn a_creature_on_broken_legs_is_lower_but_still_standing_on_them() {
         "an animal with every foot broken is {low:?} m into the floor"
     );
 
-    let sound = Monster::new();
+    let sound = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let top = |m: &Monster| {
-        let sh = monster::shape(monster::SHOULDERS);
+        let sh = ridgeback::SPECIES.shape(ridgeback::SHOULDERS);
         m.rig()
-            .part_to_world(monster::SHOULDERS, V3::new(sh.min.x, sh.max.y, Fx::ZERO))
+            .part_to_world(ridgeback::SHOULDERS, V3::new(sh.min.x, sh.max.y, Fx::ZERO))
             .y
     };
     assert!(
@@ -1400,19 +1420,24 @@ fn every_bone_in_the_rig_reaches_the_world_through_its_parents() {
     // fail silently: a child bone must move when its parent does. A typo in
     // `PARENTS` gives a creature whose tail hangs in the air where the tail
     // used to be, and nothing else would say so.
-    let mut bent = sim::beast::Pose::rest();
-    bent.bone[sim::beast::ROOT] = V3::new(Fx::ratio(1, 8), Fx::ZERO, Fx::ZERO);
-    let rest = sim::beast::Rig::build(V3::ZERO, Fx::ZERO, &sim::beast::Pose::rest());
-    let moved = sim::beast::Rig::build(V3::ZERO, Fx::ZERO, &bent);
-    for bone in 0..sim::beast::BONES {
-        if bone == sim::beast::ROOT {
+    let mut bent = sim::beast::Pose::rest(ridgeback::bones::COUNT);
+    bent.bone[ridgeback::bones::ROOT] = V3::new(Fx::ratio(1, 8), Fx::ZERO, Fx::ZERO);
+    let rest = sim::beast::Rig::build(
+        &ridgeback::SPECIES,
+        V3::ZERO,
+        Fx::ZERO,
+        &sim::beast::Pose::rest(ridgeback::bones::COUNT),
+    );
+    let moved = sim::beast::Rig::build(&ridgeback::SPECIES, V3::ZERO, Fx::ZERO, &bent);
+    for bone in 0..ridgeback::bones::COUNT {
+        if bone == ridgeback::bones::ROOT {
             continue;
         }
         let shift = moved.bone[bone].at.sub(rest.bone[bone].at).len();
         assert!(
             shift.raw() > Fx::ratio(1, 100).raw(),
             "pitching the root left {} exactly where it was",
-            sim::beast::BONE_NAMES[bone]
+            ridgeback::BONES[bone].name
         );
     }
 }

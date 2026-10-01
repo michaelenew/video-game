@@ -8,7 +8,8 @@
 //! `docs/design/monsters.md` §"Threat modes".
 
 use sim::fixed::Fx;
-use sim::monster::{self, Doing, Monster, Quarry};
+use sim::monster::{Doing, Monster, Quarry};
+use sim::species::ridgeback;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::{Class, Input, V3, World};
 
@@ -30,13 +31,13 @@ fn quarry(pos: V3, vel: V3) -> Quarry {
 fn standoff(at: V3, me: V3) -> World {
     let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
     w.players[1].health = 0;
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.pos = at;
     beast.yaw = Fx::ZERO;
     beast.doing = Doing::Prowl;
     beast.brain.think_left = u16::MAX;
     beast.brain.seen = me;
-    w.monster = Some(beast);
+    w.monsters[0] = Some(beast);
     w.players[0].pos = me;
     w.players[0].grounded = true;
     w
@@ -47,14 +48,14 @@ fn standoff(at: V3, me: V3) -> World {
 /// whether the fighter lost health.
 fn survive(mut w: World, kind: u8, hand: impl Fn(u32) -> Input) -> bool {
     let before = w.players[0].health;
-    let m = monster::attack(kind);
-    let beast = w.monster.as_mut().unwrap();
+    let m = ridgeback::SPECIES.attack(kind);
+    let beast = w.monster_mut().unwrap();
     beast.doing = Doing::Startup {
         kind,
         left: m.startup,
     };
     for f in 0..m.total() as u32 + 2 {
-        w.monster.as_mut().unwrap().brain.think_left = u16::MAX;
+        w.monster_mut().unwrap().brain.think_left = u16::MAX;
         w.advance([hand(f), Input::default()]);
     }
     w.players[0].health == before
@@ -70,8 +71,8 @@ fn nothing_a_fighter_does_on_foot_outruns_it() {
     // Its gallop has to beat a walk by a margin, and its charge has to beat
     // the fastest thing a fighter has at all.
     let walk = sim::tuning::move_speed();
-    let gallop = sim::tuning::gallop_speed();
-    let charge = monster::attack(monster::CHARGE).advance;
+    let gallop = ridgeback::SPECIES.gallop();
+    let charge = ridgeback::SPECIES.attack(ridgeback::CHARGE).advance;
     assert!(
         gallop.raw() > walk.mul(Fx::ratio(3, 2)).raw(),
         "it gallops at {gallop:?} and a fighter walks at {walk:?}"
@@ -90,11 +91,11 @@ fn a_fighter_backing_away_is_run_down() {
     // away so that this is pursuit and nothing else. It used to ask for a
     // stroll at seven metres and a walk at eight, so a backpedalling fighter
     // stayed just out of reach for as long as they liked -- and the gap grew.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.pos = V3::new(Fx::from_int(-9), Fx::ZERO, Fx::ZERO);
-    beast.brain.cooldown = [u16::MAX; monster::MOVES];
+    beast.brain.cooldown = [u16::MAX; sim::species::MAX_MOVES];
     let walk = sim::tuning::move_speed();
-    let start = sim::tuning::prowl_range().add(Fx::ONE);
+    let start = ridgeback::SPECIES.prowl_range().add(Fx::ONE);
     let mut pos = beast.pos.add(V3::new(start, Fx::ZERO, Fx::ZERO));
     let vel = V3::new(walk, Fx::ZERO, Fx::ZERO);
     for _ in 0..90 {
@@ -115,7 +116,7 @@ fn it_keeps_the_target_it_has() {
     // fighter it was trading with whenever somebody else drifted a metre
     // nearer -- in the game, the training dummy standing idle, which looked
     // like the animal losing interest and lumbering off.
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     let mine = quarry(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO), V3::ZERO);
     let nearer = quarry(V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(5)), V3::ZERO);
     beast.brain.target = 0;
@@ -162,12 +163,12 @@ fn dodge_at(at: u32) -> impl Fn(u32) -> Input {
 fn walk_does_not_dodge_does(kind: u8, range: Fx) {
     let at = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::ZERO);
     let me = at.add(V3::new(range, Fx::ZERO, Fx::ZERO));
-    let name = monster::MOVE_NAMES[kind as usize];
+    let name = ridgeback::MOVES[kind as usize].name;
     assert!(
         !survive(standoff(at, me), kind, walk_across),
         "walking sideways out of the {name} from {range:?} m got clear of it"
     );
-    let m = monster::attack(kind);
+    let m = ridgeback::SPECIES.attack(kind);
     let escaped = (0..m.startup as u32 + m.active as u32)
         .any(|f| survive(standoff(at, me), kind, dodge_at(f)));
     assert!(
@@ -178,17 +179,23 @@ fn walk_does_not_dodge_does(kind: u8, range: Fx) {
 
 #[test]
 fn the_bite_is_dodged_not_walked_out_of() {
-    walk_does_not_dodge_does(monster::BITE, monster::attack(monster::BITE).ideal_range);
+    walk_does_not_dodge_does(
+        ridgeback::BITE,
+        ridgeback::SPECIES.attack(ridgeback::BITE).ideal_range,
+    );
 }
 
 #[test]
 fn the_charge_is_dodged_not_walked_out_of() {
-    walk_does_not_dodge_does(monster::CHARGE, Fx::from_int(10));
+    walk_does_not_dodge_does(ridgeback::CHARGE, Fx::from_int(10));
 }
 
 #[test]
 fn the_slam_is_dodged_not_walked_out_of() {
-    walk_does_not_dodge_does(monster::SLAM, monster::attack(monster::SLAM).ideal_range);
+    walk_does_not_dodge_does(
+        ridgeback::SLAM,
+        ridgeback::SPECIES.attack(ridgeback::SLAM).ideal_range,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -203,14 +210,14 @@ fn the_spray_reaches_a_fighter_at_range_and_pins_them() {
     let at = V3::new(Fx::from_int(-7), Fx::ZERO, Fx::ZERO);
     let me = V3::new(Fx::from_int(7), Fx::ZERO, Fx::ZERO);
     let mut w = standoff(at, me);
-    let spray = monster::attack(monster::SPRAY);
-    w.monster.as_mut().unwrap().doing = Doing::Startup {
-        kind: monster::SPRAY,
+    let spray = ridgeback::SPECIES.attack(ridgeback::SPRAY);
+    w.monster_mut().unwrap().doing = Doing::Startup {
+        kind: ridgeback::SPRAY,
         left: spray.startup,
     };
     let mut pinned_at = None;
     for _ in 0..spray.total() as u32 {
-        w.monster.as_mut().unwrap().brain.think_left = u16::MAX;
+        w.monster_mut().unwrap().brain.think_left = u16::MAX;
         // Trying to leave, the whole time.
         w.advance([Input::aimed(Input::W, PLUS_X), Input::default()]);
         if pinned_at.is_none() && matches!(w.players[0].action, Action::Held { .. }) {
@@ -232,17 +239,17 @@ fn a_set_up_lasts_long_enough_for_what_follows_it() {
     // outlast the rest of the sweep, the beat, and a bite; the spray's root
     // has to outlast the rest of the spray, the beat, and a charge crossing
     // the ground the spray is thrown across.
-    let beat = sim::tuning::think_frames() as i32;
-    let sweep = monster::attack(monster::SWEEP);
-    let bite = monster::attack(monster::BITE);
+    let beat = ridgeback::SPECIES.think_frames() as i32;
+    let sweep = ridgeback::SPECIES.attack(ridgeback::SWEEP);
+    let bite = ridgeback::SPECIES.attack(ridgeback::BITE);
     let after_sweep = sweep.active as i32 + sweep.recovery as i32 + beat + bite.startup as i32;
     assert!(
         sweep.hitstun as i32 >= after_sweep,
         "the sweep staggers for {} frames and a bite after it takes {after_sweep}",
         sweep.hitstun
     );
-    let spray = monster::attack(monster::SPRAY);
-    let charge = monster::attack(monster::CHARGE);
+    let spray = ridgeback::SPECIES.attack(ridgeback::SPRAY);
+    let charge = ridgeback::SPECIES.attack(ridgeback::CHARGE);
     let crossing = spray
         .ideal_range
         .sub(charge.hit_x)
@@ -268,12 +275,12 @@ fn a_staggered_target_is_pressed_and_otherwise_it_comes_about() {
     // The pause is counted down from the frame it is set, so one frame of it
     // has already gone by the time the step returns.
     for (stunned, want) in [
-        (false, sim::tuning::rear_pause() - 1),
-        (true, sim::tuning::think_frames() - 1),
+        (false, ridgeback::SPECIES.rear_pause() - 1),
+        (true, ridgeback::SPECIES.think_frames() - 1),
     ] {
-        let mut beast = Monster::new();
+        let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
         beast.doing = Doing::Recovery {
-            kind: monster::SWEEP,
+            kind: ridgeback::SWEEP,
             left: 0,
         };
         beast.brain.seen_stunned = stunned;
@@ -295,22 +302,22 @@ fn the_dead_are_not_carried() {
     // it scooped up bodies often enough that the fight report counted them as
     // rides.
     let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
-    let mut beast = w.monster.unwrap();
+    let mut beast = w.monster().copied().unwrap();
     beast.doing = Doing::Prowl;
     beast.brain.think_left = u16::MAX;
-    w.monster = Some(beast);
+    w.monsters[0] = Some(beast);
     w.players[1].health = 0;
     // Drop the body onto its back from just above it.
-    let shape = monster::shape(monster::BARREL);
+    let shape = ridgeback::SPECIES.shape(ridgeback::BARREL);
     let mid = shape.min.add(shape.max).scale(Fx::ratio(1, 2));
     w.players[1].pos = beast.world_of(
-        monster::BARREL,
+        ridgeback::BARREL,
         V3::new(mid.x, shape.max.y.add(Fx::ratio(1, 8)), mid.z),
     );
     w.players[1].vel = V3::new(Fx::ZERO, Fx::ratio(-1, 1), Fx::ZERO);
     w.players[1].grounded = false;
     for _ in 0..30 {
-        w.monster.as_mut().unwrap().brain.think_left = u16::MAX;
+        w.monster_mut().unwrap().brain.think_left = u16::MAX;
         w.advance([Input::default(); MAX_PLAYERS]);
         assert!(
             !w.players[1].aboard(),
@@ -320,7 +327,7 @@ fn the_dead_are_not_carried() {
     // And a rider who dies up there comes off.
     w.players[0].pos = w.players[1].pos;
     w.players[0].pos = beast.world_of(
-        monster::BARREL,
+        ridgeback::BARREL,
         V3::new(mid.x, shape.max.y.add(Fx::ratio(1, 8)), mid.z),
     );
     w.players[0].vel = V3::new(Fx::ZERO, Fx::ratio(-1, 1), Fx::ZERO);
@@ -345,18 +352,18 @@ fn a_hunt_gives_you_a_moment_before_it_attacks() {
     // stands its ground and turns to face you, throws nothing, and then gets
     // on with it.
     let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
-    let grace = sim::tuning::hunt_grace() as u32;
-    let start = w.monster.unwrap().pos;
+    let grace = ridgeback::SPECIES.hunt_grace() as u32;
+    let start = w.monster().copied().unwrap().pos;
     for f in 0..grace {
         w.advance([Input::default(); MAX_PLAYERS]);
-        let beast = w.monster.unwrap();
+        let beast = w.monster().copied().unwrap();
         assert!(
             beast.doing.attacking().is_none(),
             "it started {} on frame {f} of a {grace}-frame grace",
-            monster::MOVE_NAMES[beast.doing.attacking().unwrap() as usize]
+            ridgeback::MOVES[beast.doing.attacking().unwrap() as usize].name
         );
     }
-    let moved = w.monster.unwrap().pos.sub(start).flat_len();
+    let moved = w.monster().copied().unwrap().pos.sub(start).flat_len();
     assert!(
         moved.raw() < Fx::ONE.raw(),
         "it walked {moved:?} m toward the hunters while it was meant to be taking them in"
@@ -364,7 +371,7 @@ fn a_hunt_gives_you_a_moment_before_it_attacks() {
     let mut attacked = false;
     for _ in 0..180 {
         w.advance([Input::default(); MAX_PLAYERS]);
-        attacked |= w.monster.unwrap().doing.attacking().is_some();
+        attacked |= w.monster().copied().unwrap().doing.attacking().is_some();
     }
     assert!(
         attacked,
@@ -374,9 +381,9 @@ fn a_hunt_gives_you_a_moment_before_it_attacks() {
 
 #[test]
 fn hitting_it_wakes_it() {
-    let mut beast = Monster::new();
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.brain.grace = 180;
-    beast.take_hit(monster::HINDFOOT_L, 10);
+    beast.take_hit(ridgeback::HINDFOOT_L, 10);
     assert_eq!(
         beast.brain.grace, 0,
         "it was hit and kept on taking the view in"
@@ -391,12 +398,12 @@ fn what_is_drawn_through_the_windup_is_where_the_hit_lands() {
     // shows one circle and a hit that lands another is the report that asked
     // for markers in the first place -- "the hitboxes are much larger than
     // they look" -- with a picture on top.
-    for kind in 0..monster::MOVES as u8 {
-        let m = monster::attack(kind);
+    for kind in 0..ridgeback::MOVE_COUNT as u8 {
+        let m = ridgeback::SPECIES.attack(kind);
         if m.damage <= 0 {
             continue;
         }
-        let mut beast = Monster::new();
+        let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
         let ahead = V3::new(m.ideal_range.max(Fx::from_int(3)), Fx::ZERO, Fx::ZERO);
         let target = quarry(beast.pos.add(ahead), V3::ZERO);
         beast.brain.seen = target.pos;
@@ -419,7 +426,7 @@ fn what_is_drawn_through_the_windup_is_where_the_hit_lands() {
         let (anchor, radius, low, high) = beast
             .hit_volume()
             .expect("the move's hit is out on its first active frame");
-        let name = monster::MOVE_NAMES[kind as usize];
+        let name = ridgeback::MOVES[kind as usize].name;
         // A move that travels has moved by a frame's worth by the time it is
         // asked; everything else is exactly where it was drawn.
         let slack = m.advance.add(m.travel).mul(sim::DT).add(Fx::ratio(1, 20));

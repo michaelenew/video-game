@@ -87,7 +87,7 @@ use crate::effects::{EffectKind, Effects};
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::input::Input;
 use crate::math::V3;
-use crate::monster::Monster;
+use crate::monster::Herd;
 use crate::state::{MAX_PLAYERS, Player};
 use crate::stones::Field;
 use crate::tuning as t;
@@ -196,7 +196,8 @@ pub struct Scene<'a> {
     pub stones: &'a Field,
     pub players: &'a [Player; MAX_PLAYERS],
     pub effects: &'a Effects,
-    pub quarry: Option<&'a Monster>,
+    /// Every creature slot. A versus match is all of them empty.
+    pub quarry: &'a Herd,
 }
 
 /// Where a fighter standing at `pos` casts from: the height abilities leave at.
@@ -975,7 +976,7 @@ pub fn shadow_faces(
     }
     // From the height the swing leaves at, and in three dimensions: a part
     // overhead is not in reach however close its footprint is.
-    if let Some(beast) = scene.quarry.filter(|b| b.alive()) {
+    for beast in scene.quarry.iter().flatten().filter(|b| b.alive()) {
         let hub = origin(from);
         let at = beast.nearest_to(hub);
         consider(at, crate::math::big_len(at.sub(hub)));
@@ -1098,7 +1099,9 @@ pub enum Contact {
     Fire {
         dist: Fx,
     },
+    /// A part of a creature: which slot of `World::monsters`, which part.
     Quarry {
+        slot: usize,
         part: usize,
         dist: Fx,
     },
@@ -1226,11 +1229,13 @@ pub fn first_along(
         }
     }
     if targets.quarry {
-        if let Some((part, dist)) = scene
-            .quarry
-            .and_then(|b| b.part_struck_along(from, dir, limit, girth))
-        {
-            keep(Contact::Quarry { part, dist });
+        for (slot, beast) in scene.quarry.iter().enumerate() {
+            if let Some((part, dist)) = beast
+                .as_ref()
+                .and_then(|b| b.part_struck_along(from, dir, limit, girth))
+            {
+                keep(Contact::Quarry { slot, part, dist });
+            }
         }
     }
     if targets.terrain {

@@ -14,6 +14,7 @@
 //! crossing to it by dash cashes the marks.
 
 use sim::class::{Ghost, Mechanic, Shadow};
+use sim::species::ridgeback;
 use sim::state::{Action, SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
@@ -80,7 +81,7 @@ fn with_scene<T>(w: &World, ask: impl FnOnce(&sim::aim::Scene) -> T) -> T {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: w.monster.as_ref(),
+        quarry: &w.monsters,
     })
 }
 
@@ -814,13 +815,13 @@ fn a_forward_dodge_with_the_shadow_at_her_heel_is_just_a_dodge() {
 /// the shadow is about the shadow rather than about chasing.
 fn hunting() -> World {
     let mut w = World::hunt([Class::ShadowReaver, Class::Bulwark]);
-    let mut beast = w.monster.expect("a hunt has a creature");
+    let mut beast = w.monster().copied().expect("a hunt has a creature");
     // Close enough that the copy, which swings from a step behind her, reaches
     // it too -- the point of the test is the second body, not her spacing.
     // Placed by its *head* rather than by its centre: it is thirteen metres
     // long, so where the middle of it is says nothing about what either body
     // can reach. Its head goes between the two of them.
-    let head = sim::monster::shape(sim::monster::HEAD);
+    let head = ridgeback::SPECIES.shape(ridgeback::HEAD);
     let mid = head.min.x.add(head.max.x).mul(Fx::ratio(1, 2));
     beast.pos = V3::new(
         mid.sub(t::shadow_trail().mul(Fx::ratio(1, 2))),
@@ -831,7 +832,7 @@ fn hunting() -> World {
     beast.yaw = Fx::from_raw(1 << 15);
     beast.doing = sim::monster::Doing::Prowl;
     beast.brain.think_left = u16::MAX;
-    w.monster = Some(beast);
+    w.monsters[0] = Some(beast);
     w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
     w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
@@ -840,7 +841,7 @@ fn hunting() -> World {
 }
 
 fn beast_health(w: &World) -> i32 {
-    w.monster.expect("a hunt has a creature").health
+    w.monster().copied().expect("a hunt has a creature").health
 }
 
 #[test]
@@ -907,8 +908,8 @@ fn the_lotus_cuts_the_creature_a_couple_of_times_a_pass_not_twelve() {
     );
     let dealt = before - beast_health(&w);
 
-    let worst = (0..sim::monster::PARTS)
-        .map(|part| sim::monster::vulnerability(part).raw())
+    let worst = (0..ridgeback::PART_COUNT)
+        .map(|part| ridgeback::SPECIES.vulnerability(part).raw())
         .max()
         .expect("the creature has parts");
     let a_blade = Fx::from_int(lotus.damage).mul(Fx::from_raw(worst)).to_int() + 1;
@@ -1990,7 +1991,7 @@ fn the_shadow_marks_the_creature_from_the_field() {
         "fixture: nothing reached the creature"
     );
     assert_eq!(
-        w.monster.unwrap().marks,
+        w.monster().copied().unwrap().marks,
         1,
         "the copy from the field cut the creature and did not mark it"
     );
@@ -2001,15 +2002,15 @@ fn a_cash_in_lands_on_the_creature_too() {
     // The shadow works a Ridgeback's flank from range and she cashes on a leg.
     let first_blow_on_it = |marks: u8| {
         let mut w = hunting();
-        let mut beast = w.monster.unwrap();
+        let mut beast = w.monster().copied().unwrap();
         beast.marks = marks;
         beast.mark_clock = t::mark_fade();
-        w.monster = Some(beast);
+        w.monsters[0] = Some(beast);
         let full = beast_health(&w);
         run(&mut w, 2, L, 0);
         for _ in 0..30 {
             if beast_health(&w) < full {
-                return (full - beast_health(&w), w.monster.unwrap().marks);
+                return (full - beast_health(&w), w.monster().copied().unwrap().marks);
             }
             run(&mut w, 1, 0, 0);
         }

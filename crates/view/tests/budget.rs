@@ -184,7 +184,7 @@ fn draw_one(rig: &mut CameraRig, prev: &World, cur: &World, n: u32) {
         // The whole legal range, floor to sky, over the run.
         (sweep - 0.5) * std::f32::consts::PI * 0.9,
         Surroundings {
-            beast: cur.monster.as_ref(),
+            beasts: &cur.monsters,
             aboard: cur.players[0].aboard(),
             aloft: frame.players[0].aloft,
             carried: frame.players[0].carried,

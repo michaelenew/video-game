@@ -614,19 +614,19 @@ pub fn update(
 
     // The creature, if there is one.
     if let Ok(mut visible) = quarry_row.single_mut() {
-        *visible = if sim.cur.monster.is_some() {
+        *visible = if sim.cur.hunting() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
         };
     }
-    if let Some(beast) = sim.cur.monster {
+    if let Some(beast) = sim.cur.monster() {
         if let Ok(mut node) = quarry.single_mut() {
-            let share = beast.health.max(0) as f32 / sim::tuning::monster_health().max(1) as f32;
+            let share = beast.health.max(0) as f32 / beast.sp().health().max(1) as f32;
             node.width = Val::Percent(100.0 * share);
         }
         if let Ok(mut node) = poise.single_mut() {
-            let share = beast.poise.max(0) as f32 / sim::tuning::poise_max().max(1) as f32;
+            let share = beast.poise.max(0) as f32 / beast.sp().poise_max().max(1) as f32;
             node.width = Val::Percent(100.0 * share.min(1.0));
         }
     }
@@ -658,7 +658,7 @@ pub fn update(
                 "the Ridgeback stands".into()
             }
             Phase::RoundOver { winner, .. } if winner == u8::MAX => "double KO".into(),
-            Phase::RoundOver { .. } if sim.cur.monster.is_some() => "the hunt is over".into(),
+            Phase::RoundOver { .. } if sim.cur.hunting() => "the hunt is over".into(),
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         });
     }

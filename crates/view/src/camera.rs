@@ -339,7 +339,7 @@ impl CameraRig {
         pitch: f32,
         around: Surroundings<'_>,
     ) -> Framing {
-        let beast = around.beast;
+        let beasts = around.beasts;
         // The mouse is only half of where they are looking. The other half is
         // whatever has turned underneath them, which the simulation has already
         // spent on their facing and on their aim -- see `Surroundings::carried`.
@@ -401,13 +401,13 @@ impl CameraRig {
         // It stops applying once the rig is climbing into the head: up there
         // the eye is at the fighter's eyes, which is above the floor by
         // definition, and a clamp that still fired would be fighting the climb.
-        let underfoot = beast.map_or(GROUND, |b| {
+        let underfoot = beasts.iter().flatten().fold(GROUND, |floor, b| {
             let eye = sim::V3::new(
                 fx_of(self.focus[0] + offset[0]),
                 sim::Fx::ZERO,
                 fx_of(self.focus[2] + offset[2]),
             );
-            b.top_under(eye).to_f32_for_render().max(GROUND)
+            floor.max(b.top_under(eye).to_f32_for_render())
         });
         let lowest = underfoot + FLOOR_CLEARANCE;
         offset[1] = offset[1].max((lowest - self.focus[1]) * (1.0 - sky));
@@ -427,7 +427,7 @@ impl CameraRig {
         // has nothing left to be blocked by, and clamping it anyway points the
         // camera at the back of the fighter's head while a dinosaur walks over
         // them, which is the one moment they most need to see.
-        let inside_it = beast.is_some_and(|b| {
+        let inside_it = |b: &sim::Monster| {
             b.contains(
                 sim::V3::new(
                     fx_of(self.focus[0]),
@@ -436,13 +436,19 @@ impl CameraRig {
                 ),
                 fx_of(PADDING),
             )
-        });
-        let blocker = if around.aboard || inside_it {
-            None
-        } else {
-            beast
         };
-        let clear = lerp(unobstructed_fraction(self.focus, offset, blocker), 1.0, sky);
+        let mut blockers: [Option<&sim::Monster>; sim::monster::MAX_MONSTERS] =
+            [None; sim::monster::MAX_MONSTERS];
+        if !around.aboard {
+            for (slot, b) in beasts.iter().enumerate().take(blockers.len()) {
+                blockers[slot] = b.as_ref().filter(|b| !inside_it(b));
+            }
+        }
+        let clear = lerp(
+            unobstructed_fraction(self.focus, offset, &blockers),
+            1.0,
+            sky,
+        );
         for axis in offset.iter_mut() {
             *axis *= clear;
         }
@@ -519,7 +525,11 @@ fn lerp(from: f32, to: f32, at: f32) -> f32 {
 /// about where "inside" starts.
 const PADDING: f32 = 0.45;
 
-fn unobstructed_fraction(focus: [f32; 3], offset: [f32; 3], beast: Option<&sim::Monster>) -> f32 {
+fn unobstructed_fraction(
+    focus: [f32; 3],
+    offset: [f32; 3],
+    beasts: &[Option<&sim::Monster>],
+) -> f32 {
     const STEPS: usize = 24;
     // Deliberately tiny. An arm that refuses to shorten past a comfortable
     // distance will happily hold the camera *inside* a wall when the fighter
@@ -536,7 +546,7 @@ fn unobstructed_fraction(focus: [f32; 3], offset: [f32; 3], beast: Option<&sim::
             focus[2] + offset[2] * t,
         ];
         let blocked = inside_geometry(p, PADDING)
-            || beast.is_some_and(|b| {
+            || beasts.iter().flatten().any(|b| {
                 b.contains(
                     sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2])),
                     fx_of(PADDING),
@@ -581,8 +591,11 @@ fn smoothing_for(per_tick: f32, dt: f32) -> f32 {
 /// round it goes.
 #[derive(Clone, Copy, Default)]
 pub struct Surroundings<'a> {
-    pub beast: Option<&'a sim::Monster>,
-    /// The fighter the camera is following is standing on it.
+    /// Every creature slot: `World::monsters`. Empty in a fixture with none.
+    pub beasts: &'a [Option<sim::Monster>],
+    /// The fighter the camera is following is standing on a creature. None of
+    /// them is then in the way: the one underfoot is not, and a second
+    /// creature is the Pair, which nobody stands on.
     pub aboard: bool,
     /// How far the framing has swung over to the airborne one -- **the
     /// simulation's own number**, read out of the snapshot rather than worked

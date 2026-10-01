@@ -22,14 +22,17 @@ pub use crate::class::Shield;
 use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::dual;
-use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
+use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, quarry_victim};
 use crate::fixed::Fx;
 use crate::gust::{self, Gale, MAX_GUSTS};
 use crate::input::Input;
 use crate::math::V3;
-use crate::monster::{self, Doing, Monster, Quarry};
+use crate::monster::{
+    self, Doing, Herd, MAX_MONSTERS, Monster, Quarry, mount_of, mount_part, mount_slot,
+};
 use crate::moves;
 use crate::shadow;
+use crate::species::SpeciesId;
 use crate::stones::{self, Field};
 use crate::tuning as t;
 
@@ -1075,14 +1078,17 @@ pub struct World {
     /// throws these out of her own hands, with her feet off the floor. See
     /// [`crate::gust`].
     pub gusts: gust::Flight,
-    /// The quarry, in a hunt. `None` is a versus match.
+    /// The quarry, in a hunt: up to [`MAX_MONSTERS`] creatures, each of any
+    /// species. All `None` is a versus match.
     ///
-    /// One slot rather than an array: a second creature is a thing to build
-    /// once there is something to learn from it, and an array of one is a
-    /// promise the code has not earned. When a second arrives, the parts, the
-    /// ride and the control algorithm are what it reuses; this field is what
-    /// changes.
-    pub monster: Option<Monster>,
+    /// Two slots because the Pair are two full monsters, and every other
+    /// creature is one. The second slot costs its bytes in every fight,
+    /// Ridgeback included; an enum of fight shapes would be smaller and is the
+    /// right thing once packs of critters want the same room (see
+    /// `docs/design/bestiary.md` P3), but for two an array is honest and cheap.
+    /// Everything that touches a creature walks the slots in order, so a hunt
+    /// with one creature in slot zero is exactly the one-creature game.
+    pub monsters: Herd,
 }
 
 impl World {
@@ -1100,7 +1106,7 @@ impl World {
             bolts: [None; MAX_BOLTS],
             debris: [None; MAX_DEBRIS],
             gusts: [None; MAX_GUSTS],
-            monster: None,
+            monsters: [None; MAX_MONSTERS],
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1115,10 +1121,44 @@ impl World {
     /// is there rather than because a flag says so -- one condition, in one
     /// place, that cannot get out of step with what is on screen.
     pub fn hunt(classes: [Class; MAX_PLAYERS]) -> World {
+        World::hunt_of(classes, SpeciesId::RIDGEBACK)
+    }
+
+    /// A hunt against one creature of any species.
+    pub fn hunt_of(classes: [Class; MAX_PLAYERS], species: SpeciesId) -> World {
+        let mut herd = [None; MAX_MONSTERS];
+        herd[0] = Some(species);
+        World::hunt_with(classes, herd)
+    }
+
+    /// A hunt against whichever creatures are named, one per slot.
+    pub fn hunt_with(
+        classes: [Class; MAX_PLAYERS],
+        herd: [Option<SpeciesId>; MAX_MONSTERS],
+    ) -> World {
         let mut w = World::with_classes(classes);
-        w.monster = Some(Monster::new());
+        for (slot, species) in herd.iter().enumerate() {
+            w.monsters[slot] = species.map(Monster::new);
+        }
         w.reset_positions();
         w
+    }
+
+    /// Is there anything to hunt? The one condition friendly fire, targets and
+    /// the round's end all read: a creature's presence rather than a flag.
+    pub fn hunting(&self) -> bool {
+        self.monsters.iter().any(Option::is_some)
+    }
+
+    /// The first creature, for the code and tools that are about one: the
+    /// harness, the HUD, most tests.
+    pub fn monster(&self) -> Option<&Monster> {
+        self.monsters.iter().flatten().next()
+    }
+
+    /// The first creature, to change it.
+    pub fn monster_mut(&mut self) -> Option<&mut Monster> {
+        self.monsters.iter_mut().flatten().next()
     }
 
     /// Put both fighters back on their marks. Keeps round wins and classes.
@@ -1151,28 +1191,37 @@ impl World {
                 p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
             }
         }
-        if self.monster.is_some() {
-            let mut beast = Monster::new();
+        let count = self.monsters.iter().flatten().count() as i32;
+        let mut hunter_spawn = None;
+        for (slot, place) in self.monsters.iter_mut().enumerate() {
+            let Some(old) = *place else { continue };
+            let mut beast = Monster::new(old.species);
+            let sp = beast.sp();
             // Well back, and facing the hunters. A creature that spawns on top
-            // of you has taken the opening read away from both of you.
-            beast.pos = V3::new(t::monster_spawn(), Fx::ZERO, Fx::ZERO);
+            // of you has taken the opening read away from both of you. Two
+            // stand side by side, a keep-out apart either side of the line.
+            let spread = sp.margin().mul(Fx::from_int(slot as i32 * 2 - (count - 1)));
+            beast.pos = V3::new(sp.spawn(), Fx::ZERO, spread);
             beast.yaw = HALF_TURN;
             beast.brain.seen = self.players[0].pos;
             // And it takes a moment to notice you: it stands its ground,
             // turns to face you, and throws nothing until the moment is spent
             // or somebody hits it. It opened with a spray and a charge that
             // landed before anybody had moved the camera. See
-            // `tuning::hunt_grace`.
-            beast.brain.grace = t::hunt_grace();
+            // `Species::hunt_grace`.
+            beast.brain.grace = sp.hunt_grace();
+            hunter_spawn.get_or_insert(sp.hunter_spawn());
+            *place = Some(beast);
+        }
+        if let Some(back) = hunter_spawn {
             for (i, p) in self.players.iter_mut().enumerate() {
                 p.pos = V3::new(
-                    t::hunter_spawn().neg(),
+                    back.neg(),
                     GROUND_Y,
                     Fx::from_int(if i == 0 { -2 } else { 2 }),
                 );
                 p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
             }
-            self.monster = Some(beast);
         }
     }
 
@@ -1217,8 +1266,9 @@ impl World {
         // deliberately small window on the fighters -- positions and
         // velocities, no buttons -- so "it reads your inputs" is not a thing
         // that can quietly become true. See `monster::Quarry`.
-        let mut spin = Fx::ZERO;
-        if let Some(mut beast) = self.monster {
+        let mut spin = [Fx::ZERO; MAX_MONSTERS];
+        for (slot, place) in self.monsters.iter_mut().enumerate() {
+            let Some(mut beast) = *place else { continue };
             let before = beast.yaw;
             let seen: [Quarry; MAX_PLAYERS] = std::array::from_fn(|i| Quarry {
                 pos: self.players[i].pos,
@@ -1231,8 +1281,8 @@ impl World {
             // Its *heading*, not its wobble: a shake would otherwise spin the
             // rider's camera as hard as it spins the animal, and you are about
             // to be thrown off anyway.
-            spin = crate::math::wrap_turns(beast.yaw.sub(before));
-            self.monster = Some(beast);
+            spin[slot] = crate::math::wrap_turns(beast.yaw.sub(before));
+            *place = Some(beast);
         }
 
         // **The creature's turn goes into the look, here and nowhere else.**
@@ -1254,6 +1304,7 @@ impl World {
         let inputs: [Input; MAX_PLAYERS] = std::array::from_fn(|i| {
             let p = &mut self.players[i];
             if p.aboard() {
+                let spin = spin[monster::mount_slot(p.mount).min(MAX_MONSTERS - 1)];
                 p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
             }
             thaw(p, wire[i].turned(p.carry_yaw))
@@ -1270,7 +1321,7 @@ impl World {
         // frame. Copied rather than borrowed because the loop below takes each
         // fighter mutably -- and snapshotting is right anyway: both players
         // aim against the same world, so neither ordering wins.
-        let beast = self.monster;
+        let beast = self.monsters;
         let seen = self.players;
         let effects = self.effects;
         // Who has hold of somebody, worked out before anybody moves. The
@@ -1292,9 +1343,9 @@ impl World {
                 stones: &field,
                 players: &seen,
                 effects: &effects,
-                quarry: beast.as_ref(),
+                quarry: &beast,
             };
-            step_player(p, i, input, &field, beast.as_ref(), &scene, carrying[i]);
+            step_player(p, i, input, &field, &beast, &scene, carrying[i]);
             advance_clocks(p);
             step_aloft(p, &field);
             fade_grey(p, frame);
@@ -1512,7 +1563,7 @@ impl World {
         // for the two to get out of step about.
         let snapshot = self.players;
         for attacker in 0..MAX_PLAYERS {
-            if self.monster.is_some() {
+            if self.hunting() {
                 break;
             }
             let defender = 1 - attacker;
@@ -1657,7 +1708,7 @@ impl World {
             };
             // Once a flight, and never a partner: in a hunt the fighters
             // cannot hurt each other, the same rule every other blow follows.
-            if struck || self.monster.is_some() {
+            if struck || self.hunting() {
                 continue;
             }
             {
@@ -1728,34 +1779,35 @@ impl World {
             }
         }
 
-        if self.monster.is_some() {
+        if self.hunting() {
             self.trade_with_the_creature();
         }
 
         self.step_shadows();
         self.step_effects();
         let standing = self.effects;
+        let versus = !self.hunting();
         bolt::step(
             &mut self.bolts,
             &mut self.players,
             &standing,
-            self.monster.is_none(),
-            &mut self.monster,
+            versus,
+            &mut self.monsters,
         );
         debris::step(
             &mut self.debris,
             &mut self.players,
             &standing,
-            self.monster.is_none(),
-            &mut self.monster,
+            versus,
+            &mut self.monsters,
         );
         let mut bursts: gust::Bursts = [None; gust::MAX_GUSTS];
         gust::step(
             &mut self.gusts,
             &mut self.players,
             &standing,
-            self.monster.is_none(),
-            &mut self.monster,
+            versus,
+            &mut self.monsters,
             &mut bursts,
         );
         // What the shots left where they landed: a cloud of embers per
@@ -1795,9 +1847,10 @@ impl World {
         self.drink_where_the_haul_ends();
 
         // Knockout check last, so the killing blow is fully applied first.
-        if let (Phase::Fighting, Some(beast)) = (self.phase, self.monster) {
+        if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
-            let winner = if !beast.alive() {
+            // The hunt is won when every creature in it is down.
+            let winner = if !self.monsters.iter().flatten().any(Monster::alive) {
                 0
             } else if !standing {
                 QUARRY
@@ -1844,8 +1897,21 @@ impl World {
     /// turns that into a desync on the first frame, which is a error message
     /// rather than a mystery.
     pub fn checksum(&self) -> u64 {
+        self.digest(crate::oven::hash())
+    }
+
+    /// The snapshot hash alone, with the tuning left out.
+    ///
+    /// What pins a fight bit for bit across a change that moves knobs around
+    /// without changing any of their values: the Oven's own hash follows its
+    /// storage layout, and the state does not care where a number is kept.
+    pub fn state_checksum(&self) -> u64 {
+        self.digest(0)
+    }
+
+    fn digest(&self, tuning: u64) -> u64 {
         let mut h = Fnv::new();
-        h.write_u64(crate::oven::hash());
+        h.write_u64(tuning);
         h.write_u32(self.frame);
         for b in &self.bolts {
             match b {
@@ -1985,10 +2051,21 @@ impl World {
             }
             hash_mechanic(&mut h, &p.mechanic);
         }
-        match &self.monster {
-            None => h.write_u32(0),
-            Some(m) => {
-                h.write_u32(1);
+        // A slot at a time. An empty slot writes a zero, except that empty
+        // slots after the last creature write nothing -- so a world with one
+        // creature, or none, hashes exactly as it did before there were two
+        // slots, and the Ridgeback's pinned hunts (`tests/ridgeback_pin.rs`)
+        // still mean what they say.
+        let last = self.monsters.iter().rposition(Option::is_some).unwrap_or(0);
+        for (slot, beast) in self.monsters.iter().enumerate().take(last + 1) {
+            let Some(m) = beast else {
+                h.write_u32(0);
+                continue;
+            };
+            {
+                // One for a creature, with its slot and species above the
+                // first byte: the Ridgeback in slot zero is still just one.
+                h.write_u32(1 | (slot as u32) << 8 | (m.species.0 as u32) << 16);
                 hash_v3(&mut h, &m.pos);
                 h.write_i32(m.yaw.raw());
                 h.write_i32(m.yaw_rate.raw());
@@ -2003,8 +2080,8 @@ impl World {
                 h.write_u32(m.rooted as u32);
                 h.write_u32(m.marks as u32);
                 h.write_u32(m.mark_clock as u32);
-                for limb in &m.part_health {
-                    h.write_i32(*limb);
+                for part in 0..m.sp().parts.len() {
+                    h.write_i32(m.part_health(part));
                 }
                 h.write_u32(m.doing.tag());
                 h.write_u32(m.doing.frames_left() as u32);
@@ -2017,8 +2094,8 @@ impl World {
                 h.write_u32(m.brain.think_left as u32);
                 h.write_u32(m.brain.last_move as u32);
                 h.write_u32(m.brain.repeat_left as u32);
-                for slot in &m.brain.cooldown {
-                    h.write_u32(*slot as u32);
+                for lock in &m.brain.cooldown[..m.sp().moves.len()] {
+                    h.write_u32(*lock as u32);
                 }
                 h.write_u32(m.brain.rng);
                 h.write_u32(m.brain.grace as u32);
@@ -2954,7 +3031,7 @@ fn step_player(
     who: usize,
     input: Input,
     field: &Field,
-    beast: Option<&Monster>,
+    herd: &Herd,
     scene: &Scene,
     carrying: bool,
 ) {
@@ -2976,14 +3053,14 @@ fn step_player(
     // **The dead do not ride.** A fighter killed on its back falls off it,
     // rather than being carried round the arena for the rest of the hunt.
     if p.aboard() && p.health <= 0 {
-        if let Some(beast) = beast {
-            p.pos = beast.world_of(p.mount as usize, p.local);
+        if let Some(beast) = ridden(p, herd) {
+            p.pos = beast.world_of(mount_part(p.mount), p.local);
         }
         p.mount = monster::NO_PART;
         p.grounded = false;
     }
     if p.aboard() {
-        match beast {
+        match ridden(p, herd) {
             Some(beast) => return step_rider(p, who, input, beast, scene, &out),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
@@ -3634,8 +3711,14 @@ fn step_player(
     p.pos = r.pos;
     p.vel = r.vel;
     p.grounded = r.grounded;
-    if let Some(beast) = beast {
-        meet_the_creature(p, beast);
+    // Every creature there is, in slot order, until one of them has you.
+    for (slot, beast) in herd.iter().enumerate() {
+        if let Some(beast) = beast {
+            meet_the_creature(p, slot, beast);
+            if p.aboard() {
+                break;
+            }
+        }
     }
     if p.grounded {
         // Driven into the floor. The hit that spiked them did its damage in
@@ -4302,7 +4385,8 @@ fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<us
             // leg with its haft and the ridge with its head has hit the ridge.
             best = Some(match best {
                 Some(seen)
-                    if monster::vulnerability(seen).raw() >= monster::vulnerability(part).raw() =>
+                    if beast.sp().vulnerability(seen).raw()
+                        >= beast.sp().vulnerability(part).raw() =>
                 {
                     seen
                 }
@@ -5748,9 +5832,9 @@ impl World {
             stones: &stones,
             players: &self.players,
             effects: &self.effects,
-            quarry: self.monster.as_ref(),
+            quarry: &self.monsters,
         };
-        let facing = aim::shadow_faces(at, owner, reach, self.monster.is_none(), &scene)
+        let facing = aim::shadow_faces(at, owner, reach, !self.hunting(), &scene)
             .unwrap_or(self.players[owner].facing);
         shadow::turn_to(&mut self.players[owner], facing);
     }
@@ -5786,9 +5870,10 @@ impl World {
         } else {
             t::shadow_echo_attending()
         };
-        let landed = match self.monster {
-            Some(_) => self.echo_gores_the_creature(&ghost, share, out),
-            None => self.echo_cuts_the_other_fighter(owner, &ghost, share, out),
+        let landed = if self.hunting() {
+            self.echo_gores_the_creature(&ghost, share, out)
+        } else {
+            self.echo_cuts_the_other_fighter(owner, &ghost, share, out)
         };
         if landed {
             shadow::echo_landed(&mut self.players[owner]);
@@ -5822,27 +5907,32 @@ impl World {
     }
 
     fn echo_gores_the_creature(&mut self, ghost: &Player, share: Fx, marks: bool) -> bool {
-        let (Some(mut beast), Some(box_out), Some(kind)) =
-            (self.monster, hitbox(ghost), ghost.action.attack_kind())
-        else {
+        let (Some(box_out), Some(kind)) = (hitbox(ghost), ghost.action.attack_kind()) else {
             return false;
         };
-        if box_out.spent || !beast.alive() {
+        if box_out.spent {
             return false;
         }
-        let Some(part) = part_under(&beast, ghost, &box_out) else {
-            return false;
-        };
-        let raw = Fx::from_int(moves::get(ghost.class, kind).damage)
-            .mul(preying(ghost.class, beast.disabled()))
-            .mul(share)
-            .to_int();
-        beast.take_hit(part, raw);
-        if marks {
-            beast.mark();
+        // The first creature the copy reaches, in slot order: one swing, one
+        // body, the same as hers.
+        for place in self.monsters.iter_mut() {
+            let Some(beast) = place.as_mut().filter(|b| b.alive()) else {
+                continue;
+            };
+            let Some(part) = part_under(beast, ghost, &box_out) else {
+                continue;
+            };
+            let raw = Fx::from_int(moves::get(ghost.class, kind).damage)
+                .mul(preying(ghost.class, beast.disabled()))
+                .mul(share)
+                .to_int();
+            beast.take_hit(part, raw);
+            if marks {
+                beast.mark();
+            }
+            return true;
         }
-        self.monster = Some(beast);
-        true
+        false
     }
 
     /// The way home. It cuts once and slows, which is the mechanic's own
@@ -5861,22 +5951,29 @@ impl World {
         // The creature, in a hunt. `QUARRY_VICTIM` is the slot the effects
         // already use for "the thing that is not a fighter", and the return
         // cuts it once for the same reason it cuts a fighter once.
-        if let Some(mut beast) = self.monster {
-            if beast.alive() && !shadow::already_cut(ghost, QUARRY_VICTIM) {
-                if let Some(part) = beast.part_struck(ghost.pos, reach, t::body_height()) {
-                    let raw = Fx::from_int(m.damage)
-                        .mul(preying(Class::ShadowReaver, beast.disabled()))
-                        .to_int();
-                    beast.take_hit(part, raw);
-                    beast.mark();
-                    // The recall's slow, offered the same way everything else
-                    // is. It is half the reason to recall through something.
-                    beast.take_control(monster::Control::slowing(
-                        t::slow_frames(),
-                        t::shadow_recall_slow(),
-                    ));
-                    self.monster = Some(beast);
-                    shadow::mark_cut(&mut self.players[owner], QUARRY_VICTIM);
+        if self.hunting() {
+            for slot in 0..MAX_MONSTERS {
+                let Some(mut beast) = self.monsters[slot] else {
+                    continue;
+                };
+                let victim = quarry_victim(slot);
+                if beast.alive() && !shadow::already_cut(ghost, victim) {
+                    if let Some(part) = beast.part_struck(ghost.pos, reach, t::body_height()) {
+                        let raw = Fx::from_int(m.damage)
+                            .mul(preying(Class::ShadowReaver, beast.disabled()))
+                            .to_int();
+                        beast.take_hit(part, raw);
+                        beast.mark();
+                        // The recall's slow, offered the same way everything
+                        // else is. It is half the reason to recall through
+                        // something.
+                        beast.take_control(monster::Control::slowing(
+                            t::slow_frames(),
+                            t::shadow_recall_slow(),
+                        ));
+                        self.monsters[slot] = Some(beast);
+                        shadow::mark_cut(&mut self.players[owner], victim);
+                    }
                 }
             }
             return;
@@ -6230,7 +6327,7 @@ impl World {
             stones: &stones,
             players: &self.players,
             effects: &self.effects,
-            quarry: self.monster.as_ref(),
+            quarry: &self.monsters,
         };
         // **Is there anything to pull on?** Asked along the arms' own path with
         // the shared question `aim::first_along` already answers for every
@@ -6249,7 +6346,7 @@ impl World {
             aim::Targets::none()
                 .terrain()
                 .stones()
-                .quarry(self.monster.is_some()),
+                .quarry(self.hunting()),
         );
         let Some(anchor) = found.filter(|c| c.is_an_anchor()) else {
             return;
@@ -6516,21 +6613,23 @@ impl World {
                             shadow::mark(&mut self.players[i]);
                         }
                     }
-                    // The same count for the creature, which is wide enough
+                    // The same count for each creature, which is wide enough
                     // that every blade reaches it: without it, twelve hits a
                     // pass.
-                    let landed = (0..LOTUS_BLADES)
-                        .filter(|&b| effect.already_hit(b, QUARRY_VICTIM))
-                        .count();
-                    if landed >= t::lotus_blades_a_pass() {
-                        continue;
-                    }
-                    let first_this_pass = landed == 0;
-                    if self.gore_for_a_share(effect, blade, at, radius, share) > 0
-                        && first_this_pass
-                    {
-                        if let Some(beast) = self.monster.as_mut() {
-                            beast.mark();
+                    for slot in 0..MAX_MONSTERS {
+                        let landed = (0..LOTUS_BLADES)
+                            .filter(|&b| effect.already_hit(b, quarry_victim(slot)))
+                            .count();
+                        if landed >= t::lotus_blades_a_pass() {
+                            continue;
+                        }
+                        let first_this_pass = landed == 0;
+                        if self.gore_for_a_share(slot, effect, blade, at, radius, share) > 0
+                            && first_this_pass
+                        {
+                            if let Some(beast) = self.monsters[slot].as_mut() {
+                                beast.mark();
+                            }
                         }
                     }
                 }
@@ -6558,11 +6657,13 @@ impl World {
                 // spent the moment it actually connects, rather than every
                 // frame it exists, so that walking a Ridgeback into one late
                 // still costs it something.
-                let dealt = self.gore_the_creature(effect, 0, effect.pos, radius);
-                if dealt > 0 {
-                    let owed = effect.leeched(dealt);
-                    self.players[effect.owner as usize].heal(owed);
-                    effect.take_hit(0, QUARRY_VICTIM);
+                let each = self.gore_each(effect, 0, effect.pos, radius, Fx::ONE);
+                for (slot, dealt) in each.into_iter().enumerate() {
+                    if dealt > 0 {
+                        let owed = effect.leeched(dealt);
+                        self.players[effect.owner as usize].heal(owed);
+                        effect.take_hit(0, quarry_victim(slot));
+                    }
                 }
             }
 
@@ -7007,7 +7108,7 @@ impl World {
     /// `advance`. Without this, a Blood mage's field was the one thing in the
     /// game that could kill a team-mate.
     fn effects_reach(&self, victim: usize, owner: u8) -> bool {
-        victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
+        victim as u8 != owner && self.players[victim].health > 0 && !self.hunting()
     }
 
     /// Did a blade sweeping from `was` to `at` slice this fighter?
@@ -7205,7 +7306,21 @@ impl World {
     /// Land an effect on whichever part of the creature is inside it, once per
     /// part of the effect. Returns what went in after the hide, or nought.
     fn gore_the_creature(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) -> i32 {
-        self.gore_for_a_share(effect, part, at, radius, Fx::ONE)
+        self.gore_each(effect, part, at, radius, Fx::ONE)
+            .iter()
+            .sum()
+    }
+
+    /// Every creature, in slot order, and what each took.
+    fn gore_each(
+        &mut self,
+        effect: &mut Effect,
+        part: usize,
+        at: V3,
+        radius: Fx,
+        share: Fx,
+    ) -> [i32; MAX_MONSTERS] {
+        std::array::from_fn(|slot| self.gore_for_a_share(slot, effect, part, at, radius, share))
     }
 
     /// [`Self::gore_the_creature`] for `share` of the effect's damage: the
@@ -7213,16 +7328,18 @@ impl World {
     /// way out that it deals a fighter.
     fn gore_for_a_share(
         &mut self,
+        slot: usize,
         effect: &mut Effect,
         part: usize,
         at: V3,
         radius: Fx,
         share: Fx,
     ) -> i32 {
-        if effect.already_hit(part, QUARRY_VICTIM) {
+        let victim = quarry_victim(slot);
+        if effect.already_hit(part, victim) {
             return 0;
         }
-        let Some(mut beast) = self.monster else {
+        let Some(mut beast) = self.monsters[slot] else {
             return 0;
         };
         if !beast.alive() {
@@ -7240,11 +7357,11 @@ impl World {
         // applied: the creature decides how much of it it is currently in a
         // state to feel. See `monster::Monster::take_control`.
         beast.take_control(effect.control());
-        self.monster = Some(beast);
+        self.monsters[slot] = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
         if effect.kind.once_a_pass() {
-            effect.take_hit(part, QUARRY_VICTIM);
+            effect.take_hit(part, victim);
         }
         // The creature bleeds too: under the struck part, projected to the
         // floor, which is what makes the pool under a toppled Ridgeback a
@@ -7770,7 +7887,8 @@ fn step_rider(
     scene: &Scene,
     out: &[bool; moves::MAX_SLOTS],
 ) {
-    let part = p.mount as usize;
+    let slot = mount_slot(p.mount);
+    let part = mount_part(p.mount);
     let held = p.local;
     let radius = t::body_radius();
 
@@ -7821,7 +7939,7 @@ fn step_rider(
     // motion that follows be what is judged. Read here rather than at the top
     // of the frame because a flinch is dealt after the fighters have moved,
     // so the cut shows up under the feet a frame later than it happens.
-    let clip = beast.doing.clip_key();
+    let clip = beast.doing.clip_key(beast.sp().moves.len());
     if p.ride_clip != clip {
         p.ride_clip = clip;
         p.grip_settle = p.grip_settle.max(t::mount_settle() as u8);
@@ -7957,7 +8075,7 @@ fn step_rider(
     if let Some((up, top)) = stepped {
         let mut rest = beast.rest_frame(up, beast.world_of(part, next));
         rest.y = top;
-        p.mount = up as u8;
+        p.mount = mount_of(slot, up);
         p.local = rest;
         p.pos = beast.world_of(up, rest);
         p.grip_settle = t::mount_settle() as u8;
@@ -7980,7 +8098,7 @@ fn step_rider(
             if on != part {
                 // Stepped from the barrel onto the tail, or the other way.
                 p.grip_settle = t::mount_settle() as u8;
-                p.mount = on as u8;
+                p.mount = mount_of(slot, on);
             }
             p.local = rest;
             p.pos = beast.world_of(on, rest);
@@ -8018,7 +8136,7 @@ fn rider_speed(p: &Player) -> Fx {
 }
 
 /// Land on the creature, or be shoved out of it.
-fn meet_the_creature(p: &mut Player, beast: &Monster) {
+fn meet_the_creature(p: &mut Player, slot: usize, beast: &Monster) {
     let radius = t::body_radius();
     let contact = beast.resolve(p.pos, radius, t::body_height());
     if contact.shoved {
@@ -8050,16 +8168,16 @@ fn meet_the_creature(p: &mut Player, beast: &Monster) {
     let Some((part, top)) = beast.surface_under(p.pos, radius) else {
         return;
     };
-    mount_on(p, beast, part, top);
+    mount_on(p, slot, beast, part, top);
 }
 
 /// Take up station on a part. Mounting is landing: there is no button, because
 /// a surface is a surface.
-fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
-    p.ride_clip = beast.doing.clip_key();
+fn mount_on(p: &mut Player, slot: usize, beast: &Monster, part: usize, top: Fx) {
+    p.ride_clip = beast.doing.clip_key(beast.sp().moves.len());
     let mut rest = beast.rest_frame(part, p.pos);
     rest.y = top;
-    p.mount = part as u8;
+    p.mount = mount_of(slot, part);
     p.local = rest;
     p.pos = beast.world_of(part, rest);
     p.vel = V3::ZERO;
@@ -8133,14 +8251,23 @@ fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
 
 /// Come off because something else decided it, rather than because you lost
 /// your grip -- being hit, or the creature dying under you.
-fn fall_off(p: &mut Player, beast: &Monster) {
+fn fall_off(p: &mut Player, herd: &Herd) {
     if !p.aboard() {
         return;
     }
-    let part = p.mount as usize;
-    p.pos = beast.world_of(part, p.local);
+    if let Some(beast) = ridden(p, herd) {
+        p.pos = beast.world_of(mount_part(p.mount), p.local);
+    }
     p.mount = monster::NO_PART;
     p.grounded = false;
+}
+
+/// The creature a rider is standing on, if it is still there.
+fn ridden<'a>(p: &Player, herd: &'a Herd) -> Option<&'a Monster> {
+    if !p.aboard() {
+        return None;
+    }
+    herd.get(mount_slot(p.mount)).and_then(Option::as_ref)
 }
 
 // ---------------------------------------------------------------------------
@@ -8176,15 +8303,15 @@ impl World {
         let field = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
-        let beast = self.monster;
+        let beast = self.monsters;
         // In a hunt the two of you are on the same side, so the only thing
         // worth shooting is the creature. One condition, in one place.
-        let versus = beast.is_none();
+        let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
             effects: &effects,
-            quarry: beast.as_ref(),
+            quarry: &beast,
         };
         let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
 
@@ -8224,10 +8351,9 @@ impl World {
                 bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir());
                 self.players[i].hit_used = true;
             }
-            Some(Contact::Quarry { part, .. }) => {
-                if let Some(mut beast) = self.monster {
+            Some(Contact::Quarry { slot, part, .. }) => {
+                if let Some(beast) = self.monsters[slot].as_mut() {
                     beast.take_hit(part, m.damage);
-                    self.monster = Some(beast);
                     self.players[i].hit_used = true;
                 }
             }
@@ -8263,13 +8389,13 @@ impl World {
         let field = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
-        let beast = self.monster;
-        let versus = beast.is_none();
+        let beast = self.monsters;
+        let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
             effects: &effects,
-            quarry: beast.as_ref(),
+            quarry: &beast,
         };
         let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
 
@@ -8356,10 +8482,9 @@ impl World {
                 }
                 self.players[i].hit_used = true;
             }
-            Some(Contact::Quarry { part, .. }) => {
-                if let Some(mut beast) = self.monster {
+            Some(Contact::Quarry { slot, part, .. }) => {
+                if let Some(beast) = self.monsters[slot].as_mut() {
                     beast.take_hit(part, m.damage);
-                    self.monster = Some(beast);
                     self.players[i].hit_used = true;
                 }
             }
@@ -8397,13 +8522,13 @@ impl World {
         let field = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
-        let beast = self.monster;
-        let versus = beast.is_none();
+        let beast = self.monsters;
+        let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
             effects: &effects,
-            quarry: beast.as_ref(),
+            quarry: &beast,
         };
         let met = aim::first_along(
             path,
@@ -8443,10 +8568,9 @@ impl World {
                 }
                 self.players[i].hit_used = true;
             }
-            Some(Contact::Quarry { part, .. }) => {
-                if let Some(mut beast) = self.monster {
+            Some(Contact::Quarry { slot, part, .. }) => {
+                if let Some(beast) = self.monsters[slot].as_mut() {
                     beast.take_hit(part, m.damage);
-                    self.monster = Some(beast);
                 }
                 self.players[i].hit_used = true;
             }
@@ -8745,15 +8869,29 @@ fn fire_pillar_slot_at(effects: &[Option<Effect>; MAX_EFFECTS], at: V3) -> Optio
 impl World {
     /// Both directions of the exchange, once both sides have moved.
     fn trade_with_the_creature(&mut self) {
-        let Some(mut beast) = self.monster else {
+        for slot in 0..MAX_MONSTERS {
+            self.trade_with(slot);
+        }
+    }
+
+    /// Both directions of the exchange with the creature in one slot.
+    fn trade_with(&mut self, slot: usize) {
+        let Some(mut beast) = self.monsters[slot] else {
             return;
+        };
+        // The herd as it stands, with this creature as it stands *now*: who
+        // falls off what reads the pose it has at the moment they fall.
+        let herd = |beast: &Monster, monsters: &Herd| {
+            let mut herd = *monsters;
+            herd[slot] = Some(*beast);
+            herd
         };
 
         // What the creature has out. Every fighter it reaches is hit on the
         // same frame -- spending the hit on whoever happened to be checked
         // first would make a coop partner a shield.
         if let (Doing::Active { kind, .. }, false) = (beast.doing, beast.hit_used) {
-            let m = monster::attack(kind);
+            let m = beast.sp().attack(kind);
             let anchor = beast
                 .hit_volume()
                 .map(|(a, _, _, _)| a)
@@ -8807,7 +8945,8 @@ impl World {
                     };
                 }
                 if !parried && !guarding {
-                    fall_off(&mut self.players[i], &beast);
+                    let now = herd(&beast, &self.monsters);
+                    fall_off(&mut self.players[i], &now);
                 }
                 // The victim's half of an impact freeze. The animal does not
                 // stop for one fighter; see `tuning::creature_freeze`.
@@ -8892,12 +9031,15 @@ impl World {
             // poise to show, not a pause in the fighter.
         }
 
-        // Nothing to stand on any more.
+        // Nothing to stand on any more -- for whoever was standing on this one.
         if !beast.alive() {
+            let now = herd(&beast, &self.monsters);
             for p in self.players.iter_mut() {
-                fall_off(p, &beast);
+                if p.aboard() && mount_slot(p.mount) == slot {
+                    fall_off(p, &now);
+                }
             }
         }
-        self.monster = Some(beast);
+        self.monsters[slot] = Some(beast);
     }
 }

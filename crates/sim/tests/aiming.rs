@@ -14,6 +14,7 @@
 use sim::aim;
 use sim::class::{Mechanic, Structure};
 use sim::effects::EffectKind;
+use sim::species::ridgeback;
 use sim::state::SLOT_SPECIAL;
 use sim::stones::Phase;
 use sim::tuning as t;
@@ -60,7 +61,7 @@ fn with_scene<T>(w: &World, ask: impl FnOnce(&aim::Scene) -> T) -> T {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: w.monster.as_ref(),
+        quarry: &w.monsters,
     })
 }
 
@@ -770,7 +771,7 @@ fn a_body_does_not_stop_the_aiming_ray() {
 fn nose_to_nose() -> World {
     let mut w = World::hunt([Class::Elementalist; sim::state::MAX_PLAYERS]);
     w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(8));
-    w.monster.as_mut().expect("a hunt has a creature").pos =
+    w.monster_mut().expect("a hunt has a creature").pos =
         V3::new(Fx::from_int(-1), Fx::ZERO, Fx::from_int(8));
     w
 }
@@ -813,10 +814,11 @@ fn a_level_look_at_the_creature_is_a_level_shot_into_its_leg() {
     // fighter working the ground game stands.
     let mut w = nose_to_nose();
     let stand = w
-        .monster
+        .monster()
+        .copied()
         .expect("a hunt has a creature")
         .rig()
-        .part_to_world(sim::monster::FOREFOOT_L, V3::ZERO);
+        .part_to_world(ridgeback::FOREFOOT_L, V3::ZERO);
     w.players[0].pos = V3::new(stand.x, Fx::ZERO, stand.z.sub(Fx::from_int(6)));
     let look = Input::looking_at(0, Input::QUARTER_TURN, 0);
     let (path, hit) = with_scene(&w, |scene| {
@@ -840,13 +842,13 @@ fn a_level_look_at_the_creature_is_a_level_shot_into_its_leg() {
     assert!(
         matches!(
             part,
-            sim::monster::FOREFOOT_L
-                | sim::monster::FOREFOOT_R
-                | sim::monster::FORELEG_L
-                | sim::monster::FORELEG_R
+            ridgeback::FOREFOOT_L
+                | ridgeback::FOREFOOT_R
+                | ridgeback::FORELEG_L
+                | ridgeback::FORELEG_R
         ),
         "a level look landed on `{}` rather than on a foreleg in front of her",
-        sim::monster::PART_NAMES[part]
+        ridgeback::PARTS[part].name
     );
 }
 
