@@ -1035,6 +1035,26 @@ impl Player {
     }
 }
 
+/// What touching down this frame costs: `was` the body as the frame found
+/// it, `now` as the step left it, before the rule has moved
+/// [`Player::fall_over`]. Zero for anything but a landing past the free
+/// height. The fight report reads it too, to count what falls cost.
+pub fn landing_damage(was: &Player, now: &Player) -> i32 {
+    if was.footed() || !now.footed() || was.fall_over.raw() <= 0 {
+        return 0;
+    }
+    let past = was.fall_over.sub(now.pos.y.max(Fx::ZERO));
+    if past.raw() <= 0 {
+        return 0;
+    }
+    let damage = past.mul(Fx::from_int(t::fall_per_metre())).to_int();
+    if was.vel.y.neg().raw() < t::fall_soft().raw() {
+        damage / 2
+    } else {
+        damage
+    }
+}
+
 /// **The fall rule, a frame on** (bestiary P6): `was` the fighter at the top
 /// of the frame, `p` at the end of it. Returns the damage a landing this frame
 /// is worth, and keeps [`Player::fall_over`].
@@ -1046,19 +1066,8 @@ impl Player {
 /// Halved for a landing slower than `fall_soft`, which only the Dual mage's
 /// slow fall manages.
 pub fn fall_rule(was: &Player, p: &mut Player) -> i32 {
-    let free = t::fall_free();
-    let over_here = p.pos.y.sub(free).max(Fx::ZERO);
-    let mut damage = 0;
-    if !was.footed() && p.footed() && p.fall_over.raw() > 0 {
-        let past = p.fall_over.sub(p.pos.y.max(Fx::ZERO));
-        if past.raw() > 0 {
-            damage = past.mul(Fx::from_int(t::fall_per_metre())).to_int();
-            let landing = was.vel.y.neg();
-            if landing.raw() < t::fall_soft().raw() {
-                damage /= 2;
-            }
-        }
-    }
+    let damage = landing_damage(was, p);
+    let over_here = p.pos.y.sub(t::fall_free()).max(Fx::ZERO);
     if p.footed() {
         p.fall_over = over_here;
     } else if p.vel.y.raw() > 0 {

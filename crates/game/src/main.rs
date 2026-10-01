@@ -23,6 +23,7 @@ mod beast;
 mod critters;
 mod crosshair;
 mod debug;
+mod ground;
 mod hub;
 mod hud;
 mod online;
@@ -148,6 +149,7 @@ fn main() {
                 beast::setup,
                 beast::setup_signs,
                 critters::setup,
+                ground::setup,
                 hud::setup,
                 crosshair::setup,
             ),
@@ -210,7 +212,12 @@ fn main() {
         // one above is full.
         .add_systems(
             Update,
-            (critters::place, critters::overlay)
+            (
+                critters::place,
+                critters::overlay,
+                ground::place,
+                ground::overlay,
+            )
                 .chain()
                 .after(beast::signs)
                 .before(palette::toggle),

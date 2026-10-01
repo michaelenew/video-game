@@ -175,6 +175,16 @@ pub fn place(
             *visible = Visibility::Hidden;
             continue;
         };
+        // **What the simulation says can be seen of it** (`World::shown`):
+        // the Veilstalker's veil, owned by the snapshot because a decloak is a
+        // tell. A part shown at nothing is not drawn; how a part shown at
+        // some is drawn -- a shimmer, a dithered silhouette -- is the
+        // creature's look to add. Every creature without a veil is shown
+        // whole, as it always was.
+        if sim.cur.shown(slot, index).raw() <= 0 {
+            *visible = Visibility::Hidden;
+            continue;
+        }
         let rig = beast.rig();
         let shape = beast.sp().shape(index);
         let mid = shape.min.add(shape.max).scale(sim::Fx::ratio(1, 2));
