@@ -157,6 +157,7 @@ pub static FIGHT: FightDecl = FightDecl {
     struck: Some(struck),
     hide: Some(hide),
     presence: Some(presence),
+    shown: Some(shown),
     repose: Some(super::legs::repose),
     ..FightDecl::PLAIN
 };
@@ -274,6 +275,37 @@ pub fn presence(m: &Monster, _rig: &crate::beast::Rig) -> crate::beast::Presence
         buried,
         unmountable: 0,
     }
+}
+
+/// **What of her is drawn**: everything, but a burst sac's site, which is
+/// empty until it lays again. A popped sac stays, a torn husk (§7).
+pub fn shown(w: &World, _slot: usize, part: usize) -> Fx {
+    match super::sac_site(part) {
+        Some(i) if site(w, i).0 == sac::EMPTY => Fx::ZERO,
+        _ => Fx::ONE,
+    }
+}
+
+/// **How far along a sac is, as it is drawn**: 0 pale, 1 amber, 2 red,
+/// 3 red and twitching -- the last stretch before it bursts, or held --
+/// flickering with 2 every few frames; `None` for a part that is no sac, or
+/// a sac that is gone. The renderer's paint for each is the look's.
+pub fn sac_stage(w: &World, part: usize) -> Option<usize> {
+    let i = super::sac_site(part)?;
+    let (state, _) = site(w, i);
+    if state == sac::EMPTY || state == sac::SCARRED {
+        return None;
+    }
+    let ripe = ripeness(w, i);
+    if red(w, i) {
+        // Twitching: faster held than swelling.
+        let beat = if state == sac::HELD { 4 } else { 8 };
+        return Some(if (w.frame / beat) % 2 == 0 { 3 } else { 2 });
+    }
+    if ripe.raw() >= Knob::SacAmber.fx().raw() {
+        return Some(1);
+    }
+    Some(0)
 }
 
 /// **What a hit on one of her parts does**, before the shared ladder. A hit

@@ -54,6 +54,9 @@ struct Skin {
     weak: Handle<StandardMaterial>,
     limb: Handle<StandardMaterial>,
     broken: Handle<StandardMaterial>,
+    /// The species' [`crate::species::Tint`] paints, in its order; empty for
+    /// one without.
+    stages: Vec<Handle<StandardMaterial>>,
 }
 
 #[derive(Resource)]
@@ -103,6 +106,14 @@ pub fn setup(
             weak: material(&mut materials, look.weak),
             limb: material(&mut materials, look.breakable),
             broken: material(&mut materials, look.broken),
+            stages: crate::species::tint(sp.id)
+                .map(|t| {
+                    t.stages
+                        .iter()
+                        .map(|p| material(&mut materials, *p))
+                        .collect()
+                })
+                .unwrap_or_default(),
         });
     }
     let hide = Hide { skins };
@@ -206,7 +217,11 @@ pub fn place(
         };
         *visible = Visibility::Inherited;
 
-        let wanted = skin(hide.of(beast.species), &beast, index);
+        let skin_of = hide.of(beast.species);
+        let tinted = crate::species::tint(beast.species)
+            .and_then(|t| (t.stage)(&sim.cur, index))
+            .and_then(|i| skin_of.stages.get(i));
+        let wanted = tinted.unwrap_or_else(|| skin(skin_of, &beast, index));
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
