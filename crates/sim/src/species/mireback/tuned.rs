@@ -9,7 +9,7 @@
 #[rustfmt::skip]
 pub const KNOBS: [i32; 397] = [
            65536, // mireback.size_(x) = 1
-           11000, // mireback.health = 11000
+           10000, // mireback.health = 10000
              600, // mireback.breakable_part_health = 600
           458752, // mireback.keep-out_from_the_wall = 7
           131072, // mireback.walk_speed = 2
@@ -169,7 +169,7 @@ pub const KNOBS: [i32; 397] = [
           327680, // mireback.belly_flop.range_tolerance = 5
            65536, // mireback.belly_flop.wants_the_target_at_(cos) = 1
            58982, // mireback.belly_flop.bearing_tolerance = 0.9
-             600, // mireback.belly_flop.appetite = 600
+             450, // mireback.belly_flop.appetite = 450
              600, // mireback.belly_flop.appetite_per_rider = 600
              360, // mireback.belly_flop.lockout_after_use = 360
                0, // mireback.belly_flop.hit_travels_at = 0
