@@ -92,14 +92,14 @@ says zero).
 
 | Creature | Arena | Tier | Champion won | Best / worst class | Unans. | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| [Ridgeback](monsters.md) | Proving ground | 3 | 14/24, 64 s | Champion 14 / Bulwark, Blood, Dual 0 | 0 | Built; the parity bar |
+| [Ridgeback](monsters.md) | Proving ground | 3 | 14/24, 64 s | Champion 14 / Blood, Dual 0 (Bulwark 1) | 0 | Built; the parity bar |
 | [Gnawers](creatures/gnawers.md) | Commons | 1 | 24/24, 35 s | everyone 20+ / Dual 20 | 0 | Built; easy |
 | [Hornback](creatures/hornback.md) | Low meadow | 1 | 22/24, 109 s | Elementalist 24 in 36 s / Dual 14 | 0–1 | Built |
 | [Hornback, crossing](creatures/hornback.md) | Crossing | 1 | 11/12, 56 s | Champion, Elem. 11 / Blood 4 | 0 | Built; two hunters lose it |
 | [Mireback](creatures/mireback.md) | Mire | 2 | 21/24, 120 s | Elementalist 24 in 41 s / Dual 0 | 0–3 | Built |
-| [Sandmaw](creatures/sandmaw.md) | Pan | 2 | 18/24, 191 s | Bulwark 24 / Blood 0 | 0 | Built |
+| [Sandmaw](creatures/sandmaw.md) | Pan | 2 | 18/24, 191 s | Bulwark 22 / Blood 0 | 0 | Built |
 | [The Pair](creatures/the-pair.md) | Den | 3 | 16/24, 159 s | Elementalist 24 in 46 s / Blood 0 | 0 | Built |
-| [Broodmother](creatures/broodmother.md) | Hollows | 3 | 7/24, 143 s | Dual 10 / four classes 0 | 0–3 | Built; short fights |
+| [Broodmother](creatures/broodmother.md) | Hollows | 3 | 7/24, 143 s | Dual 10 / Reaver, Blood 0 | 0–3 | Built; short fights |
 | [Veilstalker](creatures/veilstalker.md) | Ashwood | 4 | 6/24, 336 s | Elementalist 22 / Blood, Dual 0 | 0 | Built |
 | [Mantis](creatures/mantis.md) | Shrine | 5 | 0/24 | Elementalist 24 in 71 s / four classes 0–2 | 0 | Built |
 | [Galewing](creatures/galewing.md) | Cliffs | 4 | 4/24 (plan A), 7/24 (ride) | Elementalist 17–18 / Blood, Dual 0 | 0 | Built |
@@ -125,7 +125,7 @@ without earning it: break a foot, climb, ride the buck, topple it.* 13 m long,
 5.5 m at the back, eight moves. [monsters.md](monsters.md) §9.
 
 - **Play:** `--hunt` (or `--hunt ridgeback`), `?hunt`. The proving ground.
-- **Harness:** Champion 14/24 in 64 s, Reaver 12, Elementalist 6; Bulwark,
+- **Harness:** Champion 14/24 in 64 s, Reaver 12, Elementalist 6, Bulwark 1;
   Blood mage, Dual mage 0. Zero unanswerable for every class.
 - **Try first:** poke a foot, then *watch* — unload only into a recovery you
   can see is long, and stand beside the hind leg rather than behind it. Then
@@ -210,7 +210,7 @@ a charge into something solid; get out of a stampede's lane, or ride it.
   `--hunt hornback-escort`, `?hunt=hornback-escort` (the crossing: walk a cart
   along a road the herd migrates over).
 - **Harness:** Champion 22/24 in 109 s, Elementalist 24 in 36 s, Blood mage
-  21, Bulwark 20, Reaver 15, Dual mage 14. Crossing: 4–11 of 12 by class; two
+  21, Bulwark 19, Reaver 15, Dual mage 14. Crossing: 4–11 of 12 by class; two
   Champions 1 of 12. Four classes take one unanswerable hit in 24.
 - **Try first:** stand a boulder behind you, wait for the paws, step out of
   the lane on the head-drop, and hit the stunned bull. Then try riding a cow.
@@ -252,7 +252,7 @@ Burn the tar — which clears the floor and builds the slag steps up it.
 
 - **Play:** `--hunt mireback`, `?hunt=mireback`. The Mire.
 - **Harness:** Champion 21/24 in 120 s, Reaver 22, Elementalist 24 in 41 s,
-  Bulwark 16, Blood mage 5, Dual mage 0. Unanswerable 0–3 by class (each a
+  Bulwark 18, Blood mage 5, Dual mage 0. Unanswerable 0–3 by class (each a
   flop out of tar laid after it committed).
 - **Try first:** kick a brazier over onto the tar, and watch the flop's ring
   of warnings — does it read before it lands? Then climb the slag to burst a
@@ -294,7 +294,7 @@ vanish; beach it to climb its back.
 [creatures/sandmaw.md](creatures/sandmaw.md).
 
 - **Play:** `--hunt sandmaw`, `?hunt=sandmaw`. The Pan.
-- **Harness:** Champion 18/24 in 191 s, Bulwark 24, Elementalist 11 (338 s),
+- **Harness:** Champion 18/24 in 191 s, Bulwark 22, Elementalist 11 (338 s),
   Reaver 10, Dual mage 3, Blood mage 0. Zero unanswerable; zero bites while
   quiet.
 - **Try first:** stand still and watch the wake look for you; then walk to
@@ -337,7 +337,7 @@ cats. Never commit to one while you can't see the other; split them.
 [creatures/the-pair.md](creatures/the-pair.md).
 
 - **Play:** `--hunt pair`, `?hunt=pair`. The Den.
-- **Harness:** Champion 16/24 in 159 s, Elementalist 24 in 46 s, Bulwark 12,
+- **Harness:** Champion 16/24 in 159 s, Elementalist 24 in 46 s, Bulwark 21,
   Reaver 7, Dual mage 4, Blood mage 0. Zero unanswerable by both clauses in
   all 144 hunts.
 - **Try first:** keep both cats on screen; read the tail before you dodge a
@@ -377,8 +377,8 @@ leads to the slam that lays her sacs on the floor — the window to pop them.
 
 - **Play:** `--hunt broodmother`, `?hunt=broodmother`. The Hollows.
 - **Harness (balanced plan):** Champion 7/24 in 143 s, Dual mage 10,
-  Elementalist 1 (but 22 of 24 ignoring the brood), Bulwark, Reaver, Blood
-  mage 0. Unanswerable 0–3 by class (broodling bites from off screen).
+  Elementalist 1 (but 22 of 24 ignoring the brood), Bulwark 1 (his leap
+  takes him to the sacs: 49 pops in 109 slam windows), Reaver and Blood mage 0. Unanswerable 0–3 by class (broodling bites from off screen).
 - **Try first:** the screech, then get to a sac in the slam's window and pop
   it; see whether the colours (pale to red) tell you which sac is next.
 
@@ -412,7 +412,7 @@ footprints, breath, ripples, the shimmer before a strike, and the paint your
 hits leave. [creatures/veilstalker.md](creatures/veilstalker.md).
 
 - **Play:** `--hunt veilstalker`, `?hunt=veilstalker`. The Ashwood.
-- **Harness:** Champion 6/24 in 336 s, Elementalist 22 in 208 s, Bulwark 8,
+- **Harness:** Champion 6/24 in 336 s, Elementalist 22 in 208 s, Bulwark 9,
   Reaver 6, Blood mage and Dual mage 0. Zero blind hits, zero unanswerable.
 - **Try first:** follow the three-toed prints; hold still on a decloak with
   no fresh prints under it (a mimic); walk out of the spear's lane; tip a
