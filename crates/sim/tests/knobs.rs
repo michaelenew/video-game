@@ -53,11 +53,17 @@ const EXEMPT: &[(&str, &str)] = &[
          fighter standing there, and the middle of anything is half of it.",
     ),
     (
-        "ground.y.add(t::body_height().div(Fx::from_int(2))),",
+        "ground.y.add(height.div(Fx::from_int(2))),",
         "The same halving, in `aim::standing_middle`: where a shot aimed at a \
          patch of floor actually goes. Not a height with a feel to it -- it is \
-         the middle of whoever is standing on that patch, and the middle of \
+         the middle of whatever is standing on that patch, and the middle of \
          anything is half of it.",
+    ),
+    (
+        "let cm = |v: Fx| v.mul(Fx::from_int(100)).to_int().clamp(-32000, 32000) as i16",
+        "Metres to centimetres, for the two bytes a critter keeps per axis of its perch \
+         on a creature (`critter::Critter::perch`). A unit conversion, not a size: the \
+         100 is what a centimetre is, and the clamp is what an i16 holds.",
     ),
     (
         ".add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))",

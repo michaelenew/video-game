@@ -65,6 +65,7 @@ fn with_scene<T>(w: &World, ask: impl FnOnce(&aim::Scene) -> T) -> T {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
         arena: w.arena(),
     })
 }

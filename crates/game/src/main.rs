@@ -20,6 +20,7 @@
 mod arenas;
 mod bake;
 mod beast;
+mod critters;
 mod crosshair;
 mod debug;
 mod hub;
@@ -146,6 +147,7 @@ fn main() {
                 setup,
                 beast::setup,
                 beast::setup_signs,
+                critters::setup,
                 hud::setup,
                 crosshair::setup,
             ),
@@ -202,6 +204,16 @@ fn main() {
                 palette::draw,
             )
                 .chain(),
+        )
+        // The small bodies, after the creatures: placed from the snapshot,
+        // and their overlay with the creature's. Their own tuple because the
+        // one above is full.
+        .add_systems(
+            Update,
+            (critters::place, critters::overlay)
+                .chain()
+                .after(beast::signs)
+                .before(palette::toggle),
         )
         // A second tuple only because Bevy's is full: the hub draws last, over
         // everything, and after the poses it is previewing have been placed.

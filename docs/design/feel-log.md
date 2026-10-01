@@ -6297,3 +6297,56 @@ pin. Left as it was; noted in arenas.md for whoever wants it.
 should look at arenas.md §5: ceilings as solids, bounds that are not walls,
 and what each creature branch still owns (the sim's eye under a vault,
 creatures colliding with solids, materials read by the fight).
+
+
+### 2026-10-01 — Small bodies and packs (bestiary P3), and aiming at something short (A1, A2)
+
+**Changed** Nothing a player can feel where only fighters stand, on purpose.
+The world gained ten critter slots and a pack brain: a critter is a 48-byte box
+on its feet, a pack glances, cuts a ring round each fighter's back, hands out
+attack tokens, scatters, routs and regroups, spawns into freed slots, can be
+owned by a monster, and its bodies can stand on a creature's parts. A dev pack,
+the gnats (`--hunt gnats`), stands it all up. The aim model learned that
+"there" has a height: `aim::stands_at` is the last body the crosshair passed
+through, a ground-aimed skillshot goes to its middle, and a standing swing
+pointed at it dips (`aim::stoop`). Critters are on `first_along`'s list. See
+[critters.md](critters.md) and [aiming.md](aiming.md).
+
+**Why** Four creatures are packs or bring them, and a knee-high body could not
+be hit: every skillshot aimed through one went to a fighter's middle and over
+its back, and every standing swing stayed level over its head.
+
+**Found** The bit-identical bar held: both pinned hunts unchanged, the fight
+report for every class, twelve seeds each, solo and duo, byte for byte, and the
+full single report with its play sequence for every class. `critcheck`, a
+critter stood in front of every class with a fighter as the control, found
+more than the arithmetic in the Gnawers' §1a did:
+
+- the Gnawers' proposal -- dip the swing to the body's *middle* -- tipped it
+  steeper than it meets a fighter, because a swing leaves the hand at cast
+  height; it meets a short body at the same *share* of its height now;
+- a flat disc (the Reaver's Slash) has no height, so a dip only pulled it in
+  toward her: pointed at something short it goes out level;
+- a dipped thrust lost a few centimetres of reach across the floor, enough to
+  miss at the very edge; it keeps its reach now;
+- the Dual mage's wing lies flat at the shoulder standing and ignored the dip:
+  it comes down by the drop now;
+- `aim::look_onto`'s six rounds leave the crosshair a metre above a point forty
+  degrees down -- over a gnawer at three metres. The bot keeps them (its fights
+  are pinned on them); `look_onto_closely` settles a steep look for the tools;
+- the pack walked into the proving ground's platforms and stood there: a
+  blocked critter now slides round, keeping its side until it is clear;
+- one segment-against-box test with a square root per probe cost the Reaver's
+  Guillotine a millisecond a frame against a full pack; squared distances and a
+  bounding check before it brought a full pack to the Ridgeback's cost.
+
+After that, every move touches a 0.6 m gnat wherever it touches a fighter,
+except lunges that carry the fighter through it and the Guillotine.
+
+**Reverted** Raising `look_onto`'s rounds, for the bot's pins. Dipping a flat
+disc like a line.
+
+**Verdict** built; nothing moved for fighters by construction. A person should
+look at critters.md §7: the box, the share-of-height dip, the Guillotine passing
+over a 0.6 m body (lower `lotus_height`, or let it be the Big One's tool), and
+lunges running through critters.

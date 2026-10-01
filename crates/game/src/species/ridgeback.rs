@@ -41,4 +41,5 @@ pub const LOOK: Look = Look {
             roughness: 0.5,
         },
     }),
+    critters: &[],
 };

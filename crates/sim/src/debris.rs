@@ -27,7 +27,7 @@ use crate::arena::Arena;
 use crate::effects::Effects;
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::{V3, frame_about};
-use crate::monster::Herd;
+use crate::pack;
 use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
@@ -124,7 +124,7 @@ pub fn step(
     players: &mut [Player; MAX_PLAYERS],
     effects: &Effects,
     versus: bool,
-    quarry: &mut Herd,
+    prey: pack::Prey,
     arena: &Arena,
 ) {
     let stones = stones::gather(players);
@@ -137,11 +137,13 @@ pub fn step(
         };
         let met = {
             let seen = *players;
+            let crowd = *prey.critters;
             let scene = Scene {
                 stones: &stones,
                 players: &seen,
                 effects,
-                quarry: &*quarry,
+                quarry: &*prey.herd,
+                critters: &crowd,
                 arena,
             };
             aim::first_along(
@@ -179,9 +181,23 @@ pub fn step(
             Some(Contact::Quarry {
                 slot: which, part, ..
             }) => {
-                if let Some(beast) = quarry[which].as_mut() {
+                if let Some(beast) = prey.herd[which].as_mut() {
                     beast.take_hit(part, t::debris_damage());
                 }
+                *slot = None;
+                continue;
+            }
+            Some(Contact::Critter { index, .. }) => {
+                let along = V3::new(piece.dir.x, Fx::ZERO, piece.dir.z).normalized();
+                pack::hurt(
+                    prey.pack,
+                    prey.critters,
+                    index,
+                    t::debris_damage(),
+                    along,
+                    t::debris_knockback(),
+                    Fx::ZERO,
+                );
                 *slot = None;
                 continue;
             }

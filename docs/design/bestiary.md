@@ -205,6 +205,13 @@ the clock in the snapshot so a rollback does not pop). Beside it, a **pack
 brain**: attack tokens (how many may attack at once), roles, morale, and a
 leader. One pack brain drives up to ten critters.
 
+**Built 2026-10-01**, with the Ridgeback and versus bit-identical, ahead of the
+four creatures that use it: see [critters.md](critters.md) for what was built,
+the recipe, and what a person should review. A critter is 48 bytes, not 32 (a
+vertical velocity for leaps and launches, and a perch for standing on a
+creature); the snapshot is 3,520 bytes with ten of them and the brain. A1 and
+A2 below landed with it.
+
 ### P4 · Floor hazards (Mireback, Broodmother, Veilstalker, Sandmaw, Siegeshell)
 
 Tar, web, smoke, burning ground, a sinkhole's pull, vented steam. A small fixed
@@ -319,8 +326,8 @@ bit-identical step and never inside it, with the Ridgeback's twelve seeds and
 
 | # | Asked by | The change | What it touches today |
 | --- | --- | --- | --- |
-| A1 | [Gnawers](creatures/gnawers.md) §1a | `aim::stands_at`: the height of the last body the crosshair's ray passed through. A ground-aimed skillshot goes to *that* body's middle, and the standing swing's dead zone reads it. Bodies still do not stop the ray. | Nothing where only fighters stand: bit-identical |
-| A2 | [Hornback](creatures/hornback.md) §10 | Critters join what `aim::first_along` can run into | Nothing until critters exist |
+| A1 **built** | [Gnawers](creatures/gnawers.md) §1a | `aim::stands_at`: the height of the last body the crosshair's ray passed through. A ground-aimed skillshot goes to *that* body's middle, and the standing swing's dead zone reads it. Bodies still do not stop the ray. | Nothing where only fighters stand: bit-identical |
+| A2 **built** | [Hornback](creatures/hornback.md) §10 | Critters join what `aim::first_along` can run into | Nothing until critters exist |
 | A3 | [Siegeshell](creatures/siegeshell.md) §6 | Seen from above, the top face of a mountable part counts as a place, so aiming at your feet on a shell does not land on the floor below | **Shots at the Ridgeback's back change** |
 | A4 | [Galewing](creatures/galewing.md) §6 | `swing_path` and `origin` measure the dead zone against the surface underfoot, so a swing on a banked back is level with the back | Nothing on the floor: bit-identical. The Ridgeback's shake gets it too |
 | A5 | [Veilstalker](creatures/veilstalker.md) §6 | `aim::in_view`: whether a point is inside a fighter's view, so it can never reveal itself off-screen | Nothing: a new question, not a changed answer |
@@ -352,9 +359,11 @@ stand-in that should become a sound when there is audio, and until then
 ### Smaller things
 
 - **Critter hit shape.** P3 planned a capsule; the Hornback wants a box that
-  reaches the floor, so a level shot does not pass over a cow's back. Pick one
-  shape when P3 is built. The Gnawers' aiming problem (A1) is the same question
-  from the other side.
+  reaches the floor, so a level shot does not pass over a cow's back. **Decided
+  2026-10-01: the box**, standing on the critter's feet and yawed with it --
+  the Hornback's reason, at no cost to the gnawer. See
+  [critters.md](critters.md) §1. The Gnawers' aiming problem (A1) is built
+  beside it.
 - **Fight length at tier 5.** The Mantis is written for five to eight minutes
   solo, below the tier table's eight to twenty. A duel that long is a slog; the
   tier table was written with the Siegeshell in mind. Probably the table is what

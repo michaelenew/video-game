@@ -18,6 +18,9 @@ use crate::Plan;
 
 pub mod ridgeback;
 
+/// The dev pack's hunter.
+pub mod gnats;
+
 // pub mod gnawers;
 
 // pub mod hornback;
@@ -71,6 +74,8 @@ pub struct Words {
 pub fn card(id: SpeciesId) -> Option<&'static Card> {
     match id {
         SpeciesId::RIDGEBACK => Some(&ridgeback::CARD),
+
+        SpeciesId::GNATS => Some(&gnats::CARD),
 
         // SpeciesId::GNAWERS => Some(&gnawers::CARD),
 

@@ -31,6 +31,54 @@ fn every_registered_species_is_a_well_formed_table() {
             "{name} is registered under another id"
         );
 
+        // A pack: its kinds, who it musters, who leads, and every move a kind
+        // throws is one of the species' moves. See `docs/design/critters.md`.
+        if let Some(pack) = sp.pack {
+            assert!(!pack.kinds.is_empty(), "{name}: a pack with no kinds");
+            for (kind, count) in pack.muster {
+                assert!(
+                    (*kind as usize) < pack.kinds.len(),
+                    "{name}: musters no kind"
+                );
+                assert!(*count > 0, "{name}: musters none of a kind");
+            }
+            let total: usize = pack.muster.iter().map(|(_, n)| *n as usize).sum();
+            assert!(
+                total <= sim::critter::MAX_CRITTERS,
+                "{name}: musters more than the world holds"
+            );
+            if let Some(leader) = pack.leader {
+                assert!(
+                    (leader as usize) < pack.kinds.len(),
+                    "{name}: no such leader"
+                );
+            }
+            for k in pack.kinds {
+                for m in k.moves {
+                    assert!(
+                        (m.kind as usize) < sp.moves.len(),
+                        "{name}: a {} throws no move",
+                        k.name
+                    );
+                }
+            }
+        }
+        // A creature that is only a pack has no skeleton, parts or clips to
+        // check; its moves are its critters'.
+        if !sp.has_body() {
+            assert!(sp.pack.is_some(), "{name}: no body and no pack");
+            assert!(
+                !sp.moves.is_empty() && sp.moves.len() <= MAX_MOVES,
+                "{name}: moves"
+            );
+            assert_eq!(
+                sp.tuned.len(),
+                sp.knob_count(),
+                "{name}: re-bake its tuning"
+            );
+            continue;
+        }
+
         // The skeleton: parents before children, one root, and it is first.
         assert!(
             !sp.bones.is_empty() && sp.bones.len() <= MAX_BONES,
@@ -180,6 +228,41 @@ fn every_registered_species_stands_and_moves() {
         let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], sp.id);
         for _ in 0..240 {
             w.advance([Input::default(); MAX_PLAYERS]);
+        }
+        // A pack stands up, moves, and can be hurt -- a kind fresh from its
+        // first bake has one health and no size, and says so here.
+        if sp.pack.is_some() {
+            let pack = w.pack.expect("a pack species brings its pack");
+            assert_eq!(pack.species, sp.id);
+            let first = w
+                .critters
+                .iter()
+                .position(|c| c.alive())
+                .unwrap_or_else(|| panic!("{}'s pack has nobody in it", sp.name));
+            let c = w.critters[first];
+            assert!(
+                c.body(sp).height.raw() > 0 && c.health > 1,
+                "{}: a critter with no size or health -- set its kinds' knobs with \
+                 `bake_tuning -- --set` and bake",
+                sp.name
+            );
+            let dealt = sim::pack::hurt(
+                &mut w.pack,
+                &mut w.critters,
+                first,
+                1,
+                V3::new(
+                    sim::fixed::Fx::ONE,
+                    sim::fixed::Fx::ZERO,
+                    sim::fixed::Fx::ZERO,
+                ),
+                sim::fixed::Fx::ZERO,
+                sim::fixed::Fx::ZERO,
+            );
+            assert_eq!(dealt, 1, "{} cannot be hurt", sp.name);
+        }
+        if !sp.has_body() {
+            continue;
         }
         let beast = w.monster().copied().expect("a hunt has a creature");
         assert_eq!(beast.species, sp.id);

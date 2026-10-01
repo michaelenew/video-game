@@ -214,8 +214,11 @@ it there, for every creature, and say so in this document.
   the six Ridgeback routes it named. Its numbers are unchanged where they
   overlap (shoulders stumbling 2.665 m, front feet broken 3.807 m, through the
   slam 3.23 m, nose to tail 13.406 m).
-- **Not here:** critters (P3), the `sheds` part flag the Pair asks for, a
-  perception filter (P5). Each lands with the creature that needs it. Arenas as
+- **Not here:** the `sheds` part flag the Pair asks for, a perception filter
+  (P5). Critters (P3) landed after this: [critters.md](critters.md) is the
+  recipe for a creature that is a pack or brings one -- a `Species` gained a
+  `pack` field (`None` for the Ridgeback), and `Species::pack_only` is a table
+  with no skeleton. Each lands with the creature that needs it. Arenas as
   data (P2) landed after this, ahead of the creatures:
   [arenas.md](arenas.md) is the same kind of recipe for a creature's arena, and
   a creature branch follows both.

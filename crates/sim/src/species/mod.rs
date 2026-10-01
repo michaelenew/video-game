@@ -52,6 +52,11 @@ use crate::oven::KnobDecl;
 
 pub mod ridgeback;
 
+/// A dev pack, not a creature anybody fights for a trophy: the smallest pack
+/// that exercises every piece of the critter machinery, for its tests and for
+/// `critcheck`. It is to packs what the range is to arenas.
+pub mod gnats;
+
 // pub mod gnawers;
 
 // pub mod hornback;
@@ -89,6 +94,8 @@ impl SpeciesId {
     pub const MANTIS: SpeciesId = SpeciesId(8);
     pub const GALEWING: SpeciesId = SpeciesId(9);
     pub const SIEGESHELL: SpeciesId = SpeciesId(10);
+    /// The dev pack: see [`gnats`].
+    pub const GNATS: SpeciesId = SpeciesId(11);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// is a bug in whoever built the monster, and gets the Ridgeback rather
@@ -99,12 +106,14 @@ impl SpeciesId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 11;
+pub const COUNT: usize = 12;
 
 /// The species registered under an id, if one is.
 pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
     match id {
         SpeciesId::RIDGEBACK => Some(&ridgeback::SPECIES),
+
+        SpeciesId::GNATS => Some(&gnats::SPECIES),
 
         // SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
 
@@ -271,9 +280,107 @@ pub struct Species {
     pub tuned: &'static [i32],
     /// Where that file is, from the repository root, for the bake.
     pub tuned_path: &'static str,
+
+    // ---- its small bodies ----
+    /// **The pack it brings**, if any: its kinds of critter, who it starts
+    /// with, and the mind that steers them (`crate::pack`). `None` for a
+    /// creature that is one body, like the Ridgeback. A creature can be a pack
+    /// and nothing else -- the Gnawers, the Hornback herd -- in which case it
+    /// has no skeleton at all ([`Species::has_body`]); or a body that owns a
+    /// pack, as the Broodmother does her brood. See `docs/design/critters.md`.
+    pub pack: Option<&'static crate::pack::PackDecl>,
 }
 
 impl Species {
+    /// **A creature that is only a pack**: no skeleton, no parts, no clips --
+    /// its moves are its critters' moves and everything else is its
+    /// [`crate::pack::PackDecl`]. The Gnawers and the Hornback herd are this;
+    /// so is the dev pack, [`gnats`]. Written once here so a pack's table is
+    /// its moves, its own knobs and its pack rather than a page of empty
+    /// skeleton.
+    #[allow(clippy::too_many_arguments)]
+    pub const fn pack_only(
+        id: SpeciesId,
+        name: &'static str,
+        moves: &'static [MoveDecl],
+        own: &'static [KnobDecl],
+        tuned: &'static [i32],
+        tuned_path: &'static str,
+        pack: &'static crate::pack::PackDecl,
+    ) -> Species {
+        Species {
+            id,
+            name,
+            bones: &[],
+            mirror: &[],
+            neck: &[],
+            follows: &[0],
+            parts: &[],
+            breakable: ([u8::MAX; MAX_BREAKABLE], 0),
+            legs: &[],
+            moves,
+            clips: &[],
+            stock: Stock {
+                idle: 0,
+                walk: 0,
+                gallop: 0,
+                flinch: 0,
+                stumble: 0,
+                topple: 0,
+                dead: 0,
+            },
+            span: &[],
+            rows: 0,
+            row: |_| &[],
+            own,
+            tuned,
+            tuned_path,
+            pack: Some(pack),
+        }
+    }
+
+    /// Does it have a skeleton -- is there a `Monster` to build? A species that
+    /// is only a pack has no bones, and the world builds its critters instead.
+    pub fn has_body(&self) -> bool {
+        !self.bones.is_empty()
+    }
+
+    /// One of its pack's kinds of critter. A species with no pack, or a kind
+    /// past the end, gets the first kind of the dev pack rather than a panic in
+    /// the middle of a rollback; asking is a bug in whoever built the critter.
+    pub fn kind(&self, kind: u8) -> &'static crate::critter::CritterKind {
+        let kinds = self.pack.map_or(gnats::PACK.kinds, |p| p.kinds);
+        &kinds[(kind as usize).min(kinds.len() - 1)]
+    }
+
+    /// Where the pack's own knobs start in the store: after the moves.
+    pub fn pack_base(&self) -> usize {
+        Common::ALL.len() + self.own.len() + self.moves.len() * crate::oven::MONSTER_FIELDS
+    }
+
+    /// Where one of the pack's own knobs sits in the store.
+    pub fn pack_index(&self, k: crate::pack::PackKnob) -> usize {
+        self.pack_base() + k as usize
+    }
+
+    /// Where one field of one kind of critter sits in the store.
+    pub fn critter_index(&self, kind: usize, field: crate::critter::CritterField) -> usize {
+        self.pack_base()
+            + crate::pack::PackKnob::ALL.len()
+            + kind * crate::critter::CRITTER_FIELDS
+            + field as usize
+    }
+
+    /// One of the pack's own knobs, live.
+    pub fn pack_raw(&self, k: crate::pack::PackKnob) -> i32 {
+        crate::oven::species_raw(self.id, self.pack_index(k))
+    }
+
+    /// One of the pack's own knobs, as fixed point.
+    pub fn pack_fx(&self, k: crate::pack::PackKnob) -> Fx {
+        Fx::from_raw(self.pack_raw(k))
+    }
+
     /// The name as an identifier: lower case, spaces to underscores.
     pub fn slug(&self) -> String {
         self.name.to_lowercase().replace(' ', "_")
@@ -351,7 +458,10 @@ impl Species {
     /// How many knobs this species keeps: [`Common`], its own, then one row
     /// of `oven::MonsterField` per move.
     pub fn knob_count(&self) -> usize {
-        Common::ALL.len() + self.own.len() + self.moves.len() * crate::oven::MONSTER_FIELDS
+        self.pack_base()
+            + self.pack.map_or(0, |p| {
+                crate::pack::PackKnob::ALL.len() + p.kinds.len() * crate::critter::CRITTER_FIELDS
+            })
     }
 
     /// One of the numbers every creature has.

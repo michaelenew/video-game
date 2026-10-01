@@ -62,6 +62,7 @@ fn with_scene<T>(w: &World, ask: impl FnOnce(&aim::Scene) -> T) -> T {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
         arena: w.arena(),
     })
 }
@@ -557,7 +558,9 @@ fn a_skillshot_aimed_at_the_floor_goes_through_whoever_is_standing_on_it() {
     );
     assert_eq!(
         path.to.y.raw(),
-        aim::standing_middle(seen.at).y.raw(),
+        aim::standing_middle(seen.at, sim::tuning::body_height())
+            .y
+            .raw(),
         "a shot aimed at the floor did not end at chest height over the spot"
     );
     assert!(
@@ -602,7 +605,9 @@ fn a_skillshot_from_a_height_aims_down_at_the_floor_it_is_pointed_at() {
     // And it ends where a fighter down there actually is, not merely lower.
     assert_eq!(
         path.to.y.raw(),
-        aim::standing_middle(seen.at).y.raw(),
+        aim::standing_middle(seen.at, sim::tuning::body_height())
+            .y
+            .raw(),
         "the shot ended at {} m over a floor at {} m",
         path.to.y.to_f32_for_render(),
         seen.at.y.to_f32_for_render()
@@ -880,6 +885,7 @@ fn swing_tilt_from(w: &World, pitch: i16, grounded: bool) -> f32 {
         grounded,
         reach,
         aim::Hand::Centre,
+        aim::Stand::fighter(),
     );
     let rise = path.to.y.sub(path.from.y).to_f32_for_render();
     (rise / reach.to_f32_for_render())

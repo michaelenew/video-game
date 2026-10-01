@@ -1435,7 +1435,7 @@ impl Duelist {
             // A swing takes its pitch from the camera outside a dead zone, and
             // level is the standard arc. Only look up at somebody above you.
             _ if them.pos.y.sub(me.pos.y).raw() > Fx::ONE.raw() => {
-                let middle = aim::standing_middle(them.pos);
+                let middle = aim::standing_middle(them.pos, sim::tuning::body_height());
                 aim::look_onto(me.pos, wire, me.aloft, middle).max(0)
             }
             _ => 0,

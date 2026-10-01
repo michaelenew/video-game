@@ -265,6 +265,9 @@ pub fn play_species_watched(
     for beast in w.monsters.iter_mut().flatten() {
         beast.brain.rng = seed | 1;
     }
+    if let Some(pack) = w.pack.as_mut() {
+        pack.rng = seed | 1;
+    }
     let count = partners.clamp(1, MAX_PLAYERS);
     let mut bots: Vec<Hunter> = (0..count)
         .map(|who| Hunter::of(card, who, seed, jump_apex(classes[who])))

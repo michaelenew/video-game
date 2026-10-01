@@ -245,6 +245,78 @@ pub fn segment_gap(a0: V3, a1: V3, b0: V3, b1: V3) -> Fx {
     big_len(a0.add(d1.scale(s)).sub(b0.add(d2.scale(t))))
 }
 
+/// The distance from a point to an axis-aligned box: zero inside it.
+///
+/// Big-length rather than `len`, so a point a long way off still answers with
+/// a distance rather than 16.16's ceiling.
+pub fn point_box_gap(p: V3, min: V3, max: V3) -> Fx {
+    let out = |v: Fx, lo: Fx, hi: Fx| lo.sub(v).max(v.sub(hi)).max(Fx::ZERO);
+    big_len(V3::new(
+        out(p.x, min.x, max.x),
+        out(p.y, min.y, max.y),
+        out(p.z, min.z, max.z),
+    ))
+}
+
+/// The distance, in the floor plane only, from a point to a box's footprint.
+/// What a flat disc -- a volume with no top and no bottom -- is measured by.
+pub fn flat_box_gap(p: V3, min: V3, max: V3) -> Fx {
+    let out = |v: Fx, lo: Fx, hi: Fx| lo.sub(v).max(v.sub(hi)).max(Fx::ZERO);
+    big_len(V3::new(
+        out(p.x, min.x, max.x),
+        Fx::ZERO,
+        out(p.z, min.z, max.z),
+    ))
+}
+
+/// The closest distance between a line segment and an axis-aligned box.
+///
+/// What a capsule against a box is: the capsule touches when this is no more
+/// than its radius. A critter's body is a box (`crate::critter`), and every
+/// attack in the game is a capsule ([`segment_gap`] is the same question asked
+/// of two of them).
+///
+/// The distance from a point moving along a segment to a convex shape is a
+/// convex function of how far along it is, so a ternary search finds its
+/// minimum. **A fixed number of rounds**, for the reason [`isqrt`] has one: an
+/// answer that depends on how hard it was to find is not one two machines can
+/// be trusted to agree about. Twenty-four rounds narrow the segment to a few
+/// parts in a hundred thousand, which on the longest weapon in the game is
+/// well under a millimetre.
+pub fn segment_box_gap(a: V3, b: V3, min: V3, max: V3) -> Fx {
+    // Squared distances in `i64` inside the search -- the minimum of a distance
+    // is the minimum of its square -- and one square root at the end. A root
+    // per probe was most of the cost of a frame with ten bodies in it.
+    let gap_sq = |s: Fx| {
+        let p = a.add(b.sub(a).scale(s));
+        let out = |v: Fx, lo: Fx, hi: Fx| lo.sub(v).max(v.sub(hi)).max(Fx::ZERO).raw() as i64;
+        let (x, y, z) = (
+            out(p.x, min.x, max.x),
+            out(p.y, min.y, max.y),
+            out(p.z, min.z, max.z),
+        );
+        x * x + y * y + z * z
+    };
+    let (mut lo, mut hi) = (Fx::ZERO, Fx::ONE);
+    let mut round = 0;
+    while round < 24 {
+        let third = hi.sub(lo).div(Fx::from_int(3));
+        let m1 = lo.add(third);
+        let m2 = hi.sub(third);
+        if gap_sq(m1) <= gap_sq(m2) {
+            hi = m2;
+        } else {
+            lo = m1;
+        }
+        round += 1;
+    }
+    let best = gap_sq(lo)
+        .min(gap_sq(hi))
+        .min(gap_sq(Fx::ZERO))
+        .min(gap_sq(Fx::ONE));
+    Fx::from_raw(isqrt(best))
+}
+
 /// Linear blend of two points.
 pub const fn lerp3(from: V3, to: V3, at: Fx) -> V3 {
     V3::new(

@@ -9,6 +9,7 @@
 //! turns the handful that are actual design decisions into assertions, in the
 //! style of the rest of the feel harness: relationships, not values.
 
+use sim::critter;
 use sim::fixed::Fx;
 use sim::monster::{self, Doing};
 use sim::species::{MAX_MOVES, Species};
@@ -181,6 +182,42 @@ pub struct Report {
     commit_at: V3,
 
     pub timeline: Vec<Beat>,
+
+    /// The small bodies, when the fight has a pack (`sim::pack`). Counted for
+    /// every pack creature the same way, so a creature's plan and its report
+    /// lines can lean on them.
+    pub pack: PackTally,
+}
+
+/// What the report counts about a pack: who died, who bit, how many at once.
+#[derive(Clone, Debug, Default)]
+pub struct PackTally {
+    /// The fight had one at all.
+    pub present: bool,
+    /// Critters killed, and how many of those led the pack.
+    pub kills: u32,
+    pub leaders_killed: u32,
+    /// Critters that came into the fight after it began: spawned into a slot.
+    pub spawned: u32,
+    /// Blows the hunters landed on critters (a body losing health).
+    pub struck: u32,
+    /// Hits critters landed on the hunters, and what those moves list as
+    /// their damage.
+    pub hits_taken: u32,
+    pub damage_taken: i32,
+    /// The most critters winding up or out at once, and frames with two or
+    /// more doing it: what the tokens are for.
+    pub most_at_once: u32,
+    pub frames_two_or_more: u32,
+    /// Frames with every token held, out of the frames it was hunting: the
+    /// Gnawers' "tokens live".
+    pub tokens_full: u32,
+    pub hunting_frames: u32,
+    /// Times it scattered, routed, came back, and broke for good.
+    pub scatters: u32,
+    pub routs: u32,
+    pub regroups: u32,
+    pub broke: u32,
 }
 
 impl Report {
@@ -238,11 +275,97 @@ impl Report {
             commit_range: [Fx::ZERO; MAX_PLAYERS],
             commit_at: V3::ZERO,
             timeline: Vec::new(),
+            pack: PackTally::default(),
+        }
+    }
+
+    /// Fold one tick of the pack into the report, if there is one.
+    fn observe_pack(&mut self, before: &World, after: &World) {
+        let (Some(was), Some(now)) = (before.pack, after.pack) else {
+            return;
+        };
+        let t = &mut self.pack;
+        t.present = true;
+        let sp = now.sp();
+        let mut at_once = 0;
+        for (b, a) in before.critters.iter().zip(after.critters.iter()) {
+            if a.alive() && !b.present() {
+                t.spawned += 1;
+            }
+            if b.alive() && !a.alive() && a.state == critter::is::DEAD {
+                t.kills += 1;
+                if b.has(critter::flag::LEADER) {
+                    t.leaders_killed += 1;
+                }
+            }
+            if b.alive() && a.health < b.health {
+                t.struck += 1;
+            }
+            if a.alive() && a.attacking() {
+                at_once += 1;
+            }
+            // A move of its connecting: its hit spent on this frame.
+            if a.state == critter::is::ACTIVE
+                && a.has(critter::flag::HIT_USED)
+                && !(b.state == critter::is::ACTIVE && b.has(critter::flag::HIT_USED))
+            {
+                t.hits_taken += 1;
+                t.damage_taken += sp.attack(a.act).damage;
+                if (a.act as usize) < MAX_MOVES {
+                    self.landed[a.act as usize] += 1;
+                }
+            }
+            // A move starting: counted with the creature's own, by the
+            // species' move numbering, so the report's move table covers a
+            // pack's moves too.
+            if a.state == critter::is::STARTUP && b.state != critter::is::STARTUP {
+                if (a.act as usize) < MAX_MOVES {
+                    self.starts[a.act as usize] += 1;
+                }
+                let m = sp.attack(a.act);
+                if m.damage > 0 {
+                    self.committed += 1;
+                    if m.startup as usize >= REACTION {
+                        self.reactable += 1;
+                    }
+                }
+            }
+        }
+        t.most_at_once = t.most_at_once.max(at_once);
+        if at_once >= 2 {
+            t.frames_two_or_more += 1;
+        }
+        if now.mood == sim::pack::mood::HUNTING {
+            t.hunting_frames += 1;
+            let held = after
+                .critters
+                .iter()
+                .filter(|c| c.has(critter::flag::TOKEN))
+                .count();
+            if held >= now.token_cap() && now.token_cap() > 0 {
+                t.tokens_full += 1;
+            }
+        }
+        if was.mood != now.mood {
+            match now.mood {
+                sim::pack::mood::SCATTERED => t.scatters += 1,
+                sim::pack::mood::ROUTED => t.routs += 1,
+                sim::pack::mood::BROKEN => t.broke += 1,
+                sim::pack::mood::HUNTING if was.mood == sim::pack::mood::ROUTED => t.regroups += 1,
+                _ => {}
+            }
+        }
+        if after.monster().is_none() {
+            self.frames = after.frame;
+            if now.grace == 0 {
+                self.fought += 1;
+            }
         }
     }
 
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        self.observe_pack(before, after);
         // The first creature. A fight against two (the Pair) reports on the
         // first; a report per creature is that fight's to add.
         let (Some(&was), Some(&now)) = (before.monster(), after.monster()) else {
@@ -857,6 +980,75 @@ impl Report {
             format!("{}", self.unanswerable),
             "too fast to read, from outside its range",
         );
+
+        if self.pack.present {
+            let t = &self.pack;
+            out.push_str("\nTHE PACK\n");
+            line(
+                &mut out,
+                "killed",
+                format!("{}", t.kills),
+                if t.leaders_killed > 0 {
+                    "the leader among them"
+                } else {
+                    "small bodies down"
+                },
+            );
+            line(
+                &mut out,
+                "spawned",
+                format!("{}", t.spawned),
+                "came into the fight after it began",
+            );
+            line(
+                &mut out,
+                "blows landed on them",
+                format!("{}", t.struck),
+                "the hunters' hits on small bodies",
+            );
+            line(
+                &mut out,
+                "hits taken from them",
+                format!("{}", t.hits_taken),
+                "small bodies' moves that connected",
+            );
+            line(
+                &mut out,
+                "damage from them",
+                format!("{}", t.damage_taken),
+                "as their moves list it",
+            );
+            line(
+                &mut out,
+                "most at once",
+                format!("{}", t.most_at_once),
+                "winding up or out together: the tokens' job",
+            );
+            line(
+                &mut out,
+                "two or more",
+                format!("{:.0}%", ratio(t.frames_two_or_more, self.fought) * 100.0),
+                "of the fight",
+            );
+            line(
+                &mut out,
+                "tokens live",
+                format!("{:.0}%", ratio(t.tokens_full, t.hunting_frames) * 100.0),
+                "every token held, of the time it hunted",
+            );
+            line(
+                &mut out,
+                "scatters / routs",
+                format!("{} / {}", t.scatters, t.routs),
+                "deaths that broke the ring, and the pack",
+            );
+            line(
+                &mut out,
+                "regroups / broke",
+                format!("{} / {}", t.regroups, t.broke),
+                "came back, and left for good",
+            );
+        }
 
         // Only when there is blood to report: the section is the Blood mage's,
         // and printing zeroes for every other class would say she was there.
