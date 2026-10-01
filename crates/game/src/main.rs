@@ -554,16 +554,14 @@ fn shot_pack_move(w: &mut World, name: &str) {
     let lane = |d: sim::Fx| sim::V3::new(me.x.add(d), me.y, me.z);
     if sp.id == sim::species::SpeciesId::GNAWERS && kind == sim::species::gnawers::PILE_ON {
         // A ring of them at four metres, and the pack calls it.
-        let mut k = 0;
-        for c in w
-            .critters
-            .iter_mut()
-            .filter(|c| c.alive() && !c.has(flag::LEADER))
-        {
+        for (k, c) in (0i32..).zip(
+            w.critters
+                .iter_mut()
+                .filter(|c| c.alive() && !c.has(flag::LEADER)),
+        ) {
             let turn = sim::Fx::ratio(k * 2 + 1, 12);
             c.pos = me.add(sim::V3::from_turns(turn).scale(sim::Fx::from_int(4)));
             c.vel = sim::V3::ZERO;
-            k += 1;
         }
         if let Some(pack) = w.pack.as_mut() {
             pack.seen[0].pos = me;

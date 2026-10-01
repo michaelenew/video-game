@@ -392,7 +392,7 @@ impl Plan for Gnawers {
             });
         if let Some(t) = threat {
             let (yaw, aim, pitch) = look_at(t.at, t.middle);
-            if !in_reach(&t) {
+            if !in_reach(t) {
                 // A step in to bring the crouch into reach.
                 self.intent = SWING;
                 return Input::looking_at(steer(yaw, flat(t.at.sub(me.pos))), aim, pitch);
