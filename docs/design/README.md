@@ -8,6 +8,12 @@ Everything currently decided, proposed, or parked, in one place. This supersedes
 [architecture](architecture.md); before touching anything that is *pointed at
 something*, see [aiming](aiming.md).
 
+**Reviewing the creatures?** [review.md](review.md) is the way through the
+bestiary as built: how to start every fight, what each creature is, where the
+harness says it landed, what to try first, and every open question and every
+decision made on your behalf, each with an ID to answer by. The pictures are
+in the [gallery](gallery/README.md).
+
 ---
 
 ## 1 · Settled
@@ -92,6 +98,32 @@ poke is a design choice in a closed arena, not a gap.
 Each kit is **six abilities plus an auto and the mechanic input** — enough for a real match,
 few enough to balance and to read in third person.
 
+### The creatures
+
+Eleven, all built (2026-10-01), each in its own arena, on five tiers of difficulty
+([bestiary.md](bestiary.md); where each landed for every class is its §8). Start any of them
+with `--hunt <name>` (`?hunt=<name>` in the browser); `Shift+H` steps through all eleven in
+game, `T` tempers the one you are hunting, and the HUD's list shows your trophies.
+[review.md](review.md) has each one's command, numbers and open questions.
+
+| Creature | Tier | Arena | `--hunt` | One line |
+| --- | --- | --- | --- | --- |
+| [Gnawers](creatures/gnawers.md) | 1 | the Commons | `gnawers` | A knee-high pack and its Big One: keep them in front, kill the leader |
+| [Hornback herd](creatures/hornback.md) | 1 | the low meadow; the crossing | `hornback`, `hornback-escort` | A herd and a bull: bait the charge into a rock; escort a cart through the migration |
+| [Sandmaw](creatures/sandmaw.md) | 2 | the Pan | `sandmaw` | A worm that hunts by ear: make noise where you want it, stand still to vanish |
+| [Mireback](creatures/mireback.md) | 2 | the Mire | `mireback` | A toad that takes the floor away: burn its tar |
+| [Ridgeback](monsters.md) | 3 | the proving ground | `ridgeback` | Break a foot, climb, ride the buck, topple it |
+| [The Pair](creatures/the-pair.md) | 3 | the Den | `pair` | Two cats; one is always behind you |
+| [Broodmother](creatures/broodmother.md) | 3 | the Hollows | `broodmother` | A spider and her clock of sacs: pop them in the slam's window |
+| [Galewing](creatures/galewing.md) | 4 | the Cliffs | `galewing` | A raptor out of reach: bring it down, or ride it up |
+| [Veilstalker](creatures/veilstalker.md) | 4 | the Ashwood | `veilstalker` | The animal you never see: read what it touches |
+| [Mantis](creatures/mantis.md) | 5 | the Shrine | `mantis` | A duellist that guards, parries and reads what you repeat |
+| [Siegeshell](creatures/siegeshell.md) | 5, for two | the Last Valley | `siegeshell` | A walking hill; break its anchors before it reaches the wall |
+
+Two dev species, the gnats (a pack with nothing of its own) and the sentinel (one of every
+hazard and sense), are reached by `--hunt gnats` / `--hunt sentinel` and kept out of the cycle
+and the trophy list. The range (`--arena range`) is the dev arena with one of everything.
+
 ## 3 · Documents
 
 | Document | Covers | Status |
@@ -113,6 +145,7 @@ few enough to balance and to read in third person.
 | [elementalist-v2.md](elementalist-v2.md) | v2: four new inputs, hold-to-charge on both placement buttons, Updraft and Downdraft on her body, Cinder spray, Quake and Tremor, lit stones, the dodge through a stone | **Built 2026-09-30**, unplayed; `cargo run -p sim --bin elemental` prints its numbers |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt; **hunts since 2026-09-25**: eight moves, a threat at every range, unplayed |
+| [review.md](review.md) | **The review guide**: every fight's command, numbers, what to try first, every open question and every decision made on the owner's behalf, by ID; the [gallery](gallery/README.md) of every creature, arena and telegraph | **Written 2026-10-01** for the owner's review |
 | [bestiary.md](bestiary.md) | The cast after the Ridgeback: the contract every creature is held to, eleven creatures on five tiers, the shared machinery (P1–P8) and the aiming changes (A1–A5) they need, and the build order; §8 **where the cast landed**, every creature for every class | **Proposed 2026-09-30; the cast accepted as the first mix**; P1, P2 and P8 built 2026-10-01; §8 measured 2026-10-01, the scripted hunter playing all six classes (`hunt::class`) |
 | [species.md](species.md) | A creature is a table: the `Species` every creature is declared as, its knobs, two creatures in the world, and **the recipe for adding one** | **Built 2026-10-01** (bestiary P1 and P8); the Ridgeback pinned bit for bit |
 | [critters.md](critters.md) | Small bodies and packs: the 48-byte critter (a box on its feet), the pack brain (glance, ring, tokens, leader, morale, spawning, a monster's pack, standing on a creature), the aim change that makes a knee-high body hittable, `critcheck`, and **the recipe for a pack creature** | **Built 2026-10-01** (bestiary P3, A1, A2); the Ridgeback and versus pinned bit for bit |
@@ -129,6 +162,13 @@ few enough to balance and to read in third person.
 ## 4 · Open
 
 Nothing here blocks a prototype.
+
+**The creatures' questions are in [review.md](review.md)**, grouped by creature with an ID each
+(`GNAW-1`, `HORN-C1` …), and the cross-cutting ones there under `CAST`, `WORLD`, `CLASS` and
+`MACH`. The four that cut across the whole cast: the Elementalist's fire pillar wins most fights
+from nine metres (`CLASS-1`); the Blood mage wins almost nothing against a creature
+(`CLASS-2`); tier 5 is built for two (`CAST-1`); and the thrown shield does not touch a
+creature (`CLASS-5`).
 
 | Item | Question |
 | --- | --- |
@@ -275,15 +315,21 @@ decision, and belongs in a test.
 
 ## 8 · Next
 
-1. **Play it against a person.** Everything else is downstream of that — and the
-   Ridgeback needs it twice over. The browser build exists to make the asking
-   cheap: a link instead of a clone, [web.md](web.md). The climb now has to be
-   earned by five classes of six, the animal gallops, and the place behind it
-   that used to be safe has a kick aimed at it; whether the reward is worth the
-   trip, whether anyone finds the flank beside the hind leg, and whether the
-   ground game reads as a phase or as a toll are not things the harness can
-   answer. See [monsters.md](monsters.md) §9.
-2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
-   whether the 4-frame parry window is findable by a human.
-3. Fill out the kits beyond three moves per class.
-4. **Arena size and shape.**
+1. **Review the bestiary, and play it.** Eleven creatures, their arenas, trophies and tempers
+   are built and nobody has played them: [review.md](review.md) is the way through, one command
+   per fight and every open question by ID. Answering the `C` items (decisions made on your
+   behalf) first unblocks the most: health changed from six documents, rules changed in every
+   fight, the dev species out of the cycle.
+2. **The class-against-creature findings** (`CLASS-1` to `CLASS-5`): the fire pillar, the Blood
+   mage's kit, the Dual mage's tempo, the Reaver's Mantis, the thrown shield. Each is a decision
+   about a class or about every creature at once, and the harness cannot make it.
+3. **Play it against a person.** Everything else is downstream of that — and the creatures need
+   it twice over: every fight here was tuned by a scripted hunter with a quarter-second
+   reaction. The browser build exists to make the asking cheap: a link instead of a clone,
+   [web.md](web.md), and `?hunt=<creature>` opens any fight.
+4. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is whether the
+   4-frame parry window is findable by a human.
+5. **The world, past W2**: a menu for the picker, the hunter's notes, and — only if wanted —
+   the valley ([world.md](world.md) §2–§3).
+6. Fill out the kits beyond three moves per class.
+7. **Arena size and shape** for versus.
