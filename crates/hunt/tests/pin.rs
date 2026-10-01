@@ -18,9 +18,9 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 }
 
 const PINNED: [(Class, u32, u64); 4] = [
-    (Class::Champion, 0x2545_F491, 0x237f189d8056337a),
-    (Class::Champion, 7, 0xc2ca538911061032),
-    (Class::Bulwark, 101, 0x5ee4eac39a2775ab),
+    (Class::Champion, 0x2545_F491, 0x0efd64f4a51bd0e0),
+    (Class::Champion, 7, 0x70a143ee72ab5797),
+    (Class::Bulwark, 101, 0x1b707320b9c4af07),
     (Class::DualMage, 2_222, 0x9a10dc2ea84d2f17),
 ];
 

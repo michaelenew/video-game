@@ -16,6 +16,13 @@ impl V3 {
         z: Fx::ZERO,
     };
 
+    /// Straight up: the floor's normal.
+    pub const Y: V3 = V3 {
+        x: Fx::ZERO,
+        y: Fx::ONE,
+        z: Fx::ZERO,
+    };
+
     pub const fn new(x: Fx, y: Fx, z: Fx) -> V3 {
         V3 { x, y, z }
     }

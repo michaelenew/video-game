@@ -32,7 +32,7 @@ pub mod veilstalker;
 
 pub mod mantis;
 
-// pub mod galewing;
+pub mod galewing;
 
 // pub mod siegeshell;
 
@@ -162,7 +162,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
 
         SpeciesId::MANTIS => &mantis::LOOK,
 
-        // SpeciesId::GALEWING => &galewing::LOOK,
+        SpeciesId::GALEWING => &galewing::LOOK,
 
         // SpeciesId::SIEGESHELL => &siegeshell::LOOK,
         _ => &ridgeback::LOOK,
@@ -173,6 +173,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
 pub fn tint(id: SpeciesId) -> Option<&'static Tint> {
     match id {
         SpeciesId::BROODMOTHER => Some(&broodmother::TINT),
+        SpeciesId::GALEWING => Some(&galewing::TINT),
         _ => None,
     }
 }
