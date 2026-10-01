@@ -118,6 +118,38 @@ fn main() {
         eprintln!("no species called {wanted}; there is {}", known.join(", "));
         std::process::exit(2);
     };
+    if !sp.has_body() && sp.pack.is_some_and(|p| p.kinds.iter().any(|k| k.mountable)) {
+        // A pack with a back to ride (the Hornback's cow): how high it is,
+        // against how high every class hops, and whether each one gets on.
+        println!("the {}: backs to ride\n", sp.name);
+        let decl = sp.pack.unwrap();
+        for (k, kind) in decl.kinds.iter().enumerate() {
+            if !kind.mountable {
+                continue;
+            }
+            let tall = sim::critter::stat_fx(sp, k as u8, sim::critter::CritterField::Height);
+            println!("  {:<10} back at {} m", kind.name, m(tall));
+            let mut all = true;
+            for class in sim::class::ALL_CLASSES {
+                let apex = jump_apex(class);
+                let on = sim::critcheck::lands_on(class, sp.id, k as u8);
+                all &= on.is_some();
+                println!(
+                    "    {:<13} hop {} m, {} m to spare: {}",
+                    class.name(),
+                    m(apex),
+                    m(apex.sub(tall)),
+                    if on.is_some() { "gets on" } else { "does not" }
+                );
+            }
+            println!(
+                "  every class can jump onto a {}: {}\n",
+                kind.name.to_lowercase(),
+                if all { "yes" } else { "no" }
+            );
+        }
+        return;
+    }
     if !sp.has_body() {
         eprintln!(
             "the {} have no body to climb: they are a pack. `cargo run -p sim --bin critcheck -- --species {}` measures small bodies.",

@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 446] = [
+pub const KNOBS: [i32; 447] = [
            65536, // hornback.size_(x) = 1
             3500, // hornback.health = 3500
              500, // hornback.breakable_part_health = 500
@@ -131,10 +131,11 @@ pub const KNOBS: [i32; 446] = [
               20, // hornback_·_kick.a_cow_glances_every = 20
              120, // hornback_·_ride.the_first_buck_after = 120
               60, // hornback_·_ride.the_second_buck_after_the_first = 60
-            3932, // hornback_·_ride.first_buck's_pitch_(turns) = 0.06
-           39322, // hornback_·_ride.first_buck's_heave = 0.6
+               0, // hornback_·_ride.first_buck's_pitch_(turns) = 0
+           17695, // hornback_·_ride.first_buck's_heave = 0.27
           131072, // hornback_·_ride.the_second_is_harder_by_(x) = 2
-              30, // hornback_·_ride.a_buck's_fall_costs = 30
+               2, // hornback_·_ride.the_rump_snaps_up_over = 2
+               6, // hornback_·_ride....and_drops_back_over = 6
           104858, // hornback_·_coop.bull's_health_for_two_hunters_(x) = 1.6
              900, // hornback_·_crossing.a_migration_wave_every = 900
              300, // hornback_·_crossing.drawn_on_the_road_this_long_before = 300

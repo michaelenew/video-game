@@ -243,3 +243,67 @@ pub fn table(species: SpeciesId, kind: u8) -> Vec<Row> {
     }
     rows
 }
+
+/// **Can a class jump onto a mountable critter's back?** (The Hornback's
+/// "every class can get onto a cow's back", §1.) Stands one critter of `kind`
+/// still in its species' hunt, puts a fighter of `class` beside its flank,
+/// and holds jump while walking at it; the answer is how high the back was
+/// if the fighter ended up riding it, or `None`. The real jump, the real
+/// landing (`state::meet_the_critters`): the same question a person asks
+/// with the keyboard.
+pub fn lands_on(class: Class, species: SpeciesId, kind: u8) -> Option<Fx> {
+    // A person times the step: try every length of push toward it, held from
+    // the takeoff, and say yes if any of them lands on its back.
+    (0..40).find_map(|push| landed_with(class, species, kind, push))
+}
+
+/// One try at [`lands_on`]: jump from against its flank, holding the push
+/// toward it for `push` frames from the takeoff.
+fn landed_with(class: Class, species: SpeciesId, kind: u8, push: u32) -> Option<Fx> {
+    let mut w = World::hunt_of([class; MAX_PLAYERS], species);
+    w.players[1].health = 0;
+    let sp = species.get();
+    let slot = w.critters.iter().position(|c| c.kind == kind)?;
+    if let Some(p) = w.pack.as_mut() {
+        p.grace = u16::MAX;
+    }
+    // The body stood still at the middle, everything else away: the question
+    // is geometry.
+    let stand = |w: &mut World| {
+        for (i, c) in w.critters.iter_mut().enumerate() {
+            if i == slot {
+                c.pos = V3::ZERO;
+                c.vel = V3::ZERO;
+                c.yaw = 0;
+                c.state = is::PROWL;
+                c.timer = 0;
+            } else if c.present() {
+                c.pos = V3::new(Fx::from_int(-20), Fx::ZERO, Fx::from_int(i as i32 * 3 - 15));
+            }
+        }
+    };
+    stand(&mut w);
+    let body: Critter = w.critters[slot];
+    let half_wid = body.body(sp).half_wid;
+    w.players[0].pos = V3::new(
+        Fx::ZERO,
+        Fx::ZERO,
+        half_wid.add(crate::tuning::body_radius()).neg(),
+    );
+    for f in 0..120u32 {
+        stand(&mut w);
+        let mut press = if f < 40 { Input::SPACE } else { 0 };
+        if f < push {
+            press |= Input::W;
+        }
+        w.advance([Input::aimed(press, Input::QUARTER_TURN), Input::default()]);
+        if crate::critter::ridden(w.players[0].mount) == Some(slot) {
+            return Some(body.body(sp).crown());
+        }
+        if w.players[0].grounded && f > 4 {
+            return None;
+        }
+    }
+    let _ = (state::hitbox, Action::Free);
+    None
+}

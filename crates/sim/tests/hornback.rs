@@ -1027,3 +1027,94 @@ fn the_herd_leaves_when_the_bull_dies() {
         "every cow left"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Riding a cow
+// ---------------------------------------------------------------------------
+
+#[test]
+fn every_class_can_jump_onto_a_cow() {
+    for class in sim::class::ALL_CLASSES {
+        assert!(
+            sim::critcheck::lands_on(class, SpeciesId::HORNBACK, h::COW).is_some(),
+            "{} cannot get onto a cow's back",
+            class.name()
+        );
+    }
+}
+
+/// A fighter put on cow `i`'s back, at its middle, the herd calm and still.
+fn riding(class: Class) -> (World, usize) {
+    let mut w = hunt(class);
+    settle(&mut w);
+    let i = cows(&w)[0];
+    let sp = w.critters.sp();
+    w.players[0].mount = sim::critter::mount_of(i);
+    w.players[0].local = V3::ZERO;
+    w.players[0].pos = w.critters[i].back_point(sp, V3::ZERO);
+    w.players[0].grounded = true;
+    (w, i)
+}
+
+/// Ride until thrown or `frames` pass, crouching or not; how long it lasted.
+fn ride_for(w: &mut World, i: usize, frames: i32, brace: bool) -> Option<i32> {
+    let b = bull(w);
+    for f in 0..frames {
+        keep_up(w);
+        // The bull kept out of it: this is about the cow.
+        w.critters[b].pos = at(-20, 18);
+        w.critters[b].state = is::PROWL;
+        let press = if brace { Input::CROUCH } else { 0 };
+        w.advance([Input::aimed(press, 0), Input::default()]);
+        if h::ride::rider_of(&w.players[0]) != Some(i) {
+            return Some(f);
+        }
+    }
+    None
+}
+
+#[test]
+fn a_braced_rider_holds_the_first_buck_and_not_the_second() {
+    let first = knob(Knob::RidePatience);
+    let second = first + knob(Knob::SecondBuck);
+    let sp = sim::species::lookup(SpeciesId::HORNBACK).unwrap();
+    let buck = (sp.attack(h::BUCK).startup + sp.attack(h::BUCK).active) as i32;
+
+    // Unbraced, the first buck throws you.
+    let (mut w, i) = riding(Class::Champion);
+    let off = ride_for(&mut w, i, second + buck + 10, false).expect("thrown");
+    assert!(
+        off >= first && off < first + buck + 2,
+        "the first buck throws an unbraced rider ({off})"
+    );
+    assert!(
+        matches!(w.players[0].action, Action::HitStun { .. }),
+        "thrown, not stepped off"
+    );
+
+    // Braced, it holds the first and loses the second.
+    let (mut w, i) = riding(Class::Champion);
+    let off = ride_for(&mut w, i, second + buck + 10, true).expect("thrown in the end");
+    assert!(
+        off >= second && off < second + buck + 2,
+        "a braced rider holds the first and not the second ({off})"
+    );
+}
+
+#[test]
+fn a_rider_on_a_cow_is_out_of_its_stampede() {
+    // Riding a cow through a stampede: aloft, nothing touches you.
+    let (mut w, i) = riding(Class::Champion);
+    alarmed(&mut w);
+    let _ = i;
+    let hp = w.players[0].health;
+    throw(&mut w, h::BELLOW);
+    for _ in 0..200 {
+        w.advance([Input::aimed(Input::CROUCH, 0), Input::default()]);
+    }
+    let lost = hp - w.players[0].health;
+    assert!(
+        lost <= sim::tuning::throw_damage(),
+        "only a buck's fall, if anything ({lost})"
+    );
+}

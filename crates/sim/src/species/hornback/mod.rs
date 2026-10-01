@@ -216,7 +216,8 @@ crate::species_knobs! {
     BuckPitch,       "ride",     "First buck's pitch (turns)",            Fixed,  0,  fx(1,4);
     BuckHeave,       "ride",     "First buck's heave",                    Fixed,  0,  fx(4,1);
     SecondHarder,    "ride",     "The second is harder by (x)",           Fixed,  0,  fx(4,1);
-    BuckDamage,      "ride",     "A buck's fall costs",                   Int,    0,  400;
+    BuckSnap,        "ride",     "The rump snaps up over",                Frames, 1,  30;
+    BuckSettle,      "ride",     "...and drops back over",                Frames, 1,  60;
     CoopHealth,      "coop",     "Bull's health for two hunters (x)",     Fixed,  fx(1,1), fx(3,1);
     CartLanePeriod,  "crossing", "A migration wave every",                Frames, 0,  3600;
     CartLaneWarn,    "crossing", "Drawn on the road this long before",    Frames, 0,  900;

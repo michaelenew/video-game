@@ -182,6 +182,25 @@ pub mod pose {
 /// Not in a ring slot.
 pub const NO_SLOT: u8 = u8::MAX;
 
+/// **A fighter's mount byte for riding critter `i`**: the creature slot
+/// bits read two, past either creature (`monster::mount_of`), so nothing
+/// that reads a monster's mount mistakes it for one.
+pub const fn mount_of(i: usize) -> u8 {
+    crate::monster::mount_of(RIDDEN_SLOT, i)
+}
+
+/// The critter a fighter's mount byte names, if it names one.
+pub const fn ridden(mount: u8) -> Option<usize> {
+    if mount != NO_PART && crate::monster::mount_slot(mount) == RIDDEN_SLOT {
+        Some(crate::monster::mount_part(mount))
+    } else {
+        None
+    }
+}
+
+/// The creature-slot value a mount byte carries for a critter.
+const RIDDEN_SLOT: usize = 2;
+
 /// One small body. Forty-eight bytes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Critter {
@@ -332,6 +351,27 @@ impl Critter {
         }
     }
 
+    /// **Where a rider standing at `local` on its back is, in the world**:
+    /// `local` in the body's own frame (`x` forward, `z` across), on the top
+    /// of the box, carried through the pitch and lift its species says the
+    /// back has this frame (`PackMind::surface`). The one description of a
+    /// critter's back, read by the ride and by the renderer.
+    pub fn back_point(&self, sp: &Species, local: V3) -> V3 {
+        let body = self.body(sp);
+        let (pitch, heave) = match sp.pack {
+            Some(decl) => decl.mind.surface(self),
+            None => (Fx::ZERO, Fx::ZERO),
+        };
+        let x = local.x.mul(cos_turns(pitch));
+        let y = body.height.add(local.x.mul(sin_turns(pitch))).add(heave);
+        body.to_world(V3::new(x, y, local.z))
+    }
+
+    /// Is a kind of critter one a fighter can stand on?
+    pub fn rideable(&self, sp: &Species) -> bool {
+        self.alive() && sp.kind(self.kind).mountable
+    }
+
     /// The perch as fixed point, in the part's frame.
     pub fn perch_local(&self) -> V3 {
         let cm = |v: i16| Fx::ratio(v as i32, 100);
@@ -478,6 +518,15 @@ impl Body {
             d.x.mul(self.cos).add(d.z.mul(self.sin)),
             d.y,
             d.z.mul(self.cos).sub(d.x.mul(self.sin)),
+        )
+    }
+
+    /// A direction in the body's frame, in the world.
+    pub fn dir_to_world(&self, local: V3) -> V3 {
+        V3::new(
+            local.x.mul(self.cos).sub(local.z.mul(self.sin)),
+            local.y,
+            local.x.mul(self.sin).add(local.z.mul(self.cos)),
         )
     }
 

@@ -95,13 +95,15 @@ pub mod bull {
     pub const CHAINED: u8 = 1 << 3;
 }
 
-/// Bits of a cow's [`Critter::role`]: the low seven count frames a fighter
+/// Bits of a cow's [`Critter::role`]: the low six count frames a fighter
 /// has stood in its rear wedge, as its own glances saw it.
 pub mod cow {
     /// It has taken its nerve's worth and is leaving by the ford.
     pub const BOLTED: u8 = 1 << 7;
+    /// The buck it has out is its second, the harder one: see `ride`.
+    pub const HARD: u8 = 1 << 6;
     /// The counter's bits.
-    pub const WEDGE: u8 = 0x7F;
+    pub const WEDGE: u8 = 0x3F;
 }
 
 /// The herd's five states (§5), and gone.
@@ -1011,6 +1013,10 @@ impl PackMind for Mind {
     fn spares(&self, pack: &Pack, critters: &Critters, i: usize, who: usize) -> bool {
         // Cows do not tread on the fallen (§2): one stampede, one knockdown.
         critters[i].act == STAMPEDE && trampled(pack, who)
+    }
+
+    fn surface(&self, c: &Critter) -> (Fx, Fx) {
+        super::ride::surface(c)
     }
 
     fn mirrored(&self, c: &Critter) -> bool {

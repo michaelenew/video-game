@@ -604,7 +604,7 @@ fn call_the_herd(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize) {
     set_half(pack, memo::CLOCKS, 0, knob(Knob::RunFrames));
     let windup = c.timer;
     for c in w.critters.iter_mut() {
-        if !with_herd(c) || c.state != is::PROWL || ridden(w.players.as_slice(), c) {
+        if !with_herd(c) || c.state != is::PROWL {
             continue;
         }
         c.state = is::STARTUP;
@@ -612,18 +612,6 @@ fn call_the_herd(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize) {
         c.timer = windup.max(1);
         c.set(flag::HIT_USED, false);
     }
-}
-
-/// Is this cow carrying somebody?
-fn ridden(players: &[crate::state::Player], c: &Critter) -> bool {
-    let _ = c;
-    players
-        .iter()
-        .any(|p| p.health > 0 && super::ride::rider_of(p).is_some())
-        && players
-            .iter()
-            .filter_map(super::ride::rider_of)
-            .any(|i| i == c.slot as usize && false)
 }
 
 /// The obstacles in a lane: every solid that stops a cow, every stone, and
@@ -1001,7 +989,13 @@ fn bodies(w: &mut World) {
     let radius = t::body_radius();
     for c in w.critters.iter().filter(|c| c.alive()) {
         let body = c.body(sp);
-        for p in w.players.iter_mut().filter(|p| p.health > 0 && !p.aboard()) {
+        // On the floor only: somebody in the air is getting on its back, or
+        // over it.
+        for p in w
+            .players
+            .iter_mut()
+            .filter(|p| p.health > 0 && !p.aboard() && p.grounded)
+        {
             if p.pos.y.raw() >= body.crown().raw() {
                 continue;
             }

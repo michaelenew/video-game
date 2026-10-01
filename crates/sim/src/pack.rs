@@ -435,6 +435,18 @@ pub trait PackMind {
         false
     }
 
+    /// **How a mountable critter's back is moving under a rider**: its pitch
+    /// about its middle, in turns (nose up is positive), and how far it is
+    /// lifted. The default is level and still. The Hornback's cow bucks: the
+    /// rump kicks up, and a rider's grip is tested against that
+    /// acceleration (`state::step_critter_rider`), as a rider's is on a
+    /// monster. Must be a pure function of the critter -- it is posed from
+    /// its state and clock, which are in the snapshot.
+    fn surface(&self, c: &Critter) -> (Fx, Fx) {
+        let _ = c;
+        (Fx::ZERO, Fx::ZERO)
+    }
+
     /// **Frames until the soonest hit the pack could land**, if the species
     /// knows better than the generic count ([`frames_until_free`]), which
     /// is a pack's of tokens. The Hornback's bull takes no token: what it
