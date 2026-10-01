@@ -31,6 +31,7 @@ mod palette;
 mod picker;
 mod platform;
 mod settings;
+mod signs;
 mod species;
 mod trophies;
 
@@ -157,6 +158,7 @@ fn main() {
                 beast::setup,
                 beast::setup_signs,
                 critters::setup,
+                signs::setup,
                 ground::setup,
                 hud::setup,
                 hud::setup_picker,
@@ -224,6 +226,7 @@ fn main() {
             (
                 critters::place,
                 critters::overlay,
+                signs::place,
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
@@ -571,6 +574,10 @@ fn shot_pack_move(w: &mut World, name: &str) {
         }
         return;
     }
+    if sp.id == sim::species::SpeciesId::HORNBACK {
+        shot_herd_move(w, kind);
+        return;
+    }
     let mut chosen = None;
     for (i, c) in w.critters.iter_mut().enumerate() {
         if !c.alive() {
@@ -612,6 +619,116 @@ fn shot_pack_move(w: &mut World, name: &str) {
     {
         c.set(flag::TOKEN, true);
     }
+}
+
+/// [`shot_pack_move`] for the Hornback herd, whose moves are about where
+/// things stand: the charge at player one with a boulder three metres behind
+/// them, so the lane is drawn ending in the rock and the rock ringed; the
+/// bellow with the herd home behind the bull and its lane drawn through
+/// player one, lees and all; the close moves from their own range; a cow's
+/// kick with player one behind it; a buck with player one on its back. The
+/// herd is roused and its grace spent, so the rules draw what they would.
+fn shot_herd_move(w: &mut World, kind: u8) {
+    use sim::critter::{flag, is};
+    use sim::species::hornback as h;
+    let sp = w.critters.sp();
+    let m = sp.attack(kind);
+    // The boulders down, and the herd roused.
+    for _ in 0..2 {
+        w.advance([SimInput::default(); sim::state::MAX_PLAYERS]);
+    }
+    if let Some(pack) = w.pack.as_mut() {
+        pack.mood = sim::pack::mood::HUNTING;
+        pack.grace = 0;
+    }
+    w.advance([SimInput::default(); sim::state::MAX_PLAYERS]);
+    if let Some(pack) = w.pack.as_mut() {
+        pack.grace = 0;
+    }
+    let home = w.pack.map_or(sim::V3::ZERO, |p| p.home);
+    let Some(b) = w.critters.iter().position(|c| c.kind == h::BULL) else {
+        return;
+    };
+    let rock = sim::hazard::all(&w.lore)
+        .find(|(_, hz)| hz.index() == h::BOULDER)
+        .map(|(_, hz)| hz.centre());
+    let flat = |v: sim::V3| sim::V3::new(v.x, sim::Fx::ZERO, v.z);
+    let face = |from: sim::V3, to: sim::V3| sim::pack::yaw_of(to.sub(from));
+    let mut me = w.players[0].pos;
+    let mut body = b;
+    match kind {
+        h::CHARGE => {
+            // In front of a rock, on the line from the bull through you.
+            // Laid along +x, so a camera turned a quarter (`SHOT_YAW=1.57`)
+            // sees the whole lane across the screen.
+            if let Some(r) = rock {
+                let out = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
+                me = flat(r).add(out.scale(sim::Fx::from_int(4)));
+                let bull_at = me.add(out.scale(sim::Fx::from_int(11)));
+                w.critters[b].pos = bull_at;
+                w.critters[b].yaw = face(bull_at, me);
+            }
+        }
+        h::BELLOW => {
+            // The herd home, the bull between it and player one.
+            let out = flat(me.sub(home)).normalized();
+            let bull_at = me.sub(out.scale(sim::Fx::from_int(10)));
+            w.critters[b].pos = bull_at;
+            w.critters[b].yaw = face(bull_at, me);
+        }
+        h::KICK | h::BUCK => {
+            let Some(i) = w
+                .critters
+                .iter()
+                .position(|c| c.kind == h::COW && c.alive())
+            else {
+                return;
+            };
+            body = i;
+            let cow = w.critters[i];
+            if kind == h::KICK {
+                me = cow.pos.sub(cow.facing().scale(sim::Fx::from_int(3)));
+            } else {
+                w.players[0].mount = sim::critter::mount_of(i);
+                w.players[0].local = sim::V3::ZERO;
+                me = cow.back_point(sp, sim::V3::ZERO);
+            }
+        }
+        _ => {
+            // The close moves from where they are thrown: in front, or at the
+            // flank for the shoulder.
+            let bull_at = sim::V3::new(
+                me.x.add(m.ideal_range).add(sim::Fx::from_int(2)),
+                sim::Fx::ZERO,
+                me.z,
+            );
+            w.critters[b].pos = bull_at;
+            w.critters[b].yaw = face(bull_at, me);
+            if kind == h::SHOULDER {
+                w.critters[b].yaw = face(
+                    bull_at,
+                    bull_at.add(sim::V3::new(sim::Fx::ZERO, sim::Fx::ZERO, sim::Fx::ONE)),
+                );
+                w.critters[b].pos =
+                    sim::V3::new(me.x.add(sim::Fx::from_int(2)), sim::Fx::ZERO, me.z);
+            }
+            if kind == h::TRAMPLE {
+                w.players[0].action = sim::state::Action::Stagger { left: 40 };
+            }
+        }
+    }
+    w.players[0].pos = me;
+    if let Some(pack) = w.pack.as_mut() {
+        pack.seen[0].pos = me;
+        pack.seen[0].vel = sim::V3::ZERO;
+        pack.seen[0].alive = true;
+    }
+    let c = &mut w.critters[body];
+    c.vel = sim::V3::ZERO;
+    c.state = is::STARTUP;
+    c.act = kind;
+    c.timer = m.startup.max(1);
+    c.set(flag::HIT_USED, false);
 }
 
 /// `SHOT_WEIGHT=n` starts every Bulwark's shield holding `n`, so a capture can

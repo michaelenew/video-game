@@ -33,9 +33,12 @@ pub enum Piece {
     Leg(u8),
     Tail,
     Eyes,
+    /// A horn, left or right: only for a kind whose paint has horns, and only
+    /// while its species says that horn is whole.
+    Horn(u8),
 }
 
-const PIECES: [Piece; 8] = [
+const PIECES: [Piece; 10] = [
     Piece::Body,
     Piece::Head,
     Piece::Leg(0),
@@ -44,6 +47,8 @@ const PIECES: [Piece; 8] = [
     Piece::Leg(3),
     Piece::Tail,
     Piece::Eyes,
+    Piece::Horn(0),
+    Piece::Horn(1),
 ];
 
 /// One drawable piece: which critter slot, which piece. A fixed pool spawned
@@ -56,6 +61,8 @@ pub struct Bit(pub usize, pub Piece);
 pub struct Coats {
     /// By species id, then by kind: `(hide, eyes)`.
     by: Vec<Vec<(Handle<StandardMaterial>, Handle<StandardMaterial>)>>,
+    /// By species id, then by kind: its horns, if it has any.
+    horns: Vec<Vec<Option<Handle<StandardMaterial>>>>,
     fallback: (Handle<StandardMaterial>, Handle<StandardMaterial>),
 }
 
@@ -69,6 +76,13 @@ impl Coats {
             .get(species.0 as usize)
             .and_then(|kinds| kinds.get(kind as usize))
             .unwrap_or(&self.fallback)
+    }
+
+    fn horn(&self, species: kinds::SpeciesId, kind: u8) -> Option<&Handle<StandardMaterial>> {
+        self.horns
+            .get(species.0 as usize)
+            .and_then(|kinds| kinds.get(kind as usize))
+            .and_then(Option::as_ref)
     }
 }
 
@@ -89,8 +103,14 @@ pub fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mut by = vec![Vec::new(); kinds::COUNT];
+    let mut horns = vec![Vec::new(); kinds::COUNT];
     for sp in kinds::all() {
         let look = crate::species::look(sp.id);
+        horns[sp.id.0 as usize] = look
+            .critters
+            .iter()
+            .map(|c| c.horns.map(|paint| material(&mut materials, paint)))
+            .collect();
         by[sp.id.0 as usize] = look
             .critters
             .iter()
@@ -118,7 +138,11 @@ pub fn setup(
             ));
         }
     }
-    commands.insert_resource(Coats { by, fallback });
+    commands.insert_resource(Coats {
+        by,
+        horns,
+        fallback,
+    });
 }
 
 /// A critter between the last two snapshots: where it is, which way it faces.
@@ -162,11 +186,14 @@ struct Held {
     left: f32,
     /// Off the floor: a leap's arc.
     lift: f32,
-    /// The head turned sideways, in radians: the maul.
+    /// The head turned sideways, in radians: the maul, the hook's cock.
     head_turn: f32,
+    /// The head dropped, in radians: the charge's lock, the guard; negative
+    /// is thrown back -- the bellow.
+    head_dip: f32,
 }
 
-fn held(sp: &Species, c: &Critter) -> Held {
+fn held(sp: &Species, c: &Critter, stance: Option<crate::species::Stance>) -> Held {
     use sim::critter::pose;
     let clock = c.clock as f32;
     let speed = Vec2::new(c.vel.x.to_f32_for_render(), c.vel.z.to_f32_for_render()).length();
@@ -181,6 +208,7 @@ fn held(sp: &Species, c: &Critter) -> Held {
         left: 1.0,
         lift: 0.0,
         head_turn: 0.0,
+        head_dip: 0.0,
     };
     // **The move's stock pose** (`sim::critter::pose`), named by its clip
     // number: a critter has no clips of its own. How far through the windup
@@ -248,6 +276,90 @@ fn held(sp: &Species, c: &Critter) -> Held {
             h.pitch = 0.05;
             h.head_turn = 0.7;
         }
+        // **The paw**: the forequarter rising and coming down, twice, the
+        // head up and following you; then, from the lock, dropped level --
+        // the frame the lane goes red. Running, it stays down.
+        (is::STARTUP, pose::PAW) => {
+            let lock = sim::critter::stat(sp, c.kind, CritterField::Lock).max(1) as f32;
+            if (c.timer as f32) <= lock {
+                h.head_dip = 0.55;
+                h.pitch = -0.05;
+                h.drop = 0.05 * length;
+            } else {
+                let paws = 1.0 - (c.timer as f32 - lock) / (a.startup as f32 - lock).max(1.0);
+                h.pitch = 0.22 * (paws * std::f32::consts::TAU).sin().abs();
+                h.stride = 0.0;
+            }
+        }
+        (is::ACTIVE, pose::PAW) => {
+            h.head_dip = 0.55;
+            h.pitch = -0.08;
+            h.stride = clock * 0.3;
+        }
+        // **The hook**: head low and cocked toward the side the horn comes
+        // from; then the horns sweep up through.
+        (is::STARTUP, pose::HOOK) => {
+            let side = if mirrored(sp, c) { -1.0 } else { 1.0 };
+            h.head_dip = 0.5 * through;
+            h.head_turn = 0.55 * side * through;
+            h.drop = 0.06 * length * through;
+        }
+        (is::ACTIVE, pose::HOOK) => {
+            let side = if mirrored(sp, c) { -1.0 } else { 1.0 };
+            h.head_dip = -0.35;
+            h.head_turn = -0.45 * side;
+        }
+        // **The shoulder**: leaning away from the side it will throw, then
+        // the flank coming across.
+        (is::STARTUP, pose::LEAN) => {
+            let side = if mirrored(sp, c) { -1.0 } else { 1.0 };
+            h.roll = -0.22 * side * through;
+            h.stride = 0.0;
+        }
+        (is::ACTIVE, pose::LEAN) => {
+            let side = if mirrored(sp, c) { -1.0 } else { 1.0 };
+            h.roll = 0.3 * side;
+        }
+        // **The guard**: low and square, horns forward.
+        (is::STARTUP | is::ACTIVE, pose::BRACE) => {
+            h.head_dip = 0.45;
+            h.drop = 0.08 * length;
+            h.stride = 0.0;
+        }
+        // **The bellow**: head thrown back, neck up -- the loudest thing in
+        // the fight, and the biggest silhouette.
+        (is::STARTUP | is::ACTIVE, pose::BELLOW) => {
+            h.head_dip = -0.7 * through.max(0.35);
+            h.pitch = 0.1 * through;
+            h.stride = 0.0;
+        }
+        // **The cow's kick**: head down and tail up, then the rump up and
+        // both hind legs straight back.
+        (is::STARTUP, pose::KICK) => {
+            h.head_dip = 0.4 * through;
+            h.tail = 1.0;
+            h.stride = 0.0;
+        }
+        (is::ACTIVE, pose::KICK) => {
+            h.pitch = -0.3;
+            h.head_dip = 0.4;
+            h.tail = 1.0;
+        }
+        // **The buck**: head down; then the back itself moves (the surface,
+        // below), which is what throws a rider.
+        (is::STARTUP | is::ACTIVE, pose::BUCK) => {
+            h.head_dip = 0.5;
+            h.stride = 0.0;
+        }
+        // Flat out.
+        (is::ACTIVE, pose::GALLOP) => {
+            h.pitch = -0.05;
+            h.head_dip = 0.15;
+            h.stride = clock * 0.28;
+        }
+        (is::STARTUP, pose::GALLOP) => {
+            h.head_dip = 0.2 * through;
+        }
         // Any other lunge: stretched out, nose up a little.
         (is::ACTIVE, _) => {
             h.pitch = 0.15;
@@ -275,7 +387,31 @@ fn held(sp: &Species, c: &Critter) -> Held {
         }
         _ => {}
     }
+    // **The back as the ride feels it** (`PackMind::surface`): a cow's buck
+    // pitches and lifts the box a rider stands on, and it is drawn moving as
+    // the grip test reads it.
+    if let Some(decl) = sp.pack {
+        let (pitch, heave) = decl.mind.surface(c);
+        h.pitch += pitch.to_f32_for_render() * std::f32::consts::TAU;
+        h.lift += heave.to_f32_for_render();
+    }
+    // And whatever its species says about a stance of its own: the stunned
+    // bull, head in the dirt.
+    if let Some(stance) = stance {
+        if let Some(st) = stance(c) {
+            h.pitch = st.pitch;
+            h.roll = st.roll;
+            h.head_dip = st.head_dip;
+            h.drop = st.drop * length;
+            h.stride = 0.0;
+        }
+    }
     h
+}
+
+/// Is a critter's move thrown to its other side (`PackMind::mirrored`)?
+fn mirrored(sp: &Species, c: &Critter) -> bool {
+    sp.pack.is_some_and(|decl| decl.mind.mirrored(c))
 }
 
 /// Put every piece of every critter where the snapshot says.
@@ -301,7 +437,8 @@ pub fn place(
             continue;
         }
         let show = shown(&prev[slot], c, alpha);
-        let pose = held(sp, c);
+        let look = crate::species::look(cur.species);
+        let pose = held(sp, c, look.stance);
         // Sized from `Critter::body`, the one description the hit test and
         // the aiming ray read -- so the Big One reared to howl is drawn the
         // height it is hit at.
@@ -324,15 +461,36 @@ pub fn place(
                 Quat::IDENTITY,
             ),
             Piece::Head => (
-                put(Vec3::new(l * 0.38, h * 0.28, 0.0)),
+                put(Vec3::new(l * 0.38, h * 0.28 - pose.head_dip * h * 0.3, 0.0)),
                 Vec3::new(l * 0.24, h * 0.36, w * 0.7),
-                Quat::from_rotation_x(pose.head_turn),
+                Quat::from_rotation_x(pose.head_turn) * Quat::from_rotation_z(-pose.head_dip),
             ),
             Piece::Eyes => (
-                put(Vec3::new(l * 0.5, h * 0.36, 0.0)),
+                put(Vec3::new(l * 0.5, h * 0.36 - pose.head_dip * h * 0.3, 0.0)),
                 Vec3::new(l * 0.04, h * 0.08, w * 0.5),
-                Quat::from_rotation_x(pose.head_turn),
+                Quat::from_rotation_x(pose.head_turn) * Quat::from_rotation_z(-pose.head_dip),
             ),
+            Piece::Horn(n) => {
+                let side = if n == 0 { 1.0 } else { -1.0 };
+                let whole = look
+                    .horns
+                    .is_some_and(|f| f(&sim.cur, slot).is_some_and(|h| h[n as usize]));
+                if !whole || coats.horn(cur.species, c.kind).is_none() {
+                    *visible = Visibility::Hidden;
+                    continue;
+                }
+                let turn =
+                    Quat::from_rotation_x(pose.head_turn) * Quat::from_rotation_z(-pose.head_dip);
+                (
+                    put(Vec3::new(
+                        l * 0.42,
+                        h * 0.48 - pose.head_dip * h * 0.3,
+                        side * w * 0.55,
+                    )),
+                    Vec3::new(l * 0.07, h * 0.07, w * 0.75),
+                    turn * Quat::from_rotation_x(side * 0.5),
+                )
+            }
             Piece::Tail => {
                 let lift = Quat::from_rotation_z(-pose.tail);
                 let root = Vec3::new(-l * 0.39, h * 0.2, 0.0);
@@ -368,9 +526,11 @@ pub fn place(
         };
         *visible = Visibility::Inherited;
         let (hide, eyes) = coats.of(cur.species, c.kind);
+        let horn = coats.horn(cur.species, c.kind);
         let wanted = match piece {
             Piece::Eyes => eyes,
             Piece::Tail if c.has(flag::TOKEN) => eyes,
+            Piece::Horn(_) => horn.unwrap_or(hide),
             _ => hide,
         };
         if material.0 != *wanted {
@@ -388,7 +548,13 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
     let Some(pack) = sim.cur.pack else { return };
     let sp = pack.sp();
     let flat = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
-    for c in sim.cur.critters.iter().filter(|c| c.alive()) {
+    for (slot, c) in sim
+        .cur
+        .critters
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.alive())
+    {
         // The box the hit test reads, corner to corner.
         let body = c.body(sp);
         let (lo, hi) = (body.min(), body.max());
@@ -409,7 +575,7 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
             gizmos.line(corner(x, lo.y, z), corner(x, hi.y, z), colour);
         }
         // The bite out this frame, or the one winding up.
-        if let Some(t) = c.telegraph(sp) {
+        if let Some(t) = sim::pack::telegraph(Some(&pack), &sim.cur.critters, slot) {
             let col = if t.live { HIT } else { WINDUP };
             let at = fx3(t.anchor);
             for y in [t.low, t.high] {

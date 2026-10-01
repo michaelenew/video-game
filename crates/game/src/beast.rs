@@ -549,8 +549,9 @@ pub fn signs(
             if sim.cur.pack.is_none() || !c.alive() {
                 return None;
             }
-            return c
-                .telegraph(crowd.sp())
+            // As its species says it really is: the charge's lane cut short
+            // at the rock that will stop it (`pack::telegraph`).
+            return sim::pack::telegraph(sim.cur.pack.as_ref(), crowd, slot - MAX_MONSTERS)
                 .filter(|t| !(t.live && c.has(sim::critter::flag::HIT_USED)));
         }
         let beast = alive[slot];
