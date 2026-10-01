@@ -903,3 +903,17 @@ fn a_bulwark_blocking_the_tongue_gives_it_the_shield() {
         "the shield is planted where it was spat"
     );
 }
+
+#[test]
+fn a_dead_toad_is_a_won_hunt_with_its_trophy_and_its_temper() {
+    // The trophy is written from `hunt_won` (world W1), and a temper is the
+    // same toad fought cleverer (W2): both have to name the Mireback.
+    let mut w = hunt(Class::Champion).tempered(2);
+    assert_eq!(w.arena().id, sim::arena::ArenaId::MIREBACK);
+    assert_eq!(w.hunt_won(), None);
+    w.monster_mut().unwrap().health = 0;
+    w.advance([Input::default(); MAX_PLAYERS]);
+    let (beaten, at) = w.hunt_won().expect("a dead toad is a won hunt");
+    assert_eq!(beaten[0], Some(SpeciesId::MIREBACK));
+    assert_eq!(at, 2);
+}
