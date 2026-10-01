@@ -27,7 +27,7 @@ pub mod range;
 
 // pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -81,8 +81,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         // ArenaId::GNAWERS => &gnawers::DRESSING,
 
         // ArenaId::HORNBACK => &hornback::DRESSING,
-
-        // ArenaId::MIREBACK => &mireback::DRESSING,
+        ArenaId::MIREBACK => &mireback::DRESSING,
 
         // ArenaId::SANDMAW => &sandmaw::DRESSING,
 

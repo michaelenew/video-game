@@ -518,6 +518,9 @@ fn shot_move(w: &mut World) {
     beast.brain.seen = me;
     beast.brain.grace = 0;
     beast.brain.think_left = u16::MAX;
+    // A move thrown at a point on the floor -- a lob, a tongue that stops
+    // where it was aimed -- is aimed at them.
+    beast.aim_at(me);
     beast.doing = sim::monster::Doing::Startup {
         kind: kind as u8,
         left: m.startup,
