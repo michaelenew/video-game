@@ -7,7 +7,7 @@
 //! the Veilstalker's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 475] = [
+pub const KNOBS: [i32; 476] = [
            65536, // veilstalker.size_(x) = 1
             4500, // veilstalker.health = 4500
              500, // veilstalker.breakable_part_health = 500
@@ -125,6 +125,7 @@ pub const KNOBS: [i32; 475] = [
            19661, // veilstalker_·_mind.desperate_below_health_(x) = 0.3
                2, // veilstalker_·_retreat.leaves_after_hits = 2
                3, // veilstalker_·_retreat.desperate,_leaves_after_hits = 3
+            8192, // veilstalker_·_retreat.off_a_wall,_turns_toward_open_floor_by_(turns) = 0.125
                8, // veilstalker_·_retreat.blows_closer_than_this_are_one_hit = 8
               40, // veilstalker_·_retreat.a_burst_in_the_recoil_staggers_it_for = 40
           786432, // veilstalker_·_retreat.bounds_away_this_far = 12

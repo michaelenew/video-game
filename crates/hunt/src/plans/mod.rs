@@ -101,7 +101,6 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         SpeciesId::PAIR => Some(&pair::CARD),
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::CARD),
-
         SpeciesId::VEILSTALKER => Some(&veilstalker::CARD),
 
         // SpeciesId::MANTIS => Some(&mantis::CARD),

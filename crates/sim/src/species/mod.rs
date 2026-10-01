@@ -132,7 +132,6 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::PAIR => Some(&pair::SPECIES),
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
-
         SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
 
         // SpeciesId::MANTIS => Some(&mantis::SPECIES),
@@ -358,6 +357,11 @@ pub struct FightDecl {
     /// renderer draws it at, and what the report and the scripted hunter call
     /// visible. `None` is always fully. The Veilstalker's veil.
     pub shown: Option<fn(&crate::state::World, usize, usize) -> Fx>,
+    /// **A body drawn that is not in the world**, and how strongly: posed,
+    /// placed and drawn as a creature is -- its parts and its floor marker --
+    /// with no hurtbox, nothing to stand on and no brain. The Veilstalker's
+    /// mimic, a decloak with nothing in it. `None` is none.
+    pub apparition: Option<fn(&crate::state::World) -> Option<(crate::monster::Monster, Fx)>>,
     /// **What it draws on the floor besides its bodies' telegraphs**: a
     /// stampede's lane and its lees, the solid a charge will stop at, a
     /// guard. See [`crate::sign`]. `None` draws nothing more.
@@ -555,6 +559,7 @@ impl FightDecl {
         bumped: None,
         frame: None,
         shown: None,
+        apparition: None,
         signs: None,
         appetite: None,
         prowl_to: None,

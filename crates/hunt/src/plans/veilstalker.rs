@@ -229,9 +229,8 @@ fn scene_of<'a>(
 
 /// The creature's slot, if there is one alive.
 fn slot_of(w: &World) -> Option<usize> {
-    (0..w.monsters.len()).find(|s| {
-        w.monsters[*s].is_some_and(|m| m.species == vs::SPECIES.id && m.alive())
-    })
+    (0..w.monsters.len())
+        .find(|s| w.monsters[*s].is_some_and(|m| m.species == vs::SPECIES.id && m.alive()))
 }
 
 /// The middle of one part, where it is drawn.
@@ -429,7 +428,10 @@ impl Plan for Veilstalker {
         if let Some(at) = body.or(paint) {
             self.known = Some((flat(at), now));
         }
-        if self.known.is_some_and(|(_, f)| now.saturating_sub(f) > STALE) {
+        if self
+            .known
+            .is_some_and(|(_, f)| now.saturating_sub(f) > STALE)
+        {
             self.known = None;
         }
         let prints = prints_seen(&seen, self.who, view, &scene);
@@ -500,7 +502,11 @@ impl Plan for Veilstalker {
                 m.map(|m| m.doing),
                 m.map_or(0.0, |m| m.pos.x.to_f32_for_render()),
                 m.map_or(0.0, |m| m.pos.z.to_f32_for_render()),
-                self.known.map(|(a, f)| (a.x.to_f32_for_render(), a.z.to_f32_for_render(), now - f)),
+                self.known.map(|(a, f)| (
+                    a.x.to_f32_for_render(),
+                    a.z.to_f32_for_render(),
+                    now - f
+                )),
                 self.decloak.map(|d| (d.rear, d.empty, now - d.began)),
                 prints.len(),
                 self.intent,
@@ -592,7 +598,12 @@ impl Veilstalker {
         // read -- over it, now.
         let rake = vs::SPECIES.attack(vs::RAKE);
         let beside = wide_flat_dist(d.at, me.pos).raw()
-            <= rake.hit_x.add(rake.hit_radius).add(sim::tuning::body_radius()).add(MARGIN).raw();
+            <= rake
+                .hit_x
+                .add(rake.hit_radius)
+                .add(sim::tuning::body_radius())
+                .add(MARGIN)
+                .raw();
         if beside && !d.empty {
             self.intent = JUMP;
             if me.grounded && self.leap_left == 0 {
@@ -703,7 +714,8 @@ impl Veilstalker {
                 let near = trunks(w)
                     .into_iter()
                     .filter(|(c, wd)| {
-                        wide_flat_dist(*c, me.pos).raw() <= COVER_NEAR.add(crate::HALF.mul(*wd)).raw()
+                        wide_flat_dist(*c, me.pos).raw()
+                            <= COVER_NEAR.add(crate::HALF.mul(*wd)).raw()
                     })
                     .min_by_key(|(c, _)| wide_flat_dist(*c, me.pos).raw());
                 let flight = wide_flat_dist(d.at, me.pos)
@@ -716,7 +728,8 @@ impl Veilstalker {
                 }
                 if let Some((c, wd)) = near {
                     // The far side of the trunk from it.
-                    let behind = c.add(unit(c.sub(d.at), V3::ZERO).scale(crate::HALF.mul(wd).add(Fx::ONE)));
+                    let behind =
+                        c.add(unit(c.sub(d.at), V3::ZERO).scale(crate::HALF.mul(wd).add(Fx::ONE)));
                     self.intent = COVER;
                     let dir = unit(behind.sub(me.pos), V3::ZERO);
                     let there = wide_flat_dist(behind, me.pos).raw() < Fx::ratio(4, 10).raw();
@@ -782,7 +795,8 @@ impl Veilstalker {
     /// **Out of the smoke**, at right angles to the way it came in.
     fn smoke(&mut self, w: &World, seen: &World, me: &Player) -> Option<Input> {
         let inside = sim::hazard::all(&seen.lore).find(|(_, h)| {
-            h.index() == fight::CLOUD && wide_flat_dist(h.centre(), me.pos).raw() <= h.radius().raw()
+            h.index() == fight::CLOUD
+                && wide_flat_dist(h.centre(), me.pos).raw() <= h.radius().raw()
         });
         let Some((_, h)) = inside else {
             self.smoke_in = Some(me.pos);
@@ -797,7 +811,11 @@ impl Veilstalker {
         } else {
             side.scale(Fx::ONE.neg())
         };
-        let out = keep_in(w, me.pos, first_clear(w, me.pos, &[out, out.scale(Fx::ONE.neg())]));
+        let out = keep_in(
+            w,
+            me.pos,
+            first_clear(w, me.pos, &[out, out.scale(Fx::ONE.neg())]),
+        );
         self.intent = LEAVE;
         Some(self.turn_and(me, None, out, 0))
     }
@@ -817,7 +835,10 @@ impl Veilstalker {
         let m = seen.monsters[slot]?;
         let open = matches!(
             m.doing,
-            Doing::Recovery { .. } | Doing::Flinch { .. } | Doing::Stumble { .. } | Doing::Toppled { .. }
+            Doing::Recovery { .. }
+                | Doing::Flinch { .. }
+                | Doing::Stumble { .. }
+                | Doing::Toppled { .. }
         ) && !matches!(
             m.doing.attacking(),
             Some(vs::RETREAT | vs::CLIMB | vs::SMOKE | vs::MIMIC)
@@ -961,7 +982,13 @@ impl Veilstalker {
         // A retreat seen: follow, for a while.
         if let Some(m) = slot.and_then(|s| seen.monsters[s]) {
             if m.doing.attacking() == Some(vs::RETREAT)
-                && body_seen(seen, self.who, wire(me, self.look, me.pos, 0), &scene_of(seen, &sim::stones::gather(&seen.players), &seen.terrain())).is_some()
+                && body_seen(
+                    seen,
+                    self.who,
+                    wire(me, self.look, me.pos, 0),
+                    &scene_of(seen, &sim::stones::gather(&seen.players), &seen.terrain()),
+                )
+                .is_some()
             {
                 self.follow_left = 300;
             }
@@ -1121,12 +1148,11 @@ impl Tally for VeilTally {
             self.paint_frames += 1;
         }
         let who = (now.brain.target as usize).min(after.players.len() - 1);
-        let began = |k: u8| {
-            matches!(now.doing, Doing::Startup { kind, left } if kind == k && left == vs::SPECIES.attack(k).startup)
-        };
+        let began = |k: u8| matches!(now.doing, Doing::Startup { kind, left } if kind == k && left == vs::SPECIES.attack(k).startup);
         // A strike beginning: its decloak's frames on its target's screen.
         if let Doing::Startup { kind, left } = now.doing {
-            if fight::strikes(kind) && kind != vs::MIMIC && left == vs::SPECIES.attack(kind).startup {
+            if fight::strikes(kind) && kind != vs::MIMIC && left == vs::SPECIES.attack(kind).startup
+            {
                 self.decloaks += 1;
                 if let Some(v) = look(who) {
                     self.commit = Some((who, v, 0, kind));
@@ -1150,7 +1176,10 @@ impl Tally for VeilTally {
                     rig.bone[vs::bones::HEAD].at,
                     rig.bone[vs::bones::ROOT].at,
                 ];
-                if points.iter().any(|p| in_view(target, v, *p, HALF_VIEW, &scene)) {
+                if points
+                    .iter()
+                    .any(|p| in_view(target, v, *p, HALF_VIEW, &scene))
+                {
                     self.commit = Some((target, v, seen + 1, kind));
                 }
             }
@@ -1178,8 +1207,13 @@ impl Tally for VeilTally {
             self.retreats += 1;
             self.retreat_at = Some(after.frame);
         }
-        if matches!(was.doing, Doing::Startup { kind: vs::RETREAT, .. })
-            && matches!(now.doing, Doing::Flinch { .. })
+        if matches!(
+            was.doing,
+            Doing::Startup {
+                kind: vs::RETREAT,
+                ..
+            }
+        ) && matches!(now.doing, Doing::Flinch { .. })
         {
             self.kept += 1;
         }
@@ -1251,7 +1285,8 @@ impl Tally for VeilTally {
                 self.mottled_at[r] = Some(after.frame);
             }
         }
-        if matches!(now.doing, Doing::Toppled { .. }) && !matches!(was.doing, Doing::Toppled { .. }) {
+        if matches!(now.doing, Doing::Toppled { .. }) && !matches!(was.doing, Doing::Toppled { .. })
+        {
             self.panics += 1;
         }
         // A hit landing on a hunter.
@@ -1304,7 +1339,8 @@ impl Tally for VeilTally {
         };
         let mottled: Vec<String> = (0..vs::REGIONS)
             .filter_map(|r| {
-                self.mottled_at[r].map(|f| format!("{} at {:.0} s", vs::REGION_NAMES[r], f as f32 / 60.0))
+                self.mottled_at[r]
+                    .map(|f| format!("{} at {:.0} s", vs::REGION_NAMES[r], f as f32 / 60.0))
             })
             .collect();
         let causes: Vec<String> = fight::FireFrom::ALL
@@ -1424,8 +1460,13 @@ impl Tally for VeilTally {
                 };
                 wait.saturating_add(floor)
             }
-            Doing::Startup { kind, left } | Doing::Active { kind, left } | Doing::Recovery { kind, left }
-                if matches!(kind, vs::RETREAT | vs::GETUP | vs::CLIMB | vs::SMOKE | vs::MIMIC) =>
+            Doing::Startup { kind, left }
+            | Doing::Active { kind, left }
+            | Doing::Recovery { kind, left }
+                if matches!(
+                    kind,
+                    vs::RETREAT | vs::GETUP | vs::CLIMB | vs::SMOKE | vs::MIMIC
+                ) =>
             {
                 let a = vs::SPECIES.attack(kind);
                 let rest = match m.doing {

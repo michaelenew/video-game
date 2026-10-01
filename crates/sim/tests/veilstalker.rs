@@ -161,7 +161,8 @@ fn every_attack_decloaks_for_at_least_eighteen_frames_first() {
             } else {
                 showing = 0;
             }
-            let out = |m: &Monster| matches!(m.doing, Doing::Active { kind, .. } if fight::strikes(kind));
+            let out =
+                |m: &Monster| matches!(m.doing, Doing::Active { kind, .. } if fight::strikes(kind));
             if out(&now) && !out(&was) {
                 let kind = now.doing.attacking().unwrap();
                 if kind == vs::MIMIC {
@@ -290,7 +291,10 @@ fn a_hit_paints_the_hide_where_it_landed_and_the_paint_moves_with_it() {
         sim::math::wide_flat_dist(lit, me).raw() < sim::math::wide_flat_dist(m.pos, me).raw(),
         "the mark is on the side it was struck from"
     );
-    assert!(w.shown(0, paint.part).raw() > 0, "the painted part is drawn");
+    assert!(
+        w.shown(0, paint.part).raw() > 0,
+        "the painted part is drawn"
+    );
     // Turn the body a quarter: the mark goes with it.
     let mut turned = m;
     turned.yaw = turned.yaw.add(sim::math::QUARTER_TURN);
@@ -319,7 +323,11 @@ fn a_region_that_has_taken_enough_never_cloaks_again() {
         w.advance([look_at_it(&w), Input::default()]);
         hold(&mut w);
     }
-    assert_eq!(w.shown(0, vs::BARREL_L), Fx::ZERO, "one short is still cloaked");
+    assert_eq!(
+        w.shown(0, vs::BARREL_L),
+        Fx::ZERO,
+        "one short is still cloaked"
+    );
     {
         let m = w.monsters[0].as_mut().unwrap();
         fight::struck(m, vs::HAUNCH_L, 1);
@@ -405,7 +413,12 @@ fn a_real_decloak_stamps_its_feet_and_a_mimic_stamps_nothing() {
     start(&mut w, vs::LUNGE);
     w.advance([look_at_it(&w), Input::default()]);
     let new = fight::prints(&w).filter(|p| p.age == 0).count();
-    assert_eq!(new, 4, "a decloak sets all four feet (had {})", before.len());
+    assert_eq!(
+        new,
+        4,
+        "a decloak sets all four feet (had {})",
+        before.len()
+    );
 
     let mut w = duel(8);
     let count = |w: &World| fight::prints(w).filter(|p| p.age < 40).count();
@@ -415,7 +428,10 @@ fn a_real_decloak_stamps_its_feet_and_a_mimic_stamps_nothing() {
         w.advance([look_at_it(&w), Input::default()]);
         assert!(fight::ghost(&w).is_some() || !matches!(beast(&w).doing, Doing::Startup { .. }));
     }
-    assert!(count(&w) <= had, "a mimic stamps nothing, and the animal stood still");
+    assert!(
+        count(&w) <= had,
+        "a mimic stamps nothing, and the animal stood still"
+    );
 }
 
 #[test]
@@ -483,13 +499,19 @@ fn twenty_frames_in_fire_panics_it_and_it_is_shown_throughout() {
     assert!(frames >= need - 1, "it panicked after only {frames}");
     assert!(fight::panicked(&beast(&w)));
     // Shown whole, every frame, all the way to its feet.
-    while matches!(beast(&w).doing, Doing::Toppled { .. }) || beast(&w).doing.attacking() == Some(vs::GETUP) {
+    while matches!(beast(&w).doing, Doing::Toppled { .. })
+        || beast(&w).doing.attacking() == Some(vs::GETUP)
+    {
         for part in 0..vs::PART_COUNT {
             assert_eq!(w.shown(0, part), Fx::ONE);
         }
         w.advance([look_at_it(&w), Input::default()]);
     }
-    assert_eq!(fight::panics(&w.lore)[3], 1, "a panic by the brazier's coals");
+    assert_eq!(
+        fight::panics(&w.lore)[3],
+        1,
+        "a panic by the brazier's coals"
+    );
 }
 
 #[test]
@@ -560,7 +582,10 @@ fn after_two_hits_it_leaves_and_a_burst_in_the_recoil_keeps_it() {
         Some(vs::RETREAT),
         "two hits and it leaves"
     );
-    assert!(matches!(beast(&w).doing, Doing::Startup { .. }), "in its recoil");
+    assert!(
+        matches!(beast(&w).doing, Doing::Startup { .. }),
+        "in its recoil"
+    );
     assert_eq!(w.shown(0, vs::BARREL_R), Fx::ONE, "in full view");
 
     // The same, and a burst past the bar inside the recoil.

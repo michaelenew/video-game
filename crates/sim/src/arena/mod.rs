@@ -138,7 +138,6 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::PAIR => Some(&pair::ARENA),
 
         // ArenaId::BROODMOTHER => Some(&broodmother::ARENA),
-
         ArenaId::VEILSTALKER => Some(&veilstalker::ARENA),
 
         // ArenaId::MANTIS => Some(&mantis::ARENA),

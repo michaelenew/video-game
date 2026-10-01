@@ -10676,6 +10676,14 @@ impl World {
         out
     }
 
+    /// **A body drawn that is not in the world** (`FightDecl::apparition`),
+    /// and the strength it is drawn at: the Veilstalker's mimic. The
+    /// renderer draws it as it draws a creature; nothing else reads it.
+    pub fn apparition(&self) -> Option<(Monster, Fx)> {
+        let hook = self.lore.owner.and_then(|s| s.get().fight.apparition)?;
+        hook(self)
+    }
+
     /// How much of a creature part can be seen, nought to one: its species'
     /// `shown`, or fully. What the renderer draws a part at, and what the
     /// report and the scripted hunter call visible.

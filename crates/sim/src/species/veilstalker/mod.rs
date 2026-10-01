@@ -642,6 +642,7 @@ crate::species_knobs! {
     DesperateHealth, "mind",   "Desperate below health (x)",             Fixed, 0, fx(1,1);
     LeaveHits,       "retreat","Leaves after hits",                      Int, 1, 9;
     LeaveDesperate,  "retreat","Desperate, leaves after hits",           Int, 1, 9;
+    WayStep,         "retreat","Off a wall, turns toward open floor by (turns)", Fixed, 0, fx(1,2);
     HitGap,          "retreat","Blows closer than this are one hit",     Frames, 1, 60;
     RetreatStagger,  "retreat","A burst in the recoil staggers it for",  Frames, 0, 240;
     RetreatFar,      "retreat","Bounds away this far",                   Fixed, 0, fx(30,1);

@@ -56,11 +56,13 @@ pub static FIGHT: FightDecl = FightDecl {
     keeps_height: true,
     frame: Some(frame),
     shown: Some(shown),
+    apparition: Some(apparition),
     appetite: Some(super::mind::appetite),
     prowl_to: Some(super::mind::prowl_to),
     commit: Some(super::mind::commit),
     struck: Some(struck),
     marks: Some(marks),
+    signs: Some(signs),
     pace: Some(pace),
     presence: Some(presence),
     lob_height: Some(lob_height),
@@ -295,9 +297,14 @@ pub struct Paint {
 
 fn print_word(p: V3, foot: u8, red: bool, frame: u32) -> u32 {
     let q = |v: Fx| {
-        ((Fx::from_int(PRINT_UNIT as i32).mul(v).to_int() + PRINT_OFFSET as i32).clamp(0, 511)) as u32
+        ((Fx::from_int(PRINT_UNIT as i32).mul(v).to_int() + PRINT_OFFSET as i32).clamp(0, 511))
+            as u32
     };
-    q(p.x) | q(p.z) << 9 | (foot as u32 & 3) << 18 | 1 << 20 | (red as u32) << 21
+    q(p.x)
+        | q(p.z) << 9
+        | (foot as u32 & 3) << 18
+        | 1 << 20
+        | (red as u32) << 21
         | (frame % PRINT_CLOCK) << 22
 }
 
@@ -534,10 +541,9 @@ pub const fn strikes(kind: u8) -> bool {
 /// and the real animal through a mimic are cloaked.
 pub fn veil(m: &Monster) -> Fx {
     match m.doing {
-        Doing::Dead
-        | Doing::Flinch { .. }
-        | Doing::Stumble { .. }
-        | Doing::Toppled { .. } => Fx::ONE,
+        Doing::Dead | Doing::Flinch { .. } | Doing::Stumble { .. } | Doing::Toppled { .. } => {
+            Fx::ONE
+        }
         Doing::Prowl => Fx::ZERO,
         Doing::Startup { kind, left } => match kind {
             MIMIC | CLIMB | SMOKE => Fx::ZERO,
@@ -709,7 +715,8 @@ pub fn in_fire_at(w: &World, at: V3, pad: Fx) -> Option<FireFrom> {
         }
     }
     for stone in crate::stones::gather(&w.players).iter().flatten() {
-        if stone.lit > 0 && math::wide_flat_dist(stone.at, at).raw() <= stone.radius().add(pad).raw()
+        if stone.lit > 0
+            && math::wide_flat_dist(stone.at, at).raw() <= stone.radius().add(pad).raw()
         {
             return Some(FireFrom::Stone);
         }
@@ -836,7 +843,8 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
 
 /// The frame hook. See the module docs.
 pub fn frame(w: &mut World) {
-    let Some(slot) = (0..MAX_MONSTERS).find(|s| w.monsters[*s].is_some_and(|m| m.species == SpeciesId::VEILSTALKER))
+    let Some(slot) = (0..MAX_MONSTERS)
+        .find(|s| w.monsters[*s].is_some_and(|m| m.species == SpeciesId::VEILSTALKER))
     else {
         return;
     };
@@ -896,7 +904,10 @@ fn stalk_frames(m: &mut Monster) -> u32 {
     let hi = Knob::StalkMax.raw().max(lo);
     let frames = lo + (draw(m) % (hi - lo + 1) as u32) as i32;
     if flags(m) & flag::COOP != 0 {
-        Fx::from_int(frames).mul(Knob::CoopStalk.fx()).to_int().max(0) as u32
+        Fx::from_int(frames)
+            .mul(Knob::CoopStalk.fx())
+            .to_int()
+            .max(0) as u32
     } else {
         frames as u32
     }
@@ -944,7 +955,8 @@ fn glance_looks(w: &mut World, slot: usize) {
             then
         };
         w.lore.set_word(word::GLANCED + i, word_of(p.pos));
-        w.lore.set_word(word::GLANCED + 2 + i, lore::halves(now, then));
+        w.lore
+            .set_word(word::GLANCED + 2 + i, lore::halves(now, then));
     }
 }
 
@@ -1016,7 +1028,10 @@ fn hits_and_paint(w: &mut World, m: &mut Monster, now: u32) {
             if span.raw() <= 0 {
                 0
             } else {
-                v.sub(lo).div(span).mul(Fx::from_int(PAINT_STEPS as i32)).to_int()
+                v.sub(lo)
+                    .div(span)
+                    .mul(Fx::from_int(PAINT_STEPS as i32))
+                    .to_int()
             }
         };
         let cell = paint_word(
@@ -1030,9 +1045,7 @@ fn hits_and_paint(w: &mut World, m: &mut Monster, now: u32) {
         );
         // A fifth replaces the oldest: an empty slot first, then the oldest.
         let slot = (0..PAINTS)
-            .max_by_key(|i| {
-                paint_of(w.lore.word(word::PAINT + i), now).map_or(u32::MAX, |p| p.age)
-            })
+            .max_by_key(|i| paint_of(w.lore.word(word::PAINT + i), now).map_or(u32::MAX, |p| p.age))
             .unwrap_or(0);
         w.lore.set_word(word::PAINT + slot, cell);
     }
@@ -1047,7 +1060,10 @@ fn leave(w: &mut World, m: &mut Monster) {
     let busy = matches!(
         m.doing,
         Doing::Toppled { .. } | Doing::Dead | Doing::Stumble { .. }
-    ) || m.doing.attacking().is_some_and(|k| matches!(k, RETREAT | GETUP | POUNCE | CLIMB))
+    ) || m
+        .doing
+        .attacking()
+        .is_some_and(|k| matches!(k, RETREAT | GETUP | POUNCE | CLIMB))
         || perched(m);
     if busy {
         return;
@@ -1070,7 +1086,10 @@ fn chains(w: &mut World, m: &mut Monster) {
     let bounds = w.arena().bounds;
     let away = |m: &Monster| open_way(m.pos, m.brain.seen, Knob::RetreatFar.fx(), &bounds);
     match m.doing {
-        Doing::Recovery { kind: RAKE, left: 0 } => {
+        Doing::Recovery {
+            kind: RAKE,
+            left: 0,
+        } => {
             m.doing = Doing::Startup {
                 kind: RAKE2,
                 left: SPECIES.attack(RAKE2).startup,
@@ -1088,7 +1107,10 @@ fn chains(w: &mut World, m: &mut Monster) {
             m.hit_used = false;
             m.brain.last_move = GETUP;
         }
-        Doing::Startup { kind: GETUP, left: 0 } => {
+        Doing::Startup {
+            kind: GETUP,
+            left: 0,
+        } => {
             m.yaw = away(m);
             m.yaw_rate = Fx::ZERO;
             m.doing = Doing::Active {
@@ -1159,8 +1181,8 @@ pub fn open_way(at: V3, from: V3, far: Fx, b: &crate::arena::Bounds) -> Fx {
     } else {
         Fx::ZERO
     };
-    let eighth = Fx::ratio(1, 8);
-    let step = if toward.raw() >= 0 { eighth } else { eighth.neg() };
+    let turn = Knob::WayStep.fx();
+    let step = if toward.raw() >= 0 { turn } else { turn.neg() };
     let mut yaw = straight;
     for _ in 0..4 {
         if fits(yaw) {
@@ -1217,8 +1239,7 @@ fn perch_spots(w: &mut World, m: &Monster) {
             continue;
         }
         let top = solid.max.y;
-        if top.raw() < Knob::PerchLowest.fx().raw() || top.raw() > Knob::PerchHighest.fx().raw()
-        {
+        if top.raw() < Knob::PerchLowest.fx().raw() || top.raw() > Knob::PerchHighest.fx().raw() {
             continue;
         }
         let wx = solid.max.x.sub(solid.min.x);
@@ -1226,8 +1247,12 @@ fn perch_spots(w: &mut World, m: &Monster) {
         if wx.raw() < wide.raw() || wz.raw() < wide.raw() {
             continue;
         }
-        let x = target.x.clamp(solid.min.x.add(inset), solid.max.x.sub(inset));
-        let z = target.z.clamp(solid.min.z.add(inset), solid.max.z.sub(inset));
+        let x = target
+            .x
+            .clamp(solid.min.x.add(inset), solid.max.x.sub(inset));
+        let z = target
+            .z
+            .clamp(solid.min.z.add(inset), solid.max.z.sub(inset));
         // The nearest point of the top to the creature is where it gets on.
         let at = V3::new(x, Fx::ZERO, z);
         if math::wide_flat_dist(at, m.pos).raw() > reach.raw() {
@@ -1304,8 +1329,10 @@ fn fly(w: &mut World, m: &mut Monster) {
             m.speed = Fx::ZERO;
             let up = lore::hi(w.lore.word(word::LEAP_UP)) as i32 + 1;
             let from = lore::lo(w.lore.word(word::LEAP_UP));
-            w.lore
-                .set_word(word::LEAP_UP, lore::halves(from, up.min(i16::MAX as i32) as i16));
+            w.lore.set_word(
+                word::LEAP_UP,
+                lore::halves(from, up.min(i16::MAX as i32) as i16),
+            );
             if m.doing.free() && up > Knob::PerchPatience.raw() {
                 // Down the cloaked way: off the edge toward the target.
                 let to = flat(m.brain.seen.sub(m.pos));
@@ -1340,7 +1367,8 @@ fn fly(w: &mut World, m: &mut Monster) {
     if e == leave || (kind == CLIMB && e == 1) {
         // Off: where from, how high, facing the mark.
         w.lore.set_word(word::LEAP_FROM, word_of(m.pos));
-        w.lore.set_word(word::LEAP_UP, lore::halves(lore::to_cm(m.pos.y), 0));
+        w.lore
+            .set_word(word::LEAP_UP, lore::halves(lore::to_cm(m.pos.y), 0));
         let to = flat(m.aimed_at().sub(m.pos));
         if to.flat_len().raw() > 0 {
             m.yaw = math::atan2_turns(to.z, to.x);
@@ -1390,7 +1418,8 @@ fn fly(w: &mut World, m: &mut Monster) {
         // Up: perched if it landed on a top, on the floor if it came down.
         let top = land_y.raw() > Fx::ONE.raw();
         set_flag(m, flag::PERCHED, top);
-        w.lore.set_word(word::LEAP_UP, lore::halves(lore::to_cm(land_y), 0));
+        w.lore
+            .set_word(word::LEAP_UP, lore::halves(lore::to_cm(land_y), 0));
         m.doing = Doing::Recovery {
             kind: CLIMB,
             left: SPECIES.attack(CLIMB).recovery,
@@ -1414,8 +1443,73 @@ pub struct Quill {
 fn quill_bearing(i: usize) -> Fx {
     let half = Knob::QuillFan.fx();
     let span = (QUILL_COUNT - 1) as i32;
-    half.neg()
-        .add(half.add(half).mul(Fx::from_int(i as i32)).div(Fx::from_int(span.max(1))))
+    half.neg().add(
+        half.add(half)
+            .mul(Fx::from_int(i as i32))
+            .div(Fx::from_int(span.max(1))),
+    )
+}
+
+/// **Where a fling goes**: from the tail, at the target's chest where it is
+/// led to -- the place it leaves, the fan's middle bearing, and the fall (or
+/// rise) per metre. What the throw uses and what the floor shows.
+pub fn quill_fan(m: &Monster) -> (V3, Fx, Fx) {
+    let a = SPECIES.attack(QUILLS);
+    let tip = m.rig().bone[super::bones::TAIL4].at;
+    let from = V3::new(tip.x, Fx::ZERO, tip.z);
+    let height = Knob::QuillHeight.fx();
+    let target = m.lead_point(a.startup);
+    let chest = aim::standing_middle(target, crate::tuning::body_height());
+    let to = flat(chest.sub(from));
+    let far = math::wide_flat_len(to).max(SMALLEST);
+    let middle = math::atan2_turns(to.z, to.x);
+    (from, middle, chest.y.sub(height).div(far))
+}
+
+/// **The fan on the floor**: through the decloak, a strip down each quill's
+/// line as it would leave now, filling as the rear rises; in flight, the
+/// lines they are flying along. The quills are the species' own hit, with
+/// no cylinder for `Monster::telegraph` to draw, so this is their marker --
+/// built from [`quill_fan`] and [`quill_bearing`], what the throw itself uses.
+fn signs(w: &World, out: &mut crate::sign::Signs) {
+    use crate::sign::{Says, Sign};
+    let Some(m) = w
+        .monsters
+        .iter()
+        .flatten()
+        .find(|m| m.species == SpeciesId::VEILSTALKER && m.alive())
+    else {
+        return;
+    };
+    // Across: a quill's width and a body either side of its line.
+    let half = Knob::QuillRadius.fx().add(crate::tuning::body_radius());
+    let width = half.add(half);
+    let reach = Knob::QuillReach.fx();
+    match m.doing {
+        Doing::Startup { kind: QUILLS, left } => {
+            let a = SPECIES.attack(QUILLS);
+            let progress = Fx::from_int((a.startup - left.min(a.startup)) as i32)
+                .div(Fx::from_int(a.startup.max(1) as i32));
+            let (from, middle, _) = quill_fan(m);
+            for i in 0..QUILL_COUNT {
+                let along = V3::from_turns(middle.add(quill_bearing(i)));
+                out.push(Sign::strip(Says::Coming, from, along, reach, width).filled(progress));
+            }
+        }
+        _ => {
+            let from = point(w.lore.word(word::QUILL_AT));
+            let up = w.lore.word(word::QUILL_UP);
+            let middle = Fx::from_raw(lore::hi(up) as u16 as i32);
+            let live = w.lore.word(word::QUILL_LIVE);
+            for i in 0..QUILL_COUNT {
+                if live & 1 << i == 0 {
+                    continue;
+                }
+                let along = V3::from_turns(middle.add(quill_bearing(i)));
+                out.push(Sign::strip(Says::Live, from, along, reach, width));
+            }
+        }
+    }
 }
 
 /// **Every quill still flying**, this frame and last.
@@ -1456,15 +1550,8 @@ fn quills(w: &mut World, m: &mut Monster, slot: usize) {
         if left == a.active {
             // Thrown: from its tail, raised over its head, at where it led
             // you to.
-            let tip = m.rig().bone[super::bones::TAIL4].at;
-            let from = V3::new(tip.x, Fx::ZERO, tip.z);
+            let (from, middle, slope) = quill_fan(m);
             let height = Knob::QuillHeight.fx();
-            let target = m.lead_point(a.startup);
-            let chest = aim::standing_middle(target, crate::tuning::body_height());
-            let to = flat(chest.sub(from));
-            let far = math::wide_flat_len(to).max(SMALLEST);
-            let middle = math::atan2_turns(to.z, to.x);
-            let slope = chest.y.sub(height).div(far);
             w.lore.set_word(word::QUILL_AT, word_of(from));
             w.lore.set_word(
                 word::QUILL_UP,
@@ -1522,13 +1609,18 @@ fn quills(w: &mut World, m: &mut Monster, slot: usize) {
             let feet = p.pos;
             let head = p.pos.add(V3::new(Fx::ZERO, p.hurt_height(), Fx::ZERO));
             let gap = math::segment_gap(q.was, q.at, feet, head);
-            if gap.raw() > Knob::QuillRadius.fx().add(crate::tuning::body_radius()).raw() {
+            if gap.raw()
+                > Knob::QuillRadius
+                    .fx()
+                    .add(crate::tuning::body_radius())
+                    .raw()
+            {
                 continue;
             }
             still &= !bit;
             let dir = math::wide_normalized(flat(q.at.sub(q.was)));
-            let facing_it =
-                p.facing.dot(dir.scale(Fx::ONE.neg())).raw() >= crate::tuning::guard_arc_cos().raw();
+            let facing_it = p.facing.dot(dir.scale(Fx::ONE.neg())).raw()
+                >= crate::tuning::guard_arc_cos().raw();
             let guarding = !a.unblockable && p.action.guarding() && facing_it;
             state::apply_hit(
                 &mut w.players[i],
@@ -1614,8 +1706,13 @@ pub fn cloud(w: &World) -> Option<(V3, Fx, u32)> {
         return None;
     }
     let h = hazard::get(&w.lore, w.lore.word(word::SMOKE_SLOT) as usize);
-    (h.present() && h.index() == CLOUD)
-        .then(|| (h.centre(), h.radius(), w.frame.wrapping_sub(began.wrapping_sub(1))))
+    (h.present() && h.index() == CLOUD).then(|| {
+        (
+            h.centre(),
+            h.radius(),
+            w.frame.wrapping_sub(began.wrapping_sub(1)),
+        )
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1719,6 +1816,13 @@ pub fn apparitions(w: &World) -> [Option<Apparition>; 2] {
     out
 }
 
+/// The ghost, and the strength it is drawn at: the decloak's own ramp, as a
+/// real one's would be.
+fn apparition(w: &World) -> Option<(Monster, Fx)> {
+    let g = ghost(w)?;
+    Some((g, veil(&g)))
+}
+
 /// **The ghost as a body to draw**: the creature, moved to where the mimic
 /// plays and posed in the rear it pretends. Never in the world -- nothing
 /// hits it and nothing stands on it -- only drawn, at the decloak's
@@ -1809,7 +1913,13 @@ fn panic(w: &mut World, m: &mut Monster, now: u32) {
 pub fn panics(lore: &Lore) -> [u32; 5] {
     let p = lore.word(word::PANICS);
     let more = lore.word(word::MORE);
-    [p & 0xFF, p >> 8 & 0xFF, p >> 16 & 0xFF, p >> 24 & 0xFF, more & 0xFF]
+    [
+        p & 0xFF,
+        p >> 8 & 0xFF,
+        p >> 16 & 0xFF,
+        p >> 24 & 0xFF,
+        more & 0xFF,
+    ]
 }
 
 /// Mimics played so far.
@@ -2042,7 +2152,11 @@ fn veil_clock(w: &mut World, m: &mut Monster) {
             || m.pos.z.raw() < b.lo_z.add(room).raw()
             || m.pos.z.raw() > b.hi_z.sub(room).raw();
         let near = math::wide_flat_dist(m.pos, m.brain.seen).raw() < Knob::ExposedNear.fx().raw();
-        let left = if exposed(m) && walled && near { 1 } else { stalk };
+        let left = if exposed(m) && walled && near {
+            1
+        } else {
+            stalk
+        };
         w.lore.set_word(word::STALK, left - 1);
         if left == 1 {
             set_flag(m, flag::STALKING, false);
@@ -2100,7 +2214,8 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
     let point_of = middle_of(m);
     let fire = in_fire_at(w, m.pos, Knob::FireShy.fx().min(Fx::ONE)).is_some();
     let cloud_now = cloud(w);
-    let inside = |p: V3| cloud_now.is_some_and(|(c, r, _)| math::wide_flat_dist(c, p).raw() <= r.raw());
+    let inside =
+        |p: V3| cloud_now.is_some_and(|(c, r, _)| math::wide_flat_dist(c, p).raw() <= r.raw());
     let young = cloud_now.is_some_and(|(_, _, age)| age < Knob::SmokeQuiet.raw().max(0) as u32);
     let mut ghost_at = V3::ZERO;
     for i in 0..MAX_PLAYERS.min(2) {
@@ -2219,7 +2334,8 @@ fn ghost_place(m: &Monster, at: V3, yaw: Fx, scene: &Scene) -> Option<V3> {
 
 /// The middle of its body, where a decloak is seen.
 pub fn middle_of(m: &Monster) -> V3 {
-    m.pos.add(V3::new(Fx::ZERO, Knob::MiddleHeight.fx(), Fx::ZERO))
+    m.pos
+        .add(V3::new(Fx::ZERO, Knob::MiddleHeight.fx(), Fx::ZERO))
 }
 
 /// What the frame hook saw for hunter `i`: [`view`] bits.
@@ -2263,7 +2379,11 @@ fn marks(w: &World, out: &mut Marks) {
         out.push(Mark {
             at,
             radius: math::half(math::half(tall)),
-            height: if standing { tall } else { math::half(math::half(tall)) },
+            height: if standing {
+                tall
+            } else {
+                math::half(math::half(tall))
+            },
             look: MarkLook::Iron,
             progress: Fx::ONE,
         });

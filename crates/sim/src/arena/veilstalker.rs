@@ -44,7 +44,10 @@ pub static ARENA: Arena = Arena {
                 Mark::cm(-1200, 150, (0, 150)),
             ],
             // Somewhere in the east, already cloaked.
-            creatures: [Mark::cm(1250, 0, (-1200, 0)), Mark::cm(1250, 400, (-1200, 0))],
+            creatures: [
+                Mark::cm(1250, 0, (-1200, 0)),
+                Mark::cm(1250, 400, (-1200, 0)),
+            ],
         }),
     },
     sites: &SITES,
@@ -53,7 +56,7 @@ pub static ARENA: Arena = Arena {
 /// The trunks, by their middles in centimetres: spread so that wherever the
 /// fight is, one is a perch over it and one is cover from a fan.
 pub const TRUNKS: [(i32, i32); 6] = [
-    (-1000, -300),
+    (-850, -650),
     (-450, 1050),
     (550, 1150),
     (1100, -350),

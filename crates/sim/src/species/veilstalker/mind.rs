@@ -205,7 +205,14 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
         };
         let _ = dir;
         let yaw = fight::open_way(m.pos, target, Knob::StalkRange.fx(), &mind.ground.bounds);
-        return avoid_fire(m, mind, Some(inside(m.pos.add(V3::from_turns(yaw).scale(Knob::StalkRange.fx())), mind)));
+        return avoid_fire(
+            m,
+            mind,
+            Some(inside(
+                m.pos.add(V3::from_turns(yaw).scale(Knob::StalkRange.fx())),
+                mind,
+            )),
+        );
     }
     if !stalking && gap.raw() > Knob::BoundFrom.fx().raw() {
         return avoid_fire(m, mind, None);

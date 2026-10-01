@@ -28,7 +28,7 @@ pub mod pair;
 
 // pub mod broodmother;
 
-// pub mod veilstalker;
+pub mod veilstalker;
 
 // pub mod mantis;
 
@@ -146,8 +146,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
         SpeciesId::PAIR => &pair::LOOK,
 
         // SpeciesId::BROODMOTHER => &broodmother::LOOK,
-
-        // SpeciesId::VEILSTALKER => &veilstalker::LOOK,
+        SpeciesId::VEILSTALKER => &veilstalker::LOOK,
 
         // SpeciesId::MANTIS => &mantis::LOOK,
 
