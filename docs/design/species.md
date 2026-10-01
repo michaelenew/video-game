@@ -249,6 +249,15 @@ bit-identical:
 | `MarkLook::{Sand, Fin, Heard, Feel}` | a raised wake, a dorsal fin, a ring where it heard you, the disc it feels in |
 | `noise::nth(lore, cell)` | a noise by its cell, for a hook that keeps per-noise state of its own beside the ring |
 
+**The seams a creature with a clock and eight legs adds** (the Broodmother,
+2026-10-01), on the same terms:
+
+| Seam | What it is for |
+| --- | --- |
+| `MoveDecl::then(next)` | a declared chain: when this move's recovery runs out the shared tick begins `next` -- the screech always leading to the slam. Not a combo the brain may choose to skip |
+| `MoveDecl::unanimated` | a move in its table its own body never plays (implies `never_chosen`): the gnawer moves at the head of her table, which are her brood's. Clips are not looked for |
+| `repose(m, pose)` | the last word on the pose, after the clip and the shared layers: eight planted feet, the stabbing foot lifted to its disc, the list. What the hit test reads, so it is the simulation's, not the renderer's |
+
 ## 6 · Decided while building, for a person to review
 
 - **Sizes are maximums, not generics.** `MAX_BONES` 40, `MAX_PARTS` 48,
