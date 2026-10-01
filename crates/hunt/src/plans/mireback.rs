@@ -416,6 +416,22 @@ impl Mireback {
         beast: &Monster,
         seen: &Seen,
     ) -> Input {
+        // **Strayed out over a bank**: back in, over it.
+        let bounds = w.arena().bounds;
+        let out = me.pos.x.raw() < bounds.lo_x.raw()
+            || me.pos.x.raw() > bounds.hi_x.raw()
+            || me.pos.z.raw() < bounds.lo_z.raw()
+            || me.pos.z.raw() > bounds.hi_z.raw();
+        if out {
+            self.intent = FLANK;
+            let home = flat(beast.pos.sub(me.pos));
+            let at = atan2_turns(home.z, home.x);
+            if me.grounded && self.leap_left == 0 {
+                self.leap_left = LEAP_HOLD;
+            }
+            let jump = if self.leap_left > 0 { Input::SPACE } else { 0 };
+            return Input::aimed(steer(at, home) | jump, turns_to_aim(at.sub(me.carry_yaw)));
+        }
         let to_beast = flat(beast.pos.sub(me.pos));
         let range = to_beast.flat_len();
         let toward = to_beast.normalized();
@@ -765,37 +781,53 @@ impl Mireback {
         r.sub(d).max(Fx::ZERO)
     }
 
-    /// Go to a brazier and kick it into the arena: up onto its plinth from
-    /// the arena's side, round behind it, and a swing toward the middle.
+    /// Go to a brazier and kick it into the arena: to the floor in front of
+    /// its plinth, a jump up onto the plinth past the brazier, and a swing
+    /// back toward the middle from behind it.
     fn kindle(&mut self, me: &sim::state::Player, brazier: V3) -> Input {
         self.intent = KINDLE;
         let inward = inward_of(flat(brazier));
         let behind = flat(brazier).sub(inward.scale(Fx::ratio(9, 10)));
+        let front = flat(brazier).add(inward.scale(Fx::ratio(30, 10)));
         let look = atan2_turns(inward.z, inward.x);
         let face = turns_to_aim(look.sub(me.carry_yaw));
         let on_plinth = me.grounded && me.pos.y.raw() >= brazier.y.sub(Fx::ratio(1, 4)).raw();
-        let to = flat(behind.sub(me.pos));
-        let at = atan2_turns(to.z, to.x);
-        let toward = turns_to_aim(at.sub(me.carry_yaw));
-        if !on_plinth {
-            // Walk at it; jump when the plinth's face is a stride away.
-            let from_face = wide_flat_dist(me.pos, flat(brazier)).sub(Knob::BrazierSize.fx());
-            if from_face.raw() < Fx::from_int(3).raw() && me.grounded && self.leap_left == 0 {
-                self.leap_left = LEAP_HOLD;
-            }
-            let jump = if self.leap_left > 0 { Input::SPACE } else { 0 };
-            return Input::aimed(steer(at, to) | jump, toward);
-        }
-        if to.flat_len().raw() > Fx::ratio(3, 10).raw() {
-            return Input::aimed(steer(at, to), toward);
-        }
-        let swing = if self.cooldown == 0 && me.action.actionable() {
-            self.cooldown = SWING_GAP;
-            Input::LEFT
-        } else {
-            0
+        let go = |to: V3| {
+            let d = flat(to.sub(me.pos));
+            let at = atan2_turns(d.z, d.x);
+            (
+                steer(at, d),
+                turns_to_aim(at.sub(me.carry_yaw)),
+                d.flat_len(),
+            )
         };
-        Input::aimed(swing, face)
+        if on_plinth {
+            let (walk, wire, far) = go(behind);
+            if far.raw() > Fx::ratio(3, 10).raw() {
+                return Input::aimed(walk, wire);
+            }
+            let swing = if self.cooldown == 0 && me.action.actionable() {
+                self.cooldown = SWING_GAP;
+                Input::LEFT
+            } else {
+                0
+            };
+            return Input::aimed(swing, face);
+        }
+        // In the air on the way up: keep going for the spot behind it.
+        if self.leap_left > 0 || !me.grounded {
+            let (walk, wire, _) = go(behind);
+            let jump = if self.leap_left > 0 { Input::SPACE } else { 0 };
+            return Input::aimed(walk | jump, wire);
+        }
+        // On the floor: to the front of the plinth, then up and over.
+        let (walk, wire, far) = go(front);
+        if far.raw() < Fx::ratio(8, 10).raw() {
+            self.leap_left = LEAP_HOLD;
+            let (walk, wire, _) = go(behind);
+            return Input::aimed(walk | Input::SPACE, wire);
+        }
+        Input::aimed(walk, wire)
     }
 
     fn ride(&mut self, me: &sim::state::Player, beast: &Monster) -> Input {

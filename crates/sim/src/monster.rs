@@ -1227,23 +1227,44 @@ impl Rig {
             // hoisted on top. Using the step here lifted a rider off the tail
             // onto the haunch mid-sweep and dropped them off the far side.
             let step = part.mountable && up.raw() >= 0 && up.raw() <= t::mount_snap().raw();
-            // **Never pressed into the floor**, for a species whose parts come
-            // down on bodies (`FightDecl::lands_on_bodies`): a body standing
-            // under the Mireback's belly as a flop lands is shoved out
-            // sideways, where least penetration would push its feet through
-            // the ground and nothing pushes them back. The Ridgeback does not
+            // **Never pressed down**, for a species whose parts come down on
+            // bodies (`FightDecl::lands_on_bodies`): a body under the
+            // Mireback's belly as a flop lands -- on the floor, or on a slag
+            // mound -- is shoved out sideways, where least penetration would
+            // push its feet through whatever it stood on and nothing pushes
+            // them back. The Ridgeback does not
             // say so, and keeps its pinned hunts: whether it should is a
             // person's call (`docs/design/hazards.md` §8).
-            let into_floor = self.species.fight.lands_on_bodies
-                && world.y.raw() <= 0
-                && up.raw() > down.raw()
-                && frame
-                    .local_to_world(V3::new(p.x, sh.min.y.sub(body_height), p.z))
-                    .y
-                    .raw()
-                    < 0;
-            if !into_floor
-                && (step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw()))
+            let into_floor = self.species.fight.lands_on_bodies && up.raw() > down.raw();
+            if into_floor {
+                // Out the way it is from the creature's middle, all the way
+                // out of this box: every box it is in pushes it the same way,
+                // so a body the creature landed on comes out of the side of
+                // it rather than being passed from box to box inside.
+                let from_middle = at.sub(self.origin);
+                let away = V3::new(from_middle.x, Fx::ZERO, from_middle.z);
+                let away = if away.flat_len().raw() > 0 {
+                    crate::math::wide_normalized(away)
+                } else {
+                    self.facing.apply(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO))
+                };
+                let d = frame.rot.unapply(away);
+                let exit = |v: Fx, dv: Fx, lo: Fx, hi: Fx| -> Fx {
+                    if dv.raw() > 0 {
+                        hi.sub(v).div(dv)
+                    } else if dv.raw() < 0 {
+                        lo.sub(v).div(dv)
+                    } else {
+                        Fx::MAX
+                    }
+                };
+                let t = exit(p.x, d.x, min_x, max_x).min(exit(p.z, d.z, min_z, max_z));
+                if t.raw() < Fx::MAX.raw() {
+                    p.x = p.x.add(d.x.mul(t));
+                    p.z = p.z.add(d.z.mul(t));
+                    shoved = true;
+                }
+            } else if step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw())
             {
                 if step || up.raw() <= down.raw() {
                     p.y = sh.max.y;

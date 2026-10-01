@@ -305,63 +305,74 @@ pub const PARTS: [Part; PART_COUNT] = [
         Knob::VulnStomach as u16,
     )
     .hollow(),
-    // The legs: stubby, solid, armoured like the rest of the hide.
+    // The legs: stubby, armoured like the rest of the hide, and **soft** --
+    // folded under the flanks, they are something to hit rather than a step:
+    // solid, their low tops lifted a fighter walking into its side onto a
+    // ledge it could neither stand on nor dodge from.
     part(
         "left arm",
         SHOULDER_L,
         v((-45, 100), (-85, 100), (-45, 100)),
         v((45, 100), (30, 100), (45, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "right arm",
         SHOULDER_R,
         v((-45, 100), (-85, 100), (-45, 100)),
         v((45, 100), (30, 100), (45, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "left hand",
         FOREARM_L,
         v((-50, 100), (-70, 100), (-60, 100)),
         v((90, 100), (10, 100), (60, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "right hand",
         FOREARM_R,
         v((-50, 100), (-70, 100), (-60, 100)),
         v((90, 100), (10, 100), (60, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "left haunch",
         THIGH_L,
         v((-120, 100), (-90, 100), (-60, 100)),
         v((80, 100), (60, 100), (60, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "right haunch",
         THIGH_R,
         v((-120, 100), (-90, 100), (-60, 100)),
         v((80, 100), (60, 100), (60, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "left foot",
         SHIN_L,
         v((-40, 100), (-70, 100), (-70, 100)),
         v((160, 100), (10, 100), (70, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
     part(
         "right foot",
         SHIN_R,
         v((-40, 100), (-70, 100), (-70, 100)),
         v((160, 100), (10, 100), (70, 100)),
         Knob::VulnLeg as u16,
-    ),
+    )
+    .soft(),
 ];
 
 /// The four legs, front to back. None of its feet break: the consequence

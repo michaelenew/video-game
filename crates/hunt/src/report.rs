@@ -640,12 +640,23 @@ impl Report {
             }
         }
 
+        // **A fight with a floor burns people too.** Where the species lays
+        // hazards, health lost on a frame the creature's move did not
+        // connect is the floor's, not a hit: counted in what was taken and
+        // nowhere else, or every tick of burning tar under a hunter would read
+        // as the move in progress landing. A fight without a floor counts as
+        // it always did.
+        let floored = !sp.fight.hazards.is_empty();
+        let connected = !was.hit_used && now.hit_used;
         for i in 0..MAX_PLAYERS {
             let lost = before.players[i].health - after.players[i].health;
             if lost <= 0 {
                 continue;
             }
             self.taken += lost;
+            if floored && !connected {
+                continue;
+            }
             self.hits_taken += 1;
             if self.commit_kind == monster::NO_PART {
                 continue;
