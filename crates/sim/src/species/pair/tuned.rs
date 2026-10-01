@@ -7,7 +7,7 @@
 //! the Pair's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 488] = [
+pub const KNOBS: [i32; 491] = [
            65536, // pair.size_(x) = 1
             2200, // pair.health = 2200
              500, // pair.breakable_part_health = 500
@@ -62,7 +62,7 @@ pub const KNOBS: [i32; 488] = [
            39322, // pair_·_mind.switch_targets_when_nearer_than_(x) = 0.6
            65536, // pair.matches_a_fleeing_target's_speed_(x) = 1
               20, // pair_·_mind.turns_to_face_you_after_a_rear_move = 20
-         3932160, // pair.braking,_committed_(m/s2) = 60
+         9830400, // pair.braking,_committed_(m/s2) = 150
         58982400, // pair.launching_into_a_charge_(m/s2) = 900
              120, // pair_·_mind.holds_off_when_a_hunt_begins = 120
            85197, // pair_·_hide.head_(x_damage) = 1.3
@@ -79,7 +79,7 @@ pub const KNOBS: [i32; 488] = [
           917504, // pair_·_pair.further_apart_than_this,_they_regroup = 14
               20, // pair_·_pair.two_hits_never_land_closer_than = 20
            25494, // pair_·_pair.pincer:_apart_round_the_target_(turns) = 0.389
-           21823, // pair_·_pair.striker_behind:_round_the_target_(turns) = 0.333
+           16384, // pair_·_pair.striker_behind:_round_the_target_(turns) = 0.25
            39322, // pair_·_pair.strained_below_health_(x) = 0.6
               25, // pair_·_pair.a_coil_is_a_feint,_fresh_(%) = 25
               33, // pair_·_pair.a_coil_is_a_feint,_strained_(%) = 33
@@ -90,6 +90,9 @@ pub const KNOBS: [i32; 488] = [
               90, // pair_·_pair.twin_pounce_crashed,_dazed_for = 90
           196608, // pair_·_pair.twin_pounce_crashes_cats_this_close = 3
           655360, // pair_·_mind.a_sample_this_fast_was_a_dodge = 10
+          163840, // pair_·_mind.ambush,_its_lane_runs_past_you_by = 2.5
+              30, // pair_·_mind.getting_nowhere_this_long,_it_goes_round = 30
+              60, // pair_·_mind.goes_round_for = 60
             1500, // pair_·_mind.ambush,_at_a_fast_sample = 1500
               60, // pair_·_mind.lost_you,_searches_round_where_it_saw_you_after = 60
             9830, // pair_·_mind.searching,_circles_at_(turns/s) = 0.15
@@ -302,7 +305,7 @@ pub const KNOBS: [i32; 488] = [
              900, // pair.ambush.appetite = 900
                0, // pair.ambush.appetite_per_rider = 0
              240, // pair.ambush.lockout_after_use = 240
-          983040, // pair.ambush.hit_travels_at = 15
+         2949120, // pair.ambush.hit_travels_at = 45
                0, // pair.ambush.roots_for = 0
               18, // pair.tail_trip.startup = 18
                6, // pair.tail_trip.active = 6

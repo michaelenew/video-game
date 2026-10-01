@@ -70,9 +70,12 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         }
         let mate = fight::pos_of(lore, 1 - slot);
         let near = math::wide_flat_dist(target, mate).raw() <= Knob::InterposeNear.fx().raw();
-        // Not if it is already standing on the line.
-        let on_line = math::wide_flat_dist(interpose_point(m, mind), m.pos).raw()
-            <= Knob::LandShort.fx().raw();
+        // Not if it is already standing on the line, or there is no room on
+        // it.
+        let Some(at) = interpose_point(m, mind) else {
+            return 0;
+        };
+        let on_line = math::wide_flat_dist(at, m.pos).raw() <= Knob::LandShort.fx().raw();
         return if near && !on_line {
             Knob::InterposeAppetite.raw()
         } else {
@@ -80,6 +83,12 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         };
     }
 
+    // **Nothing out of its own reach.** The shared terms add a wounded
+    // animal's appetite to every move whatever the range; a cat does not
+    // swipe at the air five metres off.
+    if !matches!(kind, PERCH) && !in_reach(m, kind) {
+        return 0;
+    }
     let role = fight::role(m);
     let mut score = score;
     if kind == PERCH {
@@ -153,18 +162,34 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
     score
 }
 
+/// Is the target, as last seen and led, inside this move's own range?
+fn in_reach(m: &Monster, kind: u8) -> bool {
+    let a = SPECIES.attack(kind);
+    let at = m.lead_point(a.startup);
+    let d = math::wide_flat_dist(at, m.pos);
+    d.raw() >= a.ideal_range.sub(a.range_span).raw() && d.raw() <= a.ideal_range.add(a.range_span).raw()
+}
+
 /// Where the guard runs to: on the line from its wounded mate to the target,
-/// `InterposeFrom` out from the mate.
-pub fn interpose_point(m: &Monster, mind: &Mind) -> V3 {
+/// `InterposeFrom` out from the mate -- and never so near the target that the
+/// run's own reach would land on somebody standing still. The run hits what
+/// walks into its line; it is not a way to hit you where you stand.
+pub fn interpose_point(m: &Monster, mind: &Mind) -> Option<V3> {
     let slot = fight::slot_of(m);
     let mate = fight::pos_of(mind.lore, 1 - slot);
     let to = fight::flat(m.brain.seen.sub(mate));
-    let dir = if to.flat_len().raw() > 0 {
-        math::wide_normalized(to)
-    } else {
-        V3::from_turns(m.yaw)
-    };
-    mate.add(dir.scale(Knob::InterposeFrom.fx()))
+    let gap = math::wide_flat_len(to);
+    let a = SPECIES.attack(INTERPOSE);
+    let reach = a
+        .hit_x
+        .add(a.hit_radius)
+        .add(crate::tuning::body_radius())
+        .add(Knob::LandShort.fx());
+    let out = Knob::InterposeFrom.fx().min(gap.sub(reach));
+    if out.raw() <= Knob::LandShort.fx().raw() || gap.raw() <= 0 {
+        return None;
+    }
+    Some(mate.add(math::wide_normalized(to).scale(out)))
 }
 
 /// **Where it walks while it is free.**
@@ -199,6 +224,22 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
         return Some(m.pos.add(blind.scale(Knob::HoldDistance.fx())));
     }
 
+    if fight::going_round(lore, slot) {
+        // Round whatever it was stuck on: square off the line to the target,
+        // on the side its slot says, so the two do not go the same way.
+        let to = fight::flat(target.sub(m.pos));
+        let dir = if to.flat_len().raw() > 0 {
+            math::wide_normalized(to)
+        } else {
+            V3::from_turns(m.yaw)
+        };
+        let side = if slot == 0 {
+            V3::new(dir.z.neg(), Fx::ZERO, dir.x)
+        } else {
+            V3::new(dir.z, Fx::ZERO, dir.x.neg())
+        };
+        return Some(m.pos.add(side.add(dir).scale(Knob::HoldDistance.fx())));
+    }
     if st & state::REJOIN != 0 {
         return Some(mate);
     }
@@ -305,9 +346,24 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
                 m.aim_at(at);
             }
         }
+        AMBUSH => {
+            // Aimed where its last look says you are going, and on past it,
+            // so the lane is under you and in front of you.
+            let a = SPECIES.attack(AMBUSH);
+            let at = m.lead_point(a.startup);
+            let to = fight::flat(at.sub(m.pos));
+            let dir = if to.flat_len().raw() > 0 {
+                math::wide_normalized(to)
+            } else {
+                V3::from_turns(m.yaw)
+            };
+            let far = math::wide_flat_len(to).add(Knob::AmbushPast.fx());
+            m.aim_at(m.pos.add(dir.scale(far)));
+        }
         INTERPOSE => {
-            let at = interpose_point(m, mind);
-            m.aim_at(at);
+            if let Some(at) = interpose_point(m, mind) {
+                m.aim_at(at);
+            }
         }
         _ => {}
     }

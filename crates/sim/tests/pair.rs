@@ -89,6 +89,13 @@ fn throw(w: &mut World, kind: u8) {
     if pair::MOVES[kind as usize].lobbed {
         m.lob(kind);
     }
+    // The ambush is aimed past its target, as its commit aims it.
+    if kind == pair::AMBUSH {
+        let past = m.brain.seen.sub(m.pos);
+        let far = sim::math::wide_flat_len(past).add(Knob::AmbushPast.fx());
+        let at = m.pos.add(sim::math::wide_normalized(past).scale(far));
+        m.aim_at(at);
+    }
 }
 
 /// Play the move out: `press` from frame `at` of it, for `hold` frames.

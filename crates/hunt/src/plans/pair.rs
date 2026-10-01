@@ -268,6 +268,30 @@ fn keep_in(w: &World, at: V3, dir: V3) -> V3 {
     unit(side.add(unit(middle, side).scale(crate::HALF)), side)
 }
 
+/// Is there floor to go to that way: nothing standing in the next three
+/// metres, and inside the walls?
+fn clear(w: &World, ground: &sim::arena::Terrain, at: V3, dir: V3) -> bool {
+    let b = w.arena().bounds;
+    let room = Fx::from_int(2);
+    (1..=3).all(|m| {
+        let p = at.add(dir.scale(Fx::from_int(m)));
+        let inside = p.x.raw() > b.lo_x.add(room).raw()
+            && p.x.raw() < b.hi_x.sub(room).raw()
+            && p.z.raw() > b.lo_z.add(room).raw()
+            && p.z.raw() < b.hi_z.sub(room).raw();
+        inside && ground.ground_under(p).raw() <= at.y.add(Fx::ratio(3, 10)).raw()
+    })
+}
+
+/// The first of these ways that is clear, or the first if none is.
+fn first_clear(w: &World, at: V3, ways: &[V3]) -> V3 {
+    let ground = w.terrain();
+    ways.iter()
+        .copied()
+        .find(|d| d.flat_len().raw() > 0 && clear(w, &ground, at, *d))
+        .unwrap_or(ways[0])
+}
+
 /// Frames since a cat's move began, through the startup.
 fn elapsed(m: &Monster) -> Option<(u8, i32, bool)> {
     let kind = m.doing.attacking()?;
@@ -335,6 +359,13 @@ impl Plan for Pair {
             if body || marked {
                 cats[s] = Some(m);
                 self.known[s] = Some((flat(m.pos), seen.frame));
+            } else if let Some((at, f)) = self.known[s] {
+                // Looking right at where it was, and it is not there: it is
+                // somewhere else, and it has to be looked for.
+                let there = at.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+                if seen.frame.saturating_sub(f) > 10 && in_view(self.who, view, there, HALF_VIEW, &scene) {
+                    self.known[s] = None;
+                }
             }
         }
         let living = seen.cats.iter().flatten().filter(|m| m.alive()).count();
@@ -346,7 +377,7 @@ impl Plan for Pair {
             let show = |m: &Option<Monster>| {
                 m.map(|m| {
                     format!(
-                        "{:?} r{} ({:.1},{:.1}) d{:.1} aim ({:.1},{:.1}) cov {}",
+                        "{:?} r{} ({:.1},{:.1}) d{:.1} aim ({:.1},{:.1}) cov {} seen ({:.1},{:.1}) t{}",
                         m.doing,
                         fight::role(&m),
                         m.pos.x.to_f32_for_render(),
@@ -354,21 +385,26 @@ impl Plan for Pair {
                         wide_flat_dist(m.pos, me.pos).to_f32_for_render(),
                         m.aimed_at().x.to_f32_for_render(),
                         m.aimed_at().z.to_f32_for_render(),
-                        marker_covers(&m, me.pos, MARGIN)
+                        marker_covers(&m, me.pos, MARGIN),
+                        m.brain.seen.x.to_f32_for_render(),
+                        m.brain.seen.z.to_f32_for_render(),
+                        m.brain.target
                     )
                 })
             };
             eprintln!(
-                "{} me ({:.1},{:.1}) hp {} {:?} look {:.2} | {:?} | {:?} | intent {:?}",
+                "{} me ({:.1},{:.1}) hp {} {:?} look {:.2} | {:?} | {:?} | intent {:?} st {:b} {:b}",
                 w.frame,
                 me.pos.x.to_f32_for_render(),
                 me.pos.z.to_f32_for_render(),
                 me.health,
                 me.action,
                 self.look.to_f32_for_render(),
-                show(&cats[0]),
-                show(&cats[1]),
-                self.intent
+                show(&seen.cats[0]),
+                show(&seen.cats[1]),
+                self.intent,
+                fight::state_of(&w.lore, 0),
+                fight::state_of(&w.lore, 1)
             );
         }
         if self.leap_left > 0 {
@@ -486,7 +522,7 @@ impl Pair {
                         self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
                         let along = unit(m.pos.sub(me.pos), V3::from_turns(self.look));
                         let side = V3::new(along.z.neg(), Fx::ZERO, along.x);
-                        let side = keep_in(w, me.pos, side);
+                        let side = first_clear(w, me.pos, &[side, side.scale(Fx::ONE.neg())]);
                         return Some(self.turn_and(w, me, Some(middle(m)), side, Input::SHIFT));
                     }
                 }
@@ -504,7 +540,7 @@ impl Pair {
                     } else {
                         side.scale(Fx::ONE.neg())
                     };
-                    let out = keep_in(w, me.pos, out);
+                    let out = first_clear(w, me.pos, &[out, out.scale(Fx::ONE.neg())]);
                     self.intent = EVADE;
                     let bits = if (live || to_live <= 3) && self.dodge_left == 0 && me.action.actionable() {
                         self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
@@ -537,7 +573,9 @@ impl Pair {
                         continue;
                     }
                     self.intent = EVADE;
-                    let out = keep_in(w, me.pos, unit(me.pos.sub(m.pos), V3::from_turns(self.look)));
+                    let back = unit(me.pos.sub(m.pos), V3::from_turns(self.look));
+                    let side = V3::new(back.z.neg(), Fx::ZERO, back.x);
+                    let out = first_clear(w, me.pos, &[back, unit(back.add(side), back), unit(back.sub(side), back)]);
                     let bits = if kind != pair::COCK
                         && (live || to_live <= 2)
                         && self.dodge_left == 0
@@ -565,8 +603,9 @@ impl Pair {
                     }
                     self.intent = EVADE;
                     let go = Knob::DiveLeave.raw() + 3 - REACTION as i32 + self.slop.max(0);
-                    let side = V3::new(to.z.neg(), Fx::ZERO, to.x);
-                    let side = keep_in(w, me.pos, unit(side, V3::ZERO));
+                    let side = unit(V3::new(to.z.neg(), Fx::ZERO, to.x), V3::ZERO);
+                    let away = unit(to.scale(Fx::ONE.neg()), V3::ZERO);
+                    let side = first_clear(w, me.pos, &[side, side.scale(Fx::ONE.neg()), away]);
                     let bits = if self.dodge_left == 0 && me.action.actionable() && e >= go {
                         self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
                         Input::SHIFT
@@ -709,7 +748,14 @@ impl Pair {
             .flatten()
             .any(|m| m.alive() && m.doing.attacking() == Some(pair::HOWL));
         let ahead = V3::from_turns(self.look);
-        let toward = if let Some((_, at, _)) = stale {
+        let lost = (0..MAX_MONSTERS)
+            .any(|s| seen.cats[s].is_some_and(|m| m.alive()) && self.known[s].is_none());
+        let toward = if lost {
+            // One it has no idea of: turn, and keep turning, until it is
+            // on the screen.
+            self.intent = FIND;
+            Some(me.pos.add(V3::from_turns(self.look.add(Fx::ratio(1, 8))).scale(Fx::from_int(6))))
+        } else if let Some((_, at, _)) = stale {
             self.intent = FIND;
             Some(at)
         } else if self.behind_left > 0 {
@@ -975,6 +1021,15 @@ impl Tally for PairTally {
                     self.hits += 1;
                     if !self.began_seen[s] {
                         self.off_screen += 1;
+                    }
+                    if std::env::var_os("PAIR_DEBUG").is_some() {
+                        eprintln!(
+                            "HIT {} {} marker seen {} began seen {}",
+                            after.frame,
+                            pair::MOVES[kind as usize].name,
+                            self.marker_seen[s],
+                            self.began_seen[s]
+                        );
                     }
                     let tell = pair::SPECIES.attack(kind).startup as usize;
                     if tell >= REACTION || kind == pair::RAKE2 {

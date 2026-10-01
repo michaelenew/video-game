@@ -364,7 +364,9 @@ pub const MOVES: [MoveDecl; MOVE_COUNT] = [
     MoveDecl::new("Rake, again", Clip::Rake2 as usize).never_chosen(),
     MoveDecl::new("Swat", Clip::Swat as usize),
     MoveDecl::new("Feint", Clip::Feint as usize).never_chosen(),
-    MoveDecl::new("Ambush", Clip::Ambush as usize),
+    // Its lane runs past where it is aimed: from behind you, under you, and
+    // on into your screen (`the-pair.md` §6).
+    MoveDecl::new("Ambush", Clip::Ambush as usize).stops_at_aim(),
     MoveDecl::new("Tail trip", Clip::Trip as usize).mirrors_to_target_side(),
     MoveDecl::new("Perch", Clip::Perch as usize),
     MoveDecl::new("Dive", Clip::Dive as usize).lobbed(),
@@ -551,6 +553,9 @@ crate::species_knobs! {
     CrashReach,      "pair",  "Twin pounce crashes cats this close",     Fixed, 0, fx(10,1);
     // seen_fast_speed, fast_appetite
     SeenFastSpeed,   "mind",  "A sample this fast was a dodge",          Fixed, 0, fx(30,1);
+    AmbushPast,      "mind",  "Ambush, its lane runs past you by",       Fixed, 0, fx(10,1);
+    StuckAfter,      "mind",  "Getting nowhere this long, it goes round", Frames, 0, 240;
+    StuckRound,      "mind",  "Goes round for",                          Frames, 0, 240;
     FastAppetite,    "mind",  "Ambush, at a fast sample",                Int, 0, 8000;
     SearchAfter,     "mind",  "Lost you, searches round where it saw you after", Frames, 0, 600;
     SearchTurn,      "mind",  "Searching, circles at (turns/s)",          Fixed, 0, fx(1,1);

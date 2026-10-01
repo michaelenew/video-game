@@ -118,7 +118,7 @@ pub mod word {
     pub const NOW: usize = 6;
     /// Each cat's block starts here, [`EACH`] words long.
     pub const CATS: usize = 7;
-    pub const EACH: usize = 6;
+    pub const EACH: usize = 7;
     /// Where it is, in centimetres.
     pub const POS: usize = 0;
     /// The frames its next hit is live across, inclusive: zero is none.
@@ -129,6 +129,9 @@ pub mod word {
     /// The top it would perch on, in centimetres, and how high it is.
     pub const PERCH_AT: usize = 4;
     pub const PERCH_TOP: usize = 5;
+    /// Frames it has been walking somewhere and getting nowhere, then (in
+    /// the top half) frames left of going round whatever is in the way.
+    pub const STUCK: usize = 6;
 
     /// A word of a cat's block.
     pub const fn of(slot: usize, w: usize) -> usize {
@@ -526,6 +529,7 @@ pub fn frame(w: &mut World) {
         moves(&mut m, &ground, &field, now);
         herd[s] = Some(m);
     }
+    stuck(&herd, &mut lore, &living, &players, &ground);
     twin(&mut herd, &mut lore, &living, &sees);
     stagger(&mut herd, &living, now);
     apart(&mut herd, &living, &field);
@@ -831,6 +835,18 @@ pub fn aim_leap(m: &mut Monster, kind: u8, horizon: u16) {
     let to = flat(aim.sub(m.pos));
     let far = math::wide_flat_len(to);
     let near = a.ideal_range.sub(a.range_span).max(Fx::ZERO);
+    // **Nothing reaches under the lip**: a dive comes down no nearer its
+    // perch than the lip, its circle and a body clear of it.
+    let near = if kind == DIVE {
+        near.max(
+            Knob::DiveLip
+                .fx()
+                .add(a.hit_radius)
+                .add(crate::tuning::body_radius()),
+        )
+    } else {
+        near
+    };
     let most = a.ideal_range.add(a.range_span);
     let reach = far.clamp(near, most);
     let dir = if far.raw() > 0 {
@@ -1100,6 +1116,63 @@ fn fly(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones::F
         m.pos = m.pos.add(V3::from_turns(m.yaw).scale(a.travel.mul(DT)));
     }
     m.pos.y = ground_at(m.pos, ground, field);
+}
+
+/// **Stuck**: walking somewhere and getting nowhere -- a wall, a platform,
+/// a stone between it and where it wants to be. Counted here; past `StuckAfter`
+/// it goes round (`mind::prowl_to`) for `StuckRound` frames.
+fn stuck(
+    herd: &[Option<Monster>; MAX_MONSTERS],
+    lore: &mut Lore,
+    living: &[usize],
+    players: &[crate::state::Player; crate::state::MAX_PLAYERS],
+    ground: &crate::arena::Terrain,
+) {
+    let quarry: [Quarry; crate::state::MAX_PLAYERS] = std::array::from_fn(|i| Quarry {
+        pos: players[i].pos,
+        vel: players[i].vel,
+        alive: players[i].health > 0,
+        aboard: players[i].aboard(),
+        stunned: players[i].action.stunned(),
+    });
+    for &s in living {
+        let m = herd[s].expect("living");
+        let w = lore.word(word::of(s, word::STUCK));
+        let (mut count, mut round) = (w & 0xFFFF, w >> 16);
+        if round > 0 {
+            round -= 1;
+            count = 0;
+        } else {
+            let mind = crate::monster::Mind {
+                quarry: &quarry,
+                ground,
+                lore,
+            };
+            let goal = if m.doing.free() && !perched(&m) {
+                super::mind::prowl_to(&m, &mind)
+            } else {
+                None
+            };
+            let far = goal.is_some_and(|g| {
+                math::wide_flat_dist(g, m.pos).raw() > Knob::LandShort.fx().mul(Fx::from_int(2)).raw()
+            });
+            if far && m.speed.abs().raw() < Knob::LandShort.fx().raw() {
+                count += 1;
+            } else {
+                count = 0;
+            }
+            if count as i32 > Knob::StuckAfter.raw() {
+                count = 0;
+                round = Knob::StuckRound.raw().max(0) as u32;
+            }
+        }
+        lore.set_word(word::of(s, word::STUCK), (round << 16) | (count & 0xFFFF));
+    }
+}
+
+/// Is this cat going round something it was stuck on?
+pub fn going_round(lore: &Lore, slot: usize) -> bool {
+    lore.word(word::of(slot, word::STUCK)) >> 16 > 0
 }
 
 /// **The twin pounce.** When both cats are free and see the target, and the
