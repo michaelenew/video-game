@@ -1241,7 +1241,12 @@ impl World {
     /// A hunt against one creature of any species.
     pub fn hunt_of(classes: [Class; MAX_PLAYERS], species: SpeciesId) -> World {
         let mut herd = [None; MAX_MONSTERS];
-        herd[0] = Some(species);
+        // As many of it as its species says a hunt holds: two for the Pair,
+        // one for everybody else (`FightDecl::bodies`).
+        let bodies = (species.get().fight.bodies as usize).clamp(1, MAX_MONSTERS);
+        for slot in herd.iter_mut().take(bodies) {
+            *slot = Some(species);
+        }
         World::hunt_with(classes, herd)
     }
 

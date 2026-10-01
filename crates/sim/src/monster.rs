@@ -676,7 +676,13 @@ impl Monster {
 
     /// Frames between glances, after its temper.
     pub fn glance_frames(&self) -> u16 {
-        crate::temper::glance(self.sp().glance_frames(), self.temper)
+        // Its species' say first, from its own state (`FightDecl::glance`):
+        // the Pair glance quicker with two hunters to watch.
+        let own = match self.sp().fight.glance {
+            Some(f) => f(self),
+            None => self.sp().glance_frames(),
+        };
+        crate::temper::glance(own, self.temper)
     }
 
     /// Lead on the target, after its temper.
@@ -1020,6 +1026,10 @@ impl Rig {
     /// Is this part's top face level enough to stand on? Always, for a
     /// species that does not say (`FightDecl::steepest`).
     fn standable(&self, part: usize) -> bool {
+        // **A top that sheds is never a floor** (`beast::Shape::sheds`).
+        if self.species.parts.get(part).is_some_and(|p| p.shape.sheds) {
+            return false;
+        }
         match self.species.fight.steepest {
             Some(k) => self.of(part).rot.r[1].y.raw() >= self.species.own_raw(k as usize),
             None => true,
@@ -1307,7 +1317,11 @@ impl Rig {
                     shoved = true;
                 }
             } else if step
-                || (vertical.raw() <= px.abs().raw()
+                // A top that sheds is never stood on, and a body under it is
+                // never pressed into the floor: it goes out of the side, the
+                // way it came in (`beast::Shape::sheds`).
+                || (!part.sheds
+                    && vertical.raw() <= px.abs().raw()
                     && vertical.raw() <= pz.abs().raw()
                     // A face too steep to stand on is never stood on by
                     // least penetration either: it is a wall to be pushed
@@ -1371,17 +1385,6 @@ impl Monster {
             },
             None => m,
         };
-        // **A lobbed move lands at its aim point**, on the floor, wherever the
-        // body is: the glob, the belly flop. Nothing about the bone it rides.
-        if decl.lobbed {
-            let at = self.aimed_at();
-            return Some((
-                V3::new(at.x, Fx::ZERO, at.z),
-                m.hit_radius,
-                m.hit_low,
-                m.hit_high,
-            ));
-        }
         // The spray's volume leaves the animal: so many metres a second along
         // the facing, from the first active frame. Everything else has zero
         // here and happens where it is standing.
@@ -1391,6 +1394,25 @@ impl Monster {
                 m.active.saturating_sub(left).saturating_sub(1) as i32,
             ))
             .mul(DT);
+        // **A lobbed move lands at its aim point**, on the floor, wherever the
+        // body is: the glob, the belly flop. Nothing about the bone it rides.
+        // A lobbed move that travels **slides on from there** along the
+        // facing -- the Pair's pounce skidding on, claws out -- which is zero
+        // for every lobbed move that does not.
+        if decl.lobbed {
+            let at = self.aimed_at();
+            let at = if m.travel.raw() != 0 {
+                at.add(V3::from_turns(self.yaw).scale(flown))
+            } else {
+                at
+            };
+            return Some((
+                V3::new(at.x, Fx::ZERO, at.z),
+                m.hit_radius,
+                m.hit_low,
+                m.hit_high,
+            ));
+        }
         let flown = if decl.stops_at_aim {
             flown.min(self.room_to_aim(m.hit_x))
         } else {
@@ -2228,7 +2250,12 @@ impl Monster {
         for _ in 0..(front + rear) {
             mul = mul.mul(self.sp().leg_speed_hurt());
         }
-        mul
+        // And its species' say on its pace this frame (`FightDecl::pace`):
+        // an enraged cat runs faster than its gallop.
+        match self.sp().fight.pace {
+            Some(f) => mul.mul(f(self)),
+            None => mul,
+        }
     }
 
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
@@ -2349,9 +2376,11 @@ impl Monster {
             .wrapping_add(covered.raw().clamp(0, 65535) as u16);
         self.beat = self.beat.wrapping_add(self.sp().breath_rate());
 
-        // It stays inside the arena and on the floor. Nothing in the move set
-        // takes it off the ground, and a creature this size on a platform would
-        // be a camera problem rather than a fight.
+        // It stays inside the arena and on the floor. Nothing in the
+        // Ridgeback's move set takes it off the ground, and a creature that
+        // size on a platform would be a camera problem rather than a fight. A
+        // species whose height is its own (`FightDecl::keeps_height`: a cat on
+        // a wall) is left where its hooks put it.
         let margin = self.sp().margin();
         self.pos.x = self
             .pos
@@ -2361,7 +2390,9 @@ impl Monster {
             .pos
             .z
             .clamp(bounds.lo_z.add(margin), bounds.hi_z.sub(margin));
-        self.pos.y = Fx::ZERO;
+        if !self.sp().fight.keeps_height {
+            self.pos.y = Fx::ZERO;
+        }
     }
 
     /// Metres of floor ahead of it before the wall it is kept off, along its

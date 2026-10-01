@@ -123,6 +123,12 @@ pub struct Shape {
     /// keeping them in rather than its solids pushing them out, no jumping
     /// off and no buck. Neither solid nor mountable.
     pub hollow: bool,
+    /// **Its top is a slope, not a floor**: solid, and nobody stands on it.
+    /// A body that comes down on it is pushed off the side rather than held
+    /// up, whatever the least penetration says -- the Pair's backs, which
+    /// are a hop high and are not a ride (`docs/design/creatures/the-pair.md`
+    /// §3). Off, a solid top is somewhere to stand, as it always was.
+    pub sheds: bool,
 }
 
 /// One part of a species: its box, its name, and what hitting it means.
@@ -154,6 +160,7 @@ pub const fn part(name: &'static str, bone: usize, min: V3, max: V3, vuln: u16) 
             solid: true,
             breakable: false,
             hollow: false,
+            sheds: false,
         },
         weak: false,
         vuln,
@@ -180,6 +187,12 @@ impl Part {
     pub const fn hollow(mut self) -> Part {
         self.shape.hollow = true;
         self.shape.solid = false;
+        self.shape.mountable = false;
+        self
+    }
+    /// Solid, and nobody stands on it. See [`Shape::sheds`].
+    pub const fn sheds(mut self) -> Part {
+        self.shape.sheds = true;
         self.shape.mountable = false;
         self
     }
