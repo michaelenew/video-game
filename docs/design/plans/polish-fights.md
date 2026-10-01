@@ -47,3 +47,7 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
   unanswerable zero on this branch. Fire pillar investigated: bestiary §8.
 - 2026-10-01: Galewing. Coop losses are the scripted pair's jumps (falls out
   of the jump under 2 m), not the bird.
+- 2026-10-01: Siegeshell alone anchors 5900 (committed). Merged #127.
+  Gnawers: health tried, reverted (costs weak classes). Broodmother: plan's
+  (0 % time on sacs). Mireback: pause 60, health 11000 (committed).
+  Next: Veilstalker way-in, Mantis Bulwark, then final re-measure + review.md.

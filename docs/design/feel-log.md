@@ -7285,3 +7285,18 @@ the pops and the length are the plan's.
 
 **Verdict** kept the Mireback; the Gnawers' length and the Broodmother's pops
 recorded in their §13.
+
+### 2026-10-01 — The Veilstalker's stalk is in no window
+
+**Changed** The fight report leaves out of the four windows the frames the
+Veilstalker prowls unseen -- its stalk running, or its target out of view --
+as it leaves out the frames the Galewing is out of reach.
+
+**Why** Its way in was 6–8 % against 20 and its walk-up 40 against 30. The
+walk-up was the stalk, not the recoveries §9 gives it to: an animal nobody
+can find is not safe to walk up to.
+
+**Found** The Champion 39 / 18 / 15 / 28 %, the Bulwark 36 / 17 / 17 / 30,
+the Reaver 38 / 17 / 14 / 31. Wins unchanged.
+
+**Verdict** kept.

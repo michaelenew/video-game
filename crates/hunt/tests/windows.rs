@@ -109,3 +109,27 @@ fn a_bird_on_the_floor_across_the_plateau_is_in_reach_and_one_circling_is_not() 
     );
     assert!(!at(16), "a bird sixteen metres up was counted in reach");
 }
+
+#[test]
+fn the_veilstalkers_stalk_is_no_window() {
+    // An animal prowling unseen can be neither walked up to nor hit by:
+    // its windows are asked of the rest of the fight.
+    let card = hunt::plans::card(SpeciesId::VEILSTALKER).expect("its card");
+    let r = hunt::play_card_in(
+        card,
+        None,
+        0,
+        [sim::Class::Champion; MAX_PLAYERS],
+        1,
+        6_000,
+        7,
+        |_| {},
+    );
+    let counted: u32 = r.threat.iter().sum();
+    assert!(counted > 0, "no window at all in a hundred seconds");
+    assert!(
+        counted < r.fought,
+        "every fought frame was windowed ({counted} of {}): the stalk is in none",
+        r.fought
+    );
+}

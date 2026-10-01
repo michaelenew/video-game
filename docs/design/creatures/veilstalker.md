@@ -717,11 +717,18 @@ won, about one in six and a half -- tier 4 -- in five and a half to eight
 minutes (five to ten asked). Threatening 44-48 % against ~40. **What is
 off:**
 
-- **The way in is 6-8 %, against ~20, and walking up ~40 % against ~30.** The
-  windows read `frames_until_free` plus the decloak floor (`Tally::until_free`),
-  and the animal's long recoveries are visible and *walkable*: the hunter
-  is near enough to walk in, so the time that §9 calls the way in reads as
-  walk-up. The split between them is the measure's, not the fight's.
+- **The way in was 6-8 %, against ~20, and walking up ~40 % against ~30.**
+  **The measure was wrong, and is changed (2026-10-01,
+  [plans/polish-fights.md](../plans/polish-fights.md)).** Traced frame by
+  frame, the walk-up was not its recoveries but its **stalk**: an animal
+  prowling unseen, its stalk running or its target out of view, read as safe
+  to walk up because it could not hit anybody soon -- and nobody can walk up
+  to what they cannot find. Like the Galewing out of reach, those frames are
+  now in no window (`Tally::windowed`). **Threatening 36–39 %, poke 17–18,
+  way in 14–17, walk up 28–31** for the Champion, the Bulwark and the
+  Reaver -- §9's 40 / the rest / 20 / 30 near enough; the Elementalist 27 /
+  13 / 16 / 45, the Dual mage 48 / 19 / 14 / 20. Nothing in the animal
+  changed; the wins are the same.
 - **The lunge and the pounce land rarely** against a hunter that reads every
   silhouette (one in fifteen; one in a hundred against the Champion, who
   walks out of every circle; one in five against the Elementalist on a trunk

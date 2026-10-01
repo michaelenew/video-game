@@ -1526,6 +1526,32 @@ impl Tally for VeilTally {
     /// is in range and in view; until then it has its stalk, then a decloak,
     /// before it can touch anybody. And a retreat is not an attack: its
     /// recoil, its bound and its re-cloak are all time it cannot hit in.
+    /// **The stalk is not a window** (polished 2026-10-01): an animal
+    /// prowling unseen, its stalk still running or its target not in view,
+    /// can neither be walked up to -- nobody can find it -- nor hit anybody
+    /// soon. Counted, it was most of the fight's "safe to walk up" (40 %
+    /// against §9's 30, which §9 gives to "its recoveries", "long and
+    /// visible"), and the way in, which only a recovery makes, was 6 %
+    /// against 20. The windows are asked of the rest, as the Galewing's are
+    /// of the frames it is in reach.
+    fn windowed(&self, w: &World) -> bool {
+        let Some(slot) = (0..w.monsters.len()).find(|s| {
+            w.monsters[*s].is_some_and(|m| m.species == sim::species::SpeciesId::VEILSTALKER)
+        }) else {
+            return true;
+        };
+        let Some(m) = w.monsters[slot] else {
+            return true;
+        };
+        if !matches!(m.doing, Doing::Prowl) {
+            return true;
+        }
+        let stalk = fight::stalk_left(&w.lore);
+        let target = (m.brain.target as usize).min(1);
+        let ready = fight::view_of(&w.lore, target) & fight::view::IN_VIEW != 0;
+        !(fight::perched(&m) || stalk > 0 || !ready)
+    }
+
     fn until_free(&self, w: &World, slot: usize, free: u16) -> u16 {
         let Some(m) = w.monsters[slot] else {
             return free;
