@@ -595,7 +595,7 @@ reaction):
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable   pops / slam windows
   Champion      7/24   143 s        308                  44 /  9 / 14 / 33 %                 2              30 / 113
-  Bulwark       1/24   248 s         95                  46 /  9 / 14 / 31 %                 1              49 / 109
+  Bulwark       0/24     --          --                  47 /  9 / 14 / 31 %                 0              43 / 129
   Reaver        0/24     --          --                  47 /  9 / 13 / 31 %                 0              10 / 112
   Elementalist  1/24   142 s        310                  48 /  7 / 12 / 33 %                 1              81 / 117
   Blood mage    0/24     --          --                  48 /  8 / 13 / 31 %                 0               0 / 173
@@ -676,5 +676,6 @@ Elementalist's free pop from a stone, and the Reaver's throw into the window.
 `Hands::throw_in`): on a window five to eleven metres off he throws it at the
 work, leaps to it as it flies and Slams out of the leap. His row above is
 re-run with it; the feel log of the day has the before and after. The thrown
-shield strikes no creature, so it is a way in, not a ranged blow
-([review.md](../review.md) `CLASS-5`). Here it takes him to the sacs: 49 pops in 109 slam windows, from 5 in 139, and his first win (1 of 24).
+shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
+did** -- thrown, the first body it meets; recalled, each it passes once. Here it takes him to the sacs: 49 pops in 109 slam windows, from 5 in 139, and his first win (1 of 24).
+ Same seeds, after: 0 of 24 (from 1), sac pops 43 in 129 slam windows (from 49 in 109). The leap reaches the sac before the shield does, so a sac popped by the throw itself is rare; whether his throw is his one standing answer to a sac (§7) is now a question for the hunter's aim, not the simulation.

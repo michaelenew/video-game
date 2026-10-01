@@ -106,13 +106,14 @@ says zero).
 | [Siegeshell](creatures/siegeshell.md) | Last Valley | 5 (for two) | 0/24 alone, 5/12 pair | Reaver pair 12/12 / Bulwark, Blood 0 | 0–5 | Built |
 
 The Bulwark's column moved on 2026-10-01 when the hunter learned his shield
-throw; his row per creature is in §3 and in bestiary §8.
+throw, and again when the shield began to strike creatures (`CLASS-5`); his
+row per creature is in §3 and in bestiary §8.
 
 **Four things are true across the whole cast**, and each is a question in §4:
 the Elementalist's fire pillar wins most fights from nine metres (`CLASS-1`);
 the Blood mage wins almost nothing against a creature (`CLASS-2`); the Dual
-mage lives or dies on how often windows come (`CLASS-3`); and the thrown
-shield does not touch a creature at all (`CLASS-5`).
+mage lives or dies on how often windows come (`CLASS-3`). (A fourth, that the
+thrown shield touched no creature, is resolved: `CLASS-5`.)
 
 ---
 
@@ -210,7 +211,7 @@ a charge into something solid; get out of a stampede's lane, or ride it.
   `--hunt hornback-escort`, `?hunt=hornback-escort` (the crossing: walk a cart
   along a road the herd migrates over).
 - **Harness:** Champion 22/24 in 109 s, Elementalist 24 in 36 s, Blood mage
-  21, Bulwark 19, Reaver 15, Dual mage 14. Crossing: 4–11 of 12 by class; two
+  21, Bulwark 20, Reaver 15, Dual mage 14. Crossing: 4–11 of 12 by class; two
   Champions 1 of 12. Four classes take one unanswerable hit in 24.
 - **Try first:** stand a boulder behind you, wait for the paws, step out of
   the lane on the head-drop, and hit the stunned bull. Then try riding a cow.
@@ -337,7 +338,7 @@ cats. Never commit to one while you can't see the other; split them.
 [creatures/the-pair.md](creatures/the-pair.md).
 
 - **Play:** `--hunt pair`, `?hunt=pair`. The Den.
-- **Harness:** Champion 16/24 in 159 s, Elementalist 24 in 46 s, Bulwark 21,
+- **Harness:** Champion 16/24 in 159 s, Elementalist 24 in 46 s, Bulwark 23,
   Reaver 7, Dual mage 4, Blood mage 0. Zero unanswerable by both clauses in
   all 144 hunts.
 - **Try first:** keep both cats on screen; read the tail before you dodge a
@@ -377,8 +378,8 @@ leads to the slam that lays her sacs on the floor — the window to pop them.
 
 - **Play:** `--hunt broodmother`, `?hunt=broodmother`. The Hollows.
 - **Harness (balanced plan):** Champion 7/24 in 143 s, Dual mage 10,
-  Elementalist 1 (but 22 of 24 ignoring the brood), Bulwark 1 (his leap
-  takes him to the sacs: 49 pops in 109 slam windows), Reaver and Blood mage 0. Unanswerable 0–3 by class (broodling bites from off screen).
+  Elementalist 1 (but 22 of 24 ignoring the brood), Bulwark 0 (his leap
+  takes him to the sacs: 43 pops in 129 slam windows), Reaver and Blood mage 0. Unanswerable 0–3 by class (broodling bites from off screen).
 - **Try first:** the screech, then get to a sac in the slam's window and pop
   it; see whether the colours (pale to red) tell you which sac is next.
 
@@ -488,7 +489,7 @@ sky and get off in time. [creatures/galewing.md](creatures/galewing.md).
 
 - **Play:** `--hunt galewing`, `?hunt=galewing`. The Cliffs.
 - **Harness:** plan A / plan B (the ride, `--gamble`): Champion 4 / 7,
-  Elementalist 17 / 18, Reaver 9 / 11, Bulwark 0 / 2, Blood and Dual 0. Zero
+  Elementalist 17 / 18, Reaver 9 / 11, Bulwark 0 / 1, Blood and Dual 0. Zero
   unanswerable, zero unseen tells. Coop 0 of 12.
 - **Try first:** dodge the Stoop at the hit and hit its wings while it is down;
   crouch under the talon pass; when it gathers itself to lift, ride it, brace
@@ -597,12 +598,22 @@ cast")
   leave few windows? Her punch also passes over what is at her feet.
 - `CLASS-4` **The Reaver's Mantis**: her shadow beside its guard is played and
   wins nothing.
-- `CLASS-5` **The thrown shield does not strike a creature** (only a fighter,
-  in versus). Three creature documents assume it does — the Galewing's wing on
-  a pass, the Broodmother's sac, the Siegeshell's planted climb. Make a thrown
-  and recalled shield a blow on a creature (`Monster::take_blow`), or keep it a
-  way across the floor? (Found 2026-10-01 while teaching the hunter to throw;
-  not changed.)
+- `CLASS-5` **Resolved 2026-10-01: the thrown shield strikes creatures and
+  critters.** Thrown, the first body it meets takes the throw (with its
+  weight) and it plants there empty; recalled, each body it passes through
+  takes the recall once and it comes home -- the versus rule, unchanged.
+  Through the swing's own path (`state::shield_hitbox`, drawn by the overlay;
+  `part_under` and `Monster::take_blow`; `Body::touched_by`, the pack's guard
+  and `pack::struck`), so guards, weak points, breakable parts and presence are
+  each creature's own; `crates/sim/tests/thrown_shield.rs` states it. The
+  Bulwark's harness: the Hornback 19 to 20, the crossing 7 to 8 of 12, the
+  Pair 21 to 23, the Broodmother 1 to 0, the Galewing's plan B 2 to 1, the rest
+  unchanged; no pin moved. **Still open for a person:** a guard reads the blow
+  as coming from where the shield was thrown or planted (it was the shield's
+  own position, which the Mantis read as "from under its belly" and never
+  guarded); a loaded throw knocks a critter down only if the blow knocked it
+  out of what it was doing; and the Siegeshell's climb (a shield that plants
+  *on* a part) is not built -- it needs P1.
 - `CLASS-6` The thrown shield has no frames at all (an instant mechanic),
   unlike the Reaver's send: should it pay the same price? (kits/bulwark.md.)
 

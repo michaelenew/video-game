@@ -400,6 +400,10 @@ throw at the rim, leap, arrive with the shield in hand on the edge. It needs P1 
 a planted shield live on a part, which is the same change the Blood mage's pools need.
 Hard for him: the Shiver, because his jump is the lowest and the late-jump read has the
 least margin. Identity, if the shield plant is built; a hole on the shell if it is not.
+*(2026-10-01: the thrown shield now strikes a part it meets -- `CLASS-5`, resolved -- and
+plants empty on the floor under it. Planting **on** the part is still not built; it waits on
+P1. The hunter's Siegeshell plan never throws, so the Bulwark's rows did not move: 0 of 24
+alone, 0 of 12 as a pair.)*
 
 **Elementalist — a hole, or the sharpest identity in the cast.** Her structure jump
 off one stone is 25.9 m, which clears the crown from the floor. Stones cannot be
