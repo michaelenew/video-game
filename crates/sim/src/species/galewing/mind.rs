@@ -36,6 +36,10 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         if fight::wind(lore).raw() < Fx::from_int(fight::cost(kind)).raw() {
             return 0;
         }
+        // **Only the move this approach is for** (`fight::intend`).
+        if fight::intent(lore) != Some(kind) {
+            return 0;
+        }
         // **It lines up**: only with the target inside the arc of its
         // heading. Where you stand against its circle is when it can come.
         let a = SPECIES.attack(kind);
@@ -67,22 +71,27 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         }
         match kind {
             DOWNWASH => {
-                // **Only when somebody would be pushed somewhere that costs**:
-                // exposed, and near a drop or on the tower.
+                // **How exposed the targets are**: each standing where the
+                // push would reach them, more for one near a drop or on the
+                // tower; nothing if every one of them is sheltered.
                 let mut exposed = 0;
+                let mut edged = 0;
                 for (i, q) in mind.quarry.iter().enumerate().take(4) {
                     if !q.alive || q.aboard {
                         continue;
                     }
                     let b = fight::seen_of(lore, i);
-                    if b & seen::EXPOSED != 0 && b & seen::EDGE != 0 {
+                    if b & seen::EXPOSED != 0 {
                         exposed += 1;
+                        if b & seen::EDGE != 0 {
+                            edged += 1;
+                        }
                     }
                 }
                 if exposed == 0 {
                     return 0;
                 }
-                s += Knob::LeeAppetite.raw() * exposed;
+                s += Knob::LeeAppetite.raw() * edged;
             }
             VOLLEY => {
                 if m.brain.last_move == DOWNWASH && m.brain.repeat_left > 0 {
@@ -103,6 +112,11 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
                 }
             }
             _ => {}
+        }
+        // **Patience**: up there it can wait for the shot it wants. A move
+        // that fits worse than this is not thrown -- it comes round again.
+        if s < Knob::Patience.raw() {
+            return 0;
         }
         return s;
     }

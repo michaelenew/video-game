@@ -531,6 +531,8 @@ crate::species_knobs! {
     // flight
     CruiseAlt,       "flight",  "Circles at (m)",                          Fixed, 0, fx(30,1);
     CircleRadius,    "flight",  "Circle radius (m)",                       Fixed, fx(4,1), fx(30,1);
+    CircleDrift,     "flight",  "Its circle drifts over its target at (m/s)", Fixed, 0, fx(20,1);
+    CircleKeep,      "flight",  "Its circle stays inside the arena by (m)", Fixed, 0, fx(20,1);
     CircleLead,      "flight",  "Chases the circle this far ahead (turns)", Fixed, 0, fx(1,2);
     CruiseSpeed,     "flight",  "Cruises at (m/s)",                        Fixed, 0, fx(40,1);
     PassSpeed,       "flight",  "Passes low at (m/s)",                     Fixed, 0, fx(40,1);
@@ -555,7 +557,9 @@ crate::species_knobs! {
     // the brain
     LineUpArc,       "mind",    "Decides only with the target this near its heading (turns)", Fixed, 0, fx(1,2);
     FollowAppetite,  "mind",    "A follow-up's appetite",                  Int, 0, 8000;
-    LeeAppetite,     "mind",    "Downwash, appetite per exposed target",   Int, 0, 8000;
+    LeeAppetite,     "mind",    "Downwash, appetite per target near a drop", Int, 0, 8000;
+    RepeatShare,     "mind",    "The move it just threw, drawn at (x its weight)", Fixed, 0, fx(1,1);
+    Patience,        "mind",    "Aloft, throws nothing scoring under",     Int, 0, 8000;
     EdgeNear,        "mind",    "Downwash, a target this near an edge is exposed (m)", Fixed, 0, fx(20,1);
     HurtAppetite,    "mind",    "Below desperation, low moves more (x)",   Fixed, 0, fx(4,1);
     DesperateHealth, "mind",    "Desperate below health (x)",              Fixed, 0, fx(1,1);
@@ -564,7 +568,7 @@ crate::species_knobs! {
     // the moves' shapes
     StoopLock,       "stoop",   "Its aim locks this many frames before",   Frames, 0, 60;
     StoopTrack,      "stoop",   "Its aim follows you at (m/s)",            Fixed, 0, fx(30,1);
-    StoopLift,       "stoop",   "Recovery's last frames are the lift",     Frames, 0, 120;
+    GroundDwell,     "stoop",   "On the floor and free, lifts after",      Frames, 0, 600;
     TalonHeight,     "talons",  "Talons clear (m)",                        Fixed, 0, fx(3,1);
     LaneLength,      "talons",  "Lane length (m)",                         Fixed, 0, fx(40,1);
     LaneWidth,       "talons",  "Lane width (m)",                          Fixed, 0, fx(8,1);

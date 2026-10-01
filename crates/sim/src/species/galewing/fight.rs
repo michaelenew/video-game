@@ -142,6 +142,11 @@ pub mod word {
     /// The talon lane's pivot: the point the target stood at, the lane
     /// running `LaneLead` before it (cm).
     pub const LANE_PIVOT: usize = 35;
+    /// The middle of the circle it is flying now (cm): drifting toward the
+    /// one over its target (`flight::drift`).
+    pub const CIRCLE_AT: usize = 36;
+    /// The air move this approach is for, plus one (`intend`).
+    pub const INTENT: usize = 37;
 }
 
 /// The phases of the ride ([`word::RIDE`]).
@@ -574,6 +579,7 @@ fn committed(w: &mut World, m: &mut Monster) {
         return;
     }
     spend(&mut w.lore, kind);
+    w.lore.set_word(word::INTENT, 0);
     let lead = m.lead_point(a.startup);
     let lead = V3::new(lead.x, Fx::ZERO, lead.z);
     let to = V3::new(lead.x.sub(m.pos.x), Fx::ZERO, lead.z.sub(m.pos.z));
@@ -748,7 +754,9 @@ fn transitions(w: &mut World, m: &mut Monster, slot: usize) {
         lore.set_word(word::DWELL, dwell);
         // Riders on a bird that has gathered itself go up with it: it does
         // not wait for them to decide.
-        let wait = m.sp().think_frames() as u32 + 2;
+        // **A while on the floor**: the walk-up after a Stoop, with the
+        // buffet and the Screech as its price, before it gathers itself.
+        let wait = Knob::GroundDwell.raw().max(0) as u32;
         if dwell > wait {
             lore.set_word(word::DWELL, 0);
             start(m, LIFT);
@@ -765,12 +773,83 @@ fn transitions(w: &mut World, m: &mut Monster, slot: usize) {
     }
     // **The perch**: the wind run low. Not with nowhere to perch.
     if wind(lore).raw() < Fx::from_int(Knob::PerchWind.raw()).raw()
-        && broken_wings(m) == 0
+        && !grounded_for_good(m)
         && perch_top(w).is_some()
     {
         start(m, PERCH);
         bump_half(&mut w.lore, word::PASSES, true);
+        return;
     }
+    intend(w, m);
+}
+
+/// **The decision point** (§5): as its target comes into the line-up arc,
+/// it decides which air move this approach is for -- a weighted draw among
+/// those it can afford and has off lockout, the last one less likely -- and
+/// the brain then throws that one when the range fits, or nothing. The
+/// intent is dropped when the target leaves the arc, and drawn again the
+/// next time round.
+fn intend(w: &mut World, m: &mut Monster) {
+    let target = V3::new(m.brain.seen.x, Fx::ZERO, m.brain.seen.z);
+    let to = V3::new(target.x.sub(m.pos.x), Fx::ZERO, target.z.sub(m.pos.z));
+    let inside = math::wide_flat_len(to).raw() > 0 && {
+        let off = math::wrap_turns(math::atan2_turns(to.z, to.x).sub(m.yaw)).abs();
+        off.raw() <= Knob::LineUpArc.fx().raw()
+    };
+    if !inside {
+        w.lore.set_word(word::INTENT, 0);
+        return;
+    }
+    if w.lore.word(word::INTENT) != 0 {
+        return;
+    }
+    let mut weights = [0i32; super::MOVE_COUNT];
+    let mut total = 0;
+    for kind in [STOOP, TALON, DOWNWASH, VOLLEY] {
+        let a = SPECIES.attack(kind);
+        if m.brain.cooldown[kind as usize] > 0 || cost(kind) > wind(&w.lore).to_int() {
+            continue;
+        }
+        let mut wgt = a.weight.max(0);
+        if m.brain.last_move == kind {
+            wgt = Fx::from_int(wgt).mul(Knob::RepeatShare.fx()).to_int();
+        }
+        weights[kind as usize] = wgt;
+        total += wgt;
+    }
+    if total <= 0 {
+        return;
+    }
+    let mut ticket = (draw(m) % total as u32) as i32;
+    for (kind, wgt) in weights.iter().enumerate() {
+        if *wgt <= 0 {
+            continue;
+        }
+        ticket -= wgt;
+        if ticket < 0 {
+            w.lore.set_word(word::INTENT, kind as u32 + 1);
+            return;
+        }
+    }
+}
+
+/// A xorshift step on the creature's own generator.
+pub fn draw(m: &mut Monster) -> u32 {
+    let mut x = m.brain.rng;
+    if x == 0 {
+        x = 0x2545_F491;
+    }
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    m.brain.rng = x;
+    x
+}
+
+/// The air move this approach is for, if it has decided.
+pub fn intent(lore: &Lore) -> Option<u8> {
+    let w = lore.word(word::INTENT);
+    (w > 0).then(|| (w - 1) as u8)
 }
 
 /// How many fighters are standing on it.
@@ -804,8 +883,8 @@ fn sense(w: &mut World, m: &Monster) {
     let b = base(w);
     let edge = Knob::EdgeNear.fx();
     let mut bits = 0u32;
-    for i in 0..MAX_PLAYERS.min(4) {
-        let p = fighters[i];
+    for (i, p) in fighters.iter().enumerate().take(MAX_PLAYERS.min(4)) {
+        let p = *p;
         if p.health <= 0 {
             continue;
         }
@@ -885,7 +964,10 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
             set_flag(m, flag::BROKE, true);
         }
     }
-    if flags(m) & flag::LOW != 0 && aloft(m) {
+    // Low -- passing, or down on the floor after a Stoop -- and not already
+    // crashed or grounded for good.
+    let down = matches!(m.doing, Doing::Toppled { .. }) || grounded_for_good(m);
+    if flags(m) & flag::LOW != 0 && !down && !perched(m) {
         m.poise += dealt;
     }
     false
@@ -1199,8 +1281,8 @@ fn downwash(w: &mut World, m: &Monster) {
         critters: &critters,
         arena: &ground,
     };
-    for i in 0..MAX_PLAYERS {
-        let p = fighters[i];
+    for (i, p) in fighters.iter().enumerate() {
+        let p = *p;
         if p.health <= 0 || p.aboard() || carried(&w.lore) == Some(i) {
             continue;
         }
@@ -1234,7 +1316,7 @@ pub fn rake_lane(lore: &Lore) -> (V3, V3, Fx, Fx) {
 /// rest of the active window.
 pub fn raked(gone: u16) -> (Fx, Fx) {
     let a = SPECIES.attack(VOLLEY);
-    let under = Knob::VolleyUnder.raw().max(1) as i32;
+    let under = Knob::VolleyUnder.raw().max(1);
     let run = (a.active as i32 - under).max(1);
     let len = Knob::VolleyLength.fx();
     // A point s along is covered from t0 = s/len * run to t0 + under.
@@ -1410,7 +1492,7 @@ fn screech(w: &mut World, m: &mut Monster) {
         m,
         SCREECH,
         Knob::ScreechLength.fx(),
-        |m, i| cone_disc(m, i),
+        cone_disc,
         CONE_DISCS,
     );
 }
@@ -1418,14 +1500,7 @@ fn screech(w: &mut World, m: &mut Monster) {
 /// **The buffet**: everybody in the sweep on its side, once -- unless they
 /// are in the air over it.
 fn buffet(w: &mut World, m: &mut Monster) {
-    own_area(
-        w,
-        m,
-        BUFFET,
-        Knob::BuffetHigh.fx(),
-        |m, i| buffet_disc(m, i),
-        3,
-    );
+    own_area(w, m, BUFFET, Knob::BuffetHigh.fx(), buffet_disc, 3);
 }
 
 fn own_area(

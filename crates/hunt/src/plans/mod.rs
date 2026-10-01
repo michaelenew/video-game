@@ -37,7 +37,7 @@ pub mod veilstalker;
 
 // pub mod mantis;
 
-// pub mod galewing;
+pub mod galewing;
 
 // pub mod siegeshell;
 
@@ -105,8 +105,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         SpeciesId::VEILSTALKER => Some(&veilstalker::CARD),
 
         // SpeciesId::MANTIS => Some(&mantis::CARD),
-
-        // SpeciesId::GALEWING => Some(&galewing::CARD),
+        SpeciesId::GALEWING => Some(&galewing::CARD),
 
         // SpeciesId::SIEGESHELL => Some(&siegeshell::CARD),
         _ => None,

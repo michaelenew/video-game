@@ -202,6 +202,65 @@ fn cruise(m: &Monster, base: Fx) -> Fx {
     ceiling(m, base, base.add(alt))
 }
 
+/// **Where its circle is**: drifting at `CircleDrift` toward the circle that
+/// passes over its target -- the target on its rim, on the side away from
+/// its own `circle` site -- and kept inside the arena. So every lap comes
+/// over whoever it is hunting, and *when* it can come at them is where they
+/// stand against that circle (§5): ahead of it in its line-up arc, at the
+/// range a move wants.
+fn drift(w: &mut World, m: &Monster, home: V3) -> V3 {
+    let r = Knob::CircleRadius.fx();
+    let was = w.lore.word(word::CIRCLE_AT);
+    let now = if was == 0 { home } else { fight::point(was) };
+    let target = V3::new(m.brain.seen.x, Fx::ZERO, m.brain.seen.z);
+    // Inside the bounds by its radius and a little: the circle stays over
+    // the arena.
+    let b = w.arena().bounds;
+    let keep = r.add(Knob::CircleKeep.fx());
+    let clamp = |v: Fx, lo: Fx, hi: Fx| {
+        let lo = lo.add(keep);
+        let hi = hi.sub(keep);
+        if lo.raw() > hi.raw() {
+            math::half(lo.add(hi))
+        } else {
+            v.clamp(lo, hi)
+        }
+    };
+    // Of the circles with the target on their rim, eight ways round, the
+    // one that stays inside the arena and nearest its own site.
+    let mut best: Option<(V3, Fx)> = None;
+    for k in 0..BEARINGS as i32 {
+        let dir = V3::from_turns(Fx::ratio(k, BEARINGS as i32));
+        let want = target.add(dir.scale(r));
+        let kept = V3::new(
+            clamp(want.x, b.lo_x, b.hi_x),
+            Fx::ZERO,
+            clamp(want.z, b.lo_z, b.hi_z),
+        );
+        let off = math::wide_flat_dist(kept, want);
+        let cost = off
+            .mul(Fx::from_int(BEARINGS as i32))
+            .add(math::wide_flat_dist(kept, home));
+        if best.is_none_or(|(_, c)| cost.raw() < c.raw()) {
+            best = Some((kept, cost));
+        }
+    }
+    let want = best.map_or(home, |(at, _)| at);
+    let gap = V3::new(want.x.sub(now.x), Fx::ZERO, want.z.sub(now.z));
+    let far = math::wide_flat_len(gap);
+    let step = Knob::CircleDrift.fx().mul(DT).min(far);
+    let next = if far.raw() > 0 {
+        now.add(math::wide_normalized(gap).scale(step))
+    } else {
+        now
+    };
+    w.lore.set_word(word::CIRCLE_AT, fight::word_of(next));
+    next
+}
+
+/// How many ways round a target it tries a circle: a count, not an angle.
+const BEARINGS: usize = 8;
+
 /// **The point it chases round its circle**: on the circle, `CircleLead`
 /// of a turn on from where it is now, anticlockwise -- so it settles onto
 /// the circle from wherever it is, and comes round it at its own speed.
@@ -273,7 +332,8 @@ fn arrive_turn() -> Fx {
 pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
     let mut f = Flight::load(&w.lore);
     let base = fight::base(w);
-    let centre = fight::circle_centre(w);
+    let home = fight::circle_centre(w);
+    let centre = drift(w, m, home);
     let lim = limits(m);
     let was_aloft = fight::aloft(m);
     let mut aloft = was_aloft;
@@ -520,7 +580,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                     }
                 }
                 ROLL => {
-                    ride_flight(w, m, &mut f, centre, base, &lim);
+                    ride_flight(w, m, &mut f, home, base, &lim);
                     aloft = true;
                 }
                 _ => {}
@@ -534,7 +594,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                 f.hold();
                 f.yaw = shared_yaw;
             } else if riders > 0 {
-                beating = ride_flight(w, m, &mut f, centre, base, &lim);
+                beating = ride_flight(w, m, &mut f, home, base, &lim);
             } else {
                 fight::set_ride(&mut w.lore, 0, ride::NONE, 0);
                 let glide = w.lore.word(word::GLIDE);
