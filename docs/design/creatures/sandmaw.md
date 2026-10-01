@@ -606,7 +606,7 @@ Numbers from `cargo run -p hunt --bin fight -- --species sandmaw --class <c>
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable
   Champion     18/24   191 s        461                  65 / 12 / 15 /  8 %                 0
-  Bulwark      24/24   214 s        665                  64 / 12 / 16 /  7 %                 0
+  Bulwark      22/24   209 s        658                  64 / 12 / 16 /  8 %                 0
   Reaver       10/24   223 s        329                  67 / 11 / 15 /  8 %                 0
   Elementalist 11/24   338 s        252                  49 /  7 /  9 / 35 %                 0
   Blood mage    0/24     --          --                  66 / 11 / 15 /  8 %                 0
@@ -724,3 +724,10 @@ has from a stand is a 20–30-frame tell); is the stone beach on every rise the
 Elementalist's identity or a solved puzzle (§12 question 5 -- the harness
 says it is every rise); and does the swallow's mouth, coming down 4 m across,
 read as the thing to hit, which only somebody facing it can say.
+
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here it costs him two of 24 (37 throws, leaping in to a stand).

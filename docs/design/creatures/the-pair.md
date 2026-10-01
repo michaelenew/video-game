@@ -697,7 +697,7 @@ knows a cat only while the cat or its marker is on that screen.
 ```text
                 won    mean win   threat / poke / way in / walk up   both in view   unanswerable
   Champion     16/24    159 s         78 /  7 /  7 /  8 %                75 %             0
-  Bulwark      12/24    186 s         80 /  6 /  6 /  7 %                74 %             0
+  Bulwark      21/24    161 s         79 /  7 /  6 /  8 %                74 %             0
   Reaver        7/24    111 s         79 /  7 /  7 /  7 %                67 %             0
   Elementalist 24/24     46 s         79 /  6 /  5 / 10 %                57 %             0
   Blood mage    0/24      --          81 /  6 /  6 /  6 %                75 %             0
@@ -814,3 +814,9 @@ cat, and nobody stands on one (`sheds`, `nobody_stands_on_a_cat`).
   creature's does; the banner is not drawn yet), the snarl and the roar (no
   audio), Cat's step.
 
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). **Here it moved him most: 12 to 21 of 24**, in 161 s from 186 -- a leap closes on a cat in its recovery before its mate comes round (180 throws, 176 Slams out of the leap).

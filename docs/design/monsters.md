@@ -831,7 +831,7 @@ Champion's poke, heavy and dodge whatever it held. 24 hunts a class,
 ```text
                 won    mean   health left (a win)   threat / poke / way in / walk up   unanswerable   before
   Champion     14/24   64 s        329                  46 / 13 / 19 / 21 %                0          14/24
-  Bulwark       0/24    --          --                  48 / 12 / 18 / 22 %                0           0/24
+  Bulwark       1/24  103 s         95                  48 / 11 / 17 / 23 %                0           0/24
   Reaver       12/24   64 s        336                  41 / 14 / 22 / 22 %                0           5/24
   Elementalist  6/24  141 s        463                  51 / 10 / 15 / 24 %                0           0/24
   Blood mage    0/24    --          --                  53 / 11 / 16 / 20 %                0           0/24
@@ -841,10 +841,12 @@ Champion's poke, heavy and dodge whatever it held. 24 hunts a class,
                            Elementalist -- pillars 170, bolts 1874
                            Blood mage -- blinks 33, Grasps 11, cuts 62, spikes 1
                            Dual mage -- hands turned 307, goads 351, finishers 137
+                           Bulwark -- shields thrown 683, leaps 628, Slams out of the leap 626, recalls 55
 ```
 
-The Champion's and the Bulwark's hunts are bit for bit what they were
-(`tests/pin.rs`). **The Reaver** more than doubles: a shadow beside the foot
+The Champion's hunts are bit for bit what they were (`tests/pin.rs`); the
+Bulwark's were too until his shield throw was added later the same day, which
+moved his pin deliberately and won him one hunt in 24 (above; the feel log). **The Reaver** more than doubles: a shadow beside the foot
 throws every swing twice, and a dash to it is the way in and out. **The
 Elementalist** wins a third, slowly -- her pillars break feet from range, and
 the ride is where she loses time: her bolt on the ridge is a bolt at her own

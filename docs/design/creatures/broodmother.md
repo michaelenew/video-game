@@ -595,7 +595,7 @@ reaction):
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable   pops / slam windows
   Champion      7/24   143 s        308                  44 /  9 / 14 / 33 %                 2              30 / 113
-  Bulwark       0/24     --          --                  47 /  9 / 13 / 31 %                 0               5 / 139
+  Bulwark       1/24   248 s         95                  46 /  9 / 14 / 31 %                 1              49 / 109
   Reaver        0/24     --          --                  47 /  9 / 13 / 31 %                 0              10 / 112
   Elementalist  1/24   142 s        310                  48 /  7 / 12 / 33 %                 1              81 / 117
   Blood mage    0/24     --          --                  48 /  8 / 13 / 31 %                 0               0 / 173
@@ -671,3 +671,10 @@ Elementalist's free pop from a stone, and the Reaver's throw into the window.
 - **Measured, not argued**: `beastcheck --species broodmother` prints each sac's
   and shin's lowest corner standing and in the move that brings it lowest; the
   reach probe (`sim::reachcheck`) is what §1's three rules are tested with.
+
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here it takes him to the sacs: 49 pops in 109 slam windows, from 5 in 139, and his first win (1 of 24).

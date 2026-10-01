@@ -662,7 +662,7 @@ from twelve single runs each, which print the report's lines:
 ```text
                 plan A won   mean     plan B won   mean     out of reach (A / B)   unanswerable, unseen tells
   Champion        4/24      482 s       7/24      491 s          67 / 65 %                  0
-  Bulwark         0/24        --        2/24      752 s          55 / 53 %                  0
+  Bulwark         0/24        --        2/24      700 s          55 / 53 %                  0
   Reaver          9/24      646 s      11/24      580 s          55 / 53 %                  0
   Elementalist   17/24      176 s      18/24      230 s           5 /  4 %                  0
   Blood mage      0/24        --        0/24        --           51 / 49 %                  0
@@ -739,3 +739,10 @@ unseen tells** for every class and both plans. Short of the targets:
   stands on.
 - **Question 5 (the Bulwark's guard against the volley)** is not built: the
   volley is unguardable, one answer per move.
+
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here nothing in wins (33 and 22 throws): the windows on the floor are too short for the leap and the Slam.
