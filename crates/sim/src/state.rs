@@ -1450,7 +1450,9 @@ impl World {
             let class = p.class;
             let mark = here.spawns.versus[i.min(1)];
             *p = Player {
-                pos: V3::new(mark.at.x, GROUND_Y, mark.at.z),
+                // **On the ground under the mark**: the floor everywhere a
+                // mark has stood, the plateau's top in the Cliffs.
+                pos: V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z),
                 facing: mark.facing,
                 rounds_won: wins,
                 ..Player::new(class)
@@ -1526,7 +1528,7 @@ impl World {
                 match here.hunt_marks() {
                     Some(marks) => {
                         let mark = marks.hunters[i.min(1)];
-                        p.pos = V3::new(mark.at.x, GROUND_Y, mark.at.z);
+                        p.pos = V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z);
                         p.facing = mark.facing;
                     }
                     None => {

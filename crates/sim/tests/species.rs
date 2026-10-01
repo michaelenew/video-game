@@ -274,7 +274,19 @@ fn every_registered_species_stands_and_moves() {
         let beast = w.monster().copied().expect("a hunt has a creature");
         assert_eq!(beast.species, sp.id);
         let rig = beast.rig();
-        assert!(rig.origin.y.raw() == 0, "{} is off the floor", sp.name);
+        // On the floor -- or, for a species whose height is its own (a cat on
+        // a wall, a bird in the air: `FightDecl::keeps_height`), never under
+        // the ground beneath it.
+        if sp.fight.keeps_height {
+            let ground = w.arena().ground_under(rig.origin);
+            assert!(
+                rig.origin.y.raw() >= ground.raw(),
+                "{} is under the ground",
+                sp.name
+            );
+        } else {
+            assert!(rig.origin.y.raw() == 0, "{} is off the floor", sp.name);
+        }
         let mut hurt = beast;
         hurt.take_hit(0, 100);
         assert!(

@@ -75,7 +75,7 @@ pub mod veilstalker;
 
 // pub mod mantis;
 
-// pub mod galewing;
+pub mod galewing;
 
 // pub mod siegeshell;
 
@@ -136,8 +136,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
 
         // SpeciesId::MANTIS => Some(&mantis::SPECIES),
-
-        // SpeciesId::GALEWING => Some(&galewing::SPECIES),
+        SpeciesId::GALEWING => Some(&galewing::SPECIES),
 
         // SpeciesId::SIEGESHELL => Some(&siegeshell::SPECIES),
         _ => None,
