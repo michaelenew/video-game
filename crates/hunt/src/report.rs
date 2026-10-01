@@ -526,14 +526,27 @@ impl Report {
         }
         // How long each fighter's spot has been under a fight's own floor
         // sign that warns of something (`World::signs`).
+        // And under a body's own telegraph: the area or the lane its windup
+        // draws (`pack::telegraph`), which is a marker too.
         let signs = after.signs();
+        let lanes: Vec<sim::monster::Telegraph> = (0..critter::MAX_CRITTERS)
+            .filter(|i| after.critters[*i].alive())
+            .filter_map(|i| sim::pack::telegraph(after.pack.as_ref(), &after.critters, i))
+            .collect();
         for (i, p) in after.players.iter().enumerate() {
-            let marked = signs.iter().any(|s| {
-                matches!(
-                    s.says,
-                    sim::sign::Says::Coming | sim::sign::Says::Live | sim::sign::Says::Faint
-                ) && s.covers(p.pos)
+            let under_lane = lanes.iter().any(|t| {
+                let a = V3::new(t.anchor.x, Fx::ZERO, t.anchor.z);
+                let b = a.add(t.along.scale(t.sweep));
+                sim::math::flat_segment_gap(p.pos, a, b).raw()
+                    <= t.radius.add(sim::tuning::body_radius()).raw()
             });
+            let marked = under_lane
+                || signs.iter().any(|s| {
+                    matches!(
+                        s.says,
+                        sim::sign::Says::Coming | sim::sign::Says::Live | sim::sign::Says::Faint
+                    ) && s.covers(p.pos)
+                });
             self.marked_for[i] = if marked { self.marked_for[i] + 1 } else { 0 };
         }
         // Swings over a crown, once per swing; and bodies behind.

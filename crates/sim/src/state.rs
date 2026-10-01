@@ -9672,6 +9672,12 @@ impl World {
                 if !body.reaches(sp, victim.pos, victim.hurt_height(), t::body_radius()) {
                     continue;
                 }
+                if sp
+                    .pack
+                    .is_some_and(|decl| decl.mind.spares(&brain, &self.critters, c, i))
+                {
+                    continue;
+                }
                 let away = V3::new(
                     victim.pos.x.sub(anchor.x),
                     Fx::ZERO,

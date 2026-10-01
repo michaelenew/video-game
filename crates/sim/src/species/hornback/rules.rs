@@ -513,8 +513,13 @@ fn stun(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize, hit: Stopper
     body.vel = V3::ZERO;
     body.role = (body.role & !(bull::STAGGERED | bull::CHAINED)) | bull::STUNNED;
     body.set(flag::HIT_USED, true);
-    // It learns this wall, once.
-    set_point(pack, memo::WARY_AT, hit.centre());
+    // It learns this wall, once: a rock by its middle, a long face -- the
+    // bank -- by where on it the nose met it.
+    let learned = match hit {
+        Stopper::Arena(_) => nose(&w.critters[b]),
+        _ => hit.centre(),
+    };
+    set_point(pack, memo::WARY_AT, learned);
     set_half(pack, memo::WARY, 0, knob(Knob::WaryFrames) + frames);
     set_half(pack, memo::WARY, 1, knob(Knob::ChargeLockout) + frames);
     set_bit(pack, bits::ENDS_IN_SOLID, false);
@@ -682,10 +687,17 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
     // lee: its hit's own reach across, and a fighter's width -- so the lane
     // drawn is the whole of where the stampede can hit, and nothing standing
     // inside a lee drawn clear can be reached from outside it.
+    let slant = sp
+        .attack(STAMPEDE)
+        .hit_x
+        .abs()
+        .mul(Fx::ratio(1, 2))
+        .mul(Fx::ratio(1, 2));
     let keep = sp
         .attack(STAMPEDE)
         .hit_radius
         .add(t::body_radius())
+        .add(slant)
         .max(half_w);
     let room = width.mul(Fx::ratio(1, 2)).sub(keep).max(Fx::ZERO);
     let side = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
@@ -736,7 +748,10 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
         }
         // Where it wants to be across the lane: here, unless a lee or a
         // body on the floor is ahead of it.
-        let ahead = half_l.add(half_l).add(knob_fx(Knob::LeeLength));
+        let ahead = half_l
+            .add(half_l)
+            .add(knob_fx(Knob::LeeLength))
+            .add(knob_fx(Knob::LaneWidth));
         let place = rank % abreast;
         rank += 1;
         let mut want = if abreast > 1 {
@@ -780,10 +795,14 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
             }
         }
         want = want.clamp(room.neg(), room);
-        // Steered: toward its place across the lane, a body length on.
-        let goal = at
-            .add(dir.scale(along.add(half_l.add(half_l))))
-            .add(side.scale(want));
+        // Steered: toward its place across the lane, and never more than a
+        // quarter off the lane's way -- a cow running at a slant carries its
+        // hit out sideways, and the lane drawn is where the hit can be.
+        let shift = want.sub(across).abs();
+        let on = half_l
+            .add(half_l)
+            .max(shift.add(shift).add(shift).add(shift));
+        let goal = at.add(dir.scale(along.add(on))).add(side.scale(want));
         let to = V3::new(goal.x.sub(c.pos.x), Fx::ZERO, goal.z.sub(c.pos.z));
         let body = &mut w.critters[i];
         if to.flat_len().raw() > 0 {

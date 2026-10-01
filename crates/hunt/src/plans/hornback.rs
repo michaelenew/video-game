@@ -79,6 +79,10 @@ const OPEN_FOR: usize = 14;
 const HOOK_NEAR: Fx = Fx::from_raw(5 << 16);
 /// A post nearer the bull than this, or a way there passing nearer, costs.
 const KEEP_OFF: Fx = Fx::from_raw(7 << 16);
+/// A post this near the one the bull is wary of is the same rock.
+const SPENT_NEAR: Fx = Fx::from_raw(3 << 16);
+/// What standing at the bank costs, in metres of walking, over a boulder.
+const BANK_COST: Fx = Fx::from_raw(6 << 16);
 /// How far a stone is raised in front of the Elementalist into a lane.
 const STONE_AHEAD: Fx = Fx::from_raw(5 << 16);
 
@@ -123,6 +127,8 @@ pub struct Hornback {
     /// The rock it was last at when the bull was stunned: wary of it, so the
     /// next post is another (§4).
     spent: Option<V3>,
+    /// The post it last stood at.
+    posted: Option<V3>,
     /// When it last saw the bull stunned.
     stunned_at: Option<u32>,
     /// A stone already raised into this charge.
@@ -149,6 +155,7 @@ impl Hornback {
             walk_left: 0,
             was_down: false,
             stun_from: None,
+            posted: None,
             stunned_at: None,
             spent: None,
             raised_for: false,
@@ -194,28 +201,74 @@ fn auto_button(me: &sim::state::Player) -> u16 {
 
 /// The solids it can stand in front of: the standing boulders, and any stone
 /// or shield of its own, as centres and how far across.
-fn rocks(w: &World) -> Vec<(V3, Fx)> {
+fn rocks(w: &World) -> Vec<Rock> {
     let mut out = Vec::new();
     let ground = w.terrain();
+    let sp = sim::species::lookup(sim::species::SpeciesId::HORNBACK).unwrap();
     for p in ground.floor.iter() {
-        let sp = sim::species::lookup(sim::species::SpeciesId::HORNBACK).unwrap();
         if p.kind == h::BOULDER || p.kind == h::CRACKED {
             if let Some(s) = p.solid(sp) {
-                let c = V3::new(
-                    s.min.x.add(s.max.x).mul(Fx::ratio(1, 2)),
-                    Fx::ZERO,
-                    s.min.z.add(s.max.z).mul(Fx::ratio(1, 2)),
-                );
-                out.push((c, s.max.x.sub(s.min.x).mul(Fx::ratio(1, 2))));
+                out.push(Rock::Box(s.min, s.max, Fx::ZERO));
             }
+        }
+    }
+    // The bank's face, and anything else the arena stands that a charge
+    // stops at -- but not the edge, which it pulls up short of. Further off
+    // in the choosing than a boulder: a person goes to the rock in front of
+    // them first.
+    let b = ground.bounds;
+    for s in ground.arena.solids() {
+        let edge = s.min.x.raw() <= b.lo_x.raw()
+            || s.max.x.raw() >= b.hi_x.raw()
+            || s.min.z.raw() <= b.lo_z.raw()
+            || s.max.z.raw() >= b.hi_z.raw();
+        if !edge && s.max.y.raw() > Fx::ONE.raw() {
+            out.push(Rock::Box(s.min, s.max, BANK_COST));
         }
     }
     for s in sim::stones::gather(&w.players).iter().flatten() {
         if s.standing_height().raw() > Fx::ONE.raw() {
-            out.push((V3::new(s.at.x, Fx::ZERO, s.at.z), s.radius()));
+            out.push(Rock::Disc(V3::new(s.at.x, Fx::ZERO, s.at.z), s.radius()));
         }
     }
     out
+}
+
+/// A solid to stand in front of.
+#[derive(Clone, Copy)]
+enum Rock {
+    /// A box's footprint, and what choosing it costs over a boulder.
+    Box(V3, V3, Fx),
+    Disc(V3, Fx),
+}
+
+impl Rock {
+    /// Where to stand: `OFF_ROCK` off the face nearest the bull, on the line
+    /// from the bull through you.
+    fn post(&self, bull: V3, side: V3) -> V3 {
+        let (near, out) = match *self {
+            Rock::Box(min, max, _) => {
+                let x = bull.x.clamp(min.x, max.x);
+                let z = bull.z.clamp(min.z, max.z);
+                (V3::new(x, Fx::ZERO, z), Fx::ZERO)
+            }
+            Rock::Disc(c, r) => (c, r),
+        };
+        let from = flat(bull.sub(near));
+        let dir = if from.flat_len().raw() > 0 {
+            from.normalized()
+        } else {
+            side
+        };
+        near.add(dir.scale(out.add(OFF_ROCK)))
+    }
+
+    fn cost(&self) -> Fx {
+        match *self {
+            Rock::Box(_, _, c) => c,
+            Rock::Disc(..) => Fx::ZERO,
+        }
+    }
 }
 
 impl Plan for Hornback {
@@ -411,11 +464,10 @@ impl Plan for Hornback {
             let stun = h::knob(h::Knob::StunFrames).max(0) as u32;
             if w.frame < from + stun.saturating_sub(SPARE + REACTION as u32) {
                 self.intent = HEAD;
+                // Where it was stood when the bull met the rock: the post it
+                // will not use again while the bull remembers.
                 if self.spent.is_none() {
-                    self.spent = rocks(w)
-                        .into_iter()
-                        .min_by_key(|(c, _)| flat(c.sub(bull.pos)).flat_len().raw())
-                        .map(|(c, _)| c);
+                    self.spent = Some(self.posted.unwrap_or(me.pos));
                 }
                 let head = bull.pos.add(bull.facing.scale(half_len));
                 let head_mid = V3::new(
@@ -506,7 +558,15 @@ impl Plan for Hornback {
                 } else {
                     0
                 };
-                return Input::aimed(steer(bull_yaw, out.scale(OUT_OF_LANE)) | dash, bull_aim);
+                // Out, and back toward the rock behind: where the bull's head
+                // will be when the rock stops it.
+                let stops = seen.signs.iter().any(|s| s.says == Says::Stops);
+                let way = if stops && dash == 0 {
+                    out.add(out).add(bull.facing).normalized()
+                } else {
+                    out
+                };
+                return Input::aimed(steer(bull_yaw, way.scale(OUT_OF_LANE)) | dash, bull_aim);
             }
             // Before the drop: stand, facing it -- leaving early is what the
             // charge teaches against -- unless the lane drawn on the floor
@@ -553,6 +613,21 @@ impl Plan for Hornback {
                 let through = away.add(bull.facing.scale(Fx::ONE.neg())).normalized();
                 return Input::aimed(steer(bull_yaw, through) | Input::SHIFT, bull_aim);
             }
+            // The shoulder's lean, at its flank: a swing already in flight
+            // meets it; failing one, the dodge, away from the flank it will
+            // throw.
+            let leaning = bull.act == h::SHOULDER && bull.state == is::STARTUP;
+            let flank_reach = h::knob_fx(h::Knob::ShoulderFlank).add(Fx::ONE);
+            if leaning && gap.raw() < flank_reach.raw() && free && self.dodge_left == 0 {
+                self.intent = DODGE;
+                self.dodge_left = sim::tuning::dodge_frames() as u32 + 8;
+                let out = if across.raw() >= 0 {
+                    side
+                } else {
+                    side.scale(Fx::ONE.neg())
+                };
+                return Input::aimed(steer(bull_yaw, out) | Input::SHIFT, bull_aim);
+            }
             let body_reach = reach.add(half_wid);
             let close = gap.raw() <= body_reach.add(Fx::ONE).raw();
             // Open, and staying open long enough: the recovery's phase is
@@ -567,16 +642,22 @@ impl Plan for Hornback {
                 self.intent = ROUND;
                 if let Some(post) = self.post(w, &me, &bull, side) {
                     let to = flat(post.sub(me.pos));
+                    // Out of its reach first, then to the post: from in front
+                    // of it, sideways off the line its hook and its charge
+                    // take; from beside it, straight away from the flank.
                     let out = if across.raw() >= 0 {
                         side
                     } else {
                         side.scale(Fx::ONE.neg())
                     };
-                    // Across its front, first out to the side.
-                    let way = if nose_cos.raw() > 0 && gap.raw() < HOOK_NEAR.raw() {
-                        out.add(to.normalized()).normalized()
-                    } else {
+                    let way = if gap.raw() >= HOOK_NEAR.raw() {
                         to
+                    } else if nose_cos.raw() > Fx::ratio(3, 10).raw() {
+                        out.add(out).add(bull.facing).normalized()
+                    } else if rel.flat_len().raw() > 0 {
+                        rel.normalized()
+                    } else {
+                        out
                     };
                     return Input::aimed(steer(bull_yaw, way), bull_aim);
                 }
@@ -618,6 +699,7 @@ impl Plan for Hornback {
         let post = self.post(w, &me, &bull, side);
         if let Some(post) = post {
             let to = flat(post.sub(me.pos));
+            self.posted = Some(post);
             if to.flat_len().raw() > AT_POST.raw() {
                 self.intent = POST;
                 return Input::aimed(steer(bull_yaw, to), bull_aim);
@@ -648,17 +730,11 @@ impl Hornback {
         let wary = self.spent;
         rocks(w)
             .into_iter()
-            .filter(|(c, _)| wary.is_none_or(|s| flat(s.sub(*c)).flat_len().raw() > Fx::ONE.raw()))
-            .map(|(c, r)| {
-                let from = flat(bull.pos.sub(c));
-                let dir = if from.flat_len().raw() > 0 {
-                    from.normalized()
-                } else {
-                    side
-                };
-                c.add(dir.scale(r.add(OFF_ROCK)))
+            .map(|r| (r.post(bull.pos, side), r.cost()))
+            .filter(|(p, _)| {
+                wary.is_none_or(|s| flat(s.sub(*p)).flat_len().raw() > SPENT_NEAR.raw())
             })
-            .min_by_key(|p| {
+            .min_by_key(|(p, cost)| {
                 let walk = flat(p.sub(me.pos)).flat_len();
                 let near = flat(p.sub(bull.pos)).flat_len();
                 let past = sim::math::flat_segment_gap(bull.pos, me.pos, *p);
@@ -666,8 +742,9 @@ impl Hornback {
                     .sub(near)
                     .max(Fx::ZERO)
                     .add(KEEP_OFF.sub(past).max(Fx::ZERO));
-                walk.add(crowd.mul(Fx::from_int(3))).raw()
+                walk.add(*cost).add(crowd.mul(Fx::from_int(3))).raw()
             })
+            .map(|(p, _)| p)
     }
 }
 

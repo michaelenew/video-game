@@ -435,6 +435,26 @@ pub trait PackMind {
         false
     }
 
+    /// **Frames until the soonest hit the pack could land**, if the species
+    /// knows better than the generic count ([`frames_until_free`]), which
+    /// is a pack's of tokens. The Hornback's bull takes no token: what it
+    /// could land next is its own windup, or the quickest move its target's
+    /// range allows. `None` is the generic answer.
+    fn frames_until_free(&self, pack: &Pack, critters: &Critters) -> Option<u16> {
+        let _ = (pack, critters);
+        None
+    }
+
+    /// **Does critter `i`'s hit pass over fighter `who`** this frame, though
+    /// its volume reaches them? The default is that it does not. The
+    /// Hornback's stampede: the first cow to reach you knocks you down, and
+    /// the rest step over or round a body on the floor -- so a second cow
+    /// whose volume touches you on the same frame as the first spares you.
+    fn spares(&self, pack: &Pack, critters: &Critters, i: usize, who: usize) -> bool {
+        let _ = (pack, critters, i, who);
+        false
+    }
+
     /// **A fighter's swing is about to land on critter `i`**: does it? The
     /// default is that it does. A body that guards -- the Hornback bull,
     /// braced -- answers [`Guarded::Bounces`] for a blow it turns, and the
@@ -781,6 +801,12 @@ pub fn hurt(
 /// coming, so they count only once they are winding up.
 pub fn frames_until_free(pack: &Pack, critters: &Critters, herd: &Herd) -> u16 {
     let sp = pack.sp();
+    if let Some(own) = sp
+        .pack
+        .and_then(|decl| decl.mind.frames_until_free(pack, critters))
+    {
+        return own;
+    }
     let hurts = |act: u8| sp.attack(act).damage > 0;
     let mut soonest = u32::MAX;
     for c in critters.iter().filter(|c| c.alive()) {

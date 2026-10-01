@@ -761,10 +761,12 @@ impl Mind {
                 // Winding the stampede up: into the lane, and facing down it.
                 (is::STARTUP, STAMPEDE) => match bellow_lane(pack) {
                     Some((at, dir, _, width)) => {
+                        let slant = sp.attack(STAMPEDE).hit_x.abs().mul(Fx::ratio(1, 2));
                         let reach = sp
                             .attack(STAMPEDE)
                             .hit_radius
-                            .add(crate::tuning::body_radius());
+                            .add(crate::tuning::body_radius())
+                            .add(slant.mul(Fx::ratio(1, 2)));
                         let room = width.mul(Fx::ratio(1, 2)).sub(reach).max(Fx::ZERO);
                         let (along, across) = lane_frame(at, dir, c.pos);
                         let side = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
@@ -955,6 +957,59 @@ impl PackMind for Mind {
             (_, s) => s,
         };
         set_herd(pack, next);
+    }
+
+    fn frames_until_free(&self, pack: &Pack, critters: &Critters) -> Option<u16> {
+        // What could land next, and when: a windup's frames left, a hit out
+        // now; a cow's kick winding up, a stampede running. A bull that can
+        // act could throw the quickest move its target's range allows -- the
+        // hook inside its reach, the charge and its run beyond it; one that
+        // cannot (a skid, a stun) only once it can again.
+        let sp = pack.sp();
+        let mut soonest = u32::MAX;
+        for c in critters.iter().filter(|c| c.alive()) {
+            let a = sp.attack(c.act);
+            let left = match c.state {
+                is::ACTIVE if a.damage > 0 && !c.has(flag::HIT_USED) => 0,
+                is::STARTUP if a.damage > 0 => c.timer as u32,
+                _ => u32::MAX,
+            };
+            soonest = soonest.min(left);
+            if c.kind != BULL || pack.mood != mood::HUNTING {
+                continue;
+            }
+            let seen = &pack.seen[target_of(c)];
+            if !seen.alive {
+                continue;
+            }
+            let gap =
+                V3::new(seen.pos.x.sub(c.pos.x), Fx::ZERO, seen.pos.z.sub(c.pos.z)).flat_len();
+            let hook = sp.attack(HOOK);
+            let quickest = if gap.raw() <= hook.ideal_range.add(hook.range_span).raw() {
+                hook.startup as u32
+            } else {
+                let charge = sp.attack(CHARGE);
+                let run = gap
+                    .div(charge.advance.max(Fx::ONE))
+                    .mul(Fx::from_int(crate::TICK_HZ as i32));
+                charge.startup as u32 + run.to_int().max(0) as u32
+            };
+            let until = match c.state {
+                is::PROWL => 0,
+                is::RECOVERY | is::FLINCH => c.timer as u32,
+                _ => u32::MAX,
+            };
+            soonest = soonest.min(until.saturating_add(quickest));
+        }
+        if pack.grace > 0 || pack.mood != mood::HUNTING {
+            return Some(u16::MAX);
+        }
+        Some(soonest.min(u16::MAX as u32) as u16)
+    }
+
+    fn spares(&self, pack: &Pack, critters: &Critters, i: usize, who: usize) -> bool {
+        // Cows do not tread on the fallen (§2): one stampede, one knockdown.
+        critters[i].act == STAMPEDE && trampled(pack, who)
     }
 
     fn mirrored(&self, c: &Critter) -> bool {
