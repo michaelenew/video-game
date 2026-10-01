@@ -61,7 +61,7 @@ pub mod sentinel;
 
 pub mod gnawers;
 
-// pub mod hornback;
+pub mod hornback;
 
 // pub mod mireback;
 
@@ -124,7 +124,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
 
-        // SpeciesId::HORNBACK => Some(&hornback::SPECIES),
+        SpeciesId::HORNBACK => Some(&hornback::SPECIES),
 
         // SpeciesId::MIREBACK => Some(&mireback::SPECIES),
 

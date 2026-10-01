@@ -9775,6 +9775,12 @@ impl World {
                 Fx::ONE
             })
             .to_int();
+            // A guard breaker, by the versus rule's own flag -- or a Bulwark
+            // Slam carrying weight, which is what a loaded shield is for.
+            let breaks = m.unblockable
+                || (attacker.class == Class::Bulwark
+                    && kind == SLOT_COMMITTED
+                    && bulwark::weight(&attacker).raw() > 0);
             let mut any = false;
             for c in 0..critter::MAX_CRITTERS {
                 let body = self.critters[c];
@@ -9782,6 +9788,43 @@ impl World {
                     continue;
                 }
                 self.critters[c].set(bit, true);
+                // **A guard, if the body has one** (`PackMind::guarded`): a
+                // turned blow does nothing to it, and the swing recoils.
+                let guarded = match sp.pack {
+                    Some(decl) => decl.mind.guarded(
+                        &mut brain,
+                        &mut self.critters,
+                        c,
+                        &pack::Blow {
+                            who: i,
+                            from: attacker.pos,
+                            hitbox: &box_out,
+                            damage: worth,
+                            breaks,
+                        },
+                    ),
+                    None => pack::Guarded::Lands,
+                };
+                if let pack::Guarded::Bounces { recoil, push } = guarded {
+                    let back = V3::new(
+                        attacker.pos.x.sub(body.pos.x),
+                        Fx::ZERO,
+                        attacker.pos.z.sub(body.pos.z),
+                    )
+                    .normalized();
+                    let p = &mut self.players[i];
+                    p.action = Action::HitStun { left: recoil };
+                    p.stun_total = recoil;
+                    // Pushed back the distance asked, over the recoil: a
+                    // blocker's pushback, the other way round.
+                    let rate =
+                        Fx::from_int(crate::TICK_HZ as i32).div(Fx::from_int(recoil.max(1) as i32));
+                    p.vel.x = back.x.mul(push).mul(rate);
+                    p.vel.z = back.z.mul(push).mul(rate);
+                    freeze(p, impact_freeze(t::creature_freeze(), true));
+                    any = true;
+                    continue;
+                }
                 let dir = if m.knockback.raw() < 0 {
                     attacker.pos.sub(body.pos)
                 } else {

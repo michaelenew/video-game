@@ -83,6 +83,7 @@ pub const GNAWER_KIND: CritterKind = CritterKind {
     ],
     role: 0,
     yields: false,
+    mountable: false,
 };
 
 pub const KINDS: [CritterKind; 2] = [
@@ -94,6 +95,7 @@ pub const KINDS: [CritterKind; 2] = [
         moves: &[CritterMove::free(MAUL), CritterMove::free(HOWL)],
         role: 0,
         yields: false,
+        mountable: false,
     },
 ];
 

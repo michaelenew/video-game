@@ -144,7 +144,11 @@ fn every_registered_arena_is_well_formed() {
                 "{} names an unregistered creature",
                 a.name
             );
-            assert_eq!(arena::for_species(s).id, a.id, "{}", a.name);
+            // A creature may have more than one arena (the Hornback's
+            // crossing is its defend variant); the one it is hunted in by
+            // default is the first that names it, and names it.
+            assert_eq!(arena::for_species(s).creature, Some(s), "{}", a.name);
+            assert!(arena::for_species(s).id.0 <= a.id.0, "{}", a.name);
         }
     }
     assert!(seen >= 2, "the proving ground and the range, at least");

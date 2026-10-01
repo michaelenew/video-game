@@ -160,6 +160,23 @@ pub mod pose {
     pub const DIG: usize = 5;
     /// Forepaws up on an edge, hauling.
     pub const CLIMB: usize = 6;
+    /// The forequarter rising and coming down, twice; then the head drops
+    /// level and it runs. The Hornback bull's charge.
+    pub const PAW: usize = 7;
+    /// Head low and cocked to one side; then the horns sweep up through.
+    pub const HOOK: usize = 8;
+    /// Leaning away from the side it will throw; then the flank comes across.
+    pub const LEAN: usize = 9;
+    /// Head low and square, braced: a guard.
+    pub const BRACE: usize = 10;
+    /// Head thrown back, neck swelling: a call.
+    pub const BELLOW: usize = 11;
+    /// Head down, tail up; then both hind legs straight back.
+    pub const KICK: usize = 12;
+    /// Head down; then the rump kicks up under whoever is riding.
+    pub const BUCK: usize = 13;
+    /// Flat out: the legs going, the head forward. A stampede.
+    pub const GALLOP: usize = 14;
 }
 
 /// Not in a ring slot.
@@ -367,10 +384,15 @@ impl Critter {
             .mul(crate::DT);
         let fwd = self.facing();
         let side = V3::new(fwd.z.neg(), Fx::ZERO, fwd.x);
+        // Thrown to the other side, if its species says this one is.
+        let across = match sp.pack {
+            Some(decl) if decl.mind.mirrored(self) => m.hit_z.neg(),
+            _ => m.hit_z,
+        };
         let anchor = self
             .pos
             .add(fwd.scale(m.hit_x.add(flown)))
-            .add(side.scale(m.hit_z));
+            .add(side.scale(across));
         Some((
             V3::new(anchor.x, self.pos.y, anchor.z),
             m.hit_radius,
@@ -636,6 +658,11 @@ pub struct CritterKind {
     /// wall somebody in would be an unanswerable trap -- and on for a cow.
     /// Either way a fighter is never moved by one.
     pub yields: bool,
+    /// **A fighter can stand on it, and ride it**: its box's top is a
+    /// surface, as a monster's mountable part is (`state::step_critter_rider`).
+    /// The Hornback's cow. Off for everything a person is not meant to stand
+    /// on -- a gnawer, the bull.
+    pub mountable: bool,
 }
 
 /// One tuned number of one kind of critter. Every kind has a row of these in
@@ -717,7 +744,7 @@ impl CritterField {
             Fx::ratio(n, d).raw()
         }
         match self {
-            CritterField::Health => (1, 3000),
+            CritterField::Health => (1, 8000),
             CritterField::Length | CritterField::Width | CritterField::Height => {
                 (fx(1, 10), fx(8, 1))
             }

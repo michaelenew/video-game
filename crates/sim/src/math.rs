@@ -631,6 +631,83 @@ pub fn flat_segment_gap(p: V3, a: V3, b: V3) -> Fx {
     big_len(p.sub(at))
 }
 
+/// **How far a body `half_width` wide can travel along `dir` from `from`,
+/// in the floor plane, before it meets a box's footprint** -- the box grown
+/// by the body's half-width, crossed by the line of its middle. `None` if it
+/// never does within `reach`, or it is already inside. `dir` is a unit
+/// vector in the floor plane. A charge's swept stop: the bull's run against
+/// a rock (the Hornback, `species::hornback::rules`).
+pub fn flat_sweep_box(
+    from: V3,
+    dir: V3,
+    reach: Fx,
+    half_width: Fx,
+    min: V3,
+    max: V3,
+) -> Option<Fx> {
+    let (lo_x, hi_x) = (min.x.sub(half_width), max.x.add(half_width));
+    let (lo_z, hi_z) = (min.z.sub(half_width), max.z.add(half_width));
+    let inside = |x: Fx, z: Fx| {
+        x.raw() > lo_x.raw() && x.raw() < hi_x.raw() && z.raw() > lo_z.raw() && z.raw() < hi_z.raw()
+    };
+    if inside(from.x, from.z) {
+        return None;
+    }
+    let mut enter = Fx::ZERO;
+    let mut leave = reach;
+    for (o, d, lo, hi) in [(from.x, dir.x, lo_x, hi_x), (from.z, dir.z, lo_z, hi_z)] {
+        if d.raw() == 0 {
+            if o.raw() <= lo.raw() || o.raw() >= hi.raw() {
+                return None;
+            }
+            continue;
+        }
+        let ta = lo.sub(o).div(d);
+        let tb = hi.sub(o).div(d);
+        let (near, far) = if ta.raw() <= tb.raw() {
+            (ta, tb)
+        } else {
+            (tb, ta)
+        };
+        enter = enter.max(near);
+        leave = leave.min(far);
+        if enter.raw() > leave.raw() {
+            return None;
+        }
+    }
+    (enter.raw() <= reach.raw()).then_some(enter)
+}
+
+/// The same for an upright disc's footprint -- a stone, a planted shield:
+/// how far a body `half_width` wide travels along `dir` before it meets a
+/// circle of `radius` about `centre`. `None` if it never does within `reach`,
+/// or it is already inside.
+pub fn flat_sweep_disc(
+    from: V3,
+    dir: V3,
+    reach: Fx,
+    half_width: Fx,
+    centre: V3,
+    radius: Fx,
+) -> Option<Fx> {
+    let r = radius.add(half_width);
+    let rel = V3::new(centre.x.sub(from.x), Fx::ZERO, centre.z.sub(from.z));
+    // In `i64`: a stone across the meadow squares past what 16.16 holds.
+    let sq = |v: Fx| v.raw() as i64 * v.raw() as i64;
+    let along = rel.x.mul(dir.x).add(rel.z.mul(dir.z));
+    let off = rel.x.mul(dir.z).sub(rel.z.mul(dir.x));
+    let gap = sq(rel.x) + sq(rel.z);
+    if gap < sq(r) {
+        return None;
+    }
+    if along.raw() <= 0 || off.abs().raw() >= r.raw() {
+        return None;
+    }
+    let back = Fx::from_raw(((sq(r) - sq(off)).max(0) >> 16) as i32).sqrt();
+    let t = along.sub(back);
+    (t.raw() >= 0 && t.raw() <= reach.raw()).then_some(t)
+}
+
 /// Does the segment from `a` to `b` pass through an upright cylinder standing
 /// on `base`, `radius` wide and `height` tall? The part of the segment inside
 /// the cylinder's height, measured in the floor plane against its axis: a
