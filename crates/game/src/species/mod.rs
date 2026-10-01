@@ -24,7 +24,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 // pub mod broodmother;
 
@@ -143,7 +143,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
 
         SpeciesId::SANDMAW => &sandmaw::LOOK,
 
-        // SpeciesId::PAIR => &pair::LOOK,
+        SpeciesId::PAIR => &pair::LOOK,
 
         // SpeciesId::BROODMOTHER => &broodmother::LOOK,
 

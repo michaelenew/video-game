@@ -23,6 +23,7 @@ mod beast;
 mod critters;
 mod crosshair;
 mod debug;
+mod glint;
 mod ground;
 mod hub;
 mod hud;
@@ -163,6 +164,7 @@ fn main() {
                 hud::setup,
                 hud::setup_picker,
                 crosshair::setup,
+                glint::setup,
             ),
         )
         .add_systems(
@@ -230,6 +232,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                glint::update,
             )
                 .chain()
                 .after(beast::signs)
@@ -535,6 +538,49 @@ fn shot_move(w: &mut World) {
     // The worm throws three from under the sand and the rest standing.
     if beast.species == sim::species::SpeciesId::SANDMAW {
         sim::species::sandmaw::fight::ready_for(beast, kind as u8);
+    }
+    if beast.species == sim::species::SpeciesId::PAIR {
+        shot_pair_move(w, kind as u8);
+    }
+}
+
+/// [`shot_move`] for the cats: a leap is lobbed at player one; the twin
+/// pounce is both of them, one in front of the camera and one behind; for
+/// anything else the other cat is sent off to the far wall and kept there.
+fn shot_pair_move(w: &mut World, kind: u8) {
+    use sim::species::pair;
+    let me = w.players[0].pos;
+    let ground = w.terrain();
+    let first = w.monsters[0].expect("the cat just placed");
+    for (slot, m) in w.monsters.iter_mut().enumerate() {
+        let Some(m) = m else { continue };
+        if slot == 0 && kind != pair::TWIN {
+            if pair::MOVES[kind as usize].lobbed {
+                m.lob(kind);
+            }
+            continue;
+        }
+        m.brain.seen = me;
+        m.brain.grace = 0;
+        m.brain.think_left = u16::MAX;
+        if kind == pair::TWIN {
+            // Opposite sides: the second where the first is, mirrored
+            // through player one.
+            if slot == 1 {
+                m.pos = me.add(me.sub(first.pos));
+                m.yaw = sim::Fx::ZERO;
+            }
+            m.doing = sim::monster::Doing::Startup {
+                kind,
+                left: pair::SPECIES.attack(kind).startup,
+            };
+            m.hit_used = false;
+            m.lob(kind);
+            pair::fight::mark_at(m, me, &ground, &[None; sim::stones::MAX_STONES]);
+        } else {
+            m.pos = sim::V3::new(me.x, sim::Fx::ZERO, me.z.add(sim::Fx::from_int(10)));
+            m.doing = sim::monster::Doing::Prowl;
+        }
     }
 }
 

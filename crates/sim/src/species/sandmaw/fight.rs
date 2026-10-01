@@ -587,6 +587,7 @@ fn presence(m: &Monster, rig: &Rig) -> crate::beast::Presence {
     crate::beast::Presence {
         buried,
         unmountable,
+        passable: 0,
     }
 }
 

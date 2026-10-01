@@ -249,6 +249,32 @@ bit-identical:
 | `MarkLook::{Sand, Fin, Heard, Feel}` | a raised wake, a dorsal fin, a ring where it heard you, the disc it feels in |
 | `noise::nth(lore, cell)` | a noise by its cell, for a hook that keeps per-noise state of its own beside the ring |
 
+**The seams a creature with two bodies adds** (the Pair, 2026-10-01), on the
+same terms -- `PLAIN` is one body and none of the rest, and both pins, the
+twelve-seed Ridgeback reports and the Mireback's, Sandmaw's and Gnawers'
+reports came out byte-identical:
+
+| Seam | What it is for |
+| --- | --- |
+| `bodies` | how many of it a hunt places (`World::hunt_of` fills the slots); one for everybody else |
+| `keeps_height` | the walk leaves its height to its own hooks: a cat on a platform stays up there |
+| `pace(m)`, `glance(m)` | a multiplier on its speed and turn, and its frames between glances, from its own state: the enrage, two hunters |
+| `lob_height(m)` | the height a lobbed volume sits at, for one that lands on a top rather than the floor |
+| `Part::sheds` | nobody stands on it and nobody mounts it: its top face is a slope in `Rig::resolve`, not a floor |
+| `Presence::passable` | parts with a hurtbox and no body: a leaping cat can be hit but not run into, so a dodge under the arc goes through |
+| a lobbed volume's skid | a `lobbed` move with a `Travel` slides its volume along the facing for the frames it has flown; zero for every lobbed move before it |
+| `Tally::observe_with(before, after, bots)` | a species' report lines that need the hunters -- what is on their screen; defaults to `observe` |
+
+**The fight report reads every creature.** Each slot keeps its own commit
+(the move, how far each hunter was, where it stood), a hit is the slot whose
+volume connected that frame, and the windows read the smaller of the slots'
+`frames_until_free`: the pair is free when either cat is. One creature reads
+exactly as before. **"Unanswerable" needs a connection**: health lost on a
+frame no creature's volume connected -- a Blood mage paying for her own
+spells -- was being charged to the last commit, however far away it was. No
+pinned report moved; a Blood mage's against the Ridgeback can (one hunt in
+twelve read a phantom one).
+
 ## 6 · Decided while building, for a person to review
 
 - **Sizes are maximums, not generics.** `MAX_BONES` 40, `MAX_PARTS` 48,
@@ -260,8 +286,8 @@ bit-identical:
   True of the Ridgeback's feet; the Broodmother's sacs will want a flag.
 - **Common knobs share one range each.** A creature that needs a health below
   500 or a size outside 0.5–3 widens the range for everybody.
-- **The fight report reads the first creature.** A report per creature is the
-  Pair's to add.
+- **The fight report reads every creature** (the Pair): one report for the
+  hunt, the slots summed, rather than one per creature.
 - **Hunter intents are names** (`hunt::Intent`, a string), so each plan has its
   own without a shared list every creature branch edits.
 - **`beastcheck`'s routes are generic now**: the lowest surface in each lowering
@@ -269,8 +295,8 @@ bit-identical:
   the six Ridgeback routes it named. Its numbers are unchanged where they
   overlap (shoulders stumbling 2.665 m, front feet broken 3.807 m, through the
   slam 3.23 m, nose to tail 13.406 m).
-- **Not here:** the `sheds` part flag the Pair asks for, a perception filter
-  (P5). Critters (P3) landed after this: [critters.md](critters.md) is the
+- **Not here:** a perception filter (P5) -- it landed with its own document;
+  the `sheds` part flag came with the Pair. Critters (P3) landed after this: [critters.md](critters.md) is the
   recipe for a creature that is a pack or brings one -- a `Species` gained a
   `pack` field (`None` for the Ridgeback), and `Species::pack_only` is a table
   with no skeleton. Each lands with the creature that needs it. Arenas as

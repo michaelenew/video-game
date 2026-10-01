@@ -60,7 +60,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 // pub mod broodmother;
 
@@ -135,7 +135,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::SANDMAW => Some(&sandmaw::ARENA),
 
-        // ArenaId::PAIR => Some(&pair::ARENA),
+        ArenaId::PAIR => Some(&pair::ARENA),
 
         // ArenaId::BROODMOTHER => Some(&broodmother::ARENA),
 
@@ -248,7 +248,7 @@ impl Solid {
     }
 
     /// Does its footprint cover this point, grown by `pad` all round?
-    fn over(&self, x: Fx, z: Fx, pad: Fx) -> bool {
+    pub fn over(&self, x: Fx, z: Fx, pad: Fx) -> bool {
         x.raw() > self.min.x.sub(pad).raw()
             && x.raw() < self.max.x.add(pad).raw()
             && z.raw() > self.min.z.sub(pad).raw()

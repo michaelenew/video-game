@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 3
 ---
 
@@ -671,3 +672,127 @@ currencies the dodge is measured in, so it is never simply better.
    enough for a call-out. If they should *play* differently too — one heavier,
    one faster — the roles get muddier and the fight gets another layer; the
    seed says bonded equals, and this keeps it.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt pair`, the Den. The species is
+`sim/src/species/pair/` (the table; `fight.rs` for the pair brain -- roles,
+the swap, the feint's licence, the twin pounce and its crash, the stagger,
+the bond, the howl and the enrage, sight and the scar, the leaps -- run in the
+species' `frame` hook and kept in the hunt's lore; `mind.rs` for each cat's
+own scoring and where it walks), the arena `sim/src/arena/pair.rs`, the clips
+`anim/src/beast/pair/`, the look, the Den's dressing and the windup glint in
+`game` (`species/pair.rs`, `arenas/pair.rs`, `glint.rs`), the plan, the view
+and the report lines `hunt/src/plans/pair.rs`, and the rules pinned as
+sentences in `sim/tests/pair.rs` -- all fifteen of §10's, the view's one as
+the report's marker clause (below) rather than a test in `view`. The plan is
+[plans/the-pair.md](../plans/the-pair.md); the passes are in
+[feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin fight -- --species pair --class <c>`
+over 24 seeds; the scripted hunter plays §9 with a fifteen-frame reaction and
+**a view**: a camera yaw it turns at three quarters of a turn a second, and it
+knows a cat only while the cat or its marker is on that screen.
+
+```text
+                won    mean win   threat / poke / way in / walk up   both in view   unanswerable
+  Champion     16/24    159 s         78 /  7 /  7 /  8 %                75 %             0
+  Bulwark      12/24    186 s         81 /  6 /  6 /  7 %                74 %             0
+  Reaver        4/24    218 s         80 /  6 /  7 /  7 %                74 %             0
+  Elementalist  4/24    259 s         81 /  6 /  7 /  6 %                72 %             0
+  Blood mage    0/24      --          80 /  6 /  7 /  7 %                75 %             0
+  Dual mage     0/24      --          80 /  7 /  7 /  6 %                77 %             0
+
+  coop, two Champions 11/12 in 149 s;  temper 3, Champion 9/12 in 159 s
+
+  landed / thrown, 24 Champion hunts
+    Pounce 91/723   Rake 29/387   Rake, again 18/345   Swat 5/25
+    Ambush 42/374   Tail trip 19/345   Dive 14/47   Twin pounce 2/126
+    Interpose 1/39  Feint 86, Perch 101, Drop 55, Cocked paw 11 (no damage)
+```
+
+**Its own lines**, over the Champion's hunts: markers on screen at least
+fifteen frames before every hit that has a marker to see, in every hunt of
+every class (the second clause of unanswerable, §6); one hit in ten from a cat
+that was off screen as it began -- answered by its marker; both cats in view
+three quarters of the fight; a cat without sight of its target a third of it;
+two or three twin pounces a hunt, nearly all crashed; one or two scars a hunt,
+and a scarred cat struck from its blind side six to eighteen times; the death
+gap six to nine seconds when the hunter wins.
+
+**Against the targets.** **Zero unanswerable hits**, by both clauses, in all
+144 hunts of the six classes, coop and temper 3. The four classes the harness
+plays win 36 of 96, three in eight, against "about one in three", in two and
+a half to four and a half minutes (three to six asked). Every move is used.
+**What is off:**
+
+- **Threatening is 78–81 %, against 45.** The pair is free when either cat
+  is, as §9 says to measure it, and with two animals one of them nearly always
+  is: the walk-up share is the crash and the two cats' recoveries overlapping,
+  and the stagger rule keeps those apart. Reaching 45 would mean both cats
+  idle half the fight; the harness wins anyway, through the openings it has.
+- **Several moves land under one in ten**: the rake (one in thirteen), the
+  second rake, the tail trip, the twin pounce, the interpose. The harness
+  answers every marker it sees at a fifteen-frame reaction, perfectly; the
+  twin pounce is dodged late every time, which is the lesson, so it crashes
+  rather than lands.
+- **Feints are rare**: three or four a hunt, and almost never bitten. The
+  harness reads the tail perfectly, so whether the flick is readable at
+  speed (§12 question 2) is still a person's question.
+- **The Blood mage and the Dual mage lose every hunt**, as against every
+  creature: the scripted hunter does not play their pools or their bars, a
+  limit of the harness, not a finding about the cats.
+- **Temper 3 barely moves it**: the glance tightens (`temper::glance`
+  reaches the cats through `FightDecl::glance`), but a cat already glancing
+  every seven frames has little left to gain.
+
+**The body, as `beastcheck --species pair` prints it**: nose to tail 4.18 m,
+shoulders 1.78 m, back 1.53 m, head 1.62 m; every class hops over a standing
+cat, and nobody stands on one (`sheds`, `nobody_stands_on_a_cat`).
+
+**Changed from this document while building**, beyond the numbers:
+
+- **Health 2 400 a cat** (3 600 with two hunters); at 2 200 the Champion and
+  the Bulwark won eleven in twelve in two minutes, at 3 000 one in five.
+- **The pounce is 30 / 14 / 50 for 110, landing at 1.4 m radius**, not 24 /
+  20 for 150 at 1.6: at 24 frames a fifteen-frame reaction to the frame-ten
+  flick left no dodge that came out under the arc. The flick is at frame 13.
+  The mark follows you until startup frame 12 and then is fixed, so the body
+  lands where the circle is.
+- **The dive is 30 / 6 / 60 and leaves the lip at frame 22; the twin pounce
+  is 46 / 6 / 50 for 140, leaving at 40, the mark following until 28.** Both
+  at 1.4 m: a sixteen- or eighteen-frame live landing could not be cleared by
+  a dodge with ten invulnerable frames.
+- **The ambush's lane runs 2.5 m past where it saw you** and is laid at the
+  commit, the cat flat along it from the first frame; a lane that ended at
+  your feet, or swung on as the tell went, was a marker that arrived late.
+  **120 damage**, not 170.
+- **The interpose stops short of you** by its own reach: the run hits what
+  walks into its line, not somebody standing still on it.
+- **Sight is from the head or the crown** (`perception::in_sight_over_cover`):
+  a 1.5 m platform between a cat and a fighter hid each from the other at the
+  middle's height, and the cats lost the hunter behind every platform.
+- **Nothing that hurts is thrown at a memory**: a cat that cannot see its
+  target does not attack it, and a move's range must hold where it last saw
+  you as well as where it leads you to. Without both, a stale sample put an
+  ambush or a swat on a fighter standing inside its tell.
+- **The swat is thrown at 1.0–2.6 m from planted feet**: a 12-frame tell
+  under a reaction must only reach what was already in reach.
+- **A feint needs its mate round the target by 0.17 turns and on its feet**
+  (prowling or already coming), not *behind and free*: as written the feint
+  happened twice a hunt.
+- **A lobbed leap lands on the top under its aim** (`FightDecl::lob_height`)
+  and a mark is pushed out of any solid taller than the target's footing: a
+  circle drawn inside a platform was a marker nobody could stand in.
+- **A leaping cat has a hurtbox and no body** (`Presence::passable`): a dodge
+  under the arc has to go through it.
+- **The Den's stones** stand at (9.5, 9.5), (−9.5, −9.5) and (0, 10): with
+  three stones and four corners "no corner more than 8 m from one" cannot be
+  had, and the open floor south of the platforms is kept for the fight.
+- **The swap, the stagger and the bond are as written**; the twin pounce's
+  crash is a topple of `CrashFrames` (90) on the last live frame if neither
+  cat has hit and they are within `CrashReach`.
+- **Not built**: the torn-ear trophy (a hunt won records its trophy as every
+  creature's does; the banner is not drawn yet), the snarl and the roar (no
+  audio), Cat's step.
+

@@ -61,7 +61,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 // pub mod broodmother;
 
@@ -114,7 +114,7 @@ pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
 
         SpeciesId::SANDMAW => Some(&sandmaw::SANDMAW),
 
-        // SpeciesId::PAIR => Some(&pair::PAIR),
+        SpeciesId::PAIR => Some(&pair::PAIR),
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::BROODMOTHER),
 

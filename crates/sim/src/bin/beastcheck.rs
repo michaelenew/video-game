@@ -259,6 +259,33 @@ fn main() {
         );
     }
 
+    // **What sheds you**: the parts nobody stands on (`Part::sheds`), and
+    // whether a hop clears them. For an animal you cannot climb, this is the
+    // body's height against the hop spread: what you can jump over and what
+    // you have to go round.
+    if sp.parts.iter().any(|p| p.shape.sheds) {
+        println!("\nwhat sheds you (nobody stands on these), standing:");
+        for (part, p) in sp.parts.iter().enumerate() {
+            if !p.shape.sheds || !p.shape.solid {
+                continue;
+            }
+            let h = top(&standing, part);
+            let clears: Vec<&str> = apexes
+                .iter()
+                .filter(|(_, a)| h.raw() < a.raw())
+                .map(|(c, _)| c.name())
+                .collect();
+            let over = if clears.len() == apexes.len() {
+                "every class hops over it".to_string()
+            } else if clears.is_empty() {
+                "nobody hops over it".to_string()
+            } else {
+                format!("{} hop over it", clears.join(", "))
+            };
+            println!("  {:<14} {:>6} m   {}", p.name, m(h), over);
+        }
+    }
+
     // **What opens a way up**: in every state that lowers the body, the
     // lowest surface it offers and which one that is. Read off the table --
     // its stock states, its broken legs, every move it has -- so nothing

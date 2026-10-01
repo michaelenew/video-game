@@ -67,7 +67,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 // pub mod broodmother;
 
@@ -129,7 +129,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
 
-        // SpeciesId::PAIR => Some(&pair::SPECIES),
+        SpeciesId::PAIR => Some(&pair::SPECIES),
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
 
@@ -425,6 +425,28 @@ pub struct FightDecl {
     /// fight -- the Sandmaw's broken tooth ring, which shrinks its rise-bite.
     /// Read by the hit volume, so the telegraph and the hit change together.
     pub radius: Option<fn(&crate::monster::Monster, u8, Fx) -> Fx>,
+
+    // ---- two bodies (the Pair) ----
+    /// **How many of it a hunt holds**: one for every creature but the Pair,
+    /// who are two. `World::hunt_of` puts this many in the slots, so the
+    /// picker, `?hunt=` and the harness all get the whole fight.
+    pub bodies: u8,
+    /// **Its height is its own**: the walk leaves `Monster::pos.y` where the
+    /// species' hooks put it rather than on the floor, and the fence reads
+    /// it -- a cat standing on a wall top. Off, it is on the floor, as every
+    /// creature always was.
+    pub keeps_height: bool,
+    /// **Its pace this frame**, times its speed: the Pair's survivor,
+    /// enraged, runs past its gallop. `None` is one.
+    pub pace: Option<fn(&crate::monster::Monster) -> Fx>,
+    /// **Frames between its glances**, from its own state, before its
+    /// temper: the Pair glance quicker with two hunters. `None` is its
+    /// knob.
+    pub glance: Option<fn(&crate::monster::Monster) -> u16>,
+    /// **How high a lobbed move lands**: the top its aim point is on -- a cat
+    /// pouncing onto a platform lands on the platform, and its circle is
+    /// drawn there. `None` is the floor.
+    pub lob_height: Option<fn(&crate::monster::Monster) -> Fx>,
 }
 
 /// Something a species draws beyond its hazards and its telegraph.
@@ -546,6 +568,11 @@ impl FightDecl {
         hearing: None,
         from_inside: None,
         radius: None,
+        bodies: 1,
+        keeps_height: false,
+        pace: None,
+        glance: None,
+        lob_height: None,
     };
 }
 
