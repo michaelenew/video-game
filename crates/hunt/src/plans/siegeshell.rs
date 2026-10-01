@@ -37,7 +37,7 @@ use sim::state::{MAX_PLAYERS, Phase, Player};
 use sim::{Input, V3, World};
 
 use crate::report::Tally;
-use crate::{Intent, Plan, REACTION, steer, turns_to_aim};
+use crate::{Hands, Intent, Plan, REACTION, steer, turns_to_aim};
 
 /// At an ankle, swinging.
 pub const ANKLE: Intent = Intent("Ankle");
@@ -111,6 +111,13 @@ pub struct Siegeshell {
     last: V3,
     stuck: u16,
     detour_left: u16,
+    /// Its class (`crate::class`), and what this frame's choice was, for
+    /// it: the point a swing went at, the way a dodge went, or where it
+    /// waits.
+    hands: Hands,
+    aimed: Option<V3>,
+    out: Option<V3>,
+    waiting: Option<(V3, V3, i32)>,
 }
 
 impl Siegeshell {
@@ -132,6 +139,10 @@ impl Siegeshell {
             last: V3::ZERO,
             stuck: 0,
             detour_left: 0,
+            hands: Hands::new(who, seed),
+            aimed: None,
+            out: None,
+            waiting: None,
         }
     }
 
@@ -408,8 +419,29 @@ impl Plan for Siegeshell {
     }
 
     fn act(&mut self, w: &World) -> Input {
+        self.aimed = None;
+        self.out = None;
+        self.waiting = None;
         let input = self.choose(w);
         let me = w.players[self.who];
+        // The class's turn: what the choice was for, in its own hands.
+        const ATTACKS: u16 =
+            Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL | Input::MECHANIC;
+        let input = if input.bits & ATTACKS != 0
+            && let Some(at) = self.aimed
+        {
+            self.hands.hit(w, &me, at, input, None)
+        } else if input.bits & Input::SHIFT != 0
+            && let Some(out) = self.out
+        {
+            self.hands.leave(w, &me, out, input)
+        } else if let Some((beast, at, safe)) = self.waiting
+            && let Some(own) = self.hands.idle(w, &me, beast, at, safe)
+        {
+            own
+        } else {
+            input
+        };
         if std::env::var("SIEGE_DEBUG").is_ok() {
             if let Some(m) = w.monsters[0] {
                 let due = ring_due(&m, me.pos);
@@ -445,6 +477,14 @@ impl Plan for Siegeshell {
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 
@@ -513,6 +553,7 @@ impl Siegeshell {
                 };
                 // Walking out, never swinging: a swing is frames a dodge
                 // cannot be thrown in.
+                self.out = Some(out);
                 return Input::aimed(steer(yaw, out) | dodge, wire);
             }
         }
@@ -535,6 +576,7 @@ impl Siegeshell {
                 0
             };
             let wire = turns_to_aim(yaw.sub(me.carry_yaw));
+            self.out = Some(dir);
             return Input::aimed(steer(yaw, dir) | dodge, wire);
         }
         // A parasite at it.
@@ -548,6 +590,7 @@ impl Siegeshell {
             let sp = seen.critters.sp();
             let at = c.body(sp).middle();
             let swing = self.swing(me);
+            self.aimed = Some(at);
             return go(me, at, at, swing);
         }
         // Down: the crown's way up, for whoever is climbing -- alone, the
@@ -629,6 +672,12 @@ impl Siegeshell {
         } else {
             0
         };
+        self.aimed = Some(at);
+        if !near && clear {
+            // On the way to its post: the class's own business.
+            let safe = ring_due(m, me.pos).map_or(i32::MAX, |due| due.max(0));
+            self.waiting = Some((m.pos, at, safe));
+        }
         go(me, post, at, swing)
     }
 
@@ -714,6 +763,7 @@ impl Siegeshell {
                 {
                     self.intent = ANCHOR;
                     let swing = self.swing(me);
+                    self.aimed = Some(at);
                     return looking(me, at, swing);
                 }
             }
@@ -738,6 +788,7 @@ impl Siegeshell {
                 let sp = seen.critters.sp();
                 let at = c.body(sp).middle();
                 let swing = self.swing(me);
+                self.aimed = Some(at);
                 return looking(me, at, swing);
             }
         }
@@ -753,6 +804,7 @@ impl Siegeshell {
         if d.sub(face).raw() <= reach_of(me).raw() && level {
             self.intent = ANCHOR;
             let swing = self.swing(me);
+            self.aimed = Some(at);
             // Keep pressed against it: a shrug or a lurch moves the floor.
             return go(me, flat(at), at, swing);
         }

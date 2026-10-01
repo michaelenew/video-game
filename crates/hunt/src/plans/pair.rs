@@ -35,7 +35,7 @@ use sim::state::{Action, Phase, Player};
 use sim::{Input, V3, World};
 
 use crate::report::{HALF_VIEW, Tally};
-use crate::{Hunter, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
+use crate::{Hands, Hunter, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
 
 /// Keeping both in view.
 pub const WATCH: Intent = Intent("Watch");
@@ -123,6 +123,8 @@ pub struct Pair {
     slop: i32,
     rng: u32,
     hop: Fx,
+    /// Its class (`crate::class`), held to this camera.
+    hands: Hands,
 }
 
 impl Pair {
@@ -148,6 +150,7 @@ impl Pair {
                 ^ seed.wrapping_mul(0x27D4_EB2F))
                 | 1,
             hop,
+            hands: Hands::new(who, seed),
         };
         p.roll_slop();
         p
@@ -436,6 +439,14 @@ impl Plan for Pair {
     fn intent(&self) -> Intent {
         self.intent
     }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
+    }
 }
 
 impl Pair {
@@ -449,17 +460,20 @@ impl Pair {
         dir: V3,
         bits: u16,
     ) -> Input {
-        let _ = w;
         if let Some(at) = toward {
             let want = yaw_of(flat(at.sub(me.pos)));
             let error = wrap_turns(want.sub(self.look));
             let step = TURN.mul(sim::DT);
             self.look = self.look.add(error.clamp(step.neg(), step));
         }
+        self.hands.camera(Some(self.look));
         let at = toward.unwrap_or(me.pos.add(V3::from_turns(self.look).scale(Fx::from_int(8))));
         let mut input = wire(me, self.look, at, bits);
         if dir.flat_len().raw() > 0 {
             input.bits |= steer(self.look, dir);
+        }
+        if bits & Input::SHIFT != 0 && dir.flat_len().raw() > 0 {
+            return self.hands.leave(w, me, dir, input);
         }
         input
     }
@@ -651,7 +665,7 @@ impl Pair {
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let poke_busy = (poke.startup + poke.active + poke.recovery) as i32;
         let heavy_busy = crate::heavy_commitment(me.class) as i32;
-        let reach = poke.reach.add(Fx::ONE);
+        let reach = self.hands.reach(me).add(Fx::ONE);
         let mut best: Option<(usize, Monster, i32, i32)> = None;
         for (s, m) in cats.iter().enumerate() {
             let Some(m) = m else { continue };
@@ -755,7 +769,17 @@ impl Pair {
         } else {
             0
         };
-        Some(self.turn_and(w, me, Some(target), dir, swing))
+        let input = self.turn_and(w, me, Some(target), dir, swing);
+        let left = window - walk_frames;
+        if swing != 0 {
+            return Some(self.hands.hit(w, me, target, input, Some(left)));
+        }
+        if d.raw() > reach.raw()
+            && let Some(go) = self.hands.close_in(w, me, target, left)
+        {
+            return Some(go);
+        }
+        Some(input)
     }
 
     /// **Keep both in view**, and stand where they can be: outside the paws,
@@ -870,9 +894,28 @@ impl Pair {
                 }
             }
         }
-        self.turn_and(w, me, toward, dir, 0)
+        let input = self.turn_and(w, me, toward, dir, 0);
+        // Both in view and nothing coming: the class's own business, at the
+        // nearer.
+        if self.intent == WATCH
+            && let Some((_, at, _)) = nearest
+            && let Some(own) = self.hands.idle(
+                w,
+                me,
+                at,
+                at.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)),
+                IDLE_SAFE,
+            )
+        {
+            return own;
+        }
+        input
     }
 }
+
+/// How long the hunter believes it has, watching both cats with nothing
+/// coming: long enough for a shot or a sent shadow, not for a pillar.
+const IDLE_SAFE: i32 = 32;
 
 /// **The jump height**, for the plan that wants it.
 pub fn hop_of(p: &Pair) -> Fx {

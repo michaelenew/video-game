@@ -605,12 +605,17 @@ Numbers from `cargo run -p hunt --bin fight -- --species sandmaw --class <c>
 
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable
-  Champion     19/24   202 s        442                  66 / 12 / 15 /  7 %                 0
-  Bulwark      23/24   229 s        558                  65 / 12 / 16 /  6 %                 0
-  Reaver        6/24   273 s        187                  67 / 12 / 15 /  6 %                 0
-  Elementalist  4/24   556 s        162                  55 /  9 / 11 / 26 %                 0
+  Champion     18/24   191 s        461                  65 / 12 / 15 /  8 %                 0
+  Bulwark      24/24   214 s        665                  64 / 12 / 16 /  7 %                 0
+  Reaver       10/24   223 s        329                  67 / 11 / 15 /  8 %                 0
+  Elementalist 11/24   338 s        252                  49 /  7 /  9 / 35 %                 0
   Blood mage    0/24     --          --                  66 / 11 / 15 /  8 %                 0
-  Dual mage     0/24     --          --                  66 / 11 / 15 /  9 %                 0
+  Dual mage     3/24   209 s        326                  61 / 12 / 18 /  8 %                 0
+
+  (2026-10-01, every class played; on main the hour before it, 18 / 24 / 8 /
+   4 / 0 / 0 won -- the Champion's and the Bulwark's rows had moved since this
+   section was first written; the class layer moved only the Bulwark's health,
+   622 a win before it)
 
   coop, two Champions 12/12 in 95 s;  temper 3, Champion 6/12 in 207 s
 
@@ -630,6 +635,23 @@ the first gulp; the tooth ring broken in 2 of the 19 wins. The perceived
 threatening band is 49 %, unperceived 18 %. The Elementalist's 24: 268
 beaches, all but one by a stone in the circle.
 
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8). **The Elementalist** wins 11 from 4: the
+plan's stone beaches the worm as before, and now a pillar goes under the
+beached back (138 in the 24) and her bolts at the throat are aimed at it --
+slow, at five and a half minutes, but won. It was 20 before main's aim A3
+merged in: the beached back seen from above became a place, so a bolt aimed
+at it from a stone stopped on the hide's top; the layer now pushes such a
+spot out past the edge (`Hands::spot`), which won back ten of the nineteen
+the merge first cost. Whether the rest is the aim or the plan is open.
+**The Reaver** sends her shadow to the throat on the way in to a stand (427)
+and opens a lotus on it (196): 10 from 8.
+**The Dual mage** wins 3, her finishers into the stand (711). **The Blood mage
+still wins nothing**: she blinks in and out of a stand on her pools (166), but
+the pools a scythe leaves on a worm this size are never worth a spike, and her
+damage is a third of a sword's against 13 000. Zero unanswerable for every
+class, still.
+
 **Against the targets.** Zero unanswerable hits and zero quiet-unfelt bites in
 every class, every hunt: the contract holds. The Champion wins four in five
 (two in three asked) in a little over three minutes (two to four asked).
@@ -643,10 +665,10 @@ ring is rarely broken: the hunter hits the throat and the spiracles, not the
 mouth, except through a gag. **The Reaver** loses to the spit (half of its
 spits land): a dodge that has to cover six active frames from fifteen frames
 behind is the hardest timing in her kit. **The Elementalist** beaches it at
-every rise with a stone and still loses: the harness's caster does little to
-a beached back. **The Dual mage and the Blood mage** lose them all, as they do
-against the Ridgeback: the scripted hunter does not play their bars or their
-pools, which is the harness's limit, not a finding about the worm.
+every rise with a stone, and since 2026-10-01 burns the beached back and
+wins most hunts, slowly. **The Dual mage and the Blood mage** lose nearly all
+of them with their bars and pools played (above): the worm's health against
+their damage, a finding for their kits rather than the worm.
 
 **The body, as `beastcheck --species sandmaw` prints it**: nose to tail
 12.5 m (eleven of body and the lips); buried, every surface under the floor;

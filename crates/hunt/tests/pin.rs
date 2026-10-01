@@ -17,11 +17,21 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
     acc
 }
 
-const PINNED: [(Class, u32, u64); 4] = [
+const PINNED: [(Class, u32, u64); 7] = [
     (Class::Champion, 0x2545_F491, 0x0efd64f4a51bd0e0),
     (Class::Champion, 7, 0x70a143ee72ab5797),
     (Class::Bulwark, 101, 0x1b707320b9c4af07),
-    (Class::DualMage, 2_222, 0x9a10dc2ea84d2f17),
+    // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
+    // hands are kept on the side that does not burn her, her finishers are
+    // thrown into the windows the plan finds, and she goads her bars between
+    // them. The Champion's and the Bulwark's hunts did not move -- the layer
+    // hands their plans' input back unchanged here. See feel-log.md.
+    (Class::DualMage, 2_222, 0x524327a652326b5c),
+    // Added 2026-10-01 with the class layer, so that what it does with the
+    // shadow, the fire and the pools is pinned as the plan's moves are.
+    (Class::ShadowReaver, 31, 0x0502aca475823386),
+    (Class::Elementalist, 59, 0x8799650c6e550283),
+    (Class::BloodMage, 83, 0x72ec7ddafe8f9fd9),
 ];
 
 #[test]

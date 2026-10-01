@@ -46,7 +46,7 @@ use sim::species::hornback as h;
 use sim::state::{Action, MAX_PLAYERS, Phase};
 use sim::{Class, Input, V3, World};
 
-use crate::{Intent, Plan, REACTION, steer, turns_to_aim};
+use crate::{Hands, Intent, Plan, REACTION, steer, turns_to_aim};
 
 pub const ROUSE: Intent = Intent("Rouse");
 pub const POST: Intent = Intent("Post");
@@ -173,6 +173,8 @@ pub struct Hornback {
     /// Frames of a jump still held.
     jumping: u32,
     rng: u32,
+    /// Its class (`crate::class`).
+    hands: Hands,
 }
 
 impl Hornback {
@@ -200,6 +202,7 @@ impl Hornback {
             rode: 0,
             jumping: 0,
             rng,
+            hands: Hands::new(who, seed),
         }
     }
 
@@ -523,7 +526,11 @@ impl Plan for Hornback {
                     } else {
                         0
                     };
-                return Input::aimed(steer(bull_yaw, to) | dash, bull_aim);
+                let input = Input::aimed(steer(bull_yaw, to) | dash, bull_aim);
+                if dash != 0 {
+                    return self.hands.leave(w, &me, to, input);
+                }
+                return input;
             }
             self.intent = LEE;
             return Input::aimed(0, bull_aim);
@@ -588,6 +595,13 @@ impl Plan for Hornback {
                 );
                 let (yaw, aim, pitch) = look_at(head, head_mid);
                 let d = flat(head.sub(me.pos)).flat_len();
+                // What is left of the stun, in the present.
+                let window = (from + stun) as i32 - w.frame as i32 - SPARE as i32;
+                if d.raw() > reach.raw()
+                    && let Some(input) = self.hands.close_in(w, &me, head_mid, window)
+                {
+                    return input;
+                }
                 if d.raw() > reach.raw() {
                     // A person closes on the head, and dashes the last of it.
                     let dash = if d.raw() > Fx::from_int(6).raw() && self.dodge_left == 0 && free {
@@ -627,7 +641,8 @@ impl Plan for Hornback {
                     } else {
                         Input::LEFT
                     };
-                    return Input::looking_at(button, aim, pitch);
+                    let swing = Input::looking_at(button, aim, pitch);
+                    return self.hands.hit(w, &me, head_mid, swing, Some(window));
                 }
                 return Input::looking_at(0, aim, pitch);
             }
@@ -781,7 +796,14 @@ impl Plan for Hornback {
                     };
                     out.add(out).add(bull.facing).normalized()
                 };
-                return Input::aimed(steer(bull_yaw, way) | Input::SHIFT, bull_aim);
+                let dodge = Input::aimed(steer(bull_yaw, way) | Input::SHIFT, bull_aim);
+                // A Bulwark takes it on the shield instead, if it can be.
+                let hook = sp.attack(h::HOOK);
+                let over = (bull.timer as i32 + hook.active as i32 + 4).max(8) as u16;
+                if let Some(guard) = self.hands.guard(&me, !hook.unblockable, bull.middle, over) {
+                    return guard;
+                }
+                return self.hands.leave(w, &me, way, dodge);
             }
             // The shoulder's lean, at its flank: a swing already in flight
             // meets it; failing one, the dodge, away from the flank it will
@@ -796,7 +818,13 @@ impl Plan for Hornback {
                 } else {
                     side.scale(Fx::ONE.neg())
                 };
-                return Input::aimed(steer(bull_yaw, out) | Input::SHIFT, bull_aim);
+                let dodge = Input::aimed(steer(bull_yaw, out) | Input::SHIFT, bull_aim);
+                let lean = sp.attack(h::SHOULDER);
+                let over = (bull.timer as i32 + lean.active as i32 + 4).max(8) as u16;
+                if let Some(guard) = self.hands.guard(&me, !lean.unblockable, bull.middle, over) {
+                    return guard;
+                }
+                return self.hands.leave(w, &me, out, dodge);
             }
             let body_reach = reach.add(half_wid);
             let close = gap.raw() <= body_reach.add(Fx::ONE).raw();
@@ -854,7 +882,9 @@ impl Plan for Hornback {
                 } else {
                     Input::LEFT
                 };
-                return Input::looking_at(button, bull_aim, bull_pitch);
+                let swing = Input::looking_at(button, bull_aim, bull_pitch);
+                let window = open.then(|| bull.timer as i32 - REACTION as i32);
+                return self.hands.hit(w, &me, bull.middle, swing, window);
             }
         }
 
@@ -868,7 +898,8 @@ impl Plan for Hornback {
             } else {
                 Input::LEFT
             };
-            return Input::looking_at(button, bull_aim, bull_pitch);
+            let swing = Input::looking_at(button, bull_aim, bull_pitch);
+            return self.hands.hit(w, &me, bull.middle, swing, None);
         }
 
         // The crossing: beside the cart, or clear of it to stop it.
@@ -893,11 +924,28 @@ impl Plan for Hornback {
         }
         self.intent = HOLD;
         let _ = (self.rides, MAX_PLAYERS);
+        // At its post with nothing coming: the class's own business.
+        let safe = if matches!(bull.state, is::STARTUP | is::ACTIVE) {
+            bull.timer as i32 - REACTION as i32
+        } else {
+            i32::MAX
+        };
+        if let Some(input) = self.hands.idle(w, &me, bull.pos, bull.middle, safe) {
+            return input;
+        }
         Input::aimed(0, bull_aim)
     }
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 

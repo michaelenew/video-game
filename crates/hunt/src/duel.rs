@@ -39,6 +39,7 @@
 mod mechanics;
 
 use mechanics::{ClassOut, Cues};
+pub(crate) use mechanics::{dual_after, dual_bias};
 use sim::aim::{self, Kind};
 use sim::arena::Bounds;
 use sim::bolt::Flight;
@@ -254,6 +255,13 @@ impl Kit {
         self.tools.iter().flatten().copied()
     }
 
+    /// The button that throws this move, if any button does. What the
+    /// creature hunter's class layer (`crate::class`) asks, so that neither
+    /// bot keeps its own copy of which click is which.
+    pub fn button(&self, kind: u8) -> Option<u16> {
+        self.iter().find(|t| t.kind == kind).map(|t| t.bits)
+    }
+
     /// The furthest any of its moves reaches, and how soon it gets there.
     /// What a player means by "their range": the distance to respect.
     fn threat(&self) -> Fx {
@@ -290,7 +298,7 @@ fn probe(class: Class, bits: u16) -> Option<u8> {
 /// How far a move reaches from the body throwing it, to the middle of a body
 /// it would hit: the move's own length, the step it carries you, and the width
 /// of whoever is on the end of it.
-fn reach(m: &sim::Move, who: Option<&Player>) -> Fx {
+pub(crate) fn reach(m: &sim::Move, who: Option<&Player>) -> Fx {
     let own = match who {
         Some(p) => state::live_reach(p, m),
         None => m.reach,

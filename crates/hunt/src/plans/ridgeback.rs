@@ -15,7 +15,9 @@ use sim::species::ridgeback;
 use sim::state::{Action, Phase};
 use sim::{Input, V3, World};
 
-use crate::{HALF, Intent, Plan, QUARTER, REACTION, heavy, heavy_commitment, steer, turns_to_aim};
+use crate::{
+    HALF, Hands, Intent, Plan, QUARTER, REACTION, heavy, heavy_commitment, steer, turns_to_aim,
+};
 
 /// Hold at punishing distance, off the creature's nose.
 pub const CIRCLE: Intent = Intent("Circle");
@@ -150,6 +152,9 @@ pub struct Ridgeback {
     /// is what decides which of the creature's surfaces are a route and which
     /// are a wall. Measured by jumping, in `play`, rather than typed.
     hop: Fx,
+    /// Its class (`crate::class`): what the plan's poke, dodge and wait are
+    /// for whoever is holding it.
+    hands: Hands,
 }
 
 impl Ridgeback {
@@ -172,6 +177,7 @@ impl Ridgeback {
             rng: 0x9E37_79B9 ^ (who as u32).wrapping_mul(0x85EB_CA6B) | 1,
             leap_left: 0,
             hop: Fx::ZERO,
+            hands: Hands::new(who, 0),
         }
     }
 
@@ -179,6 +185,7 @@ impl Ridgeback {
     pub fn seeded(mut self, seed: u32) -> Ridgeback {
         self.rng ^= seed.wrapping_mul(0x27D4_EB2F);
         self.rng |= 1;
+        self.hands = Hands::new(self.who, seed);
         self
     }
 
@@ -478,13 +485,13 @@ impl Ridgeback {
             if self.intent != BRACE {
                 self.leap_left = 0;
             }
-            self.ride(&me, seen)
+            self.ride(w, &me, seen)
         } else {
-            self.ground(&me, &beast, seen)
+            self.ground(w, &me, &beast, seen)
         }
     }
 
-    fn ground(&mut self, me: &sim::state::Player, beast: &Monster, seen: Seen) -> Input {
+    fn ground(&mut self, w: &World, me: &sim::state::Player, beast: &Monster, seen: Seen) -> Input {
         let _ = beast;
         self.hit_due = i32::MAX;
         let to_beast = V3::new(
@@ -611,7 +618,8 @@ impl Ridgeback {
                     } else {
                         QUARTER.neg()
                     }));
-                    return Input::aimed(steer(aim, out) | Input::SHIFT, wire);
+                    let dodge = Input::aimed(steer(aim, out) | Input::SHIFT, wire);
+                    return self.hands.leave(w, me, out, dodge);
                 }
                 // Not yet. A person keeps doing what they were doing until
                 // the hit is due; what they do not do is start a swing that
@@ -678,7 +686,9 @@ impl Ridgeback {
         let foot_wire = turns_to_aim(at_foot.sub(me.carry_yaw));
         let foot_range = to_foot.flat_len();
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-        let strike = poke.reach.add(FOOT_HALF);
+        // The class's reach, not the poke's: the Blood mage's poke slot is a
+        // thrown blade, and what the plan presses is her scythe.
+        let strike = self.hands.reach(me).add(FOOT_HALF);
         // The recovery left, and the beat it takes before its next move --
         // a rhythm a person has learned by the third time they have seen it
         // -- less their own reaction.
@@ -736,7 +746,25 @@ impl Ridgeback {
             self.intent = EVADE;
             self.dodge_left = sim::tuning::dodge_frames();
             let out = V3::from_turns(seen.beast_yaw.add(this_side));
-            return Input::aimed(steer(aim, out) | Input::SHIFT, wire);
+            let dodge = Input::aimed(steer(aim, out) | Input::SHIFT, wire);
+            return self.hands.leave(w, me, out, dodge);
+        }
+        // The class's own way in, on a window, where it has one; and its own
+        // business while it waits for one.
+        let foot_point = foot.add(V3::new(Fx::ZERO, FOOT_HALF, Fx::ZERO));
+        if going_in
+            && self.hit_due > sim::tuning::dodge_frames() as i32 + DODGE_LEAD
+            && let Some(input) = self.hands.close_in(w, me, foot_point, window)
+        {
+            return input;
+        }
+        if !going_in
+            && seen.alive
+            && let Some(input) = self
+                .hands
+                .idle(w, me, seen.beast_pos, foot_point, self.hit_due)
+        {
+            return input;
         }
         let swing = if self.cooldown == 0
             && me.action.actionable()
@@ -785,10 +813,14 @@ impl Ridgeback {
         // A hop in progress keeps its button down -- height is what it is for --
         // without that costing the swing it was going to throw.
         let hop = if self.leap_left > 0 { Input::SPACE } else { 0 };
-        Input::aimed(walk | dash | swing | hop, wire)
+        let input = Input::aimed(walk | dash | swing | hop, wire);
+        if swing != 0 {
+            return self.hands.hit(w, me, foot_point, input, Some(window));
+        }
+        input
     }
 
-    fn ride(&mut self, me: &sim::state::Player, seen: Seen) -> Input {
+    fn ride(&mut self, w: &World, me: &sim::state::Player, seen: Seen) -> Input {
         // Face along the creature's spine, toward the head. The aim that goes
         // on the wire has `carry_yaw` taken back out of it, because the
         // simulation will add it again -- the fighter's look angle is the input
@@ -858,7 +890,13 @@ impl Ridgeback {
         } else {
             0
         };
-        Input::aimed(swing, wire)
+        let input = Input::aimed(swing, wire);
+        if swing != 0 {
+            // The strip is under its feet and in front: what the class
+            // throws at it, aimed down at it.
+            return self.hands.hit(w, me, seen.ridge, input, None);
+        }
+        input
     }
 }
 
@@ -873,6 +911,14 @@ impl Plan for Ridgeback {
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 

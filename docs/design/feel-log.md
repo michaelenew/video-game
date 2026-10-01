@@ -6996,3 +6996,70 @@ parasites as they were: one pair in twelve.
 one in twenty, of the floor's threatening share, and of zero unanswerable
 hits. For a person: the beat as rhythm or chore (§12, 6), 0.8 m/s as walking
 (§12, 5), and the Reaver.
+
+### 2026-10-01 — The scripted hunter plays all six classes
+
+**Changed** A class layer for the scripted hunter, `crates/hunt/src/class.rs`
+(`hunt::Hands`): a creature's plan still says *what* to do, and the layer
+says *how* this class does it, at the places every plan already had -- where
+it swings (`hit`), waits (`idle`), walks in on a window (`close_in`), dodges
+(`leave`), and could block (`guard`) -- with `finish` running last on every
+frame. Wired into all ten plans; buttons learned by pressing, as the sparring
+bot learns them; aim through `aim::look_onto`; held to a plan's camera where
+it has one. The report gains THE CLASS, and `fight --repeats` a line of it.
+`tests/class.rs`; three new pins in `tests/pin.rs` (a Reaver, an Elementalist,
+a Blood mage hunt); the Dual mage's pin re-pinned. Documentation:
+[bestiary.md](bestiary.md) §8, every creature's §13, `CLAUDE.md` and
+[aiming.md](aiming.md) brought up to what `aim.rs` holds (five lines of effect,
+not four -- `racing_path` -- and twenty-seven other functions).
+
+**Why** Every creature's report said the same thing: the hunter played the
+Champion's fight with every class, so four classes lost almost every hunt and
+the report said nothing about them.
+
+**Found** (24 hunts a class a creature; [bestiary.md](bestiary.md) §8 has the
+whole table.) The Champion's hunts are bit-identical everywhere; the Bulwark's
+moved only where the layer guards for him or answers a guarded blow with Slam
+(the Hornback, the Sandmaw, the Broodmother). **The Elementalist's fire pillar decides most
+fights**: 24 of 24 against five creatures, 22 against the Veilstalker, because
+no creature steps out of one. **The Dual mage** went from 2, 1 and 0 to 20, 14 and
+10 against the Gnawers, the Hornback and the Broodmother once both hands were
+played. **The Reaver** doubled against the Ridgeback, the Pair, the Veilstalker
+and both Galewing plans. **The Blood mage** wins only against the Gnawers and
+the Hornback: her kit is thin against something that does not bleed. Several
+plans had measured her by her poke slot -- the Bloodletter, seven metres -- and
+swung her scythe at the air; the layer measures her by the scythe. The
+Mireback's unanswerable counts had moved on main before this (1/0/1/0/1/2
+against the 1/1/1/0/0/0 its §13 recorded); four classes take a first one
+against the Hornback.
+
+**Reverted** Each of these measured worse and is out: **ascension** for the Dual
+mage (the first Mireback hunts that let her climb to both bars full lost seven
+hundred health to the wings' drain); **spiking any pool** (a scythe's pool is 22
+and the spike costs ninety); the **Grasp** as a routine way in (one arm's worth,
+forty or fifty, on a creature, for seventy of her red -- kept for long windows
+only); the **shadow sent inside a window** rather than between them (the Reaver
+fell from 15 to 8 against the Hornback); the shadow sent **past** the work so
+the way home ran through it (no better, and simpler without); a **cover stone**
+in front of the Elementalist (it cost her hunts on all four creatures tried);
+**half a recovery** of slack for a ranged move's window (the Elementalist won 2
+Ridgeback hunts in 24 for 7); **whole commitments** for the Dual mage's
+finishers and the Blood mage's spike (14 Hornback wins fell to 7, and 16 to 4);
+and a **Bulwark's guard against the Pair** (12 wins to 3: one shield, two cats).
+
+**After main merged** (the Siegeshell, aim A3): the Siegeshell's plan is wired
+too, and a pair of Dual mages went from 1 to 9 of 12 against it, a pair of
+Reavers from 11 to 12; the Bulwark and the Blood mage win nothing there in any
+company. A3 made the top of a creature's part seen from above a place, so an
+Elementalist's bolt aimed onto the beached Sandmaw's back from a stone, or off
+the Ridgeback's ridge from the saddle, stopped on the hide: her Sandmaw fell
+from 20 to 1 and her Ridgeback from 7 to 3. The layer now sends such a shot
+past the part's edge to the floor beyond, and a rider's past the mount's
+(`Hands::spot`): 11 and 6. Of the rest only the Galewing's Elementalist and
+Reaver rows moved, by a hunt or two; every other row is bit-identical.
+
+**Verdict** kept. For a person: is the pillar on a creature that stands in it
+the Elementalist's identity or a hole in every creature at once; is the Blood
+mage's kit meant to fight creatures at all; is the Dual mage's tempo-bound fight
+right against creatures that leave few windows; and the Reaver's Mantis -- her
+shadow beside its guard is played and still wins nothing.

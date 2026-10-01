@@ -29,7 +29,7 @@ use sim::species::gnawers;
 use sim::state::{MAX_PLAYERS, Phase};
 use sim::{Input, V3, World};
 
-use crate::{Intent, Plan, REACTION, steer, turns_to_aim};
+use crate::{Hands, Intent, Plan, REACTION, steer, turns_to_aim};
 
 pub const POST: Intent = Intent("ToWall");
 pub const HOLD: Intent = Intent("Hold");
@@ -109,6 +109,8 @@ pub struct Gnawers {
     /// Frames left holding the jump.
     hop_left: u32,
     rng: u32,
+    /// Its class (`crate::class`).
+    hands: Hands,
 }
 
 impl Gnawers {
@@ -127,6 +129,7 @@ impl Gnawers {
             slowed_for: 0,
             hop_left: 0,
             rng: seed | 1,
+            hands: Hands::new(who, seed),
         }
     }
 
@@ -306,7 +309,8 @@ impl Plan for Gnawers {
                 }
             });
             // Out along the wall rather than into it, when it has one.
-            return Input::aimed(steer(pack_yaw, away) | Input::SHIFT, pack_aim);
+            let dodge = Input::aimed(steer(pack_yaw, away) | Input::SHIFT, pack_aim);
+            return self.hands.leave(w, &me, away, dodge);
         }
 
         // **Jump the maul** (§2): a crouched Big One close by, winding the
@@ -358,7 +362,10 @@ impl Plan for Gnawers {
                 }
                 if self.cooldown == 0 && free {
                     self.cooldown = SWING_GAP + self.roll() % 4;
-                    return Input::looking_at(auto_button(&me), aim, pitch);
+                    let swing = Input::looking_at(auto_button(&me), aim, pitch);
+                    // Down, or scattered and alone: the window is long.
+                    let window = (big.down || self.window > 0).then_some(self.window as i32);
+                    return self.hands.hit(w, &me, big.middle, swing, window);
                 }
                 return Input::looking_at(0, aim, pitch);
             }
@@ -400,7 +407,8 @@ impl Plan for Gnawers {
             if self.cooldown == 0 && free {
                 self.intent = SWING;
                 self.cooldown = SWING_GAP + self.roll() % 4;
-                return Input::looking_at(auto_button(&me), aim, pitch);
+                let swing = Input::looking_at(auto_button(&me), aim, pitch);
+                return self.hands.hit(w, &me, t.middle, swing, None);
             }
             return Input::looking_at(0, aim, pitch);
         }
@@ -420,6 +428,16 @@ impl Plan for Gnawers {
             .iter()
             .filter(|s| dist(s).raw() < NEAR.raw())
             .min_by_key(|s| dist(s).raw());
+        // Nothing coming at it: the class's own business, at the nearest.
+        let coming = members
+            .iter()
+            .any(|s| (s.tail || s.crouching) && dist(s).raw() < WATCH_TAILS.raw());
+        if !coming
+            && let Some(s) = nearest.or(members.first())
+            && let Some(input) = self.hands.idle(w, &me, facing_pack, s.middle, i32::MAX)
+        {
+            return input;
+        }
         let bits = match nearest {
             Some(s) if dist(s).raw() > reach.raw() => {
                 let (yaw, _, _) = look_at(s.at, s.middle);
@@ -433,6 +451,14 @@ impl Plan for Gnawers {
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 

@@ -705,10 +705,14 @@ after the passes in [feel-log.md](../feel-log.md) of 2026-10-01:
                 solo won   mean    duo won   mean   threat / guarded / poke / way in / walk up   unanswerable
   Champion       0/24      --       4/12    115 s      38 / 26 /  9 / 17 / 10 %                   0
   Bulwark       18/24     246 s    11/12    178 s      47 / 18 /  7 / 15 / 13 %                   0
-  Reaver         0/24      --       0/12     --        39 / 29 / 11 / 16 /  5 %                   0
-  Elementalist   0/24      --       7/12    133 s      41 / 24 /  9 / 17 /  9 %                   0
-  Blood mage     0/24      --       0/12     --        38 / 29 / 10 / 17 /  7 %                   0
-  Dual mage      0/24      --       0/12     --        33 / 37 / 11 / 16 /  3 %                   0
+  Reaver         0/24      --       0/12     --        37 / 29 / 11 / 17 /  5 %                   0
+  Elementalist  24/24      71 s     7/12    133 s      31 / 30 / 11 / 22 /  6 %                   0
+  Blood mage     0/24      --       0/12     --        37 / 30 / 11 / 16 /  6 %                   0
+  Dual mage      2/24     212 s     0/12     --        32 / 27 / 10 / 22 /  9 %                   0
+
+  (2026-10-01, every class played, solo re-run; the duo columns are from
+   before it. Solo before: as the rows, but the Elementalist and the Dual
+   mage 0/24.)
 
   Champion solo, 216 hunts on four seed sets: 14 won (about 1 in 15), 3-4 min
   Champion duo, 44 hunts on two seed sets: 22 won (half), about 2 min
@@ -729,6 +733,23 @@ after the passes in [feel-log.md](../feel-log.md) of 2026-10-01:
       in prayer 0, dropped before it 324        on a stayer 20, other 1
     Ready 110: right 0, wrong 7, out 103      a blade broken in all 24
 ```
+
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8), held to the duellist's camera. **The
+Elementalist wins every solo hunt, in 71 s**, from outside the guard: a pillar
+under the Mantis at its standoff (304 in the 24) -- its guard turns blows, not
+fire it stands in -- and bolts at its chest. Every ablation agrees (23-24 of 24)
+but the jumper's (1), which takes her in over the guard. **The Dual mage** wins
+2. **The Reaver still wins none**: her shadow goes beside it (447), its lotus
+opens there (204) and she dashes in on it (143), but she has 750 health, the
+guard faces the body that swings, and the copies are a quarter -- "the shadow
+behind its guard" (§7) is not yet a plan, only a placement. **The Blood mage**
+wins none. Re-measured the same day, **the Champion wins none of 48 for the
+plan or any ablation** -- on main before the class layer as after it (his hunts
+did not move with it), against the 5 of 48 the table below records: the cast's
+merges since have moved him. The ablations by class, 24 each: the Bulwark 11
+(repeater), 2 (habit off), 1 (dodger), 0 (jumper); everyone else 0-2 but the
+Elementalist. Zero unanswerable, solo, for every class.
 
 **Against the targets.** Zero unanswerable hits for every class, solo and duo.
 The Champion wins about one in fifteen (§9 asks one in twenty), and two of them half the time. The
@@ -769,10 +790,10 @@ because a guessed Ready is a stance it is not hit in. The windows sit on §9's
   most health, and the plan's Bulwark does not need the guard break to win. A
   creature-side answer would be a rule about one class; the question is a
   person's (§12, 4, and a new 9).
-- **The Reaver, Blood mage and Dual mage win nothing, Elementalist only in a
-  pair.** The plan does not play the shadow behind its guard (§7's "this is her
-  fight"), the pools or the bars; the numbers are the plan's reach, not the
-  class's.
+- **The Reaver and the Blood mage win nothing solo; the Dual mage 2; the
+  Elementalist every hunt** (2026-10-01, every class played): the guard turns
+  blows and not the fire it stands in. The Reaver's shadow beside it is played
+  and is not enough.
 
 **Open questions added.**
 

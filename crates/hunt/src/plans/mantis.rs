@@ -39,7 +39,7 @@ use sim::{Class, Input, V3, World};
 
 use crate::duel::Kit;
 use crate::report::Tally;
-use crate::{Hunter, Intent, Plan, REACTION, steer, turns_to_aim};
+use crate::{Hands, Hunter, Intent, Plan, REACTION, steer, turns_to_aim};
 
 /// At its standoff, outside its reach.
 pub const SPACE: Intent = Intent("Space");
@@ -59,6 +59,10 @@ pub const ROUND: Intent = Intent("Round");
 pub const DUCK: Intent = Intent("Duck");
 /// Away from the prayer, or into it with a breaker.
 pub const PRAY: Intent = Intent("Prayer");
+/// How long the hunter believes it has at the standoff, its front a wall
+/// and nothing begun: long enough for a sent shadow or a shot.
+const STANDOFF_SAFE: i32 = 40;
+
 /// The ablations' own mistakes.
 pub const JUMP_IN: Intent = Intent("JumpIn");
 pub const DODGE: Intent = Intent("Dodge");
@@ -145,6 +149,13 @@ pub struct Duellist {
     rng: u32,
     slop: i32,
     hop: Fx,
+    /// Its class (`crate::class`), held to this camera; and what this
+    /// frame's choice was for it: the point a swing went at, in what window,
+    /// which way a dodge went, and where it waits.
+    hands: Hands,
+    aimed: Option<(V3, Option<i32>)>,
+    out: Option<V3>,
+    waiting: Option<(V3, V3, i32)>,
 }
 
 impl Duellist {
@@ -184,6 +195,10 @@ impl Duellist {
                 | 1,
             slop: 0,
             hop,
+            hands: Hands::new(who, seed),
+            aimed: None,
+            out: None,
+            waiting: None,
         }
     }
 
@@ -344,6 +359,54 @@ impl Plan for Duellist {
     }
 
     fn act(&mut self, w: &World) -> Input {
+        self.aimed = None;
+        self.out = None;
+        self.waiting = None;
+        let input = self.decide(w);
+        let me = w.players[self.who];
+        // The class's turn: what the choice was for, in its own hands.
+        const ATTACKS: u16 =
+            Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL | Input::MECHANIC;
+        if input.bits & ATTACKS != 0
+            && let Some((at, window)) = self.aimed
+        {
+            return self.hands.hit(w, &me, at, input, window);
+        }
+        if input.bits & Input::SHIFT != 0
+            && let Some(out) = self.out
+        {
+            return self.hands.leave(w, &me, out, input);
+        }
+        if let Some((at, Some(window))) = self.aimed
+            && wide_flat_dist(at, me.pos).raw() > self.hands.reach(&me).add(Fx::ONE).raw()
+            && let Some(go) = self.hands.close_in(w, &me, at, window)
+        {
+            return go;
+        }
+        if let Some((beast, at, safe)) = self.waiting
+            && let Some(own) = self.hands.idle(w, &me, beast, at, safe)
+        {
+            return own;
+        }
+        input
+    }
+
+    fn intent(&self) -> Intent {
+        self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
+    }
+}
+
+impl Duellist {
+    /// One frame of the plan, before its class has its turn.
+    fn decide(&mut self, w: &World) -> Input {
         self.gap = self.gap.saturating_sub(1);
         let me = w.players[self.who];
         if self.kit.is_none() {
@@ -408,10 +471,6 @@ impl Plan for Duellist {
         }
         self.neutral(w, &me, &m, &seen)
     }
-
-    fn intent(&self) -> Intent {
-        self.intent
-    }
 }
 
 impl Duellist {
@@ -421,6 +480,10 @@ impl Duellist {
             let error = wrap_turns(want.sub(self.look));
             let step = TURN.mul(sim::DT);
             self.look = self.look.add(error.clamp(step.neg(), step));
+        }
+        self.hands.camera(Some(self.look));
+        if bits & Input::SHIFT != 0 && dir.flat_len().raw() > 0 {
+            self.out = Some(dir);
         }
         let at = toward.unwrap_or(me.pos.add(V3::from_turns(self.look).scale(Fx::from_int(8))));
         let mut input = wire(me, self.look, at, bits);
@@ -732,7 +795,11 @@ impl Duellist {
         let window = m.frames_until_free() as i32 - REACTION as i32;
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let busy = (poke.startup + poke.active) as i32;
-        let reach = poke.reach.add(poke.step).add(sim::tuning::body_radius());
+        let reach = self
+            .hands
+            .reach(me)
+            .add(poke.step)
+            .add(sim::tuning::body_radius());
         // Arm until one blade is broken: the nearer whole blade, else the
         // body.
         let target = if fight::blades(m) == 2 {
@@ -750,6 +817,7 @@ impl Duellist {
         let walk = (d.sub(reach).max(Fx::ZERO))
             .div(sim::tuning::move_speed().mul(sim::DT))
             .to_int();
+        self.aimed = Some((target, Some(window - walk)));
         let dodge = sim::tuning::dodge_frames() as i32;
         let dash = sim::tuning::dodge_speed()
             .mul(sim::DT)
@@ -826,8 +894,9 @@ impl Duellist {
         // thorax and arm stands between the two, and a Ready's cocked blade
         // holds a fighter off at about that.
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-        let reach = poke
-            .reach
+        let reach = self
+            .hands
+            .reach(me)
             .add(poke.step)
             .add(sim::tuning::body_radius())
             .add(crate::HALF);
@@ -863,7 +932,11 @@ impl Duellist {
             };
         }
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-        let reach = poke.reach.add(poke.step).add(sim::tuning::body_radius());
+        let reach = self
+            .hands
+            .reach(me)
+            .add(poke.step)
+            .add(sim::tuning::body_radius());
         // Beside it and a little behind: the flank, a poke's length out.
         let spot = m
             .pos
@@ -871,6 +944,7 @@ impl Duellist {
             .sub(facing.scale(crate::HALF));
         if !m.covers(me.pos) && wide_flat_dist(m.pos, me.pos).raw() <= reach.add(Fx::ONE).raw() {
             if let Some(input) = self.swing(me, chest(m), Input::LEFT) {
+                self.aimed = Some((chest(m), None));
                 return input;
             }
         }
@@ -961,6 +1035,10 @@ impl Duellist {
             me.pos,
             unit(radial.add(around.scale(crate::HALF)).add(home), around),
         );
+        // At its standoff with nothing coming: the class's own business.
+        if m.doing.free() || matches!(m.doing, Doing::Recovery { .. }) {
+            self.waiting = Some((m.pos, chest(m), STANDOFF_SAFE));
+        }
         self.turn_and(me, Some(chest(m)), dir, 0)
     }
 
