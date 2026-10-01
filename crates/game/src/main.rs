@@ -493,6 +493,10 @@ fn shot_move(w: &mut World) {
     };
     let name = name.trim().to_lowercase();
     let me = w.players[0].pos;
+    if w.monster().is_none() {
+        shot_pack_move(w, &name);
+        return;
+    }
     let Some(beast) = w.monster_mut() else {
         return;
     };
@@ -522,6 +526,94 @@ fn shot_move(w: &mut World) {
         kind: kind as u8,
         left: m.startup,
     };
+}
+
+/// [`shot_move`] for a fight that is only a pack: one body of a kind that
+/// throws the move, put at the move's own distance from player one -- in
+/// front of the camera, or behind the heels for a scuttle -- and winding it
+/// up, with the rest of the pack held back in the den by a long grace. The
+/// Gnawers' pile-on is called as the pack calls it, on a ring of them.
+fn shot_pack_move(w: &mut World, name: &str) {
+    use sim::critter::{flag, is, pose};
+    let me = w.players[0].pos;
+    let sp = w.critters.sp();
+    let Some(kind) = sp
+        .moves
+        .iter()
+        .position(|m| m.name.to_lowercase().contains(name))
+    else {
+        return;
+    };
+    let kind = kind as u8;
+    let m = sp.attack(kind);
+    let Some(pack) = w.pack.as_mut() else {
+        return;
+    };
+    pack.grace = u16::MAX;
+    let home = pack.home;
+    let lane = |d: sim::Fx| sim::V3::new(me.x.add(d), me.y, me.z);
+    if sp.id == sim::species::SpeciesId::GNAWERS && kind == sim::species::gnawers::PILE_ON {
+        // A ring of them at four metres, and the pack calls it.
+        let mut k = 0;
+        for c in w
+            .critters
+            .iter_mut()
+            .filter(|c| c.alive() && !c.has(flag::LEADER))
+        {
+            let turn = sim::Fx::ratio(k * 2 + 1, 12);
+            c.pos = me.add(sim::V3::from_turns(turn).scale(sim::Fx::from_int(4)));
+            c.vel = sim::V3::ZERO;
+            k += 1;
+        }
+        if let Some(pack) = w.pack.as_mut() {
+            pack.seen[0].pos = me;
+            pack.seen[0].vel = sim::V3::ZERO;
+            pack.seen[0].alive = true;
+            sim::species::gnawers::pile_on(pack, &mut w.critters, 0);
+        }
+        return;
+    }
+    let mut chosen = None;
+    for (i, c) in w.critters.iter_mut().enumerate() {
+        if !c.alive() {
+            continue;
+        }
+        let throws = sp.kind(c.kind).moves.iter().any(|mv| mv.kind == kind);
+        if chosen.is_none() && throws {
+            chosen = Some(i);
+        } else {
+            c.pos = home;
+        }
+    }
+    let Some(i) = chosen else { return };
+    let behind = sp.moves[kind as usize].clip == pose::SCUTTLE;
+    let c = &mut w.critters[i];
+    // Where it winds up from: the Gnawers close to their bites before the
+    // windup begins (their `DartFrom` and `HamstringFrom`); anything else at
+    // the near half of the move's range.
+    let from = {
+        use sim::species::gnawers as g;
+        match (sp.id == sim::species::SpeciesId::GNAWERS, kind) {
+            (true, g::DART) => g::knob_fx(g::Knob::DartFrom),
+            (true, g::HAMSTRING) => g::knob_fx(g::Knob::HamstringFrom),
+            _ => m.ideal_range.sub(m.range_span.mul(sim::Fx::ratio(1, 2))),
+        }
+    };
+    c.pos = if behind { lane(from.neg()) } else { lane(from) };
+    c.yaw = if behind { 0 } else { 1 << 15 };
+    c.vel = sim::V3::ZERO;
+    c.state = is::STARTUP;
+    c.act = kind;
+    c.timer = m.startup;
+    c.set(flag::HIT_USED, false);
+    if sp
+        .kind(c.kind)
+        .moves
+        .iter()
+        .any(|mv| mv.kind == kind && mv.token)
+    {
+        c.set(flag::TOKEN, true);
+    }
 }
 
 /// `SHOT_WEIGHT=n` starts every Bulwark's shield holding `n`, so a capture can

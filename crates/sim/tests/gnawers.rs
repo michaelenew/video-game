@@ -1184,3 +1184,37 @@ fn a_gnawer_pack_runs_without_a_leader_and_spawns_into_a_freed_slot() {
     assert!(bites > 0, "a pack with no leader never bit");
     assert!(spawned > 0, "nothing spawned into a freed slot");
 }
+
+// ---------------------------------------------------------------------------
+// In the world (§11)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_won_hunt_is_the_gnawers_trophy_at_its_temper() {
+    // Every body down: the hunt is won, and what was beaten is the Gnawers,
+    // at the temper it was fought at -- what the trophy case writes.
+    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS).tempered(2);
+    w.players[1].health = 0;
+    assert_eq!(w.pack.unwrap().temper, 2);
+    for i in 0..MAX_CRITTERS {
+        if w.critters[i].alive() {
+            kill(&mut w, i);
+        }
+    }
+    for _ in 0..5 {
+        w.advance(idle());
+    }
+    let (beaten, temper) = w.hunt_won().expect("a won hunt");
+    assert!(beaten.contains(&Some(SpeciesId::GNAWERS)));
+    assert_eq!(temper, 2);
+}
+
+#[test]
+fn a_harder_temper_glances_sooner() {
+    // Tempers come free (species.md §5, 11): the pack's glance and lead are
+    // read through it.
+    let plain = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS);
+    let hard = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS)
+        .tempered(sim::temper::HIGHEST);
+    assert!(hard.pack.unwrap().glance_frames() < plain.pack.unwrap().glance_frames());
+}

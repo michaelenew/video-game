@@ -140,6 +140,28 @@ pub mod flag {
     pub const DETOUR_LEFT: u8 = 1 << 7;
 }
 
+/// **The critter renderer's stock poses**, by number. A critter has no
+/// skeleton and no baked clips; for a species that is only a pack, a move's
+/// `MoveDecl::clip` names which of these its windup and its hit are drawn
+/// with instead (`game/src/critters.rs`). Presentation only: nothing in the
+/// simulation reads them.
+pub mod pose {
+    /// Belly down, rump up, a wiggle; then a lunge. Every move's default.
+    pub const CROUCH: usize = 0;
+    /// Low and quick at the heels: the legs going, the body flat.
+    pub const SCUTTLE: usize = 1;
+    /// Gathered deep on the haunches; then up and through the air.
+    pub const LEAP: usize = 2;
+    /// Up on the hind legs, head back: a howl.
+    pub const REAR: usize = 3;
+    /// Low and wide, the head turned sideways: a bite at the legs.
+    pub const MAUL: usize = 4;
+    /// Nose down at the foot of something, forepaws going.
+    pub const DIG: usize = 5;
+    /// Forepaws up on an edge, hauling.
+    pub const CLIMB: usize = 6;
+}
+
 /// Not in a ring slot.
 pub const NO_SLOT: u8 = u8::MAX;
 

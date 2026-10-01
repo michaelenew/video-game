@@ -420,53 +420,7 @@ impl PackMind for Mind {
         let Some(who) = (0..MAX_PLAYERS).find(|w| set_up(pack, *w) && !treed(pack, *w)) else {
             return;
         };
-        let at = pack.seen[who].pos;
-        let radius = knob_fx(Knob::PileonRadius);
-        // Every gnawer within reach of it that is not already committed, nearest
-        // first. Ten at most; a fixed order for ties.
-        let mut order = [(i32::MAX, 0usize); MAX_CRITTERS];
-        let mut n = 0;
-        for (i, c) in critters.iter().enumerate() {
-            if !c.alive()
-                || c.state != is::PROWL
-                || c.has(flag::LEADER)
-                || c.mounted()
-                || !sp.kind(c.kind).moves.iter().any(|m| m.kind == PILE_ON)
-            {
-                continue;
-            }
-            let d = crate::math::big_len(V3::new(c.pos.x.sub(at.x), Fx::ZERO, c.pos.z.sub(at.z)));
-            if d.raw() <= radius.raw() {
-                order[n] = (d.raw(), i);
-                n += 1;
-            }
-        }
-        if n == 0 {
-            return;
-        }
-        order[..n].sort_unstable();
-        let a = sp.attack(PILE_ON);
-        let step = knob(Knob::PileonStagger).max(0) as u16;
-        for (k, (_, i)) in order[..n].iter().enumerate() {
-            let c = &mut critters[*i];
-            c.state = is::STARTUP;
-            c.act = PILE_ON;
-            c.timer = a.startup.max(1) + step * k as u16;
-            c.target = who as u8;
-            c.set(flag::HIT_USED, false);
-        }
-        let last = a.startup as i32 + step as i32 * (n as i32 - 1);
-        let left = last + a.active as i32 + a.recovery as i32;
-        set_clock(pack, Clock::PileLeft, left);
-        set_clock(pack, Clock::PileRest, left + knob(Knob::PileonRest));
-        // **One lane for all of them**: where the glance put the fighter
-        // when it was called. They close on it and leap at it, and do not
-        // follow: the heap lands where you were, so a dodge out of it is the
-        // answer and the heap is the sweep target.
-        let lane = crate::pack::lead_of(pack, who);
-        pack.memo[word::PILE_X] = lane.x.raw();
-        pack.memo[word::PILE_Z] = lane.z.raw();
-        pack.memo[word::PILE_HITS] = 0;
+        pile_on(pack, critters, who);
     }
 
     fn steer(&self, look: &Look, i: usize, want: Steer) -> Steer {
@@ -872,6 +826,62 @@ fn in_the_rear(c: &Critter, seen: &crate::pack::Seen) -> bool {
     let from = V3::new(c.pos.x.sub(seen.pos.x), Fx::ZERO, c.pos.z.sub(seen.pos.z));
     let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
     from.flat_len().raw() > 0 && facing.dot(from.normalized()).raw() <= knob_fx(Knob::RearCos).raw()
+}
+
+/// **Call a pile-on at fighter `who`**: every gnawer within `PileonRadius`
+/// of where the glance last saw it that is not already committed winds up,
+/// nearest first, `PileonStagger` frames apart, all locked to one lane -- the
+/// glance's lead on the fighter. What the pack does on seeing a fighter slowed
+/// or on the floor (in `frame`); public so a screenshot or a test can call one.
+pub fn pile_on(pack: &mut Pack, critters: &mut Critters, who: usize) {
+    let sp = pack.sp();
+    let at = pack.seen[who].pos;
+    let radius = knob_fx(Knob::PileonRadius);
+    // Every gnawer within reach of it that is not already committed, nearest
+    // first. Ten at most; a fixed order for ties.
+    let mut order = [(i32::MAX, 0usize); MAX_CRITTERS];
+    let mut n = 0;
+    for (i, c) in critters.iter().enumerate() {
+        if !c.alive()
+            || c.state != is::PROWL
+            || c.has(flag::LEADER)
+            || c.mounted()
+            || !sp.kind(c.kind).moves.iter().any(|m| m.kind == PILE_ON)
+        {
+            continue;
+        }
+        let d = crate::math::big_len(V3::new(c.pos.x.sub(at.x), Fx::ZERO, c.pos.z.sub(at.z)));
+        if d.raw() <= radius.raw() {
+            order[n] = (d.raw(), i);
+            n += 1;
+        }
+    }
+    if n == 0 {
+        return;
+    }
+    order[..n].sort_unstable();
+    let a = sp.attack(PILE_ON);
+    let step = knob(Knob::PileonStagger).max(0) as u16;
+    for (k, (_, i)) in order[..n].iter().enumerate() {
+        let c = &mut critters[*i];
+        c.state = is::STARTUP;
+        c.act = PILE_ON;
+        c.timer = a.startup.max(1) + step * k as u16;
+        c.target = who as u8;
+        c.set(flag::HIT_USED, false);
+    }
+    let last = a.startup as i32 + step as i32 * (n as i32 - 1);
+    let left = last + a.active as i32 + a.recovery as i32;
+    set_clock(pack, Clock::PileLeft, left);
+    set_clock(pack, Clock::PileRest, left + knob(Knob::PileonRest));
+    // **One lane for all of them**: where the glance put the fighter
+    // when it was called. They close on it and leap at it, and do not
+    // follow: the heap lands where you were, so a dodge out of it is the
+    // answer and the heap is the sweep target.
+    let lane = crate::pack::lead_of(pack, who);
+    pack.memo[word::PILE_X] = lane.x.raw();
+    pack.memo[word::PILE_Z] = lane.z.raw();
+    pack.memo[word::PILE_HITS] = 0;
 }
 
 /// A fighter's radius: how close behind the heels the scuttle aims.

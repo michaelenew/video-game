@@ -31,9 +31,9 @@ mod mind;
 pub mod rules;
 mod tuned;
 
-pub use mind::{Mind, gnawed, howling, latched, piling, stumbling, treed_now};
+pub use mind::{Mind, gnawed, howling, latched, pile_on, piling, stumbling, treed_now};
 
-use crate::critter::{CritterKind, CritterMove};
+use crate::critter::{CritterKind, CritterMove, pose};
 use crate::lore::Layout;
 use crate::oven::KnobDecl;
 use crate::pack::PackDecl;
@@ -49,14 +49,18 @@ pub const SCRAMBLE: u8 = 4;
 pub const MAUL: u8 = 5;
 pub const HOWL: u8 = 6;
 
+/// A critter has no clips, so each move's clip is the stock pose it is drawn
+/// with (`critter::pose`): the silhouettes §6 asks for -- the crouch rump-up,
+/// the maul low and wide with the head sideways, the Big One reared to a
+/// fighter's height to howl.
 pub const MOVES: [MoveDecl; 7] = [
-    MoveDecl::new("Dart-bite", 0),
-    MoveDecl::new("Hamstring", 0),
-    MoveDecl::new("Pile-on", 0),
-    MoveDecl::new("Gnaw", 0),
-    MoveDecl::new("Scramble", 0),
-    MoveDecl::new("Maul", 0),
-    MoveDecl::new("Howl", 0),
+    MoveDecl::new("Dart-bite", pose::CROUCH),
+    MoveDecl::new("Hamstring", pose::SCUTTLE),
+    MoveDecl::new("Pile-on", pose::LEAP),
+    MoveDecl::new("Gnaw", pose::DIG),
+    MoveDecl::new("Scramble", pose::CLIMB),
+    MoveDecl::new("Maul", pose::MAUL),
+    MoveDecl::new("Howl", pose::REAR),
 ];
 
 /// The kinds, by index.

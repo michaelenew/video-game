@@ -160,9 +160,14 @@ struct Held {
     tail: f32,
     /// How much of the body is left: fading out once dead.
     left: f32,
+    /// Off the floor: a leap's arc.
+    lift: f32,
+    /// The head turned sideways, in radians: the maul.
+    head_turn: f32,
 }
 
 fn held(sp: &Species, c: &Critter) -> Held {
+    use sim::critter::pose;
     let clock = c.clock as f32;
     let speed = Vec2::new(c.vel.x.to_f32_for_render(), c.vel.z.to_f32_for_render()).length();
     let length = stat_fx(sp, c.kind, CritterField::Length).to_f32_for_render();
@@ -174,27 +179,93 @@ fn held(sp: &Species, c: &Critter) -> Held {
         stride: clock * speed / 60.0 / length.max(0.1),
         tail: if c.has(flag::TOKEN) { 1.1 } else { -0.35 },
         left: 1.0,
+        lift: 0.0,
+        head_turn: 0.0,
     };
-    match c.state {
+    // **The move's stock pose** (`sim::critter::pose`), named by its clip
+    // number: a critter has no clips of its own. How far through the windup
+    // it is, nought to one, eases each pose in.
+    let a = sp.attack(c.act);
+    let pose = sp
+        .moves
+        .get(c.act as usize)
+        .map_or(pose::CROUCH, |m| m.clip);
+    let through = match c.state {
+        is::STARTUP => 1.0 - c.timer as f32 / a.startup.max(1) as f32,
+        _ => 1.0,
+    };
+    let wiggle = (clock * 0.9).sin();
+    match (c.state, pose) {
         // The crouch: rump up, head down, and a wiggle.
-        is::STARTUP => {
-            h.pitch = -0.28;
-            h.roll = (clock * 0.9).sin() * 0.12;
+        (is::STARTUP, pose::CROUCH) => {
+            h.pitch = -0.28 * (0.4 + 0.6 * through);
+            h.roll = wiggle * 0.12;
             h.stride = 0.0;
         }
-        // The lunge: stretched out, nose up a little.
-        is::ACTIVE => {
+        // The scuttle: flat and fast, the legs going.
+        (is::STARTUP, pose::SCUTTLE) => {
+            h.pitch = -0.08;
+            h.drop = 0.18 * length;
+            h.stride = clock * 0.35;
+        }
+        // Gathering for the pile-on: deep on the haunches.
+        (is::STARTUP, pose::LEAP) => {
+            h.pitch = -0.4 * through;
+            h.drop = 0.12 * length * through;
+            h.roll = wiggle * 0.08;
+        }
+        // Rearing to howl, head back.
+        (is::STARTUP | is::ACTIVE, pose::REAR) => {
+            h.pitch = 0.25 * through;
+            h.tail = -0.6;
+            h.stride = 0.0;
+        }
+        // Low and wide, head sideways: the maul.
+        (is::STARTUP, pose::MAUL) => {
+            h.pitch = -0.2;
+            h.drop = 0.15 * length * through;
+            h.head_turn = 0.7 * through;
+            h.roll = wiggle * 0.05;
+        }
+        // Nose down at the stone, forepaws going.
+        (is::STARTUP | is::ACTIVE, pose::DIG) => {
+            h.pitch = -0.5;
+            h.roll = (clock * 1.7).sin() * 0.1;
+            h.stride = clock * 0.25;
+        }
+        // Forepaws up an edge.
+        (is::STARTUP, pose::CLIMB) => {
+            h.pitch = 0.75 * through.max(0.3);
+            h.stride = clock * 0.2;
+        }
+        // The pile-on's leap: up and through the air.
+        (is::ACTIVE, pose::LEAP) => {
+            let t = 1.0 - c.timer as f32 / a.active.max(1) as f32;
+            h.pitch = 0.3 - 0.6 * t;
+            h.lift = (t * std::f32::consts::PI).sin() * 0.45 * length;
+        }
+        (is::ACTIVE, pose::MAUL) => {
+            h.pitch = 0.05;
+            h.head_turn = 0.7;
+        }
+        // Any other lunge: stretched out, nose up a little.
+        (is::ACTIVE, _) => {
             h.pitch = 0.15;
         }
-        is::RECOVERY => {
+        (is::STARTUP, _) => {
+            h.pitch = -0.28;
+            h.roll = wiggle * 0.12;
+            h.stride = 0.0;
+        }
+        (is::RECOVERY, _) => {
             h.pitch = -0.08;
         }
-        is::FLINCH => {
+        (is::FLINCH, _) => {
             h.roll = 0.45;
             h.pitch = 0.2;
         }
         // On its side, and fading as the corpse runs out.
-        is::DEAD => {
+        (is::DEAD, _) => {
             let corpse = sim::critter::stat(sp, c.kind, CritterField::Corpse).max(1) as f32;
             h.roll = std::f32::consts::FRAC_PI_2;
             h.stride = 0.0;
@@ -231,15 +302,19 @@ pub fn place(
         }
         let show = shown(&prev[slot], c, alpha);
         let pose = held(sp, c);
-        let l = stat_fx(sp, c.kind, CritterField::Length).to_f32_for_render();
-        let w = stat_fx(sp, c.kind, CritterField::Width).to_f32_for_render();
-        let h = stat_fx(sp, c.kind, CritterField::Height).to_f32_for_render();
+        // Sized from `Critter::body`, the one description the hit test and
+        // the aiming ray read -- so the Big One reared to howl is drawn the
+        // height it is hit at.
+        let body = c.body(sp);
+        let l = body.half_len.to_f32_for_render() * 2.0;
+        let w = body.half_wid.to_f32_for_render() * 2.0;
+        let h = body.height.to_f32_for_render();
         // The body's frame: yaw about up (zero looks down +X, turning toward
         // +Z, as the simulation's), then the pose's pitch and roll.
         let frame = Quat::from_rotation_y(-show.yaw)
             * Quat::from_rotation_z(pose.pitch)
             * Quat::from_rotation_x(pose.roll);
-        let hip = show.at + Vec3::Y * (h * 0.45 - pose.drop);
+        let hip = show.at + Vec3::Y * (h * 0.45 - pose.drop + pose.lift);
         let put = |local: Vec3| hip + frame * local;
         let legs = h * 0.45;
         let (centre, size, turn) = match piece {
@@ -251,12 +326,12 @@ pub fn place(
             Piece::Head => (
                 put(Vec3::new(l * 0.38, h * 0.28, 0.0)),
                 Vec3::new(l * 0.24, h * 0.36, w * 0.7),
-                Quat::IDENTITY,
+                Quat::from_rotation_x(pose.head_turn),
             ),
             Piece::Eyes => (
                 put(Vec3::new(l * 0.5, h * 0.36, 0.0)),
                 Vec3::new(l * 0.04, h * 0.08, w * 0.5),
-                Quat::IDENTITY,
+                Quat::from_rotation_x(pose.head_turn),
             ),
             Piece::Tail => {
                 let lift = Quat::from_rotation_z(-pose.tail);
