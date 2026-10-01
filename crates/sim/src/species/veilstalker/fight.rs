@@ -204,6 +204,9 @@ pub mod view {
     /// Where it would decloak is out of the hunter's view behind something
     /// solid, not off the side of it.
     pub const HIDDEN: u32 = 128;
+    /// It stands on floor that takes no print -- the stream, a top -- so a
+    /// decloak there would set no feet, and could not be told from a mimic.
+    pub const BARE: u32 = 256;
 }
 
 /// Its four words on the body (`Monster::own`), which the hit path reads.
@@ -1602,13 +1605,9 @@ fn mimic(w: &mut World, m: &mut Monster, now: u32) {
         }
         Doing::Active { kind: MIMIC, .. } | Doing::Recovery { kind: MIMIC, .. } => {
             m.speed = Fx::ZERO;
-            if w.lore.word(word::GHOST_LOOK) != 0 {
-                w.lore.set_word(word::GHOST_LOOK, 0);
-                w.lore
-                    .set_word(word::QUIET, Knob::MimicQuiet.raw().max(0) as u32);
-            }
         }
         _ => {
+            // Over: nothing strikes for the quiet, from now.
             if w.lore.word(word::GHOST_LOOK) != 0 {
                 w.lore.set_word(word::GHOST_LOOK, 0);
                 w.lore
@@ -2059,6 +2058,11 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
         }
         if inside(m.pos) {
             bits |= view::IN_SMOKE;
+        }
+        if !ground.floor_at(m.pos.x, m.pos.z).takes_prints()
+            || ground.ground_under(m.pos).raw() > crate::arena::SKIN.raw()
+        {
+            bits |= view::BARE;
         }
         if inside(fighters[i].pos) {
             bits |= view::THEY_IN_SMOKE;

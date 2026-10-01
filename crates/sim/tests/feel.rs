@@ -1464,3 +1464,30 @@ fn a_full_cash_in_is_the_biggest_hit_in_the_game_and_still_not_a_round() {
         );
     }
 }
+
+/// **No knob may take a Veilstalker decloak under the floor**
+/// (`veilstalker.md` §2, "the decloak is the tell, and it is a floor").
+/// Every strike begins with a decloak of at least `DecloakFloor` frames --
+/// three over a human reaction -- and the floor itself cannot be set under
+/// eighteen in the Oven. A move faster than the floor is not a tuning
+/// question; it is a different creature.
+#[test]
+fn no_decloak_knob_may_go_below_the_floor() {
+    use sim::species::veilstalker::{self as vs, Knob, fight};
+    let decl = Knob::DECLS[Knob::DecloakFloor as usize];
+    assert!(
+        decl.lo >= 18,
+        "the floor's own knob can be set to {}",
+        decl.lo
+    );
+    let floor = Knob::DecloakFloor.raw();
+    assert!(floor >= 18, "the floor is {floor}");
+    for kind in vs::STRIKES {
+        assert!(
+            fight::decloak(kind) >= floor,
+            "{} decloaks for {} frames, under the floor of {floor}",
+            vs::MOVES[kind as usize].name,
+            fight::decloak(kind),
+        );
+    }
+}

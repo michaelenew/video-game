@@ -33,7 +33,7 @@ pub mod pair;
 
 // pub mod broodmother;
 
-// pub mod veilstalker;
+pub mod veilstalker;
 
 // pub mod mantis;
 
@@ -102,7 +102,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::CARD),
 
-        // SpeciesId::VEILSTALKER => Some(&veilstalker::CARD),
+        SpeciesId::VEILSTALKER => Some(&veilstalker::CARD),
 
         // SpeciesId::MANTIS => Some(&mantis::CARD),
 

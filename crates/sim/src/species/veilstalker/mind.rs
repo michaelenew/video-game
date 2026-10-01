@@ -93,6 +93,11 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
             if fight::stalk_left(lore) > 0 || fight::quiet(lore) {
                 return 0;
             }
+            // **Only where its feet would show**: a decloak on floor that
+            // takes no print could not be told from a mimic (§2).
+            if v & view::BARE != 0 {
+                return 0;
+            }
             if !gate(m, v, lore) || !in_reach(m, kind) {
                 return 0;
             }
