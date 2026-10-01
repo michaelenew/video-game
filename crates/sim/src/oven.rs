@@ -25,6 +25,7 @@
 
 use crate::class::{ALL_CLASSES, Class};
 use crate::fixed::Fx;
+use crate::species::{self, Species, SpeciesId};
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -190,64 +191,6 @@ scalars! {
     StoneKnockHanded, "Stones",   "Knock handed on (x)",        Fixed,   0,         fx(1,1);
     StoneKnockDamp,   "Stones",   "Knock damping (x)",          Fixed,   0,         fx(1,1);
     StoneFriction,    "Stones",   "Ground friction (x)",        Fixed,   0,         fx(1,1);
-    MonsterScale,     "Ridgeback","Size (x)",                   Fixed,   fx(1,2),   fx(3,1);
-    MonsterHealth,    "Ridgeback","Health",                     Int,     500,       30000;
-    LimbHealth,       "Ridgeback","Foot health",                Int,     100,       6000;
-    MonsterMargin,    "Ridgeback","Keep-out from the wall",     Fixed,   0,         fx(12,1);
-    MonsterWalk,      "Ridgeback","Walk speed",                 Fixed,   0,         fx(20,1);
-    GallopSpeed,      "Ridgeback","Gallop speed",               Fixed,   fx(1,1),   fx(30,1);
-    MonsterBack,      "Ridgeback","Backing-off speed",          Fixed,   0,         fx(12,1);
-    MonsterAccel,     "Ridgeback","Walk acceleration",          Fixed,   fx(1,1),   fx(40,1);
-    ProwlRange,       "Ridgeback","Preferred distance",         Fixed,   fx(1,1),   fx(20,1);
-    ApproachGain,     "Ridgeback","Approach gain",              Fixed,   0,         fx(6,1);
-    TurnRateMax,      "Ridgeback","Turn rate cap (turns/s)",    Fixed,   fx(1,100), fx(2,1);
-    TurnGain,         "Ridgeback","Turn gain",                  Fixed,   fx(1,10),  fx(10,1);
-    TurnAccel,        "Ridgeback","Turn acceleration",          Fixed,   fx(1,100), fx(10,1);
-    TurnHurt,         "Ridgeback","Turn per broken leg (x)",    Fixed,   0,         fx(1,1);
-    TurnSettle,       "Ridgeback","Turn bleed-off, committed",  Fixed,   0,         fx(1,1);
-    GlanceFrames,     "Ridgeback · mind","Frames between glances", Frames, 1,       90;
-    Lead,             "Ridgeback · mind","Lead on the target (x)", Fixed,  0,       fx(2,1);
-    ProwlLead,        "Ridgeback · mind","Lead horizon, prowling", Frames, 0,       90;
-    ThinkFrames,      "Ridgeback · mind","Pause between moves",    Frames, 0,       120;
-    Decisiveness,     "Ridgeback · mind","Decisiveness (%)",       Percent, 0,      100;
-    HurtAggression,   "Ridgeback · mind","Aggression when wounded", Int,   0,       400;
-    VarietyPenalty,   "Ridgeback · mind","Repeat penalty",         Int,    0,       2000;
-    VarietyFrames,    "Ridgeback · mind","Repeat penalty decay",   Frames, 0,       300;
-    PoiseMax,         "Ridgeback","Poise",                      Int,     50,        5000;
-    PoiseRegen,       "Ridgeback","Poise regained per frame",   Int,     0,         60;
-    ToppleFrames,     "Ridgeback","Topple length",              Frames,  30,        600;
-    StumbleFrames,    "Ridgeback","Stumble length",             Frames,  20,        300;
-    FlinchFrames,     "Ridgeback","Flinch length",              Frames,  1,         90;
-    FlinchThreshold,  "Ridgeback","Damage that flinches it",    Int,     1,         2000;
-    VulnHead,         "Ridgeback · hide","Head (x damage)",     Fixed,   0,         fx(3,1);
-    VulnNeck,         "Ridgeback · hide","Neck (x damage)",     Fixed,   0,         fx(3,1);
-    VulnNape,         "Ridgeback · hide","Nape (x damage)",     Fixed,   0,         fx(4,1);
-    VulnShoulder,     "Ridgeback · hide","Shoulders (x damage)",Fixed,   0,         fx(3,1);
-    VulnBarrel,       "Ridgeback · hide","Barrel (x damage)",   Fixed,   0,         fx(3,1);
-    VulnRidge,        "Ridgeback · hide","Ridge (x damage)",    Fixed,   0,         fx(4,1);
-    VulnHaunch,       "Ridgeback · hide","Haunch (x damage)",   Fixed,   0,         fx(3,1);
-    VulnTail,         "Ridgeback · hide","Tail (x damage)",     Fixed,   0,         fx(3,1);
-    VulnTailMid,      "Ridgeback · hide","Tail, middle (x damage)", Fixed, 0,       fx(3,1);
-    VulnTailTip,      "Ridgeback · hide","Tail tip (x damage)", Fixed,   0,         fx(3,1);
-    VulnLeg,          "Ridgeback · hide","Upper leg (x damage)",Fixed,   0,         fx(3,1);
-    VulnFoot,         "Ridgeback · hide","Foot (x damage)",     Fixed,   0,         fx(3,1);
-    LegDrop,          "Ridgeback · legs","Corner drop per break", Fixed, 0,         fx(2,1);
-    LegPitch,         "Ridgeback · legs","Pitch per break",     Fixed,   0,         fx(1,8);
-    LegRoll,          "Ridgeback · legs","Roll per break",      Fixed,   0,         fx(1,8);
-    LegFold,          "Ridgeback · legs","Broken leg, knee fold", Fixed, 0,         fx(1,2);
-    LegBuckle,        "Ridgeback · legs","Broken leg, hip share (x)", Fixed, 0,    fx(2,1);
-    LegSpeedHurt,     "Ridgeback · legs","Speed per break (x)", Fixed,   0,         fx(1,1);
-    StrainDecay,      "Ridgeback · nerve","Strain bled per frame (%)", Percent, 1,  50;
-    CcStrain,         "Ridgeback · nerve","Strain to feel control", Int,  50,        6000;
-    InterruptStrain,  "Ridgeback · nerve","Strain to interrupt",    Int,  50,        9000;
-    StrainDesperation,"Ridgeback · nerve","Thresholds fall by (%)", Percent, 0,      95;
-    CcSlowBite,       "Ridgeback · nerve","Slow it actually feels (x)", Fixed, 0,    fx(1,1);
-    CcRoot,           "Ridgeback · nerve","Root, per grab frame (x)",  Fixed, 0,     fx(2,1);
-    CcStumble,        "Ridgeback · nerve","Stumble per launch (frames/mps)", Fixed, 0, fx(30,1);
-    ShakeForce,       "Ridgeback · pose","Shake force (x)",     Fixed,   0,         fx(3,1);
-    GaitStride,       "Ridgeback · pose","Stride length",       Fixed,   fx(1,2),   fx(12,1);
-    BreathRate,       "Ridgeback · pose","Breath per frame",    Int,     1,         2000;
-    HeadTrack,        "Ridgeback · pose","Head tracking (turns)", Fixed, 0,         fx(1,4);
     MountSnap,        "Riding",   "Landing reach",              Fixed,   fx(1,20),  fx(2,1);
     EdgeGrace,        "Riding",   "Overhang allowed (x body)",  Fixed,   0,         fx(2,1);
     Grip,             "Riding",   "Grip (m/s2)",                Fixed,   fx(20,1),  fx(2000,1);
@@ -259,8 +202,6 @@ scalars! {
     MountSettle,      "Riding",   "Frames to plant your feet",  Frames,  1,         30;
     RiderSpeed,       "Riding",   "Walk speed aboard (x)",      Fixed,   fx(1,10),  fx(1,1);
     LeapCarry,        "Riding",   "Momentum a leap can carry",  Fixed,   0,         fx(40,1);
-    MonsterSpawn,     "Ridgeback","Spawns this far out",        Fixed,   0,         fx(14,1);
-    HunterSpawn,      "Ridgeback","Hunters start this far out", Fixed,   0,         fx(14,1);
     StepUp,           "Riding",   "Step you can walk up",       Fixed,   0,         fx(2,1);
     BoltKnockSpeed,    "Elementalist", "Bolt knock speed",                  Fixed,  0,        fx(60,1);
     BoltKnockRange,    "Elementalist", "Bolt knock travel",                 Fixed,  fx(1,10), fx(20,1);
@@ -592,19 +533,9 @@ scalars! {
     BleedLasts,       "Blood mage", "Bleed lasts",                            Frames, 1,       900;
     BleedTick,        "Blood mage", "Bleed ticks every",                      Frames, 1,       120;
     BleedDamage,      "Blood mage", "Bleed damage per tick",                  Int,   0,        200;
-    // The Ridgeback's hunt, 2026-09-25: pursuit, the tracking windup, and the
-    // two situations that raise its appetite. Appended here rather than beside
-    // the rest of its knobs for the reason the Lotus note above gives.
-    StartupTracking,  "Ridgeback · mind","Windup follows you (x turn rate)", Fixed,  0,       fx(1,1);
-    ClosingSpeed,     "Ridgeback · mind","Closing speed that provokes it",   Fixed,  0,       fx(12,1);
-    ClosingAppetite,  "Ridgeback · mind","Appetite for a closing target",    Int,    0,       4000;
-    ComboAppetite,    "Ridgeback · mind","Appetite for a stunned target",    Int,    0,       4000;
-    TargetSwitch,     "Ridgeback · mind","Switch targets when nearer than (x)", Fixed, 0,   fx(1,1);
-    PursuitGain,      "Ridgeback","Matches a fleeing target's speed (x)",     Fixed,  0,       fx(3,1);
-    RearPause,        "Ridgeback · mind","Turns to face you after a rear move", Frames, 0,      180;
-    MonsterBrake,     "Ridgeback","Braking, committed (m/s2)",                Fixed,  fx(1,1), fx(200,1);
-    MonsterLaunch,    "Ridgeback","Launching into a charge (m/s2)",           Fixed,  fx(10,1), fx(2000,1);
-    HuntGrace,        "Ridgeback · mind","Holds off when a hunt begins",   Frames, 0,        600;
+    // The Ridgeback's knobs used to be here and above. Since the creature
+    // became a species they are its own, in `species/ridgeback/tuned.rs` --
+    // see `species::common` and `Knob::Species`.
     LotusBladesAPass, "Reaver",   "Lotus, blades that cut one body a pass", Int, 1,      12;
     // **The impact freeze**, 2026-09-26: both bodies hold still for a few
     // frames when a blow connects, which is most of what makes a hit read as
@@ -1053,10 +984,11 @@ impl MoveField {
 }
 
 // ---------------------------------------------------------------------------
-// The Ridgeback's move data
+// A creature's move data
 // ---------------------------------------------------------------------------
 
-/// One tuned field of one of the creature's moves.
+/// One tuned field of one of a creature's moves. Every species has one row of
+/// these per move, in its own store -- see [`Knob::Species`].
 ///
 /// Its own family rather than a reuse of `MoveField`, because the two tables
 /// mean different things: a fighter's move is authored against a shared body
@@ -1075,8 +1007,9 @@ pub enum MonsterField {
     HitRadius,
     HitLow,
     HitHigh,
-    /// Which articulation carries the volume: the tail's swing, or the head's
-    /// reach. See `monster::Shape::rides`.
+    /// Which articulation carries the volume: the body's, or one of the bones
+    /// the species lists in `Species::follows` -- the Ridgeback's tail's
+    /// swing, or its head's reach.
     Follows,
     Hitstun,
     Blockstun,
@@ -1187,7 +1120,7 @@ impl MonsterField {
             MonsterField::Travel => (0, fx(90, 1)),
             MonsterField::Hitstun | MonsterField::Blockstun => (0, 120),
             MonsterField::Damage => (0, 900),
-            MonsterField::Follows => (0, 2),
+            MonsterField::Follows => (0, 7),
             MonsterField::Weight | MonsterField::RiderWeight => (0, 4000),
             MonsterField::Unblockable => (0, 1),
             // Body-space coordinates run behind the creature as well as ahead
@@ -1201,9 +1134,62 @@ impl MonsterField {
     }
 }
 
-pub const MONSTER_MOVES: usize = 8;
 pub const MONSTER_FIELDS: usize = 25;
-pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
+
+/// One knob a species declares, as the Oven shows it: see
+/// [`species_knobs!`](crate::species_knobs).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct KnobDecl {
+    /// The family *within* the species: `"mind"` shows as "Ridgeback · mind",
+    /// and `""` as plain "Ridgeback".
+    pub family: &'static str,
+    pub label: &'static str,
+    pub unit: Unit,
+    pub lo: i32,
+    pub hi: i32,
+}
+
+/// Which of a species' knobs: one of the numbers every creature has, one of
+/// its own, or one field of one of its moves. Stored in that order.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Tunable {
+    Common(crate::species::Common),
+    Own(u16),
+    Move(u8, MonsterField),
+}
+
+impl Tunable {
+    /// Where it sits in the species' store and its baked file.
+    pub fn index(self, species: &Species) -> usize {
+        match self {
+            Tunable::Common(c) => c as usize,
+            Tunable::Own(k) => crate::species::Common::ALL.len() + k as usize,
+            Tunable::Move(slot, f) => species.move_index(slot as usize, f),
+        }
+    }
+
+    fn decl(self, species: &Species) -> KnobDecl {
+        match self {
+            Tunable::Common(c) => crate::species::Common::DECLS[c as usize],
+            Tunable::Own(k) => species.own[k as usize],
+            Tunable::Move(_, f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+        }
+    }
+}
+
+/// Room in each species' store. Far more than any species needs -- the
+/// Ridgeback uses 270, most of it its eight moves -- so a species with sixteen
+/// moves and a long list of its own still fits. Checked by `tests/oven.rs`.
+pub const MAX_SPECIES_KNOBS: usize = 640;
 
 pub const CLASSES: usize = 6;
 /// Counted from the table rather than written down. A literal here is a second
@@ -1240,8 +1226,31 @@ pub fn set_view(k: ViewKnob, raw: i32) {
     VIEW_CELLS[k as usize].store(raw, Ordering::Relaxed);
 }
 
-static MONSTER_CELLS: LazyLock<[AtomicI32; MONSTER_COUNT]> =
-    LazyLock::new(|| cells(&tuned::MONSTER));
+/// Every species' knobs, one row per species id, seeded from each registered
+/// species' own baked file. A row an unregistered id owns stays zero.
+static SPECIES_CELLS: LazyLock<[[AtomicI32; MAX_SPECIES_KNOBS]; species::COUNT]> =
+    LazyLock::new(|| {
+        std::array::from_fn(|id| {
+            let seed = species::lookup(SpeciesId(id as u8)).map_or(&[][..], |s| s.tuned);
+            std::array::from_fn(|i| AtomicI32::new(seed.get(i).copied().unwrap_or(0)))
+        })
+    });
+
+/// One of a species' knobs, by its index in the species' store.
+pub fn species_raw(id: SpeciesId, index: usize) -> i32 {
+    SPECIES_CELLS[id.0 as usize][index].load(Ordering::Relaxed)
+}
+
+pub fn set_species_raw(id: SpeciesId, index: usize, raw: i32) {
+    SPECIES_CELLS[id.0 as usize][index].store(raw, Ordering::Relaxed);
+}
+
+/// What a species' baked file holds for one of its knobs.
+fn species_baked(id: SpeciesId, index: usize) -> i32 {
+    species::lookup(id)
+        .and_then(|s| s.tuned.get(index).copied())
+        .unwrap_or(0)
+}
 
 pub fn scalar(s: Scalar) -> i32 {
     SCALAR_CELLS[s as usize].load(Ordering::Relaxed)
@@ -1275,18 +1284,6 @@ pub fn set_move_field(class: Class, slot: usize, field: MoveField, raw: i32) {
     MOVE_CELLS[move_index(class, slot, field)].store(raw, Ordering::Relaxed);
 }
 
-fn monster_index(slot: usize, field: MonsterField) -> usize {
-    slot * MONSTER_FIELDS + field as usize
-}
-
-pub fn monster_field(slot: usize, field: MonsterField) -> i32 {
-    MONSTER_CELLS[monster_index(slot, field)].load(Ordering::Relaxed)
-}
-
-pub fn set_monster_field(slot: usize, field: MonsterField, raw: i32) {
-    MONSTER_CELLS[monster_index(slot, field)].store(raw, Ordering::Relaxed);
-}
-
 /// Put everything back to what is committed in `tuned.rs`.
 pub fn reset_to_baked() {
     for (i, cell) in SCALAR_CELLS.iter().enumerate() {
@@ -1301,8 +1298,10 @@ pub fn reset_to_baked() {
     for (i, cell) in VIEW_CELLS.iter().enumerate() {
         cell.store(tuned::VIEW[i], Ordering::Relaxed);
     }
-    for (i, cell) in MONSTER_CELLS.iter().enumerate() {
-        cell.store(tuned::MONSTER[i], Ordering::Relaxed);
+    for (id, row) in SPECIES_CELLS.iter().enumerate() {
+        for (i, cell) in row.iter().enumerate() {
+            cell.store(species_baked(SpeciesId(id as u8), i), Ordering::Relaxed);
+        }
     }
 }
 
@@ -1325,10 +1324,11 @@ pub fn is_dirty() -> bool {
             .iter()
             .enumerate()
             .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::VIEW[i])
-        || MONSTER_CELLS
-            .iter()
-            .enumerate()
-            .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::MONSTER[i])
+        || SPECIES_CELLS.iter().enumerate().any(|(id, row)| {
+            row.iter()
+                .enumerate()
+                .any(|(i, c)| c.load(Ordering::Relaxed) != species_baked(SpeciesId(id as u8), i))
+        })
 }
 
 /// A hash of every live value.
@@ -1348,7 +1348,7 @@ pub fn hash() -> u64 {
     for c in MOVE_CELLS.iter() {
         h.write_i32(c.load(Ordering::Relaxed));
     }
-    for c in MONSTER_CELLS.iter() {
+    for c in SPECIES_CELLS.iter().flatten() {
         h.write_i32(c.load(Ordering::Relaxed));
     }
     // `VIEW_CELLS` **is** folded in, and used not to be. The camera decides
@@ -1373,7 +1373,9 @@ pub enum Knob {
     Scalar(Scalar),
     Air(Class, AirField),
     Move(Class, usize, MoveField),
-    Monster(usize, MonsterField),
+    /// One of a creature's knobs. Each species keeps its own store and bakes
+    /// its own file, so two species never share a line of either.
+    Species(SpeciesId, Tunable),
     View(ViewKnob),
 }
 
@@ -1395,8 +1397,14 @@ impl Knob {
                 crate::moves::get(c, slot as u8).name,
                 crate::moves::binding(c, slot)
             ),
-            Knob::Monster(slot, _) => {
-                format!("Ridgeback · {}", crate::monster::MOVE_NAMES[slot])
+            Knob::Species(id, t) => {
+                let s = id.get();
+                match t {
+                    Tunable::Move(slot, _) => {
+                        format!("{} · {}", s.name, s.moves[slot as usize].name)
+                    }
+                    _ => species::common::family(s, &t.decl(s)),
+                }
             }
         }
     }
@@ -1407,7 +1415,7 @@ impl Knob {
             Knob::View(k) => k.label(),
             Knob::Air(_, f) => f.label(),
             Knob::Move(_, _, f) => f.label(),
-            Knob::Monster(_, f) => f.label(),
+            Knob::Species(id, t) => t.decl(id.get()).label,
         }
     }
 
@@ -1427,11 +1435,22 @@ impl Knob {
                 slug(crate::moves::get(c, slot as u8).name),
                 slug(f.label())
             ),
-            Knob::Monster(slot, f) => format!(
-                "monster.{}.{}",
-                slug(crate::monster::MOVE_NAMES[slot]),
-                slug(f.label())
-            ),
+            Knob::Species(id, t) => {
+                let s = id.get();
+                match t {
+                    Tunable::Move(slot, f) => format!(
+                        "{}.{}.{}",
+                        slug(s.name),
+                        slug(s.moves[slot as usize].name),
+                        slug(f.label())
+                    ),
+                    _ => format!(
+                        "{}.{}",
+                        slug(&species::common::family(s, &t.decl(s))),
+                        slug(t.decl(s).label)
+                    ),
+                }
+            }
         }
     }
 
@@ -1441,17 +1460,20 @@ impl Knob {
             Knob::View(k) => k.unit(),
             Knob::Air(_, _) => Unit::Fixed,
             Knob::Move(_, _, f) => f.unit(),
-            Knob::Monster(_, f) => f.unit(),
+            Knob::Species(id, t) => t.decl(id.get()).unit,
         }
     }
 
-    pub const fn range(self) -> (i32, i32) {
+    pub fn range(self) -> (i32, i32) {
         match self {
             Knob::Scalar(s) => s.range(),
             Knob::View(k) => k.range(),
             Knob::Air(_, f) => f.range(),
             Knob::Move(_, _, f) => f.range(),
-            Knob::Monster(_, f) => f.range(),
+            Knob::Species(id, t) => {
+                let d = t.decl(id.get());
+                (d.lo, d.hi)
+            }
         }
     }
 
@@ -1461,7 +1483,7 @@ impl Knob {
             Knob::View(k) => view(k),
             Knob::Air(c, f) => air(c, f),
             Knob::Move(c, slot, f) => move_field(c, slot, f),
-            Knob::Monster(slot, f) => monster_field(slot, f),
+            Knob::Species(id, t) => species_raw(id, t.index(id.get())),
         }
     }
 
@@ -1471,7 +1493,7 @@ impl Knob {
             Knob::View(k) => set_view(k, raw),
             Knob::Air(c, f) => set_air(c, f, raw),
             Knob::Move(c, slot, f) => set_move_field(c, slot, f, raw),
-            Knob::Monster(slot, f) => set_monster_field(slot, f, raw),
+            Knob::Species(id, t) => set_species_raw(id, t.index(id.get()), raw),
         }
     }
 
@@ -1482,7 +1504,7 @@ impl Knob {
             Knob::View(k) => tuned::VIEW[k as usize],
             Knob::Air(c, f) => tuned::AIR[air_index(c, f)],
             Knob::Move(c, slot, f) => tuned::MOVES[move_index(c, slot, f)],
-            Knob::Monster(slot, f) => tuned::MONSTER[monster_index(slot, f)],
+            Knob::Species(id, t) => species_baked(id, t.index(id.get())),
         }
     }
 
@@ -1527,15 +1549,31 @@ pub fn all_knobs() -> Vec<Knob> {
             }
         }
     }
-    // Appended last, so every index already written into `tuned.rs` keeps the
-    // meaning it was baked with. That is the rule the whole store relies on.
-    for slot in 0..MONSTER_MOVES {
-        for field in MonsterField::ALL {
-            out.push(Knob::Monster(slot, *field));
-        }
-    }
     for k in ViewKnob::ALL {
         out.push(Knob::View(*k));
+    }
+    // Every creature's, species by species. Each has its own store and its
+    // own baked file, so these come last and in no particular relation to
+    // `tuned.rs`'s indices.
+    for s in species::all() {
+        out.extend(species_knobs(s));
+    }
+    out
+}
+
+/// One species' knobs, in the order its store and its baked file keep them.
+pub fn species_knobs(s: &Species) -> Vec<Knob> {
+    let mut out: Vec<Knob> = species::Common::ALL
+        .iter()
+        .map(|c| Knob::Species(s.id, Tunable::Common(*c)))
+        .collect();
+    for k in 0..s.own.len() {
+        out.push(Knob::Species(s.id, Tunable::Own(k as u16)));
+    }
+    for slot in 0..s.moves.len() {
+        for field in MonsterField::ALL {
+            out.push(Knob::Species(s.id, Tunable::Move(slot as u8, *field)));
+        }
     }
     out
 }
@@ -1588,20 +1626,56 @@ pub fn emit() -> String {
     write_block(&mut out, "MOVES", MOVE_COUNT, SCALAR_COUNT + AIR_COUNT);
     write_block(
         &mut out,
-        "MONSTER",
-        MONSTER_COUNT,
-        SCALAR_COUNT + AIR_COUNT + MOVE_COUNT,
-    );
-    write_block(
-        &mut out,
         "VIEW",
         VIEW_COUNT,
-        SCALAR_COUNT + AIR_COUNT + MOVE_COUNT + MONSTER_COUNT,
+        SCALAR_COUNT + AIR_COUNT + MOVE_COUNT,
     );
     // Exactly one trailing newline: `cargo fmt` strips a blank line at the end
     // of a file, which would leave the generated file permanently one byte
     // different from its generator.
     out.truncate(out.trim_end().len());
     out.push('\n');
+    out
+}
+
+/// Emit one species' live values as the source of its own `tuned.rs`.
+///
+/// A file per species rather than a block in the shared one, so two species
+/// built on two branches never bake into the same file.
+pub fn emit_species(s: &Species) -> String {
+    let mut out = format!(
+        "//! The {name}'s baked tuning. GENERATED -- do not edit by hand.\n\
+         //!\n\
+         //! Written by the Oven's bake button, or by `cargo run -p sim --bin bake_tuning`.\n\
+         //! Edit these in the running game (F7) and bake; the palette is the editor.\n\
+         //!\n\
+         //! The numbers every creature has come first (`species::Common`), then\n\
+         //! the {name}'s own, then one row per move (`oven::MonsterField`).\n\n",
+        name = s.name
+    );
+    let knobs = species_knobs(s);
+    out.push_str(&format!(
+        "#[rustfmt::skip]\npub const KNOBS: [i32; {}] = [\n",
+        knobs.len()
+    ));
+    for k in &knobs {
+        out.push_str(&format!(
+            "    {:>12}, // {} = {}\n",
+            k.raw(),
+            k.id(),
+            k.unit().show(k.raw())
+        ));
+    }
+    out.push_str("];\n");
+    out
+}
+
+/// Every file the bake writes, as `(path from the repository root, contents)`:
+/// `tuned.rs`, and each registered species' own.
+pub fn baked_files() -> Vec<(&'static str, String)> {
+    let mut out = vec![("crates/sim/src/tuned.rs", emit())];
+    for s in species::all() {
+        out.push((s.tuned_path, emit_species(s)));
+    }
     out
 }

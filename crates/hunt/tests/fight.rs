@@ -10,8 +10,8 @@
 //! a distribution, and one run of a distribution is an anecdote.
 
 use hunt::{Outcome, Report, play, report::REACTION_NOTE, report::Threat};
-use sim::monster::{self, MOVES};
 use sim::moves;
+use sim::species::ridgeback;
 use sim::state::MAX_PLAYERS;
 
 /// Long enough to reach a conclusion, short enough that a grind shows up as a
@@ -54,15 +54,15 @@ fn most_of_what_it_throws_can_be_answered_on_sight() {
 fn it_uses_its_whole_move_set() {
     // A move it never throws is a design fiction: it costs tuning, it costs a
     // line in the frame table, and it decides nothing.
-    let mut ever = [0u32; MOVES];
+    let mut ever = [0u32; ridgeback::MOVE_COUNT];
     for report in hunts() {
-        for (slot, count) in report.starts.iter().enumerate() {
+        for (slot, count) in report.starts[..ridgeback::MOVE_COUNT].iter().enumerate() {
             ever[slot] += count;
         }
     }
-    let missing: Vec<&str> = (0..MOVES)
+    let missing: Vec<&str> = (0..ridgeback::MOVE_COUNT)
         .filter(|k| ever[*k] == 0)
-        .map(|k| monster::MOVE_NAMES[k])
+        .map(|k| ridgeback::MOVES[k].name)
         .collect();
     assert!(
         missing.is_empty(),

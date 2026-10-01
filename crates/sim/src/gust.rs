@@ -76,7 +76,7 @@ use crate::class::Class;
 use crate::effects::Effects;
 use crate::fixed::Fx;
 use crate::math::V3;
-use crate::monster::Monster;
+use crate::monster::Herd;
 use crate::moves::{self, Move, elementalist};
 use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
@@ -312,7 +312,7 @@ pub fn step(
     players: &mut [Player; MAX_PLAYERS],
     effects: &Effects,
     versus: bool,
-    quarry: &mut Option<Monster>,
+    quarry: &mut Herd,
     bursts: &mut Bursts,
 ) {
     let stones = stones::gather(players);
@@ -334,7 +334,7 @@ pub fn step(
             stones: &stones,
             players: &seen,
             effects,
-            quarry: quarry.as_ref(),
+            quarry: &*quarry,
         };
         if shot.gale.ignites()
             && !shot.lit
@@ -409,8 +409,12 @@ pub fn step(
                 *slot = None;
                 continue;
             }
-            Some(Contact::Quarry { part, dist }) => {
-                if let Some(beast) = quarry.as_mut() {
+            Some(Contact::Quarry {
+                slot: which,
+                part,
+                dist,
+            }) => {
+                if let Some(beast) = quarry[which].as_mut() {
                     beast.take_hit(part, shot.worth(m.damage));
                 }
                 if burst_radius.is_some() {

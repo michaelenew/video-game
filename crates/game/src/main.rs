@@ -27,6 +27,7 @@ mod online;
 mod palette;
 mod platform;
 mod settings;
+mod species;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -439,7 +440,7 @@ fn shot_bars(w: &mut World) {
     }
 }
 
-/// `SHOT_MOVE=<move>` starts a hunt with the Ridgeback winding up that move at
+/// `SHOT_MOVE=<move>` starts a hunt with the creature winding up that move at
 /// player one, from the distance the move is thrown at, so a capture can look
 /// at a telegraph without waiting for the animal to choose it. The same kind
 /// of hook as `SHOT_BARS`; pair it with `SHOT_FRAME` to land partway through
@@ -450,17 +451,19 @@ fn shot_move(w: &mut World) {
         return;
     };
     let name = name.trim().to_lowercase();
-    let Some(kind) = sim::monster::MOVE_NAMES
+    let me = w.players[0].pos;
+    let Some(beast) = w.monster_mut() else {
+        return;
+    };
+    let Some(kind) = beast
+        .sp()
+        .moves
         .iter()
-        .position(|n| n.to_lowercase().contains(&name))
+        .position(|m| m.name.to_lowercase().contains(&name))
     else {
         return;
     };
-    let me = w.players[0].pos;
-    let Some(beast) = w.monster.as_mut() else {
-        return;
-    };
-    let m = sim::monster::attack(kind as u8);
+    let m = beast.sp().attack(kind as u8);
     // Put it where it would throw this at player one, at the move's own
     // distance and in front of the camera, which starts looking along +x:
     // facing them for a move aimed ahead, and turned away for one aimed
@@ -2197,8 +2200,8 @@ fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut V
 /// of his own head.
 fn pip_spot(w: &World, body: usize, index: u8) -> Option<Vec3> {
     let (marks, top) = if body == PIP_QUARRY {
-        let beast = w.monster.as_ref()?;
-        let head = beast.world_of(sim::monster::HEAD, sim::V3::ZERO);
+        let beast = w.monster()?;
+        let head = beast.world_of(species::look(beast.species).head, sim::V3::ZERO);
         (beast.marks, fx3(head) + Vec3::Y * 1.5)
     } else {
         let p = &w.players[body];
@@ -2745,7 +2748,7 @@ fn tick_sim(
         // mid-round would leave the mechanic in someone else's state.
         let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
         let classes = [ALL[next], sim.cur.players[1].class];
-        let w = if sim.cur.monster.is_some() {
+        let w = if sim.cur.hunting() {
             hunt_with(classes, sim.dummy)
         } else {
             World::with_classes(classes)
@@ -2755,7 +2758,7 @@ fn tick_sim(
     }
     if keys.just_pressed(KeyCode::Backspace) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
-        let w = if sim.cur.monster.is_some() {
+        let w = if sim.cur.hunting() {
             hunt_with(classes, sim.dummy)
         } else {
             World::with_classes(classes)
@@ -2768,7 +2771,7 @@ fn tick_sim(
     // somebody.
     if keys.just_pressed(KeyCode::KeyH) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
-        let w = if sim.cur.monster.is_some() {
+        let w = if sim.cur.hunting() {
             World::with_classes(classes)
         } else {
             hunt_with(classes, sim.dummy)
@@ -2839,7 +2842,7 @@ fn tick_sim(
                 let two = match sim.dummy {
                     // Not in a hunt: the bot fights a fighter, and in a hunt
                     // player two is out of it (see `hunt_with`).
-                    Dummy::Bot(level) if sim.cur.monster.is_none() => spar(
+                    Dummy::Bot(level) if !sim.cur.hunting() => spar(
                         &mut sparring,
                         level,
                         &sim.cur,
@@ -2971,7 +2974,7 @@ fn aim_toward(v: sim::V3) -> u16 {
 /// posing and framing. Against a creature it is the real hunter, because a
 /// fixed beat played at a monster would be a demonstration of nothing.
 fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
-    if w.monster.is_some() {
+    if w.hunting() {
         hunter.watch(w);
         return hunter.act(w);
     }
@@ -3429,7 +3432,7 @@ fn drive_camera(
         yaw,
         look.pitch,
         view::Surroundings {
-            beast: sim.cur.monster.as_ref(),
+            beasts: &sim.cur.monsters,
             aboard: sim.cur.players[me].aboard(),
             // Interpolated with everything else the fighter is drawn from, so
             // the framing does not step at the simulation's cadence.

@@ -2,11 +2,15 @@
 //!
 //!     cargo run -p hunt --bin fight
 //!     cargo run -p hunt --bin fight -- --class bulwark --trace --repeats 5
+//!     cargo run -p hunt --bin fight -- --species ridgeback
+//!
+//! Any species with a plan (`crates/hunt/src/plans/`); the Ridgeback by
+//! default.
 //!
 //! The point is not the outcome. It is the eight or nine numbers underneath
 //! it, which are what turn "the fight feels off" into a thing you can point at.
 
-use hunt::{Outcome, play};
+use hunt::{Outcome, play_species};
 
 fn arg(flag: &str) -> Option<String> {
     let mut args = std::env::args().skip(1);
@@ -31,6 +35,16 @@ fn main() {
                 .find(|c| c.name().to_lowercase().contains(&n.to_lowercase()))
         })
         .unwrap_or(sim::Class::Champion);
+    let species = match arg("--species") {
+        Some(name) => match sim::species::named(&name) {
+            Some(s) if hunt::plans::card(s.id).is_some() => s.id,
+            _ => {
+                eprintln!("no species with a hunter plan is called {name}");
+                std::process::exit(2);
+            }
+        },
+        None => sim::species::SpeciesId::RIDGEBACK,
+    };
     let repeats: u32 = arg("--repeats").and_then(|n| n.parse().ok()).unwrap_or(1);
     let partners: usize = arg("--hunters").and_then(|n| n.parse().ok()).unwrap_or(1);
     let limit: u32 = arg("--frames")
@@ -43,7 +57,8 @@ fn main() {
     let mut killed = 0;
     let mut total = 0u32;
     for run in 0..repeats.max(1) {
-        let report = play(
+        let report = play_species(
+            species,
             [class; sim::state::MAX_PLAYERS],
             partners,
             limit,

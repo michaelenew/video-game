@@ -1,7 +1,8 @@
 //! Committing a tuning session.
 //!
 //! The palette changes numbers in memory; bake is what makes them survive the
-//! process. It writes `crates/sim/src/tuned.rs`, formats it, and commits and
+//! process. It writes `crates/sim/src/tuned.rs` and every species' own
+//! `tuned.rs`, formats them, and commits and
 //! pushes on whatever branch is checked out — so an afternoon of tuning ends as
 //! a reviewable diff rather than as something you have to remember and retype.
 //!
@@ -85,33 +86,41 @@ fn run(root: &Path, args: &[&str]) -> Result<String, String> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn bake(message: &str) -> Outcome {
     let root = repo_root();
-    let rel = "crates/sim/src/tuned.rs";
-    let path = root.join(rel);
+    // Every file the Oven bakes: `tuned.rs`, and each species' own.
+    let files = sim::oven::baked_files();
+    let rels: Vec<&str> = files.iter().map(|(rel, _)| *rel).collect();
 
-    if let Err(e) = std::fs::write(&path, sim::oven::emit()) {
-        return Outcome::Failed(format!("could not write {rel}: {e}"));
+    for (rel, text) in &files {
+        if let Err(e) = std::fs::write(root.join(rel), text) {
+            return Outcome::Failed(format!("could not write {rel}: {e}"));
+        }
+        // Formatting is best effort. A correctly-valued file that rustfmt
+        // could not reach is still worth committing.
+        let _ = run(&root, &["rustfmt", "--edition", "2024", rel]);
     }
-
-    // Formatting is best effort. A correctly-valued file that rustfmt could not
-    // reach is still worth committing.
-    let _ = run(&root, &["rustfmt", "--edition", "2024", rel]);
 
     let branch = match run(&root, &["git", "rev-parse", "--abbrev-ref", "HEAD"]) {
         Ok(b) => b,
         Err(e) => return Outcome::Failed(format!("no branch: {e}")),
     };
 
-    if let Err(e) = run(&root, &["git", "add", rel]) {
+    let mut add = vec!["git", "add"];
+    add.extend(&rels);
+    if let Err(e) = run(&root, &add) {
         return Outcome::Failed(format!("git add: {e}"));
     }
 
     // Nothing staged means nothing changed. Saying so beats an empty commit.
-    if run(&root, &["git", "diff", "--cached", "--quiet", "--", rel]).is_ok() {
+    let mut quiet = vec!["git", "diff", "--cached", "--quiet", "--"];
+    quiet.extend(&rels);
+    if run(&root, &quiet).is_ok() {
         return Outcome::Ok("already baked — no changes".into());
     }
 
     let body = format!("Bake tuning: {message}\n\nBaked from the Oven.");
-    if let Err(e) = run(&root, &["git", "commit", "-m", &body, "--only", rel]) {
+    let mut commit = vec!["git", "commit", "-m", &body, "--only"];
+    commit.extend(&rels);
+    if let Err(e) = run(&root, &commit) {
         return Outcome::Failed(format!("git commit: {e}"));
     }
 

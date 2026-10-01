@@ -15,7 +15,8 @@
 
 use sim::bulwark;
 use sim::class::{ALL_CLASSES, Class, Mechanic};
-use sim::monster::{self, Doing};
+use sim::monster::Doing;
+use sim::species::ridgeback;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
@@ -637,10 +638,10 @@ fn bolt_lands(w: &World, behind: V3, pitch: i16) -> bool {
 fn stomp() {
     println!("stomp -- each creature move, into a guard at its own ideal range");
     println!("  move           damage  taken  deposit  parried");
-    for kind in 0..monster::MOVES as u8 {
-        let m = monster::attack(kind);
+    for kind in 0..ridgeback::MOVE_COUNT as u8 {
+        let m = ridgeback::SPECIES.attack(kind);
         let mut w = World::hunt([Class::Bulwark; MAX_PLAYERS]);
-        let beast = w.monster.expect("a hunt has a creature");
+        let beast = w.monster().copied().expect("a hunt has a creature");
         w.players[0].pos = beast
             .rig()
             .to_world(V3::new(m.ideal_range, Fx::ZERO, Fx::ZERO));
@@ -652,7 +653,7 @@ fn stomp() {
         let aim = (sim::math::atan2_turns(toward.z, toward.x).raw() & 0xFFFF) as u16;
         w.players[0].facing = V3::new(toward.x, Fx::ZERO, toward.z).normalized();
         w.players[0].action = Action::Guard { held: 60 };
-        w.monster.as_mut().unwrap().doing = Doing::Startup {
+        w.monster_mut().unwrap().doing = Doing::Startup {
             kind,
             left: m.startup,
         };
@@ -660,7 +661,7 @@ fn stomp() {
         let mut deposit = 0;
         let mut parried = false;
         for _ in 0..m.total() {
-            w.monster.as_mut().unwrap().brain.think_left = u16::MAX;
+            w.monster_mut().unwrap().brain.think_left = u16::MAX;
             let was = bulwark::weight(&w.players[0]);
             w.advance([Input::aimed(Input::RIGHT, aim), Input::default()]);
             deposit = deposit.max(bulwark::weight(&w.players[0]).sub(was).to_int());

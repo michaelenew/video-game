@@ -1,21 +1,23 @@
-//! Baked creature poses. GENERATED -- do not edit by hand.
+//! The Ridgeback's baked poses. GENERATED -- do not edit by hand.
 //!
 //! Written by `cargo run -p anim --bin bake_beast`. The recipes live in
-//! `crates/anim/src/beast/clips.rs`; edit those.
+//! `crates/anim/src/beast/ridgeback/`; edit those.
 //!
 //! Each row is one sample: three numbers for the hips in metres, then
-//! pitch, yaw and roll for each of the eighteen bones, all as raw 16.16
+//! pitch, yaw and roll for each of the 18 bones, all as raw 16.16
 //! bits. A clip is a span of rows, and an attack's rows are three equal
 //! runs -- startup, active, recovery -- read by phase. Retuning a move's
 //! frame counts in the Oven therefore stretches its animation with it
 //! rather than leaving the contact pose on the wrong frame.
 
-use crate::beast::{CHANNELS, CLIPS};
+use super::{CLIP_COUNT, bones};
+
+pub const CHANNELS: usize = crate::beast::channels(bones::COUNT);
 
 pub const ROWS: usize = 961;
 
-/// `(first row, how many)` per clip, in `beast::Clip::ALL` order.
-pub const SPAN: [(u16, u16); CLIPS] = [
+/// `(first row, how many)` per clip, in `Clip::ALL` order.
+pub const SPAN: [(u16, u16); CLIP_COUNT] = [
     (0, 32),   // idle
     (32, 32),  // walk
     (64, 32),  // gallop

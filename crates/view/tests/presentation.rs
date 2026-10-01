@@ -3,6 +3,7 @@
 //! Everything here runs without a window, which is the point of `view` having
 //! no engine dependency.
 
+use sim::species::ridgeback;
 use sim::state::Action;
 use sim::{Input, World};
 use view::interp::{TickClock, interpolate};
@@ -1019,7 +1020,7 @@ fn the_stride_phase_blends_the_short_way_round() {
 // ---------------------------------------------------------------------------
 
 fn a_creature_at(x: f32, yaw_turns: f32) -> sim::Monster {
-    let mut beast = sim::Monster::new();
+    let mut beast = sim::Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.pos = sim::V3::new(
         sim::Fx::ratio((x * 100.0) as i32, 100),
         sim::Fx::ZERO,
@@ -1043,7 +1044,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
             0.0,
             0.0,
             view::Surroundings {
-                beast: Some(&beast),
+                beasts: &[Some(beast)],
                 aboard: false,
                 aloft: 0.0,
                 carried: 0.0,
@@ -1058,7 +1059,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
             yaw,
             0.0,
             view::Surroundings {
-                beast: Some(&beast),
+                beasts: &[Some(beast)],
                 aboard: false,
                 aloft: 0.0,
                 carried: 0.0,
@@ -1083,7 +1084,8 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
     // straight into the animal. Treated as geometry it clamps to nothing and
     // the player is left looking at the back of their own head.
     let beast = a_creature_at(0.0, 0.0);
-    let back = sim::monster::shape(sim::monster::BARREL)
+    let back = ridgeback::SPECIES
+        .shape(ridgeback::BARREL)
         .max
         .y
         .to_f32_for_render();
@@ -1095,7 +1097,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
         0.0,
         0.0,
         view::Surroundings {
-            beast: Some(&beast),
+            beasts: &[Some(beast)],
             aboard: true,
             aloft: 0.0,
             carried: 0.0,
@@ -1108,7 +1110,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
             0.0,
             0.0,
             view::Surroundings {
-                beast: Some(&beast),
+                beasts: &[Some(beast)],
                 aboard: true,
                 aloft: 0.0,
                 carried: 0.0,

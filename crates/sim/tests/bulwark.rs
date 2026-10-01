@@ -8,7 +8,8 @@ use sim::bulwark;
 use sim::class::{Class, Mechanic, Shield};
 use sim::fixed::Fx;
 use sim::math::atan2_turns;
-use sim::monster::{self, Doing};
+use sim::monster::Doing;
+use sim::species::ridgeback;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::tuning as t;
 use sim::{Input, V3, World};
@@ -215,8 +216,8 @@ fn the_bulwark_has_the_most_health_on_the_roster() {
 #[test]
 fn a_blocked_creature_blow_loads_the_shield() {
     let mut w = World::hunt([Class::Bulwark; MAX_PLAYERS]);
-    let beast = w.monster.expect("a hunt has a creature");
-    let ideal = monster::attack(monster::STOMP).ideal_range;
+    let beast = w.monster().copied().expect("a hunt has a creature");
+    let ideal = ridgeback::SPECIES.attack(ridgeback::STOMP).ideal_range;
     w.players[0].pos = beast.rig().to_world(V3::new(ideal, Fx::ZERO, Fx::ZERO));
     w.players[0].grounded = true;
     // Parked far away, so the second fighter is not a second target.
@@ -226,13 +227,13 @@ fn a_blocked_creature_blow_loads_the_shield() {
     w.players[0].facing = V3::new(toward.x, Fx::ZERO, toward.z).normalized();
     w.players[0].action = Action::Guard { held: 60 };
     let before = w.players[0].health;
-    w.monster.as_mut().unwrap().doing = Doing::Startup {
-        kind: monster::STOMP,
-        left: monster::attack(monster::STOMP).startup,
+    w.monster_mut().unwrap().doing = Doing::Startup {
+        kind: ridgeback::STOMP,
+        left: ridgeback::SPECIES.attack(ridgeback::STOMP).startup,
     };
     let mut heaviest = Fx::ZERO;
-    for _ in 0..monster::attack(monster::STOMP).total() {
-        w.monster.as_mut().unwrap().brain.think_left = u16::MAX;
+    for _ in 0..ridgeback::SPECIES.attack(ridgeback::STOMP).total() {
+        w.monster_mut().unwrap().brain.think_left = u16::MAX;
         w.advance([Input::aimed(R, aim), Input::default()]);
         heaviest = heaviest.max(weight(&w, 0));
     }

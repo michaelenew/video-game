@@ -1,7 +1,9 @@
-//! Drawing the Ridgeback.
+//! Drawing the creatures.
 //!
-//! One box per part, placed from the same rig and the same boxes the
-//! simulation collides against. Nothing here rebuilds the creature's geometry:
+//! Any species, from its own table: one box per part, placed from the same rig
+//! and the same boxes the simulation collides against. What a species looks
+//! like -- its paint, and the decorations only it has -- is declared in its own
+//! file under `crate::species`; nothing here knows which animal it is drawing. Nothing here rebuilds the creature's geometry:
 //! if you can see a box, that box is what stops you walking through it and what
 //! your attacks are hitting.
 //!
@@ -12,9 +14,13 @@
 //! simulation does not collide against, and it is deliberately *inside* the
 //! parts it joins, so it can never make the animal look bigger than it is.
 //!
-//! The two weak points are a different colour from everything else on purpose.
+//! The weak points are a different colour from everything else on purpose.
 //! They are the only places on the animal worth hitting, and a player should be
 //! able to see that from across the arena without being told.
+//!
+//! Every creature slot in the world (`sim::monster::MAX_MONSTERS`) has its own
+//! pool of parts, joints and floor markers, so the Pair are two animals drawn
+//! the same way one is.
 
 use bevy::pbr::{
     ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
@@ -25,26 +31,63 @@ use bevy::render::mesh::MeshVertexBufferLayoutRef;
 use bevy::render::render_resource::{
     AsBindGroup, CompareFunction, RenderPipelineDescriptor, SpecializedMeshPipelineError,
 };
-use sim::beast;
-use sim::monster::{self, Doing, Monster};
+use sim::monster::{Doing, MAX_MONSTERS, Monster};
+use sim::species::{self as kinds, SpeciesId};
 
-/// One drawable part. A fixed pool, spawned once: the creature comes and goes
-/// with the match, and spawning meshes when it does would put allocation on a
-/// path the rollback re-runs.
+use crate::species::{Look, Paint};
+
+/// One drawable part: which creature slot, which part. A fixed pool, spawned
+/// once: the creature comes and goes with the match, and spawning meshes when
+/// it does would put allocation on a path the rollback re-runs.
 #[derive(Component)]
-pub struct Limb(pub usize);
+pub struct Limb(pub usize, pub usize);
 
-/// One drawable joint filler.
+/// One drawable joint filler: which creature slot, which bone.
 #[derive(Component)]
-pub struct Knuckle(pub usize);
+pub struct Knuckle(pub usize, pub usize);
 
-/// Materials, made once. Which one a part wears changes when it breaks.
-#[derive(Resource)]
-pub struct Hide {
+/// Materials, made once per species. Which one a part wears changes when it
+/// breaks.
+#[derive(Clone)]
+struct Skin {
     armour: Handle<StandardMaterial>,
     weak: Handle<StandardMaterial>,
     limb: Handle<StandardMaterial>,
     broken: Handle<StandardMaterial>,
+}
+
+#[derive(Resource)]
+pub struct Hide {
+    /// By species id; every registered species has one.
+    skins: Vec<Option<Skin>>,
+}
+
+impl Hide {
+    fn of(&self, id: SpeciesId) -> &Skin {
+        self.skins[id.0 as usize]
+            .as_ref()
+            .or_else(|| self.skins.iter().flatten().next())
+            .expect("at least one species is registered")
+    }
+}
+
+fn material(materials: &mut Assets<StandardMaterial>, paint: Paint) -> Handle<StandardMaterial> {
+    let [r, g, b] = paint.rgb;
+    let [er, eg, eb] = paint.glow;
+    materials.add(StandardMaterial {
+        base_color: Color::srgb(r, g, b),
+        emissive: LinearRgba::rgb(er, eg, eb),
+        perceptual_roughness: paint.roughness,
+        ..default()
+    })
+}
+
+/// The most parts and bones any registered species has: how many of each a
+/// slot's pool needs.
+fn most() -> (usize, usize) {
+    kinds::all().fold((0, 0), |(p, b), s| {
+        (p.max(s.parts.len()), b.max(s.bones.len()))
+    })
 }
 
 pub fn setup(
@@ -52,51 +95,42 @@ pub fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let hide = Hide {
-        armour: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.24, 0.27, 0.23),
-            perceptual_roughness: 0.92,
-            ..default()
-        }),
-        // The weak points, and they say so.
-        weak: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.86, 0.32, 0.22),
-            emissive: LinearRgba::rgb(0.55, 0.08, 0.04),
-            perceptual_roughness: 0.7,
-            ..default()
-        }),
-        limb: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.32, 0.34, 0.29),
-            perceptual_roughness: 0.9,
-            ..default()
-        }),
-        broken: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.18, 0.13, 0.13),
-            perceptual_roughness: 0.98,
-            ..default()
-        }),
-    };
+    let mut skins = vec![None; kinds::COUNT];
+    for sp in kinds::all() {
+        let look = crate::species::look(sp.id);
+        skins[sp.id.0 as usize] = Some(Skin {
+            armour: material(&mut materials, look.armour),
+            weak: material(&mut materials, look.weak),
+            limb: material(&mut materials, look.breakable),
+            broken: material(&mut materials, look.broken),
+        });
+    }
+    let hide = Hide { skins };
+    let any = hide.of(SpeciesId::RIDGEBACK).armour.clone();
     // A unit cube, scaled per part. The part boxes are axis-aligned in their
     // own bone's frame, so one mesh covers all of them.
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-    for index in 0..monster::PARTS {
-        commands.spawn((
-            Mesh3d(cube.clone()),
-            MeshMaterial3d(hide.armour.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            Limb(index),
-        ));
-    }
     let ball = meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap());
-    for bone in 0..beast::BONES {
-        commands.spawn((
-            Mesh3d(ball.clone()),
-            MeshMaterial3d(hide.armour.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            Knuckle(bone),
-        ));
+    let (parts, bones) = most();
+    for slot in 0..MAX_MONSTERS {
+        for index in 0..parts {
+            commands.spawn((
+                Mesh3d(cube.clone()),
+                MeshMaterial3d(any.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                Limb(slot, index),
+            ));
+        }
+        for bone in 0..bones {
+            commands.spawn((
+                Mesh3d(ball.clone()),
+                MeshMaterial3d(any.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                Knuckle(slot, bone),
+            ));
+        }
     }
     commands.insert_resource(hide);
 }
@@ -133,20 +167,16 @@ pub fn place(
         Without<Limb>,
     >,
 ) {
-    let Some(beast) = sim.cur.monster else {
-        for (_, _, mut visible, _) in limbs.iter_mut() {
-            *visible = Visibility::Hidden;
-        }
-        for (_, _, mut visible, _) in knuckles.iter_mut() {
-            *visible = Visibility::Hidden;
-        }
-        return;
-    };
-    let rig = beast.rig();
+    let herd = &sim.cur.monsters;
 
     for (limb, mut transform, mut visible, mut material) in limbs.iter_mut() {
-        let index = limb.0;
-        let shape = monster::shape(index);
+        let (slot, index) = (limb.0, limb.1);
+        let Some(beast) = herd[slot].filter(|b| index < b.sp().parts.len()) else {
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        let rig = beast.rig();
+        let shape = beast.sp().shape(index);
         let mid = shape.min.add(shape.max).scale(sim::Fx::ratio(1, 2));
         let size = shape.max.sub(shape.min);
         let frame = rig.of(index);
@@ -166,7 +196,7 @@ pub fn place(
         };
         *visible = Visibility::Inherited;
 
-        let wanted = skin(&hide, &beast, index);
+        let wanted = skin(hide.of(beast.species), &beast, index);
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -175,18 +205,24 @@ pub fn place(
     // The joints. Each is sized to the thinner of the parts meeting there, so
     // it disappears inside them and only shows in the wedge a bend opens up.
     for (knuckle, mut transform, mut visible, mut material) in knuckles.iter_mut() {
-        let bone = knuckle.0;
-        let Some(width) = joint_width(bone) else {
+        let (slot, bone) = (knuckle.0, knuckle.1);
+        let Some(beast) = herd[slot] else {
             *visible = Visibility::Hidden;
             continue;
         };
+        let look = crate::species::look(beast.species);
+        let Some(width) = joint_width(beast.sp(), look, bone) else {
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        let rig = beast.rig();
         *transform = Transform {
             translation: fx3(rig.bone[bone].at),
             rotation: Quat::IDENTITY,
             scale: Vec3::splat(width),
         };
         *visible = Visibility::Inherited;
-        let wanted = &hide.armour;
+        let wanted = &hide.of(beast.species).armour;
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -198,33 +234,32 @@ pub fn place(
 /// The narrower of the two parts hanging off the joint: a sphere the size of
 /// the *wider* one would bulge out of the slimmer segment and read as a bead on
 /// a string rather than as an elbow.
-fn joint_width(bone: usize) -> Option<f32> {
+fn joint_width(sp: &kinds::Species, look: &Look, bone: usize) -> Option<f32> {
+    if bone >= sp.bones.len() || look.no_knuckles.contains(&bone) {
+        return None;
+    }
     let mut narrowest: Option<sim::Fx> = None;
-    for index in 0..monster::PARTS {
-        let shape = monster::shape(index);
-        if beast::SHAPES[index].bone != bone || !beast::SHAPES[index].solid {
+    for (index, part) in sp.parts.iter().enumerate() {
+        if part.shape.bone != bone || !part.shape.solid {
             continue;
         }
+        let shape = sp.shape(index);
         let size = shape.max.sub(shape.min);
         let thin = size.y.min(size.z);
         if narrowest.is_none_or(|seen| thin.raw() < seen.raw()) {
             narrowest = Some(thin);
         }
     }
-    // The root and the chest carry the barrel; a ball there would sit inside a
-    // box two and a half metres wide and cost a draw call for nothing.
-    if matches!(bone, beast::ROOT | beast::SPINE | beast::CHEST) {
-        return None;
-    }
     narrowest.map(|w| w.to_f32_for_render() * 0.95)
 }
 
-fn skin<'a>(hide: &'a Hide, beast: &Monster, index: usize) -> &'a Handle<StandardMaterial> {
-    if monster::is_weak_point(index) {
+fn skin<'a>(hide: &'a Skin, beast: &Monster, index: usize) -> &'a Handle<StandardMaterial> {
+    let sp = beast.sp();
+    if sp.is_weak_point(index) {
         &hide.weak
     } else if beast.broken(index) {
         &hide.broken
-    } else if beast::SHAPES[index].breakable {
+    } else if sp.parts[index].shape.breakable {
         &hide.limb
     } else {
         &hide.armour
@@ -266,15 +301,19 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
     if !show.0 {
         return;
     }
-    let Some(beast) = sim.cur.monster else {
-        return;
-    };
+    for beast in sim.cur.monsters.iter().flatten() {
+        overlay_one(&mut gizmos, beast);
+    }
+}
+
+fn overlay_one(gizmos: &mut Gizmos, beast: &Monster) {
     let rig = beast.rig();
+    let sp = beast.sp();
 
     // Mountable tops, so it is obvious where the climb goes and where it dead
     // ends. Straight off the rig's own top-face corners.
-    for index in 0..monster::PARTS {
-        if !sim::beast::SHAPES[index].mountable {
+    for index in 0..sp.parts.len() {
+        if !sp.parts[index].shape.mountable {
             continue;
         }
         let quad = rig.top_face(index).map(fx3);
@@ -299,16 +338,17 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
             );
             centre
         };
-        let bottom = ring(&mut gizmos, low);
-        let top = ring(&mut gizmos, high);
+        let bottom = ring(gizmos, low);
+        let top = ring(gizmos, high);
         gizmos.line(bottom, top, colour);
     }
 
     // What it is doing, as a line off the nose: long for a committed move,
     // short while it is only looking.
-    let head = monster::shape(monster::HEAD);
+    let head_part = crate::species::look(beast.species).head;
+    let head = sp.shape(head_part);
     let nose = fx3(rig.part_to_world(
-        monster::HEAD,
+        head_part,
         sim::V3::new(head.max.x, head.max.y, sim::Fx::ZERO),
     ));
     let ahead = fx3(rig.dir_to_world(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)));
@@ -317,7 +357,7 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
         Doing::Active { .. } => 4.0,
         _ => 1.0,
     };
-    gizmos.line(nose, nose + ahead * length, intent_colour(&beast));
+    gizmos.line(nose, nose + ahead * length, intent_colour(beast));
 }
 
 // ---------------------------------------------------------------------------
@@ -339,8 +379,21 @@ pub enum Mark {
     FillLane,
 }
 
-/// One of the spray's spikes: bristling along the tail through the windup,
-/// then flying as a volley.
+/// Everything [`signs`] moves on one floor marker.
+type MarkParts = (
+    &'static Mark,
+    &'static Of,
+    &'static mut Transform,
+    &'static mut Visibility,
+    &'static mut MeshMaterial3d<MarkMaterial>,
+);
+
+/// Which creature slot a marker or a spike belongs to.
+#[derive(Component)]
+pub struct Of(pub usize);
+
+/// One of a volley's spikes (the Ridgeback's spray): bristling along the tail
+/// through the windup, then flying as a volley. See `species::Spikes`.
 #[derive(Component)]
 pub struct Spike(pub usize);
 
@@ -405,37 +458,45 @@ fn make_signs(
     // Both shapes lie flat on the floor: built in the XY plane, turned down.
     let disc = meshes.add(Circle::new(1.0));
     let strip = meshes.add(Rectangle::new(1.0, 1.0));
-    for (mark, mesh, material) in [
-        (Mark::Area, &disc, &signs.area),
-        (Mark::AreaEnd, &disc, &signs.area),
-        (Mark::Lane, &strip, &signs.area),
-        (Mark::Fill, &disc, &signs.fill),
-        (Mark::FillLane, &strip, &signs.fill),
-    ] {
-        commands.spawn((
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            NotShadowCaster,
-            mark,
-        ));
-    }
     let spike = meshes.add(Cone::new(SPIKE_RADIUS, 1.0));
-    let bone = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.93, 0.86, 0.70),
-        emissive: LinearRgba::rgb(0.9, 0.45, 0.12),
-        perceptual_roughness: 0.5,
-        ..default()
-    });
-    for i in 0..SPIKES {
-        commands.spawn((
-            Mesh3d(spike.clone()),
-            MeshMaterial3d(bone.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            Spike(i),
-        ));
+    // One volley's worth of paint: the first species that throws one. A second
+    // species with spikes of another colour would keep a material per species,
+    // the way the hide does.
+    let paint = kinds::all()
+        .find_map(|s| crate::species::look(s.id).spikes)
+        .map(|s| s.paint);
+    let bone = paint.map(|p| material(materials, p));
+    for slot in 0..MAX_MONSTERS {
+        for (mark, mesh, material) in [
+            (Mark::Area, &disc, &signs.area),
+            (Mark::AreaEnd, &disc, &signs.area),
+            (Mark::Lane, &strip, &signs.area),
+            (Mark::Fill, &disc, &signs.fill),
+            (Mark::FillLane, &strip, &signs.fill),
+        ] {
+            commands.spawn((
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                NotShadowCaster,
+                mark,
+                Of(slot),
+            ));
+        }
+        let Some(bone) = bone.as_ref() else {
+            continue;
+        };
+        for i in 0..SPIKES {
+            commands.spawn((
+                Mesh3d(spike.clone()),
+                MeshMaterial3d(bone.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                Spike(i),
+                Of(slot),
+            ));
+        }
     }
     commands.insert_resource(signs);
 }
@@ -458,24 +519,20 @@ fn make_signs(
 pub fn signs(
     sim: Res<crate::Sim>,
     signs: Res<Signs>,
-    mut marks: Query<
-        (
-            &Mark,
-            &mut Transform,
-            &mut Visibility,
-            &mut MeshMaterial3d<MarkMaterial>,
-        ),
-        Without<Spike>,
-    >,
-    mut spikes: Query<(&Spike, &mut Transform, &mut Visibility), Without<Mark>>,
+    mut marks: Query<MarkParts, Without<Spike>>,
+    mut spikes: Query<(&Spike, &Of, &mut Transform, &mut Visibility), Without<Mark>>,
 ) {
-    let beast = sim.cur.monster.filter(|b| b.alive());
-    let coming = beast
-        .and_then(|b| b.telegraph())
-        .filter(|t| !(t.live && beast.is_some_and(|b| b.hit_used)));
+    let alive: [Option<Monster>; MAX_MONSTERS] =
+        std::array::from_fn(|slot| sim.cur.monsters[slot].filter(|b| b.alive()));
+    let coming: [Option<sim::monster::Telegraph>; MAX_MONSTERS] = std::array::from_fn(|slot| {
+        let beast = alive[slot];
+        beast
+            .and_then(|b| b.telegraph())
+            .filter(|t| !(t.live && beast.is_some_and(|b| b.hit_used)))
+    });
 
-    for (mark, mut transform, mut visible, mut material) in marks.iter_mut() {
-        let Some(t) = coming else {
+    for (mark, of, mut transform, mut visible, mut material) in marks.iter_mut() {
+        let Some(t) = coming[of.0] else {
             *visible = Visibility::Hidden;
             continue;
         };
@@ -547,10 +604,16 @@ pub fn signs(
         }
     }
 
-    // The spikes. Only the spray has any.
-    let spray = beast.zip(coming).filter(|(_, t)| t.kind == monster::SPRAY);
-    for (spike, mut transform, mut visible) in spikes.iter_mut() {
-        let Some((beast, t)) = spray else {
+    // The spikes. Only a move a species' look says throws a volley has any:
+    // the Ridgeback's spray.
+    for (spike, of, mut transform, mut visible) in spikes.iter_mut() {
+        let volley = alive[of.0].zip(coming[of.0]).and_then(|(beast, t)| {
+            crate::species::look(beast.species)
+                .spikes
+                .filter(|s| s.kind == t.kind)
+                .map(|s| (beast, t, s.along))
+        });
+        let Some((beast, t, along)) = volley else {
             *visible = Visibility::Hidden;
             continue;
         };
@@ -566,11 +629,11 @@ pub fn signs(
             // rows either side of the spine. Worked out in the simulation's
             // own numbers and only turned into floats to be drawn.
             let (part, k) = if i < SPIKES / 2 {
-                (monster::TAIL_MID, i)
+                (along[0], i)
             } else {
-                (monster::TAIL_TIP, i - SPIKES / 2)
+                (along[1], i - SPIKES / 2)
             };
-            let shape = monster::shape(part);
+            let shape = beast.sp().shape(part);
             let size = shape.max.sub(shape.min);
             let side = if i % 2 == 0 {
                 sim::Fx::ONE

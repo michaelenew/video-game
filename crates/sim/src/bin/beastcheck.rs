@@ -1,6 +1,12 @@
 //! What the creature actually measures, in the states that matter.
 //!
 //!     cargo run -p sim --bin beastcheck
+//!     cargo run -p sim --bin beastcheck -- --species ridgeback
+//!
+//! Any registered species; the Ridgeback by default. Everything it prints is
+//! read off the species' table -- which parts are mountable, which are weak,
+//! which legs it has, which moves -- so a new creature is measured the moment
+//! it is registered.
 //!
 //! The climb is a geometry problem before it is a timing one -- can a jump
 //! reach that, and from where -- and geometry arguments conducted in prose go
@@ -14,13 +20,12 @@
 //!
 //! `docs/design/monsters.md` §2 quotes this.
 
-use sim::beast::{self, Clip};
 use sim::fixed::Fx;
 use sim::math::V3;
-use sim::monster::{self, Doing, Monster};
+use sim::monster::{Doing, Monster};
 use sim::oven::Unit;
+use sim::species::Species;
 use sim::state::MAX_PLAYERS;
-use sim::tuning as t;
 
 fn m(v: Fx) -> String {
     Unit::Fixed.show(v.raw())
@@ -49,7 +54,7 @@ fn jump_apex(class: sim::Class) -> Fx {
 
 /// The world height of a part's top face, at the middle of it.
 fn top(beast: &Monster, part: usize) -> Fx {
-    let sh = monster::shape(part);
+    let sh = beast.sp().shape(part);
     let mid = |a: Fx, b: Fx| a.add(b).mul(Fx::ratio(1, 2));
     beast
         .rig()
@@ -60,31 +65,61 @@ fn top(beast: &Monster, part: usize) -> Fx {
         .y
 }
 
-fn holding(doing: Doing) -> Monster {
-    let mut beast = Monster::new();
+fn holding(sp: &Species, doing: Doing) -> Monster {
+    let mut beast = Monster::new(sp.id);
     beast.doing = doing;
     beast
 }
 
-/// The lowest a part's top face gets at any point in a move, which is what
-/// decides whether the move opens a way up.
-fn lowest_through(kind: u8, part: usize) -> Fx {
-    let a = monster::attack(kind);
-    let mut best = Fx::MAX;
-    for (which, span) in [(0u8, a.startup), (1, a.active), (2, a.recovery)] {
-        for left in 0..span {
-            let doing = match which {
-                0 => Doing::Startup { kind, left },
-                1 => Doing::Active { kind, left },
-                _ => Doing::Recovery { kind, left },
-            };
-            best = best.min(top(&holding(doing), part));
-        }
-    }
-    best
+/// The lowest mountable surface on a body, and which part it is.
+fn lowest_mount(beast: &Monster) -> Option<(usize, Fx)> {
+    let sp = beast.sp();
+    (0..sp.parts.len())
+        .filter(|p| sp.parts[*p].shape.mountable)
+        .map(|p| (p, top(beast, p)))
+        .min_by_key(|(_, h)| h.raw())
+}
+
+/// The lowest any mountable surface gets across a run of states.
+fn lowest_across(states: impl Iterator<Item = Monster>) -> Option<(usize, Fx)> {
+    states
+        .filter_map(|b| lowest_mount(&b))
+        .min_by_key(|(_, h)| h.raw())
+}
+
+/// Every frame of a move, as the body holds it.
+fn through(sp: &Species, kind: u8) -> impl Iterator<Item = Monster> + '_ {
+    let a = sp.attack(kind);
+    [(0u8, a.startup), (1, a.active), (2, a.recovery)]
+        .into_iter()
+        .flat_map(move |(which, span)| {
+            (0..span).map(move |left| {
+                holding(
+                    sp,
+                    match which {
+                        0 => Doing::Startup { kind, left },
+                        1 => Doing::Active { kind, left },
+                        _ => Doing::Recovery { kind, left },
+                    },
+                )
+            })
+        })
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let wanted = args
+        .iter()
+        .position(|a| a == "--species")
+        .and_then(|i| args.get(i + 1))
+        .map_or("ridgeback", |s| s.as_str());
+    let Some(sp) = sim::species::named(wanted) else {
+        let known: Vec<&str> = sim::species::all().map(|s| s.name).collect();
+        eprintln!("no species called {wanted}; there is {}", known.join(", "));
+        std::process::exit(2);
+    };
+    println!("the {}\n", sp.name);
+
     // **Two jumps, not one.** This printed a single apex until 2026-09-17,
     // which was honest while the cast spanned four metres to seven and a half:
     // the shortest hop in the game got you most of the way up, so answering for
@@ -107,7 +142,6 @@ fn main() {
     }
     let (short, apex) = lowest;
     let (tall, best) = highest;
-    let _ = apex;
     let platform = sim::arena::WALL_HEIGHT;
     let from_platform = best.add(platform);
     println!(
@@ -146,84 +180,102 @@ fn main() {
         }
     };
 
-    let standing = holding(Doing::Prowl);
+    let standing = holding(sp, Doing::Prowl);
     println!("standing, the tops of the surfaces you can stand on:");
-    for part in 0..monster::PARTS {
-        if !beast::SHAPES[part].mountable {
+    for (part, p) in sp.parts.iter().enumerate() {
+        if !p.shape.mountable {
             continue;
         }
         let h = top(&standing, part);
-        println!(
-            "  {:<14} {:>6} m   {}",
-            monster::PART_NAMES[part],
-            m(h),
-            reach(h)
-        );
+        println!("  {:<14} {:>6} m   {}", p.name, m(h), reach(h));
     }
 
     println!("\nthe weak points, standing:");
-    for part in [monster::RIDGE, monster::NAPE] {
-        let sh = monster::shape(part);
+    for (part, p) in sp.parts.iter().enumerate() {
+        if !p.weak {
+            continue;
+        }
+        let sh = sp.shape(part);
         let high = top(&standing, part);
         println!(
             "  {:<14} {:>6} m at its foot, {:>6} m at its top, x{} damage",
-            monster::PART_NAMES[part],
+            p.name,
             m(high.sub(sh.max.y.sub(sh.min.y))),
             m(high),
-            m(monster::vulnerability(part))
+            m(sp.vulnerability(part))
         );
     }
 
-    println!("\nand what opens a way up (lowest the surface gets):");
-    let route = |label: &str, h: Fx| {
-        println!("  {label:<34} {:>6} m   {}", m(h), reach(h));
-    };
-    let stumbled = |front: bool, part: usize| {
-        let mut best = Fx::MAX;
-        for left in 0..t::stumble_frames() {
-            best = best.min(top(&holding(Doing::Stumble { left, front }), part));
+    // **What opens a way up**: in every state that lowers the body, the
+    // lowest surface it offers and which one that is. Read off the table --
+    // its stock states, its broken legs, every move it has -- so nothing
+    // about a particular animal is written here.
+    println!("\nand what opens a way up (the lowest surface, at its lowest):");
+    let route = |label: &str, found: Option<(usize, Fx)>| {
+        if let Some((part, h)) = found {
+            println!(
+                "  {label:<30} {:<14} {:>6} m   {}",
+                sp.parts[part].name,
+                m(h),
+                reach(h)
+            );
         }
-        best
     };
+    // One stumble: which end went down is in the snapshot, but the clip is
+    // the same either way.
     route(
-        "the shoulders, stumbling",
-        stumbled(true, monster::SHOULDERS),
+        "stumbling",
+        lowest_across(
+            (0..sp.stumble_frames()).map(|left| holding(sp, Doing::Stumble { left, front: true })),
+        ),
     );
-    route("the haunch, stumbling", stumbled(false, monster::HAUNCH));
-    let mut lame = Monster::new();
-    for leg in beast::LEGS {
-        if leg.front {
-            lame.part_health[leg.foot] = 0;
+    route(
+        "toppled",
+        lowest_across((0..sp.topple_frames()).map(|left| holding(sp, Doing::Toppled { left }))),
+    );
+    for (label, front) in [
+        ("every front foot broken", true),
+        ("every hind foot broken", false),
+    ] {
+        let mut lame = Monster::new(sp.id);
+        let mut any = false;
+        for leg in sp.legs.iter().filter(|l| l.front == front) {
+            if let Some(slot) = sp.break_slot(leg.foot) {
+                lame.breaks[slot] = 0;
+                any = true;
+            }
+        }
+        if any {
+            route(label, lowest_mount(&lame));
         }
     }
-    route(
-        "the shoulders, both forefeet broken",
-        top(&lame, monster::SHOULDERS),
-    );
-    let mut best = Fx::MAX;
-    for left in 0..t::topple_frames() {
-        best = best.min(top(&holding(Doing::Toppled { left }), monster::BARREL));
+    for (kind, decl) in sp.moves.iter().enumerate() {
+        route(
+            &format!("through {}", decl.name.to_lowercase()),
+            lowest_across(through(sp, kind as u8)),
+        );
     }
-    route("the barrel, toppled", best);
-    route(
-        "the shoulders, through a slam",
-        lowest_through(monster::SLAM, monster::SHOULDERS),
-    );
-    route(
-        "the tail, through a sweep",
-        lowest_through(monster::SWEEP, monster::TAIL_BASE),
-    );
 
+    // Length along the body, from the frontmost point of any part to the
+    // rearmost, standing.
     let rig = standing.rig();
-    let nose = rig
-        .part_to_world(monster::HEAD, monster::shape(monster::HEAD).max)
-        .x;
-    let tip = rig
-        .part_to_world(monster::TAIL_TIP, monster::shape(monster::TAIL_TIP).min)
-        .x;
+    let mut front = Fx::MIN;
+    let mut back = Fx::MAX;
+    for part in 0..sp.parts.len() {
+        let sh = sp.shape(part);
+        for x in [sh.min.x, sh.max.x] {
+            for z in [sh.min.z, sh.max.z] {
+                for y in [sh.min.y, sh.max.y] {
+                    let at = rig.to_body(rig.part_to_world(part, V3::new(x, y, z))).x;
+                    front = front.max(at);
+                    back = back.min(at);
+                }
+            }
+        }
+    }
     println!(
         "\nnose to tail: {} m.  clips baked: {}",
-        m(nose.sub(tip)),
-        Clip::ALL.len()
+        m(front.sub(back)),
+        sp.clips.len()
     );
 }

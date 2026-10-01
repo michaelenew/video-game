@@ -9,7 +9,6 @@
 pub mod aim;
 pub mod arena;
 pub mod beast;
-pub mod beast_baked;
 pub mod bolt;
 pub mod bulwark;
 pub mod camera;
@@ -26,6 +25,7 @@ pub mod monster;
 pub mod moves;
 pub mod oven;
 pub mod shadow;
+pub mod species;
 pub mod state;
 pub mod stones;
 pub mod tuned;

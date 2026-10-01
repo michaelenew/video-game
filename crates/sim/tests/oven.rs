@@ -32,13 +32,10 @@ fn the_registry_covers_every_stored_value() {
     // If these ever disagree, `emit` writes arrays of the wrong length and the
     // generated file stops compiling -- which is a good failure, but a worse
     // error message than this one.
+    let species: usize = sim::species::all().map(|s| s.knob_count()).sum();
     assert_eq!(
         oven::all_knobs().len(),
-        oven::SCALAR_COUNT
-            + oven::AIR_COUNT
-            + oven::MOVE_COUNT
-            + oven::MONSTER_COUNT
-            + oven::VIEW_COUNT
+        oven::SCALAR_COUNT + oven::AIR_COUNT + oven::MOVE_COUNT + oven::VIEW_COUNT + species
     );
     assert_eq!(oven::ViewKnob::ALL.len(), oven::VIEW_COUNT);
     assert_eq!(Scalar::ALL.len(), oven::SCALAR_COUNT);
@@ -50,10 +47,28 @@ fn the_registry_covers_every_stored_value() {
         MoveField::ALL.len() * sim::moves::TOTAL_SLOTS,
         oven::MOVE_COUNT
     );
-    assert_eq!(
-        MonsterField::ALL.len() * oven::MONSTER_MOVES,
-        oven::MONSTER_COUNT
-    );
+    // Every species' store: its baked file holds exactly its knobs, and they
+    // fit the room the Oven keeps for one.
+    for s in sim::species::all() {
+        assert_eq!(
+            s.knob_count(),
+            sim::species::Common::ALL.len() + s.own.len() + s.moves.len() * MonsterField::ALL.len(),
+        );
+        assert_eq!(
+            s.tuned.len(),
+            s.knob_count(),
+            "{}'s tuned.rs holds {} numbers for {} knobs -- run `cargo run -p sim --bin bake_tuning`",
+            s.name,
+            s.tuned.len(),
+            s.knob_count()
+        );
+        assert!(
+            s.knob_count() <= oven::MAX_SPECIES_KNOBS,
+            "{} has too many knobs",
+            s.name
+        );
+        assert_eq!(oven::species_knobs(s).len(), s.knob_count());
+    }
 }
 
 #[test]
@@ -86,29 +101,33 @@ fn every_knob_starts_inside_its_own_range() {
 }
 
 #[test]
-fn the_committed_file_is_what_the_oven_would_write() {
+fn the_committed_files_are_what_the_oven_would_write() {
     let _store = the_store();
     // Catches a hand-edited `tuned.rs`, and catches a bake that wrote the file
     // but did not get committed. Either one leaves the repository saying
-    // something the game does not do.
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tuned.rs");
-    let on_disk = std::fs::read_to_string(path).expect("tuned.rs is readable");
-    let wanted = oven::emit();
-    if on_disk != wanted {
-        // Report the first difference rather than both files: a whole-file diff
-        // of three hundred lines in an assertion message helps nobody.
-        let first = on_disk
-            .lines()
-            .zip(wanted.lines())
-            .position(|(a, b)| a != b)
-            .unwrap_or(on_disk.lines().count().min(wanted.lines().count()));
-        panic!(
-            "tuned.rs is out of step with the Oven at line {} -- run \
-             `cargo run -p sim --bin bake_tuning`\n  on disk: {:?}\n  wanted:  {:?}",
-            first + 1,
-            on_disk.lines().nth(first),
-            wanted.lines().nth(first)
-        );
+    // something the game does not do. Every file the bake writes: the shared
+    // one, and each species' own.
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../");
+    for (rel, wanted) in oven::baked_files() {
+        let on_disk = std::fs::read_to_string(format!("{root}{rel}"))
+            .unwrap_or_else(|e| panic!("{rel} is not readable: {e}"));
+        if on_disk != wanted {
+            // Report the first difference rather than both files: a
+            // whole-file diff of three hundred lines in an assertion message
+            // helps nobody.
+            let first = on_disk
+                .lines()
+                .zip(wanted.lines())
+                .position(|(a, b)| a != b)
+                .unwrap_or(on_disk.lines().count().min(wanted.lines().count()));
+            panic!(
+                "{rel} is out of step with the Oven at line {} -- run \
+                 `cargo run -p sim --bin bake_tuning`\n  on disk: {:?}\n  wanted:  {:?}",
+                first + 1,
+                on_disk.lines().nth(first),
+                wanted.lines().nth(first)
+            );
+        }
     }
 }
 

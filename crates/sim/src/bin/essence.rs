@@ -112,7 +112,7 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
         stones: &stones,
         players: &players,
         effects: &effects,
-        quarry: w.monster.as_ref(),
+        quarry: &w.monsters,
     };
     // A skillshot is pointed at the body's middle; a grounded move at its
     // feet, since that is where it lands.
@@ -441,7 +441,7 @@ fn against_the_creature() {
         ("swept, toppled", true, b::SWEEP, Input::LEFT),
     ] {
         let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
-        let mut beast = w.monster.expect("a hunt has a creature");
+        let mut beast = w.monster().copied().expect("a hunt has a creature");
         beast.pos = V3::ZERO;
         // Half a turn: faced at the hunter, the way a hunt spawns it.
         beast.yaw = Fx::ratio(1, 2);
@@ -451,7 +451,7 @@ fn against_the_creature() {
             sim::monster::Doing::Prowl
         };
         beast.brain.think_left = u16::MAX;
-        w.monster = Some(beast);
+        w.monsters[0] = Some(beast);
         w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
         let m = sim::moves::get(Class::BloodMage, slot);
         // Walk in from the side until the blade, held level at half its
@@ -462,7 +462,7 @@ fn against_the_creature() {
             for step in (-90..0).rev() {
                 let x = Fx::ratio(step, 10);
                 let z = Fx::ratio(zi, 10);
-                let part = w.monster.expect("creature").part_struck(
+                let part = w.monster().copied().expect("creature").part_struck(
                     V3::new(x.add(m.reach.mul(Fx::ratio(1, 2))), Fx::ZERO, z),
                     m.radius,
                     t::body_height(),
@@ -481,7 +481,7 @@ fn against_the_creature() {
             continue;
         };
         w.players[0].pos = stand;
-        let full = w.monster.expect("creature").health;
+        let full = w.monster().copied().expect("creature").health;
         run(&mut w, 2, button, 0);
         let mut biggest: Option<Effect> = None;
         for _ in 0..m.whiff_cost() as u32 {
@@ -492,7 +492,7 @@ fn against_the_creature() {
                 }
             }
         }
-        let dealt = full - w.monster.expect("creature").health;
+        let dealt = full - w.monster().copied().expect("creature").health;
         match biggest {
             Some(pool) => println!(
                 "  {:<18}{:>8}{:>8}{:>10}",
