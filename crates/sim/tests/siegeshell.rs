@@ -1100,3 +1100,75 @@ fn the_wall_falls_on_the_second_breach() {
         b.doing = Doing::Prowl;
     }
 }
+
+// ---------------------------------------------------------------------------
+// The aim (A3)
+// ---------------------------------------------------------------------------
+
+/// Ask `aim` something about the world as it stands, with the scene the
+/// simulation would build.
+fn with_scene<T>(w: &World, ask: impl FnOnce(&sim::aim::Scene) -> T) -> T {
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    ask(&sim::aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: &w.monsters,
+        critters: &w.critters,
+        arena: &w.terrain(),
+    })
+}
+
+/// **Seen from above, the top of a part you could stand on is a place; from
+/// below, the creature is a body** (A3, §6). Aboard the plateau, a crosshair
+/// on the shell a few metres ahead is on the shell -- a grounded ability goes
+/// there, not to the valley floor twenty metres under it. From the floor,
+/// looking up at the rim, the ray still goes through it.
+#[test]
+fn a_top_face_met_from_above_is_a_place_and_from_below_is_not() {
+    let mut w = hunt();
+    for _ in 0..3 {
+        walk_only(&mut w);
+        step(&mut w, Input::default());
+    }
+    walk_only(&mut w);
+    board(&mut w, ss::PLATEAU_MID, None);
+    let beast = *w.monster().unwrap();
+    let plateau = top(&beast, ss::PLATEAU_MID).to_f32_for_render();
+    // Facing along the shell, looking down at it a few metres ahead.
+    let look = Input::looking_at(0, 0, -(Fx::ratio(1, 10).raw() as i16));
+    let (seen, placed) = with_scene(&w, |scene| {
+        (
+            sim::aim::sight(0, look, m(30.0), scene),
+            sim::aim::grounded_path(0, look, m(30.0), scene),
+        )
+    });
+    assert_eq!(seen.met, sim::aim::Met::Ground);
+    assert!(seen.aboard, "the crosshair on the shell is on the shell");
+    assert!(
+        seen.at.y.to_f32_for_render() > plateau - 3.0,
+        "the crosshair on the shell met it at {:.1} m, under the plateau's {plateau:.1}",
+        seen.at.y.to_f32_for_render()
+    );
+    assert!(
+        (placed.to.y.to_f32_for_render() - seen.at.y.to_f32_for_render()).abs() < 0.05,
+        "a grounded cast aimed at the shell is put down at {:.1} m, not where the crosshair is",
+        placed.to.y.to_f32_for_render()
+    );
+
+    // On the floor beside the rim, looking up at its underside.
+    let mut w = hunt();
+    step(&mut w, Input::default());
+    let beast = *w.monster().unwrap();
+    let part = ss::rim_part(1, -1);
+    let sh = beast.sp().shape(part);
+    let rim = beast.world_of(part, sh.min.add(sh.max).scale(Fx::ratio(1, 2)));
+    w.players[0].pos = V3::new(rim.x, Fx::ZERO, rim.z);
+    w.players[0].mount = sim::monster::NO_PART;
+    let up = Input::looking_at(0, Input::QUARTER_TURN, Fx::ratio(2, 10).raw() as i16);
+    let seen = with_scene(&w, |scene| sim::aim::sight(0, up, m(30.0), scene));
+    assert!(!seen.aboard, "the rim's underside is a body, off the ray");
+    assert_ne!(seen.met, sim::aim::Met::Ground);
+}

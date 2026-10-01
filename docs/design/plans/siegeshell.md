@@ -87,7 +87,7 @@ bar: [`../monsters.md`](../monsters.md), contract [`../bestiary.md`](../bestiary
       Shiver, falls. Vent and fall tests; the crown plan reaching an anchor.
 - [x] **M5 · The crown and the clock.** Anchors, halts, phases, the Opening,
       Shed, Plough, the Siege beam, the wall. A full solo hunt runs to an end.
-- [ ] **M6 · The aim rule (A3).** Top face of a mountable part is a place;
+- [x] **M6 · The aim rule (A3).** Top face of a mountable part is a place;
       Ridgeback pins and report before/after; own commit.
 - [ ] **M7 · Two hunters.** Coop and solo plans, report lines, per-region
       windows, tuning passes, feel log.
