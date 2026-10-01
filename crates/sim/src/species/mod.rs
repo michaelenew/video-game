@@ -313,6 +313,11 @@ pub struct FightDecl {
     /// bounds -- which is what the Ridgeback has always had, and what keeps it
     /// bit-identical.
     pub collides: bool,
+    /// **Its parts come down on bodies** -- a belly flop -- so a body standing
+    /// on the floor under a part is shoved out sideways rather than into the
+    /// ground. Off, the collision is least penetration as it always was,
+    /// which keeps the Ridgeback bit-identical.
+    pub lands_on_bodies: bool,
     /// Called when it walks into a solid, with the push that got it out: the
     /// Hornback's charge into a rock is a stun.
     pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
@@ -442,6 +447,7 @@ impl FightDecl {
         perceives: crate::perception::sees_all,
         hears: false,
         collides: false,
+        lands_on_bodies: false,
         bumped: None,
         frame: None,
         shown: None,

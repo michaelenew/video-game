@@ -1038,11 +1038,6 @@ impl Rig {
             if !part.shape.mountable {
                 continue;
             }
-            // **A face pointing at the floor is not a surface**: a creature
-            // on its back has every top face underneath it.
-            if self.of(index).rot.r[1].y.raw() <= 0 {
-                continue;
-            }
             let sh = self.species.shape(index);
             let local = self.world_to_part(index, world);
             let over = local.x.raw() > sh.min.x.sub(lip).raw()
@@ -1232,7 +1227,24 @@ impl Rig {
             // hoisted on top. Using the step here lifted a rider off the tail
             // onto the haunch mid-sweep and dropped them off the far side.
             let step = part.mountable && up.raw() >= 0 && up.raw() <= t::mount_snap().raw();
-            if step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw()) {
+            // **Never pressed into the floor**, for a species whose parts come
+            // down on bodies (`FightDecl::lands_on_bodies`): a body standing
+            // under the Mireback's belly as a flop lands is shoved out
+            // sideways, where least penetration would push its feet through
+            // the ground and nothing pushes them back. The Ridgeback does not
+            // say so, and keeps its pinned hunts: whether it should is a
+            // person's call (`docs/design/hazards.md` §8).
+            let into_floor = self.species.fight.lands_on_bodies
+                && world.y.raw() <= 0
+                && up.raw() > down.raw()
+                && frame
+                    .local_to_world(V3::new(p.x, sh.min.y.sub(body_height), p.z))
+                    .y
+                    .raw()
+                    < 0;
+            if !into_floor
+                && (step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw()))
+            {
                 if step || up.raw() <= down.raw() {
                     p.y = sh.max.y;
                     landed = Some(index);
