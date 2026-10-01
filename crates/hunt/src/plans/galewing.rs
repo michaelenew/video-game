@@ -1002,7 +1002,6 @@ impl Tally for GaleTally {
                     self.watch = Some((kind, [0; 4]));
                 }
                 let points = marker_points(after, &now);
-                }
                 if let Some((_, frames)) = self.watch.as_mut() {
                     for bot in bots {
                         if points
