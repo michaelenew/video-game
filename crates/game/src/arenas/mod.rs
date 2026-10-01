@@ -29,7 +29,7 @@ pub mod gnawers;
 
 pub mod mireback;
 
-// pub mod sandmaw;
+pub mod sandmaw;
 
 // pub mod pair;
 
@@ -83,7 +83,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         // ArenaId::HORNBACK => &hornback::DRESSING,
         ArenaId::MIREBACK => &mireback::DRESSING,
 
-        // ArenaId::SANDMAW => &sandmaw::DRESSING,
+        ArenaId::SANDMAW => &sandmaw::DRESSING,
 
         // ArenaId::PAIR => &pair::DRESSING,
 

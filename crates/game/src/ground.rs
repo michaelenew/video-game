@@ -50,6 +50,11 @@ pub struct Looks {
     kindling: Handle<StandardMaterial>,
     iron: Handle<StandardMaterial>,
     embers: Handle<StandardMaterial>,
+    /// Raised sand, a fin, a noise heard, what a creature feels.
+    sand: Handle<StandardMaterial>,
+    fin: Handle<StandardMaterial>,
+    heard: Handle<StandardMaterial>,
+    feel: Handle<StandardMaterial>,
     disc: Handle<Mesh>,
     cube: Handle<Mesh>,
 }
@@ -140,6 +145,22 @@ pub fn setup(
         emissive: LinearRgba::rgb(0.9, 0.18, 0.02),
         ..default()
     });
+    // The Sandmaw's: a wake a shade darker than the sand it is in, so it
+    // reads at dusk; a dark fin; a pale ring for a noise it heard; and the
+    // faintest disc for how far it feels.
+    let [sr, sg, sb] = colour(Material::Sand);
+    let sand = materials.add(StandardMaterial {
+        base_color: Color::srgb(sr * 0.82, sg * 0.78, sb * 0.72),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let fin = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.18, 0.14, 0.11),
+        perceptual_roughness: 0.6,
+        ..default()
+    });
+    let heard = materials.add(see_through([1.0, 0.95, 0.8], 0.35, 0.9));
+    let feel = materials.add(see_through([0.55, 0.45, 0.3], 0.12, 0.2));
     let disc = meshes.add(Cylinder::new(1.0, 1.0));
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let pieces = (0..MAX_HAZARDS)
@@ -168,6 +189,10 @@ pub fn setup(
         kindling,
         iron,
         embers,
+        sand,
+        fin,
+        heard,
+        feel,
         disc,
         cube,
     });
@@ -326,6 +351,13 @@ fn mark(
     if height <= 0.0 {
         let (radius, lift, paint) = match (m.look, fill) {
             (MarkLook::Kindling, _) => (r, RING_LIFT, looks.kindling.clone()),
+            // A noise heard spreads a little as it fades.
+            (MarkLook::Heard, _) => (
+                r * (0.6 + 0.4 * progress),
+                RING_LIFT + 0.002,
+                looks.heard.clone(),
+            ),
+            (MarkLook::Feel, _) => (r, RING_LIFT - 0.02, looks.feel.clone()),
             (_, false) => (r, RING_LIFT, looks.warning.clone()),
             (_, true) => (r * progress, RING_LIFT + 0.005, looks.warning_fill.clone()),
         };
@@ -344,6 +376,8 @@ fn mark(
         (MarkLook::Iron, _) => (height, r, looks.iron.clone()),
         (MarkLook::Embers, false) => (height, r, looks.iron.clone()),
         (MarkLook::Embers, true) => (height * progress, r * 1.05, looks.embers.clone()),
+        (MarkLook::Sand, _) => (height, r, looks.sand.clone()),
+        (MarkLook::Fin, _) => (height, r, looks.fin.clone()),
         (_, _) => (height, r, looks.warning.clone()),
     };
     (

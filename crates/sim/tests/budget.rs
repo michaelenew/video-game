@@ -246,7 +246,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 9] {
+fn scenarios() -> [Scenario; 10] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -299,7 +299,42 @@ fn scenarios() -> [Scenario; 9] {
         ("full mire", |c| {
             full_mire(World::hunt_of([c; MAX_PLAYERS], SpeciesId::MIREBACK))
         }),
+        // The Sandmaw in the Pan, loud: both sinkholes open, every cell of
+        // the noise ring full, and its spine, its attention and its fences
+        // against the islands walked every frame.
+        ("the pan, loud", |c| {
+            loud_pan(World::hunt_of([c; MAX_PLAYERS], SpeciesId::SANDMAW))
+        }),
     ]
+}
+
+/// The Sandmaw's fight with its whole lore in use: two sinkholes and a full
+/// ring of noises round the hunters.
+fn loud_pan(mut w: World) -> World {
+    use sim::hazard::{self, Hazard};
+    use sim::noise::{self, NoiseKind};
+    use sim::species::sandmaw::fight as f;
+    let at =
+        |x: i32, z: i32| sim::V3::new(sim::Fx::from_int(x), sim::Fx::ZERO, sim::Fx::from_int(z));
+    hazard::place(
+        &mut w.lore,
+        Hazard::disc(f::SINKHOLE, at(-10, -3), sim::Fx::from_int(3)),
+    );
+    hazard::place(
+        &mut w.lore,
+        Hazard::disc(f::SINKHOLE, at(-10, 3), sim::Fx::from_int(3)),
+    );
+    for i in 0..8 {
+        noise::make(
+            &mut w.lore,
+            NoiseKind::Footfall,
+            at(-12 + i, (i % 3) - 1),
+            (i % 2) as u8,
+            1,
+            0,
+        );
+    }
+    w
 }
 
 /// Every hazard slot of the Mireback's fight filled round the hunters.

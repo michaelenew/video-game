@@ -43,7 +43,7 @@ dependencies and a word is the same on every machine.
 | Siegeshell | 8 vents, 12 falling things, anchors, siege state, the wall | 19 |
 | Mireback | 16 pools, braziers, swallow | 18 |
 | Veilstalker | 32 footfalls, paint, veil, 4 hazards | 15 |
-| Sandmaw | noise ring, spine, sinkhole, swallow | 14 |
+| Sandmaw | noise ring (8), two sinkholes, spine, attention, swallow | 17 |
 | Broodmother | 6 patches, 4 strands, 6 sacs, list | 13 |
 | Mantis | sight ring, guard, habits | 7 |
 | Hornback | bull's extra, boulders (the rest is in `Pack::memo`), the cart | 6 |
