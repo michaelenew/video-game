@@ -145,7 +145,7 @@ fn every_class_fights() {
 }
 
 fn inside(p: &sim::state::Player) -> bool {
-    let half = sim::arena::ARENA_HALF;
+    let half = sim::arena::proving_ground::half();
     p.pos.x.abs().raw() <= half.raw() && p.pos.z.abs().raw() <= half.raw()
 }
 

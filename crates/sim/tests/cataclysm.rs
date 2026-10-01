@@ -38,7 +38,7 @@ fn as_class(one: Class) -> World {
 /// heavy through it without having to aim it.
 ///
 /// **Clear for about five metres, and not beyond.** The blockout has a dais at
-/// `x ∈ [5, 9], z ∈ [-4, 4]`, a metre and a half tall (`arena::SOLIDS`), so a
+/// `x ∈ [5, 9], z ∈ [-4, 4]`, a metre and a half tall (`arena::proving_ground`), so a
 /// fixture that reaches past x = 5 on this line is standing things on a roof.
 /// Anything that needs real distance moves off the band first -- see
 /// [`CLEAR_LANE`].
@@ -618,14 +618,14 @@ fn tap_at(w: &mut World, button: u16, mark: V3, then: u32) {
 /// map -- the pillar vanished instead of ever being seen to move. This is a
 /// consistent player repro, not a knife's-edge one: stand beside one of the
 /// arena's two low platforms, plant a pillar at its base corner, then aim
-/// Cataclysm at the corner above that -- see `crate::arena::SOLIDS`.
+/// Cataclysm at the corner above that -- see `sim::arena::proving_ground`.
 #[test]
 fn cataclysm_aimed_at_a_dais_corner_still_turns_the_pillar_into_a_tornado() {
     let mut w = elementalist();
     w.players[0].pos = V3::new(Fx::from_int(-11), Fx::ZERO, Fx::from_int(-4));
     w.players[1].pos = V3::new(Fx::from_int(20), Fx::ZERO, Fx::from_int(20));
 
-    // The low platform at x in [-9, -5], z in [-4, 4] -- see `arena::SOLIDS`.
+    // The low platform at x in [-9, -5], z in [-4, 4] -- see `arena::proving_ground`.
     // The near-ground corner, for the pillar; the same corner on the
     // platform's top, for Cataclysm.
     let lower_corner = V3::new(Fx::from_int(-9), Fx::ZERO, Fx::from_int(4));

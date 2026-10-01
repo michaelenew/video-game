@@ -145,7 +145,7 @@ fn she_arrives_beside_the_wall_rather_than_inside_it() {
     w.players[0].pos = V3::new(Fx::from_int(11), Fx::ZERO, Fx::from_int(8));
     grasp(&mut w, TOWARD_PLUS_X, 0);
     let x = w.players[0].pos.x.to_f32_for_render();
-    let wall = sim::arena::ARENA_HALF.to_f32_for_render();
+    let wall = sim::arena::proving_ground::half().to_f32_for_render();
     assert!(
         x < wall,
         "she ended at x = {x:.2}, past the wall at {wall:.2}"
@@ -330,7 +330,7 @@ fn a_blink_into_a_wall_arrives_at_the_wall() {
     looking(&mut w, 2, SHIFT | W, TOWARD_PLUS_X, 0);
     looking(&mut w, 40, 0, TOWARD_PLUS_X, 0);
     let x = w.players[0].pos.x.to_f32_for_render();
-    let wall = sim::arena::ARENA_HALF.to_f32_for_render();
+    let wall = sim::arena::proving_ground::half().to_f32_for_render();
     assert!(
         x < wall,
         "she blinked to x = {x:.2}, through the wall at {wall:.2}"

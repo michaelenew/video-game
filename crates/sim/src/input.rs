@@ -19,6 +19,7 @@
 
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::V3;
+use crate::species::SpeciesId;
 
 /// One tick of input from one player.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
@@ -54,6 +55,47 @@ pub struct Input {
     /// to a little under a quarter turn either way, and a pitch that wrapped
     /// past vertical would be a camera nobody could use.
     pub pitch: i16,
+    /// A request to go somewhere else: the arena picker. Zero, nearly always.
+    ///
+    /// **On the wire because it is the only thing both peers agree on per
+    /// frame.** Changing arena or creature is a fresh fight, and a fresh fight
+    /// built by one client on the frame it pressed the key would be built on a
+    /// different frame by the other, or never. Sent as input, it is predicted,
+    /// confirmed and rolled back like a button, and `World::advance` acts on it
+    /// on the same frame on both machines. See `docs/design/arenas.md`.
+    pub travel: Travel,
+}
+
+/// Where a [`Input::travel`] request goes. One byte.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
+pub struct Travel(pub u8);
+
+/// What a [`Travel`] byte means.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Destination {
+    /// Fight each other, in the proving ground.
+    Versus,
+    /// Hunt a creature, in its own arena.
+    Hunt(SpeciesId),
+}
+
+impl Travel {
+    pub const NONE: Travel = Travel(0);
+    pub const VERSUS: Travel = Travel(1);
+    const HUNT: u8 = 0x80;
+
+    pub const fn hunt(species: SpeciesId) -> Travel {
+        Travel(Travel::HUNT | (species.0 & !Travel::HUNT))
+    }
+
+    pub const fn destination(self) -> Option<Destination> {
+        match self.0 {
+            0 => None,
+            1 => Some(Destination::Versus),
+            b if b & Travel::HUNT != 0 => Some(Destination::Hunt(SpeciesId(b & !Travel::HUNT))),
+            _ => None,
+        }
+    }
 }
 
 impl Input {
@@ -123,6 +165,7 @@ impl Input {
             bits,
             aim: 0,
             pitch: 0,
+            travel: Travel::NONE,
         }
     }
 
@@ -132,12 +175,18 @@ impl Input {
             bits,
             aim,
             pitch: 0,
+            travel: Travel::NONE,
         }
     }
 
     /// Buttons and a full look direction.
     pub const fn looking_at(bits: u16, aim: u16, pitch: i16) -> Input {
-        Input { bits, aim, pitch }
+        Input {
+            bits,
+            aim,
+            pitch,
+            travel: Travel::NONE,
+        }
     }
 
     /// A quarter turn, as the aim unit. Handy for tests and for turning a
@@ -173,7 +222,7 @@ impl Input {
         Input {
             bits: self.bits,
             aim: self.aim.wrapping_add(by.raw() as u16),
-            pitch: self.pitch,
+            ..self
         }
     }
 
@@ -204,11 +253,12 @@ impl Input {
     }
 
     pub const fn looking(self, aim: u16, pitch: i16) -> Input {
-        Input {
-            bits: self.bits,
-            aim,
-            pitch,
-        }
+        Input { aim, pitch, ..self }
+    }
+
+    /// The same input, asking to go somewhere else.
+    pub const fn travelling(self, to: Travel) -> Input {
+        Input { travel: to, ..self }
     }
 
     /// Both buttons at once is its own input, per the control scheme.

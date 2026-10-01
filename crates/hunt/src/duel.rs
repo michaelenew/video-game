@@ -1323,7 +1323,7 @@ impl Duelist {
                 toward
             };
             want = head;
-            let wall = sim::arena::ARENA_HALF;
+            let wall = sim::arena::proving_ground::half();
             let gap = me
                 .pos
                 .x
@@ -1569,7 +1569,7 @@ fn flat(v: V3) -> V3 {
 /// is the arena's question to answer, not this bot's; what the bot does is
 /// what a person who wants to fight does, and does not jump there.
 fn by_the_wall(pos: V3, margin: Fx) -> bool {
-    let half = sim::arena::ARENA_HALF.sub(margin);
+    let half = sim::arena::proving_ground::half().sub(margin);
     pos.x.abs().raw() > half.raw() || pos.z.abs().raw() > half.raw()
 }
 

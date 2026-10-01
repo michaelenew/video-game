@@ -388,7 +388,7 @@ impl CameraRig {
             -along[1] * back,
         ];
 
-        // The floor is not in `SOLIDS` -- it is a plane the simulation handles
+        // The floor is not one of the arena's solids -- it is a plane the simulation handles
         // separately -- so it has to be handled by hand, and *how* matters.
         //
         // Look up far enough and the arm wants to swing below the ground. The
@@ -445,7 +445,7 @@ impl CameraRig {
             }
         }
         let clear = lerp(
-            unobstructed_fraction(self.focus, offset, &blockers),
+            unobstructed_fraction(self.focus, offset, &blockers, around.arena),
             1.0,
             sky,
         );
@@ -529,6 +529,7 @@ fn unobstructed_fraction(
     focus: [f32; 3],
     offset: [f32; 3],
     beasts: &[Option<&sim::Monster>],
+    arena: &sim::arena::Arena,
 ) -> f32 {
     const STEPS: usize = 24;
     // Deliberately tiny. An arm that refuses to shorten past a comfortable
@@ -545,7 +546,7 @@ fn unobstructed_fraction(
             focus[1] + offset[1] * t,
             focus[2] + offset[2] * t,
         ];
-        let blocked = inside_geometry(p, PADDING)
+        let blocked = inside_geometry(p, PADDING, arena)
             || beasts.iter().flatten().any(|b| {
                 b.contains(
                     sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2])),
@@ -559,8 +560,8 @@ fn unobstructed_fraction(
     1.0
 }
 
-fn inside_geometry(p: [f32; 3], pad: f32) -> bool {
-    sim::arena::SOLIDS.iter().any(|s| {
+fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Arena) -> bool {
+    arena.solids().iter().any(|s| {
         let lo = [
             s.min.x.to_f32_for_render() - pad,
             s.min.y.to_f32_for_render() - pad,
@@ -589,7 +590,7 @@ fn smoothing_for(per_tick: f32, dt: f32) -> f32 {
 /// -- there is an animal, and whether you are on it changes what it is to the
 /// camera -- and a bare `bool` at a call site says nothing about which way
 /// round it goes.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct Surroundings<'a> {
     /// Every creature slot: `World::monsters`. Empty in a fixture with none.
     pub beasts: &'a [Option<sim::Monster>],
@@ -621,6 +622,22 @@ pub struct Surroundings<'a> {
     /// simulation's -- and a caller handed one number has no way to be told it
     /// forgot half of it. Zero is the default, which is the arena floor.
     pub carried: f32,
+    /// Where the fight is: `World::arena()`. Its solids are what the arm is
+    /// pulled in from -- walls, a tower, a cave's vault overhead. The default
+    /// is the proving ground, which is every fixture's arena.
+    pub arena: &'static sim::arena::Arena,
+}
+
+impl Default for Surroundings<'_> {
+    fn default() -> Self {
+        Surroundings {
+            beasts: &[],
+            aboard: false,
+            aloft: 0.0,
+            carried: 0.0,
+            arena: &sim::arena::proving_ground::ARENA,
+        }
+    }
 }
 
 /// RENDER-ONLY. Metres to the simulation's fixed point, for asking the

@@ -58,6 +58,7 @@ fn pitch_onto(w: &World, at: V3) -> i16 {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        arena: w.arena(),
     };
     (-40..=80)
         .map(|step| -(step * 200) as i16)
@@ -348,6 +349,7 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
         players: &players,
         effects: &effects,
         quarry: &[None; sim::monster::MAX_MONSTERS],
+        arena: &sim::arena::proving_ground::ARENA,
     };
     let middle = sim::aim::standing_middle(w.players[1].pos);
     let pitch = (-40..=80)

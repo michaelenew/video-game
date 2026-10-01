@@ -133,6 +133,7 @@ fn crosshair_on_the_shadow(w: &World, yaw: u16) -> Option<i16> {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        arena: w.arena(),
     };
     let at = shadow(w).pos;
     (-89..=89).map(degrees).find(|&pitch| {

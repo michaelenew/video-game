@@ -10,7 +10,7 @@ use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
 
 /// Wire format for one player's input. This is the only game data that crosses
-/// the network: six bytes of payload per player per frame.
+/// the network: seven bytes of payload per player per frame.
 ///
 /// Buttons, then yaw, then pitch, each in its own sixteen bits. All three are on
 /// the wire because movement and abilities resolve relative to where the player
@@ -28,12 +28,18 @@ pub struct NetInput(pub u64);
 impl From<NetInput> for Input {
     fn from(n: NetInput) -> Input {
         Input::looking_at((n.0 >> 32) as u16, (n.0 >> 16) as u16, n.0 as u16 as i16)
+            .travelling(sim::input::Travel((n.0 >> 48) as u8))
     }
 }
 
 impl From<Input> for NetInput {
     fn from(i: Input) -> NetInput {
-        NetInput((i.bits as u64) << 32 | (i.aim as u64) << 16 | i.pitch as u16 as u64)
+        NetInput(
+            (i.travel.0 as u64) << 48
+                | (i.bits as u64) << 32
+                | (i.aim as u64) << 16
+                | i.pitch as u16 as u64,
+        )
     }
 }
 

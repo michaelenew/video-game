@@ -53,6 +53,7 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        arena: w.arena(),
     };
     // Their middle, measured from *their* feet. Not from the world's floor: a
     // fighter standing on a platform is a metre and a half up, and aiming at

@@ -81,7 +81,7 @@
 //! is simulation state and its numbers are in the desync checksum. See
 //! `crate::camera`, which says what that bought and what it cost.
 
-use crate::arena;
+use crate::arena::{self, Arena};
 use crate::class::{Mechanic, Structure};
 use crate::effects::{EffectKind, Effects};
 use crate::fixed::{Fx, cos_turns, sin_turns};
@@ -198,6 +198,8 @@ pub struct Scene<'a> {
     pub effects: &'a Effects,
     /// Every creature slot. A versus match is all of them empty.
     pub quarry: &'a Herd,
+    /// Where the fight is: its solids are terrain to every ray here.
+    pub arena: &'a Arena,
 }
 
 /// Where a fighter standing at `pos` casts from: the height abilities leave at.
@@ -438,7 +440,7 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
     // Terrain. Ground is whatever faces upward, which is what decides whether
     // a skillshot flies level over the spot or straight at it.
     keep(floor_hit(eye, dir), Met::Ground);
-    for solid in arena::SOLIDS.iter() {
+    for solid in scene.arena.solids().iter() {
         let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
         keep(hit, facing(hit, eye, dir, solid.max.y));
     }
@@ -510,12 +512,16 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
         Met::Reach => {
             let dir = look.look_dir();
             let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
-            settle(origin(caster.pos).add(flat.scale(reach)), scene.stones)
+            settle(
+                origin(caster.pos).add(flat.scale(reach)),
+                scene.stones,
+                scene.arena,
+            )
         }
         // On the ground, exactly there -- `settle` is a no-op on a surface
         // something already stands on. On a wall, the floor beneath it,
         // because that is where the thing being placed can exist.
-        Met::Ground | Met::Solid => settle(seen.at, scene.stones),
+        Met::Ground | Met::Solid => settle(seen.at, scene.stones, scene.arena),
     };
     Path {
         from: caster.pos,
@@ -819,7 +825,7 @@ fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
             }
         }
     };
-    for solid in arena::SOLIDS.iter() {
+    for solid in scene.arena.solids().iter() {
         consider(crate::math::ray_hits_box(a, dir, solid.min, solid.max));
     }
     for stone in scene.stones.iter().flatten() {
@@ -848,7 +854,7 @@ fn nothing_between(a: V3, b: V3, scene: &Scene) -> bool {
     // Short of the far end, so a line that arrives exactly on the surface the
     // other body is standing on has not been stopped by it.
     let stopped = |hit: Option<Fx>| hit.is_some_and(|d| d.raw() < reach.raw());
-    for solid in arena::SOLIDS.iter() {
+    for solid in scene.arena.solids().iter() {
         if stopped(crate::math::ray_hits_box(a, dir, solid.min, solid.max)) {
             return false;
         }
@@ -922,9 +928,9 @@ pub fn racing_path(from: V3, look: Input, reach: Fx) -> Path {
 ///
 /// [`settle`] does the last step, so the stone comes up on top of whatever is
 /// under that spot -- another stone included -- rather than inside it.
-pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field) -> V3 {
+pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field, arena: &Arena) -> V3 {
     let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
-    settle(pos.add(flat.scale(ahead)), stones)
+    settle(pos.add(flat.scale(ahead)), stones, arena)
 }
 
 /// Which way the Reaver's shadow, **out on the field**, throws its copy of
@@ -1243,7 +1249,7 @@ pub fn first_along(
         // all three axes -- the same trick the stones use, so "do these two
         // volumes touch" stays one ray against one shape.
         let fat = V3::new(girth, girth, girth);
-        for solid in arena::SOLIDS.iter() {
+        for solid in scene.arena.solids().iter() {
             if let Some(dist) =
                 crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
             {
@@ -1255,8 +1261,8 @@ pub fn first_along(
 }
 
 /// Drop a point onto whatever it would stand on.
-pub fn settle(at: V3, stones: &Field) -> V3 {
-    let mut floor = arena::ground_under(at);
+pub fn settle(at: V3, stones: &Field, arena: &Arena) -> V3 {
+    let mut floor = arena.ground_under(at);
     for stone in stones.iter().flatten() {
         let apart = V3::new(at.x.sub(stone.at.x), Fx::ZERO, at.z.sub(stone.at.z)).flat_len();
         if apart.raw() < stone.radius().raw() && stone.top().raw() > floor.raw() {
@@ -1284,7 +1290,7 @@ fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
 
 /// The arena floor. A plane rather than a box, because that is what the
 /// simulation collides against -- `arena::resolve` treats `y <= 0` as the
-/// ground and never consults `SOLIDS` for it.
+/// ground and never consults the arena's solids for it.
 fn floor_hit(from: V3, dir: V3) -> Option<Fx> {
     if dir.y.raw() >= 0 || from.y.raw() < 0 {
         return None;

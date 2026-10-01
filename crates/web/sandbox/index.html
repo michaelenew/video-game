@@ -270,7 +270,7 @@ function p2Input(frame) {
 }
 
 // ---- rendering -------------------------------------------------------------
-const UNIT = 34, ARENA = 14;
+const UNIT = 34;
 function sx(x){ return cv.width/2 + x*UNIT; }
 function sy(z){ return cv.height/2 + z*UNIT; }
 
@@ -279,14 +279,18 @@ function draw() {
   ctx.fillStyle = "#0a0d11";
   ctx.fillRect(0,0,cv.width,cv.height);
 
-  // floor grid
+  // floor grid, to the simulation's own bounds
+  const X0 = e.arena_lo_x()/FX, X1 = e.arena_hi_x()/FX;
+  const Z0 = e.arena_lo_z()/FX, Z1 = e.arena_hi_z()/FX;
   ctx.strokeStyle = "#141b24"; ctx.lineWidth = 1;
-  for (let g = -ARENA; g <= ARENA; g += 2) {
-    ctx.beginPath(); ctx.moveTo(sx(g), sy(-ARENA)); ctx.lineTo(sx(g), sy(ARENA)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(sx(-ARENA), sy(g)); ctx.lineTo(sx(ARENA), sy(g)); ctx.stroke();
+  for (let g = X0; g <= X1; g += 2) {
+    ctx.beginPath(); ctx.moveTo(sx(g), sy(Z0)); ctx.lineTo(sx(g), sy(Z1)); ctx.stroke();
+  }
+  for (let g = Z0; g <= Z1; g += 2) {
+    ctx.beginPath(); ctx.moveTo(sx(X0), sy(g)); ctx.lineTo(sx(X1), sy(g)); ctx.stroke();
   }
   ctx.strokeStyle = "#2a3644"; ctx.lineWidth = 2;
-  ctx.strokeRect(sx(-ARENA), sy(-ARENA), 2*ARENA*UNIT, 2*ARENA*UNIT);
+  ctx.strokeRect(sx(X0), sy(Z0), (X1-X0)*UNIT, (Z1-Z0)*UNIT);
 
   for (let i = 0; i < 2; i++) {
     const x = e.p_x(i)/FX, y = e.p_y(i)/FX, z = e.p_z(i)/FX;

@@ -858,7 +858,7 @@ pub fn class_buttons(
             [sim.cur.players[0].class, sim.cur.players[1].class],
             button.0,
         );
-        let w = sim::World::with_classes(classes);
+        let w = sim::World::versus_in(classes, sim.cur.arena);
         sim.prev = w.clone();
         sim.cur = w;
     }

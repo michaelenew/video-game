@@ -117,16 +117,6 @@ const EXEMPT: &[(&str, &str)] = &[
         "The floor is the origin. Moving it would move the world, not change how it feels.",
     ),
     (
-        "pub const ARENA_HALF: Fx = Fx::from_int(14)",
-        "Arena geometry is `const` because it is not part of the rollback snapshot. Making the \
-         blockout live means having the Oven rebuild SOLIDS, which is its own piece of work.",
-    ),
-    (
-        "pub const WALL_HEIGHT: Fx = Fx::ratio(3, 2)",
-        "Arena geometry, and `const` for the same reason as ARENA_HALF: it builds SOLIDS, which \
-         is not part of the snapshot.",
-    ),
-    (
         "pub const DT: Fx = Fx::ratio(1, TICK_HZ as i32)",
         "Derived from the tick rate. The tick rate is a networking decision, not a feel one.",
     ),
