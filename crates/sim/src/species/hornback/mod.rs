@@ -28,12 +28,13 @@
 mod mind;
 pub mod ride;
 pub mod rules;
+pub mod signs;
 mod tuned;
 
 pub use mind::word as memo;
 pub use mind::{
     HerdState, Mind, bellow_lane, charge_lane, guard_arc, herd_state, horn_health, horns_whole,
-    in_lane, in_lee, stunned, wary_of,
+    in_lane, in_lee, lane_frame, stunned, wary_of,
 };
 
 use crate::arena::Material;
@@ -252,6 +253,7 @@ pub static FIGHT: FightDecl = FightDecl {
     hazards: &HAZARDS,
     objectives: &OBJECTIVES,
     frame: Some(rules::frame),
+    signs: Some(signs::signs),
     ..FightDecl::PLAIN
 };
 

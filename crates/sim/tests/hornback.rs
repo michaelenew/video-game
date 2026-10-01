@@ -608,7 +608,8 @@ fn cows_do_no_damage_outside_a_stampede() {
         let aim = ((f * 300) % 65536) as u16;
         w.advance([Input::aimed(Input::W, aim), Input::default()]);
         let lost = before - w.players[0].health;
-        if lost > 0 {
+        let running = h::herd_state(&w.pack.unwrap()) == h::HerdState::Stampede;
+        if lost > 0 && !running {
             assert!(
                 kicking
                     || w.critters
@@ -621,4 +622,408 @@ fn cows_do_no_damage_outside_a_stampede() {
         keep_up(&mut w);
     }
     let _ = kicked;
+}
+
+// ---------------------------------------------------------------------------
+// The stampede
+// ---------------------------------------------------------------------------
+
+/// A bellow at a hunter standing at `hunter`, the bull between them and the
+/// herd at home; run until the herd has come home or `frames` run out,
+/// calling `each` on every frame.
+fn bellow_at(hunter: V3, frames: u32, each: impl FnMut(&World)) -> World {
+    bellow_with(hunter, frames, false, each)
+}
+
+/// The same, with the bull taken out of it once the bellow is out: the herd
+/// alone.
+fn bellow_with(hunter: V3, frames: u32, park: bool, mut each: impl FnMut(&World)) -> World {
+    let mut w = hunt(Class::Champion);
+    alarmed(&mut w);
+    let home = w.pack.unwrap().home;
+    w.players[0].pos = hunter;
+    let to = home.sub(hunter);
+    let bull_at = hunter.add(to.normalized().scale(Fx::from_int(7)));
+    stand_bull(&mut w, bull_at, hunter);
+    // The herd home and bunched.
+    for _ in 0..240 {
+        keep_up(&mut w);
+        w.players[0].pos = hunter;
+        stand_bull(&mut w, bull_at, hunter);
+        w.advance(idle());
+    }
+    throw(&mut w, h::BELLOW);
+    let b = bull(&w);
+    for _ in 0..frames {
+        keep_up(&mut w);
+        if park && w.critters[b].act != h::BELLOW {
+            w.critters[b].pos = at(-20, 18);
+            w.critters[b].state = is::PROWL;
+        }
+        w.advance(idle());
+        each(&w);
+    }
+    w
+}
+
+#[test]
+fn no_cow_leaves_the_lane_it_was_called_down() {
+    let mut runs = 0;
+    for hunter in [at(-12, -6), at(-8, 6), at(0, 8)] {
+        bellow_at(hunter, 360, |w| {
+            let p = w.pack.unwrap();
+            for c in w.critters.iter() {
+                if c.kind == h::COW && c.alive() && c.act == h::STAMPEDE && c.state == is::ACTIVE {
+                    runs += 1;
+                    assert!(h::in_lane(&p, c.pos), "a running cow is in its lane");
+                }
+            }
+        });
+    }
+    assert!(runs > 100, "the herd ran ({runs} cow-frames)");
+}
+
+#[test]
+fn no_cow_enters_the_lee_of_a_solid_in_its_lane() {
+    // A boulder between the hunter and the herd: the lane runs over it.
+    let w = hunt(Class::Champion);
+    let mut w2 = w;
+    settle(&mut w2);
+    let home = w2.pack.unwrap().home;
+    let (slot, _) = standing_boulders(&w2)
+        .into_iter()
+        .min_by_key(|(s, _)| boulder_at(&w2, *s).sub(home).flat_len().raw())
+        .unwrap();
+    let rock = boulder_at(&w2, slot);
+    let beyond = rock.add(rock.sub(home).normalized().scale(Fx::from_int(5)));
+    let mut checked = 0;
+    let mut beside = 0;
+    bellow_at(beyond, 360, |w| {
+        let p = w.pack.unwrap();
+        let Some((at, dir, ..)) = h::bellow_lane(&p) else {
+            return;
+        };
+        let ground = w.terrain();
+        for s in ground.raised() {
+            for c in w.critters.iter() {
+                if c.kind == h::COW && c.alive() && c.act == h::STAMPEDE && c.state == is::ACTIVE {
+                    checked += 1;
+                    assert!(
+                        !h::in_lee(at, dir, s.min, s.max, c.pos, Fx::ZERO),
+                        "a running cow is in a solid's lee"
+                    );
+                    let (a, _) = h::lane_frame(at, dir, c.pos);
+                    let (ra, _) = h::lane_frame(at, dir, rock);
+                    if a.sub(ra).abs().raw() < Fx::from_int(2).raw() {
+                        beside += 1;
+                    }
+                }
+            }
+        }
+    });
+    assert!(
+        checked > 100 && beside > 0,
+        "the herd ran past the rock ({checked}, {beside})"
+    );
+}
+
+#[test]
+fn what_is_drawn_for_a_stampede_is_where_the_herd_can_be() {
+    let mut drawn = 0;
+    bellow_at(at(-10, -4), 360, |w| {
+        let signs = w.signs();
+        let lane: Vec<_> = signs
+            .iter()
+            .filter(|s| {
+                matches!(s.says, sim::sign::Says::Live | sim::sign::Says::Coming)
+                    && s.shape == sim::sign::Shape::Strip
+            })
+            .collect();
+        let lees: Vec<_> = signs
+            .iter()
+            .filter(|s| s.says == sim::sign::Says::Clear)
+            .collect();
+        for c in w.critters.iter() {
+            if c.kind == h::COW && c.alive() && c.act == h::STAMPEDE && c.state == is::ACTIVE {
+                drawn += 1;
+                assert!(
+                    lane.iter().any(|s| s.covers(c.pos)),
+                    "a running cow outside the drawn lane"
+                );
+                assert!(
+                    !lees.iter().any(|s| s.covers(c.pos)),
+                    "a running cow inside a lee drawn clear"
+                );
+            }
+        }
+    });
+    assert!(drawn > 100);
+}
+
+#[test]
+fn the_first_cow_knocks_down_and_the_rest_step_round() {
+    // Standing in the lane, out in the open: one cow's worth, and down.
+    let one = sim::species::lookup(SpeciesId::HORNBACK)
+        .unwrap()
+        .attack(h::STAMPEDE)
+        .damage;
+    let mut taken = 0;
+    let mut down = false;
+    let mut last = 0;
+    bellow_with(at(-10, -4), 360, true, |w| {
+        let lost = w.players[0].full_health() - w.players[0].health;
+        if lost > last {
+            taken += lost - last;
+        }
+        last = lost;
+        down |= matches!(w.players[0].action, Action::Stagger { .. });
+    });
+    assert!(taken > 0, "standing in the lane, a cow reaches you");
+    assert!(down, "and knocks you down");
+    assert!(
+        taken <= one,
+        "a stampede does at most one cow's worth ({taken})"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The guard and the horns
+// ---------------------------------------------------------------------------
+
+/// The bull braced, the hunter `at` relative to its nose, swinging `slot`.
+fn swing_at_guard(class: Class, offset: V3, slot: u8) -> (World, i32) {
+    let mut w = hunt(class);
+    alarmed(&mut w);
+    cows_away(&mut w);
+    let bull_at = at(0, 0);
+    stand_bull(&mut w, bull_at, at(-10, 0));
+    let b = bull(&w);
+    throw(&mut w, h::GUARD);
+    // Through the brace.
+    for _ in 0..10 {
+        w.advance(idle());
+    }
+    assert_eq!(w.critters[b].state, is::ACTIVE, "braced");
+    let target = w.critters[b].pos;
+    w.players[0].pos = target.add(offset);
+    let look = target.sub(w.players[0].pos);
+    let aim = (sim::math::atan2_turns(look.z, look.x).raw() & 0xFFFF) as u16;
+    let before = w.critters[b].health as i32;
+    w.press(0, slot, Input::aimed(0, aim));
+    for _ in 0..40 {
+        keep_up(&mut w);
+        // Holding the guard up and the bull where it is.
+        if w.critters[b].act == h::GUARD && w.critters[b].state == is::ACTIVE {
+            w.critters[b].timer = w.critters[b].timer.max(20);
+        }
+        w.advance([Input::aimed(0, aim), Input::default()]);
+    }
+    let dealt = before - w.critters[b].health as i32;
+    (w, dealt)
+}
+
+#[test]
+fn a_frontal_hit_on_the_guard_bounces_and_a_flank_hit_lands() {
+    // The sword, from in front: turned. The bull's half-length is 2.25.
+    let (w, dealt) = swing_at_guard(Class::Champion, at(-3, 0), 0);
+    assert_eq!(dealt, 0, "a frontal swing on the guard does nothing");
+    let _ = w;
+    // From the flank: lands.
+    let (_, dealt) = swing_at_guard(Class::Champion, at(0, 2), 0);
+    assert!(dealt > 0, "a flank swing lands");
+}
+
+#[test]
+fn a_guard_breaker_breaks_the_guard() {
+    // The Bulwark's grapple is unblockable in versus: through the guard.
+    let (w, dealt) = swing_at_guard(Class::Bulwark, at(-3, 0), 2);
+    let b = bull(&w);
+    assert!(dealt > 0, "a guard breaker lands");
+    let _ = b;
+}
+
+#[test]
+fn a_broken_horn_opens_its_side_of_the_guard() {
+    // The left horn broken: a frontal swing from the left lands, one from the
+    // right still bounces.
+    let mut sides = [0; 2];
+    for (k, z) in [(0usize, 1), (1usize, -1)] {
+        let mut w = hunt(Class::Champion);
+        alarmed(&mut w);
+        let mut p = w.pack.unwrap();
+        p.memo[h::memo::HORNS] = (0u16 as u32 | (500u32 << 16)) as i32;
+        w.pack = Some(p);
+        assert_eq!(h::horns_whole(&w.pack.unwrap()), [false, true]);
+        cows_away(&mut w);
+        stand_bull(&mut w, at(0, 0), at(-10, 0));
+        let b = bull(&w);
+        throw(&mut w, h::GUARD);
+        for _ in 0..10 {
+            w.advance(idle());
+        }
+        let target = w.critters[b].pos;
+        // Facing -x, so its left is -z... worked out from the bull itself.
+        let fwd = w.critters[b].facing();
+        let left = V3::new(fwd.z.neg(), Fx::ZERO, fwd.x);
+        let off = fwd.scale(Fx::from_int(3)).add(left.scale(Fx::from_int(z)));
+        w.players[0].pos = target.add(off);
+        let look = target.sub(w.players[0].pos);
+        let aim = (sim::math::atan2_turns(look.z, look.x).raw() & 0xFFFF) as u16;
+        let before = w.critters[b].health as i32;
+        w.press(0, 0, Input::aimed(0, aim));
+        for _ in 0..30 {
+            keep_up(&mut w);
+            if w.critters[b].act == h::GUARD && w.critters[b].state == is::ACTIVE {
+                w.critters[b].timer = w.critters[b].timer.max(20);
+            }
+            w.advance([Input::aimed(0, aim), Input::default()]);
+        }
+        sides[k] = before - w.critters[b].health as i32;
+    }
+    assert!(sides[0] > 0, "the broken horn's side is open: {sides:?}");
+    assert_eq!(
+        sides[1], 0,
+        "the whole horn's side still turns it: {sides:?}"
+    );
+}
+
+#[test]
+fn hits_on_the_head_in_a_stun_break_a_horn() {
+    let mut w = hunt(Class::Champion);
+    alarmed(&mut w);
+    cows_away(&mut w);
+    let (slot, _) = standing_boulders(&w)[0];
+    let rock = boulder_at(&w, slot);
+    assert!(charge_into(&mut w, rock, rock.add(at(9, 0))));
+    let b = bull(&w);
+    let c = w.critters[b];
+    // Stand at its head, a little to one side, and hit.
+    let fwd = c.facing();
+    let left = V3::new(fwd.z.neg(), Fx::ZERO, fwd.x);
+    let head = c.pos.add(fwd.scale(Fx::from_int(3)));
+    let mut stood = head
+        .add(left.scale(Fx::ONE))
+        .sub(fwd.scale(Fx::ratio(1, 2)));
+    stood.y = Fx::ZERO;
+    let before = h::horn_health(&w.pack.unwrap());
+    for f in 0..110 {
+        keep_up(&mut w);
+        w.players[0].pos = stood;
+        let look = head.sub(stood);
+        let aim = (sim::math::atan2_turns(look.z, look.x).raw() & 0xFFFF) as u16;
+        let press = if f % 14 == 0 { Input::LEFT } else { 0 };
+        w.advance([Input::aimed(press, aim), Input::default()]);
+    }
+    let after = h::horn_health(&w.pack.unwrap());
+    assert!(
+        after[0] < before[0] && after[1] == before[1],
+        "the horn on the side the blows came from: {before:?} -> {after:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Cows
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_cow_kick_only_reaches_behind_a_cow() {
+    let mut w = hunt(Class::Champion);
+    alarmed(&mut w);
+    let b = bull(&w);
+    w.critters[b].pos = at(-20, 18);
+    let i = cows(&w)[0];
+    // Every other cow out of the way.
+    for j in cows(&w) {
+        if j != i {
+            w.critters[j].pos = at(20, 18 - j as i32 * 3);
+        }
+    }
+    let sp = sim::species::lookup(SpeciesId::HORNBACK).unwrap();
+    let c = w.critters[i];
+    let kick = sim::critter::Critter {
+        state: is::ACTIVE,
+        act: h::KICK,
+        timer: sp.attack(h::KICK).active,
+        ..c
+    };
+    let fwd = c.facing();
+    let side = V3::new(fwd.z.neg(), Fx::ZERO, fwd.x);
+    let radius = sim::tuning::body_radius();
+    let tall = sim::tuning::body_height();
+    let reaches = |p: V3| kick.reaches(sp, p, tall, radius);
+    assert!(
+        reaches(c.pos.sub(fwd.scale(Fx::from_int(3)))),
+        "straight behind"
+    );
+    assert!(
+        !reaches(c.pos.add(fwd.scale(Fx::from_int(3)))),
+        "not in front"
+    );
+    assert!(
+        !reaches(c.pos.add(side.scale(Fx::from_int(2)))),
+        "not at its side"
+    );
+    // And the cow only throws it at somebody who has stood in its wedge.
+    let mut w2 = w;
+    w2.players[0].pos = c.pos.add(side.scale(Fx::from_int(3)));
+    let mut kicked = false;
+    for _ in 0..300 {
+        keep_up(&mut w2);
+        w2.critters[b].pos = at(-20, 18);
+        w2.critters[i].pos = c.pos;
+        w2.critters[i].yaw = c.yaw;
+        w2.advance(idle());
+        kicked |= w2.critters[i].act == h::KICK && w2.critters[i].attacking();
+    }
+    assert!(!kicked, "nobody behind it, no kick");
+    w2.players[0].pos = c.pos.sub(fwd.scale(Fx::from_int(3)));
+    for _ in 0..300 {
+        keep_up(&mut w2);
+        w2.critters[b].pos = at(-20, 18);
+        if w2.critters[i].state == is::PROWL {
+            w2.critters[i].pos = c.pos;
+            w2.critters[i].yaw = c.yaw;
+        }
+        w2.advance(idle());
+        kicked |= w2.critters[i].act == h::KICK && w2.critters[i].attacking();
+    }
+    assert!(kicked, "somebody stood behind it is kicked");
+}
+
+#[test]
+fn the_herd_leaves_when_the_bull_dies() {
+    let mut w = hunt(Class::Champion);
+    alarmed(&mut w);
+    let b = bull(&w);
+    let hp = w.critters[b].health as i32;
+    pack::hurt(
+        &mut w.pack,
+        &mut w.critters,
+        b,
+        hp + 1,
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        Fx::ZERO,
+        Fx::ZERO,
+    );
+    w.players[0].pos = at(-22, 18);
+    let mut over = false;
+    for _ in 0..1200 {
+        keep_up(&mut w);
+        w.advance(idle());
+        if !matches!(w.phase, sim::state::Phase::Fighting) {
+            over = true;
+            break;
+        }
+        assert!(
+            w.critters.iter().all(|c| !c.attacking()),
+            "a herd without its bull fights nobody"
+        );
+    }
+    assert!(over, "the herd leaves by the ford and the hunt is won");
+    assert!(
+        w.critters
+            .iter()
+            .all(|c| c.kind == h::BULL || !c.present() || c.state == is::GONE),
+        "every cow left"
+    );
 }

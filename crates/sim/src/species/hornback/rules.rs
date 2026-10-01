@@ -219,7 +219,7 @@ fn to_the_edge(arena: &Terrain, from: V3, dir: V3) -> Fx {
 }
 
 /// The bull's nose, on the floor.
-fn nose(c: &Critter) -> V3 {
+pub(super) fn nose(c: &Critter) -> V3 {
     let half = stat_fx(&super::SPECIES, BULL, CritterField::Length).mul(Fx::ratio(1, 2));
     let n = c.pos.add(c.facing().scale(half));
     V3::new(n.x, Fx::ZERO, n.z)
@@ -623,7 +623,7 @@ fn ridden(players: &[crate::state::Player], c: &Critter) -> bool {
 
 /// The obstacles in a lane: every solid that stops a cow, every stone, and
 /// the bull standing in it -- each as a footprint box.
-fn obstacles(w: &World, ground: &Terrain) -> ([Option<(V3, V3)>; 24], usize) {
+pub(super) fn obstacles(w: &World, ground: &Terrain) -> ([Option<(V3, V3)>; 24], usize) {
     let mut out = [None; 24];
     let mut n = 0;
     let mut push = |min: V3, max: V3| {
@@ -761,23 +761,9 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
         if to.flat_len().raw() > 0 {
             body.yaw = yaw_of(to);
         }
-        // **Held**: inside the lane, out of every lee, round the fallen.
-        across = across.clamp(room.neg(), room);
-        for (min, max) in blocks[..n].iter().flatten() {
-            if mind::in_lee(at, dir, *min, *max, body.pos, half_w) {
-                let (_, _, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
-                let left = hi_c.add(half_w);
-                let right = lo_c.sub(half_w);
-                across = if across.sub(right).abs().raw() <= left.sub(across).abs().raw()
-                    && right.raw() >= room.neg().raw()
-                    || left.raw() > room.raw()
-                {
-                    right
-                } else {
-                    left
-                };
-            }
-        }
+        // **Held**: round the fallen, inside the lane, and -- above both --
+        // out of every lee: a lee is a solid's, and nothing runs through a
+        // rock.
         for p in fallen.iter().flatten() {
             let (pa, pc) = lane_frame(at, dir, *p);
             if pa.sub(along).abs().raw() <= half_l.add(round).raw()
@@ -787,6 +773,28 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
                     pc.add(round)
                 } else {
                     pc.sub(round)
+                };
+            }
+        }
+        across = across.clamp(room.neg(), room);
+        for (min, max) in blocks[..n].iter().flatten() {
+            let probe = rules_point(at, dir, along, across);
+            if mind::in_lee(at, dir, *min, *max, probe, half_w) {
+                let (_, _, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
+                let left = hi_c.add(half_w).add(crate::arena::SKIN);
+                let right = lo_c.sub(half_w).sub(crate::arena::SKIN);
+                // The nearer side that is still in the lane; either, if
+                // neither is.
+                let fits_left = left.raw() <= room.raw();
+                let fits_right = right.raw() >= room.neg().raw();
+                let nearer_right = across.sub(right).abs().raw() <= left.sub(across).abs().raw();
+                across = match (fits_left, fits_right) {
+                    (true, true) if nearer_right => right,
+                    (true, true) => left,
+                    (true, false) => left,
+                    (false, true) => right,
+                    (false, false) if nearer_right => right,
+                    (false, false) => left,
                 };
             }
         }
@@ -807,10 +815,7 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
 /// The cows' own frame: their glances at their rear wedges, and leaving.
 fn cows(w: &mut World, pack: &mut Pack) {
     let every = knob(Knob::CowGlance).max(1) as u32;
-    let reach = knob_fx(Knob::KickReach);
-    let arc = knob_fx(Knob::KickArc);
     let frame = w.frame;
-    let ford = pack.home;
     for i in 0..MAX_CRITTERS {
         let c = w.critters[i];
         if c.kind != COW || !c.alive() {
@@ -830,20 +835,13 @@ fn cows(w: &mut World, pack: &mut Pack) {
         if frame % every != i as u32 % every {
             continue;
         }
-        let back = c.facing().scale(Fx::ONE.neg());
-        let rump = c.pos.add(
-            back.scale(stat_fx(&super::SPECIES, COW, CritterField::Length).mul(Fx::ratio(1, 2))),
+        let behind = in_wedge(
+            &c,
+            w.players
+                .iter()
+                .filter(|p| p.health > 0 && !p.aboard())
+                .map(|p| p.pos),
         );
-        let behind = w.players.iter().any(|p| {
-            let d = V3::new(p.pos.x.sub(rump.x), Fx::ZERO, p.pos.z.sub(rump.z));
-            let near = d.flat_len();
-            p.health > 0
-                && !p.aboard()
-                && p.pos.y.sub(c.pos.y).raw()
-                    < stat_fx(&super::SPECIES, COW, CritterField::Height).raw()
-                && near.raw() <= reach.raw()
-                && (near.raw() == 0 || back.dot(d.normalized()).raw() >= arc.raw())
-        });
         let body = &mut w.critters[i];
         let counted = (body.role & cow::WEDGE) as u32;
         let next = if behind {
@@ -853,7 +851,25 @@ fn cows(w: &mut World, pack: &mut Pack) {
         };
         body.role = (body.role & !cow::WEDGE) | next as u8;
     }
-    let _ = ford;
+}
+
+/// **Is anybody in a cow's rear wedge**: behind its rump, within
+/// `KickReach`, inside `KickArc` of straight back, below its back.
+pub fn in_wedge(c: &Critter, mut at: impl Iterator<Item = V3>) -> bool {
+    let sp = &super::SPECIES;
+    let reach = knob_fx(Knob::KickReach);
+    let arc = knob_fx(Knob::KickArc);
+    let back = c.facing().scale(Fx::ONE.neg());
+    let half = stat_fx(sp, COW, CritterField::Length).mul(Fx::ratio(1, 2));
+    let rump = c.pos.add(back.scale(half));
+    let tall = stat_fx(sp, COW, CritterField::Height);
+    at.any(|p| {
+        let d = V3::new(p.x.sub(rump.x), Fx::ZERO, p.z.sub(rump.z));
+        let near = d.flat_len();
+        p.y.sub(c.pos.y).raw() < tall.raw()
+            && near.raw() <= reach.raw()
+            && (near.raw() == 0 || back.dot(d.normalized()).raw() >= arc.raw())
+    })
 }
 
 /// The ford for this hunt.
@@ -959,7 +975,11 @@ pub fn horns(w: &World) -> [bool; 2] {
     w.pack.map_or([true, true], |p| horns_whole(&p))
 }
 
-/// Kept so the lane's own frame reads in one place.
+fn rules_point(at: V3, dir: V3, along: Fx, across: Fx) -> V3 {
+    lane_point(at, dir, along, across)
+}
+
+/// A point given in a lane's own frame, in the world.
 pub fn lane_point(at: V3, dir: V3, along: Fx, across: Fx) -> V3 {
     let side = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
     at.add(dir.scale(along)).add(side.scale(across))

@@ -156,6 +156,7 @@ pub static FIGHT: FightDecl = FightDecl {
     bumped: Some(bumped),
     frame: Some(frame),
     shown: None,
+    signs: None,
 };
 
 pub static SPECIES: Species = Species {

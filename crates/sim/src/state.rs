@@ -10329,6 +10329,17 @@ impl World {
         }
     }
 
+    /// **The fight's own floor signs** this frame: its species'
+    /// `FightDecl::signs`, or none. What the renderer draws besides the
+    /// bodies' telegraphs (`crate::sign`).
+    pub fn signs(&self) -> crate::sign::Signs {
+        let mut out = crate::sign::Signs::NONE;
+        if let Some(f) = self.lore.owner.and_then(|s| s.get().fight.signs) {
+            f(self, &mut out);
+        }
+        out
+    }
+
     /// How much of a creature part can be seen, nought to one: its species'
     /// `shown`, or fully. What the renderer draws a part at, and what the
     /// report and the scripted hunter call visible.
