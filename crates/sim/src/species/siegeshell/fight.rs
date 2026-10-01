@@ -117,7 +117,10 @@ pub mod body {
     /// Where the legs' move is aimed, in centimetres (`lore::halves`).
     pub const LEG_AIM: usize = 2;
     /// What the frame tells its parasites: bit 0, the pack is called down.
+    /// Bits 8 up: frames before a buckle can put it down again
+    /// (`StumbleRest`), counted down by the frame.
     pub const PACK: usize = 3;
+    pub const REST_SHIFT: u32 = 8;
 
     pub const SIDE_MASK: u32 = 0b11;
     pub const OPEN_SHIFT: u32 = 2;
@@ -235,6 +238,11 @@ pub fn open_anchor(m: &Monster) -> Option<usize> {
     }
 }
 
+/// Frames before a buckle can bring it down again.
+pub fn resting(m: &Monster) -> u32 {
+    (m.own[body::PACK] as u32) >> body::REST_SHIFT
+}
+
 /// Is the pack called down off the shell? See `mind::Roost`.
 pub fn called(m: &Monster) -> bool {
     m.own[body::PACK] & 1 != 0
@@ -328,9 +336,10 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
                 // Broken: it drags, and the next on its side brings it down.
                 m.breaks[slot] = 0;
                 ankle_broke(m, leg);
-            } else if was_broken && buckles(m, leg) > buckled {
+            } else if was_broken && buckles(m, leg) > buckled && resting(m) == 0 {
                 // A buckle: a broken ankle folding once more. On a side with
-                // two broken, it is another stumble.
+                // two broken, it is another stumble -- once it has been up
+                // for `StumbleRest` since the last.
                 ankle_broke(m, leg);
             }
         }
@@ -1001,7 +1010,13 @@ fn roost(w: &mut World, slot: usize) {
     }) {
         call = true;
     }
-    m.own[body::PACK] = i32::from(call);
+    let rest = (m.own[body::PACK] as u32) >> body::REST_SHIFT;
+    let rest = if matches!(m.doing, Doing::Stumble { .. }) {
+        Knob::StumbleRest.raw().clamp(0, 0xFFFF) as u32
+    } else {
+        rest.saturating_sub(1)
+    };
+    m.own[body::PACK] = (u32::from(call) | (rest << body::REST_SHIFT)) as i32;
     w.monsters[slot] = Some(m);
 }
 

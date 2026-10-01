@@ -272,6 +272,13 @@ fn next_ankle(m: &Monster, side: i32) -> Option<usize> {
         .min_by_key(|l| (ss::leg_pair(*l) as i32, m.part_health(ss::ankle_part(*l))))
 }
 
+/// Damage still to go before a broken ankle's next buckle.
+fn to_buckle(m: &Monster, leg: usize) -> i32 {
+    let every = Knob::BuckleHealth.raw().max(1);
+    let under = (-m.part_health(ss::ankle_part(leg))).max(0);
+    every - under % every
+}
+
 /// The side to break: the one with ankles already broken, else the left.
 fn pick_side(m: &Monster) -> i32 {
     let (l, r) = gait::broken_sides(m);
@@ -580,38 +587,53 @@ impl Siegeshell {
         }
     }
 
-    /// **The legs**: an ankle on the side being broken, from outside it.
+    /// **The legs**: an ankle on the side being broken, from outside it --
+    /// and once two are broken there, a broken one, for the buckle that is
+    /// the next stumble.
     fn legs(&mut self, w: &World, m: &Monster, me: &Player, coop: bool) -> Input {
         self.side = pick_side(m);
-        let Some(leg) = next_ankle(m, self.side) else {
+        let (l, r) = gait::broken_sides(m);
+        let broken_here = if self.side < 0 { l } else { r };
+        let buckling = broken_here >= 2;
+        let leg = if buckling {
+            // The broken ankle on this side nearest its next buckle.
+            (0..LEG_COUNT)
+                .filter(|l| ss::leg_side(*l) == self.side && m.broken(ss::ankle_part(*l)))
+                .min_by_key(|l| to_buckle(m, *l))
+        } else {
+            next_ankle(m, self.side)
+        };
+        let Some(leg) = leg else {
             self.side = -self.side;
             return Input::default();
         };
         let ankle = ss::ankle_part(leg);
         let post = post_for(m, leg);
         let at = middle(m, ankle);
-        // With a partner: the second on a side held at a sliver until the
-        // call -- the partner at an anchor.
-        let (l, r) = gait::broken_sides(m);
-        let broken_here = if self.side < 0 { l } else { r };
-        let sliver = m.part_health(ankle) * 100 <= m.sp().part_health() * SLIVER;
+        // With a partner up there: the blow that brings the side down held
+        // until the call -- the partner at an anchor -- so the stumble is the
+        // Opening. With the partner on the floor, the stumble is their way up.
+        let left = if buckling {
+            to_buckle(m, leg)
+        } else if broken_here == 1 {
+            m.part_health(ankle)
+        } else {
+            i32::MAX
+        };
+        let sliver = left * 100 <= m.sp().part_health() * SLIVER;
+        let up = partner(w, self.who).is_some_and(|p| p.aboard());
         let called = partner(w, self.who).is_some_and(|p| p.aboard() && tended(m, p.pos));
-        let holding = coop && broken_here == 1 && sliver && !called;
+        let holding = coop && up && sliver && !called;
         self.intent = if holding { WAIT } else { ANKLE };
         // Within its reach of the ankle's face, not its middle.
         let face = Fx::ratio(12, 10);
-        let near =
-            wide_flat_dist(at, me.pos).sub(face).raw() <= reach_of(me).add(Fx::ratio(5, 10)).raw();
+        let near = wide_flat_dist(at, me.pos).sub(face).raw() <= reach_of(me).add(Fx::ratio(5, 10)).raw();
         // Swing between beats: never one that will still be going when a
         // ring arrives.
         let busy = sim::moves::get(me.class, 0);
         let busy = (busy.startup + busy.active + busy.recovery) as i32 + 6;
         let clear = ring_due(m, me.pos).is_none_or(|due| due > busy || due < -12);
-        let swing = if near && !holding && clear {
-            self.swing(me)
-        } else {
-            0
-        };
+        let swing = if near && !holding && clear { self.swing(me) } else { 0 };
         go(me, post, at, swing)
     }
 

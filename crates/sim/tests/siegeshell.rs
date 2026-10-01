@@ -466,29 +466,6 @@ fn the_stumble_stair_is_climbable_by_the_bulwark() {
     );
 }
 
-#[test]
-#[ignore]
-fn probe_walk() {
-    let mut w = hunt();
-    for f in 0..(60 * 330) {
-        walk_only(&mut w);
-        park(&mut w);
-        step(&mut w, Input::default());
-        if f % 1200 == 0 {
-            let b = *w.monster().unwrap();
-            eprintln!(
-                "f{f} x {:?} doing {:?} speed {:?} hp {} siege {} p0 {:?} hp0 {}",
-                b.pos.x,
-                b.doing,
-                b.speed,
-                b.health,
-                fight::at_siege_line(&b),
-                w.players[0].pos,
-                w.players[0].health
-            );
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // The ride
@@ -612,6 +589,28 @@ fn the_walk_never_throws_a_rider() {
     }
 }
 
+#[test]
+fn the_shrug_is_a_brace_on_its_side_and_the_shiver_more_than_one_on_the_crown() {
+    // Read as the grip test reads it: the hardest a point on each tread's top
+    // accelerates, in its own frame. The shrug's side throws a loose rider
+    // and holds a braced one, everywhere on that side; the shiver is past a
+    // brace at the crown; the middle is calm through both.
+    let grip = sim::tuning::grip().to_f32_for_render();
+    let braced = grip * sim::tuning::brace_grip().to_f32_for_render();
+    for part in [ss::rim_part(1, 1), ss::FLANK_LOWER_R, ss::FLANK_UPPER_R] {
+        let a = peak_throw(ss::SHRUG, part);
+        assert!(a > grip && a < braced, "the shrug moves the {} at {a:.0}: grip {grip}, braced {braced}", ss::PARTS[part].name);
+    }
+    for part in [ss::PLATEAU_MID, ss::CROWN_PART, ss::rim_part(1, -1)] {
+        let a = peak_throw(ss::SHRUG, part);
+        assert!(a < grip, "the shrug throws from the {}: {a:.0}", ss::PARTS[part].name);
+    }
+    let a = peak_throw(ss::SHIVER, ss::CROWN_PART);
+    assert!(a > braced, "the shiver moves the crown at {a:.0}, under a brace's {braced}");
+    let a = peak_throw(ss::SHIVER, ss::PLATEAU_MID);
+    assert!(a < grip, "the shiver throws from the plateau: {a:.0}");
+}
+
 /// The hardest a point on a part's top accelerates, in the part's frame, the
 /// way the grip test reads it, through a move.
 fn peak_throw(kind: u8, part: usize) -> f32 {
@@ -669,26 +668,6 @@ fn peak_throw(kind: u8, part: usize) -> f32 {
     best
 }
 
-#[test]
-#[ignore]
-fn probe_throws() {
-    for (kind, name) in [(ss::SHRUG, "shrug"), (ss::SHIVER, "shiver")] {
-        for part in [
-            ss::rim_part(1, 1),
-            ss::FLANK_LOWER_R,
-            ss::FLANK_UPPER_R,
-            ss::PLATEAU_MID,
-            ss::CROWN_PART,
-            ss::rim_part(1, -1),
-        ] {
-            eprintln!(
-                "{name} {:20} {:.0}",
-                ss::PARTS[part].name,
-                peak_throw(kind, part)
-            );
-        }
-    }
-}
 
 #[test]
 fn a_fighter_at_an_anchor_can_break_it() {
@@ -729,79 +708,304 @@ fn a_fighter_at_an_anchor_can_break_it() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// The crown, the clock and the wall
+// ---------------------------------------------------------------------------
+
+fn break_anchor(w: &mut World, a: usize) {
+    let b = w.monster_mut().unwrap();
+    let health = b.part_health(ss::anchor_part(a));
+    b.take_hit(ss::anchor_part(a), health);
+}
+
 #[test]
-#[ignore]
-fn probe_stumble_profile() {
+fn an_anchor_breaking_halts_it_and_cancels_the_beam() {
     let mut w = hunt();
     step(&mut w, Input::default());
-    break_ankle(&mut w, 0);
-    break_ankle(&mut w, 2);
-    for _ in 0..60 {
+    {
+        let b = w.monster_mut().unwrap();
+        b.doing = Doing::Startup { kind: ss::BEAM, left: 600 };
+    }
+    let health = w.monster().unwrap().health;
+    break_anchor(&mut w, 0);
+    let b = *w.monster().unwrap();
+    assert!(matches!(b.doing, Doing::Toppled { .. }), "it did not kneel: {:?}", b.doing);
+    assert_eq!(fight::anchors_broken(&b), 1);
+    assert!(b.health < health, "its health is its anchors, and one went");
+    assert_eq!(fight::phase(&b), 1, "one anchor broken is roused");
+    // It stands where it knelt for the kneel.
+    let x = b.pos.x;
+    for _ in 0..600 {
+        park(&mut w);
+        step(&mut w, Input::default());
+    }
+    assert_eq!(w.monster().unwrap().pos.x, x, "it walked on while kneeling");
+    // The third kills it.
+    break_anchor(&mut w, 1);
+    break_anchor(&mut w, 2);
+    assert!(!w.monster().unwrap().alive(), "three anchors broken and it stands");
+}
+
+#[test]
+fn a_stumble_with_somebody_at_an_anchor_opens_it() {
+    let mut w = hunt();
+    for _ in 0..3 {
+        walk_only(&mut w);
         step(&mut w, Input::default());
     }
     let b = *w.monster().unwrap();
-    let rig = b.rig();
-    for zc in (-130..=0).step_by(5) {
-        let z = Fx::ratio(zc, 10);
-        let at = gait::flat_world(&b, V3::new(Fx::ZERO, Fx::from_int(30), z));
-        let top = rig.surface_within(at, Fx::ratio(4, 10), Fx::from_int(40), Fx::ZERO);
-        eprintln!(
-            "z {:5.1} -> {:?}",
-            zc as f32 / 10.0,
-            top.map(|(p, _)| (
-                ss::PARTS[p].name,
-                rig.part_to_world(
-                    p,
-                    V3::new(
-                        rig.world_to_part(p, at).x,
-                        b.sp().shape(p).max.y,
-                        rig.world_to_part(p, at).z
-                    )
-                )
-                .y
-                .to_f32_for_render()
-            ))
-        );
+    let sh = b.sp().shape(ss::CROWN_PART);
+    board(&mut w, ss::CROWN_PART, Some(V3::new(Fx::ratio(16, 10), sh.max.y, Fx::ZERO)));
+    break_ankle(&mut w, 0);
+    break_ankle(&mut w, 2);
+    step(&mut w, Input::default());
+    let b = *w.monster().unwrap();
+    assert_eq!(fight::open_anchor(&b), Some(0), "a stumble with a fighter at the fore anchor did not open it");
+    // Open, it takes `OpenDamage` times.
+    let mut open = b;
+    let mut shut = *w.monster().unwrap();
+    shut.own[fight::body::FLAGS] &= !(fight::body::OPEN_MASK as i32);
+    let before = open.part_health(ss::anchor_part(0));
+    open.take_hit(ss::anchor_part(0), 100);
+    shut.take_hit(ss::anchor_part(0), 100);
+    let took_open = before - open.part_health(ss::anchor_part(0));
+    let took_shut = before - shut.part_health(ss::anchor_part(0));
+    assert_eq!(took_open, Fx::from_int(100).mul(ss::Knob::OpenDamage.fx()).to_int());
+    assert_eq!(took_shut, 100);
+    // Nobody up there: no Opening.
+    let mut w = hunt();
+    step(&mut w, Input::default());
+    break_ankle(&mut w, 1);
+    break_ankle(&mut w, 3);
+    step(&mut w, Input::default());
+    assert_eq!(fight::open_anchor(w.monster().unwrap()), None);
+}
+
+#[test]
+fn the_crown_cannot_be_hit_from_the_floor() {
+    // A fighter on the floor under the shell's edge, swinging upward with
+    // every move it has, never reaches an anchor: twenty metres of shell is
+    // between them, and the shot's own path stops on the rim.
+    for class in sim::class::ALL_CLASSES {
+        let mut w = hunt_as(class);
+        for _ in 0..3 {
+            walk_only(&mut w);
+            step(&mut w, Input::default());
+        }
+        let anchors: i32 = (0..ss::ANCHOR_COUNT).map(|a| w.monster().unwrap().part_health(ss::anchor_part(a))).sum();
+        for f in 0..600 {
+            walk_only(&mut w);
+            park(&mut w);
+            let b = *w.monster().unwrap();
+            w.players[0].pos = V3::new(b.pos.x, Fx::ZERO, b.pos.z.sub(m(13.0)));
+            let at = {
+                let sh = b.sp().shape(ss::anchor_part(0));
+                b.rig().part_to_world(ss::anchor_part(0), sh.min.add(sh.max).scale(Fx::ratio(1, 2)))
+            };
+            let me = w.players[0];
+            let d = V3::new(at.x.sub(me.pos.x), Fx::ZERO, at.z.sub(me.pos.z));
+            let yaw = sim::math::atan2_turns(d.z, d.x);
+            let wire = (yaw.raw() as u32 & 0xFFFF) as u16;
+            let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+            let bits = [Input::LEFT, Input::RIGHT, Input::MIDDLE, Input::SPECIAL][(f / 40) % 4];
+            let bits = if f % 40 == 0 { bits } else { 0 };
+            step(&mut w, Input::looking_at(bits, wire, pitch));
+        }
+        let after: i32 = (0..ss::ANCHOR_COUNT).map(|a| w.monster().unwrap().part_health(ss::anchor_part(a))).sum();
+        assert_eq!(after, anchors, "a {class:?} on the floor hurt an anchor");
     }
 }
 
 #[test]
-#[ignore]
-fn probe_cross_in_a_stumble() {
+fn nothing_it_throws_can_reach_its_own_shell() {
+    // A rider on every tread through every move the creature throws that has
+    // a hit: the footfall, the stamp and the drag reach the floor, the shed
+    // and the plough the floor, the beam the wall. None of them a rider.
+    for part in [ss::rim_part(1, 1), ss::FLANK_LOWER_L, ss::PLATEAU_FORE, ss::CROWN_PART] {
+        let mut w = hunt();
+        for _ in 0..3 {
+            walk_only(&mut w);
+            step(&mut w, Input::default());
+        }
+        board(&mut w, part, None);
+        for kind in [ss::SHED, ss::PLOUGH] {
+            let b = w.monster_mut().unwrap();
+            b.doing = Doing::Startup { kind, left: ss::SPECIES.attack(kind).startup };
+            b.brain.think_left = u16::MAX;
+            let health = w.players[0].health;
+            for _ in 0..ss::SPECIES.attack(kind).total() {
+                step(&mut w, Input::new(Input::CROUCH));
+            }
+            assert_eq!(w.players[0].health, health, "{} reached a rider on the {}", ss::MOVES[kind as usize].name, ss::PARTS[part].name);
+        }
+        // And a whole minute of walking -- beats, stamps, drags -- with the
+        // parasites kept off.
+        let health = w.players[0].health;
+        for _ in 0..3600 {
+            for c in w.critters.iter_mut() {
+                c.health = 0;
+            }
+            let b = w.monster_mut().unwrap();
+            if b.doing.attacking().is_some() {
+                b.doing = Doing::Prowl;
+            }
+            b.brain.think_left = u16::MAX;
+            step(&mut w, Input::new(Input::CROUCH));
+            if !w.players[0].aboard() {
+                break;
+            }
+        }
+        // Grates scald; that is a hazard of the shell, not something thrown.
+        let floor_hits = health - w.players[0].health;
+        assert!(floor_hits % 40 == 0, "something other than a vent hurt a rider: {floor_hits}");
+    }
+}
+
+#[test]
+fn the_plough_stops_on_a_solid() {
     let mut w = hunt();
-    step(&mut w, Input::default());
-    break_ankle(&mut w, 0);
-    break_ankle(&mut w, 2);
-    for _ in 0..60 {
+    for _ in 0..3 {
+        walk_only(&mut w);
         step(&mut w, Input::default());
     }
-    // Put the fighter on the left rim, mid, and walk in.
-    board(&mut w, ss::rim_part(1, -1), None);
-    let aim = (Fx::ratio(1, 4).raw() as u32 & 0xFFFF) as u16;
-    let mut hold = 0;
-    for f in 0..600 {
-        let p = w.players[0];
-        let mut bits = Input::W;
-        if p.grounded && hold == 0 && f % 25 == 0 {
-            hold = 18;
+    // The first boulder on the middle line is some way ahead of where it
+    // starts: walk it up to the plough's reach of it.
+    let boulder = V3::new(m(-90.0), Fx::ZERO, Fx::ZERO);
+    loop {
+        walk_only(&mut w);
+        park(&mut w);
+        step(&mut w, Input::default());
+        let b = *w.monster().unwrap();
+        if boulder.x.sub(b.pos.x).raw() <= ss::Knob::PloughTo.fx().sub(Fx::from_int(8)).raw() {
+            break;
         }
-        if hold > 0 {
-            bits |= Input::SPACE;
-            hold -= 1;
+    }
+    {
+        let b = w.monster_mut().unwrap();
+        b.doing = Doing::Active { kind: ss::PLOUGH, left: ss::SPECIES.attack(ss::PLOUGH).active };
+    }
+    let b = *w.monster().unwrap();
+    let (from, along, _, stops) = fight::plough_lane(&w, &b).expect("a plough under way");
+    let full = ss::Knob::PloughTo.fx().sub(ss::Knob::PloughFrom.fx());
+    // The middle strip meets the boulder; the strips at the lane's edges, a
+    // metre and a half either side of a 2.5 m rock, go on.
+    let to_rock = boulder.sub(from).dot(along).sub(Fx::ratio(125, 100));
+    assert!(stops[2].sub(to_rock).abs().raw() < m(0.5).raw(), "the middle strip stopped at {:?}, the rock is at {to_rock:?}", stops[2]);
+    assert_eq!(stops[0], full, "an edge strip stopped with nothing in its way");
+    assert_eq!(stops[4], full, "an edge strip stopped with nothing in its way");
+    // And a fighter behind the rock is not struck.
+    w.players[0].pos = boulder.add(along.scale(Fx::from_int(2)));
+    let health = w.players[0].health;
+    for _ in 0..ss::SPECIES.attack(ss::PLOUGH).active {
+        step(&mut w, Input::default());
+    }
+    assert_eq!(w.players[0].health, health, "the plough went through a boulder");
+}
+
+#[test]
+fn a_thrown_rider_is_not_caught_by_the_beat() {
+    // A body in a throw's stun is helpless; the ring passes it by.
+    let mut w = hunt();
+    for _ in 0..3 {
+        walk_only(&mut w);
+        step(&mut w, Input::default());
+    }
+    let mut hits = 0;
+    let mut beats = 0;
+    for _ in 0..1200 {
+        walk_only(&mut w);
+        let b = *w.monster().unwrap();
+        let foot = gait::foot_in_gait(&b, 2);
+        w.players[0].pos = V3::new(foot.x, Fx::ZERO, foot.z.sub(m(4.0)));
+        w.players[0].action = sim::state::Action::HitStun { left: 30 };
+        w.players[0].health = w.players[0].full_health();
+        let before = b.stride;
+        step(&mut w, Input::default());
+        if gait::landed(before, w.monster().unwrap().stride).is_some() {
+            beats += 1;
         }
-        step(&mut w, Input::aimed(bits, aim));
-        let p = w.players[0];
-        if f % 10 == 0 {
-            eprintln!(
-                "f{f} y {:.2} z {:.2} mount {}",
-                p.pos.y.to_f32_for_render(),
-                p.pos.z.to_f32_for_render(),
-                if p.aboard() {
-                    ss::PARTS[sim::monster::mount_part(p.mount)].name
-                } else {
-                    "-"
-                }
-            );
+        if w.players[0].health < w.players[0].full_health() {
+            hits += 1;
         }
+    }
+    assert!(beats >= 3);
+    assert_eq!(hits, 0, "a ring caught a helpless body {hits} times");
+}
+
+#[test]
+fn a_vent_moves_with_the_plate_it_is_on() {
+    let mut w = hunt();
+    step(&mut w, Input::default());
+    let at = |w: &World| {
+        w.terrain().floor.iter().next().map(|h| h.a).expect("a grate on the shell")
+    };
+    let (start, body) = (at(&w), w.monster().unwrap().pos);
+    for _ in 0..600 {
+        walk_only(&mut w);
+        park(&mut w);
+        step(&mut w, Input::default());
+    }
+    let (end, moved) = (at(&w), w.monster().unwrap().pos);
+    let carried = end.x.sub(start.x);
+    let walked = moved.x.sub(body.x);
+    assert!(walked.raw() > m(5.0).raw());
+    assert!(carried.sub(walked).abs().raw() < m(0.5).raw(), "the grate moved {carried:?}, the shell {walked:?}");
+    // On top of the plate it is on, not on the floor.
+    assert!(end.y.raw() > m(15.0).raw(), "the grate is at {:?}", end.y);
+}
+
+#[test]
+fn a_fall_from_the_crown_costs_what_the_table_says() {
+    // The shared rule (hazards.md §4): free to nine metres, twenty-five a
+    // metre past it. The rim is 125 and the crown 325, landing fast.
+    let mut w = hunt();
+    for _ in 0..3 {
+        walk_only(&mut w);
+        step(&mut w, Input::default());
+    }
+    board(&mut w, ss::CROWN_PART, None);
+    let crown = w.players[0].pos.y;
+    // Off the side, from the crown, onto the floor.
+    w.players[0].pos = V3::new(w.players[0].pos.x, crown, m(30.0).neg().add(m(7.0)));
+    w.players[0].mount = sim::monster::NO_PART;
+    w.players[0].grounded = false;
+    let health = w.players[0].health;
+    for _ in 0..240 {
+        walk_only(&mut w);
+        for c in w.critters.iter_mut() {
+            c.health = 0;
+        }
+        step(&mut w, Input::default());
+        if w.players[0].grounded {
+            break;
+        }
+    }
+    let lost = health - w.players[0].health;
+    let want = crown.sub(sim::tuning::fall_free()).mul(Fx::from_int(sim::tuning::fall_per_metre())).to_int();
+    assert!((lost - want).abs() <= 25, "a fall from {crown:?} cost {lost}, the rule says {want}");
+}
+
+#[test]
+fn the_wall_falls_on_the_second_breach() {
+    let mut w = hunt();
+    step(&mut w, Input::default());
+    for breach in 1..=2 {
+        {
+            let b = w.monster_mut().unwrap();
+            // Its last frame of charge: the beam comes out this frame.
+            b.doing = Doing::Startup { kind: ss::BEAM, left: 0 };
+            b.hit_used = false;
+        }
+        park(&mut w);
+        step(&mut w, Input::default());
+        assert_eq!(fight::beams_fired(&w), breach);
+        let lost = sim::objective::lost(&w.lore);
+        assert_eq!(lost, breach == 2, "breach {breach}: the hunt lost is {lost}");
+        // Rubble from the first: the gate is down.
+        if breach == 1 {
+            assert!(w.terrain().floor.iter().any(|h| h.kind == fight::RUBBLE));
+        }
+        let b = w.monster_mut().unwrap();
+        b.doing = Doing::Prowl;
     }
 }

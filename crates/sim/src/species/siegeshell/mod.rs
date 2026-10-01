@@ -813,6 +813,7 @@ crate::species_knobs! {
     StampDrop,       "stamp",   "The foot comes down over the last (share)", Fixed, 0, fx(1,1);
     RubbleRadius,    "siege",   "The gate's rubble, radius",             Fixed, 0, fx(8,1);
     FloorBelow,      "mind",    "Somebody is on the floor below",        Fixed, 0, fx(10,1);
+    StumbleRest,     "stumble", "A buckle cannot stumble it again for",  Frames, 0, 3600;
 }
 
 const OWN: &[KnobDecl] = Knob::DECLS;
