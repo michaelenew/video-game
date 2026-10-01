@@ -420,7 +420,20 @@ pub fn step(
                 dist,
             }) => {
                 if let Some(beast) = prey.herd[which].as_mut() {
-                    beast.take_hit(part, shot.worth(m.damage));
+                    let class = players
+                        .get(shot.owner as usize)
+                        .map_or(crate::Class::Elementalist, |p| p.class);
+                    beast.take_blow(
+                        part,
+                        shot.worth(m.damage),
+                        &crate::monster::Blow {
+                            from: shot.pos,
+                            unblockable: m.unblockable,
+                            who: shot.owner,
+                            class,
+                            kind: shot.gale.slot(),
+                        },
+                    );
                 }
                 if burst_radius.is_some() {
                     burst_at(leg.at(dist), None);

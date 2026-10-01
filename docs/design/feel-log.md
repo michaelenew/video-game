@@ -6849,3 +6849,45 @@ foot over the floor, as its sentence says.
 a laptop at 9 m/s; does the view gate feel eerie or exploitable (§12 1); is
 the way-in window really walk-up; and the Elementalist's fire, which the
 harness does not cast.
+### 2026-10-01 — The Mantis: a creature that guards, sees late, and remembers, tuned by harness
+
+**Changed** Built the Mantis ([creatures/mantis.md](creatures/mantis.md) §13):
+a guard seam every hit site asks (`Monster::take_blow`), eyes on a delay line
+15-21 frames late, the coil and lunge, the scythe pair and its held variant, the
+counter off a parry, Leap and Dive, flare, pivot, prayer, Ready and a habit ring
+written only by blows that met its guard; one-sided guard once a blade breaks;
+the Shrine. A duellist plan with three ablations (`MANTIS_PLAN=repeater|jumper|
+dodger`) and the habit flag off (`MANTIS_HABIT=off`). Against the document:
+health 7,000 (8,400 with two), every scythe's damage x0.83, the guard held at
+most 120 frames and rested 40 after, a late-seen move raising the guard past its
+parry 35 % of the time, the habit remembering a Champion's weapon rather than
+his link.
+
+**Why** The plan found the guard break and the whiff punishes faster than §9
+guessed: at the written health it won far too often, and at the written damage a
+hunt was lost before the guard was learned. Without a longest hold two Blood
+mages kept its guard up for nearly the whole hunt; without the late raise every
+string ran into an open body, and with it always on every string was a wall.
+Remembered by chain link, a sword opened every time read as three moves, and the
+repeater out-earned the duellist.
+
+**Found** Champion solo about one in fifteen over 216 hunts, duo half over 44;
+won fights 3-4 minutes solo, 2 duo. The duellist beats every ablation (48 seeds:
+5 wins, 5,507 dealt; repeater 0 and 4,593, jumper 0 and 1,914, dodger 0 and
+5,207, habit off 0 and 5,359). Ready is right 148 of 366 times against the
+repeater and never against the plan. Zero unanswerable hits for every class,
+solo and duo -- once the report stopped charging a Dual mage's spell cost to a
+counter that cut her partner. The harness caught: the guard's first frame
+missed when it went up before frame 60 (a stale clock); the hammer parried at
+D=21 by an off-by-one; the lunge staggering at the end of a lane with nothing in
+it; the hunter pressing from a poke's length to the creature's middle, held off
+by its cocked blade and never swinging into Ready. The Bulwark wins 18 of 24:
+his Slam on a whiff is worth twice anybody's.
+
+**Reverted** Health 6,500 and 6,800: no measurable change on 96 seeds against
+7,000, inside the seeds' noise. Two-hunter health 9,100-9,800: a third or less;
+8,200: two in three.
+
+**Verdict** built. For a person: the Bulwark mirror is the easiest fight rather
+than the hardest (§12, 9), the fight length (§12, 7), and whether the notches
+read as fair (§12, 1).

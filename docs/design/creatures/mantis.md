@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 5
 ---
 
@@ -675,3 +676,108 @@ here is the Bulwark's, the class it is most obviously for:
    at 23–29 frames, after every dodge's invulnerability. Whether a person learns
    "don't blink" from it, or only learns that dodging is broken, is the question
    the whole fight rests on.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt mantis` (`?hunt=mantis` in the browser), the Shrine.
+The species is `crates/sim/src/species/mantis/` (`fight.rs` the guard, the
+reflexes and the body's moves; `sight.rs` the eyes; `habit.rs` the memory and
+the notches; `mind.rs` its terms), the court `crates/sim/src/arena/mantis.rs`,
+the clips `crates/anim/src/beast/mantis/`, the plan and its ablations
+`crates/hunt/src/plans/mantis.rs`, the tests `crates/sim/tests/mantis.rs`.
+Every magnitude is a knob in the Oven's `Mantis · …` families.
+
+**What the rest of the cast got from it.** A blow reaching any creature now goes
+through `Monster::take_blow` with a `monster::Blow` (where it came from, whether
+it is unblockable, who threw what), which asks the species' `FightDecl::guard`;
+every hit site does (swings, echoes, recalls, effects, beams, bolts, gusts,
+debris), and every other species answers `None`, bit for bit what it did before.
+The cone is the fighters' own (`state::in_guard_arc`, shared with
+`guard_against`). `FightDecl::sight` lets a species replace the glance's present
+with what its eyes saw; `MarkLook::Notch` draws a remembered move; the report
+has a fifth band, **guarded**, printed only where it is not zero.
+
+**Numbers**, from `cargo run -p hunt --bin fight -- --species mantis --class <c>
+--repeats 24` (duo `--hunters 2 --repeats 12`), the scripted duellist of §9,
+after the passes in [feel-log.md](../feel-log.md) of 2026-10-01:
+
+```text
+                solo won   mean    duo won   mean   threat / guarded / poke / way in / walk up   unanswerable
+  Champion       0/24      --       4/12    115 s      38 / 26 /  9 / 17 / 10 %                   0
+  Bulwark       18/24     246 s    11/12    178 s      47 / 18 /  7 / 15 / 13 %                   0
+  Reaver         0/24      --       0/12     --        39 / 29 / 11 / 16 /  5 %                   0
+  Elementalist   0/24      --       7/12    133 s      41 / 24 /  9 / 17 /  9 %                   0
+  Blood mage     0/24      --       0/12     --        38 / 29 / 10 / 17 /  7 %                   0
+  Dual mage      0/24      --       0/12     --        33 / 37 / 11 / 16 /  3 %                   0
+
+  Champion solo, 216 hunts on four seed sets: 14 won (about 1 in 15), 3-4 min
+  Champion duo, 44 hunts on two seed sets: 22 won (half), about 2 min
+
+  the plan and its ablations, Champion solo, 48 seeds each
+                won    dealt (of 7000)   Ready taken / right
+    duellist    5/48       5507               213 / 0
+    repeater    0/48       4593               366 / 148
+    jumper      0/48       1914                 0 / 0
+    dodger      0/48       5207               243 / 0
+    habit off   0/48       5359               148 / 0   (the geometric guess)
+
+  its own lines, 24 Champion hunts (§9)
+    parried on sight 18, otherwise 1          counters: after a seen move 18,
+    coil: released on a commitment 60           after Ready 0, after prayer 1,
+      (42 landed), at its end 356 (11)          unanswered 0
+    guard breaks: in the hold 50,             second slash: on a presser 0,
+      in prayer 0, dropped before it 324        on a stayer 20, other 1
+    Ready 110: right 0, wrong 7, out 103      a blade broken in all 24
+```
+
+**Against the targets.** Zero unanswerable hits for every class, solo and duo.
+The Champion wins about one in fifteen (§9 asks one in twenty), and two of them half the time. The
+plan beats every ablation on wins and on damage; the jumper is the one the Leap
+punishes hardest (a third of the damage), the repeater the one the habit reads
+(Ready right 148 of 366, two in five, against "about half"), and against the
+plan Ready is taken about four times a hunt and is never right -- the duellist
+never throws the remembered move into it. With the flag off it wins nothing,
+because a guessed Ready is a stance it is not hit in. The windows sit on §9's
+(threatening 38 against ~40, guarded 26 against ~20).
+
+**What departs from the document.**
+
+- **Health 7,000 solo, 8,400 with two** (not 4,000 and 6,800), raised pass by
+  pass until the Champion won about one in fifteen: the plan finds the guard
+  break and the whiff punishes faster than §9 guessed. A won fight is three to four minutes solo and two duo
+  -- under §9's five to eight, and further under the tier table (§12, 7).
+- **Damage ×0.83** on every scythe (75 / 100 / lunge 140 / counter 180 / leap
+  110 / dive 90 / pivot 100), so a hunt is lost in eight to twelve mistakes, not
+  five to eight, which is what the longer health asks for.
+- **The guard has a longest hold** (`holds it at most`, 120 frames from when it
+  went up) **and a rest after** (40 frames before it is raised again). Without
+  them, against two Blood mages, it was up for nearly the whole hunt; a blocked or
+  parried hit still recommits it (`a blocked hit holds it`), which is what
+  makes the minimum hold (44) the window for the breaker.
+- **A move seen too late to parry** -- one whose hit is already out when its
+  eyes see the startup -- raises the guard past its parry, against the next link,
+  on `late guard` (35 %) of such commitments, chosen once each. Always raising it
+  made every string a wall; never raising it made the guard decorative.
+- **The habit remembers a Champion's weapon, not his link**: his nine chain
+  moves are three weapons swung three ways (§5's "the swing, not the swinger").
+  Remembered by link, a sword string read as three different moves and the
+  repeater out-earned the duellist.
+- **The court is square with filled corners**, walled at 15 m, not round: the
+  arena kernel's walls are boxes. The four columns stand ten metres out on the
+  diagonals.
+- **Bulwark wins three in four.** His Slam on a whiff is 180 a hit, he has the
+  most health, and the plan's Bulwark does not need the guard break to win. A
+  creature-side answer would be a rule about one class; the question is a
+  person's (§12, 4, and a new 9).
+- **The Reaver, Blood mage and Dual mage win nothing, Elementalist only in a
+  pair.** The plan does not play the shadow behind its guard (§7's "this is her
+  fight"), the pools or the bars; the numbers are the plan's reach, not the
+  class's.
+
+**Open questions added.**
+
+9. **The Bulwark is the easiest class, not the hardest.** §7 calls the mirror
+   hard. Measured, his whiff punishes are worth twice anybody's. Lower the
+   creature's damage taken from a Slam (a rule for one class), accept it, or
+   give the plan's other classes their tools before deciding?
+

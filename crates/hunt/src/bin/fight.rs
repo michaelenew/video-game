@@ -91,7 +91,7 @@ fn main() {
     let mut total = 0u32;
     // Across the runs: the four windows, what the hunters kept, what was
     // unanswerable, and every move's thrown and landed.
-    let mut windows = [0f32; 4];
+    let mut windows = [0f32; 5];
     let mut kept = 0i32;
     let mut kept_won = 0i32;
     let mut unanswerable = 0u32;
@@ -135,6 +135,7 @@ fn main() {
             hunt::report::Threat::PokeOnly,
             hunt::report::Threat::Skilled,
             hunt::report::Threat::WalkUp,
+            hunt::report::Threat::Guarded,
         ]
         .iter()
         .zip(windows.iter_mut())
@@ -166,6 +167,10 @@ fn main() {
             windows[2] / n * 100.0,
             windows[3] / n * 100.0
         );
+        // The fifth band, for a creature with a guard (the Mantis).
+        if windows[4] > 0.0 {
+            println!("  guarded {:.0}%", windows[4] / n * 100.0);
+        }
         println!(
             "  health left: {:.0} a hunt, {:.0} a win;  unanswerable: {unanswerable}",
             kept as f32 / n,

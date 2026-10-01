@@ -423,6 +423,57 @@ impl Control {
     }
 }
 
+/// **A blow arriving at a creature, as a guard sees it**: where it comes
+/// from, whether it is a guard breaker, and who threw what. Handed to a
+/// species' guard (`species::FightDecl::guard`) before the blow is taken, at
+/// every place in the world a blow reaches a creature -- a swing, a Reaver's
+/// copy or her recall, an effect, a beam, a bolt, a gust, a stone's
+/// shrapnel -- because a guard that stopped some kinds of attack and not
+/// others would be worse than none (`state::guard_against`, the fighters'
+/// half of the same rule).
+#[derive(Clone, Copy, Debug)]
+pub struct Blow {
+    /// The point the hit comes from: the attacker's body, the shadow that
+    /// threw a copy, the effect or the bolt where it is. The same point the
+    /// fighters' `guard_against` is handed for the same kind of attack.
+    pub from: V3,
+    /// **A guard breaker**: the versus rule's own flag, and nothing else.
+    pub unblockable: bool,
+    /// The fighter whose blow it is, or `state::NOBODY` for nobody's.
+    pub who: u8,
+    /// Their class, and the move -- [`Blow::NO_MOVE`] when the blow is not
+    /// one of a class's moves (a stone's shrapnel).
+    pub class: crate::Class,
+    pub kind: u8,
+}
+
+impl Blow {
+    /// Not one of a class's moves.
+    pub const NO_MOVE: u8 = u8::MAX;
+}
+
+/// What a creature's guard made of a [`Blow`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Guarded {
+    /// No guard, or not against this: it lands as it would have.
+    Lands,
+    /// Stopped by the guard: nothing reaches the body.
+    Blocked,
+    /// Stopped inside the parry window: nothing reaches the body, and the
+    /// species makes of the parry what it will (the Mantis's counter).
+    Parried,
+    /// A guard breaker through a raised guard: it lands, and the guard is
+    /// broken.
+    Broke,
+}
+
+impl Guarded {
+    /// The guard stopped it: no damage, no control, no mark.
+    pub const fn turned(self) -> bool {
+        matches!(self, Guarded::Blocked | Guarded::Parried)
+    }
+}
+
 /// What the creature actually took.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Took {
@@ -1711,6 +1762,32 @@ impl Monster {
         self.strain >= self.cc_bar()
     }
 
+    /// **A blow, asked of its guard first**: its species' guard
+    /// (`FightDecl::guard`) says what the guard made of it, and a blow the
+    /// guard turned deals nothing. A species without a guard takes every blow
+    /// as [`Monster::take_hit`] always took it. Returns what went in, and
+    /// what the guard said.
+    pub fn take_blow(&mut self, part: usize, raw: i32, blow: &Blow) -> (i32, Guarded) {
+        let guarded = match self.sp().fight.guard {
+            Some(guard) if self.alive() => guard(self, part, blow),
+            _ => Guarded::Lands,
+        };
+        if guarded.turned() {
+            // Hit while it is still taking you in, and it has taken you in.
+            self.brain.grace = 0;
+            return (0, guarded);
+        }
+        (self.take_hit(part, raw), guarded)
+    }
+
+    /// **Would a blockable blow from `from` be stopped, now?** Its species'
+    /// answer (`FightDecl::covers`), without changing anything: what the
+    /// fight report's "guarded" window and the drawn guard read. False for a
+    /// species with no guard.
+    pub fn covers(&self, from: V3) -> bool {
+        self.alive() && self.sp().fight.covers.is_some_and(|f| f(self, from))
+    }
+
     /// Land a hit on a part. Returns the damage that actually went in, after
     /// the part's own vulnerability, which is what the caller should show.
     pub fn take_hit(&mut self, part: usize, raw: i32) -> i32 {
@@ -1920,7 +1997,20 @@ impl Monster {
     /// the whole difficulty model: it cannot react to a button because it is
     /// not looking, and a player who changes direction between two glances has
     /// done something real.
-    fn glance(&mut self, quarry: &[Quarry], senses: &Senses) {
+    fn glance(&mut self, quarry: &[Quarry], senses: &Senses, lore: &crate::lore::Lore) {
+        // **Eyes that are not a glance** (`FightDecl::sight`): a species that
+        // keeps its own record of what it saw -- the Mantis's delay line --
+        // takes its sample from there, every frame, and never from the
+        // present.
+        if let Some(sight) = self.sp().fight.sight {
+            if let Some(s) = sight(self, lore) {
+                self.brain.target = s.target;
+                self.brain.seen = s.pos;
+                self.brain.seen_vel = s.vel;
+                self.brain.seen_stunned = s.stunned;
+            }
+            return;
+        }
         if self.brain.glance_left > 0 {
             self.brain.glance_left -= 1;
             return;
@@ -2519,7 +2609,7 @@ impl Monster {
             self.yaw_rate = Fx::ZERO;
             return;
         }
-        self.glance(quarry, senses);
+        self.glance(quarry, senses, lore);
         // **A declared chain** (`MoveDecl::then`): a move whose recovery ends
         // this frame and that always leads to another starts that one at
         // once, with no pause to think and no choice. Nothing in the cast

@@ -73,7 +73,7 @@ pub mod broodmother;
 
 pub mod veilstalker;
 
-// pub mod mantis;
+pub mod mantis;
 
 // pub mod galewing;
 
@@ -135,7 +135,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
 
-        // SpeciesId::MANTIS => Some(&mantis::SPECIES),
+        SpeciesId::MANTIS => Some(&mantis::SPECIES),
 
         // SpeciesId::GALEWING => Some(&galewing::SPECIES),
 
@@ -489,6 +489,39 @@ pub struct FightDecl {
     /// creature, as the pose is. `None` is the pose as it is. The
     /// Broodmother's legs.
     pub repose: Option<fn(&crate::monster::Monster, crate::beast::Pose) -> crate::beast::Pose>,
+
+    // ---- a guard, and eyes that are late (the Mantis) ----
+    /// **Its guard**: handed a blow arriving at a part, before it is taken,
+    /// and what the guard makes of it -- blocked, parried, broken, or not a
+    /// guard's business. The species changes its own state as it answers
+    /// (the parry's counter, the break's stagger). Asked at every place a
+    /// blow reaches a creature (`Monster::take_blow`). `None` is no guard,
+    /// every blow lands, as it always did.
+    pub guard: Option<GuardFn>,
+    /// **Would its guard stop a blockable blow from this point, now** -- the
+    /// guard's question with nothing changed: the fight report's "guarded"
+    /// window, and the drawn arc.
+    pub covers: Option<fn(&crate::monster::Monster, V3) -> bool>,
+    /// **Its eyes, when they are not the glance**: the target it sees and
+    /// where, from its own record in the hunt's lore rather than the present
+    /// -- the Mantis's delay line. Called in place of the glance's sample
+    /// every frame; `None` from the hook keeps the old sample, and `None`
+    /// here is the glance, as every other creature has.
+    pub sight: Option<fn(&crate::monster::Monster, &crate::lore::Lore) -> Option<Sight>>,
+}
+
+/// [`FightDecl::guard`]: the creature, the part the blow reaches, the blow.
+pub type GuardFn =
+    fn(&mut crate::monster::Monster, usize, &crate::monster::Blow) -> crate::monster::Guarded;
+
+/// What a species' own eyes ([`FightDecl::sight`]) saw: the glance's
+/// sample, from somewhere other than the present.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Sight {
+    pub target: u8,
+    pub pos: V3,
+    pub vel: V3,
+    pub stunned: bool,
 }
 
 /// Something a species draws beyond its hazards and its telegraph.
@@ -531,6 +564,10 @@ pub enum MarkLook {
     /// **What it can feel**: a faint disc on the floor, the radius the
     /// simulation feels a body within.
     Feel,
+    /// **A notch on a blade**: a move the Mantis remembers, in its thrower's
+    /// class (`crate::Class` as a number), lit when its Ready is waiting for
+    /// it. A small column standing on the blade's edge.
+    Notch { class: u8, lit: bool },
 }
 
 /// [`FightDecl::appetite`]: the creature, a move, the shared brain's score
@@ -617,6 +654,9 @@ impl FightDecl {
         glance: None,
         lob_height: None,
         repose: None,
+        guard: None,
+        covers: None,
+        sight: None,
     };
 }
 

@@ -108,7 +108,7 @@ pub struct Report {
     /// long until it can start its next move. See [`Threat`]. The design asks
     /// for about four tenths threatening, a fifth safe to walk up on, and
     /// most of the rest open only to a poke or a fast way in.
-    pub threat: [u32; 4],
+    pub threat: [u32; 5],
 
     /// Riding.
     pub ride_frames: u32,
@@ -349,7 +349,7 @@ impl Report {
             was_open: false,
             idle_frames: 0,
             fought: 0,
-            threat: [0; 4],
+            threat: [0; 5],
             ride_frames: 0,
             rides: 0,
             longest_ride: 0,
@@ -792,8 +792,27 @@ impl Report {
                 }
             })
             .min();
+        // **Guarded**, the fifth band (the Mantis, `mantis.md` §9): its guard
+        // or its prayer is up and a hunter is inside it, so a frontal hit is
+        // wasted -- not threatening, and not open either. Only a creature
+        // with a guard (`Monster::covers`) is ever here.
+        let guarded = slots
+            .iter()
+            .filter_map(|s| after.monsters[*s])
+            .filter(|m| m.alive())
+            .any(|m| {
+                after
+                    .players
+                    .iter()
+                    .any(|p| p.health > 0 && m.covers(p.pos))
+            });
         if let (Some(free), true) = (free, fighting) {
-            self.threat[Threat::of(free as i32) as usize] += 1;
+            let band = if guarded {
+                Threat::Guarded
+            } else {
+                Threat::of(free as i32)
+            };
+            self.threat[band as usize] += 1;
         }
 
         for &slot in &slots {
@@ -1079,9 +1098,15 @@ impl Report {
             )
             .flat_len();
             // Health nothing connected for -- a Blood mage paying for her
-            // own spells -- is not the move's, however far away it was.
+            // own spells -- is not the move's, however far away it was. Nor
+            // is it when the move connected with somebody else: a Dual mage
+            // paying for a spell on the frame a counter cuts her partner,
+            // standing farther from the body than its volume reaches.
+            let from_now =
+                V3::new(p.pos.x.sub(now.pos.x), Fx::ZERO, p.pos.z.sub(now.pos.z)).flat_len();
             if (m.startup as usize) < REACTION
                 && any_connected
+                && from_now.raw() <= reach.raw()
                 && range[i].raw() > reach.raw()
                 && from_commit.raw() > reach.raw()
             {
@@ -1329,7 +1354,11 @@ impl Report {
             (Threat::PokeOnly, "a poke from where you stand"),
             (Threat::Skilled, "a dash or a leap gets you in"),
             (Threat::WalkUp, "walk in and swing"),
+            (Threat::Guarded, "its guard up, and you inside it"),
         ] {
+            if t == Threat::Guarded && self.threat[t as usize] == 0 {
+                continue;
+            }
             line(
                 &mut out,
                 t.label(),
@@ -1710,6 +1739,11 @@ pub enum Threat {
     Skilled,
     /// Long enough to walk in from the standoff and swing.
     WalkUp,
+    /// **Its guard or prayer is up and you are inside it**: a frontal hit is
+    /// wasted. Not a length of window -- a creature with a guard (the
+    /// Mantis) is in it whatever its clock says. Never for a creature
+    /// without one.
+    Guarded,
 }
 
 /// The ground between waiting at the edge of its close reach and a foot.
@@ -1743,6 +1777,7 @@ impl Threat {
             Threat::PokeOnly => "open to a poke",
             Threat::Skilled => "open to a way in",
             Threat::WalkUp => "safe to walk up",
+            Threat::Guarded => "guarded",
         }
     }
 }
