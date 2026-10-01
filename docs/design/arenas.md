@@ -97,6 +97,37 @@ ground, so a fight there hashes as it always did.
   things are. The sun is overhead (`game::arenas::sun`). See
   [creatures/galewing.md](creatures/galewing.md) §11.
 
+- **The Mire** (`arena/mireback.rs`, 2026-10-01): the Mireback's. 36 m square
+  of flat peat inside 1.5 m banks, four braziers on standable 1.5 m plinths at
+  the middle of each bank (sites `brazier`). See
+  [creatures/mireback.md](creatures/mireback.md) §11.
+- **The Pan** (`arena/sandmaw.rs`, 2026-10-01): the Sandmaw's. 36 × 36 m of
+  sand inside a 1.5 m rim of glassy rock, three half-metre rock islands with a
+  boulder on each -- the worm cannot pass under rock. See
+  [creatures/sandmaw.md](creatures/sandmaw.md) §11.
+- **The Den** (`arena/pair.rs`, 2026-10-01): the Pair's. 30 × 30 m of dry
+  grass inside a 1.5 m wall wide enough to perch on, the proving ground's two
+  platforms, three 3.5 m standing stones. See
+  [creatures/the-pair.md](creatures/the-pair.md) §11.
+- **The Hollows** (`arena/broodmother.rs`, 2026-10-01): the Broodmother's
+  cave. About 30 × 26 m of bare rock under a vault 12 m at the middle and 8 m
+  at the walls, two rock pillars, anchors for her web lines. See
+  [creatures/broodmother.md](creatures/broodmother.md) §11.
+- **The Ashwood** (`arena/veilstalker.rs`, 2026-10-01): the Veilstalker's.
+  36 × 36 m of snow that takes prints, inside a 3 m cordwood wall whose top is
+  a ledge; ash pits, a stream, trunks to perch on, braziers. See
+  [creatures/veilstalker.md](creatures/veilstalker.md) §11.
+- **The Shrine** (`arena/mantis.rs`, 2026-10-01): the Mantis's court. Square
+  with filled corners, walled at 15 m, four 8 m columns ten metres out on the
+  diagonals, no platforms. See [creatures/mantis.md](creatures/mantis.md) §11.
+- **The Last Valley** (`arena/siegeshell.rs`, 2026-10-01): the Siegeshell's.
+  A cut between 14 m cliffs, 50 m wide and 300 long, ending in a town wall
+  (site `wall`); the walk to the siege line is the clock. See
+  [creatures/siegeshell.md](creatures/siegeshell.md) §11.
+
+Every one of them, with its creature in it, is in the
+[gallery](gallery/README.md).
+
 ## 3 · The picker (W0)
 
 - `--hunt <creature>`, `?hunt=<creature>`: hunt that creature, in its arena.
@@ -110,7 +141,10 @@ ground, so a fight there hashes as it always did.
   same as `--hunt hornback --arena crossing`.
 - `H` swaps between hunting the Ridgeback and fighting each other; `Shift+H`
   steps to the next registered creature, in its own arena
-  (`species::after`, which skips ids nobody has built).
+  (`species::after`, which skips ids nobody has built and, since 2026-10-01,
+  the two dev species -- `SpeciesId::is_dev`: the gnats and the sentinel are
+  reached by `--hunt gnats` and `--hunt sentinel`, and listed on the HUD only
+  while they are the hunt).
 
 **The keys are a simulation event, not a fresh `World` built by the client.**
 `H` and `Shift+H` set `Input::travel`, one byte on the wire beside the buttons

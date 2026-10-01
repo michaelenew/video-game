@@ -414,7 +414,21 @@ fn the_cycle_skips_creatures_that_are_not_registered() {
     for id in 0..species::COUNT as u8 {
         let next = species::after(SpeciesId(id));
         assert!(species::lookup(next.id).is_some());
+        // And the dev species are not offered: `--hunt gnats` reaches them,
+        // `Shift+H` does not.
+        assert!(!next.id.is_dev(), "Shift+H offered {}", next.name);
     }
+    // Every creature a player is shown is reached by stepping round once.
+    let mut seen = Vec::new();
+    let mut at = SpeciesId::RIDGEBACK;
+    for _ in 0..species::COUNT {
+        seen.push(at);
+        at = species::after(at).id;
+    }
+    for s in species::shown() {
+        assert!(seen.contains(&s.id), "Shift+H never reaches {}", s.name);
+    }
+    assert!(species::shown().all(|s| !s.id.is_dev()));
     // With the Ridgeback the only one, every step comes back to it.
     if species::all().count() == 1 {
         assert_eq!(

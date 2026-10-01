@@ -671,7 +671,7 @@ off by a tenth of the wait it judged (below).
 ```text
                 won    mean win   threat / poke / way in / walk up   unanswerable (blind)
   Champion      6/24    336 s         45 /  8 /  6 / 40 %                0
-  Bulwark       8/24    463 s         44 /  7 /  7 / 43 %                0
+  Bulwark       9/24    483 s         43 /  8 /  7 / 43 %                0
   Reaver        6/24    491 s         43 /  8 /  6 / 43 %                0
   Elementalist 22/24    208 s         25 /  8 /  9 / 59 %                0
   Blood mage    0/24      --          46 /  7 /  6 / 41 %                0
@@ -775,3 +775,9 @@ trophy is the hunt's ordinary trophy, not the mottled pelt; the hunter does
 not read the breath (it is drawn); the shimmer is a translucent silhouette,
 the stated fallback, not a refraction of what is behind it.
 
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here one more win, 9 from 8 (14 throws).

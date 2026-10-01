@@ -346,9 +346,10 @@ and say so here.
 - **Noises are made by diffing** the fighters across the frame; a hit's noise
   is at the swing's volume or the shot's end. Footfalls are fighters' only;
   the Veilstalker's own prints are its own lore.
-- **The sentinel is a registered species** (id 12) and so appears in the
-  picker's `Shift+H` cycle, the way the gnats do. It has no hunter plan, so
-  `fight --species sentinel` says so.
+- **The sentinel is a registered species** (id 12). It has no hunter plan, so
+  `fight --species sentinel` says so. It was in the picker's `Shift+H` cycle,
+  the way the gnats were; *since 2026-10-01* neither is (`SpeciesId::is_dev`,
+  [review.md](review.md) `REV-C1`), and `--hunt sentinel` reaches it.
 - **A defended thing's box is axis-aligned**: a cart turning a corner turns
   its route, not its box.
 - **Not here**: flight and the long ride (the rest of P6, the Galewing's and
