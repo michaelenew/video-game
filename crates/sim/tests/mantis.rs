@@ -641,3 +641,357 @@ fn earthbreaker_as_the_third_link_breaks_the_guard_its_first_two_raised() {
         log.join("\n")
     );
 }
+
+// ---------------------------------------------------------------------------
+// §2 · The rest of the set
+// ---------------------------------------------------------------------------
+
+/// Start a move on it now, as its brain would.
+fn throw(w: &mut World, kind: u8) {
+    let m = w.monsters[0].as_mut().unwrap();
+    m.doing = Doing::Startup {
+        kind,
+        left: mantis::SPECIES.attack(kind).startup,
+    };
+    m.hit_used = false;
+    m.brain.think_left = 600;
+}
+
+#[test]
+fn the_pivot_cut_goes_over_a_crouch() {
+    let _knobs = lock();
+    let behind = |crouch: bool| {
+        let mut w = duel(Class::Champion, 6);
+        // Behind it, two metres off its tail, crouched or standing.
+        w.players[0].pos = at(-2, 0);
+        throw(&mut w, mantis::PIVOT);
+        let before = me(&w).health;
+        let total = mantis::SPECIES.attack(mantis::PIVOT).total() as u32;
+        for _ in 0..total + 2 {
+            let press = if crouch {
+                idle().with(Input::CROUCH)
+            } else {
+                idle()
+            };
+            w.advance([press, Input::default()]);
+            w.players[0].pos = at(-2, 0);
+            if let Some(m) = w.monsters[0].as_mut() {
+                m.pos = base();
+                m.brain.think_left = 60;
+            }
+        }
+        before - me(&w).health
+    };
+    assert!(
+        behind(false) > 0,
+        "the pivot cut missed somebody standing behind it"
+    );
+    assert_eq!(behind(true), 0, "the pivot cut hit somebody crouching");
+}
+
+#[test]
+fn prayer_never_makes_a_tell_shorter_than_reaction() {
+    let _knobs = lock();
+    for kind in 0..mantis::MOVE_COUNT as u8 {
+        let a = mantis::SPECIES.attack(kind);
+        if a.damage <= 0 {
+            continue;
+        }
+        let mut m = Monster::new(SpeciesId::MANTIS);
+        m.own[fight::body::FLAGS] = Knob::HastePips.raw();
+        m.doing = Doing::Startup {
+            kind,
+            left: a.startup,
+        };
+        fight::haste(&mut m, kind);
+        let Doing::Startup { left, .. } = m.doing else {
+            panic!(
+                "haste took the {} out of its startup",
+                mantis::MOVES[kind as usize].name
+            );
+        };
+        assert!(
+            left as i32 >= Knob::HasteFloor.raw().min(a.startup as i32),
+            "hasted, the {} has a tell of {left} frames",
+            mantis::MOVES[kind as usize].name
+        );
+        assert!(
+            Knob::HasteFloor.raw() >= 15,
+            "haste's floor is under a reaction"
+        );
+    }
+}
+
+#[test]
+fn what_is_drawn_through_the_windup_is_where_the_hit_lands() {
+    // The overlay's rule, extended to the Mantis: the floor marker under a
+    // windup is the hit test's own volume on its first live frame. The dive
+    // is drawn from where its leap chose, which the hunt holds; the rest are
+    // asked here as the Ridgeback's are (`tests/hunted.rs`).
+    let _knobs = lock();
+    for kind in 0..mantis::MOVE_COUNT as u8 {
+        let m = mantis::SPECIES.attack(kind);
+        if m.damage <= 0 || kind == mantis::DIVE {
+            continue;
+        }
+        let mut beast = Monster::new(SpeciesId::MANTIS);
+        let ahead = V3::new(m.ideal_range.max(Fx::from_int(3)), Fx::ZERO, Fx::ZERO);
+        let target = sim::monster::Quarry {
+            pos: beast.pos.add(ahead),
+            vel: V3::ZERO,
+            alive: true,
+            aboard: false,
+            stunned: false,
+        };
+        beast.brain.seen = target.pos;
+        beast.doing = Doing::Startup {
+            kind,
+            left: m.startup,
+        };
+        let mut drawn = None;
+        for _ in 0..m.startup as u32 + 2 {
+            if matches!(beast.doing, Doing::Startup { .. }) {
+                drawn = beast.telegraph();
+            }
+            beast.brain.think_left = u16::MAX;
+            beast.step(&[target]);
+            if matches!(beast.doing, Doing::Active { .. }) {
+                break;
+            }
+        }
+        let name = mantis::MOVES[kind as usize].name;
+        let drawn = drawn.unwrap_or_else(|| panic!("the {name} draws nothing through its windup"));
+        let (anchor, radius, low, high) = beast
+            .hit_volume()
+            .unwrap_or_else(|| panic!("the {name}'s hit is not out on its first live frame"));
+        let slack = m.advance.add(m.travel).mul(sim::DT).add(Fx::ratio(1, 20));
+        let off = anchor.sub(drawn.anchor).flat_len();
+        assert!(
+            off.raw() <= slack.raw(),
+            "the {name} was drawn {off:?} m from where it landed"
+        );
+        assert_eq!(
+            drawn.radius, radius,
+            "the {name} was drawn a different width"
+        );
+        assert_eq!(
+            (drawn.low, drawn.high),
+            (low, high),
+            "the {name} was drawn a different height"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// §4 · The blades
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_broken_blade_leaves_its_side_open_for_good() {
+    let _knobs = lock();
+    // Its left blade gone. Its left is -z (its right is +z, facing +x).
+    let slot = mantis::SPECIES.break_slot(mantis::BLADE_L_PART).unwrap();
+    let left_flank = V3::new(Fx::ratio(14, 10), Fx::ZERO, Fx::ratio(-14, 10));
+    let right_flank = V3::new(Fx::ratio(14, 10), Fx::ZERO, Fx::ratio(14, 10));
+    let mut m = guarding();
+    m.breaks[slot] = 0;
+    assert!(m.broken(mantis::BLADE_L_PART));
+    assert_eq!(
+        m.take_blow(mantis::THORAX_PART, 60, &sword_from(left_flank))
+            .1,
+        Guarded::Lands,
+        "a blow from its broken side was guarded"
+    );
+    let mut m = guarding();
+    m.breaks[slot] = 0;
+    assert_eq!(
+        m.take_blow(mantis::THORAX_PART, 60, &sword_from(right_flank))
+            .1,
+        Guarded::Blocked,
+        "a blow from its whole side was not"
+    );
+    // For good: a blade has no health to get back, and nothing regrows it.
+    let mut w = duel(Class::Champion, 6);
+    w.monsters[0].as_mut().unwrap().breaks[slot] = 0;
+    for _ in 0..600 {
+        w.advance([idle(), Input::default()]);
+    }
+    assert!(it(&w).broken(mantis::BLADE_L_PART), "the blade came back");
+    // Both gone: no guard, no prayer, desperate.
+    let mut m = guarding();
+    m.breaks = [0; sim::beast::MAX_BREAKABLE];
+    assert_eq!(fight::arc(&m), None);
+    assert!(!fight::may_guard(&m) || fight::blades(&m) == 0);
+}
+
+// ---------------------------------------------------------------------------
+// §5 · The habit
+// ---------------------------------------------------------------------------
+
+/// The Champion's sword into its guard, `n` times, from two metres; the
+/// guard held up for it each time, and long enough between that each is a
+/// string's first link (a sword in a string is a backcut, and an upcut).
+fn swords_into_guard(w: &mut World, n: usize) {
+    for _ in 0..n {
+        guard_up(w, false);
+        for f in 0..STRING_OVER {
+            let press = if f < 2 {
+                idle().with(Input::LEFT)
+            } else {
+                idle()
+            };
+            w.advance([press, Input::default()]);
+            place(w, 2);
+            if let Some(m) = w.monsters[0].as_mut() {
+                m.brain.think_left = 60;
+            }
+        }
+    }
+}
+
+/// Frames from one sword to the next: past the Champion's chain grace.
+const STRING_OVER: u32 = 100;
+
+fn memory(w: &World) -> Vec<habit::Entry> {
+    habit::entries(&w.lore).into_iter().flatten().collect()
+}
+
+#[test]
+fn nothing_it_remembers_came_from_an_input() {
+    let _knobs = lock();
+    // Swings thrown at the air, six metres off: nothing struck its guard, so
+    // nothing is remembered, however many buttons were pressed.
+    let mut w = duel(Class::Champion, 6);
+    for f in 0..400u32 {
+        let press = match f % 40 {
+            0 => idle().with(Input::LEFT),
+            13 => idle().with(Input::RIGHT),
+            26 => idle().with(Input::MIDDLE),
+            _ => idle(),
+        };
+        w.advance([press, Input::default()]);
+        place(&mut w, 6);
+        hold_still(&mut w);
+    }
+    assert!(
+        memory(&w).is_empty(),
+        "it remembered swings that never touched it"
+    );
+
+    // Into its guard: every entry is a blow its guard took, stamped with the
+    // frame the blow landed -- a frame its mailbox held it -- never sooner.
+    let mut w = duel(Class::Champion, 2);
+    let mut struck = Vec::new();
+    for _ in 0..3 {
+        guard_up(&mut w, false);
+        for f in 0..STRING_OVER {
+            let press = if f < 2 {
+                idle().with(Input::LEFT)
+            } else {
+                idle()
+            };
+            w.advance([press, Input::default()]);
+            place(&mut w, 2);
+            if fight::mail(&it(&w), 0).is_some() {
+                struck.push(w.frame);
+            }
+            if let Some(m) = w.monsters[0].as_mut() {
+                m.brain.think_left = 60;
+            }
+        }
+    }
+    let mem = memory(&w);
+    assert_eq!(
+        mem.len(),
+        3,
+        "three blows into its guard, {} remembered",
+        mem.len()
+    );
+    for e in &mem {
+        assert!(
+            struck.contains(&e.stamp),
+            "an entry at frame {} that no blow on its guard was struck on ({struck:?})",
+            e.stamp
+        );
+        assert_eq!(habit::decode(e.code), Some((Class::Champion, 0)));
+    }
+}
+
+#[test]
+fn habit_never_makes_its_eyes_faster() {
+    let _knobs = lock();
+    // The same fight with its memory on and off: how late it sees is the
+    // same on every frame, and never sooner than its least.
+    let run = |on: i32| {
+        let sp = &mantis::SPECIES;
+        let i = sim::species::Common::ALL.len() + Knob::Habit as usize;
+        sim::oven::set_species_raw(sp.id, i, on);
+        let mut w = duel(Class::Champion, 2);
+        let mut d = Vec::new();
+        swords_into_guard(&mut w, 4);
+        for f in 0..300u32 {
+            let press = if f % 30 == 0 {
+                idle().with(Input::LEFT)
+            } else {
+                idle()
+            };
+            w.advance([press, Input::default()]);
+            place(&mut w, 2);
+            d.push(sight::delay(&w.lore));
+        }
+        sim::oven::set_species_raw(sp.id, i, sp.tuned[i]);
+        (d, memory(&w).len())
+    };
+    let (with, remembered) = run(1);
+    let (without, forgot) = run(0);
+    assert!(
+        remembered > 0 && forgot == 0,
+        "the flag did not turn the memory on and off"
+    );
+    assert_eq!(with, without, "its memory changed how late it sees");
+    assert!(with.iter().all(|d| *d as i32 >= Knob::SightMin.raw()));
+}
+
+#[test]
+fn a_guess_it_gets_wrong_is_forgotten() {
+    let _knobs = lock();
+    let mut w = duel(Class::Champion, 2);
+    swords_into_guard(&mut w, 3);
+    let sword = habit::code(Class::Champion, 0);
+    let copies = |w: &World| memory(w).iter().filter(|e| e.code == sword).count();
+    assert_eq!(copies(&w), 3);
+    // Ready against the sword -- and a hammer instead.
+    {
+        let m = w.monsters[0].as_mut().unwrap();
+        m.doing = Doing::Active {
+            kind: mantis::READY,
+            left: mantis::SPECIES.attack(mantis::READY).active,
+        };
+        m.own[fight::body::READY_FOR] = sword;
+    }
+    let before = it(&w).health;
+    for f in 0..40 {
+        let press = if f < 2 {
+            idle().with(Input::MIDDLE)
+        } else {
+            idle()
+        };
+        w.advance([press, Input::default()]);
+        place(&mut w, 2);
+        if let Some(m) = w.monsters[0].as_mut() {
+            m.brain.think_left = 60;
+        }
+    }
+    assert!(
+        it(&w).health < before,
+        "the hammer did not land clean on a Ready for the sword"
+    );
+    assert_eq!(copies(&w), 2, "the wrong guess was not forgotten");
+    assert!(!matches!(
+        it(&w).doing,
+        Doing::Active {
+            kind: mantis::READY,
+            ..
+        }
+    ));
+}
