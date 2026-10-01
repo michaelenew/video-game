@@ -698,6 +698,11 @@ impl Siegeshell {
                     self.held = looking(me, m.pos, 0);
                     return self.held.with(Input::SPACE);
                 }
+                // Until then, nothing that would still be swinging when the
+                // jump is wanted: a rider in a swing's recovery cannot leave.
+                if me.grounded {
+                    return looking(me, m.pos, 0);
+                }
             }
         }
         // The stumble's lurch at the crown: brace.
@@ -959,9 +964,13 @@ impl Tally for Lines {
                 .signs()
                 .iter()
                 .any(|s| s.shape == Shape::Disc && s.covers(fight::leg::aim(&now)));
-        // Who was hit by what, this frame.
-        let ring = fight::ring_live(after);
-        let (_, age, _) = fight::ring(after);
+        // Who was hit by what, this frame. The ring's own record of whom it
+        // struck, not health lost while it was out: a bite or a fall inside
+        // the ring's dozen frames is not the ring's.
+        let (tb, age_b, struck_b) = fight::ring(before);
+        let (ta, age_a, struck_a) = fight::ring(after);
+        let fresh = ta != tb || age_a < age_b;
+        let rang = struck_a & !(if fresh { 0 } else { struck_b });
         for i in 0..MAX_PLAYERS {
             let (pb, pa) = (&before.players[i], &after.players[i]);
             if pa.health <= 0 && pb.health <= 0 {
@@ -973,7 +982,7 @@ impl Tally for Lines {
                 && cn.phase == fight::leg::ACTIVE
                 && cn.struck & (1 << i) != 0
                 && cw.struck & (1 << i) == 0;
-            let ring_hit = lost > 0 && (ring || age == 0) && !pb.aboard();
+            let ring_hit = lost > 0 && rang & (1 << i) != 0;
             let body_hit = lost > 0 && !was.hit_used && now.hit_used;
             if leg_hit {
                 if cn.kind == fight::leg::STAMP {
@@ -1044,8 +1053,8 @@ impl Tally for Lines {
         }
         // The exposure to each beat: fighters on the floor in a landing
         // tripod's ring's reach when it lands.
-        if age == 0 {
-            let (t, _, _) = fight::ring(after);
+        if age_a == 0 && fresh {
+            let t = ta;
             let reach = Knob::RingTo.fx().add(sim::tuning::body_radius());
             for p in after.players.iter().filter(|p| p.health > 0 && !p.aboard()) {
                 if fight::tripod_legs(t)

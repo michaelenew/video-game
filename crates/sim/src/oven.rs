@@ -1151,10 +1151,11 @@ impl MonsterField {
             // To twenty seconds: the Siegeshell's beam charges at the wall for
             // twenty (it was four, for the Mireback's wallow).
             MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 1200),
-            // To fifteen seconds: the Veilstalker's smoke stands for eight
-            // and is not vented again for fifteen; the Mantis prays at most
-            // once in fifteen.
-            MonsterField::Cooldown => (0, 900),
+            // To forty seconds: the Siegeshell's beam waits thirty between
+            // breaches (it was fifteen: the Veilstalker's smoke stands for
+            // eight and is not vented again for fifteen; the Mantis prays at
+            // most once in fifteen).
+            MonsterField::Cooldown => (0, 2400),
             MonsterField::Root => (0, 300),
             // The Mantis's lunge crosses nine metres in eight frames.
             MonsterField::Travel | MonsterField::Advance => (0, fx(90, 1)),
