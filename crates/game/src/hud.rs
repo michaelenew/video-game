@@ -253,6 +253,58 @@ pub fn setup(mut commands: Commands) {
         });
 }
 
+/// The picker's list: every creature, its trophies and the tempers on offer
+/// (world W1 and W2). A text block on the right, small and dim: a developer's
+/// harness until there is a world to walk through, not part of the fight.
+#[derive(Component)]
+pub struct PickerText;
+
+/// Spawned beside the HUD rather than inside its column, so it can sit at the
+/// right edge under the health bars without moving anything else.
+pub fn setup_picker(mut commands: Commands) {
+    commands.spawn((
+        Text::new(""),
+        TextFont {
+            font_size: 13.0,
+            ..default()
+        },
+        TextColor(DIM),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(150.0),
+            right: Val::Px(18.0),
+            ..default()
+        },
+        PickerText,
+    ));
+}
+
+/// The list, rewritten only when what it says has changed: the hunt, its
+/// temper, or the record.
+pub fn update_picker(
+    sim: Res<crate::Sim>,
+    trophies: Res<crate::trophies::Trophies>,
+    mut text: Query<&mut Text, With<PickerText>>,
+    mut shown: Local<Option<(Option<sim::species::SpeciesId>, u8, u32)>>,
+) {
+    let now = (
+        sim.cur.hunted().into_iter().flatten().next(),
+        sim.cur.temper(),
+        trophies.count(),
+    );
+    if shown.as_ref() == Some(&now) {
+        return;
+    }
+    if let Ok(mut t) = text.single_mut() {
+        *t = Text::new(crate::picker::listing(
+            &sim.cur,
+            &trophies,
+            crate::any_temper(),
+        ));
+    }
+    *shown = Some(now);
+}
+
 fn spawn_class_button(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
     parent.spawn((
         Button,
@@ -675,7 +727,10 @@ pub fn update(
         *t = Text::new(match sim.cur.phase {
             Phase::Fighting => String::new(),
             Phase::RoundOver { winner, .. } if winner == sim::state::QUARRY => {
-                "the Ridgeback stands".into()
+                match sim.cur.hunted().into_iter().flatten().next() {
+                    Some(s) => format!("the {} stands", s.get().name),
+                    None => "the quarry stands".into(),
+                }
             }
             Phase::RoundOver { winner, .. } if winner == u8::MAX => "double KO".into(),
             Phase::RoundOver { .. } if sim.cur.hunting() => "the hunt is over".into(),

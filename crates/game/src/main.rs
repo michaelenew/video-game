@@ -32,6 +32,7 @@ mod picker;
 mod platform;
 mod settings;
 mod species;
+mod trophies;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -76,7 +77,13 @@ fn chosen_start() -> picker::Start {
         platform::flag("--hunt"),
         platform::value("--hunt"),
         platform::value("--arena"),
+        platform::value("--temper"),
     )
+}
+
+/// `--temper` was given: every temper is on offer to `T`, earned or not.
+fn any_temper() -> bool {
+    platform::value("--temper").is_some() || platform::flag("--temper")
 }
 
 /// A hunt, with only the people who are actually hunting in it.
@@ -138,6 +145,7 @@ fn main() {
             enable_multipass_for_primary_context: false,
         })
         .insert_resource(settings::Settings::load())
+        .insert_resource(trophies::Trophies::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
@@ -151,6 +159,7 @@ fn main() {
                 critters::setup,
                 ground::setup,
                 hud::setup,
+                hud::setup_picker,
                 crosshair::setup,
             ),
         )
@@ -217,6 +226,7 @@ fn main() {
                 critters::overlay,
                 ground::place,
                 ground::overlay,
+                hud::update_picker,
             )
                 .chain()
                 .after(beast::signs)
@@ -2692,7 +2702,25 @@ fn tick_sim(
     mut show: ResMut<debug::ShowDebug>,
     mut scripted: ResMut<Scripted>,
     mut sparring: ResMut<Sparring>,
+    mut trophies: ResMut<trophies::Trophies>,
 ) {
+    // A won hunt is the player's trophy (world W1), whoever's machine it was
+    // won on: each peer writes its own. Read from the world as it stands at
+    // the top of the frame, which is the last one drawn.
+    if trophies.notice(&sim.cur) {
+        if let Some((_, temper)) = sim.cur.hunt_won() {
+            eprintln!(
+                "trophy: {} at temper {temper}",
+                sim.cur
+                    .hunted()
+                    .iter()
+                    .flatten()
+                    .map(|s| s.get().name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+    }
     // Typing in a text field must not also pause the match or cycle the class.
     // F7 stays live regardless, since it is the way back out.
     if focus.keyboard {
@@ -2775,6 +2803,15 @@ fn tick_sim(
         } else {
             picker::toggle(&sim.cur)
         };
+    }
+    // `T`: the same creature at the next temper on offer -- earned by beating
+    // the one below it, or any of them with `--temper`. The same trip on the
+    // wire as `H`, with the temper in the byte. See `picker::temper`.
+    if keys.just_pressed(KeyCode::KeyT) {
+        let trip = picker::temper(&sim.cur, &trophies, any_temper());
+        if trip != sim::input::Travel::NONE {
+            sim.travel = trip;
+        }
     }
     for (key, mode) in [
         (KeyCode::Digit1, Dummy::Idle),

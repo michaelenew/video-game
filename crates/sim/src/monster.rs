@@ -546,6 +546,10 @@ impl Default for Brain {
 pub struct Monster {
     /// Which kind of creature: the table everything below is read against.
     pub species: SpeciesId,
+    /// **How clever it is this hunt**: 0 as tuned, up to
+    /// [`crate::temper::HIGHEST`]. Read through the four tempered accessors
+    /// below, never past them. See [`crate::temper`].
+    pub temper: u8,
     pub pos: V3,
     /// Steered facing, in turns.
     pub yaw: Fx,
@@ -608,6 +612,7 @@ impl Monster {
         let sp = species.get();
         Monster {
             species,
+            temper: 0,
             pos: V3::ZERO,
             yaw: Fx::ZERO,
             yaw_rate: Fx::ZERO,
@@ -632,6 +637,31 @@ impl Monster {
     /// Its species' table.
     pub fn sp(&self) -> &'static Species {
         self.species.get()
+    }
+
+    // The four brain knobs a temper overrides (`crate::temper`). The brain
+    // reads them here rather than off the species, so a tempered hunt is the
+    // same code reading different numbers.
+
+    /// Frames between glances, after its temper.
+    pub fn glance_frames(&self) -> u16 {
+        crate::temper::glance(self.sp().glance_frames(), self.temper)
+    }
+
+    /// Lead on the target, after its temper.
+    pub fn lead(&self) -> Fx {
+        crate::temper::lead(self.sp().lead(), self.temper)
+    }
+
+    /// Decisiveness, after its temper.
+    pub fn decisiveness(&self) -> i32 {
+        crate::temper::decisiveness(self.sp().decisiveness(), self.temper)
+    }
+
+    /// How far its strain thresholds fall by the time it is nearly dead,
+    /// after its temper.
+    pub fn strain_desperation(&self) -> i32 {
+        crate::temper::despair(self.sp().strain_desperation(), self.temper)
     }
 
     /// A part's health. A part that cannot break is always at full: it has no
@@ -1432,7 +1462,7 @@ impl Monster {
     /// end an ordinary combo is enough. A hunt that starts methodical and ends
     /// frantic is the whole reason this is a curve rather than a constant.
     fn threshold(&self, base: i32) -> i32 {
-        let cut = (self.sp().strain_desperation() * self.missing()) / 100;
+        let cut = (self.strain_desperation() * self.missing()) / 100;
         (base * (100 - cut).clamp(5, 100)) / 100
     }
 
@@ -1653,7 +1683,7 @@ impl Monster {
             self.brain.glance_left -= 1;
             return;
         }
-        self.brain.glance_left = self.sp().glance_frames();
+        self.brain.glance_left = self.glance_frames();
         // **What it cannot perceive it does not sample** (bestiary P5). A
         // fighter its species' filter rules out this glance is not there to
         // it; if nobody is, it takes its sample from what it heard, and if it
@@ -1719,7 +1749,7 @@ impl Monster {
     /// half a second leads half a second's worth. `lead` is how much of that
     /// extrapolation it actually trusts -- at zero it swipes at where you were.
     pub fn lead_point(&self, frames: u16) -> V3 {
-        let horizon = Fx::from_int(frames as i32).mul(DT).mul(self.sp().lead());
+        let horizon = Fx::from_int(frames as i32).mul(DT).mul(self.lead());
         self.brain.seen.add(self.brain.seen_vel.scale(horizon))
     }
 
@@ -1796,7 +1826,7 @@ impl Monster {
         if best <= 0 {
             return;
         }
-        let cut = ((best as i64 * self.sp().decisiveness() as i64) / 100) as i32;
+        let cut = ((best as i64 * self.decisiveness() as i64) / 100) as i32;
         let total: i32 = scores.iter().filter(|s| **s >= cut && **s > 0).sum();
         if total <= 0 {
             return;

@@ -128,3 +128,52 @@ fn the_travel_byte_round_trips_through_the_wire_format() {
     let plain = Input::looking_at(0xffff, 0xffff, -1);
     assert_eq!(Input::from(net::NetInput::from(plain)), plain);
 }
+
+/// **Both peers agree on the temper** (world W2). It rides in the same travel
+/// byte as the creature, so the peer that did not press anything learns it in
+/// a rollback and rebuilds the same tempered fight on the same frame -- and a
+/// tempered hunt then plays differently from one as tuned, so agreeing on the
+/// creature alone would not have been enough.
+#[test]
+fn a_tempered_trip_lands_at_the_same_temper_after_a_rollback() {
+    use sim::input::Travel;
+    use sim::species::SpeciesId;
+
+    let mut s = script(900, 0x7e3a);
+    s[200][1] = s[200][1].travelling(Travel::tempered(SpeciesId::RIDGEBACK, 2));
+    let mut truth = World::new();
+    for i in &s {
+        truth.advance(*i);
+    }
+    assert!(truth.hunting());
+    assert_eq!(truth.temper(), 2, "the temper did not travel");
+
+    // The same trip as tuned is a different fight by the end.
+    let mut plain = s.clone();
+    plain[200][1] = plain[200][1].travelling(Travel::hunt(SpeciesId::RIDGEBACK));
+    let mut as_tuned = World::new();
+    for i in &plain {
+        as_tuned.advance(*i);
+    }
+    assert_eq!(as_tuned.temper(), 0);
+    assert_ne!(
+        as_tuned.checksum(),
+        truth.checksum(),
+        "a tempered hunt hashed as one as tuned"
+    );
+
+    let mut session = LocalSession::new(World::new());
+    let mut i = 0;
+    while i < s.len() {
+        let batch = (s.len() - i).min(4);
+        for k in 0..batch {
+            let mut guess = s[i + k];
+            guess[1] = Input::default();
+            session.predict_and_advance(guess);
+        }
+        session.confirm(&s[i..i + batch]);
+        i += batch;
+    }
+    assert_eq!(session.sim().temper(), 2);
+    assert_eq!(session.sim().checksum(), truth.checksum());
+}

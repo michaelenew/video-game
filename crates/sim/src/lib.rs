@@ -36,6 +36,7 @@ pub mod shadow;
 pub mod species;
 pub mod state;
 pub mod stones;
+pub mod temper;
 pub mod tuned;
 pub mod tuning;
 

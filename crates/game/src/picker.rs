@@ -5,14 +5,17 @@
 //! `--arena <name>` (or `?arena=<name>`) choose the first fight; `--hunt` on
 //! its own is the Ridgeback, as it always was. **In game**, `H` swaps between
 //! hunting and fighting each other and `Shift+H` steps to the next registered
-//! creature -- and those two go through the simulation, as a
+//! creature, and `T` steps the creature being hunted to its next temper on
+//! offer (world W2) -- and those three go through the simulation, as a
 //! [`sim::input::Travel`] on the wire, so both peers change arena on the same
-//! frame and a rollback that crosses the change replays it. The reasoning is in
-//! `docs/design/arenas.md`.
+//! frame and a rollback that crosses the change replays it. The temper rides
+//! in the same byte. The reasoning is in `docs/design/arenas.md`; tempers and
+//! trophies are `docs/design/world.md` §6.
 //!
 //! Pure functions of what was typed, so the tests at the bottom can check
 //! both spellings without a window.
 
+use crate::trophies::Trophies;
 use sim::arena::{self, ArenaId};
 use sim::input::Travel;
 use sim::species::{self, SpeciesId};
@@ -26,6 +29,9 @@ pub struct Start {
     /// An arena other than the creature's own (or than the proving ground, for
     /// versus). The range, mostly.
     pub arena: Option<ArenaId>,
+    /// `--temper <n>`: the temper to start the hunt at, regardless of what the
+    /// player has earned. A dev's flag; zero, as tuned, without it.
+    pub temper: u8,
 }
 
 /// Read the picker's two flags. `hunt` is whether `--hunt` was given and
@@ -35,7 +41,12 @@ pub struct Start {
 /// ignored -- the Ridgeback for a hunt, the creature's own arena for a place --
 /// rather than refusing to start: a link that names a creature from a branch
 /// that has not landed yet should still open on something.
-pub fn start(hunt: bool, creature: Option<&str>, place: Option<&str>) -> Start {
+pub fn start(
+    hunt: bool,
+    creature: Option<&str>,
+    place: Option<&str>,
+    temper: Option<&str>,
+) -> Start {
     let hunt = hunt.then(|| match creature {
         None => SpeciesId::RIDGEBACK,
         Some(name) => species::named(name).map_or_else(
@@ -53,17 +64,32 @@ pub fn start(hunt: bool, creature: Option<&str>, place: Option<&str>) -> Start {
         }
         found
     });
-    Start { hunt, arena }
+    let temper = temper.map_or(0, |n| match n.parse::<u8>() {
+        Ok(n) if n <= sim::temper::HIGHEST => n,
+        _ => {
+            eprintln!(
+                "--temper wants 0 to {}; got {n:?}, using the highest",
+                sim::temper::HIGHEST
+            );
+            sim::temper::HIGHEST
+        }
+    });
+    Start {
+        hunt,
+        arena,
+        temper,
+    }
 }
 
 /// The world a start describes.
 pub fn world(start: Start, classes: [Class; 2]) -> World {
-    match (start.hunt, start.arena) {
+    let w = match (start.hunt, start.arena) {
         (Some(s), Some(a)) => World::hunt_in(classes, [Some(s), None], a),
         (Some(s), None) => World::hunt_of(classes, s),
         (None, Some(a)) => World::versus_in(classes, a),
         (None, None) => World::with_classes(classes),
-    }
+    };
+    w.tempered(start.temper)
 }
 
 /// `H`: hunt the Ridgeback, or go back to fighting each other.
@@ -85,13 +111,68 @@ pub fn next(w: &World) -> Travel {
     Travel::hunt(to)
 }
 
+/// `T`: the creature being hunted again, at the next temper on offer --
+/// wrapping back to as tuned. `any` is `--temper`, which offers every one.
+/// Nothing outside a hunt, where there is nothing to temper.
+pub fn temper(w: &World, trophies: &Trophies, any: bool) -> Travel {
+    let Some(hunted) = w.hunted().into_iter().flatten().next() else {
+        return Travel::NONE;
+    };
+    Travel::tempered(hunted, trophies.next_temper(hunted, w.temper(), any))
+}
+
+/// The roman numeral a temper is called by: as tuned has none.
+pub fn numeral(t: u8) -> &'static str {
+    ["-", "I", "II", "III"][(t as usize).min(3)]
+}
+
+/// The picker's list, as the HUD shows it: every registered creature, its
+/// trophies, the tempers on offer, and which one is being hunted now.
+pub fn listing(w: &World, trophies: &Trophies, any: bool) -> String {
+    let hunted = w.hunted().into_iter().flatten().next();
+    let mut out = String::from("H hunt/versus   Shift+H next   T temper\n");
+    for sp in species::all() {
+        let here = hunted == Some(sp.id);
+        let won: Vec<&str> = (0..sim::temper::TEMPERS)
+            .filter(|t| trophies.beaten(sp.id, *t))
+            .map(|t| if t == 0 { "0" } else { numeral(t) })
+            .collect();
+        let offered: Vec<&str> = (0..sim::temper::TEMPERS)
+            .filter(|t| any || trophies.offered(sp.id, *t))
+            .map(|t| if t == 0 { "0" } else { numeral(t) })
+            .collect();
+        out.push_str(&format!(
+            "{} {:<10} trophies {:<9} tempers {}{}\n",
+            if here { ">" } else { " " },
+            sp.name,
+            if won.is_empty() {
+                "-".to_string()
+            } else {
+                won.join(" ")
+            },
+            offered.join(" "),
+            if here && w.temper() > 0 {
+                format!("   now {}", numeral(w.temper()))
+            } else {
+                String::new()
+            },
+        ));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::platform::Options;
 
     fn read(o: &Options) -> Start {
-        start(o.flag("--hunt"), o.value("--hunt"), o.value("--arena"))
+        start(
+            o.flag("--hunt"),
+            o.value("--hunt"),
+            o.value("--arena"),
+            o.value("--temper"),
+        )
     }
 
     #[test]
@@ -117,6 +198,7 @@ mod tests {
             Start {
                 hunt: Some(SpeciesId::RIDGEBACK),
                 arena: Some(ArenaId::RANGE),
+                temper: 0,
             }
         );
         // The proving ground answers to its name with a space, a dash or an
@@ -135,6 +217,7 @@ mod tests {
             Start {
                 hunt: Some(SpeciesId::RIDGEBACK),
                 arena: None,
+                temper: 0,
             }
         );
     }
@@ -146,6 +229,7 @@ mod tests {
             Start {
                 hunt: None,
                 arena: Some(ArenaId::RANGE),
+                temper: 0,
             },
             classes,
         );
@@ -155,6 +239,7 @@ mod tests {
             Start {
                 hunt: Some(SpeciesId::RIDGEBACK),
                 arena: None,
+                temper: 0,
             },
             classes,
         );
@@ -174,11 +259,54 @@ mod tests {
         assert_eq!(toggle(&hunt), Travel::VERSUS);
         for w in [&versus, &hunt] {
             match next(w).destination() {
-                Some(sim::input::Destination::Hunt(s)) => {
+                Some(sim::input::Destination::Hunt(s, _)) => {
                     assert!(species::lookup(s).is_some(), "{s:?} is not registered")
                 }
                 other => panic!("Shift+H asked for {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn the_temper_is_spelled_the_same_two_ways_and_starts_the_hunt_at_it() {
+        let args = Options::from_args(["--hunt", "ridgeback", "--temper", "2"].map(String::from));
+        let url = Options::from_query("?hunt=ridgeback&temper=2");
+        assert_eq!(read(&args), read(&url));
+        assert_eq!(read(&args).temper, 2);
+        assert_eq!(read(&Options::from_query("?hunt")).temper, 0);
+        assert_eq!(read(&Options::from_query("?hunt&temper=9")).temper, 3);
+        let w = world(read(&args), [Class::Bulwark; 2]);
+        assert_eq!(w.temper(), 2);
+        // A temper asked of a versus match is nothing at all.
+        let v = world(read(&Options::from_query("?temper=3")), [Class::Bulwark; 2]);
+        assert_eq!(v, World::with_classes([Class::Bulwark; 2]));
+    }
+
+    #[test]
+    fn t_offers_only_what_has_been_earned_unless_the_flag_says_otherwise() {
+        let hunt = World::hunt([Class::Bulwark; 2]);
+        let mut trophies = Trophies::default();
+        let at = |t: Travel| match t.destination() {
+            Some(sim::input::Destination::Hunt(s, n)) => (s, n),
+            other => panic!("T asked for {other:?}"),
+        };
+        assert_eq!(
+            at(temper(&hunt, &trophies, false)),
+            (SpeciesId::RIDGEBACK, 0)
+        );
+        assert_eq!(
+            at(temper(&hunt, &trophies, true)),
+            (SpeciesId::RIDGEBACK, 1)
+        );
+        trophies.record(SpeciesId::RIDGEBACK, 0);
+        assert_eq!(
+            at(temper(&hunt, &trophies, false)),
+            (SpeciesId::RIDGEBACK, 1)
+        );
+        let versus = World::with_classes([Class::Bulwark; 2]);
+        assert_eq!(temper(&versus, &trophies, true), Travel::NONE);
+        let list = listing(&hunt.tempered(1), &trophies, false);
+        assert!(list.contains("> Ridgeback"), "{list}");
+        assert!(list.contains("now I"), "{list}");
     }
 }

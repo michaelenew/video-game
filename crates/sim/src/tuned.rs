@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 319] = [
+pub const SCALARS: [i32; 331] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -327,6 +327,18 @@ pub const SCALARS: [i32; 319] = [
               25, // air.fall,_damage_per_metre_past_it = 25
           786432, // air.fall,_halved_landing_slower_than = 12
            16384, // aim.eye,_held_under_a_ceiling_by = 0.25
+              80, // tempers.temper_i,_glance_(%_of_its_own) = 80
+             120, // tempers.temper_i,_lead_(%_of_its_own) = 120
+              10, // tempers.temper_i,_decisiveness_(+_points) = 10
+              75, // tempers.temper_i,_thresholds_fall_(%_of_its_own) = 75
+              65, // tempers.temper_ii,_glance_(%_of_its_own) = 65
+             140, // tempers.temper_ii,_lead_(%_of_its_own) = 140
+              20, // tempers.temper_ii,_decisiveness_(+_points) = 20
+              50, // tempers.temper_ii,_thresholds_fall_(%_of_its_own) = 50
+              50, // tempers.temper_iii,_glance_(%_of_its_own) = 50
+             160, // tempers.temper_iii,_lead_(%_of_its_own) = 160
+              30, // tempers.temper_iii,_decisiveness_(+_points) = 30
+              25, // tempers.temper_iii,_thresholds_fall_(%_of_its_own) = 25
 ];
 
 #[rustfmt::skip]

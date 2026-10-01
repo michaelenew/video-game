@@ -606,6 +606,26 @@ scalars! {
     // far under the lowest ceiling over it or over its fighter. See
     // `camera::eye_under`.
     EyeUnderCeiling,  "Aim",      "Eye, held under a ceiling by",           Fixed,   0,        fx(2,1);
+    // **Tempers** (world W2, `docs/design/world.md` §4): a beaten creature
+    // fought again, cleverer rather than tougher. Each temper is four
+    // overrides on the brain knobs every species and every pack has -- the
+    // glance shortens, the lead lengthens, the decisiveness rises, and the
+    // strain thresholds stop falling as far with its health -- written as a
+    // share of the creature's own value, so a species gets its tempers by
+    // existing. Temper 0 is the creature as tuned and has no row. See
+    // `crate::temper`.
+    Temper1Glance,    "Tempers",  "Temper I, glance (% of its own)",        Int,     10,       100;
+    Temper1Lead,      "Tempers",  "Temper I, lead (% of its own)",          Int,     100,      300;
+    Temper1Decisive,  "Tempers",  "Temper I, decisiveness (+ points)",      Int,     0,        100;
+    Temper1Despair,   "Tempers",  "Temper I, thresholds fall (% of its own)",  Percent, 0,        100;
+    Temper2Glance,    "Tempers",  "Temper II, glance (% of its own)",       Int,     10,       100;
+    Temper2Lead,      "Tempers",  "Temper II, lead (% of its own)",         Int,     100,      300;
+    Temper2Decisive,  "Tempers",  "Temper II, decisiveness (+ points)",     Int,     0,        100;
+    Temper2Despair,   "Tempers",  "Temper II, thresholds fall (% of its own)", Percent, 0,        100;
+    Temper3Glance,    "Tempers",  "Temper III, glance (% of its own)",      Int,     10,       100;
+    Temper3Lead,      "Tempers",  "Temper III, lead (% of its own)",        Int,     100,      300;
+    Temper3Decisive,  "Tempers",  "Temper III, decisiveness (+ points)",    Int,     0,        100;
+    Temper3Despair,   "Tempers",  "Temper III, thresholds fall (% of its own)", Percent, 0,        100;
 }
 
 // ---------------------------------------------------------------------------

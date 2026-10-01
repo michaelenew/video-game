@@ -106,7 +106,6 @@ fn the_ring_is_cut_round_the_fighters_back() {
         w.advance(idle());
     }
     let pack = w.pack.unwrap();
-    let sp = pack.sp();
     let seen = pack.seen[0];
     let me = w.players[0];
     let (mut behind, mut ahead) = (0, 0);
@@ -120,7 +119,7 @@ fn the_ring_is_cut_round_the_fighters_back() {
             critter::NO_SLOT,
             "a member with no place on the ring"
         );
-        let at = pack::ring_point(sp, &seen, c.slot);
+        let at = pack::ring_point(&pack, &seen, c.slot);
         let off = at.sub(me.pos);
         if off.dot(me.facing).raw() < 0 {
             behind += 1;
