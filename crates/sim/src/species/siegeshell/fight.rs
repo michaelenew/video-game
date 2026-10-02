@@ -128,6 +128,9 @@ pub mod body {
     pub const STUMBLE_NEW: u32 = 1 << 4;
     pub const SIEGE: u32 = 1 << 5;
     pub const ANCHOR_NEW: u32 = 1 << 6;
+    /// Set up for one hunter: its anchors are `AnchorAlone`, not
+    /// `AnchorHealth` (tier 5 is built for two, and one in twenty alone).
+    pub const ALONE: u32 = 1 << 7;
 
     pub fn flags(m: &Monster) -> u32 {
         m.own[FLAGS] as u32
@@ -307,11 +310,21 @@ pub static FIGHT: FightDecl = FightDecl {
 /// The health it has: its anchors' share of what they started with. See the
 /// module docs.
 pub fn health_of(m: &Monster) -> i32 {
-    let most = Knob::AnchorHealth.raw().max(1) * ANCHOR_COUNT as i32;
+    let most = anchor_health(m) * ANCHOR_COUNT as i32;
     let left: i32 = (0..ANCHOR_COUNT)
         .map(|a| m.part_health(anchor_part(a)).max(0))
         .sum();
     ((m.sp().health() as i64 * left.min(most) as i64) / most as i64) as i32
+}
+
+/// An anchor's health when whole: `AnchorHealth` for the pair it is built
+/// for, `AnchorAlone` for one hunter.
+pub fn anchor_health(m: &Monster) -> i32 {
+    if body::flags(m) & body::ALONE != 0 {
+        Knob::AnchorAlone.raw().max(1)
+    } else {
+        Knob::AnchorHealth.raw().max(1)
+    }
 }
 
 /// **A blow has landed** (`FightDecl::struck`): what it did, decided here and
@@ -486,9 +499,11 @@ fn set_up(w: &mut World, slot: usize) {
         return;
     };
     let sp = m.sp();
+    let alone = w.players.iter().filter(|p| p.health > 0).count() < 2;
+    body::set(m, body::ALONE, alone);
     for a in 0..ANCHOR_COUNT {
         if let Some(s) = sp.break_slot(anchor_part(a)) {
-            m.breaks[s] = Knob::AnchorHealth.raw().max(1);
+            m.breaks[s] = anchor_health(m);
         }
     }
     m.health = health_of(m).max(1);

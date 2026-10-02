@@ -626,14 +626,23 @@ the rim, she climbs onto it, and her punch passes over the warts from the
 crown (one burst in a fourteen-minute hunt, 1058 swings to 48 connecting).
 **The Blood mage** wins 5, the same as before, spiking the pools her Grasps
 leave under it (19 spikes, 21 Grasps in the 24) and losing her red to the
-price; her unanswerable hits rose from one to three. **The Reaver** wins
+price; her unanswerable hits rose from one to three -- every one of them, and
+the Champion's one and the Reaver's two, the old measure of a flop from fresh
+tar (below): with it fixed, zero for every class. **The Reaver** wins
 22 in 89 s, her shadow at the flank (95 sent, 37 lotuses). **The
 Elementalist** is where she was: every hunt, in 41 s.
 
 **Against the targets.** The Champion wins five in eight, against about two
 in three, in two minutes (two to four asked). Zero unanswerable hits except one
-in 24 for three classes, each a flop out of tar laid after it committed (the
-report's own rule). Self-burn is about where §9 wants it, a little high. Warts
+in 24 for three classes, each counted by the report's own rule as a flop out
+of tar laid after it committed. **They were the measure's, and it is fixed
+(2026-10-01, [plans/polish-fights.md](../plans/polish-fights.md))**: the tar
+was the crash's own ring of pools -- laid on the crash frame, or merged into an
+old pool that grew under the hunter -- or, in coop, old tar a floating Dual
+mage came down into during the windup. Neither stopped an escape. The rule
+now asks for tar that was not on the floor at the commit and was under them
+the frame before the crash, which is §6's sentence; zero since, six classes,
+solo and coop. Self-burn is about where §9 wants it, a little high. Warts
 are being burst. **What is off:** threatening is 45 % against 35, and walk-up
 32 against 25 -- the toad spends its time winding up long moves, and the
 openings are long ones; the poke window is small because nearly everything it
@@ -688,6 +697,18 @@ way (`tests/mireback.rs`).
   has one material per paint, not per creature state); the stomach camera
   stays outside (§12 question 7).
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)):
+a pause of 60 frames between moves, not 40, and health 11 000, not 10 000**
+(§1's first guess). Threatening was 45 % against 35 because a toad that
+decides every two thirds of a second leaves nothing but a poke between its
+long tells; at 60 it is 35–41 % for every class (the Champion 38 / 8 / 13 /
+41), and the thousand back keeps the fight where it was asked rather than
+handing it over: the Champion 18 of 24 (from 21) in 147 s (from 120), the
+Bulwark 16, the Reaver 21, the Elementalist 24 in 48 s, the Blood mage 4,
+the Dual mage 0; two Champions 12 of 12 in 98 s; zero unanswerable. Walk-up
+is 40–52 % against 25 -- the pause is where it went. Tried: 70 and 12 000
+(37 % threatening, the Champion 12 of 24 in 190 s, the Blood mage none).
+
 **Questions for a person**, beyond §12: is the Elementalist's one-minute fight
 her identity or a hole (`flee` could favour her fire); is 45 % threatening
 oppressive in the hands or only in the harness; and does the flop -- the
@@ -701,3 +722,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it wins him two more (37 throws, every one leapt and slammed).
  Same seeds, after: 18 of 24 in 102 s, bit for bit the same: every throw is leapt to before it reaches the toad.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species mireback --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      18/24   147 s   38 /  8 / 13 / 41 %          0       12/12    98s   0
+  Bulwark       16/24   152 s   40 /  8 / 12 / 40 %          0       12/12    61s   0
+  Reaver        21/24    99 s   38 /  7 / 11 / 43 %          0       12/12    77s   0
+  Elementalist  24/24    48 s   31 /  7 / 10 / 52 %          0       12/12    29s   0
+  Blood mage     4/24   138 s   38 /  7 / 11 / 43 %          0       4/12    97s   0
+  Dual mage      0/24      --   35 /  7 / 11 / 46 %          0       5/12   142s   0
+```

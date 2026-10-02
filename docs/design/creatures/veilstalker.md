@@ -717,11 +717,18 @@ won, about one in six and a half -- tier 4 -- in five and a half to eight
 minutes (five to ten asked). Threatening 44-48 % against ~40. **What is
 off:**
 
-- **The way in is 6-8 %, against ~20, and walking up ~40 % against ~30.** The
-  windows read `frames_until_free` plus the decloak floor (`Tally::until_free`),
-  and the animal's long recoveries are visible and *walkable*: the hunter
-  is near enough to walk in, so the time that §9 calls the way in reads as
-  walk-up. The split between them is the measure's, not the fight's.
+- **The way in was 6-8 %, against ~20, and walking up ~40 % against ~30.**
+  **The measure was wrong, and is changed (2026-10-01,
+  [plans/polish-fights.md](../plans/polish-fights.md)).** Traced frame by
+  frame, the walk-up was not its recoveries but its **stalk**: an animal
+  prowling unseen, its stalk running or its target out of view, read as safe
+  to walk up because it could not hit anybody soon -- and nobody can walk up
+  to what they cannot find. Like the Galewing out of reach, those frames are
+  now in no window (`Tally::windowed`). **Threatening 36–39 %, poke 17–18,
+  way in 14–17, walk up 28–31** for the Champion, the Bulwark and the
+  Reaver -- §9's 40 / the rest / 20 / 30 near enough; the Elementalist 27 /
+  13 / 16 / 45, the Dual mage 48 / 19 / 14 / 20. Nothing in the animal
+  changed; the wins are the same.
 - **The lunge and the pounce land rarely** against a hunter that reads every
   silhouette (one in fifteen; one in a hundred against the Champion, who
   walks out of every circle; one in five against the Elementalist on a trunk
@@ -782,3 +789,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here one more win, 9 from 8 (14 throws).
  Same seeds, after: 9 of 24 in 483 s, unchanged (14 throws, every one leapt).
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species veilstalker --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       6/24   336 s   39 / 18 / 15 / 28 %          0       12/12   303s   0
+  Bulwark        9/24   483 s   36 / 17 / 17 / 30 %          0       10/12   609s   0
+  Reaver         6/24   491 s   38 / 17 / 14 / 31 %          0       10/12   499s   0
+  Elementalist  22/24   208 s   27 / 13 / 16 / 45 %          0       12/12   210s   0
+  Blood mage     0/24      --   36 / 15 / 13 / 36 %          0       0/12    --s   0
+  Dual mage      0/24      --   48 / 19 / 14 / 20 %          0       0/12    --s   0
+```

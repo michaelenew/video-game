@@ -672,6 +672,7 @@ from twelve single runs each, which print the report's lines:
    Elementalist 0 and 0)
 
   windows, every class: threatening 79-80 %, poke 6-7, way in 9, walk up 5
+  (as built, over the whole fight; in reach, from 2026-10-01: below)
   coop, two Champions: 0/12
 ```
 
@@ -691,6 +692,29 @@ eight minutes, and plan B -- the ride -- wins more often (7 against 4) and
 loses its rider to throws and the roll. **Zero unanswerable hits and zero
 unseen tells** for every class and both plans. Short of the targets:
 
+- **Out of reach, 2026-10-01** ([plans/polish-fights.md](../plans/polish-fights.md)):
+  **the measure was half wrong, and is changed; the creature was left.** A
+  bird on the floor across the plateau, or skimming a lane ten metres off,
+  counted as out of reach as much as one circling sixteen metres up; §9's
+  measure is the waiting room, so the report now asks whether the class
+  could touch it from where it stands *or from the floor under it, walked to*
+  (`windows.rs` pins both). Melee classes: **49–59 %**, from 55–67 (the
+  Champion 59, the Bulwark 53, the Reaver 50); the Elementalist 4. What is
+  left is the bird circling (about a third of the fight) and on the tower.
+  Every lever on the creature that brought it lower cost the ride its
+  wager: a wider line-up arc (90°) and a longer dwell after a Stoop (4 s)
+  took the Champion to 43 % and plan B from **7 wins in 24 to 1**; the dwell
+  alone to 52 % and plan B to 1; a lower patience aloft and a faster wind
+  moved it three points and lost wins. §9 says plan B should win more often
+  than plan A; at a third out of reach it does not, so the third is the
+  person's question it was, with these numbers beside it.
+- **Coop, two Champions, 0–1 of 12**: not the bird's. Its Wing buffet lands
+  on the pair 77–90 times in twelve hunts against 3–4 on one hunter, every
+  one on a hunter in the air: the pair's plan jumps it on time, eight frames
+  ahead, and then drops out of the jump from under two metres before the
+  sweep has passed (traced frame by frame; a Champion's hop tops out at
+  3.97 m). A slower buffet (28 frames) changed nothing. A finding for the
+  scripted pair, not the creature.
 - **Out of reach is two thirds for the melee classes, not a third** (§12's
   second question, answered "too much" by the numbers). It is counted from
   where the fighter stands -- a grounded bird across the plateau is out of
@@ -698,8 +722,24 @@ unseen tells** for every class and both plans. Short of the targets:
   (1.0 a second) perches it more and took ten points off, and lost the
   Champion half his wins; a longer dwell on the floor after a Stoop did the
   same. Left at the first guesses for a person to decide.
-- **The windows are four fifths threatening**: the bird is threatening while
-  it circles, and it circles most of the fight.
+- **The windows were four fifths threatening**: the bird counted as
+  threatening while it circled, and it circles most of the fight. **The
+  measure was wrong, and changed (2026-10-01,
+  [plans/polish-fights.md](../plans/polish-fights.md))**, in two places.
+  §9 asks for the windows "of the frames it is in reach", and the report
+  asked them of every frame: a bird circling out of reach is neither offering
+  an opening nor refusing one, so those frames are left out
+  (`Tally::windowed`). And the gather and the lift (and the flight to the
+  perch) counted as threats because they are moves; neither does damage or
+  moves anybody, and a bird gathering itself off the floor for 45 frames,
+  wings down and in reach, is the end of the walk-up the Stoop and the crash
+  open -- counted now as what is left of the move and its pause, as the
+  Veilstalker's retreat is. **In reach: threatening 52–66 %, poke 7–11, way in
+  10–17, walk up 17–23** (the Champion 61 / 11 / 10 / 18). Walk-up is the
+  sixth §9 asks. Threatening is still over its four tenths, and that part is
+  real: in reach, the bird is either making a pass or dwelling on the floor
+  after a Stoop with the buffet and the Screech ready -- the dwell the build
+  added to bring it into reach (below), whose price is exactly that.
 - **The carry and the barrel roll are rarely or never seen**: the scripted
   hunter crouches under every pass, and plan B's rides end in the first lap.
 - **The rest of the roster lost** to the scripted hunter until 2026-10-01,
@@ -747,3 +787,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here nothing in wins (33 and 22 throws): the windows on the floor are too short for the leap and the Slam.
  Same seeds, after: plan A 0 of 24, plan B 1 of 24 in 538 s (from 2 in 700 s); 22 and 21 throws, 15 and 4 of them planted and recalled rather than leapt to. The wing on a pass and the legs of a carrying bird are struck now; the hunter does not yet throw at a pass.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species galewing --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       4/24   482 s   59 /  9 / 15 / 17 %          0       0/12    --s   0
+  Bulwark        0/24      --   52 /  9 / 17 / 22 %          0       0/12    --s   0
+  Reaver         9/24   646 s   52 /  9 / 18 / 22 %          0       0/12    --s   0
+  Elementalist  17/24   176 s   64 /  7 / 11 / 17 %          0       11/12   158s   0
+  Blood mage     0/24      --   52 /  9 / 16 / 22 %          0       0/12    --s   0
+  Dual mage      0/24      --   52 /  9 / 17 / 22 %          0       0/12    --s   0
+```

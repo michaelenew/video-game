@@ -795,6 +795,17 @@ because a guessed Ready is a stance it is not hit in. The windows sit on §9's
   blows and not the fire it stands in. The Reaver's shadow beside it is played
   and is not enough.
 
+**The Bulwark, looked at again (2026-10-01,
+[plans/polish-fights.md](../plans/polish-fights.md)); nothing changed.** He
+still wins 18 of 24 with the shield throw learned. The habit reads him as §7
+says it will -- it took Ready against his Bash eleven times in a hunt -- and
+every one timed out, because his wins are not into the guard at all: 22 Bashes
+blocked, and the damage is his Slam into its recoveries, 180 a hit. No rule
+in this document answers a whiff punish that heavy, and the levers that would
+-- less from a Slam, a parry that staggers it (§12 4), his kit -- are each a
+rule about one class or about the class itself, so question 9 stands as
+written.
+
 **Open questions added.**
 
 9. **The Bulwark is the easiest class, not the hardest.** §7 calls the mirror
@@ -809,3 +820,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here nothing: the Mantis plan never walks in on a window from range, so the solo row is bit for bit the same; the duo's one throw moved its mean by two seconds.
  Same seeds, after: 18 of 24 alone and 11 of 12 as a pair, unchanged; the plan still throws once in the pair's twelve. Its guard turns a thrown shield as it turns a sword (`thrown_shield.rs`).
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species mantis --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       0/24      --   38 /  9 / 17 / 10 %          0       4/12   115s   0
+  Bulwark       18/24   246 s   47 /  7 / 15 / 13 %          0       11/12   176s   0
+  Reaver         0/24      --   37 / 11 / 17 /  5 %          0       3/12   111s   0
+  Elementalist  24/24    71 s   31 / 11 / 22 /  6 %          0       12/12    38s   0
+  Blood mage     0/24      --   37 / 11 / 16 /  6 %          0       0/12    --s   0
+  Dual mage      2/24   212 s   32 / 10 / 22 /  9 %          0       8/12   151s   0
+```

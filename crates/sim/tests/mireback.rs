@@ -916,3 +916,14 @@ fn a_dead_toad_is_a_won_hunt_with_its_trophy_and_its_temper() {
     assert_eq!(beaten[0], Some(SpeciesId::MIREBACK));
     assert_eq!(at, 2);
 }
+
+/// **A patient animal pauses** (§5; polished 2026-10-01): between moves it
+/// waits more than a reaction and a swing twice over, so a hunter who has
+/// read its last move has a turn before the next. At 40 frames it was 45 %
+/// threatening against §9's 35, and every pause was a poke at best.
+#[test]
+fn between_moves_it_leaves_a_turn() {
+    let pause = SpeciesId::MIREBACK.get().think_frames() as i32;
+    let turn = sim::tuning::HUMAN_REACTION_FRAMES as i32 + 9;
+    assert!(pause >= 2 * turn, "a pause of {pause} frames is no turn");
+}

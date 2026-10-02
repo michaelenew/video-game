@@ -936,6 +936,10 @@ pub struct PairTally {
     /// and how many frames its marker has been on its target's screen.
     began_seen: [bool; MAX_MONSTERS],
     marker_seen: [u32; MAX_MONSTERS],
+    /// And frames running each fighter has stood in it: the marker under
+    /// your feet is the tell whether or not the camera was on it, as every
+    /// other creature's report counts it (bestiary §1.4; added 2026-10-01).
+    under: [[u32; sim::state::MAX_PLAYERS]; MAX_MONSTERS],
     /// Hits landed, those from a cat off screen as it began, and those whose
     /// marker had been on screen at least fifteen frames (for every move
     /// whose tell is that long).
@@ -1049,6 +1053,7 @@ impl Tally for PairTally {
             if let Doing::Startup { kind, .. } = now.doing {
                 if began(kind) {
                     self.marker_seen[s] = 0;
+                    self.under[s] = [0; sim::state::MAX_PLAYERS];
                     self.began_seen[s] =
                         look(who).is_none_or(|v| in_view(who, v, middle(&now), HALF_VIEW, &scene));
                     match kind {
@@ -1085,6 +1090,16 @@ impl Tally for PairTally {
                     && !matches!(before.players[who].action, Action::Dodge { .. });
                 if dodged {
                     self.bitten += 1;
+                }
+            }
+            // Its marker under each fighter.
+            if now.doing.attacking().is_some() {
+                for (i, p) in after.players.iter().enumerate() {
+                    self.under[s][i] = if marker_covers(&now, p.pos, Fx::ZERO) {
+                        self.under[s][i] + 1
+                    } else {
+                        0
+                    };
                 }
             }
             // Its marker on its target's screen.
@@ -1165,7 +1180,15 @@ impl Tally for PairTally {
                         // it landed: outside it, it walked in since.
                         let then = self.trail[who][0];
                         let walked = !marker_covers(&now, then, Fx::ZERO);
-                        if self.marker_seen[s] as usize >= REACTION {
+                        // Asked of the fighter it hurt: its target, or
+                        // whoever walked into it.
+                        let hit = (0..after.players.len())
+                            .filter(|i| after.players[*i].health < before.players[*i].health)
+                            .min_by_key(|i| (*i != who) as u8)
+                            .unwrap_or(who);
+                        if self.marker_seen[s] as usize >= REACTION
+                            || self.under[s][hit] as usize >= REACTION
+                        {
                             self.marker_ok += 1;
                         } else if walked {
                             self.walked_in += 1;
@@ -1275,6 +1298,7 @@ impl Default for PairTally {
             two_alive: 0,
             began_seen: [true; MAX_MONSTERS],
             marker_seen: [0; MAX_MONSTERS],
+            under: [[0; sim::state::MAX_PLAYERS]; MAX_MONSTERS],
             hits: 0,
             off_screen: 0,
             marker_hits: 0,

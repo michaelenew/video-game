@@ -627,15 +627,30 @@ beats both one-sided plans by a distance -- the fight is the division of
 attention it was designed as. Threatening 44 %, as asked. Short of the target:
 won fights last two and a half minutes, not three to six; the walk-up share is
 a third, not a fifth (her stride is long and the hunter keeps a post beside a
-leg, §3); pops are a quarter per slam window, not one. **Unanswerable hits are
-not zero**: one or two in 24 for four classes, every one a broodling's
-hamstring or dart whose crouch began off the hunter's screen while the lane it
-draws had been under them for 7 to 14 frames, short of the report's fifteen
-(the gnawers' own rule, as the Gnawers have it). The rest of the roster lost
-until 2026-10-01, when the hunter did not play their classes; it does now
-(above), and the Dual mage wins, the Elementalist wins by ignoring the brood,
-and the Reaver, the Bulwark and the Blood mage do not. Not yet played: the
-Elementalist's free pop from a stone, and the Reaver's throw into the window.
+leg, §3); pops are a quarter per slam window, not one. **Unanswerable hits were
+not zero** when built: one or two in 24 for four classes, every one a
+broodling's hamstring, dart or pile-on whose crouch began off the hunter's
+screen -- behind one of the Hollows' pillars, or below the bottom of the
+screen of a hunter looking up at a sac -- while the lane it draws had been
+under them for 3 to 14 frames, short of the report's fifteen. **Fixed
+2026-10-01 for every pack** ([critters.md](../critters.md) §2,
+[plans/polish-fights.md](../plans/polish-fights.md)): a bite begun off your
+screen lands only through a marker that has been under you for a reaction.
+The rest of the roster lost until 2026-10-01, when the hunter did not play
+their classes; it does now (above), and the Dual mage wins, the Elementalist
+wins by ignoring the brood, and the Reaver, the Bulwark and the Blood mage do
+not. Not yet played: the Elementalist's free pop from a stone, and the
+Reaver's throw into the window.
+
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)):
+the length and the pops are the plan's, and nothing was changed.** The
+balanced Champion spends **0 %** of its time on the sacs and puts 3 % of its
+damage into them: a quarter of a pop per slam window is a hunter that does
+not go to the abdomen, not a window too short to use (§4: every sac inside
+every class's reach for 90 frames). Her length follows from the same thing --
+a fight with few pops is a fight against her 6000 alone -- and lengthening it
+on the creature (more health) would take the balanced Champion below the 5 of
+24 it wins against a target of a third. For the hunter's next pass.
 
 **What changed from the sections above.**
 
@@ -679,3 +694,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it takes him to the sacs: 49 pops in 109 slam windows, from 5 in 139, and his first win (1 of 24).
  Same seeds, after: 0 of 24 (from 1), sac pops 43 in 129 slam windows (from 49 in 109). The leap reaches the sac before the shield does, so a sac popped by the throw itself is rare; whether his throw is his one standing answer to a sac (§7) is now a question for the hunter's aim, not the simulation.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species broodmother --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       5/24   147 s   44 /  9 / 14 / 33 %          0       12/12    67s   0
+  Bulwark        0/24      --   47 /  9 / 14 / 31 %          0       12/12   124s   0
+  Reaver         0/24      --   47 /  9 / 13 / 31 %          0       12/12    66s   0
+  Elementalist   1/24   142 s   48 /  7 / 12 / 33 %          0       12/12    57s   0
+  Blood mage     0/24      --   48 /  8 / 13 / 31 %          0       0/12    --s   0
+  Dual mage     11/24   154 s   47 /  9 / 14 / 31 %          0       11/12    93s   0
+```

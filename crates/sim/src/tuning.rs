@@ -277,6 +277,14 @@ pub fn round_over_frames() -> u16 {
 /// visual reaction.
 pub const HUMAN_REACTION_FRAMES: u16 = 15;
 
+/// **Half the width of what the camera shows**, in turns: a little over fifty
+/// degrees either side, a 16:9 screen at the default field of view, taken as
+/// a cone round the look. What "on the screen" means wherever the rules ask
+/// it of a fighter's view -- a pack's bite begun off it is answered only by
+/// its marker (`pack::watch`) -- and what the fight report's hidden commits
+/// count against. Not a feel number: it is what the renderer shows.
+pub const SCREEN_HALF_VIEW: Fx = Fx::from_raw(9100);
+
 /// The airdodge: shorter and slower than the grounded one.
 ///
 /// Shorter because you are already committed by being in the air -- the jump

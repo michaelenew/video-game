@@ -713,3 +713,142 @@ fn a_standing_swing_pointed_at_a_gnat_dips_and_one_pointed_over_it_stays_level()
     );
     assert_eq!(airborne, plain);
 }
+
+// ---------------------------------------------------------------------------
+// A bite from off the screen is answered by its marker (pack::watch)
+// ---------------------------------------------------------------------------
+
+/// One gnat a metre behind a fighter who looks along +x, already
+/// winding up a bite at them. With `late`, the fighter stands further along
+/// its lane than the bite reaches, and is put under it `late` frames before
+/// it lands. Looking `back` turns them round to face it. Whether the
+/// bite connected.
+fn a_bite_from_behind(back: bool, late: Option<u16>) -> bool {
+    let mut w = gnats(Class::Champion);
+    let sp = w.critters.sp();
+    for c in w.critters.iter_mut() {
+        *c = Critter::EMPTY;
+    }
+    let me = sim::critcheck::lane();
+    let a = sp.attack(gnats::BITE);
+    // The gnat faces +x, toward the fighter's back, from a metre behind.
+    let mut c = Critter::new(
+        sp,
+        gnats::GNAT,
+        me.add(V3::new(Fx::from_int(-1), Fx::ZERO, Fx::ZERO)),
+        0,
+    );
+    c.health = i16::MAX;
+    w.critters[0] = c;
+    w.pack.as_mut().unwrap().grace = u16::MAX;
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(12));
+    // Further along its line than it reaches to begin with, if they are to be
+    // put under it late: it still turns their way, and nothing is under them.
+    let away = me.add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    w.players[0].pos = if late.is_some() { away } else { me };
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    // Looking up at something high in front of them, the floor at their
+    // heels is off the bottom of the screen -- as a hunter looking up at a
+    // creature's back has it. Or turned round to the gnat, looking at it.
+    let up = me.add(V3::new(Fx::from_int(4), Fx::from_int(10), Fx::ZERO));
+    let look = if back {
+        Input::looking_at(1 << 15, 0, 0)
+    } else {
+        Input::looking_at(
+            0,
+            0,
+            aim::look_onto_closely(w.players[0].pos, 0, Fx::ZERO, up),
+        )
+    };
+    w.advance([look, Input::default()]);
+    // The windup begins.
+    let c = &mut w.critters[0];
+    c.state = is::STARTUP;
+    c.act = gnats::BITE;
+    c.timer = a.startup.max(1);
+    c.target = 0;
+    let health = w.players[0].health;
+    for f in 0..(a.startup + a.active + 4) {
+        let left = a.startup.saturating_sub(f);
+        if late == Some(left) {
+            w.players[0].pos = me;
+        }
+        w.players[0].health = health.max(w.players[0].health);
+        let before = w.players[0].health;
+        w.advance([look, Input::default()]);
+        if w.players[0].health < before {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn a_bite_begun_off_the_screen_lands_only_through_its_marker() {
+    let sp = sim::species::SpeciesId::GNATS.get();
+    let startup = sp.attack(gnats::BITE).startup;
+    let reaction = sim::tuning::HUMAN_REACTION_FRAMES;
+    assert!(
+        startup > reaction + 2,
+        "the test needs a windup longer than a reaction: {startup}"
+    );
+    // Behind them, and they stood in its lane all along: the marker under
+    // their feet was the tell, and it lands.
+    assert!(
+        a_bite_from_behind(false, None),
+        "a marked bite from behind should land"
+    );
+    // Behind them, and they were put in its lane too late to have seen the
+    // marker for a reaction: it goes through them.
+    assert!(
+        !a_bite_from_behind(false, Some(reaction - 5)),
+        "a bite from off the screen, with its marker under them for under a reaction, landed"
+    );
+    // The same late step, looking at it: the crouch was on the screen, and it
+    // lands.
+    assert!(
+        a_bite_from_behind(true, Some(reaction - 5)),
+        "a bite begun on the screen should land however late they stepped in"
+    );
+}
+
+#[test]
+fn a_body_that_has_committed_keeps_the_fighter_it_wound_up_at() {
+    // A windup at fighter 0; fighter 1 is then the nearer. Through any number
+    // of glances it stays at 0: a windup that swung to the other hunter
+    // would be a tell that lied to both of them.
+    let mut w = gnats(Class::Champion);
+    let sp = w.critters.sp();
+    for c in w.critters.iter_mut() {
+        *c = Critter::EMPTY;
+    }
+    let me = sim::critcheck::lane();
+    let mut c = Critter::new(sp, gnats::GNAT, me, 0);
+    c.health = i16::MAX;
+    c.state = is::STARTUP;
+    c.act = gnats::BITE;
+    c.timer = u16::MAX;
+    c.target = 0;
+    w.critters[0] = c;
+    w.pack.as_mut().unwrap().grace = u16::MAX;
+    w.players[0].pos = me.add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
+    w.players[1].pos = me.add(V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(2)));
+    for _ in 0..60 {
+        keep_up(&mut w);
+        w.advance(idle());
+        assert_eq!(
+            w.critters[0].target, 0,
+            "a committed body changed its target"
+        );
+    }
+    // Out of its windup, it is after the nearest again.
+    w.critters[0].state = is::PROWL;
+    for _ in 0..60 {
+        keep_up(&mut w);
+        w.advance(idle());
+    }
+    assert_eq!(
+        w.critters[0].target, 1,
+        "a body with nothing out should go for the nearest"
+    );
+}

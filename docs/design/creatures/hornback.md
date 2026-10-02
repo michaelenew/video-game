@@ -729,15 +729,21 @@ health: a pillar under a bull that stands in it (86), bolts from her post.
 **The Bulwark** takes the hook and the shoulder on his shield now (133 guards)
 and wins one more, twenty seconds sooner. **The Reaver** sends her shadow to
 the bull (137) and is where she was; the herd's bodies take no marks, so she
-never cashes. **Four classes take one unanswerable hit in 24** where none did:
+never cashes. **Four classes took one unanswerable hit in 24** where none did:
 the one traced, the Blood mage's, was the bull's windup begun out of her sight
 as she walked to her post -- a course of the fight the Champion's hunts never
-take. **On the crossing** the Elementalist arrives more often and the Blood mage
+take. **Fixed the same day for every pack** ([critters.md](../critters.md)
+§2, [plans/polish-fights.md](../plans/polish-fights.md)): a windup begun off a
+hunter's screen lands on them only through a marker under them for a
+reaction -- the charge's lane, the bellow's -- so the bull's bite from out of
+sight goes through. Zero since, six classes, alone and in pairs; the wins
+did not move (22 / 20 / 16 / 24 / 22 / 14 of 24). **On the crossing** the Elementalist arrives more often and the Blood mage
 and the Dual mage less: a hunter fighting the bull harder is a hunter further
 from the cart.
 
 **Against the targets.** Zero unanswerable hits and zero hidden commits for every
-class, as first measured (one each for four classes since, above). **At least one charge in three goes into a solid** for every class the
+class, as first measured and again since 2026-10-01 (one each for four
+classes in between, above). **At least one charge in three goes into a solid** for every class the
 plan plays well -- the Champion on the line, the Elementalist (who raises a stone
 into a lane with nothing at its end) at two in three -- and the stun is where
 the fight's damage goes: four fifths of the Champion's. The charge lands under
@@ -820,3 +826,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it costs him one hunt in each arena: a throw the plan cuts short with a dodge leaves him without his guard until the shield is home (26 throws, 16 given up, in the 24).
  Same seeds, after: the meadow 20 of 24 in 154 s (from 19 in 163 s), the crossing 8 of 12 (from 7). A throw at the work meets a cow on its way and is a blow there (29 throws, 8 leaps, 21 recalls), where before it flew on.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species hornback --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      22/24   109 s   38 /  8 / 20 / 34 %          0       12/12   124s   0
+  Bulwark       20/24   154 s   36 /  8 / 27 / 29 %          0       12/12   178s   0
+  Reaver        16/24   164 s   36 /  7 / 26 / 31 %          0       10/12   198s   0
+  Elementalist  24/24    36 s   34 /  7 / 15 / 45 %          0       12/12    27s   0
+  Blood mage    22/24   109 s   39 /  8 / 20 / 32 %          0       12/12   108s   0
+  Dual mage     14/24   219 s   37 /  8 / 27 / 27 %          0       11/12   182s   0
+```

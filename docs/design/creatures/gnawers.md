@@ -693,7 +693,14 @@ her red. **The Reaver** sends her shadow into the ring (61) and is as quick as
 the Champion. The Champion's and the Bulwark's hunts did not move.
 
 **Against the targets.** Zero unanswerable hits of both kinds, and zero hidden
-commits, for every class. The windows are near what §9 asks (30/25/20/25):
+commits, for every class -- held by rule since 2026-10-01 rather than by luck
+of the plan: the same gnawer, borrowed by the Broodmother and the Siegeshell,
+bit from behind a pillar and from below a hunter's screen, so every pack now
+lands a bite begun off your screen only through a marker under you for a
+reaction ([critters.md](../critters.md) §2). The numbers here did not move a
+frame. In coop the report used to count three in twelve Dual mage pairs: a
+pile-on that swung to the other hunter at the next glance (a committed body
+keeps its target now), and a scramble that reached nobody. The windows are near what §9 asks (30/25/20/25):
 threatening on the mark, poke high and the two long windows short, because a
 free token reads as a poke's window. Won nine in ten or better for five
 classes. **Short and easy**: 33 to 57 seconds against one to two minutes, and
@@ -774,6 +781,18 @@ shadow crossing and the Blood mage's blink only now and then (one dash and one
 blink in 24 hunts), which are what §4 says reach the leader in a window.
 *Changed 2026-10-01:* it plays the Dual mage's bars now, and she wins 20.
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)):
+the fight is still short, and nothing was changed.** Every class played, the
+won fights run 24 s (the Elementalist) to 87 s (the Dual mage), the Champion
+35. Health is not the lever: gnawers at 260 and the Big One at 800 bought
+the Champion 14 seconds and took the Blood mage from 21 wins to 6 and the
+Dual mage from 20 to 6; the Big One alone at 1000, eleven seconds and the
+Blood mage to 3; 200 and 650, five seconds and the Blood mage to 18. The
+pack is short of danger rather than of health -- one hit taken in a typical
+Champion hunt, two bodies winding up at once 3 % of it -- so the levers left
+are the ones this section already names (the front arc, the tokens, the
+crouch), and they are a person's to pull with the fight in their hands.
+
 ### Still open -- for a person
 
 - **Is it too easy?** The scripted hunter keeps most of its health. The
@@ -800,3 +819,17 @@ blink in 24 hunts), which are what §4 says reach the leader in a window.
 answerable on sight); the pile-on leaps in sequence rather than at once (so the
 dodge answers it); the Big One's death makes the rout final; and two moves were
 added — the maul answered by a jump, and the gnaw that covers a stone's top.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species gnawers --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      24/24    35 s   27 / 43 / 13 / 17 %          0       12/12    22s   0
+  Bulwark       24/24    35 s   26 / 45 / 11 / 18 %          0       12/12    23s   0
+  Reaver        24/24    33 s   25 / 45 / 11 / 20 %          0       12/12    22s   0
+  Elementalist  24/24    24 s   23 / 52 / 12 / 13 %          0       12/12    15s   0
+  Blood mage    21/24    57 s   26 / 46 /  8 / 20 %          0       12/12    37s   0
+  Dual mage     20/24    87 s   28 / 49 / 12 / 11 %          0       12/12    79s   0
+```

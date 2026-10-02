@@ -729,11 +729,14 @@ in three to five minutes. **Short of the target**: the windows. The shell is
 near the asked four tenths threatening; the floor is not -- under a tenth --
 because the ground hunter spends the back half of the fight at a broken leg
 buckling it (as §4 says it should), and a broken leg throws nothing. The stamp
-and the drag are rare for the same reason. **Unanswerable hits are not zero**:
-every one counted is a parasite's bite from a windup begun off the hunter's
-screen while it watched an ankle or an anchor, the Broodmother's brood's case
-exactly; the Siegeshell's own three kinds (a stamp with no disc, a ring on the
-helpless, two channels inside the gap) are zero in every run.
+and the drag are rare for the same reason. **Unanswerable hits were not zero**
+when built: every one counted was a parasite's bite from a windup begun off
+the hunter's screen while it watched an ankle or an anchor, the Broodmother's
+brood's case exactly; the Siegeshell's own three kinds (a stamp with no disc,
+a ring on the helpless, two channels inside the gap) are zero in every run.
+**Fixed 2026-10-01 for every pack** ([critters.md](../critters.md) §2): a
+bite begun off your screen lands only through a marker that has been under
+you for a reaction. Zero since, six classes, alone and as a pair.
 
 **2026-10-01: the hunter plays all six classes** (`hunt::class`,
 [bestiary.md](../bestiary.md) §8). The plan's legs, parasite, anchor and dodge
@@ -798,7 +801,43 @@ What the build decided beside the document:
   once where a query used to pose it per vent, per swing sample and per step of
   a rider's walk was.
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)).**
+
+- **Alone, its anchors are 5 900, not 7 000** (`AnchorAlone`, the
+  hunt's hunters counted on its first frame, as the Galewing's coop health
+  is). At 7 000 a lone Champion broke two anchors' worth before the
+  parasites, the rings and the falls wore him down, and won none of 24; tier
+  5 asks one in twenty. Solo, 24 hunts each: Champion 1, Bulwark 0, Reaver 4,
+  Elementalist 1, Blood mage 0, Dual mage 0 -- six in 144, one in 24. 5 000
+  gave twenty-three (the Champion 5, in four minutes), 5 600 thirteen, 6 200
+  six with the Champion at none. The pair's fight is untouched: two hunters
+  get `AnchorHealth`, and their numbers are the same to the hunt
+  (`alone_its_anchors_are_the_ones_one_hunter_can_break`).
+- **The floor's threatening share stays under a tenth.** The ground hunter
+  buckles a broken leg, and a broken leg throws nothing; the levers that
+  reach him from the next leg over (a longer stamp, more stamps) were tried
+  when it was built and cost the pair half its wins. Nothing new was found
+  that does not; the share is the price of a fight whose ground half is
+  meant to be won.
+- **The Reaver as a pair wins 12 of 12.** Her shadow at an anchor and the
+  dash to it are her §7 ("excellent above"); nothing in the shell singles
+  her out, and taking it from her is a class change. Left for the owner.
+
 For a person: whether the beat is a rhythm or a chore (§12, 6), whether 0.8
 m/s reads as walking (§12, 5), the solo rate (§12, 7), the Reaver, who
 wins twelve of twelve as a pair, and the Bulwark and the Blood mage, who win
 nothing in any company.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species siegeshell --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       1/24   187 s   57 /  2 /  2 / 39 %          0       4/12   507s   0
+  Bulwark        0/24      --   72 /  1 /  2 / 25 %          0       0/12    --s   0
+  Reaver         4/24   257 s   58 /  2 /  4 / 36 %          0       12/12   223s   0
+  Elementalist   1/24   351 s   69 /  3 /  4 / 23 %          0       6/12   339s   0
+  Blood mage     0/24      --   94 /  1 /  1 /  4 %          0       0/12    --s   0
+  Dual mage      0/24      --   76 /  3 /  4 / 17 %          0       9/12   452s   0
+```

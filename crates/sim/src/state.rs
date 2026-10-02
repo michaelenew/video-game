@@ -2286,6 +2286,25 @@ impl World {
         // cart rolling.
         self.step_the_lore();
 
+        // The pack's referee, with everything where it ends the frame: which
+        // windups began off whose screen, and who has stood under a marker
+        // how long (`pack::watch`).
+        if let Some(mut brain) = self.pack {
+            let field = stones::gather(&self.players);
+            let ground = self.terrain();
+            let signs = self.signs();
+            let scene = Scene {
+                stones: &field,
+                players: &self.players,
+                effects: &self.effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &ground,
+            };
+            pack::watch(&mut brain, &self.critters, &inputs, &scene, &signs);
+            self.pack = Some(brain);
+        }
+
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
@@ -10279,6 +10298,11 @@ impl World {
                     .pack
                     .is_some_and(|decl| decl.mind.spares(&brain, &self.critters, c, i))
                 {
+                    continue;
+                }
+                // Begun off their screen, and no marker under them for a
+                // reaction: no tell, so no hit (`pack::watch`).
+                if pack::unanswered(&brain, c, i) {
                     continue;
                 }
                 let away = V3::new(

@@ -7160,3 +7160,204 @@ on a creature as a loaded Slam does (it does not: it is a blocked hit, as in
 versus); whether a critter knocked by a loaded throw should lie down even
 when the blow would not have flinched it (it does not); and the hunter, which
 still leaps before the shield arrives and so seldom uses it as a ranged blow.
+
+### 2026-10-01 — A bite from off the screen is answered by its marker, or not at all
+
+**Changed** Every pack (`sim::pack`): a windup that began off a fighter's
+screen lands on that fighter only if its marker -- the body's own lane, or a
+fight's sign for something coming -- has been under them for a reaction
+(fifteen frames); otherwise it goes through them (`pack::watch`,
+`pack::unanswered`, [critters.md](critters.md) §2). A body that has committed
+keeps the fighter it wound up at through the next glance. The screen's half
+width is one number, `tuning::SCREEN_HALF_VIEW`, which the fight report now
+reads too. In the report, a hidden commit is asked of the fighter the bite
+reached rather than of its target, and a move that marks itself spent without
+reaching anybody (the scramble) is no hit. The Mireback's own rule, a flop
+from fresh tar, now asks for tar that was not on the floor at the commit and
+was under them the frame before the crash.
+
+**Why** The contract's one hard number. The Broodmother's brood and the
+Siegeshell's parasites dealt one or two unanswerable bites in 24 hunts for
+most classes, and the Siegeshell's pairs about one a hunt. Every one was a
+hamstring, dart or pile-on whose windup began **behind one of the Hollows'
+pillars**, or **below the bottom of the screen of a hunter looking up at a
+sac**, with the lane reaching them 3 to 14 frames before the bite. The
+Veilstalker and the Pair never wind up off the screen; a pack cannot be held
+to that, because the hamstring is *for* your back. So the rule is the
+report's own two clauses, kept by the referee rather than the brain: nothing
+the pack decides reads the camera, only the exchange asks whether a hit counts.
+
+**What the harness caught** Fixed the brood, and coop still counted three in
+the Gnawers' Dual mage pair: a pile-on retargeted at the next glance to the
+other hunter (hence "keeps its target"), then bites that reached the hunter
+who had seen them counted against the one who had not (hence "asked of the
+fighter it reached"), then a scramble up a stone that reached nobody. The
+Mireback's flops "from fresh tar" were the crash's own ring of pools -- laid on
+the crash frame, or merged into an old pool that grew under the hunter -- and,
+in coop, Dual mages floating down into old tar during the windup: tar that was
+on the floor to be seen.
+
+**Found** Zero unanswerable, six classes, solo 24 and coop 12, for the
+Gnawers, the Hornback, the Mireback, the Broodmother and the Siegeshell. The
+Gnawers' and the Hornback's solo numbers did not move a frame (no hit of
+theirs was ever caught by the rule); the Broodmother's Champion won 5 of 24
+rather than 7 (two hamstrings fewer, on different seeds), the Siegeshell's
+pairs as before.
+
+**Verdict** kept. For a person: whether a bite going through you from behind
+reads as luck or as the rule it is -- the lane under you is the only warning
+you were owed, and you were not under it long enough to have had it.
+
+### 2026-10-01 — The windows are each body's own, and of the frames they are about
+
+**Changed** The fight report's four windows. In a fight of more than one body
+each frame is counted once for each body alive, in that body's own band
+(`hunt::report`); the old reading -- the bodies free when any is -- is kept as
+its own line, *threatening, together*. A creature's tally can leave a frame
+out of the windows (`Tally::windowed`): the Galewing leaves out the frames it
+is out of the first hunter's reach, as its §9 always said. The Galewing's
+gather, lift and flight to the perch count as what is left of the move and
+its pause, not as threats. Nothing else measured moved: the Ridgeback, the
+Mantis, the Veilstalker, the Hornback, the Gnawers, the Mireback, the
+Sandmaw, the Broodmother and the Siegeshell print the same windows to the
+frame, re-run on the same seeds.
+
+**Why** Three creatures sat at four fifths or two thirds threatening against
+targets of 35 to 45 %, and each was asked whether the measure or the
+creature was wrong. **The Pair**: the measure -- the harness won two in
+three through openings the min-of-two said were not there; each cat's own
+window is 55–58 % threatening, walk-up a quarter, and the second cat's cover
+is measured where it is taught (both in view, off-screen hits, *together*).
+**The Galewing**: the measure, twice -- a bird out of reach offers no window
+either way, and a 45-frame gather on the floor with its wings down is the end
+of a walk-up, not a threat; in reach it is 52–66 % threatening, walk-up a
+sixth as asked, and the rest is real (passes, and the dwell after a Stoop
+with the buffet ready). **The Sandmaw**: neither -- its own §9 measure (the
+report's *threatening (perceived)*, 46–49 %) is right, and a standing worm
+answers whoever closes with the swallow, the lash or the Sound's knockdown, as
+§2 and §5 build it. The target was written for a stand that was only a
+window; it now reads ~45–50 %.
+
+**Reverted** The Sandmaw's `surface_max` at 150 and at 100 (from 240):
+threatening 50 and 50 % against 49, won 15 and 17 of 24 against 18. A stand
+ends at its first standing move or its Sound long before either.
+
+**Verdict** kept. For a person: whether a Pair at a quarter walk-up per cat
+feels like a fight with openings, and whether the Sandmaw's stand reads as
+the window §4 promises or as the worm's most dangerous moment.
+
+### 2026-10-01 — Every class played: the last unanswerable hits, and the fire pillar
+
+**Changed** Nothing new in the creatures: the merge of the class-playing
+hunter (`hunt::class`) brought the Hornback's first unanswerable hits (one in
+24 for the Bulwark, the Reaver, the Blood mage and the Dual mage) and the
+Mireback's 1/0/2/0/3/0 by class. Re-measured on this branch, both are zero for
+every class, solo and in pairs: the bull's were windups begun off the
+hunter's screen, which the pack's referee already sends through her; the
+Mireback's were every one its old fresh-tar measure (with only that measure
+put back, they return: Blood mage 3, Reaver 2, Champion 1). The Gnawers, the
+Broodmother and the Siegeshell, every class, solo and coop: zero.
+
+**Found** Asked whether any creature fails its own design against the
+Elementalist's fire pillar (she wins 24 of 24 against five): none does. The
+pillar lands on a creature her bolts have already flinched; once free, the
+Mireback flees the burning tar it lights, as its §5 says, and the Veilstalker
+panics as its §4 says (a flinched animal cannot walk out of the base as a
+slinking one would, which its §7 names as the lever). The Mantis, the Pair,
+the bull and the Gnawers have no rule about fire and stand in it -- the
+Mantis 85 % of a pillar's frames, a cat 57 % -- and nothing in their
+documents says they should not. Recorded in [bestiary.md](bestiary.md) §8 as
+the owner's call: one rule for the cast (a creature that can move does not
+stand in fire it has seen), or the pillar's burn on a creature.
+
+**Verdict** kept; nothing changed for the pillar.
+
+### 2026-10-01 — The Galewing's waiting room, measured as one
+
+**Changed** The Galewing's *out of reach* line: a bird the class could touch
+from the floor under it, walked to, is in reach (a grounded bird across the
+plateau, a low pass ten metres off). Melee classes 49–59 % out of reach, from
+55–67; nothing in the creature changed.
+
+**Why** §9's measure is the waiting room. A bird you can walk to is not one.
+
+**Reverted** A 90° line-up arc with a 4-second dwell after a Stoop: the
+Champion's out of reach to 43 %, and plan B from 7 wins in 24 to 1 -- the
+ride stops being the better wager §9 asks it to be. The dwell alone (52 %,
+plan B 1); patience aloft 250 (47 %, plan A 0 of 24); wind at 2.5 a second
+and perching at 15 (40 %, plan A 2). A Wing buffet at 28 frames for coop: the
+pair still takes 82 buffets in twelve hunts -- they jump on time and fall
+out of the jump before the sweep passes, which is the scripted pair's.
+
+**Verdict** kept the measure; the third out of reach stays a person's call
+between the waiting room and the ride.
+
+### 2026-10-01 — The Siegeshell alone: one in twenty
+
+**Changed** With one hunter its anchors are 5 900 (`AnchorAlone`), with two
+7 000 as before.
+
+**Why** Tier 5 is built for two and one in twenty alone; at 7 000 a lone
+hunter won none of 24 for the Champion and 5 of 144 across the classes,
+dying to attrition two anchors in.
+
+**Found** Six of 144 alone (Champion 1, Reaver 4, Elementalist 1). Pairs
+unchanged to the hunt.
+
+**Reverted** 5 000 (23 of 144, the Champion's wins in four minutes), 5 600
+(13), 6 200 (6, the Champion none).
+
+**Verdict** kept. The floor's tenth threatening and the Reaver pair's 12 of
+12 are recorded in the creature's §13, not changed.
+
+### 2026-10-01 — The Mireback pauses; the Gnawers and the Broodmother left
+
+**Changed** The Mireback waits 60 frames between moves (from 40) and has
+11 000 health (from 10 000, §1's first guess).
+
+**Why** Threatening was 45 % against 35: a toad that decides every two
+thirds of a second leaves only a poke between its long tells. The health
+pays for the turn it gives back.
+
+**Found** Threatening 35–41 % for every class; the Champion 18 of 24 in
+147 s (from 21 in 120); zero unanswerable; two Champions 12 of 12.
+
+**Reverted** 70 frames and 12 000 (the Champion 12 of 24 in 190 s, the
+Blood mage none). The Gnawers' length by health -- 260 and 800, 1000 for the
+Big One alone, 200 and 650: five to fourteen seconds bought, and the Blood
+mage and the Dual mage lost most of their wins each time. Nothing changed
+for the Broodmother: her balanced Champion spends no time on the sacs, so
+the pops and the length are the plan's.
+
+**Verdict** kept the Mireback; the Gnawers' length and the Broodmother's pops
+recorded in their §13.
+
+### 2026-10-01 — The Veilstalker's stalk is in no window
+
+**Changed** The fight report leaves out of the four windows the frames the
+Veilstalker prowls unseen -- its stalk running, or its target out of view --
+as it leaves out the frames the Galewing is out of reach.
+
+**Why** Its way in was 6–8 % against 20 and its walk-up 40 against 30. The
+walk-up was the stalk, not the recoveries §9 gives it to: an animal nobody
+can find is not safe to walk up to.
+
+**Found** The Champion 39 / 18 / 15 / 28 %, the Bulwark 36 / 17 / 17 / 30,
+the Reaver 38 / 17 / 14 / 31. Wins unchanged.
+
+**Verdict** kept.
+
+### 2026-10-01 — The Pair's second clause, as the cast counts it
+
+**Changed** The Pair's report: a hit whose cat began off the screen is
+answerable if its marker was on the victim's screen for fifteen frames *or*
+under where they stood for fifteen, asked of the fighter it hurt.
+
+**Why** Every class in pairs showed one unanswerable in twelve for the
+Bulwark and the Blood mage: markers under the hunter's feet from the first
+frame, on their screen for 14 and 12 -- a camera pitched at a perched cat.
+Every other creature's report, and the contract, count a marker under you.
+
+**Found** Zero, six classes, solo and coop. The cats are unchanged.
+
+**Verdict** kept.

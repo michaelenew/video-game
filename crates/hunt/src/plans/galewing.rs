@@ -896,6 +896,9 @@ fn ranged(class: Class) -> Fx {
 pub struct GaleTally {
     fought: u32,
     out_of_reach: u32,
+    /// The bird out of the first hunter's reach this frame: what the four
+    /// windows leave out (§9, "of the frames it is in reach").
+    out_now: bool,
     /// Wing damage per wing, from the bars.
     wing_damage: [i32; 2],
     /// Passes thrown and the wing hits taken inside them.
@@ -970,6 +973,43 @@ impl Tally for GaleTally {
         self.observe_with(before, after, &[]);
     }
 
+    /// The four windows are asked of the frames it is in reach (§9): a bird
+    /// circling out of reach is neither offering an opening nor refusing
+    /// one, and counted as threatening -- free to act -- it made the windows
+    /// four fifths threatening for the whole fight.
+    fn windowed(&self, w: &World) -> bool {
+        let _ = w;
+        !self.out_now
+    }
+
+    /// **The gather and the lift, and the flight to the perch, are not
+    /// answers.** Neither does damage or moves anybody: a bird gathering
+    /// itself off the floor for 45 frames, wings down and in reach, is the
+    /// end of the walk-up the Stoop and the crash open, not a threat -- as
+    /// the Veilstalker's retreat is not. Until it can next hit: what is left
+    /// of the move, its recovery, and the pause before it decides.
+    fn until_free(&self, w: &World, slot: usize, free: u16) -> u16 {
+        let Some(m) = w.monsters[slot] else {
+            return free;
+        };
+        match m.doing {
+            Doing::Startup { kind, left }
+            | Doing::Active { kind, left }
+            | Doing::Recovery { kind, left }
+                if kind == gw::LIFT || kind == gw::PERCH =>
+            {
+                let a = m.sp().attack(kind);
+                let rest = match m.doing {
+                    Doing::Startup { .. } => left + a.active + a.recovery,
+                    Doing::Active { .. } => left + a.recovery,
+                    _ => left,
+                };
+                rest.saturating_add(m.sp().think_frames())
+            }
+            _ => free,
+        }
+    }
+
     fn observe_with(&mut self, before: &World, after: &World, bots: &[Hunter]) {
         self.frames += 1;
         let Some(slot) = fight::slot_of(after) else {
@@ -993,7 +1033,12 @@ impl Tally for GaleTally {
         };
         // Out of reach: nothing the first hunter has touches it from where
         // it stands -- its swing from the top of a hop, or its longest
-        // throw.
+        // throw -- **or from the floor under it**, walked to. §9's measure
+        // is the waiting room: a bird on the floor across the plateau, or
+        // skimming a lane ten metres off, is a bird you go to, and until
+        // 2026-10-01 it counted as out of reach as much as one circling
+        // sixteen metres up.
+        self.out_now = false;
         if let Some(bot) = bots.first() {
             let p = after.players[bot.who];
             if self.hop.is_none_or(|(c, _)| c != p.class) {
@@ -1005,9 +1050,19 @@ impl Tally for GaleTally {
                 let swing_top = feet
                     .add(V3::new(Fx::ZERO, sim::tuning::body_height(), Fx::ZERO))
                     .add(V3::new(Fx::ZERO, hop, Fx::ZERO));
-                let nearest = now.nearest_to(swing_top);
-                let melee =
-                    sim::math::wide_len(nearest.sub(swing_top)).raw() <= Fx::from_int(3).raw();
+                let reaches = |top: V3| {
+                    sim::math::wide_len(now.nearest_to(top).sub(top)).raw() <= Fx::from_int(3).raw()
+                };
+                // The same swing from the floor under its middle, if that
+                // floor is the floor the hunter stands on (within a hop):
+                // somewhere a walk gets to.
+                let under = V3::new(now.pos.x, feet.y.add(Fx::ONE), now.pos.z);
+                let floor = ground.ground_under(under);
+                let walkable = floor.sub(feet.y).abs().raw() <= hop.max(Fx::ONE).raw();
+                let under_top = V3::new(now.pos.x, floor, now.pos.z)
+                    .add(V3::new(Fx::ZERO, sim::tuning::body_height(), Fx::ZERO))
+                    .add(V3::new(Fx::ZERO, hop, Fx::ZERO));
+                let melee = reaches(swing_top) || (walkable && reaches(under_top));
                 let throw = sim::math::wide_len(
                     now.nearest_to(sim::aim::origin(feet))
                         .sub(sim::aim::origin(feet)),
@@ -1016,6 +1071,7 @@ impl Tally for GaleTally {
                     <= ranged(p.class).raw();
                 if !(melee || throw) && now.brain.grace == 0 {
                     self.out_of_reach += 1;
+                    self.out_now = true;
                 }
             }
         }

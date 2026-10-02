@@ -493,6 +493,13 @@ the hunt before it moved (see *Across the cast*, below, and the feel log).
 **And again later the same day, when the thrown shield began to strike
 creatures and critters** (`CLASS-5`, resolved): the rows above are that build's.
 
+**Re-measured 2026-10-01 after the polish pass** ([plans/polish-fights.md](plans/polish-fights.md)),
+with the Bulwark's thrown shield striking a creature: every row but the
+crossing and the Galewing's plan B (whose creatures did not change for
+them) is this branch's. The moves: the Mireback pauses longer and has 11 000
+(the Champion 21 → 18), the Siegeshell alone has anchors of 5 900 (six wins
+in 144 alone), and **unanswerable is zero everywhere**, solo and in pairs.
+
 | Creature | Class | Won | Mean win | Unanswerable | Before (won) |
 | --- | --- | --- | --- | --- | --- |
 | Ridgeback | Champion | 14/24 | 64 s | 0 | 14/24 |
@@ -508,22 +515,22 @@ creatures and critters** (`CLASS-5`, resolved): the rows above are that build's.
 |  | Blood mage | 21/24 | 57 s | 0 | 24/24 |
 |  | Dual mage | 20/24 | 87 s | 0 | 2/24 |
 | Hornback, meadow | Champion | 22/24 | 109 s | 0 | 22/24 |
-|  | Bulwark | 20/24 | 154 s | 1 | 19/24 |
-|  | Reaver | 15/24 | 163 s | 1 | 16/24 |
+|  | Bulwark | 20/24 | 154 s | 0 | 19/24 |
+|  | Reaver | 16/24 | 164 s | 0 | 16/24 |
 |  | Elementalist | 24/24 | 36 s | 0 | 23/24 |
-|  | Blood mage | 21/24 | 109 s | 1 | 5/24 |
-|  | Dual mage | 14/24 | 219 s | 1 | 1/24 |
+|  | Blood mage | 22/24 | 109 s | 0 | 5/24 |
+|  | Dual mage | 14/24 | 219 s | 0 | 1/24 |
 | Hornback, crossing | Champion | 11/12 | 56 s | 0 | 11/12 |
 |  | Bulwark | 8/12 | 59 s | 0 | 9/12 |
 |  | Reaver | 9/12 | 56 s | 0 | 9/12 |
 |  | Elementalist | 11/12 | 49 s | 0 | 7/12 |
 |  | Blood mage | 4/12 | 58 s | 0 | 8/12 |
 |  | Dual mage | 9/12 | 67 s | 0 | 11/12 |
-| Mireback | Champion | 21/24 | 120 s | 1 | 21/24 |
-|  | Bulwark | 18/24 | 102 s | 0 | 16/24 |
-|  | Reaver | 22/24 | 89 s | 2 | 23/24 |
-|  | Elementalist | 24/24 | 42 s | 0 | 24/24 |
-|  | Blood mage | 5/24 | 149 s | 3 | 5/24 |
+| Mireback | Champion | 18/24 | 147 s | 0 | 21/24 |
+|  | Bulwark | 16/24 | 152 s | 0 | 16/24 |
+|  | Reaver | 21/24 | 99 s | 0 | 23/24 |
+|  | Elementalist | 24/24 | 48 s | 0 | 24/24 |
+|  | Blood mage | 4/24 | 138 s | 0 | 5/24 |
 |  | Dual mage | 0/24 | -- | 0 | 0/24 |
 | Sandmaw | Champion | 18/24 | 191 s | 0 | 18/24 |
 |  | Bulwark | 22/24 | 209 s | 0 | 24/24 |
@@ -537,12 +544,12 @@ creatures and critters** (`CLASS-5`, resolved): the rows above are that build's.
 |  | Elementalist | 24/24 | 46 s | 0 | 4/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 4/24 | 128 s | 0 | 0/24 |
-| Broodmother (balanced) | Champion | 7/24 | 143 s | 2 | 7/24 |
+| Broodmother (balanced) | Champion | 5/24 | 147 s | 0 | 7/24 |
 |  | Bulwark | 0/24 | -- | 0 | 0/24 |
 |  | Reaver | 0/24 | -- | 0 | 0/24 |
-|  | Elementalist | 1/24 | 142 s | 1 | 0/24 |
+|  | Elementalist | 1/24 | 142 s | 0 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
-|  | Dual mage | 10/24 | 152 s | 3 | 0/24 |
+|  | Dual mage | 11/24 | 154 s | 0 | 0/24 |
 | Veilstalker | Champion | 6/24 | 336 s | 0 | 6/24 |
 |  | Bulwark | 9/24 | 483 s | 0 | 8/24 |
 |  | Reaver | 6/24 | 491 s | 0 | 3/24 |
@@ -567,14 +574,14 @@ creatures and critters** (`CLASS-5`, resolved): the rows above are that build's.
 |  | Elementalist | 18/24 | 230 s | 0 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 0/24 | -- | 0 | 0/24 |
-| Siegeshell, alone | Champion | 0/24 | -- | 1 | 0/24 |
+| Siegeshell, alone | Champion | 1/24 | 187 s | 0 | 0/24 |
 |  | Bulwark | 0/24 | -- | 0 | 0/24 |
-|  | Reaver | 3/24 | 265 s | 0 | 3/24 |
-|  | Elementalist | 2/24 | 407 s | 0 | 1/24 |
+|  | Reaver | 4/24 | 257 s | 0 | 3/24 |
+|  | Elementalist | 1/24 | 351 s | 0 | 1/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 0/24 | -- | 0 | 0/24 |
-| Siegeshell, two | Champion | 5/12 | 468 s | 5 | 5/12 |
-|  | Bulwark | 0/12 | -- | 1 | 0/12 |
+| Siegeshell, two | Champion | 4/12 | 507 s | 0 | 5/12 |
+|  | Bulwark | 0/12 | -- | 0 | 0/12 |
 |  | Reaver | 12/12 | 223 s | 0 | 11/12 |
 |  | Elementalist | 6/12 | 339 s | 0 | 7/12 |
 |  | Blood mage | 0/12 | -- | 0 | 0/12 |
@@ -657,7 +664,59 @@ before this change as after it.
   plants *on* a part) is not built: it needs P1.
 - **The Champion** did not move on any creature.
 
+### The fire pillar, looked into
+
+*2026-10-01, [plans/polish-fights.md](plans/polish-fights.md).* Asked of the
+five creatures she beats 24 of 24: does any of them fail to answer the pillar
+the way its own document says it should -- walk into it, ignore the burn, or
+have no move for it? Measured over eight Elementalist hunts each, every frame
+a pillar burned within reach of a creature.
+
+**How the pillar lands.** Almost always on a creature already flinching from
+her bolts: of the pillars that came up under the Mantis, the Pair, the
+Veilstalker, two thirds or more found it in a flinch on their first frame. So
+the first part of the burn is a window she earned, as the class layer means
+it to be.
+
+**What it does once it can move** is where the creatures differ, and only two
+of the eleven documents give a creature anything to do about fire:
+
+- **The Mireback** flees burning ground next to its tar (§5, `flee`), and
+  does: a pillar under it lights its tar, and it flops away (its pillar
+  frames are a flop's recovery and startup, 51 %, and a topple). Its fight is
+  short because a pillar is a fuse in a floor of tar, which its §7 calls her
+  identity. **As designed.**
+- **The Veilstalker** sees fire and will not walk into it, and twenty frames
+  in fire panic it (§4). A pillar under a flinching animal panics it: it
+  retreats inside the base and is down by the thirtieth frame. §7 already
+  names the lever -- "a slinking animal has walked out of the base by then"
+  assumes it was slinking, not flinched by a bolt -- and leaves it to a person.
+- **The Mantis, the Pair, the Hornback's bull and the Gnawers** have no rule
+  about fire, and stand in it. Once its flinch is over the Mantis is still
+  inside the base 85 % of the pillar's frames (prowling 31 %, its guard up
+  against her bolts 29 %); a cat 57 % (prowling, through its pause between
+  moves); the bull winds up its charge in it. Nothing in their documents says
+  they should leave -- the Mantis's even says the pillar "comes from below the
+  cone and lands" -- so **none of this is a creature failing its design**,
+  and nothing was changed.
+
+**So the pillar is simply strong against anything that does not know fire.**
+The creature-side answer would be one rule for the cast -- *a creature that
+can move does not stand in fire it has seen*, as the Veilstalker's already
+does -- which would cut a pillar on a flinched body to the flinch and the
+frames it takes to walk out; the class-side one is the pillar's burn on a
+creature. Either is a decision about the Elementalist across every fight, and
+it is the owner's.
+
 ### Unanswerable
+
+**Zero for every creature since 2026-10-01** ([plans/polish-fights.md](plans/polish-fights.md)),
+six classes, solo and coop: the Hornback's four were its bull's windups begun
+off the hunter's screen, which every pack now lands only through a marker
+under you for a reaction ([critters.md](critters.md) §2); the Mireback's were
+its own measure counting tar that was not laid after the commit -- the crash's
+own ring, or old tar a hunter stepped or floated into -- and it asks for tar
+laid after the commit now. What follows is how it stood before.
 
 Zero, as before, for every class on the Ridgeback, the Gnawers, the Sandmaw,
 the Pair, the Veilstalker, the Mantis and the Galewing. **The Mireback's

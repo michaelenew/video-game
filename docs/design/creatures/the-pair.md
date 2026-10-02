@@ -491,7 +491,9 @@ unmeasured.
 **Target numbers.** Tier 3: the scripted hunter wins **about one in three**,
 won fights **3–6 minutes**. The four windows, measured with `frames_until_free`
 taken as the **smaller of the two cats'** (the pair is free when either is):
-threatening ~45%, poke ~20%, way in ~20%, walk up ~15%. Higher threatening and
+threatening ~45%, poke ~20%, way in ~20%, walk up ~15%. *(Changed 2026-10-01,
+§13: each cat's own window, with the min-of-two kept as its own line,
+"threatening, together".)* Higher threatening and
 lower walk-up than the Ridgeback's 40/20 because there are two animals; the
 crash is most of the walk-up share. Unanswerable hits: zero. Every move used.
 No move landing more than two times in three or fewer than one in ten.
@@ -744,11 +746,20 @@ plays win 36 of 96, three in eight, against "about one in three", in two and
 a half to four and a half minutes (three to six asked). Every move is used.
 **What is off:**
 
-- **Threatening is 78–81 %, against 45.** The pair is free when either cat
-  is, as §9 says to measure it, and with two animals one of them nearly always
-  is: the walk-up share is the crash and the two cats' recoveries overlapping,
-  and the stagger rule keeps those apart. Reaching 45 would mean both cats
-  idle half the fight; the harness wins anyway, through the openings it has.
+- **Threatening was 78–81 %, against 45**, with the pair free when either
+  cat is, as §9 said to measure it. **The measure was wrong, and changed
+  (2026-10-01, [plans/polish-fights.md](../plans/polish-fights.md))**: the
+  four windows are the rhythm of openings on *a body* -- how often the one in
+  front of you can be punished -- and the harness won two hunts in three
+  through openings the min-of-two said were not there. Each cat's own window
+  now, each frame counted once for each cat alive: **threatening 55–58 %,
+  poke 7–8, way in 11, walk up 23–26** across the six classes. The cover the
+  second cat gives is the fight's lesson, and it is measured where it is
+  taught: *both in view*, the off-screen hits, and a new report line,
+  **threatening, together** (either cat able to answer), still about four
+  fifths. The creature was left alone: the remaining ten points over 45 are a
+  prowling cat close enough to pounce, which is a threat, and fewer of them
+  would make a fight the harness already wins two in three easier still.
 - **Several moves land under one in ten**: the rake (one in thirteen), the
   second rake, the tail trip, the twin pounce, the interpose. The harness
   answers every marker it sees at a fifteen-frame reaction, perfectly; the
@@ -763,6 +774,17 @@ a half to four and a half minutes (three to six asked). Every move is used.
 - **Temper 3 barely moves it**: the glance tightens (`temper::glance`
   reaches the cats through `FightDecl::glance`), but a cat already glancing
   every seven frames has little left to gain.
+
+**Unanswerable in coop, every class (2026-10-01,
+[plans/polish-fights.md](../plans/polish-fights.md)).** With every class
+played as pairs, the report counted one in twelve for the Bulwarks and the
+Blood mages: a pounce and a rake begun behind the hunter whose marker had
+been on their screen 14 and 12 frames -- while it lay under their feet from
+its first frame. The second clause now accepts either: the marker on your
+screen for a reaction, *or* under where you stand for one, which is how every
+other creature's report counts it (bestiary §1.4); and it is asked of the
+fighter the cat hurt, not only its target. Zero since, six classes, solo and
+in pairs. Nothing in the cats changed.
 
 **The body, as `beastcheck --species pair` prints it**: nose to tail 4.18 m,
 shoulders 1.78 m, back 1.53 m, head 1.62 m; every class hops over a standing
@@ -821,3 +843,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. **Here it moved him most: 12 to 21 of 24**, in 161 s from 186 -- a leap closes on a cat in its recovery before its mate comes round (180 throws, 176 Slams out of the leap).
  Same seeds, after: **23 of 24** in 163 s (from 21 in 161 s), 176 throws: the shield that turns to meet his leap now cuts the cat it passes on the way.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species pair --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      16/24   159 s   55 /  8 / 11 / 26 %          0       11/12   149s   0
+  Bulwark       23/24   163 s   56 /  8 / 11 / 25 %          0       12/12   151s   0
+  Reaver         7/24   111 s   56 /  8 / 11 / 25 %          0       10/12   100s   0
+  Elementalist  24/24    46 s   58 /  7 / 10 / 24 %          0       12/12    54s   0
+  Blood mage     0/24      --   57 /  8 / 11 / 24 %          0       0/12    --s   0
+  Dual mage      4/24   128 s   56 /  8 / 11 / 25 %          0       7/12   132s   0
+```
