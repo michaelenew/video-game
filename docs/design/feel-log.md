@@ -7346,3 +7346,18 @@ can find is not safe to walk up to.
 the Reaver 38 / 17 / 14 / 31. Wins unchanged.
 
 **Verdict** kept.
+
+### 2026-10-01 — The Pair's second clause, as the cast counts it
+
+**Changed** The Pair's report: a hit whose cat began off the screen is
+answerable if its marker was on the victim's screen for fifteen frames *or*
+under where they stood for fifteen, asked of the fighter it hurt.
+
+**Why** Every class in pairs showed one unanswerable in twelve for the
+Bulwark and the Blood mage: markers under the hunter's feet from the first
+frame, on their screen for 14 and 12 -- a camera pitched at a perched cat.
+Every other creature's report, and the contract, count a marker under you.
+
+**Found** Zero, six classes, solo and coop. The cats are unchanged.
+
+**Verdict** kept.

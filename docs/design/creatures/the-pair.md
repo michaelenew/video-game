@@ -775,6 +775,17 @@ a half to four and a half minutes (three to six asked). Every move is used.
   reaches the cats through `FightDecl::glance`), but a cat already glancing
   every seven frames has little left to gain.
 
+**Unanswerable in coop, every class (2026-10-01,
+[plans/polish-fights.md](../plans/polish-fights.md)).** With every class
+played as pairs, the report counted one in twelve for the Bulwarks and the
+Blood mages: a pounce and a rake begun behind the hunter whose marker had
+been on their screen 14 and 12 frames -- while it lay under their feet from
+its first frame. The second clause now accepts either: the marker on your
+screen for a reaction, *or* under where you stand for one, which is how every
+other creature's report counts it (bestiary §1.4); and it is asked of the
+fighter the cat hurt, not only its target. Zero since, six classes, solo and
+in pairs. Nothing in the cats changed.
+
 **The body, as `beastcheck --species pair` prints it**: nose to tail 4.18 m,
 shoulders 1.78 m, back 1.53 m, head 1.62 m; every class hops over a standing
 cat, and nobody stands on one (`sheds`, `nobody_stands_on_a_cat`).
