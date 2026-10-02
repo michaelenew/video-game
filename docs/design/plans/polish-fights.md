@@ -1,5 +1,5 @@
 ---
-status: in progress
+status: done
 started: 2026-10-01
 branch: claude/polish-fights
 ---
@@ -33,8 +33,8 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
 
 - [x] 1 contract breach -- `pack::watch`/`unanswered`, glance keeps a committed target, report asks the fighter reached, Mireback's fresh-tar rule fixed. Zero for Gnawers, Hornback, Mireback, Broodmother, Siegeshell, six classes, solo 24 / coop 12.
 - [x] 2 threatening share -- Pair: measure (per body; `together` line). Galewing: measure (windowed in reach; lift/perch not threats). Sandmaw: target (its tally's §9 measure is right; stand throws moves).
-- [ ] 3 specific misses -- Galewing done (measure: walkable floor; creature levers reverted, cost the ride). Next: Siegeshell, Gnawers, Broodmother, Mireback, Veilstalker, Mantis.
-- [ ] 4 merge and re-measure
+- [x] 3 specific misses -- Galewing done (measure: walkable floor; creature levers reverted, cost the ride). Next: Siegeshell, Gnawers, Broodmother, Mireback, Veilstalker, Mantis.
+- [x] 4 merge and re-measure (origin/main #126-#128 merged; every creature, six classes, solo 24 / pairs 12)
 
 ## Log
 
@@ -51,3 +51,6 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
   Gnawers: health tried, reverted (costs weak classes). Broodmother: plan's
   (0 % time on sacs). Mireback: pause 60, health 11000 (committed).
   Next: Veilstalker way-in, Mantis Bulwark, then final re-measure + review.md.
+- 2026-10-02: Veilstalker stalk out of the windows; Mantis Bulwark recorded;
+  Pair report's second clause counts a marker under you (coop zero); review.md
+  §7; bestiary §8 and every creature's §13 re-measured. Done.
