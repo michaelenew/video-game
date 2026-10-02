@@ -7361,3 +7361,24 @@ Every other creature's report, and the contract, count a marker under you.
 **Found** Zero, six classes, solo and coop. The cats are unchanged.
 
 **Verdict** kept.
+
+### 2026-10-02 — The Elementalist's clicks hit only what she built
+
+**Changed** Standing left click (Bolt) and right click (Cataclysm) no longer
+meet bodies: fighters, creatures and critters are off the beam's list
+(`bolt::targets`), so no damage and no interrupt. A solid wall now ends the
+line, measured by its centre. Separately, placing the pillar or a Quake looks
+through her stones to the floor (`aim::grounded_path`); Raise keeps seeing
+them, so stacking still works (`aim::raise_path`).
+
+**Why** From play. With Cinder spray, the pillar, lit stones and three ways to
+raise a stone, the beam's job is setting off what she put on the field, and
+in a crowd the poke landed on whoever stood between her and the burning stone.
+And a pillar cast past a fresh stone came up on its lid.
+
+**Found** The Elementalist's Ridgeback hunt re-pinned, in `sim` and in
+`hunt`'s scripted hunter; every other class is bit-identical. Lighting a stone with the pillar now means casting it beside the
+stone rather than on top. Her auto no longer touches a gnat or a gnawer, which
+the critter tests exempt by name.
+
+**Verdict** kept, unplayed.

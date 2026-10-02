@@ -181,24 +181,36 @@ fn cataclysm_needs_no_structure_or_pillar_to_be_thrown() {
 }
 
 #[test]
-fn a_direct_hit_is_a_real_hit_not_the_autos_no_stagger_poke() {
-    // The auto trades a fighter's charge for nothing at all -- see
-    // `docs/design/kits/elementalist.md`. The heavy is not that: it costs a
-    // long wind-up and it pays for it with a real hit, stagger and all.
+fn a_fighter_in_the_line_is_neither_hurt_nor_stopped() {
+    // Since 2026-10-02 the heavy, like the auto, goes through bodies and acts
+    // only on what she built (`bolt::targets`). A fighter caught in it takes
+    // nothing -- no damage, no stun, not the move they were winding up -- and
+    // does not stand between her and the stone behind them.
     let mut w = elementalist();
-    w.players[1].pos = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO); // ahead, inside reach
+    place(&mut w, &[standing_at(4, Fx::ZERO)]);
+    w.players[1].pos = V3::new(Fx::from_int(2), Fx::ZERO, Fx::ZERO); // in front of it
     let before = w.players[1].health;
-    tap(&mut w, R, 30);
-    assert!(
-        w.players[1].health < before,
-        "a fighter caught by Cataclysm took no damage"
+    // They start winding up their special on the frame she presses, so the
+    // shot arrives while they are still in its startup.
+    for f in 0..30 {
+        let them = if f == 0 { Q } else { 0 };
+        let her = if f < 2 { R } else { 0 };
+        w.advance([Input::aimed(her, 0), Input::aimed(them, 0)]);
+        assert!(
+            !matches!(
+                w.players[1].action,
+                Action::HitStun { .. } | Action::BlockStun { .. } | Action::Stagger { .. }
+            ),
+            "frame {f}: Cataclysm stunned the fighter in its line"
+        );
+    }
+    assert_eq!(
+        w.players[1].health, before,
+        "a fighter caught by Cataclysm took damage"
     );
     assert!(
-        matches!(
-            w.players[1].action,
-            Action::HitStun { .. } | Action::BlockStun { .. }
-        ),
-        "a fighter caught by Cataclysm was free again immediately, like the auto's poke"
+        !has_structure(&w),
+        "the fighter in front of the stone shielded it from Cataclysm"
     );
 }
 

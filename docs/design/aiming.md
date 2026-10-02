@@ -118,6 +118,17 @@ lid or side, like a wall. The stone stays on the ray rather than coming off it,
 because where on a stone you point is a mechanic: the Bolt kicks one along the
 line it was shot along.
 
+**To a placement, the Elementalist's stones are not there at all**
+(`aim::grounded_path`, 2026-10-02, from play). The ray goes through them, lid and
+side, to the floor behind, and a point under one settles on the floor rather
+than on its lid. Raise a stone, then cast a pillar past it, and the pillar used
+to come up on top of the stone, because the crosshair met it on the way to the
+floor; at close quarters one of her stones fills most of the screen. **Raise
+itself is the exception** (`aim::raise_path`): the thing it places is another
+stone, and where that goes against the ones already out is the mechanic --
+look down onto a cap and the next one stands on it. A Bulwark's planted shield
+is not one of her structures and is still a wall to every placement.
+
 ## The five lines of effect
 
 Two are **skillshots**: they start with the raycast above and go where it lands.
@@ -147,8 +158,11 @@ them: a structure, a fire pillar.
   back under that point if it reaches that far, the floor beyond it if not.
 - **Hit the top of a creature's part** (A3) — exactly there, on the shell: it is
   a place the floor does not know about, so nothing settles it.
-- **Hit anything else** — a body, a wall — it drops to whatever is underneath,
+- **Hit anything else** — a wall — it drops to whatever is underneath,
   because the thing being placed can only exist on the floor.
+- **The Elementalist's stones are not on this ray** — see
+  [Ground, and everything else](#ground-and-everything-else). Her Raise is the
+  one placement that still sees them.
 - **If it travels**, it travels from the character model to that point.
 
 ### Not grounded

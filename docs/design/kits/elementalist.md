@@ -133,6 +133,16 @@ Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 
+> **Changed 2026-10-02, from play: both standing clicks hit only what she built.**
+> The Bolt and Cataclysm pass through fighters, creatures and critters — no damage,
+> no interrupt — and act only on her stones and on fire. A solid wall ends the line.
+> With Cinder spray, the pillar, lit stones and three ways to raise a stone, the
+> beam's job had become setting off what she put on the field, and in a crowd the
+> poke kept landing on whoever stood between her and the burning stone she was
+> aiming at. What reaches people now is what the beam sets off: the fire bolt out
+> of a pillar, a lit stone's burst, the kicked stone, the debris, the tornado. The
+> air row (Air bolt, Gale) is unchanged. `bolt::targets` is the list.
+
 A **beam**, not a bolt. A short wind-up, and then an instant line from her hand
 to *whatever the crosshair is on*, out to a short-to-middle distance. Nothing
 travels, so there is nothing to lead and nothing to dodge once it is thrown —
@@ -156,12 +166,10 @@ code says so now and so does this.
 > checked every active frame and spending the move's one hit on whatever it
 > finds:
 >
-> - **a fighter** — small damage, and it takes the move they were winding up.
->   **No stagger at all**: they are free again on the very next frame, and all
->   they have lost is the charge. That trade is the move's identity in neutral.
->   It is why the auto is worth throwing at someone who has already committed
->   rather than only at someone standing still, and it is why it is the
->   cheapest hit in the class — what it buys is an interrupt, not damage;
+> - **a fighter — nothing, since 2026-10-02.** It was small damage and the
+>   move they were winding up, with no stagger. The line now goes through
+>   every body, so a fighter in front of a stone does not shield it;
+> - **a solid wall** — the line ends there;
 > - **a structure** — the stone is sent **along the line**: through the ground
 >   when she is aimed down it, and up into the air when she is aimed above it.
 >   The kick dies off over the back quarter of its travel rather than skidding
@@ -320,8 +328,9 @@ turns whatever field effect it meets into something worse rather than just damag
 >   walking clear means outrunning the wide base, and jumping or air-dodging clear of the
 >   narrower column above it is the faster way out. See
 >   `crate::effects::EffectKind::FireTornado`.
-> - **A fighter**, hit directly with nothing in the way, just takes a real hit -- heavier
->   than the auto's poke, with its own stagger rather than none.
+> - **A fighter** is not met at all since 2026-10-02: the line goes through bodies, as the
+>   auto's does, and a wall ends it. It was a real hit with its own stagger. What hurts
+>   people is the debris and the tornado.
 >
 > The wind-up is long enough to be read and punished; the payoff is why you would still
 > throw it. Earth plus Fire again: Raise or Fissure to seed a structure, then Cataclysm to
@@ -574,7 +583,8 @@ her three metres. `R` in the air is nothing yet; Hover is the candidate and wait
 
 ### Fire on a stone
 
-A stone is lit by a pillar cast on it, by an ember bursting beside it, or by a lit shot passing
+A stone is lit by a pillar whose footprint takes in its base (since 2026-10-02 a pillar aimed
+at a stone goes through it to the floor beyond, so light one by aiming at the floor beside it), by an ember bursting beside it, or by a lit shot passing
 it, and burns for five seconds. A **lit stone burns whoever stands on it** — her terrain denied
 to the opponent as cover, which is the one ruling in [../elementalist.md](../elementalist.md)
 answered — and anything that shoves or breaks it while lit (the beam's kick, a Gale's shove,

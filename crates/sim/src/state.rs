@@ -5815,7 +5815,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
     // The mechanic fires on the press with no startup, so there is nothing to
     // lock it against -- it asks `crate::aim` the same question an ability
     // does and uses the answer immediately.
-    let placed = |reach| aim::grounded_path(who, input, reach, scene).to;
+    let placed = |reach| aim::raise_path(who, input, reach, scene).to;
     match p.mechanic {
         // Throw commits you: faster, exposed, and unable to block until it is
         // back. Recall damages along the return path; reactivating mid-flight
@@ -9380,9 +9380,13 @@ impl World {
     /// Run on **every** active frame rather than only the first, for the same
     /// reason every other move's hitbox is live for its whole active window:
     /// the volume that is drawn has to be the volume that is tested, and a
-    /// shot should still catch someone who steps into the line during it. The
-    /// move's one hit is what keeps that from being two shots -- whatever the
-    /// beam meets first ends it.
+    /// shot should still catch a stone that is kicked into the line during
+    /// it. The move's one hit is what keeps that from being two shots --
+    /// whatever the beam meets first ends it.
+    ///
+    /// **It meets only what she built, and walls.** Bodies are not on its
+    /// list: it passes through fighters, creatures and critters with no
+    /// damage and no interrupt. See `bolt::targets`.
     ///
     /// Nothing here travels. The ray, the stone it kicks and the fire it
     /// lights all happen on the frame the move comes out; the fire bolt is the
@@ -9405,9 +9409,6 @@ impl World {
         let effects = self.effects;
         let beast = self.monsters;
         let crowd = self.critters;
-        // In a hunt the two of you are on the same side, so the only thing
-        // worth shooting is the creature. One condition, in one place.
-        let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
@@ -9416,7 +9417,7 @@ impl World {
             critters: &crowd,
             arena: &self.terrain(),
         };
-        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
+        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets());
 
         // How long the line actually is, whether or not it still has a hit to
         // spend. A spent beam is still a beam, and it is still drawn.
@@ -9426,18 +9427,6 @@ impl World {
         }
 
         match met {
-            Some(Contact::Fighter { index, .. }) => {
-                if bolt::poke(&mut self.players[index], shooter.pos, m.damage)
-                    == bolt::Poked::Parried
-                {
-                    self.players[i].action = Action::Stagger {
-                        left: t::parry_stagger(),
-                    };
-                    self.players[i].stun_total = t::parry_stagger();
-                    self.players[index].parried = PARRY_FLOURISH;
-                }
-                self.players[i].hit_used = true;
-            }
             // The stone goes along the line, pitch included: through the
             // ground aimed down it, up into the air aimed above it.
             Some(Contact::Stone { index, .. }) => {
@@ -9454,40 +9443,18 @@ impl World {
                 bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir());
                 self.players[i].hit_used = true;
             }
-            Some(Contact::Quarry { slot, part, .. }) => {
-                if let Some(beast) = self.monsters[slot].as_mut() {
-                    beast.take_blow(
-                        part,
-                        m.damage,
-                        &monster::Blow {
-                            from: shooter.pos,
-                            unblockable: m.unblockable,
-                            who: i as u8,
-                            class: shooter.class,
-                            kind,
-                        },
-                    );
-                    self.players[i].hit_used = true;
-                }
-            }
-            Some(Contact::Critter { index, .. }) => {
-                let along = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
-                pack::hurt(
-                    &mut self.pack,
-                    &mut self.critters,
-                    index,
-                    m.damage,
-                    along,
-                    m.knockback,
-                    Fx::ZERO,
-                );
-                self.players[i].hit_used = true;
-            }
-            // `Terrain` cannot arrive: the beam does not ask for it, and the
-            // arena is where the crosshair's own ray already stopped. The arm
-            // is spelled out rather than wildcarded so that whatever is added
-            // to `Contact` next is a compile error here instead of silence.
-            Some(Contact::Terrain { .. }) | None => {}
+            // A solid wall: the line ends there and nothing happens.
+            //
+            // A body cannot arrive: the beam does not ask for one -- it goes
+            // through people and acts only on what she built (see
+            // `bolt::targets`). The arms are spelled out rather than
+            // wildcarded so that whatever is added to `Contact` next is a
+            // compile error here instead of silence.
+            Some(Contact::Terrain { .. })
+            | Some(Contact::Fighter { .. })
+            | Some(Contact::Quarry { .. })
+            | Some(Contact::Critter { .. })
+            | None => {}
         }
     }
 
@@ -9497,10 +9464,12 @@ impl World {
     /// the spot rather than by the hitbox loop, because what it does depends
     /// on what it meets first and none of the three answers is a bubble that
     /// lives for a few frames in front of her body. What it *does* on each
-    /// answer is her heavy's own, not the auto's -- a fighter takes a real hit
-    /// instead of a poke, a structure is destroyed rather than kicked, and a
-    /// fire pillar is torn loose into a travelling tornado rather than merely
-    /// charging the shot. See `docs/design/kits/elementalist.md`.
+    /// answer is her heavy's own, not the auto's -- a structure is destroyed
+    /// rather than kicked, and a fire pillar is torn loose into a travelling
+    /// tornado rather than merely charging the shot. Like the auto it passes
+    /// through bodies and stops at walls (`bolt::targets`): what hurts people
+    /// is the debris, the burst and the tornado. See
+    /// `docs/design/kits/elementalist.md`.
     fn fire_the_cataclysm(&mut self, i: usize) {
         let shooter = self.players[i];
         let Action::Active { kind, .. } = shooter.action else {
@@ -9517,7 +9486,6 @@ impl World {
         let effects = self.effects;
         let beast = self.monsters;
         let crowd = self.critters;
-        let versus = !self.hunting();
         let scene = Scene {
             stones: &field,
             players: &seen,
@@ -9526,7 +9494,7 @@ impl World {
             critters: &crowd,
             arena: &self.terrain(),
         };
-        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
+        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets());
 
         self.players[i].beam_reach = met.map_or(beam.length(), |c| c.dist());
         if shooter.hit_used {
@@ -9534,36 +9502,6 @@ impl World {
         }
 
         match met {
-            // A real hit, not the auto's no-stagger poke: this is the class's
-            // heaviest single swing, and it costs a long wind-up to throw.
-            Some(Contact::Fighter { index, .. }) => {
-                let victim = self.players[index];
-                let (guarding, parried) = guard_against(&victim, shooter.pos, m.unblockable);
-                apply_hit(
-                    &mut self.players[index],
-                    Hit {
-                        damage: m.damage,
-                        hitstun: m.hitstun,
-                        blockstun: m.blockstun,
-                        knockback: m.knockback,
-                        launch: Fx::ZERO,
-                        grabs: 0,
-                        by: i as u8,
-                        dir: beam.dir(),
-                        blocked: guarding,
-                        parried,
-                        interrupts: true,
-                    },
-                );
-                if parried {
-                    self.players[i].action = Action::Stagger {
-                        left: t::parry_stagger(),
-                    };
-                    self.players[i].stun_total = t::parry_stagger();
-                    self.players[index].parried = PARRY_FLOURISH;
-                }
-                self.players[i].hit_used = true;
-            }
             // Broken outright, and thrown outward as debris rather than
             // detonated on the spot -- see `crate::debris`.
             Some(Contact::Stone { index, .. }) => {
@@ -9611,40 +9549,13 @@ impl World {
                 }
                 self.players[i].hit_used = true;
             }
-            Some(Contact::Quarry { slot, part, .. }) => {
-                if let Some(beast) = self.monsters[slot].as_mut() {
-                    beast.take_blow(
-                        part,
-                        m.damage,
-                        &monster::Blow {
-                            from: shooter.pos,
-                            unblockable: m.unblockable,
-                            who: i as u8,
-                            class: shooter.class,
-                            kind,
-                        },
-                    );
-                    self.players[i].hit_used = true;
-                }
-            }
-            Some(Contact::Critter { index, .. }) => {
-                let along = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
-                pack::hurt(
-                    &mut self.pack,
-                    &mut self.critters,
-                    index,
-                    m.damage,
-                    along,
-                    m.knockback,
-                    Fx::ZERO,
-                );
-                self.players[i].hit_used = true;
-            }
-            // `Terrain` cannot arrive: the beam does not ask for it, and the
-            // arena is where the crosshair's own ray already stopped. The arm
-            // is spelled out rather than wildcarded so that whatever is added
-            // to `Contact` next is a compile error here instead of silence.
-            Some(Contact::Terrain { .. }) | None => {}
+            // A solid wall ends the line; a body is never met. See the
+            // same arm in `fire_the_beam`.
+            Some(Contact::Terrain { .. })
+            | Some(Contact::Fighter { .. })
+            | Some(Contact::Quarry { .. })
+            | Some(Contact::Critter { .. })
+            | None => {}
         }
     }
 }

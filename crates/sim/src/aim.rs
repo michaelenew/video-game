@@ -498,8 +498,9 @@ pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
 /// [`sight`] for an **attack**: the same ray, on which a stone is never
 /// ground -- its lid is as solid as its side.
 ///
-/// The top of a stone *is* ground for placing, because it is where the next
-/// thing goes, so [`grounded_path`] keeps it. For a shot it is not. A skillshot
+/// Neither is it for placing, since 2026-10-02: [`grounded_path`] takes the
+/// Elementalist's stones off its ray altogether. For a shot the stone stays on
+/// the ray, but as a wall rather than a floor. A skillshot
 /// that meets ground is raised to the middle of a fighter standing there, and
 /// somebody standing just in front of a stone puts the crosshair through them
 /// and onto its lid, a body's height up: raised another half a body from there,
@@ -647,6 +648,36 @@ fn facing(hit: Option<Fx>, from: V3, dir: V3, top: Fx) -> Met {
 /// caster was doing when they cast them. `from` is the character, so an ability
 /// that races along the ground has its path already.
 pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    // **The Elementalist's stones are not ground here** -- not their tops and
+    // not their sides. The ray goes through them to the floor behind, and a
+    // point under one settles on the floor rather than on its lid. Raise a
+    // stone and then a pillar beside it, and the pillar has to go where the
+    // crosshair is on the floor, not up on the stone the crosshair passed
+    // through on the way; at close quarters a stone of hers fills most of the
+    // screen. Decided 2026-10-02, from play. A Bulwark's planted shield is
+    // still a wall: it is not one of her structures.
+    let open = past_structures(scene);
+    let scene = Scene {
+        stones: &open,
+        ..*scene
+    };
+    placed_on(who, look, reach, &scene)
+}
+
+/// Where the Elementalist's own **Raise** puts a stone: [`grounded_path`]
+/// with her stones still on the ray, lids as ground and sides as walls.
+///
+/// The one placement that keeps them, because the thing placed is another
+/// stone and where it goes against the ones already out is the mechanic:
+/// look down onto a cap and the next one stands on it, which is how she
+/// stacks them; point at a face and it comes up at its foot (`tests/aiming.rs`).
+/// Everything else she places -- the pillar, Quake -- looks through them.
+pub fn raise_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    placed_on(who, look, reach, scene)
+}
+
+/// The grounded rule over whatever field `scene` holds.
+fn placed_on(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
     let caster = &scene.players[who];
     let seen = sight(who, look, reach, scene);
     let to = match seen.met {
@@ -680,6 +711,20 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
         from: caster.pos,
         to,
     }
+}
+
+/// The field with every Elementalist's structures taken off it: what a
+/// placement sees ([`grounded_path`]). What stays is whatever else stands in
+/// the field -- a Bulwark's planted shield.
+fn past_structures(scene: &Scene) -> Field {
+    let mut open = *scene.stones;
+    for (index, slot) in open.iter_mut().enumerate() {
+        let owner = &scene.players[index / crate::class::MAX_STRUCTURES];
+        if matches!(owner.mechanic, crate::class::Mechanic::Structures(_)) {
+            *slot = None;
+        }
+    }
+    open
 }
 
 /// The line a **skillshot** flies along: from the caster's ability origin to
@@ -1478,6 +1523,17 @@ pub struct Targets {
     /// Blood mage's Grasp, and her blink looking for the wall it must not go
     /// through.
     pub terrain: bool,
+    /// The arena again, met by the **centre** of the line rather than its
+    /// girth: a wall stops the shot where the shot's own middle reaches it.
+    ///
+    /// For the Elementalist's two standing beams, which pass through bodies
+    /// and act only on what she built (`bolt::targets`) -- so the only thing
+    /// left to end one early is a solid wall, and a wall the camera's ray
+    /// could see past while her hand could not. The centre rather than the
+    /// girth because the line starts at her hand, and her hand beside a wall
+    /// is already inside that wall grown by a beam's thickness: measured that
+    /// way, a beam aimed away from the wall would stop where it started.
+    pub walls: bool,
 }
 
 impl Targets {
@@ -1488,7 +1544,13 @@ impl Targets {
             fire: false,
             quarry: false,
             terrain: false,
+            walls: false,
         }
+    }
+
+    pub const fn walls(mut self) -> Targets {
+        self.walls = true;
+        self
     }
 
     pub const fn terrain(mut self) -> Targets {
@@ -1708,6 +1770,13 @@ pub fn first_along(
             if let Some(dist) =
                 crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
             {
+                keep(Contact::Terrain { dist });
+            }
+        }
+    }
+    if targets.walls {
+        for solid in scene.arena.solids() {
+            if let Some(dist) = crate::math::ray_hits_box(from, dir, solid.min, solid.max) {
                 keep(Contact::Terrain { dist });
             }
         }
