@@ -88,22 +88,22 @@ Tier is the bestiary's target for a decent player alone (1 ≈ nine in ten won,
 5 ≈ one in twenty). **Won** is the scripted hunter, 24 hunts solo, from
 bestiary §8: the Champion (the class the plans were written for), then the
 best and worst class. **Unans.** is unanswerable hits per class (the contract
-says zero).
+says zero; zero everywhere since the polish pass, §7).
 
 | Creature | Arena | Tier | Champion won | Best / worst class | Unans. | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | [Ridgeback](monsters.md) | Proving ground | 3 | 14/24, 64 s | Champion 14 / Blood, Dual 0 (Bulwark 1) | 0 | Built; the parity bar |
 | [Gnawers](creatures/gnawers.md) | Commons | 1 | 24/24, 35 s | everyone 20+ / Dual 20 | 0 | Built; easy |
-| [Hornback](creatures/hornback.md) | Low meadow | 1 | 22/24, 109 s | Elementalist 24 in 36 s / Dual 14 | 0–1 | Built |
+| [Hornback](creatures/hornback.md) | Low meadow | 1 | 22/24, 109 s | Elementalist 24 in 36 s / Dual 14 | 0 | Built |
 | [Hornback, crossing](creatures/hornback.md) | Crossing | 1 | 11/12, 56 s | Champion, Elem. 11 / Blood 4 | 0 | Built; two hunters lose it |
-| [Mireback](creatures/mireback.md) | Mire | 2 | 21/24, 120 s | Elementalist 24 in 41 s / Dual 0 | 0–3 | Built |
+| [Mireback](creatures/mireback.md) | Mire | 2 | 18/24, 147 s | Elementalist 24 in 41 s / Dual 0 | 0 | Built |
 | [Sandmaw](creatures/sandmaw.md) | Pan | 2 | 18/24, 191 s | Bulwark 22 / Blood 0 | 0 | Built |
 | [The Pair](creatures/the-pair.md) | Den | 3 | 16/24, 159 s | Elementalist 24 in 46 s / Blood 0 | 0 | Built |
-| [Broodmother](creatures/broodmother.md) | Hollows | 3 | 7/24, 143 s | Dual 10 / Reaver, Blood 0 | 0–3 | Built; short fights |
+| [Broodmother](creatures/broodmother.md) | Hollows | 3 | 5/24, 147 s | Dual 10 / Reaver, Blood 0 | 0 | Built; short fights |
 | [Veilstalker](creatures/veilstalker.md) | Ashwood | 4 | 6/24, 336 s | Elementalist 22 / Blood, Dual 0 | 0 | Built |
 | [Mantis](creatures/mantis.md) | Shrine | 5 | 0/24 | Elementalist 24 in 71 s / four classes 0–2 | 0 | Built |
 | [Galewing](creatures/galewing.md) | Cliffs | 4 | 4/24 (plan A), 7/24 (ride) | Elementalist 17–18 / Blood, Dual 0 | 0 | Built |
-| [Siegeshell](creatures/siegeshell.md) | Last Valley | 5 (for two) | 0/24 alone, 5/12 pair | Reaver pair 12/12 / Bulwark, Blood 0 | 0–5 | Built |
+| [Siegeshell](creatures/siegeshell.md) | Last Valley | 5 (for two) | 1/24 alone, 4/12 pair | Reaver pair 12/12 / Bulwark, Blood 0 | 0 | Built |
 
 The Bulwark's column moved on 2026-10-01 when the hunter learned his shield
 throw, and again when the shield began to strike creatures (`CLASS-5`); his
