@@ -322,6 +322,23 @@ pub struct Sim {
     /// [`picker`]. On the wire rather than a fresh `World` built here, so a
     /// peer changes arena on the same frame.
     travel: sim::input::Travel,
+    /// What this peer's look last put on the wire: exact when a button decides
+    /// something, held otherwise. Offline too, so a held look plays the same
+    /// on the desk as over a connection. See [`Sim::outgoing`].
+    wire: sim::input::WireLook,
+}
+
+impl Sim {
+    /// The local fighter's input as it leaves for the simulation, one tick's
+    /// worth: its look written by [`sim::input::WireLook`], the one place that
+    /// decides when the look goes exact. Called once per tick, never per
+    /// rendered frame -- a release on a frame that ran no tick would otherwise
+    /// never be sent exact.
+    fn outgoing(&mut self, input: SimInput) -> SimInput {
+        let me = self.driver.local_player();
+        let aiming = self.cur.players[me].action.channelling().is_some();
+        self.wire.send(input, aiming)
+    }
 }
 
 /// A ring of past snapshots, and how far back through it we have stepped.
@@ -464,6 +481,7 @@ impl Default for Sim {
             history: Rewind::new(&seed),
             rehearsing: None,
             travel: sim::input::Travel::NONE,
+            wire: sim::input::WireLook::new(),
         }
     }
 }
@@ -3282,12 +3300,10 @@ fn tick_sim(
                 // A trip rides on the first tick after it was asked for, and
                 // only that one.
                 let travel = std::mem::take(&mut sim.travel);
-                let pair = [
-                    rehearsed
-                        .unwrap_or_else(|| scripted_or(scripted, held))
-                        .travelling(travel),
-                    two,
-                ];
+                let one = rehearsed
+                    .unwrap_or_else(|| scripted_or(scripted, held))
+                    .travelling(travel);
+                let pair = [sim.outgoing(one), two];
                 // Remembered before the tick, so one press of `[` lands on the
                 // frame you were just looking at. Split out of the field access
                 // because the ring and the world live on the same struct.
@@ -3310,6 +3326,7 @@ fn tick_sim(
                 let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
                 let travel = std::mem::take(&mut sim.travel);
                 let local = scripted_or(scripted, held).travelling(travel);
+                let local = sim.outgoing(local);
                 online::step(&mut sim, local);
             }
         }

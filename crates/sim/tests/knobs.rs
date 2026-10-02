@@ -19,10 +19,13 @@ use std::path::Path;
 
 /// Files that *are* the number machinery, or that carry no magnitudes.
 ///
-/// `input.rs` is the wire format -- bit positions and an angle unit, nothing
-/// with a size. `curve.rs`, `fixed.rs` and `math.rs` are arithmetic: the `3` in
-/// a cubic Bézier is the definition of a cubic Bézier, and tuning it would not
-/// change how anything feels, it would stop the curve being a curve.
+/// `input.rs` is the wire format -- bit positions and an angle unit, and the
+/// one size in it, `LOOK_BAND`, is how a sender describes its own hand rather
+/// than a rule the peers share: two peers with different bands agree, because
+/// both simulate what was sent. `curve.rs`, `fixed.rs` and `math.rs` are
+/// arithmetic: the `3` in a cubic Bézier is the definition of a cubic Bézier,
+/// and tuning it would not change how anything feels, it would stop the curve
+/// being a curve.
 const NOT_GAMEPLAY: &[&str] = &[
     "tuning.rs",
     "oven.rs",

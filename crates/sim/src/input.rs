@@ -16,6 +16,15 @@
 //! simulations diverge. Sending it as input is what makes that free: it arrives
 //! by the same path as the buttons, gets predicted and rolled back by the same
 //! machinery, and the camera itself stays out of the snapshot entirely.
+//!
+//! **What arrives is exact when a button decides something, and held
+//! otherwise.** The sender writes the look through [`WireLook`]: exact on
+//! a press, a hold, a release or a channel, and otherwise the last look it
+//! sent until the hand has moved a third of a degree from it. Nothing here
+//! changes for it -- the reads that see a held look (the facing, the walk, a
+//! creature asking what is on your screen) cannot tell -- but a still hand no
+//! longer makes every remote frame a wrong guess. See
+//! `docs/design/architecture.md` §"The look on the wire".
 
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::V3;
@@ -304,5 +313,162 @@ impl Input {
         let x = (self.has(Input::D) as i32) - (self.has(Input::A) as i32);
         let z = (self.has(Input::W) as i32) - (self.has(Input::S) as i32);
         (x, z)
+    }
+}
+
+/// How far the real look may drift from the one on the wire, in the look's own
+/// 1/65536 of a turn, before it is sent again: 1/1024 of a turn, about a
+/// third of a degree. Yaw and pitch alike.
+///
+/// That is the most a cast can be off the crosshair, and only one that came
+/// out of a buffer after its button was let go and the mouse kept moving --
+/// about 15 cm at the fire bolt's 24 m. Every other cast is exact.
+///
+/// **Not an Oven knob, deliberately.** The Oven holds the rules both peers
+/// share, and folds them into the checksum so a mismatch desyncs loudly. This
+/// is how one peer chooses to describe its own hand; two peers with different
+/// bands agree perfectly, because each sends its look and both simulate what
+/// was sent.
+pub const LOOK_BAND: u16 = 1 << 6;
+
+/// **The sender's half of the look on the wire**: what it last sent, and which
+/// buttons were down when it did.
+///
+/// The look only has to be exact on frames where it decides something, and
+/// those are frames where a button is involved: a move begins on a press, a
+/// charge resolves on a release, a channel aims on every frame it is held.
+/// Everything else that reads the look -- the facing, the walk, a creature
+/// asking what is on your screen -- cannot tell a third of a degree. So this
+/// sends the real look on those frames and the last one it sent on the
+/// others, until the hand has moved further than [`LOOK_BAND`] from it, and a
+/// still hand stops making every remote frame a wrong guess. Nothing in the
+/// simulation reads it; it writes the `aim` and `pitch` the simulation reads.
+/// See `docs/design/architecture.md` §"The look on the wire".
+///
+/// Fed **once per simulation tick**, with the input that tick sends. Fed per
+/// rendered frame instead, a release on a frame that ran no tick would be seen
+/// here and never sent exact.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WireLook {
+    /// The look last written into an input, or nothing before the first.
+    sent: Option<(u16, i16)>,
+    /// The buttons in `Input::PRESSES` on that input.
+    bits: u16,
+}
+
+impl WireLook {
+    pub const fn new() -> WireLook {
+        WireLook {
+            sent: None,
+            bits: 0,
+        }
+    }
+
+    /// The input to send this tick: `real` with its look either left exact or
+    /// held at the last one sent.
+    ///
+    /// `aiming` is whether the local fighter is channelling in the world this
+    /// peer is drawing -- a channel follows the crosshair on every frame of it,
+    /// so those frames are sent exact. Asking the predicted world is fine: a
+    /// wrong answer costs a third of a degree on one frame, never a desync,
+    /// because whatever is sent is what both peers simulate.
+    pub fn send(&mut self, real: Input, aiming: bool) -> Input {
+        let buttons = real.bits & Input::PRESSES;
+        let exact = aiming || buttons != 0 || buttons != self.bits;
+        self.bits = buttons;
+        let look = match self.sent {
+            Some((aim, pitch)) if !exact && !drifted(real, aim, pitch) => (aim, pitch),
+            _ => (real.aim, real.pitch),
+        };
+        self.sent = Some(look);
+        real.looking(look.0, look.1)
+    }
+}
+
+/// Whether the real look is further than the band from the one on the wire.
+/// Yaw wraps, so its distance is taken the short way round; pitch does not.
+fn drifted(real: Input, aim: u16, pitch: i16) -> bool {
+    let yaw = (real.aim.wrapping_sub(aim) as i16).unsigned_abs();
+    let tilt = (i32::from(real.pitch) - i32::from(pitch)).unsigned_abs();
+    yaw > LOOK_BAND || tilt > u32::from(LOOK_BAND)
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+
+    fn at(bits: u16, aim: u16, pitch: i16) -> Input {
+        Input::looking_at(bits, aim, pitch)
+    }
+
+    #[test]
+    fn the_first_input_is_exact() {
+        let mut w = WireLook::new();
+        assert_eq!(w.send(at(0, 1234, -56), false), at(0, 1234, -56));
+    }
+
+    #[test]
+    fn a_still_hand_inside_the_band_sends_the_same_look() {
+        let mut w = WireLook::new();
+        w.send(at(Input::W, 1000, 0), false);
+        let out = w.send(at(Input::W, 1000 + LOOK_BAND, -(LOOK_BAND as i16)), false);
+        assert_eq!((out.aim, out.pitch), (1000, 0));
+        // The stick is not a press: it rides along untouched.
+        assert_eq!(out.bits, Input::W);
+    }
+
+    #[test]
+    fn past_the_band_the_real_look_goes_and_becomes_the_reference() {
+        let mut w = WireLook::new();
+        w.send(at(0, 1000, 0), false);
+        let out = w.send(at(0, 1000 + LOOK_BAND + 1, 0), false);
+        assert_eq!(out.aim, 1000 + LOOK_BAND + 1);
+        let next = w.send(at(0, 1000 + LOOK_BAND + 2, 0), false);
+        assert_eq!(next.aim, 1000 + LOOK_BAND + 1);
+    }
+
+    #[test]
+    fn yaw_is_measured_the_short_way_round() {
+        let mut w = WireLook::new();
+        w.send(at(0, 10, 0), false);
+        // 20 units back across zero, not 65,516 forward.
+        assert_eq!(w.send(at(0, 65526, 0), false).aim, 10);
+    }
+
+    #[test]
+    fn a_press_a_hold_and_a_release_are_all_exact() {
+        let mut w = WireLook::new();
+        w.send(at(0, 1000, 0), false);
+        assert_eq!(w.send(at(Input::LEFT, 1010, 3), false).aim, 1010);
+        assert_eq!(w.send(at(Input::LEFT, 1020, 3), false).aim, 1020);
+        assert_eq!(w.send(at(0, 1030, 3), false).aim, 1030);
+        // And after the release, the band again, from the release's look.
+        assert_eq!(w.send(at(0, 1040, 3), false).aim, 1030);
+    }
+
+    #[test]
+    fn a_channel_is_exact_on_every_frame() {
+        let mut w = WireLook::new();
+        w.send(at(0, 1000, 0), false);
+        assert_eq!(w.send(at(0, 1001, 0), true).aim, 1001);
+        assert_eq!(w.send(at(0, 1002, 0), true).aim, 1002);
+    }
+
+    #[test]
+    fn the_wire_is_never_further_than_the_band_from_the_hand() {
+        let mut w = WireLook::new();
+        let mut aim = 0u16;
+        let mut pitch = 0i16;
+        let mut rng = 0x9e37_79b9_7f4a_7c15u64;
+        for _ in 0..10_000 {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            aim = aim.wrapping_add((rng as u16) % 97).wrapping_sub(48);
+            pitch = (pitch + ((rng >> 16) as i16 % 9) - 4).clamp(-15000, 15000);
+            let real = at(0, aim, pitch);
+            let out = w.send(real, false);
+            assert!(!drifted(real, out.aim, out.pitch));
+        }
     }
 }

@@ -211,6 +211,27 @@ forced rollbacks and compares its own checksums across re-simulations. It runs i
 `crates/net/tests/ggrs_synctest.rs` over 1200 frames and should be the first test to fail
 if the simulation ever stops being a pure function.
 
+### The look on the wire
+
+**The look is exact when a button decides something, and held otherwise.** GGRS guesses a
+late input by repeating the last one, and a mouse in a hand is never still to 1/65536 of a
+turn, so a look sent at full precision every frame made nearly every remote frame a wrong
+guess and a rollback, for nothing the player decided. `sim::input::WireLook` is the one thing that
+writes the look into an outgoing input:
+
+- **exact** on a frame where a button in `Input::PRESSES` goes down or comes up, on every
+  frame one is held, and on every frame the local fighter is channelling;
+- **otherwise the look last sent**, until the real one has moved more than
+  `sim::input::LOOK_BAND` (1/1024 of a turn) away from it.
+
+The simulation is unchanged: it reads `Input::aim` and `pitch` as it always did, and what it
+reads is never more than the band from the crosshair and exact on every frame the look decides
+where something goes. Facing, walking and a creature's "is that on your screen" are the reads
+that see the held value, and none of them can tell. The camera is drawn from the local mouse,
+not from the `World`, so the screen is not held. The same encoder runs offline, so a held look
+plays the same on the desk as over a wire. The reasoning, and the version that sends world
+coordinates instead, are in [exploration/0005](exploration/0005_open_world_netcode.md).
+
 `LocalSession` is a second, dependency-free harness that runs the same predict-and-rollback
 loop against a simulated peer. It is kept because it is readable — when SyncTest reports a
 desync, `LocalSession` is where you can watch one happen.

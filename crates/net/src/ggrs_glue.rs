@@ -22,6 +22,10 @@ use sim::{Input, World};
 /// Pitch joined it when abilities started landing where the crosshair is. A
 /// crosshair is a line in space and a line needs two angles; with only the yaw
 /// on the wire, two peers would disagree about where a fire pillar went.
+///
+/// Both are on the wire every frame but only *change* when they matter: the
+/// sender writes them through `sim::input::WireLook`, which holds them still
+/// between presses so that GGRS's guess -- the last input again -- is right.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
 pub struct NetInput(pub u64);
 

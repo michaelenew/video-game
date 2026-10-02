@@ -7361,3 +7361,23 @@ Every other creature's report, and the contract, count a marker under you.
 **Found** Zero, six classes, solo and coop. The cats are unchanged.
 
 **Verdict** kept.
+
+### 2026-10-02 — The look is held between presses
+
+**Changed** The look an input carries is exact on a frame where a button goes
+down, is held or comes up, and on every frame of a channel. Otherwise it stays
+at the last look sent until the hand has moved 1/1024 of a turn (about 0.35°)
+from it (`sim::input::WireLook`, [architecture.md](architecture.md) §"The look on
+the wire"). Offline and online alike.
+
+**Why** GGRS guesses a remote input by repeating the last one, and a look sent
+at full precision changed on nearly every frame, so nearly every remote frame
+was a wrong guess and a rollback.
+
+**Found** Not played yet. The facing and the walk can be up to 0.35° off the
+camera between presses. A cast that comes out of a buffer after its button was
+let go can be 0.35° off the crosshair, about 15 cm at 24 m. Every other cast is
+exact. The thing to play for is whether a wider band (fewer rollbacks for a
+panning hand) is ever visible.
+
+**Verdict** kept, pending play.
