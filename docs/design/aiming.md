@@ -118,6 +118,20 @@ lid or side, like a wall. The stone stays on the ray rather than coming off it,
 because where on a stone you point is a mechanic: the Bolt kicks one along the
 line it was shot along.
 
+**To a placement, the Elementalist's stones are not there at all**
+(`aim::grounded_path`, 2026-10-02, from play) — **Raise included.** The ray goes
+through them, lid and side, to the floor behind, and a point under one settles on
+the floor rather than on its lid. Stones used to be ground to a placement, and in
+practice that took agency away: a stone under the crosshair moved where the next
+thing landed, faster than the player could notice it was there and adjust, and
+the opponent could not predict it either — so raising stones to spoil aim was a
+viable strategy, which is a degenerate one. **No aiming treats a structure as
+ground.** Where a placement lands depends on the floor and the arena, never on
+what has been built on it. The cost: stacking a stone on another's cap is gone;
+aimed at the floor under one, the new stone erupts beneath it and lifts it. A
+Bulwark's planted shield is not one of her structures and is still a wall to
+every placement.
+
 ## The five lines of effect
 
 Two are **skillshots**: they start with the raycast above and go where it lands.
@@ -147,8 +161,10 @@ them: a structure, a fire pillar.
   back under that point if it reaches that far, the floor beyond it if not.
 - **Hit the top of a creature's part** (A3) — exactly there, on the shell: it is
   a place the floor does not know about, so nothing settles it.
-- **Hit anything else** — a body, a wall — it drops to whatever is underneath,
+- **Hit anything else** — a wall — it drops to whatever is underneath,
   because the thing being placed can only exist on the floor.
+- **The Elementalist's stones are not on this ray**, for any placement,
+  Raise included — see [Ground, and everything else](#ground-and-everything-else).
 - **If it travels**, it travels from the character model to that point.
 
 ### Not grounded

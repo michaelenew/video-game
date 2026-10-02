@@ -601,9 +601,13 @@ fn a_planted_shield_stops_a_body_and_a_recalled_one_does_not() {
     assert!(!walks_short(true), "a recalled shield still stopped her");
 }
 
-/// Does an Elementalist four metres north of the shield, with her crosshair
-/// on the Bulwark two metres south of it, reach him with a Bolt?
-fn bolt_reaches(recall: bool) -> bool {
+/// How far an Elementalist four metres north of the shield, shooting a Bolt
+/// level across it at the Bulwark two metres south of it, gets her beam.
+///
+/// The beam goes through bodies since 2026-10-02 (`bolt::targets`), so "did
+/// it reach him" is read off the line rather than off his health: a planted
+/// shield is a structure on the beam's list, and the line ends on it.
+fn bolt_reach(recall: bool) -> Fx {
     let (mut w, pos) = planted(t::weight_cap(), Class::Elementalist);
     if recall {
         step_lane(&mut w, 1, Input::MECHANIC, 0);
@@ -612,37 +616,29 @@ fn bolt_reaches(recall: bool) -> bool {
     let behind = V3::new(pos.x, Fx::ZERO, pos.z.sub(Fx::from_int(2)));
     w.players[1].pos = V3::new(pos.x, Fx::ZERO, pos.z.add(Fx::from_int(4)));
     w.players[0].pos = behind;
-    // The pitch that puts her crosshair on him with nothing in the way.
-    let mut open = w.clone();
-    set_weight(&mut open, 0, Fx::ZERO);
-    open.players[0].mechanic = Mechanic::Shield(Shield::Held { weight: Fx::ZERO });
-    let lands = |w: &World, pitch: i16| {
-        let mut w = w.clone();
-        let before = w.players[0].health;
-        for f in 0..60 {
-            let bits = if f == 0 { L } else { 0 };
-            w.advance([
-                Input::aimed(0, NORTH),
-                Input::looking_at(bits, SOUTH, pitch),
-            ]);
-            w.players[0].pos = behind;
-        }
-        w.players[0].health < before
-    };
-    let pitch = (-300..300)
-        .step_by(5)
-        .map(|tenth| (tenth * 65536 / 3600) as i16)
-        .find(|p| lands(&open, *p))
-        .expect("no pitch reached him with nothing in the way");
-    lands(&w, pitch)
+    let mut longest = Fx::ZERO;
+    for f in 0..60 {
+        let bits = if f == 0 { L } else { 0 };
+        w.advance([Input::aimed(0, NORTH), Input::looking_at(bits, SOUTH, 0)]);
+        w.players[0].pos = behind;
+        longest = longest.max(w.players[1].beam_reach);
+    }
+    longest
 }
 
 #[test]
 fn a_planted_shield_stops_a_shot_and_a_recalled_one_does_not() {
-    assert!(!bolt_reaches(false), "a Bolt went through a planted shield");
+    let planted = bolt_reach(false);
+    let recalled = bolt_reach(true);
     assert!(
-        bolt_reaches(true),
-        "a recalled shield still stopped the Bolt"
+        planted.raw() > 0 && planted.raw() < Fx::from_int(5).raw(),
+        "a Bolt went {} m, through a planted shield four metres away",
+        planted.to_f32_for_render()
+    );
+    assert!(
+        recalled.raw() > Fx::from_int(5).raw(),
+        "a recalled shield still stopped the Bolt at {} m",
+        recalled.to_f32_for_render()
     );
 }
 

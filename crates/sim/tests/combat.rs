@@ -646,6 +646,13 @@ fn the_drawn_hitbox_is_the_one_that_hits() {
     // and which an overlay rebuilding the box from the move table on its own
     // would get wrong on every frame but the first.
     for class in ALL_CLASSES {
+        // The Elementalist's beam is still drawn, but since 2026-10-02 it goes
+        // through bodies and meets only what she built (`bolt::targets`), so
+        // there is no boundary against a fighter to pin. What it draws against
+        // a stone is `tests/beam.rs`'s `the_drawn_beam_ends_where_the_shot_stopped`.
+        if class == sim::class::Class::Elementalist {
+            continue;
+        }
         let inside = swinging_at(class, 0.8);
         assert!(
             inside.players[1].health < inside.players[1].full_health(),

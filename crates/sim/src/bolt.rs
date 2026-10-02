@@ -7,11 +7,11 @@
 //! is nothing to lead and nothing to dodge once it is thrown. What it meets
 //! first is the whole move:
 //!
-//! - **a fighter** — small damage, and it takes whatever they were winding up.
-//!   No stagger at all: they get their frames straight back, minus the move
-//!   they had been charging. That trade is the auto's entire identity in
-//!   neutral, and it is why the move is worth throwing at someone who is
-//!   already committed rather than only at someone standing still;
+//! - **a body — nothing.** Since 2026-10-02 the beam passes through fighters,
+//!   creatures and critters alike: no damage, no interrupt. It was a poke, and
+//!   in a crowd the poke kept landing on whoever stood between her and the
+//!   burning stone she was aiming at. See [`targets`];
+//! - **a solid wall** — the line ends there, and nothing happens;
 //! - **a structure** — the stone is sent along the line, along the ground when
 //!   she is aimed down it and up into the air when she is aimed above it;
 //! - **fire** — the beam does not stop at a hazard, it *lights* one. A fire
@@ -35,7 +35,7 @@ use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::pack;
-use crate::state::{Action, Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
+use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
 
@@ -56,8 +56,8 @@ pub type Flight = [Option<FireBolt>; MAX_BOLTS];
 /// Three conditions rather than one, and the last two are not redundant. Being
 /// a skillshot is what decides how the move is *aimed* and is a property of
 /// the move table, so another class could be given one tomorrow. What the shot
-/// *does* when it lands -- poke, kick a stone, light a pillar -- is this
-/// class's alone, and it is specifically the poke's: Cataclysm is a second
+/// *does* when it lands -- kick a stone, light a pillar -- is this
+/// class's alone, and it is specifically the auto's: Cataclysm is a second
 /// skillshot on the same class, aimed the same way and resolved the same way
 /// structurally, but what it does when it lands is `crate::debris`'s and
 /// `crate::effects::EffectKind::FireTornado`'s answer, not this one.
@@ -67,58 +67,30 @@ pub fn throws_a_beam(p: &Player, kind: u8) -> bool {
         && kind == crate::state::SLOT_POKE
 }
 
-/// What the beam can run into: bodies, stones, and fire.
+/// What the Elementalist's two standing beams -- the Bolt and Cataclysm -- can
+/// run into: **only what she built**, and the walls.
+///
+/// Stones and fire, and nothing with a body. Not a fighter, not a creature,
+/// not a critter: the beams go straight through all of them, with no damage
+/// and no interrupt. Changed 2026-10-02, from play: with Cinder spray, the
+/// pillar, lit stones and three ways to raise a stone, the beam's job is to
+/// set off what she has put on the field, and a crowd standing between her
+/// and a burning stone used to eat the shot as a poke instead. What reaches
+/// people is what the beam sets off -- the fire bolt out of a pillar, the
+/// burst of a lit stone, the debris, the tornado.
 ///
 /// Fire is on the list here and *not* on the aiming ray's, which is the whole
 /// of the pillar interaction: you can see through flame, so it never steals the
 /// crosshair, but a shot passing through it comes out the far side changed.
-pub fn targets(versus: bool) -> Targets {
-    Targets::none()
-        .fighters(versus)
-        .stones()
-        .fire()
-        .quarry(!versus)
-}
-
-/// What the beam does to a fighter it catches.
 ///
-/// Damage, and the charge. **No stagger of any kind**: a fighter caught by the
-/// auto is free again on the very next frame, and all they have lost is the
-/// wind-up they were partway through. A poke that stunned would be an opener,
-/// and this is not meant to be one -- it is meant to be the thing that makes
-/// committing to a long telegraph in front of an Elementalist a decision.
-pub fn poke(defender: &mut Player, from: V3, damage: i32) -> Poked {
-    let (guarding, parried) = guard_against(defender, from, false);
-    // Taken on the shield, so stored -- the same deposit `apply_hit` makes,
-    // for the one blockable blow that does not go through it.
-    if guarding || parried {
-        crate::bulwark::load(defender, damage, parried);
-    }
-    if parried {
-        return Poked::Parried;
-    }
-    if guarding {
-        // No chip damage, and nothing to interrupt: a guard is not a charge.
-        return Poked::Blocked;
-    }
-    defender.wound(damage);
-    // The interrupt, and the whole of it. Startup is the only phase that is a
-    // *charge* -- a move already out has been paid for, and taking it back
-    // would make a no-stagger poke better than moves that do stagger.
-    if matches!(defender.action, Action::Startup { .. }) {
-        defender.action = Action::Free;
-    }
-    Poked::Hit
-}
-
-/// How a poke landed.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Poked {
-    Hit,
-    Blocked,
-    /// Read on the frame it came out. The attacker eats the stagger, the same
-    /// as any other parry.
-    Parried,
+/// **A solid wall ends the line** ([`Targets::walls`]). The crosshair's ray
+/// already stops on terrain, but the beam leaves from her hand rather than the
+/// camera, and the two can disagree about a corner.
+///
+/// The argument is gone: who counts as an enemy no longer matters to a shot
+/// that hits nobody.
+pub fn targets() -> Targets {
+    Targets::none().stones().fire().walls()
 }
 
 // ---------------------------------------------------------------------------

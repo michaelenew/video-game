@@ -35,13 +35,13 @@ every one of them is a function in `aim.rs`:**
 
 | Kind | Call | Rule |
 | --- | --- | --- |
-| Grounded | `aim::grounded_path` | Ground: cast exactly there. Max range: max range on the ground in the mouse's direction. If it travels, it travels from the character to that point. |
+| Grounded | `aim::grounded_path` | Ground: cast exactly there. Max range: max range on the ground in the mouse's direction. If it travels, it travels from the character to that point. **No structure is ground**: the ray goes through the Elementalist's stones to the floor, for every placement including Raise. A stone under the crosshair must never move where something lands. |
 | Skillshot | `aim::skillshot_path` | Ground: that spot raised to the **middle of whatever stands on it** (`aim::standing_middle`, with the height from `aim::stands_at` — a fighter's, unless the crosshair passed through something shorter), because the floor is never the target — bodies are not on the ray, so a ground hit means "there". Anything else — wall, stone (its top too: `aim::sight_for_attack`), body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. Standing, pointed at something **shorter than a fighter** (`aim::stands_at`), it dips to meet it at the same share of its height a level swing meets a fighter at (`aim::stoop`); zero where only fighters stand. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 | Racing | `aim::racing_path` | From the stone the Elementalist is holding churning (her own feet if there is none), **flat along the yaw of her look**, as far as the hold bought. No raycast and no pitch: the place was aimed when the stone was raised, and the hold is the distance. Fissure only. |
 
-The rest of `aim.rs` -- twenty-seven functions as of 2026-10-01 -- are **not**
+The rest of `aim.rs` -- twenty-seven functions as of 2026-10-02 -- are **not**
 lines of effect. `aim::sight` and `aim::sight_for_attack` are the one raycast
 itself, `aim::origin` and `aim::hand_origin` where a cast leaves the body, and
 `aim::first_along` what a path runs into. `aim::pointing_at`

@@ -134,56 +134,6 @@ fn stones_of(w: &World) -> Vec<sim::class::Structure> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_shot_hits_whoever_the_crosshair_is_on() {
-    // The headline, and the one property a player can actually check: put the
-    // reticle on somebody and the shot reaches them.
-    let mut w = elementalist();
-    let pitch = crosshair_onto_the_other_fighter(&w)
-        .expect("no angle put the crosshair on the other fighter at all");
-    shoot(&mut w, pitch);
-    assert!(
-        w.players[1].health < w.players[1].full_health(),
-        "the crosshair was on them and the shot went somewhere else"
-    );
-}
-
-#[test]
-fn aiming_over_someone_shoots_over_them() {
-    // The other half. The shot is a line at the angle it was fired, so lifting
-    // the reticle off somebody lifts the shot off them too.
-    let base = elementalist();
-    let pitch = crosshair_onto_the_other_fighter(&base)
-        .expect("no angle put the crosshair on the other fighter at all");
-
-    let mut high = elementalist();
-    shoot(&mut high, pitch + tenths(350));
-    assert_eq!(
-        high.players[1].health,
-        high.players[1].full_health(),
-        "a shot aimed thirty-five degrees above a fighter still hit them, so the aim \
-         is decoration and the shot is following the ground"
-    );
-}
-
-#[test]
-fn aiming_up_reaches_someone_standing_above_her() {
-    // Height is real in both directions. Someone on a platform is somewhere the
-    // crosshair can be put, and putting it there has to be enough.
-    let mut w = elementalist();
-    w.players[0].pos = at(-1.0, 0.0, 0.0);
-    // On the raised platform at the far end, which is a body's height up.
-    w.players[1].pos = at(6.0, 1.5, 0.0);
-
-    let pitch = crosshair_onto_the_other_fighter(&w)
-        .expect("no angle put the crosshair on a fighter standing on the platform");
-    shoot(&mut w, pitch);
-    assert!(
-        w.players[1].health < w.players[1].full_health(),
-        "aiming up at a fighter standing above her did not reach them"
-    );
-}
-
-#[test]
 fn the_drawn_beam_ends_where_the_shot_stopped() {
     // The overlay draws `state::hitbox`, and for this move that is the line
     // itself. A beam stopped by a stone is as long as the gap to the stone; one
@@ -239,63 +189,104 @@ fn the_drawn_beam_ends_where_the_shot_stopped() {
 }
 
 // ---------------------------------------------------------------------------
-// What it does to a fighter
+// What it does to a fighter: nothing
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_shot_takes_the_charge_and_gives_the_frames_straight_back() {
-    // Small damage, the wind-up they were partway through, and nothing else. No
-    // hitstun, no stagger, no shove -- being poked by the auto costs you the
-    // move you were holding and not your turn.
+fn the_shot_goes_through_a_fighter_without_hurting_or_interrupting_them() {
+    // Since 2026-10-02 the beam meets only what she built (`bolt::targets`).
+    // It was a poke -- small damage, and the wind-up the victim was partway
+    // through -- and in a crowd the poke kept landing on whoever stood between
+    // her and the burning stone she meant. Now a fighter is not on its list:
+    // no damage, and the move they were charging comes out.
     let mut w = elementalist();
     let pitch = crosshair_onto_the_other_fighter(&w)
         .expect("no angle put the crosshair on the other fighter at all");
 
-    let mut caught = None;
     let mut wound_up = false;
+    let mut charging = false;
     for _ in 0..40 {
-        // Player two winds up their slowest move once, then lets go, so what
-        // the beam interrupts is not immediately thrown again.
-        // Their special: the slowest thing they have an input for, now that
-        // shift is only a dodge and the committed slot has no button.
         let them = if !wound_up && w.players[1].action == Action::Free {
             wound_up = true;
             Input::SPECIAL
         } else {
             0
         };
-        let before = w.players[1];
         w.advance([
             Input::looking_at(L, LOOK_RIGHT, pitch),
             Input::aimed(them, LOOK_LEFT),
         ]);
-        if w.players[1].health < before.health && caught.is_none() {
-            caught = Some((before.action, w.players[1]));
+        if w.players[0].beam_reach.raw() > 0 {
+            charging |= matches!(w.players[1].action, Action::Startup { .. })
+                || matches!(w.players[1].action, Action::Active { .. });
         }
     }
-    let (was, now) = caught.expect("the auto never connected");
+    assert!(wound_up, "fixture: player two never wound anything up");
+    assert!(
+        charging,
+        "player two's wind-up did not survive the beam passing through them"
+    );
+    assert_eq!(
+        w.players[1].health,
+        w.players[1].full_health(),
+        "the beam hurt a fighter it passed through"
+    );
+}
 
+#[test]
+fn a_fighter_in_front_of_a_stone_does_not_shield_it() {
+    // The complaint this answers: aiming at her own stone in a crowd, and the
+    // shot spending itself on the body in the way. The crosshair is on the
+    // stone, a fighter stands on the line, and the stone is what moves.
+    let mut w = elementalist();
+    run(&mut w, 2, E, 0);
+    run(&mut w, 30, 0, 0);
+    let stone = stones_of(&w)[0].at;
+    let pitch = crosshair_onto(&w, |seen| on_the_stone(stone, seen))
+        .expect("no angle put the crosshair on the stone");
+    // Halfway between her and it, on the line.
+    let mid = w.players[0].pos.add(stone).scale(Fx::ratio(1, 2));
+    w.players[1].pos = V3::new(mid.x, Fx::ZERO, mid.z);
+    shoot(&mut w, pitch);
+    let moved = stones_of(&w)[0].at.sub(stone).flat_len();
     assert!(
-        matches!(was, Action::Startup { .. }),
-        "fixture did not catch player two mid-charge; they were {was:?}"
+        moved.raw() > metres(0.5).raw(),
+        "the stone behind the fighter moved only {} m",
+        moved.to_f32_for_render()
     );
-    assert_eq!(
-        now.action,
-        Action::Free,
-        "the auto left its victim in {:?} -- it is meant to have no stagger at all",
-        now.action
-    );
-    assert_eq!(
-        (now.vel.x.raw(), now.vel.z.raw()),
-        (0, 0),
-        "the auto shoved its victim, which is knockback by another name"
-    );
-    assert!(
-        now.full_health() - now.health <= now.full_health() / 10,
-        "the auto took {} of {} health; it is meant to be small",
-        now.full_health() - now.health,
-        now.full_health()
-    );
+    assert_eq!(w.players[1].health, w.players[1].full_health());
+}
+
+#[test]
+fn a_wall_ends_the_line() {
+    // The one thing besides what she built that stops a beam. Asked of the
+    // line itself, because the crosshair's ray already stops on terrain and
+    // what this guards is the hand's line disagreeing with the camera's about
+    // a corner: from her hand straight through the dais (`x` from 5 to 9, a
+    // metre and a half tall) at a stone standing beyond it.
+    let mut w = World::with_classes([Class::Elementalist, Class::Bulwark]);
+    w.players[0].pos = V3::ZERO;
+    w.players[1].pos = at(-6.0, 0.0, 0.0);
+    let mut stone = sim::class::Structure::raised(at(11.0, 0.0, 0.0));
+    stone.age = stone.rise + 1;
+    let mut slots = [None; sim::class::MAX_STRUCTURES];
+    slots[0] = Some(stone);
+    w.players[0].mechanic = Mechanic::Structures(slots);
+    let line = aim::Path {
+        from: at(0.0, 1.0, 0.0),
+        to: at(11.0, 1.0, 0.0),
+    };
+    let met = with_scene(&w, |scene| {
+        aim::first_along(line, metres(0.2), 0, scene, sim::bolt::targets())
+    });
+    match met {
+        Some(aim::Contact::Terrain { dist }) => assert!(
+            (dist.to_f32_for_render() - 5.0).abs() < 0.5,
+            "met the dais {} m out; its face is at 5",
+            dist.to_f32_for_render()
+        ),
+        other => panic!("the line through the dais met {other:?}, not the dais"),
+    }
 }
 
 // ---------------------------------------------------------------------------

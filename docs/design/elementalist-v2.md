@@ -35,8 +35,8 @@ are free in the input word.
 
 |  | Standing | Airborne |
 | --- | --- | --- |
-| `L` | **Bolt** — as built | **Air bolt** — more knockback; **lights** through fire |
-| `R` | **Cataclysm** — as built | **Gale** — more knockback; **pushes stones**; lights through fire |
+| `L` | **Bolt** — hits only her stones and fire (2026-10-02) | **Air bolt** — more knockback; **lights** through fire |
+| `R` | **Cataclysm** — hits only her stones and fire (2026-10-02) | **Gale** — more knockback; **pushes stones**; lights through fire |
 | `M` | **Cinder spray** | Cinder spray — the same move; only where it bursts changes |
 | `M4` | *proposed:* Blast | *proposed:* Blast |
 | `M5` | **Quake** | — |
@@ -55,7 +55,7 @@ and `U` stand in for the clicks, so a trackpad plays her.
 
 Structures, cap of three, as built. Two additions:
 
-- **Fire on a stone lights it.** A Strike landing on its top, a Cinder spray bursting on or
+- **Fire on a stone lights it.** A Strike whose footprint takes in its base, a Cinder spray bursting on or
   beside it, a burning Gale passing it. A lit stone glows at the seams for a while, burns
   whoever stands on it, and **bursts into burning debris when anyone shoves or breaks it** —
   the beam's kick, a Gale's push, Cataclysm, or the break-through below. This is the answer to
@@ -89,7 +89,8 @@ replaces is a knob and the one ratio the feel harness pins.
 
 The opponent sees *that* she is charging and how far it reaches, not where it lands. Their
 answers are the honest ones: close and hit her while she crawls, leave the range, or put a
-stone in the lane — and a Strike that meets a stone lands on its top and lights it.
+stone in the lane. A Strike aimed at one of her stones goes through it to the floor beyond
+(2026-10-02: a pillar on a stone's lid was the complaint); one cast beside it lights it.
 
 ### `E` held — Fissure
 

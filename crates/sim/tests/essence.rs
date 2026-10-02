@@ -253,7 +253,9 @@ fn her_own_costs_never_pool() {
 #[test]
 fn nobody_else_spills_anybody() {
     for class in ALL_CLASSES {
-        if class == Class::BloodMage {
+        // The Elementalist's left click goes through bodies since 2026-10-02
+        // (`bolt::targets`): it never hits her, so it has nothing to say here.
+        if class == Class::BloodMage || class == Class::Elementalist {
             continue;
         }
         let mut w = World::with_classes([class, Class::BloodMage]);

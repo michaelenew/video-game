@@ -556,8 +556,13 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         over.is_empty(),
         "passes over a gnat where a fighter is hit: {over:?}"
     );
-    // And every auto touches one at some distance.
+    // And every auto touches one at some distance -- but the Elementalist's,
+    // which since 2026-10-02 goes through every body and meets only what she
+    // built (`bolt::targets`).
     for class in sim::class::ALL_CLASSES {
+        if class == sim::class::Class::Elementalist {
+            continue;
+        }
         let auto = rows
             .iter()
             .find(|r| r.class == class && r.kind == 0)

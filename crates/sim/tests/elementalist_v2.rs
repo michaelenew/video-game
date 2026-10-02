@@ -1269,15 +1269,69 @@ fn a_tremor_is_a_quake_on_her_own_feet_and_the_stone_lifts_her() {
 }
 
 #[test]
+fn a_pillar_aimed_at_her_stone_lands_on_the_floor_behind_it() {
+    // From play, 2026-10-02: raise a stone, then a pillar past it, and the
+    // pillar came up on the stone's lid -- the crosshair's ray met the stone
+    // on its way to the floor, and a placement took the stone for ground. At
+    // close quarters a stone fills the screen. The placement ray now goes
+    // through her stones (`aim::grounded_path`), so the pillar goes to the
+    // floor the crosshair would be on if the stone were not there.
+    let mut w = elementalist();
+    let spot = at(-3.0, 0.0, 8.0);
+    let mut stone = Structure::raised(spot);
+    stone.age = stone.rise + 1;
+    let mut slots = [None; sim::class::MAX_STRUCTURES];
+    slots[0] = Some(stone);
+    w.players[0].mechanic = Mechanic::Structures(slots);
+    let reach = sim::moves::get(Class::Elementalist, SLOT_SPECIAL).reach;
+    // The crosshair on the stone itself: its face, or its lid.
+    let pitch = (-800..0)
+        .rev()
+        .find_map(|step| {
+            let pitch = (step * 65536 / 3600) as i16;
+            let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+            let seen = with_scene(&w, |scene| sim::aim::sight(0, look, reach, scene));
+            let gap = V3::new(seen.at.x.sub(spot.x), Fx::ZERO, seen.at.z.sub(spot.z)).flat_len();
+            (seen.at.y.raw() > metres(0.5).raw() && gap.raw() < stone.radius().raw())
+                .then_some(pitch)
+        })
+        .expect("no pitch put the crosshair on the stone");
+    strike(&mut w, pitch, 0);
+    let p = pillars(&w);
+    assert_eq!(p.len(), 1, "no pillar came up");
+    assert_eq!(
+        p[0].pos.y.raw(),
+        0,
+        "the pillar stood {} m up, on the stone",
+        p[0].pos.y.to_f32_for_render()
+    );
+    assert!(
+        p[0].pos.x.raw() > spot.x.add(stone.radius()).raw(),
+        "the pillar came up at x = {}, not past the stone at x = {}",
+        p[0].pos.x.to_f32_for_render(),
+        spot.x.to_f32_for_render()
+    );
+}
+
+#[test]
 fn a_pillar_cast_on_a_stone_lights_it_and_a_lit_stone_burns_its_stander() {
     let mut w = elementalist();
     let spot = at(-2.0, 0.0, 8.0);
     sim::stones::raise(&mut w.players[0], Structure::raised(spot));
     run(&mut w, 30, 0, 0);
     assert_eq!(stones_of(&w)[0].lit, 0);
-    let pitch = crosshair_onto_the_floor_at(&w, spot, t::raise_reach());
+    // On the floor at its near face: the pillar looks *through* her stones
+    // since 2026-10-02 (`aim::grounded_path`), so it is lit by a pillar whose
+    // footprint takes in its base rather than by one stood on its lid. A
+    // metre and a half short of its centre: far enough off its face that the
+    // crosshair is on the floor and not the stone, well inside the pillar.
+    let short = at(-2.0 - 1.5, 0.0, 8.0);
+    let pitch = crosshair_onto_the_floor_at(&w, short, t::raise_reach());
     strike(&mut w, pitch, 0);
-    assert!(stones_of(&w)[0].lit > 0, "lit by the pillar cast on it");
+    assert!(
+        stones_of(&w)[0].lit > 0,
+        "lit by the pillar cast against it"
+    );
     // Somebody standing on top of it.
     let top = stones_of(&w)[0].top();
     w.players[1].pos = V3::new(spot.x, top, spot.z);

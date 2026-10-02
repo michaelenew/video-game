@@ -256,13 +256,17 @@ fn a_stone_can_be_raised_at_your_own_feet() {
 }
 
 #[test]
-fn aiming_at_the_side_of_a_stone_puts_the_next_one_at_its_foot() {
-    // A stone stands a whole body height, and abilities come out of the chest,
-    // so from the ground you are always looking at a stone's *side* and never
-    // at its top. Grounded means grounded: what you place arrives at the foot
-    // of the thing you pointed at, the same as pointing at a wall.
+fn aiming_at_the_side_of_a_stone_puts_the_next_one_on_the_floor_behind_it() {
+    // Since 2026-10-02 no placement treats a stone as ground or as a wall: the
+    // ray goes through it to the floor beyond (`aim::grounded_path`). A stone
+    // under the crosshair used to move where the next thing landed, faster
+    // than the player or the opponent could notice it was there, so raising
+    // stones to spoil aim was a strategy. Where a placement lands depends on
+    // the floor, never on what has been built on it.
+    //
+    // The first one well inside Raise's reach, so the floor behind it is too.
     let mut w = elementalist();
-    tap(&mut w, E, down(30), 30);
+    tap(&mut w, E, down(45), 30);
     let first = stones_of(&w)[0];
     assert_eq!(
         first.phase(),
@@ -297,17 +301,18 @@ fn aiming_at_the_side_of_a_stone_puts_the_next_one_at_its_foot() {
         second.at.y.to_f32_for_render()
     );
     assert!(
-        ahead(&w, second.at) < reach,
-        "the second stone came up past the one it was aimed at"
+        ahead(&w, second.at) > reach,
+        "the second stone came up at {} m, at or short of the one it was aimed through at {reach} m",
+        ahead(&w, second.at)
     );
 }
 
 #[test]
-fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_top() {
-    // The other way round, and the way a player actually stacks them: get above
-    // the cap and the trace meets it, so what you place stands on it. The cap
-    // of the cylinder has to be traced for this -- a tube with no lid would let
-    // the ray straight through.
+fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_the_floor_under_it() {
+    // The other way round: from above, looking down onto the cap. That used to
+    // stack the next stone on top; since 2026-10-02 the lid is not ground to a
+    // placement either, so the ray goes through to the floor and the new stone
+    // comes up underneath -- which is the eruption that lifts the old one.
     let mut w = elementalist();
     tap(&mut w, E, down(30), 30);
     let first = stones_of(&w)[0];
@@ -326,12 +331,17 @@ fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_top() {
     tap(&mut w, E, down(89), 40);
 
     let second = stones_of(&w)[1];
-    let gap = second.at.y.sub(first.top()).abs().to_f32_for_render();
+    assert_eq!(
+        second.at.y.raw(),
+        0,
+        "the second stone settled at {:.2} m, on the cap, not on the floor under it",
+        second.at.y.to_f32_for_render()
+    );
+    let apart = second.at.sub(over).flat_len();
     assert!(
-        gap < 0.1,
-        "the second stone settled at {:.2} m, not on the cap it was aimed at ({:.2} m)",
-        second.at.y.to_f32_for_render(),
-        first.top().to_f32_for_render()
+        apart.raw() < t::structure_radius().raw(),
+        "the second stone came up {:.2} m from the one it was aimed down onto",
+        apart.to_f32_for_render()
     );
 }
 

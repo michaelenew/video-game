@@ -308,8 +308,15 @@ fn every_class_can_touch_a_gnawer_with_its_auto() {
     // auto touches"). The Dual mage's dark auto is the one lunge that runs
     // through a body inside two metres -- `critters.md` §7, a person's call
     // -- so hers is asked at three, where she throws it from.
+    //
+    // The Elementalist's is out since 2026-10-02: her standing clicks go
+    // through every body and meet only what she built (`bolt::targets`). What
+    // reaches a gnawer from her is what the beam sets off.
     let rows = sim::critcheck::table(SpeciesId::GNAWERS, g::GNAWER);
     for class in sim::class::ALL_CLASSES {
+        if class == Class::Elementalist {
+            continue;
+        }
         let auto = if class == Class::BloodMage {
             sim::moves::blood::SWEEP
         } else {
