@@ -146,11 +146,9 @@ fn a_stone_raised_underneath_another_throws_it_into_the_air() {
         "the first stone did not settle on the floor"
     );
 
-    // A second, aimed at the foot of the first: the ray stops on its near
-    // face, which settles onto the floor just short of its middle. That is as
-    // close underneath as a player can put one now that the crosshair is the
-    // aim -- pointing at where its base *would* be means pointing at the stone
-    // itself, and a stone you point at is a surface you land on top of.
+    // A second, aimed at the foot of the first. Since 2026-10-02 a placement's
+    // ray goes through her stones (`aim::grounded_path`), so pointing at where
+    // its base is reaches the floor under it.
     let foot = {
         let first = stone(&w, 0).at;
         V3::new(first.x, Fx::ratio(1, 10), first.z)
@@ -179,10 +177,15 @@ fn a_stone_raised_off_centre_throws_the_other_one_clear() {
     tap(&mut w, E, 30);
     let from = stone(&w, 0).at;
 
-    // Step aside, so the next one comes up under the shoulder of the first --
-    // aimed at its foot from where we now stand, which is what a player does.
+    // Step aside, and aim at the floor under the edge of the first, on the
+    // side facing her -- any further in and the middle is past Raise's reach
+    // from here. The placement ray goes through the stone to that
+    // floor (`aim::grounded_path`).
     run(&mut w, 6, Input::D, 0);
-    let foot = V3::new(from.x, Fx::ratio(1, 10), from.z);
+    let toward = w.players[0].pos.sub(from);
+    let toward = V3::new(toward.x, Fx::ZERO, toward.z).normalized();
+    let foot = from.add(toward.scale(t::structure_radius()));
+    let foot = V3::new(foot.x, Fx::ZERO, foot.z);
     tap_at(&mut w, E, foot, 120);
 
     let thrown = stone(&w, 0).at.sub(from).flat_len();

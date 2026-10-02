@@ -239,6 +239,12 @@ existing uncaptured structure to kick it forward through the ground for low dama
 > **Implemented, at the cursor.** "At the cursor" is now literal — the stone comes up on the
 > first thing the crosshair's line meets, out to Raise's reach. "Beneath yourself" is looking
 > down, and the eruption carries you with it.
+>
+> **Her stones are not on that line** (2026-10-02, from play): it goes through them to the floor,
+> so a stone is never stacked on another's cap — one aimed at the floor under a stone comes up
+> beneath it and lifts it. A stone under the crosshair moving where the next one landed was faster
+> than anyone could react to, and raising stones to spoil aim was a strategy. See
+> [../aiming.md](../aiming.md#ground-and-everything-else).
 
 ### Fissure — `E` held
 **Startup** medium · **Recovery** medium · **Range** long · **Mechanic** spawns a structure

@@ -5815,7 +5815,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
     // The mechanic fires on the press with no startup, so there is nothing to
     // lock it against -- it asks `crate::aim` the same question an ability
     // does and uses the answer immediately.
-    let placed = |reach| aim::raise_path(who, input, reach, scene).to;
+    let placed = |reach| aim::grounded_path(who, input, reach, scene).to;
     match p.mechanic {
         // Throw commits you: faster, exposed, and unable to block until it is
         // back. Recall damages along the return path; reactivating mid-flight

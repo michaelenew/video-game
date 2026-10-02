@@ -119,15 +119,18 @@ because where on a stone you point is a mechanic: the Bolt kicks one along the
 line it was shot along.
 
 **To a placement, the Elementalist's stones are not there at all**
-(`aim::grounded_path`, 2026-10-02, from play). The ray goes through them, lid and
-side, to the floor behind, and a point under one settles on the floor rather
-than on its lid. Raise a stone, then cast a pillar past it, and the pillar used
-to come up on top of the stone, because the crosshair met it on the way to the
-floor; at close quarters one of her stones fills most of the screen. **Raise
-itself is the exception** (`aim::raise_path`): the thing it places is another
-stone, and where that goes against the ones already out is the mechanic --
-look down onto a cap and the next one stands on it. A Bulwark's planted shield
-is not one of her structures and is still a wall to every placement.
+(`aim::grounded_path`, 2026-10-02, from play) — **Raise included.** The ray goes
+through them, lid and side, to the floor behind, and a point under one settles on
+the floor rather than on its lid. Stones used to be ground to a placement, and in
+practice that took agency away: a stone under the crosshair moved where the next
+thing landed, faster than the player could notice it was there and adjust, and
+the opponent could not predict it either — so raising stones to spoil aim was a
+viable strategy, which is a degenerate one. **No aiming treats a structure as
+ground.** Where a placement lands depends on the floor and the arena, never on
+what has been built on it. The cost: stacking a stone on another's cap is gone;
+aimed at the floor under one, the new stone erupts beneath it and lifts it. A
+Bulwark's planted shield is not one of her structures and is still a wall to
+every placement.
 
 ## The five lines of effect
 
@@ -160,9 +163,8 @@ them: a structure, a fire pillar.
   a place the floor does not know about, so nothing settles it.
 - **Hit anything else** — a wall — it drops to whatever is underneath,
   because the thing being placed can only exist on the floor.
-- **The Elementalist's stones are not on this ray** — see
-  [Ground, and everything else](#ground-and-everything-else). Her Raise is the
-  one placement that still sees them.
+- **The Elementalist's stones are not on this ray**, for any placement,
+  Raise included — see [Ground, and everything else](#ground-and-everything-else).
 - **If it travels**, it travels from the character model to that point.
 
 ### Not grounded

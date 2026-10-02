@@ -649,35 +649,20 @@ fn facing(hit: Option<Fx>, from: V3, dir: V3, top: Fx) -> Met {
 /// that races along the ground has its path already.
 pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
     // **The Elementalist's stones are not ground here** -- not their tops and
-    // not their sides. The ray goes through them to the floor behind, and a
-    // point under one settles on the floor rather than on its lid. Raise a
-    // stone and then a pillar beside it, and the pillar has to go where the
-    // crosshair is on the floor, not up on the stone the crosshair passed
-    // through on the way; at close quarters a stone of hers fills most of the
-    // screen. Decided 2026-10-02, from play. A Bulwark's planted shield is
-    // still a wall: it is not one of her structures.
+    // not their sides, for anything placed, Raise included. The ray goes
+    // through them to the floor behind, and a point under one settles on the
+    // floor rather than on its lid. Decided 2026-10-02, from play: a stone
+    // under the crosshair moved the placement somewhere the player had not
+    // meant and the opponent could not predict, faster than either could
+    // notice it was there -- which made raising stones to spoil aim a
+    // strategy. Where a placement lands depends on the floor and the arena,
+    // never on what has been built on it. A Bulwark's planted shield is still
+    // a wall: it is not one of her structures.
     let open = past_structures(scene);
-    let scene = Scene {
+    let scene = &Scene {
         stones: &open,
         ..*scene
     };
-    placed_on(who, look, reach, &scene)
-}
-
-/// Where the Elementalist's own **Raise** puts a stone: [`grounded_path`]
-/// with her stones still on the ray, lids as ground and sides as walls.
-///
-/// The one placement that keeps them, because the thing placed is another
-/// stone and where it goes against the ones already out is the mechanic:
-/// look down onto a cap and the next one stands on it, which is how she
-/// stacks them; point at a face and it comes up at its foot (`tests/aiming.rs`).
-/// Everything else she places -- the pillar, Quake -- looks through them.
-pub fn raise_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
-    placed_on(who, look, reach, scene)
-}
-
-/// The grounded rule over whatever field `scene` holds.
-fn placed_on(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
     let caster = &scene.players[who];
     let seen = sight(who, look, reach, scene);
     let to = match seen.met {
