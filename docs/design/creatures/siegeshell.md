@@ -827,3 +827,17 @@ For a person: whether the beat is a rhythm or a chore (§12, 6), whether 0.8
 m/s reads as walking (§12, 5), the solo rate (§12, 7), the Reaver, who
 wins twelve of twelve as a pair, and the Bulwark and the Blood mage, who win
 nothing in any company.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species siegeshell --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       1/24   187 s   57 /  2 /  2 / 39 %          0       4/12   507s   0
+  Bulwark        0/24      --   72 /  1 /  2 / 25 %          0       0/12    --s   0
+  Reaver         4/24   257 s   58 /  2 /  4 / 36 %          0       12/12   223s   0
+  Elementalist   1/24   351 s   69 /  3 /  4 / 23 %          0       6/12   339s   0
+  Blood mage     0/24      --   94 /  1 /  1 /  4 %          0       0/12    --s   0
+  Dual mage      0/24      --   76 /  3 /  4 / 17 %          0       9/12   452s   0
+```

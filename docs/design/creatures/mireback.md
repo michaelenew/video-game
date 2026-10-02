@@ -722,3 +722,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it wins him two more (37 throws, every one leapt and slammed).
  Same seeds, after: 18 of 24 in 102 s, bit for bit the same: every throw is leapt to before it reaches the toad.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species mireback --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      18/24   147 s   38 /  8 / 13 / 41 %          0       12/12    98s   0
+  Bulwark       16/24   152 s   40 /  8 / 12 / 40 %          0       12/12    61s   0
+  Reaver        21/24    99 s   38 /  7 / 11 / 43 %          0       12/12    77s   0
+  Elementalist  24/24    48 s   31 /  7 / 10 / 52 %          0       12/12    29s   0
+  Blood mage     4/24   138 s   38 /  7 / 11 / 43 %          0       4/12    97s   0
+  Dual mage      0/24      --   35 /  7 / 11 / 46 %          0       5/12   142s   0
+```

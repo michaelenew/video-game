@@ -819,3 +819,17 @@ crouch), and they are a person's to pull with the fight in their hands.
 answerable on sight); the pile-on leaps in sequence rather than at once (so the
 dodge answers it); the Big One's death makes the rout final; and two moves were
 added — the maul answered by a jump, and the gnaw that covers a stone's top.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species gnawers --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      24/24    35 s   27 / 43 / 13 / 17 %          0       12/12    22s   0
+  Bulwark       24/24    35 s   26 / 45 / 11 / 18 %          0       12/12    23s   0
+  Reaver        24/24    33 s   25 / 45 / 11 / 20 %          0       12/12    22s   0
+  Elementalist  24/24    24 s   23 / 52 / 12 / 13 %          0       12/12    15s   0
+  Blood mage    21/24    57 s   26 / 46 /  8 / 20 %          0       12/12    37s   0
+  Dual mage     20/24    87 s   28 / 49 / 12 / 11 %          0       12/12    79s   0
+```

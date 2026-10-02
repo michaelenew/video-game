@@ -694,3 +694,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it takes him to the sacs: 49 pops in 109 slam windows, from 5 in 139, and his first win (1 of 24).
  Same seeds, after: 0 of 24 (from 1), sac pops 43 in 129 slam windows (from 49 in 109). The leap reaches the sac before the shield does, so a sac popped by the throw itself is rare; whether his throw is his one standing answer to a sac (§7) is now a question for the hunter's aim, not the simulation.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species broodmother --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       5/24   147 s   44 /  9 / 14 / 33 %          0       12/12    67s   0
+  Bulwark        0/24      --   47 /  9 / 14 / 31 %          0       12/12   124s   0
+  Reaver         0/24      --   47 /  9 / 13 / 31 %          0       12/12    66s   0
+  Elementalist   1/24   142 s   48 /  7 / 12 / 33 %          0       12/12    57s   0
+  Blood mage     0/24      --   48 /  8 / 13 / 31 %          0       0/12    --s   0
+  Dual mage     11/24   154 s   47 /  9 / 14 / 31 %          0       11/12    93s   0
+```

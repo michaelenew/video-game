@@ -843,3 +843,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. **Here it moved him most: 12 to 21 of 24**, in 161 s from 186 -- a leap closes on a cat in its recovery before its mate comes round (180 throws, 176 Slams out of the leap).
  Same seeds, after: **23 of 24** in 163 s (from 21 in 161 s), 176 throws: the shield that turns to meet his leap now cuts the cat it passes on the way.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species pair --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      16/24   159 s   55 /  8 / 11 / 26 %          0       11/12   149s   0
+  Bulwark       23/24   163 s   56 /  8 / 11 / 25 %          0       12/12   151s   0
+  Reaver         7/24   111 s   56 /  8 / 11 / 25 %          0       10/12   100s   0
+  Elementalist  24/24    46 s   58 /  7 / 10 / 24 %          0       12/12    54s   0
+  Blood mage     0/24      --   57 /  8 / 11 / 24 %          0       0/12    --s   0
+  Dual mage      4/24   128 s   56 /  8 / 11 / 25 %          0       7/12   132s   0
+```

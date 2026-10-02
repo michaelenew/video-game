@@ -787,3 +787,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here nothing in wins (33 and 22 throws): the windows on the floor are too short for the leap and the Slam.
  Same seeds, after: plan A 0 of 24, plan B 1 of 24 in 538 s (from 2 in 700 s); 22 and 21 throws, 15 and 4 of them planted and recalled rather than leapt to. The wing on a pass and the legs of a carrying bird are struck now; the hunter does not yet throw at a pass.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species galewing --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion       4/24   482 s   59 /  9 / 15 / 17 %          0       0/12    --s   0
+  Bulwark        0/24      --   52 /  9 / 17 / 22 %          0       0/12    --s   0
+  Reaver         9/24   646 s   52 /  9 / 18 / 22 %          0       0/12    --s   0
+  Elementalist  17/24   176 s   64 /  7 / 11 / 17 %          0       11/12   158s   0
+  Blood mage     0/24      --   52 /  9 / 16 / 22 %          0       0/12    --s   0
+  Dual mage      0/24      --   52 /  9 / 17 / 22 %          0       0/12    --s   0
+```

@@ -826,3 +826,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it costs him one hunt in each arena: a throw the plan cuts short with a dodge leaves him without his guard until the shield is home (26 throws, 16 given up, in the 24).
  Same seeds, after: the meadow 20 of 24 in 154 s (from 19 in 163 s), the crossing 8 of 12 (from 7). A throw at the work meets a cow on its way and is a blow there (29 throws, 8 leaps, 21 recalls), where before it flew on.
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species hornback --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      22/24   109 s   38 /  8 / 20 / 34 %          0       12/12   124s   0
+  Bulwark       20/24   154 s   36 /  8 / 27 / 29 %          0       12/12   178s   0
+  Reaver        16/24   164 s   36 /  7 / 26 / 31 %          0       10/12   198s   0
+  Elementalist  24/24    36 s   34 /  7 / 15 / 45 %          0       12/12    27s   0
+  Blood mage    22/24   109 s   39 /  8 / 20 / 32 %          0       12/12   108s   0
+  Dual mage     14/24   219 s   37 /  8 / 27 / 27 %          0       11/12   182s   0
+```

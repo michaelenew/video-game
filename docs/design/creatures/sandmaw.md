@@ -752,3 +752,17 @@ re-run with it; the feel log of the day has the before and after. The thrown
 shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
 did** -- thrown, the first body it meets; recalled, each it passes once. Here it costs him two of 24 (37 throws, leaping in to a stand).
  Same seeds, after: 22 of 24 in 209 s, unchanged. A shield does not strike a worm under the sand, only one standing out of it (`thrown_shield.rs`).
+
+### Re-measured 2026-10-01, after the polish pass
+
+`fight --species sandmaw --class <c> --repeats 24` alone and `--hunters 2 --repeats 12` as a pair of the class, on [plans/polish-fights.md](../plans/polish-fights.md)'s branch with origin/main merged (every class played, the Bulwark's shield thrown and striking). The windows are the report's own (for the Sandmaw the shared line, not §9's perceived one; for a fight of two bodies each body's own).
+
+```text
+                won    mean   threat / poke / way in / walk up   unans   coop won  mean  unans
+  Champion      18/24   191 s   65 / 12 / 15 /  8 %          0       12/12    78s   0
+  Bulwark       22/24   209 s   64 / 12 / 16 /  8 %          0       12/12   133s   0
+  Reaver        10/24   223 s   67 / 11 / 15 /  8 %          0       12/12   129s   0
+  Elementalist  11/24   338 s   49 /  7 /  9 / 35 %          0       12/12   241s   0
+  Blood mage     0/24      --   66 / 11 / 15 /  8 %          0       0/12    --s   0
+  Dual mage      3/24   209 s   61 / 12 / 18 /  8 %          0       12/12   216s   0
+```
