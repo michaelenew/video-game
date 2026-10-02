@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 ggrs = { version = "0.11.1", features = ["sync-send"] }
 sim = { path = "../sim" }
+regions = { path = "../regions" }
 
 # `ggrs` plugs in here. It is not vendored yet because this environment cannot
 # reach crates.io; add it when working locally:

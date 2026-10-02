@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/net", "crates/view", "crates/anim",
+members = ["crates/sim", "crates/regions", "crates/net", "crates/view", "crates/anim",
     "crates/manual", "crates/game", "crates/web", "crates/hunt"]
 
 [workspace.package]

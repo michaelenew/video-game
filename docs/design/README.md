@@ -154,6 +154,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [creatures/](creatures/) | One design per creature: [Gnawers](creatures/gnawers.md) (**built 2026-10-01**: `--hunt gnawers`, the Commons; §13 is where it landed), [Hornback herd](creatures/hornback.md) (**built 2026-10-01**: `--hunt hornback`, the low meadow, and `--hunt hornback-escort`, the crossing; §13 is where it landed), [Sandmaw](creatures/sandmaw.md) (**built 2026-10-01**: `--hunt sandmaw`, the Pan; §13 is where it landed), [Mireback](creatures/mireback.md) (**built 2026-10-01**: `--hunt mireback`, the Mire; §13 is where it landed), [The Pair](creatures/the-pair.md) (**built 2026-10-01**: `--hunt pair`, the Den; §13 is where it landed), [Broodmother](creatures/broodmother.md) (**built 2026-10-01**: `--hunt broodmother`, the Hollows; §13 is where it landed), [Galewing](creatures/galewing.md) (**built 2026-10-01**: `--hunt galewing`, the Cliffs; §13 is where it landed), [Veilstalker](creatures/veilstalker.md) (**built 2026-10-01**: `--hunt veilstalker`, the Ashwood; §13 is where it landed), [Mantis](creatures/mantis.md) (**built 2026-10-01**: `--hunt mantis`, the Shrine; §13 is where it landed), [Siegeshell](creatures/siegeshell.md) (**built 2026-10-01**: `--hunt siegeshell`, the Last Valley; §13 is where it landed) | All ten built: the Gnawers, the Hornback herd, the Mireback, the Sandmaw, the Pair, the Broodmother, the Galewing, the Veilstalker, the Mantis and the Siegeshell |
 | [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0 (the picker), W1 (trophies) and W2 (tempers) built 2026-10-01 |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
+| [regions.md](regions.md) | The overlapping hexagonal regions the open world will keep its checksums in, run by every build now: region checksums, the ledger, simulated neighbours' heartbeats, the gate, and the dev-mode watchdog | **Built 2026-10-02** |
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
@@ -220,6 +221,7 @@ animation and the frame budget.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
+crates/regions  The region ledger every build keeps: tape, books, heartbeats, gate, watchdog.
 crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.

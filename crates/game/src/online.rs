@@ -125,6 +125,14 @@ pub fn step(sim: &mut crate::Sim, local: SimInput) {
         return;
     }
 
+    // The region gate, asked before the frame is begun: a held frame adds no
+    // input and advances nothing, and GGRS waits for us the way it waits for a
+    // slow peer. See `docs/design/regions.md` §"The ledger".
+    sim.ledger.tick();
+    if !sim.ledger.may_advance(sim.cur.frame + 1) {
+        return;
+    }
+
     if session
         .add_local_input(*handle, net::NetInput::from(local))
         .is_err()
@@ -136,8 +144,13 @@ pub fn step(sim: &mut crate::Sim, local: SimInput) {
     let prev = sim.cur.clone();
     match session.advance_frame() {
         Ok(requests) => {
-            net::handle_requests(&mut sim.cur, requests);
+            net::handle_requests(&mut sim.cur, requests, &mut sim.ledger);
             sim.prev = prev;
+            // The books are kept for a frame once GGRS has confirmed it: no
+            // rollback reaches back past it, and the tape holds its final run.
+            if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
+                sim.ledger.confirm_through(confirmed, &sim.cur);
+            }
         }
         Err(net::ggrs::GgrsError::PredictionThreshold) => {}
         Err(e) => eprintln!("advance failed: {e}"),

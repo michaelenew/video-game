@@ -305,6 +305,106 @@ pub fn update_picker(
     *shown = Some(now);
 }
 
+/// The region books, in dev mode: the grid, the live regions and their
+/// checksums, the heartbeats, and the watchdog's tally and latest findings.
+/// `docs/design/regions.md`. Along the bottom between the two fighters'
+/// readouts, small and dim -- it is for whoever is building the game, not for
+/// the fight.
+#[derive(Component)]
+pub struct RegionText;
+
+/// Spawned only in dev mode, where there is a watchdog to report.
+pub fn setup_regions(mut commands: Commands) {
+    if !crate::dev_mode() {
+        return;
+    }
+    commands.spawn((
+        Text::new(""),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(DIM),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(14.0),
+            left: Val::Percent(30.0),
+            ..default()
+        },
+        RegionText,
+    ));
+}
+
+/// Rewritten every quarter of a second of frames, not every frame: it is a
+/// readout, and a string a frame is an allocation a frame.
+pub fn update_regions(
+    sim: Res<crate::Sim>,
+    mut text: Query<&mut Text, With<RegionText>>,
+    mut shown: Local<Option<(u32, u32)>>,
+) {
+    let Ok(mut t) = text.single_mut() else {
+        return;
+    };
+    let ledger = &sim.ledger;
+    let seq = ledger.watch().map_or(0, |w| w.seq());
+    let now = (ledger.confirmed().unwrap_or(0) / 15, seq);
+    if shown.as_ref() == Some(&now) {
+        return;
+    }
+    *shown = Some(now);
+    *t = Text::new(region_readout(ledger));
+}
+
+fn region_readout(ledger: &regions::Ledger) -> String {
+    use std::fmt::Write;
+    let g = ledger.grid();
+    let m = |v: sim::Fx| v.raw() as f32 / 65536.0;
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "regions  hexagon {:.0} m | horizon {:.0} m | overlap {:.0} m{}",
+        m(g.size),
+        m(g.horizon()),
+        m(g.overlap),
+        if g.sound() { "" } else { " | UNSOUND" }
+    );
+    let _ = write!(out, "live");
+    for l in ledger.live() {
+        let _ = write!(
+            out,
+            "  ({},{}) {:04x}",
+            l.region.q,
+            l.region.r,
+            l.checksum & 0xffff
+        );
+    }
+    let _ = writeln!(out);
+    let confirmed = ledger.confirmed().unwrap_or(0);
+    let heard = ledger.heard();
+    let simulated = heard.iter().filter(|h| h.simulated).count();
+    let behind = heard
+        .iter()
+        .map(|h| confirmed.saturating_sub(h.through))
+        .max()
+        .unwrap_or(0);
+    let _ = writeln!(
+        out,
+        "heard  {} followed | {simulated} simulated | slowest {behind} frames behind",
+        heard.len()
+    );
+    if let Some(w) = ledger.watch() {
+        let _ = write!(out, "watch  {} re-runs", w.reruns);
+        for (name, n) in regions::Finding::KINDS.iter().zip(w.counts) {
+            let _ = write!(out, " | {name} {n}");
+        }
+        let _ = writeln!(out);
+        for issue in w.issues().take(4) {
+            let _ = writeln!(out, "  {issue}");
+        }
+    }
+    out
+}
+
 fn spawn_class_button(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
     parent.spawn((
         Button,

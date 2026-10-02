@@ -76,6 +76,7 @@ fn run_peer(
 ) -> Outcome {
     let mut session = p2p::start(port, remote, local_handle).expect("session");
     let mut world = World::new();
+    let mut ledger = regions::Ledger::new(&world, true);
     let mut advanced = 0u32;
 
     // Wait for the handshake before feeding it input.
@@ -120,7 +121,10 @@ fn run_peer(
 
         match session.advance_frame() {
             Ok(requests) => {
-                handle_requests(&mut world, requests);
+                handle_requests(&mut world, requests, &mut ledger);
+                if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
+                    ledger.confirm_through(confirmed, &world);
+                }
                 advanced += 1;
             }
             Err(ggrs::GgrsError::PredictionThreshold) => {}
@@ -136,6 +140,19 @@ fn run_peer(
         tick += Duration::from_micros(16_667);
         if let Some(rest) = tick.checked_duration_since(Instant::now()) {
             std::thread::sleep(rest);
+        }
+    }
+
+    // The region books, kept on confirmed frames as the game keeps them: any
+    // broken promise other than a fast body is a failure of this run.
+    if let Some(watch) = ledger.watch() {
+        println!("{name}: {} region re-runs", watch.reruns);
+        for issue in watch.issues() {
+            println!("{name}: region watch: {issue}");
+            assert!(
+                matches!(issue.finding, regions::Finding::TooFast { .. }),
+                "{name}: the region books broke a promise: {issue}"
+            );
         }
     }
 

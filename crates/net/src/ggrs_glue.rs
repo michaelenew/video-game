@@ -62,7 +62,16 @@ impl Config for SessionConfig {
 ///
 /// This is the whole integration: GGRS decides *when* to save, load and
 /// advance; the simulation only has to do those three things correctly.
-pub fn handle_requests(world: &mut World, requests: Vec<GgrsRequest<SessionConfig>>) {
+///
+/// Every advance also goes on the region ledger's tape -- a re-simulated frame
+/// overwriting its prediction -- so that once GGRS confirms a frame the books
+/// can be kept for it, the same books every build keeps.
+/// `docs/design/regions.md`.
+pub fn handle_requests(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    ledger: &mut regions::Ledger,
+) {
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
@@ -78,6 +87,7 @@ pub fn handle_requests(world: &mut World, requests: Vec<GgrsRequest<SessionConfi
                 for (slot, (input, _status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
                     *slot = (*input).into();
                 }
+                ledger.record(world, frame_inputs);
                 world.advance(frame_inputs);
             }
         }

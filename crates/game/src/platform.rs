@@ -287,6 +287,11 @@ mod host {
     /// Nothing to install: a panic already prints to the terminal the game was
     /// started from.
     pub fn report_panics() {}
+
+    /// A developer's line: the terminal the game was started from.
+    pub fn say(line: &str) {
+        eprintln!("{line}");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +348,12 @@ mod host {
         }
     }
 
+    /// A developer's line: the browser console, as a warning -- an error would
+    /// fail the page-load smoke test, and this is a finding, not a failure.
+    pub fn say(line: &str) {
+        web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(line));
+    }
+
     /// Put the panic message where the player can read it.
     ///
     /// Without this a panic in the browser is a blank canvas and
@@ -365,7 +376,7 @@ mod host {
 }
 
 use host::read_options;
-pub use host::{load_settings, load_trophies, report_panics, save_settings, save_trophies};
+pub use host::{load_settings, load_trophies, report_panics, save_settings, save_trophies, say};
 
 // ---------------------------------------------------------------------------
 

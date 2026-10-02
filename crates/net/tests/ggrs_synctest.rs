@@ -39,6 +39,11 @@ fn synctest(mut world: World, buttons: u16, label: &str) {
         rng
     };
 
+    // The region books, kept through every forced rollback: a frame is final
+    // once it is further back than SyncTest ever rolls, and its world then
+    // comes off the tape -- the version the last re-simulation wrote.
+    let mut ledger = regions::Ledger::new(&world, true);
+
     for frame in 0..1200u32 {
         for handle in 0..2 {
             session
@@ -52,10 +57,23 @@ fn synctest(mut world: World, buttons: u16, label: &str) {
         let requests = session
             .advance_frame()
             .unwrap_or_else(|e| panic!("{label}: desync at frame {frame}: {e}"));
-        handle_requests(&mut world, requests);
+        handle_requests(&mut world, requests, &mut ledger);
+        ledger.confirm_through(world.frame.saturating_sub(8), &world);
     }
 
     assert_eq!(world.frame, 1200);
+    let watch = ledger.watch().expect("the watchdog is on");
+    assert!(
+        watch.reruns > 1000,
+        "{label}: {} locality checks",
+        watch.reruns
+    );
+    let wrong: Vec<String> = watch
+        .issues()
+        .filter(|i| !matches!(i.finding, regions::Finding::TooFast { .. }))
+        .map(|i| i.to_string())
+        .collect();
+    assert!(wrong.is_empty(), "{label}: {wrong:#?}");
 }
 
 #[test]

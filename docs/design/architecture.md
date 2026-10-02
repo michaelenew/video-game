@@ -10,6 +10,7 @@ rendering or networking.
 
 ```
 crates/sim    Deterministic simulation. Zero dependencies, no floating point.
+crates/regions The region books every build keeps (regions.md). Depends on sim only.
 crates/net    Rollback session (GGRS) + the headless soak binary.
 crates/view   Presentation logic: interpolation, camera framing, posing. No engine.
 crates/game   Bevy app. Rendering only -- it owns no gameplay state.
@@ -235,6 +236,16 @@ coordinates instead, are in [exploration/0005](exploration/0005_open_world_netco
 `LocalSession` is a second, dependency-free harness that runs the same predict-and-rollback
 loop against a simulated peer. It is kept because it is readable — when SyncTest reports a
 desync, `LocalSession` is where you can watch one happen.
+
+### Regions
+
+**Every build keeps region books on every confirmed frame**, single player included, so the
+logic an open world will depend on is dogfooded while the game is one arena. `crates/regions`
+holds a tape of recent frames, the live regions' checksums, heartbeats (simulated for every
+region no fighter stands in), and the gate both drivers ask before a frame. In dev mode a
+watchdog re-runs one region a frame from the tape with only its members' inputs and reports
+anything that reached in from outside. `net::handle_requests` writes the tape; GGRS's
+confirmed frame is when the books are kept. The specification is [regions.md](regions.md).
 
 **Honest about "no server ever":** true for the prototype and for LAN. Direct-IP
 connections between arbitrary home networks eventually need NAT traversal, which means a

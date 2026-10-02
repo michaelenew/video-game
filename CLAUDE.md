@@ -190,6 +190,29 @@ sent a link.
 Build it with `./crates/web/build-game.sh`; the reasoning is
 [`docs/design/web.md`](docs/design/web.md).
 
+## Regions: every build keeps the books
+
+The open world will be overlapping hexagonal regions, each with its own
+checksum, and **single player, the harness, the browser and the two-peer game
+all run that logic now** so it is dogfooded while the game is small:
+`crates/regions` (the ledger: tape, books, heartbeats, gate, dev watchdog),
+`sim::region` (the grid) and `World::region_checksum`. The specification is
+[`docs/design/regions.md`](docs/design/regions.md). Three things to keep true:
+
+- **A driver that runs frames feeds the ledger**: `record` before every
+  advance (a rollback's included), `confirm_through` once a frame is final,
+  `tick` and `may_advance` before beginning one. The local and online drivers,
+  SyncTest and the localhost peers all do; a new driver that skips it is the
+  failure this rule is for.
+- **Whole-world and region checksums share one set of `hash_*` helpers** in
+  `state.rs`. A field added to the checksum goes in the helper, not beside it.
+- **`reach` and `speed` in the Oven's Regions family are a declaration.** When
+  the watchdog reports *too fast* or *outran*, either the effect is wrong or the
+  declaration is, and the declaration is what sizes the open world.
+
+Enforced by `sim/tests/regions.rs`, `regions/tests/{gate,watch}.rs`, and the
+region assertions in `net/tests/ggrs_synctest.rs` and `p2p_localhost`.
+
 ## The overlay draws what the hit test uses
 
 `state::hitbox` is the one description of an attack's volume, and the debug

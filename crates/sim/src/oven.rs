@@ -626,6 +626,18 @@ scalars! {
     Temper3Lead,      "Tempers",  "Temper III, lead (% of its own)",        Int,     100,      300;
     Temper3Decisive,  "Tempers",  "Temper III, decisiveness (+ points)",    Int,     0,        100;
     Temper3Despair,   "Tempers",  "Temper III, thresholds fall (% of its own)", Percent, 0,        100;
+    // **Regions** (`docs/design/regions.md`): the overlapping hexagons every
+    // build keeps its books in, and the speed of light they are sized by.
+    // `reach` and `speed` are a declaration, not a rule a move obeys: the dev
+    // watchdog reports every effect that outruns them. `delay` is how old a
+    // neighbour's outcome may be, `net::MAX_ROLLBACK_FRAMES`. See
+    // `crate::region`.
+    RegionReach,      "Regions",  "Reach, farthest anything acts (m)",      Fixed,   fx(1,1),  fx(200,1);
+    RegionSpeed,      "Regions",  "Speed, fastest anything moves (m/s)",    Fixed,   fx(1,1),  fx(500,1);
+    RegionDelay,      "Regions",  "Delay, oldest outcome a region takes",   Frames,  1,        30;
+    RegionOverlap,    "Regions",  "Checksum zone, reaches past its hexagon (m)", Fixed, 0,      fx(50,1);
+    RegionSize,       "Regions",  "Hexagon size, centre to corner (m)",     Fixed,   fx(4,1),  fx(2000,1);
+    RegionNeighbourLag, "Regions", "Simulated neighbour, heartbeat lag",    Frames,  0,        120;
 }
 
 // ---------------------------------------------------------------------------

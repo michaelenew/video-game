@@ -1,0 +1,17 @@
+[package]
+name = "regions"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# The region ledger every build keeps: `docs/design/regions.md`.
+#
+# Nothing but `sim`, so it builds for the window and the canvas alike -- the
+# browser has no `net` and still runs the same books. Like `sim`, it allocates
+# when it is made and never after.
+[dependencies]
+sim = { path = "../sim" }
+
+[dev-dependencies]
+hunt = { path = "../hunt" }

@@ -165,6 +165,7 @@ fn main() {
                 ground::setup,
                 hud::setup,
                 hud::setup_picker,
+                hud::setup_regions,
                 crosshair::setup,
                 glint::setup,
                 veil::setup,
@@ -235,6 +236,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                hud::update_regions,
                 glint::update,
                 veil::place,
             )
@@ -326,6 +328,12 @@ pub struct Sim {
     /// something, held otherwise. Offline too, so a held look plays the same
     /// on the desk as over a connection. See [`Sim::outgoing`].
     wire: sim::input::WireLook,
+    /// The region books: every build keeps them, with the watchdog on in dev
+    /// mode. Fed every frame this peer runs and every frame it confirms. See
+    /// `docs/design/regions.md`.
+    pub ledger: regions::Ledger,
+    /// How many of the watchdog's findings have been printed.
+    regions_said: u32,
 }
 
 impl Sim {
@@ -482,6 +490,8 @@ impl Default for Sim {
             rehearsing: None,
             travel: sim::input::Travel::NONE,
             wire: sim::input::WireLook::new(),
+            ledger: regions::Ledger::new(&seed, dev_mode()),
+            regions_said: 0,
         }
     }
 }
@@ -3269,6 +3279,13 @@ fn tick_sim(
                     sim.paused = true;
                     break;
                 }
+                // The region gate: the same one the open world will have,
+                // with its neighbours simulated. As tuned it never holds.
+                let next = sim.cur.frame + 1;
+                sim.ledger.tick();
+                if !sim.ledger.may_advance(next) {
+                    continue;
+                }
                 // Scripted inputs are resampled per simulation tick, not per
                 // rendered frame. One render frame can cover several ticks, and
                 // reusing a sample across them smears a four-frame press into
@@ -3307,8 +3324,14 @@ fn tick_sim(
                 // Remembered before the tick, so one press of `[` lands on the
                 // frame you were just looking at. Split out of the field access
                 // because the ring and the world live on the same struct.
-                let Sim { history, cur, .. } = &mut *sim;
+                let Sim {
+                    history,
+                    cur,
+                    ledger,
+                    ..
+                } = &mut *sim;
                 history.push(cur);
+                ledger.record(cur, pair);
                 sim.prev = sim.cur.clone();
                 sim.cur.advance(pair);
                 if travel != sim::input::Travel::NONE {
@@ -3317,6 +3340,9 @@ fn tick_sim(
                     sim.cur = seated(sim.cur.clone(), sim.dummy);
                     sim.prev = sim.cur.clone();
                 }
+                // Offline every frame is confirmed the moment it is run.
+                let Sim { cur, ledger, .. } = &mut *sim;
+                ledger.confirm_through(cur.frame, cur);
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -3331,6 +3357,26 @@ fn tick_sim(
             }
         }
     }
+    say_region_findings(&mut sim);
+}
+
+/// Print every region finding the watchdog has made since the last call: the
+/// terminal on the desk, the console in the browser. Dev mode only -- without
+/// it there is no watchdog to ask.
+fn say_region_findings(sim: &mut Sim) {
+    let Some(watch) = sim.ledger.watch() else {
+        return;
+    };
+    let said = sim.regions_said;
+    if watch.seq() == said {
+        return;
+    }
+    let mut fresh: Vec<_> = watch.issues().filter(|i| i.seq > said).collect();
+    fresh.reverse();
+    for issue in fresh {
+        platform::say(&format!("regions: {issue}"));
+    }
+    sim.regions_said = watch.seq();
 }
 
 fn scripted_or(scripted: Option<SimInput>, live: SimInput) -> SimInput {

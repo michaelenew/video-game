@@ -13,6 +13,7 @@ hunt = { path = "../hunt" }
 manual = { path = "../manual" }
 sim = { path = "../sim" }
 view = { path = "../view" }
+regions = { path = "../regions" }
 
 # Default features minus the ones a 3D arena prototype does not need. Keeps
 # compile times down without giving up rendering, glTF or PBR.

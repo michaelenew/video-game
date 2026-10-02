@@ -36,6 +36,7 @@ use crate::monster::{
 use crate::moves;
 use crate::objective;
 use crate::pack::{self, Pack};
+use crate::region::{Body, Grid, RegionId};
 use crate::shadow;
 use crate::species::SpeciesId;
 use crate::stones::{self, Field};
@@ -2382,152 +2383,30 @@ impl World {
         h.write_u32(self.frame);
         for b in &self.bolts {
             match b {
-                Some(b) => {
-                    h.write_u32(b.owner as u32 + 1);
-                    hash_v3(&mut h, &b.pos);
-                    hash_v3(&mut h, &b.dir);
-                    h.write_i32(b.travelled.raw());
-                }
+                Some(b) => hash_bolt(&mut h, b),
                 None => h.write_u32(0),
             }
         }
         for d in &self.debris {
             match d {
-                Some(d) => {
-                    h.write_u32(d.owner as u32 + 1);
-                    hash_v3(&mut h, &d.pos);
-                    hash_v3(&mut h, &d.dir);
-                    h.write_i32(d.travelled.raw());
-                }
+                Some(d) => hash_shard(&mut h, d),
                 None => h.write_u32(0),
             }
         }
         for g in &self.gusts {
             match g {
-                Some(g) => {
-                    h.write_u32(g.owner as u32 + 1);
-                    // Which of the two, on the wire: a bolt and a disc at the
-                    // same place going the same way are not the same shot, and
-                    // a checksum that could not tell them apart would let one
-                    // peer's disc be the other's bolt.
-                    h.write_u32(g.gale as u32);
-                    hash_v3(&mut h, &g.pos);
-                    hash_v3(&mut h, &g.dir);
-                    h.write_i32(g.travelled.raw());
-                    h.write_u32(g.lit as u32);
-                    h.write_u32(g.pushed as u32);
-                }
+                Some(g) => hash_gust(&mut h, g),
                 None => h.write_u32(0),
             }
         }
         for e in &self.effects {
             match e {
-                Some(e) => {
-                    h.write_u32(e.kind as u32 + 1);
-                    h.write_u32(e.owner as u32);
-                    h.write_u32(e.class as u32);
-                    h.write_u32(e.slot as u32);
-                    h.write_u32(e.age as u32);
-                    h.write_u32(e.life as u32);
-                    h.write_u64(e.struck);
-                    h.write_i32(e.banked);
-                    h.write_i32(e.power.raw());
-                    h.write_i32(e.reach.raw());
-                    hash_v3(&mut h, &e.pos);
-                    hash_v3(&mut h, &e.dir);
-                    hash_v3(&mut h, &e.home);
-                }
+                Some(e) => hash_effect(&mut h, e),
                 None => h.write_u32(0),
             }
         }
         for p in &self.players {
-            for v in [p.pos, p.vel, p.facing, p.aim_path.from, p.aim_path.to] {
-                h.write_i32(v.x.raw());
-                h.write_i32(v.y.raw());
-                h.write_i32(v.z.raw());
-            }
-            h.write_i32(p.health);
-            h.write_i32(p.grey);
-            h.write_u32(p.grounded as u32);
-            h.write_u32(p.air_dodged as u32);
-            h.write_u32(p.slowed as u32);
-            h.write_i32(p.slow_mul.raw());
-            h.write_u32(p.hasted as u32);
-            h.write_u32(p.marks as u32);
-            h.write_u32(p.mark_clock as u32);
-            h.write_i32(p.thrown_at.raw());
-            h.write_u32(p.bound as u32);
-            h.write_u32(p.mechanic_held as u32);
-            h.write_u32(p.right_held as u32);
-            h.write_u32(p.shadow_queued as u32);
-            h.write_u32(p.space_held as u32);
-            h.write_u32(p.leap_used as u32);
-            h.write_u32(p.blinked as u32);
-            h.write_u32(p.bleeding as u32);
-            h.write_u32(p.bled_by as u32);
-            h.write_u32(p.hauled_in as u32);
-            h.write_i32(p.slam.raw());
-            h.write_i32(p.slam_fall.raw());
-            h.write_u32(p.held_by as u32);
-            h.write_u32(p.jump_hold as u32);
-            h.write_u32(p.air_stall as u32);
-            h.write_u32(p.haul as u32);
-            hash_v3(&mut h, &p.haul_to);
-            h.write_i32(p.haul_speed.raw());
-            h.write_u32(p.air_stalls as u32);
-            h.write_u32(p.hit_used as u32);
-            h.write_u32(p.crouching as u32);
-            h.write_u32(p.stride as u32);
-            h.write_u32(p.air_frames as u32);
-            h.write_u32(p.since_landed as u32);
-            h.write_u32(p.parried as u32);
-            h.write_u32(p.crouched_for as u32);
-            h.write_u32(p.stun_total as u32);
-            h.write_u32(p.frozen as u32);
-            h.write_u32(p.frozen_bits as u32);
-            h.write_i32(p.aloft.raw());
-            h.write_u32(p.action.tag());
-            h.write_u32(p.action.frames_left() as u32);
-            let kind = match p.action {
-                Action::Startup { kind, .. }
-                | Action::Active { kind, .. }
-                | Action::Recovery { kind, .. } => kind,
-                _ => 0,
-            };
-            h.write_u32(kind as u32);
-            h.write_u32(p.rounds_won as u32);
-            h.write_u32(p.class as u32);
-            h.write_u32(p.mount as u32);
-            hash_v3(&mut h, &p.local);
-            hash_v3(&mut h, &p.grip_vel);
-            h.write_i32(p.carry_yaw.raw());
-            h.write_u32(p.grip_settle as u32);
-            h.write_u32(p.ride_clip as u32);
-            h.write_i32(p.beam_reach.raw());
-            h.write_i32(p.channelled.raw());
-            h.write_u32(p.charging_stone as u32);
-            h.write_u32(p.f_held as u32);
-            h.write_u32(p.r_held as u32);
-            h.write_u32(p.side_b_held as u32);
-            h.write_u32(p.breaking as u32);
-            // Only when a swing stooped: a fight with nothing short in it
-            // hashes as it did before anything could be.
-            if p.stoop != Fx::ZERO {
-                h.write_i32(p.stoop.raw());
-            }
-            // Only while a fall could hurt: nothing in the proving ground
-            // stands high enough, so its fights hash as they always did.
-            if p.fall_over != Fx::ZERO {
-                h.write_i32(0xFA11);
-                h.write_i32(p.fall_over.raw());
-            }
-            for f in &p.repeat_lock {
-                h.write_u32(*f as u32);
-            }
-            for f in &p.reactivate_lock {
-                h.write_u32(*f as u32);
-            }
-            hash_mechanic(&mut h, &p.mechanic);
+            hash_player(&mut h, p);
         }
         // A slot at a time. An empty slot writes a zero, except that empty
         // slots after the last creature write nothing -- so a world with one
@@ -2540,71 +2419,9 @@ impl World {
                 h.write_u32(0);
                 continue;
             };
-            {
-                // One for a creature, with its slot and species above the
-                // first byte: the Ridgeback in slot zero is still just one.
-                h.write_u32(1 | (slot as u32) << 8 | (m.species.0 as u32) << 16);
-                // Its temper, only when it has one: a hunt as tuned hashes
-                // exactly as it did before there were tempers.
-                if m.temper != 0 {
-                    h.write_u32(0x7E | (m.temper as u32) << 8);
-                }
-                hash_v3(&mut h, &m.pos);
-                h.write_i32(m.yaw.raw());
-                h.write_i32(m.yaw_rate.raw());
-                h.write_i32(m.speed.raw());
-                h.write_i32(m.health);
-                h.write_i32(m.poise);
-                h.write_i32(m.strain);
-                h.write_u32(m.stride as u32);
-                h.write_u32(m.beat as u32);
-                h.write_u32(m.slowed as u32);
-                h.write_i32(m.slow_mul.raw());
-                h.write_u32(m.rooted as u32);
-                h.write_u32(m.marks as u32);
-                h.write_u32(m.mark_clock as u32);
-                for part in 0..m.sp().parts.len() {
-                    h.write_i32(m.part_health(part));
-                }
-                h.write_u32(m.doing.tag());
-                h.write_u32(m.doing.frames_left() as u32);
-                h.write_u32(m.doing.attacking().unwrap_or(0) as u32);
-                h.write_u32(m.hit_used as u32);
-                hash_v3(&mut h, &m.brain.seen);
-                hash_v3(&mut h, &m.brain.seen_vel);
-                h.write_u32(m.brain.target as u32);
-                h.write_u32(m.brain.glance_left as u32);
-                h.write_u32(m.brain.think_left as u32);
-                h.write_u32(m.brain.last_move as u32);
-                h.write_u32(m.brain.repeat_left as u32);
-                for lock in &m.brain.cooldown[..m.sp().moves.len()] {
-                    h.write_u32(*lock as u32);
-                }
-                h.write_u32(m.brain.rng);
-                h.write_u32(m.brain.grace as u32);
-                // A species' mark and its words on the body, only when a
-                // species has used them: every creature before them hashes
-                // as it did.
-                if m.brain.aim != [0; 2] {
-                    h.write_u32(0x3A4C);
-                    h.write_u32(crate::lore::halves(m.brain.aim[0], m.brain.aim[1]));
-                }
-                if m.own != [0; 4] {
-                    h.write_u32(0x0E);
-                    for w in m.own {
-                        h.write_i32(w);
-                    }
-                }
-            }
+            hash_monster(&mut h, slot, m);
         }
-        match self.phase {
-            Phase::Fighting => h.write_u32(0),
-            Phase::RoundOver { winner, left } => {
-                h.write_u32(1);
-                h.write_u32(winner as u32);
-                h.write_u32(left as u32);
-            }
-        }
+        hash_phase(&mut h, self.phase);
         // The arena, after everything else and only when it is not the
         // proving ground: so a fight there hashes exactly as it did before
         // arenas were data, and the pinned hunts still mean what they say.
@@ -2614,61 +2431,94 @@ impl World {
         // The pack and its bodies, last, and only when there is one: a fight
         // without small bodies hashes exactly as it did before there were any.
         if let Some(p) = &self.pack {
-            h.write_u32(0xC0 | (p.species.0 as u32) << 8);
-            if p.temper != 0 {
-                h.write_u32(0x7E | (p.temper as u32) << 8);
-            }
-            for v in [p.mood, p.owner, p.leader, p.boost, p.mustered, p.lost] {
-                h.write_u32(v as u32);
-            }
-            for v in [p.mood_left, p.boost_left, p.glance_left, p.grace] {
-                h.write_u32(v as u32);
-            }
-            for r in &p.rest {
-                h.write_u32(*r as u32);
-            }
-            h.write_u32(p.rng);
-            hash_v3(&mut h, &p.home);
-            for s in &p.seen {
-                hash_v3(&mut h, &s.pos);
-                hash_v3(&mut h, &s.vel);
-                h.write_u32(s.facing as u32);
-                h.write_u32(
-                    s.alive as u32
-                        | (s.down as u32) << 1
-                        | (s.slowed as u32) << 2
-                        | (s.staggered as u32) << 3,
-                );
-                h.write_u32(s.ring_places as u32 | (s.ring_base as u32) << 8);
-                h.write_u32(s.arc as u32);
-            }
-            for m in &p.memo {
-                h.write_i32(*m);
-            }
+            hash_pack(&mut h, p);
         }
         if self.pack.is_some() || self.critters.any() {
             h.write_u32(self.critters.species.0 as u32);
             for c in self.critters.iter() {
-                hash_v3(&mut h, &c.pos);
-                hash_v3(&mut h, &c.vel);
-                h.write_u32(c.yaw as u32 | (c.health as u16 as u32) << 16);
-                h.write_u32(c.timer as u32 | (c.clock as u32) << 16);
-                h.write_u32(u32::from_le_bytes([c.kind, c.state, c.act, c.flags]));
-                h.write_u32(u32::from_le_bytes([c.role, c.slot, c.target, c.mount]));
-                h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
-                h.write_u32(c.perch[2] as u16 as u32 | (c.seared as u32) << 16);
+                hash_critter(&mut h, c);
             }
         }
         // The hunt's lore, last, and only when something is in it: a fight
         // with nothing on the floor, nothing heard and nothing to defend
         // hashes exactly as it did before there was any.
         if !self.lore.is_blank() {
-            h.write_u32(0x10E | (self.lore.owner.map_or(0xFF, |s| s.0) as u32) << 16);
-            for cell in self.lore.cells() {
-                for w in cell {
-                    h.write_u32(*w);
-                }
+            hash_lore(&mut h, &self.lore);
+        }
+        h.finish()
+    }
+}
+
+impl World {
+    /// Every body in the world, with where it stands and its own state hash --
+    /// the same bytes [`World::checksum`] writes for it. Fighters always;
+    /// creatures, critters and things in flight when they are there.
+    pub fn each_body(&self, mut visit: impl FnMut(Body, V3, u64)) {
+        fn own(write: impl FnOnce(&mut Fnv)) -> u64 {
+            let mut h = Fnv::new();
+            write(&mut h);
+            h.finish()
+        }
+        for (i, b) in self.bolts.iter().enumerate() {
+            if let Some(b) = b {
+                visit(Body::Bolt(i as u8), b.pos, own(|h| hash_bolt(h, b)));
             }
+        }
+        for (i, d) in self.debris.iter().enumerate() {
+            if let Some(d) = d {
+                visit(Body::Shard(i as u8), d.pos, own(|h| hash_shard(h, d)));
+            }
+        }
+        for (i, g) in self.gusts.iter().enumerate() {
+            if let Some(g) = g {
+                visit(Body::Gust(i as u8), g.pos, own(|h| hash_gust(h, g)));
+            }
+        }
+        for (i, e) in self.effects.iter().enumerate() {
+            if let Some(e) = e {
+                visit(Body::Effect(i as u8), e.pos, own(|h| hash_effect(h, e)));
+            }
+        }
+        for (i, p) in self.players.iter().enumerate() {
+            visit(Body::Fighter(i as u8), p.pos, own(|h| hash_player(h, p)));
+        }
+        for (slot, beast) in self.monsters.iter().enumerate() {
+            if let Some(m) = beast {
+                let hash = own(|h| hash_monster(h, slot, m));
+                visit(Body::Creature(slot as u8), m.pos, hash);
+            }
+        }
+        for (i, c) in self.critters.iter().enumerate() {
+            if c.present() {
+                visit(Body::Critter(i as u8), c.pos, own(|h| hash_critter(h, c)));
+            }
+        }
+    }
+
+    /// One region's checksum: the frame, the region, and every body standing
+    /// in its checksum zone, each by its slot and its own hash. The fight's
+    /// home region also carries the state that belongs to no body -- the
+    /// phase, the arena, the pack and the lore -- because a one-arena game has
+    /// some, and that is where it is counted until it is made local. See
+    /// `docs/design/regions.md` §"A region checksum".
+    pub fn region_checksum(&self, grid: &Grid, region: RegionId) -> u64 {
+        let mut h = Fnv::new();
+        h.write_u32(self.frame);
+        h.write_u32(region.word());
+        self.each_body(|body, at, own| {
+            if grid.in_zone(region, at) {
+                h.write_u32(body.word());
+                h.write_u64(own);
+            }
+        });
+        if region == grid.fight_home() {
+            hash_phase(&mut h, self.phase);
+            h.write_u32(self.arena.0 as u32);
+            if let Some(p) = &self.pack {
+                hash_pack(&mut h, p);
+            }
+            h.write_u32(self.critters.species.0 as u32);
+            hash_lore(&mut h, &self.lore);
         }
         h.finish()
     }
@@ -6158,6 +6008,269 @@ pub fn depth_of_size(p: &Player, kind: u8) -> Fx {
 /// [`dual::steer`].
 fn steer_meter(p: &mut Player, kind: u8) {
     dual::steer(p, kind);
+}
+
+// ---------------------------------------------------------------------------
+// The checksum's pieces. One function per kind of thing, so the whole-world
+// hash (`World::digest`) and a region's (`World::region_checksum`) write the
+// same bytes for the same body and cannot drift apart. See
+// `docs/design/regions.md` §"A region checksum".
+// ---------------------------------------------------------------------------
+
+fn hash_bolt(h: &mut Fnv, b: &crate::bolt::FireBolt) {
+    h.write_u32(b.owner as u32 + 1);
+    hash_v3(h, &b.pos);
+    hash_v3(h, &b.dir);
+    h.write_i32(b.travelled.raw());
+}
+
+fn hash_shard(h: &mut Fnv, d: &crate::debris::Shard) {
+    h.write_u32(d.owner as u32 + 1);
+    hash_v3(h, &d.pos);
+    hash_v3(h, &d.dir);
+    h.write_i32(d.travelled.raw());
+}
+
+fn hash_gust(h: &mut Fnv, g: &crate::gust::Gust) {
+    h.write_u32(g.owner as u32 + 1);
+    // Which of the two, on the wire: a bolt and a disc at the
+    // same place going the same way are not the same shot, and
+    // a checksum that could not tell them apart would let one
+    // peer's disc be the other's bolt.
+    h.write_u32(g.gale as u32);
+    hash_v3(h, &g.pos);
+    hash_v3(h, &g.dir);
+    h.write_i32(g.travelled.raw());
+    h.write_u32(g.lit as u32);
+    h.write_u32(g.pushed as u32);
+}
+
+fn hash_effect(h: &mut Fnv, e: &Effect) {
+    h.write_u32(e.kind as u32 + 1);
+    h.write_u32(e.owner as u32);
+    h.write_u32(e.class as u32);
+    h.write_u32(e.slot as u32);
+    h.write_u32(e.age as u32);
+    h.write_u32(e.life as u32);
+    h.write_u64(e.struck);
+    h.write_i32(e.banked);
+    h.write_i32(e.power.raw());
+    h.write_i32(e.reach.raw());
+    hash_v3(h, &e.pos);
+    hash_v3(h, &e.dir);
+    hash_v3(h, &e.home);
+}
+
+fn hash_player(h: &mut Fnv, p: &Player) {
+    for v in [p.pos, p.vel, p.facing, p.aim_path.from, p.aim_path.to] {
+        h.write_i32(v.x.raw());
+        h.write_i32(v.y.raw());
+        h.write_i32(v.z.raw());
+    }
+    h.write_i32(p.health);
+    h.write_i32(p.grey);
+    h.write_u32(p.grounded as u32);
+    h.write_u32(p.air_dodged as u32);
+    h.write_u32(p.slowed as u32);
+    h.write_i32(p.slow_mul.raw());
+    h.write_u32(p.hasted as u32);
+    h.write_u32(p.marks as u32);
+    h.write_u32(p.mark_clock as u32);
+    h.write_i32(p.thrown_at.raw());
+    h.write_u32(p.bound as u32);
+    h.write_u32(p.mechanic_held as u32);
+    h.write_u32(p.right_held as u32);
+    h.write_u32(p.shadow_queued as u32);
+    h.write_u32(p.space_held as u32);
+    h.write_u32(p.leap_used as u32);
+    h.write_u32(p.blinked as u32);
+    h.write_u32(p.bleeding as u32);
+    h.write_u32(p.bled_by as u32);
+    h.write_u32(p.hauled_in as u32);
+    h.write_i32(p.slam.raw());
+    h.write_i32(p.slam_fall.raw());
+    h.write_u32(p.held_by as u32);
+    h.write_u32(p.jump_hold as u32);
+    h.write_u32(p.air_stall as u32);
+    h.write_u32(p.haul as u32);
+    hash_v3(h, &p.haul_to);
+    h.write_i32(p.haul_speed.raw());
+    h.write_u32(p.air_stalls as u32);
+    h.write_u32(p.hit_used as u32);
+    h.write_u32(p.crouching as u32);
+    h.write_u32(p.stride as u32);
+    h.write_u32(p.air_frames as u32);
+    h.write_u32(p.since_landed as u32);
+    h.write_u32(p.parried as u32);
+    h.write_u32(p.crouched_for as u32);
+    h.write_u32(p.stun_total as u32);
+    h.write_u32(p.frozen as u32);
+    h.write_u32(p.frozen_bits as u32);
+    h.write_i32(p.aloft.raw());
+    h.write_u32(p.action.tag());
+    h.write_u32(p.action.frames_left() as u32);
+    let kind = match p.action {
+        Action::Startup { kind, .. }
+        | Action::Active { kind, .. }
+        | Action::Recovery { kind, .. } => kind,
+        _ => 0,
+    };
+    h.write_u32(kind as u32);
+    h.write_u32(p.rounds_won as u32);
+    h.write_u32(p.class as u32);
+    h.write_u32(p.mount as u32);
+    hash_v3(h, &p.local);
+    hash_v3(h, &p.grip_vel);
+    h.write_i32(p.carry_yaw.raw());
+    h.write_u32(p.grip_settle as u32);
+    h.write_u32(p.ride_clip as u32);
+    h.write_i32(p.beam_reach.raw());
+    h.write_i32(p.channelled.raw());
+    h.write_u32(p.charging_stone as u32);
+    h.write_u32(p.f_held as u32);
+    h.write_u32(p.r_held as u32);
+    h.write_u32(p.side_b_held as u32);
+    h.write_u32(p.breaking as u32);
+    // Only when a swing stooped: a fight with nothing short in it
+    // hashes as it did before anything could be.
+    if p.stoop != Fx::ZERO {
+        h.write_i32(p.stoop.raw());
+    }
+    // Only while a fall could hurt: nothing in the proving ground
+    // stands high enough, so its fights hash as they always did.
+    if p.fall_over != Fx::ZERO {
+        h.write_i32(0xFA11);
+        h.write_i32(p.fall_over.raw());
+    }
+    for f in &p.repeat_lock {
+        h.write_u32(*f as u32);
+    }
+    for f in &p.reactivate_lock {
+        h.write_u32(*f as u32);
+    }
+    hash_mechanic(h, &p.mechanic);
+}
+
+fn hash_monster(h: &mut Fnv, slot: usize, m: &crate::monster::Monster) {
+    // One for a creature, with its slot and species above the
+    // first byte: the Ridgeback in slot zero is still just one.
+    h.write_u32(1 | (slot as u32) << 8 | (m.species.0 as u32) << 16);
+    // Its temper, only when it has one: a hunt as tuned hashes
+    // exactly as it did before there were tempers.
+    if m.temper != 0 {
+        h.write_u32(0x7E | (m.temper as u32) << 8);
+    }
+    hash_v3(h, &m.pos);
+    h.write_i32(m.yaw.raw());
+    h.write_i32(m.yaw_rate.raw());
+    h.write_i32(m.speed.raw());
+    h.write_i32(m.health);
+    h.write_i32(m.poise);
+    h.write_i32(m.strain);
+    h.write_u32(m.stride as u32);
+    h.write_u32(m.beat as u32);
+    h.write_u32(m.slowed as u32);
+    h.write_i32(m.slow_mul.raw());
+    h.write_u32(m.rooted as u32);
+    h.write_u32(m.marks as u32);
+    h.write_u32(m.mark_clock as u32);
+    for part in 0..m.sp().parts.len() {
+        h.write_i32(m.part_health(part));
+    }
+    h.write_u32(m.doing.tag());
+    h.write_u32(m.doing.frames_left() as u32);
+    h.write_u32(m.doing.attacking().unwrap_or(0) as u32);
+    h.write_u32(m.hit_used as u32);
+    hash_v3(h, &m.brain.seen);
+    hash_v3(h, &m.brain.seen_vel);
+    h.write_u32(m.brain.target as u32);
+    h.write_u32(m.brain.glance_left as u32);
+    h.write_u32(m.brain.think_left as u32);
+    h.write_u32(m.brain.last_move as u32);
+    h.write_u32(m.brain.repeat_left as u32);
+    for lock in &m.brain.cooldown[..m.sp().moves.len()] {
+        h.write_u32(*lock as u32);
+    }
+    h.write_u32(m.brain.rng);
+    h.write_u32(m.brain.grace as u32);
+    // A species' mark and its words on the body, only when a
+    // species has used them: every creature before them hashes
+    // as it did.
+    if m.brain.aim != [0; 2] {
+        h.write_u32(0x3A4C);
+        h.write_u32(crate::lore::halves(m.brain.aim[0], m.brain.aim[1]));
+    }
+    if m.own != [0; 4] {
+        h.write_u32(0x0E);
+        for w in m.own {
+            h.write_i32(w);
+        }
+    }
+}
+
+fn hash_phase(h: &mut Fnv, phase: Phase) {
+    match phase {
+        Phase::Fighting => h.write_u32(0),
+        Phase::RoundOver { winner, left } => {
+            h.write_u32(1);
+            h.write_u32(winner as u32);
+            h.write_u32(left as u32);
+        }
+    }
+}
+
+fn hash_pack(h: &mut Fnv, p: &Pack) {
+    h.write_u32(0xC0 | (p.species.0 as u32) << 8);
+    if p.temper != 0 {
+        h.write_u32(0x7E | (p.temper as u32) << 8);
+    }
+    for v in [p.mood, p.owner, p.leader, p.boost, p.mustered, p.lost] {
+        h.write_u32(v as u32);
+    }
+    for v in [p.mood_left, p.boost_left, p.glance_left, p.grace] {
+        h.write_u32(v as u32);
+    }
+    for r in &p.rest {
+        h.write_u32(*r as u32);
+    }
+    h.write_u32(p.rng);
+    hash_v3(h, &p.home);
+    for s in &p.seen {
+        hash_v3(h, &s.pos);
+        hash_v3(h, &s.vel);
+        h.write_u32(s.facing as u32);
+        h.write_u32(
+            s.alive as u32
+                | (s.down as u32) << 1
+                | (s.slowed as u32) << 2
+                | (s.staggered as u32) << 3,
+        );
+        h.write_u32(s.ring_places as u32 | (s.ring_base as u32) << 8);
+        h.write_u32(s.arc as u32);
+    }
+    for m in &p.memo {
+        h.write_i32(*m);
+    }
+}
+
+fn hash_critter(h: &mut Fnv, c: &crate::critter::Critter) {
+    hash_v3(h, &c.pos);
+    hash_v3(h, &c.vel);
+    h.write_u32(c.yaw as u32 | (c.health as u16 as u32) << 16);
+    h.write_u32(c.timer as u32 | (c.clock as u32) << 16);
+    h.write_u32(u32::from_le_bytes([c.kind, c.state, c.act, c.flags]));
+    h.write_u32(u32::from_le_bytes([c.role, c.slot, c.target, c.mount]));
+    h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
+    h.write_u32(c.perch[2] as u16 as u32 | (c.seared as u32) << 16);
+}
+
+fn hash_lore(h: &mut Fnv, lore: &Lore) {
+    h.write_u32(0x10E | (lore.owner.map_or(0xFF, |s| s.0) as u32) << 16);
+    for cell in lore.cells() {
+        for w in cell {
+            h.write_u32(*w);
+        }
+    }
 }
 
 fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {

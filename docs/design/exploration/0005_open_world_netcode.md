@@ -1,5 +1,5 @@
 ---
-status: exploration — regions open; the look on the wire decided and built
+status: exploration — regions built as the books every build keeps (regions.md); the look on the wire decided and built
 started: 2026-10-02
 ---
 
@@ -7,8 +7,10 @@ started: 2026-10-02
 
 Two threads that came out of one conversation. The first is how peer-to-peer
 rollback could stretch over a large world with no server computing anything. It
-is open: nothing is built and the arenas stay separate ([world.md](../world.md)
-§7). The second is what each peer sends each frame. That one is small, true for
+moved into [regions.md](../regions.md) on 2026-10-02: every build now keeps
+the region books, with simulated neighbours and a dev-mode watchdog, while the
+arenas stay separate ([world.md](../world.md) §7). Peers exchanging region
+checksums and outcomes is the step after. The second is what each peer sends each frame. That one is small, true for
 the two-player game today, and decided: it moved into
 [architecture.md](../architecture.md) §"The look on the wire".
 

@@ -926,3 +926,98 @@ pub fn crouch_turns(drop: Fx, len: Fx) -> Fx {
 pub fn turns_to_radians(turns: Fx) -> Fx {
     turns.mul(TAU)
 }
+
+// ---------------------------------------------------------------------------
+// Hexagons
+//
+// The floor tiling the regions are drawn on (`crate::region`): pointy-topped
+// hexagons of a given circumradius, addressed by axial coordinates `(q, r)`.
+// The arithmetic is the standard one; it is written in 64-bit raw fixed point
+// because a hexagon a long way from the origin times root three is past what
+// 16.16 holds.
+// ---------------------------------------------------------------------------
+
+/// Root three in 16.16, to the last bit it holds.
+const ROOT3: i64 = 113_512;
+
+/// The centre of hexagon `(q, r)` on the floor, for hexagons of circumradius
+/// `size`: `x = size·√3·(q + r/2)`, `z = size·3/2·r`.
+pub fn hex_centre(q: i32, r: i32, size: Fx) -> (Fx, Fx) {
+    let s = size.raw() as i64;
+    // Twice q plus r, so the half is exact.
+    let x = s * ROOT3 * (2 * q as i64 + r as i64) / (2 << 16);
+    let z = s * 3 * r as i64 / 2;
+    (Fx::from_raw(sat(x)), Fx::from_raw(sat(z)))
+}
+
+/// Which hexagon of circumradius `size` the floor point `(x, z)` is in: the
+/// fractional axial coordinate, rounded the cube way (round all three of
+/// `q`, `r`, `-q-r` and fix the one that moved furthest), which is the
+/// rounding that never puts a point in a hexagon it is not in.
+pub fn hex_at(x: Fx, z: Fx, size: Fx) -> (i32, i32) {
+    let s = (size.raw() as i64).max(1);
+    let (x, z) = (x.raw() as i64, z.raw() as i64);
+    // q = (√3/3·x − z/3) / size and r = (2/3·z) / size, both in 16.16.
+    let qf = (((x * ROOT3) >> 16) - z) * 65_536 / (3 * s);
+    let rf = 2 * z * 65_536 / (3 * s);
+    let yf = -qf - rf;
+    let round = |v: i64| (v + 32_768) >> 16;
+    let (mut rq, mut rr, ry) = (round(qf), round(rf), round(yf));
+    let dq = (rq * 65_536 - qf).abs();
+    let dr = (rr * 65_536 - rf).abs();
+    let dy = (ry * 65_536 - yf).abs();
+    if dq > dr && dq > dy {
+        rq = -rr - ry;
+    } else if dr > dy {
+        rr = -rq - ry;
+    }
+    (rq as i32, rr as i32)
+}
+
+/// The six corners of hexagon `(q, r)`, starting at the one straight down
+/// `-z` and going round towards `+x`.
+pub fn hex_corners(q: i32, r: i32, size: Fx) -> [V3; 6] {
+    let (cx, cz) = hex_centre(q, r, size);
+    let s = size.raw() as i64;
+    let across = Fx::from_raw(sat(s * ROOT3 / (2 << 16)));
+    let half = Fx::from_raw(sat(s / 2));
+    let at = |dx: Fx, dz: Fx| V3::new(cx.add(dx), Fx::ZERO, cz.add(dz));
+    [
+        at(Fx::ZERO, size.neg()),
+        at(across, half.neg()),
+        at(across, half),
+        at(Fx::ZERO, size),
+        at(across.neg(), half),
+        at(across.neg(), half.neg()),
+    ]
+}
+
+/// How far the floor point under `p` is from hexagon `(q, r)`: zero inside
+/// it, otherwise the distance to its nearest edge.
+pub fn hex_gap(q: i32, r: i32, size: Fx, p: V3) -> Fx {
+    if hex_at(p.x, p.z, size) == (q, r) {
+        return Fx::ZERO;
+    }
+    let c = hex_corners(q, r, size);
+    let mut gap = flat_segment_gap(p, c[5], c[0]);
+    for i in 0..5 {
+        gap = gap.min(flat_segment_gap(p, c[i], c[i + 1]));
+    }
+    gap
+}
+
+/// The six hexagons sharing an edge with `(q, r)`.
+pub const fn hex_neighbours(q: i32, r: i32) -> [(i32, i32); 6] {
+    [
+        (q + 1, r),
+        (q + 1, r - 1),
+        (q, r - 1),
+        (q - 1, r),
+        (q - 1, r + 1),
+        (q, r + 1),
+    ]
+}
+
+fn sat(v: i64) -> i32 {
+    v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
