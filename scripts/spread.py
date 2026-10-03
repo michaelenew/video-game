@@ -191,20 +191,23 @@ def norm(a):
 # Noise: two disjoint draws of S seeds from the baseline.
 S = 12
 noise, noise_c, d_noise = [], [], []
-for _ in range(args.draws):
+by_d = {(r["class"], int(r["seed"])): difficulty_parts(r) for r in base_rows}
+for _ in range(args.draws * 4):
     pick = rng.sample(SEEDS_BASE, 2 * S)
     a, b = pick[:S], pick[S:]
     sa = signature({c: [base[c][s] for s in a] for c in CLASSES})
     sb = signature({c: [base[c][s] for s in b] for c in CLASSES})
     noise.append(dist(sa, sb))
     noise_c.append(dist_c(sa, sb))
-    by = {(r["class"], int(r["seed"])): difficulty_parts(r) for r in base_rows}
-    da = diff_score([by[(c, s)] for c in CLASSES for s in a])
+    da = diff_score([by_d[(c, s)] for c in CLASSES for s in a])
     d_noise.append(da)
 noise.sort()
 noise_c.sort()
 N95 = noise[int(0.95 * len(noise))]
 N95C = noise_c[int(0.95 * len(noise_c))]
+# A knob's kind is its largest shift over eleven levels, so its bar is the
+# noise a best-of-eleven reaches 95% of the time: the 0.95^(1/11) quantile.
+NMAX = noise[min(len(noise) - 1, int(0.95 ** (1 / 11) * len(noise)))]
 NAMES = [f"{c}:{k}" for c in CLASSES for k in KEYS[c]]
 N50 = noise[len(noise) // 2]
 SD_D = statistics.pstdev(d_noise)
@@ -564,6 +567,7 @@ if oat_rows and vhat:
             pass
     # The reference: the level at the tuned value, on the same seeds.
     refs = [s for s in st.values() if not s["genome"]]
+    BAR = max(NMAX, TEMPER_ORTH or 0)
     ranking = []
     for knob, levels in by_knob.items():
         baked = levels[0][1]
@@ -591,19 +595,19 @@ if oat_rows and vhat:
         cliff = None
         if steps and sum(steps) > 0:
             i = max(range(len(steps)), key=lambda k: steps[k])
-            if steps[i] > 0.5 * sum(steps) and steps[i] > N95:
+            if steps[i] > 0.5 * sum(steps) and steps[i] > BAR:
                 cliff = (span[i], span[i + 1])
         kind = max(kinds) if kinds else 0
         degree = max(abs(x) for x in degs) / SD_D if degs else 0
         # Kind at matched difficulty: the biggest orthogonal shift among
         # levels within one noise-sd of the tuned difficulty.
         pure = max([k for k, dd in zip(kinds, degs) if abs(dd) < SD_D] or [0])
-        label = "kind" if kind > N95 else ("degree" if degree > 2 else "dead")
-        ranking.append((knob, label, kind / N95, degree, pure / N95, cliff, baked, lo, hi))
+        label = "kind" if kind > BAR else ("degree" if degree > 3 else "dead")
+        ranking.append((knob, label, kind / N95, degree, pure / N95, cliff, baked, lo, hi, pure > BAR))
     print("## M3 · Which knobs carry kind\n")
-    print(f"Every knob alone, at seven levels across its range and five across +-30% of tuned. *Kind* is the largest shift of the fight orthogonal to the difficulty direction, in N95 units; *degree* the largest change of difficulty in noise sds; *kind at matched D* the largest orthogonal shift among levels within one noise sd of the tuned difficulty. A knob is **kind** if its orthogonal shift passes N95, **degree** if not but its difficulty moves by more than two sds, **dead** otherwise. A **cliff** is one step between adjacent range levels carrying over half the sweep's whole movement.\n")
+    print(f"Every knob alone, at seven levels across its range and five across +-30% of tuned. *Kind* is the largest shift of the fight orthogonal to the difficulty direction, in N95 units; *degree* the largest change of difficulty in noise sds; *kind at matched D* the largest orthogonal shift among levels within one noise sd of the tuned difficulty. A knob is **kind** if its orthogonal shift passes the bar -- the larger of the noise a best-of-eleven reaches 95% of the time ({NMAX / N95:.2f} x N95) and the hardest temper's own orthogonal shift ({(TEMPER_ORTH or 0) / N95:.2f} x N95) -- **degree** if not but its difficulty moves by more than three sds, **dead** otherwise; **pure kind** if it passes the bar at a level within one sd of the tuned difficulty. A **cliff** is one step between adjacent range levels carrying over half the sweep's whole movement, and more than the bar.\n")
     tally = collections.Counter(r[1] for r in ranking)
-    print(f"Of {len(ranking)} knobs: {tally['kind']} kind, {tally['degree']} degree, {tally['dead']} dead; {sum(1 for r in ranking if r[5])} with a cliff.\n")
+    print(f"Of {len(ranking)} knobs: {tally['kind']} kind ({sum(1 for r in ranking if r[9])} of them pure), {tally['degree']} degree, {tally['dead']} dead; {sum(1 for r in ranking if r[5])} with a cliff.\n")
 
     def group(k):
         head, _, field = k.partition(".")
@@ -633,18 +637,27 @@ if oat_rows and vhat:
     groups = collections.defaultdict(collections.Counter)
     for r in ranking:
         groups[group(r[0])][r[1]] += 1
-    print("| Group | Knobs | Kind | Degree | Dead |\n| --- | --- | --- | --- | --- |")
+    pure_by = collections.Counter(group(r[0]) for r in ranking if r[9])
+    print("| Group | Knobs | Kind | Pure kind | Degree | Dead |\n| --- | --- | --- | --- | --- | --- |")
     for gname, c in sorted(groups.items(), key=lambda kv: -sum(kv[1].values())):
-        print(f"| {gname} | {sum(c.values())} | {c['kind']} | {c['degree']} | {c['dead']} |")
+        print(f"| {gname} | {sum(c.values())} | {c['kind']} | {pure_by[gname]} | {c['degree']} | {c['dead']} |")
     print()
-    print("Strongest kind knobs:\n")
+    print("Strongest kind knobs, by their shift at matched difficulty:\n")
     print("| Knob | Kind (x N95) | Kind at matched D (x N95) | Degree (sd) | Cliff |\n| --- | --- | --- | --- | --- |")
-    for r in sorted(ranking, key=lambda r: -r[2])[:25]:
+    for r in sorted(ranking, key=lambda r: -r[4])[:25]:
         print(f"| {r[0]} | {r[2]:.2f} | {r[4]:.2f} | {r[3]:.1f} | {'%d -> %d' % r[5] if r[5] else ''} |")
     print("\nStrongest degree knobs (by difficulty moved):\n")
     print("| Knob | Degree (sd) | Kind (x N95) | Label |\n| --- | --- | --- | --- |")
     for r in sorted(ranking, key=lambda r: -r[3])[:15]:
         print(f"| {r[0]} | {r[3]:.1f} | {r[2]:.2f} | {r[1]} |")
+    pure = sorted(r[0] for r in ranking if r[9])
+    print(f"\nPure kind ({len(pure)}) -- a different fight at the same difficulty: {', '.join(pure)}\n")
+    rest = sorted(r[0] for r in ranking if r[1] == "kind" and not r[9])
+    print(f"Kind, but only with a change of difficulty ({len(rest)}): {', '.join(rest)}\n")
+    deg = sorted(r[0] for r in ranking if r[1] == "degree")
+    print(f"Degree ({len(deg)}): {', '.join(deg)}\n")
+    tempered = [r for r in ranking if any(w in r[0] for w in ("frames_between_glances", "lead_on_the_target", "decisiveness", "thresholds_fall_by"))]
+    print("The four knobs a temper turns: " + "; ".join(f"{r[0].split('.')[-1]} {r[1]}{' (pure)' if r[9] else ''}, kind {r[2]:.2f}, degree {r[3]:.1f}" for r in tempered) + "\n")
     dead = sorted(r[0] for r in ranking if r[1] == "dead")
     print(f"\nDead ({len(dead)}): {', '.join(dead)}\n")
     cl = [r for r in ranking if r[5]]

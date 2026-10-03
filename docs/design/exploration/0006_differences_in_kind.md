@@ -1,12 +1,20 @@
 ---
-status: exploration
+status: exploration — run
 started: 2026-10-03
+run: 2026-10-03
 ---
 
 # 0006 — Numbers as differences in kind
 
 *Does moving a creature's knobs inside the Oven's ranges make a different
 fight, or only a harder one? The measurement, written down before it is run.*
+
+**Run, 2026-10-03** (§8; tables in [0006_results.md](0006_results.md)): kind
+exists, and by default it is modest and concentrated. Mutated genomes of equal
+difficulty make measurably different fights -- more different than the hardest
+temper -- but about as different as a temper in size, and in timing and
+choice rather than geometry: 94 of 247 knobs carry it, 142 carry nothing at the
+level of a whole fight. New animals have to come from the body.
 
 ## The question, and why it decides things
 
@@ -231,3 +239,126 @@ Appended to this note when run:
 - **The frame cap.** `Unresolved` hunts are counted as losses and reported
   separately; a regime that produces many of them is a finding (a line that
   cannot be killed is a wall, 0005's thesis), not noise.
+
+## 8 · What came out, 2026-10-03
+
+Run in full: the baseline (240 seeds), the temper control, 400 mutated
+genomes, 200 wild ones and every knob alone at twelve levels -- about 258,000
+hunts, every class over the same twelve seeds. The tables are
+[0006_results.md](0006_results.md); this is what they say.
+
+### Two corrections to the plan, made before reading the verdict
+
+- **A control was added: the tempers.** They change only how the creature
+  thinks and were built to be the same fight, harder. They came out at 1.2 to
+  1.4 times the noise floor N95 -- so §4's bar, "further apart than N95", is
+  passed by a pure change of difficulty, and cannot by itself be the test of
+  kind. Every kind rate below is also given against the hardest temper's own
+  shift orthogonal to difficulty, which is the bar a difference in kind has to
+  clear.
+- **A knob's kind is its best of eleven levels**, and a best-of-eleven
+  clears a 95% bar by chance 43% of the time. The per-knob bar is the larger
+  of the noise a best-of-eleven reaches (1.13 x N95) and the hardest temper
+  (1.37 x N95), and degree needs three noise sds rather than two.
+
+And two lenses a player would recognise were added beside the distance: how
+much of the creature's move mix differs, and how far the six classes' win
+rates move.
+
+### The verdict
+
+**Kind exists, and it is modest by default and concentrated in a few places.**
+
+- **By §4's rule, kind exists**: the kind rate is 100% (at least 30% asked)
+  and one run names its genome among ten of equal difficulty 6.8 times as often
+  as chance (at least 3x asked). **Against the tempers it still holds**: 90%
+  of mutated pairs at matched difficulty -- 85% of those that keep the fight
+  contract -- shift further away from difficulty than the hardest temper does.
+- **But the size of a random mutation's difference is a temper's size.** Two
+  mutated genomes of equal difficulty differ in about 11% of the moves they
+  throw (temper III: 12%), and their class win rates move by 0.42 summed over
+  six classes (temper I: 0.42), beyond noise in only one pair in five. A
+  breeder would feel a mutated line as the same animal in a different mood.
+- **The big differences are in who it is for.** The most separated fair pairs
+  are the ones that flip which class wins: one genome lets the Bulwark win 11
+  hunts of 12 and the Champion 1, another of the same difficulty gives the
+  Bulwark none and the Champion 8. That is a difference in kind a player would
+  name, and random mutation finds it rarely.
+- **Wild genomes are different and broken.** Every one of 200 broke the fight
+  contract, half their hunts never ended, and their move mix differs by more
+  than half. The space has room for very different fights; almost none of the
+  room is fair.
+
+### Where kind lives (M3)
+
+Of 247 knobs, **94 change the fight beyond the bar, 28 of them at the same
+difficulty ("pure kind"); 11 change only difficulty; 142 change neither** --
+over their whole range, one at a time.
+
+- **Timing carries it.** 23 of 24 frame-data knobs are kind and 11 are pure:
+  every move's recovery, the sweep's and spray's windup and active frames.
+  How long a move commits the creature is what reshapes a fight without making
+  it harder.
+- **Choice is next**: half of the knobs that say when a move is chosen (its
+  ideal range, range tolerance, bearing and cone) are kind, and two appetites
+  and the glance are pure.
+- **Geometry is nearly dead**: 44 of 56 hit-volume and travel knobs, and 38 of
+  48 knobs for what a hit does (stun, knockback, launch), change neither the
+  fight nor its difficulty. The exception is how far a move carries the body
+  (advance), kind on five of eight moves. Not because nothing happens -- with no radius the
+  bite lands 3 times in 409 instead of 110 in 257 -- but because the creature
+  makes it up with its other seven moves, and the hunt as a whole absorbs it.
+  This measure sees whole fights; a change to one move's local life is a
+  smaller thing it is built not to see.
+- **The nerve row is dead** (6 of 7), and so is most of the mind row beyond
+  the glance and the pause after a rear: the wounded aggression, the repeat
+  penalty, the closing appetites.
+- **Difficulty lives in health**, by far (26 noise sds across its range),
+  then the flinch threshold, the per-rider appetites, the pause between moves
+  and the feet's hide -- each of which also changes the fight, so none is pure
+  degree.
+- **Six cliffs**: the turn rate, poise and the flinch threshold near the
+  bottom of their ranges, and the per-rider appetites of the bite, sweep and
+  kick between 2,000 and 3,300, where the creature stops choosing anything
+  else while somebody is aboard.
+
+### Against the predictions in §4
+
+| Predicted | Found |
+| --- | --- |
+| Mind and nerve rows are degree | **Wrong**: mostly dead. The glance and the turn after a rear are pure kind; lead and decisiveness are kind with a change of difficulty; how far the strain thresholds fall -- the fourth temper knob -- is dead |
+| Health and damage are degree | **Half**: health is the strongest difficulty knob there is, and it changes the fight too; damage is mostly dead, except on the rear-and-slam, the back kick and the sweep, where it is pure kind |
+| Size is kind | **Right**, though not at matched difficulty: bigger is harder |
+| Cones and frame data are kind | **Right**: frame data nearly all, cones half |
+| Lockouts are kind | **Wrong**: 2 of 8 |
+| Travel and advance are kind | **Half**: how far a move carries the body (advance) is kind on five of eight moves, with a change of difficulty; how fast a volume travels is dead on seven of eight |
+
+### The decision
+
+- **Knobs alone are not a slider, but they are not new animals either.** A
+  line bred by knob mutation would feel like the same creature in a different
+  mood; that is worth having, and it is not what the world thread asks for.
+  New animals have to come from 0005's body layers, under 0007's gate.
+- **The gene list for knob breeding is the 94 kind knobs** -- weighted toward
+  the 28 pure ones -- and not the 142 dead ones, which are genes that carry no
+  phenotype and would only add noise to a lineage. Frame data and the
+  choosing knobs first.
+- **Difficulty stays with tempers and health**, not with lines: a bred line
+  should differ in what it is, and how hard it is should be the hunter's
+  choice.
+- **Every offspring passes the fight contract before it is born.** Half of
+  the mutations broke it; that is the filter's work, and at seventy-two hunts
+  -- six seconds -- it is affordable in the breeding loop. The cliffs are
+  either excluded or given discrete alleles either side.
+- **What kind random variation rarely finds, a breeder can select for.** The
+  class-flipping pairs exist at matched difficulty; a breeding program that
+  shows the breeder which classes their line favours would find them on
+  purpose.
+
+### What the measurement still cannot see
+
+As §7 said, and confirmed: one plan per class (the hunter does not adapt),
+whole fights rather than single moves, one arena, one temper, solo. Signature
+components that rarely move in the baseline (the Bulwark's mean ride) can
+dominate a distance by themselves, which is why every distance is also given
+clipped; the verdict reads the same either way.

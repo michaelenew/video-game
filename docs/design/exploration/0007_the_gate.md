@@ -1,5 +1,5 @@
 ---
-status: exploration
+status: exploration — proposed
 started: 2026-10-03
 ---
 
@@ -197,7 +197,10 @@ The person's list, and where each stands after the experiments.
    from the body's size; only the clip is content. A move for a generated body
    is then *a striker, a path for it, and a tempo* -- and the path is what the
    role trait of [0005](0005_body_plans.md) §5 B3 would let a recipe express
-   without bone indices.
+   without bone indices. [0006](0006_differences_in_kind.md) §8 says which of
+   those a fight feels: the tempo (frame data is what reshapes a fight without
+   making it harder) and when the move is chosen, far more than the size or
+   reach of its volume, which the rest of the move set absorbs.
 3. **Moves that survive a change of topology.** Within a skeleton family they
    already do: the Pair's and the Veilstalker's moves played on the Ridgeback
    with their feet on the floor and their blows on the body. Across families,
