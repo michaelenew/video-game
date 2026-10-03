@@ -2,6 +2,9 @@
 resolver = "3"
 members = ["crates/sim", "crates/net", "crates/view", "crates/anim",
     "crates/manual", "crates/game", "crates/web", "crates/hunt"]
+# The topology lab turns on `sim`'s `lab` feature; kept out so a workspace
+# build never does. See crates/lab/Cargo.toml.
+exclude = ["crates/lab"]
 
 [workspace.package]
 edition = "2024"

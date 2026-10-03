@@ -35,6 +35,8 @@
 //! conflicting.
 
 pub mod common;
+#[cfg(feature = "lab")]
+pub mod lab;
 
 pub use common::Common;
 
@@ -124,7 +126,22 @@ impl SpeciesId {
 pub const COUNT: usize = 13;
 
 /// The species registered under an id, if one is.
+/// The species registered for an id. With the `lab` feature (the topology
+/// experiments, `crates/lab`, never the game), a species installed at runtime
+/// by [`lab::install`] answers first; without it this is [`registered`].
+#[cfg(not(feature = "lab"))]
 pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
+    registered(id)
+}
+
+/// See the other `lookup`: the lab's build, where a body can be swapped.
+#[cfg(feature = "lab")]
+pub fn lookup(id: SpeciesId) -> Option<&'static Species> {
+    lab::installed(id).or(registered(id))
+}
+
+/// The species compiled in for an id: every creature's table, by its id.
+pub const fn registered(id: SpeciesId) -> Option<&'static Species> {
     match id {
         SpeciesId::RIDGEBACK => Some(&ridgeback::SPECIES),
 
@@ -352,6 +369,7 @@ pub type Apparition = fn(&crate::state::World) -> Option<(crate::monster::Monste
 /// a species that says nothing is fought exactly as the Ridgeback always was.
 ///
 /// See `docs/design/hazards.md` for the recipe.
+#[cfg_attr(feature = "lab", derive(Clone, Copy))]
 pub struct FightDecl {
     /// How it lays out the hunt's lore: hazard cells, noise cells, objective
     /// cells, and its own. See [`crate::lore`].
@@ -781,6 +799,7 @@ impl FightField {
 
 /// One kind of creature. See the module docs.
 #[derive(Debug)]
+#[cfg_attr(feature = "lab", derive(Clone, Copy))]
 pub struct Species {
     pub id: SpeciesId,
     /// As a person says it: "Ridgeback". Also the family name of its knobs in

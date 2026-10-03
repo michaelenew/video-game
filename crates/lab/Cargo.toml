@@ -1,0 +1,26 @@
+[package]
+name = "lab"
+version = "0.1.0"
+edition = "2024"
+license = "UNLICENSED"
+publish = false
+
+# The topology lab: docs/design/exploration/0005_body_plans.md.
+#
+# **Outside the workspace on purpose.** It turns on `sim`'s `lab` feature,
+# which lets a species be swapped at runtime, and a workspace member that did
+# would switch it on for every crate in every `cargo test --workspace`. Built on
+# its own, it cannot reach the game:
+#
+#     CARGO_TARGET_DIR=target/lab cargo run --release \
+#         --manifest-path crates/lab/Cargo.toml --bin body
+[workspace]
+
+[dependencies]
+sim = { path = "../sim", features = ["lab"] }
+hunt = { path = "../hunt" }
+anim = { path = "../anim" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

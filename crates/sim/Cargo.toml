@@ -12,3 +12,9 @@ license.workspace = true
 # (state, inputs) and owns all of its own math. Adding a dependency here needs
 # a very good reason and a determinism argument.
 [dependencies]
+
+# `lab`: a species can be installed at runtime in place of the compiled one,
+# for the topology experiments (`crates/lab`, outside the workspace). Off in
+# every build the game, the tests and the tools make.
+[features]
+lab = []

@@ -640,6 +640,14 @@ pub const SECTIONS: &[Section] = &[
                 "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/), at a temper (0 to 3). Every class is played as itself (crates/hunt/src/class.rs), and THE CLASS -- or, with --repeats, the last line -- counts what it did: shadows sent and lotuses, pillars and shots, spikes and blinks, the Dual mage's hands and goads, the Bulwark's guards. --gamble plays the creature's second plan, the one that takes a risk the first will not (the Mireback's: let the tongue land once the toad is low, to be swallowed and hit the stomach), where it has one. Against the Mantis, MANTIS_PLAN=repeater, jumper or dodger plays one of the duellist's three ablations, MANTIS_HABIT=off turns its habit memory off for the run, and MANTIS_DEBUG=1 prints the hunt frame by frame. Against the Siegeshell, --hunters 2 is the pair it is tuned for: one on the legs and one climbing for the crown, the call between them read off where the climber stands; SIEGE_DEBUG=1 prints the hunt frame by frame.",
             ),
             e(
+                "cargo run --release -p hunt --bin spread -- --regime <base|temper|mutate|wild|oat> --genomes <n> --seeds <n> --shard <i>/<n>",
+                "Hunt many variants of a creature's tuning, every class over the same seeds, and write a row per hunt to target/spread: the sweep behind docs/design/exploration/0006. base is the creature as tuned, temper its four tempers (the control), mutate a quarter of its knobs moved by up to 30%, wild every knob anywhere in its range, oat one knob at a time. Shards are separate processes because the Oven is global. Read the result with python3 scripts/spread.py.",
+            ),
+            e(
+                "CARGO_TARGET_DIR=target/lab cargo run --release --manifest-path crates/lab/Cargo.toml --bin body -- [e0 e1 ...]",
+                "The topology lab (docs/design/exploration/0005): change a creature's body at runtime -- proportions, part flags, a cousin's move, a move across skeletons, traits, a hybrid -- and measure where its feet are, whether it skates, whether its blows come from its body, who can climb it, and how the hunt goes. Prints Markdown and writes contact sheets to target/lab. Outside the workspace because it turns on sim's lab feature; its consts binary prints the two numbers scripts/spread.py compares against.",
+            ),
+            e(
                 "cargo run -p hunt --bin brood -- --class <name> --all --repeats <n> --seed <n> --hunters <1|2> --balanced --quiet",
                 "The Broodmother's three plans side by side -- balanced, brood only, mother only -- with her own lines: time and damage on the brood, the sacs and her; sacs popped, burst and held; pops per slam window; guarded bites; rooted time; strand trips; clutches. The balanced plan has to beat both.",
             ),
@@ -681,6 +689,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "./scripts/setup-tools.sh web|shot|browser|all",
                 "Install, once, the tools a fresh machine lacks: wasm-bindgen for the web build, Xvfb and a software GPU for screenshots, Playwright for the smoke test. The one place those steps are written; start it in the background.",
+            ),
+            e(
+                "python3 scripts/spread.py [--dir target/spread] [--pairs <n>]",
+                "Read what the spread sweep wrote: whether numbers make a different fight or only a harder one. Prints the contract rate, separability at matched difficulty against the tempers, identifiability from one run, and every knob ranked kind, degree or dead.",
             ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),
