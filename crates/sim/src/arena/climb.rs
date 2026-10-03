@@ -4,7 +4,7 @@
 //!
 //! The look is the Hallelujah Mountains' climb to the banshee rookery:
 //! **islands of rock hanging in open air** at staggered heights, a deep fall
-//! under every gap to a dark floor (the **pit**: below it you are stood back
+//! under every gap -- sixty metres and more -- to a dark floor (the **pit**: below it you are stood back
 //! on your last checkpoint, `crate::course`), stepping-stone chains of small
 //! islands, a long arch, an overhang to go under, and the finish on the highest
 //! island, a nest -- the Galewing's rookery, where the bird would live. Every
@@ -35,7 +35,7 @@ use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::class::Class;
 use crate::course::{Course, Step, Tier};
 
-use Material::{Ash, Grass, Rock, Wood};
+use Material::{Grass, Peat, Rock, Wood};
 
 /// Every course, in the order `Shift+J` steps through them: by tier.
 pub static COURSES: [&Course; 6] = [
@@ -66,7 +66,7 @@ pub static STAIR: Arena = Arena {
     name: "Stair",
     creature: None,
     bounds: Bounds::cm((-2300, 5800), (-2500, 3200)),
-    floor: Ash,
+    floor: Peat,
     regions: &[],
     solids: &STAIR_SOLIDS,
     spawns: SPAWNS,
@@ -75,19 +75,19 @@ pub static STAIR: Arena = Arena {
 
 const STAIR_SOLIDS: [Solid; 7] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 800, 300], Rock),
+    Solid::cm([-300, 0, -300], [300, 6800, 300], Rock),
     // up 1 m
-    Solid::cm([600, 600, -250], [1100, 900, 250], Grass),
+    Solid::cm([600, 6600, -250], [1100, 6900, 250], Grass),
     // up 1.5 m
-    Solid::cm([600, 750, 600], [1100, 1050, 1100], Grass),
+    Solid::cm([600, 6750, 600], [1100, 7050, 1100], Grass),
     // up 2 m
-    Solid::cm([1400, 950, 600], [1900, 1250, 1100], Grass),
+    Solid::cm([1400, 6950, 600], [1900, 7250, 1100], Grass),
     // up 2.5 m
-    Solid::cm([2150, 1200, 600], [2650, 1500, 1100], Grass),
+    Solid::cm([2150, 7200, 600], [2650, 7500, 1100], Grass),
     // level 4 m
-    Solid::cm([2150, 1200, -300], [2650, 1500, 200], Grass),
+    Solid::cm([2150, 7200, -300], [2650, 7500, 200], Grass),
     // up 2 m, the nest
-    Solid::cm([2950, 1300, -450], [3750, 1700, 350], Wood),
+    Solid::cm([2950, 7300, -450], [3750, 7700, 350], Wood),
 ];
 
 static STAIR_COURSE: Course = Course {
@@ -95,7 +95,7 @@ static STAIR_COURSE: Course = Course {
     name: "The Stair",
     tier: Tier::Easy,
     for_class: None,
-    pit: 200,
+    pit: 6200,
     route: &[
         Step {
             solid: 0,
@@ -159,7 +159,7 @@ pub static CAUSEWAY: Arena = Arena {
     name: "Causeway",
     creature: None,
     bounds: Bounds::cm((-2300, 10100), (-2400, 2500)),
-    floor: Ash,
+    floor: Peat,
     regions: &[],
     solids: &CAUSEWAY_SOLIDS,
     spawns: SPAWNS,
@@ -168,21 +168,21 @@ pub static CAUSEWAY: Arena = Arena {
 
 const CAUSEWAY_SOLIDS: [Solid; 8] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 2000, 300], Rock),
+    Solid::cm([-300, 0, -300], [300, 8000, 300], Rock),
     // level 4.5 m
-    Solid::cm([750, 1700, -200], [1250, 2000, 200], Grass),
+    Solid::cm([750, 7700, -200], [1250, 8000, 200], Grass),
     // down 1 m, 5 m
-    Solid::cm([1750, 1600, -200], [2150, 1900, 200], Grass),
+    Solid::cm([1750, 7600, -200], [2150, 7900, 200], Grass),
     // stepping stone
-    Solid::cm([2550, 1820, -100], [2750, 1900, 100], Rock),
+    Solid::cm([2550, 7820, -100], [2750, 7900, 100], Rock),
     // stepping stone
-    Solid::cm([3150, 1820, -100], [3350, 1900, 100], Rock),
+    Solid::cm([3150, 7820, -100], [3350, 7900, 100], Rock),
     // down 2 m, 5.5 m
-    Solid::cm([3900, 1400, -250], [4400, 1700, 250], Grass),
+    Solid::cm([3900, 7400, -250], [4400, 7700, 250], Grass),
     // the bridge
-    Solid::cm([4700, 1580, -125], [6700, 1700, 125], Rock),
+    Solid::cm([4700, 7580, -125], [6700, 7700, 125], Rock),
     // level 5 m, the far island
-    Solid::cm([7200, 1300, -400], [8000, 1700, 400], Wood),
+    Solid::cm([7200, 7300, -400], [8000, 7700, 400], Wood),
 ];
 
 static CAUSEWAY_COURSE: Course = Course {
@@ -190,7 +190,7 @@ static CAUSEWAY_COURSE: Course = Course {
     name: "The Causeway",
     tier: Tier::Easy,
     for_class: None,
-    pit: 1100,
+    pit: 7100,
     route: &[
         Step {
             solid: 0,
@@ -261,7 +261,7 @@ pub static CLIMB: Arena = Arena {
     name: "Climb",
     creature: None,
     bounds: Bounds::cm((-2300, 10400), (-2300, 4300)),
-    floor: Ash,
+    floor: Peat,
     regions: &[],
     solids: &CLIMB_SOLIDS,
     spawns: SPAWNS,
@@ -270,27 +270,27 @@ pub static CLIMB: Arena = Arena {
 
 const CLIMB_SOLIDS: [Solid; 11] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 1000, 300], Rock),
+    Solid::cm([-300, 0, -300], [300, 7000, 300], Rock),
     // up 2 m, 6 m
-    Solid::cm([900, 900, -250], [1400, 1200, 250], Grass),
+    Solid::cm([900, 6900, -250], [1400, 7200, 250], Grass),
     // stepping stone, up 1 m
-    Solid::cm([1850, 1220, -75], [2000, 1300, 75], Rock),
+    Solid::cm([1850, 7220, -75], [2000, 7300, 75], Rock),
     // stepping stone, up 1 m
-    Solid::cm([2450, 1320, -75], [2600, 1400, 75], Rock),
+    Solid::cm([2450, 7320, -75], [2600, 7400, 75], Rock),
     // stepping stone, up 1 m
-    Solid::cm([3050, 1420, -75], [3200, 1500, 75], Rock),
+    Solid::cm([3050, 7420, -75], [3200, 7500, 75], Rock),
     // up 4 m, 3.6 m
-    Solid::cm([2875, 1600, 435], [3375, 1900, 935], Grass),
+    Solid::cm([2875, 7600, 435], [3375, 7900, 935], Grass),
     // level 7 m
-    Solid::cm([2875, 1600, 1635], [3375, 1900, 2135], Grass),
+    Solid::cm([2875, 7600, 1635], [3375, 7900, 2135], Grass),
     // the overhang: a slab 3 m over the gap
-    Solid::cm([3225, 2200, 1535], [3775, 2400, 2235], Rock),
+    Solid::cm([3225, 8200, 1535], [3775, 8400, 2235], Rock),
     // 2.5 m under the overhang
-    Solid::cm([3625, 1600, 1635], [4125, 1900, 2135], Grass),
+    Solid::cm([3625, 7600, 1635], [4125, 7900, 2135], Grass),
     // down 2 m onto the arch
-    Solid::cm([4625, 1580, 1760], [7025, 1700, 2010], Rock),
+    Solid::cm([4625, 7580, 1760], [7025, 7700, 2010], Rock),
     // up 3 m, 5 m, the rookery
-    Solid::cm([7525, 1600, 1485], [8325, 2000, 2285], Wood),
+    Solid::cm([7525, 7600, 1485], [8325, 8000, 2285], Wood),
 ];
 
 static CLIMB_COURSE: Course = Course {
@@ -298,7 +298,7 @@ static CLIMB_COURSE: Course = Course {
     name: "The Climb",
     tier: Tier::Hard,
     for_class: None,
-    pit: 400,
+    pit: 6400,
     route: &[
         Step {
             solid: 0,
@@ -383,7 +383,7 @@ pub static DRIFT: Arena = Arena {
     name: "Drift",
     creature: None,
     bounds: Bounds::cm((-2300, 11000), (-2300, 3600)),
-    floor: Ash,
+    floor: Peat,
     regions: &[],
     solids: &DRIFT_SOLIDS,
     spawns: SPAWNS,
@@ -392,25 +392,25 @@ pub static DRIFT: Arena = Arena {
 
 const DRIFT_SOLIDS: [Solid; 10] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 3000, 300], Rock),
+    Solid::cm([-300, 0, -300], [300, 9000, 300], Rock),
     // level 7.2 m
-    Solid::cm([1020, 2700, -250], [1520, 3000, 250], Grass),
+    Solid::cm([1020, 8700, -250], [1520, 9000, 250], Grass),
     // down 2 m, 7.8 m
-    Solid::cm([2300, 2500, -250], [2800, 2800, 250], Grass),
+    Solid::cm([2300, 8500, -250], [2800, 8800, 250], Grass),
     // level 7.4 m
-    Solid::cm([3540, 2500, -250], [4040, 2800, 250], Grass),
+    Solid::cm([3540, 8500, -250], [4040, 8800, 250], Grass),
     // stepping stone
-    Solid::cm([4590, 2720, -60], [4710, 2800, 60], Rock),
+    Solid::cm([4590, 8720, -60], [4710, 8800, 60], Rock),
     // stepping stone
-    Solid::cm([5260, 2720, -60], [5380, 2800, 60], Rock),
+    Solid::cm([5260, 8720, -60], [5380, 8800, 60], Rock),
     // stepping stone
-    Solid::cm([5930, 2720, -60], [6050, 2800, 60], Rock),
+    Solid::cm([5930, 8720, -60], [6050, 8800, 60], Rock),
     // down 4 m, 8.5 m
-    Solid::cm([6900, 2100, -250], [7400, 2400, 250], Grass),
+    Solid::cm([6900, 8100, -250], [7400, 8400, 250], Grass),
     // up 2 m, 6 m
-    Solid::cm([6900, 2300, 850], [7400, 2600, 1350], Grass),
+    Solid::cm([6900, 8300, 850], [7400, 8600, 1350], Grass),
     // down 1 m, 7 m, the far island
-    Solid::cm([8100, 2100, 700], [8900, 2500, 1500], Wood),
+    Solid::cm([8100, 8100, 700], [8900, 8500, 1500], Wood),
 ];
 
 static DRIFT_COURSE: Course = Course {
@@ -418,7 +418,7 @@ static DRIFT_COURSE: Course = Course {
     name: "The Drift",
     tier: Tier::Hard,
     for_class: None,
-    pit: 1800,
+    pit: 7800,
     route: &[
         Step {
             solid: 0,
@@ -503,7 +503,7 @@ pub static SPIRE: Arena = Arena {
     name: "Spire",
     creature: None,
     bounds: Bounds::cm((-2300, 5300), (-2400, 2500)),
-    floor: Ash,
+    floor: Peat,
     regions: &[],
     solids: &SPIRE_SOLIDS,
     spawns: SPAWNS,
@@ -512,13 +512,13 @@ pub static SPIRE: Arena = Arena {
 
 const SPIRE_SOLIDS: [Solid; 4] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 1000, 300], Rock),
+    Solid::cm([-300, 0, -300], [300, 7000, 300], Rock),
     // up 1 m, 5 m
-    Solid::cm([800, 800, -250], [1300, 1100, 250], Grass),
+    Solid::cm([800, 6800, -250], [1300, 7100, 250], Grass),
     // up 1 m, 5 m: the launch
-    Solid::cm([1800, 900, -300], [2400, 1200, 300], Grass),
+    Solid::cm([1800, 6900, -300], [2400, 7200, 300], Grass),
     // up 32 m, half a metre out: the spire
-    Solid::cm([2450, 3900, -400], [3250, 4400, 400], Wood),
+    Solid::cm([2450, 9900, -400], [3250, 10400, 400], Wood),
 ];
 
 static SPIRE_COURSE: Course = Course {
@@ -526,7 +526,7 @@ static SPIRE_COURSE: Course = Course {
     name: "The Spire",
     tier: Tier::Edge,
     for_class: Some(Class::Elementalist),
-    pit: 400,
+    pit: 6400,
     route: &[
         Step {
             solid: 0,
@@ -569,7 +569,7 @@ pub static GULF: Arena = Arena {
     name: "Gulf",
     creature: None,
     bounds: Bounds::cm((-2300, 9500), (-2400, 2500)),
-    floor: Ash,
+    floor: Peat,
     regions: &[],
     solids: &GULF_SOLIDS,
     spawns: SPAWNS,
@@ -578,19 +578,19 @@ pub static GULF: Arena = Arena {
 
 const GULF_SOLIDS: [Solid; 7] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 2500, 300], Rock),
+    Solid::cm([-300, 0, -300], [300, 8500, 300], Rock),
     // level 6 m
-    Solid::cm([900, 2200, -250], [1400, 2500, 250], Grass),
+    Solid::cm([900, 8200, -250], [1400, 8500, 250], Grass),
     // 7.5 m onto a stone a metre across
-    Solid::cm([2150, 2370, -50], [2250, 2450, 50], Rock),
+    Solid::cm([2150, 8370, -50], [2250, 8450, 50], Rock),
     // 9 m and up 1.5 m off the stone
-    Solid::cm([3150, 2300, -250], [3650, 2600, 250], Grass),
+    Solid::cm([3150, 8300, -250], [3650, 8600, 250], Grass),
     // down 3 m, 7.5 m, onto a stone
-    Solid::cm([4400, 2220, -50], [4500, 2300, 50], Rock),
+    Solid::cm([4400, 8220, -50], [4500, 8300, 50], Rock),
     // up 1 m off the stone, 8 m
-    Solid::cm([5300, 2100, -250], [5800, 2400, 250], Grass),
+    Solid::cm([5300, 8100, -250], [5800, 8400, 250], Grass),
     // up 5 m, 8.2 m: the far nest
-    Solid::cm([6620, 2500, -400], [7420, 2900, 400], Wood),
+    Solid::cm([6620, 8500, -400], [7420, 8900, 400], Wood),
 ];
 
 static GULF_COURSE: Course = Course {
@@ -598,7 +598,7 @@ static GULF_COURSE: Course = Course {
     name: "The Gulf",
     tier: Tier::Edge,
     for_class: Some(Class::ShadowReaver),
-    pit: 1700,
+    pit: 7700,
     route: &[
         Step {
             solid: 0,

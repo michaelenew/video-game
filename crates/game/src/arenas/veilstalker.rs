@@ -16,6 +16,7 @@ const CHAR: [f32; 3] = [0.10, 0.09, 0.09];
 pub static DRESSING: Dressing = Dressing {
     // A white winter sky, low and close.
     sky: [0.80, 0.83, 0.88],
+    below: None,
     props: &[
         Prop {
             shape: Shape::Cylinder,

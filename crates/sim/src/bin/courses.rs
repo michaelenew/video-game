@@ -1,17 +1,17 @@
 //! **The jump courses, measured**: every hop of every course, for every class
-//! the courses are for, played in the sim (`sim::coursecheck`).
+//! the courses are for, searched (`sim::coursecheck`, `sim::search`).
 //!
 //!     cargo run --release -p sim --bin courses
-//!     cargo run --release -p sim --bin courses -- climb drift
+//!     cargo run --release -p sim --bin courses -- climb drift --budget 1500
+//!     cargo run --release -p sim --bin courses -- --fixtures 2> crates/sim/tests/fixtures/courses.txt
 //!
-//! For each hop: what was built (the gap, the rise), and for each class the
-//! **timing window** -- how many of sixteen takeoff frames a plain running
-//! jump lands from (`J`), how many airdodge frames land at the best takeoff
-//! (`D`) -- the **distance margin** -- how much wider the gap could be and
-//! still be landed by the running jump, plain/airdodged, off the envelope's
-//! trajectories -- and which of the class's own tools also clear it. Then the
-//! whole course, each hop with the first technique that clears it: the
-//! measured matrix in `docs/design/courses.md` §5.
+//! For each hop and class: `S` and the window if the shared blocks land it
+//! (the jump, the airdodge, aerials, the strafe), otherwise the whole kit's
+//! tools and window, otherwise `NO`. The window is how many of 31
+//! frames the tightest input of the plainest line found can move and still
+//! land. Then, for each class, whether every hop is cleared (a hop nothing
+//! clears alone may be crossed with the one before it, over a stepping stone).
+//! A search is a lower bound.
 //!
 //! Integer arithmetic throughout: this file lives under `crates/sim/src`, and
 //! the no-floats guard covers it.
@@ -20,8 +20,8 @@ use sim::arena::cm;
 use sim::class::Class;
 use sim::course;
 use sim::coursecheck as c;
-use sim::envelope::{self as e, Extra};
-use sim::{Fx, TICK_HZ};
+use sim::envelope as e;
+use sim::search::Kit;
 
 /// The five classes the courses are for (the Bulwark is out by the owner's
 /// choice: `docs/design/courses.md` §0).
@@ -44,52 +44,111 @@ fn short(class: Class) -> &'static str {
     }
 }
 
-fn secs(frames: u32) -> String {
-    let tenths = frames * 10 / TICK_HZ;
-    format!("{}.{}s", tenths / 10, tenths % 10)
+fn budget() -> usize {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter()
+        .position(|a| a == "--budget")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(1500)
 }
 
 fn main() {
-    let asked: Vec<String> = std::env::args().skip(1).collect();
-    let wanted = |name: &str| asked.is_empty() || asked.iter().any(|a| a == name);
-    // The trajectories every distance margin is read from, once per class.
-    let paths: Vec<(Vec<e::Path>, Vec<e::Path>)> = CLASSES
-        .iter()
-        .map(|class| {
-            (
-                vec![e::off_the_edge(*class, Extra::Nothing)],
-                e::airdodge_paths(*class),
-            )
-        })
+    let asked: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|a| !a.starts_with("--") && a.parse::<usize>().is_err())
         .collect();
-    println!("The jump courses, measured. J = takeoff frames of 16 a plain jump lands from;");
-    println!(
-        "D = airdodge frames that land; +a/+b = metres the gap could widen, plain/airdodged.\n"
-    );
+    let wanted = |name: &str| asked.is_empty() || asked.iter().any(|a| a == name);
+    let fixtures = std::env::args().any(|a| a == "--fixtures");
+    let budget = budget();
+    {
+        println!(
+            "The jump courses, searched ({budget} runs per search; a search is a lower bound)."
+        );
+        println!("S<n>: the shared blocks land it, the tightest input movable n of 31 frames;");
+        println!("otherwise the kit's tools and the window; NO: nothing found.\n");
+    }
     for course in course::all() {
         let slug = course.arena().slug();
         if !wanted(&slug) {
             continue;
         }
-        println!(
-            "{} -- {} (`--arena {}`){}",
-            course.name,
-            course.tier.name(),
-            slug,
-            course.for_class.map_or(String::new(), |k| format!(
-                ", built against the {}",
-                k.name()
-            ))
-        );
-        print!("  {:<36}", "hop");
-        for class in CLASSES {
-            print!(" {:>26}", short(class));
+        {
+            println!(
+                "{} -- {} (`--arena {}`)",
+                course.name,
+                course.tier.name(),
+                slug
+            );
+            print!("  {:<40}", "hop");
+            for class in CLASSES {
+                print!(" {:>22}", short(class));
+            }
+            println!();
         }
-        println!();
-        for from in 0..course.route.len() - 1 {
+        let hops = course.route.len() - 1;
+        // cleared[class][hop]: by itself, or as the second of a pair.
+        let mut cleared = vec![vec![false; hops]; CLASSES.len()];
+        let mut cells = vec![vec![String::new(); CLASSES.len()]; hops];
+        for from in 0..hops {
+            for (k, class) in CLASSES.iter().enumerate() {
+                let seed = (*class as u64) << 24 | (course.arena.0 as u64) << 8 | from as u64;
+                let shared = c::solve(course, *class, from, 1, Kit::Shared, budget / 2, seed);
+                // The whole kit, from two seeds before giving up.
+                let full = match &shared {
+                    Some(_) => None,
+                    None => c::solve(course, *class, from, 1, Kit::Full, budget, seed)
+                        .or_else(|| c::solve(course, *class, from, 1, Kit::Full, budget, !seed)),
+                };
+                let cell = match (&shared, &full) {
+                    (Some(l), _) => format!("S{}", l.window),
+                    (None, Some(l)) => format!("{} {}", c::uses(&l.program).join("+"), l.window),
+                    _ => "NO".to_string(),
+                };
+                for (kit, line) in [("shared", &shared), ("full", &full)] {
+                    if let (true, Some(l)) = (fixtures, line) {
+                        eprintln!(
+                            "{slug} {from} 1 {} {kit} | {}",
+                            class.name().replace(' ', "_"),
+                            l.program
+                        );
+                    }
+                }
+                if shared.is_some() || full.is_some() {
+                    cleared[k][from] = true;
+                }
+                cells[from][k] = cell;
+            }
+        }
+        // A hop nothing clears alone: the pair from the step before.
+        for (k, class) in CLASSES.iter().enumerate() {
+            for from in 1..hops {
+                if cleared[k][from] {
+                    continue;
+                }
+                let seed =
+                    (*class as u64) << 24 | (course.arena.0 as u64) << 8 | 0x80 | from as u64;
+                let pair = c::solve(course, *class, from - 1, 2, Kit::Full, budget, seed)
+                    .or_else(|| c::solve(course, *class, from - 1, 2, Kit::Full, budget, !seed));
+                if let Some(l) = pair {
+                    cleared[k][from] = true;
+                    cells[from][k] =
+                        format!("pair: {} {}", c::uses(&l.program).join("+"), l.window);
+                    if fixtures {
+                        eprintln!(
+                            "{slug} {} 2 {} full | {}",
+                            from - 1,
+                            class.name().replace(' ', "_"),
+                            l.program
+                        );
+                    }
+                }
+            }
+        }
+        for (from, row) in cells.iter().enumerate() {
             let step = course.route[from + 1];
             print!(
-                "  {:<36}",
+                "  {:<40}",
                 format!(
                     "{}. {} ({}m, {}m)",
                     from + 1,
@@ -98,60 +157,24 @@ fn main() {
                     e::metres(cm(step.rise))
                 )
             );
-            for (k, class) in CLASSES.iter().enumerate() {
-                let w = c::standing_on(course, *class, from);
-                let v = c::judge(&w, course, from, *class);
-                let (plain, dodged) = &paths[k];
-                let rise = cm(step.rise);
-                let gap = cm(step.gap);
-                let spare = |p: &[e::Path]| {
-                    e::widest(p, rise).map_or("-".to_string(), |far| e::metres(far.sub(gap)))
-                };
-                let mut tools: Vec<String> = Vec::new();
-                for t in &v.tools {
-                    let n = v.tools.iter().filter(|o| o.family() == t.family()).count();
-                    let named = format!("{}x{n}", t.family());
-                    if !tools.contains(&named) {
-                        tools.push(named);
-                    }
-                }
-                let cell = if v.cleared() {
-                    format!(
-                        "J{} D{} {}/{}{}",
-                        v.jump_window,
-                        v.dodge_window,
-                        spare(plain),
-                        spare(dodged),
-                        if tools.is_empty() {
-                            String::new()
-                        } else {
-                            format!(" {}", tools.join("+"))
-                        }
-                    )
-                } else {
-                    format!("NO {}/{}", spare(plain), spare(dodged))
-                };
-                print!(" {:>26}", cell);
+            for cell in row {
+                print!(" {:>22}", cell);
             }
             println!();
         }
-        println!("  whole course, each hop with the first thing that clears it:");
-        for class in CLASSES {
-            let (done, frames, finished) = c::run(course, class);
-            let how: Vec<String> = done.iter().map(|(_, t)| t.family().to_string()).collect();
-            println!(
-                "    {:<9} {:<9} {:>6}  {}",
-                short(class),
-                if finished { "finishes" } else { "stuck" },
-                if finished {
-                    secs(frames)
+        print!("  {:<40}", "finishes");
+        for row in &cleared {
+            let done = row.iter().all(|c| *c);
+            let stuck = row.iter().position(|c| !c).map_or(0, |i| i + 1);
+            print!(
+                " {:>22}",
+                if done {
+                    "yes".to_string()
                 } else {
-                    format!("at {}", done.len() + 1)
-                },
-                how.join(", ")
+                    format!("no, hop {stuck}")
+                }
             );
         }
-        println!();
+        println!("\n");
     }
-    let _ = Fx::ZERO;
 }

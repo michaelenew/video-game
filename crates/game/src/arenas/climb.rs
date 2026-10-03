@@ -1,7 +1,8 @@
 //! The jump courses' dressing (`sim::arena::climb`): the Hallelujah
-//! Mountains under a hazy dawn. A sheet of mist a metre over the floor, so
-//! the drop under every gap reads as a drop into cloud rather than onto
-//! ground; far floating peaks on every side; a cairn of stones at each
+//! Mountains under a hazy dawn. The islands hang sixty metres and more over
+//! a floor nearly black and wider than the eye reaches, so the drop under
+//! every gap reads as a long fall into the dark; far
+//! floating peaks on every side; a cairn of stones at each
 //! checkpoint; and on the last island a nest of sticks round three pale eggs
 //! -- the rookery, where the Galewing would live. None of it collides: every
 //! island, bridge and overhang is the simulation's. Generated with the
@@ -10,9 +11,10 @@
 
 use super::{Dressing, Prop, Shape};
 
-const MIST: [f32; 3] = [0.78, 0.82, 0.86];
 const PEAK: [f32; 3] = [0.56, 0.61, 0.65];
 const MOSS: [f32; 3] = [0.30, 0.42, 0.26];
+/// The floor of the world, seen from sixty metres and more: nearly black.
+const DEEP: [f32; 3] = [0.05, 0.06, 0.08];
 const CAIRN: [f32; 3] = [0.62, 0.60, 0.55];
 const STICK: [f32; 3] = [0.36, 0.26, 0.16];
 const EGG: [f32; 3] = [0.90, 0.88, 0.80];
@@ -114,19 +116,19 @@ const fn nest(x: f32, y: f32, z: f32) -> [Prop; 11] {
 }
 
 // The Stair
-const STAIR_PEAK0: [Prop; 2] = peak(-48.0, 6.4, -16.5, 30.0);
-const STAIR_PEAK1: [Prop; 2] = peak(88.0, 16.4, 18.5, 36.0);
-const STAIR_PEAK2: [Prop; 2] = peak(17.5, 2.4, 67.0, 40.0);
-const STAIR_PEAK3: [Prop; 2] = peak(-12.5, 20.4, -55.0, 28.0);
-const STAIR_PEAK4: [Prop; 2] = peak(78.0, 26.4, -50.0, 24.0);
-const STAIR_PEAK5: [Prop; 2] = peak(-43.0, 12.4, 52.0, 26.0);
-const STAIR_CAIRN3: [Prop; 3] = cairn(14.6, 12.5, 6.6);
-const STAIR_NEST: [Prop; 11] = nest(33.5, 17.0, -0.5);
+const STAIR_PEAK0: [Prop; 2] = peak(-48.0, 66.4, -16.5, 30.0);
+const STAIR_PEAK1: [Prop; 2] = peak(88.0, 76.4, 18.5, 36.0);
+const STAIR_PEAK2: [Prop; 2] = peak(17.5, 62.4, 67.0, 40.0);
+const STAIR_PEAK3: [Prop; 2] = peak(-12.5, 80.4, -55.0, 28.0);
+const STAIR_PEAK4: [Prop; 2] = peak(78.0, 86.4, -50.0, 24.0);
+const STAIR_PEAK5: [Prop; 2] = peak(-43.0, 72.4, 52.0, 26.0);
+const STAIR_CAIRN3: [Prop; 3] = cairn(14.6, 72.5, 6.6);
+const STAIR_NEST: [Prop; 11] = nest(33.5, 77.0, -0.5);
 
 pub static STAIR: Dressing = Dressing {
     sky: SKY,
+    below: Some(DEEP),
     props: &[
-        prop(Shape::Box, [17.5, 0.0, 3.5], [281.0, 1.0, 257.0], 0.0, MIST),
         STAIR_PEAK0[0],
         STAIR_PEAK0[1],
         STAIR_PEAK1[0],
@@ -157,19 +159,19 @@ pub static STAIR: Dressing = Dressing {
 };
 
 // The Causeway
-const CAUSEWAY_PEAK0: [Prop; 2] = peak(-48.0, 12.5, -19.5, 30.0);
-const CAUSEWAY_PEAK1: [Prop; 2] = peak(131.0, 22.5, 15.5, 36.0);
-const CAUSEWAY_PEAK2: [Prop; 2] = peak(39.0, 8.5, 60.0, 40.0);
-const CAUSEWAY_PEAK3: [Prop; 2] = peak(9.0, 26.5, -54.0, 28.0);
-const CAUSEWAY_PEAK4: [Prop; 2] = peak(121.0, 32.5, -49.0, 24.0);
-const CAUSEWAY_PEAK5: [Prop; 2] = peak(-43.0, 18.5, 45.0, 26.0);
-const CAUSEWAY_CAIRN4: [Prop; 3] = cairn(32.1, 19.0, -0.4);
-const CAUSEWAY_NEST: [Prop; 11] = nest(76.0, 17.0, 0.0);
+const CAUSEWAY_PEAK0: [Prop; 2] = peak(-48.0, 72.5, -19.5, 30.0);
+const CAUSEWAY_PEAK1: [Prop; 2] = peak(131.0, 82.5, 15.5, 36.0);
+const CAUSEWAY_PEAK2: [Prop; 2] = peak(39.0, 68.5, 60.0, 40.0);
+const CAUSEWAY_PEAK3: [Prop; 2] = peak(9.0, 86.5, -54.0, 28.0);
+const CAUSEWAY_PEAK4: [Prop; 2] = peak(121.0, 92.5, -49.0, 24.0);
+const CAUSEWAY_PEAK5: [Prop; 2] = peak(-43.0, 78.5, 45.0, 26.0);
+const CAUSEWAY_CAIRN4: [Prop; 3] = cairn(32.1, 79.0, -0.4);
+const CAUSEWAY_NEST: [Prop; 11] = nest(76.0, 77.0, 0.0);
 
 pub static CAUSEWAY: Dressing = Dressing {
     sky: SKY,
+    below: Some(DEEP),
     props: &[
-        prop(Shape::Box, [39.0, 0.0, 0.5], [324.0, 1.0, 249.0], 0.0, MIST),
         CAUSEWAY_PEAK0[0],
         CAUSEWAY_PEAK0[1],
         CAUSEWAY_PEAK1[0],
@@ -200,26 +202,20 @@ pub static CAUSEWAY: Dressing = Dressing {
 };
 
 // The Climb
-const CLIMB_PEAK0: [Prop; 2] = peak(-48.0, 9.8, -10.0, 30.0);
-const CLIMB_PEAK1: [Prop; 2] = peak(134.0, 19.8, 25.0, 36.0);
-const CLIMB_PEAK2: [Prop; 2] = peak(40.5, 5.8, 78.0, 40.0);
-const CLIMB_PEAK3: [Prop; 2] = peak(10.5, 23.8, -53.0, 28.0);
-const CLIMB_PEAK4: [Prop; 2] = peak(124.0, 29.8, -48.0, 24.0);
-const CLIMB_PEAK5: [Prop; 2] = peak(-43.0, 15.8, 63.0, 26.0);
-const CLIMB_CAIRN5: [Prop; 3] = cairn(29.4, 19.0, 4.9);
-const CLIMB_CAIRN8: [Prop; 3] = cairn(46.9, 17.0, 18.2);
-const CLIMB_NEST: [Prop; 11] = nest(79.2, 20.0, 18.9);
+const CLIMB_PEAK0: [Prop; 2] = peak(-48.0, 69.8, -10.0, 30.0);
+const CLIMB_PEAK1: [Prop; 2] = peak(134.0, 79.8, 25.0, 36.0);
+const CLIMB_PEAK2: [Prop; 2] = peak(40.5, 65.8, 78.0, 40.0);
+const CLIMB_PEAK3: [Prop; 2] = peak(10.5, 83.8, -53.0, 28.0);
+const CLIMB_PEAK4: [Prop; 2] = peak(124.0, 89.8, -48.0, 24.0);
+const CLIMB_PEAK5: [Prop; 2] = peak(-43.0, 75.8, 63.0, 26.0);
+const CLIMB_CAIRN5: [Prop; 3] = cairn(29.4, 79.0, 4.9);
+const CLIMB_CAIRN8: [Prop; 3] = cairn(46.9, 77.0, 18.2);
+const CLIMB_NEST: [Prop; 11] = nest(79.2, 80.0, 18.9);
 
 pub static CLIMB: Dressing = Dressing {
     sky: SKY,
+    below: Some(DEEP),
     props: &[
-        prop(
-            Shape::Box,
-            [40.5, 0.0, 10.0],
-            [327.0, 1.0, 266.0],
-            0.0,
-            MIST,
-        ),
         CLIMB_PEAK0[0],
         CLIMB_PEAK0[1],
         CLIMB_PEAK1[0],
@@ -253,20 +249,20 @@ pub static CLIMB: Dressing = Dressing {
 };
 
 // The Drift
-const DRIFT_PEAK0: [Prop; 2] = peak(-48.0, 21.5, -13.5, 30.0);
-const DRIFT_PEAK1: [Prop; 2] = peak(140.0, 31.5, 21.5, 36.0);
-const DRIFT_PEAK2: [Prop; 2] = peak(43.5, 17.5, 71.0, 40.0);
-const DRIFT_PEAK3: [Prop; 2] = peak(13.5, 35.5, -53.0, 28.0);
-const DRIFT_PEAK4: [Prop; 2] = peak(130.0, 41.5, -48.0, 24.0);
-const DRIFT_PEAK5: [Prop; 2] = peak(-43.0, 27.5, 56.0, 26.0);
-const DRIFT_CAIRN3: [Prop; 3] = cairn(36.0, 28.0, -1.9);
-const DRIFT_CAIRN7: [Prop; 3] = cairn(69.6, 24.0, -1.9);
-const DRIFT_NEST: [Prop; 11] = nest(85.0, 25.0, 11.0);
+const DRIFT_PEAK0: [Prop; 2] = peak(-48.0, 81.5, -13.5, 30.0);
+const DRIFT_PEAK1: [Prop; 2] = peak(140.0, 91.5, 21.5, 36.0);
+const DRIFT_PEAK2: [Prop; 2] = peak(43.5, 77.5, 71.0, 40.0);
+const DRIFT_PEAK3: [Prop; 2] = peak(13.5, 95.5, -53.0, 28.0);
+const DRIFT_PEAK4: [Prop; 2] = peak(130.0, 101.5, -48.0, 24.0);
+const DRIFT_PEAK5: [Prop; 2] = peak(-43.0, 87.5, 56.0, 26.0);
+const DRIFT_CAIRN3: [Prop; 3] = cairn(36.0, 88.0, -1.9);
+const DRIFT_CAIRN7: [Prop; 3] = cairn(69.6, 84.0, -1.9);
+const DRIFT_NEST: [Prop; 11] = nest(85.0, 85.0, 11.0);
 
 pub static DRIFT: Dressing = Dressing {
     sky: SKY,
+    below: Some(DEEP),
     props: &[
-        prop(Shape::Box, [43.5, 0.0, 6.5], [333.0, 1.0, 259.0], 0.0, MIST),
         DRIFT_PEAK0[0],
         DRIFT_PEAK0[1],
         DRIFT_PEAK1[0],
@@ -300,19 +296,19 @@ pub static DRIFT: Dressing = Dressing {
 };
 
 // The Spire
-const SPIRE_PEAK0: [Prop; 2] = peak(-48.0, 13.2, -19.5, 30.0);
-const SPIRE_PEAK1: [Prop; 2] = peak(83.0, 23.2, 15.5, 36.0);
-const SPIRE_PEAK2: [Prop; 2] = peak(15.0, 9.2, 60.0, 40.0);
-const SPIRE_PEAK3: [Prop; 2] = peak(-15.0, 27.2, -54.0, 28.0);
-const SPIRE_PEAK4: [Prop; 2] = peak(73.0, 33.2, -49.0, 24.0);
-const SPIRE_PEAK5: [Prop; 2] = peak(-43.0, 19.2, 45.0, 26.0);
-const SPIRE_CAIRN2: [Prop; 3] = cairn(18.6, 12.0, -2.4);
-const SPIRE_NEST: [Prop; 11] = nest(28.5, 44.0, 0.0);
+const SPIRE_PEAK0: [Prop; 2] = peak(-48.0, 73.2, -19.5, 30.0);
+const SPIRE_PEAK1: [Prop; 2] = peak(83.0, 83.2, 15.5, 36.0);
+const SPIRE_PEAK2: [Prop; 2] = peak(15.0, 69.2, 60.0, 40.0);
+const SPIRE_PEAK3: [Prop; 2] = peak(-15.0, 87.2, -54.0, 28.0);
+const SPIRE_PEAK4: [Prop; 2] = peak(73.0, 93.2, -49.0, 24.0);
+const SPIRE_PEAK5: [Prop; 2] = peak(-43.0, 79.2, 45.0, 26.0);
+const SPIRE_CAIRN2: [Prop; 3] = cairn(18.6, 72.0, -2.4);
+const SPIRE_NEST: [Prop; 11] = nest(28.5, 104.0, 0.0);
 
 pub static SPIRE: Dressing = Dressing {
     sky: SKY,
+    below: Some(DEEP),
     props: &[
-        prop(Shape::Box, [15.0, 0.0, 0.5], [276.0, 1.0, 249.0], 0.0, MIST),
         SPIRE_PEAK0[0],
         SPIRE_PEAK0[1],
         SPIRE_PEAK1[0],
@@ -343,20 +339,20 @@ pub static SPIRE: Dressing = Dressing {
 };
 
 // The Gulf
-const GULF_PEAK0: [Prop; 2] = peak(-48.0, 19.2, -19.5, 30.0);
-const GULF_PEAK1: [Prop; 2] = peak(125.0, 29.2, 15.5, 36.0);
-const GULF_PEAK2: [Prop; 2] = peak(36.0, 15.2, 60.0, 40.0);
-const GULF_PEAK3: [Prop; 2] = peak(6.0, 33.2, -54.0, 28.0);
-const GULF_PEAK4: [Prop; 2] = peak(115.0, 39.2, -49.0, 24.0);
-const GULF_PEAK5: [Prop; 2] = peak(-43.0, 25.2, 45.0, 26.0);
-const GULF_CAIRN3: [Prop; 3] = cairn(32.1, 26.0, -1.9);
-const GULF_CAIRN5: [Prop; 3] = cairn(53.6, 24.0, -1.9);
-const GULF_NEST: [Prop; 11] = nest(70.2, 29.0, 0.0);
+const GULF_PEAK0: [Prop; 2] = peak(-48.0, 79.2, -19.5, 30.0);
+const GULF_PEAK1: [Prop; 2] = peak(125.0, 89.2, 15.5, 36.0);
+const GULF_PEAK2: [Prop; 2] = peak(36.0, 75.2, 60.0, 40.0);
+const GULF_PEAK3: [Prop; 2] = peak(6.0, 93.2, -54.0, 28.0);
+const GULF_PEAK4: [Prop; 2] = peak(115.0, 99.2, -49.0, 24.0);
+const GULF_PEAK5: [Prop; 2] = peak(-43.0, 85.2, 45.0, 26.0);
+const GULF_CAIRN3: [Prop; 3] = cairn(32.1, 86.0, -1.9);
+const GULF_CAIRN5: [Prop; 3] = cairn(53.6, 84.0, -1.9);
+const GULF_NEST: [Prop; 11] = nest(70.2, 89.0, 0.0);
 
 pub static GULF: Dressing = Dressing {
     sky: SKY,
+    below: Some(DEEP),
     props: &[
-        prop(Shape::Box, [36.0, 0.0, 0.5], [318.0, 1.0, 249.0], 0.0, MIST),
         GULF_PEAK0[0],
         GULF_PEAK0[1],
         GULF_PEAK1[0],

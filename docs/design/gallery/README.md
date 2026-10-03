@@ -36,8 +36,9 @@ creature placed winding that move up at player one.
 
 ## The jump courses
 
-Taken 2026-10-03 with `GAME_ARGS="--arena <name> --p1 <class> --p2 <class>"`,
-`SHOT_FRAME=60`, `DEMO=0` and a `SHOT_PITCH` per course; see
+Taken 2026-10-03, round two (the islands sixty metres up over an unlit floor), with
+`GAME_ARGS="--arena <name> --p1 <class> --p2 <class>"`, `SHOT_FRAME=60`, `DEMO=0`
+and a `SHOT_PITCH` per course (−0.35 looking out, −0.75 for the drop); see
 [courses.md](../courses.md). The panel at the right is the course list and the
 run.
 
@@ -46,4 +47,4 @@ run.
 | ![](course-stair.jpg) **The Stair** (easy), the Champion on the foot. | ![](course-causeway.jpg) **The Causeway** (easy), the Blood mage. |
 | ![](course-climb.jpg) **The Climb** (hard), the Reaver: the islands up to the rookery. | ![](course-drift.jpg) **The Drift** (hard), the Dual mage: the long gaps drifting down. |
 | ![](course-spire.jpg) **The Spire** (barely possible), looking up at the rookery's underside 32 m above. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver. |
-
+| ![](course-climb-drop.jpg) **The drop**, from the Climb's start: the floor is sixty metres down, unlit. | |

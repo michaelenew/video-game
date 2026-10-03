@@ -25,11 +25,11 @@
 //! allocates; it is a tool, not a frame.
 
 use crate::arena::{self, Arena, ArenaId, Bounds, Material, Solid, cm};
-use crate::class::{Class, Ghost, Mechanic};
+use crate::class::{Class, Mechanic};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::{self, V3};
-use crate::state::{Action, World};
+use crate::state::World;
 
 /// Metres, from a whole number of them.
 fn m(v: i32) -> Fx {
@@ -352,439 +352,6 @@ pub fn airdodge_paths(class: Class) -> Vec<Path> {
 }
 
 // ---------------------------------------------------------------------------
-// Up onto a ledge, with the class's own tools
-// ---------------------------------------------------------------------------
-
-/// One of the lab's ledges: its height, the middle of its row across z, and
-/// its near face along x.
-#[derive(Clone, Copy, Debug)]
-pub struct Ledge {
-    pub height: Fx,
-    pub z: Fx,
-    pub face: Fx,
-}
-
-pub fn ledge(i: usize) -> Ledge {
-    let (z, h) = arena::lab::LEDGES[i];
-    Ledge {
-        height: cm(h),
-        z: cm(z),
-        face: cm(arena::lab::LEDGE_FACE.0),
-    }
-}
-
-/// How many ledges the lab has.
-pub fn ledges() -> usize {
-    arena::lab::LEDGES.len()
-}
-
-/// A point on the ledge's top, `into` metres past its face.
-pub fn on_top(l: Ledge, into: Fx) -> V3 {
-    V3::new(l.face.add(into), l.height, l.z)
-}
-
-/// **One attempt**: fighter one of `class` standing still `back` metres from
-/// the ledge's face, `prepare` done to the world, then `pilot` choosing her
-/// input every frame for `frames` frames. True the first frame she is
-/// standing on its top.
-pub fn onto(
-    class: Class,
-    l: Ledge,
-    back: Fx,
-    frames: u32,
-    prepare: impl FnOnce(&mut World),
-    mut pilot: impl FnMut(u32, &World) -> Input,
-) -> bool {
-    let mut w = lab(class);
-    stand(&mut w, V3::new(l.face.sub(back), Fx::ZERO, l.z));
-    prepare(&mut w);
-    for f in 0..frames {
-        let input = pilot(f, &w);
-        tick(&mut w, input);
-        let p = &w.players[0];
-        if p.grounded
-            && p.pos.x.raw() > l.face.raw()
-            && p.pos.y.sub(l.height).abs().raw() < cm(5).raw()
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// How far back [`reach_table`] looks, in metres.
-pub const fn scan_metres() -> i32 {
-    30
-}
-
-/// A tool: what it is called, and a pilot for it -- `try_it(class, ledge,
-/// back, setting)` -- scanned over `settings`.
-pub struct Tool {
-    pub class: Class,
-    pub name: &'static str,
-    /// What it is, in a line, and what the scan covers.
-    pub note: &'static str,
-    pub settings: u32,
-    pub try_it: fn(Ledge, Fx, u32) -> bool,
-}
-
-/// **The furthest back she can stand from a ledge of each height and still
-/// end up on it** with this tool, in half metres from half a metre out to 30:
-/// `None` where nothing worked from anywhere.
-pub fn reach_table(tool: &Tool) -> Vec<Option<Fx>> {
-    let half = cm(50);
-    let far = m(scan_metres());
-    (0..ledges())
-        .map(|i| {
-            let l = ledge(i);
-            let mut best = None;
-            let mut misses = 0;
-            let mut back = half;
-            while back.raw() <= far.raw() && misses < 6 {
-                if (0..tool.settings).any(|s| (tool.try_it)(l, back, s)) {
-                    best = Some(back);
-                    misses = 0;
-                } else if best.is_some() {
-                    misses += 1;
-                }
-                back = back.add(half);
-            }
-            best
-        })
-        .collect()
-}
-
-/// A run-up and a held jump toward the ledge, space pressed `back` from its
-/// face after a five-metre approach, and `air` done in the air: the plain
-/// jump, as a pilot, to read the other tools against.
-fn running_jump(l: Ledge, back: Fx, class: Class, air: impl Fn(u32) -> u16 + Copy) -> bool {
-    let mut jumped: Option<u32> = None;
-    onto(
-        class,
-        l,
-        back.add(m(5)),
-        240,
-        |_| {},
-        move |f, w| {
-            let p = &w.players[0];
-            let mut bits = Input::W;
-            if jumped.is_none() && p.pos.x.raw() >= l.face.sub(back).raw() {
-                jumped = Some(f);
-            }
-            if let Some(j) = jumped {
-                bits |= Input::SPACE | air(f - j);
-            }
-            ahead(bits)
-        },
-    )
-}
-
-/// Every tool there is, class by class.
-pub fn tools() -> Vec<Tool> {
-    vec![
-        Tool {
-            class: Class::ShadowReaver,
-            name: "Shadow + dash",
-            note: "send the shadow onto the top (right click, crosshair on it), then the \
-                   dash to it (shift + forward, crosshair on the shadow); from the floor, or \
-                   thrown from the top of a hop at 10, 20 or 30 frames",
-            settings: 4,
-            try_it: |l, back, s| reaver_shadow(l, back, s),
-        },
-        Tool {
-            class: Class::Elementalist,
-            name: "Stone jump",
-            note: "one stone raised under her own feet, space held from the frame that \
-                   rides the eruption (scanned 0-24), forward held once she is above the top",
-            settings: 25,
-            try_it: |l, back, s| stone_jump(l, back, 1, 0, s),
-        },
-        Tool {
-            class: Class::Elementalist,
-            name: "Double stone jump",
-            note: "two stones under her feet 2 frames apart, space from the frame that \
-                   rides both (scanned 0-24), forward once above the top",
-            settings: 25,
-            try_it: |l, back, s| stone_jump(l, back, 2, 2, s),
-        },
-        Tool {
-            class: Class::Elementalist,
-            name: "Updraft",
-            note: "F on the spot and space held through the column (scanned 0-20 frames \
-                   after), forward once she is above the top",
-            settings: 7,
-            try_it: |l, back, s| updraft(l, back, s * 3),
-        },
-        Tool {
-            class: Class::Elementalist,
-            name: "Stone stair",
-            note: "a stone raised at the foot of the face, walked to and hopped on, then \
-                   a held jump to the top: forward and space held throughout",
-            settings: 1,
-            try_it: |l, back, _| stone_stair(l, back),
-        },
-        Tool {
-            class: Class::DualMage,
-            name: "Second jump",
-            note: "her bars held at 80 (the second tier, set rather than earned): a \
-                   running jump and the second one pressed at 10-40 frames",
-            settings: 7,
-            try_it: |l, back, s| {
-                running_jump_with(l, back, Class::DualMage, true, move |after| {
-                    let k = 10 + s * 5;
-                    if after + 1 == k {
-                        0
-                    } else if after >= k && after < k + 20 {
-                        Input::SPACE
-                    } else if after > 22 && after < k {
-                        0
-                    } else {
-                        Input::SPACE
-                    }
-                })
-            },
-        },
-        Tool {
-            class: Class::Champion,
-            name: "Rush + pole vault",
-            note: "Rush toward the ledge (E) and the spear planted in the floor (right \
-                   click, an eighth of a turn down) 1 to 15 frames into it",
-            settings: 8,
-            try_it: |l, back, s| pole_vault(l, back, 1 + s * 2),
-        },
-        Tool {
-            class: Class::Champion,
-            name: "Takeoff",
-            note: "a running jump with a weapon pressed the frame after the feet leave \
-                   (the takeoffs: sword, hammer, spear)",
-            settings: 3,
-            try_it: |l, back, s| {
-                let button = [Input::LEFT, Input::MIDDLE, Input::RIGHT][s as usize];
-                running_jump(l, back, Class::Champion, move |after| {
-                    if after == 1 || after == 2 { button } else { 0 }
-                })
-            },
-        },
-        Tool {
-            class: Class::BloodMage,
-            name: "Grasp haul",
-            note: "Q held 0-30 frames with the crosshair a metre onto the top, from the \
-                   floor or thrown from a held jump; arms that meet only scenery haul her \
-                   to them (the `Grasp hauls` flag, on)",
-            settings: 14,
-            try_it: |l, back, s| grasp_haul(l, back, (s % 7) * 5, s >= 7),
-        },
-    ]
-}
-
-/// [`running_jump`], optionally with the Dual mage's bars held at the
-/// second tier every frame.
-fn running_jump_with(
-    l: Ledge,
-    back: Fx,
-    class: Class,
-    tier: bool,
-    space: impl Fn(u32) -> u16 + Copy,
-) -> bool {
-    let mut jumped: Option<u32> = None;
-    let mut w = lab(class);
-    stand(&mut w, V3::new(l.face.sub(back.add(m(5))), Fx::ZERO, l.z));
-    for f in 0..260u32 {
-        if tier {
-            set_bars(&mut w, m(80));
-        }
-        let p = &w.players[0];
-        let mut bits = Input::W;
-        if jumped.is_none() && p.pos.x.raw() >= l.face.sub(back).raw() {
-            jumped = Some(f);
-        }
-        if let Some(j) = jumped {
-            bits |= space(f - j);
-        }
-        tick(&mut w, ahead(bits));
-        let p = &w.players[0];
-        if p.grounded
-            && p.pos.x.raw() > l.face.raw()
-            && p.pos.y.sub(l.height).abs().raw() < cm(5).raw()
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// The Reaver: the shadow onto the top, and the dash to it. `setting` 0 is
-/// from the floor; 1 to 3 throw it from a hop, 10, 20 or 30 frames up.
-fn reaver_shadow(l: Ledge, back: Fx, setting: u32) -> bool {
-    let target = on_top(l, m(1));
-    let throw_at = if setting == 0 { 0 } else { setting * 10 };
-    let mut sent = false;
-    let mut dashed = false;
-    onto(
-        Class::ShadowReaver,
-        l,
-        back,
-        200,
-        |_| {},
-        move |f, w| {
-            let p = &w.players[0];
-            let shadow = crate::shadow::of(p);
-            let mut bits = if setting > 0 && f < throw_at + 2 {
-                Input::SPACE
-            } else {
-                0
-            };
-            if !sent && f >= throw_at {
-                if f > throw_at {
-                    sent = true;
-                }
-                return toward(w, bits | Input::RIGHT, target);
-            }
-            if let Some(s) = shadow {
-                if matches!(s.doing, Ghost::Waiting) && !dashed {
-                    if matches!(p.action, Action::Dodge { .. }) {
-                        dashed = true;
-                    }
-                    bits |= Input::SHIFT | Input::W;
-                    return toward(w, bits, s.pos);
-                }
-            }
-            toward(w, bits, target)
-        },
-    )
-}
-
-/// The Elementalist's structure jump: `count` stones under her own feet,
-/// `gap` frames apart, space held from `jump_at`, forward once she is above
-/// the top.
-fn stone_jump(l: Ledge, back: Fx, count: u32, gap: u32, jump_at: u32) -> bool {
-    let mut raised = 0u32;
-    let mut feet = None;
-    onto(
-        Class::Elementalist,
-        l,
-        back,
-        300,
-        |_| {},
-        move |f, w| {
-            let p = &w.players[0];
-            let here = *feet.get_or_insert(V3::new(p.pos.x, Fx::ZERO, p.pos.z));
-            let mut bits = 0;
-            if raised < count && f == raised * gap {
-                bits |= Input::MECHANIC;
-                raised += 1;
-            }
-            if f >= jump_at {
-                bits |= Input::SPACE;
-            }
-            if p.pos.y.raw() > l.height.add(m(1)).raw() {
-                bits |= Input::W;
-                return ahead(bits);
-            }
-            if bits & Input::MECHANIC != 0 {
-                return toward(w, bits, here);
-            }
-            ahead(bits)
-        },
-    )
-}
-
-/// The Updraft: F on the spot, space from `jump_at`, forward once above.
-fn updraft(l: Ledge, back: Fx, jump_at: u32) -> bool {
-    onto(
-        Class::Elementalist,
-        l,
-        back,
-        300,
-        |_| {},
-        move |f, w| {
-            let p = &w.players[0];
-            let mut bits = if f < 2 { Input::KEY_F } else { 0 };
-            if f >= jump_at {
-                bits |= Input::SPACE;
-            }
-            if p.pos.y.raw() > l.height.add(m(1)).raw() {
-                bits |= Input::W;
-            }
-            ahead(bits)
-        },
-    )
-}
-
-/// A stone at the foot of the face, then forward and space held: up onto the
-/// stone, and up off it.
-fn stone_stair(l: Ledge, back: Fx) -> bool {
-    let foot = V3::new(l.face.sub(m(1)), Fx::ZERO, l.z);
-    onto(
-        Class::Elementalist,
-        l,
-        back,
-        400,
-        |_| {},
-        move |f, w| {
-            if f < 2 {
-                return toward(w, Input::MECHANIC, foot);
-            }
-            // Let it stand fully out of the floor before walking at it.
-            if f < 2 + crate::tuning::structure_rise() as u32 + 4 {
-                return ahead(0);
-            }
-            ahead(Input::W | Input::SPACE)
-        },
-    )
-}
-
-/// The Champion: Rush at the ledge and plant the spear `vault_at` frames in.
-fn pole_vault(l: Ledge, back: Fx, vault_at: u32) -> bool {
-    let down = -(1 << 13);
-    onto(
-        Class::Champion,
-        l,
-        back,
-        200,
-        |_| {},
-        move |f, _| {
-            let bits = if f == 0 {
-                Input::MECHANIC
-            } else if f >= vault_at && f < vault_at + 2 {
-                Input::RIGHT | Input::W
-            } else {
-                Input::W
-            };
-            Input::looking_at(bits, 0, down)
-        },
-    )
-}
-
-/// The Blood mage: Q held `hold` frames with the crosshair a metre onto the
-/// top, from the floor or from a held jump (`hop`), then let go and let the
-/// arms do it.
-fn grasp_haul(l: Ledge, back: Fx, hold: u32, hop: bool) -> bool {
-    let top = on_top(l, m(1));
-    onto(
-        Class::BloodMage,
-        l,
-        back,
-        260,
-        |_| {},
-        move |f, w| {
-            let mut bits = if (2..=2 + hold).contains(&f) {
-                Input::SPECIAL
-            } else {
-                0
-            };
-            if hop && f < 40 {
-                bits |= Input::SPACE;
-            }
-            if f > hold + 80 {
-                return ahead(Input::W);
-            }
-            toward(w, bits, top)
-        },
-    )
-}
-
-// ---------------------------------------------------------------------------
 // The tools on the flat: single numbers
 // ---------------------------------------------------------------------------
 
@@ -833,6 +400,72 @@ pub fn reaver_chain() -> (Fx, Fx, Fx) {
     }
     let jump = w.players[0].pos.sub(from).flat_len();
     (range, jump, apex)
+}
+
+/// **The dash jump, swept**, on the flat: the shadow sent `send` metres along
+/// the floor, the dash to it, and space pressed `k` frames into the carry --
+/// then, in the air, either the stick held forward or the strafe held at
+/// 70 degrees off her motion with an aerial thrown every 20 frames. How far
+/// from where she stood she comes down, and how far past the shadow.
+pub fn dash_jump(send: Fx, k: u32, strafe: bool) -> Option<(Fx, Fx)> {
+    let mut w = lab(Class::ShadowReaver);
+    let (x, z) = arena::lab::LANE;
+    let start = V3::new(cm(x), Fx::ZERO, cm(z));
+    stand(&mut w, start);
+    let target = start.add(V3::new(send, Fx::ZERO, Fx::ZERO));
+    for f in 0..3u32 {
+        let bits = if f < 2 { Input::RIGHT } else { 0 };
+        let look = toward(&w, bits, target);
+        tick(&mut w, look);
+    }
+    let mut carry_from: Option<u32> = None;
+    let mut jumped = false;
+    let mut from = start;
+    for f in 0..400u32 {
+        let p = w.players[0];
+        let carrying = crate::shadow::carrying_a_dash(&p);
+        if carrying && carry_from.is_none() {
+            carry_from = Some(f);
+            from = p.pos;
+        }
+        let input = match carry_from {
+            None => {
+                let s = crate::shadow::of(&p).map_or(target, |s| s.pos);
+                toward(&w, Input::SHIFT | Input::W, s)
+            }
+            Some(c) if !jumped => {
+                if f >= c + k {
+                    if !carrying {
+                        return None;
+                    }
+                    jumped = true;
+                    ahead(Input::SPACE | Input::W)
+                } else {
+                    ahead(0)
+                }
+            }
+            Some(_) => {
+                let mut bits = if p.vel.y.raw() > 0 { Input::SPACE } else { 0 };
+                if !strafe {
+                    ahead(bits | Input::W)
+                } else {
+                    if f % 20 == 0 {
+                        bits |= Input::LEFT;
+                    }
+                    let moving = math::atan2_turns(p.vel.z, p.vel.x).raw();
+                    let side = if moving > 0 { -1 } else { 1 };
+                    let yaw = (moving + side * 70 * 65536 / 360) & 0xFFFF;
+                    Input::aimed(bits | Input::W, yaw as u16)
+                }
+            }
+        };
+        tick(&mut w, input);
+        let p = &w.players[0];
+        if jumped && p.grounded {
+            return Some((p.pos.sub(start).flat_len(), p.pos.sub(from).flat_len()));
+        }
+    }
+    None
 }
 
 /// The Elementalist's structure jumps straight up, on the flat: the best

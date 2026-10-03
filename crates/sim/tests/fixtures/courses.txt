@@ -1,0 +1,195 @@
+stair 0 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J9
+stair 0 1 Elementalist shared | 0 0@0 0 ; 0:J7
+stair 0 1 Blood_mage shared | 0 0@18 0 ; 0:J6
+stair 0 1 Dual_mage shared | 0 0@0 0 ; 0:J18
+stair 0 1 Champion shared | 0 0@0 0 ; 0:J3
+stair 1 1 Shadow_Reaver shared | 0 0@3 3 ; 6:J6
+stair 1 1 Elementalist shared | 0 0@0 0 ; 0:J18
+stair 1 1 Blood_mage shared | 0 0@2 0 ; 0:J8
+stair 1 1 Dual_mage shared | 0 0@0 0 ; 0:J4
+stair 1 1 Champion shared | 12 0@7 0 ; 0:J19
+stair 2 1 Shadow_Reaver shared | 1 0@0 0 ; 0:J60
+stair 2 1 Elementalist shared | 0 0@4 0 ; 0:J6
+stair 2 1 Blood_mage shared | 63 0@0 0 ; 0:J18
+stair 2 1 Dual_mage shared | 37 0@0 0 ; 0:J18
+stair 2 1 Champion shared | 0 0@0 0 ; 0:J18
+stair 3 1 Shadow_Reaver shared | 0 0@3 0 ; 0:J8
+stair 3 1 Elementalist shared | 147 0@0 0 ; 0:J13
+stair 3 1 Blood_mage shared | 0 0@0 0 ; 0:J9
+stair 3 1 Dual_mage shared | 0 0@0 0 ; 0:J8
+stair 3 1 Champion shared | 0 0@0 0 ; 0:J9
+stair 4 1 Shadow_Reaver shared | 0 0@1 0 ; 0:J18
+stair 4 1 Elementalist shared | 0 0@2 0 ; 0:J18
+stair 4 1 Blood_mage shared | 7 0@0 0 ; 0:J21
+stair 4 1 Dual_mage shared | 0 0@11 0 ; 0:J7
+stair 4 1 Champion shared | 0 0@0 0 ; 0:J36
+stair 5 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J10
+stair 5 1 Elementalist shared | 0 0@5 0 ; 0:J17
+stair 5 1 Blood_mage shared | 0 0@4 0 ; 0:J9
+stair 5 1 Dual_mage shared | 0 0@10 0 ; 0:J18
+stair 5 1 Champion shared | 8 0@0 0 ; 0:J8
+causeway 0 1 Shadow_Reaver shared | 0 0@17 0 ; 0:J18
+causeway 0 1 Elementalist shared | 0 0@0 0 ; 0:J10
+causeway 0 1 Blood_mage shared | 0 0@0 0 ; 0:J8
+causeway 0 1 Dual_mage shared | 0 0@0 0 ; 0:J3
+causeway 0 1 Champion shared | 0 0@6 0 ; 0:J1 8:P0
+causeway 1 1 Shadow_Reaver shared | 0 0@4 0 ; 0:J11 11:P1
+causeway 1 1 Elementalist shared | 0 0@7 0 ; 0:J6 38:P2
+causeway 1 1 Blood_mage shared | 0 0@0 0 ; 0:J18
+causeway 1 1 Dual_mage shared | 0 0@0 0 ; 0:P0
+causeway 1 1 Champion shared | 0 0@12 0 ; 0:J8
+causeway 2 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J23
+causeway 2 1 Elementalist shared | 10 0@0 0 ; 0:J1 9:P0
+causeway 2 1 Blood_mage shared | 0 0@0 0 ; 0:J11
+causeway 2 1 Dual_mage shared | 30 0@16 0 ; 0:J9
+causeway 2 1 Champion shared | 8 0@0 0 ; 0:J20
+causeway 3 1 Shadow_Reaver shared | 220 0@0 0 ; 3:J64
+causeway 3 1 Elementalist shared | 0 0@6 0 ; 0:J1
+causeway 3 1 Blood_mage shared | 0 0@8 0 ; 4:J1 8:P2
+causeway 3 1 Dual_mage shared | 0 0@1 0 ; 0:J1
+causeway 3 1 Champion shared | 0 0@0 0 ; 0:J23
+causeway 4 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J19 22:D
+causeway 4 1 Elementalist shared | 0 0@0 0 ; 6:P0
+causeway 4 1 Blood_mage shared | 0 0@0 0 ; 0:J18
+causeway 4 1 Dual_mage shared | 0 0@2 0 ; 0:P0
+causeway 4 1 Champion shared | 0 0@2 0 ; 6:P0
+causeway 5 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J1
+causeway 5 1 Elementalist shared | 0 0@0 0 ; 7:P0
+causeway 5 1 Blood_mage shared | 60 0@0 0 ; 0:J19
+causeway 5 1 Dual_mage shared | 0 0@4 4 ; 0:P0
+causeway 5 1 Champion shared | 0 0@0 0 ; 0:J1
+causeway 6 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J18 20:P1
+causeway 6 1 Elementalist shared | 0 0@0 0 ; 0:J14
+causeway 6 1 Blood_mage shared | 0 0@0 0 ; 0:J18
+causeway 6 1 Dual_mage shared | 0 0@0 0 ; 0:J33
+causeway 6 1 Champion shared | 0 0@0 0 ; 0:J18
+climb 0 1 Shadow_Reaver shared | 0 83@11 0 ; 3:J14
+climb 0 1 Elementalist shared | 52 0@0 0 ; 2:J15 15:J7
+climb 0 1 Blood_mage shared | 0 0@2 0 ; 0:J18 28:P0
+climb 0 1 Dual_mage shared | 0 0@0 0 ; 0:J22
+climb 0 1 Champion shared | 0 0@5 0 ; 4:J18
+climb 1 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J3 12:P0
+climb 1 1 Elementalist shared | 0 0@15 1 ; 1:J32 13:P1
+climb 1 1 Blood_mage shared | 0 0@0 0 ; 0:J12
+climb 1 1 Dual_mage shared | 0 0@0 0 ; 0:J13
+climb 1 1 Champion shared | 0 0@0 0 ; 0:J6 13:P0
+climb 2 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J11
+climb 2 1 Elementalist shared | 255 0@25 13 ; 25:J18 35:P2
+climb 2 1 Blood_mage shared | 151 0@6 10 ; 21:J13
+climb 2 1 Dual_mage shared | 332 0@9 26 ; 27:J18 36:P0
+climb 2 1 Champion shared | 263 0@12 2 ; 8:J8 22:P0
+climb 3 1 Shadow_Reaver full | 900 0@29 0 ; 0:A1f870,0,2 20:X
+climb 3 1 Elementalist shared | 211 0@11 0 ; 7:J18 13:P0
+climb 3 1 Blood_mage shared | 65 0@0 11 ; 0:P2 10:J22 34:P2
+climb 3 1 Dual_mage shared | 0 0@0 0 ; 0:J22 5:P1
+climb 3 1 Champion shared | 586 0@75 49 ; 49:J18
+climb 4 1 Shadow_Reaver shared | 158 0@0 0 ; 0:J18
+climb 4 1 Elementalist shared | 305 0@9 18 ; 30:J30
+climb 4 1 Blood_mage shared | 0 0@0 0 ; 0:J18
+climb 4 1 Dual_mage shared | 0 0@5 0 ; 0:J18
+climb 4 1 Champion shared | 300 0@4 13 ; 23:J18
+climb 5 1 Shadow_Reaver shared | 0 0@0 7 ; 8:J12 23:P0
+climb 5 1 Elementalist shared | 0 0@10 0 ; 0:J5 21:P0
+climb 5 1 Blood_mage shared | 0 0@10 0 ; 0:J14 22:P2
+climb 5 1 Dual_mage shared | 0 82@15 0 ; 0:J5 16:P0
+climb 5 1 Champion shared | 0 0@0 0 ; 0:J16 16:P0
+climb 6 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J18
+climb 6 1 Elementalist shared | 7 0@0 0 ; 0:J18
+climb 6 1 Blood_mage shared | 0 0@0 0 ; 0:J18
+climb 6 1 Dual_mage shared | 0 0@7 0 ; 0:P0
+climb 6 1 Champion shared | 0 0@0 0 ; 0:J25
+climb 7 1 Shadow_Reaver shared | 0 0@8 0 ; 0:J16 11:P1
+climb 7 1 Elementalist shared | 0 0@0 0 ; 7:P0
+climb 7 1 Blood_mage shared | 0 0@11 0 ; 0:J16
+climb 7 1 Dual_mage shared | 0 0@0 0 ; 0:P0
+climb 7 1 Champion shared | 0 0@1 0 ; 1:P0
+climb 8 1 Shadow_Reaver shared | 0 0@13 0 ; 3:J15
+climb 8 1 Elementalist shared | 0 0@0 0 ; 0:J24
+climb 8 1 Blood_mage shared | 0 0@6 0 ; 0:J25
+climb 8 1 Dual_mage shared | 0 0@0 0 ; 0:J15
+climb 8 1 Champion shared | 0 0@0 0 ; 0:J18
+drift 0 1 Shadow_Reaver shared | 0 0@23 0 ; 0:P1 27:D
+drift 0 1 Elementalist shared | 0 0@13 0 ; 0:J7 19:P0
+drift 0 1 Blood_mage shared | 0 0@0 0 ; 0:J12 20:P2
+drift 0 1 Dual_mage shared | 0 0@0 0 ; 0:J18 13:J12
+drift 0 1 Champion shared | 0 0@13 0 ; 3:J8 3:J10 21:P0
+drift 1 1 Shadow_Reaver shared | 0 84@0 0 ; 0:J11 47:P0
+drift 1 1 Elementalist shared | 0 0@0 0 ; 0:J9 14:P0
+drift 1 1 Blood_mage shared | 3 0@0 0 ; 0:J18 30:P0
+drift 1 1 Dual_mage shared | 0 0@20 0 ; 0:P0
+drift 1 1 Champion shared | 46 0@5 0 ; 8:J18
+drift 2 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J9 24:P0
+drift 2 1 Elementalist shared | 0 0@0 0 ; 0:J19
+drift 2 1 Blood_mage shared | 0 0@8 0 ; 3:J17 23:P2
+drift 2 1 Dual_mage shared | 0 0@0 0 ; 0:J13 11:P0
+drift 2 1 Champion shared | 0 0@0 0 ; 2:J16 19:P0
+drift 3 1 Shadow_Reaver shared | 0 0@3 0 ; 0:J2 17:P0
+drift 3 1 Elementalist shared | 0 0@0 5 ; 6:J18 14:P0
+drift 3 1 Blood_mage shared | 0 0@0 0 ; 1:J10 11:P2
+drift 3 1 Dual_mage shared | 0 0@0 0 ; 0:J6
+drift 3 1 Champion shared | 0 0@14 0 ; 1:J14
+drift 4 1 Shadow_Reaver shared | 118 0@0 19 ; 11:P0 18:P1 39:J18 58:P0
+drift 4 1 Elementalist shared | 0 0@5 0 ; 0:J11
+drift 4 1 Blood_mage full | 224 0@12 4 ; 5:J10 21:P2
+drift 4 1 Dual_mage full | 0 0@10 0 ; 0:J6
+drift 4 1 Champion shared | 270 0@5 0 ; 5:J4 20:P0
+drift 5 1 Shadow_Reaver full | 100 0@0 0 ; 0:A1m0,0,2 18:X
+drift 5 1 Elementalist full | 163 0@100 37 ; 12:P0 30:J30
+drift 5 1 Blood_mage shared | 0 0@2 0 ; 0:J13
+drift 5 1 Dual_mage shared | 0 0@12 51 ; 20:P2 28:J87 64:P0
+drift 5 1 Champion shared | 224 0@0 10 ; 19:J12
+drift 6 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J1 23:P0
+drift 6 1 Elementalist shared | 0 0@2 0 ; 0:J19 35:P0
+drift 6 1 Blood_mage full | 272 0@20 16 ; 24:J18 62:P1
+drift 6 1 Dual_mage shared | 0 0@7 0 ; 22:P0
+drift 6 1 Champion full | 628 0@11 0 ; 39:P6 47:V
+drift 7 1 Shadow_Reaver shared | 0 0@2 0 ; 0:J18
+drift 7 1 Elementalist shared | 0 0@0 0 ; 0:J62
+drift 7 1 Blood_mage shared | 0 0@0 0 ; 3:J18
+drift 7 1 Dual_mage shared | 0 0@0 0 ; 0:J6 14:P0
+drift 7 1 Champion shared | 0 0@0 0 ; 0:J16 18:P0
+drift 8 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J18 37:P0
+drift 8 1 Elementalist shared | 0 0@5 0 ; 0:J11 12:P0
+drift 8 1 Blood_mage shared | 1 0@0 0 ; 0:J15 16:P2
+drift 8 1 Dual_mage shared | 8 0@0 0 ; 0:J18
+drift 8 1 Champion shared | 48 0@8 0 ; 3:J14 21:P2
+spire 0 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J20
+spire 0 1 Elementalist shared | 0 0@2 0 ; 0:J17
+spire 0 1 Blood_mage shared | 0 0@0 0 ; 0:J9 13:P2
+spire 0 1 Dual_mage shared | 0 0@0 0 ; 0:J12
+spire 0 1 Champion shared | 0 0@0 0 ; 0:J8 13:P0
+spire 1 1 Shadow_Reaver shared | 39 0@0 0 ; 0:J11 17:P0
+spire 1 1 Elementalist shared | 0 0@9 0 ; 0:J17
+spire 1 1 Blood_mage shared | 0 0@0 0 ; 0:J18
+spire 1 1 Dual_mage shared | 0 0@0 0 ; 0:J67
+spire 1 1 Champion shared | 0 0@0 0 ; 0:J14
+spire 2 1 Elementalist full | 60 0@90 90 ; 0:A6f0,0,1 2:A6f0,0,1 9:J90
+gulf 0 1 Shadow_Reaver shared | 0 0@0 0 ; 0:J20
+gulf 0 1 Elementalist shared | 0 0@8 0 ; 2:J8 12:P0
+gulf 0 1 Blood_mage shared | 0 0@0 0 ; 0:J10 14:P2
+gulf 0 1 Dual_mage shared | 0 0@29 0 ; 1:J7 44:D
+gulf 0 1 Champion shared | 0 0@0 0 ; 0:J21
+gulf 1 1 Shadow_Reaver shared | 0 0@1 0 ; 1:J13 9:P0 27:P1
+gulf 1 1 Elementalist shared | 0 0@5 0 ; 2:J14 13:J20
+gulf 1 1 Blood_mage shared | 0 82@3 0 ; 2:J10 36:P0
+gulf 1 1 Dual_mage shared | 0 0@0 0 ; 0:J8 30:P2
+gulf 1 1 Champion shared | 0 0@10 0 ; 0:J9 21:P0
+gulf 2 1 Shadow_Reaver full | 0 0@7 0 ; 0:A1l115,5,2 28:X
+gulf 2 1 Elementalist full | 357 0@96 92 ; 26:A6f0,0,1 102:J17 118:P0
+gulf 2 1 Dual_mage shared | 106 0@14 22 ; 23:J76 60:P1
+gulf 2 1 Champion shared | 256 0@20 13 ; 22:J2 28:P0
+gulf 3 1 Shadow_Reaver shared | 0 0@3 0 ; 0:J30
+gulf 3 1 Elementalist shared | 0 0@0 0 ; 0:J18
+gulf 3 1 Blood_mage shared | 0 0@13 0 ; 0:J12 27:P0
+gulf 3 1 Dual_mage shared | 0 0@0 0 ; 20:P0
+gulf 3 1 Champion shared | 0 0@0 0 ; 0:J9 11:P0
+gulf 4 1 Shadow_Reaver shared | 0 0@0 0 ; 6:P1 29:D
+gulf 4 1 Elementalist full | 0 0@81 35 ; 8:J86 11:A6f-25,-67,1
+gulf 4 1 Blood_mage shared | 158 0@8 0 ; 0:J18 33:P2
+gulf 4 1 Dual_mage shared | 155 0@10 0 ; 5:J24 37:P1 71:P0
+gulf 4 1 Champion full | 0 0@16 0 ; 2:J18 17:P0 32:P6
+gulf 5 1 Shadow_Reaver full | 0 0@0 0 ; 0:A1l150,150,2 22:X
+gulf 5 1 Elementalist full | 172 0@43 0 ; 0:A6f150,0,1 10:J60 44:P0
+gulf 5 1 Dual_mage shared | 0 84@0 0 ; 1:J18 38:P2
+gulf 5 1 Champion shared | 504 0@56 0 ; 43:J18 47:P2 82:P0
+gulf 1 2 Blood_mage full | 0 0@0 0 ; 0:J19 33:J70 46:P0 81:A3m18,-88,28 108:A3l-5,12,10

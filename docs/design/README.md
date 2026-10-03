@@ -78,6 +78,11 @@ because at its old strength and length a held jump read as an elevator with grav
 on at the top. See [feel-log.md](feel-log.md); it changes the Ridgeback's climb, which
 `cargo run -p sim --bin beastcheck` now prints as a spread rather than one number.
 
+**A movement tool's reach is paid for in execution — timing, aim, precision — never in
+waiting, and never free.** Accepted 2026-10-03 from the jump courses
+([courses.md](courses.md) §0): a tool that reaches far with no timing, or reaches far after
+standing still long enough, is the thing to fix.
+
 **Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
 poke is a design choice in a closed arena, not a gap.
 

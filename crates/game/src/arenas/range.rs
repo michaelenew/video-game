@@ -9,6 +9,7 @@ const CAIRN: [f32; 3] = [0.45, 0.43, 0.40];
 
 pub static DRESSING: Dressing = Dressing {
     sky: [0.30, 0.38, 0.48],
+    below: None,
     props: &[
         Prop {
             shape: Shape::Box,

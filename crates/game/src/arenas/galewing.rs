@@ -63,6 +63,7 @@ const P2: [Prop; 2] = peak(45.0, 65.0, 35.0);
 pub static DRESSING: Dressing = Dressing {
     // High, thin air: a pale clear blue.
     sky: [0.62, 0.76, 0.92],
+    below: None,
     props: &[
         cloud(-46.0, -10.0, 24.0),
         cloud(-44.0, 14.0, 20.0),

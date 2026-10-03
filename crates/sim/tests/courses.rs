@@ -1,31 +1,14 @@
 //! The jump courses (`docs/design/courses.md`): their tables are well formed,
 //! a fall stands you back on your last checkpoint, the clock stops at the
-//! finish -- and **every route the document promises is played**: the two
-//! hard courses by all five classes they are for, and each barely-possible
-//! course by the class it was built against. A route that stops working when
-//! somebody retunes a jump is the point: the course was built against those
-//! numbers, and the document says which.
-//!
-//! The routes are `sim::coursecheck::run`: scripted input, a hop at a time,
-//! each with the first technique that clears it.
+//! finish, and `N` steps through them. The routes the document promises are
+//! played in `tests/search.rs`, from the search's own fixtures.
 
 use sim::arena::ArenaId;
 use sim::class::Class;
 use sim::course::{self, Run, Tier};
-use sim::coursecheck;
 use sim::input::{Destination, Travel};
 use sim::state::MAX_PLAYERS;
 use sim::{Fx, Input, V3, World};
-
-/// The five classes the courses are for; the Bulwark is out of this by the
-/// owner's choice (courses.md §0).
-const FIVE: [Class; 5] = [
-    Class::ShadowReaver,
-    Class::Elementalist,
-    Class::BloodMage,
-    Class::DualMage,
-    Class::Champion,
-];
 
 fn named(name: &str) -> &'static course::Course {
     course::all()
@@ -172,50 +155,4 @@ fn a_course_is_a_trip_on_the_wire_and_the_key_steps_through_them_all() {
     ask[0] = ask[0].travelling(Travel::arena(ArenaId(60)));
     w.advance(ask);
     assert_eq!(w.arena, ArenaId::PROVING_GROUND);
-}
-
-fn finishes(name: &str, class: Class) {
-    let c = named(name);
-    let (done, frames, finished) = coursecheck::run(c, class);
-    let how: Vec<String> = done.iter().map(|(_, t)| t.name()).collect();
-    assert!(
-        finished,
-        "{} did not finish {}: stuck after {:?}",
-        class.name(),
-        c.name,
-        how
-    );
-    assert!(frames > 0);
-}
-
-/// **The main route is hard and everybody finishes it**: the owner's goal
-/// for these courses (courses.md §0). Every class, on its jump and airdodge
-/// and whatever else it has.
-#[test]
-fn every_class_finishes_the_climb() {
-    for class in FIVE {
-        finishes("climb", class);
-    }
-}
-
-#[test]
-fn every_class_finishes_the_drift() {
-    for class in FIVE {
-        finishes("drift", class);
-    }
-}
-
-/// **The Spire is possible**, for the class it was built against: a double
-/// stone jump off the launch, 32 m up onto the rookery.
-#[test]
-fn the_elementalist_climbs_the_spire() {
-    finishes("spire", Class::Elementalist);
-}
-
-/// **The Gulf is possible**, for the class it was built against: a shadow
-/// sent onto a stone a metre across, the dash to it and the dash jump off it,
-/// and the last island by the shadow alone.
-#[test]
-fn the_reaver_crosses_the_gulf() {
-    finishes("gulf", Class::ShadowReaver);
 }

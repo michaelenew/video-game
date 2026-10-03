@@ -12,6 +12,7 @@ const POST: [f32; 3] = [0.30, 0.22, 0.14];
 
 pub static DRESSING: Dressing = Dressing {
     sky: [0.36, 0.38, 0.33],
+    below: None,
     props: &[
         Prop {
             shape: Shape::Cylinder,
