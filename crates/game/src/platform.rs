@@ -3,7 +3,9 @@
 //! Five things, and only five. Three of them are here: **how a run is
 //! configured**, **where its settings are kept** (and the trophy record beside
 //! them, which is kept the same way for the same reason), and **what a crash
-//! looks like**. [`crate::online`] owns the fourth, whether there is a peer. The
+//! looks like** -- with the line that says how meeting a peer is going, which
+//! goes to the same two places a crash does. [`crate::online`] owns the
+//! fourth, **how a peer is reached**. The
 //! fifth — whether there is a checkout to commit a tuning session to — belongs
 //! to the two files that want one, [`crate::bake`] and [`crate::hub`], which
 //! carry their own browser half and are the two exemptions in
@@ -287,6 +289,13 @@ mod host {
     /// Nothing to install: a panic already prints to the terminal the game was
     /// started from.
     pub fn report_panics() {}
+
+    /// The terminal the game was started from is the only place to say it.
+    pub fn announce(line: &str) {
+        if !line.is_empty() {
+            eprintln!("{line}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -362,10 +371,27 @@ mod host {
             }
         }));
     }
+
+    /// How meeting the other player is going, in `#online-status` beside the
+    /// share link -- where somebody waiting for a friend is looking, rather
+    /// than only on the canvas behind the mouse capture.
+    pub fn announce(line: &str) {
+        let element = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.get_element_by_id("online-status"));
+        if let Some(element) = element {
+            element.set_text_content(Some(line));
+        }
+        if !line.is_empty() {
+            web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(line));
+        }
+    }
 }
 
 use host::read_options;
-pub use host::{load_settings, load_trophies, report_panics, save_settings, save_trophies};
+pub use host::{
+    announce, load_settings, load_trophies, report_panics, save_settings, save_trophies,
+};
 
 // ---------------------------------------------------------------------------
 

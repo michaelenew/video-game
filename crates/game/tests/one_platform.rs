@@ -55,8 +55,10 @@ const ALLOWED: &[(&str, &str)] = &[
     ),
     (
         "online.rs",
-        "The peer. UDP on the desktop, and on wasm a `Driver` with one variant, \
-         so the browser build does not depend on `net` at all.",
+        "How the peer is reached: a UDP port to a typed-in address on the \
+         desktop, a room on a public broker and a WebRTC line in a page. Both \
+         come out as one `net::Rendezvous`, and this file is where the choice \
+         between them is made.",
     ),
     (
         "bake.rs",

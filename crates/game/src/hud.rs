@@ -44,6 +44,12 @@ pub struct HealthBar {
 #[derive(Component)]
 pub struct StateText(pub usize);
 
+/// How meeting the other player is going, or which side you are once you
+/// have. Under the round counter, small: it matters before the fight and at a
+/// glance during it.
+#[derive(Component)]
+pub struct OnlineText;
+
 /// The creature's health, and how close it is to losing its footing.
 ///
 /// One row rather than two, because they are read together: the question the
@@ -182,6 +188,24 @@ pub fn setup(mut commands: Commands) {
             .with_children(|row| {
                 spawn_meter(row, 12.0, QUARRY, QuarryBar);
                 spawn_meter(row, 5.0, POISE, PoiseBar);
+            });
+
+            root.spawn(Node {
+                width: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                margin: UiRect::top(Val::Px(6.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                row.spawn((
+                    Text::new(""),
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    TextColor(STEP),
+                    OnlineText,
+                ));
             });
 
             // Middle: the round banner, empty while fighting.
@@ -928,6 +952,17 @@ type ButtonQuery<'w, 's> = Query<
     Changed<Interaction>,
 >;
 
+/// The online line. Its own system because `update`'s queries are already
+/// carefully disjoint, and this text only changes when the line does.
+pub fn update_online(sim: Res<crate::Sim>, mut text: Query<&mut Text, With<OnlineText>>) {
+    let line = sim.driver.status().unwrap_or("");
+    for mut t in text.iter_mut() {
+        if t.0 != line {
+            *t = Text::new(line);
+        }
+    }
+}
+
 /// Click a picker to cycle that player's class.
 ///
 /// Restarts the match, exactly as Tab does, because a class change mid-round
@@ -938,7 +973,9 @@ pub fn class_buttons(
     show: Res<ShowClassButtons>,
     buttons: ButtonQuery,
 ) {
-    if !show.0 {
+    // A class change restarts the fight on this machine only; against a
+    // person the classes are the ones the link named.
+    if !show.0 || sim.driver.online() {
         return;
     }
     for (interaction, button, _) in buttons.iter() {

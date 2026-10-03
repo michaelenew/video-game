@@ -11,6 +11,10 @@ license.workspace = true
 anim = { path = "../anim" }
 hunt = { path = "../hunt" }
 manual = { path = "../manual" }
+# The peer, on both platforms: UDP to a typed-in address on a desktop, a room
+# on a public broker and a WebRTC line in a browser. `net` holds both, behind
+# one `Rendezvous`; `src/online.rs` picks.
+net = { path = "../net" }
 sim = { path = "../sim" }
 view = { path = "../view" }
 
@@ -23,9 +27,8 @@ view = { path = "../view" }
 bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "tonemapping_luts", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font"] }
 bevy_egui = { version = "0.34", default-features = false, features = ["render", "bevy_picking", "default_fonts"] }
 
-# On a desktop: an X11 window, threads to schedule systems across, and a peer.
+# On a desktop: an X11 window, and threads to schedule systems across.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-net = { path = "../net" }
 bevy = { version = "0.16", default-features = false, features = ["x11", "multi_threaded"] }
 
 # In a browser: WebGL 2 rather than WebGPU, because WebGL 2 is everywhere and
@@ -33,9 +36,10 @@ bevy = { version = "0.16", default-features = false, features = ["x11", "multi_t
 # can send to somebody. No `multi_threaded`: wasm threads need cross-origin
 # isolation headers, which GitHub Pages does not send.
 #
-# `web-sys` is here for the three browser facts the game needs and Bevy does
-# not hand over: the query string, local storage, and somewhere to print a
-# panic. See `src/platform.rs`.
+# `web-sys` is here for the four browser facts the game needs and Bevy does
+# not hand over: the query string, local storage, somewhere to print a panic,
+# and somewhere to say how meeting the other player is going. See
+# `src/platform.rs`.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.16", default-features = false, features = ["webgl2"] }
 wasm-bindgen = "0.2"

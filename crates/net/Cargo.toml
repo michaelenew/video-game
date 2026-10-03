@@ -8,16 +8,39 @@ license.workspace = true
 [dependencies]
 ggrs = { version = "0.11.1", features = ["sync-send"] }
 sim = { path = "../sim" }
-
-# `ggrs` plugs in here. It is not vendored yet because this environment cannot
-# reach crates.io; add it when working locally:
-#
-#   ggrs = "0.10"
-#
-# `Rollback` below is deliberately shaped like the GGRS session handler
-# (advance / save / load / checksum), so wiring it up is an impl block rather
-# than a redesign.
 serde = { version = "1", features = ["derive"] }
+# GGRS's own wire format. A socket that is not GGRS's UDP one -- a WebRTC data
+# channel, the shared UDP port in `meet::direct` -- has to put a `Message` into
+# bytes the same way, so it uses the same encoder at the version GGRS pins.
+bincode = "1.3"
+
+# In a browser: GGRS's clock and its random numbers come from JavaScript, and
+# the meeting point is reached through the browser's own WebSocket,
+# BroadcastChannel and WebRTC. See `src/browser.rs`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ggrs = { version = "0.11.1", features = ["sync-send", "wasm-bindgen"] }
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "BinaryType",
+    "BroadcastChannel",
+    "console",
+    "MessageEvent",
+    "RtcConfiguration",
+    "RtcDataChannel",
+    "RtcDataChannelInit",
+    "RtcDataChannelState",
+    "RtcDataChannelType",
+    "RtcIceGatheringState",
+    "RtcIceServer",
+    "RtcPeerConnection",
+    "RtcPeerConnectionState",
+    "RtcSdpType",
+    "RtcSessionDescription",
+    "RtcSessionDescriptionInit",
+    "WebSocket",
+] }
 
 [dev-dependencies]
 # GGRS ships a SyncTest session that replays with forced rollbacks and compares

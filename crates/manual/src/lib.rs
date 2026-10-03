@@ -82,7 +82,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",
-                "Peer-to-peer against someone else. Rollback netcode, no server.",
+                "Peer-to-peer against someone else, on a LAN or wherever their address reaches. Rollback netcode, no server. Both of you start it with the other's address; --port defaults to the peer's port, and the same port on both machines is fine. The two say hello before the match: whoever started first is player one, and two different builds or two different --p1/--p2/--arena are refused rather than desynced. You practise while you wait; restarts, class changes, pausing and stepping are off for the match.",
+            ),
+            e(
+                "cargo run -p game -- --room <name> [--board tabs] [--broker <url>]",
+                "Not on a desktop yet: rooms are the browser's (see below), because a desktop has no WebRTC yet. Says so and starts training.",
             ),
             e(
                 "cargo run -p manual",
@@ -97,15 +101,27 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "In a browser",
         in_browser: true,
-        blurb: "The same build, one player. A page cannot open a UDP socket, so peer-to-peer stays on the desktop; the query string does what the flags do.",
+        blurb: "The same build. Play a friend with a link; the query string does what the flags do.",
         entries: &[
             e(
                 "./crates/web/build-game.sh",
                 "Build the page. Writes target/web, which is what GitHub Pages serves.",
             ),
             e(
+                "?room=<name>",
+                "Play a friend: the page's Play with a friend button makes one, and you send them the link. Both of you open it, and the two pages find each other through free public message brokers and then connect directly (WebRTC) -- no server of ours, and nothing of the match goes through anyone else. Whoever opened it first is player one; the classes and arena are the link's, so put ?p1=, ?p2= and ?arena= in it before you send it. You practise while you wait. Some networks, often mobile data, will not take a direct connection; the page says so.",
+            ),
+            e(
+                "?room=<name>&board=tabs",
+                "The same, between two tabs of this browser and nothing else: the room is a BroadcastChannel instead of a broker. For trying it alone, and for the smoke test.",
+            ),
+            e(
+                "?room=<name>&broker=<url>",
+                "The same, through one MQTT broker of your choosing instead of the public three: a wss:// URL that takes WebSocket connections (ws:// for one on this machine). Both of you need the same one.",
+            ),
+            e(
                 "?p1=<class>&p2=<class>",
-                "Pick classes, the same names the flags take. Tab still cycles player one in game.",
+                "Pick classes, the same names the flags take. Tab still cycles player one in game, except in a match against a friend.",
             ),
             e(
                 "?hunt or ?hunt=<creature>",

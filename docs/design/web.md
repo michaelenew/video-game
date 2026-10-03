@@ -11,7 +11,8 @@ decided: 2026-09-14
 
 The same game, compiled to WebAssembly and pointed at a canvas instead of a
 window. Not a demo of it, not a cut-down version: the same simulation, the same
-renderer, the same controls, one player.
+renderer, the same controls -- and, since 2026-10-03, the same netcode: two
+people with a link play each other (§"Playing a friend from a link").
 
 It exists because of §8 of the [design README](README.md) — *play it against a
 person* — and because of what that costs to arrange today. Installing Rust,
@@ -39,7 +40,7 @@ it stops being either.
 Five things, and every one of them is in a file that exists to hold it rather
 than scattered through the crate:
 [`platform.rs`](../../crates/game/src/platform.rs) has three,
-[`online.rs`](../../crates/game/src/online.rs) has the peer, and `bake.rs` and
+[`online.rs`](../../crates/game/src/online.rs) has how the peer is reached, and `bake.rs` and
 `hub.rs` have the checkout. `crates/game/tests/one_platform.rs` is what makes
 that true rather than merely written down — it fails on a `std::env`,
 `std::fs`, `std::net`, `std::process` or `std::thread` anywhere else in `game`.
@@ -63,13 +64,10 @@ The **trophy record** (world W1) is kept the same way under its own key,
 `arena.trophies`, beside `~/.config/arena/trophies.conf` on the desktop -- the
 same text in both, so a person can read which creatures they have beaten.
 
-**There is no peer.** A page cannot open a UDP socket, so `Driver` has one
-variant on wasm and `net` is not a dependency of the browser build at all. This
-was the known cost going in and it is an acceptable one: the browser is for
-*seeing* the game, and the training dummy on `1`–`4` is enough to feel a class
-out. Two players on one keyboard still works — dummy mode `4` hands player two
-the second key set — so a browser can seat two people on a sofa, just not two
-people in two cities.
+**There is no UDP socket.** So the peer is reached another way: a room on a
+public message broker to meet, and a WebRTC data channel to play over. Same
+`Driver::Online`, same GGRS session; only the way of meeting differs, and
+`online.rs` is where it is chosen. See §"Playing a friend from a link".
 
 **There is no checkout.** The Oven still opens on `F7` and every number in it
 still moves live, which is most of what the Oven is for: you can try a tuning
@@ -199,27 +197,101 @@ only checks, and they still run on a person's machine before a push.
 Locally, `python3 -m http.server --directory target/web 8080`. Opening the file
 directly will not work — ES modules and `fetch` both need an origin.
 
-## Getting the second player back
+## Playing a friend from a link
 
-Rollback does not care what carries the inputs. GGRS takes a transport, the wire
-format is two bytes per player per frame, and the browser has WebRTC data
-channels, which are UDP-like and can be unordered and unreliable — which is what
-rollback wants. What it needs that the desktop build does not is a signalling
-server for the handshake, which is a small always-on service and therefore a
-different kind of commitment from "no server".
+*Built 2026-10-03.* What a person does:
 
-Not now, and not blocking anything: the open question this build exists to
-answer is whether the fight is any good, and one person and a dummy answers a
-surprising amount of it.
+1. Opens the page and presses **Play with a friend**. The URL gains
+   `?room=k3x9qw` -- six random letters -- and the page shows that link with a
+   Copy button.
+2. Sends it. Their friend opens it.
+3. Both pages say *Online: you are player one / two*, and the match starts from
+   the beginning. Whoever opened the room first is player one.
+
+While waiting, the fight runs as training, so the wait is practice. The match
+then starts from the world the link describes, not from wherever practice got
+to: classes and arena are the link's (`&p1=`, `&p2=`, `&arena=`), and in a
+match the training tools that edit the world on one machine -- Tab, Backspace,
+pause, stepping, rewind, the class pickers -- are switched off rather than
+allowed to desync it. `H` and `T` still work, because they travel on the wire.
+
+### How the two pages find each other
+
+Two browsers cannot talk directly until each knows how to reach the other, and
+learning that takes one note each way -- an *offer* and an *answer*, in
+WebRTC's words. Something has to carry those two notes. Three options were on
+the table: copy and paste them by hand, run a small server of our own, or
+borrow public infrastructure. **The third, for now**: free public MQTT brokers
+(`broker.emqx.io`, `broker.hivemq.com`, `test.mosquitto.org`), which any page
+can reach over a WebSocket. A room is a topic; every note goes to all three, so
+one being down does not close the room. Google's and Cloudflare's public STUN
+servers tell each page what its address looks like from outside its router.
+None of them carries a frame of the match: once the data channel is open, the
+two browsers talk to each other and nobody else.
+
+### Built in three seams, so any one can be swapped
+
+`crates/net/src/meet.rs`:
+
+| Seam | What it is | Today | Slots in later |
+| --- | --- | --- | --- |
+| `Board` | Where strangers leave notes under a room name | Public MQTT brokers (`browser::public`); any one broker (`browser::brokers`, `?broker=wss://…`); two tabs of one browser (`browser::tabs`, `?board=tabs`); the UDP port itself on a desktop (`direct`) | Our own signalling server; Nostr relays; copy and paste |
+| `Line` | The direct connection, opened by trading an offer and an answer | WebRTC data channel, unordered and never resent (`browser::RtcLine`); UDP (`direct::UdpLine`) | WebRTC on the desktop, so a desktop can play a browser; a TURN relay |
+| `Rendezvous` | The whole meeting, polled once a frame until it hands GGRS a socket | `Room<B: Board, L: Line>` | Matchmaking; a lobby |
+
+`Room` is the protocol and it is four lines of text, which is why a board can be
+anything that carries text. Every note is repeated until what it asked for has
+happened, because a public broker delivers at most once. A hello carries the
+**terms** -- the build stamp and the checksum of the starting world, which
+covers both classes, the arena and every tuned number -- and a room never
+answers a hello with different terms: two pages from different deploys, or one
+with a different `?p1=`, are told so rather than left to desync. The peer with
+the lower random id makes the offer, and the offer says who is player one, so
+the seats are decided once, by one side, and cannot come out differently on the
+two machines. Offers are numbered: a page only speaks from its frame loop, a
+frame can take seconds, and an offerer that gave up and started over must never
+be handed the answer to its previous offer, which describes a connection that
+no longer exists. (The first two-tab run found exactly that.) `crates/net/tests/meet.rs` runs the whole protocol and a real
+GGRS match in memory, with notes lost at random.
+
+The desktop's `--port`/`--peer` is the same `Room` over a board and a line that
+are both the one UDP port. That also fixed a bug: seats used to come from
+ordering the two addresses, and each machine knew its own only as
+`127.0.0.1`, so on two real machines both claimed player one.
+
+### What it does not do yet
+
+- **Some network pairs will not connect.** Mobile data and strict office or
+  school networks often refuse direct connections. That needs a TURN relay,
+  which carries the match and costs money to run. The page says so in a
+  sentence rather than hanging.
+- **The notes are public.** Anyone subscribed to the same topic on a public
+  broker can read the two notes, which contain each player's network addresses.
+  Six random letters keep strangers from stumbling into a room, not from
+  watching one. Encrypting the notes with a key derived from the room name is
+  the next step if that matters.
+- **Rooms are two players, and a desktop cannot join one.** A third visitor
+  waits until one of the two leaves. A desktop has no WebRTC yet, so it plays
+  desktops by address and browsers not at all; `Line` is where that goes.
+- **The link chooses both classes.** A lobby where each picks their own is a
+  `Rendezvous` that trades one more note.
+- **Public brokers promise nothing.** Swapping them for one we run is one
+  constant, `browser::BROKERS`, and `?broker=` tries one without a rebuild.
+- **A tab in the background stops.** Browsers pause a hidden tab's frames, and
+  the meeting and the match both run on frames. Waiting with the tab hidden is
+  fine -- the room is still there when you come back -- but hiding it mid-match
+  drops the connection.
 
 ## What this build cannot tell you
 
 Worth being clear, because a link is easy to over-read:
 
-- **Nothing about netplay.** No rollback, no prediction, no desync. Those are
-  tested by `net`'s SyncTest and by two desktops.
+- **Less about netplay than it looks.** Two tabs on one machine
+  (`crates/web/room-smoke.mjs`) prove the pages meet and play, but with no
+  latency to roll back over. Real latency is two people on two networks.
 - **Nothing conclusive about performance.** The browser is slower and
   single-threaded. A frame that misses here may be fine natively.
-- **Nothing about the versus match.** One player, on a dummy that stands still,
-  blocks, or attacks on a seventy-frame cadence. It answers *does this class feel
-  like anything*, not *is this matchup fair*.
+- **Only as much about the versus match as you bring a friend for.** Alone it
+  is one player on a dummy that stands still, blocks, or attacks on a
+  seventy-frame cadence: *does this class feel like anything*, not *is this
+  matchup fair*.

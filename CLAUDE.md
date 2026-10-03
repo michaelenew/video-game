@@ -174,7 +174,8 @@ you reverted.
 five things, each of which lives in a file that exists to hold it.** Where a
 run's settings come from (argv, or the query string — `?dev` is `--dev`), where
 a player's settings are kept (a file, or local storage) and where a panic can be
-read are `crates/game/src/platform.rs`. Whether there is a peer is `online.rs`.
+read are `crates/game/src/platform.rs`. How the peer is reached (UDP, or a
+public broker and WebRTC) is `online.rs`.
 Whether there is a checkout to commit a bake to is `bake.rs` and `hub.rs`.
 Enforced by `crates/game/tests/one_platform.rs`, which fails on `std::env`,
 `std::fs`, `std::net`, `std::process`, `std::thread` or `web_sys` anywhere else

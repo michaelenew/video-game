@@ -1,13 +1,15 @@
 //! Two real peer-to-peer sessions on localhost.
 //!
-//! Spawns two GGRS P2P sessions on separate UDP ports, runs a match between
-//! them, and checks they agree. This is the closest thing to a real network
+//! Spawns two peers on separate UDP ports, lets them meet the way two desktops
+//! do (`net::direct`: a hello each way, then an offer and an answer), runs a
+//! match between them, and checks they agree. This is the closest thing to a real network
 //! test that fits on one machine: real sockets, real packets, real input
 //! prediction and rollback -- only the latency is missing.
 //!
 //!     cargo run -p net --bin p2p_localhost
 
-use net::{NetInput, handle_requests, p2p};
+use net::meet::{Rendezvous, fresh_id};
+use net::{NetInput, Progress, direct::Direct, handle_requests, p2p};
 use sim::{Input, World};
 use std::net::SocketAddr;
 use std::sync::mpsc;
@@ -21,20 +23,11 @@ fn main() {
     let a: SocketAddr = format!("127.0.0.1:{PORT_A}").parse().unwrap();
     let b: SocketAddr = format!("127.0.0.1:{PORT_B}").parse().unwrap();
 
-    // Both peers derive the same answer from the same two addresses.
-    let handle_a = p2p::local_handle_for(a, b);
-    let handle_b = p2p::local_handle_for(b, a);
-    assert_ne!(
-        handle_a, handle_b,
-        "both peers claimed the same player slot"
-    );
-    println!("peer A is player {handle_a}, peer B is player {handle_b}");
-
     let (tx, rx) = mpsc::channel();
     let tx2 = tx.clone();
 
-    let ta = std::thread::spawn(move || run_peer("A", PORT_A, b, handle_a, tx));
-    let tb = std::thread::spawn(move || run_peer("B", PORT_B, a, handle_b, tx2));
+    let ta = std::thread::spawn(move || run_peer("A", PORT_A, b, tx));
+    let tb = std::thread::spawn(move || run_peer("B", PORT_B, a, tx2));
 
     let ra = ta.join().expect("peer A panicked");
     let rb = tb.join().expect("peer B panicked");
@@ -50,6 +43,10 @@ fn main() {
         ra.advanced > 0 && rb.advanced > 0,
         "no frames were simulated"
     );
+    assert_ne!(
+        ra.handle, rb.handle,
+        "both peers claimed the same player slot"
+    );
     assert_eq!(ra.frame, rb.frame, "peers ended on different frames");
     assert_eq!(
         ra.checksum, rb.checksum,
@@ -62,6 +59,7 @@ fn main() {
 }
 
 struct Outcome {
+    handle: usize,
     frame: u32,
     checksum: u64,
     advanced: u32,
@@ -71,10 +69,25 @@ fn run_peer(
     name: &'static str,
     port: u16,
     remote: SocketAddr,
-    local_handle: usize,
     _log: mpsc::Sender<String>,
 ) -> Outcome {
-    let mut session = p2p::start(port, remote, local_handle).expect("session");
+    let mut room = Direct::bind(port)
+        .expect("bind")
+        .toward(remote, fresh_id(), "p2p-localhost");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let start = Instant::now();
+    let seat = loop {
+        match room.poll(start.elapsed().as_millis() as u64) {
+            Progress::Ready(seat) => break seat,
+            Progress::Failed(why) => panic!("{name}: {why}"),
+            Progress::Waiting(_) => {}
+        }
+        assert!(Instant::now() < deadline, "{name}: the peers never met");
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let local_handle = seat.handle;
+    println!("{name}: met, player {}", local_handle + 1);
+    let mut session = p2p::start(seat).expect("session");
     let mut world = World::new();
     let mut advanced = 0u32;
 
@@ -140,6 +153,7 @@ fn run_peer(
     }
 
     Outcome {
+        handle: local_handle,
         frame: world.frame,
         checksum: world.checksum(),
         advanced,
