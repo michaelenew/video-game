@@ -72,6 +72,10 @@ pub mod galewing;
 
 pub mod siegeshell;
 
+pub mod lab;
+
+pub mod climb;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -98,6 +102,17 @@ impl ArenaId {
     pub const RANGE: ArenaId = ArenaId(11);
     /// The Hornback's second arena: the crossing, its defend variant (P7).
     pub const HORNBACK_CROSSING: ArenaId = ArenaId(12);
+    /// A dev arena for measuring movement: see [`lab`] and `crate::envelope`.
+    pub const LAB: ArenaId = ArenaId(13);
+    /// **The jump courses** (`docs/design/courses.md`): no creature, the
+    /// movement system is the challenge. Two at each tier, all in [`climb`],
+    /// each with its own `crate::course::Course`.
+    pub const CLIMB_STAIR: ArenaId = ArenaId(14);
+    pub const CLIMB_CAUSEWAY: ArenaId = ArenaId(15);
+    pub const CLIMB_CLIMB: ArenaId = ArenaId(16);
+    pub const CLIMB_DRIFT: ArenaId = ArenaId(17);
+    pub const CLIMB_SPIRE: ArenaId = ArenaId(18);
+    pub const CLIMB_GULF: ArenaId = ArenaId(19);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -107,7 +122,7 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 13;
+pub const COUNT: usize = 20;
 
 /// The most solids an arena may have. Every query walks all of them, several
 /// times a frame per body, so this is what keeps a large arena inside the
@@ -145,6 +160,15 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::GALEWING => Some(&galewing::ARENA),
         ArenaId::SIEGESHELL => Some(&siegeshell::ARENA),
+
+        ArenaId::LAB => Some(&lab::ARENA),
+
+        ArenaId::CLIMB_STAIR => Some(&climb::STAIR),
+        ArenaId::CLIMB_CAUSEWAY => Some(&climb::CAUSEWAY),
+        ArenaId::CLIMB_CLIMB => Some(&climb::CLIMB),
+        ArenaId::CLIMB_DRIFT => Some(&climb::DRIFT),
+        ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
+        ArenaId::CLIMB_GULF => Some(&climb::GULF),
         _ => None,
     }
 }

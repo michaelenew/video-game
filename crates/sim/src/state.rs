@@ -1199,6 +1199,10 @@ pub struct World {
     /// is. See [`crate::lore`]. Blank, and not hashed, in a fight that uses
     /// none of it.
     pub lore: Lore,
+    /// **A jump course's runs**, one per fighter: the furthest gate reached,
+    /// the falls, the clock (`crate::course`). All zero, and not hashed, in an
+    /// arena that is not a course.
+    pub course: [crate::course::Run; MAX_PLAYERS],
 }
 
 impl World {
@@ -1221,6 +1225,7 @@ impl World {
             critters: Critters::NONE,
             pack: None,
             lore: Lore::NONE,
+            course: [crate::course::Run::default(); MAX_PLAYERS],
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1407,11 +1412,47 @@ impl World {
                 crate::species::lookup(species)?;
                 World::hunt_of(classes, species).tempered(temper)
             }
+            // A course, or any arena: an unregistered one is no trip, for
+            // the reason an unregistered creature is not.
+            Destination::Arena(place) => {
+                arena::lookup(place)?;
+                World::versus_in(classes, place)
+            }
         };
         Some(World {
             frame: self.frame,
             ..world
         })
+    }
+
+    /// **One frame of a jump course** (`crate::course`): for each fighter,
+    /// has she fallen into the pit, left the start, reached a gate? A fall
+    /// stands her on the last gate she reached as a round would -- fresh,
+    /// with whatever she had out taken back -- and keeps the clock running.
+    /// A no-op in an arena that is not a course.
+    fn step_course(&mut self) {
+        let Some(course) = crate::course::of(self.arena) else {
+            return;
+        };
+        for i in 0..MAX_PLAYERS {
+            let event =
+                crate::course::step(course, &mut self.course[i], self.players[i].pos, self.frame);
+            if let crate::course::Event::Fell(gate) = event {
+                let gate = gate.min(course.finish());
+                let (stand, facing) = (course.gate(gate).stand(), course.facing(gate));
+                let p = &mut self.players[i];
+                let (wins, class) = (p.rounds_won, p.class);
+                *p = Player {
+                    pos: stand,
+                    facing,
+                    rounds_won: wins,
+                    ..Player::new(class)
+                };
+                if let Mechanic::Shadow(_) = p.mechanic {
+                    p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+                }
+            }
+        }
     }
 
     /// Is there anything to hunt? The one condition friendly fire, targets and
@@ -1438,6 +1479,8 @@ impl World {
         self.bolts = [None; MAX_BOLTS];
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
+        // A course's runs start again with the round, clock and all.
+        self.course = [crate::course::Run::default(); MAX_PLAYERS];
         let here = self.arena();
         // The hunt's lore starts again with the round: nothing on the floor,
         // nothing heard, every defended thing whole and back at its start.
@@ -2305,6 +2348,11 @@ impl World {
             self.pack = Some(brain);
         }
 
+        // A jump course: a fall stands you back on the last gate you reached,
+        // and reaching a gate is the run's. After every body has moved, so a
+        // fall is read against where the frame left them.
+        self.step_course();
+
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
@@ -2610,6 +2658,15 @@ impl World {
         // arenas were data, and the pinned hunts still mean what they say.
         if self.arena != ArenaId::PROVING_GROUND {
             h.write_u32(0xA0 | (self.arena.0 as u32) << 8);
+        }
+        // A course's runs, only in a course: every other fight hashes exactly
+        // as it did before there were any.
+        if crate::course::of(self.arena).is_some() {
+            for r in &self.course {
+                h.write_u32(r.reached as u32 | (r.falls as u32) << 8);
+                h.write_u32(r.started);
+                h.write_u32(r.time);
+            }
         }
         // The pack and its bodies, last, and only when there is one: a fight
         // without small bodies hashes exactly as it did before there were any.
