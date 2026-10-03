@@ -13,14 +13,14 @@
 //! first is **the foot**, a spire standing on the floor, because a round
 //! starts on the ground under a mark.
 //!
-//! | Course | Tier | Read | The asks |
-//! | --- | --- | --- | --- |
-//! | The Stair (`stair`) | easy | An easy ascent: six islands, each a little higher, every gap well inside a plain jump for every class. | up 1 m, up 1.5 m, up 2 m, up 2.5 m, level 4 m, up 2 m, the nest |
-//! | The Causeway (`causeway`) | easy | An easy crossing, read horizontally and drifting down: level gaps, two stepping stones and a long bridge. | level 4.5 m, down 1 m, 5 m, stepping stone, stepping stone, down 2 m, 5.5 m, the bridge, level 5 m, the far island |
-//! | The Climb (`climb`) | hard | The hard ascent to the rookery: every hop near the edge of the shortest jumps' airdodge, stepping stones, a gap under an overhang, the arch. | up 2 m, 6 m, stepping stone, up 1 m, stepping stone, up 1 m, stepping stone, up 1 m, up 4 m, 3.6 m, level 7 m, 2.5 m under the overhang, down 2 m onto the arch, up 3 m, 5 m, the rookery |
-//! | The Drift (`drift`) | hard | The hard crossing: long gaps between islands at about one height, drifting down, every one past a plain jump for the shortest jumpers. | level 7.2 m, down 2 m, 7.8 m, level 7.4 m, stepping stone, stepping stone, stepping stone, down 4 m, 8.5 m, up 2 m, 6 m, down 1 m, 7 m, the far island |
-//! | The Spire (`spire`) | edge | Barely possible, built against the Elementalist: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out. | up 1 m, 5 m, up 1 m, 5 m: the launch, up 32 m, half a metre out: the spire |
-//! | The Gulf (`gulf`) | edge | Barely possible, built against the Reaver: gaps too wide to jump, crossed by a shadow on a stone a metre across and the dash jump off it, and a last island higher than any jump and nearer than the reach of the shadow. | level 6 m, 7.5 m onto a stone a metre across, 9 m and up 1.5 m off the stone, down 3 m, 7.5 m, onto a stone, up 1 m off the stone, 8 m, up 5 m, 8.2 m: the far nest |
+//! | Course | Tier | What it is |
+//! | --- | --- | --- |
+//! | The Stair (`stair`) | easy | An easy ascent: six islands, each a little higher, every gap well inside a plain jump for every class. |
+//! | The Causeway (`causeway`) | easy | An easy crossing, read horizontally and drifting down: level gaps, two stepping stones and a long bridge. |
+//! | The Climb (`climb`) | hard | The hard ascent to the rookery: every hop near the edge of the shortest jumps' airdodge, stepping stones, a gap under an overhang, the arch. |
+//! | The Drift (`drift`) | hard | The hard crossing: long gaps between islands at about one height, drifting down, every one past a plain jump for the shortest jumpers. |
+//! | The Spire (`spire`) | edge | Barely possible, built against the Elementalist: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out. |
+//! | The Gulf (`gulf`) | edge | Barely possible, built against the Reaver: gaps too wide to jump, crossed by a shadow on a stone a metre across and the dash jump off it, and a last island higher than any jump and nearer than the reach of the shadow. |
 //!
 //! **Generated from a list of hops** -- a direction, the gap from the last
 //! island's edge, the rise from its top, the size -- so each route's numbers

@@ -74,7 +74,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --arena <name>",
-                "Fight in another arena: proving_ground (the default), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
+                "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, climb, drift, spire, gulf), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
                 "cargo run -p game -- --hunt <creature> --temper <n>",
@@ -113,7 +113,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?arena=<name>",
-                "Fight in another arena, exactly as --arena does: proving_ground or range.",
+                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, climb, drift, spire, gulf.",
             ),
             e(
                 "?temper=<n>",
@@ -408,6 +408,29 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "The red strip",
                 "The ridge: unarmoured, and out of reach from the ground. Enough damage there puts the creature on its side.",
+            ),
+        ],
+    },
+    Section {
+        title: "Jump courses",
+        in_browser: true,
+        blurb: "Islands of rock hanging over a long drop, nothing to fight: the movement system is the challenge. Two easy, two hard, two barely possible; docs/design/courses.md has every hop and which classes clear it.",
+        entries: &[
+            e(
+                "N",
+                "The next jump course, in order of difficulty: the Stair and the Causeway (easy), the Climb and the Drift (hard -- every class can finish them, none with much to spare), the Spire and the Gulf (barely possible: built against the Elementalist and the Reaver). From anywhere else, the first. Online, both players go together.",
+            ),
+            e(
+                "--arena stair, ?arena=stair",
+                "Start in a course by name: stair, causeway, climb, drift, spire or gulf. With --p1 (or ?p1=) for the class.",
+            ),
+            e(
+                "Falling",
+                "Below the islands is a long way down. Fall and you are stood back on the last checkpoint you reached, fresh, with whatever you had out taken back; the clock keeps running. Backspace starts the course again.",
+            ),
+            e(
+                "The panel on the right",
+                "Every course, the one you are in, the last checkpoint you reached, the clock from leaving the start, and how often you fell. The clock stops at the finish: the nest on the last island.",
             ),
         ],
     },

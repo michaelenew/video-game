@@ -339,11 +339,16 @@ pub fn widest(paths: &[Path], rise: Fx) -> Option<Fx> {
 
 /// Every airdodge timing worth trying: one every three frames through the
 /// airtime.
+///
+/// The plain jump is among them, so the best of the set is the best a
+/// player can do with or without it.
 pub fn airdodge_paths(class: Class) -> Vec<Path> {
-    (1..60u32)
+    let mut out: Vec<Path> = (1..60u32)
         .step_by(3)
         .map(|k| off_the_edge(class, Extra::Airdodge(k)))
-        .collect()
+        .collect();
+    out.push(off_the_edge(class, Extra::Nothing));
+    out
 }
 
 // ---------------------------------------------------------------------------

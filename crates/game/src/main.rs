@@ -3199,6 +3199,11 @@ fn tick_sim(
             picker::toggle(&sim.cur)
         };
     }
+    // `N`: the next jump course, in order of difficulty. The same trip on the
+    // wire as `H`, with the arena in the byte. See `picker::next_course`.
+    if keys.just_pressed(KeyCode::KeyN) {
+        sim.travel = picker::next_course(&sim.cur);
+    }
     // `T`: the same creature at the next temper on offer -- earned by beating
     // the one below it, or any of them with `--temper`. The same trip on the
     // wire as `H`, with the temper in the byte. See `picker::temper`.

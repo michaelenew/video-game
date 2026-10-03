@@ -33,3 +33,17 @@ creature placed winding that move up at player one.
 | ![](broodmother-telegraph.jpg) **Broodmother, the slam**: her footprint drawn on the floor. | ![](veilstalker-telegraph.jpg) **Veilstalker, the tail spear**: the shimmer and the lane — all you see of it. |
 | ![](mantis-telegraph.jpg) **Mantis, the lunge**: its lane down the court. | ![](galewing-telegraph.jpg) **Galewing, the Stoop**: the circle where it will hit, the bird above. |
 | ![](siegeshell-telegraph.jpg) **Siegeshell, the stamp**: the foot over you and its disc. | |
+
+## The jump courses
+
+Taken 2026-10-03 with `GAME_ARGS="--arena <name> --p1 <class> --p2 <class>"`,
+`SHOT_FRAME=60`, `DEMO=0` and a `SHOT_PITCH` per course; see
+[courses.md](../courses.md). The panel at the right is the course list and the
+run.
+
+| | |
+| --- | --- |
+| ![](course-stair.jpg) **The Stair** (easy), the Champion on the foot. | ![](course-causeway.jpg) **The Causeway** (easy), the Blood mage. |
+| ![](course-climb.jpg) **The Climb** (hard), the Reaver: the islands up to the rookery. | ![](course-drift.jpg) **The Drift** (hard), the Dual mage: the long gaps drifting down. |
+| ![](course-spire.jpg) **The Spire** (barely possible), looking up at the rookery's underside 32 m above. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver. |
+

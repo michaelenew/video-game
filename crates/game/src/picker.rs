@@ -147,6 +147,47 @@ pub fn next(w: &World) -> Travel {
     Travel::hunt(to)
 }
 
+/// `N`: the next jump course, in order of difficulty -- easy, hard, barely
+/// possible -- wrapping, and the first from anywhere that is not a course.
+/// The same trip on the wire as `H`, with the arena in the byte
+/// (`sim::input::Travel::arena`). See `docs/design/courses.md`.
+pub fn next_course(w: &World) -> Travel {
+    Travel::arena(sim::course::after(w.arena).arena)
+}
+
+/// The course panel, in a course: every course, which one this is, and how
+/// the run is going -- the furthest checkpoint, the clock, the falls.
+pub fn course_panel(w: &World) -> Option<String> {
+    let here = sim::course::of(w.arena)?;
+    let run = w.course[0];
+    let mut out = String::from("N next course   Backspace restart\n");
+    for c in sim::course::all() {
+        out.push_str(&format!(
+            "{} {:<14} {}{}\n",
+            if c.arena == w.arena { ">" } else { " " },
+            c.name,
+            c.tier.name(),
+            c.for_class
+                .map_or(String::new(), |k| format!(" ({})", k.name())),
+        ));
+    }
+    let tenths = run.clock(w.frame) * 10 / sim::TICK_HZ;
+    out.push_str(&format!(
+        "\n{} -- {}\n{}  {}.{}s  falls {}\n",
+        here.name,
+        here.tier.name(),
+        if run.finished() {
+            "FINISHED".to_string()
+        } else {
+            format!("checkpoint {}/{}", run.reached, here.finish())
+        },
+        tenths / 10,
+        tenths % 10,
+        run.falls,
+    ));
+    Some(out)
+}
+
 /// `T`: the creature being hunted again, at the next temper on offer --
 /// wrapping back to as tuned. `any` is `--temper`, which offers every one.
 /// Nothing outside a hunt, where there is nothing to temper.
@@ -167,7 +208,10 @@ pub fn numeral(t: u8) -> &'static str {
 /// dev species is listed only while it is the one being hunted.
 pub fn listing(w: &World, trophies: &Trophies, any: bool) -> String {
     let hunted = w.hunted().into_iter().flatten().next();
-    let mut out = String::from("H hunt/versus   Shift+H next   T temper\n");
+    if let Some(panel) = course_panel(w) {
+        return panel;
+    }
+    let mut out = String::from("H hunt/versus   Shift+H next   T temper   N courses\n");
     for sp in species::all().filter(|s| !s.id.is_dev() || hunted == Some(s.id)) {
         let here = hunted == Some(sp.id);
         let won: Vec<&str> = (0..sim::temper::TEMPERS)
@@ -403,5 +447,36 @@ mod tests {
             next(&gnats).destination(),
             Some(sim::input::Destination::Hunt(SpeciesId::GNATS, 0))
         );
+    }
+
+    #[test]
+    fn n_steps_through_the_courses_and_the_panel_follows() {
+        let versus = World::with_classes([Class::Champion; 2]);
+        let mut w = versus;
+        let mut seen = Vec::new();
+        for _ in 0..sim::course::all().count() {
+            let Some(sim::input::Destination::Arena(a)) = next_course(&w).destination() else {
+                panic!("N went nowhere");
+            };
+            seen.push(a);
+            w = World::versus_in([Class::Champion; 2], a);
+            let panel = course_panel(&w).expect("a course without a panel");
+            let here = sim::course::of(a).expect("N went somewhere that is not a course");
+            assert!(panel.contains(&format!("> {}", here.name)), "{panel}");
+            assert!(panel.contains("checkpoint 0/"), "{panel}");
+        }
+        for c in sim::course::all() {
+            assert!(seen.contains(&c.arena), "N never reached {}", c.name);
+        }
+        // Outside a course the creature list is shown, and offers the key.
+        let list = listing(
+            &World::with_classes([Class::Champion; 2]),
+            &Trophies::default(),
+            false,
+        );
+        assert!(list.contains("N courses"), "{list}");
+        // And the names the flags take start one.
+        let s = start(false, None, Some("climb"), None);
+        assert_eq!(s.arena, Some(sim::arena::ArenaId::CLIMB_CLIMB));
     }
 }
