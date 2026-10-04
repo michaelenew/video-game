@@ -133,9 +133,9 @@ ground, so a fight there hashes as it always did.
   metre past it from 8 m below its top to 45 m above, and an open floor.
   `cargo run -p sim --bin envelope` searches every class in it
   ([courses.md](courses.md) §3).
-- **The jump courses** (`arena/climb.rs`, 2026-10-03; hand-authored 2026-10-04): eight arenas of rock
+- **The jump courses** (`arena/climb.rs`, 2026-10-03; hand-authored 2026-10-04): nine arenas of rock
   islands hanging sixty metres and more over a pit, no creature -- the Stair, the Causeway, the
-  Spiral, the Falls, the Slalom, the Fork, the Spire, the Gulf. Each is also a `course::Course`, a
+  Spiral, the Falls, the Slalom, the Fork, the Spire, the Gulf, and the Reach, a proving ground of marked distances. Each is also a `course::Course`, a
   route of islands with checkpoints; see [courses.md](courses.md). The first
   arenas made mostly of **hanging** solids: every island is a floor on top and
   a ceiling underneath, through the same resolve as a cave's vault.

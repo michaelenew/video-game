@@ -115,6 +115,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::CLIMB_FORK => &climb::FORK,
         ArenaId::CLIMB_SPIRE => &climb::SPIRE,
         ArenaId::CLIMB_GULF => &climb::GULF,
+        ArenaId::CLIMB_REACH => &climb::REACH,
         _ => &proving_ground::DRESSING,
     }
 }

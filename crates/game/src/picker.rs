@@ -185,6 +185,11 @@ pub fn course_panel(w: &World) -> Option<String> {
         tenths % 10,
         run.falls,
     ));
+    if !here.note.is_empty() {
+        out.push('\n');
+        out.push_str(here.note);
+        out.push('\n');
+    }
     Some(out)
 }
 

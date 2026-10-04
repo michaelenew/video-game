@@ -22,6 +22,7 @@
 //! | The Fork (`fork`) | hard | Hard (a guess): a hub with two ways on -- a high road up stacked ledges and along the tops, a low road of stepping stones -- that meet again; a committed leap down onto a big landing; a long runway to the nest. |
 //! | The Spire (`spire`) | edge | Barely possible (a guess), the Elementalist's: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out. |
 //! | The Gulf (`gulf`) | edge | Barely possible (a guess): an expert line in the open -- a runway, then eight-, seven- and six-metre leaps onto ever smaller stones, and a last nine-metre leap down to the nest. |
+//! | The Reach (`reach`) | proving | A proving ground (unplayed): one hub, gap lanes of 10 to 50 m off its front, ledges 5 to 45 m up behind it, two long-and-up targets and two Grasp faces, each marked at its takeoff by a block per five metres. A fall stands you back on the hub. |
 //!
 //! **Authored by hand** (round four), as places to play rather than to
 //! measure: a spiral round a pillar, an arch and a waterfall of stones, a
@@ -30,15 +31,21 @@
 //! scenery grey rock. Every tier is the author's guess, waiting on play.
 //! The easy two and the Spire are older, built from lists of hops; the rest
 //! from small builders in the generator.
+//!
+//! **Round five** put jumps well beyond a plain run and jump into the hard
+//! courses and the Gulf -- some on the route, some as shortcuts -- each onto a
+//! big top with a checkpoint before it, for trying the class mechanics; and
+//! added the Reach, a proving ground of marked distances
+//! (`Course::note` says where they are, on the course panel).
 
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::class::Class;
 use crate::course::{Course, Step, Tier};
 
-use Material::{Grass, Peat, Rock, Sand, Snow, Wood};
+use Material::{Grass, Peat, Rock, Sand, Snow, Stone, Wood};
 
 /// Every course, in the order `N` steps through them: by tier.
-pub static COURSES: [&Course; 8] = [
+pub static COURSES: [&Course; 9] = [
     &STAIR_COURSE,
     &CAUSEWAY_COURSE,
     &SPIRAL_COURSE,
@@ -47,6 +54,7 @@ pub static COURSES: [&Course; 8] = [
     &FORK_COURSE,
     &SPIRE_COURSE,
     &GULF_COURSE,
+    &REACH_COURSE,
 ];
 
 /// Both fighters start on the foot, side by side, facing out along `+x`.
@@ -98,6 +106,7 @@ static STAIR_COURSE: Course = Course {
     tier: Tier::Easy,
     for_class: None,
     pit: 6200,
+    note: "",
     route: &[
         Step {
             solid: 0,
@@ -193,6 +202,7 @@ static CAUSEWAY_COURSE: Course = Course {
     tier: Tier::Easy,
     for_class: None,
     pit: 7100,
+    note: "",
     route: &[
         Step {
             solid: 0,
@@ -262,7 +272,7 @@ pub static SPIRAL: Arena = Arena {
     id: ArenaId::CLIMB_SPIRAL,
     name: "Spiral",
     creature: None,
-    bounds: Bounds::cm((-2300, 4100), (-2800, 2800)),
+    bounds: Bounds::cm((-2300, 4100), (-3400, 4000)),
     floor: Peat,
     regions: &[],
     solids: &SPIRAL_SOLIDS,
@@ -270,9 +280,11 @@ pub static SPIRAL: Arena = Arena {
     sites: &[],
 };
 
-const SPIRAL_SOLIDS: [Solid; 23] = [
+const SPIRAL_SOLIDS: [Solid; 26] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 6800, 300], Rock),
+    // the pad: raise a stone here for the chimney
+    Solid::cm([-300, 6500, -1100], [300, 6800, -500], Grass),
     // ledge 1 round the pillar
     Solid::cm([575, 6760, -570], [725, 6880, -330], Grass),
     // ledge 2 round the pillar
@@ -305,6 +317,8 @@ const SPIRAL_SOLIDS: [Solid; 23] = [
     Solid::cm([575, 7840, 280], [725, 7960, 420], Sand),
     // ledge 16 round the pillar
     Solid::cm([780, 7930, 575], [920, 8050, 725], Sand),
+    // the shelf: 9 m up and 6 m out from ledge 5 (Grasp, vault)
+    Solid::cm([950, 7750, 1300], [1550, 8050, 1900], Snow),
     // ledge 17 round the pillar
     Solid::cm([1180, 8020, 575], [1320, 8140, 725], Snow),
     // ledge 18 round the pillar
@@ -313,6 +327,8 @@ const SPIRAL_SOLIDS: [Solid; 23] = [
     Solid::cm([1875, 8200, 380], [2025, 8320, 520], Sand),
     // ledge 20 round the pillar
     Solid::cm([1875, 8290, -20], [2025, 8410, 120], Sand),
+    // the chimney: 17 m straight up off the pad
+    Solid::cm([350, 8200, -1400], [950, 8500, -800], Snow),
     // the great pillar: the climb goes round it
     Solid::cm([800, 0, -500], [1800, 8460, 500], Rock),
     // the nest on the crown
@@ -324,7 +340,8 @@ static SPIRAL_COURSE: Course = Course {
     name: "The Spiral",
     tier: Tier::Hard,
     for_class: None,
-    pit: 6280,
+    pit: 6200,
+    note: "Big jumps:\nchimney: 17 m up off the pad (left of start)\nshelf: 9 m up, 6 m out from ledge 5",
     route: &[
         Step {
             solid: 0,
@@ -334,150 +351,164 @@ static SPIRAL_COURSE: Course = Course {
             ask: "the start",
         },
         Step {
-            solid: 1,
+            solid: 2,
             check: false,
             gap: 0,
             rise: 80,
             ask: "ledge 1 round the pillar",
         },
         Step {
-            solid: 2,
+            solid: 3,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 2 round the pillar",
         },
         Step {
-            solid: 3,
+            solid: 4,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 3 round the pillar",
         },
         Step {
-            solid: 4,
+            solid: 5,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 4 round the pillar",
         },
         Step {
-            solid: 5,
+            solid: 6,
             check: true,
             gap: 0,
             rise: 75,
             ask: "ledge 5 round the pillar",
         },
         Step {
-            solid: 6,
+            solid: 7,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 6 round the pillar",
         },
         Step {
-            solid: 7,
+            solid: 8,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 7 round the pillar",
         },
         Step {
-            solid: 8,
+            solid: 9,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 8 round the pillar",
         },
         Step {
-            solid: 9,
+            solid: 10,
             check: true,
             gap: 0,
             rise: 75,
             ask: "ledge 9 round the pillar",
         },
         Step {
-            solid: 10,
+            solid: 11,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 10 round the pillar",
         },
         Step {
-            solid: 11,
+            solid: 12,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 11 round the pillar",
         },
         Step {
-            solid: 12,
+            solid: 13,
             check: false,
             gap: 0,
             rise: 75,
             ask: "ledge 12 round the pillar",
         },
         Step {
-            solid: 13,
+            solid: 14,
             check: true,
             gap: 0,
             rise: 75,
             ask: "ledge 13 round the pillar",
         },
         Step {
-            solid: 14,
+            solid: 15,
             check: false,
             gap: 0,
             rise: 90,
             ask: "ledge 14 round the pillar",
         },
         Step {
-            solid: 15,
+            solid: 16,
             check: false,
             gap: 0,
             rise: 90,
             ask: "ledge 15 round the pillar",
         },
         Step {
-            solid: 16,
+            solid: 17,
             check: false,
             gap: 0,
             rise: 90,
             ask: "ledge 16 round the pillar",
         },
         Step {
-            solid: 17,
+            solid: 18,
+            check: true,
+            gap: 0,
+            rise: 0,
+            ask: "the shelf: 9 m up and 6 m out from ledge 5 (Grasp, vault)",
+        },
+        Step {
+            solid: 19,
             check: true,
             gap: 0,
             rise: 90,
             ask: "ledge 17 round the pillar",
         },
         Step {
-            solid: 18,
+            solid: 20,
             check: false,
             gap: 0,
             rise: 90,
             ask: "ledge 18 round the pillar",
         },
         Step {
-            solid: 19,
+            solid: 21,
             check: false,
             gap: 0,
             rise: 90,
             ask: "ledge 19 round the pillar",
         },
         Step {
-            solid: 20,
+            solid: 22,
             check: false,
             gap: 0,
             rise: 90,
             ask: "ledge 20 round the pillar",
         },
         Step {
-            solid: 22,
+            solid: 23,
             check: true,
             gap: 0,
-            rise: 150,
+            rise: 90,
+            ask: "the chimney: 17 m straight up off the pad",
+        },
+        Step {
+            solid: 25,
+            check: true,
+            gap: 0,
+            rise: 60,
             ask: "the nest on the crown",
         },
     ],
@@ -492,7 +523,7 @@ pub static FALLS: Arena = Arena {
     id: ArenaId::CLIMB_FALLS,
     name: "Falls",
     creature: None,
-    bounds: Bounds::cm((-2300, 13200), (-2500, 2500)),
+    bounds: Bounds::cm((-2300, 14700), (-2500, 2600)),
     floor: Peat,
     regions: &[],
     solids: &FALLS_SOLIDS,
@@ -503,36 +534,36 @@ pub static FALLS: Arena = Arena {
 const FALLS_SOLIDS: [Solid; 16] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 7200, 300], Rock),
-    // the first island
-    Solid::cm([450, 6960, -250], [950, 7260, 250], Grass),
+    // the meadow: a runway
+    Solid::cm([500, 6960, -250], [1700, 7260, 250], Grass),
     // the stair to the arch, 1
-    Solid::cm([1100, 7270, -140], [1400, 7360, 140], Sand),
+    Solid::cm([1750, 7270, 310], [2050, 7360, 590], Sand),
     // the stair to the arch, 2
-    Solid::cm([1520, 7380, -140], [1820, 7470, 140], Sand),
+    Solid::cm([2170, 7380, 310], [2470, 7470, 590], Sand),
     // the stair to the arch, 3
-    Solid::cm([1940, 7490, -140], [2240, 7580, 140], Sand),
+    Solid::cm([2590, 7490, 310], [2890, 7580, 590], Sand),
     // the stair to the arch, 4
-    Solid::cm([2360, 7600, -140], [2660, 7690, 140], Sand),
+    Solid::cm([3010, 7600, 310], [3310, 7690, 590], Sand),
     // the arch: run it
-    Solid::cm([2930, 7750, -150], [5130, 7900, 150], Snow),
-    // the big landing
-    Solid::cm([5730, 7250, -450], [6630, 7550, 450], Snow),
+    Solid::cm([3580, 7750, -150], [5780, 7900, 150], Snow),
+    // the big landing, 14 m out and 5 m down
+    Solid::cm([7180, 7100, -500], [8180, 7400, 500], Snow),
     // the falls, stone 1
-    Solid::cm([6910, 7330, 170], [7090, 7420, 350], Sand),
+    Solid::cm([8460, 7180, 170], [8640, 7270, 350], Sand),
     // the falls, stone 2
-    Solid::cm([7360, 7200, -350], [7540, 7290, -170], Sand),
+    Solid::cm([8910, 7050, -350], [9090, 7140, -170], Sand),
     // the falls, stone 3
-    Solid::cm([7810, 7070, 170], [7990, 7160, 350], Sand),
+    Solid::cm([9360, 6920, 170], [9540, 7010, 350], Sand),
     // the falls, stone 4
-    Solid::cm([8260, 6940, -350], [8440, 7030, -170], Snow),
+    Solid::cm([9810, 6790, -350], [9990, 6880, -170], Snow),
     // the falls, stone 5
-    Solid::cm([8710, 6810, 170], [8890, 6900, 350], Sand),
+    Solid::cm([10260, 6660, 170], [10440, 6750, 350], Sand),
     // the falls, stone 6
-    Solid::cm([9160, 6680, -350], [9340, 6770, -170], Sand),
+    Solid::cm([10710, 6530, -350], [10890, 6620, -170], Sand),
     // the pool at the foot of the falls
-    Solid::cm([9610, 6340, -300], [10210, 6640, 300], Snow),
+    Solid::cm([11160, 6190, -300], [11760, 6490, 300], Snow),
     // the nest
-    Solid::cm([10710, 6340, -200], [11110, 6740, 200], Wood),
+    Solid::cm([12260, 6190, -200], [12660, 6590, 200], Wood),
 ];
 
 static FALLS_COURSE: Course = Course {
@@ -540,7 +571,8 @@ static FALLS_COURSE: Course = Course {
     name: "The Falls",
     tier: Tier::Hard,
     for_class: None,
-    pit: 6040,
+    pit: 5890,
+    note: "Big jumps:\nlong way up: meadow to arch, 19 m, +6 m\nleap: off the arch, 14 m, -5 m\nplunge: landing to pool, 30 m, -9 m",
     route: &[
         Step {
             solid: 0,
@@ -554,7 +586,7 @@ static FALLS_COURSE: Course = Course {
             check: false,
             gap: 0,
             rise: 60,
-            ask: "the first island",
+            ask: "the meadow: a runway",
         },
         Step {
             solid: 2,
@@ -595,8 +627,8 @@ static FALLS_COURSE: Course = Course {
             solid: 7,
             check: true,
             gap: 0,
-            rise: -350,
-            ask: "the big landing",
+            rise: -500,
+            ask: "the big landing, 14 m out and 5 m down",
         },
         Step {
             solid: 8,
@@ -666,7 +698,7 @@ pub static SLALOM: Arena = Arena {
     id: ArenaId::CLIMB_SLALOM,
     name: "Slalom",
     creature: None,
-    bounds: Bounds::cm((-2300, 8700), (-2500, 2600)),
+    bounds: Bounds::cm((-2300, 10200), (-3500, 2600)),
     floor: Peat,
     regions: &[],
     solids: &SLALOM_SOLIDS,
@@ -674,9 +706,11 @@ pub static SLALOM: Arena = Arena {
     sites: &[],
 };
 
-const SLALOM_SOLIDS: [Solid; 22] = [
+const SLALOM_SOLIDS: [Solid; 24] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 7000, 300], Rock),
+    // the runway: the span starts here
+    Solid::cm([-300, 6850, -900], [1700, 7000, -500], Grass),
     // slalom stone 1
     Solid::cm([600, 6910, 210], [820, 7000, 430], Sand),
     // a slalom pillar
@@ -713,12 +747,14 @@ const SLALOM_SOLIDS: [Solid; 22] = [
     Solid::cm([3840, 6700, -200], [4240, 7000, 200], Grass),
     // under the cave mouth, 2
     Solid::cm([4520, 6700, -200], [4920, 7000, 200], Grass),
-    // under the cave mouth, 3
-    Solid::cm([5200, 6700, -200], [5600, 7000, 200], Snow),
+    // out of the cave mouth
+    Solid::cm([5200, 6850, -200], [6200, 7000, 200], Snow),
     // the cave mouth: a roof two metres over a head
-    Solid::cm([3640, 7380, -500], [5800, 7780, 500], Rock),
-    // the nest
-    Solid::cm([6180, 6700, -250], [6680, 7100, 250], Wood),
+    Solid::cm([3640, 7380, -500], [5400, 7780, 500], Rock),
+    // the span: 25 m off the runway
+    Solid::cm([4200, 6700, -1500], [5000, 7000, -700], Snow),
+    // the nest, 13 m out and 3 m down
+    Solid::cm([7500, 6300, -300], [8100, 6700, 300], Wood),
 ];
 
 static SLALOM_COURSE: Course = Course {
@@ -726,7 +762,8 @@ static SLALOM_COURSE: Course = Course {
     name: "The Slalom",
     tier: Tier::Hard,
     for_class: None,
-    pit: 6400,
+    pit: 6100,
+    note: "Big jumps:\nspan: runway (left) to island, 25 m\n  then on to the nest, 25 m, -3 m\nout of the cave to the nest, 13 m, -3 m",
     route: &[
         Step {
             solid: 0,
@@ -736,88 +773,95 @@ static SLALOM_COURSE: Course = Course {
             ask: "the start",
         },
         Step {
-            solid: 1,
+            solid: 2,
             check: false,
             gap: 0,
             rise: 0,
             ask: "slalom stone 1",
         },
         Step {
-            solid: 3,
+            solid: 4,
             check: false,
             gap: 0,
             rise: 40,
             ask: "slalom stone 2",
         },
         Step {
-            solid: 5,
+            solid: 6,
             check: false,
             gap: 0,
             rise: 40,
             ask: "slalom stone 3",
         },
         Step {
-            solid: 7,
+            solid: 8,
             check: true,
             gap: 0,
             rise: -80,
             ask: "slalom stone 4",
         },
         Step {
-            solid: 9,
+            solid: 10,
             check: false,
             gap: 0,
             rise: 40,
             ask: "slalom stone 5",
         },
         Step {
-            solid: 11,
+            solid: 12,
             check: false,
             gap: 0,
             rise: 40,
             ask: "slalom stone 6",
         },
         Step {
-            solid: 13,
+            solid: 14,
             check: false,
             gap: 0,
             rise: -80,
             ask: "slalom stone 7",
         },
         Step {
-            solid: 15,
+            solid: 16,
             check: true,
             gap: 0,
             rise: 40,
             ask: "slalom stone 8",
         },
         Step {
-            solid: 17,
+            solid: 18,
             check: false,
             gap: 0,
             rise: -40,
             ask: "under the cave mouth, 1",
         },
         Step {
-            solid: 18,
+            solid: 19,
             check: false,
             gap: 0,
             rise: 0,
             ask: "under the cave mouth, 2",
         },
         Step {
-            solid: 19,
+            solid: 20,
             check: true,
             gap: 0,
             rise: 0,
-            ask: "under the cave mouth, 3",
+            ask: "out of the cave mouth",
         },
         Step {
-            solid: 21,
+            solid: 22,
             check: true,
             gap: 0,
-            rise: 100,
-            ask: "the nest",
+            rise: 0,
+            ask: "the span: 25 m off the runway",
+        },
+        Step {
+            solid: 23,
+            check: true,
+            gap: 0,
+            rise: -300,
+            ask: "the nest, 13 m out and 3 m down",
         },
     ],
 };
@@ -831,7 +875,7 @@ pub static FORK: Arena = Arena {
     id: ArenaId::CLIMB_FORK,
     name: "Fork",
     creature: None,
-    bounds: Bounds::cm((-2300, 13900), (-2500, 2600)),
+    bounds: Bounds::cm((-2300, 14000), (-2500, 2700)),
     floor: Peat,
     regions: &[],
     solids: &FORK_SOLIDS,
@@ -839,47 +883,41 @@ pub static FORK: Arena = Arena {
     sites: &[],
 };
 
-const FORK_SOLIDS: [Solid; 20] = [
+const FORK_SOLIDS: [Solid; 17] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 7500, 300], Rock),
     // the hub: two ways on
     Solid::cm([400, 7200, -400], [1200, 7500, 400], Snow),
-    // the high road, ledge 1
-    Solid::cm([1350, 7350, 290], [1650, 7650, 550], Grass),
-    // the high road, ledge 2
-    Solid::cm([1770, 7500, 290], [2070, 7800, 550], Grass),
-    // the high road, ledge 3
-    Solid::cm([2190, 7650, 290], [2490, 7950, 550], Grass),
-    // the high road, ledge 4
-    Solid::cm([2610, 7800, 290], [2910, 8100, 550], Grass),
+    // the high road: the wall, 8 m up
+    Solid::cm([1300, 8000, 150], [1800, 8300, 650], Snow),
     // the high road, top 1
-    Solid::cm([3030, 7800, 290], [3530, 8100, 550], Grass),
+    Solid::cm([2100, 8000, 150], [2600, 8300, 650], Grass),
     // the high road, top 2
-    Solid::cm([3910, 7800, 290], [4410, 8100, 550], Grass),
-    // the high road, top 3
-    Solid::cm([4790, 7800, 290], [5290, 8100, 550], Grass),
+    Solid::cm([2900, 8000, 150], [3400, 8300, 650], Grass),
     // the low road, stone 1
-    Solid::cm([1489, 7310, -470], [1669, 7400, -290], Sand),
+    Solid::cm([1420, 7310, -470], [1600, 7400, -290], Sand),
     // the low road, stone 2
-    Solid::cm([2127, 7310, -330], [2307, 7400, -150], Sand),
+    Solid::cm([1920, 7310, -330], [2100, 7400, -150], Sand),
     // the low road, stone 3
-    Solid::cm([2765, 7310, -470], [2945, 7400, -290], Sand),
+    Solid::cm([2420, 7310, -470], [2600, 7400, -290], Sand),
     // the low road, stone 4
-    Solid::cm([3403, 7310, -330], [3583, 7400, -150], Sand),
+    Solid::cm([2920, 7310, -330], [3100, 7400, -150], Sand),
     // the low road, stone 5
-    Solid::cm([4041, 7310, -470], [4221, 7400, -290], Sand),
+    Solid::cm([3420, 7310, -470], [3600, 7400, -290], Sand),
     // the low road, stone 6
-    Solid::cm([4679, 7310, -330], [4859, 7400, -150], Sand),
+    Solid::cm([3920, 7310, -330], [4100, 7400, -150], Sand),
     // the low road, stone 7
-    Solid::cm([5317, 7310, -470], [5497, 7400, -290], Sand),
+    Solid::cm([4420, 7310, -470], [4600, 7400, -290], Sand),
+    // the low road, stone 8
+    Solid::cm([4920, 7310, -330], [5100, 7400, -150], Sand),
     // where the roads meet
-    Solid::cm([5970, 7200, -400], [6770, 7500, 400], Snow),
-    // the big landing
-    Solid::cm([7470, 6900, -500], [8470, 7200, 500], Snow),
+    Solid::cm([5200, 7200, -400], [6000, 7500, 400], Snow),
+    // the big landing, 15 m out and 4 m down
+    Solid::cm([7500, 6800, -500], [8500, 7100, 500], Snow),
     // the runway
-    Solid::cm([8770, 7150, -200], [10770, 7300, 200], Snow),
+    Solid::cm([8800, 7050, -200], [10800, 7200, 200], Snow),
     // the nest
-    Solid::cm([11370, 7000, -250], [11870, 7400, 250], Wood),
+    Solid::cm([11400, 6900, -250], [11900, 7300, 250], Wood),
 ];
 
 static FORK_COURSE: Course = Course {
@@ -887,7 +925,8 @@ static FORK_COURSE: Course = Course {
     name: "The Fork",
     tier: Tier::Hard,
     for_class: None,
-    pit: 6600,
+    pit: 6500,
+    note: "Big jumps:\nhigh road: the wall, 8 m up\n  then its drop, 18 m, -8 m\nthe leap from where roads meet, 15 m, -4 m",
     route: &[
         Step {
             solid: 0,
@@ -904,77 +943,105 @@ static FORK_COURSE: Course = Course {
             ask: "the hub: two ways on",
         },
         Step {
-            solid: 9,
+            solid: 2,
+            check: true,
+            gap: 0,
+            rise: 800,
+            ask: "the high road: the wall, 8 m up",
+        },
+        Step {
+            solid: 3,
             check: false,
             gap: 0,
-            rise: -100,
+            rise: 0,
+            ask: "the high road, top 1",
+        },
+        Step {
+            solid: 4,
+            check: false,
+            gap: 0,
+            rise: 0,
+            ask: "the high road, top 2",
+        },
+        Step {
+            solid: 5,
+            check: false,
+            gap: 0,
+            rise: -900,
             ask: "the low road, stone 1",
         },
         Step {
-            solid: 10,
+            solid: 6,
             check: false,
             gap: 0,
             rise: 0,
             ask: "the low road, stone 2",
         },
         Step {
-            solid: 11,
+            solid: 7,
             check: false,
             gap: 0,
             rise: 0,
             ask: "the low road, stone 3",
         },
         Step {
-            solid: 12,
+            solid: 8,
             check: false,
             gap: 0,
             rise: 0,
             ask: "the low road, stone 4",
         },
         Step {
-            solid: 13,
+            solid: 9,
             check: false,
             gap: 0,
             rise: 0,
             ask: "the low road, stone 5",
         },
         Step {
-            solid: 14,
+            solid: 10,
             check: false,
             gap: 0,
             rise: 0,
             ask: "the low road, stone 6",
         },
         Step {
-            solid: 15,
+            solid: 11,
             check: false,
             gap: 0,
             rise: 0,
             ask: "the low road, stone 7",
         },
         Step {
-            solid: 16,
+            solid: 12,
+            check: false,
+            gap: 0,
+            rise: 0,
+            ask: "the low road, stone 8",
+        },
+        Step {
+            solid: 13,
             check: true,
             gap: 0,
             rise: 100,
             ask: "where the roads meet",
         },
         Step {
-            solid: 17,
+            solid: 14,
             check: true,
             gap: 0,
-            rise: -300,
-            ask: "the big landing",
+            rise: -400,
+            ask: "the big landing, 15 m out and 4 m down",
         },
         Step {
-            solid: 18,
+            solid: 15,
             check: true,
             gap: 0,
             rise: 100,
             ask: "the runway",
         },
         Step {
-            solid: 19,
+            solid: 16,
             check: true,
             gap: 0,
             rise: 100,
@@ -1017,6 +1084,7 @@ static SPIRE_COURSE: Course = Course {
     tier: Tier::Edge,
     for_class: Some(Class::Elementalist),
     pit: 6400,
+    note: "",
     route: &[
         Step {
             solid: 0,
@@ -1058,7 +1126,7 @@ pub static GULF: Arena = Arena {
     id: ArenaId::CLIMB_GULF,
     name: "Gulf",
     creature: None,
-    bounds: Bounds::cm((-2300, 9200), (-2300, 2400)),
+    bounds: Bounds::cm((-2300, 11800), (-2300, 3700)),
     floor: Peat,
     regions: &[],
     solids: &GULF_SOLIDS,
@@ -1066,21 +1134,19 @@ pub static GULF: Arena = Arena {
     sites: &[],
 };
 
-const GULF_SOLIDS: [Solid; 7] = [
+const GULF_SOLIDS: [Solid; 6] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 8500, 300], Rock),
     // the runway
     Solid::cm([300, 8350, -200], [2300, 8500, 200], Grass),
-    // eight metres, level, onto three
-    Solid::cm([3100, 8200, -150], [3400, 8500, 150], Snow),
-    // seven metres and up 1.5, onto two
-    Solid::cm([4100, 8560, -100], [4300, 8650, 100], Sand),
-    // six metres onto a stone 1.2 m across
-    Solid::cm([4900, 8560, -60], [5020, 8650, 60], Sand),
-    // and another
-    Solid::cm([5620, 8560, -60], [5740, 8650, 60], Snow),
-    // nine metres and down two: the nest
-    Solid::cm([6640, 8050, -250], [7140, 8450, 250], Wood),
+    // the first gulf: 18 m level
+    Solid::cm([4100, 8200, -250], [4900, 8500, 250], Snow),
+    // the climb: 14 m and 3 m up
+    Solid::cm([6300, 8500, -250], [6900, 8800, 250], Snow),
+    // the high line: 18 m and 10 m up
+    Solid::cm([6500, 9200, 1000], [7300, 9500, 1600], Snow),
+    // the last: 22 m and 4 m down, the nest
+    Solid::cm([9100, 8000, -300], [9700, 8400, 300], Wood),
 ];
 
 static GULF_COURSE: Course = Course {
@@ -1088,7 +1154,8 @@ static GULF_COURSE: Course = Course {
     name: "The Gulf",
     tier: Tier::Edge,
     for_class: None,
-    pit: 7850,
+    pit: 7800,
+    note: "Big jumps:\n18 m level; 14 m, +3 m; 22 m, -4 m\nhigh line (right): 18 m, +10 m;\n  then 19 m, -11 m to the nest",
     route: &[
         Step {
             solid: 0,
@@ -1109,35 +1176,113 @@ static GULF_COURSE: Course = Course {
             check: true,
             gap: 0,
             rise: 0,
-            ask: "eight metres, level, onto three",
+            ask: "the first gulf: 18 m level",
         },
         Step {
             solid: 3,
-            check: false,
+            check: true,
             gap: 0,
-            rise: 150,
-            ask: "seven metres and up 1.5, onto two",
+            rise: 300,
+            ask: "the climb: 14 m and 3 m up",
         },
         Step {
             solid: 4,
-            check: false,
+            check: true,
             gap: 0,
-            rise: 0,
-            ask: "six metres onto a stone 1.2 m across",
+            rise: 700,
+            ask: "the high line: 18 m and 10 m up",
         },
         Step {
             solid: 5,
             check: true,
             gap: 0,
-            rise: 0,
-            ask: "and another",
+            rise: -1100,
+            ask: "the last: 22 m and 4 m down, the nest",
         },
+    ],
+};
+
+// ---------------------------------------------------------------------------
+// The Reach: proving
+// ---------------------------------------------------------------------------
+
+/// A proving ground (unplayed): one hub, gap lanes of 10 to 50 m off its front, ledges 5 to 45 m up behind it, two long-and-up targets and two Grasp faces, each marked at its takeoff by a block per five metres. A fall stands you back on the hub.
+pub static REACH: Arena = Arena {
+    id: ArenaId::CLIMB_REACH,
+    name: "Reach",
+    creature: None,
+    bounds: Bounds::cm((-4500, 7900), (-6600, 8400)),
+    floor: Peat,
+    regions: &[],
+    solids: &REACH_SOLIDS,
+    spawns: SPAWNS,
+    sites: &[],
+};
+
+const REACH_SOLIDS: [Solid; 20] = [
+    // the hub: every lane and ledge leaves from it
+    Solid::cm([-1800, 0, -3200], [200, 6000, 3200], Rock),
+    // gap lane: 10 m level
+    Solid::cm([1200, 5700, -2700], [1800, 6000, -2100], Grass),
+    // gap lane: 15 m level
+    Solid::cm([1700, 5700, -1900], [2300, 6000, -1300], Grass),
+    // gap lane: 20 m level
+    Solid::cm([2200, 5700, -1100], [2800, 6000, -500], Grass),
+    // gap lane: 25 m level
+    Solid::cm([2700, 5700, -300], [3300, 6000, 300], Sand),
+    // gap lane: 30 m level
+    Solid::cm([3200, 5700, 500], [3800, 6000, 1100], Sand),
+    // gap lane: 40 m level
+    Solid::cm([4200, 5700, 1300], [4800, 6000, 1900], Stone),
+    // gap lane: 50 m level
+    Solid::cm([5200, 5700, 2100], [5800, 6000, 2700], Stone),
+    // the way back from the 10 m lane
+    Solid::cm([1100, 5910, -3300], [1400, 6000, -2900], Sand),
+    // the way back from the 10 m lane
+    Solid::cm([500, 5910, -3300], [800, 6000, -2900], Sand),
+    // ledge: 5 m up, half a metre out
+    Solid::cm([-2450, 6200, -2300], [-1850, 6500, -1700], Grass),
+    // ledge: 10 m up, half a metre out
+    Solid::cm([-2450, 6700, -1500], [-1850, 7000, -900], Grass),
+    // ledge: 15 m up, half a metre out
+    Solid::cm([-2450, 7200, -700], [-1850, 7500, -100], Sand),
+    // ledge: 20 m up, half a metre out
+    Solid::cm([-2450, 7700, 100], [-1850, 8000, 700], Sand),
+    // ledge: 30 m up, half a metre out
+    Solid::cm([-2450, 8700, 900], [-1850, 9000, 1500], Stone),
+    // ledge: 45 m up, half a metre out
+    Solid::cm([-2450, 10200, 1700], [-1850, 10500, 2300], Stone),
+    // long and up: 15 m out, 5 m up
+    Solid::cm([-1700, 6200, 4700], [-1100, 6500, 5300], Sand),
+    // long and up: 25 m out, 10 m up
+    Solid::cm([-700, 6700, 5700], [-100, 7000, 6300], Stone),
+    // Grasp face: 6 m out, 3 m up
+    Solid::cm([-1400, 5400, -4400], [-800, 6300, -3800], Grass),
+    // Grasp face: 8 m out, 6 m up
+    Solid::cm([-600, 5400, -4600], [0, 6600, -4000], Grass),
+];
+
+static REACH_COURSE: Course = Course {
+    arena: ArenaId::CLIMB_REACH,
+    name: "The Reach",
+    tier: Tier::Proving,
+    for_class: None,
+    pit: 5400,
+    note: "Lanes ahead, left to right, level:\n  10 15 20 25 30 40 50 m\nLedges behind, half a metre out:\n  5 10 15 20 30 45 m up\nRight end: 15 m out +5, 25 m out +10\nLeft end, Grasp faces: 6 m +3, 8 m +6\nOne block at an edge = 5 m\nA fall puts you back on the hub",
+    route: &[
         Step {
-            solid: 6,
+            solid: 0,
             check: true,
             gap: 0,
-            rise: -200,
-            ask: "nine metres and down two: the nest",
+            rise: 0,
+            ask: "the hub",
+        },
+        Step {
+            solid: 7,
+            check: true,
+            gap: 0,
+            rise: 0,
+            ask: "the 50 m lane",
         },
     ],
 };

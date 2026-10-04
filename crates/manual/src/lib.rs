@@ -74,7 +74,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --arena <name>",
-                "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, spiral, falls, slalom, fork, spire, gulf), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
+                "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
                 "cargo run -p game -- --hunt <creature> --temper <n>",
@@ -113,7 +113,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?arena=<name>",
-                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, spiral, falls, slalom, fork, spire, gulf.",
+                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach.",
             ),
             e(
                 "?temper=<n>",
@@ -418,11 +418,11 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "N",
-                "The next jump course, in order of difficulty: the Stair and the Causeway (easy); the Spiral round a great pillar, the Falls over an arch and down a waterfall of stones, the Slalom between pillars and through a cave mouth, and the Fork with its high and low roads (hard); the Spire and the Gulf (barely possible). From anywhere else, the first. Online, both players go together.",
+                "The next jump course, in order of difficulty: the Stair and the Causeway (easy); the Spiral round a great pillar, the Falls over an arch and down a waterfall of stones, the Slalom between pillars and through a cave mouth, and the Fork with its high and low roads (hard); the Spire and the Gulf (barely possible); then the Reach, a proving ground of marked distances for trying each class's mechanics. The hard courses and the Gulf have big jumps for the mechanics too; the course panel says where. From anywhere else, the first. Online, both players go together.",
             ),
             e(
                 "--arena stair, ?arena=stair",
-                "Start in a course by name: stair, causeway, spiral, falls, slalom, fork, spire or gulf. With --p1 (or ?p1=) for the class.",
+                "Start in a course by name: stair, causeway, spiral, falls, slalom, fork, spire, gulf or reach. With --p1 (or ?p1=) for the class.",
             ),
             e(
                 "Falling",

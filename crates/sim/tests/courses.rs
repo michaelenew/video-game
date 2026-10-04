@@ -1,7 +1,7 @@
 //! The jump courses (`docs/design/courses.md`): their tables are well formed,
 //! a fall stands you back on your last checkpoint, the clock stops at the
-//! finish, and `N` steps through them. The routes the document promises are
-//! played in `tests/search.rs`, from the search's own fixtures.
+//! finish, `N` steps through them, and on the proving ground a fall always
+//! goes back to the hub.
 
 use sim::arena::ArenaId;
 use sim::class::Class;
@@ -155,4 +155,23 @@ fn a_course_is_a_trip_on_the_wire_and_the_key_steps_through_them_all() {
     ask[0] = ask[0].travelling(Travel::arena(ArenaId(60)));
     w.advance(ask);
     assert_eq!(w.arena, ArenaId::PROVING_GROUND);
+}
+
+#[test]
+fn on_the_proving_ground_a_fall_always_stands_you_on_the_hub() {
+    let c = named("reach");
+    assert_eq!(c.tier, Tier::Proving);
+    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], c.arena);
+    // Land the far lane: the finish.
+    let far = c.gate(c.finish());
+    w.players[0].pos = far.stand();
+    w.advance([Input::default(); MAX_PLAYERS]);
+    assert_eq!(w.course[0].reached as usize, c.finish());
+    // Step off it into the pit: back on the hub, not on the lane.
+    w.players[0].pos = V3::new(far.stand().x, Fx::ZERO, far.stand().z);
+    w.advance([Input::default(); MAX_PLAYERS]);
+    let hub = c.gate(0).stand();
+    assert_eq!(w.course[0].falls, 1);
+    assert_eq!(w.players[0].pos.x, hub.x);
+    assert_eq!(w.players[0].pos.y, hub.y, "not stood back on the hub");
 }

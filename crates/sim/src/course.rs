@@ -52,9 +52,12 @@ pub enum Tier {
     /// Every class clears it, near the edge of what its jump and airdodge
     /// can do. The main route the game is meant to be.
     Hard,
-    /// Barely possible, and only for some: proven by a scripted route in
-    /// `tests/courses.rs`.
+    /// Barely possible, and only for some.
     Edge,
+    /// Not a route but a playground: one hub, and targets at marked
+    /// distances to try each class's mechanics against. A fall always stands
+    /// you back on the hub.
+    Proving,
 }
 
 impl Tier {
@@ -63,6 +66,7 @@ impl Tier {
             Tier::Easy => "easy",
             Tier::Hard => "hard",
             Tier::Edge => "barely possible",
+            Tier::Proving => "proving ground",
         }
     }
 }
@@ -78,6 +82,9 @@ pub struct Course {
     pub for_class: Option<Class>,
     /// Below this height, in centimetres, a body has fallen.
     pub pit: i32,
+    /// A line for the course panel: where the big jumps are, or a proving
+    /// ground's distances. Empty for none.
+    pub note: &'static str,
     /// The route: the start, every island on the way, the finish.
     pub route: &'static [Step],
 }
@@ -250,7 +257,14 @@ pub enum Event {
 pub fn step(course: &Course, run: &mut Run, pos: V3, frame: u32) -> Event {
     if pos.y.raw() < cm(course.pit).raw() {
         run.falls = run.falls.saturating_add(1);
-        return Event::Fell(run.reached as usize);
+        // A proving ground has no way forward to keep: every try starts from
+        // the hub.
+        let back = if course.tier == Tier::Proving {
+            0
+        } else {
+            run.reached as usize
+        };
+        return Event::Fell(back);
     }
     if run.started == 0 && !course.gate(0).holds(pos) {
         run.started = frame.saturating_add(1).max(1);

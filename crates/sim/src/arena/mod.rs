@@ -117,6 +117,9 @@ impl ArenaId {
     pub const CLIMB_GULF: ArenaId = ArenaId(19);
     pub const CLIMB_SLALOM: ArenaId = ArenaId(20);
     pub const CLIMB_FORK: ArenaId = ArenaId(21);
+    /// The proving ground of the jump courses: lanes and ledges at marked
+    /// distances, one per class mechanic to try.
+    pub const CLIMB_REACH: ArenaId = ArenaId(22);
     /// A dev arena of single hops, for measuring a kind of hop: see [`bench`].
     pub const BENCH: ArenaId = ArenaId(30);
 
@@ -179,6 +182,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::CLIMB_FORK => Some(&climb::FORK),
         ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
         ArenaId::CLIMB_GULF => Some(&climb::GULF),
+        ArenaId::CLIMB_REACH => Some(&climb::REACH),
         _ => None,
     }
 }
