@@ -3804,6 +3804,9 @@ fn step_player(
     }
 
     let mob = p.class.mobility();
+    if pressed_space {
+        shadow::bank_dash_jump(p);
+    }
     step_mechanic(p, scene.arena);
     hold_the_churn(p, input);
 
@@ -4273,15 +4276,16 @@ fn step_player(
     }
 
     // **The dash jump.** The dash stops dead on the shadow, and for a few
-    // frames after -- the carry -- a jump takes a share of the crossing's speed
-    // up with her (`tuning::dash_jump_keep`). It cuts the dodge's tail short,
-    // which is the other half of the reward: the frames she would have spent
-    // standing there being punished are spent in the air going somewhere.
+    // frames after -- the carry -- a jump takes the crossing's speed up with
+    // her (`tuning::dash_jump_keep`), less what the carry has bled of it. It
+    // cuts the dodge's tail short, which is the other half of the reward: the
+    // frames she would have spent standing there being punished are spent in
+    // the air going somewhere.
     //
-    // A share rather than all of it, since 2026-09-23: the whole fifty metres a
-    // second cleared the arena. The ordinary jump above cannot fire here: the
-    // carry runs inside the dodge, and a dodge is not actionable.
-    if pressed_space && shadow::carrying_a_dash(p) {
+    // A press in the dash's last few frames counts too (`bank_dash_jump`): the
+    // ordinary jump above cannot fire inside a dodge, so without the bank a
+    // press one frame early was simply lost.
+    if (pressed_space || shadow::dash_jump_banked(p)) && shadow::carrying_a_dash(p) {
         let lunge = shadow::lunge(p);
         p.vel = V3::new(lunge.x, p.vel.y, lunge.z);
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
@@ -6293,6 +6297,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.dash as u32);
             h.write_u32(shadow.carry as u32);
             hash_v3(h, &shadow.lunge);
+            h.write_u32(shadow.jump_banked as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);

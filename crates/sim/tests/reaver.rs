@@ -658,10 +658,10 @@ fn a_planted_shield_across_the_line_leaves_her_with_an_ordinary_dodge() {
 }
 
 #[test]
-fn a_jump_inside_the_carry_leaves_with_a_share_of_the_dash() {
+fn a_jump_inside_the_carry_leaves_with_the_dash() {
     // The dash stops on the shadow; a jump pressed in the short window after
-    // it takes `dash_jump_keep` of the crossing's speed up with her. More than
-    // a standing jump, far less than the dash -- which used to clear the arena.
+    // it takes the crossing's speed up with her (`dash_jump_keep`, all of it
+    // since 2026-10-04), less what each frame of the carry has bled of it.
     let mut w = in_the_open();
     let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
     put_the_shadow_at(&mut w, out);
@@ -684,21 +684,63 @@ fn a_jump_inside_the_carry_leaves_with_a_share_of_the_dash() {
     }
     let leaving = took_off.expect("the jump inside the carry never left the ground");
     let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
-    let want = t::shadow_dash_speed().mul(t::dash_jump_keep());
+    let most = t::shadow_dash_speed().mul(t::dash_jump_keep());
+    let least = most.mul(t::dodge_decay()).mul(t::dodge_decay());
     assert!(
         leaving.y.raw() > 0,
         "she was airborne without going up, so that was the dash and not a jump"
     );
     assert!(
-        along.raw() > t::move_speed().raw(),
-        "she left the ground at {:.1} m/s, no faster than a standing jump",
-        along.to_f32_for_render()
-    );
-    assert!(
-        (along.raw() - want.raw()).abs() < Fx::ratio(1, 2).raw(),
-        "she left the ground at {:.1} m/s, not the {:.1} the dash jump keeps",
+        along.raw() >= least.raw() - Fx::ratio(1, 2).raw()
+            && along.raw() <= most.raw() + Fx::ratio(1, 2).raw(),
+        "she left the ground at {:.1} m/s, not the {:.1}-{:.1} a jump on the \
+         carry's first frame keeps of the dash",
         along.to_f32_for_render(),
-        want.to_f32_for_render()
+        least.to_f32_for_render(),
+        most.to_f32_for_render()
+    );
+}
+
+#[test]
+fn a_jump_pressed_just_before_arrival_is_kept_for_it() {
+    // The dash is a dodge, and a dodge is not actionable, so a press a frame
+    // before she arrived used to be lost. Pressed only in the dash's last
+    // frames and never in the carry, it should still be the dash jump.
+    let mut w = in_the_open();
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    let close = t::shadow_dash_speed().mul(sim::DT).mul(Fx::from_int(2));
+
+    let mut pressed = false;
+    let mut took_off = None;
+    for _ in 0..(t::dodge_frames() as u32 * 2) {
+        let me = &w.players[0];
+        let dashing = shadow(&w).dash > 0;
+        let near = shadow(&w).pos.sub(me.pos).len().raw() <= close.raw();
+        let bits = if dashing && near && !pressed {
+            pressed = true;
+            SHIFT | W | Input::SPACE
+        } else if took_off.is_none() && !pressed {
+            SHIFT | W
+        } else {
+            W
+        };
+        run(&mut w, 1, bits, pitch);
+        if took_off.is_none() && !w.players[0].grounded && pressed {
+            took_off = Some(w.players[0].vel);
+        }
+    }
+    assert!(
+        pressed,
+        "the dash never came within two frames of the shadow"
+    );
+    let leaving = took_off.expect("the press before arrival was dropped");
+    let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
+    assert!(
+        along.raw() > t::move_speed().mul(Fx::from_int(3)).raw(),
+        "she left at {:.1} m/s: the banked press jumped without the dash's speed",
+        along.to_f32_for_render()
     );
 }
 
@@ -725,9 +767,10 @@ fn the_dash_stops_on_the_shadow() {
 }
 
 #[test]
-fn the_dash_jump_does_not_clear_the_arena() {
-    // Across the whole leash and straight into a held jump: where she lands
-    // should be well inside the arena's width from where she took off.
+fn the_dash_jump_launches_her() {
+    // Six metres of dash and straight into a held jump: it is her launch, and
+    // it should carry her well past half the arena's width. A fifth of the
+    // dash, from 2026-09-23 to 2026-10-04, made it an ordinary jump.
     let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
     w.players[0].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
     w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
@@ -758,8 +801,8 @@ fn the_dash_jump_does_not_clear_the_arena() {
     let flew = w.players[0].pos.sub(from).flat_len();
     let arena = sim::arena::proving_ground::half().add(sim::arena::proving_ground::half());
     assert!(
-        flew.raw() < arena.mul(Fx::ratio(1, 2)).raw(),
-        "a dash jump carried her {:.1} m, over half the arena's {:.1}",
+        flew.raw() > arena.mul(Fx::ratio(1, 2)).raw(),
+        "a dash jump carried her {:.1} m, under half the arena's {:.1}",
         flew.to_f32_for_render(),
         arena.to_f32_for_render()
     );

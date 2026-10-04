@@ -7387,3 +7387,28 @@ stone rather than on top. Her auto no longer touches a gnat or a gnawer, which
 the critter tests exempt by name.
 
 **Verdict** kept, unplayed.
+
+### 2026-10-04 — the dash jump launches again
+
+**Changed** A jump out of the dash's carry keeps **all** of the dash's flat speed
+(`Dash jump, keeps of the dash speed`, 20% → 100%), bled by the dodge's decay for each frame of
+the carry already gone, so the first frame goes furthest. New knob `Dash jump, press kept
+before arrival` (6 frames): a space press in the dash's last frames is banked and thrown on
+arrival. The dash still stops dead on the shadow, as decided 2026-09-23.
+
+**Why** From play: the dash jump "used to launch the reaver a very long way, and now it's
+essentially an ordinary jump, and very awkwardly buffered". It is her timing-based mobility,
+and the jump-courses work (docs/design/courses.md) wants it. The fifth came in with 379062e on
+2026-09-23 because the dash jump cleared the arena; the arena is not what a course is.
+
+**Measured** (`cargo run --release -p sim --bin envelope`): shadow sent 9 m level, jump on the
+carry's first frame: 49.5 m past the shadow, 58.5 m from where she stood, 5.1 m high; one
+carry frame lands within half a metre of the best. Was 10.6 m past. Tests:
+`reaver::a_jump_inside_the_carry_leaves_with_the_dash`,
+`a_jump_pressed_just_before_arrival_is_kept_for_it`, `the_dash_jump_launches_her`.
+
+**What else moved** `hunt`'s scripted Reaver hunt diverges from frame 31 (it dash-jumps
+further) and is re-pinned; the sim's Ridgeback pin changed only by the new field in the hash.
+
+**Verdict** kept on the user's word. Open: whether it clears a fight arena too readily again,
+and whether shadow range should come down so the dash jump carries her mobility (courses.md).

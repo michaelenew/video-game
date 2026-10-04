@@ -847,6 +847,14 @@ pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
 }
 
+/// How many frames before the dash arrives a jump press is kept for the dash
+/// jump. The dash is a dodge and a dodge is not actionable, so without this a
+/// press a frame early fell on the floor and the dash jump read as badly
+/// buffered.
+pub fn dash_jump_buffer() -> i32 {
+    oven::scalar(Scalar::DashJumpBuffer).max(0)
+}
+
 // ---------------------------------------------------------------------------
 // The Reaver's v2: the shadow aims and keeps a tally, and her hits cash it
 // ---------------------------------------------------------------------------
@@ -933,11 +941,12 @@ pub fn health_of(class: crate::class::Class) -> i32 {
 
 /// What a jump out of the dash's carry keeps of the dash's speed, flat.
 ///
-/// A fifth, 2026-09-23. It used to be everything: the dash arrived at fifty
-/// metres a second, slid on past the shadow, and a jump in the carry took the
-/// whole slide up with it and cleared the arena. The dash stops on the shadow
-/// now, and the jump out of it is a lunge -- ten metres a second, about one
-/// and a half walks -- rather than a launch.
+/// All of it, again, since 2026-10-04: the jump out of a dash is the Reaver's
+/// timing-based mobility and it launches her. A fifth from 2026-09-23 made it
+/// an ordinary jump. The dash still stops on the shadow (that part of
+/// 2026-09-23 was for precise fighting and stays); the speed is banked for the
+/// jump and bled by the dodge's decay through the carry, as the old slide was,
+/// so the earlier the press the further she goes.
 pub fn dash_jump_keep() -> Fx {
     Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
 }

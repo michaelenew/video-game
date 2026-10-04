@@ -560,7 +560,30 @@ pub fn spend_carry(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.carry = 0;
     shadow.lunge = V3::ZERO;
+    shadow.jump_banked = false;
     put(p, shadow);
+}
+
+/// A jump pressed while the dash is still crossing: kept for the arrival if
+/// she is within `tuning::dash_jump_buffer` frames of the shadow, and thrown
+/// the frame she lands on it. Earlier than that it is dropped, as before.
+pub fn bank_dash_jump(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    if shadow.dash == 0 {
+        return;
+    }
+    let reach = t::shadow_dash_speed()
+        .mul(DT)
+        .mul(Fx::from_int(t::dash_jump_buffer()));
+    if shadow.pos.sub(p.pos).len().raw() <= reach.raw() {
+        shadow.jump_banked = true;
+        put(p, shadow);
+    }
+}
+
+/// Is a jump waiting from the last frames of the dash?
+pub fn dash_jump_banked(p: &Player) -> bool {
+    of(p).is_some_and(|shadow| shadow.jump_banked)
 }
 
 /// What a jump out of the carry takes with it: the share of the dash banked
@@ -577,6 +600,7 @@ pub fn broken_by_a_hit(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.dash = 0;
     shadow.carry = 0;
+    shadow.jump_banked = false;
     put(p, shadow);
 }
 
@@ -592,6 +616,15 @@ fn step_her_dash(p: &mut Player) {
     // The carry runs down whether or not a dash is still going: it is what a
     // dash leaves behind, and the frame it was opened on is one of its own.
     shadow.carry = shadow.carry.saturating_sub(1);
+    // The banked speed bleeds as the old slide did, so the earlier the jump
+    // the further it goes: the tech has a gradient rather than a pass mark.
+    if shadow.carry > 0 {
+        shadow.lunge = V3::new(
+            shadow.lunge.x.mul(t::dodge_decay()),
+            Fx::ZERO,
+            shadow.lunge.z.mul(t::dodge_decay()),
+        );
+    }
     if shadow.dash == 0 {
         put(p, shadow);
         return;
@@ -610,6 +643,10 @@ fn step_her_dash(p: &mut Player) {
     if arrived || !matches!(p.action, Action::Dodge { .. }) {
         shadow.dash = 0;
     }
+    if !arrived && shadow.dash == 0 {
+        // Ran out of dodge short of the shadow: no carry, nothing to jump out of.
+        shadow.jump_banked = false;
+    }
     if arrived {
         // **She lands on it, not near it.** The tolerance above is half a metre
         // wide and the shadow is standing somewhere she can stand, so closing
@@ -622,9 +659,9 @@ fn step_her_dash(p: &mut Player) {
         // back -- the rise that carried her up would keep carrying her off the
         // top of it -- and so does the floor: the dash used to leave her
         // sliding at the speed she crossed at, four or five metres past the
-        // shadow, which made arriving anywhere precise impossible. What is
-        // kept of that speed is banked for a jump out of the carry, and only
-        // for that. See `tuning::dash_jump_keep`.
+        // shadow, which made arriving anywhere precise impossible. The speed
+        // is banked for a jump out of the carry, and only for that -- all of
+        // it, since 2026-10-04. See `tuning::dash_jump_keep`.
         let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
         shadow.lunge = flat.scale(t::dash_jump_keep());
         p.vel = V3::ZERO;

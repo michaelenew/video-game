@@ -626,6 +626,9 @@ scalars! {
     Temper3Lead,      "Tempers",  "Temper III, lead (% of its own)",        Int,     100,      300;
     Temper3Decisive,  "Tempers",  "Temper III, decisiveness (+ points)",    Int,     0,        100;
     Temper3Despair,   "Tempers",  "Temper III, thresholds fall (% of its own)", Percent, 0,        100;
+    // How early, before the dash arrives, a jump press is kept for the dash
+    // jump rather than dropped on the floor of a dodge that is not actionable.
+    DashJumpBuffer,   "Reaver",    "Dash jump, press kept before arrival",  Frames, 0,        20;
 }
 
 // ---------------------------------------------------------------------------

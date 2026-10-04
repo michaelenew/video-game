@@ -361,11 +361,16 @@ pub struct Shadow {
     /// of throwing it on the floor. Pressing early keeps more, so the tech has
     /// a gradient rather than a pass mark -- see `tuning::shadow_carry`.
     pub carry: u16,
-    /// What a jump out of the carry takes with it, flat: a share of the
-    /// dash's own velocity, banked on arrival. The dash itself stops dead on
-    /// the shadow -- see `shadow::step_her_dash` -- so this is the only place
-    /// the crossing's speed survives, and it survives only into the jump.
+    /// What a jump out of the carry takes with it, flat: the dash's own
+    /// velocity, banked on arrival and bled away by the dodge's decay for
+    /// each frame of the carry that passes, so pressing early keeps more. The
+    /// dash itself stops dead on the shadow -- see `shadow::step_her_dash` --
+    /// so this is the only place the crossing's speed survives, and it
+    /// survives only into the jump.
     pub lunge: V3,
+    /// A jump pressed in the last frames of the dash, before it arrived,
+    /// waiting to be thrown on arrival. See `shadow::bank_dash_jump`.
+    pub jump_banked: bool,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -409,6 +414,7 @@ impl Shadow {
             dash: 0,
             carry: 0,
             lunge: V3::ZERO,
+            jump_banked: false,
         }
     }
 

@@ -315,12 +315,23 @@ something another class can actually do, rather than a rule nothing exercises. S
 the **carry**. It is the same length however far she came: a dash that spent its whole dodge
 getting there is given the window rather than having the distance swallow it.
 
-**A jump pressed inside the carry is a lunge.** It is one of the two things that can cut a
-dodge's tail short (a swing is the other, above), and that is half the reward: the frames she
-would have spent standing there being punished are spent in the air going somewhere instead.
-The other half is speed — a fifth of the dash's, about one and a half walks, in the direction
-she crossed (`Dash jump, keeps of the dash speed`). It used to be the whole slide, fifty metres
-a second, and a dash jump cleared the arena; it carries her about ten and a half metres now.
+**A jump pressed inside the carry is a launch — restored 2026-10-04.** It is one of the two
+things that can cut a dodge's tail short (a swing is the other, above), and that is half the
+reward: the frames she would have spent standing there being punished are spent in the air
+going somewhere instead. The other half is speed — **all of the dash's**, in the direction she
+crossed (`Dash jump, keeps of the dash speed`, 100%), less what the dodge's decay has bled of
+it for each frame of the carry already gone. So the tech is a gradient: the first frame of the
+carry goes furthest, about 50 m past a shadow sent 9 m on the flat, and each frame later is
+noticeably shorter. This is her timing-based mobility.
+
+**A press in the dash's last frames counts** (`Dash jump, press kept before arrival`, six
+frames): the dash is a dodge and a dodge is not actionable, so a press a frame early used to
+fall on the floor and the jump felt badly buffered. Pressed earlier than that, it is dropped.
+
+From 2026-09-23 to 2026-10-04 the jump kept only a fifth of the dash, about ten metres a
+second, and carried her ten and a half metres: an ordinary jump. That was reverted on the
+user's word. The other half of the 2026-09-23 change — the dash stopping dead on the shadow
+rather than sliding past it, for precise fighting — stays.
 
 It is a **press**, not a held button, and it answers only a dash. Every dodge in the game
 has a punishable tail, and a jump out of *that* would be a universal escape rather than one
@@ -397,7 +408,7 @@ makes with Rush.
 - Does the shadow have collision, or is it purely a marker? Collision makes it
   denial-able, which cuts both ways. **It has none today.**
 - **How long should the carry be, and how much of the dash should the jump keep?** Ten
-  frames and a fifth are first values. The dash no longer slides past the shadow at all.
+  frames, all of the dash and a six-frame press buffer are the values since 2026-10-04. The dash no longer slides past the shadow at all.
   Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
 - **The tally's numbers.** Five marks, a fade of a second and a half, 0.4 a mark. All first guesses; see the open questions in
