@@ -76,6 +76,8 @@ pub mod lab;
 
 pub mod climb;
 
+pub mod bench;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -105,14 +107,18 @@ impl ArenaId {
     /// A dev arena for measuring movement: see [`lab`] and `crate::envelope`.
     pub const LAB: ArenaId = ArenaId(13);
     /// **The jump courses** (`docs/design/courses.md`): no creature, the
-    /// movement system is the challenge. Two at each tier, all in [`climb`],
+    /// movement system is the challenge. Two or three at each tier, all in [`climb`],
     /// each with its own `crate::course::Course`.
     pub const CLIMB_STAIR: ArenaId = ArenaId(14);
     pub const CLIMB_CAUSEWAY: ArenaId = ArenaId(15);
-    pub const CLIMB_CLIMB: ArenaId = ArenaId(16);
-    pub const CLIMB_DRIFT: ArenaId = ArenaId(17);
+    pub const CLIMB_GALLERY: ArenaId = ArenaId(16);
+    pub const CLIMB_NARROWS: ArenaId = ArenaId(17);
     pub const CLIMB_SPIRE: ArenaId = ArenaId(18);
     pub const CLIMB_GULF: ArenaId = ArenaId(19);
+    pub const CLIMB_SILL: ArenaId = ArenaId(20);
+    pub const CLIMB_EYRIE: ArenaId = ArenaId(21);
+    /// A dev arena of single hops, for measuring a kind of hop: see [`bench`].
+    pub const BENCH: ArenaId = ArenaId(30);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -122,7 +128,7 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 20;
+pub const COUNT: usize = 40;
 
 /// The most solids an arena may have. Every query walks all of them, several
 /// times a frame per body, so this is what keeps a large arena inside the
@@ -163,10 +169,14 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::LAB => Some(&lab::ARENA),
 
+        ArenaId::BENCH => Some(&bench::ARENA),
+
         ArenaId::CLIMB_STAIR => Some(&climb::STAIR),
         ArenaId::CLIMB_CAUSEWAY => Some(&climb::CAUSEWAY),
-        ArenaId::CLIMB_CLIMB => Some(&climb::CLIMB),
-        ArenaId::CLIMB_DRIFT => Some(&climb::DRIFT),
+        ArenaId::CLIMB_GALLERY => Some(&climb::GALLERY),
+        ArenaId::CLIMB_NARROWS => Some(&climb::NARROWS),
+        ArenaId::CLIMB_SILL => Some(&climb::SILL),
+        ArenaId::CLIMB_EYRIE => Some(&climb::EYRIE),
         ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
         ArenaId::CLIMB_GULF => Some(&climb::GULF),
         _ => None,
@@ -601,7 +611,17 @@ fn resolve_among(
                     if vel.y.raw() < 0 {
                         vel.y = Fx::ZERO;
                     }
-                    grounded = true;
+                    // **Lifted onto a top is not landing on it while still
+                    // rising.** A jump that clips a ledge's near corner on
+                    // the way up is pushed up onto the top here -- the
+                    // vertical overlap is the shallowest -- and counted as
+                    // standing, it let a still-held jump fire a second
+                    // takeoff stacked on the first's speed (about 27 m/s up;
+                    // `tests/corner.rs`). She is put on the top and keeps
+                    // rising; she lands when she stops.
+                    if vel.y.raw() <= 0 {
+                        grounded = true;
+                    }
                 } else {
                     pos.y = solid.min.y.sub(height);
                     if vel.y.raw() > 0 {

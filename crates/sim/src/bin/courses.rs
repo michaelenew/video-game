@@ -50,10 +50,40 @@ fn budget() -> usize {
         .position(|a| a == "--budget")
         .and_then(|i| args.get(i + 1))
         .and_then(|n| n.parse().ok())
-        .unwrap_or(1500)
+        .unwrap_or(800)
+}
+
+/// `--bench`: every lane of the bench arena, every class, the most forgiving
+/// line's window -- the shared blocks, and the whole kit.
+fn bench(budget: usize) {
+    use sim::arena::{ArenaId, bench};
+    let solids = ArenaId::BENCH.get().solids();
+    println!("bench -- the most forgiving line's tightest window, of 31, whole kit");
+    print!("  {:<22}", "hop");
+    for class in CLASSES {
+        print!(" {:>10}", short(class));
+    }
+    println!();
+    for (name, a, b) in bench::LANES {
+        print!("  {:<22}", name);
+        for class in CLASSES {
+            let st =
+                sim::search::Stage::hop(ArenaId::BENCH, class, solids[a], solids[b], solids[b]);
+            let seed = (class as u64) << 8 | b as u64;
+            let w = |kit| {
+                c::loosest(&st, kit, budget, seed).map_or("-".to_string(), |l| l.window.to_string())
+            };
+            print!(" {:>10}", w(Kit::Full));
+        }
+        println!();
+    }
 }
 
 fn main() {
+    if std::env::args().any(|a| a == "--bench") {
+        bench(budget());
+        return;
+    }
     let asked: Vec<String> = std::env::args()
         .skip(1)
         .filter(|a| !a.starts_with("--") && a.parse::<usize>().is_err())
@@ -65,8 +95,9 @@ fn main() {
         println!(
             "The jump courses, searched ({budget} runs per search; a search is a lower bound)."
         );
-        println!("S<n>: the shared blocks land it, the tightest input movable n of 31 frames;");
-        println!("otherwise the kit's tools and the window; NO: nothing found.\n");
+        println!("Each cell: the most forgiving line found -- how many of 31 frames its tightest");
+        println!("input can move and still land -- and any tool past the jump, airdodge and");
+        println!("strafe it uses; NO: nothing found.\n");
     }
     for course in course::all() {
         let slug = course.arena().slug();
@@ -93,28 +124,33 @@ fn main() {
         for from in 0..hops {
             for (k, class) in CLASSES.iter().enumerate() {
                 let seed = (*class as u64) << 24 | (course.arena.0 as u64) << 8 | from as u64;
-                let shared = c::solve(course, *class, from, 1, Kit::Shared, budget / 2, seed);
-                // The whole kit, from two seeds before giving up.
-                let full = match &shared {
-                    Some(_) => None,
-                    None => c::solve(course, *class, from, 1, Kit::Full, budget, seed)
-                        .or_else(|| c::solve(course, *class, from, 1, Kit::Full, budget, !seed)),
-                };
-                let cell = match (&shared, &full) {
-                    (Some(l), _) => format!("S{}", l.window),
-                    (None, Some(l)) => format!("{} {}", c::uses(&l.program).join("+"), l.window),
-                    _ => "NO".to_string(),
-                };
-                for (kit, line) in [("shared", &shared), ("full", &full)] {
-                    if let (true, Some(l)) = (fixtures, line) {
-                        eprintln!(
-                            "{slug} {from} 1 {} {kit} | {}",
-                            class.name().replace(' ', "_"),
-                            l.program
-                        );
+                let st = c::stage(course, *class, from, 1);
+                // A miss is often the search's and not the class's: once more,
+                // harder, before calling it.
+                let line = c::loosest(&st, Kit::Full, budget, seed)
+                    .or_else(|| c::loosest(&st, Kit::Full, budget * 3, seed.rotate_left(17)));
+                let cell = match &line {
+                    Some(l) => {
+                        let tools: Vec<&str> = c::uses(&l.program)
+                            .into_iter()
+                            .filter(|t| !matches!(*t, "jump" | "strafe"))
+                            .collect();
+                        if tools.is_empty() {
+                            format!("{}", l.window)
+                        } else {
+                            format!("{} {}", l.window, tools.join("+"))
+                        }
                     }
+                    None => "NO".to_string(),
+                };
+                if let (true, Some(l)) = (fixtures, &line) {
+                    eprintln!(
+                        "{slug} {from} 1 {} full | {}",
+                        class.name().replace(' ', "_"),
+                        l.program
+                    );
                 }
-                if shared.is_some() || full.is_some() {
+                if line.is_some() {
                     cleared[k][from] = true;
                 }
                 cells[from][k] = cell;
@@ -128,8 +164,12 @@ fn main() {
                 }
                 let seed =
                     (*class as u64) << 24 | (course.arena.0 as u64) << 8 | 0x80 | from as u64;
-                let pair = c::solve(course, *class, from - 1, 2, Kit::Full, budget, seed)
-                    .or_else(|| c::solve(course, *class, from - 1, 2, Kit::Full, budget, !seed));
+                let pair = c::loosest(
+                    &c::stage(course, *class, from - 1, 2),
+                    Kit::Full,
+                    budget,
+                    seed,
+                );
                 if let Some(l) = pair {
                     cleared[k][from] = true;
                     cells[from][k] =

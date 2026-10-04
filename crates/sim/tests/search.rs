@@ -6,8 +6,8 @@
 //! §1 and §5). This replays every one: each envelope line lands on its lab
 //! ledge across at least the gap it claims, and each course line lands on
 //! the island it claims. And it holds the courses to what the document says
-//! of them: every class finishes both hard courses, and each barely possible
-//! one is finished by the class it was built against.
+//! of them: every class finishes all three hard courses, and each barely
+//! possible one is finished by the class it was built against.
 //!
 //! A search is a lower bound. If a change to the game makes a line here stop
 //! working, either the change took that reach away -- say so in
@@ -109,7 +109,7 @@ fn every_course_line_lands_and_the_routes_are_what_the_document_says() {
         Class::DualMage,
         Class::Champion,
     ] {
-        for slug in ["stair", "causeway", "climb", "drift"] {
+        for slug in ["stair", "causeway", "gallery", "narrows", "sill"] {
             assert!(
                 finishes(&rows, slug, class),
                 "the {} does not finish {slug}",
@@ -118,5 +118,6 @@ fn every_course_line_lands_and_the_routes_are_what_the_document_says() {
         }
     }
     assert!(finishes(&rows, "spire", Class::Elementalist));
+    assert!(finishes(&rows, "eyrie", Class::Elementalist));
     assert!(finishes(&rows, "gulf", Class::ShadowReaver));
 }

@@ -365,6 +365,9 @@ pub struct Outcome {
     /// How near a miss was: horizontally outside the goal, plus how far below
     /// its top she was, at the closest. Zero on a landing.
     pub short: Fx,
+    /// On a landing, how far from the goal's middle her feet came down: a
+    /// line that lands in the middle has room either side to be wrong.
+    pub off: Fx,
 }
 
 /// Whole metres: a size in the instrument's own bookkeeping, not a feel.
@@ -503,6 +506,7 @@ pub fn run_watching(stage: &Stage, prog: &Program, mut watch: impl FnMut(&World)
             out.landed = true;
             out.frame = f;
             out.short = Fx::ZERO;
+            out.off = p.pos.sub(middle(&to)).flat_len();
             break;
         }
         // Gone: into a course's pit, or well under both tops.
@@ -549,7 +553,7 @@ pub fn score(stage: &Stage, o: &Outcome) -> i64 {
             gap - 2 * short - metres(50).raw() as i64
         }
     } else if o.landed {
-        metres(1000).raw() as i64 - o.frame as i64
+        metres(1000).raw() as i64 - o.off.raw() as i64
     } else {
         -short
     }
@@ -1026,6 +1030,34 @@ pub fn search_from(
             }
         }
     }
+    let elite = elite_of(stage, kit, budget, &mut rng, starts);
+    let (p, o) = elite.into_iter().next().expect("seeds are never empty");
+    (p, o)
+}
+
+/// [`search_from`], keeping the best few rather than the best: what a caller
+/// that wants the most forgiving of several lines picks from.
+pub fn search_elite(
+    stage: &Stage,
+    kit: Kit,
+    budget: usize,
+    seed: u64,
+    extra: Vec<Program>,
+) -> Vec<(Program, Outcome)> {
+    let mut rng = Rng(seed ^ 0x9E37_79B9_7F4A_7C15);
+    let mut starts = seeds(stage.class, kit);
+    starts.extend(extra);
+    elite_of(stage, kit, budget, &mut rng, starts)
+}
+
+fn elite_of(
+    stage: &Stage,
+    kit: Kit,
+    budget: usize,
+    rng: &mut Rng,
+    starts: Vec<Program>,
+) -> Vec<(Program, Outcome)> {
+    let mut rng = *rng;
     let mut elite: Vec<(i64, Program, Outcome)> = starts
         .into_iter()
         .map(|p| {
@@ -1051,8 +1083,7 @@ pub fn search_from(
             elite.truncate(keep);
         }
     }
-    let (_, p, o) = elite.swap_remove(0);
-    (p, o)
+    elite.into_iter().map(|(_, p, o)| (p, o)).collect()
 }
 
 /// How far either way [`window`] moves an input: fifteen frames, a quarter

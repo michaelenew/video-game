@@ -67,7 +67,7 @@ fn every_course_is_well_formed() {
 
 #[test]
 fn a_fall_stands_you_on_your_last_checkpoint_and_counts() {
-    let c = named("climb");
+    let c = named("gallery");
     let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], c.arena);
     // Reach the first checkpoint: stand on it.
     let check = c.gate(1);

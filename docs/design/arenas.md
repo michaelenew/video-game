@@ -125,14 +125,17 @@ ground, so a fight there hashes as it always did.
   (site `wall`); the walk to the siege line is the clock. See
   [creatures/siegeshell.md](creatures/siegeshell.md) §11.
 
+- **The bench** (`arena/bench.rs`, 2026-10-04): a dev arena of single hops, regenerated per
+  experiment, for measuring a kind of hop before a course is built from it
+  (`courses -- --bench`).
 - **The lab** (`arena/lab.rs`, 2026-10-03): a dev arena for measuring
   movement -- a 40 m runway with a real edge, seventeen hanging ledges half a
   metre past it from 8 m below its top to 45 m above, and an open floor.
   `cargo run -p sim --bin envelope` searches every class in it
   ([courses.md](courses.md) §1).
-- **The jump courses** (`arena/climb.rs`, 2026-10-03): six arenas of rock
+- **The jump courses** (`arena/climb.rs`, 2026-10-03): eight arenas of rock
   islands hanging sixty metres and more over a pit, no creature -- the Stair, the Causeway, the
-  Climb, the Drift, the Spire, the Gulf. Each is also a `course::Course`, a
+  Gallery, the Narrows, the Sill, the Spire, the Eyrie, the Gulf. Each is also a `course::Course`, a
   route of islands with checkpoints; see [courses.md](courses.md). The first
   arenas made mostly of **hanging** solids: every island is a floor on top and
   a ceiling underneath, through the same resolve as a cave's vault.

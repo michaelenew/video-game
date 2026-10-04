@@ -158,3 +158,43 @@ pub fn uses(p: &Program) -> Vec<&'static str> {
     }
     out
 }
+
+/// **The most forgiving line found** for a stage: the search's best few
+/// landing lines, from two seeds (and, for the whole kit, from the shared
+/// line too), each made plain and as forgiving as a short climb makes it; the
+/// one with the widest tightest window. The window is the difficulty measure
+/// the courses are built against (`docs/design/courses.md` §4): a hop whose
+/// most forgiving line still has a narrow window is hard.
+pub fn loosest(stage: &Stage, kit: Kit, budget: usize, seed: u64) -> Option<Line> {
+    let mut found: Vec<Program> = Vec::new();
+    for s in [seed, !seed] {
+        let extra = if kit == Kit::Full {
+            search::search_elite(stage, Kit::Shared, budget / 2, s, Vec::new())
+                .into_iter()
+                .filter(|(_, o)| o.landed)
+                .map(|(p, _)| p)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for (p, o) in search::search_elite(stage, kit, budget, s, extra) {
+            if o.landed && !found.contains(&p) {
+                found.push(p);
+            }
+        }
+    }
+    let mut best: Option<Line> = None;
+    for (i, p) in found.iter().enumerate() {
+        let p = simplify(stage, p);
+        let (p, window) = forgiving(stage, &p, 8, seed ^ i as u64);
+        if best.as_ref().is_none_or(|b| window > b.window) {
+            let outcome = search::run(stage, &p);
+            best = Some(Line {
+                program: p,
+                outcome,
+                window,
+            });
+        }
+    }
+    best
+}

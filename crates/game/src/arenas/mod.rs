@@ -109,8 +109,10 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
 
         ArenaId::CLIMB_STAIR => &climb::STAIR,
         ArenaId::CLIMB_CAUSEWAY => &climb::CAUSEWAY,
-        ArenaId::CLIMB_CLIMB => &climb::CLIMB,
-        ArenaId::CLIMB_DRIFT => &climb::DRIFT,
+        ArenaId::CLIMB_GALLERY => &climb::GALLERY,
+        ArenaId::CLIMB_NARROWS => &climb::NARROWS,
+        ArenaId::CLIMB_SILL => &climb::SILL,
+        ArenaId::CLIMB_EYRIE => &climb::EYRIE,
         ArenaId::CLIMB_SPIRE => &climb::SPIRE,
         ArenaId::CLIMB_GULF => &climb::GULF,
         _ => &proving_ground::DRESSING,

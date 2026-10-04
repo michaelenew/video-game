@@ -476,7 +476,7 @@ mod tests {
         );
         assert!(list.contains("N courses"), "{list}");
         // And the names the flags take start one.
-        let s = start(false, None, Some("climb"), None);
-        assert_eq!(s.arena, Some(sim::arena::ArenaId::CLIMB_CLIMB));
+        let s = start(false, None, Some("gallery"), None);
+        assert_eq!(s.arena, Some(sim::arena::ArenaId::CLIMB_GALLERY));
     }
 }
