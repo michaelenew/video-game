@@ -132,6 +132,14 @@ which is what it used to be, and what made the class's whole setup free.
 
 **Out:** the second body races to where the crosshair is pointing and stops there.
 
+**Where it cannot stand, it does not go — added 2026-10-04.** Aimed past the edge of an
+island and into a drop, the send looks back toward her along the floor, up to three metres
+(`Send shadow, forgiveness back`), and lands on the first footing it finds, a body's width in
+from the lip. If there is none, the shadow stays with her, the crosshair flashes red for a
+moment (`Send shadow, refusal shown`; a sound later), and the button is free again at once:
+a send that never went out costs no lockout. From play on the jump courses, where the shadow
+used to dive into the abyss. See `aim::footing_toward` and [aiming.md](../aiming.md).
+
 **Home:** pressed again, it dashes back through anything between the two of you, damaging
 and slowing it. **And it takes an open Guillotine lotus with it**, which is the
 combination the kit is built around — see below.

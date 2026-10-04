@@ -847,6 +847,19 @@ pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
 }
 
+/// How far back toward her a send aimed at nowhere to stand looks for
+/// somewhere that is, before it refuses. A small forgiveness, not a search:
+/// aimed off the far edge of an island, the shadow lands on the edge; aimed
+/// at the middle of the drop, it stays with her. See `aim::footing_toward`.
+pub fn shadow_forgive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowForgive)).max(Fx::ZERO)
+}
+
+/// How many frames the crosshair shows that a send was refused.
+pub fn shadow_refused_show() -> u8 {
+    oven::scalar(Scalar::ShadowRefusedShow).clamp(1, 255) as u8
+}
+
 /// How many frames before the dash arrives a jump press is kept for the dash
 /// jump. The dash is a dodge and a dodge is not actionable, so without this a
 /// press a frame early fell on the floor and the dash jump read as badly

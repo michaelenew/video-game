@@ -30,6 +30,10 @@ const COMMITTED: Color = Color::srgba(0.60, 0.66, 0.76, 0.65);
 /// Drawn behind the mark so it stays visible against a pale wall as well as a
 /// dark one.
 const SHADOW: Color = Color::srgba(0.0, 0.0, 0.0, 0.55);
+/// A Reaver's send refused: aimed at nowhere a body could stand
+/// (`sim::aim::footing_toward`). Brief, and the only thing the refusal says
+/// until there is a sound for it.
+const REFUSED: Color = Color::srgba(0.95, 0.25, 0.22, 0.95);
 
 #[derive(Component)]
 pub struct Crosshair;
@@ -139,7 +143,16 @@ pub fn update(
     *visible = Visibility::Inherited;
 
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    let want = if frame.players[sim.local_player()].action.actionable() {
+    let me = &frame.players[sim.local_player()];
+    // The mechanic is not in the interpolated view; the frame it was
+    // refused on is in the newest snapshot, which is all a flash needs.
+    let refused = matches!(
+        sim.cur.players[sim.local_player()].mechanic,
+        sim::class::Mechanic::Shadow(s) if s.refused > 0
+    );
+    let want = if refused {
+        REFUSED
+    } else if me.action.actionable() {
         LIVE
     } else {
         COMMITTED

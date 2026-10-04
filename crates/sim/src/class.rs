@@ -371,6 +371,10 @@ pub struct Shadow {
     /// A jump pressed in the last frames of the dash, before it arrived,
     /// waiting to be thrown on arrival. See `shadow::bank_dash_jump`.
     pub jump_banked: bool,
+    /// Frames left of showing that a send was refused: aimed at nowhere a
+    /// body could stand, with nothing within the forgiveness either. The
+    /// crosshair reads it. See `aim::footing_toward`.
+    pub refused: u8,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -415,6 +419,7 @@ impl Shadow {
             carry: 0,
             lunge: V3::ZERO,
             jump_banked: false,
+            refused: 0,
         }
     }
 

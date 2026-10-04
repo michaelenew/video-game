@@ -2071,3 +2071,96 @@ fn a_cash_in_lands_on_the_creature_too() {
     );
     assert_eq!(left, 0, "the cash-in did not spend the creature's marks");
 }
+
+// ---------------------------------------------------------------------------
+// A send aimed at nowhere to stand -- 2026-10-04, from play on the courses
+// ---------------------------------------------------------------------------
+
+/// The Reach: a Reaver standing on its hub at `x` metres, `z = 0`, facing
+/// down +X toward the hub's front edge at `x = 2`, with the drop beyond it.
+/// The other fighter is parked at the hub's far side.
+fn on_the_reach(x: i32) -> World {
+    let reach = sim::course::all()
+        .find(|c| c.arena().slug() == "reach")
+        .expect("no course called reach");
+    let mut w = World::versus_in([Class::ShadowReaver; sim::state::MAX_PLAYERS], reach.arena);
+    let top = reach.top(0).max.y;
+    w.players[0].pos = V3::new(Fx::from_int(x), top, Fx::ZERO);
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-16), top, Fx::from_int(25));
+    run(&mut w, 20, 0, 0);
+    w
+}
+
+#[test]
+fn a_send_just_past_the_edge_lands_on_the_edge() {
+    let w = on_the_reach(-8);
+    let top = w.players[0].pos.y;
+    let off = V3::new(Fx::ratio(7, 2), Fx::ZERO, Fx::ZERO);
+    let got = with_scene(&w, |scene| {
+        sim::aim::footing_toward(w.players[0].pos, off, scene)
+    })
+    .expect("a metre and a half past the edge, the forgiveness found nothing");
+    assert_eq!(got.y, top, "it settled somewhere other than the hub's top");
+    assert!(
+        got.x.raw() <= Fx::from_int(2).sub(t::body_radius()).raw() + Fx::ratio(1, 4).raw(),
+        "it stood {:.2} m along, balanced on the lip at 2",
+        got.x.to_f32_for_render()
+    );
+}
+
+#[test]
+fn a_send_far_into_the_drop_finds_nothing() {
+    let w = on_the_reach(-8);
+    let far = V3::new(Fx::from_int(7), Fx::ZERO, Fx::ZERO);
+    let got = with_scene(&w, |scene| {
+        sim::aim::footing_toward(w.players[0].pos, far, scene)
+    });
+    assert!(
+        got.is_none(),
+        "five metres out over the drop, it found footing at {got:?}"
+    );
+}
+
+#[test]
+fn a_refused_send_stays_with_her_and_can_be_tried_again() {
+    // Level look: the send's full range on the flat, nine metres, which from
+    // the lip is seven metres out over the drop -- past the forgiveness.
+    let mut w = on_the_reach(0);
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    tap(&mut w, R, 0, send.startup as u32 + 2);
+    let s = shadow(&w);
+    assert!(
+        matches!(s.doing, Ghost::Attending),
+        "the shadow went out into the drop: {:?}",
+        s.doing
+    );
+    assert!(s.refused > 0, "the refusal did not show");
+    assert!(
+        !w.players[0].locked_out(SLOT_MECHANIC),
+        "a send that never went out still locked the button"
+    );
+}
+
+#[test]
+fn a_send_off_the_edge_from_a_few_metres_back_lands_on_the_hub() {
+    // Five metres back: nine out ends four past the lip, inside the
+    // forgiveness, so the shadow should come down on the hub's front edge.
+    let mut w = on_the_reach(-5);
+    let top = w.players[0].pos.y;
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    tap(
+        &mut w,
+        R,
+        0,
+        (send.whiff_cost() + t::shadow_send_frames()) as u32,
+    );
+    let s = shadow(&w);
+    assert!(s.is_out(), "the send was refused with footing in reach");
+    assert_eq!(s.pos.y, top, "the shadow is not on the hub's top");
+    assert!(
+        s.pos.x.raw() < Fx::from_int(2).raw(),
+        "the shadow is at {:.2}, past the lip",
+        s.pos.x.to_f32_for_render()
+    );
+}

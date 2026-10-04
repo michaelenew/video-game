@@ -6298,6 +6298,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.carry as u32);
             hash_v3(h, &shadow.lunge);
             h.write_u32(shadow.jump_banked as u32);
+            h.write_u32(shadow.refused as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -6537,9 +6538,26 @@ impl World {
     /// they track the shadow rather than the ground they drag the length of the
     /// arena behind it. A recall through a crowd is the Reaver's biggest turn.
     fn order_the_shadow(&mut self, who: usize, to: V3) {
-        let Some(order) = shadow::order(&mut self.players[who], to) else {
+        let stones = stones::gather(&self.players);
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &self.players,
+            effects: &self.effects,
+            quarry: &self.monsters,
+            critters: &self.critters,
+            arena: &self.terrain(),
+        };
+        let footing = aim::footing_toward(self.players[who].pos, to, &scene);
+        let Some(order) = shadow::order(&mut self.players[who], footing) else {
             return;
         };
+        if order == shadow::Order::Refused {
+            // Nothing went out, so nothing is owed: the press can be tried
+            // again at once rather than waiting out a lockout on a throw that
+            // never happened.
+            self.players[who].repeat_lock[SLOT_MECHANIC as usize] = 0;
+            return;
+        }
         if order != shadow::Order::Recalled {
             return;
         }

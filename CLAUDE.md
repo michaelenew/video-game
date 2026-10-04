@@ -95,7 +95,10 @@ on* -- `+y` on the floor, the mounted part's own on a creature -- which is what
 `swing_path`'s dead zone is measured against (bestiary A4, the Galewing).
 `aim::blink_to` answers *where does a body sent along the floor stop* -- the
 Dual mage's blink, short of the first thing its feet meet -- and `aim::settle`
-*what does this point stand on*. **Every eye `aim.rs` starts
+*what does this point stand on*. `aim::standable` asks *is that footing* (not a
+course's drop), and `aim::footing_toward` *where nearby is*, if the aimed spot
+is not: the Reaver's send scans a little way back toward her and is refused if
+nothing is there. **Every eye `aim.rs` starts
 from is `camera::eye_under`**: the eye held under a cave's vault, which the
 drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 

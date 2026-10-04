@@ -629,6 +629,11 @@ scalars! {
     // How early, before the dash arrives, a jump press is kept for the dash
     // jump rather than dropped on the floor of a dodge that is not actionable.
     DashJumpBuffer,   "Reaver",    "Dash jump, press kept before arrival",  Frames, 0,        20;
+    // How far back toward her a send that points at nowhere to stand looks
+    // for somewhere that is, before it refuses (`aim::footing_toward`).
+    ShadowForgive,    "Reaver",    "Send shadow, forgiveness back (m)",     Fixed,  0,        fx(10,1);
+    // How long the crosshair shows a refused send.
+    ShadowRefusedShow, "Reaver",   "Send shadow, refusal shown (frames)",   Frames, 1,        60;
 }
 
 // ---------------------------------------------------------------------------

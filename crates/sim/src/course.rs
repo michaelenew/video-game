@@ -199,6 +199,13 @@ pub fn of(arena: ArenaId) -> Option<&'static Course> {
 
 /// Every course, in the order the picker steps through them: by tier, then
 /// as listed.
+/// The height a body has fallen below in this arena, if it is a course: the
+/// floor under its islands is a drop, not somewhere to stand. `None` for every
+/// arena whose floor is a floor.
+pub fn pit_of(arena: ArenaId) -> Option<Fx> {
+    of(arena).map(|c| cm(c.pit))
+}
+
 pub fn all() -> impl Iterator<Item = &'static Course> {
     crate::arena::climb::COURSES.iter().copied()
 }

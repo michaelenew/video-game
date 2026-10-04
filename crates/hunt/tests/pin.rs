@@ -34,7 +34,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     (Class::DualMage, 2_222, 0x524327a652326b5c),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
-    (Class::ShadowReaver, 31, 0x0c0dd4d4aa8a059c),
+    (Class::ShadowReaver, 31, 0xe5d88764654e392c),
     (Class::Elementalist, 59, 0x33eb170574ec1780),
     (Class::BloodMage, 83, 0x72ec7ddafe8f9fd9),
 ];

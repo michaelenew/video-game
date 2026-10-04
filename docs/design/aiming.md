@@ -449,6 +449,17 @@ where the **first** of the four lines meets something, less her own radius.
 it — a stone's top, a ledge, the floor — for anything that lands a thing
 somewhere it was not aimed (a thrown body, a mark on the ground).
 
+**Can a body stand there, and if not, where nearby can it?** `aim::standable`
+says whether a settled point is footing: anywhere but a course's drop, whose
+floor is a pit rather than ground. `aim::footing_toward` is the Reaver's send
+asking it (added 2026-10-04, from play: the shadow dived into the abyss). The
+grounded point itself when it is footing; otherwise the first footing scanning
+back toward her along the floor, for at most `Send shadow, forgiveness back`
+(3 m), then a body's width further onto it; otherwise nothing, and the send
+is refused. A small forgiveness and then a refusal, never a search for the
+nearest footing anywhere: a placement that goes somewhere the player did not
+point is what this document exists to prevent.
+
 **Which way is up underfoot?** `aim::underfoot_up` — `+y` on the floor and on
 anything in the arena, the mounted part's own `+y` on a creature. What the
 swing's dead zone is measured against (§"Swing", bestiary A4); added

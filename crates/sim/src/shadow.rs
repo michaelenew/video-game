@@ -75,6 +75,7 @@ fn heel(p: &Player) -> V3 {
 /// mechanic upkeep happens for every class.
 pub fn step(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
+    shadow.refused = shadow.refused.saturating_sub(1);
 
     // It turns the way she turns. It is her shadow: it does what she does, and
     // that includes which way it is pointed, which is what makes its copy of a
@@ -397,17 +398,26 @@ pub enum Order {
     Sent,
     /// It was out, and now it is coming home through anybody in the way.
     Recalled,
+    /// It was with her, and it was pointed at nowhere it could stand: it
+    /// stays, and the refusal shows. See `aim::footing_toward`.
+    Refused,
 }
 
 /// Throw the shadow at `to`, or call it home if it is already out.
 ///
 /// One button, two meanings, decided by where the second body is — the same
 /// shape as the Bulwark's shield, and for the same reason: the mechanic has a
-/// position, so the only thing the key can mean is "change it".
-pub fn order(p: &mut Player, to: V3) -> Option<Order> {
+/// position, so the only thing the key can mean is "change it". `to` is
+/// `None` when the send was aimed at nowhere it could stand
+/// (`aim::footing_toward`): a send then is refused, and a recall is a recall.
+pub fn order(p: &mut Player, to: Option<V3>) -> Option<Order> {
     let mut shadow = of(p)?;
-    let order = match shadow.doing {
-        Ghost::Attending => {
+    let order = match (shadow.doing, to) {
+        (Ghost::Attending, None) => {
+            shadow.refused = t::shadow_refused_show();
+            Order::Refused
+        }
+        (Ghost::Attending, Some(to)) => {
             shadow.doing = Ghost::Casting {
                 from: shadow.pos,
                 to,
@@ -418,8 +428,8 @@ pub fn order(p: &mut Player, to: V3) -> Option<Order> {
         // Already on its way home. Pressing again does not hurry it, but the
         // press is still a recall as far as everything downstream is concerned
         // -- the lotus reads the order, not the state.
-        Ghost::Returning { .. } => Order::Recalled,
-        Ghost::Casting { .. } | Ghost::Waiting => {
+        (Ghost::Returning { .. }, _) => Order::Recalled,
+        (Ghost::Casting { .. } | Ghost::Waiting, _) => {
             shadow.doing = Ghost::Returning { struck: 0 };
             Order::Recalled
         }

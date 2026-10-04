@@ -7412,3 +7412,25 @@ further) and is re-pinned; the sim's Ridgeback pin changed only by the new field
 
 **Verdict** kept on the user's word. Open: whether it clears a fight arena too readily again,
 and whether shadow range should come down so the dash jump carries her mobility (courses.md).
+
+### 2026-10-04 — a send aimed into the drop stays home
+
+**Changed** The Reaver's send, aimed where no body could stand (on the courses, the drop
+between islands), scans back toward her along the floor for up to `Send shadow, forgiveness
+back` (3 m, new knob) and lands on the first footing, a body's width in from the lip. Nothing
+there: the shadow stays with her, the crosshair flashes red for `Send shadow, refusal shown`
+(18 frames, new knob), and the send's repeat lockout is refunded.
+`aim::standable` and `aim::footing_toward` are new; only the send uses them.
+
+**Why** From play: "The reaver's shadow diving into the abyss isn't right... a small bit of
+forgiveness and then feedback if the shadow can't be placed." Auditory feedback is wanted
+eventually; the red crosshair is today's minor visual cue.
+
+**Measured** `reaver::a_send_just_past_the_edge_lands_on_the_edge`,
+`a_send_far_into_the_drop_finds_nothing`, `a_refused_send_stays_with_her_and_can_be_tried_again`,
+`a_send_off_the_edge_from_a_few_metres_back_lands_on_the_hub`, all on the Reach. Off the
+courses nothing changes: every other arena's floor is footing. Both pinned hunts are
+re-pinned for the new hashed field only; they play identically.
+
+**Verdict** kept on the user's word, unplayed. Open: whether three metres is the right
+forgiveness, and whether the refusal reads at a glance.
