@@ -36,17 +36,16 @@ creature placed winding that move up at player one.
 
 ## The jump courses
 
-Taken 2026-10-04, round three, with `GAME_ARGS="--arena <name> --p1 <class> --p2 <class>"`,
-`SHOT_FRAME=60`, `DEMO=0` and a `SHOT_PITCH` per course (−0.3 to −0.35 looking out,
-+0.45 looking up at the Spire and the Eyrie, −0.6 for the drop); see
-[courses.md](../courses.md). The panel at the right is the course list and the run.
-The hard courses' roofs are six metres thick and fill the top of the screen from
-the start: a cave mouth with the next stone under its lip.
+Taken 2026-10-04, round four, with `GAME_ARGS="--arena <name> --p1 <class> --p2 <class>"`,
+`SHOT_FRAME=60`, `DEMO=0` and a `SHOT_PITCH` per course (about −0.2 looking out,
+near level at the Spiral and the Spire); see [courses.md](../courses.md). The panel
+at the right is the course list and the run. Grass is a path island, sand a
+stepping stone, snow a checkpoint, wood the nest; grey rock is never the route.
+Every tier is an unplayed guess.
 
 | | |
 | --- | --- |
 | ![](course-stair.jpg) **The Stair** (easy), the Champion. | ![](course-causeway.jpg) **The Causeway** (easy), the Blood mage. |
-| ![](course-gallery.jpg) **The Gallery** (hard), the Reaver: the roofs over the gaps, the stones under them. | ![](course-narrows.jpg) **The Narrows** (hard), the Dual mage: ledges 60 cm wide. |
-| ![](course-sill.jpg) **The Sill** (hard), the Champion. | ![](course-spire.jpg) **The Spire** (barely possible), the summit 32 m up. |
-| ![](course-eyrie.jpg) **The Eyrie** (barely possible), 38 m up. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver: twelve metres under a roof. |
-| ![](course-drop.jpg) **The drop**, from the Gallery's start: sixty metres down, spires crowned with trees for scale. | |
+| ![](course-spiral.jpg) **The Spiral** (hard), the Elementalist: ledges climbing round the pillar. | ![](course-falls.jpg) **The Falls** (hard), the Reaver: the stair and the arch ahead. |
+| ![](course-slalom.jpg) **The Slalom** (hard), the Dual mage: stones between the pillars, the cave mouth beyond. | ![](course-fork.jpg) **The Fork** (hard), the Champion: high road right, low road left. |
+| ![](course-spire.jpg) **The Spire** (barely possible), the Elementalist. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver: the runway and the long gaps. |

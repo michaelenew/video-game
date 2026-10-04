@@ -111,12 +111,12 @@ impl ArenaId {
     /// each with its own `crate::course::Course`.
     pub const CLIMB_STAIR: ArenaId = ArenaId(14);
     pub const CLIMB_CAUSEWAY: ArenaId = ArenaId(15);
-    pub const CLIMB_GALLERY: ArenaId = ArenaId(16);
-    pub const CLIMB_NARROWS: ArenaId = ArenaId(17);
+    pub const CLIMB_SPIRAL: ArenaId = ArenaId(16);
+    pub const CLIMB_FALLS: ArenaId = ArenaId(17);
     pub const CLIMB_SPIRE: ArenaId = ArenaId(18);
     pub const CLIMB_GULF: ArenaId = ArenaId(19);
-    pub const CLIMB_SILL: ArenaId = ArenaId(20);
-    pub const CLIMB_EYRIE: ArenaId = ArenaId(21);
+    pub const CLIMB_SLALOM: ArenaId = ArenaId(20);
+    pub const CLIMB_FORK: ArenaId = ArenaId(21);
     /// A dev arena of single hops, for measuring a kind of hop: see [`bench`].
     pub const BENCH: ArenaId = ArenaId(30);
 
@@ -173,10 +173,10 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::CLIMB_STAIR => Some(&climb::STAIR),
         ArenaId::CLIMB_CAUSEWAY => Some(&climb::CAUSEWAY),
-        ArenaId::CLIMB_GALLERY => Some(&climb::GALLERY),
-        ArenaId::CLIMB_NARROWS => Some(&climb::NARROWS),
-        ArenaId::CLIMB_SILL => Some(&climb::SILL),
-        ArenaId::CLIMB_EYRIE => Some(&climb::EYRIE),
+        ArenaId::CLIMB_SPIRAL => Some(&climb::SPIRAL),
+        ArenaId::CLIMB_FALLS => Some(&climb::FALLS),
+        ArenaId::CLIMB_SLALOM => Some(&climb::SLALOM),
+        ArenaId::CLIMB_FORK => Some(&climb::FORK),
         ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
         ArenaId::CLIMB_GULF => Some(&climb::GULF),
         _ => None,

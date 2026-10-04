@@ -74,7 +74,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --arena <name>",
-                "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, gallery, narrows, sill, spire, eyrie, gulf), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
+                "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, spiral, falls, slalom, fork, spire, gulf), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
                 "cargo run -p game -- --hunt <creature> --temper <n>",
@@ -113,7 +113,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?arena=<name>",
-                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, gallery, narrows, sill, spire, eyrie, gulf.",
+                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, spiral, falls, slalom, fork, spire, gulf.",
             ),
             e(
                 "?temper=<n>",
@@ -414,15 +414,15 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "Jump courses",
         in_browser: true,
-        blurb: "Islands of rock hanging over a long drop, nothing to fight: the movement system is the challenge. Two easy, three hard, three barely possible; docs/design/courses.md has every hop and how much room for error each class gets on it.",
+        blurb: "Islands of rock hanging over a long drop, nothing to fight: the movement system is the challenge. Two easy, four hard, two barely possible -- every tier a guess until somebody plays them; docs/design/courses.md has the list.",
         entries: &[
             e(
                 "N",
-                "The next jump course, in order of difficulty: the Stair and the Causeway (easy), the Gallery, the Narrows and the Sill (hard -- low roofs over every gap, small stones and narrow ledges, turning at every hop: every class can finish them, with a few frames to spare), the Spire, the Eyrie and the Gulf (barely possible: the first two the Elementalist's, the Gulf the Reaver's and the Champion's). From anywhere else, the first. Online, both players go together.",
+                "The next jump course, in order of difficulty: the Stair and the Causeway (easy); the Spiral round a great pillar, the Falls over an arch and down a waterfall of stones, the Slalom between pillars and through a cave mouth, and the Fork with its high and low roads (hard); the Spire and the Gulf (barely possible). From anywhere else, the first. Online, both players go together.",
             ),
             e(
                 "--arena stair, ?arena=stair",
-                "Start in a course by name: stair, causeway, gallery, narrows, sill, spire, eyrie or gulf. With --p1 (or ?p1=) for the class.",
+                "Start in a course by name: stair, causeway, spiral, falls, slalom, fork, spire or gulf. With --p1 (or ?p1=) for the class.",
             ),
             e(
                 "Falling",

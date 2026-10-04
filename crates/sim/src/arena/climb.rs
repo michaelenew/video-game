@@ -6,8 +6,7 @@
 //! **islands of rock hanging in open air** at staggered heights, a deep fall
 //! under every gap -- sixty metres and more -- to a dark floor (the **pit**: below it you are stood back
 //! on your last checkpoint, `crate::course`), stepping-stone chains of small
-//! islands, tunnels of low roofs through the rock, and the finish on the last
-//! island, a nest -- the Galewing's rookery, where the bird would live. Every
+//! islands, and the finish on the last island, a nest -- the Galewing's rookery, where the bird would live. Every
 //! island but the first hangs: its bottom is above the floor, so it is a
 //! ceiling to whatever is under it as well as a floor to whoever is on it. The
 //! first is **the foot**, a spire standing on the floor, because a round
@@ -17,40 +16,36 @@
 //! | --- | --- | --- |
 //! | The Stair (`stair`) | easy | An easy ascent: six islands, each a little higher, every gap well inside a plain jump for every class. |
 //! | The Causeway (`causeway`) | easy | An easy crossing, read horizontally and drifting down: level gaps, two stepping stones and a long bridge. |
-//! | The Gallery (`gallery`) | hard | Hard: a tunnel of slabs through the rocks, zig-zagging, every hop under a roof a hand above the head onto a stone a metre and a half across. |
-//! | The Narrows (`narrows`) | hard | Hard: ledges sixty centimetres wide under low roofs, turning at every one. |
-//! | The Sill (`sill`) | hard | Hard: stones stepping up thirty centimetres at a time under roofs, turning, so no hop is the same jump twice. |
-//! | The Spire (`spire`) | edge | Barely possible, built against the Elementalist: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out. |
-//! | The Eyrie (`eyrie`) | edge | Barely possible, built against the Elementalist: the Spire's taller sister, the eyrie 38 m above the launch and a metre out from it. |
-//! | The Gulf (`gulf`) | edge | Barely possible: two gaps of twelve metres under roofs a hand over the head, too low to jump far and too long to dash -- the dash jump, or the Rush. |
+//! | The Spiral (`spiral`) | hard | Hard (a guess): a climb round a great pillar on ledges stepping up its four faces, one and a quarter turns, the ledges smaller on the second turn, to a nest on its crown. |
+//! | The Falls (`falls`) | hard | Hard (a guess): a stair of stones up onto a twenty-metre arch, a run along it and a leap off its end down onto a big landing, then a waterfall of small stones stepping down left and right to a pool. |
+//! | The Slalom (`slalom`) | hard | Hard (a guess): stepping stones weaving between tall pillars, then the one roof in the set -- a cave mouth over three islands -- and out into the light. |
+//! | The Fork (`fork`) | hard | Hard (a guess): a hub with two ways on -- a high road up stacked ledges and along the tops, a low road of stepping stones -- that meet again; a committed leap down onto a big landing; a long runway to the nest. |
+//! | The Spire (`spire`) | edge | Barely possible (a guess), the Elementalist's: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out. |
+//! | The Gulf (`gulf`) | edge | Barely possible (a guess): an expert line in the open -- a runway, then eight-, seven- and six-metre leaps onto ever smaller stones, and a last nine-metre leap down to the nest. |
 //!
-//! **Generated from a list of hops** -- a direction, the gap from the last
-//! island's edge, the rise from its top, the size -- so each route's numbers
-//! are what was built, and are written into the route (`Step::gap`,
-//! `Step::rise`) for the instrument to read. The hard courses (round three)
-//! are built from **constraints rather than distance**: a roof a hand over the
-//! head caps every jump, launch and hang alike, over the takeoff and the gap
-//! and not the target (so the Grasp has nothing over it to haul to), onto small
-//! stones or narrow ledges, turning at every hop. Each hop's gap was set by
-//! measuring every class's most forgiving line on the bench
-//! (`courses -- --bench`) and then on the course: `cargo run --release -p sim
-//! --bin courses`.
+//! **Authored by hand** (round four), as places to play rather than to
+//! measure: a spiral round a pillar, an arch and a waterfall of stones, a
+//! slalom between pillars with one cave mouth, a fork with a high road and a
+//! low road. Path islands are grass, stepping stones sand, checkpoints snow,
+//! scenery grey rock. Every tier is the author's guess, waiting on play.
+//! The easy two and the Spire are older, built from lists of hops; the rest
+//! from small builders in the generator.
 
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::class::Class;
 use crate::course::{Course, Step, Tier};
 
-use Material::{Grass, Peat, Rock, Wood};
+use Material::{Grass, Peat, Rock, Sand, Snow, Wood};
 
 /// Every course, in the order `N` steps through them: by tier.
 pub static COURSES: [&Course; 8] = [
     &STAIR_COURSE,
     &CAUSEWAY_COURSE,
-    &GALLERY_COURSE,
-    &NARROWS_COURSE,
-    &SILL_COURSE,
+    &SPIRAL_COURSE,
+    &FALLS_COURSE,
+    &SLALOM_COURSE,
+    &FORK_COURSE,
     &SPIRE_COURSE,
-    &EYRIE_COURSE,
     &GULF_COURSE,
 ];
 
@@ -259,58 +254,476 @@ static CAUSEWAY_COURSE: Course = Course {
 };
 
 // ---------------------------------------------------------------------------
-// The Gallery: hard
+// The Spiral: hard
 // ---------------------------------------------------------------------------
 
-/// Hard: a tunnel of slabs through the rocks, zig-zagging, every hop under a roof a hand above the head onto a stone a metre and a half across.
-pub static GALLERY: Arena = Arena {
-    id: ArenaId::CLIMB_GALLERY,
-    name: "Gallery",
+/// Hard (a guess): a climb round a great pillar on ledges stepping up its four faces, one and a quarter turns, the ledges smaller on the second turn, to a nest on its crown.
+pub static SPIRAL: Arena = Arena {
+    id: ArenaId::CLIMB_SPIRAL,
+    name: "Spiral",
     creature: None,
-    bounds: Bounds::cm((-2300, 4200), (-2400, 2600)),
+    bounds: Bounds::cm((-2300, 4100), (-2800, 2800)),
     floor: Peat,
     regions: &[],
-    solids: &GALLERY_SOLIDS,
+    solids: &SPIRAL_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
 };
 
-const GALLERY_SOLIDS: [Solid; 15] = [
+const SPIRAL_SOLIDS: [Solid; 23] = [
     // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 7000, 300], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([300, 7210, -360], [620, 7810, 360], Rock),
-    // 3.2 m under a roof onto a stone
-    Solid::cm([620, 6920, -75], [770, 7000, 75], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([560, 7205, 75], [830, 7805, 355], Rock),
-    // 2.8 m, turning, under a roof
-    Solid::cm([620, 6920, 355], [770, 7000, 505], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([770, 7240, 295], [1110, 7840, 565], Rock),
-    // 3.4 m and a step up, under a roof
-    Solid::cm([1110, 6950, 355], [1260, 7030, 505], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1050, 7240, 55], [1320, 7840, 355], Rock),
-    // 3 m, turning back
-    Solid::cm([1110, 6950, -95], [1260, 7030, 55], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1260, 7240, -155], [1580, 7840, 115], Rock),
-    // 3.2 m under a roof
-    Solid::cm([1580, 6950, -95], [1730, 7030, 55], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([1520, 7235, 55], [1790, 7835, 355], Rock),
-    // 3 m, turning
-    Solid::cm([1580, 6950, 355], [1730, 7030, 505], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1730, 7240, 295], [2030, 7840, 565], Rock),
-    // 3 m to the nest
-    Solid::cm([2030, 6630, 355], [2180, 7030, 505], Wood),
+    Solid::cm([-300, 0, -300], [300, 6800, 300], Rock),
+    // ledge 1 round the pillar
+    Solid::cm([575, 6760, -570], [725, 6880, -330], Grass),
+    // ledge 2 round the pillar
+    Solid::cm([575, 6835, -170], [725, 6955, 70], Grass),
+    // ledge 3 round the pillar
+    Solid::cm([575, 6910, 230], [725, 7030, 470], Grass),
+    // ledge 4 round the pillar
+    Solid::cm([730, 6985, 575], [970, 7105, 725], Grass),
+    // ledge 5 round the pillar
+    Solid::cm([1130, 7060, 575], [1370, 7180, 725], Snow),
+    // ledge 6 round the pillar
+    Solid::cm([1530, 7135, 575], [1770, 7255, 725], Grass),
+    // ledge 7 round the pillar
+    Solid::cm([1875, 7210, 330], [2025, 7330, 570], Grass),
+    // ledge 8 round the pillar
+    Solid::cm([1875, 7285, -70], [2025, 7405, 170], Grass),
+    // ledge 9 round the pillar
+    Solid::cm([1875, 7360, -470], [2025, 7480, -230], Snow),
+    // ledge 10 round the pillar
+    Solid::cm([1630, 7435, -725], [1870, 7555, -575], Grass),
+    // ledge 11 round the pillar
+    Solid::cm([1230, 7510, -725], [1470, 7630, -575], Grass),
+    // ledge 12 round the pillar
+    Solid::cm([830, 7585, -725], [1070, 7705, -575], Grass),
+    // ledge 13 round the pillar
+    Solid::cm([575, 7660, -520], [725, 7780, -380], Snow),
+    // ledge 14 round the pillar
+    Solid::cm([575, 7750, -120], [725, 7870, 20], Sand),
+    // ledge 15 round the pillar
+    Solid::cm([575, 7840, 280], [725, 7960, 420], Sand),
+    // ledge 16 round the pillar
+    Solid::cm([780, 7930, 575], [920, 8050, 725], Sand),
+    // ledge 17 round the pillar
+    Solid::cm([1180, 8020, 575], [1320, 8140, 725], Snow),
+    // ledge 18 round the pillar
+    Solid::cm([1580, 8110, 575], [1720, 8230, 725], Sand),
+    // ledge 19 round the pillar
+    Solid::cm([1875, 8200, 380], [2025, 8320, 520], Sand),
+    // ledge 20 round the pillar
+    Solid::cm([1875, 8290, -20], [2025, 8410, 120], Sand),
+    // the great pillar: the climb goes round it
+    Solid::cm([800, 0, -500], [1800, 8460, 500], Rock),
+    // the nest on the crown
+    Solid::cm([800, 8460, -500], [1800, 8560, 500], Wood),
 ];
 
-static GALLERY_COURSE: Course = Course {
-    arena: ArenaId::CLIMB_GALLERY,
-    name: "The Gallery",
+static SPIRAL_COURSE: Course = Course {
+    arena: ArenaId::CLIMB_SPIRAL,
+    name: "The Spiral",
+    tier: Tier::Hard,
+    for_class: None,
+    pit: 6280,
+    route: &[
+        Step {
+            solid: 0,
+            check: true,
+            gap: 0,
+            rise: 0,
+            ask: "the start",
+        },
+        Step {
+            solid: 1,
+            check: false,
+            gap: 0,
+            rise: 80,
+            ask: "ledge 1 round the pillar",
+        },
+        Step {
+            solid: 2,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 2 round the pillar",
+        },
+        Step {
+            solid: 3,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 3 round the pillar",
+        },
+        Step {
+            solid: 4,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 4 round the pillar",
+        },
+        Step {
+            solid: 5,
+            check: true,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 5 round the pillar",
+        },
+        Step {
+            solid: 6,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 6 round the pillar",
+        },
+        Step {
+            solid: 7,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 7 round the pillar",
+        },
+        Step {
+            solid: 8,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 8 round the pillar",
+        },
+        Step {
+            solid: 9,
+            check: true,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 9 round the pillar",
+        },
+        Step {
+            solid: 10,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 10 round the pillar",
+        },
+        Step {
+            solid: 11,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 11 round the pillar",
+        },
+        Step {
+            solid: 12,
+            check: false,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 12 round the pillar",
+        },
+        Step {
+            solid: 13,
+            check: true,
+            gap: 0,
+            rise: 75,
+            ask: "ledge 13 round the pillar",
+        },
+        Step {
+            solid: 14,
+            check: false,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 14 round the pillar",
+        },
+        Step {
+            solid: 15,
+            check: false,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 15 round the pillar",
+        },
+        Step {
+            solid: 16,
+            check: false,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 16 round the pillar",
+        },
+        Step {
+            solid: 17,
+            check: true,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 17 round the pillar",
+        },
+        Step {
+            solid: 18,
+            check: false,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 18 round the pillar",
+        },
+        Step {
+            solid: 19,
+            check: false,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 19 round the pillar",
+        },
+        Step {
+            solid: 20,
+            check: false,
+            gap: 0,
+            rise: 90,
+            ask: "ledge 20 round the pillar",
+        },
+        Step {
+            solid: 22,
+            check: true,
+            gap: 0,
+            rise: 150,
+            ask: "the nest on the crown",
+        },
+    ],
+};
+
+// ---------------------------------------------------------------------------
+// The Falls: hard
+// ---------------------------------------------------------------------------
+
+/// Hard (a guess): a stair of stones up onto a twenty-metre arch, a run along it and a leap off its end down onto a big landing, then a waterfall of small stones stepping down left and right to a pool.
+pub static FALLS: Arena = Arena {
+    id: ArenaId::CLIMB_FALLS,
+    name: "Falls",
+    creature: None,
+    bounds: Bounds::cm((-2300, 13200), (-2500, 2500)),
+    floor: Peat,
+    regions: &[],
+    solids: &FALLS_SOLIDS,
+    spawns: SPAWNS,
+    sites: &[],
+};
+
+const FALLS_SOLIDS: [Solid; 16] = [
+    // the foot: a spire standing on the floor, the start
+    Solid::cm([-300, 0, -300], [300, 7200, 300], Rock),
+    // the first island
+    Solid::cm([450, 6960, -250], [950, 7260, 250], Grass),
+    // the stair to the arch, 1
+    Solid::cm([1100, 7270, -140], [1400, 7360, 140], Sand),
+    // the stair to the arch, 2
+    Solid::cm([1520, 7380, -140], [1820, 7470, 140], Sand),
+    // the stair to the arch, 3
+    Solid::cm([1940, 7490, -140], [2240, 7580, 140], Sand),
+    // the stair to the arch, 4
+    Solid::cm([2360, 7600, -140], [2660, 7690, 140], Sand),
+    // the arch: run it
+    Solid::cm([2930, 7750, -150], [5130, 7900, 150], Snow),
+    // the big landing
+    Solid::cm([5730, 7250, -450], [6630, 7550, 450], Snow),
+    // the falls, stone 1
+    Solid::cm([6910, 7330, 170], [7090, 7420, 350], Sand),
+    // the falls, stone 2
+    Solid::cm([7360, 7200, -350], [7540, 7290, -170], Sand),
+    // the falls, stone 3
+    Solid::cm([7810, 7070, 170], [7990, 7160, 350], Sand),
+    // the falls, stone 4
+    Solid::cm([8260, 6940, -350], [8440, 7030, -170], Snow),
+    // the falls, stone 5
+    Solid::cm([8710, 6810, 170], [8890, 6900, 350], Sand),
+    // the falls, stone 6
+    Solid::cm([9160, 6680, -350], [9340, 6770, -170], Sand),
+    // the pool at the foot of the falls
+    Solid::cm([9610, 6340, -300], [10210, 6640, 300], Snow),
+    // the nest
+    Solid::cm([10710, 6340, -200], [11110, 6740, 200], Wood),
+];
+
+static FALLS_COURSE: Course = Course {
+    arena: ArenaId::CLIMB_FALLS,
+    name: "The Falls",
+    tier: Tier::Hard,
+    for_class: None,
+    pit: 6040,
+    route: &[
+        Step {
+            solid: 0,
+            check: true,
+            gap: 0,
+            rise: 0,
+            ask: "the start",
+        },
+        Step {
+            solid: 1,
+            check: false,
+            gap: 0,
+            rise: 60,
+            ask: "the first island",
+        },
+        Step {
+            solid: 2,
+            check: false,
+            gap: 0,
+            rise: 100,
+            ask: "the stair to the arch, 1",
+        },
+        Step {
+            solid: 3,
+            check: false,
+            gap: 0,
+            rise: 110,
+            ask: "the stair to the arch, 2",
+        },
+        Step {
+            solid: 4,
+            check: false,
+            gap: 0,
+            rise: 110,
+            ask: "the stair to the arch, 3",
+        },
+        Step {
+            solid: 5,
+            check: false,
+            gap: 0,
+            rise: 110,
+            ask: "the stair to the arch, 4",
+        },
+        Step {
+            solid: 6,
+            check: true,
+            gap: 0,
+            rise: 210,
+            ask: "the arch: run it",
+        },
+        Step {
+            solid: 7,
+            check: true,
+            gap: 0,
+            rise: -350,
+            ask: "the big landing",
+        },
+        Step {
+            solid: 8,
+            check: false,
+            gap: 0,
+            rise: -130,
+            ask: "the falls, stone 1",
+        },
+        Step {
+            solid: 9,
+            check: false,
+            gap: 0,
+            rise: -130,
+            ask: "the falls, stone 2",
+        },
+        Step {
+            solid: 10,
+            check: false,
+            gap: 0,
+            rise: -130,
+            ask: "the falls, stone 3",
+        },
+        Step {
+            solid: 11,
+            check: true,
+            gap: 0,
+            rise: -130,
+            ask: "the falls, stone 4",
+        },
+        Step {
+            solid: 12,
+            check: false,
+            gap: 0,
+            rise: -130,
+            ask: "the falls, stone 5",
+        },
+        Step {
+            solid: 13,
+            check: false,
+            gap: 0,
+            rise: -130,
+            ask: "the falls, stone 6",
+        },
+        Step {
+            solid: 14,
+            check: true,
+            gap: 0,
+            rise: -130,
+            ask: "the pool at the foot of the falls",
+        },
+        Step {
+            solid: 15,
+            check: true,
+            gap: 0,
+            rise: 100,
+            ask: "the nest",
+        },
+    ],
+};
+
+// ---------------------------------------------------------------------------
+// The Slalom: hard
+// ---------------------------------------------------------------------------
+
+/// Hard (a guess): stepping stones weaving between tall pillars, then the one roof in the set -- a cave mouth over three islands -- and out into the light.
+pub static SLALOM: Arena = Arena {
+    id: ArenaId::CLIMB_SLALOM,
+    name: "Slalom",
+    creature: None,
+    bounds: Bounds::cm((-2300, 8700), (-2500, 2600)),
+    floor: Peat,
+    regions: &[],
+    solids: &SLALOM_SOLIDS,
+    spawns: SPAWNS,
+    sites: &[],
+};
+
+const SLALOM_SOLIDS: [Solid; 22] = [
+    // the foot: a spire standing on the floor, the start
+    Solid::cm([-300, 0, -300], [300, 7000, 300], Rock),
+    // slalom stone 1
+    Solid::cm([600, 6910, 210], [820, 7000, 430], Sand),
+    // a slalom pillar
+    Solid::cm([630, 0, -400], [790, 7900, -240], Rock),
+    // slalom stone 2
+    Solid::cm([980, 6950, -430], [1200, 7040, -210], Sand),
+    // a slalom pillar
+    Solid::cm([1010, 0, 240], [1170, 7900, 400], Rock),
+    // slalom stone 3
+    Solid::cm([1360, 6990, 210], [1580, 7080, 430], Sand),
+    // a slalom pillar
+    Solid::cm([1390, 0, -400], [1550, 7900, -240], Rock),
+    // slalom stone 4
+    Solid::cm([1740, 6910, -430], [1960, 7000, -210], Snow),
+    // a slalom pillar
+    Solid::cm([1770, 0, 240], [1930, 7900, 400], Rock),
+    // slalom stone 5
+    Solid::cm([2120, 6950, 210], [2340, 7040, 430], Sand),
+    // a slalom pillar
+    Solid::cm([2150, 0, -400], [2310, 7900, -240], Rock),
+    // slalom stone 6
+    Solid::cm([2500, 6990, -430], [2720, 7080, -210], Sand),
+    // a slalom pillar
+    Solid::cm([2530, 0, 240], [2690, 7900, 400], Rock),
+    // slalom stone 7
+    Solid::cm([2880, 6910, 210], [3100, 7000, 430], Sand),
+    // a slalom pillar
+    Solid::cm([2910, 0, -400], [3070, 7900, -240], Rock),
+    // slalom stone 8
+    Solid::cm([3260, 6950, -430], [3480, 7040, -210], Snow),
+    // a slalom pillar
+    Solid::cm([3290, 0, 240], [3450, 7900, 400], Rock),
+    // under the cave mouth, 1
+    Solid::cm([3840, 6700, -200], [4240, 7000, 200], Grass),
+    // under the cave mouth, 2
+    Solid::cm([4520, 6700, -200], [4920, 7000, 200], Grass),
+    // under the cave mouth, 3
+    Solid::cm([5200, 6700, -200], [5600, 7000, 200], Snow),
+    // the cave mouth: a roof two metres over a head
+    Solid::cm([3640, 7380, -500], [5800, 7780, 500], Rock),
+    // the nest
+    Solid::cm([6180, 6700, -250], [6680, 7100, 250], Wood),
+];
+
+static SLALOM_COURSE: Course = Course {
+    arena: ArenaId::CLIMB_SLALOM,
+    name: "The Slalom",
     tier: Tier::Hard,
     for_class: None,
     pit: 6400,
@@ -323,113 +736,158 @@ static GALLERY_COURSE: Course = Course {
             ask: "the start",
         },
         Step {
-            solid: 2,
+            solid: 1,
             check: false,
-            gap: 320,
+            gap: 0,
             rise: 0,
-            ask: "3.2 m under a roof onto a stone",
+            ask: "slalom stone 1",
         },
         Step {
-            solid: 4,
+            solid: 3,
             check: false,
-            gap: 280,
-            rise: 0,
-            ask: "2.8 m, turning, under a roof",
+            gap: 0,
+            rise: 40,
+            ask: "slalom stone 2",
         },
         Step {
-            solid: 6,
+            solid: 5,
+            check: false,
+            gap: 0,
+            rise: 40,
+            ask: "slalom stone 3",
+        },
+        Step {
+            solid: 7,
             check: true,
-            gap: 340,
-            rise: 30,
-            ask: "3.4 m and a step up, under a roof",
+            gap: 0,
+            rise: -80,
+            ask: "slalom stone 4",
         },
         Step {
-            solid: 8,
+            solid: 9,
             check: false,
-            gap: 300,
-            rise: 0,
-            ask: "3 m, turning back",
+            gap: 0,
+            rise: 40,
+            ask: "slalom stone 5",
         },
         Step {
-            solid: 10,
+            solid: 11,
             check: false,
-            gap: 320,
-            rise: 0,
-            ask: "3.2 m under a roof",
+            gap: 0,
+            rise: 40,
+            ask: "slalom stone 6",
         },
         Step {
-            solid: 12,
-            check: true,
-            gap: 300,
-            rise: 0,
-            ask: "3 m, turning",
+            solid: 13,
+            check: false,
+            gap: 0,
+            rise: -80,
+            ask: "slalom stone 7",
         },
         Step {
-            solid: 14,
+            solid: 15,
             check: true,
-            gap: 300,
+            gap: 0,
+            rise: 40,
+            ask: "slalom stone 8",
+        },
+        Step {
+            solid: 17,
+            check: false,
+            gap: 0,
+            rise: -40,
+            ask: "under the cave mouth, 1",
+        },
+        Step {
+            solid: 18,
+            check: false,
+            gap: 0,
             rise: 0,
-            ask: "3 m to the nest",
+            ask: "under the cave mouth, 2",
+        },
+        Step {
+            solid: 19,
+            check: true,
+            gap: 0,
+            rise: 0,
+            ask: "under the cave mouth, 3",
+        },
+        Step {
+            solid: 21,
+            check: true,
+            gap: 0,
+            rise: 100,
+            ask: "the nest",
         },
     ],
 };
 
 // ---------------------------------------------------------------------------
-// The Narrows: hard
+// The Fork: hard
 // ---------------------------------------------------------------------------
 
-/// Hard: ledges sixty centimetres wide under low roofs, turning at every one.
-pub static NARROWS: Arena = Arena {
-    id: ArenaId::CLIMB_NARROWS,
-    name: "Narrows",
+/// Hard (a guess): a hub with two ways on -- a high road up stacked ledges and along the tops, a low road of stepping stones -- that meet again; a committed leap down onto a big landing; a long runway to the nest.
+pub static FORK: Arena = Arena {
+    id: ArenaId::CLIMB_FORK,
+    name: "Fork",
     creature: None,
-    bounds: Bounds::cm((-2300, 4200), (-2400, 2700)),
+    bounds: Bounds::cm((-2300, 13900), (-2500, 2600)),
     floor: Peat,
     regions: &[],
-    solids: &NARROWS_SOLIDS,
+    solids: &FORK_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
 };
 
-const NARROWS_SOLIDS: [Solid; 15] = [
+const FORK_SOLIDS: [Solid; 20] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 7500, 300], Rock),
-    // the roof over the gap, 20 cm over a head
-    Solid::cm([300, 7700, -360], [600, 8300, 360], Rock),
-    // 3 m onto a ledge 60 cm wide, under a roof
-    Solid::cm([600, 7400, -30], [900, 7500, 30], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([540, 7705, 30], [960, 8305, 280], Rock),
-    // 2.5 m, turning, onto a narrow ledge
-    Solid::cm([720, 7400, 280], [780, 7500, 580], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([780, 7705, 220], [1080, 8305, 640], Rock),
-    // 3 m onto a narrow ledge
-    Solid::cm([1080, 7400, 400], [1380, 7500, 460], Rock),
-    // the roof over the gap, 20 cm over a head
-    Solid::cm([1020, 7700, 100], [1440, 8300, 400], Rock),
-    // 3 m, turning back
-    Solid::cm([1200, 7400, -200], [1260, 7500, 100], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([1260, 7705, -260], [1580, 8305, 160], Rock),
-    // 3.2 m onto a narrow ledge
-    Solid::cm([1580, 7400, -80], [1880, 7500, -20], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([1520, 7705, -20], [1940, 8305, 280], Rock),
-    // 3 m, turning
-    Solid::cm([1700, 7400, 280], [1760, 7500, 580], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([1760, 7705, 220], [2020, 8305, 640], Rock),
-    // 2.6 m to the nest
-    Solid::cm([2020, 7100, 355], [2170, 7500, 505], Wood),
+    // the hub: two ways on
+    Solid::cm([400, 7200, -400], [1200, 7500, 400], Snow),
+    // the high road, ledge 1
+    Solid::cm([1350, 7350, 290], [1650, 7650, 550], Grass),
+    // the high road, ledge 2
+    Solid::cm([1770, 7500, 290], [2070, 7800, 550], Grass),
+    // the high road, ledge 3
+    Solid::cm([2190, 7650, 290], [2490, 7950, 550], Grass),
+    // the high road, ledge 4
+    Solid::cm([2610, 7800, 290], [2910, 8100, 550], Grass),
+    // the high road, top 1
+    Solid::cm([3030, 7800, 290], [3530, 8100, 550], Grass),
+    // the high road, top 2
+    Solid::cm([3910, 7800, 290], [4410, 8100, 550], Grass),
+    // the high road, top 3
+    Solid::cm([4790, 7800, 290], [5290, 8100, 550], Grass),
+    // the low road, stone 1
+    Solid::cm([1489, 7310, -470], [1669, 7400, -290], Sand),
+    // the low road, stone 2
+    Solid::cm([2127, 7310, -330], [2307, 7400, -150], Sand),
+    // the low road, stone 3
+    Solid::cm([2765, 7310, -470], [2945, 7400, -290], Sand),
+    // the low road, stone 4
+    Solid::cm([3403, 7310, -330], [3583, 7400, -150], Sand),
+    // the low road, stone 5
+    Solid::cm([4041, 7310, -470], [4221, 7400, -290], Sand),
+    // the low road, stone 6
+    Solid::cm([4679, 7310, -330], [4859, 7400, -150], Sand),
+    // the low road, stone 7
+    Solid::cm([5317, 7310, -470], [5497, 7400, -290], Sand),
+    // where the roads meet
+    Solid::cm([5970, 7200, -400], [6770, 7500, 400], Snow),
+    // the big landing
+    Solid::cm([7470, 6900, -500], [8470, 7200, 500], Snow),
+    // the runway
+    Solid::cm([8770, 7150, -200], [10770, 7300, 200], Snow),
+    // the nest
+    Solid::cm([11370, 7000, -250], [11870, 7400, 250], Wood),
 ];
 
-static NARROWS_COURSE: Course = Course {
-    arena: ArenaId::CLIMB_NARROWS,
-    name: "The Narrows",
+static FORK_COURSE: Course = Course {
+    arena: ArenaId::CLIMB_FORK,
+    name: "The Fork",
     tier: Tier::Hard,
     for_class: None,
-    pit: 6900,
+    pit: 6600,
     route: &[
         Step {
             solid: 0,
@@ -439,169 +897,88 @@ static NARROWS_COURSE: Course = Course {
             ask: "the start",
         },
         Step {
-            solid: 2,
-            check: false,
-            gap: 300,
-            rise: 0,
-            ask: "3 m onto a ledge 60 cm wide, under a roof",
-        },
-        Step {
-            solid: 4,
-            check: false,
-            gap: 250,
-            rise: 0,
-            ask: "2.5 m, turning, onto a narrow ledge",
-        },
-        Step {
-            solid: 6,
-            check: true,
-            gap: 300,
-            rise: 0,
-            ask: "3 m onto a narrow ledge",
-        },
-        Step {
-            solid: 8,
-            check: false,
-            gap: 300,
-            rise: 0,
-            ask: "3 m, turning back",
-        },
-        Step {
-            solid: 10,
-            check: false,
-            gap: 320,
-            rise: 0,
-            ask: "3.2 m onto a narrow ledge",
-        },
-        Step {
-            solid: 12,
-            check: true,
-            gap: 300,
-            rise: 0,
-            ask: "3 m, turning",
-        },
-        Step {
-            solid: 14,
-            check: true,
-            gap: 260,
-            rise: 0,
-            ask: "2.6 m to the nest",
-        },
-    ],
-};
-
-// ---------------------------------------------------------------------------
-// The Sill: hard
-// ---------------------------------------------------------------------------
-
-/// Hard: stones stepping up thirty centimetres at a time under roofs, turning, so no hop is the same jump twice.
-pub static SILL: Arena = Arena {
-    id: ArenaId::CLIMB_SILL,
-    name: "Sill",
-    creature: None,
-    bounds: Bounds::cm((-2300, 4300), (-2700, 2400)),
-    floor: Peat,
-    regions: &[],
-    solids: &SILL_SOLIDS,
-    spawns: SPAWNS,
-    sites: &[],
-};
-
-const SILL_SOLIDS: [Solid; 15] = [
-    // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 8000, 300], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([300, 8240, -360], [620, 8840, 360], Rock),
-    // 3.2 m and up 30 cm, under a roof
-    Solid::cm([620, 7950, -75], [770, 8030, 75], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([560, 8240, -375], [830, 8840, -75], Rock),
-    // 3 m, turning
-    Solid::cm([620, 7950, -525], [770, 8030, -375], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([770, 8270, -585], [1130, 8870, -315], Rock),
-    // 3.6 m and up 30 cm
-    Solid::cm([1130, 7980, -525], [1280, 8060, -375], Rock),
-    // the roof over the gap, 25 cm over a head
-    Solid::cm([1070, 8265, -375], [1340, 8865, -95], Rock),
-    // 2.8 m, turning
-    Solid::cm([1130, 7980, -95], [1280, 8060, 55], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1280, 8300, -155], [1600, 8900, 115], Rock),
-    // 3.2 m and up 30 cm
-    Solid::cm([1600, 8010, -95], [1750, 8090, 55], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1540, 8330, -435], [1810, 8930, -95], Rock),
-    // 3.4 m and up, turning
-    Solid::cm([1600, 8040, -585], [1750, 8120, -435], Rock),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1750, 8330, -645], [2050, 8930, -375], Rock),
-    // 3 m to the nest
-    Solid::cm([2050, 7720, -585], [2200, 8120, -435], Wood),
-];
-
-static SILL_COURSE: Course = Course {
-    arena: ArenaId::CLIMB_SILL,
-    name: "The Sill",
-    tier: Tier::Hard,
-    for_class: None,
-    pit: 7400,
-    route: &[
-        Step {
-            solid: 0,
+            solid: 1,
             check: true,
             gap: 0,
             rise: 0,
-            ask: "the start",
+            ask: "the hub: two ways on",
         },
         Step {
-            solid: 2,
+            solid: 9,
             check: false,
-            gap: 320,
-            rise: 30,
-            ask: "3.2 m and up 30 cm, under a roof",
-        },
-        Step {
-            solid: 4,
-            check: false,
-            gap: 300,
-            rise: 0,
-            ask: "3 m, turning",
-        },
-        Step {
-            solid: 6,
-            check: true,
-            gap: 360,
-            rise: 30,
-            ask: "3.6 m and up 30 cm",
-        },
-        Step {
-            solid: 8,
-            check: false,
-            gap: 280,
-            rise: 0,
-            ask: "2.8 m, turning",
+            gap: 0,
+            rise: -100,
+            ask: "the low road, stone 1",
         },
         Step {
             solid: 10,
             check: false,
-            gap: 320,
-            rise: 30,
-            ask: "3.2 m and up 30 cm",
+            gap: 0,
+            rise: 0,
+            ask: "the low road, stone 2",
+        },
+        Step {
+            solid: 11,
+            check: false,
+            gap: 0,
+            rise: 0,
+            ask: "the low road, stone 3",
         },
         Step {
             solid: 12,
-            check: true,
-            gap: 340,
-            rise: 30,
-            ask: "3.4 m and up, turning",
+            check: false,
+            gap: 0,
+            rise: 0,
+            ask: "the low road, stone 4",
+        },
+        Step {
+            solid: 13,
+            check: false,
+            gap: 0,
+            rise: 0,
+            ask: "the low road, stone 5",
         },
         Step {
             solid: 14,
-            check: true,
-            gap: 300,
+            check: false,
+            gap: 0,
             rise: 0,
-            ask: "3 m to the nest",
+            ask: "the low road, stone 6",
+        },
+        Step {
+            solid: 15,
+            check: false,
+            gap: 0,
+            rise: 0,
+            ask: "the low road, stone 7",
+        },
+        Step {
+            solid: 16,
+            check: true,
+            gap: 0,
+            rise: 100,
+            ask: "where the roads meet",
+        },
+        Step {
+            solid: 17,
+            check: true,
+            gap: 0,
+            rise: -300,
+            ask: "the big landing",
+        },
+        Step {
+            solid: 18,
+            check: true,
+            gap: 0,
+            rise: 100,
+            ask: "the runway",
+        },
+        Step {
+            solid: 19,
+            check: true,
+            gap: 0,
+            rise: 100,
+            ask: "the nest",
         },
     ],
 };
@@ -610,7 +987,7 @@ static SILL_COURSE: Course = Course {
 // The Spire: edge
 // ---------------------------------------------------------------------------
 
-/// Barely possible, built against the Elementalist: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out.
+/// Barely possible (a guess), the Elementalist's: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out.
 pub static SPIRE: Arena = Arena {
     id: ArenaId::CLIMB_SPIRE,
     name: "Spire",
@@ -673,81 +1050,15 @@ static SPIRE_COURSE: Course = Course {
 };
 
 // ---------------------------------------------------------------------------
-// The Eyrie: edge
-// ---------------------------------------------------------------------------
-
-/// Barely possible, built against the Elementalist: the Spire's taller sister, the eyrie 38 m above the launch and a metre out from it.
-pub static EYRIE: Arena = Arena {
-    id: ArenaId::CLIMB_EYRIE,
-    name: "Eyrie",
-    creature: None,
-    bounds: Bounds::cm((-2300, 5200), (-2300, 2400)),
-    floor: Peat,
-    regions: &[],
-    solids: &EYRIE_SOLIDS,
-    spawns: SPAWNS,
-    sites: &[],
-};
-
-const EYRIE_SOLIDS: [Solid; 4] = [
-    // the foot: a spire standing on the floor, the start
-    Solid::cm([-300, 0, -300], [300, 7000, 300], Rock),
-    // up 1 m, 5 m
-    Solid::cm([800, 6800, -250], [1300, 7100, 250], Grass),
-    // up 1 m, 5 m: the launch
-    Solid::cm([1800, 6900, -300], [2400, 7200, 300], Grass),
-    // up 38 m, a metre out: the eyrie
-    Solid::cm([2500, 10500, -300], [3100, 11000, 300], Wood),
-];
-
-static EYRIE_COURSE: Course = Course {
-    arena: ArenaId::CLIMB_EYRIE,
-    name: "The Eyrie",
-    tier: Tier::Edge,
-    for_class: Some(Class::Elementalist),
-    pit: 6400,
-    route: &[
-        Step {
-            solid: 0,
-            check: true,
-            gap: 0,
-            rise: 0,
-            ask: "the start",
-        },
-        Step {
-            solid: 1,
-            check: false,
-            gap: 500,
-            rise: 100,
-            ask: "up 1 m, 5 m",
-        },
-        Step {
-            solid: 2,
-            check: true,
-            gap: 500,
-            rise: 100,
-            ask: "up 1 m, 5 m: the launch",
-        },
-        Step {
-            solid: 3,
-            check: true,
-            gap: 100,
-            rise: 3800,
-            ask: "up 38 m, a metre out: the eyrie",
-        },
-    ],
-};
-
-// ---------------------------------------------------------------------------
 // The Gulf: edge
 // ---------------------------------------------------------------------------
 
-/// Barely possible: two gaps of twelve metres under roofs a hand over the head, too low to jump far and too long to dash -- the dash jump, or the Rush.
+/// Barely possible (a guess): an expert line in the open -- a runway, then eight-, seven- and six-metre leaps onto ever smaller stones, and a last nine-metre leap down to the nest.
 pub static GULF: Arena = Arena {
     id: ArenaId::CLIMB_GULF,
     name: "Gulf",
     creature: None,
-    bounds: Bounds::cm((-2300, 6400), (-2400, 2400)),
+    bounds: Bounds::cm((-2300, 9200), (-2300, 2400)),
     floor: Peat,
     regions: &[],
     solids: &GULF_SOLIDS,
@@ -755,27 +1066,29 @@ pub static GULF: Arena = Arena {
     sites: &[],
 };
 
-const GULF_SOLIDS: [Solid; 6] = [
+const GULF_SOLIDS: [Solid; 7] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 8500, 300], Rock),
-    // level 5 m
-    Solid::cm([800, 8200, -250], [1300, 8500, 250], Grass),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([1300, 8710, -310], [2550, 9310, 310], Rock),
-    // 12.5 m under a low roof
-    Solid::cm([2550, 8200, -150], [2850, 8500, 150], Grass),
-    // the roof over the gap, 30 cm over a head
-    Solid::cm([2850, 8710, -210], [4050, 9310, 210], Rock),
-    // 12 m under a low roof, to the nest
-    Solid::cm([4050, 8100, -150], [4350, 8500, 150], Wood),
+    // the runway
+    Solid::cm([300, 8350, -200], [2300, 8500, 200], Grass),
+    // eight metres, level, onto three
+    Solid::cm([3100, 8200, -150], [3400, 8500, 150], Snow),
+    // seven metres and up 1.5, onto two
+    Solid::cm([4100, 8560, -100], [4300, 8650, 100], Sand),
+    // six metres onto a stone 1.2 m across
+    Solid::cm([4900, 8560, -60], [5020, 8650, 60], Sand),
+    // and another
+    Solid::cm([5620, 8560, -60], [5740, 8650, 60], Snow),
+    // nine metres and down two: the nest
+    Solid::cm([6640, 8050, -250], [7140, 8450, 250], Wood),
 ];
 
 static GULF_COURSE: Course = Course {
     arena: ArenaId::CLIMB_GULF,
     name: "The Gulf",
     tier: Tier::Edge,
-    for_class: Some(Class::ShadowReaver),
-    pit: 7900,
+    for_class: None,
+    pit: 7850,
     route: &[
         Step {
             solid: 0,
@@ -787,23 +1100,44 @@ static GULF_COURSE: Course = Course {
         Step {
             solid: 1,
             check: false,
-            gap: 500,
+            gap: 0,
             rise: 0,
-            ask: "level 5 m",
+            ask: "the runway",
+        },
+        Step {
+            solid: 2,
+            check: true,
+            gap: 0,
+            rise: 0,
+            ask: "eight metres, level, onto three",
         },
         Step {
             solid: 3,
-            check: true,
-            gap: 1250,
+            check: false,
+            gap: 0,
+            rise: 150,
+            ask: "seven metres and up 1.5, onto two",
+        },
+        Step {
+            solid: 4,
+            check: false,
+            gap: 0,
             rise: 0,
-            ask: "12.5 m under a low roof",
+            ask: "six metres onto a stone 1.2 m across",
         },
         Step {
             solid: 5,
             check: true,
-            gap: 1200,
+            gap: 0,
             rise: 0,
-            ask: "12 m under a low roof, to the nest",
+            ask: "and another",
+        },
+        Step {
+            solid: 6,
+            check: true,
+            gap: 0,
+            rise: -200,
+            ask: "nine metres and down two: the nest",
         },
     ],
 };

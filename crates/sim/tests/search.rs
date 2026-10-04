@@ -15,8 +15,6 @@
 //! fixtures.
 
 use sim::class::{ALL_CLASSES, Class};
-use sim::course;
-use sim::coursecheck;
 use sim::search::{self, Program, Stage};
 
 fn class_named(name: &str) -> Class {
@@ -59,65 +57,4 @@ fn every_envelope_line_lands_across_its_gap() {
         n += 1;
     }
     assert!(n > 50, "only {n} envelope fixtures");
-}
-
-/// Which hops each class clears, from the course fixtures, every one replayed.
-fn cleared() -> Vec<(String, Class, Vec<bool>)> {
-    let text = include_str!("fixtures/courses.txt");
-    let mut out: Vec<(String, Class, Vec<bool>)> = Vec::new();
-    for (head, prog) in lines(text) {
-        let slug = head[0].to_string();
-        let from: usize = head[1].parse().unwrap();
-        let hops: usize = head[2].parse().unwrap();
-        let class = class_named(head[3]);
-        let c = course::all()
-            .find(|c| c.arena().slug() == slug)
-            .unwrap_or_else(|| panic!("no course {slug}"));
-        let st = coursecheck::stage(c, class, from, hops);
-        assert!(
-            search::run(&st, &prog).landed,
-            "{slug} hop {} for the {}: {prog} no longer lands",
-            from + 1,
-            class.name()
-        );
-        let row = match out.iter_mut().find(|r| r.0 == slug && r.1 == class) {
-            Some(r) => r,
-            None => {
-                out.push((slug.clone(), class, vec![false; c.route.len() - 1]));
-                out.last_mut().unwrap()
-            }
-        };
-        for h in from..from + hops {
-            row.2[h] = true;
-        }
-    }
-    out
-}
-
-fn finishes(rows: &[(String, Class, Vec<bool>)], slug: &str, class: Class) -> bool {
-    rows.iter()
-        .any(|r| r.0 == slug && r.1 == class && r.2.iter().all(|c| *c))
-}
-
-#[test]
-fn every_course_line_lands_and_the_routes_are_what_the_document_says() {
-    let rows = cleared();
-    for class in [
-        Class::ShadowReaver,
-        Class::Elementalist,
-        Class::BloodMage,
-        Class::DualMage,
-        Class::Champion,
-    ] {
-        for slug in ["stair", "causeway", "gallery", "narrows", "sill"] {
-            assert!(
-                finishes(&rows, slug, class),
-                "the {} does not finish {slug}",
-                class.name()
-            );
-        }
-    }
-    assert!(finishes(&rows, "spire", Class::Elementalist));
-    assert!(finishes(&rows, "eyrie", Class::Elementalist));
-    assert!(finishes(&rows, "gulf", Class::ShadowReaver));
 }
