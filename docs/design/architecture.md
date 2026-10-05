@@ -194,8 +194,8 @@ determinism argument.
 ## Networking
 
 **Peer to peer, rollback from day one.** No server of ours: two desktops connect directly
-by IP, and two browsers meet in a room on a public message broker and then connect directly
-over WebRTC. Both are the same meeting protocol (`crates/net/src/meet.rs`), which checks the
+by IP, and browsers and desktops meet in a sealed room on a public message broker and then
+connect directly over WebRTC. Both are the same meeting protocol (`crates/net/src/meet.rs`), which checks the
 two clients agree on the build and the starting world and settles who is player one before
 a frame is played; [web.md](web.md) §"Playing a friend from a link" has the design.
 
@@ -875,5 +875,4 @@ did**, so every class implemented from here is checked from its first commit.
    Blood mage's Black spike, the Reaver's Send shadow -- already have one, and are animated.
 3. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
-4. **A TURN relay**, for the network pairs that will not take a direct connection; and
-   WebRTC on the desktop, so a desktop can join a browser's room.
+4. **A TURN relay**, for the network pairs that will not take a direct connection.

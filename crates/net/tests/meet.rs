@@ -299,3 +299,80 @@ fn two_desktops_meet_over_udp_and_take_different_seats() {
     let sb = sb.expect("b seated");
     assert_eq!((handle_a, sb.handle), (0, 1));
 }
+
+/// Two desktops over real WebRTC: str0m on both ends, on this machine, meeting
+/// through a sealed board. The same line a desktop uses to join a page's room;
+/// here it meets itself, so the test needs no browser.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn two_desktops_meet_over_webrtc_through_a_sealed_room_and_play() {
+    use net::native::RtcLine;
+    use net::seal::{RoomKey, Sealed};
+    let hall = Hall::default();
+    let key = RoomKey::new("k3x9qw", "a-long-random-secret");
+    let mut a = Room::new(Sealed::new(hall.board(), key.clone()), RtcLine::new, 5, "t");
+    let mut b = Room::new(Sealed::new(hall.board(), key), RtcLine::new, 9, "t");
+    let begun = std::time::Instant::now();
+    let now = || begun.elapsed().as_millis() as u64;
+    let (mut sa, mut sb) = (None, None);
+    while (sa.is_none() || sb.is_none()) && now() < 20_000 {
+        if sa.is_none() {
+            match a.poll(now()) {
+                Progress::Ready(s) => sa = Some(s),
+                Progress::Failed(why) => panic!("a: {why}"),
+                Progress::Waiting(_) => {}
+            }
+        }
+        if now() > 300 && sb.is_none() {
+            match b.poll(now()) {
+                Progress::Ready(s) => sb = Some(s),
+                Progress::Failed(why) => panic!("b: {why}"),
+                Progress::Waiting(_) => {}
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let (sa, sb) = (sa.expect("a seated"), sb.expect("b seated"));
+    assert_eq!((sa.handle, sb.handle), (0, 1));
+    play(sa, sb, 300);
+}
+
+/// Run a real GGRS match between two seats for `frames` frames each, at
+/// whatever speed the line allows, and fail on a desync.
+#[cfg(not(target_arch = "wasm32"))]
+fn play(sa: Seat, sb: Seat, frames: u32) {
+    let (ha, hb) = (sa.handle, sb.handle);
+    let mut peers = [
+        (p2p::start(sa).expect("a session"), World::new(), ha),
+        (p2p::start(sb).expect("b session"), World::new(), hb),
+    ];
+    let mut rng = 0x2545_f491_4f6c_dd1d_u64;
+    let mut done = [0u32; 2];
+    let begun = std::time::Instant::now();
+    while done.iter().any(|&f| f < frames) && begun.elapsed().as_secs() < 60 {
+        for (i, (session, world, handle)) in peers.iter_mut().enumerate() {
+            session.poll_remote_clients();
+            if session.current_state() != net::ggrs::SessionState::Running {
+                continue;
+            }
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            let input = NetInput::from(Input::aimed((rng & 0x1ff) as u16, (rng >> 20) as u16));
+            if session.add_local_input(*handle, input).is_err() {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                handle_requests(world, requests);
+                done[i] += 1;
+            }
+            for event in session.events() {
+                if let net::ggrs::GgrsEvent::DesyncDetected { frame, .. } = event {
+                    panic!("desync at frame {frame}");
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(done.iter().all(|&f| f >= frames), "frames: {done:?}");
+}

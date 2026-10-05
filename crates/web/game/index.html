@@ -288,7 +288,9 @@
     <div id="online-status" role="status" aria-live="polite"></div>
     <small>Whoever opened the room first is player one. The classes and the arena are the link's:
       add <code>&amp;p1=</code>, <code>&amp;p2=</code> or <code>&amp;arena=</code> before you send it.
-      You can practise while you wait.</small>
+      You can practise while you wait. A friend on a desktop joins with
+      <code>game --join '&lt;link&gt;'</code>. Everything after <code>#key=</code> is the
+      room's secret: the public relays see notes they cannot read.</small>
   </div>
 
   <p class="lede">
@@ -446,17 +448,29 @@ __CONTROLS__
     hint.hidden = document.pointerLockElement === canvas;
   });
 
-  // Rooms. The name is all that has to be shared, so it is short, random, and
-  // free of letters that read as each other (no i, l, o, 0, 1).
+  // Rooms. A short random name to recognise, and a long random secret to
+  // seal it, both free of letters that read as each other (no i, l, o, 0, 1).
   const params = new URLSearchParams(location.search);
-  function freshRoom() {
+  function letters(n) {
     const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-    const bytes = crypto.getRandomValues(new Uint8Array(6));
-    return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+    let out = '';
+    while (out.length < n) {
+      for (const b of crypto.getRandomValues(new Uint8Array(n))) {
+        // Rejection rather than `b % 31`, which would favour the first few
+        // letters: 248 is the largest multiple of 31 under 256.
+        if (b < 248 && out.length < n) out += alphabet[b % alphabet.length];
+      }
+    }
+    return out;
   }
+  const freshRoom = () => letters(6);
+  // The room's secret: 26 letters, about 129 bits, after the `#` -- the part
+  // of a link a browser never sends to the server. It seals the room's notes
+  // on the public brokers (crates/net/src/seal.rs).
+  const freshKey = () => letters(26);
   document.getElementById('friend').addEventListener('click', () => {
     params.set('room', freshRoom());
-    location.search = params.toString();
+    location.assign(`${location.pathname}?${params}#key=${freshKey()}`);
   });
   if (params.get('room')) {
     document.getElementById('room').hidden = false;
@@ -478,7 +492,8 @@ __CONTROLS__
     document.getElementById('leave').addEventListener('click', () => {
       params.delete('room');
       params.delete('board');
-      location.search = params.toString();
+      params.delete('broker');
+      location.assign(`${location.pathname}${params.size ? '?' + params : ''}`);
     });
   }
 

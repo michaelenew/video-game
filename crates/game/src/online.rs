@@ -6,7 +6,11 @@
 //!     https://…/?room=k3x9qw&board=tabs   (two tabs of one browser)
 //!     https://…/?room=k3x9qw&broker=wss://… (one broker of your choosing)
 //!
-//! On a desktop, each is given the other's address:
+//! A desktop joins the same room with the same link, pasted:
+//!
+//!     game --join 'https://…/?room=k3x9qw#key=…'
+//!
+//! or, on a LAN, two desktops are given each other's address:
 //!
 //!     game --port 47811 --peer 192.168.1.20:47812
 //!
@@ -18,8 +22,10 @@
 //! the simulation only has to do those three things correctly.
 //!
 //! **Which way of meeting is the one thing here that differs by platform**,
-//! and it is chosen in [`start`]: a public broker and WebRTC in a page (which
-//! cannot open a UDP socket), a UDP port on a desktop. Past that the two are
+//! and it is chosen in [`start`]: a room is `net::browser` in a page and
+//! `net::native` on a desktop -- the same brokers, the same sealed notes, the
+//! same WebRTC data channel, built from different parts -- and only a desktop
+//! can also go straight to an address over UDP. Past that the two are
 //! one `Box<dyn net::Rendezvous>`, and the rest of the crate does not know
 //! which it got. See `crates/net/src/meet.rs` for the seams and
 //! [`docs/design/web.md`](../../../docs/design/web.md) for the reasoning.
@@ -92,9 +98,9 @@ pub fn wanted() -> bool {
 /// number, so a different link or a different Oven is caught here, before a
 /// frame is played, rather than as a desync.
 fn terms(start: &World) -> String {
-    // Stamped by `crates/web/build-game.sh`. A desktop built by hand says
-    // `dev`, and two of those are told apart by the checksum alone.
-    let build = option_env!("ARENA_BUILD").unwrap_or("dev");
+    // The commit this was built from (`build.rs`), so a desktop built from
+    // the commit the page was deployed from is the same build as the page.
+    let build = env!("ARENA_BUILD");
     format!("{build}-{:016x}", start.checksum())
 }
 
@@ -115,28 +121,47 @@ pub fn start(start: &World) -> Driver {
     }
 }
 
+/// The room this run was sent to, if any: its name, and the secret after the
+/// link's `#` that seals it (`net::seal`). On a desktop both arrive in
+/// `--join <link>`, which `platform` unpacks into the same two names.
+fn room_key() -> Option<net::seal::RoomKey> {
+    let room = platform::value("--room")?;
+    Some(net::seal::RoomKey::new(
+        room,
+        platform::value("--key").unwrap_or(""),
+    ))
+}
+
 #[cfg(target_arch = "wasm32")]
 fn rendezvous(start: &World) -> Option<Result<Box<dyn net::Rendezvous>, String>> {
-    let room = platform::value("--room")?;
+    let key = room_key()?;
     let me = net::meet::fresh_id();
     let terms = terms(start);
     Some(Ok(
         match (platform::value("--board"), platform::value("--broker")) {
-            (Some("tabs"), _) => Box::new(net::browser::tabs(room, me, &terms)),
-            (_, Some(url)) => Box::new(net::browser::brokers(&[url], room, me, &terms)),
-            _ => Box::new(net::browser::public(room, me, &terms)),
+            (Some("tabs"), _) => Box::new(net::browser::tabs(&key, me, &terms)),
+            (_, Some(url)) => Box::new(net::browser::brokers(&[url], &key, me, &terms)),
+            _ => Box::new(net::browser::public(&key, me, &terms)),
         },
     ))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn rendezvous(start: &World) -> Option<Result<Box<dyn net::Rendezvous>, String>> {
-    if platform::value("--room").is_some() {
-        return Some(Err(
-            "Rooms are the browser build's for now: a desktop has no WebRTC yet. \
-             On a desktop, use --port and --peer."
-                .into(),
-        ));
+    if let Some(key) = room_key() {
+        let me = net::meet::fresh_id();
+        let terms = terms(start);
+        return Some(
+            match (platform::value("--board"), platform::value("--broker")) {
+                (Some("tabs"), _) => Err(
+                    "board=tabs is two tabs of one browser, and this is not a browser. \
+                     Drop it from the link to meet through the public brokers."
+                        .into(),
+                ),
+                (_, Some(url)) => Ok(Box::new(net::native::brokers(&[url], &key, me, &terms))),
+                _ => Ok(Box::new(net::native::public(&key, me, &terms))),
+            },
+        );
     }
     let peer = platform::value("--peer")?;
     let Ok(peer) = peer.parse::<std::net::SocketAddr>() else {

@@ -16,13 +16,13 @@
 //! That is honest rather than a trick: a handle used from a second thread
 //! would find the table empty and panic, rather than race.
 //!
-//! What a public broker sees: the room name, and the two notes' contents,
-//! which include each player's network addresses (that is what an offer
-//! *is*). Anyone subscribed to the same topic sees them too. Nothing of the
-//! match goes through it.
+//! What a public broker sees: a topic that names nothing, and notes it cannot
+//! read -- every board here is wrapped in [`Sealed`] (see `seal.rs`). Nothing
+//! of the match goes through it.
 
-use crate::meet::{Board, Boards, Line, LineState, Reach, Room};
+use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN};
 use crate::mqtt;
+use crate::seal::{RoomKey, Sealed};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -38,62 +38,46 @@ use web_sys::{
     WebSocket,
 };
 
-/// Free public MQTT brokers that accept WebSocket connections from a page.
-///
-/// None of them promises anything, which is why there are three and every
-/// note goes to all of them. Replacing them with one we run is a one-line
-/// change here and nothing else.
-pub const BROKERS: &[&str] = &[
-    "wss://broker.emqx.io:8084/mqtt",
-    "wss://broker.hivemq.com:8884/mqtt",
-    "wss://test.mosquitto.org:8081/mqtt",
-];
-
-/// STUN servers: each answers one question, "what does my address look like
-/// from outside my router?", which is what lets two home networks connect
-/// directly. They carry nothing of the match.
-pub const STUN: &[&str] = &[
-    "stun:stun.l.google.com:19302",
-    "stun:stun.cloudflare.com:3478",
-];
-
 /// How long to wait for the full list of ways to reach this machine before
 /// posting the ones found so far. A STUN server that does not answer can hold
 /// the list open for many seconds, and the local and outside addresses -- the
 /// ones that matter -- are nearly always in within a second.
 const GATHER_MS: u64 = 2_500;
 
-/// A room name, made safe to be part of a topic: letters, digits, `-` and
-/// `_`, lower case, at most 32. MQTT reads `+` and `#` in a topic as
-/// wildcards, and two people typing `K3X9` and `k3x9` mean the same room.
-pub fn room_name(code: &str) -> String {
-    code.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .take(32)
-        .map(|c| c.to_ascii_lowercase())
-        .collect()
+/// Meet through the public brokers in the room this key names.
+pub fn public(key: &RoomKey, me: u64, terms: &str) -> Room<Sealed<Boards>, RtcLine> {
+    brokers(BROKERS, key, me, terms)
 }
 
-/// Meet in `code` through the public brokers.
-pub fn public(code: &str, me: u64, terms: &str) -> Room<Boards, RtcLine> {
-    brokers(BROKERS, code, me, terms)
-}
-
-/// Meet in `code` through these brokers: `wss://` (or `ws://`) URLs of MQTT
-/// brokers that take WebSocket connections. One we run, or a local one for a
-/// test, is this with a different list.
-pub fn brokers(urls: &[&str], code: &str, me: u64, terms: &str) -> Room<Boards, RtcLine> {
-    let topic = format!("arena-rollback/room/{}", room_name(code));
+/// Meet through these brokers: `wss://` (or `ws://`) URLs of MQTT brokers
+/// that take WebSocket connections. One we run, or a local one for a test, is
+/// this with a different list.
+pub fn brokers(
+    urls: &[&str],
+    key: &RoomKey,
+    me: u64,
+    terms: &str,
+) -> Room<Sealed<Boards>, RtcLine> {
     let boards = urls
         .iter()
-        .map(|url| Box::new(MqttBoard::open(url, &topic, me)) as Box<dyn Board>)
+        .map(|url| Box::new(MqttBoard::open(url, key.topic(), me)) as Box<dyn Board>)
         .collect();
-    Room::new(Boards(boards), RtcLine::new, me, terms)
+    Room::new(
+        Sealed::new(Boards(boards), key.clone()),
+        RtcLine::new,
+        me,
+        terms,
+    )
 }
 
-/// Meet in `code` with another tab of this browser.
-pub fn tabs(code: &str, me: u64, terms: &str) -> Room<TabsBoard, RtcLine> {
-    Room::new(TabsBoard::open(code), RtcLine::new, me, terms)
+/// Meet another tab of this browser.
+pub fn tabs(key: &RoomKey, me: u64, terms: &str) -> Room<Sealed<TabsBoard>, RtcLine> {
+    Room::new(
+        Sealed::new(TabsBoard::open(key.topic()), key.clone()),
+        RtcLine::new,
+        me,
+        terms,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -344,8 +328,9 @@ impl Drop for Tabs {
 pub struct TabsBoard(Option<Held<Tabs>>);
 
 impl TabsBoard {
-    pub fn open(code: &str) -> TabsBoard {
-        let Ok(channel) = BroadcastChannel::new(&format!("arena-room-{}", room_name(code))) else {
+    /// `name` is the room's topic, so two rooms never overhear each other.
+    pub fn open(name: &str) -> TabsBoard {
+        let Ok(channel) = BroadcastChannel::new(name) else {
             return TabsBoard(None);
         };
         let notes = Rc::new(RefCell::new(VecDeque::new()));

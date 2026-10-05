@@ -40,7 +40,9 @@ const room = 'smoke' + Math.random().toString(36).slice(2, 8);
 // ROOM_VIA=broker=ws://127.0.0.1:9001 meets through a broker instead: the
 // whole public path, against one running on this machine.
 const via = process.env.ROOM_VIA || 'board=tabs';
-const link = `${url}${url.includes('?') ? '&' : '?'}room=${room}&${via}`;
+// A sealed room, as the page's button makes: the secret after the `#`.
+const secret = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+const link = `${url}${url.includes('?') ? '&' : '?'}room=${room}&${via}#key=${secret}`;
 console.log(`room link: ${link}`);
 
 const errors = [];

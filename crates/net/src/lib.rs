@@ -17,7 +17,10 @@ pub mod ggrs_glue;
 pub mod loopback;
 pub mod meet;
 pub mod mqtt;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native;
 pub mod p2p;
+pub mod seal;
 
 /// Re-exported so the front end never depends on GGRS directly. Networking is
 /// this crate's business.

@@ -40,6 +40,26 @@
 use crate::Peer;
 use ggrs::{Message, NonBlockingSocket};
 
+/// Free public MQTT brokers that accept WebSocket connections, from a page or
+/// from a desktop.
+///
+/// None of them promises anything, which is why there are three and every
+/// note goes to all of them. Replacing them with one we run is a change here
+/// and nothing else; `?broker=` tries one without a rebuild.
+pub const BROKERS: &[&str] = &[
+    "wss://broker.emqx.io:8084/mqtt",
+    "wss://broker.hivemq.com:8884/mqtt",
+    "wss://test.mosquitto.org:8081/mqtt",
+];
+
+/// STUN servers: each answers one question, "what does my address look like
+/// from outside my router?", which is what lets two home networks connect
+/// directly. They carry nothing of the match.
+pub const STUN: &[&str] = &[
+    "stun:stun.l.google.com:19302",
+    "stun:stun.cloudflare.com:3478",
+];
+
 /// The note format's version. A note from another version is recognised as
 /// "a different build" rather than ignored as noise.
 pub const PROTOCOL: u32 = 1;

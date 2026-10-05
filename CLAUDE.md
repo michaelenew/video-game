@@ -199,13 +199,15 @@ that can drift from the rule it illustrates is worse than no overlay.
 
 ## Tools that are not on every machine
 
-Three things this repository does need tools a fresh machine does not have: the
+Four things this repository does need tools a fresh machine does not have: the
 **browser build** needs `wasm-bindgen` at the lock file's exact version, a
 **headless screenshot** needs Xvfb, a software Vulkan driver and ImageMagick,
-and **loading the built page** (`./scripts/web-smoke.sh`, which is how a change
-to the browser build is checked) needs Playwright and its Chromium.
-`./scripts/setup-tools.sh web`, `shot`, `browser` or `all` installs them, once,
-and is the only place the steps are written. The Pages workflow runs it; a
+**loading the built page** (`./scripts/web-smoke.sh`, which is how a change
+to the browser build is checked) needs Playwright and its Chromium, and **a
+desktop joining a page's room** (`./scripts/room-desktop.sh`, how a change to
+`net::native` is checked) needs all of those and mosquitto.
+`./scripts/setup-tools.sh web`, `shot`, `browser`, `broker` or `all` installs
+them, once, and is the only place the steps are written. The Pages workflow runs it; a
 cloud environment's setup script should run it too, so a session starts with
 them.
 

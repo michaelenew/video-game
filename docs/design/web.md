@@ -202,9 +202,11 @@ directly will not work — ES modules and `fetch` both need an origin.
 *Built 2026-10-03.* What a person does:
 
 1. Opens the page and presses **Play with a friend**. The URL gains
-   `?room=k3x9qw` -- six random letters -- and the page shows that link with a
-   Copy button.
-2. Sends it. Their friend opens it.
+   `?room=k3x9qw#key=…` -- six random letters to recognise the room by, and
+   twenty-six after the `#` that seal it (§"Sealed rooms") -- and the page
+   shows that link with a Copy button.
+2. Sends it. Their friend opens it -- in a browser, or on a desktop with
+   `game --join '<link>'` (§"A desktop in a browser's room").
 3. Both pages say *Online: you are player one / two*, and the match starts from
    the beginning. Whoever opened the room first is player one.
 
@@ -229,14 +231,53 @@ servers tell each page what its address looks like from outside its router.
 None of them carries a frame of the match: once the data channel is open, the
 two browsers talk to each other and nobody else.
 
+### Sealed rooms
+
+*Built 2026-10-05.* A public broker's topics are readable by anyone, and the
+two notes a room trades hold each player's network addresses. So the link
+carries a secret -- 26 random letters, about 129 bits, after `#key=`, the part
+of a link a browser never sends to the server it came from -- and two things
+are derived from it and the room's name with SHA-256 under separate labels:
+the **topic** the brokers see (a hex string that names nothing), and a key
+that seals every note with ChaCha20-Poly1305. A note that does not open is
+dropped, so a stranger can neither read the room nor forge a hello into it.
+The topic is bound into each seal, so a note lifted from one room does not
+open in another, and every note gets a fresh random nonce, so a repeated hello
+is not recognisable as a repeat.
+
+It is one more `Board`: `seal::Sealed<B>` wraps any board, so the room never
+sees a sealed note and the brokers never see an open one, and nothing else
+changed. A link without a key still works, sealed under the room name alone,
+which stops somebody watching every topic but not somebody who can guess six
+letters.
+
+### A desktop in a browser's room
+
+*Built 2026-10-05.* `game --join '<link>'` opens the link a friend's page made:
+`platform.rs` unpacks its query and its `#` into the same settings a page
+reads from its own address -- room, key, classes, arena -- with any flag typed
+beside it winning. Then `net::native` builds the same room from different
+parts: the same brokers over a TLS WebSocket (a thread per broker, because
+connecting blocks), the same sealed notes, and the same data channel from
+[str0m](https://github.com/algesten/str0m), a WebRTC library that does no I/O
+itself -- it is handed packets and the time, so the room's once-a-frame polling
+drives it with no async runtime. A desktop asks a STUN server for its own
+outside address with a twenty-byte question of its own (RFC 5389), since str0m
+leaves gathering to its caller. Either side may make the room or the offer.
+
+The two must be the same build: `crates/game/build.rs` stamps a desktop build
+with its commit, the way `build-game.sh` stamps the page, so a desktop built
+from the commit the page was deployed from (the page's footer names it) is
+the page's build.
+
 ### Built in three seams, so any one can be swapped
 
 `crates/net/src/meet.rs`:
 
 | Seam | What it is | Today | Slots in later |
 | --- | --- | --- | --- |
-| `Board` | Where strangers leave notes under a room name | Public MQTT brokers (`browser::public`); any one broker (`browser::brokers`, `?broker=wss://…`); two tabs of one browser (`browser::tabs`, `?board=tabs`); the UDP port itself on a desktop (`direct`) | Our own signalling server; Nostr relays; copy and paste |
-| `Line` | The direct connection, opened by trading an offer and an answer | WebRTC data channel, unordered and never resent (`browser::RtcLine`); UDP (`direct::UdpLine`) | WebRTC on the desktop, so a desktop can play a browser; a TURN relay |
+| `Board` | Where strangers leave notes under a room name | Public MQTT brokers (`browser::public`, `native::public`); any one broker (`?broker=wss://…`); two tabs of one browser (`browser::tabs`, `?board=tabs`); the UDP port itself on a desktop (`direct`); any of these sealed (`seal::Sealed`) | Our own signalling server; Nostr relays; copy and paste |
+| `Line` | The direct connection, opened by trading an offer and an answer | WebRTC data channel, unordered and never resent: a page's own (`browser::RtcLine`), or str0m on a desktop (`native::RtcLine`); UDP (`direct::UdpLine`) | A TURN relay |
 | `Rendezvous` | The whole meeting, polled once a frame until it hands GGRS a socket | `Room<B: Board, L: Line>` | Matchmaking; a lobby |
 
 `Room` is the protocol and it is four lines of text, which is why a board can be
@@ -265,18 +306,19 @@ ordering the two addresses, and each machine knew its own only as
   school networks often refuse direct connections. That needs a TURN relay,
   which carries the match and costs money to run. The page says so in a
   sentence rather than hanging.
-- **The notes are public.** Anyone subscribed to the same topic on a public
-  broker can read the two notes, which contain each player's network addresses.
-  Six random letters keep strangers from stumbling into a room, not from
-  watching one. Encrypting the notes with a key derived from the room name is
-  the next step if that matters.
-- **Rooms are two players, and a desktop cannot join one.** A third visitor
-  waits until one of the two leaves. A desktop has no WebRTC yet, so it plays
-  desktops by address and browsers not at all; `Line` is where that goes.
+- **The brokers still see who is talking.** A sealed room hides what the notes
+  say, not that two network addresses connected to a broker at the same time.
+  And the link is the key: whoever has it can join.
+- **Rooms are two players.** A third visitor waits until one of the two leaves.
+- **A desktop and a browser on one home network: expected to work, not yet
+  seen to.** Chrome hides a page's local address behind a `.local` name that a
+  desktop cannot look up, so the connection rests on the page reaching the
+  desktop's local address, which the desktop does publish. (The smoke test
+  turns the hiding off; two real machines on one network are the check.)
 - **The link chooses both classes.** A lobby where each picks their own is a
   `Rendezvous` that trades one more note.
 - **Public brokers promise nothing.** Swapping them for one we run is one
-  constant, `browser::BROKERS`, and `?broker=` tries one without a rebuild.
+  constant, `meet::BROKERS`, and `?broker=` (`--broker`) tries one without a rebuild.
 - **A tab in the background stops.** Browsers pause a hidden tab's frames, and
   the meeting and the match both run on frames. Waiting with the tab hidden is
   fine -- the room is still there when you come back -- but hiding it mid-match
