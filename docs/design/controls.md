@@ -903,7 +903,7 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | `Q` | **Guillotine lotus** — twelve blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
 | `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
-| `space`, in the frames after a dash lands | **The dash jump.** Takes the speed she arrived with up with her, and cuts the dodge's tail short. A press, and only after a dash |
+| `space`, in the dash's last frames | **The dash jump.** Pressed before she lands on the shadow, it launches her the frame she arrives with the dash's whole speed. A press after landing is an ordinary jump: she is free the moment she lands (2026-10-04) |
 | `shift` + forward, anywhere else | The ordinary dodge |
 | — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 

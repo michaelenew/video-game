@@ -7434,3 +7434,34 @@ re-pinned for the new hashed field only; they play identically.
 
 **Verdict** kept on the user's word, unplayed. Open: whether three metres is the right
 forgiveness, and whether the refusal reads at a glance.
+
+### 2026-10-04 — the dash jump is pressed before the halt; free on landing; the eye stops jumping
+
+**Changed**
+- The dash jump fires only from a press made in the dash's last six frames, on the frame she
+  lands, at the dash's whole speed. The ten-frame window after landing is gone (the carry is
+  one frame, the arrival's).
+- Arriving ends the dodge: she is actionable the frame she lands. A shift held through the dash
+  must come up before it dodges again (`Shadow::shift_spent`).
+- The eye's ceiling is sloped at hanging solids' edges (`Arena::ceiling_near`, new knob `Eye,
+  ceiling slope away from an edge`, 1 m/m), so passing under an island's edge no longer
+  jumps the eye or the aim. The drawn camera's arm still pulls in at once (slower put the
+  eye inside rock, `presentation::camera_pulls_in_rather_than_sitting_inside_a_platform`)
+  but lets go slowly instead of snapping back out.
+
+**Why** From play: "Sometimes it will pause for a few frames before I launch at near full
+speed. It needs to be that the jump input is made before the end of dash halt. I also need the
+reaver to regain movement control instantly after a shadow dash." And: "I had a few instances
+where the camera jumped on me. That shouldn't happen, it can mess someone's aim up." Every
+course island hangs, so every island was a ceiling to the eye, switched on and off by a
+footprint test.
+
+**Measured** `reaver::the_dash_jump_launches_her`, `a_jump_pressed_after_landing_is_an_ordinary_jump`,
+`she_is_free_the_frame_she_lands`, `a_jump_pressed_just_before_arrival_is_kept_for_it`;
+`arena::walking_under_an_island_edge_never_jumps_the_eye` (fails on the old footprint test: a
+half-metre step in the Spiral). The scripted Reaver hunt is re-pinned (it plays differently
+from frame 31); the Ridgeback pin changed only by the hashed field. The envelope tool's
+saved routes were regenerated, since its Reaver lines jumped a frame after landing.
+
+**Verdict** kept on the user's word, unplayed. Watch: the dash losing its punishable tail in
+versus.

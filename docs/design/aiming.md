@@ -542,6 +542,19 @@ moved. Every eye `aim.rs` takes is this one, and the drawn camera
 follows. `look_onto` still settles against `camera::eye`: it has no arena to
 ask, and a bot aiming under a vault is off by the clamp at worst.
 
+**Sloped at the edges since 2026-10-04.** On a jump course every island hangs, so
+every island is a ceiling, and the footprint test switched the hold on and off
+the frame the eye or the body passed under an edge: the camera and the aim
+jumped together ("the camera jumped on me... it can mess someone's aim up").
+The ceiling is now `Arena::ceiling_near`: a hanging solid's underside, plus
+`Eye, ceiling slope away from an edge` (1 m per metre) for each metre outside its
+footprint. Directly under a vault nothing changed; near an edge the eye glides.
+`arena::walking_under_an_island_edge_never_jumps_the_eye` walks every course's
+islands in 5 cm steps. The drawn camera's arm, pulled in when geometry comes
+between it and the fighter, now lets go slowly (`view::camera`, `ARM_OUT`)
+instead of snapping back out; the pull-in stays immediate, since anything slower
+puts the eye inside the rock.
+
 ## Small bodies: how tall "there" is
 
 **Added 2026-10-01, with the critters** ([critters.md](critters.md); bestiary §6

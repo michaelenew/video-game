@@ -591,6 +591,20 @@ pub fn bank_dash_jump(p: &mut Player) {
     }
 }
 
+/// Is the shift that threw the last dash still down? A held shift is not a
+/// fresh dodge until it has come up once. Called every frame with whether
+/// shift is down; answers whether a dodge must wait.
+pub fn shift_spent(p: &mut Player, shift_down: bool) -> bool {
+    let Some(mut shadow) = of(p) else {
+        return false;
+    };
+    if !shift_down && shadow.shift_spent {
+        shadow.shift_spent = false;
+        put(p, shadow);
+    }
+    shadow.shift_spent
+}
+
 /// Is a jump waiting from the last frames of the dash?
 pub fn dash_jump_banked(p: &Player) -> bool {
     of(p).is_some_and(|shadow| shadow.jump_banked)
@@ -675,17 +689,16 @@ fn step_her_dash(p: &mut Player) {
         let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
         shadow.lunge = flat.scale(t::dash_jump_keep());
         p.vel = V3::ZERO;
-        shadow.carry = t::shadow_carry();
-        // The window is the same length however far she came. What is left of
-        // the dodge usually *is* that window -- she arrived early and the rest
-        // is the slide -- but a dash that spent the whole dodge crossing would
-        // leave none, so the dodge is topped up to fit. Never shortened: a
-        // short dash keeps the tail it has always had.
-        if let Action::Dodge { left } = p.action {
-            if left < shadow.carry {
-                p.action = Action::Dodge { left: shadow.carry };
-            }
-        }
+        // **And she is hers again on the frame she lands** (2026-10-04, from
+        // play: "regain movement control instantly after a shadow dash"). The
+        // dodge's tail is cut, so a stick held keeps walking and a button
+        // pressed is a move. The carry is this one frame: the dash jump
+        // fires on it if its press came during the dash
+        // (`bank_dash_jump`), at the dash's whole speed, with no pause on the
+        // shadow -- a press after landing is an ordinary jump.
+        p.action = Action::Free;
+        shadow.carry = 1;
+        shadow.shift_spent = true;
         if shadow.is_out() {
             shadow.doing = Ghost::Attending;
         }

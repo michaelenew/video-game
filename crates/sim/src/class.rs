@@ -375,6 +375,11 @@ pub struct Shadow {
     /// body could stand, with nothing within the forgiveness either. The
     /// crosshair reads it. See `aim::footing_toward`.
     pub refused: u8,
+    /// Shift was still down when a dash landed: it dodges again only once it
+    /// has come up. The dash's tail is cut on arrival (2026-10-04), so a shift
+    /// held through a short dash would otherwise throw a second dodge on the
+    /// frame she lands. See `shadow::shift_spent`.
+    pub shift_spent: bool,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -420,6 +425,7 @@ impl Shadow {
             lunge: V3::ZERO,
             jump_banked: false,
             refused: 0,
+            shift_spent: false,
         }
     }
 

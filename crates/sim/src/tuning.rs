@@ -2787,6 +2787,12 @@ pub fn fall_soft() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FallSoft))
 }
 
+/// How fast the eye's ceiling rises per metre outside a hanging solid's
+/// footprint. See `arena::Arena::ceiling_near`.
+pub fn eye_ceiling_slope() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EyeCeilingSlope)).max(Fx::ZERO)
+}
+
 /// How far under a ceiling the eye is held. See `camera::eye_under`.
 pub fn eye_under_ceiling() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EyeUnderCeiling))

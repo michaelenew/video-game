@@ -533,6 +533,32 @@ impl Arena {
         material_among(self, &[self.solids()], pos)
     }
 
+    /// **The lowest ceiling near a point, sloped**: for every solid hanging
+    /// from the roof whose underside is above `above`, its underside plus
+    /// `slope` for each metre the point stands outside its footprint (the
+    /// larger of the two flat distances). Directly under a solid it is the
+    /// underside, as [`Arena::ceiling_over`] says; walking out from under an
+    /// edge it rises away instead of vanishing. That is what keeps the eye
+    /// (`camera::eye_under`) from jumping as it or the fighter crosses an
+    /// edge: on a course every island hangs, and a hard footprint test popped
+    /// the eye down and up again as you passed under one (2026-10-04, from
+    /// play: "the camera jumped on me").
+    pub fn ceiling_near(&self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
+        let mut best: Option<Fx> = None;
+        for s in self.solids().iter() {
+            if !s.hangs() || s.min.y.raw() <= above.raw() {
+                continue;
+            }
+            let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
+            let dz = s.min.z.sub(z).max(z.sub(s.max.z)).max(Fx::ZERO);
+            let at = s.min.y.add(dx.max(dz).mul(slope));
+            if best.is_none_or(|b| at.raw() < b.raw()) {
+                best = Some(at);
+            }
+        }
+        best
+    }
+
     /// **The lowest ceiling over a point**: the underside of the lowest solid
     /// hanging from the roof whose footprint covers it and whose underside is
     /// above `above`. What keeps the eye inside a cave (`camera::eye_under`).

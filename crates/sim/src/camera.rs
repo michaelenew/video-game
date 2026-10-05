@@ -470,15 +470,20 @@ pub fn eye(pos: V3, look: Input, aloft: Fx) -> V3 {
 /// `tuning::eye_under_ceiling` below the lowest ceiling over the eye or over
 /// the fighter -- a solid hanging from the roof whose underside is above the
 /// fighter's head -- and nowhere else does it move. With no ceiling over
-/// either it is [`eye`] exactly, which is every arena but a cave.
+/// either it is [`eye`] exactly, which is every arena but a cave or a course.
+/// Near a ceiling's edge the limit slopes away (`tuning::eye_ceiling_slope`)
+/// rather than stopping, so crossing an edge never jumps the eye.
 ///
 /// The drawn camera starts from this one too (`view::camera`), so the
 /// crosshair and the eye stay the same line under a vault.
 pub fn eye_under(pos: V3, look: Input, aloft: Fx, arena: &crate::arena::Arena) -> V3 {
     let mut at = eye(pos, look, aloft);
     let head = pos.y.add(t::body_height());
-    let over_eye = arena.ceiling_over(at.x, at.z, head);
-    let over_body = arena.ceiling_over(pos.x, pos.z, head);
+    // Sloped rather than a footprint test, so the eye moves continuously as
+    // it or the body passes an edge: see `Arena::ceiling_near`.
+    let slope = t::eye_ceiling_slope();
+    let over_eye = arena.ceiling_near(at.x, at.z, head, slope);
+    let over_body = arena.ceiling_near(pos.x, pos.z, head, slope);
     let lowest = match (over_eye, over_body) {
         (Some(a), Some(b)) => Some(a.min(b)),
         (a, b) => a.or(b),

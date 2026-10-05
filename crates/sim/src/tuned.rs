@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 334] = [
+pub const SCALARS: [i32; 335] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -342,6 +342,7 @@ pub const SCALARS: [i32; 334] = [
                6, // reaver.dash_jump,_press_kept_before_arrival = 6
           196608, // reaver.send_shadow,_forgiveness_back_(m) = 3
               18, // reaver.send_shadow,_refusal_shown_(frames) = 18
+           65536, // aim.eye,_ceiling_slope_away_from_an_edge = 1
 ];
 
 #[rustfmt::skip]

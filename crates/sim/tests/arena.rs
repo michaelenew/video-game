@@ -543,3 +543,42 @@ fn lengths_across_the_range_do_not_saturate() {
         assert_eq!(wide_normalized(v), v.normalized());
     }
 }
+
+#[test]
+fn walking_under_an_island_edge_never_jumps_the_eye() {
+    // On a course every island hangs, so every island is a ceiling to the
+    // eye. A hard footprint test dropped the eye by metres the step the body
+    // or the eye passed under an edge, and the aim with it (2026-10-04, from
+    // play: "the camera jumped on me"). Walked across every island's edge in
+    // five-centimetre steps, the eye should move by little more than the step.
+    use sim::camera::eye_under;
+    let step = Fx::ratio(1, 20);
+    let most = Fx::ratio(1, 4);
+    for c in sim::course::all() {
+        let a = c.arena();
+        for s in a.solids.iter().filter(|s| s.hangs()) {
+            let z = Fx::from_raw(s.min.z.raw() + (s.max.z.raw() - s.min.z.raw()) / 2);
+            let y = s.min.y.sub(sim::tuning::body_height()).sub(Fx::ONE);
+            for aim in [0u16, 32768] {
+                let look = Input::looking_at(0, aim, 0);
+                let mut x = s.min.x.sub(Fx::from_int(8));
+                let mut last: Option<Fx> = None;
+                while x.raw() < s.min.x.add(Fx::ONE).raw() {
+                    let eye = eye_under(V3::new(x, y, z), look, Fx::ZERO, a);
+                    if let Some(prev) = last {
+                        assert!(
+                            (eye.y.raw() - prev.raw()).abs() <= most.raw(),
+                            "{}: the eye jumped {:.2} m at x {:.2} by the solid at {:?}",
+                            c.name,
+                            (eye.y.raw() - prev.raw()) as f32 / 65536.0,
+                            x.to_f32_for_render(),
+                            s.min
+                        );
+                    }
+                    last = Some(eye.y);
+                    x = x.add(step);
+                }
+            }
+        }
+    }
+}

@@ -658,47 +658,60 @@ fn a_planted_shield_across_the_line_leaves_her_with_an_ordinary_dodge() {
 }
 
 #[test]
-fn a_jump_inside_the_carry_leaves_with_the_dash() {
-    // The dash stops on the shadow; a jump pressed in the short window after
-    // it takes the crossing's speed up with her (`dash_jump_keep`, all of it
-    // since 2026-10-04), less what each frame of the carry has bled of it.
+fn a_jump_pressed_after_landing_is_an_ordinary_jump() {
+    // The dash jump is pressed during the dash, before the halt. Pressed on
+    // the shadow after she has stopped, it is an ordinary jump: the stall the
+    // old carry window made is what play objected to.
     let mut w = in_the_open();
     let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
     put_the_shadow_at(&mut w, out);
     let pitch = crosshair_onto(&w, out);
-
+    let mut landed = false;
     let mut took_off = None;
     for _ in 0..(t::dodge_frames() as u32 * 2) {
-        // Shift comes off the moment the window opens, so what is measured is
-        // the jump rather than a second dodge thrown on the next frame.
-        let carrying = shadow(&w).carry > 0;
-        let bits = if carrying {
-            W | Input::SPACE
-        } else {
+        let bits = if landed {
+            Input::SPACE
+        } else if shadow(&w).dash > 0 || !landed {
             SHIFT | W
+        } else {
+            0
         };
         run(&mut w, 1, bits, pitch);
-        if carrying && took_off.is_none() && !w.players[0].grounded {
+        if !landed && shadow(&w).carry > 0 {
+            landed = true;
+        } else if landed && took_off.is_none() && !w.players[0].grounded {
             took_off = Some(w.players[0].vel);
         }
     }
-    let leaving = took_off.expect("the jump inside the carry never left the ground");
+    let leaving = took_off.expect("a jump on the shadow after landing never left the ground");
     let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
-    let most = t::shadow_dash_speed().mul(t::dash_jump_keep());
-    let least = most.mul(t::dodge_decay()).mul(t::dodge_decay());
     assert!(
-        leaving.y.raw() > 0,
-        "she was airborne without going up, so that was the dash and not a jump"
+        along.raw() <= t::move_speed().raw(),
+        "she left at {:.1} m/s: a press after the halt still took the dash's speed",
+        along.to_f32_for_render()
     );
-    assert!(
-        along.raw() >= least.raw() - Fx::ratio(1, 2).raw()
-            && along.raw() <= most.raw() + Fx::ratio(1, 2).raw(),
-        "she left the ground at {:.1} m/s, not the {:.1}-{:.1} a jump on the \
-         carry's first frame keeps of the dash",
-        along.to_f32_for_render(),
-        least.to_f32_for_render(),
-        most.to_f32_for_render()
-    );
+}
+
+#[test]
+fn she_is_free_the_frame_she_lands() {
+    // "Regain movement control instantly after a shadow dash." The dodge's
+    // tail is cut on arrival.
+    let mut w = in_the_open();
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    for _ in 0..(t::dodge_frames() as u32 * 2) {
+        run(&mut w, 1, SHIFT | W, pitch);
+        if shadow(&w).carry > 0 {
+            assert!(
+                w.players[0].action.actionable(),
+                "she landed on the shadow still in {:?}",
+                w.players[0].action
+            );
+            return;
+        }
+    }
+    panic!("the dash never arrived");
 }
 
 #[test]
@@ -768,9 +781,10 @@ fn the_dash_stops_on_the_shadow() {
 
 #[test]
 fn the_dash_jump_launches_her() {
-    // Six metres of dash and straight into a held jump: it is her launch, and
-    // it should carry her well past half the arena's width. A fifth of the
-    // dash, from 2026-09-23 to 2026-10-04, made it an ordinary jump.
+    // Six metres of dash, the jump pressed as she closes on the shadow and
+    // held: it is her launch, and it should carry her well past half the
+    // arena's width. A fifth of the dash, from 2026-09-23 to 2026-10-04,
+    // made it an ordinary jump.
     let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
     w.players[0].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
     w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
@@ -781,16 +795,19 @@ fn the_dash_jump_launches_her() {
         .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
     put_the_shadow_at(&mut w, out);
     let pitch = crosshair_onto(&w, out);
+    let close = t::shadow_dash_speed().mul(sim::DT).mul(Fx::from_int(2));
     let mut took_off_at = None;
+    let mut pressing = false;
     for _ in 0..200 {
-        let carrying = shadow(&w).carry > 0;
-        let bits = if carrying || took_off_at.is_some() {
+        let me = &w.players[0];
+        pressing |= shadow(&w).dash > 0 && shadow(&w).pos.sub(me.pos).len().raw() <= close.raw();
+        let bits = if pressing {
             W | Input::SPACE
         } else {
             SHIFT | W
         };
         run(&mut w, 1, bits, pitch);
-        if carrying && took_off_at.is_none() && !w.players[0].grounded {
+        if pressing && took_off_at.is_none() && !w.players[0].grounded {
             took_off_at = Some(w.players[0].pos);
         }
         if took_off_at.is_some() && w.players[0].grounded {

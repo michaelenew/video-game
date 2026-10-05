@@ -3782,6 +3782,9 @@ fn step_player(
     // held button would spend it on the first frame it was available rather
     // than on the frame the player chose.
     let pressed_space = input.has(Input::SPACE) && !p.space_held;
+    if !input.has(Input::SHIFT) {
+        shadow::shift_spent(p, false);
+    }
     p.space_held = input.has(Input::SPACE);
     // The two keys the v2 grammar added, read on the press like the mechanic.
     let pressed_f = input.has(Input::KEY_F) && !p.f_held;
@@ -3914,7 +3917,10 @@ fn step_player(
                     // hand and the dash underneath it are that class's alone.
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, true)
-                } else if input.has(Input::SHIFT) && (ax != 0 || az != 0) {
+                } else if input.has(Input::SHIFT)
+                    && (ax != 0 || az != 0)
+                    && !shadow::shift_spent(p, true)
+                {
                     // Shift plus a direction dodges. It used to be space plus a
                     // direction, which meant that pressing the jump button while
                     // moving -- which is most of the time -- did not jump. Space is
@@ -4269,23 +4275,22 @@ fn step_player(
         dual::spend_wing_beat(p);
     }
 
-    if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
+    // Not on the frame a banked dash jump fires: the dash jump below is that
+    // press, and both would stack two takeoffs into one.
+    let dash_jump = shadow::dash_jump_banked(p) && shadow::carrying_a_dash(p);
+    if input.has(Input::SPACE) && p.grounded && p.action.actionable() && !dash_jump {
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump).mul(foot.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
     }
 
-    // **The dash jump.** The dash stops dead on the shadow, and for a few
-    // frames after -- the carry -- a jump takes the crossing's speed up with
-    // her (`tuning::dash_jump_keep`), less what the carry has bled of it. It
-    // cuts the dodge's tail short, which is the other half of the reward: the
-    // frames she would have spent standing there being punished are spent in
-    // the air going somewhere.
-    //
-    // A press in the dash's last few frames counts too (`bank_dash_jump`): the
-    // ordinary jump above cannot fire inside a dodge, so without the bank a
-    // press one frame early was simply lost.
-    if (pressed_space || shadow::dash_jump_banked(p)) && shadow::carrying_a_dash(p) {
+    // **The dash jump.** Pressed in the dash's last few frames
+    // (`bank_dash_jump`, `tuning::dash_jump_buffer`) and thrown on the frame
+    // she lands on the shadow, with the crossing's whole speed
+    // (`tuning::dash_jump_keep`). Only a press made *before* the halt counts
+    // (2026-10-04, from play): a press after it found her already stopped and
+    // launched her a few frames late, which read as a stall.
+    if dash_jump {
         let lunge = shadow::lunge(p);
         p.vel = V3::new(lunge.x, p.vel.y, lunge.z);
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
@@ -6299,6 +6304,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             hash_v3(h, &shadow.lunge);
             h.write_u32(shadow.jump_banked as u32);
             h.write_u32(shadow.refused as u32);
+            h.write_u32(shadow.shift_spent as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);

@@ -634,6 +634,9 @@ scalars! {
     ShadowForgive,    "Reaver",    "Send shadow, forgiveness back (m)",     Fixed,  0,        fx(10,1);
     // How long the crosshair shows a refused send.
     ShadowRefusedShow, "Reaver",   "Send shadow, refusal shown (frames)",   Frames, 1,        60;
+    // How fast the eye's ceiling rises per metre outside a hanging solid, so
+    // passing under an island's edge glides the eye instead of jumping it.
+    EyeCeilingSlope,  "Aim",       "Eye, ceiling slope away from an edge",  Fixed,  0,        fx(4,1);
 }
 
 // ---------------------------------------------------------------------------
