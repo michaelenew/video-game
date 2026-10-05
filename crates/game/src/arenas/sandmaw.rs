@@ -15,6 +15,7 @@ const GLASS: [f32; 3] = [0.35, 0.42, 0.40];
 pub static DRESSING: Dressing = Dressing {
     // Dusk over the Glass Flats.
     sky: [0.72, 0.46, 0.34],
+    below: None,
     props: &[
         Prop {
             shape: Shape::Cylinder,

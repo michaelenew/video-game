@@ -75,6 +75,7 @@ fn heel(p: &Player) -> V3 {
 /// mechanic upkeep happens for every class.
 pub fn step(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
+    shadow.refused = shadow.refused.saturating_sub(1);
 
     // It turns the way she turns. It is her shadow: it does what she does, and
     // that includes which way it is pointed, which is what makes its copy of a
@@ -397,17 +398,26 @@ pub enum Order {
     Sent,
     /// It was out, and now it is coming home through anybody in the way.
     Recalled,
+    /// It was with her, and it was pointed at nowhere it could stand: it
+    /// stays, and the refusal shows. See `aim::footing_toward`.
+    Refused,
 }
 
 /// Throw the shadow at `to`, or call it home if it is already out.
 ///
 /// One button, two meanings, decided by where the second body is — the same
 /// shape as the Bulwark's shield, and for the same reason: the mechanic has a
-/// position, so the only thing the key can mean is "change it".
-pub fn order(p: &mut Player, to: V3) -> Option<Order> {
+/// position, so the only thing the key can mean is "change it". `to` is
+/// `None` when the send was aimed at nowhere it could stand
+/// (`aim::footing_toward`): a send then is refused, and a recall is a recall.
+pub fn order(p: &mut Player, to: Option<V3>) -> Option<Order> {
     let mut shadow = of(p)?;
-    let order = match shadow.doing {
-        Ghost::Attending => {
+    let order = match (shadow.doing, to) {
+        (Ghost::Attending, None) => {
+            shadow.refused = t::shadow_refused_show();
+            Order::Refused
+        }
+        (Ghost::Attending, Some(to)) => {
             shadow.doing = Ghost::Casting {
                 from: shadow.pos,
                 to,
@@ -418,8 +428,8 @@ pub fn order(p: &mut Player, to: V3) -> Option<Order> {
         // Already on its way home. Pressing again does not hurry it, but the
         // press is still a recall as far as everything downstream is concerned
         // -- the lotus reads the order, not the state.
-        Ghost::Returning { .. } => Order::Recalled,
-        Ghost::Casting { .. } | Ghost::Waiting => {
+        (Ghost::Returning { .. }, _) => Order::Recalled,
+        (Ghost::Casting { .. } | Ghost::Waiting, _) => {
             shadow.doing = Ghost::Returning { struck: 0 };
             Order::Recalled
         }
@@ -560,7 +570,44 @@ pub fn spend_carry(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.carry = 0;
     shadow.lunge = V3::ZERO;
+    shadow.jump_banked = false;
     put(p, shadow);
+}
+
+/// A jump pressed while the dash is still crossing: kept for the arrival if
+/// she is within `tuning::dash_jump_buffer` frames of the shadow, and thrown
+/// the frame she lands on it. Earlier than that it is dropped, as before.
+pub fn bank_dash_jump(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    if shadow.dash == 0 {
+        return;
+    }
+    let reach = t::shadow_dash_speed()
+        .mul(DT)
+        .mul(Fx::from_int(t::dash_jump_buffer()));
+    if shadow.pos.sub(p.pos).len().raw() <= reach.raw() {
+        shadow.jump_banked = true;
+        put(p, shadow);
+    }
+}
+
+/// Is the shift that threw the last dash still down? A held shift is not a
+/// fresh dodge until it has come up once. Called every frame with whether
+/// shift is down; answers whether a dodge must wait.
+pub fn shift_spent(p: &mut Player, shift_down: bool) -> bool {
+    let Some(mut shadow) = of(p) else {
+        return false;
+    };
+    if !shift_down && shadow.shift_spent {
+        shadow.shift_spent = false;
+        put(p, shadow);
+    }
+    shadow.shift_spent
+}
+
+/// Is a jump waiting from the last frames of the dash?
+pub fn dash_jump_banked(p: &Player) -> bool {
+    of(p).is_some_and(|shadow| shadow.jump_banked)
 }
 
 /// What a jump out of the carry takes with it: the share of the dash banked
@@ -577,6 +624,7 @@ pub fn broken_by_a_hit(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.dash = 0;
     shadow.carry = 0;
+    shadow.jump_banked = false;
     put(p, shadow);
 }
 
@@ -592,6 +640,15 @@ fn step_her_dash(p: &mut Player) {
     // The carry runs down whether or not a dash is still going: it is what a
     // dash leaves behind, and the frame it was opened on is one of its own.
     shadow.carry = shadow.carry.saturating_sub(1);
+    // The banked speed bleeds as the old slide did, so the earlier the jump
+    // the further it goes: the tech has a gradient rather than a pass mark.
+    if shadow.carry > 0 {
+        shadow.lunge = V3::new(
+            shadow.lunge.x.mul(t::dodge_decay()),
+            Fx::ZERO,
+            shadow.lunge.z.mul(t::dodge_decay()),
+        );
+    }
     if shadow.dash == 0 {
         put(p, shadow);
         return;
@@ -610,6 +667,10 @@ fn step_her_dash(p: &mut Player) {
     if arrived || !matches!(p.action, Action::Dodge { .. }) {
         shadow.dash = 0;
     }
+    if !arrived && shadow.dash == 0 {
+        // Ran out of dodge short of the shadow: no carry, nothing to jump out of.
+        shadow.jump_banked = false;
+    }
     if arrived {
         // **She lands on it, not near it.** The tolerance above is half a metre
         // wide and the shadow is standing somewhere she can stand, so closing
@@ -622,23 +683,22 @@ fn step_her_dash(p: &mut Player) {
         // back -- the rise that carried her up would keep carrying her off the
         // top of it -- and so does the floor: the dash used to leave her
         // sliding at the speed she crossed at, four or five metres past the
-        // shadow, which made arriving anywhere precise impossible. What is
-        // kept of that speed is banked for a jump out of the carry, and only
-        // for that. See `tuning::dash_jump_keep`.
+        // shadow, which made arriving anywhere precise impossible. The speed
+        // is banked for a jump out of the carry, and only for that -- all of
+        // it, since 2026-10-04. See `tuning::dash_jump_keep`.
         let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
         shadow.lunge = flat.scale(t::dash_jump_keep());
         p.vel = V3::ZERO;
-        shadow.carry = t::shadow_carry();
-        // The window is the same length however far she came. What is left of
-        // the dodge usually *is* that window -- she arrived early and the rest
-        // is the slide -- but a dash that spent the whole dodge crossing would
-        // leave none, so the dodge is topped up to fit. Never shortened: a
-        // short dash keeps the tail it has always had.
-        if let Action::Dodge { left } = p.action {
-            if left < shadow.carry {
-                p.action = Action::Dodge { left: shadow.carry };
-            }
-        }
+        // **And she is hers again on the frame she lands** (2026-10-04, from
+        // play: "regain movement control instantly after a shadow dash"). The
+        // dodge's tail is cut, so a stick held keeps walking and a button
+        // pressed is a move. The carry is this one frame: the dash jump
+        // fires on it if its press came during the dash
+        // (`bank_dash_jump`), at the dash's whole speed, with no pause on the
+        // shadow -- a press after landing is an ordinary jump.
+        p.action = Action::Free;
+        shadow.carry = 1;
+        shadow.shift_spent = true;
         if shadow.is_out() {
             shadow.doing = Ghost::Attending;
         }

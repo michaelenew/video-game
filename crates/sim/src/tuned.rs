@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 331] = [
+pub const SCALARS: [i32; 337] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -247,7 +247,7 @@ pub const SCALARS: [i32; 331] = [
            65536, // health.blood_mage_(x) = 1
            65536, // health.dual_mage_(x) = 1
                1, // reaver.shadow_turns_its_copy_to_a_body = on
-              20, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 20
+             100, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 100
              400, // bulwark.weight,_the_most_the_shield_holds = 400
              600, // bulwark.weight,_a_full_shield_empties_in = 600
           131072, // bulwark.weight,_a_parry_loads_(x_its_damage) = 2
@@ -339,6 +339,12 @@ pub const SCALARS: [i32; 331] = [
              145, // tempers.temper_iii,_lead_(%_of_its_own) = 145
               25, // tempers.temper_iii,_decisiveness_(+_points) = 25
               30, // tempers.temper_iii,_thresholds_fall_(%_of_its_own) = 30
+               6, // reaver.dash_jump,_press_kept_before_arrival = 6
+          196608, // reaver.send_shadow,_forgiveness_back_(m) = 3
+              18, // reaver.send_shadow,_refusal_shown_(frames) = 18
+           65536, // aim.eye,_ceiling_slope_away_from_an_edge = 1
+               4, // champion.rising_attack,_still_from_the_floor = 4
+               6, // champion.jump_after_a_click_still_rises = 6
 ];
 
 #[rustfmt::skip]

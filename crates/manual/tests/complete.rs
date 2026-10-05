@@ -50,6 +50,8 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "KeyP" => vec!["P"],
         // The temper: the same creature, cleverer (world W2).
         "KeyT" => vec!["T"],
+        // The next jump course (docs/design/courses.md).
+        "KeyN" => vec!["N"],
         "KeyQ" => vec!["Q"],
         "KeyR" => vec!["R", "F and R"],
         "KeyF" => vec!["F", "F and R"],

@@ -1783,6 +1783,57 @@ fn settle_aboard(at: V3, scene: &Scene) -> V3 {
     put
 }
 
+/// **Can a body stand where this settled point is?** Anywhere but a course's
+/// drop: a course's islands hang over a floor a long way down, and a point that
+/// settles onto that floor has fallen, not landed. Every other arena's floor is
+/// a floor.
+pub fn standable(at: V3, arena: &Terrain) -> bool {
+    crate::course::pit_of(arena.id).is_none_or(|pit| at.y.raw() > pit.raw())
+}
+
+/// **Where a placed thing aimed at `to` can go**, from a caster standing at
+/// `from`: `to` itself when a body could stand there, and otherwise the first
+/// point that one could, scanning back along the floor toward the caster for
+/// at most `tuning::shadow_forgive` -- and then a body's width further onto
+/// it, if that is still footing, so what lands there is on the top rather
+/// than balanced on its lip. `None` when the scan finds nothing: the caller
+/// refuses the placement.
+///
+/// The Reaver's send, aimed off an island's far edge or into the drop between
+/// two (2026-10-04, from play: the shadow dived into the abyss). A small
+/// forgiveness and then a refusal, rather than a search for the nearest
+/// footing anywhere: a send that goes somewhere the player did not point at
+/// is the thing the aiming model exists to prevent. Structures are not
+/// footing here, for the same reason they are not ground in
+/// [`grounded_path`].
+pub fn footing_toward(from: V3, to: V3, scene: &Scene) -> Option<V3> {
+    if standable(to, scene.arena) {
+        return Some(to);
+    }
+    let open = past_structures(scene);
+    let back = V3::new(from.x.sub(to.x), Fx::ZERO, from.z.sub(to.z));
+    let span = back.flat_len();
+    if span.raw() <= 0 {
+        return None;
+    }
+    let dir = back.scale(Fx::ONE.div(span));
+    let limit = t::shadow_forgive().min(span);
+    // Half a body at a time: fine enough that no top a body could stand on
+    // is stepped over.
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    let mut along = step;
+    while along.raw() <= limit.raw() {
+        let at = settle(to.add(dir.scale(along)), &open, scene.arena);
+        if standable(at, scene.arena) {
+            let further = along.add(t::body_radius()).min(span);
+            let onto = settle(to.add(dir.scale(further)), &open, scene.arena);
+            return Some(if onto.y == at.y { onto } else { at });
+        }
+        along = along.add(step);
+    }
+    None
+}
+
 /// Drop a point onto whatever it would stand on.
 pub fn settle(at: V3, stones: &Field, arena: &Terrain) -> V3 {
     let mut floor = arena.ground_under(at);

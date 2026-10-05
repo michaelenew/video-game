@@ -33,3 +33,20 @@ creature placed winding that move up at player one.
 | ![](broodmother-telegraph.jpg) **Broodmother, the slam**: her footprint drawn on the floor. | ![](veilstalker-telegraph.jpg) **Veilstalker, the tail spear**: the shimmer and the lane — all you see of it. |
 | ![](mantis-telegraph.jpg) **Mantis, the lunge**: its lane down the court. | ![](galewing-telegraph.jpg) **Galewing, the Stoop**: the circle where it will hit, the bird above. |
 | ![](siegeshell-telegraph.jpg) **Siegeshell, the stamp**: the foot over you and its disc. | |
+
+## The jump courses
+
+Taken 2026-10-04, rounds four and five, with `GAME_ARGS="--arena <name> --p1 <class> --p2 <class>"`,
+`SHOT_FRAME=60`, `DEMO=0` and a `SHOT_PITCH` per course (about −0.2 looking out,
+near level at the Spiral and the Spire); see [courses.md](../courses.md). The panel
+at the right is the course list and the run. Grass is a path island, sand a
+stepping stone, snow a checkpoint, wood the nest; grey rock is never the route.
+Every tier is an unplayed guess. The panel lists each course's big jumps (round five).
+
+| | |
+| --- | --- |
+| ![](course-stair.jpg) **The Stair** (easy), the Champion. | ![](course-causeway.jpg) **The Causeway** (easy), the Blood mage. |
+| ![](course-spiral.jpg) **The Spiral** (hard), the Elementalist: ledges climbing round the pillar, the pad on the left, the chimney's balcony up and right. | ![](course-falls.jpg) **The Falls** (hard), the Reaver: the stair and the arch ahead. |
+| ![](course-slalom.jpg) **The Slalom** (hard), the Dual mage: stones between the pillars, the cave mouth beyond, the span's runway on the left. | ![](course-fork.jpg) **The Fork** (hard), the Champion: the high road's wall up and right, the low road's stones ahead. |
+| ![](course-spire.jpg) **The Spire** (barely possible), the Elementalist. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver: the runway, the 18 m gulf, the high line up and right. |
+| ![](course-reach.jpg) **The Reach** (proving ground), the Reaver on the hub: the gap lanes ahead, a yellow block per five metres at each takeoff. | |

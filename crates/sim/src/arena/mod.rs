@@ -72,6 +72,12 @@ pub mod galewing;
 
 pub mod siegeshell;
 
+pub mod lab;
+
+pub mod climb;
+
+pub mod bench;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -98,6 +104,24 @@ impl ArenaId {
     pub const RANGE: ArenaId = ArenaId(11);
     /// The Hornback's second arena: the crossing, its defend variant (P7).
     pub const HORNBACK_CROSSING: ArenaId = ArenaId(12);
+    /// A dev arena for measuring movement: see [`lab`] and `crate::envelope`.
+    pub const LAB: ArenaId = ArenaId(13);
+    /// **The jump courses** (`docs/design/courses.md`): no creature, the
+    /// movement system is the challenge. Two or three at each tier, all in [`climb`],
+    /// each with its own `crate::course::Course`.
+    pub const CLIMB_STAIR: ArenaId = ArenaId(14);
+    pub const CLIMB_CAUSEWAY: ArenaId = ArenaId(15);
+    pub const CLIMB_SPIRAL: ArenaId = ArenaId(16);
+    pub const CLIMB_FALLS: ArenaId = ArenaId(17);
+    pub const CLIMB_SPIRE: ArenaId = ArenaId(18);
+    pub const CLIMB_GULF: ArenaId = ArenaId(19);
+    pub const CLIMB_SLALOM: ArenaId = ArenaId(20);
+    pub const CLIMB_FORK: ArenaId = ArenaId(21);
+    /// The proving ground of the jump courses: lanes and ledges at marked
+    /// distances, one per class mechanic to try.
+    pub const CLIMB_REACH: ArenaId = ArenaId(22);
+    /// A dev arena of single hops, for measuring a kind of hop: see [`bench`].
+    pub const BENCH: ArenaId = ArenaId(30);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -107,7 +131,7 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 13;
+pub const COUNT: usize = 40;
 
 /// The most solids an arena may have. Every query walks all of them, several
 /// times a frame per body, so this is what keeps a large arena inside the
@@ -145,6 +169,20 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::GALEWING => Some(&galewing::ARENA),
         ArenaId::SIEGESHELL => Some(&siegeshell::ARENA),
+
+        ArenaId::LAB => Some(&lab::ARENA),
+
+        ArenaId::BENCH => Some(&bench::ARENA),
+
+        ArenaId::CLIMB_STAIR => Some(&climb::STAIR),
+        ArenaId::CLIMB_CAUSEWAY => Some(&climb::CAUSEWAY),
+        ArenaId::CLIMB_SPIRAL => Some(&climb::SPIRAL),
+        ArenaId::CLIMB_FALLS => Some(&climb::FALLS),
+        ArenaId::CLIMB_SLALOM => Some(&climb::SLALOM),
+        ArenaId::CLIMB_FORK => Some(&climb::FORK),
+        ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
+        ArenaId::CLIMB_GULF => Some(&climb::GULF),
+        ArenaId::CLIMB_REACH => Some(&climb::REACH),
         _ => None,
     }
 }
@@ -495,6 +533,32 @@ impl Arena {
         material_among(self, &[self.solids()], pos)
     }
 
+    /// **The lowest ceiling near a point, sloped**: for every solid hanging
+    /// from the roof whose underside is above `above`, its underside plus
+    /// `slope` for each metre the point stands outside its footprint (the
+    /// larger of the two flat distances). Directly under a solid it is the
+    /// underside, as [`Arena::ceiling_over`] says; walking out from under an
+    /// edge it rises away instead of vanishing. That is what keeps the eye
+    /// (`camera::eye_under`) from jumping as it or the fighter crosses an
+    /// edge: on a course every island hangs, and a hard footprint test popped
+    /// the eye down and up again as you passed under one (2026-10-04, from
+    /// play: "the camera jumped on me").
+    pub fn ceiling_near(&self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
+        let mut best: Option<Fx> = None;
+        for s in self.solids().iter() {
+            if !s.hangs() || s.min.y.raw() <= above.raw() {
+                continue;
+            }
+            let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
+            let dz = s.min.z.sub(z).max(z.sub(s.max.z)).max(Fx::ZERO);
+            let at = s.min.y.add(dx.max(dz).mul(slope));
+            if best.is_none_or(|b| at.raw() < b.raw()) {
+                best = Some(at);
+            }
+        }
+        best
+    }
+
     /// **The lowest ceiling over a point**: the underside of the lowest solid
     /// hanging from the roof whose footprint covers it and whose underside is
     /// above `above`. What keeps the eye inside a cave (`camera::eye_under`).
@@ -577,7 +641,17 @@ fn resolve_among(
                     if vel.y.raw() < 0 {
                         vel.y = Fx::ZERO;
                     }
-                    grounded = true;
+                    // **Lifted onto a top is not landing on it while still
+                    // rising.** A jump that clips a ledge's near corner on
+                    // the way up is pushed up onto the top here -- the
+                    // vertical overlap is the shallowest -- and counted as
+                    // standing, it let a still-held jump fire a second
+                    // takeoff stacked on the first's speed (about 27 m/s up;
+                    // `tests/corner.rs`). She is put on the top and keeps
+                    // rising; she lands when she stops.
+                    if vel.y.raw() <= 0 {
+                        grounded = true;
+                    }
                 } else {
                     pos.y = solid.min.y.sub(height);
                     if vel.y.raw() > 0 {

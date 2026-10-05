@@ -132,6 +132,14 @@ which is what it used to be, and what made the class's whole setup free.
 
 **Out:** the second body races to where the crosshair is pointing and stops there.
 
+**Where it cannot stand, it does not go — added 2026-10-04.** Aimed past the edge of an
+island and into a drop, the send looks back toward her along the floor, up to three metres
+(`Send shadow, forgiveness back`), and lands on the first footing it finds, a body's width in
+from the lip. If there is none, the shadow stays with her, the crosshair flashes red for a
+moment (`Send shadow, refusal shown`; a sound later), and the button is free again at once:
+a send that never went out costs no lockout. From play on the jump courses, where the shadow
+used to dive into the abyss. See `aim::footing_toward` and [aiming.md](../aiming.md).
+
 **Home:** pressed again, it dashes back through anything between the two of you, damaging
 and slowing it. **And it takes an open Guillotine lotus with it**, which is the
 combination the kit is built around — see below.
@@ -311,20 +319,29 @@ something another class can actually do, rather than a rule nothing exercises. S
 
 #### The carry, and the jump out of it — added 2026-09-14
 
-**Arriving stops her on the shadow's spot**, and opens a short window — ten frames — called
-the **carry**. It is the same length however far she came: a dash that spent its whole dodge
-getting there is given the window rather than having the distance swallow it.
+**Arriving stops her on the shadow's spot, and she is free that frame — since 2026-10-04.**
+The dodge's tail is cut on arrival: a held stick keeps walking, a click is a move. From play:
+"I need the reaver to regain movement control instantly after a shadow dash." A shift still
+held from the dash dodges again only once it has come up, so holding it through a short dash
+does not throw a second dodge on landing.
 
-**A jump pressed inside the carry is a lunge.** It is one of the two things that can cut a
-dodge's tail short (a swing is the other, above), and that is half the reward: the frames she
-would have spent standing there being punished are spent in the air going somewhere instead.
-The other half is speed — a fifth of the dash's, about one and a half walks, in the direction
-she crossed (`Dash jump, keeps of the dash speed`). It used to be the whole slide, fifty metres
-a second, and a dash jump cleared the arena; it carries her about ten and a half metres now.
+**The dash jump is pressed during the dash, before she lands — 2026-10-04.** A space press in
+the dash's last frames (`Dash jump, press kept before arrival`, six) is kept, and on the frame
+she lands on the shadow she launches with **all of the dash's speed** in the direction she
+crossed (`Dash jump, keeps of the dash speed`, 100%): about 50 m past a shadow sent 9 m on the
+flat. There is no pause on the shadow. A press after landing is an ordinary jump. Briefly on
+2026-10-04 the press could also come in a ten-frame window after landing, with the speed bled
+for each frame of it; from play that read as a stall followed by a launch, and it went.
 
-It is a **press**, not a held button, and it answers only a dash. Every dodge in the game
-has a punishable tail, and a jump out of *that* would be a universal escape rather than one
-class's tech.
+From 2026-09-23 to 2026-10-04 the jump kept only a fifth of the dash, about ten metres a
+second, and carried her ten and a half metres: an ordinary jump. That was reverted on the
+user's word. The other half of the 2026-09-23 change — the dash stopping dead on the shadow
+rather than sliding past it, for precise fighting — stays.
+
+It is a **press**, and it answers only a dash. Every other dodge in the game keeps its
+punishable tail, and a jump out of *that* would be a universal escape rather than one
+class's tech. The dash to the shadow no longer has one: that is a real loss of punish on the
+Reaver in a fight, taken on the user's word, and worth watching in versus.
 
 ### Executioner — `E`, or `shift` + left click
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
@@ -397,7 +414,7 @@ makes with Rush.
 - Does the shadow have collision, or is it purely a marker? Collision makes it
   denial-able, which cuts both ways. **It has none today.**
 - **How long should the carry be, and how much of the dash should the jump keep?** Ten
-  frames and a fifth are first values. The dash no longer slides past the shadow at all.
+  frames, all of the dash and a six-frame press buffer are the values since 2026-10-04. The dash no longer slides past the shadow at all.
   Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
 - **The tally's numbers.** Five marks, a fade of a second and a half, 0.4 a mark. All first guesses; see the open questions in

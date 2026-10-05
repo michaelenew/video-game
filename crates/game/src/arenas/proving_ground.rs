@@ -5,5 +5,6 @@ use super::Dressing;
 
 pub static DRESSING: Dressing = Dressing {
     sky: [0.05, 0.06, 0.08],
+    below: None,
     props: &[],
 };

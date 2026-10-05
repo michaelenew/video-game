@@ -86,12 +86,16 @@ pub enum Destination {
     Versus,
     /// Hunt a creature, in its own arena, at a temper.
     Hunt(SpeciesId, u8),
+    /// No creature, in a chosen arena: a jump course (`crate::course`).
+    Arena(crate::arena::ArenaId),
 }
 
 impl Travel {
     pub const NONE: Travel = Travel(0);
     pub const VERSUS: Travel = Travel(1);
     const HUNT: u8 = 0x80;
+    /// `01aa aaaa`: no creature, in arena `a`.
+    const ARENA: u8 = 0x40;
     const SPECIES: u8 = 0x1F;
     const TEMPER_SHIFT: u8 = 5;
     const TEMPER: u8 = 0x03;
@@ -112,10 +116,23 @@ impl Travel {
         Travel(Travel::HUNT | t << Travel::TEMPER_SHIFT | (species.0 & Travel::SPECIES))
     }
 
+    /// Go to an arena with nobody in it to hunt: a jump course. An id past
+    /// what six bits hold is no request.
+    pub const fn arena(id: crate::arena::ArenaId) -> Travel {
+        if id.0 > !Travel::ARENA & !Travel::HUNT {
+            Travel::NONE
+        } else {
+            Travel(Travel::ARENA | id.0)
+        }
+    }
+
     pub const fn destination(self) -> Option<Destination> {
         match self.0 {
             0 => None,
             1 => Some(Destination::Versus),
+            b if b & Travel::HUNT == 0 && b & Travel::ARENA != 0 => Some(Destination::Arena(
+                crate::arena::ArenaId(b & !Travel::ARENA),
+            )),
             b if b & Travel::HUNT != 0 => Some(Destination::Hunt(
                 SpeciesId(b & Travel::SPECIES),
                 (b >> Travel::TEMPER_SHIFT) & Travel::TEMPER,

@@ -1199,6 +1199,10 @@ pub struct World {
     /// is. See [`crate::lore`]. Blank, and not hashed, in a fight that uses
     /// none of it.
     pub lore: Lore,
+    /// **A jump course's runs**, one per fighter: the furthest gate reached,
+    /// the falls, the clock (`crate::course`). All zero, and not hashed, in an
+    /// arena that is not a course.
+    pub course: [crate::course::Run; MAX_PLAYERS],
 }
 
 impl World {
@@ -1221,6 +1225,7 @@ impl World {
             critters: Critters::NONE,
             pack: None,
             lore: Lore::NONE,
+            course: [crate::course::Run::default(); MAX_PLAYERS],
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1407,11 +1412,47 @@ impl World {
                 crate::species::lookup(species)?;
                 World::hunt_of(classes, species).tempered(temper)
             }
+            // A course, or any arena: an unregistered one is no trip, for
+            // the reason an unregistered creature is not.
+            Destination::Arena(place) => {
+                arena::lookup(place)?;
+                World::versus_in(classes, place)
+            }
         };
         Some(World {
             frame: self.frame,
             ..world
         })
+    }
+
+    /// **One frame of a jump course** (`crate::course`): for each fighter,
+    /// has she fallen into the pit, left the start, reached a gate? A fall
+    /// stands her on the last gate she reached as a round would -- fresh,
+    /// with whatever she had out taken back -- and keeps the clock running.
+    /// A no-op in an arena that is not a course.
+    fn step_course(&mut self) {
+        let Some(course) = crate::course::of(self.arena) else {
+            return;
+        };
+        for i in 0..MAX_PLAYERS {
+            let event =
+                crate::course::step(course, &mut self.course[i], self.players[i].pos, self.frame);
+            if let crate::course::Event::Fell(gate) = event {
+                let gate = gate.min(course.finish());
+                let (stand, facing) = (course.gate(gate).stand(), course.facing(gate));
+                let p = &mut self.players[i];
+                let (wins, class) = (p.rounds_won, p.class);
+                *p = Player {
+                    pos: stand,
+                    facing,
+                    rounds_won: wins,
+                    ..Player::new(class)
+                };
+                if let Mechanic::Shadow(_) = p.mechanic {
+                    p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+                }
+            }
+        }
     }
 
     /// Is there anything to hunt? The one condition friendly fire, targets and
@@ -1438,6 +1479,8 @@ impl World {
         self.bolts = [None; MAX_BOLTS];
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
+        // A course's runs start again with the round, clock and all.
+        self.course = [crate::course::Run::default(); MAX_PLAYERS];
         let here = self.arena();
         // The hunt's lore starts again with the round: nothing on the floor,
         // nothing heard, every defended thing whole and back at its start.
@@ -2305,6 +2348,11 @@ impl World {
             self.pack = Some(brain);
         }
 
+        // A jump course: a fall stands you back on the last gate you reached,
+        // and reaching a gate is the run's. After every body has moved, so a
+        // fall is read against where the frame left them.
+        self.step_course();
+
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
@@ -2610,6 +2658,15 @@ impl World {
         // arenas were data, and the pinned hunts still mean what they say.
         if self.arena != ArenaId::PROVING_GROUND {
             h.write_u32(0xA0 | (self.arena.0 as u32) << 8);
+        }
+        // A course's runs, only in a course: every other fight hashes exactly
+        // as it did before there were any.
+        if crate::course::of(self.arena).is_some() {
+            for r in &self.course {
+                h.write_u32(r.reached as u32 | (r.falls as u32) << 8);
+                h.write_u32(r.started);
+                h.write_u32(r.time);
+            }
         }
         // The pack and its bodies, last, and only when there is one: a fight
         // without small bodies hashes exactly as it did before there were any.
@@ -3725,6 +3782,9 @@ fn step_player(
     // held button would spend it on the first frame it was available rather
     // than on the frame the player chose.
     let pressed_space = input.has(Input::SPACE) && !p.space_held;
+    if !input.has(Input::SHIFT) {
+        shadow::shift_spent(p, false);
+    }
     p.space_held = input.has(Input::SPACE);
     // The two keys the v2 grammar added, read on the press like the mechanic.
     let pressed_f = input.has(Input::KEY_F) && !p.f_held;
@@ -3747,6 +3807,9 @@ fn step_player(
     }
 
     let mob = p.class.mobility();
+    if pressed_space {
+        shadow::bank_dash_jump(p);
+    }
     step_mechanic(p, scene.arena);
     hold_the_churn(p, input);
 
@@ -3770,6 +3833,8 @@ fn step_player(
     // reason the Rush cancel does -- a recovery that has been cut short has to
     // reach the input below on the frame it was cut, not the frame after.
     arm_takeoff(p, input);
+    rise_out_of_a_swing(p, who, pressed_space, input, scene);
+    refresh_the_rise(p);
     bank_the_leap(p, pressed_space);
     chain_cancel(p, input);
 
@@ -3852,9 +3917,13 @@ fn step_player(
                 {
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
+                    rise_from_the_floor(p, kind, scene);
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, true)
-                } else if input.has(Input::SHIFT) && (ax != 0 || az != 0) {
+                } else if input.has(Input::SHIFT)
+                    && (ax != 0 || az != 0)
+                    && !shadow::shift_spent(p, true)
+                {
                     // Shift plus a direction dodges. It used to be space plus a
                     // direction, which meant that pressing the jump button while
                     // moving -- which is most of the time -- did not jump. Space is
@@ -4209,22 +4278,22 @@ fn step_player(
         dual::spend_wing_beat(p);
     }
 
-    if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
+    // Not on the frame a banked dash jump fires: the dash jump below is that
+    // press, and both would stack two takeoffs into one.
+    let dash_jump = shadow::dash_jump_banked(p) && shadow::carrying_a_dash(p);
+    if input.has(Input::SPACE) && p.grounded && p.action.actionable() && !dash_jump {
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump).mul(foot.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
     }
 
-    // **The dash jump.** The dash stops dead on the shadow, and for a few
-    // frames after -- the carry -- a jump takes a share of the crossing's speed
-    // up with her (`tuning::dash_jump_keep`). It cuts the dodge's tail short,
-    // which is the other half of the reward: the frames she would have spent
-    // standing there being punished are spent in the air going somewhere.
-    //
-    // A share rather than all of it, since 2026-09-23: the whole fifty metres a
-    // second cleared the arena. The ordinary jump above cannot fire here: the
-    // carry runs inside the dodge, and a dodge is not actionable.
-    if pressed_space && shadow::carrying_a_dash(p) {
+    // **The dash jump.** Pressed in the dash's last few frames
+    // (`bank_dash_jump`, `tuning::dash_jump_buffer`) and thrown on the frame
+    // she lands on the shadow, with the crossing's whole speed
+    // (`tuning::dash_jump_keep`). Only a press made *before* the halt counts
+    // (2026-10-04, from play): a press after it found her already stopped and
+    // launched her a few frames late, which read as a stall.
+    if dash_jump {
         let lunge = shadow::lunge(p);
         p.vel = V3::new(lunge.x, p.vel.y, lunge.z);
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
@@ -4727,10 +4796,29 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
     // *leave*, and a move that spent it on an attack would take that away. The
     // window is armed on the floor and can still be open on the frame you land
     // aboard, which is the only way this is ever reached.
-    if !p.aboard() && champion_takeoff_window(p) > 0 {
+    //
+    // **On the floor**, the window: the jump button down makes a click the
+    // rising attack from the ground.
+    if p.grounded && !p.aboard() && champion_takeoff_window(p) > 0 {
         return Some(c::TAKEOFF + weapon);
     }
+    // **In the air**, one rule (2026-10-05, from play): holding jump is the
+    // rising attack, once per trip off the ground; otherwise the aerial. It
+    // used to be the window running eight frames into the jump, which made a
+    // click a frame either side of its end a different move -- the rising
+    // attack from a metre up, or the hammer's spike before the apex.
+    //
+    // And the first few frames of a jump are still the floor's: a click in
+    // them is the rising attack from the ground whether or not jump is still
+    // held (`rise_from_the_floor` puts him back down for it).
     if !p.grounded {
+        let just_left = matches!(
+            p.mechanic,
+            Mechanic::Forms { lifted, takeoff, .. } if lifted <= t::floor_grace() && takeoff > 0
+        );
+        if !p.aboard() && !rise_spent(p) && (just_left || input.has(Input::SPACE)) {
+            return Some(c::TAKEOFF + weapon);
+        }
         return Some(c::IN_THE_AIR + weapon);
     }
     Some(c::link(champion_chain(p).0, weapon))
@@ -4747,6 +4835,99 @@ fn champion_chain(p: &Player) -> (u8, u16) {
         } => (chain, chain_left),
         _ => (0, 0),
     }
+}
+
+/// Is this trip off the ground's rising attack spent?
+fn rise_spent(p: &Player) -> bool {
+    matches!(
+        p.mechanic,
+        Mechanic::Forms {
+            rise_used: true,
+            ..
+        }
+    )
+}
+
+/// Give the rising attack back once he is on his feet and free: the trip it
+/// belonged to is over. Not while a takeoff thrown from the floor is still
+/// winding up on it, which is the same trip.
+fn refresh_the_rise(p: &mut Player) {
+    let (grounded, free) = (p.grounded, p.action.actionable());
+    if let Mechanic::Forms {
+        rise_used, lifted, ..
+    } = &mut p.mechanic
+    {
+        *lifted = if grounded {
+            0
+        } else {
+            lifted.saturating_add(1)
+        };
+        if grounded && free {
+            *rise_used = false;
+        }
+    }
+}
+
+/// **A rising attack clicked just after the jump comes out of the floor.**
+/// In the first `tuning::floor_grace` frames of a trip off the ground he is
+/// put back on the floor he left -- under half a metre, hidden by the plant
+/// the move starts with -- and the takeoff runs from there, as it would have
+/// with the click a frame earlier. Later than that, it is the airborne rising
+/// attack, from where he is. Added 2026-10-05, from play: a click a few frames
+/// after jump threw it from a metre up, over the heads it was meant for.
+fn rise_from_the_floor(p: &mut Player, kind: u8, scene: &Scene) {
+    if p.class != Class::Champion || p.grounded || !moves::champion::is_takeoff(kind) {
+        return;
+    }
+    let Mechanic::Forms { lifted, .. } = p.mechanic else {
+        return;
+    };
+    if lifted == 0 || lifted > t::floor_grace() || p.vel.y.raw() <= 0 {
+        return;
+    }
+    let floor = scene.arena.ground_under(p.pos);
+    if floor.raw() > p.pos.y.raw() {
+        return;
+    }
+    p.pos.y = floor;
+    p.vel.y = Fx::ZERO;
+    p.grounded = true;
+    p.jump_hold = 0;
+}
+
+/// **Jump just after a click.** A grounded swing still in the first frames of
+/// its startup (`tuning::takeoff_late`) becomes the rising attack with the
+/// same weapon when jump is pressed: the click-first half of "attack as you
+/// jump", which used to throw the grounded swing and then, out of its
+/// recovery, a rising attack nobody asked for. The swing's repeat lockout is
+/// handed back, since it never came out. Added 2026-10-05, from play.
+fn rise_out_of_a_swing(
+    p: &mut Player,
+    who: usize,
+    pressed_space: bool,
+    input: Input,
+    scene: &Scene,
+) {
+    use moves::champion as c;
+    if p.class != Class::Champion || !pressed_space || !p.grounded || p.aboard() {
+        return;
+    }
+    let Action::Startup { kind, left } = p.action else {
+        return;
+    };
+    if kind >= c::IN_THE_AIR {
+        return;
+    }
+    let m = moves::get(p.class, kind);
+    if m.startup.saturating_sub(left) > t::takeoff_late() {
+        return;
+    }
+    if let Some(slot) = p.repeat_lock.get_mut(kind as usize) {
+        *slot = 0;
+    }
+    let rise = c::TAKEOFF + c::weapon(kind);
+    begin_champion(p, rise);
+    p.action = begin_move(p, who, rise, input, scene, true);
 }
 
 /// Frames left in which a weapon click leaves the floor rather than swinging on
@@ -4944,6 +5125,11 @@ fn begin_champion(p: &mut Player, kind: u8) {
         // when its recovery ends.
         if c::is_takeoff(kind) {
             *takeoff = 0;
+        }
+    }
+    if c::is_takeoff(kind) {
+        if let Mechanic::Forms { rise_used, .. } = &mut p.mechanic {
+            *rise_used = true;
         }
     }
 }
@@ -6200,6 +6386,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             chain_hit,
             takeoff,
             leap_banked,
+            rise_used,
+            lifted,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
@@ -6211,6 +6399,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*chain_hit as u32);
             h.write_u32(*takeoff as u32);
             h.write_u32(*leap_banked as u32);
+            h.write_u32(*rise_used as u32);
+            h.write_u32(*lifted as u32);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -6236,6 +6426,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.dash as u32);
             h.write_u32(shadow.carry as u32);
             hash_v3(h, &shadow.lunge);
+            h.write_u32(shadow.jump_banked as u32);
+            h.write_u32(shadow.refused as u32);
+            h.write_u32(shadow.shift_spent as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -6475,9 +6668,26 @@ impl World {
     /// they track the shadow rather than the ground they drag the length of the
     /// arena behind it. A recall through a crowd is the Reaver's biggest turn.
     fn order_the_shadow(&mut self, who: usize, to: V3) {
-        let Some(order) = shadow::order(&mut self.players[who], to) else {
+        let stones = stones::gather(&self.players);
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &self.players,
+            effects: &self.effects,
+            quarry: &self.monsters,
+            critters: &self.critters,
+            arena: &self.terrain(),
+        };
+        let footing = aim::footing_toward(self.players[who].pos, to, &scene);
+        let Some(order) = shadow::order(&mut self.players[who], footing) else {
             return;
         };
+        if order == shadow::Order::Refused {
+            // Nothing went out, so nothing is owed: the press can be tried
+            // again at once rather than waiting out a lockout on a throw that
+            // never happened.
+            self.players[who].repeat_lock[SLOT_MECHANIC as usize] = 0;
+            return;
+        }
         if order != shadow::Order::Recalled {
             return;
         }

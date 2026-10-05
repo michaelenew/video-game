@@ -74,7 +74,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --arena <name>",
-                "Fight in another arena: proving_ground (the default), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
+                "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
                 "cargo run -p game -- --hunt <creature> --temper <n>",
@@ -113,7 +113,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?arena=<name>",
-                "Fight in another arena, exactly as --arena does: proving_ground or range.",
+                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach.",
             ),
             e(
                 "?temper=<n>",
@@ -408,6 +408,29 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "The red strip",
                 "The ridge: unarmoured, and out of reach from the ground. Enough damage there puts the creature on its side.",
+            ),
+        ],
+    },
+    Section {
+        title: "Jump courses",
+        in_browser: true,
+        blurb: "Islands of rock hanging over a long drop, nothing to fight: the movement system is the challenge. Two easy, four hard, two barely possible -- every tier a guess until somebody plays them; docs/design/courses.md has the list.",
+        entries: &[
+            e(
+                "N",
+                "The next jump course, in order of difficulty: the Stair and the Causeway (easy); the Spiral round a great pillar, the Falls over an arch and down a waterfall of stones, the Slalom between pillars and through a cave mouth, and the Fork with its high and low roads (hard); the Spire and the Gulf (barely possible); then the Reach, a proving ground of marked distances for trying each class's mechanics. The hard courses and the Gulf have big jumps for the mechanics too; the course panel says where. From anywhere else, the first. Online, both players go together.",
+            ),
+            e(
+                "--arena stair, ?arena=stair",
+                "Start in a course by name: stair, causeway, spiral, falls, slalom, fork, spire, gulf or reach. With --p1 (or ?p1=) for the class.",
+            ),
+            e(
+                "Falling",
+                "Below the islands is a long way down. Fall and you are stood back on the last checkpoint you reached, fresh, with whatever you had out taken back; the clock keeps running. Backspace starts the course again.",
+            ),
+            e(
+                "The panel on the right",
+                "Every course, the one you are in, the last checkpoint you reached, the clock from leaving the start, and how often you fell. The clock stops at the finish: the nest on the last island.",
             ),
         ],
     },

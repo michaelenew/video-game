@@ -847,6 +847,27 @@ pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
 }
 
+/// How far back toward her a send aimed at nowhere to stand looks for
+/// somewhere that is, before it refuses. A small forgiveness, not a search:
+/// aimed off the far edge of an island, the shadow lands on the edge; aimed
+/// at the middle of the drop, it stays with her. See `aim::footing_toward`.
+pub fn shadow_forgive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowForgive)).max(Fx::ZERO)
+}
+
+/// How many frames the crosshair shows that a send was refused.
+pub fn shadow_refused_show() -> u8 {
+    oven::scalar(Scalar::ShadowRefusedShow).clamp(1, 255) as u8
+}
+
+/// How many frames before the dash arrives a jump press is kept for the dash
+/// jump. The dash is a dodge and a dodge is not actionable, so without this a
+/// press a frame early fell on the floor and the dash jump read as badly
+/// buffered.
+pub fn dash_jump_buffer() -> i32 {
+    oven::scalar(Scalar::DashJumpBuffer).max(0)
+}
+
 // ---------------------------------------------------------------------------
 // The Reaver's v2: the shadow aims and keeps a tally, and her hits cash it
 // ---------------------------------------------------------------------------
@@ -933,11 +954,12 @@ pub fn health_of(class: crate::class::Class) -> i32 {
 
 /// What a jump out of the dash's carry keeps of the dash's speed, flat.
 ///
-/// A fifth, 2026-09-23. It used to be everything: the dash arrived at fifty
-/// metres a second, slid on past the shadow, and a jump in the carry took the
-/// whole slide up with it and cleared the arena. The dash stops on the shadow
-/// now, and the jump out of it is a lunge -- ten metres a second, about one
-/// and a half walks -- rather than a launch.
+/// All of it, again, since 2026-10-04: the jump out of a dash is the Reaver's
+/// timing-based mobility and it launches her. A fifth from 2026-09-23 made it
+/// an ordinary jump. The dash still stops on the shadow (that part of
+/// 2026-09-23 was for precise fighting and stays); the speed is banked for the
+/// jump and bled by the dodge's decay through the carry, as the old slide was,
+/// so the earlier the press the further she goes.
 pub fn dash_jump_keep() -> Fx {
     Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
 }
@@ -1306,6 +1328,18 @@ pub fn chain_cancel_repeated() -> u16 {
 /// mean what the player meant. See `state::arm_takeoff`.
 pub fn takeoff_window() -> u16 {
     oven::scalar(Scalar::TakeoffWindow) as u16
+}
+
+/// How many frames into a jump the Champion's rising attack is still thrown
+/// from the floor he just left. See `state::rise_from_the_floor`.
+pub fn floor_grace() -> u8 {
+    oven::scalar(Scalar::FloorGrace).clamp(0, 255) as u8
+}
+
+/// How many frames into a grounded swing's startup a jump press still turns
+/// it into the rising attack. See `state::rise_out_of_a_swing`.
+pub fn takeoff_late() -> u16 {
+    oven::scalar(Scalar::TakeoffLate).max(0) as u16
 }
 
 /// The forward shove the spear's takeoff gives, on the frame the shaft reaches
@@ -2763,6 +2797,12 @@ pub fn fall_per_metre() -> i32 {
 /// slow fall, dropped from a height she did not climb to herself.
 pub fn fall_soft() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FallSoft))
+}
+
+/// How fast the eye's ceiling rises per metre outside a hanging solid's
+/// footprint. See `arena::Arena::ceiling_near`.
+pub fn eye_ceiling_slope() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EyeCeilingSlope)).max(Fx::ZERO)
 }
 
 /// How far under a ceiling the eye is held. See `camera::eye_under`.
