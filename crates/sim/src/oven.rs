@@ -637,6 +637,12 @@ scalars! {
     // How fast the eye's ceiling rises per metre outside a hanging solid, so
     // passing under an island's edge glides the eye instead of jumping it.
     EyeCeilingSlope,  "Aim",       "Eye, ceiling slope away from an edge",  Fixed,  0,        fx(4,1);
+    // How many frames into a jump a rising attack is still thrown from the
+    // floor he just left, rather than from where the jump has got him to.
+    FloorGrace,       "Champion",  "Rising attack, still from the floor",   Frames, 0,        10;
+    // How many frames into a grounded swing's startup a jump still turns it
+    // into the rising attack: the click-first half of the same forgiveness.
+    TakeoffLate,      "Champion",  "Jump after a click still rises",        Frames, 0,        12;
 }
 
 // ---------------------------------------------------------------------------

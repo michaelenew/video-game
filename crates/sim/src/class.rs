@@ -144,6 +144,8 @@ impl Class {
                 chain_hit: false,
                 takeoff: 0,
                 leap_banked: false,
+                rise_used: false,
+                lifted: 0,
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -594,6 +596,14 @@ pub enum Mechanic {
         /// same press as jump" survives the two arriving a few frames apart --
         /// which they always do. Zero everywhere else.
         takeoff: u16,
+        /// This airtime's rising attack is spent. One per trip off the
+        /// ground, and a takeoff thrown from the floor is that trip's one;
+        /// back when he is on his feet and free. See `state::champion_move`.
+        rise_used: bool,
+        /// Frames since his feet left the floor, saturating; zero on it. A
+        /// rising attack clicked in the first few (`tuning::floor_grace`) is
+        /// thrown from the floor he just left. See `state::rise_from_the_floor`.
+        lifted: u8,
         /// A jump pressed **during** the hammer's finisher, kept until it lands.
         ///
         /// The finisher throws whoever it hits into the air, and the decision

@@ -18,8 +18,8 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 }
 
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x0efd64f4a51bd0e0),
-    (Class::Champion, 7, 0x70a143ee72ab5797),
+    (Class::Champion, 0x2545_F491, 0x143611fd55677fcb),
+    (Class::Champion, 7, 0xfe52c37d05a0c38e),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed

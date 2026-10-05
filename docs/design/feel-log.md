@@ -7465,3 +7465,31 @@ saved routes were regenerated, since its Reaver lines jumped a frame after landi
 
 **Verdict** kept on the user's word, unplayed. Watch: the dash losing its punishable tail in
 versus.
+
+### 2026-10-05 — the Champion's rising attacks: one rule on the floor, one in the air
+
+**Changed** On the floor and in the first four frames of a jump (`Rising attack, still from
+the floor`, new knob), space and a weapon in either order is the rising attack from the
+floor: a grounded swing up to six frames into its startup turns into it when jump is pressed
+(`Jump after a click still rises`, new knob, its lockout refunded), and a click just after the
+jump puts him back on the floor he left. In the air, holding space is the rising attack, once
+per trip off the ground (a floor one counts); otherwise the aerial.
+
+**Why** From play: "A tiny gap in when jump vs the attack are pressed is the difference
+between a short hop into rising attack that goes over head height, a rising attack from
+ground (usually intended), or a regular attack into a buffered rising attack from ground...
+it seems to sometimes go into the downward attack before the apex." The user's own two
+rules.
+
+**Tried and reverted** A three-frame crouch before every Champion jump, so a click during it
+rose from the floor. It broke five movement tests that use him as the standard jumper and
+changed every jump he makes; the snap back to the floor does the same job inside the move.
+
+**Measured** `effects::jump_a_few_frames_after_the_click_still_rises_from_the_floor`,
+`a_click_just_after_the_jump_rises_from_the_floor_it_left`,
+`in_the_air_holding_jump_is_the_rising_attack_once`, `a_rising_attack_from_the_floor_is_that_jumps_one`.
+Both Champion hunt pins re-pinned: they play differently. The envelope tool's saved routes
+regenerated.
+
+**Verdict** kept on the user's word, unplayed. Watch: a full hop held into an aerial is now
+the rising attack, which may surprise anyone used to jump-then-aerial.

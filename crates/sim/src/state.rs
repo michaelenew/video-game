@@ -3833,6 +3833,8 @@ fn step_player(
     // reason the Rush cancel does -- a recovery that has been cut short has to
     // reach the input below on the frame it was cut, not the frame after.
     arm_takeoff(p, input);
+    rise_out_of_a_swing(p, who, pressed_space, input, scene);
+    refresh_the_rise(p);
     bank_the_leap(p, pressed_space);
     chain_cancel(p, input);
 
@@ -3915,6 +3917,7 @@ fn step_player(
                 {
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
+                    rise_from_the_floor(p, kind, scene);
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, true)
                 } else if input.has(Input::SHIFT)
@@ -4793,10 +4796,29 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
     // *leave*, and a move that spent it on an attack would take that away. The
     // window is armed on the floor and can still be open on the frame you land
     // aboard, which is the only way this is ever reached.
-    if !p.aboard() && champion_takeoff_window(p) > 0 {
+    //
+    // **On the floor**, the window: the jump button down makes a click the
+    // rising attack from the ground.
+    if p.grounded && !p.aboard() && champion_takeoff_window(p) > 0 {
         return Some(c::TAKEOFF + weapon);
     }
+    // **In the air**, one rule (2026-10-05, from play): holding jump is the
+    // rising attack, once per trip off the ground; otherwise the aerial. It
+    // used to be the window running eight frames into the jump, which made a
+    // click a frame either side of its end a different move -- the rising
+    // attack from a metre up, or the hammer's spike before the apex.
+    //
+    // And the first few frames of a jump are still the floor's: a click in
+    // them is the rising attack from the ground whether or not jump is still
+    // held (`rise_from_the_floor` puts him back down for it).
     if !p.grounded {
+        let just_left = matches!(
+            p.mechanic,
+            Mechanic::Forms { lifted, takeoff, .. } if lifted <= t::floor_grace() && takeoff > 0
+        );
+        if !p.aboard() && !rise_spent(p) && (just_left || input.has(Input::SPACE)) {
+            return Some(c::TAKEOFF + weapon);
+        }
         return Some(c::IN_THE_AIR + weapon);
     }
     Some(c::link(champion_chain(p).0, weapon))
@@ -4813,6 +4835,99 @@ fn champion_chain(p: &Player) -> (u8, u16) {
         } => (chain, chain_left),
         _ => (0, 0),
     }
+}
+
+/// Is this trip off the ground's rising attack spent?
+fn rise_spent(p: &Player) -> bool {
+    matches!(
+        p.mechanic,
+        Mechanic::Forms {
+            rise_used: true,
+            ..
+        }
+    )
+}
+
+/// Give the rising attack back once he is on his feet and free: the trip it
+/// belonged to is over. Not while a takeoff thrown from the floor is still
+/// winding up on it, which is the same trip.
+fn refresh_the_rise(p: &mut Player) {
+    let (grounded, free) = (p.grounded, p.action.actionable());
+    if let Mechanic::Forms {
+        rise_used, lifted, ..
+    } = &mut p.mechanic
+    {
+        *lifted = if grounded {
+            0
+        } else {
+            lifted.saturating_add(1)
+        };
+        if grounded && free {
+            *rise_used = false;
+        }
+    }
+}
+
+/// **A rising attack clicked just after the jump comes out of the floor.**
+/// In the first `tuning::floor_grace` frames of a trip off the ground he is
+/// put back on the floor he left -- under half a metre, hidden by the plant
+/// the move starts with -- and the takeoff runs from there, as it would have
+/// with the click a frame earlier. Later than that, it is the airborne rising
+/// attack, from where he is. Added 2026-10-05, from play: a click a few frames
+/// after jump threw it from a metre up, over the heads it was meant for.
+fn rise_from_the_floor(p: &mut Player, kind: u8, scene: &Scene) {
+    if p.class != Class::Champion || p.grounded || !moves::champion::is_takeoff(kind) {
+        return;
+    }
+    let Mechanic::Forms { lifted, .. } = p.mechanic else {
+        return;
+    };
+    if lifted == 0 || lifted > t::floor_grace() || p.vel.y.raw() <= 0 {
+        return;
+    }
+    let floor = scene.arena.ground_under(p.pos);
+    if floor.raw() > p.pos.y.raw() {
+        return;
+    }
+    p.pos.y = floor;
+    p.vel.y = Fx::ZERO;
+    p.grounded = true;
+    p.jump_hold = 0;
+}
+
+/// **Jump just after a click.** A grounded swing still in the first frames of
+/// its startup (`tuning::takeoff_late`) becomes the rising attack with the
+/// same weapon when jump is pressed: the click-first half of "attack as you
+/// jump", which used to throw the grounded swing and then, out of its
+/// recovery, a rising attack nobody asked for. The swing's repeat lockout is
+/// handed back, since it never came out. Added 2026-10-05, from play.
+fn rise_out_of_a_swing(
+    p: &mut Player,
+    who: usize,
+    pressed_space: bool,
+    input: Input,
+    scene: &Scene,
+) {
+    use moves::champion as c;
+    if p.class != Class::Champion || !pressed_space || !p.grounded || p.aboard() {
+        return;
+    }
+    let Action::Startup { kind, left } = p.action else {
+        return;
+    };
+    if kind >= c::IN_THE_AIR {
+        return;
+    }
+    let m = moves::get(p.class, kind);
+    if m.startup.saturating_sub(left) > t::takeoff_late() {
+        return;
+    }
+    if let Some(slot) = p.repeat_lock.get_mut(kind as usize) {
+        *slot = 0;
+    }
+    let rise = c::TAKEOFF + c::weapon(kind);
+    begin_champion(p, rise);
+    p.action = begin_move(p, who, rise, input, scene, true);
 }
 
 /// Frames left in which a weapon click leaves the floor rather than swinging on
@@ -5010,6 +5125,11 @@ fn begin_champion(p: &mut Player, kind: u8) {
         // when its recovery ends.
         if c::is_takeoff(kind) {
             *takeoff = 0;
+        }
+    }
+    if c::is_takeoff(kind) {
+        if let Mechanic::Forms { rise_used, .. } = &mut p.mechanic {
+            *rise_used = true;
         }
     }
 }
@@ -6266,6 +6386,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             chain_hit,
             takeoff,
             leap_banked,
+            rise_used,
+            lifted,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
@@ -6277,6 +6399,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*chain_hit as u32);
             h.write_u32(*takeoff as u32);
             h.write_u32(*leap_banked as u32);
+            h.write_u32(*rise_used as u32);
+            h.write_u32(*lifted as u32);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);

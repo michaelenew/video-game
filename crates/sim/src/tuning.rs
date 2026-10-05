@@ -1330,6 +1330,18 @@ pub fn takeoff_window() -> u16 {
     oven::scalar(Scalar::TakeoffWindow) as u16
 }
 
+/// How many frames into a jump the Champion's rising attack is still thrown
+/// from the floor he just left. See `state::rise_from_the_floor`.
+pub fn floor_grace() -> u8 {
+    oven::scalar(Scalar::FloorGrace).clamp(0, 255) as u8
+}
+
+/// How many frames into a grounded swing's startup a jump press still turns
+/// it into the rising attack. See `state::rise_out_of_a_swing`.
+pub fn takeoff_late() -> u16 {
+    oven::scalar(Scalar::TakeoffLate).max(0) as u16
+}
+
 /// The forward shove the spear's takeoff gives, on the frame the shaft reaches
 /// the floor.
 ///

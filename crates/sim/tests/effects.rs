@@ -2424,6 +2424,92 @@ fn each_weapon_has_its_own_way_off_the_ground() {
 }
 
 #[test]
+fn jump_a_few_frames_after_the_click_still_rises_from_the_floor() {
+    // 2026-10-05, from play: a click a hair before jump threw the grounded
+    // swing and then, out of its recovery, a rising attack nobody asked for.
+    use moves::champion as c;
+    let mut w = engaged(Class::Champion);
+    let floor = w.players[0].pos.y;
+    run(&mut w, 1, LMB, 0);
+    run(&mut w, 2, 0, 0);
+    run(&mut w, 1, Input::SPACE, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::RISING_CUT));
+    assert_eq!(w.players[0].pos.y, floor, "it did not rise from the floor");
+}
+
+#[test]
+fn a_click_just_after_the_jump_rises_from_the_floor_it_left() {
+    // The other order: jump, then the click a few frames later. It used to
+    // come out from where the jump had got him, a metre up and over heads.
+    use moves::champion as c;
+    let mut w = engaged(Class::Champion);
+    let floor = w.players[0].pos.y;
+    run(&mut w, 1, Input::SPACE, 0);
+    run(&mut w, 3, Input::SPACE, 0);
+    assert!(
+        w.players[0].pos.y.raw() > floor.raw(),
+        "the jump never left"
+    );
+    run(&mut w, 1, LMB | Input::SPACE, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::RISING_CUT));
+    assert_eq!(
+        w.players[0].pos.y, floor,
+        "the rising attack started from where the jump had got to"
+    );
+}
+
+#[test]
+fn in_the_air_holding_jump_is_the_rising_attack_once() {
+    // The air rule: jump held and a weapon is the rising attack, once per trip
+    // off the ground; otherwise the aerial -- rising or falling alike.
+    use moves::champion as c;
+    let late = sim::tuning::takeoff_window() as u32 + 4;
+    // Rising, jump let go: the aerial, never the spike's cousin by accident.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 2, Input::SPACE, 0);
+    run(&mut w, late, 0, 0);
+    run(&mut w, 1, LMB, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::AIR_SWORD));
+    // Jump held: the rising attack, from the air.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, late, Input::SPACE, 0);
+    run(&mut w, 1, LMB | Input::SPACE, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::RISING_CUT));
+    // And only once: the next, still held, is the aerial.
+    run(&mut w, 60, Input::SPACE, 0);
+    assert!(
+        !w.players[0].grounded,
+        "he landed; the fixture needs a longer trip"
+    );
+    run(&mut w, 1, MMB | Input::SPACE, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::AIR_HAMMER));
+}
+
+#[test]
+fn a_rising_attack_from_the_floor_is_that_jumps_one() {
+    use moves::champion as c;
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, MMB | Input::SPACE, 0);
+    // Until the uppercut has him off the floor, and then a moment more --
+    // not so long that he lands and the held jump takes him up again.
+    for _ in 0..40 {
+        if !w.players[0].grounded {
+            break;
+        }
+        run(&mut w, 1, Input::SPACE, 0);
+    }
+    assert!(!w.players[0].grounded, "the uppercut never left the floor");
+    run(&mut w, 3, Input::SPACE, 0);
+    assert!(!w.players[0].grounded, "he came down already");
+    while !w.players[0].action.actionable() {
+        run(&mut w, 1, Input::SPACE, 0);
+    }
+    assert!(!w.players[0].grounded, "he landed before he could act");
+    run(&mut w, 1, LMB | Input::SPACE, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::AIR_SWORD));
+}
+
+#[test]
 fn a_takeoff_costs_the_jump_it_came_out_of() {
     // One jump buys one of them. Without this the window would be a few frames
     // of free launchers rather than a way to spend a jump.
