@@ -14,8 +14,7 @@ const HUSK: [f32; 3] = [0.62, 0.58, 0.46];
 const BONE: [f32; 3] = [0.82, 0.78, 0.68];
 
 pub static DRESSING: Dressing = Dressing {
-    sky: [0.03, 0.03, 0.04],
-    below: None,
+    drop: false,
     props: &[
         Prop {
             shape: Shape::Box,

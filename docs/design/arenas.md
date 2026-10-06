@@ -185,17 +185,27 @@ waiting.
    `solids` (centimetres, `Solid::cm(min, max, material)`), `spawns`.
    Uncomment the two lines in `arena/mod.rs`: `pub mod galewing;` and its arm
    in `lookup`.
-2. **Its dressing**, if it has any: `crates/game/src/arenas/galewing.rs` with a
-   `DRESSING` (a sky colour and props nothing collides with — bones, reeds, a
-   banner); uncomment its two lines in `game/src/arenas/mod.rs`. Without one it
-   is drawn bare, which is honest: every solid and region is drawn from the
-   table anyway.
-3. **Check.** `cargo test -p sim --test arena` checks every registered arena:
+2. **Its sky**, one line in `crates/look/src/skies.rs`: `ArenaId::GALEWING =>
+   Sky::over([r, g, b])`, naming the colour of the air at eye level. The rest
+   of the sky is derived from it — deeper overhead, darker below the horizon —
+   and so is the distance fog, which fades everything far away into exactly
+   that colour. An arena with no entry gets a plain bright day rather than a
+   black void. Then `cargo run -p look --example skies` draws all of them side
+   by side, so a new one can be judged against the others rather than on its
+   own; override `zenith`, `ground`, `glow` or `reach` if it needs something
+   the derivation cannot reach, and if the override turns out to be generally
+   true, move it into the derivation so the next arena starts closer.
+3. **Its dressing**, if it has any: `crates/game/src/arenas/galewing.rs` with a
+   `DRESSING` (props nothing collides with — bones, reeds, a banner — and
+   `drop: true` if the floor is a long way down rather than ground); uncomment
+   its two lines in `game/src/arenas/mod.rs`. Without one it is drawn bare,
+   which is honest: every solid and region is drawn from the table anyway.
+4. **Check.** `cargo test -p sim --test arena` checks every registered arena:
    solids with volume, at most 64 of them, marks inside the bounds and out of
    the solids, facing level, its creature registered. `cargo test -p sim
    --test budget` measures a fight in the range; an arena bigger or busier than
    the range should be added to its scenarios.
-4. **Look at it.** `cargo run -p game -- --hunt galewing` (or `--arena galewing`
+5. **Look at it.** `cargo run -p game -- --hunt galewing` (or `--arena galewing`
    before the creature exists), and `./scripts/screenshot.sh` with the same
    flags.
 

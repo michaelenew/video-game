@@ -33,6 +33,7 @@ mod picker;
 mod platform;
 mod settings;
 mod signs;
+mod sky;
 mod species;
 mod trophies;
 mod veil;
@@ -180,9 +181,11 @@ fn main() {
                 // Mouse look runs next: aim is an input to the tick, not a
                 // decoration applied after it.
                 mouse_look,
-                // The arena is drawn after the tick, so a fight that has just
-                // moved arena is drawn in the new one on the frame it starts.
-                (tick_sim, arenas::dress).chain(),
+                // The arena is drawn after the tick, and the dome rides the
+                // camera afterwards: it is 480 m across, and a jump course is
+                // longer than that, so a dome left at the origin is a sphere
+                // the player can walk out of.
+                (tick_sim, arenas::dress, sky::follow).chain(),
                 apply_poses,
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems

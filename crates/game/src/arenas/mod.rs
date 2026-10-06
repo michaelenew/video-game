@@ -19,6 +19,8 @@
 use bevy::prelude::*;
 use sim::arena::{Area, ArenaId, Material};
 
+use crate::sky;
+
 pub mod proving_ground;
 
 pub mod range;
@@ -69,14 +71,7 @@ pub enum Shape {
 /// What an arena adds to its geometry, for the eye only.
 #[derive(Clone, Copy, Debug)]
 pub struct Dressing {
-    /// The colour behind everything.
-    pub sky: [f32; 3],
-    /// **A drop, not a floor**: when set, the floor is drawn in this colour,
-    /// unlit, catching no shadows and running far past the bounds, so it
-    /// reads as a long way down rather than as ground just under the
-    /// islands. The jump courses' (`climb`). The simulation's floor is where
-    /// it always is; this is only how it looks.
-    pub below: Option<[f32; 3]>,
+    pub drop: bool,
     pub props: &'static [Prop],
 }
 
@@ -181,8 +176,9 @@ pub fn dress(
     old: Query<Entity, With<Scenery>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut sky: ResMut<ClearColor>,
+    mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
+    mut camera: Query<Entity, With<crate::MainCamera>>,
 ) {
     let arena = sim.cur.arena();
     if drawn.0 == Some(arena.id) {
@@ -193,16 +189,45 @@ pub fn dress(
         commands.entity(entity).despawn();
     }
     let dressing = dressing(arena.id);
-    sky.0 = Color::srgb(dressing.sky[0], dressing.sky[1], dressing.sky[2]);
+    let sun_at = sun(arena.id);
+    // One table, keyed by arena: `look::skies`. Resolved once here rather than
+    // per frame, and shared by the dome, the fog and the drop below, which is
+    // what keeps all three agreeing about where the horizon is.
+    let sky = look::skies::of(arena.id).resolved();
+
+    // The clear colour still matters: it is what shows in the sliver of a frame
+    // before the dome is drawn, and anywhere the dome does not reach. Set to
+    // the horizon so that sliver is never a different colour from the sky.
+    let h = sky.horizon;
+    clear.0 = Color::srgb(h[0], h[1], h[2]);
+    sky::raise(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &sky,
+        sun_at,
+        Scenery,
+    );
+    // Fog on the camera rather than on the scene, because it is a property of
+    // looking rather than of the things looked at.
+    if let Ok(eye) = camera.single_mut() {
+        commands.entity(eye).insert(sky::fog(&sky));
+    }
     for mut light in &mut suns {
-        *light = Transform::from_translation(sun(arena.id)).looking_at(Vec3::ZERO, Vec3::Y);
+        *light = Transform::from_translation(sun_at).looking_at(Vec3::ZERO, Vec3::Y);
     }
 
     // The drop's floor, unlit: made before `paint` borrows the materials.
-    let below = dressing.below.map(|rgb| {
+    //
+    // Unlit but **fogged**, which is the whole point of it now. A drop drawn
+    // crisp from edge to edge is a dark floor somebody put under the level; the
+    // same floor hazing toward the sky as it recedes is a long way down.
+    let below = dressing.drop.then(|| {
+        let rgb = sky.ground;
         materials.add(StandardMaterial {
             base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
             unlit: true,
+            fog_enabled: true,
             ..default()
         })
     });
