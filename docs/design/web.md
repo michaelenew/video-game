@@ -217,6 +217,30 @@ match the training tools that edit the world on one machine -- Tab, Backspace,
 pause, stepping, rewind, the class pickers -- are switched off rather than
 allowed to desync it. `H` and `T` still work, because they travel on the wire.
 
+### From inside the game: the Esc menu
+
+*Built 2026-10-06.* The same rooms, from the client rather than the page, and
+the same on a desktop as in a browser (`crates/game/src/menu.rs`). Escape
+steps out of the fight and brings up a menu; a click in the arena goes back.
+In it:
+
+- **Create a room**: a fresh name and secret, and the fight being practised --
+  both classes, the creature, its temper, the arena -- written into the link
+  (`picker::describe`). The match starts from the world *the link* describes,
+  built by the same function a friend's client will use (`start_world`), so
+  the two agree even where the link cannot say everything about the practice.
+- **Join**: paste a friend's link. It is unpacked exactly as `--join` is.
+- **The active room**, while there is one: its name, how meeting is going, the
+  link with a **Copy link** button, and **Leave**. In a browser the link also
+  goes into the address bar, so a reload stays in the room.
+- **Progress** -- the creature list with trophies and tempers -- on the right,
+  and only while the menu is up.
+
+A room made on a desktop links to the published page, so a friend without the
+game clicks it and plays in their browser; `--page <url>` points it at another
+deploy. A page releases the mouse itself on Escape without the key reaching the
+game, so the game also opens the menu when the page reports its mouse lock gone.
+
 ### How the two pages find each other
 
 Two browsers cannot talk directly until each knows how to reach the other, and

@@ -25,7 +25,9 @@ view = { path = "../view" }
 # Cargo unions the features of a dependency declared more than once, which is
 # how one crate builds for a window and for a canvas.
 bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "tonemapping_luts", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font"] }
-bevy_egui = { version = "0.34", default-features = false, features = ["render", "bevy_picking", "default_fonts"] }
+# `manage_clipboard`: the Esc menu's Copy link, and pasting a friend's link
+# into it -- the system clipboard on a desktop, the browser's in a page.
+bevy_egui = { version = "0.34", default-features = false, features = ["render", "bevy_picking", "default_fonts", "manage_clipboard"] }
 
 # On a desktop: an X11 window, and threads to schedule systems across.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -43,4 +45,4 @@ bevy = { version = "0.16", default-features = false, features = ["x11", "multi_t
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.16", default-features = false, features = ["webgl2"] }
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["Document", "Element", "Location", "Storage", "Window", "console"] }
+web-sys = { version = "0.3", features = ["Document", "Element", "History", "Location", "Storage", "Window", "console"] }

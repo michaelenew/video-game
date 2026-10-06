@@ -27,6 +27,7 @@ mod glint;
 mod ground;
 mod hub;
 mod hud;
+mod menu;
 mod online;
 mod palette;
 mod picker;
@@ -75,12 +76,12 @@ fn matches(n: &str, c: sim::Class) -> bool {
 ///
 /// Flags as well as keys, because the headless screenshot script takes flags
 /// and not keystrokes. See [`picker`].
-fn chosen_start() -> picker::Start {
+fn chosen_start(opts: &platform::Options) -> picker::Start {
     picker::start(
-        platform::flag("--hunt"),
-        platform::value("--hunt"),
-        platform::value("--arena"),
-        platform::value("--temper"),
+        opts.flag("--hunt"),
+        opts.value("--hunt"),
+        opts.value("--arena"),
+        opts.value("--temper"),
     )
 }
 
@@ -105,15 +106,26 @@ fn seated(mut w: World, dummy: Dummy) -> World {
     w
 }
 
-fn chosen_classes() -> [sim::Class; 2] {
+fn chosen_classes(opts: &platform::Options) -> [sim::Class; 2] {
     [
-        platform::value("--p1")
+        opts.value("--p1")
             .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
-        platform::value("--p2")
+        opts.value("--p2")
             .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
     ]
+}
+
+/// The world a set of settings starts in: the run's own at startup, or a
+/// room's link when one is made or joined from the Esc menu. One function for
+/// both, which is what makes the world two clients build from one link the
+/// same world.
+fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
+    seated(
+        picker::world(chosen_start(opts), chosen_classes(opts)),
+        dummy,
+    )
 }
 
 fn main() {
@@ -144,6 +156,7 @@ fn main() {
         .init_resource::<Torsos>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
+        .init_resource::<menu::Menu>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -239,6 +252,8 @@ fn main() {
                 veil::place,
                 online::announce,
                 hud::update_online,
+                menu::show_progress,
+                menu::draw,
             )
                 .chain()
                 .after(beast::signs)
@@ -445,17 +460,18 @@ impl Default for Sim {
     fn default() -> Self {
         // Against a person, player two is that person: alive in a hunt, and on
         // nobody's script.
-        let dummy = if online::wanted() {
+        let opts = platform::options();
+        let dummy = if online::wanted(opts) {
             Dummy::Human
         } else {
             starting_dummy()
         };
-        let mut w = seated(picker::world(chosen_start(), chosen_classes()), dummy);
+        let mut w = start_world(opts, dummy);
         shot_bars(&mut w);
         shot_weight(&mut w);
         shot_move(&mut w);
         let seed = w.clone();
-        let driver = online::start(&w);
+        let driver = online::start(opts, &w);
         Sim {
             prev: w.clone(),
             cur: w,
@@ -3785,6 +3801,7 @@ fn cursor_should_be_captured(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 fn mouse_look(
     mut look: ResMut<Look>,
     mut settings: ResMut<settings::Settings>,
@@ -3792,6 +3809,8 @@ fn mouse_look(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut focus: ResMut<palette::UiFocus>,
+    mut menu: ResMut<menu::Menu>,
+    mut lock_seen: Local<bool>,
     mut windows: Query<&mut Window>,
 ) {
     // Sensitivity, adjustable mid-match and written straight to disk. Two people
@@ -3855,14 +3874,35 @@ fn mouse_look(
     // The keyboard keeps playing, so you can drag a value and immediately feel
     // it with W and J without closing anything.
     let clicked = mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right);
+    // A page lets go of the mouse itself on Escape, and the key never reaches
+    // the game: so a lock the page has dropped is an Escape. Only once the
+    // lock has been seen, because a page grants it a frame or two after the
+    // click that asked for it.
+    let lost = look.grabbed && platform::pointer_lock_lost();
+    if look.grabbed && !lost {
+        *lock_seen = true;
+    }
+    let lost = lost && std::mem::take(&mut *lock_seen);
+    let escape = keys.just_pressed(KeyCode::Escape) || lost;
+    // **The Esc menu** (`menu.rs`): Escape out of the fight brings it up, and
+    // Escape again puts it away; taking the mouse back puts it away too.
+    if escape {
+        menu.open = look.grabbed || !menu.open;
+    }
     let want = cursor_should_be_captured(
-        keys.just_pressed(KeyCode::Escape),
+        escape,
         std::mem::take(&mut focus.just_opened),
         clicked && !focus.pointer,
         look.grabbed,
     );
+    if want {
+        menu.open = false;
+    }
     if want != look.grabbed {
         look.grabbed = want;
+        if !want {
+            *lock_seen = false;
+        }
         if let Ok(mut window) = windows.single_mut() {
             window.cursor_options.grab_mode = if want {
                 bevy::window::CursorGrabMode::Locked

@@ -105,9 +105,12 @@ pub fn sample_focus(
     // The hub shares this window and these devices, so it shares the answer to
     // who owns them. One place decides, or a click lands in two places at once.
     hub: Res<crate::hub::Hub>,
+    // And the Esc menu, whose join box takes typing and whose buttons take
+    // clicks that must not also be a punch or a grab of the mouse.
+    menu: Res<crate::menu::Menu>,
     mut focus: ResMut<UiFocus>,
 ) {
-    if !palette.open && !hub.open {
+    if !palette.open && !hub.open && !menu.open {
         *focus = UiFocus::default();
         return;
     }

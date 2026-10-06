@@ -134,6 +134,16 @@ impl Options {
         }
     }
 
+    /// Give a name a value, replacing any it had. How the Esc menu writes a
+    /// room it has just made into the settings a link is built from.
+    pub fn set(&mut self, name: &str, value: &str) {
+        self.pairs.retain(|(key, _)| !same(key, name));
+        self.pairs.push((
+            name.trim_start_matches('-').to_string(),
+            Some(value.to_string()),
+        ));
+    }
+
     /// The value given for a name, if it was given one.
     pub fn value(&self, name: &str) -> Option<&str> {
         self.pairs
@@ -316,6 +326,28 @@ mod host {
             eprintln!("{line}");
         }
     }
+
+    /// Where the published page lives, which is what a room's link opens: a
+    /// friend without the game clicks it and plays in their browser.
+    /// `--page <url>` points it at another deploy.
+    pub fn page_url() -> String {
+        super::value("--page")
+            .unwrap_or("https://michaelenew.github.io/video-game/")
+            .to_string()
+    }
+
+    /// A desktop has no address bar, so the link goes to the terminal too,
+    /// for whoever started the game from one.
+    pub fn show_room(link: Option<&str>) {
+        if let Some(link) = link {
+            eprintln!("room: {link}");
+        }
+    }
+
+    /// A desktop window keeps the mouse until the game lets go of it.
+    pub fn pointer_lock_lost() -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +436,35 @@ mod host {
         }));
     }
 
+    /// This page's own address, without its query or `#`: a room made here is
+    /// a room on this deploy.
+    pub fn page_url() -> String {
+        web_sys::window()
+            .map(|w| w.location())
+            .and_then(|l| Some(format!("{}{}", l.origin().ok()?, l.pathname().ok()?)))
+            .unwrap_or_default()
+    }
+
+    /// The room's link in the address bar, so a reload stays in the room and
+    /// the bar itself is a way to share it; the bare page when leaving.
+    pub fn show_room(link: Option<&str>) {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let url = link.map_or_else(page_url, str::to_string);
+        if let Ok(history) = window.history() {
+            let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&url));
+        }
+    }
+
+    /// The browser releases the mouse itself on Escape, and the key never
+    /// reaches the game. So the game asks: has the page lost its lock?
+    pub fn pointer_lock_lost() -> bool {
+        web_sys::window()
+            .and_then(|w| w.document())
+            .is_some_and(|d| d.pointer_lock_element().is_none())
+    }
+
     /// How meeting the other player is going, in `#online-status` beside the
     /// share link -- where somebody waiting for a friend is looking, rather
     /// than only on the canvas behind the mouse capture.
@@ -422,7 +483,8 @@ mod host {
 
 use host::read_options;
 pub use host::{
-    announce, load_settings, load_trophies, report_panics, save_settings, save_trophies,
+    announce, load_settings, load_trophies, page_url, pointer_lock_lost, report_panics,
+    save_settings, save_trophies, show_room,
 };
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,10 @@
 #
 #   ./scripts/web-smoke.sh [screenshot.png]
 #
-# WEB_ROOM=0 skips the room check, which loads the game twice more.
+# Then the Esc menu: one tab creates a room from it, another joins from it
+# (`crates/web/menu-smoke.mjs`).
+#
+# WEB_ROOM=0 skips the room and menu checks, which load the game four times more.
 # WEB_REBUILD=1 rebuilds even when target/web exists. WEB_QUERY=hunt=gnawers
 # loads the page asking for something, so a creature can be checked reachable. The build needs
 # `./scripts/setup-tools.sh web` and the browser needs `... browser`; both are
@@ -30,4 +33,5 @@ node crates/web/smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "$O
 
 if [ "${WEB_ROOM:-1}" != 0 ]; then
   node crates/web/room-smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "${OUT%.png}-room"
+  node crates/web/menu-smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "${OUT%.png}-menu"
 fi

@@ -161,6 +161,26 @@ impl<B: Board> Board for Sealed<B> {
     }
 }
 
+/// `n` random letters from an alphabet with nothing that reads as something
+/// else (no i, l, o, 0 or 1), the way the page makes a room's name and its
+/// secret: 6 to recognise a room by, 26 (about 129 bits) to seal it.
+pub fn letters(n: usize) -> String {
+    const LETTERS: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
+    let mut out = String::with_capacity(n);
+    let mut bytes = [0u8; 32];
+    while out.len() < n {
+        getrandom::getrandom(&mut bytes).expect("no source of randomness for a room");
+        // Rejection rather than `b % 31`, which would favour the first few
+        // letters: 248 is the largest multiple of 31 under 256.
+        for &b in bytes.iter().filter(|&&b| b < 248) {
+            if out.len() < n {
+                out.push(LETTERS[b as usize % LETTERS.len()] as char);
+            }
+        }
+    }
+    out
+}
+
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /// Base64 in the URL-safe alphabet, unpadded. Fifteen lines rather than a

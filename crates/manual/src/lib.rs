@@ -90,7 +90,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --room <name> --key <secret> [--broker <url>]",
-                "The same, spelled out: --join is these, unpacked from the link. --key is the part after #key= in it, which seals the room: the brokers carry notes they cannot read, under a name that is not the room's. --broker <url> meets through one MQTT broker instead of the public three (ws:// for one on this machine). --board tabs is the browser's alone.",
+                "The same, spelled out: --join is these, unpacked from the link. --key is the part after #key= in it, which seals the room: the brokers carry notes they cannot read, under a name that is not the room's. --broker <url> meets through one MQTT broker instead of the public three (ws:// for one on this machine). --board tabs is the browser's alone. --page <url> is the page a room made on this desktop links to (the published one by default), for a room on another deploy.",
             ),
             e(
                 "cargo run -p manual",
@@ -164,6 +164,10 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e("Mouse", "Aim. Where you look is where you are pointed."),
             e("Click / Esc", "Capture the mouse, and release it."),
+            e(
+                "Esc menu",
+                "Esc steps out of the fight and brings up the menu; a click in the arena goes back. In it: Create a room, which makes a link for the fight you are practising, and a box to paste a friend's link and Join; while a room is active, its name, how meeting is going, the link with a Copy link button, and Leave. The creature list with your trophies and tempers is on the right, and only there while the menu is up.",
+            ),
             e("W A S D", "Move, relative to the camera."),
             e(
                 "Space",

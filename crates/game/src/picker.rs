@@ -121,6 +121,41 @@ pub fn world(start: Start, classes: [Class; 2]) -> World {
     w.tempered(start.temper)
 }
 
+/// **The fight a world is, as the settings that start it** -- the inverse of
+/// [`start`] and [`world`], for a room made from the Esc menu, whose link has
+/// to say what is being practised: both classes, the creature, its temper, and
+/// the arena when it is not the creature's own. Names are the ones `--p1`,
+/// `--hunt` and `--arena` take, so the link reads like a command line.
+///
+/// It describes, it does not copy: a fight that is not one of the starts
+/// (the Pair with a third creature, say) comes out as the nearest one. Both
+/// clients build their world from the link, so they agree either way.
+pub fn describe(w: &World) -> Vec<(&'static str, String)> {
+    let class = |c: Class| c.name().to_lowercase().replace(' ', "");
+    let mut out = vec![
+        ("p1", class(w.players[0].class)),
+        ("p2", class(w.players[1].class)),
+    ];
+    let here = w.arena.get();
+    match w.hunted().into_iter().flatten().next() {
+        Some(sp) => {
+            out.push(("hunt", sp.get().slug()));
+            if arena::for_species(sp).id != w.arena {
+                out.push(("arena", here.slug()));
+            }
+            if w.temper() > 0 {
+                out.push(("temper", w.temper().to_string()));
+            }
+        }
+        None => {
+            if here.id != World::with_classes([Class::Bulwark; 2]).arena {
+                out.push(("arena", here.slug()));
+            }
+        }
+    }
+    out
+}
+
 /// `H`: hunt the Ridgeback, or go back to fighting each other.
 pub fn toggle(w: &World) -> Travel {
     if w.hunting() {
@@ -403,5 +438,41 @@ mod tests {
             next(&gnats).destination(),
             Some(sim::input::Destination::Hunt(SpeciesId::GNATS, 0))
         );
+    }
+
+    #[test]
+    fn a_described_fight_starts_the_same_fight() {
+        // What the Esc menu writes into a room's link has to read back, through
+        // the same functions a friend's client uses, as the fight it came from.
+        let classes = [Class::ShadowReaver, Class::Champion];
+        let fights = [
+            Start::default(),
+            start(true, Some("gnawers"), None, Some("2")),
+            start(true, Some("hornback-escort"), None, None),
+            start(true, Some("ridgeback"), Some("range"), None),
+            start(false, None, Some("range"), None),
+            start(true, Some("pair"), None, None),
+        ];
+        for fight in fights {
+            let w = world(fight, classes);
+            let said = describe(&w);
+            let get = |name: &str| {
+                said.iter()
+                    .find(|(n, _)| *n == name)
+                    .map(|(_, v)| v.as_str())
+            };
+            let back = start(
+                get("hunt").is_some(),
+                get("hunt"),
+                get("arena"),
+                get("temper"),
+            );
+            let again = world(back, classes);
+            assert_eq!(
+                again.checksum(),
+                w.checksum(),
+                "{fight:?} described as {said:?}"
+            );
+        }
     }
 }
