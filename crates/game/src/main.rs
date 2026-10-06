@@ -29,10 +29,12 @@ mod hub;
 mod hud;
 mod menu;
 mod online;
+mod outline;
 mod palette;
 mod picker;
 mod platform;
 mod settings;
+mod shapes;
 mod signs;
 mod sky;
 mod species;
@@ -168,6 +170,12 @@ fn main() {
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
+        // The line round every silhouette, as a pass over the finished picture.
+        // Only where the platform can read a depth buffer: see
+        // `platform::draws_outlines`. Registering it anyway would not fail
+        // quietly -- the pipeline is built whether or not a camera asks for it,
+        // and on WebGL2 building it is the panic.
+        .add_plugins(outline::OutlinePlugin.only_if(platform::draws_outlines()))
         .add_systems(
             Startup,
             (
@@ -1437,18 +1445,37 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn((
-        Camera3d::default(),
-        // Bevy's default is a 45-degree vertical field of view, which is a
-        // portrait-lens view of an arena you are meant to be moving around
-        // inside. The real value is a setting; this is just the starting point.
-        Projection::Perspective(PerspectiveProjection {
-            fov: settings.fov_radians(),
-            ..default()
-        }),
-        Transform::from_xyz(0.0, 6.0, 14.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
-        MainCamera,
-    ));
+    let eye = commands
+        .spawn((
+            Camera3d::default(),
+            // Bevy's default is a 45-degree vertical field of view, which is a
+            // portrait-lens view of an arena you are meant to be moving around
+            // inside. The real value is a setting; this is just the starting point.
+            Projection::Perspective(PerspectiveProjection {
+                fov: settings.fov_radians(),
+                ..default()
+            }),
+            Transform::from_xyz(0.0, 6.0, 14.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
+            MainCamera,
+            // **No multisampling.** The outline pass below wants a depth buffer it
+            // can read, and a multisampled one cannot be read on every backend. The
+            // edges are smoothed afterwards instead, which costs one pass and works
+            // the same everywhere.
+            Msaa::Off,
+            bevy::core_pipeline::fxaa::Fxaa::default(),
+        ))
+        .id();
+    if platform::draws_outlines() {
+        // The line round everything: a pass over the finished picture rather
+        // than a second copy of every object (`outline`), and the depth-only
+        // pass it reads -- the cheapest thing a frame can be asked to draw, and
+        // the only way to get a depth buffer that can be sampled rather than
+        // only written to. WebGL2 has neither, which is why this is a question.
+        commands.entity(eye).insert((
+            outline::Outline::from(look::edge::LINE),
+            bevy::core_pipeline::prepass::DepthPrepass,
+        ));
+    }
 
     commands.spawn((
         DirectionalLight {
@@ -1464,17 +1491,27 @@ fn setup(
     // the floor at the inside faces of the walls, which the key light never
     // reaches. Without a fill they read as flat black and the fight happens in
     // front of a void.
+    //
+    // It carries the sky's colour (`arenas::Skylight`), and it is **directional
+    // on purpose**: that is what makes a shadow the complement of its light
+    // rather than making the whole arena the complement of its light. Most of
+    // the fill used to be the ambient term instead, which lands equally on
+    // every face including the ones the sun is already on, and a blue wash over
+    // a green field cancels most of the green -- the Gulf's islands came out as
+    // sage. The sky is dimmer than the sun and reaches shadows more than it
+    // reaches what is already lit, and both of those have to be true here too.
     commands.spawn((
         DirectionalLight {
-            illuminance: 3_200.0,
+            illuminance: 2_900.0,
             shadows_enabled: false,
             ..default()
         },
         Transform::from_xyz(-8.0, 6.0, -7.0).looking_at(Vec3::ZERO, Vec3::Y),
+        arenas::Skylight,
     ));
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.65, 0.72, 0.85),
-        brightness: 520.0,
+        brightness: 130.0,
         ..default()
     });
 
@@ -1535,10 +1572,12 @@ fn setup(
 
         // The shield is a separate object because its position is independent
         // of the character -- that is the whole mechanic. See bulwark.md.
+        const SHIELD: Vec3 = Vec3::new(0.75, 0.9, 0.14);
+        let brass = [0.92, 0.76, 0.38];
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.75, 0.9, 0.14))),
+            Mesh3d(meshes.add(Cuboid::from_size(SHIELD))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.92, 0.76, 0.38),
+                base_color: Color::srgb(brass[0], brass[1], brass[2]),
                 perceptual_roughness: 0.5,
                 ..default()
             })),

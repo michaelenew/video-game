@@ -221,8 +221,22 @@ about is moved into the derivation, so the next arena starts closer and the
 tweak is deleted. A tweak that stays a tweak forever is a derivation nobody
 wrote down.
 
-`crates/game/src/sky.rs` is the Bevy half: a mesh, a material, a fog component.
-Nothing in it decides what a colour should be.
+There are four modules and they stack: `sky` is what is behind everything,
+`palette` what a surface's colour is, `edge` where the accent and the outline
+go, and `skies` the one table that gives each arena its sky — from which its
+palette follows, so an arena that names one colour has a whole look.
+
+**Judge a palette lit, never as albedo.** `palette::lit` is the renderer's
+response curve, measured off a screenshot rather than guessed, and every swatch
+on the sheet goes through it. The first version of the palette looked bright and
+distinct as raw albedo and arrived in the game as a white wash with the
+differences flattened out of it by the tonemapper's knee. A harness that does
+not predict the screen is a harness that will be tuned against *instead of* the
+screen.
+
+`crates/game/src/sky.rs` and `crates/game/src/shapes.rs` are the Bevy half: a
+mesh, a material, a fog component, and the vertex colours that carry the
+accent. Nothing in either decides what a colour should be.
 
 ## Tools that are not on every machine
 

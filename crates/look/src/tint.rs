@@ -181,6 +181,52 @@ impl Lch {
     }
 }
 
+/// The most chroma sRGB can hold at this lightness and hue.
+pub fn ceiling_at(l: f32, h: f32) -> f32 {
+    let lab = |c: f32| {
+        let a = h * std::f32::consts::TAU;
+        from_oklab([l, c * a.cos(), c * a.sin()])
+    };
+    let (mut lo, mut hi) = (0.0f32, 0.45f32);
+    for _ in 0..18 {
+        let mid = 0.5 * (lo + hi);
+        if in_gamut(lab(mid)) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
+/// **The loudest this hue gets**, somewhere sensible on the lightness scale.
+///
+/// How much chroma sRGB can hold depends enormously on the hue: a yellow is at
+/// its most colourful up near white, a blue down near black, and asking for
+/// both at one fixed lightness gets a vivid yellow and a muddy blue. That is
+/// not a detail. Anything that derives a *relationship* from an accent's
+/// chroma -- "no surface may be louder than the accent" -- quietly collapses
+/// when one arena's accent happens to be a hue that cannot hold much at the
+/// lightness it was asked for, and the whole arena desaturates to keep a
+/// promise about a colour nobody chose carefully.
+///
+/// So the lightness is found rather than fixed. The band keeps it a colour you
+/// could paint something with: an accent at 0.2 is a hole and one at 0.95 is a
+/// highlight.
+pub fn loudest(h: f32) -> Lch {
+    let (mut best, mut at) = (0.0f32, 0.6f32);
+    let (lo, hi) = (0.52f32, 0.86f32);
+    for i in 0..=24 {
+        let l = lo + (hi - lo) * i as f32 / 24.0;
+        let c = ceiling_at(l, h);
+        if c > best {
+            best = c;
+            at = l;
+        }
+    }
+    Lch { l: at, c: best, h }
+}
+
 fn in_gamut(c: Rgb) -> bool {
     c.iter().all(|v| (-1e-4..=1.000_1).contains(v))
 }

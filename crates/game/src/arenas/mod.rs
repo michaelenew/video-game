@@ -115,24 +115,13 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
     }
 }
 
-/// What a material looks like. One colour each, for every arena: sand is the
-/// same sand wherever it is, and an arena that wants its own wants a new
-/// material in the simulation, because a floor the creature reads differently
-/// should look different.
-pub fn colour(material: Material) -> [f32; 3] {
-    match material {
-        // The proving ground's floor and walls, as they always were.
-        Material::Ground => [0.13, 0.15, 0.18],
-        Material::Stone => [0.30, 0.34, 0.40],
-        Material::Grass => [0.20, 0.30, 0.16],
-        Material::Rock => [0.36, 0.33, 0.30],
-        Material::Sand => [0.62, 0.55, 0.40],
-        Material::Snow => [0.82, 0.85, 0.90],
-        Material::Ash => [0.32, 0.31, 0.31],
-        Material::Peat => [0.17, 0.13, 0.09],
-        Material::Water => [0.16, 0.30, 0.42],
-        Material::Wood => [0.33, 0.24, 0.16],
-    }
+/// A material's colour in an arena, and the one place the game asks.
+///
+/// Thin on purpose: the answer is `look::palette`, which derives a whole
+/// scheme from the arena's sky. Ten colours written here once, for the whole
+/// game, is what made every arena the same ten colours.
+pub fn colour(id: ArenaId, material: Material) -> [f32; 3] {
+    look::palette::of(id).of(material)
 }
 
 /// **The key light**, the one that casts shadows: put where [`sun`] says
@@ -151,6 +140,21 @@ pub fn sun(id: ArenaId) -> Vec3 {
         _ => Vec3::new(6.0, 14.0, 5.0),
     }
 }
+
+/// **The fill light**, which is the sky rather than the sun.
+///
+/// Nothing outdoors is lit by one light. The sun is one and the whole sky is
+/// the other, and the sky is a different colour -- so the shadowed side of a
+/// rock is not a darker version of its lit side, it is a *bluer* one. A shadow
+/// painted as plain darkness looks dead; the same shadow in the complement of
+/// the light looks like a real afternoon.
+///
+/// So this light and the ambient term both take `Palette::shade`, which is the
+/// arena's own sky overhead -- exactly what is shining into every shadow in it.
+/// Under a warm dawn the shadows come out violet; under a blue midday, deeper
+/// blue. Nothing had to be chosen.
+#[derive(Component)]
+pub struct Skylight;
 
 /// Everything drawn for the arena, so all of it can go when the arena does.
 #[derive(Component)]
@@ -178,7 +182,10 @@ pub fn dress(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
+    mut fill: Query<&mut DirectionalLight, With<Skylight>>,
+    mut ambient: ResMut<AmbientLight>,
     mut camera: Query<Entity, With<crate::MainCamera>>,
+    looks: Option<Res<crate::ground::Looks>>,
 ) {
     let arena = sim.cur.arena();
     if drawn.0 == Some(arena.id) {
@@ -194,6 +201,34 @@ pub fn dress(
     // per frame, and shared by the dome, the fog and the drop below, which is
     // what keeps all three agreeing about where the horizon is.
     let sky = look::skies::of(arena.id).resolved();
+    // Derived from that sky, so an arena that has one has both. Everything
+    // drawn below goes through it, props included.
+    let palette = look::palette::Palette::under(&sky);
+    // Everything the arena is made of is painted with this: the palette says
+    // what colour a thing is, the edge rule says where its accent goes, and
+    // `shapes` puts the answer in the vertices. One white material serves all
+    // of it, because every mesh carries its own colour.
+    //
+    // The crest half of the rule is stretched over the heights this arena
+    // actually contains, read off its own collision data. A fixed ramp from the
+    // ground reads beautifully in a proving ground whose walls are waist-high
+    // and paints every surface of a jump course at full strength, because a
+    // course's *lowest* island is already forty metres up.
+    let (lo, hi) = arena
+        .solids()
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(lo, hi), s| {
+            (lo.min(fx(s.min.y)), hi.max(fx(s.max.y)))
+        });
+    let brush = crate::shapes::Brush {
+        palette,
+        edge: if lo <= hi {
+            look::edge::EDGE.across(lo, hi)
+        } else {
+            look::edge::EDGE
+        },
+    };
+    let white = materials.add(crate::shapes::plain());
 
     // The clear colour still matters: it is what shows in the sliver of a frame
     // before the dome is drawn, and anywhere the dome does not reach. Set to
@@ -212,6 +247,24 @@ pub fn dress(
     // looking rather than of the things looked at.
     if let Ok(eye) = camera.single_mut() {
         commands.entity(eye).insert(sky::fog(&sky));
+        // The line fades over the same distance the air does -- where there is
+        // a line at all.
+        if crate::platform::draws_outlines() {
+            commands
+                .entity(eye)
+                .insert(crate::outline::Outline::over(look::edge::LINE, &sky));
+        }
+    }
+    // The pooled hazard and raised-solid materials take this arena's colours.
+    if let Some(looks) = &looks {
+        crate::ground::repaint(looks, &mut materials, arena.id);
+    }
+    // Both the ambient term and the fill light take the sky's colour, so every
+    // shadow in the arena is the complement of what cast it.
+    let shade = palette.shade;
+    ambient.color = Color::srgb(shade[0], shade[1], shade[2]);
+    for mut light in &mut fill {
+        light.color = Color::srgb(shade[0], shade[1], shade[2]);
     }
     for mut light in &mut suns {
         *light = Transform::from_translation(sun_at).looking_at(Vec3::ZERO, Vec3::Y);
@@ -256,15 +309,26 @@ pub fn dress(
             ));
         }
         None => {
+            let (w, d) = (hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0);
+            // Subdivided, because a four-vertex plane has nowhere to put a
+            // gradient. The accent runs in from the arena's own perimeter,
+            // which is the edge of the world as far as anyone standing on it
+            // is concerned.
+            let mut floor = Plane3d::default()
+                .mesh()
+                .size(w, d)
+                .subdivisions(crate::shapes::cuts_across(w.max(d), brush.edge.reach))
+                .build();
+            crate::shapes::paint(
+                &mut floor,
+                Vec3::new(w * 0.5, 0.0, d * 0.5),
+                Vec3::ZERO,
+                palette.of(arena.floor),
+                &brush,
+            );
             commands.spawn((
-                Mesh3d(
-                    meshes.add(
-                        Plane3d::default()
-                            .mesh()
-                            .size(hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0),
-                    ),
-                ),
-                MeshMaterial3d(paint(colour(arena.floor))),
+                Mesh3d(meshes.add(floor)),
+                MeshMaterial3d(white.clone()),
                 Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
                 Scenery,
             ));
@@ -272,7 +336,7 @@ pub fn dress(
     }
     for (i, region) in arena.regions.iter().enumerate() {
         let lift = 0.004 * (i + 1) as f32;
-        let look = paint(colour(region.material));
+        let look = paint(palette.of(region.material));
         match region.area {
             Area::Rect { lo, hi } => {
                 let (x0, z0, x1, z1) = (fx(lo.0), fx(lo.1), fx(hi.0), fx(hi.1));
@@ -301,25 +365,42 @@ pub fn dress(
         let min = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z));
         let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
         let size = max - min;
+        let at = (min + max) * 0.5;
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
-            MeshMaterial3d(paint(colour(solid.material))),
-            Transform::from_translation((min + max) * 0.5),
+            Mesh3d(meshes.add(crate::shapes::boxy(
+                size,
+                at,
+                palette.of(solid.material),
+                &brush,
+            ))),
+            MeshMaterial3d(white.clone()),
+            Transform::from_translation(at),
             Scenery,
         ));
     }
 
     for prop in dressing.props {
         let [w, h, d] = prop.size;
+        let at = Vec3::new(prop.at[0], prop.at[1] + h * 0.5, prop.at[2]);
+        let rgb = palette.surface(prop.rgb);
+        let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
         let mesh = match prop.shape {
-            Shape::Box => meshes.add(Cuboid::new(w, h, d)),
-            Shape::Cylinder => meshes.add(Cylinder::new(w * 0.5, h)),
-            Shape::Sphere => meshes.add(Sphere::new(w * 0.5)),
+            Shape::Box => crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
+            Shape::Cylinder => {
+                let mut m = Cylinder::new(w * 0.5, h).mesh().build();
+                crate::shapes::paint(&mut m, half, at, rgb, &brush);
+                m
+            }
+            Shape::Sphere => {
+                let mut m = Sphere::new(w * 0.5).mesh().build();
+                crate::shapes::paint(&mut m, Vec3::splat(w * 0.5), at, rgb, &brush);
+                m
+            }
         };
         commands.spawn((
-            Mesh3d(mesh),
-            MeshMaterial3d(paint(prop.rgb)),
-            Transform::from_xyz(prop.at[0], prop.at[1] + h * 0.5, prop.at[2])
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
+            Transform::from_translation(at)
                 .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
             Scenery,
         ));
