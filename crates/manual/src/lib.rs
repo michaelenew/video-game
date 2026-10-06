@@ -90,7 +90,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --room <name> --key <secret> [--broker <url>]",
-                "The same, spelled out: --join is these, unpacked from the link. --key is the part after #key= in it, which seals the room: the brokers carry notes they cannot read, under a name that is not the room's. --broker <url> meets through one MQTT broker instead of the public three (ws:// for one on this machine). --board tabs is the browser's alone. --page <url> is the page a room made on this desktop links to (the published one by default), for a room on another deploy.",
+                "The same, spelled out: --join is these, unpacked from the link. --key is the part after #key= in it, which seals the room: the brokers carry notes they cannot read, under a name that is not the room's. --broker <url> meets through one MQTT broker instead of the public three (ws:// for one on this machine). --board tabs is the browser's alone. --page <url> is the page a room made on this desktop links to (the published one by default), for a room on another deploy. --delay <frames> (?delay= in a page) holds your own inputs back that many frames, trading rollback for delay on your side only; the default is none, so online feels like local play.",
             ),
             e(
                 "cargo run -p manual",
@@ -113,7 +113,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?room=<name>",
-                "Play a friend: the page's Play with a friend button makes one, and you send them the link. Both of you open it, and the two pages find each other through free public message brokers and then connect directly (WebRTC) -- no server of ours, and nothing of the match goes through anyone else. The link ends in #key=, a random secret that seals the room: the brokers see only notes they cannot read, under a name that is not the room's. A friend on a desktop joins the same link with --join. Whoever opened it first is player one; the classes and arena are the link's, so put ?p1=, ?p2= and ?arena= in it before you send it. You practise while you wait. Some networks, often mobile data, will not take a direct connection; the page says so.",
+                "Play a friend: the page's Play with a friend button makes one, and you send them the link. Both of you open it, and the two pages find each other through free public message brokers and then connect directly (WebRTC) -- no server of ours, and nothing of the match goes through anyone else. The link ends in #key=, a random secret that seals the room: the brokers see only notes they cannot read, under a name that is not the room's. A friend on a desktop joins the same link with --join. Whoever opened it first is player one; the classes and arena are the link's, so put ?p1=, ?p2= and ?arena= in it before you send it -- or change class once you are in, with Tab. You practise while you wait. Some networks, often mobile data, will not take a direct connection; the page says so.",
             ),
             e(
                 "?room=<name>&board=tabs",
@@ -491,17 +491,26 @@ pub const SECTIONS: &[Section] = &[
                 "5 6 7",
                 "Dummy is a sparring bot -- easy, normal, hard. It sees late, aims imperfectly, and picks a new personality every time you press one.",
             ),
-            e("Tab", "Cycle player one's class. Restarts the match."),
+            e(
+                "Tab",
+                "Cycle your class. Restarts the fight. Works against a person too: both games restart on the same frame, with your new class and whatever they have.",
+            ),
             e(
                 "F8",
-                "Hide or show the class pickers beside each health bar. On by default. Clicking one cycles that player's class, and it needs a free cursor -- press Esc, or open the Oven.",
+                "Hide or show the class pickers beside each health bar. On by default. Clicking one cycles that player's class -- against a person, only your own -- and it needs a free cursor: press Esc, or open the Oven.",
             ),
             e(
                 "Backspace",
-                "Reset the match. It was R, until R became an ability key.",
+                "Reset the match. It was R, until R became an ability key. Against a person it resets both games, on the same frame.",
             ),
-            e("P", "Pause."),
-            e("]", "Step one frame. Pauses if it was running."),
+            e(
+                "P",
+                "Pause. Against a person it pauses both games, and either of you carries on.",
+            ),
+            e(
+                "]",
+                "Step one frame. Pauses if it was running. Against a person it steps both games.",
+            ),
             e(
                 "[",
                 "Step one frame BACK, about two and a half seconds' worth. Pauses if it was running. Local play only -- a peer is not rewinding with you. While paused, the readout under the crosshair says what the frame is doing: where her feet are, how fast she is rising, and every structure's age and climb rate.",

@@ -971,7 +971,7 @@ impl Sim {
     /// guessing, and the things worth stepping through are exactly the ones too
     /// quick to read at speed.
     pub fn stepping(&self) -> bool {
-        self.paused
+        self.paused || self.cur.paused
     }
 }
 
@@ -3144,7 +3144,7 @@ fn tick_sim(
     // quarter-second a frame and so runs slow exactly when a page is
     // struggling -- and the meeting's timeouts are about the network.
     real: Res<Time<Real>>,
-    look: Res<Look>,
+    mut look: ResMut<Look>,
     focus: Res<palette::UiFocus>,
     mut sim: ResMut<Sim>,
     mut show: ResMut<debug::ShowDebug>,
@@ -3179,17 +3179,28 @@ fn tick_sim(
     if focus.keyboard {
         return;
     }
-    // Against a person the world changes only through ticks both machines
-    // play. Pausing, stepping, restarting and changing class are training
-    // tools that would edit it on one machine, so a match ignores them rather
-    // than desync. `H` and `T` still work: they travel on the wire.
+    // **Online is two people at one keyboard, with one of them somewhere
+    // else.** Against a person the world changes only through ticks both
+    // machines play, so anything that changes the fight -- pause, step,
+    // restart, class, arena, creature -- is asked for on the wire
+    // (`sim::input::Travel`) and both machines do it on the same frame. In
+    // training the same keys act on the spot. Only stepping *back* stays
+    // training's: it rewinds a history only this machine has.
     let training = !sim.driver.online();
-    if training && keys.just_pressed(KeyCode::KeyP) {
-        sim.paused = !sim.paused;
+    if keys.just_pressed(KeyCode::KeyP) {
+        if training {
+            sim.paused = !sim.paused;
+        } else {
+            sim.travel = sim::input::Travel::PAUSE;
+        }
     }
-    if training && keys.just_pressed(KeyCode::BracketRight) {
-        sim.step_once = true;
-        sim.paused = true;
+    if keys.just_pressed(KeyCode::BracketRight) {
+        if training {
+            sim.step_once = true;
+            sim.paused = true;
+        } else {
+            sim.travel = sim::input::Travel::STEP;
+        }
     }
     // **Back a frame.** The other half of stepping, and the half that makes it
     // worth having: anything that happens on a single frame has to be gone past
@@ -3233,20 +3244,24 @@ fn tick_sim(
     if keys.just_pressed(KeyCode::F2) {
         sim.bind_pose = !sim.bind_pose;
     }
-    if training && keys.just_pressed(KeyCode::Tab) {
-        // Cycle player one's class. Restarts the match, since a class change
-        // mid-round would leave the mechanic in someone else's state.
-        let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
-        let classes = [ALL[next], sim.cur.players[1].class];
-        let w = seated(sim.cur.restarted(classes), sim.dummy);
-        sim.prev = w.clone();
-        sim.cur = w;
+    if keys.just_pressed(KeyCode::Tab) {
+        // Cycle your own class. Restarts the fight, since a class change
+        // mid-round would leave the mechanic in someone else's state -- and
+        // asked for on the wire rather than done here, like the picker below,
+        // so against a person both machines restart on the same frame.
+        let me = sim.local_player();
+        let next = ALL[(sim.cur.players[me].class as usize + 1) % ALL.len()];
+        sim.travel = sim::input::Travel::class(me, next);
     }
-    if training && keys.just_pressed(KeyCode::Backspace) {
-        let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
-        let w = seated(sim.cur.restarted(classes), sim.dummy);
-        sim.prev = w.clone();
-        sim.cur = w;
+    if keys.just_pressed(KeyCode::Backspace) {
+        if training {
+            let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
+            let w = seated(sim.cur.restarted(classes), sim.dummy);
+            sim.prev = w.clone();
+            sim.cur = w;
+        } else {
+            sim.travel = sim::input::Travel::RESTART;
+        }
     }
     // The picker. `H` swaps between hunting the Ridgeback and fighting each
     // other; `Shift+H` steps to the next creature there is, in its own arena.
@@ -3290,6 +3305,19 @@ fn tick_sim(
         }
     }
 
+    // The meeting first: the tick it opens the line on is the tick the match
+    // starts.
+    let was_online = sim.driver.online();
+    online::meet(&mut sim, real.elapsed().as_millis() as u64);
+    if !was_online && sim.driver.online() {
+        // The mouse turns whichever fighter is yours, and the match starts
+        // with it facing where yours stands facing. Player two spawns facing
+        // player one, the other way from the yaw training left the mouse at,
+        // and would otherwise turn round on the first frame.
+        let facing = fx3(sim.cur.players[sim.local_player()].facing);
+        look.yaw = facing.z.atan2(facing.x);
+    }
+
     // Input the palette is claiming belongs to the palette. Clicking a slider
     // used to throw a poke as well, and typing in the search box drove the
     // fighter around -- J, K and L are attack keys.
@@ -3307,9 +3335,6 @@ fn tick_sim(
     // Player two has no mouse, so they aim level.
     .looking(look.aim_two(), 0);
 
-    // The meeting first: the tick it opens the line on is the tick the match
-    // starts.
-    online::meet(&mut sim, real.elapsed().as_millis() as u64);
     if !sim.driver.online() {
         let ticks = if sim.paused {
             u32::from(std::mem::take(&mut sim.step_once))
@@ -3374,6 +3399,7 @@ fn tick_sim(
         }
     } else {
         let ticks = sim.clock.advance(time.delta_secs());
+        let ticks = online::pace(&mut sim, ticks);
         for _ in 0..ticks {
             let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
             let travel = std::mem::take(&mut sim.travel);
@@ -3965,9 +3991,13 @@ fn drive_camera(
         rig.0.set_fov(settings.fov_radians());
     }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    // The camera follows whichever fighter this client is driving.
+    // The camera follows whichever fighter this client is driving, turned by
+    // the mouse: `look.yaw` is what drives your fighter in either seat online.
+    // (`yaw_two` is the keyboard turn of a second person on this keyboard,
+    // who never has the camera.) Reading `yaw_two` for seat two is what left
+    // the camera of whoever joined a room pointing where it started.
     let me = sim.local_player();
-    let yaw = if me == 0 { look.yaw } else { look.yaw_two };
+    let yaw = look.yaw;
     let framing = rig.0.update_around(
         time.delta_secs(),
         frame.players[me].pos,

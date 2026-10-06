@@ -370,6 +370,58 @@ thread that panics anyway reports itself down with the panic's message. `native:
 fails without the fix. The desktop tests had only ever used a local `ws://`
 broker, without TLS, which is why none of them saw it.
 
+### Playing online should feel like playing locally
+
+*2026-10-06*, from the first match between two real people, which found three
+things.
+
+**Input delay is none.** GGRS held each player's own input back two frames,
+the usual starting point for a fighting game, and against the local game that
+was felt at once -- which defeats the reason for rollback, whose job is to make
+the network invisible. `net::p2p::INPUT_DELAY` is now zero: a press acts on
+the next frame, and everything the far side does is predicted and corrected.
+The cost is longer rollbacks (half the round trip, up to the session's
+eight-frame window), which the frame budget was set for. `delay=` (`--delay`)
+gives a frame or two back, on one side only, for a link where the other
+fighter visibly jitters.
+
+**The side that is ahead slows down.** Two clocks never agree, and the faster
+one drifts ahead until it hits the prediction window and stops dead -- felt as
+lag. GGRS measures the gap and leaves closing it to the game: `online::pace`
+holds back one tick in ten on whichever side is ahead.
+
+**Class changes travel on the wire.** Tab and the class pickers used to rebuild
+the world on one machine, so a match refused them and you were stuck with the
+link's classes. They are now `Travel::class(seat, class)` in your input, like
+the creature picker's H: `World::advance` restarts the same fight with the new
+class on the same frame on both machines, and both players changing on one
+frame both count. Against a person you change only your own.
+
+**So does everything else one keyboard does to the fight.** The rule, from
+the same session: *online is two people at one keyboard, with one of them on
+another machine.* Backspace, P and `]` are `Travel::RESTART`, `PAUSE` and
+`STEP`, acted on by `World::advance` on both machines on the same frame;
+`World::paused` is in the snapshot, and a paused frame changes nothing but the
+frame count the rollback session owns. Only `[` stays training's -- it steps
+back through a history this machine alone keeps.
+
+**H and N used to drop your friend.** Not a desync in the simulation (a page
+and a desktop agree bit for bit through every creature and course, run as
+wasm32 and x86_64 alike): the first frame of an arena a page has not drawn
+before compiles its shaders, on the page's one thread, for seconds. GGRS
+counted two seconds of silence as a disconnect, so the side that pressed the
+key said "your friend disconnected" and played on with blank inputs for them,
+which the other side saw as a desync. `net::p2p` waits fifteen seconds now,
+the screen says when your friend has gone quiet, and `online::pace` closes a
+gap of more than three frames every other frame rather than one in ten.
+`crates/net/tests/trips_online.rs` freezes one side for three and a half
+seconds after a trip, and plays every trip and control from either side.
+
+**And the camera of whoever joined.** It read the yaw of a second player on
+one keyboard, which nothing turns online, so player two's fighter turned and
+the camera did not. The camera now always reads the mouse, and a match starts
+with the mouse facing the way your fighter stands.
+
 ### What it does not do yet
 
 - **Some network pairs will not connect.** Mobile data and strict office or
@@ -385,8 +437,8 @@ broker, without TLS, which is why none of them saw it.
   desktop cannot look up, so the connection rests on the page reaching the
   desktop's local address, which the desktop does publish. (The smoke test
   turns the hiding off; two real machines on one network are the check.)
-- **The link chooses both classes.** A lobby where each picks their own is a
-  `Rendezvous` that trades one more note.
+- **The link chooses the classes you start with.** Each of you can change
+  your own after that, with Tab or your class picker (see below).
 - **Public brokers promise nothing.** Swapping them for one we run is one
   constant, `meet::BROKERS`, and `?broker=` (`--broker`) tries one without a rebuild.
 - **A tab in the background stops.** Browsers pause a hidden tab's frames, and
