@@ -196,6 +196,9 @@ pub fn dress(
         edge: look::edge::EDGE,
     };
     let white = materials.add(crate::shapes::plain());
+    // One material for every line in the arena; the colour is in the vertices.
+    let ink = materials.add(crate::shapes::ink());
+    let line = look::edge::LINE;
 
     // The clear colour still matters: it is what shows in the sliver of a frame
     // before the dome is drawn, and anywhere the dome does not reach. Set to
@@ -330,6 +333,18 @@ pub fn dress(
             Transform::from_translation(at),
             Scenery,
         ));
+        commands.spawn((
+            Mesh3d(meshes.add(crate::shapes::boxy_line(
+                size,
+                palette.of(solid.material),
+                line,
+            ))),
+            MeshMaterial3d(ink.clone()),
+            Transform::from_translation(at),
+            bevy::pbr::NotShadowCaster,
+            bevy::pbr::NotShadowReceiver,
+            Scenery,
+        ));
     }
 
     for prop in dressing.props {
@@ -337,19 +352,36 @@ pub fn dress(
         let at = Vec3::new(prop.at[0], prop.at[1] + h * 0.5, prop.at[2]);
         let rgb = palette.surface(prop.rgb);
         let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
-        let mesh = match prop.shape {
-            Shape::Box => crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
+        let (mesh, outline) = match prop.shape {
+            Shape::Box => (
+                crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
+                crate::shapes::boxy_line(Vec3::new(w, h, d), rgb, line),
+            ),
             Shape::Cylinder => {
                 let mut m = Cylinder::new(w * 0.5, h).mesh().build();
+                let mut o = Cylinder::new(w * 0.5, h).mesh().build();
                 crate::shapes::paint(&mut m, half, at, rgb, &brush);
-                m
+                crate::shapes::round_line(&mut o, line, rgb);
+                (m, o)
             }
             Shape::Sphere => {
                 let mut m = Sphere::new(w * 0.5).mesh().build();
+                let mut o = Sphere::new(w * 0.5).mesh().build();
                 crate::shapes::paint(&mut m, Vec3::splat(w * 0.5), at, rgb, &brush);
-                m
+                crate::shapes::round_line(&mut o, line, rgb);
+                (m, o)
             }
         };
+        let turned = Transform::from_translation(at)
+            .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU));
+        commands.spawn((
+            Mesh3d(meshes.add(outline)),
+            MeshMaterial3d(ink.clone()),
+            turned,
+            bevy::pbr::NotShadowCaster,
+            bevy::pbr::NotShadowReceiver,
+            Scenery,
+        ));
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(white.clone()),

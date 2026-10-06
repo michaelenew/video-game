@@ -77,6 +77,47 @@ impl Edge {
     }
 }
 
+/// The line drawn round the outside of a thing.
+///
+/// The last piece of the hand-drawn feel, and the one that does the most for
+/// how deliberate the picture looks. Flat colours with no line read as
+/// *untextured* -- as a thing somebody has not finished. The same flat colours
+/// with a line round them read as *drawn*, because that is what a drawing is:
+/// an outline with colour inside it. Nothing about the shading changed; the
+/// line changed what the eye thinks it is looking at.
+#[derive(Clone, Copy, Debug)]
+pub struct Line {
+    /// How far the line stands out past the thing, in metres.
+    pub swell: f32,
+    /// How much darker than the surface the line is, in lightness.
+    pub ink: f32,
+}
+
+/// The default line. Thin -- about three pixels at the distance a fight is
+/// watched from -- because a thick one stops being a line and becomes a border,
+/// and a border makes everything look like a sticker.
+pub const LINE: Line = Line {
+    swell: 0.035,
+    ink: 0.30,
+};
+
+impl Line {
+    /// What colour the line round a surface of this colour is.
+    ///
+    /// **Not black.** A black line against a pastel palette is the one thing in
+    /// frame that did not come from the scheme, and it reads as a hard edge
+    /// stuck onto a soft picture. A dark version of the thing's own colour
+    /// reads as the same object seen in its own shadow, which is what an
+    /// illustrator draws, and it keeps its chroma so a green thing is outlined
+    /// in dark green.
+    pub fn colour(&self, surface: [f32; 3]) -> [f32; 3] {
+        crate::tint::Lch::of(surface)
+            .lighter(-self.ink)
+            .vivid(0.85)
+            .rgb()
+    }
+}
+
 /// Smooth at both ends, so a gradient arrives and leaves without a seam.
 ///
 /// The usual `3t^2 - 2t^3`. A linear ramp has a visible crease where it meets
@@ -131,6 +172,26 @@ mod tests {
             "height is not readable off a top face"
         );
         assert_eq!(wall_high, 0.0, "a vertical face picked up the crest accent");
+    }
+
+    #[test]
+    fn a_line_is_darker_than_what_it_surrounds_and_still_coloured() {
+        use crate::tint::Lch;
+        for surface in [[0.62, 0.80, 0.54], [0.94, 0.87, 0.68], [0.54, 0.80, 0.86]] {
+            let ink = Lch::of(LINE.colour(surface));
+            let on = Lch::of(surface);
+            assert!(ink.l < on.l - 0.15, "the line is not dark enough to read");
+            assert!(
+                ink.c > 0.01,
+                "the line went grey, which is a black outline \
+                                   with extra steps"
+            );
+            let turn = (ink.h - on.h).abs();
+            assert!(
+                turn.min(1.0 - turn) < 0.02,
+                "the line is not its object's colour"
+            );
+        }
     }
 
     #[test]

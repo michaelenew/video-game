@@ -1060,6 +1060,20 @@ struct BodyPart {
     joint: Joint,
 }
 
+/// This part is the **line round** a part, not the part itself.
+///
+/// A fighter is the most important silhouette on the screen, so it gets the
+/// same treatment the arena does: a copy of each limb, a few centimetres
+/// bigger, drawn inside out so only its far side survives, which leaves a rim
+/// exactly where the limb's outline is. See `shapes::ink`.
+///
+/// It rides the same component and the same posing loop as the limb it
+/// surrounds rather than getting a query of its own: the two have to agree
+/// about where a limb *is* every single frame, and two systems that have to
+/// agree are a thing that will one day not.
+#[derive(Component)]
+struct Inked;
+
 /// One piece of the Reaver's shadow -- the second skeleton.
 ///
 /// A whole body rather than a marker on the floor. The shadow copies her
@@ -1444,6 +1458,11 @@ fn setup(
             perceptual_roughness: 0.65,
             ..default()
         });
+        // The line round her: her own colour, well darkened, drawn inside out.
+        let srgb = colour.to_srgba();
+        let ink = materials.add(crate::shapes::ink_in(
+            look::edge::LINE.colour([srgb.red, srgb.green, srgb.blue]),
+        ));
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
@@ -1457,6 +1476,15 @@ fn setup(
                         MeshMaterial3d(skin.clone()),
                         Transform::default(),
                         BodyPart { owner, joint },
+                    ));
+                    root.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        MeshMaterial3d(ink.clone()),
+                        Transform::default(),
+                        BodyPart { owner, joint },
+                        Inked,
+                        bevy::pbr::NotShadowCaster,
+                        bevy::pbr::NotShadowReceiver,
                     ));
                 }
             });
@@ -1490,17 +1518,34 @@ fn setup(
 
         // The shield is a separate object because its position is independent
         // of the character -- that is the whole mechanic. See bulwark.md.
-        commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.75, 0.9, 0.14))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.92, 0.76, 0.38),
-                perceptual_roughness: 0.5,
-                ..default()
-            })),
-            Transform::default(),
-            Visibility::Hidden,
-            ShieldMesh(owner),
-        ));
+        const SHIELD: Vec3 = Vec3::new(0.75, 0.9, 0.14);
+        let brass = [0.92, 0.76, 0.38];
+        commands
+            .spawn((
+                Mesh3d(meshes.add(Cuboid::from_size(SHIELD))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::srgb(brass[0], brass[1], brass[2]),
+                    perceptual_roughness: 0.5,
+                    ..default()
+                })),
+                Transform::default(),
+                Visibility::Hidden,
+                ShieldMesh(owner),
+            ))
+            // Its line, as a child: the shield's mesh is a fixed size, so the
+            // scale that stands the same few centimetres off it is fixed too
+            // and nothing has to recompute it per frame.
+            .with_child((
+                Mesh3d(meshes.add(Cuboid::from_size(SHIELD))),
+                MeshMaterial3d(
+                    materials.add(crate::shapes::ink_in(look::edge::LINE.colour(brass))),
+                ),
+                Transform::from_scale(
+                    (SHIELD + Vec3::splat(look::edge::LINE.swell * 2.0)) / SHIELD,
+                ),
+                bevy::pbr::NotShadowCaster,
+                bevy::pbr::NotShadowReceiver,
+            ));
     }
 
     // A fixed pool, one pair of cylinders per effect slot, because the
@@ -3587,8 +3632,12 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
 /// fighter's root, a fighter's part, a shadow's root and a shadow's part are
 /// four different entities and never the same one. Written as an alias because
 /// saying it four times in a signature is the same sentence four times.
-type Posed<'w, 's, Tag, A, B, C> =
-    Query<'w, 's, (&'static Tag, &'static mut Transform), (Without<A>, Without<B>, Without<C>)>;
+type Posed<'w, 's, Tag, A, B, C> = Query<
+    'w,
+    's,
+    (&'static Tag, Option<&'static Inked>, &'static mut Transform),
+    (Without<A>, Without<B>, Without<C>),
+>;
 
 // A Bevy system's parameter list *is* its dependency declaration, and this one
 // now poses two bodies per fighter. Splitting it to get under a count would
@@ -3611,7 +3660,7 @@ fn apply_poses(
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
-    for (fighter, mut tf) in roots.iter_mut() {
+    for (fighter, _, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
         tf.translation = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
         tf.rotation = body_turn(p.facing);
@@ -3669,13 +3718,21 @@ fn apply_poses(
         }
     }
 
-    for (bp, mut tf) in parts.iter_mut() {
+    for (bp, inked, mut tf) in parts.iter_mut() {
         let skeleton = &skeletons[bp.owner];
         let (centre, rot) = skins[bp.owner].box_of(skeleton, bp.joint);
         let size = view::pose::part_size(skeleton, bp.joint);
         tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
         tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
-        tf.scale = Vec3::new(size[0], size[1], size[2]);
+        // The line stands the same few centimetres off every limb, in metres,
+        // rather than by a fraction of the limb -- a fraction would draw a
+        // forearm in hairline and a torso in marker pen.
+        let swell = if inked.is_some() {
+            look::edge::LINE.swell * 2.0
+        } else {
+            0.0
+        };
+        tf.scale = Vec3::new(size[0] + swell, size[1] + swell, size[2] + swell);
     }
 
     // The second body, on the same skeleton and through the same solver. It is
@@ -3697,14 +3754,14 @@ fn apply_poses(
             ),
         ));
     }
-    for (root, mut tf) in shadow_roots.iter_mut() {
+    for (root, _, mut tf) in shadow_roots.iter_mut() {
         let Some(ghost) = frame.shadows[root.0] else {
             continue;
         };
         tf.translation = Vec3::new(ghost.pos[0], ghost.pos[1], ghost.pos[2]);
         tf.rotation = Quat::from_rotation_y(ghost.facing[0].atan2(ghost.facing[2]));
     }
-    for (part, mut tf) in shadow_parts.iter_mut() {
+    for (part, _, mut tf) in shadow_parts.iter_mut() {
         let Some(skin) = shadow_skins[part.owner].as_ref() else {
             continue;
         };
