@@ -10,6 +10,8 @@ license.workspace = true
 # on a real fighter immediately. Nothing in a shipped frame calls it.
 anim = { path = "../anim" }
 hunt = { path = "../hunt" }
+# The art direction, with no engine in it: colour space, skies, palettes.
+look = { path = "../look" }
 manual = { path = "../manual" }
 sim = { path = "../sim" }
 view = { path = "../view" }

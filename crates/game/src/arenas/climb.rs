@@ -1,7 +1,7 @@
 //! The jump courses' dressing (`sim::arena::climb`): the Hallelujah
 //! Mountains under a hazy dawn. The islands hang sixty metres and more over
-//! a floor nearly black and wider than the eye reaches, so the drop under
-//! every gap reads as a long fall into the dark; far
+//! a cloud deck wider than the eye reaches, so the drop under every gap reads
+//! as a long fall into bright air (the sky is `look::skies::ALOFT`); far
 //! floating peaks on every side; far below, spires of rock crowned with
 //! trees, so the eye has something to measure the drop by; a cairn of stones at each
 //! checkpoint; and on the last island a nest of sticks round three pale eggs
@@ -14,8 +14,6 @@ use super::{Dressing, Prop, Shape};
 
 const PEAK: [f32; 3] = [0.56, 0.61, 0.65];
 const MOSS: [f32; 3] = [0.30, 0.42, 0.26];
-/// The floor of the world, seen from sixty metres and more: nearly black.
-const DEEP: [f32; 3] = [0.05, 0.06, 0.08];
 const DEEP_ROCK: [f32; 3] = [0.24, 0.24, 0.26];
 const CANOPY: [f32; 3] = [0.16, 0.24, 0.14];
 const CAIRN: [f32; 3] = [0.62, 0.60, 0.55];
@@ -23,9 +21,6 @@ const STICK: [f32; 3] = [0.36, 0.26, 0.16];
 const EGG: [f32; 3] = [0.90, 0.88, 0.80];
 /// A distance mark: one block per five metres at a takeoff edge.
 const PIP: [f32; 3] = [0.95, 0.75, 0.20];
-
-/// The hazy dawn behind everything.
-const SKY: [f32; 3] = [0.66, 0.74, 0.80];
 
 const fn prop(shape: Shape, at: [f32; 3], size: [f32; 3], yaw: f32, rgb: [f32; 3]) -> Prop {
     Prop {
@@ -172,8 +167,7 @@ const STAIR_DEEP12: [Prop; 2] = spire(55.8, 55.8, 8.8);
 const STAIR_DEEP13: [Prop; 2] = spire(-6.5, -5.0, 9.1);
 
 pub static STAIR: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         STAIR_DEEP0[0],
         STAIR_DEEP0[1],
@@ -257,8 +251,7 @@ const CAUSEWAY_DEEP12: [Prop; 2] = spire(24.3, -48.2, 21.3);
 const CAUSEWAY_DEEP13: [Prop; 2] = spire(46.7, 16.5, 18.2);
 
 pub static CAUSEWAY: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         CAUSEWAY_DEEP0[0],
         CAUSEWAY_DEEP0[1],
@@ -347,8 +340,7 @@ const SPIRAL_DEEP12: [Prop; 2] = spire(30.3, -62.7, 15.7);
 const SPIRAL_DEEP13: [Prop; 2] = spire(6.5, 23.1, 12.2);
 
 pub static SPIRAL: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         SPIRAL_DEEP0[0],
         SPIRAL_DEEP0[1],
@@ -450,8 +442,7 @@ const FALLS_DEEP12: [Prop; 2] = spire(124.5, 50.1, 8.8);
 const FALLS_DEEP13: [Prop; 2] = spire(22.9, -7.6, 9.1);
 
 pub static FALLS: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         FALLS_DEEP0[0],
         FALLS_DEEP0[1],
@@ -547,8 +538,7 @@ const SLALOM_DEEP12: [Prop; 2] = spire(71.3, -63.9, 15.7);
 const SLALOM_DEEP13: [Prop; 2] = spire(35.8, 13.7, 12.2);
 
 pub static SLALOM: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         SLALOM_DEEP0[0],
         SLALOM_DEEP0[1],
@@ -645,8 +635,7 @@ const FORK_DEEP12: [Prop; 2] = spire(63.3, 49.2, 13.8);
 const FORK_DEEP13: [Prop; 2] = spire(123.0, 8.6, 8.2);
 
 pub static FORK: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         FORK_DEEP0[0],
         FORK_DEEP0[1],
@@ -742,8 +731,7 @@ const SPIRE_DEEP12: [Prop; 2] = spire(51.9, 49.2, 8.8);
 const SPIRE_DEEP13: [Prop; 2] = spire(-8.1, -7.4, 9.1);
 
 pub static SPIRE: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         SPIRE_DEEP0[0],
         SPIRE_DEEP0[1],
@@ -829,8 +817,7 @@ const GULF_DEEP12: [Prop; 2] = spire(51.8, 58.7, 13.8);
 const GULF_DEEP13: [Prop; 2] = spire(105.6, 15.1, 8.2);
 
 pub static GULF: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         GULF_DEEP0[0],
         GULF_DEEP0[1],
@@ -993,8 +980,7 @@ const REACH_PIP72: Prop = pip(-3.2, 60.0, -31.0);
 const REACH_PIP73: Prop = pip(-2.8, 60.0, -31.0);
 
 pub static REACH: Dressing = Dressing {
-    sky: SKY,
-    below: Some(DEEP),
+    drop: true,
     props: &[
         REACH_DEEP0[0],
         REACH_DEEP0[1],

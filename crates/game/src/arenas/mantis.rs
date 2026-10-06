@@ -44,8 +44,7 @@ const fn moss(x: f32, z: f32, yaw: f32) -> Prop {
 
 pub static DRESSING: Dressing = Dressing {
     // A pale evening, the light going gold.
-    sky: [0.80, 0.74, 0.62],
-    below: None,
+    drop: false,
     props: &[
         // The gate on the trail in from the west.
         Prop {
