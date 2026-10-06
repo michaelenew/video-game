@@ -89,7 +89,13 @@ impl Sky {
                 // The depth is worth more than it looks. At -0.17 the whole
                 // sheet came out as twenty-three pale washes -- pleasant, and
                 // with no gradient strong enough to tell you which way is up.
-                h.lighter(-0.26).vivid(1.45).turned(-0.025).rgb()
+                //
+                // And the *colour* is worth more still. A sky is rich overhead
+                // and pale at the horizon, which is the same structure the rest
+                // of the palette has: a saturated base with the pastel laid on
+                // top. Doubling the chroma here is what turns a pale blue
+                // ceiling into a sky somebody would look up at.
+                h.lighter(-0.30).vivid(1.95).turned(-0.025).rgb()
             } else {
                 self.zenith
             },

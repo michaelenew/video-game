@@ -9,6 +9,15 @@
 //! carry their own browser half and are the two exemptions in
 //! `crates/game/tests/one_platform.rs`.
 //!
+//! A **sixth** has had to be added, reluctantly, and it is here because this is
+//! where a difference goes: [`draws_outlines`]. The line round every silhouette
+//! is read off a depth prepass, and WebGL2 cannot read a depth texture at
+//! all -- it reaches naga as a shadow sampler, whose only operation is a
+//! comparison, so there is no arrangement of the shader that gets the number
+//! out. It is a capability the platform does not have rather than a choice,
+//! which is the one honest reason to add to this list, and it goes away the day
+//! the browser build asks for WebGPU instead.
+//!
 //! That test is the rule: nothing outside those four files may reach the host,
 //! so everything else in the crate is written once and compiled twice.
 //!
@@ -368,6 +377,20 @@ use host::read_options;
 pub use host::{load_settings, load_trophies, report_panics, save_settings, save_trophies};
 
 // ---------------------------------------------------------------------------
+
+/// Whether this build can draw the line round a silhouette.
+///
+/// `crate::outline` reads the depth prepass, and WebGL2 has no way to read a
+/// depth texture: naga binds one as a shadow sampler, which can compare a value
+/// against it and nothing else. So the browser draws the same arenas in the
+/// same colours with no lines on them, which is a real difference and is said
+/// plainly here rather than discovered.
+///
+/// It is a platform capability, not a setting. When the browser build moves to
+/// WebGPU this becomes `true` everywhere and the whole thing goes.
+pub fn draws_outlines() -> bool {
+    !cfg!(target_arch = "wasm32")
+}
 
 #[cfg(test)]
 mod tests {

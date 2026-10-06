@@ -12,10 +12,9 @@
 //! thing most likely to behave differently, and it keeps the art direction in a
 //! crate with no engine in it, which is the rule in `CLAUDE.md`.
 //!
-//! The one thing it cannot do is a view-dependent effect -- a rim that follows
-//! the silhouette as you walk round. That is a real loss and it is not this
-//! one: the edges being drawn here are the object's own, which is what a
-//! painter outlines anyway.
+//! The *line* round a thing is not here: that is `crate::outline`, a pass over
+//! the finished picture, because a line wants its width in pixels and this file
+//! only knows about metres.
 //!
 //! A vertex colour multiplies the material's `base_color`, so everything built
 //! here is drawn with a white material and carries its whole colour itself.
@@ -23,7 +22,7 @@
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
-use look::edge::{Edge, Line};
+use look::edge::Edge;
 use look::{Palette, tint};
 
 /// What paints a surface: an arena's palette, and the rule for where its accent
@@ -186,91 +185,6 @@ pub fn paint(mesh: &mut Mesh, half: Vec3, centre: Vec3, base: [f32; 3], brush: &
         .collect();
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
 }
-
-/// The material a silhouette line is drawn with.
-///
-/// **Front faces culled**, which is the whole trick. The line is the same shape
-/// as the thing, swollen by a few centimetres, drawn inside out: its near side
-/// is thrown away, so what is left is its *far* side, which the thing itself
-/// covers everywhere except round the outside. What shows is a rim, exactly as
-/// wide as the swelling, which is a silhouette by construction rather than by
-/// edge detection -- no second pass, no depth buffer to read, nothing that
-/// behaves differently in a browser.
-///
-/// Unlit, because a line is ink and ink is not a surface the sun falls on. It
-/// still fogs with distance like everything else, or a far-off island would be
-/// drawn in sharp outline against air it should be fading into.
-pub fn ink() -> StandardMaterial {
-    ink_in([1.0, 1.0, 1.0])
-}
-
-/// The same, in one colour, for a thing whose line is not in its vertices --
-/// a fighter's limbs, which are unit cubes scaled every frame.
-pub fn ink_in(rgb: [f32; 3]) -> StandardMaterial {
-    StandardMaterial {
-        base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
-        unlit: true,
-        cull_mode: Some(bevy::render::render_resource::Face::Front),
-        ..default()
-    }
-}
-
-/// The shell that draws the line round a box.
-///
-/// The same box, bigger by the line's width in every direction, with every
-/// vertex the line's colour. Built at the larger size rather than pushed out
-/// along the vertex normals: a box's normals point three different ways at
-/// every corner, so pushing along them tears the corners open, and a silhouette
-/// with holes at its corners is worse than none. Every shape here is convex, so
-/// growing it is exact.
-pub fn boxy_line(size: Vec3, base: [f32; 3], line: Line) -> Mesh {
-    let mut mesh = boxy(
-        size + Vec3::splat(line.swell * 2.0),
-        Vec3::ZERO,
-        base,
-        &Brush {
-            palette: FLAT,
-            edge: NONE,
-        },
-    );
-    paint_flat(&mut mesh, line.colour(base));
-    mesh
-}
-
-/// The same, for a mesh that already exists: a cylinder or a sphere grown by
-/// pushing every vertex out from the middle, which is exact for a round thing.
-pub fn round_line(mesh: &mut Mesh, line: Line, base: [f32; 3]) {
-    if let Some(bevy::render::mesh::VertexAttributeValues::Float32x3(p)) =
-        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
-    {
-        for v in p.iter_mut() {
-            let at = Vec3::from_array(*v);
-            *v = (at + at.normalize_or_zero() * line.swell).to_array();
-        }
-    }
-    paint_flat(mesh, line.colour(base));
-}
-
-/// Make every vertex one colour.
-fn paint_flat(mesh: &mut Mesh, rgb: [f32; 3]) {
-    let n = mesh.count_vertices();
-    let c = tint::linear(rgb);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[c[0], c[1], c[2], 1.0]; n]);
-}
-
-/// A palette that changes nothing, and a rule that accents nothing: for
-/// building the line's shell, whose colour is set afterwards anyway.
-const FLAT: Palette = Palette {
-    light: [1.0, 1.0, 1.0],
-    accent: [1.0, 1.0, 1.0],
-    unify: 0.0,
-};
-const NONE: Edge = Edge {
-    rim: 0.0,
-    reach: 1.0,
-    crest: 0.0,
-    climb: 1.0,
-};
 
 /// How many times a flat span that long should be cut up, so a gradient of the
 /// accent's reach has vertices to live on.

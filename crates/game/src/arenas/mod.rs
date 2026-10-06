@@ -141,6 +141,21 @@ pub fn sun(id: ArenaId) -> Vec3 {
     }
 }
 
+/// **The fill light**, which is the sky rather than the sun.
+///
+/// Nothing outdoors is lit by one light. The sun is one and the whole sky is
+/// the other, and the sky is a different colour -- so the shadowed side of a
+/// rock is not a darker version of its lit side, it is a *bluer* one. A shadow
+/// painted as plain darkness looks dead; the same shadow in the complement of
+/// the light looks like a real afternoon.
+///
+/// So this light and the ambient term both take `Palette::shade`, which is the
+/// arena's own sky overhead -- exactly what is shining into every shadow in it.
+/// Under a warm dawn the shadows come out violet; under a blue midday, deeper
+/// blue. Nothing had to be chosen.
+#[derive(Component)]
+pub struct Skylight;
+
 /// Everything drawn for the arena, so all of it can go when the arena does.
 #[derive(Component)]
 pub struct Scenery;
@@ -167,6 +182,8 @@ pub fn dress(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
+    mut fill: Query<&mut DirectionalLight, With<Skylight>>,
+    mut ambient: ResMut<AmbientLight>,
     mut camera: Query<Entity, With<crate::MainCamera>>,
     looks: Option<Res<crate::ground::Looks>>,
 ) {
@@ -191,14 +208,27 @@ pub fn dress(
     // what colour a thing is, the edge rule says where its accent goes, and
     // `shapes` puts the answer in the vertices. One white material serves all
     // of it, because every mesh carries its own colour.
+    //
+    // The crest half of the rule is stretched over the heights this arena
+    // actually contains, read off its own collision data. A fixed ramp from the
+    // ground reads beautifully in a proving ground whose walls are waist-high
+    // and paints every surface of a jump course at full strength, because a
+    // course's *lowest* island is already forty metres up.
+    let (lo, hi) = arena
+        .solids()
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(lo, hi), s| {
+            (lo.min(fx(s.min.y)), hi.max(fx(s.max.y)))
+        });
     let brush = crate::shapes::Brush {
         palette,
-        edge: look::edge::EDGE,
+        edge: if lo <= hi {
+            look::edge::EDGE.across(lo, hi)
+        } else {
+            look::edge::EDGE
+        },
     };
     let white = materials.add(crate::shapes::plain());
-    // One material for every line in the arena; the colour is in the vertices.
-    let ink = materials.add(crate::shapes::ink());
-    let line = look::edge::LINE;
 
     // The clear colour still matters: it is what shows in the sliver of a frame
     // before the dome is drawn, and anywhere the dome does not reach. Set to
@@ -217,10 +247,24 @@ pub fn dress(
     // looking rather than of the things looked at.
     if let Ok(eye) = camera.single_mut() {
         commands.entity(eye).insert(sky::fog(&sky));
+        // The line fades over the same distance the air does -- where there is
+        // a line at all.
+        if crate::platform::draws_outlines() {
+            commands
+                .entity(eye)
+                .insert(crate::outline::Outline::over(look::edge::LINE, &sky));
+        }
     }
     // The pooled hazard and raised-solid materials take this arena's colours.
     if let Some(looks) = &looks {
         crate::ground::repaint(looks, &mut materials, arena.id);
+    }
+    // Both the ambient term and the fill light take the sky's colour, so every
+    // shadow in the arena is the complement of what cast it.
+    let shade = palette.shade;
+    ambient.color = Color::srgb(shade[0], shade[1], shade[2]);
+    for mut light in &mut fill {
+        light.color = Color::srgb(shade[0], shade[1], shade[2]);
     }
     for mut light in &mut suns {
         *light = Transform::from_translation(sun_at).looking_at(Vec3::ZERO, Vec3::Y);
@@ -333,18 +377,6 @@ pub fn dress(
             Transform::from_translation(at),
             Scenery,
         ));
-        commands.spawn((
-            Mesh3d(meshes.add(crate::shapes::boxy_line(
-                size,
-                palette.of(solid.material),
-                line,
-            ))),
-            MeshMaterial3d(ink.clone()),
-            Transform::from_translation(at),
-            bevy::pbr::NotShadowCaster,
-            bevy::pbr::NotShadowReceiver,
-            Scenery,
-        ));
     }
 
     for prop in dressing.props {
@@ -352,40 +384,23 @@ pub fn dress(
         let at = Vec3::new(prop.at[0], prop.at[1] + h * 0.5, prop.at[2]);
         let rgb = palette.surface(prop.rgb);
         let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
-        let (mesh, outline) = match prop.shape {
-            Shape::Box => (
-                crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
-                crate::shapes::boxy_line(Vec3::new(w, h, d), rgb, line),
-            ),
+        let mesh = match prop.shape {
+            Shape::Box => crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
             Shape::Cylinder => {
                 let mut m = Cylinder::new(w * 0.5, h).mesh().build();
-                let mut o = Cylinder::new(w * 0.5, h).mesh().build();
                 crate::shapes::paint(&mut m, half, at, rgb, &brush);
-                crate::shapes::round_line(&mut o, line, rgb);
-                (m, o)
+                m
             }
             Shape::Sphere => {
                 let mut m = Sphere::new(w * 0.5).mesh().build();
-                let mut o = Sphere::new(w * 0.5).mesh().build();
                 crate::shapes::paint(&mut m, Vec3::splat(w * 0.5), at, rgb, &brush);
-                crate::shapes::round_line(&mut o, line, rgb);
-                (m, o)
+                m
             }
         };
-        let turned = Transform::from_translation(at)
-            .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU));
-        commands.spawn((
-            Mesh3d(meshes.add(outline)),
-            MeshMaterial3d(ink.clone()),
-            turned,
-            bevy::pbr::NotShadowCaster,
-            bevy::pbr::NotShadowReceiver,
-            Scenery,
-        ));
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(white.clone()),
-            Transform::from_xyz(prop.at[0], prop.at[1] + h * 0.5, prop.at[2])
+            Transform::from_translation(at)
                 .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
             Scenery,
         ));

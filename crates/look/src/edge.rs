@@ -37,9 +37,20 @@ pub struct Edge {
     pub reach: f32,
     /// The most accent a high upward-facing surface gets.
     pub crest: f32,
-    /// The height, in metres, over which the crest accent builds to its full
-    /// amount.
-    pub climb: f32,
+    /// The height at which the crest accent starts, in metres.
+    pub base: f32,
+    /// The height at which it reaches its full amount.
+    ///
+    /// **An arena's own range, not a fixed number**, which is the one thing
+    /// here that cannot be a constant. A proving ground's walls stand a metre
+    /// and a half; a jump course's islands hang sixty metres up and the lowest
+    /// of them is already forty. A ramp from the ground to twenty metres makes
+    /// the proving ground read beautifully and paints *every* surface on a
+    /// course at full strength, because every surface on a course is past the
+    /// top of the ramp -- which is how the Gulf came out as one flat wash of
+    /// mint. Stretched over what the arena actually contains, the same rule
+    /// says the same thing in both: higher here than that, over there.
+    pub top: f32,
 }
 
 /// The default rule.
@@ -54,13 +65,30 @@ pub struct Edge {
 /// The rest are low for a related reason: every object in frame gets them at
 /// once, and twenty things each a little bit purple is a lot of purple.
 pub const EDGE: Edge = Edge {
-    rim: 0.34,
+    rim: 0.26,
     reach: 0.45,
-    crest: 0.26,
-    climb: 20.0,
+    crest: 0.20,
+    base: 0.0,
+    top: 20.0,
 };
 
 impl Edge {
+    /// The same rule, with the crest stretched over the heights an arena
+    /// actually contains.
+    ///
+    /// A little headroom at both ends, so the lowest thing in the arena is not
+    /// flatly unaccented and the highest is not pinned at maximum -- a ramp
+    /// that saturates at either end is two flat colours with a gradient in the
+    /// middle.
+    pub fn across(self, lo: f32, hi: f32) -> Edge {
+        let span = (hi - lo).max(2.0);
+        Edge {
+            base: lo - span * 0.25,
+            top: hi + span * 0.15,
+            ..self
+        }
+    }
+
     /// How much accent at a point.
     ///
     /// `to_edge` is metres to the nearest edge of the face, `up` how far the
@@ -72,7 +100,8 @@ impl Edge {
         // be properly upward before it starts: a wall that leans back a little
         // is still a wall.
         let facing = up.max(0.0).powi(2);
-        let high = fade((height / self.climb).clamp(0.0, 1.0));
+        let span = (self.top - self.base).max(0.001);
+        let high = fade(((height - self.base) / span).clamp(0.0, 1.0));
         (rim + self.crest * facing * high).clamp(0.0, 1.0)
     }
 }
@@ -87,34 +116,59 @@ impl Edge {
 /// line changed what the eye thinks it is looking at.
 #[derive(Clone, Copy, Debug)]
 pub struct Line {
-    /// How far the line stands out past the thing, in metres.
-    pub swell: f32,
-    /// How much darker than the surface the line is, in lightness.
+    /// How much darker than the surface the line is, in Oklab lightness.
+    ///
+    /// **There is no width here, and that is the point.** A line's width
+    /// belongs to the screen, not to the world. Said in metres it comes out
+    /// thick along a face turned away from you and thin along one facing you --
+    /// one edge of one box going from a band to a hairline along its length --
+    /// which is what sent the drawing of it out of the geometry and into
+    /// `game::outline`, a pass over the finished picture where a pixel is a
+    /// pixel. This crate knows nothing about a window, so it says what colour a
+    /// line is and stops.
     pub ink: f32,
 }
 
-/// The default line. Thin -- about three pixels at the distance a fight is
-/// watched from -- because a thick one stops being a line and becomes a border,
-/// and a border makes everything look like a sticker.
-pub const LINE: Line = Line {
-    swell: 0.035,
-    ink: 0.30,
-};
+/// The default line.
+///
+/// `ink` is small for a reason that is easy to get backwards. A line is not
+/// dark, it is *saturated*: see [`Line::colour`].
+pub const LINE: Line = Line { ink: 0.24 };
 
 impl Line {
     /// What colour the line round a surface of this colour is.
     ///
-    /// **Not black.** A black line against a pastel palette is the one thing in
-    /// frame that did not come from the scheme, and it reads as a hard edge
-    /// stuck onto a soft picture. A dark version of the thing's own colour
-    /// reads as the same object seen in its own shadow, which is what an
-    /// illustrator draws, and it keeps its chroma so a green thing is outlined
-    /// in dark green.
+    /// **Saturated, barely darker.** This is the part that is easy to get
+    /// backwards, and getting it backwards is what makes an outline look cheap.
+    /// The instinct is *darker*, and a line taken a long way down in lightness
+    /// is a black line whatever hue it started from -- there is no colour left
+    /// at the bottom of the scale to say it was ever green. Against a palette
+    /// like this one that line is the only thing in frame that did not come
+    /// from the scheme, and it reads as a hard edge stuck onto a soft picture.
+    ///
+    /// What an illustrator does instead is push the *colour* up and the
+    /// lightness down only a little. A green thing gets a line of deep, vivid
+    /// green: chroma separates it from the pale surface as surely as darkness
+    /// would, and it belongs to the object rather than being drawn on top of
+    /// it.
+    ///
+    /// **Measured against the lit colour, not the albedo.** A line is ink: it
+    /// is drawn unlit, so what is written here is exactly what lands on the
+    /// screen, while everything round it is albedo the sun and the tonemap have
+    /// carried a long way up. Darkening the albedo therefore puts the line far
+    /// below its surroundings instead of a little below them -- which is a
+    /// black outline on every pale surface in the game, the one thing the
+    /// paragraph above says not to do.
     pub fn colour(&self, surface: [f32; 3]) -> [f32; 3] {
-        crate::tint::Lch::of(surface)
-            .lighter(-self.ink)
-            .vivid(0.85)
-            .rgb()
+        let seen = crate::tint::Lch::of(crate::palette::lit(surface));
+        crate::tint::Lch {
+            l: (seen.l - self.ink).max(0.30),
+            // A floor as well as a multiplier, so a near-grey thing -- stone,
+            // snow -- still gets a line with a hue in it rather than a grey one.
+            c: (seen.c * 2.6).max(0.075),
+            h: seen.h,
+        }
+        .rgb()
     }
 }
 
@@ -164,11 +218,11 @@ mod tests {
 
     #[test]
     fn height_shows_on_what_faces_the_sky() {
-        let floor = EDGE.at(8.0, 1.0, 0.0);
-        let up_high = EDGE.at(8.0, 1.0, EDGE.climb);
-        let wall_high = EDGE.at(8.0, 0.0, EDGE.climb);
+        let floor = EDGE.at(8.0, 1.0, EDGE.base);
+        let up_high = EDGE.at(8.0, 1.0, EDGE.top);
+        let wall_high = EDGE.at(8.0, 0.0, EDGE.top);
         assert!(
-            up_high > floor + 0.2,
+            up_high > floor + 0.15,
             "height is not readable off a top face"
         );
         assert_eq!(wall_high, 0.0, "a vertical face picked up the crest accent");
@@ -179,12 +233,21 @@ mod tests {
         use crate::tint::Lch;
         for surface in [[0.62, 0.80, 0.54], [0.94, 0.87, 0.68], [0.54, 0.80, 0.86]] {
             let ink = Lch::of(LINE.colour(surface));
-            let on = Lch::of(surface);
-            assert!(ink.l < on.l - 0.15, "the line is not dark enough to read");
+            // Compared with the surface as it will be *seen*, which is the
+            // whole point of the line being chosen that way.
+            let on = Lch::of(crate::palette::lit(surface));
             assert!(
-                ink.c > 0.01,
-                "the line went grey, which is a black outline \
-                                   with extra steps"
+                ink.l < on.l - 0.08,
+                "the line is not darker than its object"
+            );
+            assert!(
+                ink.l > 0.35,
+                "the line is so dark it is a black outline with extra steps"
+            );
+            assert!(
+                ink.c > on.c,
+                "the line is duller than its object, so what separates it from \
+                 the surface is darkness rather than colour"
             );
             let turn = (ink.h - on.h).abs();
             assert!(
@@ -192,6 +255,26 @@ mod tests {
                 "the line is not its object's colour"
             );
         }
+    }
+
+    #[test]
+    fn a_courses_islands_are_not_all_at_the_top_of_the_ramp() {
+        // The failure this exists for. A jump course's lowest island is already
+        // forty metres up, so a ramp measured from the ground paints every
+        // surface on it at full strength and the whole course comes out as one
+        // flat wash. Stretched over what the arena holds, the same rule still
+        // says *this is higher than that*.
+        let course = EDGE.across(42.0, 78.0);
+        let low = course.at(8.0, 1.0, 42.0);
+        let high = course.at(8.0, 1.0, 78.0);
+        assert!(
+            high > low + 0.08,
+            "the course reads flat: {low:.3} to {high:.3}"
+        );
+        assert!(
+            low < course.crest * 0.5,
+            "its lowest island is already maxed out"
+        );
     }
 
     #[test]

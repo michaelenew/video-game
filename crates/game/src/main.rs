@@ -28,6 +28,7 @@ mod ground;
 mod hub;
 mod hud;
 mod online;
+mod outline;
 mod palette;
 mod picker;
 mod platform;
@@ -156,6 +157,12 @@ fn main() {
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
+        // The line round every silhouette, as a pass over the finished picture.
+        // Only where the platform can read a depth buffer: see
+        // `platform::draws_outlines`. Registering it anyway would not fail
+        // quietly -- the pipeline is built whether or not a camera asks for it,
+        // and on WebGL2 building it is the panic.
+        .add_plugins(outline::OutlinePlugin.only_if(platform::draws_outlines()))
         .add_systems(
             Startup,
             (
@@ -1060,20 +1067,6 @@ struct BodyPart {
     joint: Joint,
 }
 
-/// This part is the **line round** a part, not the part itself.
-///
-/// A fighter is the most important silhouette on the screen, so it gets the
-/// same treatment the arena does: a copy of each limb, a few centimetres
-/// bigger, drawn inside out so only its far side survives, which leaves a rim
-/// exactly where the limb's outline is. See `shapes::ink`.
-///
-/// It rides the same component and the same posing loop as the limb it
-/// surrounds rather than getting a query of its own: the two have to agree
-/// about where a limb *is* every single frame, and two systems that have to
-/// agree are a thing that will one day not.
-#[derive(Component)]
-struct Inked;
-
 /// One piece of the Reaver's shadow -- the second skeleton.
 ///
 /// A whole body rather than a marker on the floor. The shadow copies her
@@ -1406,18 +1399,37 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn((
-        Camera3d::default(),
-        // Bevy's default is a 45-degree vertical field of view, which is a
-        // portrait-lens view of an arena you are meant to be moving around
-        // inside. The real value is a setting; this is just the starting point.
-        Projection::Perspective(PerspectiveProjection {
-            fov: settings.fov_radians(),
-            ..default()
-        }),
-        Transform::from_xyz(0.0, 6.0, 14.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
-        MainCamera,
-    ));
+    let eye = commands
+        .spawn((
+            Camera3d::default(),
+            // Bevy's default is a 45-degree vertical field of view, which is a
+            // portrait-lens view of an arena you are meant to be moving around
+            // inside. The real value is a setting; this is just the starting point.
+            Projection::Perspective(PerspectiveProjection {
+                fov: settings.fov_radians(),
+                ..default()
+            }),
+            Transform::from_xyz(0.0, 6.0, 14.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
+            MainCamera,
+            // **No multisampling.** The outline pass below wants a depth buffer it
+            // can read, and a multisampled one cannot be read on every backend. The
+            // edges are smoothed afterwards instead, which costs one pass and works
+            // the same everywhere.
+            Msaa::Off,
+            bevy::core_pipeline::fxaa::Fxaa::default(),
+        ))
+        .id();
+    if platform::draws_outlines() {
+        // The line round everything: a pass over the finished picture rather
+        // than a second copy of every object (`outline`), and the depth-only
+        // pass it reads -- the cheapest thing a frame can be asked to draw, and
+        // the only way to get a depth buffer that can be sampled rather than
+        // only written to. WebGL2 has neither, which is why this is a question.
+        commands.entity(eye).insert((
+            outline::Outline::from(look::edge::LINE),
+            bevy::core_pipeline::prepass::DepthPrepass,
+        ));
+    }
 
     commands.spawn((
         DirectionalLight {
@@ -1433,17 +1445,27 @@ fn setup(
     // the floor at the inside faces of the walls, which the key light never
     // reaches. Without a fill they read as flat black and the fight happens in
     // front of a void.
+    //
+    // It carries the sky's colour (`arenas::Skylight`), and it is **directional
+    // on purpose**: that is what makes a shadow the complement of its light
+    // rather than making the whole arena the complement of its light. Most of
+    // the fill used to be the ambient term instead, which lands equally on
+    // every face including the ones the sun is already on, and a blue wash over
+    // a green field cancels most of the green -- the Gulf's islands came out as
+    // sage. The sky is dimmer than the sun and reaches shadows more than it
+    // reaches what is already lit, and both of those have to be true here too.
     commands.spawn((
         DirectionalLight {
-            illuminance: 3_200.0,
+            illuminance: 2_900.0,
             shadows_enabled: false,
             ..default()
         },
         Transform::from_xyz(-8.0, 6.0, -7.0).looking_at(Vec3::ZERO, Vec3::Y),
+        arenas::Skylight,
     ));
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.65, 0.72, 0.85),
-        brightness: 520.0,
+        brightness: 130.0,
         ..default()
     });
 
@@ -1458,11 +1480,6 @@ fn setup(
             perceptual_roughness: 0.65,
             ..default()
         });
-        // The line round her: her own colour, well darkened, drawn inside out.
-        let srgb = colour.to_srgba();
-        let ink = materials.add(crate::shapes::ink_in(
-            look::edge::LINE.colour([srgb.red, srgb.green, srgb.blue]),
-        ));
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
@@ -1476,15 +1493,6 @@ fn setup(
                         MeshMaterial3d(skin.clone()),
                         Transform::default(),
                         BodyPart { owner, joint },
-                    ));
-                    root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                        MeshMaterial3d(ink.clone()),
-                        Transform::default(),
-                        BodyPart { owner, joint },
-                        Inked,
-                        bevy::pbr::NotShadowCaster,
-                        bevy::pbr::NotShadowReceiver,
                     ));
                 }
             });
@@ -1520,32 +1528,17 @@ fn setup(
         // of the character -- that is the whole mechanic. See bulwark.md.
         const SHIELD: Vec3 = Vec3::new(0.75, 0.9, 0.14);
         let brass = [0.92, 0.76, 0.38];
-        commands
-            .spawn((
-                Mesh3d(meshes.add(Cuboid::from_size(SHIELD))),
-                MeshMaterial3d(materials.add(StandardMaterial {
-                    base_color: Color::srgb(brass[0], brass[1], brass[2]),
-                    perceptual_roughness: 0.5,
-                    ..default()
-                })),
-                Transform::default(),
-                Visibility::Hidden,
-                ShieldMesh(owner),
-            ))
-            // Its line, as a child: the shield's mesh is a fixed size, so the
-            // scale that stands the same few centimetres off it is fixed too
-            // and nothing has to recompute it per frame.
-            .with_child((
-                Mesh3d(meshes.add(Cuboid::from_size(SHIELD))),
-                MeshMaterial3d(
-                    materials.add(crate::shapes::ink_in(look::edge::LINE.colour(brass))),
-                ),
-                Transform::from_scale(
-                    (SHIELD + Vec3::splat(look::edge::LINE.swell * 2.0)) / SHIELD,
-                ),
-                bevy::pbr::NotShadowCaster,
-                bevy::pbr::NotShadowReceiver,
-            ));
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::from_size(SHIELD))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb(brass[0], brass[1], brass[2]),
+                perceptual_roughness: 0.5,
+                ..default()
+            })),
+            Transform::default(),
+            Visibility::Hidden,
+            ShieldMesh(owner),
+        ));
     }
 
     // A fixed pool, one pair of cylinders per effect slot, because the
@@ -3632,12 +3625,8 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
 /// fighter's root, a fighter's part, a shadow's root and a shadow's part are
 /// four different entities and never the same one. Written as an alias because
 /// saying it four times in a signature is the same sentence four times.
-type Posed<'w, 's, Tag, A, B, C> = Query<
-    'w,
-    's,
-    (&'static Tag, Option<&'static Inked>, &'static mut Transform),
-    (Without<A>, Without<B>, Without<C>),
->;
+type Posed<'w, 's, Tag, A, B, C> =
+    Query<'w, 's, (&'static Tag, &'static mut Transform), (Without<A>, Without<B>, Without<C>)>;
 
 // A Bevy system's parameter list *is* its dependency declaration, and this one
 // now poses two bodies per fighter. Splitting it to get under a count would
@@ -3660,7 +3649,7 @@ fn apply_poses(
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
-    for (fighter, _, mut tf) in roots.iter_mut() {
+    for (fighter, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
         tf.translation = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
         tf.rotation = body_turn(p.facing);
@@ -3718,21 +3707,13 @@ fn apply_poses(
         }
     }
 
-    for (bp, inked, mut tf) in parts.iter_mut() {
+    for (bp, mut tf) in parts.iter_mut() {
         let skeleton = &skeletons[bp.owner];
         let (centre, rot) = skins[bp.owner].box_of(skeleton, bp.joint);
         let size = view::pose::part_size(skeleton, bp.joint);
         tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
         tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
-        // The line stands the same few centimetres off every limb, in metres,
-        // rather than by a fraction of the limb -- a fraction would draw a
-        // forearm in hairline and a torso in marker pen.
-        let swell = if inked.is_some() {
-            look::edge::LINE.swell * 2.0
-        } else {
-            0.0
-        };
-        tf.scale = Vec3::new(size[0] + swell, size[1] + swell, size[2] + swell);
+        tf.scale = Vec3::new(size[0], size[1], size[2]);
     }
 
     // The second body, on the same skeleton and through the same solver. It is
@@ -3754,14 +3735,14 @@ fn apply_poses(
             ),
         ));
     }
-    for (root, _, mut tf) in shadow_roots.iter_mut() {
+    for (root, mut tf) in shadow_roots.iter_mut() {
         let Some(ghost) = frame.shadows[root.0] else {
             continue;
         };
         tf.translation = Vec3::new(ghost.pos[0], ghost.pos[1], ghost.pos[2]);
         tf.rotation = Quat::from_rotation_y(ghost.facing[0].atan2(ghost.facing[2]));
     }
-    for (part, _, mut tf) in shadow_parts.iter_mut() {
+    for (part, mut tf) in shadow_parts.iter_mut() {
         let Some(skin) = shadow_skins[part.owner].as_ref() else {
             continue;
         };

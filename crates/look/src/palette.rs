@@ -48,21 +48,65 @@ use sim::arena::{ArenaId, Material};
 pub struct Palette {
     /// The colour of the light here. Everything is pulled partway toward it.
     pub light: [f32; 3],
-    /// The bright, deliberately wrong hue laid along edges and crests.
+    /// The bright, deliberately wrong hue. Saturated, for small marks that are
+    /// meant to be noticed.
     pub accent: [f32; 3],
+    /// The same hue as a **pastel**, and the one that actually gets used on
+    /// most surfaces.
+    ///
+    /// The structure this whole module is after: a rich, fairly flat base, and
+    /// then pastels and tints laid over it to bring it to life. Those are two
+    /// different jobs and they want two different colours. A saturated accent
+    /// run along every edge in the arena is not a highlight, it is a second
+    /// base colour fighting the first; a pale one reads as light falling on the
+    /// thing, which is what a highlight is.
+    pub sheen: [f32; 3],
+    /// **What fills a shadow**, which is not black.
+    ///
+    /// Nothing in daylight is ever lit by one light. The sun is one; the whole
+    /// sky is the other, and the sky is a different colour, so the shadowed
+    /// side of a rock is not a darker version of its lit side -- it is a
+    /// *bluer* one. That is why a shadow painted as plain darkness looks dead
+    /// and a shadow painted in the complement looks like a photograph of a real
+    /// afternoon.
+    ///
+    /// So this is the sky's own colour overhead, which is exactly what is
+    /// shining into every shadow in the arena, and the game hands it straight
+    /// to the ambient light. Under a warm dawn the shadows come out violet;
+    /// under a blue midday, a deeper blue. Nothing had to be chosen.
+    pub shade: [f32; 3],
     /// How far a surface is turned toward the light's hue, 0 to 1. Zero is ten
     /// materials that have never met; one is a monochrome.
     pub unify: f32,
+    /// The most chroma a surface in *this* arena may have.
+    ///
+    /// Not the constant: sRGB cannot hold the same chroma at every hue, so an
+    /// accent asked for a strong violet comes back strong and one asked for a
+    /// strong teal comes back weaker, and in that arena a rich floor would
+    /// out-shout the one colour that is supposed to be the loudest thing in
+    /// frame. Keeping the ceiling a fixed way under whatever the accent
+    /// actually got makes the relationship true by construction rather than by
+    /// being lucky with the hue.
+    pub ceiling: f32,
 }
 
 /// How far toward the light, when nothing says otherwise.
 ///
-/// A quarter of the way is enough to make a frame hang together and not enough
-/// to stop grass being green -- and grass has to stay green, because a player
-/// reads the floor at a glance to know what they are standing on.
-pub const UNIFY: f32 = 0.26;
+/// Enough to make a frame hang together and not enough to stop grass being
+/// green -- and grass has to stay green, because a player reads the floor at a
+/// glance to know what they are standing on.
+///
+/// It came down from a quarter once the shadows were a colour. A hue rotation
+/// and a complementary fill light do the same job from opposite ends, and
+/// paying for both leaves nothing: the Gulf's islands went through a rotation
+/// toward a peach dawn and then under a violet sky, and arrived as sage.
+pub const UNIFY: f32 = 0.15;
 
 /// The lightness every surface is mapped into.
+///
+/// Mid, not pale. A base layer that is already nearly white has nowhere to put
+/// a highlight: the pastels laid on it do not read, and the shadow side has
+/// only grey to fall into. Rich down here, light up there.
 ///
 /// Two tweaks folded back into this one constant, and the second is the more
 /// useful. Wide, not narrow: the first version squeezed all ten materials into
@@ -77,15 +121,21 @@ pub const UNIFY: f32 = 0.26;
 /// palette half the materials sat below 0.45, which is where a colour stops
 /// being a colour and starts being a dark shape -- and a picture made of dark
 /// shapes under a bright sky reads as a silhouette test, not as a place.
-pub const BAND: (f32, f32) = (0.42, 0.74);
+pub const BAND: (f32, f32) = (0.38, 0.70);
 
 /// How much colour a surface may have: a floor and a ceiling.
+///
+/// The ceiling came up a long way once there were proper shadows to put under
+/// these. A desaturated base plus a pastel on top is two weak colours; a rich
+/// base with a pastel on top is a picture. The ceiling is still under the
+/// accent's own chroma, because the one colour that is meant to be noticed has
+/// to be the most saturated thing in the frame.
 ///
 /// Pastel is high lightness **with colour still in it**, so there is a floor as
 /// well as a ceiling. The ceiling keeps a bright surface from competing with
 /// the accent, which has to be the loudest thing in the frame or it is not an
 /// accent.
-pub const CHROMA: (f32, f32) = (0.030, 0.120);
+pub const CHROMA: (f32, f32) = (0.060, 0.225);
 
 impl Palette {
     /// The palette under a sky.
@@ -106,12 +156,41 @@ impl Palette {
             c: light.c.max(0.02),
             ..light
         };
+        // **As loud as that hue gets**, at whatever lightness holds the most
+        // colour: see `tint::loudest`. A fixed lightness gives a vivid violet
+        // and a muddy teal, and since the surface ceiling is kept under the
+        // accent, a muddy teal takes the whole arena down with it -- which is
+        // how the Gulf's emerald islands arrived as sage.
+        let accent = tint::loudest(light.h + 0.42).rgb();
         Palette {
             light: light.rgb(),
             // Bright and strongly coloured, and at a lightness of its own:
             // an accent that matches the surfaces it sits on disappears.
-            accent: Lch::new(0.78, 0.155, light.h + 0.42).rgb(),
+            accent,
+            // Lighter and much softer: a highlight, not a second base colour.
+            // Taken off what the accent *became* rather than off a constant,
+            // for the same reason the ceiling is: a hue sRGB cannot hold
+            // strongly would otherwise get a pastel as loud as its own accent.
+            sheen: Lch {
+                l: 0.88,
+                c: Lch::of(accent).c * 0.38,
+                h: Lch::of(accent).h,
+            }
+            .rgb(),
+            shade: {
+                // The sky overhead, made usable as a light: its hue and a good
+                // deal of its colour, at a lightness an ambient term wants.
+                // **Light, despite being the shadow colour.** This is an
+                // irradiance, not a shadow: the engine multiplies it by the
+                // ambient brightness, so its lightness is how much sky gets in
+                // rather than how dark the shadow ends up. Taken literally from
+                // the zenith it came out near black, and every shaded face in
+                // the arena went to navy -- rich, and unreadable.
+                let z = Lch::of(sky.resolved().zenith);
+                Lch::new(0.66, z.c.clamp(0.075, 0.115), z.h).rgb()
+            },
             unify: UNIFY,
+            ceiling: CHROMA.1.min(Lch::of(accent).c * 0.82),
         }
     }
 
@@ -132,7 +211,7 @@ impl Palette {
         let own = Lch::of(rgb);
         Lch {
             l: BAND.0 + (BAND.1 - BAND.0) * share(own.l),
-            c: own.c.clamp(CHROMA.0, CHROMA.1),
+            c: CHROMA.0 + (self.ceiling - CHROMA.0) * vividness(own.c),
             h: own.h,
         }
         .toward_hue(Lch::of(self.light).h, self.unify)
@@ -144,14 +223,33 @@ impl Palette {
         self.surface(local(material))
     }
 
-    /// A colour with the accent laid over it, `amount` of the way.
+    /// A colour with the pastel laid over it, `amount` of the way: what an edge
+    /// or a crest gets.
     ///
     /// Blended in Oklab rather than added, unlike the sky's glow: this is paint
     /// on a surface, not light arriving at the eye, and paint replaces what was
     /// under it.
     pub fn accented(&self, base: [f32; 3], amount: f32) -> [f32; 3] {
-        tint::mix(base, self.accent, amount.clamp(0.0, 1.0))
+        tint::mix(base, self.sheen, amount.clamp(0.0, 1.0))
     }
+}
+
+/// Where a colour's chroma sits in the range the materials span, 0 to 1.
+///
+/// The same trick as [`share`], and for a better reason. Clamping chroma into
+/// the range leaves everything that was already inside it exactly where it was,
+/// so a palette written by hand is only as rich as whoever wrote the triples
+/// happened to make it -- which turned out to be a floor at a third of the
+/// chroma it was allowed, and a picture that looked washed out while the
+/// numbers all said it should not be.
+///
+/// Stretching instead puts stone near the bottom of the arena's range and grass
+/// near the top, whatever was typed. Richness becomes a property of the
+/// derivation rather than of somebody's eye for an sRGB triple.
+fn vividness(c: f32) -> f32 {
+    const DULLEST: f32 = 0.012;
+    const RICHEST: f32 = 0.100;
+    ((c - DULLEST) / (RICHEST - DULLEST)).clamp(0.0, 1.0)
 }
 
 /// Where a lightness sits in the range the materials span, 0 to 1.
@@ -199,22 +297,24 @@ pub fn lit(albedo: [f32; 3]) -> [f32; 3] {
 
 /// A material's own colour, before any arena has had an opinion about it.
 ///
-/// Written bright and pastel rather than accurate, because accurate is where
-/// the uncanny valley is. These say *grass*, *sand*, *snow* at a glance -- which
-/// is the only thing they have to do, since the floor is read at a glance and
-/// never looked at.
+/// Written **rich** rather than accurate, because accurate is where the uncanny
+/// valley is and pale is where nothing has anywhere to go. These say *grass*,
+/// *sand*, *snow* at a glance -- the only thing they have to do, since a floor
+/// is read at a glance and never looked at -- and they say it in a colour
+/// strong enough to carry a pastel highlight and a coloured shadow on top of
+/// it. Grass here is an emerald, not a sage.
 pub fn local(material: Material) -> [f32; 3] {
     match material {
-        Material::Ground => [0.74, 0.70, 0.66],
-        Material::Stone => [0.76, 0.78, 0.84],
-        Material::Grass => [0.64, 0.82, 0.54],
-        Material::Rock => [0.78, 0.74, 0.68],
-        Material::Sand => [0.94, 0.87, 0.68],
-        Material::Snow => [0.94, 0.96, 0.99],
-        Material::Ash => [0.72, 0.71, 0.75],
-        Material::Peat => [0.62, 0.50, 0.43],
-        Material::Water => [0.54, 0.80, 0.86],
-        Material::Wood => [0.76, 0.60, 0.43],
+        Material::Ground => [0.58, 0.48, 0.32],
+        Material::Stone => [0.58, 0.63, 0.76],
+        Material::Grass => [0.24, 0.68, 0.46],
+        Material::Rock => [0.62, 0.56, 0.50],
+        Material::Sand => [0.90, 0.76, 0.46],
+        Material::Snow => [0.88, 0.93, 0.99],
+        Material::Ash => [0.48, 0.48, 0.58],
+        Material::Peat => [0.42, 0.30, 0.26],
+        Material::Water => [0.14, 0.62, 0.72],
+        Material::Wood => [0.68, 0.38, 0.20],
     }
 }
 
@@ -253,7 +353,7 @@ mod tests {
                 let (name, m) = (arena.name, format!("{m:?}"));
                 assert!(c.l >= BAND.0 - 0.01, "{name}/{m}: dark ({:.2})", c.l);
                 assert!(c.l <= BAND.1 + 0.01, "{name}/{m}: blown out ({:.2})", c.l);
-                assert!(c.c <= CHROMA.1 + 0.005, "{name}/{m}: neon ({:.3})", c.c);
+                assert!(c.c <= p.ceiling + 0.005, "{name}/{m}: neon ({:.3})", c.c);
             }
         }
     }
@@ -296,10 +396,67 @@ mod tests {
                 "{}: the accent is {turn:.2} of a turn from the light",
                 arena.name
             );
+            // Against the surfaces this arena actually has, not against the
+            // ceiling: sRGB cannot hold the same chroma at every hue, so an
+            // accent asked for 0.19 comes back as whatever its hue allows, and
+            // what matters is only that it still wins.
+            let loudest = EVERY
+                .iter()
+                .map(|m| Lch::of(p.of(*m)).c)
+                .fold(0.0f32, f32::max);
             assert!(
-                a.c > CHROMA.1,
-                "{}: the accent is duller than a surface",
-                arena.name
+                a.c > loudest,
+                "{}: the accent ({:.3}) is duller than a surface ({loudest:.3})",
+                arena.name,
+                a.c
+            );
+        }
+    }
+
+    #[test]
+    fn the_pastel_is_pale_and_the_accent_is_not() {
+        // The two jobs, and the reason there are two colours. A highlight is
+        // light and soft; a mark meant to be noticed is neither. Run the
+        // saturated one along every edge in the arena and it stops being an
+        // accent and becomes a second base colour fighting the first.
+        for arena in sim::arena::all() {
+            let p = of(arena.id);
+            let (sheen, accent) = (Lch::of(p.sheen), Lch::of(p.accent));
+            let name = arena.name;
+            assert!(
+                sheen.l > BAND.1,
+                "{name}: the pastel is not lighter than a surface"
+            );
+            assert!(sheen.c < accent.c * 0.6, "{name}: the pastel is not soft");
+            let turn = (sheen.h - accent.h).abs();
+            assert!(
+                turn.min(1.0 - turn) < 0.03,
+                "{name}: they are not the same hue"
+            );
+        }
+    }
+
+    #[test]
+    fn a_shadow_is_filled_with_sky_and_not_with_darkness() {
+        // What makes a shadow look like an afternoon rather than like a hole.
+        // It has to be a *colour*, and it has to be a different one from the
+        // light, or every shadow in the game is just the base colour turned
+        // down.
+        for arena in sim::arena::all() {
+            // The cave has no sky to fill anything, and the lab's sky is flat
+            // on purpose -- it is where jumps are measured, and a coloured
+            // shadow there is a colour somebody ends up measuring.
+            if arena.id == ArenaId::BROODMOTHER || arena.id == ArenaId::LAB {
+                continue;
+            }
+            let p = of(arena.id);
+            let (shade, light) = (Lch::of(p.shade), Lch::of(p.light));
+            let name = arena.name;
+            assert!(shade.c > 0.05, "{name}: the shadow fill went grey");
+            let turn = (shade.h - light.h).abs();
+            assert!(
+                turn.min(1.0 - turn) > 0.02,
+                "{name}: the shadow is the same colour as the light"
             );
         }
     }
