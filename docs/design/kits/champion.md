@@ -173,6 +173,25 @@ two and a half metres of shove, the furthest of any link in the chain.
 
 ## The takeoffs — a weapon on the way off the floor
 
+**When a click is a takeoff — 2026-10-05, from play.** It was "the jump button down, and
+eight frames after", and a hair either side of that edge was three different moves: a
+rising attack from a metre up that sailed over heads, the one from the floor that was
+meant, or a grounded swing followed by a buffered rising attack nobody asked for. In the air
+the aerial came out as soon as the eight frames ran out, so the hammer's spike could come
+out before the apex. Now:
+
+- **On the floor, and in the first four frames of a jump** (`Rising attack, still from the
+  floor`), space and a weapon in either order is the rising attack **from the floor**. A
+  weapon clicked up to six frames before the jump (`Jump after a click still rises`) turns
+  into it, its lockout handed back; one clicked just after puts him back on the floor he
+  left, under half a metre, hidden by the plant the move starts with.
+- **In the air, holding space is the rising attack**, once per trip off the ground. A
+  rising attack thrown from the floor is that trip's one. Space up, it is the aerial, rising
+  or falling alike.
+
+A crouch before every jump was tried first and reverted the same day: three frames of delay
+on every Champion jump changed how all of his jumping felt, which was not what was asked.
+
 Press a weapon on the same press as jump and you get that weapon's **takeoff** instead of
 its grounded or airborne move. Three moves, one per weapon, and they are three different
 reasons to leave the ground:

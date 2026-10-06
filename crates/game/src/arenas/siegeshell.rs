@@ -35,7 +35,7 @@ const fn scree(x: f32, z: f32, yaw: f32) -> Prop {
 
 pub static DRESSING: Dressing = Dressing {
     // A heavy sky, the light low and grey-gold.
-    sky: [0.62, 0.58, 0.50],
+    drop: false,
     props: &[
         // The town over the wall: roofs, and a tower at each end of it.
         roof(147.5, -18.0, 8.0),

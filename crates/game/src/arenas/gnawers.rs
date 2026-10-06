@@ -9,7 +9,7 @@ const BONE: [f32; 3] = [0.84, 0.80, 0.70];
 const TUSSOCK: [f32; 3] = [0.30, 0.38, 0.18];
 
 pub static DRESSING: Dressing = Dressing {
-    sky: [0.42, 0.52, 0.60],
+    drop: false,
     props: &[
         // The den: a black throat at the back of the mouth.
         Prop {

@@ -303,18 +303,33 @@ pub fn setup_picker(mut commands: Commands) {
     ));
 }
 
+/// What the picker's list last said: the hunt, its temper, the trophies, and
+/// a jump course's run packed into one number.
+type Shown = (Option<sim::species::SpeciesId>, u8, u32, u64);
+
 /// The list, rewritten only when what it says has changed: the hunt, its
 /// temper, or the record.
 pub fn update_picker(
     sim: Res<crate::Sim>,
     trophies: Res<crate::trophies::Trophies>,
     mut text: Query<&mut Text, With<PickerText>>,
-    mut shown: Local<Option<(Option<sim::species::SpeciesId>, u8, u32)>>,
+    mut shown: Local<Option<Shown>>,
 ) {
+    // In a jump course the panel is the run: it changes with the arena, the
+    // checkpoint, the falls and the clock's tenths.
+    let run = sim.cur.course[0];
+    let course = sim::course::of(sim.cur.arena).map_or(0, |_| {
+        let tenths = (run.clock(sim.cur.frame) * 10 / sim::TICK_HZ) as u64;
+        1 + (sim.cur.arena.0 as u64)
+            + (run.reached as u64) * 0x100
+            + (run.falls as u64) * 0x1_0000
+            + tenths * 0x1_0000_0000
+    });
     let now = (
         sim.cur.hunted().into_iter().flatten().next(),
         sim.cur.temper(),
         trophies.count(),
+        course,
     );
     if shown.as_ref() == Some(&now) {
         return;

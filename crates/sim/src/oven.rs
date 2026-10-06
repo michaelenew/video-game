@@ -626,6 +626,23 @@ scalars! {
     Temper3Lead,      "Tempers",  "Temper III, lead (% of its own)",        Int,     100,      300;
     Temper3Decisive,  "Tempers",  "Temper III, decisiveness (+ points)",    Int,     0,        100;
     Temper3Despair,   "Tempers",  "Temper III, thresholds fall (% of its own)", Percent, 0,        100;
+    // How early, before the dash arrives, a jump press is kept for the dash
+    // jump rather than dropped on the floor of a dodge that is not actionable.
+    DashJumpBuffer,   "Reaver",    "Dash jump, press kept before arrival",  Frames, 0,        20;
+    // How far back toward her a send that points at nowhere to stand looks
+    // for somewhere that is, before it refuses (`aim::footing_toward`).
+    ShadowForgive,    "Reaver",    "Send shadow, forgiveness back (m)",     Fixed,  0,        fx(10,1);
+    // How long the crosshair shows a refused send.
+    ShadowRefusedShow, "Reaver",   "Send shadow, refusal shown (frames)",   Frames, 1,        60;
+    // How fast the eye's ceiling rises per metre outside a hanging solid, so
+    // passing under an island's edge glides the eye instead of jumping it.
+    EyeCeilingSlope,  "Aim",       "Eye, ceiling slope away from an edge",  Fixed,  0,        fx(4,1);
+    // How many frames into a jump a rising attack is still thrown from the
+    // floor he just left, rather than from where the jump has got him to.
+    FloorGrace,       "Champion",  "Rising attack, still from the floor",   Frames, 0,        10;
+    // How many frames into a grounded swing's startup a jump still turns it
+    // into the rising attack: the click-first half of the same forgiveness.
+    TakeoffLate,      "Champion",  "Jump after a click still rises",        Frames, 0,        12;
 }
 
 // ---------------------------------------------------------------------------

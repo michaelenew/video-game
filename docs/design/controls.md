@@ -844,6 +844,15 @@ wide on purpose — *jump then weapon* is the order that works, and both at once
 frame — because "attack as you jump" is one intention and two buttons and nobody presses two
 buttons on the same tick. A takeoff spends the window, so one jump buys one of them.
 
+**Since 2026-10-05 the rule is two sentences** (from play: a hair either side of the old
+eight-frame window was three different moves). *On the floor, or in the first four frames of
+a jump, space and a weapon in either order is the rising attack from the floor*: a weapon
+clicked up to six frames before the jump turns into it, and one clicked just after the jump
+puts him back on the floor he left to throw it. *In the air, holding space is the rising
+attack, once per trip off the ground*, and a rising attack from the floor is that trip's
+one; otherwise it is the aerial, rising or falling alike. See
+[kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor).
+
 **This is the first real use of `space` as a modifier anywhere in the grammar**, and it is
 worth flagging as a precedent rather than as a Champion detail: if it reads well here it is
 a whole row of options every class could have, and if it reads badly it should not spread.
@@ -903,7 +912,7 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | `Q` | **Guillotine lotus** — twelve blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
 | `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
-| `space`, in the frames after a dash lands | **The dash jump.** Takes the speed she arrived with up with her, and cuts the dodge's tail short. A press, and only after a dash |
+| `space`, in the dash's last frames | **The dash jump.** Pressed before she lands on the shadow, it launches her the frame she arrives with the dash's whole speed. A press after landing is an ordinary jump: she is free the moment she lands (2026-10-04) |
 | `shift` + forward, anywhere else | The ordinary dodge |
 | — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 

@@ -658,47 +658,102 @@ fn a_planted_shield_across_the_line_leaves_her_with_an_ordinary_dodge() {
 }
 
 #[test]
-fn a_jump_inside_the_carry_leaves_with_a_share_of_the_dash() {
-    // The dash stops on the shadow; a jump pressed in the short window after
-    // it takes `dash_jump_keep` of the crossing's speed up with her. More than
-    // a standing jump, far less than the dash -- which used to clear the arena.
+fn a_jump_pressed_after_landing_is_an_ordinary_jump() {
+    // The dash jump is pressed during the dash, before the halt. Pressed on
+    // the shadow after she has stopped, it is an ordinary jump: the stall the
+    // old carry window made is what play objected to.
     let mut w = in_the_open();
     let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
     put_the_shadow_at(&mut w, out);
     let pitch = crosshair_onto(&w, out);
-
+    let mut landed = false;
     let mut took_off = None;
     for _ in 0..(t::dodge_frames() as u32 * 2) {
-        // Shift comes off the moment the window opens, so what is measured is
-        // the jump rather than a second dodge thrown on the next frame.
-        let carrying = shadow(&w).carry > 0;
-        let bits = if carrying {
-            W | Input::SPACE
-        } else {
+        let bits = if landed {
+            Input::SPACE
+        } else if shadow(&w).dash > 0 || !landed {
             SHIFT | W
+        } else {
+            0
         };
         run(&mut w, 1, bits, pitch);
-        if carrying && took_off.is_none() && !w.players[0].grounded {
+        if !landed && shadow(&w).carry > 0 {
+            landed = true;
+        } else if landed && took_off.is_none() && !w.players[0].grounded {
             took_off = Some(w.players[0].vel);
         }
     }
-    let leaving = took_off.expect("the jump inside the carry never left the ground");
+    let leaving = took_off.expect("a jump on the shadow after landing never left the ground");
     let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
-    let want = t::shadow_dash_speed().mul(t::dash_jump_keep());
     assert!(
-        leaving.y.raw() > 0,
-        "she was airborne without going up, so that was the dash and not a jump"
-    );
-    assert!(
-        along.raw() > t::move_speed().raw(),
-        "she left the ground at {:.1} m/s, no faster than a standing jump",
+        along.raw() <= t::move_speed().raw(),
+        "she left at {:.1} m/s: a press after the halt still took the dash's speed",
         along.to_f32_for_render()
     );
+}
+
+#[test]
+fn she_is_free_the_frame_she_lands() {
+    // "Regain movement control instantly after a shadow dash." The dodge's
+    // tail is cut on arrival.
+    let mut w = in_the_open();
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    for _ in 0..(t::dodge_frames() as u32 * 2) {
+        run(&mut w, 1, SHIFT | W, pitch);
+        if shadow(&w).carry > 0 {
+            assert!(
+                w.players[0].action.actionable(),
+                "she landed on the shadow still in {:?}",
+                w.players[0].action
+            );
+            return;
+        }
+    }
+    panic!("the dash never arrived");
+}
+
+#[test]
+fn a_jump_pressed_just_before_arrival_is_kept_for_it() {
+    // The dash is a dodge, and a dodge is not actionable, so a press a frame
+    // before she arrived used to be lost. Pressed only in the dash's last
+    // frames and never in the carry, it should still be the dash jump.
+    let mut w = in_the_open();
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    let close = t::shadow_dash_speed().mul(sim::DT).mul(Fx::from_int(2));
+
+    let mut pressed = false;
+    let mut took_off = None;
+    for _ in 0..(t::dodge_frames() as u32 * 2) {
+        let me = &w.players[0];
+        let dashing = shadow(&w).dash > 0;
+        let near = shadow(&w).pos.sub(me.pos).len().raw() <= close.raw();
+        let bits = if dashing && near && !pressed {
+            pressed = true;
+            SHIFT | W | Input::SPACE
+        } else if took_off.is_none() && !pressed {
+            SHIFT | W
+        } else {
+            W
+        };
+        run(&mut w, 1, bits, pitch);
+        if took_off.is_none() && !w.players[0].grounded && pressed {
+            took_off = Some(w.players[0].vel);
+        }
+    }
     assert!(
-        (along.raw() - want.raw()).abs() < Fx::ratio(1, 2).raw(),
-        "she left the ground at {:.1} m/s, not the {:.1} the dash jump keeps",
-        along.to_f32_for_render(),
-        want.to_f32_for_render()
+        pressed,
+        "the dash never came within two frames of the shadow"
+    );
+    let leaving = took_off.expect("the press before arrival was dropped");
+    let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
+    assert!(
+        along.raw() > t::move_speed().mul(Fx::from_int(3)).raw(),
+        "she left at {:.1} m/s: the banked press jumped without the dash's speed",
+        along.to_f32_for_render()
     );
 }
 
@@ -725,9 +780,11 @@ fn the_dash_stops_on_the_shadow() {
 }
 
 #[test]
-fn the_dash_jump_does_not_clear_the_arena() {
-    // Across the whole leash and straight into a held jump: where she lands
-    // should be well inside the arena's width from where she took off.
+fn the_dash_jump_launches_her() {
+    // Six metres of dash, the jump pressed as she closes on the shadow and
+    // held: it is her launch, and it should carry her well past half the
+    // arena's width. A fifth of the dash, from 2026-09-23 to 2026-10-04,
+    // made it an ordinary jump.
     let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
     w.players[0].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
     w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
@@ -738,16 +795,19 @@ fn the_dash_jump_does_not_clear_the_arena() {
         .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
     put_the_shadow_at(&mut w, out);
     let pitch = crosshair_onto(&w, out);
+    let close = t::shadow_dash_speed().mul(sim::DT).mul(Fx::from_int(2));
     let mut took_off_at = None;
+    let mut pressing = false;
     for _ in 0..200 {
-        let carrying = shadow(&w).carry > 0;
-        let bits = if carrying || took_off_at.is_some() {
+        let me = &w.players[0];
+        pressing |= shadow(&w).dash > 0 && shadow(&w).pos.sub(me.pos).len().raw() <= close.raw();
+        let bits = if pressing {
             W | Input::SPACE
         } else {
             SHIFT | W
         };
         run(&mut w, 1, bits, pitch);
-        if carrying && took_off_at.is_none() && !w.players[0].grounded {
+        if pressing && took_off_at.is_none() && !w.players[0].grounded {
             took_off_at = Some(w.players[0].pos);
         }
         if took_off_at.is_some() && w.players[0].grounded {
@@ -758,8 +818,8 @@ fn the_dash_jump_does_not_clear_the_arena() {
     let flew = w.players[0].pos.sub(from).flat_len();
     let arena = sim::arena::proving_ground::half().add(sim::arena::proving_ground::half());
     assert!(
-        flew.raw() < arena.mul(Fx::ratio(1, 2)).raw(),
-        "a dash jump carried her {:.1} m, over half the arena's {:.1}",
+        flew.raw() > arena.mul(Fx::ratio(1, 2)).raw(),
+        "a dash jump carried her {:.1} m, under half the arena's {:.1}",
         flew.to_f32_for_render(),
         arena.to_f32_for_render()
     );
@@ -2027,4 +2087,97 @@ fn a_cash_in_lands_on_the_creature_too() {
         "a full tally cashed on the creature for {cashed} against a plain {plain}"
     );
     assert_eq!(left, 0, "the cash-in did not spend the creature's marks");
+}
+
+// ---------------------------------------------------------------------------
+// A send aimed at nowhere to stand -- 2026-10-04, from play on the courses
+// ---------------------------------------------------------------------------
+
+/// The Reach: a Reaver standing on its hub at `x` metres, `z = 0`, facing
+/// down +X toward the hub's front edge at `x = 2`, with the drop beyond it.
+/// The other fighter is parked at the hub's far side.
+fn on_the_reach(x: i32) -> World {
+    let reach = sim::course::all()
+        .find(|c| c.arena().slug() == "reach")
+        .expect("no course called reach");
+    let mut w = World::versus_in([Class::ShadowReaver; sim::state::MAX_PLAYERS], reach.arena);
+    let top = reach.top(0).max.y;
+    w.players[0].pos = V3::new(Fx::from_int(x), top, Fx::ZERO);
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-16), top, Fx::from_int(25));
+    run(&mut w, 20, 0, 0);
+    w
+}
+
+#[test]
+fn a_send_just_past_the_edge_lands_on_the_edge() {
+    let w = on_the_reach(-8);
+    let top = w.players[0].pos.y;
+    let off = V3::new(Fx::ratio(7, 2), Fx::ZERO, Fx::ZERO);
+    let got = with_scene(&w, |scene| {
+        sim::aim::footing_toward(w.players[0].pos, off, scene)
+    })
+    .expect("a metre and a half past the edge, the forgiveness found nothing");
+    assert_eq!(got.y, top, "it settled somewhere other than the hub's top");
+    assert!(
+        got.x.raw() <= Fx::from_int(2).sub(t::body_radius()).raw() + Fx::ratio(1, 4).raw(),
+        "it stood {:.2} m along, balanced on the lip at 2",
+        got.x.to_f32_for_render()
+    );
+}
+
+#[test]
+fn a_send_far_into_the_drop_finds_nothing() {
+    let w = on_the_reach(-8);
+    let far = V3::new(Fx::from_int(7), Fx::ZERO, Fx::ZERO);
+    let got = with_scene(&w, |scene| {
+        sim::aim::footing_toward(w.players[0].pos, far, scene)
+    });
+    assert!(
+        got.is_none(),
+        "five metres out over the drop, it found footing at {got:?}"
+    );
+}
+
+#[test]
+fn a_refused_send_stays_with_her_and_can_be_tried_again() {
+    // Level look: the send's full range on the flat, nine metres, which from
+    // the lip is seven metres out over the drop -- past the forgiveness.
+    let mut w = on_the_reach(0);
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    tap(&mut w, R, 0, send.startup as u32 + 2);
+    let s = shadow(&w);
+    assert!(
+        matches!(s.doing, Ghost::Attending),
+        "the shadow went out into the drop: {:?}",
+        s.doing
+    );
+    assert!(s.refused > 0, "the refusal did not show");
+    assert!(
+        !w.players[0].locked_out(SLOT_MECHANIC),
+        "a send that never went out still locked the button"
+    );
+}
+
+#[test]
+fn a_send_off_the_edge_from_a_few_metres_back_lands_on_the_hub() {
+    // Five metres back: nine out ends four past the lip, inside the
+    // forgiveness, so the shadow should come down on the hub's front edge.
+    let mut w = on_the_reach(-5);
+    let top = w.players[0].pos.y;
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    tap(
+        &mut w,
+        R,
+        0,
+        (send.whiff_cost() + t::shadow_send_frames()) as u32,
+    );
+    let s = shadow(&w);
+    assert!(s.is_out(), "the send was refused with footing in reach");
+    assert_eq!(s.pos.y, top, "the shadow is not on the hub's top");
+    assert!(
+        s.pos.x.raw() < Fx::from_int(2).raw(),
+        "the shadow is at {:.2}, past the lip",
+        s.pos.x.to_f32_for_render()
+    );
 }

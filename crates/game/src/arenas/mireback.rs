@@ -11,7 +11,7 @@ const DEADWOOD: [f32; 3] = [0.24, 0.21, 0.18];
 const POST: [f32; 3] = [0.30, 0.22, 0.14];
 
 pub static DRESSING: Dressing = Dressing {
-    sky: [0.36, 0.38, 0.33],
+    drop: false,
     props: &[
         Prop {
             shape: Shape::Cylinder,

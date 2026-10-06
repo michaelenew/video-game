@@ -22,7 +22,7 @@ const fn tussock(x: f32, z: f32, size: f32) -> Prop {
 }
 
 pub static DRESSING: Dressing = Dressing {
-    sky: [0.52, 0.64, 0.74],
+    drop: false,
     props: &[
         // The river beyond the ford, east.
         Prop {
@@ -72,7 +72,7 @@ pub static DRESSING: Dressing = Dressing {
 
 /// The crossing: the road west to east, the herd's ground north of it.
 pub static CROSSING: Dressing = Dressing {
-    sky: [0.55, 0.64, 0.70],
+    drop: false,
     props: &[
         // Ruts along the road.
         Prop {

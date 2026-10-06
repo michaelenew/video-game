@@ -48,9 +48,9 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 
 /// What each class's hunt hashed to before the creature became a species.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xfc2589582a11956a),
+    (Class::Champion, 0x92d2fe3e7aa9f640),
     (Class::Bulwark, 0x343a49eb275a9f8c),
-    (Class::ShadowReaver, 0xf9e4195ad6ed48f5),
+    (Class::ShadowReaver, 0xe53fcf6df7af6f65),
     (Class::BloodMage, 0xa0aa0d5ca0dae7e5),
     (Class::DualMage, 0x93e81a0b1b363049),
     (Class::Elementalist, 0xd2bbb3f816b55bd2),

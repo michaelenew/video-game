@@ -18,8 +18,8 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 }
 
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x0efd64f4a51bd0e0),
-    (Class::Champion, 7, 0x70a143ee72ab5797),
+    (Class::Champion, 0x2545_F491, 0x143611fd55677fcb),
+    (Class::Champion, 7, 0xfe52c37d05a0c38e),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
@@ -34,7 +34,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     (Class::DualMage, 2_222, 0x524327a652326b5c),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
-    (Class::ShadowReaver, 31, 0x0502aca475823386),
+    (Class::ShadowReaver, 31, 0xb2ab9338138ce5f0),
     (Class::Elementalist, 59, 0x33eb170574ec1780),
     (Class::BloodMage, 83, 0x72ec7ddafe8f9fd9),
 ];

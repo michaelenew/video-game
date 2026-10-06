@@ -19,6 +19,8 @@
 use bevy::prelude::*;
 use sim::arena::{Area, ArenaId, Material};
 
+use crate::sky;
+
 pub mod proving_ground;
 
 pub mod range;
@@ -42,6 +44,8 @@ pub mod mantis;
 pub mod galewing;
 
 pub mod siegeshell;
+
+pub mod climb;
 
 /// One thing to look at that nothing collides with.
 #[derive(Clone, Copy, Debug)]
@@ -67,8 +71,7 @@ pub enum Shape {
 /// What an arena adds to its geometry, for the eye only.
 #[derive(Clone, Copy, Debug)]
 pub struct Dressing {
-    /// The colour behind everything.
-    pub sky: [f32; 3],
+    pub drop: bool,
     pub props: &'static [Prop],
 }
 
@@ -98,6 +101,16 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
 
         ArenaId::GALEWING => &galewing::DRESSING,
         ArenaId::SIEGESHELL => &siegeshell::DRESSING,
+
+        ArenaId::CLIMB_STAIR => &climb::STAIR,
+        ArenaId::CLIMB_CAUSEWAY => &climb::CAUSEWAY,
+        ArenaId::CLIMB_SPIRAL => &climb::SPIRAL,
+        ArenaId::CLIMB_FALLS => &climb::FALLS,
+        ArenaId::CLIMB_SLALOM => &climb::SLALOM,
+        ArenaId::CLIMB_FORK => &climb::FORK,
+        ArenaId::CLIMB_SPIRE => &climb::SPIRE,
+        ArenaId::CLIMB_GULF => &climb::GULF,
+        ArenaId::CLIMB_REACH => &climb::REACH,
         _ => &proving_ground::DRESSING,
     }
 }
@@ -151,6 +164,9 @@ pub struct Drawn(Option<ArenaId>);
 /// edge of the walls.
 const APRON: f32 = 12.0;
 
+/// How wide a drop's floor is drawn: past the horizon from any island.
+const DEEP: f32 = 2000.0;
+
 /// Draw the arena the simulation is in, when it is not the one already drawn.
 #[allow(clippy::too_many_arguments)] // A Bevy system: one argument per resource it reads.
 pub fn dress(
@@ -160,8 +176,9 @@ pub fn dress(
     old: Query<Entity, With<Scenery>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut sky: ResMut<ClearColor>,
+    mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
+    mut camera: Query<Entity, With<crate::MainCamera>>,
 ) {
     let arena = sim.cur.arena();
     if drawn.0 == Some(arena.id) {
@@ -172,11 +189,48 @@ pub fn dress(
         commands.entity(entity).despawn();
     }
     let dressing = dressing(arena.id);
-    sky.0 = Color::srgb(dressing.sky[0], dressing.sky[1], dressing.sky[2]);
+    let sun_at = sun(arena.id);
+    // One table, keyed by arena: `look::skies`. Resolved once here rather than
+    // per frame, and shared by the dome, the fog and the drop below, which is
+    // what keeps all three agreeing about where the horizon is.
+    let sky = look::skies::of(arena.id).resolved();
+
+    // The clear colour still matters: it is what shows in the sliver of a frame
+    // before the dome is drawn, and anywhere the dome does not reach. Set to
+    // the horizon so that sliver is never a different colour from the sky.
+    let h = sky.horizon;
+    clear.0 = Color::srgb(h[0], h[1], h[2]);
+    sky::raise(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &sky,
+        sun_at,
+        Scenery,
+    );
+    // Fog on the camera rather than on the scene, because it is a property of
+    // looking rather than of the things looked at.
+    if let Ok(eye) = camera.single_mut() {
+        commands.entity(eye).insert(sky::fog(&sky));
+    }
     for mut light in &mut suns {
-        *light = Transform::from_translation(sun(arena.id)).looking_at(Vec3::ZERO, Vec3::Y);
+        *light = Transform::from_translation(sun_at).looking_at(Vec3::ZERO, Vec3::Y);
     }
 
+    // The drop's floor, unlit: made before `paint` borrows the materials.
+    //
+    // Unlit but **fogged**, which is the whole point of it now. A drop drawn
+    // crisp from edge to edge is a dark floor somebody put under the level; the
+    // same floor hazing toward the sky as it recedes is a long way down.
+    let below = dressing.drop.then(|| {
+        let rgb = sky.ground;
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
+            unlit: true,
+            fog_enabled: true,
+            ..default()
+        })
+    });
     let mut paint = |rgb: [f32; 3]| {
         materials.add(StandardMaterial {
             base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
@@ -191,18 +245,31 @@ pub fn dress(
     let b = arena.bounds;
     let (lo_x, hi_x) = (fx(b.lo_x), fx(b.hi_x));
     let (lo_z, hi_z) = (fx(b.lo_z), fx(b.hi_z));
-    commands.spawn((
-        Mesh3d(
-            meshes.add(
-                Plane3d::default()
-                    .mesh()
-                    .size(hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0),
-            ),
-        ),
-        MeshMaterial3d(paint(colour(arena.floor))),
-        Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
-        Scenery,
-    ));
+    match below {
+        Some(dark) => {
+            commands.spawn((
+                Mesh3d(meshes.add(Plane3d::default().mesh().size(DEEP, DEEP))),
+                MeshMaterial3d(dark),
+                Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                bevy::pbr::NotShadowReceiver,
+                Scenery,
+            ));
+        }
+        None => {
+            commands.spawn((
+                Mesh3d(
+                    meshes.add(
+                        Plane3d::default()
+                            .mesh()
+                            .size(hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0),
+                    ),
+                ),
+                MeshMaterial3d(paint(colour(arena.floor))),
+                Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                Scenery,
+            ));
+        }
+    }
     for (i, region) in arena.regions.iter().enumerate() {
         let lift = 0.004 * (i + 1) as f32;
         let look = paint(colour(region.material));

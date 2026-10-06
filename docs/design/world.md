@@ -60,7 +60,8 @@ Between fight places there are **trails**: short traversal places with no
 creature, where the challenge is the movement system itself — a ledge line that
 wants a held jump, a gap that wants the Reaver's shadow or an Elementalist stone.
 Trails are cheap to make, they teach movement between fights, and they are the
-exploration.
+exploration. **The first six are built** as measuring instruments, with the envelope
+they were built against: [courses.md](courses.md) (2026-10-03).
 
 You see a creature before you fight it. Every fight place can be looked into
 from the trail that leads to it, and the creature is doing its **idle life**:

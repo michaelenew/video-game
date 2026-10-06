@@ -95,7 +95,10 @@ on* -- `+y` on the floor, the mounted part's own on a creature -- which is what
 `swing_path`'s dead zone is measured against (bestiary A4, the Galewing).
 `aim::blink_to` answers *where does a body sent along the floor stop* -- the
 Dual mage's blink, short of the first thing its feet meet -- and `aim::settle`
-*what does this point stand on*. **Every eye `aim.rs` starts
+*what does this point stand on*. `aim::standable` asks *is that footing* (not a
+course's drop), and `aim::footing_toward` *where nearby is*, if the aimed spot
+is not: the Reaver's send scans a little way back toward her and is refused if
+nothing is there. **Every eye `aim.rs` starts
 from is `camera::eye_under`**: the eye held under a cave's vault, which the
 drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 
@@ -196,6 +199,30 @@ Build it with `./crates/web/build-game.sh`; the reasoning is
 `state::hitbox` is the one description of an attack's volume, and the debug
 overlay, the browser sandbox and the creature's exchange all read it. An overlay
 that can drift from the rule it illustrates is worse than no overlay.
+
+## The art direction is a crate with no engine in it
+
+Colour, skies and palettes live in `crates/look`, which depends on `sim` and
+nothing else. The rule is the same one `view` follows for presentation logic: a
+thing that is a pure function from a few numbers to a colour should be callable
+without starting a game, because that is what makes it cheap to look at.
+
+It is cheap to look at because **there will not be a developer for this game
+forever**, so the cost that matters is not the arenas that exist — it is the
+next one. `cargo run -p look --example skies` draws every arena's sky in one
+picture in under a second; judging the same twenty-three in the game is
+twenty-three launches, and what you are judging is a gradient, which does not
+need a game to exist.
+
+The loop, in that order: **derive, look, tweak, fold back.** A new arena names
+one colour and gets a whole sky from it. Somebody looks at the sheet. What they
+change by hand is a tweak. What the tweak turns out to be *generally* true
+about is moved into the derivation, so the next arena starts closer and the
+tweak is deleted. A tweak that stays a tweak forever is a derivation nobody
+wrote down.
+
+`crates/game/src/sky.rs` is the Bevy half: a mesh, a material, a fog component.
+Nothing in it decides what a colour should be.
 
 ## Tools that are not on every machine
 

@@ -276,7 +276,18 @@ pub struct CameraRig {
     cfg: RigConfig,
     focus: [f32; 3],
     initialised: bool,
+    /// How much of the arm geometry is letting through, eased on the way
+    /// out: see [`ARM_OUT`].
+    clear: f32,
 }
+
+/// How fast the arm lets go again, per tick, once geometry that pulled it in
+/// is out of the way. The pull-in itself is immediate -- anything slower puts
+/// the eye inside the rock for the frames it takes -- but the way back out is
+/// eased: on a course an island crosses the arm every few seconds, and an arm
+/// that snapped back out as well pumped the view in and out each time
+/// (2026-10-04, from play: "the camera jumped on me").
+const ARM_OUT: f32 = 0.15;
 
 impl CameraRig {
     /// Track the player's field of view.
@@ -295,6 +306,7 @@ impl CameraRig {
             cfg,
             focus: [0.0, 0.0, 0.0],
             initialised: false,
+            clear: 1.0,
         }
     }
 
@@ -346,7 +358,8 @@ impl CameraRig {
         let yaw = yaw + around.carried;
         let target = [player[0], player[1] + self.cfg.look_height, player[2]];
 
-        if !self.initialised {
+        let fresh = !self.initialised;
+        if fresh {
             self.focus = target;
             self.initialised = true;
         }
@@ -458,11 +471,17 @@ impl CameraRig {
                     .filter(|b| !b.sp().fight.camera_passes && !inside_it(b));
             }
         }
-        let clear = lerp(
+        let want = lerp(
             unobstructed_fraction(self.focus, offset, &blockers, around.arena),
             1.0,
             sky,
         );
+        if fresh || want < self.clear {
+            self.clear = want;
+        } else {
+            self.clear += (want - self.clear) * smoothing_for(ARM_OUT, dt);
+        }
+        let clear = self.clear;
         for axis in offset.iter_mut() {
             *axis *= clear;
         }

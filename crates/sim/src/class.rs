@@ -144,6 +144,8 @@ impl Class {
                 chain_hit: false,
                 takeoff: 0,
                 leap_banked: false,
+                rise_used: false,
+                lifted: 0,
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -361,11 +363,25 @@ pub struct Shadow {
     /// of throwing it on the floor. Pressing early keeps more, so the tech has
     /// a gradient rather than a pass mark -- see `tuning::shadow_carry`.
     pub carry: u16,
-    /// What a jump out of the carry takes with it, flat: a share of the
-    /// dash's own velocity, banked on arrival. The dash itself stops dead on
-    /// the shadow -- see `shadow::step_her_dash` -- so this is the only place
-    /// the crossing's speed survives, and it survives only into the jump.
+    /// What a jump out of the carry takes with it, flat: the dash's own
+    /// velocity, banked on arrival and bled away by the dodge's decay for
+    /// each frame of the carry that passes, so pressing early keeps more. The
+    /// dash itself stops dead on the shadow -- see `shadow::step_her_dash` --
+    /// so this is the only place the crossing's speed survives, and it
+    /// survives only into the jump.
     pub lunge: V3,
+    /// A jump pressed in the last frames of the dash, before it arrived,
+    /// waiting to be thrown on arrival. See `shadow::bank_dash_jump`.
+    pub jump_banked: bool,
+    /// Frames left of showing that a send was refused: aimed at nowhere a
+    /// body could stand, with nothing within the forgiveness either. The
+    /// crosshair reads it. See `aim::footing_toward`.
+    pub refused: u8,
+    /// Shift was still down when a dash landed: it dodges again only once it
+    /// has come up. The dash's tail is cut on arrival (2026-10-04), so a shift
+    /// held through a short dash would otherwise throw a second dodge on the
+    /// frame she lands. See `shadow::shift_spent`.
+    pub shift_spent: bool,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -409,6 +425,9 @@ impl Shadow {
             dash: 0,
             carry: 0,
             lunge: V3::ZERO,
+            jump_banked: false,
+            refused: 0,
+            shift_spent: false,
         }
     }
 
@@ -577,6 +596,14 @@ pub enum Mechanic {
         /// same press as jump" survives the two arriving a few frames apart --
         /// which they always do. Zero everywhere else.
         takeoff: u16,
+        /// This airtime's rising attack is spent. One per trip off the
+        /// ground, and a takeoff thrown from the floor is that trip's one;
+        /// back when he is on his feet and free. See `state::champion_move`.
+        rise_used: bool,
+        /// Frames since his feet left the floor, saturating; zero on it. A
+        /// rising attack clicked in the first few (`tuning::floor_grace`) is
+        /// thrown from the floor he just left. See `state::rise_from_the_floor`.
+        lifted: u8,
         /// A jump pressed **during** the hammer's finisher, kept until it lands.
         ///
         /// The finisher throws whoever it hits into the air, and the decision

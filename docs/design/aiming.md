@@ -449,6 +449,17 @@ where the **first** of the four lines meets something, less her own radius.
 it — a stone's top, a ledge, the floor — for anything that lands a thing
 somewhere it was not aimed (a thrown body, a mark on the ground).
 
+**Can a body stand there, and if not, where nearby can it?** `aim::standable`
+says whether a settled point is footing: anywhere but a course's drop, whose
+floor is a pit rather than ground. `aim::footing_toward` is the Reaver's send
+asking it (added 2026-10-04, from play: the shadow dived into the abyss). The
+grounded point itself when it is footing; otherwise the first footing scanning
+back toward her along the floor, for at most `Send shadow, forgiveness back`
+(3 m), then a body's width further onto it; otherwise nothing, and the send
+is refused. A small forgiveness and then a refusal, never a search for the
+nearest footing anywhere: a placement that goes somewhere the player did not
+point is what this document exists to prevent.
+
 **Which way is up underfoot?** `aim::underfoot_up` — `+y` on the floor and on
 anything in the arena, the mounted part's own `+y` on a creature. What the
 swing's dead zone is measured against (§"Swing", bestiary A4); added
@@ -530,6 +541,19 @@ moved. Every eye `aim.rs` takes is this one, and the drawn camera
 (`view::camera`) starts from it too, so the crosshair stays on the line the ray
 follows. `look_onto` still settles against `camera::eye`: it has no arena to
 ask, and a bot aiming under a vault is off by the clamp at worst.
+
+**Sloped at the edges since 2026-10-04.** On a jump course every island hangs, so
+every island is a ceiling, and the footprint test switched the hold on and off
+the frame the eye or the body passed under an edge: the camera and the aim
+jumped together ("the camera jumped on me... it can mess someone's aim up").
+The ceiling is now `Arena::ceiling_near`: a hanging solid's underside, plus
+`Eye, ceiling slope away from an edge` (1 m per metre) for each metre outside its
+footprint. Directly under a vault nothing changed; near an edge the eye glides.
+`arena::walking_under_an_island_edge_never_jumps_the_eye` walks every course's
+islands in 5 cm steps. The drawn camera's arm, pulled in when geometry comes
+between it and the fighter, now lets go slowly (`view::camera`, `ARM_OUT`)
+instead of snapping back out; the pull-in stays immediate, since anything slower
+puts the eye inside the rock.
 
 ## Small bodies: how tall "there" is
 

@@ -7387,3 +7387,109 @@ stone rather than on top. Her auto no longer touches a gnat or a gnawer, which
 the critter tests exempt by name.
 
 **Verdict** kept, unplayed.
+
+### 2026-10-04 — the dash jump launches again
+
+**Changed** A jump out of the dash's carry keeps **all** of the dash's flat speed
+(`Dash jump, keeps of the dash speed`, 20% → 100%), bled by the dodge's decay for each frame of
+the carry already gone, so the first frame goes furthest. New knob `Dash jump, press kept
+before arrival` (6 frames): a space press in the dash's last frames is banked and thrown on
+arrival. The dash still stops dead on the shadow, as decided 2026-09-23.
+
+**Why** From play: the dash jump "used to launch the reaver a very long way, and now it's
+essentially an ordinary jump, and very awkwardly buffered". It is her timing-based mobility,
+and the jump-courses work (docs/design/courses.md) wants it. The fifth came in with 379062e on
+2026-09-23 because the dash jump cleared the arena; the arena is not what a course is.
+
+**Measured** (`cargo run --release -p sim --bin envelope`): shadow sent 9 m level, jump on the
+carry's first frame: 49.5 m past the shadow, 58.5 m from where she stood, 5.1 m high; one
+carry frame lands within half a metre of the best. Was 10.6 m past. Tests:
+`reaver::a_jump_inside_the_carry_leaves_with_the_dash`,
+`a_jump_pressed_just_before_arrival_is_kept_for_it`, `the_dash_jump_launches_her`.
+
+**What else moved** `hunt`'s scripted Reaver hunt diverges from frame 31 (it dash-jumps
+further) and is re-pinned; the sim's Ridgeback pin changed only by the new field in the hash.
+
+**Verdict** kept on the user's word. Open: whether it clears a fight arena too readily again,
+and whether shadow range should come down so the dash jump carries her mobility (courses.md).
+
+### 2026-10-04 — a send aimed into the drop stays home
+
+**Changed** The Reaver's send, aimed where no body could stand (on the courses, the drop
+between islands), scans back toward her along the floor for up to `Send shadow, forgiveness
+back` (3 m, new knob) and lands on the first footing, a body's width in from the lip. Nothing
+there: the shadow stays with her, the crosshair flashes red for `Send shadow, refusal shown`
+(18 frames, new knob), and the send's repeat lockout is refunded.
+`aim::standable` and `aim::footing_toward` are new; only the send uses them.
+
+**Why** From play: "The reaver's shadow diving into the abyss isn't right... a small bit of
+forgiveness and then feedback if the shadow can't be placed." Auditory feedback is wanted
+eventually; the red crosshair is today's minor visual cue.
+
+**Measured** `reaver::a_send_just_past_the_edge_lands_on_the_edge`,
+`a_send_far_into_the_drop_finds_nothing`, `a_refused_send_stays_with_her_and_can_be_tried_again`,
+`a_send_off_the_edge_from_a_few_metres_back_lands_on_the_hub`, all on the Reach. Off the
+courses nothing changes: every other arena's floor is footing. Both pinned hunts are
+re-pinned for the new hashed field only; they play identically.
+
+**Verdict** kept on the user's word, unplayed. Open: whether three metres is the right
+forgiveness, and whether the refusal reads at a glance.
+
+### 2026-10-04 — the dash jump is pressed before the halt; free on landing; the eye stops jumping
+
+**Changed**
+- The dash jump fires only from a press made in the dash's last six frames, on the frame she
+  lands, at the dash's whole speed. The ten-frame window after landing is gone (the carry is
+  one frame, the arrival's).
+- Arriving ends the dodge: she is actionable the frame she lands. A shift held through the dash
+  must come up before it dodges again (`Shadow::shift_spent`).
+- The eye's ceiling is sloped at hanging solids' edges (`Arena::ceiling_near`, new knob `Eye,
+  ceiling slope away from an edge`, 1 m/m), so passing under an island's edge no longer
+  jumps the eye or the aim. The drawn camera's arm still pulls in at once (slower put the
+  eye inside rock, `presentation::camera_pulls_in_rather_than_sitting_inside_a_platform`)
+  but lets go slowly instead of snapping back out.
+
+**Why** From play: "Sometimes it will pause for a few frames before I launch at near full
+speed. It needs to be that the jump input is made before the end of dash halt. I also need the
+reaver to regain movement control instantly after a shadow dash." And: "I had a few instances
+where the camera jumped on me. That shouldn't happen, it can mess someone's aim up." Every
+course island hangs, so every island was a ceiling to the eye, switched on and off by a
+footprint test.
+
+**Measured** `reaver::the_dash_jump_launches_her`, `a_jump_pressed_after_landing_is_an_ordinary_jump`,
+`she_is_free_the_frame_she_lands`, `a_jump_pressed_just_before_arrival_is_kept_for_it`;
+`arena::walking_under_an_island_edge_never_jumps_the_eye` (fails on the old footprint test: a
+half-metre step in the Spiral). The scripted Reaver hunt is re-pinned (it plays differently
+from frame 31); the Ridgeback pin changed only by the hashed field. The envelope tool's
+saved routes were regenerated, since its Reaver lines jumped a frame after landing.
+
+**Verdict** kept on the user's word, unplayed. Watch: the dash losing its punishable tail in
+versus.
+
+### 2026-10-05 — the Champion's rising attacks: one rule on the floor, one in the air
+
+**Changed** On the floor and in the first four frames of a jump (`Rising attack, still from
+the floor`, new knob), space and a weapon in either order is the rising attack from the
+floor: a grounded swing up to six frames into its startup turns into it when jump is pressed
+(`Jump after a click still rises`, new knob, its lockout refunded), and a click just after the
+jump puts him back on the floor he left. In the air, holding space is the rising attack, once
+per trip off the ground (a floor one counts); otherwise the aerial.
+
+**Why** From play: "A tiny gap in when jump vs the attack are pressed is the difference
+between a short hop into rising attack that goes over head height, a rising attack from
+ground (usually intended), or a regular attack into a buffered rising attack from ground...
+it seems to sometimes go into the downward attack before the apex." The user's own two
+rules.
+
+**Tried and reverted** A three-frame crouch before every Champion jump, so a click during it
+rose from the floor. It broke five movement tests that use him as the standard jumper and
+changed every jump he makes; the snap back to the floor does the same job inside the move.
+
+**Measured** `effects::jump_a_few_frames_after_the_click_still_rises_from_the_floor`,
+`a_click_just_after_the_jump_rises_from_the_floor_it_left`,
+`in_the_air_holding_jump_is_the_rising_attack_once`, `a_rising_attack_from_the_floor_is_that_jumps_one`.
+Both Champion hunt pins re-pinned: they play differently. The envelope tool's saved routes
+regenerated.
+
+**Verdict** kept on the user's word, unplayed. Watch: a full hop held into an aerial is now
+the rising attack, which may surprise anyone used to jump-then-aerial.

@@ -10,6 +10,8 @@ license.workspace = true
 # on a real fighter immediately. Nothing in a shipped frame calls it.
 anim = { path = "../anim" }
 hunt = { path = "../hunt" }
+# The art direction, with no engine in it: colour space, skies, palettes.
+look = { path = "../look" }
 manual = { path = "../manual" }
 # The peer, on both platforms: UDP to a typed-in address on a desktop, a room
 # on a public broker and a WebRTC line in a browser. `net` holds both, behind

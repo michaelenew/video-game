@@ -14,7 +14,7 @@ const ROCK: [f32; 3] = [0.48, 0.44, 0.40];
 
 pub static DRESSING: Dressing = Dressing {
     // Late afternoon over the scrub.
-    sky: [0.78, 0.62, 0.42],
+    drop: false,
     props: &[
         Prop {
             shape: Shape::Cylinder,
