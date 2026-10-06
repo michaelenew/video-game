@@ -195,6 +195,12 @@ waiting.
    own; override `zenith`, `ground`, `glow` or `reach` if it needs something
    the derivation cannot reach, and if the override turns out to be generally
    true, move it into the derivation so the next arena starts closer.
+   Its **palette** comes with the sky and needs no line of its own: every
+   surface in the arena is pulled a quarter of the way toward the light's hue,
+   which is what makes unrelated objects read as objects in one place, and the
+   arena gets a bright accent 0.42 of a turn away from that light, laid along
+   every edge and on whatever stands high. `cargo run -p look --example
+   palettes` draws those, lit, next to every other arena's.
 3. **Its dressing**, if it has any: `crates/game/src/arenas/galewing.rs` with a
    `DRESSING` (props nothing collides with — bones, reeds, a banner — and
    `drop: true` if the floor is a long way down rather than ground); uncomment
