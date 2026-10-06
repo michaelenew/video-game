@@ -74,6 +74,20 @@ pub fn connect(client_id: &str) -> Vec<u8> {
     packet(0x10, &body)
 }
 
+/// What a CONNACK's refusal code means (3.2.2.3), for a person reading why a
+/// broker turned us away.
+pub fn refusal(code: u8) -> String {
+    let why = match code {
+        1 => "it does not speak MQTT 3.1.1",
+        2 => "it rejected our client id",
+        3 => "the service is unavailable",
+        4 => "it wants a user name and password",
+        5 => "we are not authorised",
+        _ => "an unknown reason",
+    };
+    format!("code {code}, {why}")
+}
+
 /// SUBSCRIBE (3.8) to one topic at QoS 0.
 pub fn subscribe(packet_id: u16, topic: &str) -> Vec<u8> {
     let mut body = packet_id.to_be_bytes().to_vec();

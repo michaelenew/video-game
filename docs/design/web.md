@@ -324,6 +324,52 @@ are both the one UDP port. That also fixed a bug: seats used to come from
 ordering the two addresses, and each machine knew its own only as
 `127.0.0.1`, so on two real machines both claimed player one.
 
+### When a room will not form: F10
+
+*Built 2026-10-06*, after the first real try failed on both a page and a
+desktop with "Could not reach any meeting point", and nothing anywhere said
+why. A room is a chain -- look up a broker, connect, TLS, WebSocket, MQTT,
+subscribe, hear a hello, open the line -- and that sentence is the end of it,
+so every link in it now leaves a trace.
+
+**F10 switches dev mode on mid-session** (`--dev`, without relaunching), and
+in dev mode the Esc menu lists the meeting's own account of itself,
+`Rendezvous::report`, with a *Copy details* button:
+
+- **Each meeting point, step by step, with times.** `Board::report`, from a
+  `meet::Trace` each board keeps. A desktop can say everything: the address a
+  broker's name looked up to, which address it connected to or why not, the
+  TLS and WebSocket handshake (with the HTTP status if a server answered), and
+  the broker's MQTT answer with its refusal code spelled out. A page can say
+  much less, by design -- a browser does not tell a page why a connection
+  failed, so that a page cannot probe a network -- but it does give the close
+  code, and 1006 before the socket ever opened means refused, blocked,
+  unreachable or a bad certificate. The browser's own console line beside it
+  names the real reason.
+- **The sealed room**: its topic, and how many notes on it would not open,
+  which is the answer when two clients hear each other and never meet (two
+  links with different secrets).
+- **The room**: this client's id, hellos posted, notes read, the friend's id
+  and when they were last heard, and the stage of the offer and answer.
+- **The direct line**: on a desktop the local and outside addresses and the
+  ICE state; in a page the connection, ICE, gathering and channel states.
+
+When a meeting fails, the same lines are printed to the console -- the
+browser's, or the terminal -- whether dev mode is on or not, because once it
+has failed it is too late to switch anything on for the same story.
+
+The first trace this was built to read turned up a bug before it ran:
+**a desktop could never reach a `wss://` broker.** tungstenite's TLS uses
+rustls, rustls 0.23 will not connect until a process names its cryptography,
+and nothing did, so each broker's thread panicked inside the handshake -- and
+a panicked thread never marked its broker down, so the room said "Reaching the
+meeting point…" for ever. `net` now builds rustls with aws-lc (which str0m
+already builds) and `native::install_crypto` names it, so a second backend
+arriving with some later dependency cannot make it ambiguous again; a broker
+thread that panics anyway reports itself down with the panic's message. `native::tests::a_tls_handshake_fails_with_a_reason_rather_than_a_panic`
+fails without the fix. The desktop tests had only ever used a local `ws://`
+broker, without TLS, which is why none of them saw it.
+
 ### What it does not do yet
 
 - **Some network pairs will not connect.** Mobile data and strict office or

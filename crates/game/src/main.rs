@@ -1001,8 +1001,31 @@ fn env_f32(key: &str) -> Option<f32> {
 /// It exists because that combination *is* the working mode right now, and a
 /// mode you reach for every session should not need two keypresses and a
 /// reminder of which two.
+///
+/// **F10 switches it mid-session**, because the moment you want it is the
+/// moment something has gone wrong -- a room that will not form, say -- and
+/// relaunching with `--dev` throws that moment away. Switched on, it shows the
+/// overlay and the Esc menu's connection details; the Oven stays one F7 away
+/// rather than covering the menu you switched it on to read.
 pub fn dev_mode() -> bool {
-    platform::flag("--dev")
+    dev_switch().load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn dev_switch() -> &'static std::sync::atomic::AtomicBool {
+    static DEV: std::sync::OnceLock<std::sync::atomic::AtomicBool> = std::sync::OnceLock::new();
+    DEV.get_or_init(|| std::sync::atomic::AtomicBool::new(platform::flag("--dev")))
+}
+
+/// F10: dev mode on or off, and the overlay with it.
+fn toggle_dev_mode(show: &mut debug::ShowDebug) {
+    let on = !dev_mode();
+    dev_switch().store(on, std::sync::atomic::Ordering::Relaxed);
+    show.0 = on;
+    platform::log(if on {
+        "dev mode on (F10): the overlay, and connection details in the Esc menu"
+    } else {
+        "dev mode off (F10)"
+    });
 }
 
 fn env_num(key: &str) -> Option<u32> {
@@ -3145,6 +3168,11 @@ fn tick_sim(
                     .join(", ")
             );
         }
+    }
+    // F10 too: a function key types nothing, and the moment you want dev mode
+    // may well be with a pasted link still in the Esc menu's box.
+    if keys.just_pressed(KeyCode::F10) {
+        toggle_dev_mode(&mut show);
     }
     // Typing in a text field must not also pause the match or cycle the class.
     // F7 stays live regardless, since it is the way back out.

@@ -20,7 +20,7 @@
 //! read -- every board here is wrapped in [`Sealed`] (see `seal.rs`). Nothing
 //! of the match goes through it.
 
-use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN};
+use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN, Trace, seconds};
 use crate::mqtt;
 use crate::seal::{RoomKey, Sealed};
 use std::any::Any;
@@ -32,7 +32,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    BinaryType, BroadcastChannel, MessageEvent, RtcConfiguration, RtcDataChannel,
+    BinaryType, BroadcastChannel, CloseEvent, MessageEvent, RtcConfiguration, RtcDataChannel,
     RtcDataChannelInit, RtcDataChannelState, RtcDataChannelType, RtcIceGatheringState,
     RtcIceServer, RtcPeerConnection, RtcPeerConnectionState, RtcSdpType, RtcSessionDescriptionInit,
     WebSocket,
@@ -142,15 +142,39 @@ fn bytes_of(event: &MessageEvent) -> Option<Vec<u8>> {
 // MQTT over a WebSocket
 // ---------------------------------------------------------------------------
 
-#[derive(Default)]
 struct Inbox {
     reader: mqtt::Reader,
     open: bool,
     closed: bool,
+    /// When the socket was made, on the page's clock, and what has happened
+    /// to it since -- for [`Board::report`].
+    started: f64,
+    trace: Trace,
+    down_at: Option<u64>,
+}
+
+impl Inbox {
+    fn age(&self) -> u64 {
+        (js_sys::Date::now() - self.started).max(0.0) as u64
+    }
+
+    fn note(&mut self, what: impl Into<String>) {
+        let at = self.age();
+        self.trace.note(at, what);
+    }
+
+    fn down(&mut self, why: impl Into<String>) {
+        if self.down_at.is_none() {
+            self.down_at = Some(self.age());
+        }
+        self.note(why);
+    }
 }
 
 struct Mqtt {
-    socket: WebSocket,
+    url: String,
+    /// `None` when the browser would not even make one.
+    socket: Option<WebSocket>,
     topic: String,
     client_id: String,
     inbox: Rc<RefCell<Inbox>>,
@@ -165,7 +189,9 @@ struct Mqtt {
 
 impl Mqtt {
     fn send(&self, bytes: &[u8]) {
-        let _ = self.socket.send_with_u8_array(bytes);
+        if let Some(socket) = &self.socket {
+            let _ = socket.send_with_u8_array(bytes);
+        }
     }
 
     /// Everything the socket has delivered, turned into state and notes.
@@ -181,14 +207,25 @@ impl Mqtt {
         if open && !self.sent_connect {
             self.sent_connect = true;
             self.send(&mqtt::connect(&self.client_id));
+            self.inbox.borrow_mut().note("MQTT connect sent");
         }
         loop {
             let next = self.inbox.borrow_mut().reader.packet();
             let Some(packet) = next else { break };
             match packet {
-                mqtt::Incoming::ConnAck(0) => self.send(&mqtt::subscribe(1, &self.topic)),
-                mqtt::Incoming::ConnAck(_) => self.reach = Reach::Down,
+                mqtt::Incoming::ConnAck(0) => {
+                    self.inbox.borrow_mut().note("MQTT accepted; subscribing");
+                    self.send(&mqtt::subscribe(1, &self.topic));
+                }
+                mqtt::Incoming::ConnAck(code) => {
+                    self.inbox.borrow_mut().down(format!(
+                        "down: the broker refused us, {}",
+                        mqtt::refusal(code)
+                    ));
+                    self.reach = Reach::Down;
+                }
                 mqtt::Incoming::SubAck => {
+                    self.inbox.borrow_mut().note("subscribed: up");
                     self.reach = Reach::Up;
                     while let Some(note) = self.waiting.pop_front() {
                         self.send(&mqtt::publish(&self.topic, note.as_bytes()));
@@ -211,11 +248,13 @@ impl Drop for Mqtt {
         if self.reach == Reach::Up {
             self.send(&mqtt::disconnect());
         }
-        self.socket.set_onopen(None);
-        self.socket.set_onmessage(None);
-        self.socket.set_onclose(None);
-        self.socket.set_onerror(None);
-        let _ = self.socket.close();
+        if let Some(socket) = &self.socket {
+            socket.set_onopen(None);
+            socket.set_onmessage(None);
+            socket.set_onclose(None);
+            socket.set_onerror(None);
+            let _ = socket.close();
+        }
     }
 }
 
@@ -226,15 +265,39 @@ impl MqttBoard {
     /// Start connecting. A board that could not even create its socket is
     /// simply down; [`Boards`] carries on with the others.
     pub fn open(url: &str, topic: &str, me: u64) -> MqttBoard {
-        let Ok(socket) = WebSocket::new_with_str(url, "mqtt") else {
-            return MqttBoard(None);
+        let mut inbox = Inbox {
+            reader: mqtt::Reader::default(),
+            open: false,
+            closed: false,
+            started: js_sys::Date::now(),
+            trace: Trace::default(),
+            down_at: None,
+        };
+        inbox.note("opening a WebSocket");
+        let socket = match WebSocket::new_with_str(url, "mqtt") {
+            Ok(socket) => socket,
+            Err(e) => {
+                // A malformed URL, or a port the browser itself forbids.
+                inbox.closed = true;
+                inbox.down(format!(
+                    "down: the browser would not open it: {}",
+                    e.as_string()
+                        .or_else(|| js_sys::JSON::stringify(&e).ok().map(String::from))
+                        .unwrap_or_default()
+                ));
+                return MqttBoard(Some(Held::new(Mqtt::dead(url, inbox))));
+            }
         };
         socket.set_binary_type(BinaryType::Arraybuffer);
-        let inbox = Rc::new(RefCell::new(Inbox::default()));
+        let inbox = Rc::new(RefCell::new(inbox));
 
         let on_open = {
             let inbox = inbox.clone();
-            Closure::<dyn FnMut(JsValue)>::new(move |_| inbox.borrow_mut().open = true)
+            Closure::<dyn FnMut(JsValue)>::new(move |_| {
+                let mut inbox = inbox.borrow_mut();
+                inbox.open = true;
+                inbox.note("WebSocket open");
+            })
         };
         let on_message = {
             let inbox = inbox.clone();
@@ -244,17 +307,50 @@ impl MqttBoard {
                 }
             })
         };
+        // The close event carries the one thing a page is told about a failed
+        // connection: its code. 1006 with no reason is "it never answered, or
+        // the connection was cut" -- a blocked port, a firewall, a broker down.
         let on_close = {
             let inbox = inbox.clone();
-            Closure::<dyn FnMut(JsValue)>::new(move |_| inbox.borrow_mut().closed = true)
+            Closure::<dyn FnMut(JsValue)>::new(move |event: JsValue| {
+                let mut inbox = inbox.borrow_mut();
+                inbox.closed = true;
+                let why = match event.dyn_ref::<CloseEvent>() {
+                    Some(close) => format!(
+                        "down: closed, code {} ({}){}{}",
+                        close.code(),
+                        close_code(close.code(), inbox.open),
+                        if close.reason().is_empty() {
+                            String::new()
+                        } else {
+                            format!(", reason \"{}\"", close.reason())
+                        },
+                        if close.was_clean() { ", cleanly" } else { "" }
+                    ),
+                    None => "down: closed".into(),
+                };
+                inbox.down(why);
+            })
+        };
+        // An error event says nothing at all, on purpose: a page is not told
+        // why a connection failed, so it cannot probe a network. The browser's
+        // own console line beside it is the only place the reason is written.
+        let on_error = {
+            let inbox = inbox.clone();
+            Closure::<dyn FnMut(JsValue)>::new(move |_| {
+                let mut inbox = inbox.borrow_mut();
+                inbox.closed = true;
+                inbox.note("error (the browser does not tell the page why; see the console)");
+            })
         };
         socket.set_onopen(Some(on_open.as_ref().unchecked_ref()));
         socket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
         socket.set_onclose(Some(on_close.as_ref().unchecked_ref()));
-        socket.set_onerror(Some(on_close.as_ref().unchecked_ref()));
+        socket.set_onerror(Some(on_error.as_ref().unchecked_ref()));
 
         MqttBoard(Some(Held::new(Mqtt {
-            socket,
+            url: url.to_string(),
+            socket: Some(socket),
             topic: topic.to_string(),
             client_id: format!("arena-{me:016x}"),
             inbox,
@@ -263,8 +359,45 @@ impl MqttBoard {
             waiting: VecDeque::new(),
             notes: VecDeque::new(),
             last_ping: 0,
-            _handlers: vec![on_open, on_message, on_close],
+            _handlers: vec![on_open, on_message, on_close, on_error],
         })))
+    }
+}
+
+impl Mqtt {
+    /// A board whose socket could not even be made: down from the start, kept
+    /// so the report still has its story.
+    fn dead(url: &str, inbox: Inbox) -> Mqtt {
+        Mqtt {
+            url: url.to_string(),
+            socket: None,
+            topic: String::new(),
+            client_id: String::new(),
+            inbox: Rc::new(RefCell::new(inbox)),
+            reach: Reach::Down,
+            sent_connect: true,
+            waiting: VecDeque::new(),
+            notes: VecDeque::new(),
+            last_ping: 0,
+            _handlers: Vec::new(),
+        }
+    }
+}
+
+/// What a WebSocket close code means (RFC 6455 §7.4.1), in a few words.
+fn close_code(code: u16, was_open: bool) -> &'static str {
+    match code {
+        1000 => "closed normally",
+        1001 => "the server is going away",
+        1002 => "protocol error",
+        1003 => "data it does not accept",
+        1006 if was_open => "the connection was cut",
+        1006 => "never connected: refused, blocked, unreachable, or a bad certificate",
+        1008 => "refused by policy",
+        1009 => "message too big",
+        1011 => "the server hit an error",
+        1015 => "the TLS handshake failed",
+        _ => "unlisted",
     }
 }
 
@@ -304,6 +437,24 @@ impl Board for MqttBoard {
             }
             m.reach
         })
+    }
+
+    fn report(&self, out: &mut Vec<String>) {
+        let Some(held) = &self.0 else { return };
+        held.with(|m| {
+            let inbox = m.inbox.borrow();
+            out.push(format!(
+                "meeting point {}: {}",
+                m.url,
+                match (m.reach, inbox.down_at) {
+                    (Reach::Up, _) => "up".to_string(),
+                    (Reach::Trying, _) => format!("still trying after {}", seconds(inbox.age())),
+                    (Reach::Down, Some(at)) => format!("down after {}", seconds(at)),
+                    (Reach::Down, None) => "down".to_string(),
+                }
+            ));
+            inbox.trace.lines(out);
+        });
     }
 }
 
@@ -570,5 +721,26 @@ impl Line for RtcLine {
 
     fn recv(&mut self) -> Option<Vec<u8>> {
         self.0.as_ref()?.with(|r| r.inbox.borrow_mut().pop_front())
+    }
+
+    fn report(&self, out: &mut Vec<String>) {
+        let Some(held) = &self.0 else {
+            out.push("direct line: the browser would not make a WebRTC connection".into());
+            return;
+        };
+        held.with(|r| {
+            out.push(format!(
+                "direct line: connection {:?}, ICE {:?}, gathering {:?}, channel {:?}{}",
+                r.pc.connection_state(),
+                r.pc.ice_connection_state(),
+                r.pc.ice_gathering_state(),
+                r.channel.ready_state(),
+                if r.failed.get() {
+                    ", negotiation failed (see the console)"
+                } else {
+                    ""
+                }
+            ));
+        });
     }
 }

@@ -113,6 +113,10 @@ pub trait Board: Send + Sync {
     /// Can it carry notes right now? Called once a frame, so it is also where
     /// a board does its housekeeping (a keep-alive, say).
     fn reach(&mut self, now_ms: u64) -> Reach;
+    /// What it can say about how it is going, for somebody working out why a
+    /// room never formed: a few lines of plain text, appended to `out`. Read
+    /// only in dev mode (F10), so it may be as wordy as it is useful.
+    fn report(&self, _out: &mut Vec<String>) {}
 }
 
 /// Several boards as one: every note goes on all of them, and a note on any of
@@ -152,6 +156,54 @@ impl Board for Boards {
             Reach::Trying
         }
     }
+
+    fn report(&self, out: &mut Vec<String>) {
+        for board in &self.0 {
+            board.report(out);
+        }
+    }
+}
+
+/// What happened to one connection, in order and with when: "connecting",
+/// "open after 210 ms", "closed: code 1006". The raw material of a board's
+/// [`Board::report`].
+///
+/// Kept short, the first events and the latest ones, because what went wrong
+/// is nearly always at the start, and a connection that stays up repeats
+/// nothing worth reading.
+#[derive(Clone, Debug, Default)]
+pub struct Trace {
+    events: Vec<(u64, String)>,
+    /// Events dropped from the middle to keep it short.
+    skipped: usize,
+}
+
+impl Trace {
+    const KEEP: usize = 16;
+
+    /// `at_ms` is from when the connection was started.
+    pub fn note(&mut self, at_ms: u64, what: impl Into<String>) {
+        if self.events.len() >= Self::KEEP {
+            self.events.remove(Self::KEEP / 2);
+            self.skipped += 1;
+        }
+        self.events.push((at_ms, what.into()));
+    }
+
+    /// One indented line per event.
+    pub fn lines(&self, out: &mut Vec<String>) {
+        for (i, (at, what)) in self.events.iter().enumerate() {
+            if self.skipped > 0 && i == Self::KEEP / 2 {
+                out.push(format!("      ... {} more ...", self.skipped));
+            }
+            out.push(format!("    {}  {what}", seconds(*at)));
+        }
+    }
+}
+
+/// Milliseconds as a person reads them: `12.3 s`.
+pub fn seconds(ms: u64) -> String {
+    format!("{}.{} s", ms / 1000, ms % 1000 / 100)
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +239,8 @@ pub trait Line: Send + Sync {
     fn state(&mut self) -> LineState;
     fn send(&mut self, packet: &[u8]);
     fn recv(&mut self) -> Option<Vec<u8>>;
+    /// As [`Board::report`]: how the connection is going, for dev mode.
+    fn report(&self, _out: &mut Vec<String>) {}
 }
 
 /// GGRS over any [`Line`].
@@ -253,6 +307,13 @@ pub enum Progress {
 pub trait Rendezvous: Send + Sync {
     /// `now_ms` is any clock that only goes forward, in milliseconds.
     fn poll(&mut self, now_ms: u64) -> Progress;
+    /// Everything it knows about how the meeting is going, as lines of plain
+    /// text: who it has heard from, and each meeting point's own story. Shown
+    /// in dev mode (F10), and printed when a meeting fails, because "could not
+    /// reach any meeting point" is the end of a story and this is the story.
+    fn report(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +471,12 @@ pub struct Room<B: Board, L: Line> {
     mismatch: bool,
     /// A partner went quiet and was forgotten; said until somebody arrives.
     left: bool,
+    /// For [`Rendezvous::report`]: the last time polled, and what was traded.
+    now: u64,
+    hellos: u32,
+    notes: u32,
+    /// Notes the board delivered that were not ours to read.
+    noise: u32,
 }
 
 impl<B: Board, L: Line> Room<B, L> {
@@ -440,6 +507,10 @@ impl<B: Board, L: Line> Room<B, L> {
             since: 0,
             mismatch: false,
             left: false,
+            now: 0,
+            hellos: 0,
+            notes: 0,
+            noise: 0,
         }
     }
 
@@ -458,8 +529,10 @@ impl<B: Board, L: Line> Room<B, L> {
     fn read_notes(&mut self, now: u64) {
         while let Some(text) = self.board.take() {
             let Some(note) = Note::read(&text) else {
+                self.noise += 1;
                 continue;
             };
+            self.notes += 1;
             match note {
                 Note::Foreign => self.mismatch = true,
                 Note::Hello {
@@ -570,6 +643,7 @@ impl<B: Board, L: Line> Room<B, L> {
 impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
     fn poll(&mut self, now: u64) -> Progress {
         let joined = *self.joined.get_or_insert(now);
+        self.now = now;
         let waited = now.saturating_sub(joined);
         let reach = self.board.reach(now);
 
@@ -582,6 +656,7 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
             .is_none_or(|t| now.saturating_sub(t) >= HELLO_EVERY_MS)
         {
             self.last_hello = Some(now);
+            self.hellos += 1;
             let terms = self.terms.clone();
             self.post(Note::Hello {
                 from: self.me,
@@ -706,6 +781,61 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
             }
         }
     }
+
+    fn report(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let waited = self.now.saturating_sub(self.joined.unwrap_or(self.now));
+        out.push(format!(
+            "me {:016x}, in the room {}: {} hellos posted, {} notes read, {} unreadable",
+            self.me,
+            seconds(waited),
+            self.hellos,
+            self.notes,
+            self.noise,
+        ));
+        out.push(match &self.partner {
+            Some(p) => format!(
+                "friend {:016x}, last heard {} ago",
+                p.id,
+                seconds(self.now.saturating_sub(p.last_heard))
+            ),
+            None if self.left => "friend: went quiet and was forgotten".into(),
+            None => "friend: not heard from".into(),
+        });
+        if self.mismatch {
+            out.push("someone with a different build or settings is in the room".into());
+        }
+        out.push(format!(
+            "stage: {}",
+            match &self.stage {
+                Stage::Looking => "looking".to_string(),
+                Stage::Offering {
+                    attempt, posted, ..
+                } => format!(
+                    "offered (attempt {attempt}, {})",
+                    if posted.is_some() {
+                        "posted"
+                    } else {
+                        "still describing this machine"
+                    }
+                ),
+                Stage::Calling { .. } => "their answer accepted, line opening".into(),
+                Stage::Answering { answer, .. } => format!(
+                    "answering their offer ({})",
+                    if answer.is_some() {
+                        "posted"
+                    } else {
+                        "still describing this machine"
+                    }
+                ),
+            }
+        ));
+        if let Some(line) = &self.line {
+            line.report(&mut out);
+        }
+        self.board.report(&mut out);
+        out
+    }
 }
 
 const LINE_FAILED: &str = "Found your friend, but a direct connection between your two \
@@ -739,6 +869,22 @@ pub fn fresh_id() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_trace_keeps_its_start_and_its_latest() {
+        let mut trace = Trace::default();
+        for i in 0..40 {
+            trace.note(i * 100, format!("event {i}"));
+        }
+        let mut lines = Vec::new();
+        trace.lines(&mut lines);
+        assert_eq!(lines.len(), Trace::KEEP + 1, "{lines:#?}");
+        assert!(lines[0].ends_with("event 0"), "{}", lines[0]);
+        assert!(lines[0].contains("0.0 s"), "{}", lines[0]);
+        assert!(lines.iter().any(|l| l.contains("24 more")), "{lines:#?}");
+        assert!(lines.last().unwrap().ends_with("event 39"));
+        assert!(lines.last().unwrap().contains("3.9 s"));
+    }
 
     #[test]
     fn every_note_reads_back_as_written() {

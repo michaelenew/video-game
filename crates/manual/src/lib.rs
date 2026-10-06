@@ -530,6 +530,10 @@ pub const SECTIONS: &[Section] = &[
                 "F9",
                 "The animation hub: every clip, editable while it runs.",
             ),
+            e(
+                "F10",
+                "Dev mode on or off, mid-session: what --dev turns on, without relaunching. The overlay, and in the Esc menu the connection details for a room -- each meeting point's connection step by step, who has been heard from, the direct line -- with a Copy details button. A room that fails prints the same details to the console (the browser's, or the terminal) whether or not it is on.",
+            ),
         ],
     },
     Section {

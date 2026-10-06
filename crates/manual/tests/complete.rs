@@ -83,6 +83,7 @@ fn spoken(key: &str) -> Vec<&'static str> {
         // in both directions.
         "F8" => vec!["F8"],
         "F9" => vec!["F9"],
+        "F10" => vec!["F10"],
         _ => vec![],
     }
 }

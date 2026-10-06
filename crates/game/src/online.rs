@@ -54,8 +54,10 @@ pub enum Driver {
         /// `None` for two desktops meeting by address.
         room: Option<Room>,
     },
-    /// Meeting failed, so this is training, and this is why.
-    Alone(String),
+    /// Meeting failed, so this is training, and this is why -- and the
+    /// meeting's own account of it ([`net::Rendezvous::report`]), kept for the
+    /// Esc menu in dev mode, since the meeting itself is gone.
+    Alone { why: String, report: Vec<String> },
     Online {
         session: Box<net::ggrs::P2PSession<net::SessionConfig>>,
         handle: usize,
@@ -90,12 +92,23 @@ impl Driver {
         }
     }
 
+    /// How meeting is going, in detail: every meeting point's story, who has
+    /// been heard from, the direct line. For dev mode's Esc menu. Empty in
+    /// training, and in a match (which is past meeting).
+    pub fn report(&self) -> Vec<String> {
+        match self {
+            Driver::Meeting { rendezvous, .. } => rendezvous.report(),
+            Driver::Alone { report, .. } => report.clone(),
+            _ => Vec::new(),
+        }
+    }
+
     /// One line for the HUD, and for the page around the canvas.
     pub fn status(&self) -> Option<&str> {
         match self {
             Driver::Local => None,
             Driver::Meeting { said, .. } => Some(said),
-            Driver::Alone(why) => Some(why),
+            Driver::Alone { why, .. } => Some(why),
             Driver::Online { desynced: true, .. } => {
                 Some("DESYNC: the two games disagree about the fight. A bug -- please report it.")
             }
@@ -138,7 +151,10 @@ pub fn start(opts: &Options, start: &World) -> Driver {
         },
         Some(Err(why)) => {
             eprintln!("{why}");
-            Driver::Alone(why)
+            Driver::Alone {
+                why,
+                report: Vec::new(),
+            }
         }
     }
 }
@@ -288,8 +304,15 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
     match rendezvous.poll(now_ms) {
         net::Progress::Waiting(why) => *said = why,
         net::Progress::Failed(why) => {
-            eprintln!("{why}");
-            sim.driver = Driver::Alone(why);
+            // Printed whether or not dev mode is on: a console or a terminal
+            // is where somebody looks once it has failed, and by then it is
+            // too late to switch anything on and try again for the same story.
+            let report = rendezvous.report();
+            platform::log(&format!("meeting failed: {why}"));
+            for line in &report {
+                platform::log(line);
+            }
+            sim.driver = Driver::Alone { why, report };
         }
         net::Progress::Ready(seat) => {
             let handle = seat.handle;
@@ -315,7 +338,10 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                         room,
                     }
                 }
-                Err(e) => Driver::Alone(format!("could not start the match: {e}")),
+                Err(e) => Driver::Alone {
+                    why: format!("could not start the match: {e}"),
+                    report: Vec::new(),
+                },
             };
         }
     }
