@@ -230,7 +230,14 @@ fn a_match_runs_in_sync_over_the_line_the_meeting_opened() {
             rng ^= rng << 13;
             rng ^= rng >> 7;
             rng ^= rng << 17;
-            let input = NetInput::from(Input::aimed((rng & 0x1ff) as u16, (rng >> 20) as u16));
+            let mut input = Input::aimed((rng & 0x1ff) as u16, (rng >> 20) as u16);
+            // Mid-match, whoever is player two changes class: Tab against a
+            // person, which travels on the wire and must land on the same
+            // frame on both machines, or the desync check below fires.
+            if *handle == 1 && frames[i] == 100 {
+                input = input.travelling(sim::input::Travel::class(1, sim::Class::Champion));
+            }
+            let input = NetInput::from(input);
             if session.add_local_input(*handle, input).is_err() {
                 continue;
             }
@@ -249,6 +256,14 @@ fn a_match_runs_in_sync_over_the_line_the_meeting_opened() {
         }
     }
     assert!(frames.iter().all(|&f| f >= 300), "frames: {frames:?}");
+    for (_, world, handle) in &peers {
+        assert_eq!(
+            world.players[1].class,
+            sim::Class::Champion,
+            "player two's class change, as seen by player {}",
+            handle + 1
+        );
+    }
 }
 
 /// The desktop's `--port`/`--peer`, over real UDP on this machine.

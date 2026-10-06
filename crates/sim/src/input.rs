@@ -68,7 +68,9 @@ pub struct Input {
 
 /// Where a [`Input::travel`] request goes. One byte.
 ///
-/// `0` is no request and `1` is versus. A hunt sets the top bit, keeps the
+/// `0` is no request and `1` is versus. `2`, `3` and `4` are restart, pause
+/// and step. `001s cccc` is a class change: seat `s` becomes class `c`, in a
+/// restart of the same fight. A hunt sets the top bit, keeps the
 /// species in the low five and its **temper** in the two between
 /// (`crate::temper`): `1tt sssss`. So the temper travels with the creature, on
 /// the same frame, and a rollback that crosses the start of a tempered hunt
@@ -88,14 +90,32 @@ pub enum Destination {
     Hunt(SpeciesId, u8),
     /// No creature, in a chosen arena: a jump course (`crate::course`).
     Arena(crate::arena::ArenaId),
+    /// The same fight, restarted, as it is: Backspace.
+    Restart,
+    /// Pause, or carry on: P. Stays paused through a trip.
+    Pause,
+    /// Pause if running, and play exactly this frame: `]`.
+    Step,
+    /// The same fight, restarted, with this seat's fighter as this class.
+    /// Tab, and the class pickers: on the wire for the reason every trip is,
+    /// so a class can change mid-match against a person.
+    Class { seat: usize, class: crate::Class },
 }
 
 impl Travel {
     pub const NONE: Travel = Travel(0);
     pub const VERSUS: Travel = Travel(1);
+    /// The training controls, on the wire so they work against a person the
+    /// way they work for two people at one keyboard: see [`Destination`].
+    pub const RESTART: Travel = Travel(2);
+    pub const PAUSE: Travel = Travel(3);
+    pub const STEP: Travel = Travel(4);
     const HUNT: u8 = 0x80;
     /// `01aa aaaa`: no creature, in arena `a`.
     const ARENA: u8 = 0x40;
+    /// `001s cccc`: seat `s` becomes class `c`.
+    const CLASS: u8 = 0x20;
+    const SEAT: u8 = 0x10;
     const SPECIES: u8 = 0x1F;
     const TEMPER_SHIFT: u8 = 5;
     const TEMPER: u8 = 0x03;
@@ -126,10 +146,28 @@ impl Travel {
         }
     }
 
+    /// Seat `seat`'s fighter becomes `class`, in a restart of the same fight.
+    pub const fn class(seat: usize, class: crate::Class) -> Travel {
+        Travel(Travel::CLASS | if seat == 1 { Travel::SEAT } else { 0 } | class as u8)
+    }
+
     pub const fn destination(self) -> Option<Destination> {
         match self.0 {
             0 => None,
             1 => Some(Destination::Versus),
+            2 => Some(Destination::Restart),
+            3 => Some(Destination::Pause),
+            4 => Some(Destination::Step),
+            b if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS => {
+                let index = (b & 0x0F) as usize;
+                if index >= crate::class::ALL_CLASSES.len() {
+                    return None;
+                }
+                Some(Destination::Class {
+                    seat: if b & Travel::SEAT != 0 { 1 } else { 0 },
+                    class: crate::class::ALL_CLASSES[index],
+                })
+            }
             b if b & Travel::HUNT == 0 && b & Travel::ARENA != 0 => Some(Destination::Arena(
                 crate::arena::ArenaId(b & !Travel::ARENA),
             )),

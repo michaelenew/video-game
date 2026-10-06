@@ -8,6 +8,8 @@
 //!   link a friend sent. While a room is active it is listed instead -- its
 //!   name, how meeting is going, the link, *Copy link* and *Leave*. Rooms
 //!   are `online.rs`; this only draws them.
+//! - **Connection details**, in dev mode (F10): the meeting's own account of
+//!   how each meeting point's connection went, for a room that will not form.
 //! - **Progress** -- the creatures, their trophies and tempers -- on the right,
 //!   which is otherwise hidden: it is reference, not something to read
 //!   mid-fight (`hud::update_picker` writes it; [`show_progress`] shows it).
@@ -30,6 +32,8 @@ pub struct Menu {
     refused: Option<String>,
     /// "Copied" on the button for a moment after a copy.
     copied_at: Option<f64>,
+    /// The same, for the connection details.
+    details_copied_at: Option<f64>,
 }
 
 /// The Oven and the hub own the screen while they are open; the menu waits.
@@ -125,8 +129,51 @@ pub fn draw(
                     }
                 }
             }
+            details(ui, &mut menu, &sim, now);
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
+        });
+}
+
+/// **Connection details**, in dev mode: the meeting's own account of itself
+/// (`net::Rendezvous::report`) -- each meeting point's connection step by step,
+/// who has been heard from, the direct line -- with a button to copy it all,
+/// because the person reading it is usually about to paste it to somebody.
+/// Outside dev mode, a room that is meeting or has failed says where they are.
+fn details(ui: &mut egui::Ui, menu: &mut Menu, sim: &crate::Sim, now: f64) {
+    let report = sim.driver.report();
+    if report.is_empty() {
+        return;
+    }
+    ui.add_space(6.0);
+    if !crate::dev_mode() {
+        ui.label(egui::RichText::new("F10 (dev mode) shows the connection details.").weak());
+        return;
+    }
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new("Connection details").strong());
+        let copied = menu.details_copied_at.is_some_and(|t| now - t < 1.5);
+        if ui
+            .button(if copied { "Copied" } else { "Copy details" })
+            .clicked()
+        {
+            let mut text = sim.driver.status().unwrap_or("").to_string();
+            for line in &report {
+                text.push('\n');
+                text.push_str(line);
+            }
+            ui.ctx().copy_text(text);
+            menu.details_copied_at = Some(now);
+        }
+    });
+    egui::ScrollArea::vertical()
+        .max_height(280.0)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            for line in &report {
+                ui.label(egui::RichText::new(line).monospace().small());
+            }
         });
 }
 

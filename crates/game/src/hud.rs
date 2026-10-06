@@ -988,22 +988,23 @@ pub fn class_buttons(
     show: Res<ShowClassButtons>,
     buttons: ButtonQuery,
 ) {
-    // A class change restarts the fight on this machine only; against a
-    // person the classes are the ones the link named.
-    if !show.0 || sim.driver.online() {
+    if !show.0 {
         return;
     }
     for (interaction, button, _) in buttons.iter() {
-        if *interaction != Interaction::Pressed {
+        // Against a person, only your own: their class is theirs to pick.
+        if *interaction != Interaction::Pressed
+            || sim.driver.online() && button.0 != sim.local_player()
+        {
             continue;
         }
+        // Asked for on the wire, as Tab is, so a peer restarts on the same
+        // frame.
         let classes = cycle_class(
             [sim.cur.players[0].class, sim.cur.players[1].class],
             button.0,
         );
-        let w = sim::World::versus_in(classes, sim.cur.arena);
-        sim.prev = w.clone();
-        sim.cur = w;
+        sim.travel = sim::input::Travel::class(button.0, classes[button.0]);
     }
 }
 

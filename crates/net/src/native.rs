@@ -16,7 +16,7 @@
 //! the channel is negotiated the same way (id 0, unordered, never resent) --
 //! which is the whole of what makes a desktop and a page able to meet.
 
-use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN};
+use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN, Trace, seconds};
 use crate::mqtt;
 use crate::seal::{RoomKey, Sealed};
 use std::collections::VecDeque;
@@ -69,6 +69,12 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(6);
 const READ_SLICE: Duration = Duration::from_millis(20);
 
 struct Mailbox {
+    url: String,
+    started: Instant,
+    /// What happened to the connection, for [`Board::report`].
+    trace: Trace,
+    /// When it went down, from `started`.
+    down_at: Option<u64>,
     reach: Reach,
     notes: VecDeque<String>,
     /// Posted before the subscription was live, to send when it is.
@@ -85,7 +91,13 @@ pub struct MqttBoard {
 impl MqttBoard {
     /// Start connecting, on a thread of its own.
     pub fn open(url: &str, topic: &str, me: u64) -> MqttBoard {
+        let mut story = Trace::default();
+        story.note(0, "starting");
         let mailbox = Arc::new(Mutex::new(Mailbox {
+            url: url.to_string(),
+            started: Instant::now(),
+            trace: story,
+            down_at: None,
             reach: Reach::Trying,
             notes: VecDeque::new(),
             waiting: VecDeque::new(),
@@ -97,16 +109,34 @@ impl MqttBoard {
         let spawned = std::thread::Builder::new()
             .name("mqtt board".into())
             .spawn(move || {
-                let outcome = run_broker(&url, &topic, me, &inbox, &posts, &stopped);
+                // A panic in here would end the thread with the board still
+                // "trying", and the room would wait on it forever. Caught, it
+                // is one more way of being down, with its message in the trace.
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_broker(&url, &topic, me, &inbox, &posts, &stopped)
+                }))
+                .unwrap_or_else(|panic| {
+                    let why = panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "no message".into());
+                    Err(format!("the connection thread crashed: {why}"))
+                });
                 if let Err(why) = outcome
                     && !stopped.load(Ordering::Relaxed)
                 {
                     eprintln!("meeting point {url}: {why}");
+                    trace(&inbox, format!("down: {why}"));
                 }
-                lock(&inbox).reach = Reach::Down;
+                let mut mailbox = lock(&inbox);
+                mailbox.reach = Reach::Down;
+                mailbox.down_at = Some(mailbox.started.elapsed().as_millis() as u64);
             });
         if spawned.is_err() {
-            lock(&mailbox).reach = Reach::Down;
+            let mut mailbox = lock(&mailbox);
+            mailbox.reach = Reach::Down;
+            mailbox.trace.note(0, "down: could not start its thread");
         }
         MqttBoard {
             mailbox,
@@ -150,6 +180,44 @@ impl Board for MqttBoard {
     fn reach(&mut self, _now_ms: u64) -> Reach {
         lock(&self.mailbox).reach
     }
+
+    fn report(&self, out: &mut Vec<String>) {
+        let mailbox = lock(&self.mailbox);
+        let age = mailbox.started.elapsed().as_millis() as u64;
+        out.push(format!(
+            "meeting point {}: {}",
+            mailbox.url,
+            match (mailbox.reach, mailbox.down_at) {
+                (Reach::Up, _) => "up".to_string(),
+                (Reach::Trying, _) => format!("still trying after {}", seconds(age)),
+                (Reach::Down, Some(at)) => format!("down after {}", seconds(at)),
+                (Reach::Down, None) => "down".to_string(),
+            }
+        ));
+        mailbox.trace.lines(out);
+    }
+}
+
+/// Add an event to a board's trace, timed from when the board was opened.
+fn trace(mailbox: &Mutex<Mailbox>, what: impl Into<String>) {
+    let mut mailbox = lock(mailbox);
+    let at = mailbox.started.elapsed().as_millis() as u64;
+    mailbox.trace.note(at, what);
+}
+
+/// Name rustls's cryptography for the process, once.
+///
+/// rustls connects nothing until it knows which to use. It works it out alone
+/// only when exactly one is compiled in: with none (as this crate first
+/// shipped) or with two (as any new dependency could cause) the handshake
+/// panics, and every `wss://` broker fails before sending a byte. Naming it
+/// here holds in both cases. aws-lc is the one str0m already builds.
+fn install_crypto() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // An error means somebody installed one first, which is as good.
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
 }
 
 type Socket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
@@ -157,8 +225,9 @@ type Socket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStre
 /// Open a TCP connection to the broker within [`CONNECT_TIMEOUT`], then the
 /// WebSocket on top of it (with TLS for `wss://`), asking for the `mqtt`
 /// subprotocol as a browser does.
-fn dial(url: &str) -> Result<Socket, String> {
+fn dial(url: &str, mailbox: &Mutex<Mailbox>) -> Result<Socket, String> {
     use tungstenite::client::IntoClientRequest;
+    install_crypto();
     let mut request = url.into_client_request().map_err(|e| e.to_string())?;
     request.headers_mut().insert(
         "Sec-WebSocket-Protocol",
@@ -173,22 +242,87 @@ fn dial(url: &str) -> Result<Socket, String> {
         } else {
             80
         });
-    let addrs = (host, port).to_socket_addrs().map_err(|e| e.to_string())?;
+    trace(mailbox, format!("looking up {host}"));
+    let addrs: Vec<SocketAddr> = (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("could not look up {host}: {e}"))?
+        .collect();
+    trace(
+        mailbox,
+        format!(
+            "{host} is {}",
+            addrs
+                .iter()
+                .map(|a| a.ip().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    );
     let mut last = String::from("no address");
     for addr in addrs {
+        trace(mailbox, format!("connecting to {addr}"));
         match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
             Ok(stream) => {
+                trace(
+                    mailbox,
+                    format!(
+                        "connected; {} and WebSocket handshake",
+                        if uri.scheme_str() == Some("wss") {
+                            "TLS"
+                        } else {
+                            "no TLS (ws://)"
+                        }
+                    ),
+                );
                 stream
                     .set_read_timeout(Some(CONNECT_TIMEOUT))
                     .map_err(|e| e.to_string())?;
-                let (socket, _) =
-                    tungstenite::client_tls(request, stream).map_err(|e| e.to_string())?;
+                let (socket, response) =
+                    tungstenite::client_tls(request, stream).map_err(|e| handshake_failed(&e))?;
+                trace(
+                    mailbox,
+                    format!(
+                        "WebSocket open (HTTP {}, subprotocol {})",
+                        response.status(),
+                        response
+                            .headers()
+                            .get("Sec-WebSocket-Protocol")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("none")
+                    ),
+                );
                 return Ok(socket);
             }
-            Err(e) => last = e.to_string(),
+            Err(e) => {
+                trace(mailbox, format!("{addr}: {e}"));
+                last = format!("could not connect to {addr}: {e}");
+            }
         }
     }
     Err(last)
+}
+
+/// Why a TLS and WebSocket handshake failed, with the HTTP answer if the
+/// server got as far as giving one -- a proxy's 403 reads very differently
+/// from a broker's 400.
+fn handshake_failed(
+    e: &tungstenite::HandshakeError<
+        tungstenite::ClientHandshake<tungstenite::stream::MaybeTlsStream<TcpStream>>,
+    >,
+) -> String {
+    match e {
+        tungstenite::HandshakeError::Failure(tungstenite::Error::Http(response)) => format!(
+            "the WebSocket handshake was refused: HTTP {}{}",
+            response.status(),
+            response
+                .body()
+                .as_ref()
+                .map(|b| format!(" ({})", String::from_utf8_lossy(b).trim()))
+                .unwrap_or_default()
+        ),
+        tungstenite::HandshakeError::Failure(e) => format!("the handshake failed: {e}"),
+        tungstenite::HandshakeError::Interrupted(_) => "the handshake was interrupted".into(),
+    }
 }
 
 fn tcp_of(socket: &Socket) -> &TcpStream {
@@ -208,7 +342,7 @@ fn run_broker(
     stop: &AtomicBool,
 ) -> Result<(), String> {
     use tungstenite::Message;
-    let mut socket = dial(url)?;
+    let mut socket = dial(url, mailbox)?;
     tcp_of(&socket)
         .set_read_timeout(Some(READ_SLICE))
         .map_err(|e| e.to_string())?;
@@ -218,6 +352,7 @@ fn run_broker(
             .map_err(|e| e.to_string())
     };
     send(&mut socket, mqtt::connect(&format!("arena-{me:016x}")))?;
+    trace(mailbox, "MQTT connect sent");
 
     let mut reader = mqtt::Reader::default();
     let mut last_ping = Instant::now();
@@ -229,7 +364,14 @@ fn run_broker(
         }
         match socket.read() {
             Ok(Message::Binary(bytes)) => reader.feed(&bytes),
-            Ok(Message::Close(_)) => return Err("the broker closed the connection".into()),
+            Ok(Message::Close(frame)) => {
+                return Err(match frame {
+                    Some(f) => {
+                        format!("the broker closed the connection ({} {})", f.code, f.reason)
+                    }
+                    None => "the broker closed the connection".into(),
+                });
+            }
             Ok(_) => {}
             Err(tungstenite::Error::Io(e))
                 if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
@@ -237,11 +379,15 @@ fn run_broker(
         }
         while let Some(packet) = reader.packet() {
             match packet {
-                mqtt::Incoming::ConnAck(0) => send(&mut socket, mqtt::subscribe(1, topic))?,
+                mqtt::Incoming::ConnAck(0) => {
+                    trace(mailbox, "MQTT accepted; subscribing");
+                    send(&mut socket, mqtt::subscribe(1, topic))?;
+                }
                 mqtt::Incoming::ConnAck(code) => {
-                    return Err(format!("the broker refused us (code {code})"));
+                    return Err(format!("the broker refused us: {}", mqtt::refusal(code)));
                 }
                 mqtt::Incoming::SubAck => {
+                    trace(mailbox, "subscribed: up");
                     let waiting = {
                         let mut mailbox = lock(mailbox);
                         mailbox.reach = Reach::Up;
@@ -384,6 +530,8 @@ struct Rtc0 {
     channel: Option<ChannelId>,
     open: bool,
     failed: bool,
+    /// The last ICE state str0m reported, for [`Line::report`].
+    ice: Option<IceConnectionState>,
     inbox: VecDeque<Vec<u8>>,
     buf: Box<[u8; 2048]>,
 }
@@ -444,6 +592,7 @@ impl Rtc0 {
             channel: None,
             open: false,
             failed: false,
+            ice: None,
             inbox: VecDeque::new(),
             buf: Box::new([0; 2048]),
         })
@@ -515,10 +664,11 @@ impl Rtc0 {
                             self.inbox.push_back(data.data);
                         }
                     }
-                    Event::IceConnectionStateChange(IceConnectionState::Disconnected)
-                        if !self.open =>
-                    {
-                        self.failed = true;
+                    Event::IceConnectionStateChange(state) => {
+                        self.ice = Some(state);
+                        if state == IceConnectionState::Disconnected && !self.open {
+                            self.failed = true;
+                        }
                     }
                     _ => {}
                 },
@@ -647,11 +797,120 @@ impl Line for RtcLine {
         })
         .flatten()
     }
+
+    fn report(&self, out: &mut Vec<String>) {
+        let Some(r) = &self.0 else {
+            out.push("direct line: could not open a UDP socket".into());
+            return;
+        };
+        let r = lock(r);
+        out.push(format!(
+            "direct line: here {}, outside {}, ICE {}, {}",
+            r.host,
+            r.outside.map_or_else(
+                || {
+                    if r.stun_asked {
+                        "unknown (no STUN answer)".to_string()
+                    } else {
+                        "not asked yet".to_string()
+                    }
+                },
+                |a| a.to_string()
+            ),
+            r.ice
+                .map_or_else(|| "not started".to_string(), |s| format!("{s:?}")),
+            if r.failed {
+                "failed"
+            } else if r.open {
+                "open"
+            } else if r.description.is_some() {
+                "described"
+            } else {
+                "idle"
+            }
+        ));
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mailbox(url: &str) -> Mutex<Mailbox> {
+        Mutex::new(Mailbox {
+            url: url.into(),
+            started: Instant::now(),
+            trace: Trace::default(),
+            down_at: None,
+            reach: Reach::Trying,
+            notes: VecDeque::new(),
+            waiting: VecDeque::new(),
+        })
+    }
+
+    #[test]
+    fn a_tls_handshake_fails_with_a_reason_rather_than_a_panic() {
+        // rustls with no cryptography named panics inside the handshake, which
+        // is what kept every desktop off every `wss://` broker. Something that
+        // accepts the connection and then says nothing TLS is enough to get
+        // there: the handshake starts, and must end in an error.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                use std::io::Write;
+                let _ = stream.write_all(b"HTTP/1.1 400 Not TLS\r\n\r\n");
+            }
+        });
+        let url = format!("wss://127.0.0.1:{port}/mqtt");
+        let mailbox = mailbox(&url);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dial(&url, &mailbox).map(|_| ())
+        }));
+        let Ok(Err(why)) = outcome else {
+            panic!("dialling TLS must fail with a reason, not {outcome:?}");
+        };
+        assert!(why.contains("handshake"), "{why}");
+        let mut lines = Vec::new();
+        lock(&mailbox).trace.lines(&mut lines);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("TLS and WebSocket handshake")),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn a_broker_that_refuses_is_down_with_its_story() {
+        // A port nothing listens on: bound, its number noted, and let go.
+        let port = UdpSocket::bind("127.0.0.1:0")
+            .and_then(|_| std::net::TcpListener::bind("127.0.0.1:0"))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let url = format!("ws://127.0.0.1:{port}/mqtt");
+        let mut board = MqttBoard::open(&url, "topic", 7);
+        let started = Instant::now();
+        while board.reach(0) == Reach::Trying {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "still trying a closed port"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(board.reach(0), Reach::Down);
+        let mut report = Vec::new();
+        board.report(&mut report);
+        let text = report.join("\n");
+        assert!(
+            text.contains(&format!("meeting point {url}: down")),
+            "{text}"
+        );
+        assert!(text.contains("connecting to 127.0.0.1"), "{text}");
+        assert!(text.contains("down: could not connect"), "{text}");
+    }
 
     #[test]
     fn a_stun_answer_reads_back_the_address_it_masks() {

@@ -327,6 +327,11 @@ mod host {
         }
     }
 
+    /// A line for whoever is debugging: the terminal.
+    pub fn log(line: &str) {
+        eprintln!("{line}");
+    }
+
     /// Where the published page lives, which is what a room's link opens: a
     /// friend without the game clicks it and plays in their browser.
     /// `--page <url>` points it at another deploy.
@@ -479,11 +484,16 @@ mod host {
             web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(line));
         }
     }
+
+    /// A line for whoever is debugging: the browser's console.
+    pub fn log(line: &str) {
+        web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(line));
+    }
 }
 
 use host::read_options;
 pub use host::{
-    announce, load_settings, load_trophies, page_url, pointer_lock_lost, report_panics,
+    announce, load_settings, load_trophies, log, page_url, pointer_lock_lost, report_panics,
     save_settings, save_trophies, show_room,
 };
 

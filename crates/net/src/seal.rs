@@ -132,11 +132,17 @@ impl RoomKey {
 pub struct Sealed<B: Board> {
     board: B,
     key: RoomKey,
+    /// Notes on the topic that did not open: a different secret, or noise.
+    unopened: u32,
 }
 
 impl<B: Board> Sealed<B> {
     pub fn new(board: B, key: RoomKey) -> Self {
-        Sealed { board, key }
+        Sealed {
+            board,
+            key,
+            unopened: 0,
+        }
     }
 }
 
@@ -152,12 +158,25 @@ impl<B: Board> Board for Sealed<B> {
             if let Some(note) = self.key.open(&sealed) {
                 return Some(note);
             }
+            self.unopened += 1;
         }
         None
     }
 
     fn reach(&mut self, now_ms: u64) -> Reach {
         self.board.reach(now_ms)
+    }
+
+    /// The board's own report, and how many notes would not open -- which,
+    /// when two clients hear each other and never meet, is the answer: the
+    /// two links have different secrets after the `#`.
+    fn report(&self, out: &mut Vec<String>) {
+        out.push(format!(
+            "sealed room, topic {}: {} notes would not open (wrong secret, or noise)",
+            self.key.topic(),
+            self.unopened
+        ));
+        self.board.report(out);
     }
 }
 

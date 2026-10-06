@@ -26,6 +26,11 @@ getrandom = "0.2"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 str0m = { version = "0.24", default-features = false, features = ["rust-crypto"] }
 tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots"] }
+# tungstenite's TLS names no cryptography, and rustls will not connect without
+# one: every `wss://` broker panicked in its handshake. aws-lc is the one str0m
+# already builds, so naming it here adds nothing to compile; see
+# `native::install_crypto`.
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
 
 # In a browser: GGRS's clock and its random numbers come from JavaScript, and
 # the meeting point is reached through the browser's own WebSocket,
@@ -39,6 +44,7 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
     "BinaryType",
     "BroadcastChannel",
+    "CloseEvent",
     "console",
     "MessageEvent",
     "RtcConfiguration",
@@ -46,6 +52,7 @@ web-sys = { version = "0.3", features = [
     "RtcDataChannelInit",
     "RtcDataChannelState",
     "RtcDataChannelType",
+    "RtcIceConnectionState",
     "RtcIceGatheringState",
     "RtcIceServer",
     "RtcPeerConnection",

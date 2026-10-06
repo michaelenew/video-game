@@ -54,14 +54,22 @@ pub enum Driver {
         /// `None` for two desktops meeting by address.
         room: Option<Room>,
     },
-    /// Meeting failed, so this is training, and this is why.
-    Alone(String),
+    /// Meeting failed, so this is training, and this is why -- and the
+    /// meeting's own account of it ([`net::Rendezvous::report`]), kept for the
+    /// Esc menu in dev mode, since the meeting itself is gone.
+    Alone { why: String, report: Vec<String> },
     Online {
         session: Box<net::ggrs::P2PSession<net::SessionConfig>>,
         handle: usize,
         desynced: bool,
         gone: bool,
         room: Option<Room>,
+        /// Frames with ticks since one was held back for being ahead; see
+        /// [`pace`].
+        paced: u32,
+        /// The friend's game has gone quiet for a moment: loading an arena,
+        /// say, or in a window the system has stopped drawing.
+        quiet: bool,
     },
 }
 
@@ -90,16 +98,30 @@ impl Driver {
         }
     }
 
+    /// How meeting is going, in detail: every meeting point's story, who has
+    /// been heard from, the direct line. For dev mode's Esc menu. Empty in
+    /// training, and in a match (which is past meeting).
+    pub fn report(&self) -> Vec<String> {
+        match self {
+            Driver::Meeting { rendezvous, .. } => rendezvous.report(),
+            Driver::Alone { report, .. } => report.clone(),
+            _ => Vec::new(),
+        }
+    }
+
     /// One line for the HUD, and for the page around the canvas.
     pub fn status(&self) -> Option<&str> {
         match self {
             Driver::Local => None,
             Driver::Meeting { said, .. } => Some(said),
-            Driver::Alone(why) => Some(why),
+            Driver::Alone { why, .. } => Some(why),
             Driver::Online { desynced: true, .. } => {
                 Some("DESYNC: the two games disagree about the fight. A bug -- please report it.")
             }
             Driver::Online { gone: true, .. } => Some("Your friend disconnected."),
+            Driver::Online { quiet: true, .. } => {
+                Some("Waiting for your friend's game: it has gone quiet for a moment…")
+            }
             Driver::Online { handle: 0, .. } => Some("Online: you are player one (blue)."),
             Driver::Online { .. } => Some("Online: you are player two (orange)."),
         }
@@ -138,7 +160,10 @@ pub fn start(opts: &Options, start: &World) -> Driver {
         },
         Some(Err(why)) => {
             eprintln!("{why}");
-            Driver::Alone(why)
+            Driver::Alone {
+                why,
+                report: Vec::new(),
+            }
         }
     }
 }
@@ -288,8 +313,15 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
     match rendezvous.poll(now_ms) {
         net::Progress::Waiting(why) => *said = why,
         net::Progress::Failed(why) => {
-            eprintln!("{why}");
-            sim.driver = Driver::Alone(why);
+            // Printed whether or not dev mode is on: a console or a terminal
+            // is where somebody looks once it has failed, and by then it is
+            // too late to switch anything on and try again for the same story.
+            let report = rendezvous.report();
+            platform::log(&format!("meeting failed: {why}"));
+            for line in &report {
+                platform::log(line);
+            }
+            sim.driver = Driver::Alone { why, report };
         }
         net::Progress::Ready(seat) => {
             let handle = seat.handle;
@@ -298,9 +330,17 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
             else {
                 unreachable!("matched above");
             };
-            sim.driver = match net::p2p::start(seat) {
+            // `delay=` (`--delay`) trades some rollback back for input delay,
+            // on this side only. None is the default: see `net::p2p`.
+            let delay = platform::value("--delay")
+                .and_then(|d| d.parse().ok())
+                .unwrap_or(net::p2p::INPUT_DELAY);
+            sim.driver = match net::p2p::start_with_delay(seat, delay) {
                 Ok(session) => {
-                    eprintln!("online: you are player {}", handle + 1);
+                    eprintln!(
+                        "online: you are player {}, input delay {delay} frames",
+                        handle + 1
+                    );
                     let start = *start;
                     sim.prev = start.clone();
                     sim.history = crate::Rewind::new(&start);
@@ -313,9 +353,14 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                         desynced: false,
                         gone: false,
                         room,
+                        paced: 0,
+                        quiet: false,
                     }
                 }
-                Err(e) => Driver::Alone(format!("could not start the match: {e}")),
+                Err(e) => Driver::Alone {
+                    why: format!("could not start the match: {e}"),
+                    report: Vec::new(),
+                },
             };
         }
     }
@@ -330,6 +375,42 @@ pub fn announce(sim: bevy::prelude::Res<crate::Sim>, mut last: bevy::prelude::Lo
     }
 }
 
+/// How many of this frame's `ticks` to run online: all of them, unless this
+/// side is ahead of the other.
+///
+/// Two clocks never agree exactly, and the one that runs fast gets ahead: its
+/// predictions reach further, its rollbacks get longer, and at the session's
+/// prediction limit it stops dead until the other catches up -- a stall you
+/// feel as lag. GGRS measures the gap (`frames_ahead`) and leaves closing it
+/// to the game, so the side that is ahead holds back one tick in every
+/// [`PACE_EVERY`] frames: about a tenth slower, for as long as it is ahead,
+/// which is too little to see and closes a frame's gap in under a second.
+pub fn pace(sim: &mut crate::Sim, ticks: u32) -> u32 {
+    let Driver::Online { session, paced, .. } = &mut sim.driver else {
+        return ticks;
+    };
+    if ticks == 0 {
+        return 0;
+    }
+    *paced += 1;
+    // Far ahead -- the other side has just come back from a long frame --
+    // closes faster: every other frame, rather than one in ten.
+    let every = if session.frames_ahead() > FAR_AHEAD {
+        2
+    } else {
+        PACE_EVERY
+    };
+    if session.frames_ahead() > 0 && *paced >= every {
+        *paced = 0;
+        return ticks - 1;
+    }
+    ticks
+}
+
+/// See [`pace`].
+const PACE_EVERY: u32 = 10;
+const FAR_AHEAD: i32 = 3;
+
 /// One networked tick.
 ///
 /// GGRS decides when to save, load and advance; `handle_requests` services
@@ -341,6 +422,7 @@ pub fn step(sim: &mut crate::Sim, local: SimInput) {
         handle,
         desynced,
         gone,
+        quiet,
         ..
     } = &mut sim.driver
     else {
@@ -361,7 +443,14 @@ pub fn step(sim: &mut crate::Sim, local: SimInput) {
                 eprintln!("peer disconnected");
                 *gone = true;
             }
-            net::ggrs::GgrsEvent::NetworkInterrupted { .. } => eprintln!("peer interrupted"),
+            net::ggrs::GgrsEvent::NetworkInterrupted { .. } => {
+                eprintln!("peer interrupted");
+                *quiet = true;
+            }
+            net::ggrs::GgrsEvent::NetworkResumed { .. } => {
+                eprintln!("peer resumed");
+                *quiet = false;
+            }
             _ => {}
         }
     }

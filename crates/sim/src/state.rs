@@ -1203,6 +1203,12 @@ pub struct World {
     /// the falls, the clock (`crate::course`). All zero, and not hashed, in an
     /// arena that is not a course.
     pub course: [crate::course::Run; MAX_PLAYERS],
+    /// **Paused**, against a person: P on either machine, on the wire
+    /// ([`Destination::Pause`]), so both stop on the same frame -- what P does
+    /// for two people at one keyboard. While it is set a frame changes nothing
+    /// but the frame count, which the rollback session owns. Training pauses
+    /// by not ticking at all, and never sets it.
+    pub paused: bool,
 }
 
 impl World {
@@ -1226,6 +1232,7 @@ impl World {
             pack: None,
             lore: Lore::NONE,
             course: [crate::course::Run::default(); MAX_PLAYERS],
+            paused: false,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1404,9 +1411,14 @@ impl World {
     /// A request for a creature that is not registered is no request at all:
     /// the picker never sends one, and a peer on an older build that did would
     /// otherwise be sent somewhere the other cannot follow.
-    fn travelled(&self, to: Travel) -> Option<World> {
-        let classes = self.players.map(|p| p.class);
+    ///
+    /// `classes` are the fighters' classes after this frame's class changes,
+    /// which a trip on the same frame keeps. A class change itself is not a
+    /// trip: see [`World::recast`].
+    fn travelled(&self, to: Travel, classes: [Class; MAX_PLAYERS]) -> Option<World> {
         let world = match to.destination()? {
+            Destination::Class { .. } | Destination::Pause | Destination::Step => return None,
+            Destination::Restart => self.restarted(classes),
             Destination::Versus => World::with_classes(classes),
             Destination::Hunt(species, temper) => {
                 crate::species::lookup(species)?;
@@ -1421,8 +1433,26 @@ impl World {
         };
         Some(World {
             frame: self.frame,
+            paused: self.paused,
             ..world
         })
+    }
+
+    /// This frame's class changes, from both sides: each [`Destination::Class`]
+    /// on the wire sets that seat's class, player one's first. `None` if there
+    /// were none.
+    fn recast(&self, wire: &[Input; MAX_PLAYERS]) -> Option<[Class; MAX_PLAYERS]> {
+        let mut classes = self.players.map(|p| p.class);
+        let mut any = false;
+        for input in wire {
+            if let Some(Destination::Class { seat, class }) = input.travel.destination()
+                && seat < MAX_PLAYERS
+            {
+                classes[seat] = class;
+                any = true;
+            }
+        }
+        any.then_some(classes)
     }
 
     /// **One frame of a jump course** (`crate::course`): for each fighter,
@@ -1598,8 +1628,35 @@ impl World {
         // frame it arrives on is spent building it: player one's request wins
         // if both send one on the same frame, which both machines agree on
         // because both have both inputs.
-        if let Some(next) = wire.iter().find_map(|i| self.travelled(i.travel)) {
+        //
+        // A class change is the same kind of thing (Tab, and the pickers): the
+        // same fight restarted with the new classes, on the frame it arrives.
+        // Both players may ask on one frame and both are honoured, and a trip
+        // on that frame keeps them.
+        let recast = self.recast(&wire);
+        let classes = recast.unwrap_or_else(|| self.players.map(|p| p.class));
+        let next = wire
+            .iter()
+            .find_map(|i| self.travelled(i.travel, classes))
+            .or_else(|| {
+                recast.map(|classes| World {
+                    frame: self.frame,
+                    paused: self.paused,
+                    ..self.restarted(classes)
+                })
+            });
+        // Pause and step, from either side: one press is one toggle, and a
+        // step pauses as well as playing its frame.
+        let asked = |d: Destination| wire.iter().any(|i| i.travel.destination() == Some(d));
+        let step = asked(Destination::Step);
+        let toggle = asked(Destination::Pause);
+        if let Some(next) = next {
             *self = next;
+            self.paused = (self.paused != toggle) || step;
+            return;
+        }
+        self.paused = (self.paused != toggle) || step;
+        if self.paused && !step {
             return;
         }
 
@@ -2428,6 +2485,11 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(tuning);
         h.write_u32(self.frame);
+        // Only while set, so a world that is not paused hashes as it always
+        // has and every pinned checksum stays pinned.
+        if self.paused {
+            h.write_u32(0x7061_7573);
+        }
         for b in &self.bolts {
             match b {
                 Some(b) => {
