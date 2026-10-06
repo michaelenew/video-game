@@ -22,6 +22,7 @@ pub mod palette;
 pub mod sheet;
 pub mod skies;
 pub mod sky;
+pub mod swatch;
 pub mod tint;
 
 pub use edge::Edge;

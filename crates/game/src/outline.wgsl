@@ -37,7 +37,9 @@ struct Outline {
     // Where the line starts fading out and where it is gone, in metres.
     haze: f32,
     gone: f32,
-    _pad: vec3<f32>,
+    // How strongly the ink is laid on, 0 to 1.
+    weight: f32,
+    _pad: vec2<f32>,
 }
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
@@ -188,7 +190,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // of the picture whose whole job is to dissolve. So it is wound down over
     // the same distance the fog is.
     let metres = mine * settings.near;
-    let seen = 1.0 - smoothstep(settings.haze, settings.gone, metres);
+    let seen = settings.weight * (1.0 - smoothstep(settings.haze, settings.gone, metres));
     if (seen <= 0.001) {
         return colour;
     }

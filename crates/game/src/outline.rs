@@ -111,7 +111,17 @@ pub struct Outline {
     /// it is wound down over the same distance the fog is.
     pub haze: f32,
     pub gone: f32,
-    pub pad: Vec3,
+    /// How strongly the ink is laid on, 0 to 1.
+    ///
+    /// Width and weight are different knobs and it matters which one you
+    /// reach for. A line two pixels wide and solid reads as a cartoon outline;
+    /// the same width laid on at two thirds reads as a drawn line, because what
+    /// makes a drawing look drawn is a line that *varies*, and a line that is
+    /// everywhere at full strength does not. It is also the only way to get
+    /// below a pixel: a binary one-pixel line cannot be thinner than one pixel,
+    /// but it can be fainter.
+    pub weight: f32,
+    pub pad: Vec2,
 }
 
 impl Outline {
@@ -136,16 +146,17 @@ impl Outline {
 
     fn plain(line: look::edge::Line) -> Outline {
         Outline {
-            radius: 1.6,
+            radius: 1.0,
             step: 0.035,
             ink: line.ink + 0.10,
             chroma: 2.6,
             floor: 0.075,
-            fold: 0.0025,
+            fold: 0.004,
             near: 0.1,
             haze: 200.0,
             gone: 420.0,
-            pad: Vec3::ZERO,
+            weight: 0.62,
+            pad: Vec2::ZERO,
         }
     }
 }
