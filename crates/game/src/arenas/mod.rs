@@ -115,24 +115,13 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
     }
 }
 
-/// What a material looks like. One colour each, for every arena: sand is the
-/// same sand wherever it is, and an arena that wants its own wants a new
-/// material in the simulation, because a floor the creature reads differently
-/// should look different.
-pub fn colour(material: Material) -> [f32; 3] {
-    match material {
-        // The proving ground's floor and walls, as they always were.
-        Material::Ground => [0.13, 0.15, 0.18],
-        Material::Stone => [0.30, 0.34, 0.40],
-        Material::Grass => [0.20, 0.30, 0.16],
-        Material::Rock => [0.36, 0.33, 0.30],
-        Material::Sand => [0.62, 0.55, 0.40],
-        Material::Snow => [0.82, 0.85, 0.90],
-        Material::Ash => [0.32, 0.31, 0.31],
-        Material::Peat => [0.17, 0.13, 0.09],
-        Material::Water => [0.16, 0.30, 0.42],
-        Material::Wood => [0.33, 0.24, 0.16],
-    }
+/// A material's colour in an arena, and the one place the game asks.
+///
+/// Thin on purpose: the answer is `look::palette`, which derives a whole
+/// scheme from the arena's sky. Ten colours written here once, for the whole
+/// game, is what made every arena the same ten colours.
+pub fn colour(id: ArenaId, material: Material) -> [f32; 3] {
+    look::palette::of(id).of(material)
 }
 
 /// **The key light**, the one that casts shadows: put where [`sun`] says
@@ -179,6 +168,7 @@ pub fn dress(
     mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
     mut camera: Query<Entity, With<crate::MainCamera>>,
+    looks: Option<Res<crate::ground::Looks>>,
 ) {
     let arena = sim.cur.arena();
     if drawn.0 == Some(arena.id) {
@@ -194,6 +184,9 @@ pub fn dress(
     // per frame, and shared by the dome, the fog and the drop below, which is
     // what keeps all three agreeing about where the horizon is.
     let sky = look::skies::of(arena.id).resolved();
+    // Derived from that sky, so an arena that has one has both. Everything
+    // drawn below goes through it, props included.
+    let palette = look::palette::Palette::under(&sky);
 
     // The clear colour still matters: it is what shows in the sliver of a frame
     // before the dome is drawn, and anywhere the dome does not reach. Set to
@@ -212,6 +205,10 @@ pub fn dress(
     // looking rather than of the things looked at.
     if let Ok(eye) = camera.single_mut() {
         commands.entity(eye).insert(sky::fog(&sky));
+    }
+    // The pooled hazard and raised-solid materials take this arena's colours.
+    if let Some(looks) = &looks {
+        crate::ground::repaint(looks, &mut materials, arena.id);
     }
     for mut light in &mut suns {
         *light = Transform::from_translation(sun_at).looking_at(Vec3::ZERO, Vec3::Y);
@@ -264,7 +261,7 @@ pub fn dress(
                             .size(hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0),
                     ),
                 ),
-                MeshMaterial3d(paint(colour(arena.floor))),
+                MeshMaterial3d(paint(palette.of(arena.floor))),
                 Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
                 Scenery,
             ));
@@ -272,7 +269,7 @@ pub fn dress(
     }
     for (i, region) in arena.regions.iter().enumerate() {
         let lift = 0.004 * (i + 1) as f32;
-        let look = paint(colour(region.material));
+        let look = paint(palette.of(region.material));
         match region.area {
             Area::Rect { lo, hi } => {
                 let (x0, z0, x1, z1) = (fx(lo.0), fx(lo.1), fx(hi.0), fx(hi.1));
@@ -303,7 +300,7 @@ pub fn dress(
         let size = max - min;
         commands.spawn((
             Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
-            MeshMaterial3d(paint(colour(solid.material))),
+            MeshMaterial3d(paint(palette.of(solid.material))),
             Transform::from_translation((min + max) * 0.5),
             Scenery,
         ));
@@ -318,7 +315,7 @@ pub fn dress(
         };
         commands.spawn((
             Mesh3d(mesh),
-            MeshMaterial3d(paint(prop.rgb)),
+            MeshMaterial3d(paint(palette.surface(prop.rgb))),
             Transform::from_xyz(prop.at[0], prop.at[1] + h * 0.5, prop.at[2])
                 .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
             Scenery,

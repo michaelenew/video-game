@@ -21,6 +21,7 @@ use sim::objective::{self, MAX_STANDING};
 use sim::species::{MAX_MARKS, Mark, MarkLook};
 
 use crate::arenas::colour;
+use sim::arena::ArenaId;
 
 /// Which pool a mesh belongs to, and its index in it.
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -93,17 +94,45 @@ impl Looks {
     }
 }
 
+/// What a hazard or a raised solid is drawn in: the arena's own colour for
+/// that material, lifted a little so a thing standing on the floor is not the
+/// floor.
+///
+/// The lift used to be a flat 1.25x on an already-dark colour, which is how a
+/// raised stone and the floor it stands on ended up the same grey. A step in
+/// lightness reads as a step; a step in brightness reads as a lighting bug.
+fn floor_colour(id: ArenaId, m: Material) -> [f32; 3] {
+    look::tint::Lch::of(look::palette::of(id).of(m))
+        .lighter(0.05)
+        .rgb()
+}
+
+/// Repaint the pooled materials for an arena, in place.
+///
+/// The pool is spawned once and never respawned -- a fight must not allocate --
+/// so an arena change edits the materials the handles already point at.
+pub fn repaint(looks: &Looks, materials: &mut Assets<StandardMaterial>, id: ArenaId) {
+    for (m, handle) in MATERIALS.iter().zip(&looks.by) {
+        if let Some(mat) = materials.get_mut(handle) {
+            let [r, g, b] = floor_colour(id, *m);
+            mat.base_color = Color::srgb(r, g, b);
+        }
+    }
+}
+
 pub fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let by = MATERIALS
+    // The proving ground's, to start. `repaint` swaps them for the arena's own
+    // the moment one is drawn, in place, so nothing here is spawned twice.
+    let by: Vec<_> = MATERIALS
         .iter()
         .map(|m| {
-            let [r, g, b] = colour(*m);
+            let [r, g, b] = floor_colour(ArenaId::PROVING_GROUND, *m);
             materials.add(StandardMaterial {
-                base_color: Color::srgb(r * 1.25, g * 1.25, b * 1.25),
+                base_color: Color::srgb(r, g, b),
                 perceptual_roughness: 0.6,
                 ..default()
             })
@@ -150,7 +179,7 @@ pub fn setup(
     // The Sandmaw's: a wake a shade darker than the sand it is in, so it
     // reads at dusk; a dark fin; a pale ring for a noise it heard; and the
     // faintest disc for how far it feels.
-    let [sr, sg, sb] = colour(Material::Sand);
+    let [sr, sg, sb] = colour(ArenaId::SANDMAW, Material::Sand);
     let sand = materials.add(StandardMaterial {
         base_color: Color::srgb(sr * 0.82, sg * 0.78, sb * 0.72),
         perceptual_roughness: 0.95,

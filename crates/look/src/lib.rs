@@ -17,8 +17,11 @@
 //! they change by hand is a tweak. What the tweak turns out to be *generally*
 //! true about is moved into the derivation, so the next arena starts closer.
 
+pub mod palette;
+pub mod sheet;
 pub mod skies;
 pub mod sky;
 pub mod tint;
 
+pub use palette::Palette;
 pub use sky::Sky;
