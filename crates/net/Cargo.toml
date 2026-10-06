@@ -8,16 +8,53 @@ license.workspace = true
 [dependencies]
 ggrs = { version = "0.11.1", features = ["sync-send"] }
 sim = { path = "../sim" }
-
-# `ggrs` plugs in here. It is not vendored yet because this environment cannot
-# reach crates.io; add it when working locally:
-#
-#   ggrs = "0.10"
-#
-# `Rollback` below is deliberately shaped like the GGRS session handler
-# (advance / save / load / checksum), so wiring it up is an impl block rather
-# than a redesign.
 serde = { version = "1", features = ["derive"] }
+# GGRS's own wire format. A socket that is not GGRS's UDP one -- a WebRTC data
+# channel, the shared UDP port in `meet::direct` -- has to put a `Message` into
+# bytes the same way, so it uses the same encoder at the version GGRS pins.
+bincode = "1.3"
+# Sealing the room's notes (`seal.rs`): ChaCha20-Poly1305 for the notes, and
+# SHA-256 to turn the link's secret into a key and a topic. Pure Rust, so the
+# same code runs in a page and on a desktop, and both ends agree byte for byte.
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+sha2 = "0.10"
+getrandom = "0.2"
+
+# On a desktop: WebRTC without a browser (str0m: it does no I/O of its own, so
+# the room's polling drives it, and its crypto is pure Rust), and a WebSocket
+# to the brokers over TLS. Together they let a desktop join a browser's room.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+str0m = { version = "0.24", default-features = false, features = ["rust-crypto"] }
+tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots"] }
+
+# In a browser: GGRS's clock and its random numbers come from JavaScript, and
+# the meeting point is reached through the browser's own WebSocket,
+# BroadcastChannel and WebRTC. See `src/browser.rs`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ggrs = { version = "0.11.1", features = ["sync-send", "wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["js"] }
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "BinaryType",
+    "BroadcastChannel",
+    "console",
+    "MessageEvent",
+    "RtcConfiguration",
+    "RtcDataChannel",
+    "RtcDataChannelInit",
+    "RtcDataChannelState",
+    "RtcDataChannelType",
+    "RtcIceGatheringState",
+    "RtcIceServer",
+    "RtcPeerConnection",
+    "RtcPeerConnectionState",
+    "RtcSdpType",
+    "RtcSessionDescription",
+    "RtcSessionDescriptionInit",
+    "WebSocket",
+] }
 
 [dev-dependencies]
 # GGRS ships a SyncTest session that replays with forced rollbacks and compares

@@ -27,6 +27,7 @@ mod glint;
 mod ground;
 mod hub;
 mod hud;
+mod menu;
 mod online;
 mod palette;
 mod picker;
@@ -76,12 +77,12 @@ fn matches(n: &str, c: sim::Class) -> bool {
 ///
 /// Flags as well as keys, because the headless screenshot script takes flags
 /// and not keystrokes. See [`picker`].
-fn chosen_start() -> picker::Start {
+fn chosen_start(opts: &platform::Options) -> picker::Start {
     picker::start(
-        platform::flag("--hunt"),
-        platform::value("--hunt"),
-        platform::value("--arena"),
-        platform::value("--temper"),
+        opts.flag("--hunt"),
+        opts.value("--hunt"),
+        opts.value("--arena"),
+        opts.value("--temper"),
     )
 }
 
@@ -106,15 +107,26 @@ fn seated(mut w: World, dummy: Dummy) -> World {
     w
 }
 
-fn chosen_classes() -> [sim::Class; 2] {
+fn chosen_classes(opts: &platform::Options) -> [sim::Class; 2] {
     [
-        platform::value("--p1")
+        opts.value("--p1")
             .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
-        platform::value("--p2")
+        opts.value("--p2")
             .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
     ]
+}
+
+/// The world a set of settings starts in: the run's own at startup, or a
+/// room's link when one is made or joined from the Esc menu. One function for
+/// both, which is what makes the world two clients build from one link the
+/// same world.
+fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
+    seated(
+        picker::world(chosen_start(opts), chosen_classes(opts)),
+        dummy,
+    )
 }
 
 fn main() {
@@ -145,6 +157,7 @@ fn main() {
         .init_resource::<Torsos>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
+        .init_resource::<menu::Menu>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -240,6 +253,10 @@ fn main() {
                 hud::update_picker,
                 glint::update,
                 veil::place,
+                online::announce,
+                hud::update_online,
+                menu::show_progress,
+                menu::draw,
             )
                 .chain()
                 .after(beast::signs)
@@ -444,22 +461,28 @@ struct Sparring(Option<hunt::Duelist>);
 
 impl Default for Sim {
     fn default() -> Self {
-        let mut w = seated(
-            picker::world(chosen_start(), chosen_classes()),
-            starting_dummy(),
-        );
+        // Against a person, player two is that person: alive in a hunt, and on
+        // nobody's script.
+        let opts = platform::options();
+        let dummy = if online::wanted(opts) {
+            Dummy::Human
+        } else {
+            starting_dummy()
+        };
+        let mut w = start_world(opts, dummy);
         shot_bars(&mut w);
         shot_weight(&mut w);
         shot_move(&mut w);
         let seed = w.clone();
+        let driver = online::start(opts, &w);
         Sim {
             prev: w.clone(),
             cur: w,
             clock: TickClock::new(),
             paused: false,
             step_once: false,
-            dummy: starting_dummy(),
-            driver: online::start(),
+            dummy,
+            driver,
             // `BIND_POSE=1` starts frozen, so the proportions of a build can be
             // captured without a keypress.
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
@@ -3094,6 +3117,10 @@ fn tick_sim(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     time: Res<Time>,
+    // The meeting's clock: the wall's, not the game's, which is clamped to a
+    // quarter-second a frame and so runs slow exactly when a page is
+    // struggling -- and the meeting's timeouts are about the network.
+    real: Res<Time<Real>>,
     look: Res<Look>,
     focus: Res<palette::UiFocus>,
     mut sim: ResMut<Sim>,
@@ -3124,10 +3151,15 @@ fn tick_sim(
     if focus.keyboard {
         return;
     }
-    if keys.just_pressed(KeyCode::KeyP) {
+    // Against a person the world changes only through ticks both machines
+    // play. Pausing, stepping, restarting and changing class are training
+    // tools that would edit it on one machine, so a match ignores them rather
+    // than desync. `H` and `T` still work: they travel on the wire.
+    let training = !sim.driver.online();
+    if training && keys.just_pressed(KeyCode::KeyP) {
         sim.paused = !sim.paused;
     }
-    if keys.just_pressed(KeyCode::BracketRight) {
+    if training && keys.just_pressed(KeyCode::BracketRight) {
         sim.step_once = true;
         sim.paused = true;
     }
@@ -3135,7 +3167,7 @@ fn tick_sim(
     // worth having: anything that happens on a single frame has to be gone past
     // and returned to before you can see what it did. Local play only -- a peer
     // is not rewinding with you.
-    if keys.just_pressed(KeyCode::BracketLeft) && matches!(sim.driver, Driver::Local) {
+    if training && keys.just_pressed(KeyCode::BracketLeft) {
         sim.paused = true;
         if let Some(back) = sim.history.pop() {
             // `prev` as well, or the interpolator spends a frame drawing the
@@ -3156,7 +3188,7 @@ fn tick_sim(
     // reason to be able to watch one.
     //
     // Dev only, because it takes the controls away from you.
-    if dev_mode() && keys.just_pressed(KeyCode::KeyG) {
+    if training && dev_mode() && keys.just_pressed(KeyCode::KeyG) {
         let classes = [sim::Class::Elementalist, sim.cur.players[1].class];
         let w = World::with_classes(classes);
         sim.prev = w.clone();
@@ -3173,7 +3205,7 @@ fn tick_sim(
     if keys.just_pressed(KeyCode::F2) {
         sim.bind_pose = !sim.bind_pose;
     }
-    if keys.just_pressed(KeyCode::Tab) {
+    if training && keys.just_pressed(KeyCode::Tab) {
         // Cycle player one's class. Restarts the match, since a class change
         // mid-round would leave the mechanic in someone else's state.
         let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
@@ -3182,7 +3214,7 @@ fn tick_sim(
         sim.prev = w.clone();
         sim.cur = w;
     }
-    if keys.just_pressed(KeyCode::Backspace) {
+    if training && keys.just_pressed(KeyCode::Backspace) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
         let w = seated(sim.cur.restarted(classes), sim.dummy);
         sim.prev = w.clone();
@@ -3247,79 +3279,78 @@ fn tick_sim(
     // Player two has no mouse, so they aim level.
     .looking(look.aim_two(), 0);
 
-    match &mut sim.driver {
-        Driver::Local => {
-            let ticks = if sim.paused {
-                u32::from(std::mem::take(&mut sim.step_once))
-            } else {
-                sim.clock.advance(time.delta_secs())
+    // The meeting first: the tick it opens the line on is the tick the match
+    // starts.
+    online::meet(&mut sim, real.elapsed().as_millis() as u64);
+    if !sim.driver.online() {
+        let ticks = if sim.paused {
+            u32::from(std::mem::take(&mut sim.step_once))
+        } else {
+            sim.clock.advance(time.delta_secs())
+        };
+        for _ in 0..ticks {
+            if sim.stop_at.is_some_and(|n| sim.cur.frame >= n) {
+                sim.paused = true;
+                break;
+            }
+            // Scripted inputs are resampled per simulation tick, not per
+            // rendered frame. One render frame can cover several ticks, and
+            // reusing a sample across them smears a four-frame press into
+            // whatever the frame rate happened to be -- which makes two
+            // runs of the same script diverge.
+            let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
+            // The rehearsal outranks the demo script and the keyboard, and
+            // ends by handing the controls back rather than looping.
+            let rehearsed = sim.rehearsing.and_then(|from| {
+                let since = sim.cur.frame.saturating_sub(from);
+                if since > REHEARSAL_FRAMES {
+                    sim.rehearsing = None;
+                    None
+                } else {
+                    Some(rehearsal(since, &sim.cur))
+                }
+            });
+            let two = match sim.dummy {
+                // Not in a hunt: the bot fights a fighter, and in a hunt
+                // player two is out of it (see `seated`).
+                Dummy::Bot(level) if !sim.cur.hunting() => spar(
+                    &mut sparring,
+                    level,
+                    &sim.cur,
+                    time.elapsed().as_nanos() as u32,
+                ),
+                mode => dummy_input(mode, sim.cur.frame, held_two),
             };
-            for _ in 0..ticks {
-                if sim.stop_at.is_some_and(|n| sim.cur.frame >= n) {
-                    sim.paused = true;
-                    break;
-                }
-                // Scripted inputs are resampled per simulation tick, not per
-                // rendered frame. One render frame can cover several ticks, and
-                // reusing a sample across them smears a four-frame press into
-                // whatever the frame rate happened to be -- which makes two
-                // runs of the same script diverge.
-                let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
-                // The rehearsal outranks the demo script and the keyboard, and
-                // ends by handing the controls back rather than looping.
-                let rehearsed = sim.rehearsing.and_then(|from| {
-                    let since = sim.cur.frame.saturating_sub(from);
-                    if since > REHEARSAL_FRAMES {
-                        sim.rehearsing = None;
-                        None
-                    } else {
-                        Some(rehearsal(since, &sim.cur))
-                    }
-                });
-                let two = match sim.dummy {
-                    // Not in a hunt: the bot fights a fighter, and in a hunt
-                    // player two is out of it (see `seated`).
-                    Dummy::Bot(level) if !sim.cur.hunting() => spar(
-                        &mut sparring,
-                        level,
-                        &sim.cur,
-                        time.elapsed().as_nanos() as u32,
-                    ),
-                    mode => dummy_input(mode, sim.cur.frame, held_two),
-                };
-                // A trip rides on the first tick after it was asked for, and
-                // only that one.
-                let travel = std::mem::take(&mut sim.travel);
-                let pair = [
-                    rehearsed
-                        .unwrap_or_else(|| scripted_or(scripted, held))
-                        .travelling(travel),
-                    two,
-                ];
-                // Remembered before the tick, so one press of `[` lands on the
-                // frame you were just looking at. Split out of the field access
-                // because the ring and the world live on the same struct.
-                let Sim { history, cur, .. } = &mut *sim;
-                history.push(cur);
+            // A trip rides on the first tick after it was asked for, and
+            // only that one.
+            let travel = std::mem::take(&mut sim.travel);
+            let pair = [
+                rehearsed
+                    .unwrap_or_else(|| scripted_or(scripted, held))
+                    .travelling(travel),
+                two,
+            ];
+            // Remembered before the tick, so one press of `[` lands on the
+            // frame you were just looking at. Split out of the field access
+            // because the ring and the world live on the same struct.
+            let Sim { history, cur, .. } = &mut *sim;
+            history.push(cur);
+            sim.prev = sim.cur.clone();
+            sim.cur.advance(pair);
+            if travel != sim::input::Travel::NONE {
+                // A new fight: nothing to interpolate from, and player two
+                // sits a hunt out unless a person has their keys.
+                sim.cur = seated(sim.cur.clone(), sim.dummy);
                 sim.prev = sim.cur.clone();
-                sim.cur.advance(pair);
-                if travel != sim::input::Travel::NONE {
-                    // A new fight: nothing to interpolate from, and player two
-                    // sits a hunt out unless a person has their keys.
-                    sim.cur = seated(sim.cur.clone(), sim.dummy);
-                    sim.prev = sim.cur.clone();
-                }
             }
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        Driver::Online { .. } => {
-            let ticks = sim.clock.advance(time.delta_secs());
-            for _ in 0..ticks {
-                let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
-                let travel = std::mem::take(&mut sim.travel);
-                let local = scripted_or(scripted, held).travelling(travel);
-                online::step(&mut sim, local);
-            }
+    } else {
+        let ticks = sim.clock.advance(time.delta_secs());
+        for _ in 0..ticks {
+            let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
+            let travel = std::mem::take(&mut sim.travel);
+            let local = scripted_or(scripted, held).travelling(travel);
+            online::step(&mut sim, local);
         }
     }
 }
@@ -3778,6 +3809,7 @@ fn cursor_should_be_captured(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 fn mouse_look(
     mut look: ResMut<Look>,
     mut settings: ResMut<settings::Settings>,
@@ -3785,6 +3817,8 @@ fn mouse_look(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut focus: ResMut<palette::UiFocus>,
+    mut menu: ResMut<menu::Menu>,
+    mut lock_seen: Local<bool>,
     mut windows: Query<&mut Window>,
 ) {
     // Sensitivity, adjustable mid-match and written straight to disk. Two people
@@ -3848,14 +3882,35 @@ fn mouse_look(
     // The keyboard keeps playing, so you can drag a value and immediately feel
     // it with W and J without closing anything.
     let clicked = mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right);
+    // A page lets go of the mouse itself on Escape, and the key never reaches
+    // the game: so a lock the page has dropped is an Escape. Only once the
+    // lock has been seen, because a page grants it a frame or two after the
+    // click that asked for it.
+    let lost = look.grabbed && platform::pointer_lock_lost();
+    if look.grabbed && !lost {
+        *lock_seen = true;
+    }
+    let lost = lost && std::mem::take(&mut *lock_seen);
+    let escape = keys.just_pressed(KeyCode::Escape) || lost;
+    // **The Esc menu** (`menu.rs`): Escape out of the fight brings it up, and
+    // Escape again puts it away; taking the mouse back puts it away too.
+    if escape {
+        menu.open = look.grabbed || !menu.open;
+    }
     let want = cursor_should_be_captured(
-        keys.just_pressed(KeyCode::Escape),
+        escape,
         std::mem::take(&mut focus.just_opened),
         clicked && !focus.pointer,
         look.grabbed,
     );
+    if want {
+        menu.open = false;
+    }
     if want != look.grabbed {
         look.grabbed = want;
+        if !want {
+            *lock_seen = false;
+        }
         if let Ok(mut window) = windows.single_mut() {
             window.cursor_options.grab_mode = if want {
                 bevy::window::CursorGrabMode::Locked

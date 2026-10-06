@@ -82,7 +82,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",
-                "Peer-to-peer against someone else. Rollback netcode, no server.",
+                "Peer-to-peer against someone else, on a LAN or wherever their address reaches. Rollback netcode, no server. Both of you start it with the other's address; --port defaults to the peer's port, and the same port on both machines is fine. The two say hello before the match: whoever started first is player one, and two different builds or two different --p1/--p2/--arena are refused rather than desynced. You practise while you wait; restarts, class changes, pausing and stepping are off for the match.",
+            ),
+            e(
+                "cargo run -p game -- --join '<link>'",
+                "Join a friend's room from the desktop: paste the link their page made, quoted, and it plays exactly as opening the link would -- the same room, classes and arena, through the same public brokers, over the same WebRTC connection. A desktop and a page meet as two pages do, so either can have made the room. It must be built from the commit the page was deployed from (the page's footer names it), or the room says the builds differ. Flags typed beside it win over the link's.",
+            ),
+            e(
+                "cargo run -p game -- --room <name> --key <secret> [--broker <url>]",
+                "The same, spelled out: --join is these, unpacked from the link. --key is the part after #key= in it, which seals the room: the brokers carry notes they cannot read, under a name that is not the room's. --broker <url> meets through one MQTT broker instead of the public three (ws:// for one on this machine). --board tabs is the browser's alone. --page <url> is the page a room made on this desktop links to (the published one by default), for a room on another deploy.",
             ),
             e(
                 "cargo run -p manual",
@@ -97,15 +105,27 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "In a browser",
         in_browser: true,
-        blurb: "The same build, one player. A page cannot open a UDP socket, so peer-to-peer stays on the desktop; the query string does what the flags do.",
+        blurb: "The same build. Play a friend with a link; the query string does what the flags do.",
         entries: &[
             e(
                 "./crates/web/build-game.sh",
                 "Build the page. Writes target/web, which is what GitHub Pages serves.",
             ),
             e(
+                "?room=<name>",
+                "Play a friend: the page's Play with a friend button makes one, and you send them the link. Both of you open it, and the two pages find each other through free public message brokers and then connect directly (WebRTC) -- no server of ours, and nothing of the match goes through anyone else. The link ends in #key=, a random secret that seals the room: the brokers see only notes they cannot read, under a name that is not the room's. A friend on a desktop joins the same link with --join. Whoever opened it first is player one; the classes and arena are the link's, so put ?p1=, ?p2= and ?arena= in it before you send it. You practise while you wait. Some networks, often mobile data, will not take a direct connection; the page says so.",
+            ),
+            e(
+                "?room=<name>&board=tabs",
+                "The same, between two tabs of this browser and nothing else: the room is a BroadcastChannel instead of a broker. For trying it alone, and for the smoke test.",
+            ),
+            e(
+                "?room=<name>&broker=<url>",
+                "The same, through one MQTT broker of your choosing instead of the public three: a wss:// URL that takes WebSocket connections (ws:// for one on this machine). Both of you need the same one.",
+            ),
+            e(
                 "?p1=<class>&p2=<class>",
-                "Pick classes, the same names the flags take. Tab still cycles player one in game.",
+                "Pick classes, the same names the flags take. Tab still cycles player one in game, except in a match against a friend.",
             ),
             e(
                 "?hunt or ?hunt=<creature>",
@@ -144,6 +164,10 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e("Mouse", "Aim. Where you look is where you are pointed."),
             e("Click / Esc", "Capture the mouse, and release it."),
+            e(
+                "Esc menu",
+                "Esc steps out of the fight and brings up the menu; a click in the arena goes back. In it: Create a room, which makes a link for the fight you are practising, and a box to paste a friend's link and Join; while a room is active, its name, how meeting is going, the link with a Copy link button, and Leave. The creature list with your trophies and tempers is on the right, and only there while the menu is up.",
+            ),
             e("W A S D", "Move, relative to the camera."),
             e(
                 "Space",
@@ -699,7 +723,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "./scripts/web-smoke.sh [out.png]",
-                "Load the built web page in headless Chromium: fails on any console error, failed request or missing controls entry, and leaves a screenshot.",
+                "Load the built web page in headless Chromium: fails on any console error, failed request or missing controls entry, and leaves a screenshot. Then two tabs open one sealed room and must meet as players one and two.",
+            ),
+            e(
+                "./scripts/room-desktop.sh [prefix]",
+                "A page opens a sealed room and the desktop build joins it with --join, through mosquitto on this machine, under Xvfb: they must meet as players one and two and play without a desync. Leaves a screenshot of each and the desktop's log.",
             ),
             e(
                 "./scripts/setup-tools.sh web|shot|browser|all",

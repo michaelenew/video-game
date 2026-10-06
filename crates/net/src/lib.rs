@@ -9,13 +9,35 @@
 use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
 
+#[cfg(target_arch = "wasm32")]
+pub mod browser;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod direct;
 pub mod ggrs_glue;
+pub mod loopback;
+pub mod meet;
+pub mod mqtt;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native;
 pub mod p2p;
+pub mod seal;
 
 /// Re-exported so the front end never depends on GGRS directly. Networking is
 /// this crate's business.
 pub use ggrs;
 pub use ggrs_glue::{NetInput, SessionConfig, handle_requests};
+pub use meet::{Progress, Rendezvous, Seat};
+
+/// The far end of a match, as GGRS addresses it.
+///
+/// Not a socket address: in a browser the other player is at the end of a
+/// WebRTC data channel, and a page never learns an address for it. One
+/// variant, because a match has one other player and every [`meet::Line`]
+/// reaches exactly one; a third player would make this an index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Peer {
+    Line,
+}
 
 /// What a rollback session needs from a simulation.
 pub trait Rollback {

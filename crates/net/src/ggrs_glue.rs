@@ -43,15 +43,19 @@ impl From<Input> for NetInput {
     }
 }
 
-/// Session configuration. `Address` is a plain socket address because the
-/// prototype connects peers directly by IP with no matchmaking server.
+/// Session configuration.
+///
+/// `Address` is [`crate::Peer`] rather than a socket address because the other
+/// player is not always at one: in a browser they are at the far end of a
+/// WebRTC data channel, which has no address a page can see. One session type
+/// for every way of meeting is what lets `game` hold a single `Driver::Online`.
 #[derive(Debug)]
 pub struct SessionConfig;
 
 impl Config for SessionConfig {
     type Input = NetInput;
     type State = World;
-    type Address = std::net::SocketAddr;
+    type Address = crate::Peer;
 }
 
 /// Service one batch of GGRS requests against the simulation.

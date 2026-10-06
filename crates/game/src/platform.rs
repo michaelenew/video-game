@@ -3,7 +3,9 @@
 //! Five things, and only five. Three of them are here: **how a run is
 //! configured**, **where its settings are kept** (and the trophy record beside
 //! them, which is kept the same way for the same reason), and **what a crash
-//! looks like**. [`crate::online`] owns the fourth, whether there is a peer. The
+//! looks like** -- with the line that says how meeting a peer is going, which
+//! goes to the same two places a crash does. [`crate::online`] owns the
+//! fourth, **how a peer is reached**. The
 //! fifth — whether there is a checkout to commit a tuning session to — belongs
 //! to the two files that want one, [`crate::bake`] and [`crate::hub`], which
 //! carry their own browser half and are the two exemptions in
@@ -114,6 +116,32 @@ impl Options {
             })
             .collect();
         Options { pairs }
+    }
+
+    /// A link's settings, added under the ones already given: the query
+    /// string, and the part after `#` -- where a room's secret travels, because
+    /// a browser never sends that part to the server. So `--join <link>` is
+    /// the desktop opening the link a friend sent, and a flag typed beside it
+    /// still wins over the link's.
+    #[allow(dead_code)]
+    pub fn absorb_link(&mut self, link: &str) {
+        let (rest, fragment) = link.split_once('#').unwrap_or((link, ""));
+        let query = rest.split_once('?').map_or("", |(_, q)| q);
+        for (name, value) in Options::from_query(&format!("{query}&{fragment}")).pairs {
+            if !self.pairs.iter().any(|(key, _)| same(key, &name)) {
+                self.pairs.push((name, value));
+            }
+        }
+    }
+
+    /// Give a name a value, replacing any it had. How the Esc menu writes a
+    /// room it has just made into the settings a link is built from.
+    pub fn set(&mut self, name: &str, value: &str) {
+        self.pairs.retain(|(key, _)| !same(key, name));
+        self.pairs.push((
+            name.trim_start_matches('-').to_string(),
+            Some(value.to_string()),
+        ));
     }
 
     /// The value given for a name, if it was given one.
@@ -230,7 +258,11 @@ mod host {
     use std::path::PathBuf;
 
     pub fn read_options() -> super::Options {
-        super::Options::from_args(std::env::args().skip(1))
+        let mut options = super::Options::from_args(std::env::args().skip(1));
+        if let Some(link) = options.value("--join").map(str::to_string) {
+            options.absorb_link(&link);
+        }
+        options
     }
 
     /// Where one of the player's files lives: `~/.config/arena/<file>`.
@@ -287,6 +319,35 @@ mod host {
     /// Nothing to install: a panic already prints to the terminal the game was
     /// started from.
     pub fn report_panics() {}
+
+    /// The terminal the game was started from is the only place to say it.
+    pub fn announce(line: &str) {
+        if !line.is_empty() {
+            eprintln!("{line}");
+        }
+    }
+
+    /// Where the published page lives, which is what a room's link opens: a
+    /// friend without the game clicks it and plays in their browser.
+    /// `--page <url>` points it at another deploy.
+    pub fn page_url() -> String {
+        super::value("--page")
+            .unwrap_or("https://michaelenew.github.io/video-game/")
+            .to_string()
+    }
+
+    /// A desktop has no address bar, so the link goes to the terminal too,
+    /// for whoever started the game from one.
+    pub fn show_room(link: Option<&str>) {
+        if let Some(link) = link {
+            eprintln!("room: {link}");
+        }
+    }
+
+    /// A desktop window keeps the mouse until the game lets go of it.
+    pub fn pointer_lock_lost() -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -299,11 +360,23 @@ mod host {
     /// this one's settings.
     const STORAGE_KEY: &str = "arena.settings";
 
+    /// The query string, and the part after `#`, which carries a room's
+    /// secret precisely because it is never sent to the server.
     pub fn read_options() -> super::Options {
-        let query = web_sys::window()
-            .and_then(|w| w.location().search().ok())
-            .unwrap_or_default();
-        super::Options::from_query(&query)
+        let location = web_sys::window().map(|w| w.location());
+        let part = |get: fn(&web_sys::Location) -> Result<String, wasm_bindgen::JsValue>| {
+            location
+                .as_ref()
+                .and_then(|l| get(l).ok())
+                .unwrap_or_default()
+        };
+        let query = part(web_sys::Location::search);
+        let fragment = part(web_sys::Location::hash);
+        super::Options::from_query(&format!(
+            "{}&{}",
+            query.trim_start_matches('?'),
+            fragment.trim_start_matches('#')
+        ))
     }
 
     /// `localStorage`, holding exactly the text the desktop writes to a file.
@@ -362,10 +435,57 @@ mod host {
             }
         }));
     }
+
+    /// This page's own address, without its query or `#`: a room made here is
+    /// a room on this deploy.
+    pub fn page_url() -> String {
+        web_sys::window()
+            .map(|w| w.location())
+            .and_then(|l| Some(format!("{}{}", l.origin().ok()?, l.pathname().ok()?)))
+            .unwrap_or_default()
+    }
+
+    /// The room's link in the address bar, so a reload stays in the room and
+    /// the bar itself is a way to share it; the bare page when leaving.
+    pub fn show_room(link: Option<&str>) {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let url = link.map_or_else(page_url, str::to_string);
+        if let Ok(history) = window.history() {
+            let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&url));
+        }
+    }
+
+    /// The browser releases the mouse itself on Escape, and the key never
+    /// reaches the game. So the game asks: has the page lost its lock?
+    pub fn pointer_lock_lost() -> bool {
+        web_sys::window()
+            .and_then(|w| w.document())
+            .is_some_and(|d| d.pointer_lock_element().is_none())
+    }
+
+    /// How meeting the other player is going, in `#online-status` beside the
+    /// share link -- where somebody waiting for a friend is looking, rather
+    /// than only on the canvas behind the mouse capture.
+    pub fn announce(line: &str) {
+        let element = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.get_element_by_id("online-status"));
+        if let Some(element) = element {
+            element.set_text_content(Some(line));
+        }
+        if !line.is_empty() {
+            web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(line));
+        }
+    }
 }
 
 use host::read_options;
-pub use host::{load_settings, load_trophies, report_panics, save_settings, save_trophies};
+pub use host::{
+    announce, load_settings, load_trophies, page_url, pointer_lock_lost, report_panics,
+    save_settings, save_trophies, show_room,
+};
 
 // ---------------------------------------------------------------------------
 
@@ -468,6 +588,31 @@ mod tests {
         let back = Trophies::from_text(&host::read_from(&file).expect("written"));
         assert_eq!(back, record);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_pasted_link_is_the_run_it_was_sent_as() {
+        // `--join` on a desktop is opening the link: its room, its classes,
+        // and the secret after the `#`. A flag typed beside it wins.
+        let mut args = Options::from_args(
+            [
+                "--join",
+                "https://x.github.io/video-game/?room=k3x9qw&p1=reaver&p2=champion#key=abc123",
+                "--p2",
+                "bulwark",
+            ]
+            .map(String::from),
+        );
+        args.absorb_link(args.value("join").unwrap().to_string().as_str());
+        assert_eq!(args.value("room"), Some("k3x9qw"));
+        assert_eq!(args.value("key"), Some("abc123"));
+        assert_eq!(args.value("p1"), Some("reaver"));
+        assert_eq!(args.value("p2"), Some("bulwark"));
+        // The page reads its own address the same way.
+        let page = Options::from_query("room=k3x9qw&p1=reaver&key=abc123");
+        for name in ["room", "key", "p1"] {
+            assert_eq!(args.value(name), page.value(name), "{name}");
+        }
     }
 
     #[test]

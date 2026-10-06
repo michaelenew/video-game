@@ -177,7 +177,8 @@ you reverted.
 five things, each of which lives in a file that exists to hold it.** Where a
 run's settings come from (argv, or the query string — `?dev` is `--dev`), where
 a player's settings are kept (a file, or local storage) and where a panic can be
-read are `crates/game/src/platform.rs`. Whether there is a peer is `online.rs`.
+read are `crates/game/src/platform.rs`. How the peer is reached (UDP, or a
+public broker and WebRTC) is `online.rs`.
 Whether there is a checkout to commit a bake to is `bake.rs` and `hub.rs`.
 Enforced by `crates/game/tests/one_platform.rs`, which fails on `std::env`,
 `std::fs`, `std::net`, `std::process`, `std::thread` or `web_sys` anywhere else
@@ -225,13 +226,15 @@ Nothing in it decides what a colour should be.
 
 ## Tools that are not on every machine
 
-Three things this repository does need tools a fresh machine does not have: the
+Four things this repository does need tools a fresh machine does not have: the
 **browser build** needs `wasm-bindgen` at the lock file's exact version, a
 **headless screenshot** needs Xvfb, a software Vulkan driver and ImageMagick,
-and **loading the built page** (`./scripts/web-smoke.sh`, which is how a change
-to the browser build is checked) needs Playwright and its Chromium.
-`./scripts/setup-tools.sh web`, `shot`, `browser` or `all` installs them, once,
-and is the only place the steps are written. The Pages workflow runs it; a
+**loading the built page** (`./scripts/web-smoke.sh`, which is how a change
+to the browser build is checked) needs Playwright and its Chromium, and **a
+desktop joining a page's room** (`./scripts/room-desktop.sh`, how a change to
+`net::native` is checked) needs all of those and mosquitto.
+`./scripts/setup-tools.sh web`, `shot`, `browser`, `broker` or `all` installs
+them, once, and is the only place the steps are written. The Pages workflow runs it; a
 cloud environment's setup script should run it too, so a session starts with
 them.
 

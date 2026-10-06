@@ -8,8 +8,8 @@
 # `file://` URL -- or publish it. `.github/workflows/pages.yml` runs exactly
 # this and hands the directory to GitHub Pages.
 #
-# What comes out is the same build the desktop runs, minus the peer: see
-# `crates/game/src/platform.rs` for the four places the two differ, and
+# What comes out is the same build the desktop runs: see
+# `crates/game/src/platform.rs` for the places the two differ, and
 # `docs/design/web.md` for why it is the whole game rather than a cut-down one.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -37,6 +37,15 @@ rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true
 # `wasm-release` is `release` with `opt-level = "z"`, `panic = "abort"` and the
 # symbols stripped. Download size is the whole cost of a link somebody is not
 # sure they want to click.
+#
+# `ARENA_BUILD` is baked into the module and sent in the hello two players
+# trade before a match (`crates/game/src/online.rs`, `terms`): two pages from
+# different deploys are told so, rather than left to desync.
+#
+# The commit alone, the way `crates/game/build.rs` stamps a desktop build, so
+# a desktop built from the deployed commit can join a page's room.
+ARENA_BUILD="$(git rev-parse --short=7 HEAD 2>/dev/null || echo dev)"
+export ARENA_BUILD
 cargo build -p game --target wasm32-unknown-unknown --profile wasm-release
 
 rm -rf "$OUT"
@@ -76,7 +85,7 @@ fi
 # The controls panel comes from the manual, so the page cannot describe keys the
 # game does not have. The build stamp is so a bug report can name a build.
 CONTROLS=$(cargo run -q -p manual -- --html)
-STAMP="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+STAMP="$ARENA_BUILD"
 git diff --quiet 2>/dev/null || STAMP="$STAMP+dirty"
 STAMP="$STAMP · $(date -u +%Y-%m-%d)"
 

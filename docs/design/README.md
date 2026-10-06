@@ -160,7 +160,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [courses.md](courses.md) | **Jump courses**: eight hand-authored floating-island courses to play (two easy; the Spiral, the Falls, the Slalom and the Fork hard; the Spire and the Gulf barely possible -- every tier an unplayed guess; `--arena falls`, `N` steps through them), big jumps in them for the class mechanics, the Reach (a proving ground of marked distances, `--arena reach`), the corner-clip fix, and the round-two/three measuring tools kept but not used as design inputs | **Built 2026-10-03, hand-authored 2026-10-04, big jumps and the Reach 2026-10-04**; for play |
 | [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0 (the picker), W1 (trophies) and W2 (tempers) built 2026-10-01 |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
-| [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
+| [web.md](web.md) | The browser build: what a page cannot do, and what it does instead; playing a friend from a link (rooms on public brokers, WebRTC, the three seams in `net::meet`), sealed rooms, and a desktop joining a page's room | Decided; rooms built 2026-10-03, sealed and open to desktops 2026-10-05 |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |

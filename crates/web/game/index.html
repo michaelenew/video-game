@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arena — prototype</title>
-<meta name="description" content="A rollback arena fighter, mid-prototype. One player, in a browser.">
+<meta name="description" content="A rollback arena fighter, mid-prototype. Play it alone, or send a friend a link.">
 
 <!-- Inline so the page is three files and not four, and so the browser stops
      asking for a favicon that is not there. A shield, at 32 pixels. -->
@@ -15,6 +15,12 @@
   only thing generated into it is the controls panel, which comes from
   `manual::browser_help()` so that it cannot drift from the keys the game
   actually handles. `crates/web/build-game.sh` does the substitution.
+
+  It also makes rooms. "Play with a friend" puts `?room=<name>` in the URL,
+  and the game reads it the way it reads every other parameter: it meets
+  whoever else opens the same link and plays them (crates/game/src/online.rs).
+  This page only makes the name, shows the link to send, and shows the line
+  the game writes into #online-status.
 
   Three things this page owes a person who followed a link:
     1. Say no before the download if their browser cannot run it. Eight
@@ -207,13 +213,41 @@
   .help dd { margin: 1px 0 0; color: var(--dim); }
 
   footer { color: var(--dim); font-size: 12.5px; padding-top: 8px; }
+
+  /* The room panel: the link to send, and how meeting is going. */
+  .room {
+    display: grid;
+    gap: 8px;
+    margin: 4px 0 14px;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--p1);
+    border-radius: 8px;
+  }
+  .room[hidden] { display: none; }
+  .room .share { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .room input {
+    flex: 1 1 260px;
+    min-width: 0;
+    font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--edge);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+  #online-status { color: var(--ink); }
+  #online-status:empty::before { content: 'Starting…'; color: var(--dim); }
+  .room small { color: var(--dim); }
+  .under .actions { display: flex; gap: 8px; }
   a { color: var(--p1); }
 </style>
 
 <div class="wrap">
   <header>
     <h1>Arena <em>— prototype</em></h1>
-    <p>Rollback arena fighter, mid-build. One player and a training dummy.</p>
+    <p>Rollback arena fighter, mid-build. A training dummy, or a friend with a link.</p>
   </header>
 
   <div class="stage" id="stage">
@@ -232,21 +266,41 @@
       <p id="loading-note">Fetching the build. It is a few megabytes and it is cached after the first time.</p>
     </div>
 
-    <div id="hint" hidden>Click to capture the mouse · Esc to release</div>
+    <div id="hint" hidden>Click to capture the mouse · Esc for the menu: rooms, progress</div>
     <pre id="fatal" hidden></pre>
   </div>
 
   <div class="under">
     <span>Six classes. <b>Tab</b> cycles yours, <b>F8</b> shows the pickers, <b>1</b>–<b>4</b> sets what the dummy does.</span>
-    <button id="full" type="button">Fullscreen</button>
+    <span class="actions">
+      <button id="friend" type="button">Play with a friend</button>
+      <button id="full" type="button">Fullscreen</button>
+    </span>
+  </div>
+
+  <div class="room" id="room" hidden>
+    <div><b>Room <span id="room-name"></span>.</b> Send your friend this link; when they open it, the match starts.</div>
+    <div class="share">
+      <input id="room-link" readonly aria-label="Link to send">
+      <button id="copy" type="button">Copy link</button>
+      <button id="leave" type="button">Leave</button>
+    </div>
+    <div id="online-status" role="status" aria-live="polite"></div>
+    <small>Whoever opened the room first is player one. The classes and the arena are the link's:
+      add <code>&amp;p1=</code>, <code>&amp;p2=</code> or <code>&amp;arena=</code> before you send it.
+      You can practise while you wait. A friend on a desktop joins with
+      <code>game --join '&lt;link&gt;'</code>. Everything after <code>#key=</code> is the
+      room's secret: the public relays see notes they cannot read.</small>
   </div>
 
   <p class="lede">
     Everything you press is simulated in fixed point and nothing about the fight
-    is decided by the renderer — the same build plays peer-to-peer on a desktop
-    with rollback netcode. <b>A browser cannot open a UDP socket</b>, so this
-    page is single player: you, and a dummy you can set to stand still, block,
-    or attack on a cadence you can practise parrying.
+    is decided by the renderer, so two machines can play it with rollback
+    netcode. <b>Play with a friend</b> makes a link: the two pages find each
+    other through free public message brokers, then talk directly, browser to
+    browser — nothing of the match goes through anyone else. Alone, it is you
+    and a dummy you can set to stand still, block, or attack on a cadence you
+    can practise parrying.
   </p>
 
   <div class="help">
@@ -393,6 +447,55 @@ __CONTROLS__
   document.addEventListener('pointerlockchange', () => {
     hint.hidden = document.pointerLockElement === canvas;
   });
+
+  // Rooms. A short random name to recognise, and a long random secret to
+  // seal it, both free of letters that read as each other (no i, l, o, 0, 1).
+  const params = new URLSearchParams(location.search);
+  function letters(n) {
+    const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let out = '';
+    while (out.length < n) {
+      for (const b of crypto.getRandomValues(new Uint8Array(n))) {
+        // Rejection rather than `b % 31`, which would favour the first few
+        // letters: 248 is the largest multiple of 31 under 256.
+        if (b < 248 && out.length < n) out += alphabet[b % alphabet.length];
+      }
+    }
+    return out;
+  }
+  const freshRoom = () => letters(6);
+  // The room's secret: 26 letters, about 129 bits, after the `#` -- the part
+  // of a link a browser never sends to the server. It seals the room's notes
+  // on the public brokers (crates/net/src/seal.rs).
+  const freshKey = () => letters(26);
+  document.getElementById('friend').addEventListener('click', () => {
+    params.set('room', freshRoom());
+    location.assign(`${location.pathname}?${params}#key=${freshKey()}`);
+  });
+  if (params.get('room')) {
+    document.getElementById('room').hidden = false;
+    document.getElementById('room-name').textContent = params.get('room');
+    document.getElementById('friend').hidden = true;
+    const link = document.getElementById('room-link');
+    link.value = location.href;
+    link.addEventListener('focus', () => link.select());
+    document.getElementById('copy').addEventListener('click', async (e) => {
+      try {
+        await navigator.clipboard.writeText(link.value);
+        e.target.textContent = 'Copied';
+      } catch {
+        link.focus();
+        e.target.textContent = 'Press Ctrl+C';
+      }
+      setTimeout(() => (e.target.textContent = 'Copy link'), 1800);
+    });
+    document.getElementById('leave').addEventListener('click', () => {
+      params.delete('room');
+      params.delete('board');
+      params.delete('broker');
+      location.assign(`${location.pathname}${params.size ? '?' + params : ''}`);
+    });
+  }
 
   document.getElementById('full').addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen();

@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Prove the browser build starts: build it if it is not there, serve it, load
-# it in headless Chromium and report.
+# it in headless Chromium and report. Then prove two pages can play each
+# other: two tabs open one room and must meet (`crates/web/room-smoke.mjs`).
 #
 #   ./scripts/web-smoke.sh [screenshot.png]
 #
+# Then the Esc menu: one tab creates a room from it, another joins from it
+# (`crates/web/menu-smoke.mjs`).
+#
+# WEB_ROOM=0 skips the room and menu checks, which load the game four times more.
 # WEB_REBUILD=1 rebuilds even when target/web exists. WEB_QUERY=hunt=gnawers
 # loads the page asking for something, so a creature can be checked reachable. The build needs
 # `./scripts/setup-tools.sh web` and the browser needs `... browser`; both are
@@ -25,3 +30,8 @@ trap 'kill $SERVER 2>/dev/null || true' EXIT
 sleep 1
 
 node crates/web/smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "$OUT"
+
+if [ "${WEB_ROOM:-1}" != 0 ]; then
+  node crates/web/room-smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "${OUT%.png}-room"
+  node crates/web/menu-smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "${OUT%.png}-menu"
+fi

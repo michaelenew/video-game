@@ -193,13 +193,20 @@ determinism argument.
 
 ## Networking
 
-**Peer to peer, rollback from day one.** The prototype needs no server: create a room and
-connect two peers directly by IP.
+**Peer to peer, rollback from day one.** No server of ours: two desktops connect directly
+by IP, and browsers and desktops meet in a sealed room on a public message broker and then
+connect directly over WebRTC. Both are the same meeting protocol (`crates/net/src/meet.rs`), which checks the
+two clients agree on the build and the starting world and settles who is player one before
+a frame is played; [web.md](web.md) §"Playing a friend from a link" has the design.
 
 **GGRS is wired.** It is the Rust reimplementation of GGPO and handles input prediction,
 rollback, and the periodic checksum exchange, which means **desync detection is largely
 free**. `handle_requests` services its save / load / advance requests against the
 simulation; that function is the entire integration.
+
+GGRS's address type is `net::Peer` rather than a socket address, because a browser's peer
+is at the end of a data channel and has none; every transport is a `meet::Line` behind one
+`LineSocket`, so there is one session type for every way of meeting.
 
 GGRS requires its input type to be `serde`-serialisable, so the wire type `NetInput` lives
 in `net` rather than putting a dependency on `sim` — whose zero-dependency status is a
@@ -215,9 +222,11 @@ if the simulation ever stops being a pure function.
 loop against a simulated peer. It is kept because it is readable — when SyncTest reports a
 desync, `LocalSession` is where you can watch one happen.
 
-**Honest about "no server ever":** true for the prototype and for LAN. Direct-IP
-connections between arbitrary home networks eventually need NAT traversal, which means a
-small STUN or relay service. Not needed now; worth not being surprised by later.
+**Honest about "no server ever":** true of the match, never of the meeting. Two browsers
+use public brokers to trade their two notes and public STUN servers to learn their own
+outside addresses; neither carries a frame of play. Network pairs that refuse a direct
+connection at all (often mobile data) need a TURN relay, which does carry the match and
+is not free -- not built, and the page says so when it happens.
 
 ## Animation under rollback
 
@@ -836,7 +845,7 @@ Everything below builds and passes today.
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Dev mode | `./scripts/dev.sh` — wireframes, the Oven and the class pickers |
 | Round flow | Knockout, round wins, reset |
-| **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
+| **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP; **a link in the browser** (`?room=`) — verified between two tabs of headless Chromium (`crates/web/room-smoke.mjs`), not yet between two networks |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
 | **All six classes** | **`game --p1 champion --p2 elementalist`**, or Tab to cycle |
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
@@ -866,4 +875,4 @@ did**, so every class implemented from here is checked from its first commit.
    Blood mage's Black spike, the Reaver's Send shadow -- already have one, and are animated.
 3. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
-4. **NAT traversal**, when the game leaves the LAN.
+4. **A TURN relay**, for the network pairs that will not take a direct connection.

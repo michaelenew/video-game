@@ -7,6 +7,8 @@
 #                                    # Vulkan driver, ImageMagick
 #   ./scripts/setup-tools.sh browser # loading the built page: Playwright and
 #                                    # its Chromium, for scripts/web-smoke.sh
+#   ./scripts/setup-tools.sh broker  # an MQTT broker on this machine, for
+#                                    # scripts/room-desktop.sh
 #   ./scripts/setup-tools.sh all
 #
 # Idempotent: a tool already there at the right version is skipped in under a
@@ -44,6 +46,11 @@
 #       every checkout. The browser download is the slow part, a couple of
 #       hundred megabytes; a machine that already has one (the cloud
 #       containers do, at PLAYWRIGHT_BROWSERS_PATH) is skipped.
+#
+# broker
+#       `scripts/room-desktop.sh` has a page and the desktop build meet in a
+#       room, through mosquitto on this machine rather than a public broker.
+#       A Debian package, like `shot`.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -67,38 +74,50 @@ web() {
   fi
 }
 
-# --- headless screenshots ------------------------------------------------------
-shot() {
-  local pkgs="xvfb imagemagick mesa-vulkan-drivers libxkbcommon-x11-0"
+# --- Debian packages, for `shot` and `broker` --------------------------------
+# apt_packages <target> <what, for the log> <package...>
+apt_packages() {
+  local target="$1" what="$2"
+  shift 2
   local missing=""
-  for p in $pkgs; do
+  for p in "$@"; do
     dpkg -s "$p" >/dev/null 2>&1 || missing="$missing $p"
   done
   if [ -z "$missing" ]; then
-    echo "shot: Xvfb, lavapipe and ImageMagick already installed"
+    echo "$target: $what already installed"
     return
   fi
   if ! command -v apt-get >/dev/null 2>&1; then
-    echo "shot: no apt-get here; install the equivalents of:$missing" >&2
+    echo "$target: no apt-get here; install the equivalents of:$missing" >&2
     status=1
     return
   fi
   local sudo=""
   if [ "$(id -u)" != 0 ]; then
     if command -v sudo >/dev/null 2>&1; then sudo="sudo"; else
-      echo "shot: not root and no sudo; run: apt-get install -y$missing" >&2
+      echo "$target: not root and no sudo; run: apt-get install -y$missing" >&2
       status=1
       return
     fi
   fi
-  echo "shot: installing$missing"
+  echo "$target: installing$missing"
   if $sudo apt-get install -y --no-install-recommends $missing >/dev/null 2>&1 \
      || { $sudo apt-get update >/dev/null 2>&1 && $sudo apt-get install -y --no-install-recommends $missing >/dev/null 2>&1; }; then
-    echo "shot: installed$missing"
+    echo "$target: installed$missing"
   else
-    echo "shot: FAILED: apt-get install -y$missing" >&2
+    echo "$target: FAILED: apt-get install -y$missing" >&2
     status=1
   fi
+}
+
+# --- headless screenshots ------------------------------------------------------
+shot() {
+  apt_packages shot "Xvfb, lavapipe and ImageMagick" xvfb imagemagick mesa-vulkan-drivers libxkbcommon-x11-0
+}
+
+# --- a broker for a room on this machine ------------------------------------------
+broker() {
+  apt_packages broker "mosquitto" mosquitto
 }
 
 # --- the page in a browser -----------------------------------------------------
@@ -148,8 +167,9 @@ for target in "$@"; do
     web) web ;;
     shot) shot ;;
     browser) browser ;;
-    all) web; shot; browser ;;
-    *) echo "unknown target '$target': web, shot, browser or all" >&2; exit 2 ;;
+    broker) broker ;;
+    all) web; shot; browser; broker ;;
+    *) echo "unknown target '$target': web, shot, browser, broker or all" >&2; exit 2 ;;
   esac
 done
 exit $status
