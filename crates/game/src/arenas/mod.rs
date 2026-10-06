@@ -187,6 +187,15 @@ pub fn dress(
     // Derived from that sky, so an arena that has one has both. Everything
     // drawn below goes through it, props included.
     let palette = look::palette::Palette::under(&sky);
+    // Everything the arena is made of is painted with this: the palette says
+    // what colour a thing is, the edge rule says where its accent goes, and
+    // `shapes` puts the answer in the vertices. One white material serves all
+    // of it, because every mesh carries its own colour.
+    let brush = crate::shapes::Brush {
+        palette,
+        edge: look::edge::EDGE,
+    };
+    let white = materials.add(crate::shapes::plain());
 
     // The clear colour still matters: it is what shows in the sliver of a frame
     // before the dome is drawn, and anywhere the dome does not reach. Set to
@@ -253,15 +262,26 @@ pub fn dress(
             ));
         }
         None => {
+            let (w, d) = (hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0);
+            // Subdivided, because a four-vertex plane has nowhere to put a
+            // gradient. The accent runs in from the arena's own perimeter,
+            // which is the edge of the world as far as anyone standing on it
+            // is concerned.
+            let mut floor = Plane3d::default()
+                .mesh()
+                .size(w, d)
+                .subdivisions(crate::shapes::cuts_across(w.max(d), brush.edge.reach))
+                .build();
+            crate::shapes::paint(
+                &mut floor,
+                Vec3::new(w * 0.5, 0.0, d * 0.5),
+                Vec3::ZERO,
+                palette.of(arena.floor),
+                &brush,
+            );
             commands.spawn((
-                Mesh3d(
-                    meshes.add(
-                        Plane3d::default()
-                            .mesh()
-                            .size(hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0),
-                    ),
-                ),
-                MeshMaterial3d(paint(palette.of(arena.floor))),
+                Mesh3d(meshes.add(floor)),
+                MeshMaterial3d(white.clone()),
                 Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
                 Scenery,
             ));
@@ -298,24 +318,41 @@ pub fn dress(
         let min = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z));
         let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
         let size = max - min;
+        let at = (min + max) * 0.5;
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
-            MeshMaterial3d(paint(palette.of(solid.material))),
-            Transform::from_translation((min + max) * 0.5),
+            Mesh3d(meshes.add(crate::shapes::boxy(
+                size,
+                at,
+                palette.of(solid.material),
+                &brush,
+            ))),
+            MeshMaterial3d(white.clone()),
+            Transform::from_translation(at),
             Scenery,
         ));
     }
 
     for prop in dressing.props {
         let [w, h, d] = prop.size;
+        let at = Vec3::new(prop.at[0], prop.at[1] + h * 0.5, prop.at[2]);
+        let rgb = palette.surface(prop.rgb);
+        let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
         let mesh = match prop.shape {
-            Shape::Box => meshes.add(Cuboid::new(w, h, d)),
-            Shape::Cylinder => meshes.add(Cylinder::new(w * 0.5, h)),
-            Shape::Sphere => meshes.add(Sphere::new(w * 0.5)),
+            Shape::Box => crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
+            Shape::Cylinder => {
+                let mut m = Cylinder::new(w * 0.5, h).mesh().build();
+                crate::shapes::paint(&mut m, half, at, rgb, &brush);
+                m
+            }
+            Shape::Sphere => {
+                let mut m = Sphere::new(w * 0.5).mesh().build();
+                crate::shapes::paint(&mut m, Vec3::splat(w * 0.5), at, rgb, &brush);
+                m
+            }
         };
         commands.spawn((
-            Mesh3d(mesh),
-            MeshMaterial3d(paint(palette.surface(prop.rgb))),
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
             Transform::from_xyz(prop.at[0], prop.at[1] + h * 0.5, prop.at[2])
                 .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
             Scenery,

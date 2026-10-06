@@ -32,6 +32,7 @@ mod palette;
 mod picker;
 mod platform;
 mod settings;
+mod shapes;
 mod signs;
 mod sky;
 mod species;

@@ -5,8 +5,9 @@
 //! ```
 //!
 //! One row per arena: the **light** it is under, its **accent**, and then its
-//! ten surfaces, each shown twice -- plain, and with the accent laid over it
-//! the way an edge or a crest gets it. The surfaces are drawn **lit**
+//! ten surfaces, each shown twice -- plain, and with the accent at the strength
+//! an edge gets it. The last column is the falloff itself, across the whole
+//! distance the accent reaches. The surfaces are drawn **lit**
 //! (`palette::lit`), not as raw albedo, so what is on the sheet is what will be
 //! on the screen; judging albedo is how the first version of this palette came
 //! out as a white wash in the game while looking fine here. The second half of each swatch is the
@@ -24,6 +25,7 @@
 //! - **A beige accent.** If the accent chip looks like more of the light, the
 //!   edges in that arena will do nothing at all.
 
+use look::edge::EDGE;
 use look::palette::{self, lit, local};
 use look::sheet::{box_at, byte, text, write};
 use sim::arena::Material;
@@ -41,9 +43,9 @@ const EVERY: [Material; 10] = [
     Material::Wood,
 ];
 
-/// How much accent an edge gets, for the sheet. The real amount varies along a
-/// surface; this is the strong end of it, which is the end worth judging.
-const EDGE: f32 = 0.45;
+/// How wide the falloff strip is drawn, in pixels. It spans `EDGE.reach`
+/// metres, so one strip is the whole gradient a player will see on an edge.
+const FALLOFF: usize = 44;
 
 const LABEL: usize = 104;
 const CHIP: usize = 30;
@@ -52,7 +54,7 @@ const ROW: usize = 34;
 fn main() {
     let arenas: Vec<_> = sim::arena::all().collect();
     // Label, light, accent, a gap, then the ten surfaces in two halves each.
-    let w = LABEL + CHIP * 2 + 10 + EVERY.len() * (CHIP + 2);
+    let w = LABEL + CHIP * 2 + 10 + EVERY.len() * (CHIP + 2) + FALLOFF + 10;
     let h = ROW * arenas.len() + 18;
     let mut px = vec![[20u8, 20, 24]; w * h];
 
@@ -82,7 +84,24 @@ fn main() {
                 w,
                 (x + CHIP / 2, y),
                 (CHIP / 2, CHIP),
-                byte(lit(p.accented(c, EDGE))),
+                byte(lit(p.accented(c, EDGE.rim))),
+            );
+        }
+        // The gradient itself: a strip across `EDGE.reach` metres of a top
+        // face, from the edge inward. What to look for is a band with a
+        // visible middle it does not reach -- an edge that covers the whole
+        // strip is a surface colour, which is how the first version of this
+        // rule came out as *everything is purple*.
+        let ground = p.of(Material::Ground);
+        for i in 0..FALLOFF {
+            let metres = EDGE.reach * i as f32 / (FALLOFF - 1) as f32;
+            let c = p.accented(ground, EDGE.at(metres, 1.0, 2.0));
+            box_at(
+                &mut px,
+                w,
+                (w - FALLOFF - 4 + i, y),
+                (1, CHIP),
+                byte(lit(c)),
             );
         }
     }
