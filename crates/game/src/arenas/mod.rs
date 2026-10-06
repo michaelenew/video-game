@@ -292,6 +292,13 @@ pub fn dress(
         })
     };
 
+    // **The floor casts no shadow.** Shadows fall on it, never from it: it
+    // is the lowest thing there is, so a shadow map that has drawn it has
+    // drawn eight thousand triangles -- the whole of its gradient's
+    // subdivision -- that nothing can ever be in the shadow of. Every flat
+    // thing lying on it (the regions, the drop below a course) is the same.
+    // What stands on it -- the solids, the props, the bodies -- still casts.
+    //
     // The floor: its own material under everything, then each region on top,
     // a hair higher than the one before so a later region wins on screen the
     // way it wins in `Arena::floor_at`.
@@ -305,6 +312,10 @@ pub fn dress(
                 MeshMaterial3d(dark),
                 Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
                 bevy::pbr::NotShadowReceiver,
+                // Nothing is under it to throw a shadow on, and it is two
+                // kilometres across: drawn into every shadow cascade it was
+                // most of each one's triangles. See the note on the floor.
+                bevy::pbr::NotShadowCaster,
                 Scenery,
             ));
         }
@@ -330,6 +341,7 @@ pub fn dress(
                 Mesh3d(meshes.add(floor)),
                 MeshMaterial3d(white.clone()),
                 Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                bevy::pbr::NotShadowCaster,
                 Scenery,
             ));
         }
@@ -344,6 +356,7 @@ pub fn dress(
                     Mesh3d(meshes.add(Plane3d::default().mesh().size(x1 - x0, z1 - z0))),
                     MeshMaterial3d(look),
                     Transform::from_xyz((x0 + x1) * 0.5, lift, (z0 + z1) * 0.5),
+                    bevy::pbr::NotShadowCaster,
                     Scenery,
                 ));
             }
@@ -353,6 +366,7 @@ pub fn dress(
                     MeshMaterial3d(look),
                     Transform::from_xyz(fx(at.0), lift, fx(at.1))
                         .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+                    bevy::pbr::NotShadowCaster,
                     Scenery,
                 ));
             }

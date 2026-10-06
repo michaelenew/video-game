@@ -33,6 +33,7 @@ mod outline;
 mod palette;
 mod picker;
 mod platform;
+mod profile;
 mod settings;
 mod shapes;
 mod signs;
@@ -176,6 +177,7 @@ fn main() {
         // quietly -- the pipeline is built whether or not a camera asks for it,
         // and on WebGL2 building it is the panic.
         .add_plugins(outline::OutlinePlugin.only_if(platform::draws_outlines()))
+        .add_plugins(profile::ProfilePlugin)
         .add_systems(
             Startup,
             (
@@ -2010,12 +2012,20 @@ fn fade_own_body(
         if part.owner != me {
             continue;
         }
-        let Some(skin) = materials.get_mut(&material.0) else {
+        // Looked at before it is taken mutably: `Assets::get_mut` marks the
+        // asset changed whether or not anything is written to it, and a
+        // material marked changed is rebuilt on the GPU that frame -- which
+        // this did, for one's own skin, sixteen parts over, every frame. The
+        // one `get_mut` left is reached only when the alpha has moved.
+        let Some(skin) = materials.get(&material.0) else {
             continue;
         };
         if (skin.base_color.alpha() - alpha).abs() < 0.001 {
             continue;
         }
+        let Some(skin) = materials.get_mut(&material.0) else {
+            continue;
+        };
         skin.base_color.set_alpha(alpha);
         // Blending only while it is actually translucent. An always-blended
         // fighter sorts against the other one and against the arena for no
@@ -3126,11 +3136,18 @@ fn place_shields(
         );
         let full = sim::bulwark::fullness(player).to_f32_for_render();
         tf.scale = Vec3::new(1.0 + 0.2 * full, 1.0 + 0.2 * full, 1.0 + 1.5 * full);
-        if let Some(m) = materials.get_mut(&look.0) {
-            let empty = Vec3::new(0.92, 0.76, 0.38);
-            let heavy = Vec3::new(0.30, 0.20, 0.10);
-            let c = empty.lerp(heavy, full);
-            m.base_color = Color::srgb(c.x, c.y, c.z);
+        // Written only when it has moved: a material touched every frame is
+        // a material rebuilt on the GPU every frame, for both shields, held
+        // or not -- two thirds of a millisecond a frame, measured 2026-10-06,
+        // for a colour that is the same one almost always.
+        let empty = Vec3::new(0.92, 0.76, 0.38);
+        let heavy = Vec3::new(0.30, 0.20, 0.10);
+        let c = empty.lerp(heavy, full);
+        let want = Color::srgb(c.x, c.y, c.z);
+        if materials.get(&look.0).is_some_and(|m| m.base_color != want)
+            && let Some(m) = materials.get_mut(&look.0)
+        {
+            m.base_color = want;
         }
         match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
             // Thrown or planted: it is somewhere in the arena on its own.

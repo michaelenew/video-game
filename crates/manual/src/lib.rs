@@ -93,6 +93,10 @@ pub const SECTIONS: &[Section] = &[
                 "The same, spelled out: --join is these, unpacked from the link. --key is the part after #key= in it, which seals the room: the brokers carry notes they cannot read, under a name that is not the room's. --broker <url> meets through one MQTT broker instead of the public three (ws:// for one on this machine). --board tabs is the browser's alone. --page <url> is the page a room made on this desktop links to (the published one by default), for a room on another deploy. --delay <frames> (?delay= in a page) holds your own inputs back that many frames, trading rollback for delay on your side only; the default is none, so online feels like local play.",
             ),
             e(
+                "cargo run -p game --release -- --profile",
+                "A frame-cost readout every two seconds, to the terminal: frame time, how many entities there are and how many meshes are on screen, and -- where the driver can time its own work -- what each render pass cost the GPU and how many triangles and pixels it drew. Beside it, the knobs that let one build be measured at several render settings: --cascades <n> and --shadow-reach <m> set the sun's shadow cascades (Bevy's defaults are 4 to 150 m), --shadow-map <px> the shadow map's size (2048), --shadow-filter hard|gaussian how its edge is softened (gaussian, thirteen taps a pixel; hard is one), and --no-outline, --no-fxaa and --no-prepass take a pass over the finished picture away, so its cost is what the frame time drops by. scripts/profile.sh runs it headlessly under lavapipe. What was found with it is in docs/design/architecture.md under The frame budget.",
+            ),
+            e(
                 "cargo run -p manual",
                 "This text, without building the game.",
             ),
