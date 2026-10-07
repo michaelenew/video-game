@@ -116,6 +116,88 @@ cells (the Mireback, the Siegeshell); 24 leaves each creature five or more to gr
 `tests/lore.rs` fails if a layout does not fit. The region is hashed only when a cell is not
 zero, so a fight that uses none of it hashes as it did before it existed.
 
+### Where a rendered frame goes (measured 2026-10-06, `--profile`)
+
+The renderer gets "the rest" of the frame, and until now nobody had looked at how it spent
+it. `cargo run -p game --release -- --profile` prints, every two seconds, the frame time,
+what is on screen, and what each render pass cost the GPU; `./scripts/profile.sh` runs it
+headlessly under lavapipe, and a build with `--features bevy/trace_chrome,bevy/bevy_log`
+writes a chrome trace of every system. Both were run on a Ridgeback hunt with the scripted
+hunter playing (`DEMO=1`), at the window's 1280 x 760.
+
+**The simulation is not where the time is.** Three scripted Ridgeback hunts, 128 seconds of
+play, run in 120 ms in the headless harness: about 15 µs a frame, hunter included. In the
+game, `tick_sim` with its two snapshot copies a tick is under 0.2 ms a frame and posing the
+skeletons under 0.04 ms. Everything measurable is in the renderer, and most of that is not
+geometry: an arena draws some six thousand triangles a pass, which no GPU notices. It is
+**pixels**, and it is **passes**.
+
+A frame draws the scene six times. Four shadow cascades (Bevy's default, each into a
+2048 x 2048 map, out to 150 m), a depth prepass (so the outline can read depth, and so the
+main pass shades each pixel once), and the main pass; then four passes over the finished
+picture: the outline, FXAA, tonemapping and the blit to the window. Under lavapipe, where
+the GPU's time is a CPU's and can be read exactly:
+
+| Pass | Before | After | What changed |
+| --- | --- | --- | --- |
+| Four shadow cascades | 15.5 ms | 4.4 ms | **The floor no longer casts a shadow.** It is 8,192 triangles of subdivided plane (its gradient needs the vertices), it was two thirds of every cascade's primitives, and nothing is ever under it to be in its shadow. The regions lying on it and the drop plane under a course are the same. |
+| Depth prepass | 3.3 ms | 3.2 ms | |
+| Main opaque pass | 51.5 ms | 51.5 ms | 973,000 fragments, which is every pixel once: fill-bound, by the PBR shader with two directional lights, fog and a thirteen-tap shadow filter. |
+| Main transparent pass | 13–19 ms | 13 ms | Half a screen of fragments for about sixty triangles: the telegraph discs under the creature's attacks, drawn on top of everything and blended. The cost is their area, which is the point of them. |
+| The outline | — | ≈ 0 | Taking it off the camera (`--no-outline`) changes the frame time by less than the noise: nine depth taps a pixel is nothing next to the shading pass. |
+| FXAA | — | 12.6 ms | Taking it off (`--no-fxaa`) is the one post-pass that shows, a ninth of the software frame. On a GPU a fullscreen pass of a dozen taps is a fraction of a millisecond; not worth its jaggies. |
+| **Whole frame** | **124 ms** | **111 ms** | |
+
+**The prepass earns its keep.** Without it (`--no-prepass`) the main pass goes from 51 ms
+to 73 ms, because the shading runs on every fragment drawn rather than on the one that
+wins each pixel. It was added so the outline could read depth; it would be worth having
+anyway.
+
+Two further options were measured and **not** taken, because each changes the picture;
+they are what to reach for if a machine still cannot keep up, and `--profile` has a flag for
+each so the trade can be looked at rather than argued:
+
+- **Two cascades to 60 m** (`--cascades 2 --shadow-reach 60`): the shadow passes go from
+  4.4 ms to 2.7 ms. Shadows past sixty metres go, and those between ten and sixty get half
+  the resolution they have now.
+- **A hard shadow edge** (`--shadow-filter hard`): the main pass goes from 51.5 ms to
+  44 ms, a seventh of the frame's biggest pass, because the shader samples the shadow map
+  once a pixel instead of thirteen times. The edge of every shadow becomes a stair. On a
+  picture that is flat colour with an ink line round it, that may be a style rather than a
+  loss; it wants a person to look.
+
+**What the CPU does with a frame.** The chrome trace, per rendered frame, is Bevy's
+machinery and almost none of the game's: the schedule executor, extracting the scene to the
+render world, building bind groups. The game's own systems are a few hundred microseconds
+together. Two things in them were churning, and are fixed:
+
+- **Two materials were marked changed every frame.** The shield's was written every frame,
+  for both fighters' shields, held or not, to a colour that is the same one almost always.
+  One's own skin was worse, and subtler: the fade that takes the body out of the way of the
+  camera *compared* the alpha before writing it, but reached the material through
+  `Assets::get_mut` to do the comparing, and `get_mut` queues a Modified event whether or
+  not anything is written. A material marked changed is one the renderer rebuilds its bind
+  groups for: 0.65 ms a frame in `prepare_material_bind_groups`, every frame, for nothing.
+  Both now look with `get` and reach for `get_mut` only when there is something to write,
+  and the system is at 0.22 ms.
+- **The HUD was re-laid-out every frame.** Four texts were rewritten every frame -- the
+  class readouts, the score, the banner, the step readout, most of them empty or unchanged
+  for seconds at a time -- and a `Text` written is a text re-shaped and re-measured, and
+  the HUD laid out again behind it: 0.65 ms a frame across `text_system`,
+  `measure_text_system` and `ui_layout_system`. They are written when they change now. The
+  score used to carry the simulation frame as well, which changes sixty times a second and
+  so cost the same on its own; it carries it while the simulation is stopped, which is when
+  a screenshot is taken and the only time a person can read it. What is left of the cost,
+  about half a millisecond under lavapipe's contention, is the frame-data line itself --
+  `startup 3f`, `guard 12f` -- which changes every frame of every move because that is
+  what it is for. It goes the day that readout is dev-only.
+
+The rule both of these are instances of is already written in this file's "no allocation"
+family: **the renderer must not touch what has not changed.** Bevy's change detection is
+what makes a thousand pooled entities cheap -- the pools (1,115 meshes, about a hundred not
+hidden in a hunt) cost under half a millisecond a frame in transform and visibility work --
+and a write that is not conditional on a change opts that thing out of it.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.
@@ -847,6 +929,7 @@ Everything below builds and passes today.
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP; **a link in the browser** (`?room=`) — verified between two tabs of headless Chromium (`crates/web/room-smoke.mjs`), not yet between two networks |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
+| Frame profile | `./scripts/profile.sh`, `game --profile` — frame time, what is on screen, and each render pass's GPU cost; see "Where a rendered frame goes" above |
 | **All six classes** | **`game --p1 champion --p2 elementalist`**, or Tab to cycle |
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
 | **The Ridgeback** | **`game --hunt`, or `H`** — ten parts, six moves, per-part armour, poise and a topple |

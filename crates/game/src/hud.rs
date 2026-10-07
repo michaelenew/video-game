@@ -645,7 +645,7 @@ pub fn update(
     mut seen_full: Local<(u32, [i32; sim::monster::MAX_MONSTERS])>,
 ) {
     for mut text in step.iter_mut() {
-        *text = Text::new(step_readout(&sim));
+        set_text(&mut text, step_readout(&sim));
     }
     for (bar, mut node) in bars.iter_mut() {
         // Against this fighter's own full bar, which is per class now -- see
@@ -760,26 +760,31 @@ pub fn update(
 
     for (tag, mut text) in states.iter_mut() {
         let p = &sim.cur.players[tag.0];
-        *text = Text::new(format!(
-            "{}\n{}\n{}",
-            p.class.name(),
-            describe(p),
-            mechanic(p)
-        ));
+        set_text(
+            &mut text,
+            format!("{}\n{}\n{}", p.class.name(), describe(p), mechanic(p)),
+        );
     }
 
     if let Ok(mut t) = rounds.single_mut() {
         // The simulation frame rides along with the score so a screenshot says
         // which moment it caught. Two captures of "the same" pose are only
-        // comparable if you can see they are the same frame.
-        *t = Text::new(format!(
-            "{} - {}   f{}",
-            sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won, sim.cur.frame
-        ));
+        // comparable if you can see they are the same frame. **While the
+        // simulation is stopped**, which is when a capture is taken
+        // (`SHOT_FRAME`, or `]` and `[`): a readout that changes sixty times
+        // a second re-shapes its text and lays the whole HUD out again sixty
+        // times a second, for a number nobody can read at that speed.
+        let (p1, p2) = (sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won);
+        let line = if sim.stepping() {
+            format!("{p1} - {p2}   f{}", sim.cur.frame)
+        } else {
+            format!("{p1} - {p2}")
+        };
+        set_text(&mut t, line);
     }
 
     if let Ok(mut t) = banner.single_mut() {
-        *t = Text::new(match sim.cur.phase {
+        let line = match sim.cur.phase {
             Phase::Fighting => String::new(),
             Phase::RoundOver { winner, .. } if winner == sim::state::QUARRY => {
                 match sim.cur.hunted().into_iter().flatten().next() {
@@ -790,7 +795,21 @@ pub fn update(
             Phase::RoundOver { winner, .. } if winner == u8::MAX => "double KO".into(),
             Phase::RoundOver { .. } if sim.cur.hunting() => "the hunt is over".into(),
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
-        });
+        };
+        set_text(&mut t, line);
+    }
+}
+
+/// Write a readout only when it has changed.
+///
+/// A `Text` written every frame is a text re-shaped and re-measured every
+/// frame, and the whole HUD laid out again behind it, whether or not a letter
+/// of it is different -- about two thirds of a millisecond a frame for four
+/// readouts, measured 2026-10-06. Nearly all of them say the same thing for
+/// seconds at a time.
+fn set_text(text: &mut Text, line: String) {
+    if text.0 != line {
+        text.0 = line;
     }
 }
 
