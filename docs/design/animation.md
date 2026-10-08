@@ -396,8 +396,14 @@ the overlay panel too, so the arc the hit test sweeps and the arc the hands
 sweep are seen as two arcs -- or as one. Beside the picture it prints, per
 live frame, how far each hand is off the volume's axis, how far the line
 through the hands is turned from it, and where along the reach the grip sits,
-and a table of the worst per move. Zero is the standard, and `anim::track`
-is what meets it.
+and a table of the worst per move. Zero is the standard for a swing or a
+thrust, and `anim::track` is what meets it. A disc has no axis: the audit
+prints how far the nearer hand is past its edge and draws it, and whether a
+gesture that puts a disc at arm's length should reach into it is judged by
+eye per move (the Bulwark's bash and the Reaver's cuts do; the Elementalist's
+lifts and stamps do not, by their own notes). Volumes planted where the
+crosshair was, shots that fly from the hand and wings are drawn and not
+measured, since a hand at the far end of those would be wrong.
 
 A contact sheet has three panels: the clip from the side, from the front, and
 every frame overlaid so the arcs of the hands and feet are visible as arcs. The

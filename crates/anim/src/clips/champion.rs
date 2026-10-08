@@ -481,16 +481,16 @@ fn sweep() -> Recipe {
     // six-frame startup has room for, so it has to be a big one.
     let cocked = {
         let body = Pose::rest()
-            .hips(0.05, -0.10, -0.04)
-            .root(1.0, -5.0, 30.0)
-            .spine(4.0, -8.0, 21.0)
-            .chest(0.0, -6.0, 21.0)
-            .head(-2.0, 3.0, -38.0)
+            .hips(0.07, -0.11, -0.06)
+            .root(2.0, -6.0, 42.0)
+            .spine(5.0, -9.0, 26.0)
+            .chest(1.0, -7.0, 24.0)
+            .head(-2.0, 4.0, -52.0)
             .wrists(0.0, 0.0, 0.0);
         stand(
             weapon(body, [0.36, 1.50, 0.08], [0.56, 0.74, 0.37]),
-            -10.0,
-            0.03,
+            -12.0,
+            0.05,
         )
     };
 
@@ -499,11 +499,11 @@ fn sweep() -> Recipe {
     // through its step and the cut is riding on it.
     let high = {
         let body = Pose::rest()
-            .hips(0.03, -0.10, 0.04)
-            .root(3.0, -3.0, 22.0)
-            .spine(7.0, -5.0, 15.0)
-            .chest(3.0, -4.0, 15.0)
-            .head(2.0, 2.0, -26.0)
+            .hips(0.03, -0.11, 0.06)
+            .root(6.0, -3.0, 24.0)
+            .spine(9.0, -5.0, 14.0)
+            .chest(4.0, -4.0, 12.0)
+            .head(2.0, 2.0, -32.0)
             .wrists(-4.0, 0.0, 0.0);
         step_stance(
             weapon(body, [0.38, 1.36, 0.36], [0.57, 0.57, 0.59]),
@@ -517,11 +517,11 @@ fn sweep() -> Recipe {
     // of the cut where the weapon is pointing where the player is looking.
     let level = {
         let body = Pose::rest()
-            .hips(-0.02, -0.12, 0.06)
-            .root(5.0, 0.0, -2.0)
-            .spine(10.0, 2.0, -6.0)
-            .chest(4.0, 1.0, -8.0)
-            .head(3.0, 0.0, 12.0)
+            .hips(-0.03, -0.14, 0.10)
+            .root(9.0, 1.0, -6.0)
+            .spine(13.0, 2.0, -10.0)
+            .chest(6.0, 1.0, -10.0)
+            .head(3.0, 0.0, 18.0)
             .wrists(-3.0, 0.0, 0.0);
         step_stance(
             weapon(body, [0.04, 1.20, 0.46], [0.02, 0.04, 1.0]),
@@ -535,11 +535,11 @@ fn sweep() -> Recipe {
     // a glide.
     let low = {
         let body = Pose::rest()
-            .hips(-0.07, -0.14, 0.04)
-            .root(8.0, 4.0, -24.0)
-            .spine(13.0, 6.0, -19.0)
-            .chest(5.0, 4.0, -20.0)
-            .head(3.0, -2.0, 34.0)
+            .hips(-0.09, -0.16, 0.08)
+            .root(13.0, 5.0, -34.0)
+            .spine(17.0, 7.0, -24.0)
+            .chest(7.0, 5.0, -22.0)
+            .head(3.0, -2.0, 46.0)
             .wrists(-5.0, 0.0, 0.0);
         step_stance(
             weapon(body, [-0.34, 0.94, 0.36], [-0.57, -0.57, 0.59]),
@@ -553,11 +553,11 @@ fn sweep() -> Recipe {
     // weight is over the front foot.
     let past = {
         let body = Pose::rest()
-            .hips(-0.09, -0.18, 0.08)
-            .root(11.0, 5.0, -32.0)
-            .spine(16.0, 7.0, -24.0)
-            .chest(6.0, 5.0, -24.0)
-            .head(3.0, -2.0, 44.0)
+            .hips(-0.12, -0.20, 0.12)
+            .root(16.0, 6.0, -44.0)
+            .spine(20.0, 8.0, -28.0)
+            .chest(8.0, 6.0, -26.0)
+            .head(3.0, -2.0, 58.0)
             .wrists(-8.0, 0.0, 0.0);
         step_stance(
             weapon(body, [-0.36, 0.86, 0.30], [-0.62, -0.60, 0.50]),
@@ -572,16 +572,16 @@ fn sweep() -> Recipe {
     // feet have to agree to go.
     let push = {
         let body = Pose::rest()
-            .hips(0.04, -0.12, 0.0)
-            .root(2.0, -4.0, 25.0)
-            .spine(6.0, -6.0, 17.0)
-            .chest(2.0, -4.0, 17.0)
-            .head(1.0, 3.0, -30.0)
+            .hips(0.05, -0.13, 0.02)
+            .root(4.0, -5.0, 34.0)
+            .spine(8.0, -7.0, 20.0)
+            .chest(3.0, -5.0, 19.0)
+            .head(1.0, 4.0, -44.0)
             .wrists(-5.0, 0.0, 0.0);
         step_stance(
             weapon(body, [0.38, 1.42, 0.20], [0.58, 0.68, 0.45]),
-            0.20,
-            0.09,
+            0.22,
+            0.10,
         )
     };
 
