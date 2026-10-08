@@ -478,14 +478,19 @@ fn sweep() -> Recipe {
 
     // Wound up over the right shoulder with the head tipped back, weight sunk
     // onto the rear leg about to push. One frame of telegraph is all a
-    // six-frame startup has room for, so it has to be a big one.
+    // six-frame startup has room for, so it has to be a big one -- but not
+    // by turning the hips past thirty degrees. At forty the hands, put on the
+    // hit line by `track`, could only be reached with the arm wrapped over
+    // the shoulder (swing 175, spread 136, twist 107), and the fade into the
+    // wind-up swung a hand 0.6 m a frame getting there
+    // (`view/tests/presentation.rs`, nothing is a jump).
     let cocked = {
         let body = Pose::rest()
-            .hips(0.07, -0.11, -0.06)
-            .root(2.0, -6.0, 42.0)
-            .spine(5.0, -9.0, 26.0)
-            .chest(1.0, -7.0, 24.0)
-            .head(-2.0, 4.0, -52.0)
+            .hips(0.05, -0.10, -0.04)
+            .root(1.0, -5.0, 30.0)
+            .spine(4.0, -8.0, 21.0)
+            .chest(0.0, -6.0, 21.0)
+            .head(-2.0, 3.0, -38.0)
             .wrists(0.0, 0.0, 0.0);
         stand(
             weapon(body, [0.36, 1.50, 0.08], [0.56, 0.74, 0.37]),

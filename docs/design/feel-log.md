@@ -7640,3 +7640,26 @@ fire by brushing a seam and short enough not to be a wait; whether the
 climbs, all sized to the Bulwark's jump, are treacherous for anyone else;
 and how long a pair who does not know it takes, end to end (the target is
 five minutes).
+
+### 2026-10-08 — the sword's wind-up turns thirty degrees again
+
+**Changed** The sword cut's wound-up pose is back to the 30° hip turn it had
+before the sword body pass; the drive, cut and follow-through keep their
+bigger turns.
+
+**Why** At 40° the hands, which the hand track puts on the hit line, could
+only be reached with the arm wrapped over the shoulder: the solver's answer
+was a shoulder at 175°, 136° and 107° and an elbow at 150°. The fade from a
+guard into that wind-up swung a hand 0.58 m in one frame, over the 0.45 m
+the presentation test allows for anything drawn. 36° did the same; 30° solves
+to an ordinary arm and moves the hand 0.29 m a frame at most. The test had
+been failing since the sword pass, and the sword pass shipped without the
+view tests being run, which is how it got through.
+
+Also from the same pass: the test that the drawn weapon goes the way the hit
+volume does read every move right hand forward. The hand track holds a cut
+from the left left hand forward, so it read the Backcut backwards. It now
+measures the blade the game draws (`view::arms::champion_arms`), from the
+hands to the volume's far end.
+
+**Verdict** kept, **unplayed**.
