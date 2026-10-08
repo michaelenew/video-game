@@ -137,7 +137,8 @@ every placement.
 Two are **skillshots**: they start with the raycast above and go where it lands.
 Three are not: they are pointed by something the player already decided — which
 way their body is facing, where they put the mechanic, or where they raised the
-stone a crack races from — and consult no ray.
+stone a crack races from. The last of those does read the ray, but only for a
+direction: where it starts and how far it goes were decided already.
 
 Every move declares which, in the move table (`aim::Kind`). There is no sixth.
 
@@ -279,14 +280,23 @@ swinging, and `view/tests/kinematics.rs` fails if they ever part company.
 ### Racing
 
 From the stone the Elementalist is holding churning — or her own feet, if there
-is none — **flat along the yaw of her look**, for as far as the hold bought. One
-move: Fissure, `E` held. `aim::racing_path`.
+is none — **flat toward the crosshair's spot on the ground**, for as far as the
+hold bought. One move: Fissure, `E` held. `aim::racing_path`.
 
 The place it starts was aimed already, with the crosshair, when the stone was
 raised; what is chosen now is a direction and a distance, and the distance is
-the hold's. So the look is read for its yaw only. A crack through the ground has
-no pitch to be given, and one that went shorter because she happened to be
-looking down would be aiming twice. What it meets on the way is `first_along`'s
+the hold's. The direction is the line from the stone through the spot a
+grounded cast would land on (`grounded_path`, asked out to the stone's distance
+plus the crack's reach, so the far end of the run is on the floor rather than
+the range sphere). The crack runs along that line, past the spot or short of
+it as the hold decides: it has no pitch to be given, and one that went shorter
+because she happened to be looking down would be aiming twice. A crosshair on
+the stone's own spot names no direction, and there the yaw of her look is used.
+
+*Was the yaw of her look until 2026-10-08.* That is parallel to the crosshair
+rather than through it, so from a stone off to one side the crack ran past what
+the reticle sat on by the stone's whole offset — the chest-ray mistake, made
+from a stone. What it meets on the way is `first_along`'s
 question, asked when the crack comes out.
 
 ### At the mechanic

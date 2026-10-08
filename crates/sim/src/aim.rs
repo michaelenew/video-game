@@ -137,10 +137,10 @@ pub enum Kind {
     /// Wherever the class mechanic is standing. The player aimed when they put
     /// it there. [`mechanic_path`].
     AtTheMechanic,
-    /// From the stone the Elementalist is holding churning, **flat along her
-    /// look**, as far as the hold bought. Fissure, and nothing else: a crack
-    /// that races through the ground from a place she already chose, in a
-    /// direction she is choosing now. [`racing_path`].
+    /// From the stone the Elementalist is holding churning, **flat toward the
+    /// crosshair's spot on the ground**, as far as the hold bought. Fissure,
+    /// and nothing else: a crack that races through the ground from a place
+    /// she already chose, in a direction she is choosing now. [`racing_path`].
     Racing,
 }
 
@@ -1352,19 +1352,41 @@ pub fn mechanic_path(from: V3, mechanic: &Mechanic) -> Path {
 }
 
 /// A crack racing through the ground: from `from` -- the stone the
-/// Elementalist held churning, or her own feet if there is none -- **flat
-/// along the yaw of her look**, for `reach`.
+/// Elementalist held churning, or her own feet if there is none -- **flat,
+/// toward the spot on the ground under the crosshair**, for `reach`.
 ///
 /// The fifth line of effect, and the argument for it being one is the same as
 /// for the fourth. The place it starts was aimed already, with the crosshair,
 /// when the stone was raised; what is being chosen now is a direction and a
-/// distance, and the distance is the hold's. The look is read for its yaw
-/// only: a crack through the ground has no pitch to be given, and one that
-/// went shorter because she happened to be looking down would be aiming
-/// twice. What it meets along the way is `first_along`'s question, asked by
+/// distance, and the distance is the hold's. The direction is the line from
+/// the stone through the crosshair's spot on the ground -- the same spot
+/// [`grounded_path`] would place something on -- so the crack runs along the
+/// line the player can see between the two, past the spot or short of it as
+/// the hold decides. It used to be the yaw of her look, which pointed it
+/// parallel to the crosshair rather than at it: from a stone off to one side,
+/// the crack ran past what the reticle sat on by the stone's whole offset --
+/// the mistake this file exists to prevent, made from a stone rather than a
+/// chest. Changed 2026-10-08, from play.
+///
+/// The spot is asked for at a range that covers everywhere the crack could
+/// end -- the stone's distance from her, plus `reach` -- so a crosshair on
+/// the far end of the crack's run is on the floor rather than out on the
+/// range sphere. Only the spot's direction from the stone is read: a crack
+/// through the ground has no pitch to be given, and the distance is the
+/// hold's, never how far away she happened to be looking. A crosshair on the
+/// stone's own spot names no direction, and there it keeps the yaw of her
+/// look. What it meets along the way is `first_along`'s question, asked by
 /// the move when the crack comes out.
-pub fn racing_path(from: V3, look: Input, reach: Fx) -> Path {
-    let dir = V3::from_turns(look.aim_turns());
+pub fn racing_path(from: V3, who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    let caster = scene.players[who].pos;
+    let range = from.sub(caster).flat_len().add(reach);
+    let spot = grounded_path(who, look, range, scene).to;
+    let toward = V3::new(spot.x.sub(from.x), Fx::ZERO, spot.z.sub(from.z)).normalized();
+    let dir = if toward == V3::ZERO {
+        V3::from_turns(look.aim_turns())
+    } else {
+        toward
+    };
     Path {
         from,
         to: from.add(dir.scale(reach)),

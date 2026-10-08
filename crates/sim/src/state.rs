@@ -6275,10 +6275,12 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
             )
         }
         aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
-        // From the stone she is holding churning, flat along her look. Her
-        // own feet when there is none, which the crack's slot cannot reach
-        // without one -- see `hold_the_churn`.
-        aim::Kind::Racing => aim::racing_path(held_stone_at(p).unwrap_or(p.pos), input, reach),
+        // From the stone she is holding churning, flat toward the crosshair's
+        // spot on the ground. Her own feet when there is none, which the
+        // crack's slot cannot reach without one -- see `hold_the_churn`.
+        aim::Kind::Racing => {
+            aim::racing_path(held_stone_at(p).unwrap_or(p.pos), who, input, reach, scene)
+        }
     };
 }
 

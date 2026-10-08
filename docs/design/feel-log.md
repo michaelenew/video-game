@@ -7537,6 +7537,25 @@ Replays: a browser-saved tape reproduces bit for bit through the harness
 ear. sound.md §7 is the listening list. Watch: whether a flesh thud reads as a
 thud or an arcade, and whether the parry chime stands out in a fight.
 
+### 2026-10-08 — Fissure goes where the crosshair is
+
+**Changed** The crack runs from the held stone **toward the crosshair's spot on the
+ground** -- the point a grounded cast would land on -- instead of along the yaw of her
+look. The length is still the hold's alone. `aim::racing_path` now takes the scene and
+asks `grounded_path` for the spot, out to the stone's distance plus the crack's reach.
+
+**Why** From play: the crack seemed to aim by her yaw, not the crosshair. It did. The yaw
+from a stone is parallel to the line from her eye, so from a stone raised off to one side
+the crack ran past the reticle by the stone's whole offset.
+
+**Measured** `elementalist_v2::the_crack_runs_toward_the_spot_the_crosshair_is_on`: a look a
+sixteenth of a turn to the side and down onto the floor; the crack runs at about 44° where
+the yaw is 22.5°, and the test fails on the old line. The other crack tests pass
+unchanged: looking level, the spot is straight ahead of the stone.
+
+**Verdict** kept on the user's word, unplayed. Watch: the crosshair resting right beside the
+stone makes a short line, so a small mouse movement swings the crack a long way.
+
 ### 2026-10-08 — stones that are not boxes, and floors that are not flat
 
 **Changed** ([forms.md](forms.md) §"The third pass") The Elementalist's
