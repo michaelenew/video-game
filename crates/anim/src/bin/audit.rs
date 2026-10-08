@@ -79,12 +79,23 @@ fn main() {
         let path = dir.join(format!("{}.png", clip.name()));
         canvas.write(&path).expect("write sheet");
         let (startup, active, recovery) = sim::moves::frames(class, slot);
+        let m = sim::moves::get(class, slot);
         println!(
             "\n{}  slot {slot}  {startup}+{active}+{recovery} frames  hand {}  -> {}",
             clip.name(),
-            sim::moves::get(class, slot).hand.name(),
+            m.hand.name(),
             path.display()
         );
+        // A volume the hands are not meant to be on: something planted where
+        // the crosshair was, a shot that flies from the hand, a wing that
+        // opens off a fist. Drawn on the sheet; not measured against the
+        // hands, because a hand at the far end of those would be wrong.
+        let hands_job =
+            matches!(m.aim(), sim::aim::Kind::Swing) && !matches!(m.shape, sim::moves::Shape::Wing);
+        if !hands_job {
+            println!("  not a hand's job: {:?}, {:?}", m.aim(), m.shape);
+            continue;
+        }
         println!(
             "  {:>5} | {:>8} {:>8} | {:>7} | {:>7} | {:>6} | {:>7}",
             "frame", "L off", "R off", "axis", "grip", "reach", "in disc"
