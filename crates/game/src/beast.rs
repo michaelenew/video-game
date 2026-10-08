@@ -171,9 +171,11 @@ pub fn setup(
     }
     let hide = Hide { skins };
     let any = hide.of(SpeciesId::RIDGEBACK).armour.clone();
-    // A unit cube, scaled per part. The part boxes are axis-aligned in their
-    // own bone's frame, so one mesh covers all of them.
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    // A unit rounded box, scaled per part. The part boxes are axis-aligned in
+    // their own bone's frame, so one mesh covers all of them; rounded rather
+    // than a cube so a flank reads as a flank and not a crate, with the box
+    // the simulation collides against unchanged (`docs/design/forms.md`).
+    let cube = meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.3, 10, None));
     let ball = meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap());
     let (parts, bones) = most();
     for slot in 0..BODIES {

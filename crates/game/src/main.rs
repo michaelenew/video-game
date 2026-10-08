@@ -565,6 +565,22 @@ impl Default for Sim {
     }
 }
 
+/// The unit form a fighter's part is drawn as, scaled per frame to its box
+/// (`skeleton::Build::box_of`). A rounded box rather than a cube: the box is
+/// still the box, so nothing about the pose or the hit test moves, but a limb
+/// has no edge to catch the light as a line and the head is nearly a ball.
+/// See `docs/design/forms.md`.
+fn limb_form(joint: view::skeleton::Joint) -> Mesh {
+    use view::skeleton::Joint;
+    let rounding = match joint {
+        Joint::Head => 0.85,
+        Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => 0.5,
+        Joint::Root | Joint::Spine | Joint::Chest => 0.35,
+        _ => 0.6,
+    };
+    shapes::soft_box(Vec3::ONE, rounding, 10, None)
+}
+
 /// The build this is, as the tape names it: the commit, the way the hello
 /// two players trade names it (`online::terms`).
 pub fn build() -> &'static str {
@@ -1617,7 +1633,7 @@ fn setup(
                 // Tab to change class.
                 for joint in JOINTS {
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        Mesh3d(meshes.add(limb_form(joint))),
                         MeshMaterial3d(skin.clone()),
                         Transform::default(),
                         BodyPart { owner, joint },
@@ -1644,7 +1660,7 @@ fn setup(
             .with_children(|root| {
                 for joint in JOINTS {
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        Mesh3d(meshes.add(limb_form(joint))),
                         MeshMaterial3d(shade.clone()),
                         Transform::default(),
                         ShadowPart { owner, joint },

@@ -60,6 +60,11 @@ pub struct Looks {
     notches: Vec<Handle<StandardMaterial>>,
     disc: Handle<Mesh>,
     cube: Handle<Mesh>,
+    /// For a raised solid of bare rock (the herd's boulders, the Mireback's
+    /// slag): a rock, inside the box the body collides against
+    /// (`docs/design/forms.md`). Two of them, so a field of boulders is not
+    /// one boulder repeated.
+    rocks: [Handle<Mesh>; 2],
 }
 
 const MATERIALS: [Material; 10] = [
@@ -210,6 +215,10 @@ pub fn setup(
         .collect();
     let disc = meshes.add(Cylinder::new(1.0, 1.0));
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let rocks = [
+        meshes.add(crate::shapes::rock(Vec3::ONE, 3, None)),
+        meshes.add(crate::shapes::rock(Vec3::ONE, 11, None)),
+    ];
     let pieces = (0..MAX_HAZARDS)
         .map(Piece::Hazard)
         .chain((0..MAX_RAISED).map(Piece::Raised))
@@ -243,6 +252,7 @@ pub fn setup(
         notches,
         disc,
         cube,
+        rocks,
     });
 }
 
@@ -320,8 +330,13 @@ pub fn place(
             Piece::Raised(i) => (i < raised_n).then(|| {
                 let s = raised[i];
                 let (lo, hi) = (v3(s.min), v3(s.max));
+                let form = if s.material == sim::arena::Material::Rock {
+                    looks.rocks[i % 2].clone()
+                } else {
+                    looks.cube.clone()
+                };
                 (
-                    looks.cube.clone(),
+                    form,
                     Transform {
                         translation: (lo + hi) * 0.5,
                         rotation: Quat::IDENTITY,

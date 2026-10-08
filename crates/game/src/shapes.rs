@@ -191,3 +191,143 @@ pub fn paint(mesh: &mut Mesh, half: Vec3, centre: Vec3, base: [f32; 3], brush: &
 pub fn cuts_across(span: f32, reach: f32) -> u32 {
     ((span / reach).ceil() as u32).clamp(1, 64)
 }
+
+// ---------------------------------------------------------------------------
+// Forms that are not boxes
+// ---------------------------------------------------------------------------
+
+/// A box with its corners and edges rounded off: a **superellipsoid**, the
+/// one family of surfaces that runs from a sphere to a box on a single
+/// number. `rounding` is that number -- 1 is an ellipsoid, 0 would be the box
+/// itself, and about 0.3 is a box that has been handled: flat faces, soft
+/// edges, nothing that catches the light as a line.
+///
+/// The surface is `(a·c(u)^e·c(v)^e, b·s(u)^e, c·c(u)^e·s(v)^e)` over latitude
+/// `u` and longitude `v`, with `c(w)^e` meaning `sign(cos w)·|cos w|^e`, and the
+/// normal is the same expression with `2 - e` for `e`, which is why no normal
+/// is estimated from neighbours here. Both come out exactly, at every vertex.
+///
+/// Unit-sized when `size` is one, for a mesh that is scaled per frame (a
+/// fighter's parts); sized when it is not, for one that stands still (a rock).
+/// `centre` and `brush` paint it the way [`boxy`] paints a box, from where it
+/// will stand; `None` leaves it white for a material to colour.
+pub fn soft_box(
+    size: Vec3,
+    rounding: f32,
+    segments: usize,
+    paint: Option<(Vec3, [f32; 3], &Brush)>,
+) -> Mesh {
+    superellipsoid(size, rounding, segments, paint, |_, _| 1.0)
+}
+
+/// A rock: a rounded box roughed up. Each vertex is pulled **inward** by a
+/// little noise, so the stone never pokes out of the collision box it is
+/// drawn for -- a body stops a hand's breadth before a rock it cannot see
+/// rather than inside one it can. `seed` makes two rocks of one size two
+/// rocks.
+pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
+    superellipsoid(size, 0.45, 14, paint, move |p, _| {
+        // Two octaves of a smooth value noise over the direction, scaled by
+        // the rock's own size so a boulder and a pebble are rough alike.
+        let q = p / size.max_element().max(1e-3);
+        let n = value_noise(q * 2.3 + Vec3::splat(s)) * 0.65
+            + value_noise(q * 5.1 + Vec3::splat(s * 1.7)) * 0.35;
+        1.0 - 0.18 * (0.5 + 0.5 * n)
+    })
+}
+
+/// The superellipsoid itself, with a radial scale per vertex.
+fn superellipsoid(
+    size: Vec3,
+    rounding: f32,
+    segments: usize,
+    paint: Option<(Vec3, [f32; 3], &Brush)>,
+    radial: impl Fn(Vec3, Vec3) -> f32,
+) -> Mesh {
+    let e = rounding.clamp(0.05, 1.0);
+    let half = size * 0.5;
+    let (lat, lon) = (segments.max(4), segments.max(4) * 2);
+    let pow = |w: f32, e: f32| w.signum() * w.abs().powf(e);
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity((lat + 1) * (lon + 1));
+    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(positions.capacity());
+    let mut colours: Vec<[f32; 4]> = Vec::with_capacity(positions.capacity());
+    for i in 0..=lat {
+        let u = -std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * i as f32 / lat as f32;
+        let (su, cu) = u.sin_cos();
+        for j in 0..=lon {
+            let v = -std::f32::consts::PI + std::f32::consts::TAU * j as f32 / lon as f32;
+            let (sv, cv) = v.sin_cos();
+            let p = Vec3::new(
+                half.x * pow(cu, e) * pow(cv, e),
+                half.y * pow(su, e),
+                half.z * pow(cu, e) * pow(sv, e),
+            );
+            let n = Vec3::new(
+                pow(cu, 2.0 - e) * pow(cv, 2.0 - e) / half.x.max(1e-4),
+                pow(su, 2.0 - e) / half.y.max(1e-4),
+                pow(cu, 2.0 - e) * pow(sv, 2.0 - e) / half.z.max(1e-4),
+            )
+            .normalize_or(Vec3::Y);
+            let p = p * radial(p, n);
+            positions.push(p.to_array());
+            normals.push(n.to_array());
+            colours.push(match paint {
+                Some((centre, base, brush)) => {
+                    let mut to_edge = f32::MAX;
+                    for axis in 0..3 {
+                        if 1.0 - n[axis].abs() > 0.3 {
+                            to_edge = to_edge.min((half[axis] - p[axis].abs()).max(0.0));
+                        }
+                    }
+                    brush.at(base, to_edge, n.y, centre.y + p.y)
+                }
+                None => [1.0, 1.0, 1.0, 1.0],
+            });
+        }
+    }
+    let mut indices: Vec<u32> = Vec::with_capacity(lat * lon * 6);
+    let row = (lon + 1) as u32;
+    for i in 0..lat as u32 {
+        for j in 0..lon as u32 {
+            let a = i * row + j;
+            let b = a + row;
+            // Wound to face outward, with +y up and the longitude running
+            // the way `(cos v, sin v)` runs round +y.
+            indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
+        }
+    }
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+    .with_inserted_indices(Indices::U32(indices))
+}
+
+/// Smooth value noise in `-1..1`, from a hash of the lattice points round
+/// `p`, blended with a smoothstep. Deterministic, dependency-free, and only
+/// ever run when an arena is dressed.
+fn value_noise(p: Vec3) -> f32 {
+    let hash = |x: i32, y: i32, z: i32| -> f32 {
+        let mut h = (x as u32).wrapping_mul(0x8da6_b343)
+            ^ (y as u32).wrapping_mul(0xd816_3841)
+            ^ (z as u32).wrapping_mul(0xcb1a_b31f);
+        h ^= h >> 13;
+        h = h.wrapping_mul(0x5bd1_e995);
+        h ^= h >> 15;
+        (h & 0xffff) as f32 / 32767.5 - 1.0
+    };
+    let f = p.floor();
+    let (x, y, z) = (f.x as i32, f.y as i32, f.z as i32);
+    let t = p - f;
+    let s = t * t * (Vec3::splat(3.0) - 2.0 * t);
+    let lerp = |a: f32, b: f32, w: f32| a + (b - a) * w;
+    let c00 = lerp(hash(x, y, z), hash(x + 1, y, z), s.x);
+    let c10 = lerp(hash(x, y + 1, z), hash(x + 1, y + 1, z), s.x);
+    let c01 = lerp(hash(x, y, z + 1), hash(x + 1, y, z + 1), s.x);
+    let c11 = lerp(hash(x, y + 1, z + 1), hash(x + 1, y + 1, z + 1), s.x);
+    lerp(lerp(c00, c10, s.y), lerp(c01, c11, s.y), s.z)
+}

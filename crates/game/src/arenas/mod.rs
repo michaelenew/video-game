@@ -380,13 +380,26 @@ pub fn dress(
         let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
         let size = max - min;
         let at = (min + max) * 0.5;
+        // The form follows the material (`docs/design/forms.md`): bare rock
+        // is a rock, soft ground is rounded, dressed stone and timber keep
+        // their edges. Every form stays inside the box the body collides
+        // against.
+        let rgb = palette.of(solid.material);
+        let seed = (at.x * 7.0 + at.z * 13.0 + size.y * 3.0) as i32 as u32;
+        let mesh = match solid.material {
+            Material::Rock => crate::shapes::rock(size, seed, Some((at, rgb, &brush))),
+            Material::Ground
+            | Material::Grass
+            | Material::Sand
+            | Material::Snow
+            | Material::Ash
+            | Material::Peat => crate::shapes::soft_box(size, 0.3, 12, Some((at, rgb, &brush))),
+            Material::Stone | Material::Wood | Material::Water => {
+                crate::shapes::boxy(size, at, rgb, &brush)
+            }
+        };
         commands.spawn((
-            Mesh3d(meshes.add(crate::shapes::boxy(
-                size,
-                at,
-                palette.of(solid.material),
-                &brush,
-            ))),
+            Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(white.clone()),
             Transform::from_translation(at),
             Scenery,
