@@ -53,6 +53,10 @@ is where it has to be made true. So:
 
 ## 2 · Later: a valley of places
 
+*2026-10-08: [exploration/0006](exploration/0006_valley.md) argues for a line
+rather than a graph -- one long climb loaded in reaches, the fights in it --
+and names the first reach to build.*
+
 **A world made of arenas.** The world is a small graph of **places**. Each place
 is one arena (made possible by bestiary P2, arenas as data), with a creature or
 without one, and exits to its neighbours. Only one place is loaded at a time.
