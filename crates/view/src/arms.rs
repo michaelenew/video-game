@@ -208,7 +208,7 @@ const SWORD_REACH: f32 = 1.2;
 /// The shortest and longest the blade is drawn, hand to tip, while a cut is
 /// out. The cut decides; these only stop a degenerate frame drawing a dagger
 /// or a pike.
-const SWORD_FLEX: (f32, f32) = (0.9, 1.9);
+const SWORD_FLEX: (f32, f32) = (0.9, 2.1);
 const SWORD_POINT: f32 = 0.2;
 const SWORD_BREADTH: f32 = 0.085;
 const SWORD_THICK: f32 = 0.024;

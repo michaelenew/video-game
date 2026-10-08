@@ -422,6 +422,11 @@ pub fn bake(recipe: &Recipe) -> Baked {
         }
     }
 
+    // The hands on the hit line, for the moves that have one
+    // (`crate::track`): the recipe authored the body, and the weapon goes
+    // where the hit test says it is.
+    crate::track::apply(recipe.clip, &mut frames);
+
     Baked {
         clip: recipe.clip,
         frames,

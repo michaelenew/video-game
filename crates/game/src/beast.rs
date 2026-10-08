@@ -171,9 +171,19 @@ pub fn setup(
     }
     let hide = Hide { skins };
     let any = hide.of(SpeciesId::RIDGEBACK).armour.clone();
-    // A unit cube, scaled per part. The part boxes are axis-aligned in their
-    // own bone's frame, so one mesh covers all of them.
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    // A unit rounded box, scaled per part. The part boxes are axis-aligned in
+    // their own bone's frame, so one mesh covers all of them; rounded rather
+    // than a cube so a flank reads as a flank and not a crate, with the box
+    // the simulation collides against unchanged (`docs/design/forms.md`).
+    let cube = meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.22, 10, None));
+    // Three forms a part can take, by what it is: a plate (armour, the body)
+    // keeps most of its edge, a limb is rounder, a weak point is soft.
+    let forms = Forms {
+        plate: cube.clone(),
+        limb: meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.5, 10, None)),
+        weak: meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.7, 12, None)),
+    };
+    commands.insert_resource(forms);
     let ball = meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap());
     let (parts, bones) = most();
     for slot in 0..BODIES {
@@ -262,19 +272,47 @@ impl Boom {
 }
 
 /// Put every part where the simulation says it is.
+/// The unit forms a creature's parts are drawn as, by what the part is
+/// (`docs/design/forms.md`): a plate, a limb, a weak point.
+#[derive(Resource)]
+pub struct Forms {
+    plate: Handle<Mesh>,
+    limb: Handle<Mesh>,
+    weak: Handle<Mesh>,
+}
+
+impl Forms {
+    fn of(&self, sp: &kinds::Species, index: usize) -> &Handle<Mesh> {
+        if sp.is_weak_point(index) {
+            &self.weak
+        } else if sp.parts[index].shape.breakable {
+            &self.limb
+        } else {
+            &self.plate
+        }
+    }
+}
+
+/// A part's drawn state: where, whether, what skin, what form.
+type Limbs<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Limb,
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut MeshMaterial3d<StandardMaterial>,
+        &'static mut Mesh3d,
+    ),
+    Without<Knuckle>,
+>;
+
 pub fn place(
     sim: Res<crate::Sim>,
     hide: Res<Hide>,
+    forms: Res<Forms>,
     boom: Res<Boom>,
-    mut limbs: Query<
-        (
-            &Limb,
-            &mut Transform,
-            &mut Visibility,
-            &mut MeshMaterial3d<StandardMaterial>,
-        ),
-        Without<Knuckle>,
-    >,
+    mut limbs: Limbs,
     mut knuckles: Query<
         (
             &Knuckle,
@@ -291,7 +329,7 @@ pub fn place(
     let mut rig_of = |slot: usize, beast: &Monster| {
         *rigs[slot.min(BODIES - 1)].get_or_insert_with(|| beast.rig())
     };
-    for (limb, mut transform, mut visible, mut material) in limbs.iter_mut() {
+    for (limb, mut transform, mut visible, mut material, mut mesh) in limbs.iter_mut() {
         let (slot, index) = (limb.0, limb.1);
         let Some((beast, strength)) =
             body_in(&sim.cur, slot).filter(|(b, _)| index < b.sp().parts.len())
@@ -353,6 +391,10 @@ pub fn place(
         };
         if material.0 != *wanted {
             material.0 = wanted.clone();
+        }
+        let form = forms.of(beast.sp(), index);
+        if mesh.0 != *form {
+            mesh.0 = form.clone();
         }
     }
 

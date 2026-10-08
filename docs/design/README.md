@@ -125,6 +125,8 @@ game, `T` tempers the one you are hunting, and the HUD's list shows your trophie
 | [Mantis](creatures/mantis.md) | 5 | the Shrine | `mantis` | A duellist that guards, parries and reads what you repeat |
 | [Siegeshell](creatures/siegeshell.md) | 5, for two | the Last Valley | `siegeshell` | A walking hill; break its anchors before it reaches the wall |
 
+**The game starts in the valley** ([valley.md](valley.md)): Hearth's square, with every creature a room off the climb, behind its tier's waystone. `--versus` starts the proving ground instead, and `--open` lights every waystone.
+
 Two dev species, the gnats (a pack with nothing of its own) and the sentinel (one of every
 hazard and sense), are reached by `--hunt gnats` / `--hunt sentinel` and kept out of the cycle
 and the trophy list. The range (`--arena range`) is the dev arena with one of everything.
@@ -158,11 +160,13 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [arenas.md](arenas.md) | An arena is a table: bounds, solids (ceilings included), floor materials, spawns; the picker (`--hunt <creature>`, `--arena`, `H` / `Shift+H` on the wire); **the recipe for adding one** | **Built 2026-10-01** (bestiary P2, world W0); the proving ground pinned bit for bit |
 | [creatures/](creatures/) | One design per creature: [Gnawers](creatures/gnawers.md) (**built 2026-10-01**: `--hunt gnawers`, the Commons; §13 is where it landed), [Hornback herd](creatures/hornback.md) (**built 2026-10-01**: `--hunt hornback`, the low meadow, and `--hunt hornback-escort`, the crossing; §13 is where it landed), [Sandmaw](creatures/sandmaw.md) (**built 2026-10-01**: `--hunt sandmaw`, the Pan; §13 is where it landed), [Mireback](creatures/mireback.md) (**built 2026-10-01**: `--hunt mireback`, the Mire; §13 is where it landed), [The Pair](creatures/the-pair.md) (**built 2026-10-01**: `--hunt pair`, the Den; §13 is where it landed), [Broodmother](creatures/broodmother.md) (**built 2026-10-01**: `--hunt broodmother`, the Hollows; §13 is where it landed), [Galewing](creatures/galewing.md) (**built 2026-10-01**: `--hunt galewing`, the Cliffs; §13 is where it landed), [Veilstalker](creatures/veilstalker.md) (**built 2026-10-01**: `--hunt veilstalker`, the Ashwood; §13 is where it landed), [Mantis](creatures/mantis.md) (**built 2026-10-01**: `--hunt mantis`, the Shrine; §13 is where it landed), [Siegeshell](creatures/siegeshell.md) (**built 2026-10-01**: `--hunt siegeshell`, the Last Valley; §13 is where it landed) | All ten built: the Gnawers, the Hornback herd, the Mireback, the Sandmaw, the Pair, the Broodmother, the Galewing, the Veilstalker, the Mantis and the Siegeshell |
 | [courses.md](courses.md) | **Jump courses**: eight hand-authored floating-island courses to play (two easy; the Spiral, the Falls, the Slalom and the Fork hard; the Spire and the Gulf barely possible -- every tier an unplayed guess; `--arena falls`, `N` steps through them), big jumps in them for the class mechanics, the Reach (a proving ground of marked distances, `--arena reach`), the corner-clip fix, and the round-two/three measuring tools kept but not used as design inputs | **Built 2026-10-03, hand-authored 2026-10-04, big jumps and the Reach 2026-10-04**; for play |
-| [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0 (the picker), W1 (trophies) and W2 (tempers) built 2026-10-01 |
+| [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0 (the picker), W1 (trophies) and W2 (tempers) built 2026-10-01; the valley built 2026-10-08, as [valley.md](valley.md) |
+| [valley.md](valley.md) | **The valley**: where the game starts now. Hearth, its Ring for fighting each other, and five reaches climbing to the Saddle, the creatures' arenas as rooms off them; seams you walk into together, waystones lit by what the pair has beaten, cairns, no dying and no friendly fire outside the Ring, vines and updrafts, and the replay's report of a pair's run | **Built 2026-10-08**, unplayed |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead; playing a friend from a link (rooms on public brokers, WebRTC, the three seams in `net::meet`), sealed rooms, and a desktop joining a page's room | Decided; rooms built 2026-10-03, sealed and open to desktops 2026-10-05 |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
+| [forms.md](forms.md) | **Forms**: the collision box stays the truth and the form is drawn inside it -- rounded fighters and creature parts, rocks and the Elementalist's stones pulled inward by noise, soft earth, dressed stone chamfered; and **relief**, four arenas' floors with hills and hollows the simulation stands on | Three passes built 2026-10-08, unplayed |
 | [sound.md](sound.md) | **Sound, derived**: a sound is an excitation shaped by a resonator, and the simulation's own numbers decide both -- a blow's weight is its impact freeze, a telegraph is as long as its startup, a footfall is the floor's material, a struck thing rings by its size. Nothing recorded; a sheet of every sound in a second; one frame sounded once under rollback | **Built 2026-10-08**, unheard |
 | [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness | **Built 2026-10-08** |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
@@ -345,7 +349,8 @@ decision, and belongs in a test.
    4-frame parry window is findable by a human. **It has a chime now** ([sound.md](sound.md),
    2026-10-08): the whole voice is derived and nobody has heard it, and sound.md §7 is the
    listening list, the parry first.
-5. **The world, past W2**: a menu for the picker, the hunter's notes, and — only if wanted —
-   the valley ([world.md](world.md) §2–§3).
+5. **Walk the valley with a friend** ([valley.md](valley.md)): built 2026-10-08 and where the
+   game now starts. Record the run (`Y`) and send it; the replay's report says how long each
+   reach took and where you fell. `--open` lights every waystone for a walk without the fights.
 6. Fill out the kits beyond three moves per class.
 7. **Arena size and shape** for versus.

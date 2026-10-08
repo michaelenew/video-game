@@ -63,16 +63,24 @@ pub struct Row {
 
 /// Where every trial stands: open floor in the proving ground, clear of both
 /// platforms and the walls out past the farthest of [`METRES`]. The fighter is
-/// here, looking down +X; the body is that many metres along it.
+/// here, looking down +X; the body is that many metres along it. At `y = 0`:
+/// a creature's own arena may have relief under this lane
+/// (`arena::relief`), and [`on_the_floor`] puts a body down on it.
 pub fn lane() -> V3 {
     V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(-9))
+}
+
+/// A point put down on the arena's floor, wherever the floor is there.
+fn on_the_floor(w: &World, at: V3) -> V3 {
+    V3::new(at.x, w.arena().ground_under(at), at.z)
 }
 
 /// Put fighter 0 at the start of the lane looking down +X, with her second body -- if
 /// she has one -- attending at her shoulder, as a round starts.
 fn stand_at_origin(w: &mut World) {
+    let at = on_the_floor(w, lane());
     let p = &mut w.players[0];
-    p.pos = lane();
+    p.pos = at;
     p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
     if let crate::class::Mechanic::Shadow(_) = p.mechanic {
         p.mechanic =
@@ -86,7 +94,7 @@ fn stand_at_origin(w: &mut World) {
 pub fn fighter_trial(class: Class, move_kind: u8, metres: Fx) -> bool {
     let mut w = World::with_classes([class; MAX_PLAYERS]);
     stand_at_origin(&mut w);
-    w.players[1].pos = lane().add(V3::new(metres, Fx::ZERO, Fx::ZERO));
+    w.players[1].pos = on_the_floor(&w, lane().add(V3::new(metres, Fx::ZERO, Fx::ZERO)));
     w.players[1].facing = V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO);
     let idle = Input::default();
     for _ in 0..2 {
@@ -167,7 +175,7 @@ pub fn trial(species: SpeciesId, kind: u8, class: Class, move_kind: u8, metres: 
     let mut body = Critter::new(
         sp,
         kind,
-        lane().add(V3::new(metres, Fx::ZERO, Fx::ZERO)),
+        on_the_floor(&w, lane().add(V3::new(metres, Fx::ZERO, Fx::ZERO))),
         1 << 15,
     );
     body.state = is::FLINCH;
@@ -269,10 +277,13 @@ fn landed_with(class: Class, species: SpeciesId, kind: u8, push: u32) -> Option<
     }
     // The body stood still at the middle, everything else away: the question
     // is geometry.
+    // On the floor at the middle: the meadow has a swell there
+    // (`arena::relief`), and a body held at zero under it is a body sunk.
+    let middle = on_the_floor(&w, V3::ZERO);
     let stand = |w: &mut World| {
         for (i, c) in w.critters.iter_mut().enumerate() {
             if i == slot {
-                c.pos = V3::ZERO;
+                c.pos = middle;
                 c.vel = V3::ZERO;
                 c.yaw = 0;
                 c.state = is::PROWL;
@@ -285,10 +296,13 @@ fn landed_with(class: Class, species: SpeciesId, kind: u8, push: u32) -> Option<
     stand(&mut w);
     let body: Critter = w.critters[slot];
     let half_wid = body.body(sp).half_wid;
-    w.players[0].pos = V3::new(
-        Fx::ZERO,
-        Fx::ZERO,
-        half_wid.add(crate::tuning::body_radius()).neg(),
+    w.players[0].pos = on_the_floor(
+        &w,
+        V3::new(
+            Fx::ZERO,
+            Fx::ZERO,
+            half_wid.add(crate::tuning::body_radius()).neg(),
+        ),
     );
     for f in 0..120u32 {
         stand(&mut w);

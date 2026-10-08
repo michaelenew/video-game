@@ -612,7 +612,7 @@ fn nearest_terrain(
 
     // Terrain. Ground is whatever faces upward, which is what decides whether
     // a skillshot flies level over the spot or straight at it.
-    keep(floor_hit(eye, dir), Met::Ground);
+    keep(floor_hit(eye, dir, scene.arena.arena, limit), Met::Ground);
     for solid in scene.arena.solids() {
         let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
         keep(hit, facing(hit, eye, dir, solid.max.y));
@@ -732,10 +732,16 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
             let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
             let dir = look.look_dir();
             let near = near_clip(eye, dir, from);
-            standing_middle(
-                seen.at,
-                stands_along(who, eye, dir, near, seen.dist, scene).height,
-            )
+            let stand = stands_along(who, eye, dir, near, seen.dist, scene);
+            // Measured from the body's own feet when the ray passed through
+            // one: on a floor with relief (`arena::relief`) the ground behind
+            // a body is not at the body's height, and half a body up from
+            // *that* is a shot over a critter's back or under its chin.
+            let ground = match stand.at {
+                Some(feet) => V3::new(seen.at.x, feet.y, seen.at.z),
+                None => seen.at,
+            };
+            standing_middle(ground, stand.height)
         }
         // A wall, a stone -- lid or side -- the edge of the range: the point
         // itself, because that is the thing the player is looking at. See
@@ -1887,11 +1893,25 @@ fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
 /// The arena floor. A plane rather than a box, because that is what the
 /// simulation collides against -- `arena::resolve` treats `y <= 0` as the
 /// ground and never consults the arena's solids for it.
-fn floor_hit(from: V3, dir: V3) -> Option<Fx> {
-    if dir.y.raw() >= 0 || from.y.raw() < 0 {
-        return None;
+/// The floor: a plane where it is flat, and the relief where the arena has
+/// some (`arena::relief`) -- marched, out to the limit the caller has or the
+/// far side of the arena, whichever is nearer, since a ray that reaches
+/// neither has nothing to hit.
+fn floor_hit(from: V3, dir: V3, arena: &crate::arena::Arena, limit: Fx) -> Option<Fx> {
+    if crate::arena::relief::is_flat(arena.id) {
+        if dir.y.raw() >= 0 || from.y.raw() < 0 {
+            return None;
+        }
+        return Some(from.y.div(dir.y.neg()));
     }
-    Some(from.y.div(dir.y.neg()))
+    let b = arena.bounds;
+    let across = b.hi_x.sub(b.lo_x).add(b.hi_z.sub(b.lo_z));
+    let far = if limit.raw() < across.raw() {
+        limit
+    } else {
+        across
+    };
+    crate::math::ray_hits_heightfield(from, dir, far, &|x, z| arena.relief_at(x, z))
 }
 
 /// A stone: an upright cylinder standing on its base, with both end caps.

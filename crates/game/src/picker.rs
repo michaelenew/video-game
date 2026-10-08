@@ -150,11 +150,9 @@ pub fn describe(w: &World) -> Vec<(&'static str, String)> {
                 out.push(("temper", w.temper().to_string()));
             }
         }
-        None => {
-            if here.id != World::with_classes([Class::Bulwark; 2]).arena {
-                out.push(("arena", here.slug()));
-            }
-        }
+        // Always named, now that a link with no arena is the valley: the
+        // proving ground is a place like any other.
+        None => out.push(("arena", here.slug())),
     }
     out
 }

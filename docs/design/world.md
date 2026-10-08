@@ -53,6 +53,15 @@ is where it has to be made true. So:
 
 ## 2 · Later: a valley of places
 
+*2026-10-08: [exploration/0006](exploration/0006_valley.md) argued for a line
+rather than a graph -- one long climb loaded in reaches -- and **the valley
+is built**, the same day, as [valley.md](valley.md): Hearth with a Ring for
+fighting each other, five reaches to the Saddle, the creatures' arenas as
+rooms off them, the tiers below as waystones. The map below is the graph it
+replaced; the Ridgeback's place is the Highlands, a room up a stair in the
+Pinewood. Not built from this section: looking into a room to see the
+creature's idle life, and the Crossing as a place.*
+
 **A world made of arenas.** The world is a small graph of **places**. Each place
 is one arena (made possible by bestiary P2, arenas as data), with a creature or
 without one, and exits to its neighbours. Only one place is loaded at a time.
@@ -257,9 +266,11 @@ place is locked to the lone player, not to the pair. The creature's coop tuning
   list -- every creature, its trophies, its tempers, which is being hunted --
   is a small text block at the right of the HUD.
 
-**Later**, if the valley is built: places with exits, trails, Hearth, waystones,
-the hunter's notes (§4), and — if progression is un-parked — sidegrades as named
-bundles of Oven overrides.
+**The valley, built 2026-10-08** ([valley.md](valley.md)): places with exits
+(seams you walk into together), the reaches as the trails, Hearth and its Ring,
+waystones reading what the pair has beaten, cairns. It is where the game starts.
+**Later:** the hunter's notes (§4), the Siegeshell coming to you (§3), and — if
+progression is un-parked — sidegrades as named bundles of Oven overrides.
 
 W0 comes with P2 (after the Hornback in the bestiary's build order); W1 and W2
 are small and can follow any time after.

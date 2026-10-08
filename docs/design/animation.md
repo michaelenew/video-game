@@ -293,6 +293,38 @@ angle and grip width, with the elbows pointed explicitly through
 `HEAVY` on the whole body left a four-frame hammer arc three and a half frames
 behind its own hit volume.
 
+### The hands are on the hit line, by construction
+
+Added 2026-10-08. An attack clip used to be authored *against* the hit volume:
+the author read the move's plane and reach, typed where the hands ought to be
+on the contact frame and the last live frame, and hoped. The audit (below)
+measured how that went -- on the sword's live frames the nearer hand was up to
+a quarter of a metre off the volume's axis and the line through the hands was
+forty degrees from it -- and the renderer was dragging the blade out of the
+fists to put it where the hit test was (`view::arms`), which is what read as
+rough.
+
+So the hands are no longer typed. `anim::track` throws the move in a real
+simulation at bake time, reads the volume the hit test has out on each frame
+(`sim::state::hitbox`, the one description of an attack's shape, in the body's
+own space), and puts the hands on it: both hands along a swing's axis a grip
+apart, the leading hand along a thrust's, eased on over the five frames before
+the volume appears and off over the five after, each frame solved toward the
+elbow the frame before had (`view::ik::hand_to_near`) so the arm never flips
+over mid-line. **A recipe authors the body** -- the hips, the step, the turn of
+the chest, the follow-through -- and the weapon goes where the weapon goes.
+Change a move's arc in the table and the clip's arms change with it.
+
+Two things follow. The grip is held **closer on a fast arc**: a cut that turns a
+hundred degrees in three frames is the move, and the hands cannot be half a
+metre out on it without moving faster than the motion ceiling allows, so the
+grip slides in toward the hub as the axis turns faster and the drawn blade
+reaches the rest (`SWORD_FLEX`). And only moves *with a line* do this -- a
+swing or a thrust, which is the Champion's whole kit and the two mages'
+sweeps; a disc at arm's length, a beam, a wing and a thing planted on the
+floor have no axis for two hands to lie along, and their clips stay as
+authored.
+
 ### Lengths come from the move table
 
 An attack clip's length is `startup + active + recovery`, read live from the
@@ -351,6 +383,27 @@ cargo run -p anim --bin preview -- walk_forward         one clip
 cargo run -p anim --bin preview -- --file dodge         a whole file
 cargo run -p anim --bin preview -- walk_forward --feet  a per-frame foot table
 ```
+
+```text
+cargo run -p anim --bin audit                            every Champion move
+cargo run -p anim --bin audit -- --class blood           another class
+cargo run -p anim --bin audit -- champion_sword          one clip
+```
+
+The audit is the contact sheet with the **hit volume drawn over it**: the
+capsule the simulation has out on each frame, red, under the figure, and in
+the overlay panel too, so the arc the hit test sweeps and the arc the hands
+sweep are seen as two arcs -- or as one. Beside the picture it prints, per
+live frame, how far each hand is off the volume's axis, how far the line
+through the hands is turned from it, and where along the reach the grip sits,
+and a table of the worst per move. Zero is the standard for a swing or a
+thrust, and `anim::track` is what meets it. A disc has no axis: the audit
+prints how far the nearer hand is past its edge and draws it, and whether a
+gesture that puts a disc at arm's length should reach into it is judged by
+eye per move (the Bulwark's bash and the Reaver's cuts do; the Elementalist's
+lifts and stamps do not, by their own notes). Volumes planted where the
+crosshair was, shots that fly from the hand and wings are drawn and not
+measured, since a hand at the far end of those would be wrong.
 
 A contact sheet has three panels: the clip from the side, from the front, and
 every frame overlaid so the arcs of the hands and feet are visible as arcs. The

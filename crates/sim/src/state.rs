@@ -1035,6 +1035,48 @@ impl Player {
     }
 }
 
+/// **A vine and an updraft**, after gravity has had its say.
+///
+/// A body whose feet are in a vine **climbs** with the jump held, at
+/// `tuning::vine_speed`, **slides down** with crouch, and otherwise **clings**:
+/// a body falling past a vine catches on it. Sideways it moves at half pace.
+/// A vine is footing for the fall rule -- you can only fall from it from
+/// where you let go -- so the fall is measured from here.
+///
+/// A body in the air inside an updraft's column, below its top, is carried
+/// up at `tuning::vent_rise` at least, and let go at the top to drift. That
+/// is a push up, and the fall rule already lowers a fall's start for one.
+fn climb_and_ride(p: &mut Player, input: Input, arena: ArenaId) {
+    if let Some(_vine) = crate::valley::vine_at(arena, p.pos) {
+        let speed = t::vine_speed();
+        let climbing = input.has(Input::SPACE);
+        let sliding = input.has(Input::CROUCH) && !p.grounded;
+        if climbing {
+            p.vel.y = speed;
+            p.grounded = false;
+        } else if sliding {
+            p.vel.y = speed.neg();
+        } else if !p.grounded {
+            p.vel.y = Fx::ZERO;
+        }
+        if !p.grounded {
+            p.vel.x = crate::math::half(p.vel.x);
+            p.vel.z = crate::math::half(p.vel.z);
+            p.jump_hold = 0;
+            p.fall_over = p.pos.y.sub(t::fall_free()).max(Fx::ZERO);
+        }
+        return;
+    }
+    if !p.grounded {
+        if let Some(_vent) = crate::valley::vent_at(arena, p.pos) {
+            let rise = t::vent_rise();
+            if p.vel.y.raw() < rise.raw() {
+                p.vel.y = rise;
+            }
+        }
+    }
+}
+
 /// What touching down this frame costs: `was` the body as the frame found
 /// it, `now` as the step left it, before the rule has moved
 /// [`Player::fall_over`]. Zero for anything but a landing past the free
@@ -1221,6 +1263,11 @@ pub struct World {
     /// changes -- a fighter's health -- is. Against a person both seats are
     /// played and it is two on both machines.
     pub seats: u8,
+    /// **The valley's journey** (`crate::valley`): whether this world is the
+    /// valley, which creatures have been beaten on the way, which seam you
+    /// came in by, each fighter's last cairn. All zero, and not hashed,
+    /// outside it.
+    pub valley: crate::valley::Journey,
 }
 
 impl World {
@@ -1246,6 +1293,7 @@ impl World {
             course: [crate::course::Run::default(); MAX_PLAYERS],
             paused: false,
             seats: MAX_PLAYERS as u8,
+            valley: crate::valley::Journey::default(),
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1319,7 +1367,57 @@ impl World {
             }
         }
         w.reset_positions();
+        // **A place of the valley that is not a creature's room is the
+        // valley**: Hearth, the Ring, a reach. A room is only the valley when
+        // a seam leads into it (`World::arrive`), so `--hunt` and a room's
+        // arena on its own are the fights they always were.
+        if herd.iter().all(Option::is_none)
+            && crate::valley::place(w.arena)
+                .is_some_and(|p| !matches!(p.kind, crate::valley::Kind::Room(_)))
+        {
+            w.valley.on = true;
+        }
         w
+    }
+
+    /// **Arrive in a place of the valley**: the world a seam leads to. A
+    /// room starts its creature's hunt; anywhere else is the place as it
+    /// stands. `at` is the seam of `to` you come in by, and where you stand;
+    /// `None` is the place's own start. The journey comes along -- what has
+    /// been beaten -- and everything about the last place does not.
+    pub fn arrive(
+        classes: [Class; MAX_PLAYERS],
+        journey: crate::valley::Journey,
+        to: ArenaId,
+        at: Option<u8>,
+        seats: u8,
+    ) -> World {
+        let place = crate::valley::place(to);
+        let mut w = match place.map(|p| p.kind) {
+            Some(crate::valley::Kind::Room(species)) => {
+                World::hunt_in(classes, crate::replay::herd_of(species), to)
+            }
+            _ => World::hunt_in(classes, [None; MAX_MONSTERS], to),
+        };
+        w.valley = crate::valley::Journey {
+            on: true,
+            beaten: journey.beaten,
+            came: at.map_or(crate::valley::NONE, |k| k + 1),
+            ..crate::valley::Journey::default()
+        };
+        if let Some(seam) = at.and_then(|k| place.and_then(|p| p.seam(k))) {
+            let here = w.arena();
+            for (i, p) in w.players.iter_mut().enumerate() {
+                let mark = seam.marks[i.min(1)];
+                p.pos = V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z);
+                p.facing = mark.facing;
+                p.vel = V3::ZERO;
+                if let Mechanic::Shadow(_) = p.mechanic {
+                    p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+                }
+            }
+        }
+        w.seated(seats)
     }
 
     /// A versus match in a chosen arena.
@@ -1330,6 +1428,17 @@ impl World {
     /// The same fight from the top: these classes, the same creatures, the
     /// same arena, the same temper. What a reset or a class change starts.
     pub fn restarted(&self, classes: [Class; MAX_PLAYERS]) -> World {
+        if self.valley.on {
+            // In the valley a restart is this place again, from the seam you
+            // came in by, with the journey kept.
+            return World::arrive(
+                classes,
+                self.valley,
+                self.arena,
+                self.valley.came.checked_sub(1),
+                self.seats,
+            );
+        }
         World::hunt_in(classes, self.hunted(), self.arena).tempered(self.temper())
     }
 
@@ -1360,7 +1469,7 @@ impl World {
     /// fight's initial state, applied as the world is built.
     pub fn seated(mut self, seats: u8) -> World {
         self.seats = seats.clamp(1, MAX_PLAYERS as u8);
-        if self.hunting() {
+        if self.hunting() || self.peaceful() {
             for p in self.players.iter_mut().skip(self.seats as usize) {
                 p.health = 0;
             }
@@ -1446,7 +1555,13 @@ impl World {
     /// trip: see [`World::recast`].
     fn travelled(&self, to: Travel, classes: [Class; MAX_PLAYERS]) -> Option<World> {
         let world = match to.destination()? {
-            Destination::Class { .. } | Destination::Pause | Destination::Step => return None,
+            Destination::Class { .. }
+            | Destination::Pause
+            | Destination::Step
+            | Destination::Credit(_) => return None,
+            Destination::Valley => {
+                World::arrive(classes, self.valley, crate::valley::START, None, self.seats)
+            }
             Destination::Restart => self.restarted(classes),
             Destination::Versus => World::with_classes(classes),
             Destination::Hunt(species, temper) => {
@@ -1514,10 +1629,201 @@ impl World {
         }
     }
 
+    /// **One frame of the valley** (`crate::valley`). Where it is peaceful, a
+    /// fighter who has died is stood on their last cairn -- or where they
+    /// came in -- and one standing on a cairn is rested. Then the seams: the
+    /// world one leads to, if everybody still on their feet is in it, or
+    /// somebody has held it for `tuning::seam_hold`, and its waystone (if it
+    /// has one) is lit. A no-op outside the valley.
+    fn step_valley(&mut self) -> Option<World> {
+        if !self.valley.on {
+            return None;
+        }
+        let place = crate::valley::place(self.arena)?;
+        let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+        if self.peaceful() {
+            // **A fighter nobody plays is not in the valley**: kept under the
+            // middle of the place's floor, where nothing reaches it and
+            // nothing draws it in view -- rather than a body lying at every
+            // seam you come through. The Ring keeps both (player two is the
+            // dummy or the bot there), and a hunt takes an absent hunter out
+            // as it always has.
+            let b = self.arena().bounds;
+            let under = V3::new(
+                Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
+                Fx::from_int(-1000),
+                Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
+            );
+            for p in self.players.iter_mut().skip(seats) {
+                p.pos = under;
+                p.vel = V3::ZERO;
+                p.health = 0;
+            }
+            for i in 0..seats {
+                if self.players[i].health <= 0 {
+                    self.stand_back(i, place);
+                }
+                let feet = self.players[i].pos;
+                if let Some((k, _)) = place.cairns().find(|(_, s)| crate::valley::on_top(s, feet)) {
+                    self.valley.cairn[i] = k as u8 + 1;
+                    let p = &mut self.players[i];
+                    p.health = p.health.max(t::health_of(p.class));
+                }
+            }
+        }
+        let mut inside: [Option<usize>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+        for (i, slot) in inside.iter_mut().enumerate().take(seats) {
+            let p = &self.players[i];
+            if p.health <= 0 {
+                continue;
+            }
+            *slot = place.seams.iter().position(|s| s.zone.holds(p.pos));
+            if slot.is_none() {
+                self.valley.armed |= 1 << i;
+            }
+        }
+        let armed = self.valley.armed;
+        let counts = |i: usize| armed & (1 << i) != 0;
+        let Some(k) = (0..seats).find_map(|i| if counts(i) { inside[i] } else { None }) else {
+            self.valley.held = crate::valley::NONE;
+            self.valley.hold = 0;
+            return None;
+        };
+        let seam = &place.seams[k];
+        if !seam.gate.lit(self.valley.beaten) {
+            self.valley.held = crate::valley::NONE;
+            self.valley.hold = 0;
+            return None;
+        }
+        let everybody =
+            (0..seats).all(|i| self.players[i].health <= 0 || (counts(i) && inside[i] == Some(k)));
+        if self.valley.held != k as u8 + 1 {
+            self.valley.held = k as u8 + 1;
+            self.valley.hold = 0;
+        }
+        self.valley.hold = self.valley.hold.saturating_add(1);
+        if !everybody && self.valley.hold < t::seam_hold() {
+            return None;
+        }
+        Some(self.through(seam))
+    }
+
+    /// The world a seam leads to, with this one's frame and pause.
+    fn through(&self, seam: &crate::valley::Seam) -> World {
+        let classes = self.players.map(|p| p.class);
+        World {
+            frame: self.frame,
+            paused: self.paused,
+            ..World::arrive(classes, self.valley, seam.to, Some(seam.at), self.seats)
+        }
+    }
+
+    /// **A hunt in the valley, lost**: you wake outside, at the seam you went
+    /// in by -- or in Hearth, for a room the world started in.
+    fn woke_outside(&self) -> World {
+        let back = crate::valley::place(self.arena)
+            .and_then(|p| self.valley.came.checked_sub(1).and_then(|k| p.seam(k)));
+        match back {
+            Some(seam) => self.through(seam),
+            None => World {
+                frame: self.frame,
+                paused: self.paused,
+                ..World::arrive(
+                    self.players.map(|p| p.class),
+                    self.valley,
+                    crate::valley::START,
+                    None,
+                    self.seats,
+                )
+            },
+        }
+    }
+
+    /// **A hunt in the valley, won**: the place goes quiet -- no creature,
+    /// no pack, nothing on the floor -- and the hunters are rested where they
+    /// stand, to walk out the way they came.
+    fn quiet(&mut self) {
+        self.monsters = [None; MAX_MONSTERS];
+        self.pack = None;
+        self.critters = Critters::NONE;
+        self.lore = Lore::NONE;
+        self.effects = [None; MAX_EFFECTS];
+        self.bolts = [None; MAX_BOLTS];
+        self.debris = [None; MAX_DEBRIS];
+        self.gusts = [None; MAX_GUSTS];
+        let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+        for p in self.players.iter_mut().take(seats) {
+            let (pos, facing, wins, class) = (p.pos, p.facing, p.rounds_won, p.class);
+            *p = Player {
+                pos,
+                facing,
+                rounds_won: wins,
+                ..Player::new(class)
+            };
+            if let Mechanic::Shadow(_) = p.mechanic {
+                p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+            }
+        }
+    }
+
+    /// Stand fighter `i` back up after a death in a peaceful place: on the
+    /// last cairn they touched, or where they came in, fresh -- as a fall on
+    /// a jump course stands you on your checkpoint.
+    fn stand_back(&mut self, i: usize, place: &crate::valley::Place) {
+        let here = self.arena();
+        let on_mark =
+            |m: &arena::Mark| (V3::new(m.at.x, here.ground_under(m.at), m.at.z), m.facing);
+        let cairn = self.valley.cairn[i]
+            .checked_sub(1)
+            .and_then(|k| here.solids().get(k as usize));
+        let p = &mut self.players[i];
+        let (pos, facing) = match cairn {
+            Some(top) => (
+                V3::new(
+                    Fx::from_raw(top.min.x.raw() / 2 + top.max.x.raw() / 2),
+                    top.max.y,
+                    Fx::from_raw(top.min.z.raw() / 2 + top.max.z.raw() / 2),
+                ),
+                p.facing,
+            ),
+            None => match self.valley.came.checked_sub(1).and_then(|k| place.seam(k)) {
+                Some(seam) => on_mark(&seam.marks[i.min(1)]),
+                None => on_mark(&here.spawns.versus[i.min(1)]),
+            },
+        };
+        let (wins, class) = (p.rounds_won, p.class);
+        *p = Player {
+            pos,
+            facing,
+            rounds_won: wins,
+            ..Player::new(class)
+        };
+        if let Mechanic::Shadow(_) = p.mechanic {
+            p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+        }
+    }
+
     /// Is there anything to hunt? The one condition friendly fire, targets and
     /// the round's end all read: a creature's presence rather than a flag.
     pub fn hunting(&self) -> bool {
         self.monsters.iter().any(Option::is_some) || self.pack.is_some()
+    }
+
+    /// **Is this a peaceful place of the valley**: the town, a reach, a room
+    /// whose creature is beaten -- anywhere in the valley but the Ring and a
+    /// hunt still going. Nobody can hurt anybody, and a death is a cairn
+    /// rather than a round (`crate::valley`).
+    pub fn peaceful(&self) -> bool {
+        self.valley.on
+            && !self.hunting()
+            && crate::valley::place(self.arena).is_none_or(|p| p.peaceful())
+    }
+
+    /// **May the fighters hurt each other?** In versus, yes; in a hunt and in
+    /// the valley's peaceful places, no. The one question every blow between
+    /// fighters asks.
+    pub fn pvp(&self) -> bool {
+        !self.hunting() && !self.peaceful()
     }
 
     /// The first creature, for the code and tools that are about one: the
@@ -1634,11 +1940,9 @@ impl World {
                         p.facing = mark.facing;
                     }
                     None => {
-                        p.pos = V3::new(
-                            back.neg(),
-                            GROUND_Y,
-                            Fx::from_int(if i == 0 { -2 } else { 2 }),
-                        );
+                        let x = back.neg();
+                        let z = Fx::from_int(if i == 0 { -2 } else { 2 });
+                        p.pos = V3::new(x, here.ground_under(V3::new(x, GROUND_Y, z)), z);
                         p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
                     }
                 }
@@ -1652,6 +1956,17 @@ impl World {
     /// that is not seeded from state, no iteration over unordered collections.
     pub fn advance(&mut self, wire: [Input; MAX_PLAYERS]) {
         self.frame = self.frame.wrapping_add(1);
+
+        // A creature credited to the valley's journey from somebody's
+        // trophies (`Destination::Credit`): a bit, on the frame it arrives,
+        // before anything this frame reads the waystones.
+        if self.valley.on {
+            for input in &wire {
+                if let Some(Destination::Credit(species)) = input.travel.destination() {
+                    self.valley.credit(species);
+                }
+            }
+        }
 
         // The picker. A request from either side is a fresh fight, and the
         // frame it arrives on is spent building it: player one's request wins
@@ -1706,6 +2021,18 @@ impl World {
                     settle(p, here);
                     advance_clocks(p);
                     step_aloft(p, &field, here);
+                }
+                return;
+            }
+            // **A hunt in the valley does not start again.** Won, the place
+            // goes quiet and you walk out the way you came; lost, you wake
+            // outside, at the seam you went in by.
+            if self.valley.on && self.hunting() {
+                if self.hunt_won().is_some() {
+                    self.quiet();
+                    self.phase = Phase::Fighting;
+                } else {
+                    *self = self.woke_outside();
                 }
                 return;
             }
@@ -2109,7 +2436,7 @@ impl World {
         // for the two to get out of step about.
         let snapshot = self.players;
         for attacker in 0..MAX_PLAYERS {
-            if self.hunting() {
+            if !self.pvp() {
                 break;
             }
             let defender = 1 - attacker;
@@ -2255,7 +2582,7 @@ impl World {
             };
             // Once a flight, and never a partner: in a hunt the fighters
             // cannot hurt each other, the same rule every other blow follows.
-            if struck || self.hunting() {
+            if struck || !self.pvp() {
                 continue;
             }
             {
@@ -2336,7 +2663,7 @@ impl World {
         self.step_shadows();
         self.step_effects();
         let standing = self.effects;
-        let versus = !self.hunting();
+        let versus = self.pvp();
         bolt::step(
             &mut self.bolts,
             &mut self.players,
@@ -2439,6 +2766,15 @@ impl World {
         // fall is read against where the frame left them.
         self.step_course();
 
+        // The valley: a death in a peaceful place is a cairn, a cairn rests
+        // you, and a seam everybody is in -- or somebody has held -- takes
+        // you both on. A trip replaces the world, so it is the frame's last
+        // word.
+        if let Some(next) = self.step_valley() {
+            *self = next;
+            return;
+        }
+
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
@@ -2462,6 +2798,11 @@ impl World {
                 for p in self.players.iter_mut().filter(|p| p.health > 0) {
                     p.rounds_won += 1;
                 }
+                if self.valley.on {
+                    for species in self.hunted().into_iter().flatten() {
+                        self.valley.credit(species);
+                    }
+                }
             }
             self.phase = Phase::RoundOver {
                 winner,
@@ -2469,7 +2810,7 @@ impl World {
             };
             return;
         }
-        if matches!(self.phase, Phase::Fighting) {
+        if matches!(self.phase, Phase::Fighting) && !self.peaceful() {
             let down = [self.players[0].health <= 0, self.players[1].health <= 0];
             if down[0] || down[1] {
                 let winner = match down {
@@ -2749,6 +3090,16 @@ impl World {
         // arenas were data, and the pinned hunts still mean what they say.
         if self.arena != ArenaId::PROVING_GROUND {
             h.write_u32(0xA0 | (self.arena.0 as u32) << 8);
+        }
+        // The valley's journey, only in the valley: every other fight hashes
+        // exactly as it did before there was one.
+        if self.valley.on {
+            let v = &self.valley;
+            h.write_u32(0x7A11);
+            h.write_u32(v.beaten);
+            h.write_u32(v.came as u32 | (v.held as u32) << 8 | (v.armed as u32) << 16);
+            h.write_u32(v.hold as u32);
+            h.write_u32(v.cairn[0] as u32 | (v.cairn[1] as u32) << 8);
         }
         // A course's runs, only in a course: every other fight hashes exactly
         // as it did before there were any.
@@ -4456,6 +4807,12 @@ fn step_player(
                 p.vel.y = floor;
             }
         }
+    }
+
+    // **The valley's two props** (`crate::valley`), for anybody: a vine and
+    // an updraft. Neither is a class's, and neither costs anything but time.
+    if dashing.is_none() && !hauling {
+        climb_and_ride(p, input, scene.arena.arena.id);
     }
 
     p.pos = p.pos.add(p.vel.scale(DT));
@@ -6859,8 +7216,10 @@ impl World {
         };
         let landed = if self.hunting() {
             self.echo_gores_the_creature(owner, &ghost, share, out)
-        } else {
+        } else if self.pvp() {
             self.echo_cuts_the_other_fighter(owner, &ghost, share, out)
+        } else {
+            false
         };
         if landed {
             shadow::echo_landed(&mut self.players[owner]);
@@ -8165,7 +8524,7 @@ impl World {
     /// `advance`. Without this, a Blood mage's field was the one thing in the
     /// game that could kill a team-mate.
     fn effects_reach(&self, victim: usize, owner: u8) -> bool {
-        victim as u8 != owner && self.players[victim].health > 0 && !self.hunting()
+        victim as u8 != owner && self.players[victim].health > 0 && self.pvp()
     }
 
     /// Did a blade sweeping from `was` to `at` slice this fighter?
@@ -8437,7 +8796,7 @@ impl World {
                     effect.owner,
                     effect.class,
                     effect.slot,
-                    floor_under(body.pos),
+                    floor_under(self.arena(), body.pos),
                     dealt,
                 );
             }
@@ -8522,7 +8881,7 @@ impl World {
                 effect.owner,
                 effect.class,
                 effect.slot,
-                floor_under(at),
+                floor_under(self.arena(), at),
                 dealt,
             );
         }
@@ -8636,8 +8995,8 @@ fn stone_under_the_crosshair(
 /// creature's contact points are always over it. Stones are not consulted --
 /// a pool spilled onto a raised structure is an open question in the design,
 /// and until it is answered blood falls to the floor.
-fn floor_under(at: V3) -> V3 {
-    V3::new(at.x, GROUND_Y, at.z)
+fn floor_under(arena: &arena::Arena, at: V3) -> V3 {
+    V3::new(at.x, arena.relief_at(at.x, at.z), at.z)
 }
 
 impl World {
@@ -9890,7 +10249,7 @@ impl World {
         let effects = self.effects;
         let beast = self.monsters;
         let crowd = self.critters;
-        let versus = !self.hunting();
+        let versus = self.pvp();
         let scene = Scene {
             stones: &field,
             players: &seen,
@@ -10691,7 +11050,13 @@ impl World {
                 let dealt = before.min(worth).max(0);
                 if dealt > 0 {
                     self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
-                    self.spill(i as u8, attacker.class, kind, floor_under(body.pos), dealt);
+                    self.spill(
+                        i as u8,
+                        attacker.class,
+                        kind,
+                        floor_under(self.arena(), body.pos),
+                        dealt,
+                    );
                     self.players[i].heal(m.leeched(dealt));
                     dual::landed_a_hit(&mut self.players[i]);
                 }
@@ -10861,7 +11226,7 @@ impl World {
                     i as u8,
                     attacker.class,
                     kind,
-                    floor_under(box_out.centre()),
+                    floor_under(self.arena(), box_out.centre()),
                     dealt,
                 );
             }

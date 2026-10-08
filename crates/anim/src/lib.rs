@@ -32,6 +32,7 @@ pub mod png;
 pub mod sheet;
 pub mod source;
 pub mod spring;
+pub mod track;
 
 pub use bake::{Baked, Feel, Key, Looseness, Recipe, bake};
 pub use chain::{Chain, Segment};

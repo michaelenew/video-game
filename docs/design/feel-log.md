@@ -7555,3 +7555,146 @@ unchanged: looking level, the spot is straight ahead of the stone.
 
 **Verdict** kept on the user's word, unplayed. Watch: the crosshair resting right beside the
 stone makes a short line, so a small mouse movement swings the crack a long way.
+
+### 2026-10-08 — stones that are not boxes, and floors that are not flat
+
+**Changed** ([forms.md](forms.md) §"The third pass") The Elementalist's
+stones are drawn as rock columns, pulled in by noise and flat on top, inside
+the same box the hit test uses. Four arenas -- the low meadow, the Commons,
+the Pan, the Ashwood -- have **relief**: a table of hills and hollows per
+arena that the simulation's floor is the sum of, a few tens of centimetres
+over several metres. Every ground query starts at it; feet follow it
+downhill by one new knob (`StepDown`, 8 cm, the one frame of the steepest
+slope) rather than falling off it in a stutter; it is drawn at the
+simulation's own heights and shaded by height so a hill reads.
+
+**Why** Asked for: forms less boxy, terrain less regular. Relief is the one
+piece of the forms work that is not a drawing -- it moves where feet stand,
+where the aiming ray meets the floor, where a creature's fence puts it --
+which is why it is a table in `sim` with a test that nothing the fight lays on
+the floor sits on a slope.
+
+**Measured** `relief_is_gentle_everywhere` (no more than a tenth of a metre
+per half metre, nowhere over 0.7 m) and
+`relief_keeps_clear_of_what_stands_on_the_floor` (water level, sites and low
+solids on the plain, no hollow under any solid, the meadow's boulders flat).
+The first draft of the step-down glue ran everywhere at 36 cm and changed the
+pair's fight (`the_two_never_land_within_the_gap_except_the_twin_pounce`
+failed); gated to arenas with relief, onto the open floor only, every flat
+arena is bit for bit as before. Two places in the Veilstalker's fight and one
+in the pair's compared the floor against zero -- a creature on a hill would
+have read as perched on a trunk -- and now compare against the relief.
+
+**Verdict** kept, **unplayed**: judged from screenshots. Watch: whether a
+hill under a fight reads as a hill or as a lighting error, and whether
+anyone notices walking downhill at all, which is the point.
+
+### 2026-10-08 — the hands are on the hit line
+
+**Changed** ([animation.md](animation.md) §"The hands are on the hit line, by
+construction") Every swing and thrust in the game -- the Champion's eighteen
+moves, the Dual mage's and the Blood mage's sweeps -- has its hands put on the
+simulation's own hit volume at bake time (`anim::track`), eased on and off
+over five frames either side, each frame solved toward the elbow of the frame
+before. The recipes still author the body. `cargo run -p anim --bin audit`
+draws the volume over the clip and prints how far the hands are off it.
+
+**Why** Asked for: every animation to match its hit boxes and look good; the
+sword swing named as rough. The audit put a number on rough: on the sword's
+live frames the nearer hand was 24 cm off the volume's axis and the hands'
+line was 44° from it, so the drawn blade was being dragged out of the fists
+to sit on the hit test.
+
+**Measured** Every Champion move audits at 0 cm off the axis except the three
+flat sweeps and the jab, which the arm cannot quite reach (air spear 11 cm,
+rush sweep 9, rush slash 7, spear 4). The motion ceiling held: a grip on a fast
+arc is drawn in toward the hub so a hand never travels more than 24 cm a
+frame, an elbow under a hand on the line gets the hand's ceiling on those
+frames, and the drawn blade may stretch to 2.1 m to reach the volume's end
+from a choked grip. Three ways of easing the hands onto the line were tried
+and two thrown out: blending arm *angles* swung a forearm half a metre
+between frames (a solved arm reaches the same place with its channels a turn
+apart), and solving each frame afresh flipped the elbow over mid-line; what
+stayed is a blend of hand *positions* with the solver told which elbow it had.
+
+**Verdict** kept, **unplayed**: judged on the audit sheets and in two
+screenshots. The hands are right; the bodies under them are the next thing,
+and the fast arcs (a hundred degrees in three frames) are a question for the
+move table as much as for the clips. Watch: whether a choked grip on the
+upcut reads as a sword or a wand.
+
+
+### 2026-10-08 — the valley: a world to climb, where the game starts
+
+**Changed** ([valley.md](valley.md)) The game starts in Hearth now, not the
+proving ground. Five reaches climb from its gate to the Saddle, every
+creature's arena is a room off them behind its tier's waystone, and the Ring,
+through Hearth's north door, is the one place two players can hurt each other.
+New knobs in the Oven: **seam hold** 120 frames (two seconds standing in a
+way out before it goes without the other player), **vine speed** 2.5 m/s and
+**updraft rise** 8 m/s. Nobody dies in a reach: a death stands you back on
+your last cairn with your health back, so a fall costs exactly what the fall
+rule says and never ends the walk.
+
+**Why** Asked for: a wider world to explore with a friend, with natural
+climbing that forces the treacherous movement, end to end in a few minutes.
+The plan was [exploration/0006](exploration/0006_valley.md).
+
+**Tried and changed while building** The Mouth's first traverse jump was
+4.6 m out and 2 m up, which the Bulwark's plain jump cannot make (5.2 m on
+the level, 4.1 m at two metres up): the second terrace was carried out to
+2.6 m from the first ledge at a metre and a half up. The test that checks
+every required hop first asked whether a body *lands* on the far ledge,
+which fails a short high hop that a person makes by starting closer; it asks
+whether the jump is high enough with 30 cm to spare and wide enough at that
+height now.
+
+**Measured** Every class makes every hop nobody can go round
+(`tests/valley.rs`). Two fighters walking out of Hearth's gate together
+arrive in the Mouth together, and the replay's report says so.
+
+**Verdict** kept, **unplayed**: walked by tests, judged from the plan sheet
+and screenshots. Watch: whether the two-second hold is long enough not to
+fire by brushing a seam and short enough not to be a wait; whether the
+climbs, all sized to the Bulwark's jump, are treacherous for anyone else;
+and how long a pair who does not know it takes, end to end (the target is
+five minutes).
+
+### 2026-10-08 — the sword's wind-up turns thirty degrees again
+
+**Changed** The sword cut's wound-up pose is back to the 30° hip turn it had
+before the sword body pass; the drive, cut and follow-through keep their
+bigger turns.
+
+**Why** At 40° the hands, which the hand track puts on the hit line, could
+only be reached with the arm wrapped over the shoulder: the solver's answer
+was a shoulder at 175°, 136° and 107° and an elbow at 150°. The fade from a
+guard into that wind-up swung a hand 0.58 m in one frame, over the 0.45 m
+the presentation test allows for anything drawn. 36° did the same; 30° solves
+to an ordinary arm and moves the hand 0.29 m a frame at most. The test had
+been failing since the sword pass, and the sword pass shipped without the
+view tests being run, which is how it got through.
+
+Also from the same pass: the test that the drawn weapon goes the way the hit
+volume does read every move right hand forward. The hand track holds a cut
+from the left left hand forward, so it read the Backcut backwards. It now
+measures the blade the game draws (`view::arms::champion_arms`), from the
+hands to the volume's far end.
+
+**Verdict** kept, **unplayed**.
+
+### 2026-10-08 — footsteps that are not pans
+
+**Changed** Footfalls, landings, a jump leaving the floor and a creature
+going down are a new sound, a step, instead of a blow on the floor
+([sound.md](sound.md) §7). A walk's peak fell from about 0.55 to about 0.27.
+
+**Why** Heard by the owner: "walking sounds like pans clattering", and
+landing too. The valley made it constant: Hearth is paved in stone and the
+reaches are rock, and both were struck as if a floor were a plate hung in
+the air, ringing at 330 to 1300 Hz for a fifth of a second.
+
+**Verdict** kept, **unheard** since: judged on the sheet's spectrograms
+(no line of tone under any step but wood's short knock) and by
+`the_ground_does_not_ring`. Listen to `target/sound-sheet/04-*` and
+`05-*` first.

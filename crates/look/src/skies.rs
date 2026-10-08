@@ -115,6 +115,39 @@ pub fn of(id: ArenaId) -> Sky {
             ..Sky::over([0.96, 0.84, 0.80])
         },
 
+        // --- the valley ------------------------------------------------------
+        //
+        // One day, climbing: a warm morning in the town, the river's fresh
+        // light at the Mouth, noon on the Shelves, the wood's green afternoon,
+        // and the thinnest, bluest air of the game on the Saddle. The reach
+        // grows with the height, so the higher you are the further you see.
+        ArenaId::HEARTH => Sky {
+            reach: 500.0,
+            ..Sky::over([0.93, 0.88, 0.80])
+        },
+        ArenaId::RING => Sky::over([0.94, 0.87, 0.79]),
+        ArenaId::MOUTH => Sky {
+            reach: 520.0,
+            ..Sky::over([0.80, 0.89, 0.93])
+        },
+        ArenaId::BANK => Sky {
+            reach: 560.0,
+            ..Sky::over([0.84, 0.90, 0.89])
+        },
+        ArenaId::SHELVES => Sky {
+            reach: 720.0,
+            ..Sky::over([0.76, 0.86, 0.96])
+        },
+        ArenaId::PINEWOOD => Sky {
+            reach: 600.0,
+            ..Sky::over([0.82, 0.90, 0.85])
+        },
+        ArenaId::SADDLE => Sky {
+            reach: 1100.0,
+            ..Sky::over([0.73, 0.84, 0.98])
+        },
+        ArenaId::HIGHLANDS => Sky::over([0.82, 0.86, 0.92]),
+
         // --- the jump courses ---------------------------------------------
         //
         // Nine siblings, one sky, nine turns of the wheel. See `ALOFT`.

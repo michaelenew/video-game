@@ -41,6 +41,7 @@ mod sky;
 mod sound;
 mod species;
 mod trophies;
+mod valley;
 mod veil;
 
 use bevy::input::mouse::MouseMotion;
@@ -82,12 +83,25 @@ fn matches(n: &str, c: sim::Class) -> bool {
 /// Flags as well as keys, because the headless screenshot script takes flags
 /// and not keystrokes. See [`picker`].
 fn chosen_start(opts: &platform::Options) -> picker::Start {
-    picker::start(
+    let mut start = picker::start(
         opts.flag("--hunt"),
         opts.value("--hunt"),
         opts.value("--arena"),
         opts.value("--temper"),
-    )
+    );
+    // **The valley is where a run starts** (`docs/design/valley.md`): Hearth's
+    // square, unless a fight was asked for -- `--hunt`, `--arena`, or
+    // `--versus` for the proving ground as it always was.
+    if start.hunt.is_none() && start.arena.is_none() && !opts.flag("--versus") {
+        start.arena = Some(sim::valley::START);
+    }
+    start
+}
+
+/// `--open`: every waystone in the valley lit, as if every creature had been
+/// beaten. For walking the whole valley without the fights.
+fn open_valley() -> bool {
+    platform::flag("--open")
 }
 
 /// `--temper` was given: every temper is on offer to `T`, earned or not.
@@ -167,6 +181,7 @@ fn main() {
         .init_resource::<hud::ShowClassButtons>()
         .init_resource::<menu::Menu>()
         .init_resource::<sound::Soundscape>()
+        .init_resource::<Joints>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -195,6 +210,7 @@ fn main() {
                 ground::setup,
                 hud::setup,
                 hud::setup_picker,
+                valley::setup_text,
                 crosshair::setup,
                 glint::setup,
                 veil::setup,
@@ -217,12 +233,15 @@ fn main() {
                 (
                     tick_sim,
                     arenas::dress,
+                    valley::update,
                     sky::follow,
                     sound::play,
                     sound::setup,
                 )
                     .chain(),
-                apply_poses,
+                // One entry, so the chain stays under twenty: the balls go
+                // where the poses just put the joints.
+                (apply_poses, pose_balls).chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -274,6 +293,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                valley::update_text,
                 glint::update,
                 veil::place,
                 online::announce,
@@ -562,6 +582,112 @@ impl Default for Sim {
             record: platform::flag("--record"),
             round_saved: false,
         }
+    }
+}
+
+/// The unit form a fighter's part is drawn as, scaled per frame to its box
+/// (`skeleton::Build::box_of`). A rounded box rather than a cube: the box is
+/// still the box, so nothing about the pose or the hit test moves, but a limb
+/// has no edge to catch the light as a line and the head is nearly a ball.
+/// See `docs/design/forms.md`.
+fn limb_form(joint: view::skeleton::Joint) -> Mesh {
+    use view::skeleton::Joint;
+    match joint {
+        // Round about the bone, blunt at the ends, meeting the next limb in a
+        // ball at the joint (`BodyBall`).
+        Joint::ArmL
+        | Joint::ArmR
+        | Joint::ForearmL
+        | Joint::ForearmR
+        | Joint::ThighL
+        | Joint::ThighR
+        | Joint::ShinL
+        | Joint::ShinR => shapes::soft_cylinder(Vec3::ONE, 0.5, 10),
+        Joint::Head => shapes::soft_box(Vec3::ONE, 0.9, 12, None),
+        Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => {
+            shapes::soft_box(Vec3::ONE, 0.5, 8, None)
+        }
+        Joint::Root | Joint::Spine | Joint::Chest => shapes::soft_box(Vec3::ONE, 0.35, 10, None),
+    }
+}
+
+/// The joints a limb bends at, each drawn as a ball the limb's own width so
+/// the bend shows a knee rather than a gap: shoulder, elbow, wrist, hip, knee,
+/// ankle. The torso's joints are inside the torso and need none.
+const BALLS: [view::skeleton::Joint; 12] = {
+    use view::skeleton::Joint;
+    [
+        Joint::ArmL,
+        Joint::ForearmL,
+        Joint::HandL,
+        Joint::ArmR,
+        Joint::ForearmR,
+        Joint::HandR,
+        Joint::ThighL,
+        Joint::ShinL,
+        Joint::FootL,
+        Joint::ThighR,
+        Joint::ShinR,
+        Joint::FootR,
+    ]
+};
+
+/// How wide the ball at a joint is: the narrower cross-section of the limb
+/// that hangs from it, a hair under so it never shows through a straight
+/// limb and only fills the wedge a bend opens.
+fn ball_width(skeleton: &Skeleton, joint: view::skeleton::Joint) -> f32 {
+    let size = view::pose::part_size(skeleton, joint);
+    size[0].min(size[2]) * 0.98
+}
+
+/// Where each fighter's joints are this frame, in the fighter's own frame:
+/// what [`pose_balls`] puts the balls at. Written by the posing pass.
+#[derive(Resource, Default)]
+struct Joints {
+    body: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+    shadow: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+}
+
+/// A ball at one of a fighter's joints. See [`BALLS`].
+#[derive(Component)]
+struct BodyBall {
+    owner: usize,
+    joint: view::skeleton::Joint,
+}
+
+/// The same, on the Reaver's second body.
+#[derive(Component)]
+struct ShadowBall {
+    owner: usize,
+    joint: view::skeleton::Joint,
+}
+
+/// Put the joint balls where the posing pass left the joints.
+fn pose_balls(
+    sim: Res<Sim>,
+    joints: Res<Joints>,
+    mut balls: Query<(&BodyBall, &mut Transform), Without<ShadowBall>>,
+    mut shadow_balls: Query<(&ShadowBall, &mut Transform), Without<BodyBall>>,
+) {
+    let skeletons = [
+        skeleton_for(sim.cur.players[0].class),
+        skeleton_for(sim.cur.players[1].class),
+    ];
+    for (ball, mut tf) in balls.iter_mut() {
+        let Some(skin) = joints.body[ball.owner] else {
+            continue;
+        };
+        let at = skin.origin[ball.joint.index()];
+        tf.translation = Vec3::new(at[0], at[1], at[2]);
+        tf.scale = Vec3::splat(ball_width(&skeletons[ball.owner], ball.joint));
+    }
+    for (ball, mut tf) in shadow_balls.iter_mut() {
+        let Some(skin) = joints.shadow[ball.owner] else {
+            continue;
+        };
+        let at = skin.origin[ball.joint.index()];
+        tf.translation = Vec3::new(at[0], at[1], at[2]);
+        tf.scale = Vec3::splat(ball_width(&skeletons[ball.owner], ball.joint));
     }
 }
 
@@ -1617,10 +1743,18 @@ fn setup(
                 // Tab to change class.
                 for joint in JOINTS {
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        Mesh3d(meshes.add(limb_form(joint))),
                         MeshMaterial3d(skin.clone()),
                         Transform::default(),
                         BodyPart { owner, joint },
+                    ));
+                }
+                for joint in BALLS {
+                    root.spawn((
+                        Mesh3d(meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap())),
+                        MeshMaterial3d(skin.clone()),
+                        Transform::default(),
+                        BodyBall { owner, joint },
                     ));
                 }
             });
@@ -1644,10 +1778,18 @@ fn setup(
             .with_children(|root| {
                 for joint in JOINTS {
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        Mesh3d(meshes.add(limb_form(joint))),
                         MeshMaterial3d(shade.clone()),
                         Transform::default(),
                         ShadowPart { owner, joint },
+                    ));
+                }
+                for joint in BALLS {
+                    root.spawn((
+                        Mesh3d(meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap())),
+                        MeshMaterial3d(shade.clone()),
+                        Transform::default(),
+                        ShadowBall { owner, joint },
                     ));
                 }
             });
@@ -1793,10 +1935,14 @@ fn setup(
     // Structures get their own pool, because they are not effects: they have no
     // clock and they belong to the Elementalist's mechanic, which is the only
     // place that knows about them.
+    // Each a column of earth with its own roughness, so three stones up at
+    // once are three stones (`shapes::rock_column`; `docs/design/forms.md`).
     for owner in 0..MAX_PLAYERS {
         for index in 0..sim::class::MAX_STRUCTURES {
             commands.spawn((
-                Mesh3d(unit.clone()),
+                Mesh3d(meshes.add(shapes::rock_column(
+                    (owner * sim::class::MAX_STRUCTURES + index) as u32 + 1,
+                ))),
                 MeshMaterial3d(look.stone.clone()),
                 Transform::default(),
                 Visibility::Hidden,
@@ -3306,6 +3452,16 @@ fn tick_sim(
             );
         }
     }
+    // **The valley's waystones read the journey**, and the journey learns
+    // what this player has beaten from their trophies: one creature on the
+    // wire a frame, the first the journey has not got, until it has them all
+    // (`sim::input::Destination::Credit`). Both peers send theirs, so the
+    // valley is open as far as the more travelled of you has been.
+    if sim.travel == sim::input::Travel::NONE && sim.cur.valley.on {
+        if let Some(s) = valley::credit_due(&sim.cur, &trophies, open_valley()) {
+            sim.travel = sim::input::Travel::credit(s);
+        }
+    }
     // F10 too: a function key types nothing, and the moment you want dev mode
     // may well be with a pasted link still in the Esc menu's box.
     if keys.just_pressed(KeyCode::F10) {
@@ -3413,6 +3569,10 @@ fn tick_sim(
         } else {
             picker::toggle(&sim.cur)
         };
+    }
+    // `V`: back to the valley -- Hearth's square, with the journey kept.
+    if keys.just_pressed(KeyCode::KeyV) {
+        sim.travel = sim::input::Travel::VALLEY;
     }
     // `N`: the next jump course, in order of difficulty. The same trip on the
     // wire as `H`, with the arena in the byte. See `picker::next_course`.
@@ -3904,8 +4064,18 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
 /// fighter's root, a fighter's part, a shadow's root and a shadow's part are
 /// four different entities and never the same one. Written as an alias because
 /// saying it four times in a signature is the same sentence four times.
-type Posed<'w, 's, Tag, A, B, C> =
-    Query<'w, 's, (&'static Tag, &'static mut Transform), (Without<A>, Without<B>, Without<C>)>;
+type Posed<'w, 's, Tag, A, B, C> = Query<
+    'w,
+    's,
+    (&'static Tag, &'static mut Transform),
+    (
+        Without<A>,
+        Without<B>,
+        Without<C>,
+        Without<BodyBall>,
+        Without<ShadowBall>,
+    ),
+>;
 
 // A Bevy system's parameter list *is* its dependency declaration, and this one
 // now poses two bodies per fighter. Splitting it to get under a count would
@@ -3925,6 +4095,7 @@ fn apply_poses(
     mut shadow_seen: Query<(&mut Visibility, &ShadowRoot)>,
     mut shadow_roots: Posed<ShadowRoot, Fighter, BodyPart, ShadowPart>,
     mut shadow_parts: Posed<ShadowPart, Fighter, BodyPart, ShadowRoot>,
+    mut joints: ResMut<Joints>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
@@ -3956,6 +4127,9 @@ fn apply_poses(
             }
         }
         skins.push(view::skeleton::solve(skeleton, &pose));
+    }
+    for (owner, skin) in skins.iter().enumerate() {
+        joints.body[owner] = Some(*skin);
     }
 
     // The shield hand, in the arena rather than in the character's own space,
@@ -4021,6 +4195,7 @@ fn apply_poses(
         tf.translation = Vec3::new(ghost.pos[0], ghost.pos[1], ghost.pos[2]);
         tf.rotation = Quat::from_rotation_y(ghost.facing[0].atan2(ghost.facing[2]));
     }
+    joints.shadow = shadow_skins;
     for (part, mut tf) in shadow_parts.iter_mut() {
         let Some(skin) = shadow_skins[part.owner].as_ref() else {
             continue;

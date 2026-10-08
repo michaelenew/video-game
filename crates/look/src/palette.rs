@@ -383,6 +383,77 @@ pub const EVERY: [Material; 10] = [
 pub fn of(id: ArenaId) -> Palette {
     Palette::under(&crate::skies::of(id))
 }
+impl Palette {
+    /// **A way on**, drawn as a light where a seam of the valley is: the
+    /// arena's own pastel when the way is open, and a cold grey of the same
+    /// lightness when a dark waystone holds it. Derived, so a new place has
+    /// its beacons without anybody choosing them.
+    pub fn beacon(&self, lit: bool) -> [f32; 3] {
+        if lit {
+            self.sheen
+        } else {
+            let l = Lch::of(self.sheen);
+            Lch {
+                l: l.l * 0.8,
+                c: 0.01,
+                h: Lch::of(self.shade).h,
+            }
+            .rgb()
+        }
+    }
+
+    /// **The face of a cliff** whose top is `top`: rock under a soft top --
+    /// turf, snow, sand on a terrace is a skin on stone -- and the top's own
+    /// stuff a step darker on bare rock or on something `thin`, a hedge, which
+    /// is what it is all the way down.
+    pub fn cliff_face(&self, top: Material, thin: bool) -> [f32; 3] {
+        if top == Material::Rock || thin {
+            let c = Lch::of(self.of(top));
+            Lch { l: c.l * 0.88, ..c }.rgb()
+        } else {
+            self.of(Material::Rock)
+        }
+    }
+
+    /// A vine on a face: the arena's grass, a step darker, because it hangs
+    /// in the face's shadow.
+    pub fn vine(&self) -> [f32; 3] {
+        let g = Lch::of(self.of(Material::Grass));
+        Lch { l: g.l * 0.72, ..g }.rgb()
+    }
+
+    /// An updraft: the light itself, which is all rising air is.
+    pub fn draft(&self) -> [f32; 3] {
+        self.surface([0.94, 0.96, 1.0])
+    }
+}
+
+/// **A far ridge**, for the lookout's view of the valley: the ground's
+/// colour fading into the horizon's with distance, `t` from near (0) to far
+/// (1) -- aerial perspective, as one mix.
+pub fn far_ridge(horizon: [f32; 3], ground: [f32; 3], t: f32) -> [f32; 3] {
+    tint::mix(ground, horizon, 0.35 + 0.6 * t.clamp(0.0, 1.0))
+}
+
+/// How much lighter or darker the floor is for standing `height` metres above
+/// or below its plain: the relief's shading, as a factor on the floor's colour.
+///
+/// The floor's rises and dips (`sim::arena::relief`) are a few tens of
+/// centimetres over several metres, which tilts the ground a handful of
+/// degrees; under a sun sixty degrees up, that is a change in lighting of a
+/// few percent, and a hill that is only a few percent is a hill nobody sees.
+/// What makes a swell read on real ground is not the sun but the sky: a
+/// crown sees the whole dome and a hollow sees less of it, and dust, water
+/// and growth all collect downhill, so a dip is darker than the plain for
+/// three reasons at once. This is that, as one number per metre: a sixth
+/// lighter at half a metre up and a sixth darker at half a metre down,
+/// clamped so a tall rise never bleaches.
+///
+/// Multiplied into the vertex colour, so it goes through `lit` with
+/// everything else and is judged on the sheet the same way.
+pub fn relief_shade(height: f32) -> f32 {
+    (1.0 + 0.33 * height).clamp(0.72, 1.28)
+}
 
 #[cfg(test)]
 mod tests {

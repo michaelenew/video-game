@@ -1209,7 +1209,11 @@ fn fly(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones::F
     }
     if e < leave {
         // Still coiled: on whatever is under it.
-        m.pos.y = ground_at(m.pos, ground, field).max(if perched(m) { m.pos.y } else { Fx::ZERO });
+        m.pos.y = ground_at(m.pos, ground, field).max(if perched(m) {
+            m.pos.y
+        } else {
+            ground.relief_at(m.pos.x, m.pos.z)
+        });
         return;
     }
     let from = point(m.own[body::LEAP_FROM] as u32);

@@ -233,3 +233,65 @@ fn twist_for_axis(skeleton: &Skeleton, joint: Joint, swing: f32, spread: f32, ax
     let u = (-math::dot(axis, b)).atan2(math::dot(axis, a));
     u * mirror
 }
+
+/// [`hand_to`], preferring the elbow that points where `elbow` does.
+///
+/// For a hand that is being moved a little each frame -- along a hit line,
+/// or eased onto one (`anim::track`) -- the swivel to prefer is the one the
+/// frame before had, not the natural one: two nearby targets can each be
+/// reached best from either side of the natural elbow, and a solver that
+/// picks afresh each frame flips the elbow over halfway along the line,
+/// which moved a forearm half a metre between two frames whose hands were a
+/// few centimetres apart. The preference is twice [`hand_to`]'s, so a flip
+/// costs more than a miss of several centimetres.
+pub fn hand_to_near(
+    pose: &mut Pose,
+    skeleton: &Skeleton,
+    left: bool,
+    target: V3,
+    elbow: V3,
+) -> f32 {
+    let upper = if left { Joint::ArmL } else { Joint::ArmR };
+    let shoulder = solve(skeleton, pose).origin[upper.index()];
+    let axis = math::normalize_or(math::sub(target, shoulder), [0.0, -1.0, 0.0]);
+    let wish = math::normalize_or(
+        math::sub(elbow, math::scale(axis, math::dot(elbow, axis))),
+        fallback_perp(axis),
+    );
+    const STEPS: usize = 16;
+    let mut best = (f32::INFINITY, wish);
+    for i in 0..STEPS {
+        let angle = i as f32 / STEPS as f32 * std::f32::consts::TAU;
+        let candidate = Quat::axis_angle(axis, angle).rotate(wish);
+        let mut trial = *pose;
+        let miss = reach(&mut trial, skeleton, upper, target, candidate);
+        let unnatural = 1.0 - math::dot(candidate, wish);
+        let score = miss + 0.06 * unnatural;
+        if score < best.0 {
+            best = (score, candidate);
+        }
+    }
+    reach(pose, skeleton, upper, target, best.1)
+}
+
+/// Which way a pose's elbow points: the part of the shoulder-to-elbow line
+/// that is square to the shoulder-to-wrist line. What [`hand_to_near`] is
+/// given from the frame before.
+pub fn elbow_of(pose: &Pose, skeleton: &Skeleton, left: bool) -> V3 {
+    let (upper, middle, hand) = if left {
+        (Joint::ArmL, Joint::ForearmL, Joint::HandL)
+    } else {
+        (Joint::ArmR, Joint::ForearmR, Joint::HandR)
+    };
+    let skin = solve(skeleton, pose);
+    let shoulder = skin.origin[upper.index()];
+    let axis = math::normalize_or(
+        math::sub(skin.origin[hand.index()], shoulder),
+        [0.0, -1.0, 0.0],
+    );
+    let e = math::sub(skin.origin[middle.index()], shoulder);
+    math::normalize_or(
+        math::sub(e, math::scale(axis, math::dot(e, axis))),
+        fallback_perp(axis),
+    )
+}

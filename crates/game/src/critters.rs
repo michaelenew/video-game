@@ -126,7 +126,9 @@ pub fn setup(
         material(&mut materials, crate::species::NO_BODY),
         material(&mut materials, crate::species::NO_BODY),
     );
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    // A small body is rounder than a big one: a rounded box, not a crate
+    // (`docs/design/forms.md`); its box is still what the hit test uses.
+    let cube = meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.45, 8, None));
     for slot in 0..MAX_CRITTERS {
         for piece in PIECES {
             commands.spawn((

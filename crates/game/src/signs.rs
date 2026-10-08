@@ -126,6 +126,7 @@ pub fn place(
     mut fills: Query<(&Fill, &mut Transform, &mut Visibility), Without<Drawn>>,
 ) {
     let signs = sim.cur.signs();
+    let arena = sim.cur.arena();
     let list: Vec<&sim::sign::Sign> = signs.iter().collect();
     let flat = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
     let v3 = |v: sim::V3| {
@@ -149,17 +150,27 @@ pub fn place(
         } else {
             FLOOR
         };
+        // On the floor under its middle, tilted to the floor's slope there
+        // (`crate::ground::floor_at`): a sign is a flat shape, and on a floor
+        // with relief a flat shape at zero floats in every hollow.
         *transform = match sign.shape {
-            Shape::Strip => Transform {
-                translation: Vec3::new(at.x, lift, at.z) + along * (length * 0.5),
-                rotation: Quat::from_rotation_y(-along.z.atan2(along.x)) * flat,
-                scale: Vec3::new(length.max(0.01), width.max(0.01), 1.0),
-            },
-            Shape::Disc | Shape::Ring => Transform {
-                translation: Vec3::new(at.x, lift, at.z),
-                rotation: flat,
-                scale: Vec3::new(width, width, 1.0),
-            },
+            Shape::Strip => {
+                let centre = Vec3::new(at.x, 0.0, at.z) + along * (length * 0.5);
+                let (floor, tilt) = crate::ground::floor_at(arena, centre.x, centre.z);
+                Transform {
+                    translation: Vec3::new(centre.x, floor + lift, centre.z),
+                    rotation: tilt * Quat::from_rotation_y(-along.z.atan2(along.x)) * flat,
+                    scale: Vec3::new(length.max(0.01), width.max(0.01), 1.0),
+                }
+            }
+            Shape::Disc | Shape::Ring => {
+                let (floor, tilt) = crate::ground::floor_at(arena, at.x, at.z);
+                Transform {
+                    translation: Vec3::new(at.x, floor + lift, at.z),
+                    rotation: tilt * flat,
+                    scale: Vec3::new(width, width, 1.0),
+                }
+            }
         };
         *visible = Visibility::Inherited;
         let wanted = inks.of(sign.says);
@@ -181,9 +192,11 @@ pub fn place(
         let length =
             sign.length.to_f32_for_render() * sign.progress.to_f32_for_render().clamp(0.0, 1.0);
         let width = sign.width.to_f32_for_render();
+        let centre = Vec3::new(at.x, 0.0, at.z) + along * (length * 0.5);
+        let (floor, tilt) = crate::ground::floor_at(arena, centre.x, centre.z);
         *transform = Transform {
-            translation: Vec3::new(at.x, FLOOR + 0.01, at.z) + along * (length * 0.5),
-            rotation: Quat::from_rotation_y(-along.z.atan2(along.x)) * flat,
+            translation: Vec3::new(centre.x, floor + FLOOR + 0.01, centre.z),
+            rotation: tilt * Quat::from_rotation_y(-along.z.atan2(along.x)) * flat,
             scale: Vec3::new(length.max(0.01), width.max(0.01), 1.0),
         };
         *visible = Visibility::Inherited;

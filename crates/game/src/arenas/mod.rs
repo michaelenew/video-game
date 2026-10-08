@@ -325,11 +325,25 @@ pub fn dress(
             // gradient. The accent runs in from the arena's own perimeter,
             // which is the edge of the world as far as anyone standing on it
             // is concerned.
-            let mut floor = Plane3d::default()
-                .mesh()
-                .size(w, d)
-                .subdivisions(crate::shapes::cuts_across(w.max(d), brush.edge.reach))
-                .build();
+            // Flat, a subdivided plane; with relief (`sim::arena::relief`),
+            // a grid at the simulation's own heights, half a metre a cell,
+            // so what is drawn is the floor feet are held to.
+            let hilly = !sim::arena::relief::is_flat(arena.id);
+            let mut floor = if hilly {
+                let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+                crate::shapes::ground_grid(
+                    Vec2::new(w, d),
+                    Vec3::new((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                    0.5,
+                    &|x, z| fx(arena.relief_at(to_fx(x), to_fx(z))),
+                )
+            } else {
+                Plane3d::default()
+                    .mesh()
+                    .size(w, d)
+                    .subdivisions(crate::shapes::cuts_across(w.max(d), brush.edge.reach))
+                    .build()
+            };
             crate::shapes::paint(
                 &mut floor,
                 Vec3::new(w * 0.5, 0.0, d * 0.5),
@@ -337,6 +351,10 @@ pub fn dress(
                 palette.of(arena.floor),
                 &brush,
             );
+            // Ground, not paint: the colour wanders a little across it.
+            crate::shapes::mottle(&mut floor, 0.07, 2.5, arena.id.0 as u32);
+            // A crown lighter and a hollow darker, by the look's rule.
+            crate::shapes::shade_by_height(&mut floor, &look::palette::relief_shade);
             commands.spawn((
                 Mesh3d(meshes.add(floor)),
                 MeshMaterial3d(white.clone()),
@@ -346,29 +364,64 @@ pub fn dress(
             ));
         }
     }
+    let hilly = !sim::arena::relief::is_flat(arena.id);
     for (i, region) in arena.regions.iter().enumerate() {
-        let lift = 0.004 * (i + 1) as f32;
         let look = paint(palette.of(region.material));
+        // A hair above the floor, each region a hair above the last.
+        let lift = 0.004 * (i + 1) as f32;
+        // On a floor with relief the patch follows it, vertex by vertex, at
+        // the simulation's own heights; on a flat one it is a flat shape.
+        let under = |x: f32, z: f32| {
+            let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+            fx(arena.relief_at(to_fx(x), to_fx(z)))
+        };
         match region.area {
             Area::Rect { lo, hi } => {
                 let (x0, z0, x1, z1) = (fx(lo.0), fx(lo.1), fx(hi.0), fx(hi.1));
+                let centre = Vec3::new((x0 + x1) * 0.5, lift, (z0 + z1) * 0.5);
+                let mesh = if hilly {
+                    crate::shapes::ground_grid(
+                        Vec2::new(x1 - x0, z1 - z0),
+                        Vec3::new(centre.x, 0.0, centre.z),
+                        0.5,
+                        &under,
+                    )
+                } else {
+                    Plane3d::default().mesh().size(x1 - x0, z1 - z0).build()
+                };
                 commands.spawn((
-                    Mesh3d(meshes.add(Plane3d::default().mesh().size(x1 - x0, z1 - z0))),
+                    Mesh3d(meshes.add(mesh)),
                     MeshMaterial3d(look),
-                    Transform::from_xyz((x0 + x1) * 0.5, lift, (z0 + z1) * 0.5),
+                    Transform::from_translation(centre),
                     bevy::pbr::NotShadowCaster,
                     Scenery,
                 ));
             }
             Area::Disc { at, radius } => {
-                commands.spawn((
-                    Mesh3d(meshes.add(Circle::new(fx(radius)))),
-                    MeshMaterial3d(look),
-                    Transform::from_xyz(fx(at.0), lift, fx(at.1))
-                        .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-                    bevy::pbr::NotShadowCaster,
-                    Scenery,
-                ));
+                let centre = Vec3::new(fx(at.0), lift, fx(at.1));
+                if hilly {
+                    commands.spawn((
+                        Mesh3d(meshes.add(crate::shapes::ground_disc(
+                            fx(radius),
+                            Vec3::new(centre.x, 0.0, centre.z),
+                            0.5,
+                            &under,
+                        ))),
+                        MeshMaterial3d(look),
+                        Transform::from_translation(centre),
+                        bevy::pbr::NotShadowCaster,
+                        Scenery,
+                    ));
+                } else {
+                    commands.spawn((
+                        Mesh3d(meshes.add(Circle::new(fx(radius)))),
+                        MeshMaterial3d(look),
+                        Transform::from_translation(centre)
+                            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+                        bevy::pbr::NotShadowCaster,
+                        Scenery,
+                    ));
+                }
             }
         }
     }
@@ -380,13 +433,54 @@ pub fn dress(
         let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
         let size = max - min;
         let at = (min + max) * 0.5;
+        // The form follows the material (`docs/design/forms.md`): bare rock
+        // is a rock, soft ground is rounded, dressed stone and timber keep
+        // their edges. Every form stays inside the box the body collides
+        // against.
+        let rgb = palette.of(solid.material);
+        let seed = (at.x * 7.0 + at.z * 13.0 + size.y * 3.0) as i32 as u32;
+        // **Terrain** -- a terrace, a bank, a valley's side, a hedge -- is a
+        // cliff, roughened in metres rather than in shares of its size, so a
+        // thirty-metre block's edge is where its collision is. Dressed stone
+        // and timber stay square at any size. A soft top on a tall block (a
+        // turf-topped terrace) shows rock in its faces; a thin one (a hedge)
+        // is its own stuff all the way down.
+        let soft = matches!(
+            solid.material,
+            Material::Ground
+                | Material::Grass
+                | Material::Sand
+                | Material::Snow
+                | Material::Ash
+                | Material::Peat
+                | Material::Rock
+        );
+        if soft && crate::shapes::is_terrain(size) {
+            let side = palette.cliff_face(solid.material, size.x.min(size.z) < 3.0);
+            commands.spawn((
+                Mesh3d(meshes.add(crate::shapes::cliff(size, seed, rgb, side, at, &brush))),
+                MeshMaterial3d(white.clone()),
+                Transform::from_translation(at),
+                Scenery,
+            ));
+            continue;
+        }
+        let mesh = match solid.material {
+            Material::Rock => crate::shapes::rock(size, seed, Some((at, rgb, &brush))),
+            Material::Ground
+            | Material::Grass
+            | Material::Sand
+            | Material::Snow
+            | Material::Ash
+            | Material::Peat => crate::shapes::soft_box(size, 0.3, 12, Some((at, rgb, &brush))),
+            // Dressed stone is cut square and keeps its arris, chamfered just
+            // enough not to catch the light as a wire; timber a little more.
+            Material::Stone => crate::shapes::chamfered_box(size, 0.06, Some((at, rgb, &brush))),
+            Material::Wood => crate::shapes::chamfered_box(size, 0.04, Some((at, rgb, &brush))),
+            Material::Water => crate::shapes::boxy(size, at, rgb, &brush),
+        };
         commands.spawn((
-            Mesh3d(meshes.add(crate::shapes::boxy(
-                size,
-                at,
-                palette.of(solid.material),
-                &brush,
-            ))),
+            Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(white.clone()),
             Transform::from_translation(at),
             Scenery,
@@ -399,7 +493,9 @@ pub fn dress(
         let rgb = palette.surface(prop.rgb);
         let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
         let mesh = match prop.shape {
-            Shape::Box => crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
+            Shape::Box => {
+                crate::shapes::chamfered_box(Vec3::new(w, h, d), 0.04, Some((at, rgb, &brush)))
+            }
             Shape::Cylinder => {
                 let mut m = Cylinder::new(w * 0.5, h).mesh().build();
                 crate::shapes::paint(&mut m, half, at, rgb, &brush);
@@ -418,6 +514,145 @@ pub fn dress(
                 .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
             Scenery,
         ));
+    }
+
+    // **The floor broken up**, by dressing rather than geometry: the floor's
+    // height is the simulation's and cannot move, so what lies on it does the
+    // work -- tussocks in grass, pebbles on earth and sand, drifts on snow,
+    // chips on rock -- small enough to walk through unnoticed and placed by a
+    // hash of the arena, so the same arena scatters the same way every time.
+    // Not on a course (no floor), not in water, never inside a solid.
+    if !dressing.drop {
+        scatter(&mut commands, &mut meshes, arena, &palette, &brush, &white);
+    }
+
+    // The valley's seams, waystones, vines and updrafts, and the lookout's
+    // view from the town: `crate::valley`, for a place that is one.
+    crate::valley::draw(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        arena,
+        &palette,
+        &sky,
+    );
+}
+
+/// How much floor one scattered thing stands for, in square metres.
+const SCATTER_SPACING: f32 = 40.0;
+
+fn scatter(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    arena: &sim::arena::Arena,
+    palette: &look::palette::Palette,
+    brush: &crate::shapes::Brush,
+    white: &Handle<StandardMaterial>,
+) {
+    let b = arena.bounds;
+    let (lo_x, hi_x) = (fx(b.lo_x), fx(b.hi_x));
+    let (lo_z, hi_z) = (fx(b.lo_z), fx(b.hi_z));
+    let (w, d) = (hi_x - lo_x, hi_z - lo_z);
+    let count = ((w * d / SCATTER_SPACING) as usize).clamp(12, 200);
+    let seed = arena.id.0 as u32 + 1;
+    let shade = |rgb: [f32; 3], k: f32| [rgb[0] * k, rgb[1] * k, rgb[2] * k];
+    for i in 0..count {
+        let i = i as u32;
+        let r = |salt: u32| crate::shapes::hash01(seed, i, salt);
+        let x = lo_x + 1.0 + (w - 2.0) * r(1);
+        let z = lo_z + 1.0 + (d - 2.0) * r(2);
+        // RENDER-ONLY: metres to fixed point, to ask the arena what is here.
+        let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+        let at = sim::V3::new(to_fx(x), sim::Fx::ZERO, to_fx(z));
+        // Not inside anything, and not where a region says something else
+        // stands on the floor.
+        if arena.solids().iter().any(|s| {
+            x > fx(s.min.x) - 0.4
+                && x < fx(s.max.x) + 0.4
+                && z > fx(s.min.z) - 0.4
+                && z < fx(s.max.z) + 0.4
+        }) {
+            continue;
+        }
+        let y = fx(arena.ground_under(at));
+        let material = arena.material_under(at);
+        let base = palette.of(material);
+        let (mesh, size) = match material {
+            Material::Grass => {
+                let s = 0.25 + 0.3 * r(3);
+                let h = 0.07 + 0.08 * r(4);
+                let rgb = shade(base, 0.78 + 0.1 * r(5));
+                (
+                    crate::shapes::soft_box(
+                        Vec3::new(s, h * 2.0, s * (0.8 + 0.4 * r(6))),
+                        0.9,
+                        8,
+                        Some((Vec3::new(x, y, z), rgb, brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Ground | Material::Peat | Material::Ash | Material::Sand => {
+                let s = 0.1 + 0.16 * r(3);
+                let h = 0.05 + 0.06 * r(4);
+                let rock = palette.of(Material::Rock);
+                let mix = 0.55;
+                let rgb = [
+                    base[0] * (1.0 - mix) + rock[0] * mix,
+                    base[1] * (1.0 - mix) + rock[1] * mix,
+                    base[2] * (1.0 - mix) + rock[2] * mix,
+                ];
+                (
+                    crate::shapes::rock(
+                        Vec3::new(s, h * 2.0, s * (0.7 + 0.6 * r(6))),
+                        seed ^ i,
+                        Some((Vec3::new(x, y, z), shade(rgb, 0.9 + 0.2 * r(5)), brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Snow => {
+                let s = 0.8 + 1.0 * r(3);
+                let h = 0.05 + 0.07 * r(4);
+                (
+                    crate::shapes::soft_box(
+                        Vec3::new(s, h * 2.0, s * (0.5 + 0.5 * r(6))),
+                        0.95,
+                        8,
+                        Some((Vec3::new(x, y, z), shade(base, 1.04), brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Rock | Material::Stone => {
+                // A paved floor is swept: half as many, and small.
+                if i % 2 == 1 {
+                    continue;
+                }
+                let s = 0.08 + 0.1 * r(3);
+                let h = 0.03 + 0.04 * r(4);
+                (
+                    crate::shapes::rock(
+                        Vec3::new(s, h * 2.0, s * (0.6 + 0.6 * r(6))),
+                        seed ^ i,
+                        Some((Vec3::new(x, y, z), shade(base, 0.85 + 0.2 * r(5)), brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Water | Material::Wood => continue,
+        };
+        // Half buried: the form's middle sits on the floor, so only its top
+        // half shows and nothing has a visible underside to float on.
+        commands.spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
+            Transform::from_xyz(x, y, z)
+                .with_rotation(Quat::from_rotation_y(r(7) * std::f32::consts::TAU)),
+            bevy::pbr::NotShadowCaster,
+            Scenery,
+        ));
+        let _ = size;
     }
 }
 

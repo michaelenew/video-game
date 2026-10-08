@@ -18,7 +18,7 @@
 //! frame.
 
 use crate::patch::{
-    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Strike, Wet, Whoosh,
+    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Step, Strike, Wet, Whoosh,
 };
 use sim::class::{Mechanic, Shield};
 use sim::effects::EffectKind;
@@ -209,11 +209,11 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
         // Leaving the floor, and coming back to it.
         if was.grounded && !now.grounded && now.vel.y.raw() > 0 {
             out.push(
-                Patch::Strike(Strike {
-                    weight: 0.2,
-                    sharp: 0.2,
+                Patch::Step(Step {
+                    weight: 0.15,
                     material: floor(was.pos),
                     size: FIGHTER,
+                    seed: after.frame as u8 ^ i as u8,
                 }),
                 now.pos,
             );
@@ -221,11 +221,11 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
         if !was.grounded && now.grounded && !now.aboard() {
             let fall = was.vel.y.to_f32_for_render().abs();
             out.push(
-                Patch::Strike(Strike {
+                Patch::Step(Step {
                     weight: (0.2 + fall / 25.0).min(1.0),
-                    sharp: 0.1,
                     material: floor(now.pos),
                     size: FIGHTER,
+                    seed: after.frame as u8 ^ i as u8,
                 }),
                 now.pos,
             );
@@ -237,11 +237,11 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
             let period = (90.0 / speed.max(2.0)).clamp(9.0, 24.0) as u32;
             if (after.frame + (i as u32) * (period / 2)) % period == 0 {
                 out.push(
-                    Patch::Strike(Strike {
+                    Patch::Step(Step {
                         weight: (0.12 + speed / 40.0).min(0.45),
-                        sharp: 0.15,
                         material: floor(now.pos),
                         size: FIGHTER,
+                        seed: (after.frame / period) as u8 ^ (i as u8) << 4,
                     }),
                     now.pos,
                 );
@@ -389,11 +389,11 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
             && !matches!(was.doing, Doing::Toppled { .. } | Doing::Stumble { .. })
         {
             out.push(
-                Patch::Strike(Strike {
+                Patch::Step(Step {
                     weight: 1.0,
-                    sharp: 0.0,
                     material: Material::of_floor(here.material_under(now.pos)),
                     size,
+                    seed: after.frame as u8,
                 }),
                 now.pos,
             );
@@ -624,7 +624,7 @@ mod tests {
         assert!(
             has(&c, |p| matches!(
                 p,
-                Patch::Strike(Strike {
+                Patch::Step(Step {
                     material: Material::Earth,
                     ..
                 })
@@ -636,7 +636,7 @@ mod tests {
             let c = step(&mut w, [Input::default(); MAX_PLAYERS]);
             landed |= has(
                 &c,
-                |p| matches!(p, Patch::Strike(Strike { material: Material::Earth, weight, .. }) if *weight > 0.2),
+                |p| matches!(p, Patch::Step(Step { material: Material::Earth, weight, .. }) if *weight > 0.2),
             );
         }
         assert!(landed);

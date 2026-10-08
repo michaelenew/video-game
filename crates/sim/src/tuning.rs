@@ -220,6 +220,27 @@ pub fn crouch_height_scale() -> Fx {
 pub fn body_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyRadius))
 }
+/// How far the floor may fall away under grounded feet before it is a drop
+/// (`arena::relief`, and any step that low).
+pub fn step_down() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepDown)).max(Fx::ZERO)
+}
+
+/// Frames one fighter alone holds a seam before it takes the pair on
+/// (`crate::valley`).
+pub fn seam_hold() -> u16 {
+    oven::scalar(Scalar::SeamHold).max(1) as u16
+}
+
+/// How fast a vine is climbed, or slid down.
+pub fn vine_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VineSpeed)).max(Fx::ZERO)
+}
+
+/// How fast an updraft carries a body up.
+pub fn vent_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VentRise)).max(Fx::ZERO)
+}
 pub fn body_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyHeight))
 }

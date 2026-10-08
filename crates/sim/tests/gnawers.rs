@@ -151,18 +151,21 @@ fn one_gnawer(class: Class, metres: i32, kind: u8) -> (World, Input) {
     for c in w.critters.iter_mut() {
         *c = Critter::EMPTY;
     }
-    let mut c = Critter::new(
-        sp,
-        kind,
+    // Both on the Commons' floor, which has relief under the lane
+    // (`arena::relief`): a body set at zero in a hollow is a body in the air.
+    let on_the_floor = |w: &World, at: V3| V3::new(at.x, w.arena().ground_under(at), at.z);
+    let body_at = on_the_floor(
+        &w,
         sim::critcheck::lane().add(V3::new(Fx::from_int(metres), Fx::ZERO, Fx::ZERO)),
-        1 << 15,
     );
+    let me_at = on_the_floor(&w, sim::critcheck::lane());
+    let mut c = Critter::new(sp, kind, body_at, 1 << 15);
     c.state = is::FLINCH;
     c.timer = u16::MAX;
     c.health = i16::MAX;
     w.critters[0] = c;
     w.pack.as_mut().unwrap().grace = u16::MAX;
-    w.players[0].pos = sim::critcheck::lane();
+    w.players[0].pos = me_at;
     w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
     for _ in 0..2 {
         w.advance([Input::looking_at(0, 0, 0), Input::default()]);

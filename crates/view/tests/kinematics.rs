@@ -581,21 +581,40 @@ fn fx(v: f32) -> sim::Fx {
 // The Champion is the only class whose moves have directions worth checking:
 // everything else swings a disc at arm's length.
 
-/// The way the weapon points, as the renderer draws it on this frame of a clip.
-///
-/// Nothing hangs off the hands yet, so the weapon exists only as the line
-/// between the two wrists -- and the **right** hand is the one nearer the head,
-/// which is `clips::champion::weapon`'s own convention. In world axes, with the
-/// fighter facing `+x`.
-fn drawn_weapon(clip: view::Clip, frame: u16) -> [f32; 3] {
+/// The way the weapon points, as the renderer draws it on this frame of a clip,
+/// butt to tip, in world axes, for the fighter `p` on the same frame.
+fn drawn_weapon(clip: view::Clip, frame: u16, p: &sim::state::Player) -> [f32; 3] {
+    // **What the game draws**, by the function the game draws it with:
+    // `view::arms::champion_arms`, given the hands where this clip puts them
+    // in the arena, the way `apply_poses` hands them over. The blade runs from
+    // the grip toward the volume's far end, so what this can catch is a grip
+    // drawn on the wrong side of the cut -- a hand past the tip, an arm across
+    // the body -- rather than a convention about which hand leads, which
+    // follows the side a cut comes from (`anim::track::grip_on`) and read a
+    // cut from the left backwards when it was checked right hand forward.
     let s = skeleton::skeleton_for(sim::Class::Champion);
     let skin = skeleton::solve(&s, &clip.at(frame as u32));
-    let l = skin.origin[view::hand_joint(true).index()];
-    let r = skin.origin[view::hand_joint(false).index()];
-    let facing = [1.0, 0.0];
-    let a = view::into_world([r[0] - l[0], r[1] - l[1], r[2] - l[2]], [0.0; 3], facing);
-    let len = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt().max(1e-4);
-    [a[0] / len, a[1] / len, a[2] / len]
+    let pos = [
+        p.pos.x.to_f32_for_render(),
+        p.pos.y.to_f32_for_render(),
+        p.pos.z.to_f32_for_render(),
+    ];
+    let facing = [
+        p.facing.x.to_f32_for_render(),
+        p.facing.z.to_f32_for_render(),
+    ];
+    let hand =
+        |left: bool| view::into_world(skin.box_of(&s, view::hand_joint(left)).0, pos, facing);
+    let still = view::math::Quat([0.0, 0.0, 0.0, 1.0]);
+    let torso = view::arms::Torso {
+        chest: pos,
+        chest_turn: still,
+        hips: pos,
+        hips_turn: still,
+    };
+    let arms = view::arms::champion_arms(p, hand(true), hand(false), &torso)
+        .expect("a Champion holds a weapon");
+    arms.weapons[arms.held as usize].axis()
 }
 
 /// The way the hit volume points on the same frame of the same move, taken from
@@ -608,7 +627,7 @@ fn drawn_weapon(clip: view::Clip, frame: u16) -> [f32; 3] {
 /// Re-deriving that here would be a second copy of the correspondence the
 /// renderer already owns, and the two would eventually disagree -- which is the
 /// exact failure this test exists to catch.
-fn swung_volume(kind: u8, frame: u16) -> Option<[f32; 3]> {
+fn swung_volume(kind: u8, frame: u16) -> Option<([f32; 3], sim::state::Player)> {
     let mut w = sim::World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
     // Out of reach, and the chain walked by hand: what is being compared is two
     // descriptions of a shape, and a victim standing in it would end the move
@@ -654,7 +673,7 @@ fn swung_volume(kind: u8, frame: u16) -> Option<[f32; 3]> {
         if len < 0.01 {
             return None;
         }
-        return Some([a[0] / len, a[1] / len, a[2] / len]);
+        return Some(([a[0] / len, a[1] / len, a[2] / len], w.players[0]));
     }
     None
 }
@@ -686,10 +705,10 @@ fn the_champion_swings_the_weapon_the_player_can_see() {
         let m = sim::moves::get(sim::Class::Champion, kind);
         let (_, contact, through) = clip.phases().expect("an attack clip");
         for frame in [contact, through] {
-            let Some(volume) = swung_volume(kind, frame) else {
+            let Some((volume, p)) = swung_volume(kind, frame) else {
                 panic!("{} put no volume out on frame {frame}", m.name);
             };
-            let drawn = drawn_weapon(clip, frame);
+            let drawn = drawn_weapon(clip, frame, &p);
             // Only the components the move actually commits to. A thrust has no
             // opinion about height and a flat sweep has none about its own
             // climb, so demanding one would be demanding a number the design
