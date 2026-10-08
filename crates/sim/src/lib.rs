@@ -36,6 +36,7 @@ pub mod oven;
 pub mod pack;
 pub mod perception;
 pub mod reachcheck;
+pub mod replay;
 pub mod search;
 pub mod shadow;
 pub mod sign;

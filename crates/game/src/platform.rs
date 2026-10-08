@@ -325,6 +325,26 @@ mod host {
         write_to(&p, text, "trophies");
     }
 
+    /// A replay (`sim::replay`), as a file in a folder beside the settings:
+    /// `~/.config/arena/replays/<name>`, or the folder `ARENA_REPLAYS` names.
+    /// Returns where it went, for the menu and the terminal.
+    pub fn save_replay(name: &str, text: &str) -> Option<String> {
+        let p = path("replays", "ARENA_REPLAYS")?.join(name);
+        write_to(&p, text, "the replay");
+        Some(p.display().to_string())
+    }
+
+    /// A replay to play back (`--replay <file>`): the file's text.
+    pub fn load_replay(path: &str) -> Option<String> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => Some(text),
+            Err(e) => {
+                eprintln!("could not read the replay {path}: {e}");
+                None
+            }
+        }
+    }
+
     /// Nothing to install: a panic already prints to the terminal the game was
     /// started from.
     pub fn report_panics() {}
@@ -430,6 +450,36 @@ mod host {
         }
     }
 
+    /// A replay, as a **download**: a page has no folder to write to, and a
+    /// replay is a file to send somebody rather than a setting to keep, so it
+    /// goes the way a file leaves a page -- a blob, a link to it, a click.
+    /// Returns what the browser was told to call it.
+    pub fn save_replay(name: &str, text: &str) -> Option<String> {
+        use wasm_bindgen::JsCast;
+        let document = web_sys::window()?.document()?;
+        let parts = js_sys::Array::new();
+        parts.push(&wasm_bindgen::JsValue::from_str(text));
+        let options = web_sys::BlobPropertyBag::new();
+        options.set_type("text/plain");
+        let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &options).ok()?;
+        let url = web_sys::Url::create_object_url_with_blob(&blob).ok()?;
+        let anchor: web_sys::HtmlAnchorElement =
+            document.create_element("a").ok()?.dyn_into().ok()?;
+        anchor.set_href(&url);
+        anchor.set_download(name);
+        anchor.click();
+        let _ = web_sys::Url::revoke_object_url(&url);
+        Some(format!("downloaded as {name}"))
+    }
+
+    /// A page has no file to open: `?replay=` is said no to, in the console.
+    pub fn load_replay(path: &str) -> Option<String> {
+        log(&format!(
+            "a page cannot open the replay {path}: play it back on a desktop with --replay"
+        ));
+        None
+    }
+
     /// Put the panic message where the player can read it.
     ///
     /// Without this a panic in the browser is a blank canvas and
@@ -502,8 +552,8 @@ mod host {
 
 use host::read_options;
 pub use host::{
-    announce, load_settings, load_trophies, log, page_url, pointer_lock_lost, report_panics,
-    save_settings, save_trophies, show_room,
+    announce, load_replay, load_settings, load_trophies, log, page_url, pointer_lock_lost,
+    report_panics, save_replay, save_settings, save_trophies, show_room,
 };
 
 // ---------------------------------------------------------------------------

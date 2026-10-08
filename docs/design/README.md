@@ -163,6 +163,8 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead; playing a friend from a link (rooms on public brokers, WebRTC, the three seams in `net::meet`), sealed rooms, and a desktop joining a page's room | Decided; rooms built 2026-10-03, sealed and open to desktops 2026-10-05 |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
+| [sound.md](sound.md) | **Sound, derived**: a sound is an excitation shaped by a resonator, and the simulation's own numbers decide both -- a blow's weight is its impact freeze, a telegraph is as long as its startup, a footfall is the floor's material, a struck thing rings by its size. Nothing recorded; a sheet of every sound in a second; one frame sounded once under rollback | **Built 2026-10-08**, unheard |
+| [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness | **Built 2026-10-08** |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -236,7 +238,10 @@ crates/web    The browser: the playable page, and the frame-data tool.
 ```
 
 **Requires Rust 1.85+** (Bevy 0.16's MSRV). `rustup update` if Cargo complains about
-`edition2024` -- that error names the symptom, not the cause.
+`edition2024` -- that error names the symptom, not the cause. **On Linux the desktop build
+also needs ALSA's headers** (`libasound2-dev` on Debian and Ubuntu; `./scripts/setup-tools.sh
+desktop` installs them), since 2026-10-08 when the game got sound ([sound.md](sound.md)); an
+error from `alsa-sys` is that. The browser build does not: a page's audio is the browser's.
 
 **Working on it:** `./scripts/dev.sh` — hitbox wireframes, the Oven, and a class picker beside each health bar. Extra
 arguments pass through, so `./scripts/dev.sh --p1 champion` works.
@@ -332,9 +337,14 @@ decision, and belongs in a test.
 3. **Play it against a person.** Everything else is downstream of that — and the creatures need
    it twice over: every fight here was tuned by a scripted hunter with a quarter-second
    reaction. The browser build exists to make the asking cheap: a link instead of a clone,
-   [web.md](web.md), and `?hunt=<creature>` opens any fight.
+   [web.md](web.md), and `?hunt=<creature>` opens any fight. **Since 2026-10-08 a played
+   fight can reach the harness**: `Y` saves it as a replay, and
+   `cargo run -p hunt --bin replay` judges it with the creature's own report
+   ([replays.md](replays.md)). Send the file.
 4. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is whether the
-   4-frame parry window is findable by a human.
+   4-frame parry window is findable by a human. **It has a chime now** ([sound.md](sound.md),
+   2026-10-08): the whole voice is derived and nobody has heard it, and sound.md §7 is the
+   listening list, the parry first.
 5. **The world, past W2**: a menu for the picker, the hunter's notes, and — only if wanted —
    the valley ([world.md](world.md) §2–§3).
 6. Fill out the kits beyond three moves per class.

@@ -1209,6 +1209,18 @@ pub struct World {
     /// but the frame count, which the rollback session owns. Training pauses
     /// by not ticking at all, and never sets it.
     pub paused: bool,
+    /// **How many seats are played**: two, or one with the second fighter out
+    /// of any hunt. The harness has always taken absent hunters out, because
+    /// a fighter nobody drives is a body the creature walks over to stand on;
+    /// the game does the same for its dummy. Kept here so that a fresh fight
+    /// built *inside* a tick -- a trip on the wire, a restart -- seats itself
+    /// ([`World::seated`]), and a replay of the inputs alone rebuilds the same
+    /// fight (`crate::replay`).
+    ///
+    /// **Not hashed.** It is read only as a fight is built, and what it
+    /// changes -- a fighter's health -- is. Against a person both seats are
+    /// played and it is two on both machines.
+    pub seats: u8,
 }
 
 impl World {
@@ -1233,6 +1245,7 @@ impl World {
             lore: Lore::NONE,
             course: [crate::course::Run::default(); MAX_PLAYERS],
             paused: false,
+            seats: MAX_PLAYERS as u8,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1339,6 +1352,22 @@ impl World {
         self
     }
 
+    /// **Seat `seats` fighters**, one or two, and take the rest out of a hunt:
+    /// a fighter nobody drives is a target the creature will happily cross
+    /// the arena for, which is what the first long run of the harness
+    /// measured. Versus seats both whatever is asked, since there is nothing
+    /// in it to take a seat out of. Like [`World::tempered`], part of a
+    /// fight's initial state, applied as the world is built.
+    pub fn seated(mut self, seats: u8) -> World {
+        self.seats = seats.clamp(1, MAX_PLAYERS as u8);
+        if self.hunting() {
+            for p in self.players.iter_mut().skip(self.seats as usize) {
+                p.health = 0;
+            }
+        }
+        self
+    }
+
     /// The hunt's temper: its first creature's, or its pack's. Zero in versus.
     pub fn temper(&self) -> u8 {
         self.monster()
@@ -1434,7 +1463,7 @@ impl World {
         Some(World {
             frame: self.frame,
             paused: self.paused,
-            ..world
+            ..world.seated(self.seats)
         })
     }
 
@@ -1642,7 +1671,7 @@ impl World {
                 recast.map(|classes| World {
                     frame: self.frame,
                     paused: self.paused,
-                    ..self.restarted(classes)
+                    ..self.restarted(classes).seated(self.seats)
                 })
             });
         // Pause and step, from either side: one press is one toggle, and a

@@ -110,15 +110,18 @@ pub fn mode(name: &str) -> Option<(&'static species::Species, ArenaId)> {
         .map(|a| (sp, a.id))
 }
 
-/// The world a start describes.
+/// The world a start describes, with both seats played: `sim::replay::Start`
+/// is the one place a world is built from its settings, so a replay of a
+/// fight rebuilds exactly the fight the picker started.
 pub fn world(start: Start, classes: [Class; 2]) -> World {
-    let w = match (start.hunt, start.arena) {
-        (Some(s), Some(a)) => World::hunt_in(classes, [Some(s), None], a),
-        (Some(s), None) => World::hunt_of(classes, s),
-        (None, Some(a)) => World::versus_in(classes, a),
-        (None, None) => World::with_classes(classes),
-    };
-    w.tempered(start.temper)
+    sim::replay::Start {
+        classes,
+        hunt: start.hunt,
+        arena: start.arena,
+        temper: start.temper,
+        seats: 2,
+    }
+    .world()
 }
 
 /// **The fight a world is, as the settings that start it** -- the inverse of

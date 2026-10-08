@@ -10,6 +10,10 @@
 //!   are `online.rs`; this only draws them.
 //! - **Connection details**, in dev mode (F10): the meeting's own account of
 //!   how each meeting point's connection went, for a room that will not form.
+//! - **Save replay.** The fight so far -- every frame of it, from its start
+//!   -- as a file (a download, in a browser) that
+//!   `cargo run -p hunt --bin replay` judges and `--replay` plays back. `Y`
+//!   does the same without the menu. See `docs/design/replays.md`.
 //! - **Progress** -- the creatures, their trophies and tempers -- on the right,
 //!   which is otherwise hidden: it is reference, not something to read
 //!   mid-fight (`hud::update_picker` writes it; [`show_progress`] shows it).
@@ -130,6 +134,31 @@ pub fn draw(
                 }
             }
             details(ui, &mut menu, &sim, now);
+            ui.separator();
+            ui.heading("Replay");
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui.button("Save replay").clicked() {
+                    crate::save_replay(&mut sim);
+                }
+                ui.label(
+                    egui::RichText::new(format!(
+                        "the fight so far: {} frames, {:.0} s",
+                        sim.tape_len(),
+                        sim.tape_len() as f32 / sim::TICK_HZ as f32
+                    ))
+                    .weak(),
+                );
+            });
+            if let Some(at) = &sim.saved {
+                ui.label(egui::RichText::new(format!("Saved: {at}")).weak());
+            }
+            ui.label(
+                egui::RichText::new(
+                    "Y saves too. Send the file to be judged: cargo run -p hunt --bin replay -- <file>.",
+                )
+                .weak(),
+            );
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
         });

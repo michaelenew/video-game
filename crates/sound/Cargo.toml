@@ -1,0 +1,19 @@
+[package]
+name = "sound"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# The game's voice, with no engine in it -- the arrangement `look` has for
+# colour. Every sound is a function from a few numbers the simulation already
+# has (a blow's weight, what it struck, how big that was, how long a windup
+# is) to a waveform, so the whole voice can be rendered to files and listened
+# to in a second without starting a game. Floats are fine here: nothing in
+# this crate feeds the simulation.
+[dependencies]
+sim = { path = "../sim" }
+
+[dev-dependencies]
+# The sheet example draws its spectrograms with `look`'s picture writer.
+look = { path = "../look" }

@@ -32,6 +32,7 @@
 pub mod class;
 pub mod duel;
 pub mod plans;
+pub mod replay;
 pub mod report;
 
 pub use class::{Hands, Uses};
@@ -88,6 +89,19 @@ pub trait Plan {
     }
 }
 
+/// The plan of a person: none the report can read. See [`Hunter::person`].
+struct Person;
+
+impl Plan for Person {
+    fn watch(&mut self, _: &World) {}
+    fn act(&mut self, _: &World) -> Input {
+        Input::default()
+    }
+    fn intent(&self) -> Intent {
+        Intent("a person")
+    }
+}
+
 /// One scripted fighter, playing its creature's plan.
 pub struct Hunter {
     pub who: usize,
@@ -126,6 +140,27 @@ impl Hunter {
             plan: (card.plan)(who, seed, hop),
             last: Input::default(),
         }
+    }
+
+    /// **A person**, for the report: a hunter whose every frame is read off
+    /// a replay rather than decided (`crate::replay`). The report asks a
+    /// hunter three things -- which seat, what it last pressed (its camera),
+    /// and what it meant -- and a person answers the first two exactly and
+    /// the third not at all.
+    pub fn person(who: usize, species: SpeciesId) -> Hunter {
+        Hunter {
+            who,
+            species,
+            plan: Box::new(Person),
+            last: Input::default(),
+        }
+    }
+
+    /// One frame from a replay, in place of [`Hunter::act`]: the input is
+    /// what the person pressed, remembered as the camera the report reads.
+    pub fn playback(&mut self, input: Input) -> Input {
+        self.last = input;
+        input
     }
 
     pub fn watch(&mut self, w: &World) {

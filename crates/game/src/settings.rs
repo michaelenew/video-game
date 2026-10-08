@@ -41,11 +41,15 @@ pub const MIN_FOV: f32 = 40.0;
 pub const MAX_FOV: f32 = 100.0;
 const FOV_STEP: f32 = 2.0;
 
+/// Master volume, nought to one, in steps of a tenth.
+const VOLUME_STEP: f32 = 0.1;
+
 /// Which number a key press is reaching for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Knob {
     Sensitivity,
     Fov,
+    Volume,
 }
 
 #[derive(Clone, Debug, PartialEq, Resource)]
@@ -53,6 +57,8 @@ pub struct Settings {
     pub sensitivity: f32,
     /// Vertical field of view, in degrees.
     pub fov: f32,
+    /// Master volume, nought to one. See `crate::sound`.
+    pub volume: f32,
     /// Keys we did not recognise, kept so saving does not discard them.
     other: BTreeMap<String, String>,
 }
@@ -65,6 +71,7 @@ impl Default for Settings {
             // 45-degree view from six metres reads as cramped in an arena you
             // are meant to be moving around inside.
             fov: 58.0,
+            volume: 0.8,
             other: BTreeMap::new(),
         }
     }
@@ -98,6 +105,10 @@ impl Settings {
             Knob::Fov => {
                 self.fov = (self.fov + sign * FOV_STEP).clamp(MIN_FOV, MAX_FOV);
             }
+            Knob::Volume => {
+                self.volume = ((self.volume + sign * VOLUME_STEP) * 10.0).round() / 10.0;
+                self.volume = self.volume.clamp(0.0, 1.0);
+            }
         }
     }
 
@@ -121,7 +132,8 @@ impl Settings {
                     s.sensitivity = v.clamp(MIN_SENSITIVITY, MAX_SENSITIVITY)
                 }
                 ("fov", Some(v)) => s.fov = v.clamp(MIN_FOV, MAX_FOV),
-                ("sensitivity" | "fov", None) => {}
+                ("volume", Some(v)) => s.volume = v.clamp(0.0, 1.0),
+                ("sensitivity" | "fov" | "volume", None) => {}
                 _ => {
                     s.other.insert(key.to_string(), value.to_string());
                 }
@@ -134,8 +146,10 @@ impl Settings {
         let mut out = String::from("# Arena prototype settings.\n");
         out.push_str("# sensitivity: mouse turn rate, 1.0 is the default feel.\n");
         out.push_str("# fov: vertical field of view, degrees.\n");
+        out.push_str("# volume: master volume, 0 to 1.\n");
         out.push_str(&format!("sensitivity = {:.3}\n", self.sensitivity));
         out.push_str(&format!("fov = {:.1}\n", self.fov));
+        out.push_str(&format!("volume = {:.1}\n", self.volume));
         for (key, value) in &self.other {
             out.push_str(&format!("{key} = {value}\n"));
         }

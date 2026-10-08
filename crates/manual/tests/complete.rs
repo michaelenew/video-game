@@ -64,6 +64,8 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "BracketLeft" => vec!["["],
         // The rehearsed double structure jump, `--dev` only.
         "KeyG" => vec!["G"],
+        // Save a replay of the fight so far (docs/design/replays.md).
+        "KeyY" => vec!["Y"],
         "Minus" | "NumpadSubtract" => vec!["-"],
         "Equal" | "NumpadAdd" => vec!["="],
         "Semicolon" | "Quote" => vec!["; and '"],
@@ -76,6 +78,8 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "F1" => vec!["F1"],
         "F2" => vec!["F2"],
         "F3" | "F4" => vec!["F3 and F4"],
+        // Volume (docs/design/sound.md).
+        "PageUp" | "PageDown" => vec!["Page Up and Page Down"],
         "F5" | "F6" => vec!["F5 and F6"],
         "F7" => vec!["F7"],
         // Every `F<n>` the game might grow needs a spelling here, so that

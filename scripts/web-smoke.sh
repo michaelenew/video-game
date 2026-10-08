@@ -5,6 +5,8 @@
 #
 #   ./scripts/web-smoke.sh [screenshot.png]
 #
+# Then the page saves a replay with Y and the harness judges it
+# (`crates/web/replay-smoke.mjs`, then `cargo run -p hunt --bin replay`).
 # Then the Esc menu: one tab creates a room from it, another joins from it
 # (`crates/web/menu-smoke.mjs`). Then a room that cannot form must say why, in
 # the console and with F10 in the menu (`crates/web/diag-smoke.mjs`).
@@ -32,6 +34,13 @@ trap 'kill $SERVER 2>/dev/null || true' EXIT
 sleep 1
 
 node crates/web/smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "$OUT"
+
+# The page saves a replay with Y, and this build reproduces it bit for bit:
+# the file leaves the browser and goes through the harness that judges fights
+# (`docs/design/replays.md`). The judge exits non-zero if the replay does not
+# reproduce, which fails the smoke.
+node crates/web/replay-smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "${OUT%.png}"
+cargo run -q -p hunt --bin replay -- "${OUT%.png}.replay" | head -4
 
 if [ "${WEB_ROOM:-1}" != 0 ]; then
   node crates/web/room-smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "${OUT%.png}-room"

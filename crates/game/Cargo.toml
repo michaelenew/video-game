@@ -12,6 +12,9 @@ anim = { path = "../anim" }
 hunt = { path = "../hunt" }
 # The art direction, with no engine in it: colour space, skies, palettes.
 look = { path = "../look" }
+# The voice, with no engine in it: what each thing sounds like, rendered to
+# samples the mixer plays. `src/sound.rs` is the half that plays them.
+sound = { path = "../sound" }
 manual = { path = "../manual" }
 # The peer, on both platforms: UDP to a typed-in address on a desktop, a room
 # on a public broker and a WebRTC line in a browser. `net` holds both, behind
@@ -26,7 +29,7 @@ view = { path = "../view" }
 # The two platform blocks below add to this list rather than replacing it:
 # Cargo unions the features of a dependency declared more than once, which is
 # how one crate builds for a window and for a canvas.
-bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "tonemapping_luts", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font"] }
+bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "tonemapping_luts", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font", "bevy_audio", "wav"] }
 # `manage_clipboard`: the Esc menu's Copy link, and pasting a friend's link
 # into it -- the system clipboard on a desktop, the browser's in a page.
 bevy_egui = { version = "0.34", default-features = false, features = ["render", "bevy_picking", "default_fonts", "manage_clipboard"] }
@@ -40,11 +43,13 @@ bevy = { version = "0.16", default-features = false, features = ["x11", "multi_t
 # can send to somebody. No `multi_threaded`: wasm threads need cross-origin
 # isolation headers, which GitHub Pages does not send.
 #
-# `web-sys` is here for the four browser facts the game needs and Bevy does
+# `web-sys` is here for the five browser facts the game needs and Bevy does
 # not hand over: the query string, local storage, somewhere to print a panic,
-# and somewhere to say how meeting the other player is going. See
+# somewhere to say how meeting the other player is going, and a download for
+# a replay, which is a file to send somebody and a page has no folder. See
 # `src/platform.rs`.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.16", default-features = false, features = ["webgl2"] }
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["Document", "Element", "History", "Location", "Storage", "Window", "console"] }
+web-sys = { version = "0.3", features = ["Blob", "BlobPropertyBag", "Document", "Element", "History", "HtmlAnchorElement", "HtmlElement", "Location", "Storage", "Url", "Window", "console"] }
+js-sys = "0.3"

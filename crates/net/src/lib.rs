@@ -25,7 +25,7 @@ pub mod seal;
 /// Re-exported so the front end never depends on GGRS directly. Networking is
 /// this crate's business.
 pub use ggrs;
-pub use ggrs_glue::{NetInput, SessionConfig, handle_requests};
+pub use ggrs_glue::{NetInput, SessionConfig, handle_requests, handle_requests_watched};
 pub use meet::{Progress, Rendezvous, Seat};
 
 /// The far end of a match, as GGRS addresses it.

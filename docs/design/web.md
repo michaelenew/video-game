@@ -64,6 +64,12 @@ The **trophy record** (world W1) is kept the same way under its own key,
 `arena.trophies`, beside `~/.config/arena/trophies.conf` on the desktop -- the
 same text in both, so a person can read which creatures they have beaten.
 
+**There is no folder to save a file in.** A replay
+([replays.md](replays.md)) is a file to *send*, not a setting to keep, so on
+a page it leaves the way a file leaves a page: as a download, where the desktop
+writes it to `~/.config/arena/replays/`. The reverse -- `--replay <file>`,
+playing one back -- a page cannot do at all, and says so in the console.
+
 **There is no UDP socket.** So the peer is reached another way: a room on a
 public message broker to meet, and a WebRTC data channel to play over. Same
 `Driver::Online`, same GGRS session; only the way of meeting differs, and
@@ -233,6 +239,8 @@ In it:
 - **The active room**, while there is one: its name, how meeting is going, the
   link with a **Copy link** button, and **Leave**. In a browser the link also
   goes into the address bar, so a reload stays in the room.
+- **Save replay**: the fight so far as a file (a download, here), for
+  `cargo run -p hunt --bin replay` to judge. `Y` does the same without the menu.
 - **Progress** -- the creature list with trophies and tempers -- on the right,
   and only while the menu is up.
 

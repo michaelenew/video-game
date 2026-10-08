@@ -63,6 +63,19 @@ impl Config for SessionConfig {
 /// This is the whole integration: GGRS decides *when* to save, load and
 /// advance; the simulation only has to do those three things correctly.
 pub fn handle_requests(world: &mut World, requests: Vec<GgrsRequest<SessionConfig>>) {
+    handle_requests_watched(world, requests, |_, _, _| {});
+}
+
+/// [`handle_requests`], showing `watch` every frame advanced -- the world
+/// before, the inputs that moved it on, and the world after -- predicted or
+/// confirmed, re-advanced after a rollback or not. What the game's replay
+/// records (by frame number, so the last word on a frame is the confirmed
+/// one) and what its sound listens to (once per frame, the first time).
+pub fn handle_requests_watched(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
+) {
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
@@ -78,7 +91,10 @@ pub fn handle_requests(world: &mut World, requests: Vec<GgrsRequest<SessionConfi
                 for (slot, (input, _status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
                     *slot = (*input).into();
                 }
+                // A flat copy, like every snapshot the session saves: no heap.
+                let before = world.clone();
                 world.advance(frame_inputs);
+                watch(&before, frame_inputs, world);
             }
         }
     }
