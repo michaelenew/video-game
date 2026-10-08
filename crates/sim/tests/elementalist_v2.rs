@@ -849,6 +849,63 @@ fn the_crack_runs_further_the_longer_the_hold() {
     assert!(lengths[0].raw() < lengths[1].raw() && lengths[1].raw() < lengths[2].raw());
 }
 
+/// The crack runs from the stone **toward the spot the crosshair is on**, not
+/// along the yaw of her look. From a stone raised straight ahead, a look
+/// turned a sixteenth of a turn to the side and down onto the floor puts the
+/// crosshair on a spot off to that side; the crack goes along the line from
+/// the stone through it. Along her yaw it would have run parallel to that
+/// line, past the spot by the stone's whole offset from her.
+#[test]
+fn the_crack_runs_toward_the_spot_the_crosshair_is_on() {
+    let mut w = elementalist();
+    run(&mut w, 1, E, 0);
+    let held_at = stones_of(&w)[0].at;
+    let look = |bits: u16| Input::looking_at(bits, 1 << 12, -3000);
+    let step =
+        |w: &mut World, bits: u16| w.advance([look(bits), Input::looking_at(0, LOOK_LEFT, 0)]);
+    while !matches!(w.players[0].action, Action::Channel { .. }) {
+        step(&mut w, E);
+    }
+    for _ in 0..20 {
+        step(&mut w, E);
+    }
+    let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
+    let seen = with_scene(&w, |scene| {
+        sim::aim::sight(0, look(0), Fx::from_int(40), scene)
+    });
+    assert_eq!(
+        seen.met,
+        sim::aim::Met::Ground,
+        "the crosshair is on the floor"
+    );
+    let spot = seen.at;
+    step(&mut w, 0);
+    for _ in 0..(m.startup + 1) {
+        step(&mut w, 0);
+    }
+    assert_eq!(scars(&w).len(), 1, "the crack ran");
+    let end = stones_of(&w)[0].at;
+    let ran = V3::new(end.x.sub(held_at.x), Fx::ZERO, end.z.sub(held_at.z));
+    let want = V3::new(spot.x.sub(held_at.x), Fx::ZERO, spot.z.sub(held_at.z));
+    let (ran, want) = (ran.normalized(), want.normalized());
+    let off = ran.x.mul(want.z).sub(ran.z.mul(want.x)).abs();
+    assert!(
+        off.raw() < metres(0.02).raw() && ran.dot(want).raw() > 0,
+        "the crack ran along ({}, {}), and the line through the crosshair is ({}, {})",
+        ran.x.raw(),
+        ran.z.raw(),
+        want.x.raw(),
+        want.z.raw(),
+    );
+    // And that line is not her yaw, or this proves nothing.
+    let yaw = V3::from_turns(Fx::ratio(1, 16));
+    let apart = yaw.x.mul(want.z).sub(yaw.z.mul(want.x)).abs();
+    assert!(
+        apart.raw() > metres(0.1).raw(),
+        "the spot is not on her yaw from the stone"
+    );
+}
+
 #[test]
 fn rough_terrain_slows_whoever_crosses_it_and_never_her() {
     let mut w = elementalist();

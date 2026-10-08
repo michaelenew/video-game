@@ -255,7 +255,7 @@ staggering them. Leaves a slowing field along its path for several seconds.
 
 > **Built 2026-09-30, on a hold.** `E` tapped is Raise; `E` held past the stone's churn keeps
 > it churning and becomes the crack's hold, and letting go races the crack out from the stone
-> along her facing — two metres for a tap of a hold, ten for the full second — and the stone
+> toward the crosshair's spot on the ground (along her facing until 2026-10-08) — two metres for a tap of a hold, ten for the full second — and the stone
 > erupts at its end. It stops at the first body and hits it, and its line is **rough terrain**
 > for four seconds, which slows whoever crosses it and never her. See §"v2".
 
