@@ -217,7 +217,16 @@ pub fn soft_box(
     segments: usize,
     paint: Option<(Vec3, [f32; 3], &Brush)>,
 ) -> Mesh {
-    superellipsoid(size, rounding, segments, paint, |_, _| 1.0)
+    superellipsoid(size, (rounding, rounding), segments, paint, |_, _| 1.0)
+}
+
+/// A limb: round in cross-section, with ends rounded by `ends` (1 is a
+/// capsule's hemisphere, 0.4 a blunt pad). The same surface as [`soft_box`]
+/// with its two exponents told apart -- round about the bone, soft along it
+/// -- which is what a stretched capsule is not: a capsule scaled long grows
+/// pointed ends, and this keeps them blunt whatever the bone's length.
+pub fn soft_cylinder(size: Vec3, ends: f32, segments: usize) -> Mesh {
+    superellipsoid(size, (ends, 1.0), segments, None, |_, _| 1.0)
 }
 
 /// A rock: a rounded box roughed up. Each vertex is pulled **inward** by a
@@ -227,7 +236,7 @@ pub fn soft_box(
 /// rocks.
 pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
     let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
-    superellipsoid(size, 0.45, 14, paint, move |p, _| {
+    superellipsoid(size, (0.45, 0.45), 14, paint, move |p, _| {
         // Two octaves of a smooth value noise over the direction, scaled by
         // the rock's own size so a boulder and a pebble are rough alike.
         let q = p / size.max_element().max(1e-3);
@@ -237,15 +246,17 @@ pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> M
     })
 }
 
-/// The superellipsoid itself, with a radial scale per vertex.
+/// The superellipsoid itself, with a radial scale per vertex. `rounding` is
+/// the pair of exponents: along the latitude (the ends, about `y`) and the
+/// longitude (the cross-section).
 fn superellipsoid(
     size: Vec3,
-    rounding: f32,
+    rounding: (f32, f32),
     segments: usize,
     paint: Option<(Vec3, [f32; 3], &Brush)>,
     radial: impl Fn(Vec3, Vec3) -> f32,
 ) -> Mesh {
-    let e = rounding.clamp(0.05, 1.0);
+    let (e1, e2) = (rounding.0.clamp(0.05, 1.0), rounding.1.clamp(0.05, 1.0));
     let half = size * 0.5;
     let (lat, lon) = (segments.max(4), segments.max(4) * 2);
     let pow = |w: f32, e: f32| w.signum() * w.abs().powf(e);
@@ -259,14 +270,14 @@ fn superellipsoid(
             let v = -std::f32::consts::PI + std::f32::consts::TAU * j as f32 / lon as f32;
             let (sv, cv) = v.sin_cos();
             let p = Vec3::new(
-                half.x * pow(cu, e) * pow(cv, e),
-                half.y * pow(su, e),
-                half.z * pow(cu, e) * pow(sv, e),
+                half.x * pow(cu, e1) * pow(cv, e2),
+                half.y * pow(su, e1),
+                half.z * pow(cu, e1) * pow(sv, e2),
             );
             let n = Vec3::new(
-                pow(cu, 2.0 - e) * pow(cv, 2.0 - e) / half.x.max(1e-4),
-                pow(su, 2.0 - e) / half.y.max(1e-4),
-                pow(cu, 2.0 - e) * pow(sv, 2.0 - e) / half.z.max(1e-4),
+                pow(cu, 2.0 - e1) * pow(cv, 2.0 - e2) / half.x.max(1e-4),
+                pow(su, 2.0 - e1) / half.y.max(1e-4),
+                pow(cu, 2.0 - e1) * pow(sv, 2.0 - e2) / half.z.max(1e-4),
             )
             .normalize_or(Vec3::Y);
             let p = p * radial(p, n);
@@ -330,4 +341,44 @@ fn value_noise(p: Vec3) -> f32 {
     let c01 = lerp(hash(x, y, z + 1), hash(x + 1, y, z + 1), s.x);
     let c11 = lerp(hash(x, y + 1, z + 1), hash(x + 1, y + 1, z + 1), s.x);
     lerp(lerp(c00, c10, s.y), lerp(c01, c11, s.y), s.z)
+}
+
+/// Break a painted surface up: each vertex's colour moved a little by a
+/// smooth noise over where it is, `amount` at most (0.07 is a floor that is
+/// ground rather than paint), with features about `scale` metres across.
+/// For the floor, whose height is the simulation's and cannot vary; its
+/// colour can.
+pub fn mottle(mesh: &mut Mesh, amount: f32, scale: f32, seed: u32) {
+    let Some(positions) = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .and_then(|a| a.as_float3())
+    else {
+        return;
+    };
+    let positions: Vec<[f32; 3]> = positions.to_vec();
+    let Some(bevy::render::mesh::VertexAttributeValues::Float32x4(colours)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
+    else {
+        return;
+    };
+    let s = Vec3::splat(seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-5);
+    for (c, p) in colours.iter_mut().zip(&positions) {
+        let q = Vec3::from(*p) / scale.max(1e-3) + s;
+        let n = value_noise(q) * 0.6 + value_noise(q * 2.7 + Vec3::splat(3.1)) * 0.4;
+        let k = 1.0 + amount * n;
+        c[0] *= k;
+        c[1] *= k;
+        c[2] *= k;
+    }
+}
+
+/// A deterministic 0..1 from a few integers: where the scattered dressing
+/// goes, and how big each piece is.
+pub fn hash01(a: u32, b: u32, c: u32) -> f32 {
+    let mut h =
+        a.wrapping_mul(0x8da6_b343) ^ b.wrapping_mul(0xd816_3841) ^ c.wrapping_mul(0xcb1a_b31f);
+    h ^= h >> 13;
+    h = h.wrapping_mul(0x5bd1_e995);
+    h ^= h >> 15;
+    (h & 0xff_ffff) as f32 / 0xff_ffff as f32
 }

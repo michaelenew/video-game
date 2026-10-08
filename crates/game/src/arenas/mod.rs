@@ -337,6 +337,8 @@ pub fn dress(
                 palette.of(arena.floor),
                 &brush,
             );
+            // Ground, not paint: the colour wanders a little across it.
+            crate::shapes::mottle(&mut floor, 0.07, 2.5, arena.id.0 as u32);
             commands.spawn((
                 Mesh3d(meshes.add(floor)),
                 MeshMaterial3d(white.clone()),
@@ -394,9 +396,11 @@ pub fn dress(
             | Material::Snow
             | Material::Ash
             | Material::Peat => crate::shapes::soft_box(size, 0.3, 12, Some((at, rgb, &brush))),
-            Material::Stone | Material::Wood | Material::Water => {
-                crate::shapes::boxy(size, at, rgb, &brush)
-            }
+            // Dressed stone is cut square and keeps its arris, chamfered just
+            // enough not to catch the light as a wire; timber a little more.
+            Material::Stone => crate::shapes::soft_box(size, 0.12, 8, Some((at, rgb, &brush))),
+            Material::Wood => crate::shapes::soft_box(size, 0.2, 8, Some((at, rgb, &brush))),
+            Material::Water => crate::shapes::boxy(size, at, rgb, &brush),
         };
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
@@ -412,7 +416,9 @@ pub fn dress(
         let rgb = palette.surface(prop.rgb);
         let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
         let mesh = match prop.shape {
-            Shape::Box => crate::shapes::boxy(Vec3::new(w, h, d), at, rgb, &brush),
+            Shape::Box => {
+                crate::shapes::soft_box(Vec3::new(w, h, d), 0.15, 8, Some((at, rgb, &brush)))
+            }
             Shape::Cylinder => {
                 let mut m = Cylinder::new(w * 0.5, h).mesh().build();
                 crate::shapes::paint(&mut m, half, at, rgb, &brush);
@@ -431,6 +437,130 @@ pub fn dress(
                 .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
             Scenery,
         ));
+    }
+
+    // **The floor broken up**, by dressing rather than geometry: the floor's
+    // height is the simulation's and cannot move, so what lies on it does the
+    // work -- tussocks in grass, pebbles on earth and sand, drifts on snow,
+    // chips on rock -- small enough to walk through unnoticed and placed by a
+    // hash of the arena, so the same arena scatters the same way every time.
+    // Not on a course (no floor), not in water, never inside a solid.
+    if !dressing.drop {
+        scatter(&mut commands, &mut meshes, arena, &palette, &brush, &white);
+    }
+}
+
+/// How much floor one scattered thing stands for, in square metres.
+const SCATTER_SPACING: f32 = 22.0;
+
+fn scatter(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    arena: &sim::arena::Arena,
+    palette: &look::palette::Palette,
+    brush: &crate::shapes::Brush,
+    white: &Handle<StandardMaterial>,
+) {
+    let b = arena.bounds;
+    let (lo_x, hi_x) = (fx(b.lo_x), fx(b.hi_x));
+    let (lo_z, hi_z) = (fx(b.lo_z), fx(b.hi_z));
+    let (w, d) = (hi_x - lo_x, hi_z - lo_z);
+    let count = ((w * d / SCATTER_SPACING) as usize).clamp(12, 200);
+    let seed = arena.id.0 as u32 + 1;
+    let shade = |rgb: [f32; 3], k: f32| [rgb[0] * k, rgb[1] * k, rgb[2] * k];
+    for i in 0..count {
+        let i = i as u32;
+        let r = |salt: u32| crate::shapes::hash01(seed, i, salt);
+        let x = lo_x + 1.0 + (w - 2.0) * r(1);
+        let z = lo_z + 1.0 + (d - 2.0) * r(2);
+        // RENDER-ONLY: metres to fixed point, to ask the arena what is here.
+        let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+        let at = sim::V3::new(to_fx(x), sim::Fx::ZERO, to_fx(z));
+        // Not inside anything, and not where a region says something else
+        // stands on the floor.
+        if arena.solids().iter().any(|s| {
+            x > fx(s.min.x) - 0.4
+                && x < fx(s.max.x) + 0.4
+                && z > fx(s.min.z) - 0.4
+                && z < fx(s.max.z) + 0.4
+        }) {
+            continue;
+        }
+        let y = fx(arena.ground_under(at));
+        let material = arena.material_under(at);
+        let base = palette.of(material);
+        let (mesh, size) = match material {
+            Material::Grass => {
+                let s = 0.35 + 0.55 * r(3);
+                let h = 0.12 + 0.14 * r(4);
+                let rgb = shade(base, 0.86 + 0.08 * r(5));
+                (
+                    crate::shapes::soft_box(
+                        Vec3::new(s, h * 2.0, s * (0.8 + 0.4 * r(6))),
+                        0.9,
+                        8,
+                        Some((Vec3::new(x, y, z), rgb, brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Ground | Material::Peat | Material::Ash | Material::Sand => {
+                let s = 0.12 + 0.22 * r(3);
+                let h = 0.06 + 0.08 * r(4);
+                let rock = palette.of(Material::Rock);
+                let mix = 0.55;
+                let rgb = [
+                    base[0] * (1.0 - mix) + rock[0] * mix,
+                    base[1] * (1.0 - mix) + rock[1] * mix,
+                    base[2] * (1.0 - mix) + rock[2] * mix,
+                ];
+                (
+                    crate::shapes::rock(
+                        Vec3::new(s, h * 2.0, s * (0.7 + 0.6 * r(6))),
+                        seed ^ i,
+                        Some((Vec3::new(x, y, z), shade(rgb, 0.9 + 0.2 * r(5)), brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Snow => {
+                let s = 0.8 + 1.0 * r(3);
+                let h = 0.05 + 0.07 * r(4);
+                (
+                    crate::shapes::soft_box(
+                        Vec3::new(s, h * 2.0, s * (0.5 + 0.5 * r(6))),
+                        0.95,
+                        8,
+                        Some((Vec3::new(x, y, z), shade(base, 1.04), brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Rock | Material::Stone => {
+                let s = 0.1 + 0.18 * r(3);
+                let h = 0.04 + 0.06 * r(4);
+                (
+                    crate::shapes::rock(
+                        Vec3::new(s, h * 2.0, s * (0.6 + 0.6 * r(6))),
+                        seed ^ i,
+                        Some((Vec3::new(x, y, z), shade(base, 0.85 + 0.2 * r(5)), brush)),
+                    ),
+                    h,
+                )
+            }
+            Material::Water | Material::Wood => continue,
+        };
+        // Half buried: the form's middle sits on the floor, so only its top
+        // half shows and nothing has a visible underside to float on.
+        commands.spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
+            Transform::from_xyz(x, y, z)
+                .with_rotation(Quat::from_rotation_y(r(7) * std::f32::consts::TAU)),
+            bevy::pbr::NotShadowCaster,
+            Scenery,
+        ));
+        let _ = size;
     }
 }
 

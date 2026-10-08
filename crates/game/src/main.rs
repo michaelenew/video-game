@@ -167,6 +167,7 @@ fn main() {
         .init_resource::<hud::ShowClassButtons>()
         .init_resource::<menu::Menu>()
         .init_resource::<sound::Soundscape>()
+        .init_resource::<Joints>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -222,7 +223,9 @@ fn main() {
                     sound::setup,
                 )
                     .chain(),
-                apply_poses,
+                // One entry, so the chain stays under twenty: the balls go
+                // where the poses just put the joints.
+                (apply_poses, pose_balls).chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -572,13 +575,103 @@ impl Default for Sim {
 /// See `docs/design/forms.md`.
 fn limb_form(joint: view::skeleton::Joint) -> Mesh {
     use view::skeleton::Joint;
-    let rounding = match joint {
-        Joint::Head => 0.85,
-        Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => 0.5,
-        Joint::Root | Joint::Spine | Joint::Chest => 0.35,
-        _ => 0.6,
-    };
-    shapes::soft_box(Vec3::ONE, rounding, 10, None)
+    match joint {
+        // Round about the bone, blunt at the ends, meeting the next limb in a
+        // ball at the joint (`BodyBall`).
+        Joint::ArmL
+        | Joint::ArmR
+        | Joint::ForearmL
+        | Joint::ForearmR
+        | Joint::ThighL
+        | Joint::ThighR
+        | Joint::ShinL
+        | Joint::ShinR => shapes::soft_cylinder(Vec3::ONE, 0.5, 10),
+        Joint::Head => shapes::soft_box(Vec3::ONE, 0.9, 12, None),
+        Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => {
+            shapes::soft_box(Vec3::ONE, 0.5, 8, None)
+        }
+        Joint::Root | Joint::Spine | Joint::Chest => shapes::soft_box(Vec3::ONE, 0.35, 10, None),
+    }
+}
+
+/// The joints a limb bends at, each drawn as a ball the limb's own width so
+/// the bend shows a knee rather than a gap: shoulder, elbow, wrist, hip, knee,
+/// ankle. The torso's joints are inside the torso and need none.
+const BALLS: [view::skeleton::Joint; 12] = {
+    use view::skeleton::Joint;
+    [
+        Joint::ArmL,
+        Joint::ForearmL,
+        Joint::HandL,
+        Joint::ArmR,
+        Joint::ForearmR,
+        Joint::HandR,
+        Joint::ThighL,
+        Joint::ShinL,
+        Joint::FootL,
+        Joint::ThighR,
+        Joint::ShinR,
+        Joint::FootR,
+    ]
+};
+
+/// How wide the ball at a joint is: the narrower cross-section of the limb
+/// that hangs from it, a hair under so it never shows through a straight
+/// limb and only fills the wedge a bend opens.
+fn ball_width(skeleton: &Skeleton, joint: view::skeleton::Joint) -> f32 {
+    let size = view::pose::part_size(skeleton, joint);
+    size[0].min(size[2]) * 0.98
+}
+
+/// Where each fighter's joints are this frame, in the fighter's own frame:
+/// what [`pose_balls`] puts the balls at. Written by the posing pass.
+#[derive(Resource, Default)]
+struct Joints {
+    body: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+    shadow: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+}
+
+/// A ball at one of a fighter's joints. See [`BALLS`].
+#[derive(Component)]
+struct BodyBall {
+    owner: usize,
+    joint: view::skeleton::Joint,
+}
+
+/// The same, on the Reaver's second body.
+#[derive(Component)]
+struct ShadowBall {
+    owner: usize,
+    joint: view::skeleton::Joint,
+}
+
+/// Put the joint balls where the posing pass left the joints.
+fn pose_balls(
+    sim: Res<Sim>,
+    joints: Res<Joints>,
+    mut balls: Query<(&BodyBall, &mut Transform), Without<ShadowBall>>,
+    mut shadow_balls: Query<(&ShadowBall, &mut Transform), Without<BodyBall>>,
+) {
+    let skeletons = [
+        skeleton_for(sim.cur.players[0].class),
+        skeleton_for(sim.cur.players[1].class),
+    ];
+    for (ball, mut tf) in balls.iter_mut() {
+        let Some(skin) = joints.body[ball.owner] else {
+            continue;
+        };
+        let at = skin.origin[ball.joint.index()];
+        tf.translation = Vec3::new(at[0], at[1], at[2]);
+        tf.scale = Vec3::splat(ball_width(&skeletons[ball.owner], ball.joint));
+    }
+    for (ball, mut tf) in shadow_balls.iter_mut() {
+        let Some(skin) = joints.shadow[ball.owner] else {
+            continue;
+        };
+        let at = skin.origin[ball.joint.index()];
+        tf.translation = Vec3::new(at[0], at[1], at[2]);
+        tf.scale = Vec3::splat(ball_width(&skeletons[ball.owner], ball.joint));
+    }
 }
 
 /// The build this is, as the tape names it: the commit, the way the hello
@@ -1639,6 +1732,14 @@ fn setup(
                         BodyPart { owner, joint },
                     ));
                 }
+                for joint in BALLS {
+                    root.spawn((
+                        Mesh3d(meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap())),
+                        MeshMaterial3d(skin.clone()),
+                        Transform::default(),
+                        BodyBall { owner, joint },
+                    ));
+                }
             });
 
         // The Reaver's second body. A full skeleton's worth of parts, hidden
@@ -1664,6 +1765,14 @@ fn setup(
                         MeshMaterial3d(shade.clone()),
                         Transform::default(),
                         ShadowPart { owner, joint },
+                    ));
+                }
+                for joint in BALLS {
+                    root.spawn((
+                        Mesh3d(meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap())),
+                        MeshMaterial3d(shade.clone()),
+                        Transform::default(),
+                        ShadowBall { owner, joint },
                     ));
                 }
             });
@@ -3920,8 +4029,18 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
 /// fighter's root, a fighter's part, a shadow's root and a shadow's part are
 /// four different entities and never the same one. Written as an alias because
 /// saying it four times in a signature is the same sentence four times.
-type Posed<'w, 's, Tag, A, B, C> =
-    Query<'w, 's, (&'static Tag, &'static mut Transform), (Without<A>, Without<B>, Without<C>)>;
+type Posed<'w, 's, Tag, A, B, C> = Query<
+    'w,
+    's,
+    (&'static Tag, &'static mut Transform),
+    (
+        Without<A>,
+        Without<B>,
+        Without<C>,
+        Without<BodyBall>,
+        Without<ShadowBall>,
+    ),
+>;
 
 // A Bevy system's parameter list *is* its dependency declaration, and this one
 // now poses two bodies per fighter. Splitting it to get under a count would
@@ -3941,6 +4060,7 @@ fn apply_poses(
     mut shadow_seen: Query<(&mut Visibility, &ShadowRoot)>,
     mut shadow_roots: Posed<ShadowRoot, Fighter, BodyPart, ShadowPart>,
     mut shadow_parts: Posed<ShadowPart, Fighter, BodyPart, ShadowRoot>,
+    mut joints: ResMut<Joints>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
@@ -3972,6 +4092,9 @@ fn apply_poses(
             }
         }
         skins.push(view::skeleton::solve(skeleton, &pose));
+    }
+    for (owner, skin) in skins.iter().enumerate() {
+        joints.body[owner] = Some(*skin);
     }
 
     // The shield hand, in the arena rather than in the character's own space,
@@ -4037,6 +4160,7 @@ fn apply_poses(
         tf.translation = Vec3::new(ghost.pos[0], ghost.pos[1], ghost.pos[2]);
         tf.rotation = Quat::from_rotation_y(ghost.facing[0].atan2(ghost.facing[2]));
     }
+    joints.shadow = shadow_skins;
     for (part, mut tf) in shadow_parts.iter_mut() {
         let Some(skin) = shadow_skins[part.owner].as_ref() else {
             continue;
