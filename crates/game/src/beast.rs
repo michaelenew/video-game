@@ -293,21 +293,26 @@ impl Forms {
     }
 }
 
+/// A part's drawn state: where, whether, what skin, what form.
+type Limbs<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Limb,
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut MeshMaterial3d<StandardMaterial>,
+        &'static mut Mesh3d,
+    ),
+    Without<Knuckle>,
+>;
+
 pub fn place(
     sim: Res<crate::Sim>,
     hide: Res<Hide>,
     forms: Res<Forms>,
     boom: Res<Boom>,
-    mut limbs: Query<
-        (
-            &Limb,
-            &mut Transform,
-            &mut Visibility,
-            &mut MeshMaterial3d<StandardMaterial>,
-            &mut Mesh3d,
-        ),
-        Without<Knuckle>,
-    >,
+    mut limbs: Limbs,
     mut knuckles: Query<
         (
             &Knuckle,
