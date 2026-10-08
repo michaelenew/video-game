@@ -80,6 +80,22 @@ pub mod climb;
 
 pub mod bench;
 
+pub mod hearth;
+
+pub mod ring;
+
+pub mod mouth;
+
+pub mod bank;
+
+pub mod shelves;
+
+pub mod pinewood;
+
+pub mod saddle;
+
+pub mod highlands;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -122,8 +138,21 @@ impl ArenaId {
     /// The proving ground of the jump courses: lanes and ledges at marked
     /// distances, one per class mechanic to try.
     pub const CLIMB_REACH: ArenaId = ArenaId(22);
+    /// **The valley** (`docs/design/valley.md`, `crate::valley`): the town,
+    /// its ring, and the five reaches of the climb.
+    pub const HEARTH: ArenaId = ArenaId(23);
+    pub const RING: ArenaId = ArenaId(24);
+    pub const MOUTH: ArenaId = ArenaId(25);
+    pub const BANK: ArenaId = ArenaId(26);
+    pub const SHELVES: ArenaId = ArenaId(27);
+    pub const PINEWOOD: ArenaId = ArenaId(28);
+    pub const SADDLE: ArenaId = ArenaId(29);
     /// A dev arena of single hops, for measuring a kind of hop: see [`bench`].
     pub const BENCH: ArenaId = ArenaId(30);
+    /// The Ridgeback's room in the valley: the proving ground's plan on a
+    /// moor. The Ridgeback is still hunted in the proving ground by
+    /// [`for_species`]; this is only where the valley meets it.
+    pub const HIGHLANDS: ArenaId = ArenaId(31);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -185,6 +214,15 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
         ArenaId::CLIMB_GULF => Some(&climb::GULF),
         ArenaId::CLIMB_REACH => Some(&climb::REACH),
+
+        ArenaId::HEARTH => Some(&hearth::ARENA),
+        ArenaId::RING => Some(&ring::ARENA),
+        ArenaId::MOUTH => Some(&mouth::ARENA),
+        ArenaId::BANK => Some(&bank::ARENA),
+        ArenaId::SHELVES => Some(&shelves::ARENA),
+        ArenaId::PINEWOOD => Some(&pinewood::ARENA),
+        ArenaId::SADDLE => Some(&saddle::ARENA),
+        ArenaId::HIGHLANDS => Some(&highlands::ARENA),
         _ => None,
     }
 }
@@ -709,7 +747,7 @@ fn resolve_among(
                 let floor = arena.relief_at(pos.x, pos.z);
                 let ground = ground_among(arena, lists, pos);
                 let gap = pos.y.sub(ground);
-                if !relief::of(arena.id).is_empty()
+                if !relief::is_flat(arena.id)
                     && ground.raw() == floor.raw()
                     && gap.raw() > 0
                     && gap.raw() <= t::step_down().raw()

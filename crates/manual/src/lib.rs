@@ -413,6 +413,53 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "The valley",
+        in_browser: true,
+        blurb: "A run starts in Hearth, the walled town at the valley's mouth: walk out of its gates into a world of places joined together, a climb from the river to the Saddle with every creature in a room off the way, and the Ring in town for fighting each other. docs/design/valley.md has the whole map.",
+        entries: &[
+            e(
+                "Walk into a way out",
+                "A notch in a wall, a gate, a passage at the end of a reach, glowing: the way on. Both of you walk in and you go on together; one of you alone holds it for two seconds and takes the other along. The line at the top says where it leads.",
+            ),
+            e(
+                "Waystones",
+                "The ways up the valley are under waystones, lit by beating the creatures below them: one of the herd and the den opens the Shelves, one of the Pan and the Mire the Pinewood, two of the Pair, the Broodmother and the Ridgeback the Saddle, one of the Galewing and the Veilstalker the Shrine, and the Mantis the Long Valley. Your trophies count, and so do your friend's: the valley is open as far as the more travelled of you has been. Going back down is never shut.",
+            ),
+            e(
+                "Rooms",
+                "Walking into a creature's room starts its hunt. Win, and the place goes quiet: walk out the way you came. Lose, and you wake outside at the way you went in.",
+            ),
+            e(
+                "Climbing",
+                "Shelves, gaps, traverses along a face, chimneys between two walls -- the jump is all there is to it, and a fall costs what the fall rule says: free to nine metres, twenty-five a metre past that. A long way round always exists. Snow on a top is a cairn: touch it to rest, and if you die you are stood on the last one you touched.",
+            ),
+            e(
+                "Vines and updrafts",
+                "Green strands down a face are a vine: hold Space to climb it, crouch to slide down, let go of both to cling. A pale column of air on the Saddle is an updraft: jump into it and it carries you up.",
+            ),
+            e(
+                "The Ring",
+                "Through the north door of the town: the one place in the valley the two of you can fight each other, round by round, on the proving ground's floor plan. The training dummy and the sparring bot are player two here when nobody has the second keys. Hop the south wall and walk into the door to leave.",
+            ),
+            e(
+                "V",
+                "Back to the valley: Hearth's square, with what you have beaten kept. From a hunt, a course or a versus match started any other way, this is how you get to the valley. Online, both players go together.",
+            ),
+            e(
+                "--versus, ?versus",
+                "Start in the proving ground fighting each other, the way a run started before there was a valley. --arena and --hunt start where they say, as they always have.",
+            ),
+            e(
+                "--open, ?open",
+                "Every waystone lit, as if everything had been beaten: for walking the whole valley without the fights.",
+            ),
+            e(
+                "--arena mouth, ?arena=mouth",
+                "Start somewhere else in the valley by name: hearth, ring, mouth, bank, shelves, pinewood or saddle.",
+            ),
+        ],
+    },
+    Section {
         title: "Hunting the Ridgeback",
         in_browser: true,
         blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",

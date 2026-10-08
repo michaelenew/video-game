@@ -1,7 +1,14 @@
 ---
-status: exploration
+status: built
 started: 2026-10-08
 ---
+
+> **Built the same day.** [valley.md](../valley.md) is what was built and is
+> the specification; this note is how it was argued. The open questions at
+> the end are answered there: walking into a room starts its hunt and its
+> exit works mid-fight; a seam fires on everybody or a two-second hold; the
+> lookout is ridges painted on the sky; the waystones read the union of both
+> players' trophies.
 
 # 0006 — The valley and the haven
 

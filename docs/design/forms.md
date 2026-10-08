@@ -119,6 +119,29 @@ they were on the boxes, so an arena's palette is unchanged.
    tenth darker at half a metre down) -- the sky a crown sees and the dust
    a hollow collects, as one number per metre.
 
+## The fourth pass (built, 2026-10-08, for the valley)
+
+1. **Terrain is a cliff, not a rock.** The rock form pulls a surface in by
+   up to a quarter of its own size, which is a lumpy boulder at two metres
+   and seven metres of air under your feet at thirty. A box more than six
+   metres across or tall, in a soft material or rock, is drawn by
+   `shapes::cliff`: each face a grid a metre and a half a cell, pushed in by
+   at most 0.35 m along its normal by noise, fading to nothing a metre from
+   the face's border, and the top kept flat. A turf-topped terrace shows
+   rock in its faces (`look::palette::cliff_face`); a thin one, a hedge, is
+   its own stuff all the way down.
+2. **Three meshes were facing the wrong way, and are tested now.** The
+   relief's floor (`ground_grid`) was wound facing down, so every hilly floor
+   was culled from above and the sky's horizon showed through where the
+   grass should have been -- the low meadow and the other relief arenas have
+   been a pale wash since the third pass. The first cliffs had the same
+   order in both arms of their winding test, so a grass terrace showed the
+   inside of its own underside in rock colour. And the rounded forms'
+   poles were millimetre rings drawn inside out, because a float's cosine
+   of minus ninety degrees is a hair below zero. `shapes::tests` now checks
+   that every closed form's triangles face out and every floor's face up,
+   which is the check that would have caught all three.
+
 ## What to decide
 
 1. Is the amount right? Each is one number: the rock's roughness (0.28 of

@@ -328,7 +328,7 @@ pub fn dress(
             // Flat, a subdivided plane; with relief (`sim::arena::relief`),
             // a grid at the simulation's own heights, half a metre a cell,
             // so what is drawn is the floor feet are held to.
-            let hilly = !sim::arena::relief::of(arena.id).is_empty();
+            let hilly = !sim::arena::relief::is_flat(arena.id);
             let mut floor = if hilly {
                 let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
                 crate::shapes::ground_grid(
@@ -364,7 +364,7 @@ pub fn dress(
             ));
         }
     }
-    let hilly = !sim::arena::relief::of(arena.id).is_empty();
+    let hilly = !sim::arena::relief::is_flat(arena.id);
     for (i, region) in arena.regions.iter().enumerate() {
         let look = paint(palette.of(region.material));
         // A hair above the floor, each region a hair above the last.
@@ -439,6 +439,32 @@ pub fn dress(
         // against.
         let rgb = palette.of(solid.material);
         let seed = (at.x * 7.0 + at.z * 13.0 + size.y * 3.0) as i32 as u32;
+        // **Terrain** -- a terrace, a bank, a valley's side, a hedge -- is a
+        // cliff, roughened in metres rather than in shares of its size, so a
+        // thirty-metre block's edge is where its collision is. Dressed stone
+        // and timber stay square at any size. A soft top on a tall block (a
+        // turf-topped terrace) shows rock in its faces; a thin one (a hedge)
+        // is its own stuff all the way down.
+        let soft = matches!(
+            solid.material,
+            Material::Ground
+                | Material::Grass
+                | Material::Sand
+                | Material::Snow
+                | Material::Ash
+                | Material::Peat
+                | Material::Rock
+        );
+        if soft && crate::shapes::is_terrain(size) {
+            let side = palette.cliff_face(solid.material, size.x.min(size.z) < 3.0);
+            commands.spawn((
+                Mesh3d(meshes.add(crate::shapes::cliff(size, seed, rgb, side, at, &brush))),
+                MeshMaterial3d(white.clone()),
+                Transform::from_translation(at),
+                Scenery,
+            ));
+            continue;
+        }
         let mesh = match solid.material {
             Material::Rock => crate::shapes::rock(size, seed, Some((at, rgb, &brush))),
             Material::Ground
@@ -499,6 +525,17 @@ pub fn dress(
     if !dressing.drop {
         scatter(&mut commands, &mut meshes, arena, &palette, &brush, &white);
     }
+
+    // The valley's seams, waystones, vines and updrafts, and the lookout's
+    // view from the town: `crate::valley`, for a place that is one.
+    crate::valley::draw(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        arena,
+        &palette,
+        &sky,
+    );
 }
 
 /// How much floor one scattered thing stands for, in square metres.

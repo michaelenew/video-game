@@ -118,8 +118,85 @@ pub fn of(id: ArenaId) -> &'static [Bump] {
         ArenaId::GNAWERS => &COMMONS,
         ArenaId::SANDMAW => &PAN,
         ArenaId::VEILSTALKER => &ASHWOOD,
+        ArenaId::MOUTH => &super::mouth::BUMPS,
+        ArenaId::BANK => &super::bank::BUMPS,
+        ArenaId::SHELVES => &super::shelves::BUMPS,
+        ArenaId::PINEWOOD => &super::pinewood::BUMPS,
+        ArenaId::SADDLE => &super::saddle::BUMPS,
         _ => &[],
     }
+}
+
+/// **A long slope**: the floor rising by `rise` between two lines across one
+/// axis, smoothly -- level before the first, level again past the second,
+/// and a smoothstep between, so it joins the ground either side without an
+/// edge. What a valley climbs by (`docs/design/exploration/0006_valley.md`):
+/// a reach's floor is a few of these, with the steep ones hidden under the
+/// cliffs that stand on them.
+///
+/// Along an axis rather than in any direction, so nothing here takes a
+/// square root or squares a distance across a two-hundred-metre arena.
+#[derive(Clone, Copy, Debug)]
+pub struct Ramp {
+    /// Along x, or along z.
+    pub along_x: bool,
+    pub from: Fx,
+    pub to: Fx,
+    pub rise: Fx,
+}
+
+impl Ramp {
+    /// Rising `rise` centimetres between `x = from` and `x = to`.
+    pub const fn x(from: i32, to: i32, rise: i32) -> Ramp {
+        Ramp {
+            along_x: true,
+            from: Fx::ratio(from, 100),
+            to: Fx::ratio(to, 100),
+            rise: Fx::ratio(rise, 100),
+        }
+    }
+
+    /// Rising `rise` centimetres between `z = from` and `z = to`.
+    pub const fn z(from: i32, to: i32, rise: i32) -> Ramp {
+        Ramp {
+            along_x: false,
+            ..Ramp::x(from, to, rise)
+        }
+    }
+
+    /// Its height at a point.
+    pub fn at(&self, x: Fx, z: Fx) -> Fx {
+        let p = if self.along_x { x } else { z };
+        let span = self.to.sub(self.from);
+        if span.raw() == 0 {
+            return if p.raw() >= self.to.raw() {
+                self.rise
+            } else {
+                Fx::ZERO
+            };
+        }
+        let t = p.sub(self.from).div(span).clamp(Fx::ZERO, Fx::ONE);
+        let three = Fx::ONE.add(Fx::ONE).add(Fx::ONE);
+        let s = t.mul(t).mul(three.sub(t.add(t)));
+        self.rise.mul(s)
+    }
+}
+
+/// An arena's ramps: the valley's reaches, and nothing else yet.
+pub fn ramps(id: ArenaId) -> &'static [Ramp] {
+    match id {
+        ArenaId::MOUTH => &super::mouth::RAMPS,
+        ArenaId::BANK => &super::bank::RAMPS,
+        ArenaId::SHELVES => &super::shelves::RAMPS,
+        ArenaId::PINEWOOD => &super::pinewood::RAMPS,
+        ArenaId::SADDLE => &super::saddle::RAMPS,
+        _ => &[],
+    }
+}
+
+/// Is the floor one plane at zero here? Most arenas' is.
+pub fn is_flat(id: ArenaId) -> bool {
+    of(id).is_empty() && ramps(id).is_empty()
 }
 
 /// The floor's height at a point: zero on a flat floor.
@@ -137,6 +214,9 @@ pub fn height_at(id: ArenaId, x: Fx, z: Fx) -> Fx {
         }
         let s = Fx::ONE.sub(q);
         h = h.add(b.height.mul(s).mul(s));
+    }
+    for r in ramps(id) {
+        h = h.add(r.at(x, z));
     }
     h
 }

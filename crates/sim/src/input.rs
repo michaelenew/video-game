@@ -100,6 +100,15 @@ pub enum Destination {
     /// Tab, and the class pickers: on the wire for the reason every trip is,
     /// so a class can change mid-match against a person.
     Class { seat: usize, class: crate::Class },
+    /// **The valley** (`crate::valley`): Hearth's square, with the journey so
+    /// far kept. What a run starts in, and what `V` goes back to.
+    Valley,
+    /// **This creature has been beaten**, on the sender's record: what a
+    /// player's trophies light the valley's waystones by. Not a trip; it sets
+    /// a bit of the journey on the frame it arrives, on both machines, which
+    /// is how two players who have each beaten different things share a
+    /// valley that is open as far as the more travelled of them has been.
+    Credit(SpeciesId),
 }
 
 impl Travel {
@@ -110,6 +119,10 @@ impl Travel {
     pub const RESTART: Travel = Travel(2);
     pub const PAUSE: Travel = Travel(3);
     pub const STEP: Travel = Travel(4);
+    /// See [`Destination::Valley`].
+    pub const VALLEY: Travel = Travel(5);
+    /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
+    const CREDIT: u8 = 8;
     const HUNT: u8 = 0x80;
     /// `01aa aaaa`: no creature, in arena `a`.
     const ARENA: u8 = 0x40;
@@ -146,6 +159,16 @@ impl Travel {
         }
     }
 
+    /// Credit a creature to the valley's journey. A species past what the
+    /// byte holds is no request.
+    pub const fn credit(species: SpeciesId) -> Travel {
+        if species.0 as u32 + Travel::CREDIT as u32 >= Travel::CLASS as u32 {
+            Travel::NONE
+        } else {
+            Travel(Travel::CREDIT + species.0)
+        }
+    }
+
     /// Seat `seat`'s fighter becomes `class`, in a restart of the same fight.
     pub const fn class(seat: usize, class: crate::Class) -> Travel {
         Travel(Travel::CLASS | if seat == 1 { Travel::SEAT } else { 0 } | class as u8)
@@ -158,6 +181,10 @@ impl Travel {
             2 => Some(Destination::Restart),
             3 => Some(Destination::Pause),
             4 => Some(Destination::Step),
+            5 => Some(Destination::Valley),
+            b if b >= Travel::CREDIT && b < Travel::CLASS => {
+                Some(Destination::Credit(SpeciesId(b - Travel::CREDIT)))
+            }
             b if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS => {
                 let index = (b & 0x0F) as usize;
                 if index >= crate::class::ALL_CLASSES.len() {

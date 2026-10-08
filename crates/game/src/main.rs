@@ -41,6 +41,7 @@ mod sky;
 mod sound;
 mod species;
 mod trophies;
+mod valley;
 mod veil;
 
 use bevy::input::mouse::MouseMotion;
@@ -82,12 +83,25 @@ fn matches(n: &str, c: sim::Class) -> bool {
 /// Flags as well as keys, because the headless screenshot script takes flags
 /// and not keystrokes. See [`picker`].
 fn chosen_start(opts: &platform::Options) -> picker::Start {
-    picker::start(
+    let mut start = picker::start(
         opts.flag("--hunt"),
         opts.value("--hunt"),
         opts.value("--arena"),
         opts.value("--temper"),
-    )
+    );
+    // **The valley is where a run starts** (`docs/design/valley.md`): Hearth's
+    // square, unless a fight was asked for -- `--hunt`, `--arena`, or
+    // `--versus` for the proving ground as it always was.
+    if start.hunt.is_none() && start.arena.is_none() && !opts.flag("--versus") {
+        start.arena = Some(sim::valley::START);
+    }
+    start
+}
+
+/// `--open`: every waystone in the valley lit, as if every creature had been
+/// beaten. For walking the whole valley without the fights.
+fn open_valley() -> bool {
+    platform::flag("--open")
 }
 
 /// `--temper` was given: every temper is on offer to `T`, earned or not.
@@ -196,6 +210,7 @@ fn main() {
                 ground::setup,
                 hud::setup,
                 hud::setup_picker,
+                valley::setup_text,
                 crosshair::setup,
                 glint::setup,
                 veil::setup,
@@ -218,6 +233,7 @@ fn main() {
                 (
                     tick_sim,
                     arenas::dress,
+                    valley::update,
                     sky::follow,
                     sound::play,
                     sound::setup,
@@ -277,6 +293,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                valley::update_text,
                 glint::update,
                 veil::place,
                 online::announce,
@@ -3435,6 +3452,16 @@ fn tick_sim(
             );
         }
     }
+    // **The valley's waystones read the journey**, and the journey learns
+    // what this player has beaten from their trophies: one creature on the
+    // wire a frame, the first the journey has not got, until it has them all
+    // (`sim::input::Destination::Credit`). Both peers send theirs, so the
+    // valley is open as far as the more travelled of you has been.
+    if sim.travel == sim::input::Travel::NONE && sim.cur.valley.on {
+        if let Some(s) = valley::credit_due(&sim.cur, &trophies, open_valley()) {
+            sim.travel = sim::input::Travel::credit(s);
+        }
+    }
     // F10 too: a function key types nothing, and the moment you want dev mode
     // may well be with a pasted link still in the Esc menu's box.
     if keys.just_pressed(KeyCode::F10) {
@@ -3542,6 +3569,10 @@ fn tick_sim(
         } else {
             picker::toggle(&sim.cur)
         };
+    }
+    // `V`: back to the valley -- Hearth's square, with the journey kept.
+    if keys.just_pressed(KeyCode::KeyV) {
+        sim.travel = sim::input::Travel::VALLEY;
     }
     // `N`: the next jump course, in order of difficulty. The same trip on the
     // wire as `H`, with the arena in the byte. See `picker::next_course`.

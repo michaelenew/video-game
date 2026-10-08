@@ -99,3 +99,39 @@ fn a_versus_tape_is_judged_without_a_creature() {
     assert_eq!(judged.rounds, w.players.map(|p| p.rounds_won));
     assert!(judged.hands.iter().all(|h| h.frames > 0));
 }
+
+#[test]
+fn a_taped_walk_through_the_valley_reports_its_places() {
+    // Two people walk out of Hearth's square and through the valley gate
+    // together, and on up the Mouth. The judgement names both places and
+    // says they went on together.
+    let mut w = World::versus_in([Class::Champion, Class::Elementalist], sim::valley::START);
+    assert!(w.valley.on);
+    let mut tape = Tape::begin(&w, "test");
+    let walk = Input::aimed(Input::W, 0);
+    for _ in 0..600 {
+        let inputs = [walk, walk];
+        tape.record(w.frame, inputs);
+        w.advance(inputs);
+    }
+    tape.finish(&w);
+    let back = Tape::from_text(&tape.to_text()).expect("the tape parses");
+    let judged = hunt::replay::judge(&back).expect("the start rebuilds");
+    assert_eq!(
+        judged.matched,
+        Some(true),
+        "{}",
+        judged.render(&back, false)
+    );
+    let legs = &judged.trek.legs;
+    assert!(legs.len() >= 2, "{}", judged.render(&back, false));
+    assert_eq!(legs[0].arena, sim::arena::ArenaId::HEARTH);
+    assert_eq!(
+        legs[0].out,
+        Some(("the valley", true)),
+        "{}",
+        judged.render(&back, false)
+    );
+    assert_eq!(legs[1].arena, sim::arena::ArenaId::MOUTH);
+    assert!(judged.render(&back, false).contains("THE VALLEY"));
+}

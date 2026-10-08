@@ -50,3 +50,18 @@ Every tier is an unplayed guess. The panel lists each course's big jumps (round 
 | ![](course-slalom.jpg) **The Slalom** (hard), the Dual mage: stones between the pillars, the cave mouth beyond, the span's runway on the left. | ![](course-fork.jpg) **The Fork** (hard), the Champion: the high road's wall up and right, the low road's stones ahead. |
 | ![](course-spire.jpg) **The Spire** (barely possible), the Elementalist. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver: the runway, the 18 m gulf, the high line up and right. |
 | ![](course-reach.jpg) **The Reach** (proving ground), the Reaver on the hub: the gap lanes ahead, a yellow block per five metres at each takeoff. | |
+
+## The valley
+
+Taken 2026-10-08 with `GAME_ARGS="--arena <place>"` (Hearth with nothing, since
+it is where the game starts), `SHOT_PITCH=0.12` and the Bulwark's demo
+throwing slams; see [valley.md](../valley.md). The line under the scoreboard
+is the valley's: the place, and how many creatures the journey has beaten.
+The plan beside them is `cargo run -p look --example valley`.
+
+| | |
+| --- | --- |
+| ![](valley.png) **The plan**, every place from above, Hearth at the top: seams boxed (gold open, grey behind a waystone), waystones yellow, cairns white, vines green, updrafts pale rings. | ![](valley-hearth.jpg) **Hearth**: the square, and the stair up the inside of the wall to the lookout on the left. |
+| ![](valley-ring.jpg) **The Ring**, through Hearth's north door: the proving ground in sand, the one place you can fight each other. | ![](valley-mouth.jpg) **The Mouth**: the road out of the gate, the river on the left, the scree rising to the Step. |
+| ![](valley-bank.jpg) **The Bank**: the den's mouth at the foot, the ten-shelf stair up the face, the vine at its south end. | ![](valley-shelves.jpg) **The Shelves**: on the first terrace, the traverse's ledge along the right-hand wall. |
+| ![](valley-pinewood.jpg) **The Pinewood**: the trunks, the Highlands' stair up the left wall, the chimney's ledges between the giant trunks ahead. | ![](valley-saddle.jpg) **The Saddle**: on the west platform's turf, the ridge running out ahead to the spires. |

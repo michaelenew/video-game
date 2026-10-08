@@ -147,7 +147,7 @@ impl Start {
 }
 
 /// As many of a species as its hunt holds: two for the Pair, one for the rest.
-fn herd_of(species: SpeciesId) -> [Option<SpeciesId>; crate::monster::MAX_MONSTERS] {
+pub fn herd_of(species: SpeciesId) -> [Option<SpeciesId>; crate::monster::MAX_MONSTERS] {
     let mut herd = [None; crate::monster::MAX_MONSTERS];
     let bodies = (species.get().fight.bodies as usize).clamp(1, crate::monster::MAX_MONSTERS);
     for slot in herd.iter_mut().take(bodies) {

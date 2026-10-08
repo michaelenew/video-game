@@ -7604,3 +7604,39 @@ and the fast arcs (a hundred degrees in three frames) are a question for the
 move table as much as for the clips. Watch: whether a choked grip on the
 upcut reads as a sword or a wand.
 
+
+### 2026-10-08 — the valley: a world to climb, where the game starts
+
+**Changed** ([valley.md](valley.md)) The game starts in Hearth now, not the
+proving ground. Five reaches climb from its gate to the Saddle, every
+creature's arena is a room off them behind its tier's waystone, and the Ring,
+through Hearth's north door, is the one place two players can hurt each other.
+New knobs in the Oven: **seam hold** 120 frames (two seconds standing in a
+way out before it goes without the other player), **vine speed** 2.5 m/s and
+**updraft rise** 8 m/s. Nobody dies in a reach: a death stands you back on
+your last cairn with your health back, so a fall costs exactly what the fall
+rule says and never ends the walk.
+
+**Why** Asked for: a wider world to explore with a friend, with natural
+climbing that forces the treacherous movement, end to end in a few minutes.
+The plan was [exploration/0006](exploration/0006_valley.md).
+
+**Tried and changed while building** The Mouth's first traverse jump was
+4.6 m out and 2 m up, which the Bulwark's plain jump cannot make (5.2 m on
+the level, 4.1 m at two metres up): the second terrace was carried out to
+2.6 m from the first ledge at a metre and a half up. The test that checks
+every required hop first asked whether a body *lands* on the far ledge,
+which fails a short high hop that a person makes by starting closer; it asks
+whether the jump is high enough with 30 cm to spare and wide enough at that
+height now.
+
+**Measured** Every class makes every hop nobody can go round
+(`tests/valley.rs`). Two fighters walking out of Hearth's gate together
+arrive in the Mouth together, and the replay's report says so.
+
+**Verdict** kept, **unplayed**: walked by tests, judged from the plan sheet
+and screenshots. Watch: whether the two-second hold is long enough not to
+fire by brushing a seam and short enough not to be a wait; whether the
+climbs, all sized to the Bulwark's jump, are treacherous for anyone else;
+and how long a pair who does not know it takes, end to end (the target is
+five minutes).

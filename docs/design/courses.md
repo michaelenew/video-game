@@ -165,10 +165,13 @@ narrow question later:
 
 ## 4 · Props a shared world could give every class
 
-Not built: **hanging vines** climbable by anyone (the vertical answer the Blood
-mage and Champion lack); **updraft vents** (the Elementalist's Updraft for
-everyone); **drifting rocks** on fixed paths (a timing gate the same for every
-class; the sim has no moving solids yet).
+**Vines and updraft vents are built** (2026-10-08), for the valley rather than
+the courses: a vine is a face anybody climbs at 2.5 m/s holding jump, and a
+vent lifts a body in the air at 8 m/s to its top. Both are tables in a
+valley place and knobs in the Oven; see [valley.md](valley.md) §3. A course
+could take them by the same tables; none does yet. Still not built:
+**drifting rocks** on fixed paths (a timing gate the same for every class;
+the sim has no moving solids yet).
 
 ## 5 · Not done, and next
 

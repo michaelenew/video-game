@@ -46,6 +46,7 @@ pub mod stones;
 pub mod temper;
 pub mod tuned;
 pub mod tuning;
+pub mod valley;
 
 pub use class::{Class, Mechanic};
 pub use fixed::Fx;

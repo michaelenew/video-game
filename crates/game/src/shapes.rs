@@ -372,7 +372,11 @@ fn superellipsoid(
     let mut colours: Vec<[f32; 4]> = Vec::with_capacity(positions.capacity());
     for i in 0..=lat {
         let u = -std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * i as f32 / lat as f32;
+        // A latitude's cosine is never negative; in floats it is, a hair,
+        // at the poles, and `pow` keeps the sign -- which turned each pole
+        // into a millimetre ring drawn inside out.
         let (su, cu) = u.sin_cos();
+        let cu = cu.max(0.0);
         for j in 0..=lon {
             let v = -std::f32::consts::PI + std::f32::consts::TAU * j as f32 / lon as f32;
             let (sv, cv) = v.sin_cos();
@@ -646,9 +650,14 @@ pub fn ground_grid(size: Vec2, centre: Vec3, cell: f32, h: &dyn Fn(f32, f32) -> 
         for i in 0..nx as u32 {
             let a = j * row + i;
             let b = a + row;
-            // Facing up: +x by +z spans the floor, and up is the right-hand
-            // side of z then x.
-            indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+            // Facing up, so the floor is seen from above: a triangle's front
+            // is the side its corners run anticlockwise on, and from above
+            // that is `a`, then `b` (+z), then `a + 1` (+x) -- z cross x is
+            // +y. The other order faced the ground, the renderer culled every
+            // hilly floor seen from above, and what showed through was the
+            // sky's horizon: a pale wash where the grass should have been.
+            // `faces_up` below holds it.
+            indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
         }
     }
     let count = positions.len();
@@ -739,5 +748,216 @@ pub fn shade_by_height(mesh: &mut Mesh, shade: &dyn Fn(f32) -> f32) {
         c[0] *= k;
         c[1] *= k;
         c[2] *= k;
+    }
+}
+
+/// **A cliff**: a box the size of terrain -- a terrace, a bank, a valley's
+/// side -- whose faces are roughened by noise **in metres, not in shares of
+/// its size**.
+///
+/// The boulder form (`rock`) pulls its surface in by up to a quarter of its
+/// own size, which on a two-metre boulder is a lumpy stone and on a
+/// thirty-metre terrace is seven metres of air you stand on while seeing the
+/// ground fall away under you. So past a few metres the form changes: each
+/// face is a grid a metre and a half a cell, pushed in by at most
+/// `ROUGH` along its own normal by noise, the push fading to nothing at the
+/// face's border so the edges stay the box's own straight arrises and no two
+/// faces part. **The top is flat**, since it is stood on. Every push is
+/// inward, so the cliff is inside its collision box like every other form.
+///
+/// Coloured as it is made rather than painted afterwards: the top `top_rgb`,
+/// the faces `side_rgb`, both through the brush so the accent still runs
+/// along the arris and over the top.
+pub fn cliff(
+    size: Vec3,
+    seed: u32,
+    top_rgb: [f32; 3],
+    side_rgb: [f32; 3],
+    centre: Vec3,
+    brush: &Brush,
+) -> Mesh {
+    const ROUGH: f32 = 0.35;
+    const CELL: f32 = 1.5;
+    let half = size * 0.5;
+    let s = Vec3::splat(seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-5);
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut colours: Vec<[f32; 4]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    // Six faces: the normal, and the two axes the face spans.
+    let faces: [(Vec3, Vec3, Vec3); 6] = [
+        (Vec3::Y, Vec3::X, Vec3::NEG_Z),
+        (Vec3::NEG_Y, Vec3::X, Vec3::Z),
+        (Vec3::X, Vec3::NEG_Z, Vec3::Y),
+        (Vec3::NEG_X, Vec3::Z, Vec3::Y),
+        (Vec3::Z, Vec3::X, Vec3::Y),
+        (Vec3::NEG_Z, Vec3::NEG_X, Vec3::Y),
+    ];
+    for (n, u, v) in faces {
+        let (hu, hv) = (
+            (u * half).abs().max_element(),
+            (v * half).abs().max_element(),
+        );
+        let (nu, nv) = (
+            ((2.0 * hu / CELL).ceil() as usize).clamp(1, 120),
+            ((2.0 * hv / CELL).ceil() as usize).clamp(1, 120),
+        );
+        let base = positions.len() as u32;
+        let flat = n.y.abs() > 0.5;
+        let rgb = if n.y > 0.5 { top_rgb } else { side_rgb };
+        for j in 0..=nv {
+            for i in 0..=nu {
+                let a = -hu + 2.0 * hu * i as f32 / nu as f32;
+                let b = -hv + 2.0 * hv * j as f32 / nv as f32;
+                let mut p = n * (n * half).abs().max_element() + u * a + v * b;
+                if !flat {
+                    // Fading to nothing a metre in from the face's border.
+                    let edge = (hu - a.abs()).min(hv - b.abs()).max(0.0);
+                    let fade = (edge / 1.0).clamp(0.0, 1.0);
+                    let q = (p + centre) * 0.45 + s;
+                    let noise =
+                        value_noise(q) * 0.6 + value_noise(q * 2.6 + Vec3::splat(4.7)) * 0.4;
+                    p -= n * ROUGH * fade * (0.5 + 0.5 * noise);
+                }
+                positions.push(p.to_array());
+                normals.push(n.to_array());
+                let to_edge = (hu - a.abs()).min(hv - b.abs()).max(0.0);
+                colours.push(brush.at(rgb, to_edge, n.y, centre.y + p.y));
+            }
+        }
+        let row = (nu + 1) as u32;
+        // Wound so the face looks out along `n`. A triangle's front is the
+        // side its corners run anticlockwise on: `a`, `a + 1` (+u), `b` (+v)
+        // has its front along u x v. Decided from the face's axes, not from a
+        // roughened cell, which can lean either way. (It once had the same
+        // order in both arms, and half of every cliff faced inward: a grass
+        // terrace showed its own underside, in the side's rock colour.)
+        let outward = u.cross(v).dot(n) > 0.0;
+        for j in 0..nv as u32 {
+            for i in 0..nu as u32 {
+                let a = base + j * row + i;
+                let b = a + row;
+                if outward {
+                    indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+                } else {
+                    indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
+                }
+            }
+        }
+    }
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+    .with_inserted_indices(Indices::U32(indices));
+    // Normals from the roughened surface, so the lumps catch the light.
+    mesh.compute_smooth_normals();
+    let _ = normals;
+    mesh
+}
+
+/// Is a solid this size terrain -- big enough that a form pulled in by a
+/// share of its size would float its edges off the collision box?
+pub fn is_terrain(size: Vec3) -> bool {
+    size.x.max(size.z) > 6.0 || size.y > 6.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every triangle of a mesh, as its corners.
+    fn triangles(mesh: &Mesh) -> Vec<[Vec3; 3]> {
+        let p = mesh
+            .attribute(Mesh::ATTRIBUTE_POSITION)
+            .and_then(|a| a.as_float3())
+            .expect("positions");
+        let Some(Indices::U32(ix)) = mesh.indices() else {
+            panic!("u32 indices");
+        };
+        ix.chunks(3)
+            .map(|t| [0, 1, 2].map(|k| Vec3::from(p[t[k] as usize])))
+            .collect()
+    }
+
+    /// A floor's front faces the sky, or the renderer culls it from where
+    /// everybody stands. A front is the side the corners run anticlockwise
+    /// on, which is the side `(b - a) x (c - a)` points to.
+    fn faces_up(mesh: &Mesh, what: &str) {
+        for [a, b, c] in triangles(mesh) {
+            let n = (b - a).cross(c - a);
+            assert!(n.y > 0.0, "{what}: a triangle faces down: {a} {b} {c}");
+        }
+    }
+
+    #[test]
+    fn a_hilly_floor_faces_the_sky() {
+        let hills = |x: f32, z: f32| (x * 0.3).sin() + (z * 0.2).cos();
+        faces_up(
+            &ground_grid(Vec2::new(12.0, 8.0), Vec3::ZERO, 0.5, &hills),
+            "ground_grid",
+        );
+        faces_up(&ground_disc(3.0, Vec3::ZERO, 0.5, &hills), "ground_disc");
+    }
+
+    #[test]
+    fn every_face_of_a_cliff_looks_out() {
+        // A terrace: every triangle's front faces away from the middle, or
+        // the renderer culls it from outside and shows the far face's
+        // inside through the gap.
+        let brush = Brush {
+            palette: look::palette::Palette::under(&look::skies::of(sim::arena::ArenaId::MOUTH)),
+            edge: look::edge::EDGE,
+        };
+        let size = Vec3::new(30.0, 13.0, 44.0);
+        let mesh = cliff(
+            size,
+            7,
+            [0.3, 0.6, 0.3],
+            [0.5, 0.5, 0.5],
+            Vec3::ZERO,
+            &brush,
+        );
+        let mut up = 0;
+        for [a, b, c] in triangles(&mesh) {
+            let n = (b - a).cross(c - a);
+            let mid = (a + b + c) / 3.0;
+            assert!(n.dot(mid) > 0.0, "a triangle faces in: {a} {b} {c}");
+            up += (n.y > 0.0 && mid.y > 0.0) as u32;
+        }
+        assert!(up > 0, "no top");
+    }
+
+    /// The same for every closed form here: no front faces the middle.
+    /// A pole's triangles have no area and face nowhere, so they pass. Dented
+    /// forms (a rock) lean, so a few may.
+    fn looks_out(mesh: &Mesh, what: &str, share: f32) {
+        let tris = triangles(mesh);
+        let inward = tris
+            .iter()
+            .filter(|[a, b, c]| (*b - *a).cross(*c - *a).dot((*a + *b + *c) / 3.0) < -1e-6)
+            .count();
+        assert!(
+            inward as f32 <= (1.0 - share) * tris.len() as f32,
+            "{what}: {inward} of {} triangles face in",
+            tris.len()
+        );
+    }
+
+    #[test]
+    fn every_closed_form_looks_out() {
+        let brush = Brush {
+            palette: look::palette::Palette::under(&look::skies::of(sim::arena::ArenaId::MOUTH)),
+            edge: look::edge::EDGE,
+        };
+        let size = Vec3::new(3.0, 1.5, 2.0);
+        let grey = [0.5, 0.5, 0.5];
+        looks_out(&boxy(size, Vec3::ZERO, grey, &brush), "boxy", 1.0);
+        looks_out(&chamfered_box(size, 0.2, None), "chamfered_box", 1.0);
+        looks_out(&soft_box(size, 0.3, 16, None), "soft_box", 1.0);
+        looks_out(&soft_cylinder(size, 0.3, 16), "soft_cylinder", 1.0);
+        looks_out(&rock(size, 5, None), "rock", 0.95);
     }
 }

@@ -1876,7 +1876,7 @@ fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
 /// far side of the arena, whichever is nearer, since a ray that reaches
 /// neither has nothing to hit.
 fn floor_hit(from: V3, dir: V3, arena: &crate::arena::Arena, limit: Fx) -> Option<Fx> {
-    if crate::arena::relief::of(arena.id).is_empty() {
+    if crate::arena::relief::is_flat(arena.id) {
         if dir.y.raw() >= 0 || from.y.raw() < 0 {
             return None;
         }

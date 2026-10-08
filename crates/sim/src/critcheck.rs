@@ -277,10 +277,13 @@ fn landed_with(class: Class, species: SpeciesId, kind: u8, push: u32) -> Option<
     }
     // The body stood still at the middle, everything else away: the question
     // is geometry.
+    // On the floor at the middle: the meadow has a swell there
+    // (`arena::relief`), and a body held at zero under it is a body sunk.
+    let middle = on_the_floor(&w, V3::ZERO);
     let stand = |w: &mut World| {
         for (i, c) in w.critters.iter_mut().enumerate() {
             if i == slot {
-                c.pos = V3::ZERO;
+                c.pos = middle;
                 c.vel = V3::ZERO;
                 c.yaw = 0;
                 c.state = is::PROWL;
@@ -293,10 +296,13 @@ fn landed_with(class: Class, species: SpeciesId, kind: u8, push: u32) -> Option<
     stand(&mut w);
     let body: Critter = w.critters[slot];
     let half_wid = body.body(sp).half_wid;
-    w.players[0].pos = V3::new(
-        Fx::ZERO,
-        Fx::ZERO,
-        half_wid.add(crate::tuning::body_radius()).neg(),
+    w.players[0].pos = on_the_floor(
+        &w,
+        V3::new(
+            Fx::ZERO,
+            Fx::ZERO,
+            half_wid.add(crate::tuning::body_radius()).neg(),
+        ),
     );
     for f in 0..120u32 {
         stand(&mut w);

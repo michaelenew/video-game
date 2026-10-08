@@ -164,6 +164,134 @@ impl Hands {
     }
 }
 
+/// **One place of the valley, as a replay went through it**
+/// (`docs/design/valley.md`): when you came in and went on, what the
+/// climbing cost, and whether the two of you went on together.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Leg {
+    pub arena: sim::arena::ArenaId,
+    pub entered: u32,
+    pub left: Option<u32>,
+    /// Damage landings: in a peaceful place, the only damage there is is a
+    /// fall's.
+    pub falls: [u32; MAX_PLAYERS],
+    /// Times stood back on a cairn after a death.
+    pub stood_back: [u32; MAX_PLAYERS],
+    /// Cairns touched, in order, by solid index (each new one once).
+    pub cairns: Vec<u8>,
+    /// Where it went on to, and whether everybody walked in or one held it.
+    pub out: Option<(&'static str, bool)>,
+}
+
+/// The valley, place by place. Empty for a replay that never was in it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Trek {
+    pub legs: Vec<Leg>,
+}
+
+impl Trek {
+    fn observe(&mut self, before: &World, after: &World) {
+        if !after.valley.on && !before.valley.on {
+            return;
+        }
+        if self.legs.is_empty() || before.arena != after.arena {
+            if let Some(last) = self.legs.last_mut() {
+                last.left = Some(after.frame);
+                // The seam it went by is the one that comes out where the
+                // new place says it was come into; it went because everybody
+                // walked in, unless somebody had been holding it the whole
+                // hold.
+                let came = after.valley.came.checked_sub(1);
+                let seam = sim::valley::place(before.arena).and_then(|p| {
+                    p.seams
+                        .iter()
+                        .enumerate()
+                        .find(|(_, s)| s.to == after.arena && Some(s.at) == came)
+                });
+                if let Some((k, seam)) = seam {
+                    let held = before.valley.held as usize == k + 1
+                        && before.valley.hold + 1 >= sim::tuning::seam_hold();
+                    last.out = Some((seam.says, !held));
+                }
+            }
+            self.legs.push(Leg {
+                arena: after.arena,
+                entered: after.frame,
+                left: None,
+                falls: [0; MAX_PLAYERS],
+                stood_back: [0; MAX_PLAYERS],
+                cairns: Vec::new(),
+                out: None,
+            });
+            return;
+        }
+        let leg = self.legs.last_mut().expect("a leg");
+        if !after.peaceful() {
+            return;
+        }
+        for i in 0..MAX_PLAYERS {
+            let (was, now) = (before.players[i], after.players[i]);
+            if was.health <= 0 {
+                continue;
+            }
+            let jumped = now.pos.sub(was.pos).flat_len().raw() > sim::Fx::from_int(3).raw();
+            if jumped && now.health >= was.health {
+                leg.stood_back[i] += 1;
+            } else if now.health < was.health {
+                leg.falls[i] += 1;
+            }
+            let c = after.valley.cairn[i];
+            if c != before.valley.cairn[i] && c > 0 && !leg.cairns.contains(&(c - 1)) {
+                leg.cairns.push(c - 1);
+            }
+        }
+    }
+
+    /// The table, place by place.
+    pub fn render(&self, end: u32) -> String {
+        if self.legs.is_empty() {
+            return String::new();
+        }
+        let first = self.legs[0].entered;
+        let clock = |f: u32| {
+            let s = f.saturating_sub(first) / 60;
+            format!("{}:{:02}", s / 60, s % 60)
+        };
+        let total = end.saturating_sub(first) / 60;
+        let mut out = format!(
+            "\nTHE VALLEY  {} places, {}:{:02} in all\n",
+            self.legs.len(),
+            total / 60,
+            total % 60
+        );
+        out.push_str(
+            "  PLACE            IN     OUT     TIME   FALLS   STOOD BACK   CAIRNS   ON TO\n",
+        );
+        for leg in &self.legs {
+            let left = leg.left.unwrap_or(end);
+            let on = match leg.out {
+                Some((to, true)) => format!("{to}, together"),
+                Some((to, false)) => format!("{to}, held"),
+                None if leg.left.is_some() => "(a trip)".to_string(),
+                None => "-".to_string(),
+            };
+            out.push_str(&format!(
+                "  {:<15}  {:>5}  {:>5}  {:>5} s   {}/{}       {}/{}         {:>2}     {on}\n",
+                leg.arena.get().name,
+                clock(leg.entered),
+                clock(left),
+                (left - leg.entered) / 60,
+                leg.falls[0],
+                leg.falls[1],
+                leg.stood_back[0],
+                leg.stood_back[1],
+                leg.cairns.len(),
+            ));
+        }
+        out
+    }
+}
+
 /// A replay, judged.
 pub struct Judgement {
     /// The creature's report, in a hunt whose creature has a plan card -- the
@@ -173,6 +301,8 @@ pub struct Judgement {
     pub hands: [Hands; MAX_PLAYERS],
     /// Rounds each side won, in versus.
     pub rounds: [u8; MAX_PLAYERS],
+    /// The valley, place by place, when the replay was in it.
+    pub trek: Trek,
     /// The world the replay ended on.
     pub end: World,
     /// Whether it is the one the game ended on: `None` for a tape with no
@@ -190,7 +320,9 @@ pub fn judge(tape: &Tape) -> Result<Judgement, String> {
         .map(|who| Hunter::person(who, species.unwrap_or(sim::species::SpeciesId::RIDGEBACK)))
         .collect();
     let mut hands: [Hands; MAX_PLAYERS] = Default::default();
+    let mut trek = Trek::default();
     let end = tape.play(|before, inputs, after| {
+        trek.observe(before, after);
         for person in people.iter_mut() {
             person.playback(inputs[person.who]);
         }
@@ -209,6 +341,7 @@ pub fn judge(tape: &Tape) -> Result<Judgement, String> {
         report,
         hands,
         rounds: end.players.map(|p| p.rounds_won),
+        trek,
         matched,
         end,
     })
@@ -247,7 +380,8 @@ impl Judgement {
             }
             None => out.push_str("  unchecked: the tape has no end line\n"),
         }
-        if tape.start.hunt.is_none() {
+        out.push_str(&self.trek.render(self.end.frame));
+        if tape.start.hunt.is_none() && self.trek.legs.is_empty() {
             out.push_str(&format!(
                 "  rounds: player one {}, player two {}\n",
                 self.rounds[0], self.rounds[1]

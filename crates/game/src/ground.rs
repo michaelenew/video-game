@@ -271,7 +271,7 @@ const SKIN: f32 = 0.03;
 /// enough (`crates/sim/tests/relief.rs`) that its ends stay within a hand of
 /// the ground.
 pub fn floor_at(arena: &sim::arena::Arena, x: f32, z: f32) -> (f32, Quat) {
-    if sim::arena::relief::of(arena.id).is_empty() {
+    if sim::arena::relief::is_flat(arena.id) {
         return (0.0, Quat::IDENTITY);
     }
     let h = |x: f32, z: f32| fx(arena.relief_at(to_fx(x), to_fx(z)));
