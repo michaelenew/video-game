@@ -926,3 +926,44 @@ pub fn crouch_turns(drop: Fx, len: Fx) -> Fx {
 pub fn turns_to_radians(turns: Fx) -> Fx {
     turns.mul(TAU)
 }
+
+/// A ray against a **height field**: the floor's relief (`arena::relief`),
+/// `h(x, z)` being its height. Marched in half-metre steps out to `far`, then
+/// the crossing bisected eight times, which puts the answer under a
+/// centimetre; a fixed step and a fixed count, like every solver here, so two
+/// machines take the same number of steps and land on the same bit. `None`
+/// from under the surface or when nothing is crossed within `far`.
+///
+/// A plane is the special case `h = 0`, and a flat floor should still use the
+/// plane: this is two hundred evaluations where that is a division.
+pub fn ray_hits_heightfield(from: V3, dir: V3, far: Fx, h: &dyn Fn(Fx, Fx) -> Fx) -> Option<Fx> {
+    let above = |t: Fx| -> Fx {
+        let p = from.add(dir.scale(t));
+        p.y.sub(h(p.x, p.z))
+    };
+    if above(Fx::ZERO).raw() < 0 {
+        return None;
+    }
+    let step = Fx::ratio(1, 2);
+    let mut t = Fx::ZERO;
+    for _ in 0..240 {
+        if t.raw() >= far.raw() {
+            return None;
+        }
+        let next = t.add(step).min(far);
+        if above(next).raw() <= 0 {
+            let (mut lo, mut hi) = (t, next);
+            for _ in 0..8 {
+                let mid = lo.add(hi).div(Fx::from_int(2));
+                if above(mid).raw() <= 0 {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            return Some(hi);
+        }
+        t = next;
+    }
+    None
+}

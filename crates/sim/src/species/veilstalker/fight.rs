@@ -1965,7 +1965,10 @@ fn trail(w: &mut World, m: &Monster, now: u32) {
         let at = rig.part_to_world(part, V3::ZERO);
         let floor = ground.ground_under(at);
         let skin = crate::arena::SKIN;
-        let on_floor = floor.raw() <= skin.raw() && m.pos.y.raw() <= floor.add(skin).raw();
+        // The floor itself -- the relief under this foot, not a trunk's top.
+        let plain = ground.relief_at(at.x, at.z);
+        let on_floor =
+            floor.sub(plain).raw() <= skin.raw() && m.pos.y.raw() <= floor.add(skin).raw();
         if !on_floor || !ground.floor_at(at.x, at.z).takes_prints() {
             return;
         }
@@ -2253,7 +2256,11 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
             bits |= view::IN_SMOKE;
         }
         if !ground.floor_at(m.pos.x, m.pos.z).takes_prints()
-            || ground.ground_under(m.pos).raw() > crate::arena::SKIN.raw()
+            || ground.ground_under(m.pos).raw()
+                > ground
+                    .relief_at(m.pos.x, m.pos.z)
+                    .add(crate::arena::SKIN)
+                    .raw()
         {
             bits |= view::BARE;
         }
@@ -2354,9 +2361,10 @@ fn ghost_place(m: &Monster, at: V3, yaw: Fx, scene: &Scene) -> Option<V3> {
     let off = cone.mul(Knob::MimicEdge.fx()).mul(side);
     let range = math::half(Knob::MimicFrom.fx().add(Knob::MimicTo.fx()));
     let spot = at.add(V3::from_turns(yaw.add(off)).scale(range));
-    let spot = V3::new(spot.x, Fx::ZERO, spot.z);
+    // On the floor itself -- the relief under it, not on a trunk.
+    let spot = V3::new(spot.x, scene.arena.relief_at(spot.x, spot.z), spot.z);
     let mid = spot.add(V3::new(Fx::ZERO, Knob::MiddleHeight.fx(), Fx::ZERO));
-    let inside = scene.arena.inside(spot) && scene.arena.ground_under(spot).raw() <= Fx::ZERO.raw();
+    let inside = scene.arena.inside(spot) && scene.arena.ground_under(spot).raw() <= spot.y.raw();
     (inside && aim::in_view_from(at, Fx::ZERO, yaw, mid, cone, scene)).then_some(spot)
 }
 

@@ -33,6 +33,10 @@ const LEFT: [u8; 3] = [96, 200, 210];
 const RIGHT: [u8; 3] = [236, 150, 86];
 const LABEL: [u8; 3] = [120, 128, 140];
 
+/// The hit volume, where a sheet is asked to show one.
+const HIT: [u8; 3] = [240, 96, 104];
+const HUB: [u8; 3] = [255, 214, 120];
+
 const CELL_W: usize = 108;
 const CELL_H: usize = 148;
 const COLS: usize = 12;
@@ -47,6 +51,30 @@ const TRAIL_H: usize = 240;
 /// a fixed position while the body slides past it, which is the clearest
 /// possible picture of whether the feet are sliding.
 pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose], travel: f32) -> (Canvas, Vec<usize>) {
+    contact_sheet_marked(skeleton, frames, travel, &[])
+}
+
+/// A capsule drawn over a frame, in the character's own space: the hit
+/// volume the simulation has out on that frame (`sim::state::hitbox`), as
+/// the audit reads it. `from` is the hub end.
+#[derive(Clone, Copy, Debug)]
+pub struct Mark {
+    pub from: V3,
+    pub to: V3,
+    pub radius: f32,
+}
+
+/// [`contact_sheet`] with the hit volume drawn over the frames that have one:
+/// `marks[i]` is what to draw on frame `i`. The volume is drawn *under* the
+/// figure, so the arm that is meant to be holding it is readable against it,
+/// and in the overlay panel too, so the arc the hit test sweeps and the arc
+/// the hands sweep can be seen as two arcs -- or as one, which is the point.
+pub fn contact_sheet_marked(
+    skeleton: &Skeleton,
+    frames: &[Pose],
+    travel: f32,
+    marks: &[Vec<Mark>],
+) -> (Canvas, Vec<usize>) {
     let picks = sample_indices(frames.len(), COLS * 2);
     let rows = picks.len().div_ceil(COLS);
 
@@ -77,6 +105,9 @@ pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose], travel: f32) -> (Canv
             );
             let cell = Cell::new(x, y, CELL_W, CELL_H, panel);
             cell.floor(&mut c);
+            for m in marks.get(*frame).map(Vec::as_slice).unwrap_or(&[]) {
+                mark(&mut c, &cell, m, 1.0);
+            }
             draw(&mut c, &cell, skeleton, &frames[*frame], 1.0);
             digits(&mut c, x + 4, y + 4, *frame, LABEL);
         }
@@ -102,6 +133,12 @@ pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose], travel: f32) -> (Canv
         // drawn on top of a moving body is mud rather than an arc.
         if travel == 0.0 || i % 3 == 0 {
             draw(&mut c, &trail, skeleton, pose, 0.10 + 0.16 * t);
+        }
+    }
+    for i in 0..n {
+        trail.shift = travel * i as f32;
+        for m in marks.get(i).map(Vec::as_slice).unwrap_or(&[]) {
+            mark(&mut c, &trail, m, 0.45);
         }
     }
     for i in 0..n * cycles {
@@ -174,6 +211,24 @@ impl Cell {
             c.blend(x as i32, self.floor_y as i32, FLOOR, 0.8);
         }
     }
+}
+
+/// The hit volume on one frame: a band as wide as the capsule, a thin line
+/// down its axis, a ring at the hub and a dot at the far end.
+fn mark(c: &mut Canvas, cell: &Cell, m: &Mark, alpha: f32) {
+    let a = cell.project(m.from);
+    let b = cell.project(m.to);
+    let r = (m.radius * cell.scale).max(1.5);
+    let len = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+    let steps = (len / (r * 0.5)).ceil().max(1.0) as usize;
+    for s in 0..=steps {
+        let t = s as f32 / steps as f32;
+        let p = (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+        c.dot(p, HIT, r, 0.10 * alpha);
+    }
+    c.line(a, b, HIT, 1.0);
+    c.dot(b, HIT, 2.2, 0.9 * alpha);
+    c.dot(a, HUB, 2.6, 0.9 * alpha);
 }
 
 fn draw(c: &mut Canvas, cell: &Cell, skeleton: &Skeleton, pose: &Pose, alpha: f32) {

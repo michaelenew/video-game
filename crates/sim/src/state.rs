@@ -1634,11 +1634,9 @@ impl World {
                         p.facing = mark.facing;
                     }
                     None => {
-                        p.pos = V3::new(
-                            back.neg(),
-                            GROUND_Y,
-                            Fx::from_int(if i == 0 { -2 } else { 2 }),
-                        );
+                        let x = back.neg();
+                        let z = Fx::from_int(if i == 0 { -2 } else { 2 });
+                        p.pos = V3::new(x, here.ground_under(V3::new(x, GROUND_Y, z)), z);
                         p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
                     }
                 }
@@ -8435,7 +8433,7 @@ impl World {
                     effect.owner,
                     effect.class,
                     effect.slot,
-                    floor_under(body.pos),
+                    floor_under(self.arena(), body.pos),
                     dealt,
                 );
             }
@@ -8520,7 +8518,7 @@ impl World {
                 effect.owner,
                 effect.class,
                 effect.slot,
-                floor_under(at),
+                floor_under(self.arena(), at),
                 dealt,
             );
         }
@@ -8634,8 +8632,8 @@ fn stone_under_the_crosshair(
 /// creature's contact points are always over it. Stones are not consulted --
 /// a pool spilled onto a raised structure is an open question in the design,
 /// and until it is answered blood falls to the floor.
-fn floor_under(at: V3) -> V3 {
-    V3::new(at.x, GROUND_Y, at.z)
+fn floor_under(arena: &arena::Arena, at: V3) -> V3 {
+    V3::new(at.x, arena.relief_at(at.x, at.z), at.z)
 }
 
 impl World {
@@ -10689,7 +10687,13 @@ impl World {
                 let dealt = before.min(worth).max(0);
                 if dealt > 0 {
                     self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
-                    self.spill(i as u8, attacker.class, kind, floor_under(body.pos), dealt);
+                    self.spill(
+                        i as u8,
+                        attacker.class,
+                        kind,
+                        floor_under(self.arena(), body.pos),
+                        dealt,
+                    );
                     self.players[i].heal(m.leeched(dealt));
                     dual::landed_a_hit(&mut self.players[i]);
                 }
@@ -10859,7 +10863,7 @@ impl World {
                     i as u8,
                     attacker.class,
                     kind,
-                    floor_under(box_out.centre()),
+                    floor_under(self.arena(), box_out.centre()),
                     dealt,
                 );
             }

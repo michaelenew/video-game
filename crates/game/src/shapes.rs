@@ -236,14 +236,121 @@ pub fn soft_cylinder(size: Vec3, ends: f32, segments: usize) -> Mesh {
 /// rocks.
 pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
     let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
-    superellipsoid(size, (0.55, 0.55), 16, paint, move |p, _| {
+    superellipsoid(size, (0.55, 0.55), 16, paint, move |p, n| {
         // Two octaves of a smooth value noise over the direction, scaled by
         // the rock's own size so a boulder and a pebble are rough alike.
         let q = p / size.max_element().max(1e-3);
-        let n = value_noise(q * 2.3 + Vec3::splat(s)) * 0.65
+        let v = value_noise(q * 2.3 + Vec3::splat(s)) * 0.65
             + value_noise(q * 5.1 + Vec3::splat(s * 1.7)) * 0.35;
-        1.0 - 0.28 * (0.5 + 0.5 * n)
+        // **The top stays where the box says.** A rock is stood on, and feet
+        // stand at the box's top; a top pulled inward would leave them in
+        // the air. The roughness fades out as the face turns upward.
+        let top = n.y.clamp(0.0, 1.0);
+        1.0 - 0.28 * (0.5 + 0.5 * v) * (1.0 - top * top)
     })
+}
+
+/// A column of raised earth: the Elementalist's stone, and the planted
+/// shield's wall. A unit mesh, scaled per frame to the radius and the height
+/// the simulation says (`place_structures`), so the shape is in the mesh and
+/// the size is the simulation's.
+///
+/// A lathe rather than a superellipsoid, because the thing that made the
+/// first one read as a machined drum was its **top**: a flat cap at the full
+/// radius is a perfect circle however lumpy the sides under it are, and from
+/// the camera's height the top is most of what you see. So the footprint is
+/// what varies -- a rounded square in plan, pulled in by lumps at two scales
+/// and narrowing a little toward the top -- and the cap is that same
+/// irregular rim filled in, **flat at the full height**, since feet stand
+/// on it. Every pull is inward, so the stone stays inside the box the hit
+/// test uses. Few facets round, since a stone has facets.
+pub fn rock_column(seed: u32) -> Mesh {
+    let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
+    let (rings, spokes) = (8usize, 18usize);
+    // The footprint at angle `a` and height `t` (0 at the foot, 1 at the top),
+    // on the unit box: a superellipse pulled in by noise and a taper.
+    let foot = |a: f32, t: f32| -> Vec3 {
+        let (sa, ca) = a.sin_cos();
+        let e = 0.6;
+        let sx = ca.signum() * ca.abs().powf(e);
+        let sz = sa.signum() * sa.abs().powf(e);
+        let q = Vec3::new(sx * 0.5, t - 0.5, sz * 0.5);
+        let v = value_noise(q * 6.5 + Vec3::splat(s)) * 0.65
+            + value_noise(q * 13.0 + Vec3::splat(s * 2.3)) * 0.35;
+        let k = 1.0 - (0.04 + 0.18 * (0.5 + 0.5 * v)) - 0.06 * t;
+        Vec3::new(sx * 0.5 * k, t - 0.5, sz * 0.5 * k)
+    };
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    // The side: a normal from the surface's own two tangents.
+    for j in 0..=rings {
+        let t = j as f32 / rings as f32;
+        for i in 0..=spokes {
+            let a = std::f32::consts::TAU * i as f32 / spokes as f32;
+            let p = foot(a, t);
+            let da = foot(a + 0.02, t) - foot(a - 0.02, t);
+            let dt = foot(a, (t + 0.02).min(1.0)) - foot(a, (t - 0.02).max(0.0));
+            let mut n = da.cross(dt).normalize_or(Vec3::X);
+            if n.dot(Vec3::new(p.x, 0.0, p.z)) < 0.0 {
+                n = -n;
+            }
+            positions.push(p.to_array());
+            normals.push(n.to_array());
+        }
+    }
+    let row = (spokes + 1) as u32;
+    let mut tri = |a: u32, b: u32, c: u32, out: Vec3, ps: &[[f32; 3]]| {
+        // Wound so the face points `out`: a stone is looked at from outside.
+        let (pa, pb, pc) = (
+            Vec3::from(ps[a as usize]),
+            Vec3::from(ps[b as usize]),
+            Vec3::from(ps[c as usize]),
+        );
+        if (pb - pa).cross(pc - pa).dot(out) >= 0.0 {
+            indices.extend_from_slice(&[a, b, c]);
+        } else {
+            indices.extend_from_slice(&[a, c, b]);
+        }
+    };
+    for j in 0..rings as u32 {
+        for i in 0..spokes as u32 {
+            let (a, b, c, d) = (
+                j * row + i,
+                j * row + i + 1,
+                (j + 1) * row + i,
+                (j + 1) * row + i + 1,
+            );
+            let p = Vec3::from(positions[a as usize]);
+            let out = Vec3::new(p.x, 0.0, p.z);
+            tri(a, b, c, out, &positions);
+            tri(b, d, c, out, &positions);
+        }
+    }
+    // The caps: the rim at each end filled to its middle, flat.
+    for (t, up) in [(1.0f32, Vec3::Y), (0.0, Vec3::NEG_Y)] {
+        let centre = positions.len() as u32;
+        positions.push([0.0, t - 0.5, 0.0]);
+        normals.push(up.to_array());
+        let first = positions.len() as u32;
+        for i in 0..=spokes {
+            let a = std::f32::consts::TAU * i as f32 / spokes as f32;
+            positions.push(foot(a, t).to_array());
+            normals.push(up.to_array());
+        }
+        for i in 0..spokes as u32 {
+            tri(centre, first + i, first + i + 1, up, &positions);
+        }
+    }
+    let count = positions.len();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32, 1.0, 1.0, 1.0]; count])
+    .with_inserted_indices(Indices::U32(indices))
 }
 
 /// The superellipsoid itself, with a radial scale per vertex. `rounding` is
@@ -503,4 +610,134 @@ pub fn chamfered_box(size: Vec3, bevel: f32, paint: Option<(Vec3, [f32; 3], &Bru
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
     .with_inserted_indices(Indices::U32(indices))
+}
+
+/// A floor with relief: a grid of `cell` metres over `size`, each vertex at
+/// the height `h(x, z)` gives for its place in the arena (the mesh is centred
+/// on `centre`), with normals from the slopes either side. Where the floor is
+/// flat the plane is cheaper; this is for the arenas that have hills
+/// (`sim::arena::relief`), and it carries no colour until it is painted.
+pub fn ground_grid(size: Vec2, centre: Vec3, cell: f32, h: &dyn Fn(f32, f32) -> f32) -> Mesh {
+    let nx = ((size.x / cell).ceil() as usize).clamp(1, 400);
+    let nz = ((size.y / cell).ceil() as usize).clamp(1, 400);
+    let (dx, dz) = (size.x / nx as f32, size.y / nz as f32);
+    let at = |i: usize, j: usize| -> Vec3 {
+        let x = -size.x * 0.5 + dx * i as f32;
+        let z = -size.y * 0.5 + dz * j as f32;
+        Vec3::new(x, h(centre.x + x, centre.z + z), z)
+    };
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity((nx + 1) * (nz + 1));
+    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(positions.capacity());
+    for j in 0..=nz {
+        for i in 0..=nx {
+            let p = at(i, j);
+            // Central differences, one cell either way, clamped at the rim.
+            let (xa, xb) = (at(i.saturating_sub(1), j), at((i + 1).min(nx), j));
+            let (za, zb) = (at(i, j.saturating_sub(1)), at(i, (j + 1).min(nz)));
+            let n = (xb - xa).cross(zb - za).normalize_or(Vec3::Y);
+            let n = if n.y < 0.0 { -n } else { n };
+            positions.push(p.to_array());
+            normals.push(n.to_array());
+        }
+    }
+    let row = (nx + 1) as u32;
+    let mut indices: Vec<u32> = Vec::with_capacity(nx * nz * 6);
+    for j in 0..nz as u32 {
+        for i in 0..nx as u32 {
+            let a = j * row + i;
+            let b = a + row;
+            // Facing up: +x by +z spans the floor, and up is the right-hand
+            // side of z then x.
+            indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+        }
+    }
+    let count = positions.len();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32, 1.0, 1.0, 1.0]; count])
+    .with_inserted_indices(Indices::U32(indices))
+}
+
+/// A disc of floor at the simulation's own heights, for a region of a floor
+/// that has relief: rings of `cell` from the middle out, each vertex at
+/// `h(x, z)` in arena coordinates, so a trodden patch or a pool lies *on* a
+/// swell rather than floating flat through it. Normals from the height
+/// function, like [`ground_grid`]'s. `centre.y` is the lift above the floor.
+pub fn ground_disc(radius: f32, centre: Vec3, cell: f32, h: &dyn Fn(f32, f32) -> f32) -> Mesh {
+    let rings = ((radius / cell).ceil() as usize).clamp(1, 64);
+    let spokes = ((2.0 * std::f32::consts::PI * radius / cell).ceil() as usize).clamp(8, 128);
+    let at = |x: f32, z: f32| Vec3::new(x, h(centre.x + x, centre.z + z) + centre.y, z);
+    let normal = |x: f32, z: f32| {
+        let e = cell * 0.5;
+        let n = (at(x + e, z) - at(x - e, z))
+            .cross(at(x, z + e) - at(x, z - e))
+            .normalize_or(Vec3::Y);
+        if n.y < 0.0 { -n } else { n }
+    };
+    let mut positions: Vec<[f32; 3]> = vec![at(0.0, 0.0).to_array()];
+    let mut normals: Vec<[f32; 3]> = vec![normal(0.0, 0.0).to_array()];
+    for r in 1..=rings {
+        let rr = radius * r as f32 / rings as f32;
+        for s in 0..spokes {
+            let a = std::f32::consts::TAU * s as f32 / spokes as f32;
+            let (x, z) = (rr * a.cos(), rr * a.sin());
+            positions.push(at(x, z).to_array());
+            normals.push(normal(x, z).to_array());
+        }
+    }
+    let idx = |r: usize, s: usize| -> u32 {
+        if r == 0 {
+            0
+        } else {
+            (1 + (r - 1) * spokes + (s % spokes)) as u32
+        }
+    };
+    let mut indices: Vec<u32> = Vec::with_capacity(rings * spokes * 6);
+    for s in 0..spokes {
+        // Facing up: with +x by +z spanning the floor, up is z then x.
+        indices.extend_from_slice(&[idx(0, 0), idx(1, s + 1), idx(1, s)]);
+    }
+    for r in 1..rings {
+        for s in 0..spokes {
+            let (a, b, c, d) = (idx(r, s), idx(r, s + 1), idx(r + 1, s), idx(r + 1, s + 1));
+            indices.extend_from_slice(&[a, b, c, b, d, c]);
+        }
+    }
+    let count = positions.len();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32, 1.0, 1.0, 1.0]; count])
+    .with_inserted_indices(Indices::U32(indices))
+}
+
+/// Scale every vertex colour by a factor of its height, `shade(y)`: how the
+/// floor's relief is lit (`look::palette::relief_shade`). The rule is the
+/// look's; this only applies it.
+pub fn shade_by_height(mesh: &mut Mesh, shade: &dyn Fn(f32) -> f32) {
+    let Some(positions) = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .and_then(|a| a.as_float3())
+    else {
+        return;
+    };
+    let heights: Vec<f32> = positions.iter().map(|p| p[1]).collect();
+    let Some(bevy::render::mesh::VertexAttributeValues::Float32x4(colours)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
+    else {
+        return;
+    };
+    for (c, y) in colours.iter_mut().zip(&heights) {
+        let k = shade(*y);
+        c[0] *= k;
+        c[1] *= k;
+        c[2] *= k;
+    }
 }

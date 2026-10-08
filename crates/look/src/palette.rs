@@ -383,6 +383,25 @@ pub const EVERY: [Material; 10] = [
 pub fn of(id: ArenaId) -> Palette {
     Palette::under(&crate::skies::of(id))
 }
+/// How much lighter or darker the floor is for standing `height` metres above
+/// or below its plain: the relief's shading, as a factor on the floor's colour.
+///
+/// The floor's rises and dips (`sim::arena::relief`) are a few tens of
+/// centimetres over several metres, which tilts the ground a handful of
+/// degrees; under a sun sixty degrees up, that is a change in lighting of a
+/// few percent, and a hill that is only a few percent is a hill nobody sees.
+/// What makes a swell read on real ground is not the sun but the sky: a
+/// crown sees the whole dome and a hollow sees less of it, and dust, water
+/// and growth all collect downhill, so a dip is darker than the plain for
+/// three reasons at once. This is that, as one number per metre: a sixth
+/// lighter at half a metre up and a sixth darker at half a metre down,
+/// clamped so a tall rise never bleaches.
+///
+/// Multiplied into the vertex colour, so it goes through `lit` with
+/// everything else and is judged on the sheet the same way.
+pub fn relief_shade(height: f32) -> f32 {
+    (1.0 + 0.33 * height).clamp(0.72, 1.28)
+}
 
 #[cfg(test)]
 mod tests {

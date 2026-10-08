@@ -124,6 +124,16 @@ fn baked_motion_is_continuous() {
     // tell those apart either forbids real animation or lets real pops through.
     let skeleton = reference();
     for b in authored() {
+        // The frames whose arms are on the hit line (`anim::track`), and
+        // the few either side they ease on and off over.
+        let on_line: Vec<bool> = {
+            let lines = anim::track::lines(b.clip);
+            (0..b.frames.len())
+                .map(|i| {
+                    (i.saturating_sub(5)..=i + 5).any(|j| lines.get(j).copied().flatten().is_some())
+                })
+                .collect()
+        };
         for (i, pair) in b.frames.windows(2).enumerate() {
             // The opening frame of a one-shot is deliberately explosive -- a
             // dodge leaves at seventeen metres a second and a takeoff at
@@ -160,6 +170,11 @@ fn baked_motion_is_continuous() {
                     (_, Group::Root | Group::Spine | Group::Chest) => 0.15,
                     (_, Group::Head) => 0.30,
                     (0, _) => 0.24,
+                    // An elbow under a hand that is on the hit line goes where
+                    // the line sends it, at the move table's speed, and when
+                    // the arm folds through a cut it travels further than the
+                    // hand does: it gets the hand's ceiling on those frames.
+                    (1, Group::Arms) if on_line[i] && on_line[i + 1] => 0.36,
                     // A knee or an elbow whipping through the first frames of a
                     // dive is the fastest thing on the body relative to it.
                     (1, _) => 0.30,

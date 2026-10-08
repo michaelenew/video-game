@@ -7536,3 +7536,71 @@ Replays: a browser-saved tape reproduces bit for bit through the harness
 **Verdict** kept, **unheard** -- judged by spectrogram and by test, not by
 ear. sound.md §7 is the listening list. Watch: whether a flesh thud reads as a
 thud or an arcade, and whether the parry chime stands out in a fight.
+
+### 2026-10-08 — stones that are not boxes, and floors that are not flat
+
+**Changed** ([forms.md](forms.md) §"The third pass") The Elementalist's
+stones are drawn as rock columns, pulled in by noise and flat on top, inside
+the same box the hit test uses. Four arenas -- the low meadow, the Commons,
+the Pan, the Ashwood -- have **relief**: a table of hills and hollows per
+arena that the simulation's floor is the sum of, a few tens of centimetres
+over several metres. Every ground query starts at it; feet follow it
+downhill by one new knob (`StepDown`, 8 cm, the one frame of the steepest
+slope) rather than falling off it in a stutter; it is drawn at the
+simulation's own heights and shaded by height so a hill reads.
+
+**Why** Asked for: forms less boxy, terrain less regular. Relief is the one
+piece of the forms work that is not a drawing -- it moves where feet stand,
+where the aiming ray meets the floor, where a creature's fence puts it --
+which is why it is a table in `sim` with a test that nothing the fight lays on
+the floor sits on a slope.
+
+**Measured** `relief_is_gentle_everywhere` (no more than a tenth of a metre
+per half metre, nowhere over 0.7 m) and
+`relief_keeps_clear_of_what_stands_on_the_floor` (water level, sites and low
+solids on the plain, no hollow under any solid, the meadow's boulders flat).
+The first draft of the step-down glue ran everywhere at 36 cm and changed the
+pair's fight (`the_two_never_land_within_the_gap_except_the_twin_pounce`
+failed); gated to arenas with relief, onto the open floor only, every flat
+arena is bit for bit as before. Two places in the Veilstalker's fight and one
+in the pair's compared the floor against zero -- a creature on a hill would
+have read as perched on a trunk -- and now compare against the relief.
+
+**Verdict** kept, **unplayed**: judged from screenshots. Watch: whether a
+hill under a fight reads as a hill or as a lighting error, and whether
+anyone notices walking downhill at all, which is the point.
+
+### 2026-10-08 — the hands are on the hit line
+
+**Changed** ([animation.md](animation.md) §"The hands are on the hit line, by
+construction") Every swing and thrust in the game -- the Champion's eighteen
+moves, the Dual mage's and the Blood mage's sweeps -- has its hands put on the
+simulation's own hit volume at bake time (`anim::track`), eased on and off
+over five frames either side, each frame solved toward the elbow of the frame
+before. The recipes still author the body. `cargo run -p anim --bin audit`
+draws the volume over the clip and prints how far the hands are off it.
+
+**Why** Asked for: every animation to match its hit boxes and look good; the
+sword swing named as rough. The audit put a number on rough: on the sword's
+live frames the nearer hand was 24 cm off the volume's axis and the hands'
+line was 44° from it, so the drawn blade was being dragged out of the fists
+to sit on the hit test.
+
+**Measured** Every Champion move audits at 0 cm off the axis except the three
+flat sweeps and the jab, which the arm cannot quite reach (air spear 11 cm,
+rush sweep 9, rush slash 7, spear 4). The motion ceiling held: a grip on a fast
+arc is drawn in toward the hub so a hand never travels more than 24 cm a
+frame, an elbow under a hand on the line gets the hand's ceiling on those
+frames, and the drawn blade may stretch to 2.1 m to reach the volume's end
+from a choked grip. Three ways of easing the hands onto the line were tried
+and two thrown out: blending arm *angles* swung a forearm half a metre
+between frames (a solved arm reaches the same place with its channels a turn
+apart), and solving each frame afresh flipped the elbow over mid-line; what
+stayed is a blend of hand *positions* with the solver told which elbow it had.
+
+**Verdict** kept, **unplayed**: judged on the audit sheets and in two
+screenshots. The hands are right; the bodies under them are the next thing,
+and the fast arcs (a hundred degrees in three frames) are a question for the
+move table as much as for the clips. Watch: whether a choked grip on the
+upcut reads as a sword or a wand.
+

@@ -708,6 +708,10 @@ pub const SECTIONS: &[Section] = &[
                 "Draw a clip as a contact sheet PNG, into target/anim-preview. Add --feet for a per-frame table of what each foot is doing, or --all for everything.",
             ),
             e(
+                "cargo run -p anim --bin audit",
+                "Does the animation match the hit volume? Throws every attack of a class (--class <name>; the Champion by default, or name a clip), draws the volume the hit test has out on each frame over the clip's contact sheet in target/anim-audit, and prints how far each hand is off the volume's axis, how far the line through the hands is turned from it, and the worst per move.",
+            ),
+            e(
                 "cargo run -p anim --bin export -- docs/preview/anim.json",
                 "Write the skeletons and every baked frame out as JSON, for the browser bench in docs/preview.",
             ),

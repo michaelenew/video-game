@@ -260,6 +260,32 @@ pub fn setup(
 /// floor's own regions, not enough to read as a step.
 const SKIN: f32 = 0.03;
 
+/// Where the floor is under a point of the arena, and which way it faces:
+/// the relief's height there and the turn that lays a flat thing on its
+/// slope (`sim::arena::relief`). Everything the game draws flat on the floor
+/// -- a hazard's skin, a species' ring, a hunt's sign -- goes through this,
+/// because a flat shape at zero floats in every hollow and sinks into every
+/// rise, and the warnings are the one thing on the floor a player has to be
+/// able to read. The slope is the floor's own gradient a quarter of a metre
+/// either way; a sign a few metres long lies on it, and the hills are gentle
+/// enough (`crates/sim/tests/relief.rs`) that its ends stay within a hand of
+/// the ground.
+pub fn floor_at(arena: &sim::arena::Arena, x: f32, z: f32) -> (f32, Quat) {
+    if sim::arena::relief::of(arena.id).is_empty() {
+        return (0.0, Quat::IDENTITY);
+    }
+    let h = |x: f32, z: f32| fx(arena.relief_at(to_fx(x), to_fx(z)));
+    let here = h(x, z);
+    let dx = (h(x + 0.25, z) - h(x - 0.25, z)) / 0.5;
+    let dz = (h(x, z + 0.25) - h(x, z - 0.25)) / 0.5;
+    let normal = Vec3::new(-dx, 1.0, -dz).normalize_or(Vec3::Y);
+    (here, Quat::from_rotation_arc(Vec3::Y, normal))
+}
+
+fn to_fx(v: f32) -> sim::Fx {
+    sim::Fx::from_raw((v * 65536.0) as i32)
+}
+
 /// Put every piece where the snapshot says.
 pub fn place(
     sim: Res<crate::Sim>,
@@ -284,6 +310,7 @@ pub fn place(
     let (raised, raised_n) = ground.floor.solids::<MAX_RAISED>();
     let standing: Vec<objective::Standing> = objective::standing(&w.lore, w.arena()).collect();
     let marks = w.marks();
+    let arena = w.arena();
     for (piece, mut transform, mut visible, mut mesh, mut material) in pieces.iter_mut() {
         let shown = match *piece {
             Piece::Hazard(i) => hazards.get(i).map(|h| {
@@ -301,12 +328,17 @@ pub fn place(
                 } else {
                     0.01 + 0.002 * i as f32
                 };
+                // On the floor under its middle, a skin laid on the slope
+                // there; a column stands upright from it.
+                let (floor, tilt) = floor_at(arena, (a.x + b.x) * 0.5, (a.z + b.z) * 0.5);
+                let lay = if tall > SKIN { Quat::IDENTITY } else { tilt };
                 match h.decl.shape {
                     Shape::Disc => (
                         looks.disc.clone(),
                         Transform {
-                            translation: a + Vec3::Y * (lift + tall * 0.5),
-                            rotation: Quat::IDENTITY,
+                            translation: Vec3::new(a.x, a.y.max(floor), a.z)
+                                + Vec3::Y * (lift + tall * 0.5),
+                            rotation: lay,
                             scale: Vec3::new(r, tall, r),
                         },
                         looks.hazard(h),
@@ -315,11 +347,13 @@ pub fn place(
                         let along = b - a;
                         let len = along.length().max(0.01);
                         let yaw = (-along.z).atan2(along.x);
+                        let mid = (a + b) * 0.5;
                         (
                             looks.cube.clone(),
                             Transform {
-                                translation: (a + b) * 0.5 + Vec3::Y * (lift + tall * 0.5),
-                                rotation: Quat::from_rotation_y(yaw),
+                                translation: Vec3::new(mid.x, mid.y.max(floor), mid.z)
+                                    + Vec3::Y * (lift + tall * 0.5),
+                                rotation: lay * Quat::from_rotation_y(yaw),
                                 scale: Vec3::new(len, tall, r * 2.0),
                             },
                             looks.hazard(h),
@@ -373,12 +407,12 @@ pub fn place(
                     looks.bar.clone(),
                 )
             }),
-            Piece::Mark(i) => marks.items[i].map(|m| mark(&looks, &m, false)),
+            Piece::Mark(i) => marks.items[i].map(|m| mark(&looks, arena, &m, false)),
             Piece::MarkFill(i) => marks.items[i]
                 .filter(|m| {
                     m.progress.raw() > 0 && matches!(m.look, MarkLook::Warning | MarkLook::Embers)
                 })
-                .map(|m| mark(&looks, &m, true)),
+                .map(|m| mark(&looks, arena, &m, true)),
         };
         match shown {
             Some((m, t, paint)) => {
@@ -416,10 +450,15 @@ const RING_LIFT: f32 = 0.07;
 /// or a column standing in the arena (its fill rising with progress).
 fn mark(
     looks: &Looks,
+    arena: &sim::arena::Arena,
     m: &Mark,
     fill: bool,
 ) -> (Handle<Mesh>, Transform, Handle<StandardMaterial>) {
     let at = v3(m.at);
+    // On the floor, wherever the floor is: a mark set at zero by a species
+    // that never heard of hills still lands on them.
+    let (floor, tilt) = floor_at(arena, at.x, at.z);
+    let at = Vec3::new(at.x, at.y.max(floor), at.z);
     let r = fx(m.radius);
     let progress = fx(m.progress).clamp(0.0, 1.0);
     let height = fx(m.height);
@@ -440,7 +479,7 @@ fn mark(
             looks.disc.clone(),
             Transform {
                 translation: at + Vec3::Y * lift,
-                rotation: Quat::IDENTITY,
+                rotation: tilt,
                 scale: Vec3::new(radius, 0.01, radius),
             },
             paint,

@@ -325,11 +325,25 @@ pub fn dress(
             // gradient. The accent runs in from the arena's own perimeter,
             // which is the edge of the world as far as anyone standing on it
             // is concerned.
-            let mut floor = Plane3d::default()
-                .mesh()
-                .size(w, d)
-                .subdivisions(crate::shapes::cuts_across(w.max(d), brush.edge.reach))
-                .build();
+            // Flat, a subdivided plane; with relief (`sim::arena::relief`),
+            // a grid at the simulation's own heights, half a metre a cell,
+            // so what is drawn is the floor feet are held to.
+            let hilly = !sim::arena::relief::of(arena.id).is_empty();
+            let mut floor = if hilly {
+                let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+                crate::shapes::ground_grid(
+                    Vec2::new(w, d),
+                    Vec3::new((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                    0.5,
+                    &|x, z| fx(arena.relief_at(to_fx(x), to_fx(z))),
+                )
+            } else {
+                Plane3d::default()
+                    .mesh()
+                    .size(w, d)
+                    .subdivisions(crate::shapes::cuts_across(w.max(d), brush.edge.reach))
+                    .build()
+            };
             crate::shapes::paint(
                 &mut floor,
                 Vec3::new(w * 0.5, 0.0, d * 0.5),
@@ -339,6 +353,8 @@ pub fn dress(
             );
             // Ground, not paint: the colour wanders a little across it.
             crate::shapes::mottle(&mut floor, 0.07, 2.5, arena.id.0 as u32);
+            // A crown lighter and a hollow darker, by the look's rule.
+            crate::shapes::shade_by_height(&mut floor, &look::palette::relief_shade);
             commands.spawn((
                 Mesh3d(meshes.add(floor)),
                 MeshMaterial3d(white.clone()),
@@ -348,29 +364,64 @@ pub fn dress(
             ));
         }
     }
+    let hilly = !sim::arena::relief::of(arena.id).is_empty();
     for (i, region) in arena.regions.iter().enumerate() {
-        let lift = 0.004 * (i + 1) as f32;
         let look = paint(palette.of(region.material));
+        // A hair above the floor, each region a hair above the last.
+        let lift = 0.004 * (i + 1) as f32;
+        // On a floor with relief the patch follows it, vertex by vertex, at
+        // the simulation's own heights; on a flat one it is a flat shape.
+        let under = |x: f32, z: f32| {
+            let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+            fx(arena.relief_at(to_fx(x), to_fx(z)))
+        };
         match region.area {
             Area::Rect { lo, hi } => {
                 let (x0, z0, x1, z1) = (fx(lo.0), fx(lo.1), fx(hi.0), fx(hi.1));
+                let centre = Vec3::new((x0 + x1) * 0.5, lift, (z0 + z1) * 0.5);
+                let mesh = if hilly {
+                    crate::shapes::ground_grid(
+                        Vec2::new(x1 - x0, z1 - z0),
+                        Vec3::new(centre.x, 0.0, centre.z),
+                        0.5,
+                        &under,
+                    )
+                } else {
+                    Plane3d::default().mesh().size(x1 - x0, z1 - z0).build()
+                };
                 commands.spawn((
-                    Mesh3d(meshes.add(Plane3d::default().mesh().size(x1 - x0, z1 - z0))),
+                    Mesh3d(meshes.add(mesh)),
                     MeshMaterial3d(look),
-                    Transform::from_xyz((x0 + x1) * 0.5, lift, (z0 + z1) * 0.5),
+                    Transform::from_translation(centre),
                     bevy::pbr::NotShadowCaster,
                     Scenery,
                 ));
             }
             Area::Disc { at, radius } => {
-                commands.spawn((
-                    Mesh3d(meshes.add(Circle::new(fx(radius)))),
-                    MeshMaterial3d(look),
-                    Transform::from_xyz(fx(at.0), lift, fx(at.1))
-                        .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-                    bevy::pbr::NotShadowCaster,
-                    Scenery,
-                ));
+                let centre = Vec3::new(fx(at.0), lift, fx(at.1));
+                if hilly {
+                    commands.spawn((
+                        Mesh3d(meshes.add(crate::shapes::ground_disc(
+                            fx(radius),
+                            Vec3::new(centre.x, 0.0, centre.z),
+                            0.5,
+                            &under,
+                        ))),
+                        MeshMaterial3d(look),
+                        Transform::from_translation(centre),
+                        bevy::pbr::NotShadowCaster,
+                        Scenery,
+                    ));
+                } else {
+                    commands.spawn((
+                        Mesh3d(meshes.add(Circle::new(fx(radius)))),
+                        MeshMaterial3d(look),
+                        Transform::from_translation(centre)
+                            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+                        bevy::pbr::NotShadowCaster,
+                        Scenery,
+                    ));
+                }
             }
         }
     }

@@ -643,6 +643,10 @@ scalars! {
     // How many frames into a grounded swing's startup a jump still turns it
     // into the rising attack: the click-first half of the same forgiveness.
     TakeoffLate,      "Champion",  "Jump after a click still rises",        Frames, 0,        12;
+    // **How far a floor may fall away under grounded feet** before it is a
+    // drop: walking down a hill (`arena::relief`) or off a low step keeps the
+    // feet on the ground below up to this; beyond it gravity takes over.
+    StepDown,         "Movement",  "Terrain, step down (m)",                Fixed,  0,        fx(2,25);
 }
 
 // ---------------------------------------------------------------------------

@@ -65,11 +65,66 @@ they were on the boxes, so an arena's palette is unchanged.
    half buried so nothing has an underside to float on. Not on a course,
    which has no floor.
 
+## The third pass (built, 2026-10-08, on "stones not cuboids, terrain less regular")
+
+1. **The Elementalist's stones are rock columns** (`shapes::rock_column`): a
+   lathe whose footprint is a rounded square pulled in by lumps at two
+   scales and narrowing a little toward the top, seeded per slot so no two
+   stones match, with that same irregular rim filled in **flat at the full
+   height** because feet stand on it. The first version was a superellipsoid
+   with lumpy sides and read as a machined drum, because its cap was a
+   perfect circle at the full radius and from the camera's height the cap is
+   most of what you see. Every pull is inward: a stone is still exactly as
+   wide as the hit test says.
+2. **Four arenas have relief** (`sim::arena::relief`): the floor's height
+   is a short table of hills and hollows per arena, each `h · (1 - d²/r²)²`
+   inside its radius and nothing outside, summed. Flat at the crown and flat
+   at the rim, so it joins the plain without an edge; a few tens of
+   centimetres over several metres, so nothing is steeper than a tenth of a
+   metre per half metre of floor (`crates/sim/tests/relief.rs`). The low
+   meadow, the Commons, the Pan and the Ashwood have it; the proving ground
+   and every course stay flat, and so does every arena nobody has written a
+   table for.
+
+   **It is the simulation's floor, not a drawing.** The floor term of every
+   ground query starts at the relief instead of zero: standing, landing,
+   the step-off test, the aiming ray's floor hit (a heightfield march in
+   `math::ray_hits_heightfield`), creatures' fences, spawns, where blood
+   falls. Feet follow a floor that falls away gently: walking downhill,
+   the resolver puts the feet on the floor below when it is within one
+   frame of the steepest slope (`StepDown`, 8 cm) rather than leaving them
+   for gravity, which otherwise made every descent a stutter of tiny
+   falls. That glue runs only where there is relief, and only onto the open
+   floor: the flat arenas play bit for bit as they did.
+
+   **What lies on the floor keeps to the plain.** The tables are
+   hand-placed so that water lies level, a site (the braziers, the cart's
+   road) and a low solid (a step, a trunk, an island) stand on flat
+   ground, the meadow's boulders too; a rise may run *into* a tall solid's
+   base, but the floor never falls away under one. The same test holds all
+   of that, so a bump moved later cannot quietly open a gap under a wall.
+3. **Everything drawn flat on the floor is laid on the floor it has**
+   (`ground::floor_at`): a hazard's skin, a species' ring, a hunt's sign
+   strip, all at the relief's height under their middle and tilted to its
+   slope there. The signs ignore depth so they can be read through a leg,
+   which on a hill meant a sign at zero floated in every hollow and showed
+   through every rise; a sign a few metres long on a slope this gentle stays
+   within a hand of the ground at its ends.
+4. **The relief is drawn at the simulation's heights** (`shapes::ground_grid`,
+   half a metre a cell, and `ground_disc` for the trodden patches and pools
+   on it), with normals from the height function. A hill of a few degrees
+   under a high sun is a few percent of shading, which is a hill nobody
+   sees, so the floor is also **shaded by height** by the look's own rule
+   (`look::palette::relief_shade`: a tenth lighter at half a metre up, a
+   tenth darker at half a metre down) -- the sky a crown sees and the dust
+   a hollow collects, as one number per metre.
+
 ## What to decide
 
 1. Is the amount right? Each is one number: the rock's roughness (0.28 of
-   its size), the chamfer (6 cm), the mottle (7 %), the scatter's spacing
-   (40 m² a piece).
+   its size), the stones' (0.1), the chamfer (6 cm), the mottle (7 %), the
+   scatter's spacing (40 m² a piece), the relief's shading (a fifth per
+   metre) and the height of the tallest hill (0.6 m).
 2. The scattered dressing is procedural and the same every time for an
    arena; a creature's document may want its own (the Sandmaw's Pan has
    islands and bones already). The hand-placed props win on the eye, the

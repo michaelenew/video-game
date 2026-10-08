@@ -2432,7 +2432,8 @@ impl Monster {
 
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
     /// that could strafe would make its turn limit decorative.
-    fn walk(&mut self, bounds: &Bounds, prowl: Option<V3>) {
+    fn walk(&mut self, arena: &Terrain, prowl: Option<V3>) {
+        let bounds = &arena.arena.bounds;
         let want = match self.doing {
             _ if self.rooted > 0 => Fx::ZERO,
             // Noticing you: it stands its ground and turns to face you.
@@ -2563,7 +2564,10 @@ impl Monster {
             .z
             .clamp(bounds.lo_z.add(margin), bounds.hi_z.sub(margin));
         if !self.sp().fight.keeps_height {
-            self.pos.y = Fx::ZERO;
+            // On the floor, wherever the floor is: a hill's crown on a hill
+            // (`arena::relief`). Not on a solid -- the creature does not
+            // collide with those (review.md `MACH-3`).
+            self.pos.y = arena.relief_at(self.pos.x, self.pos.z);
         }
     }
 
@@ -2713,7 +2717,7 @@ impl Monster {
             _ => None,
         };
         self.steer(prowl);
-        self.walk(&arena.bounds, prowl);
+        self.walk(arena, prowl);
         self.fence(arena);
     }
 

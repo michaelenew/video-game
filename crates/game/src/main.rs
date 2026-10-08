@@ -1918,10 +1918,14 @@ fn setup(
     // Structures get their own pool, because they are not effects: they have no
     // clock and they belong to the Elementalist's mechanic, which is the only
     // place that knows about them.
+    // Each a column of earth with its own roughness, so three stones up at
+    // once are three stones (`shapes::rock_column`; `docs/design/forms.md`).
     for owner in 0..MAX_PLAYERS {
         for index in 0..sim::class::MAX_STRUCTURES {
             commands.spawn((
-                Mesh3d(unit.clone()),
+                Mesh3d(meshes.add(shapes::rock_column(
+                    (owner * sim::class::MAX_STRUCTURES + index) as u32 + 1,
+                ))),
                 MeshMaterial3d(look.stone.clone()),
                 Transform::default(),
                 Visibility::Hidden,

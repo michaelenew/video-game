@@ -220,6 +220,11 @@ pub fn crouch_height_scale() -> Fx {
 pub fn body_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyRadius))
 }
+/// How far the floor may fall away under grounded feet before it is a drop
+/// (`arena::relief`, and any step that low).
+pub fn step_down() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepDown)).max(Fx::ZERO)
+}
 pub fn body_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyHeight))
 }

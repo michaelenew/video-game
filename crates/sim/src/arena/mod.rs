@@ -48,6 +48,8 @@ use crate::tuning as t;
 // One line per arena, each followed by a blank line. See the module docs for
 // why every planned creature already has one.
 
+pub mod relief;
+
 pub mod proving_ground;
 
 pub mod range;
@@ -485,6 +487,14 @@ impl Arena {
         &self.solids[..self.solids.len().min(MAX_SOLIDS)]
     }
 
+    /// **The floor's height here**, before anything standing on it: zero on a
+    /// flat floor, a hill's on a hill ([`relief`]). Every floor the
+    /// simulation finds -- collision, the aiming ray, a creature's fence --
+    /// starts from this.
+    pub fn relief_at(&self, x: Fx, z: Fx) -> Fx {
+        relief::height_at(self.id, x, z)
+    }
+
     /// A name for flags and URLs: lower case, underscores.
     pub fn slug(&self) -> String {
         self.name.to_lowercase().replace([' ', '-'], "_")
@@ -514,7 +524,15 @@ impl Arena {
         radius: Fx,
         height: Fx,
     ) -> Resolved {
-        resolve_among(&[self.solids()], pos, vel, was_grounded, radius, height)
+        resolve_among(
+            self,
+            &[self.solids()],
+            pos,
+            vel,
+            was_grounded,
+            radius,
+            height,
+        )
     }
 
     /// Height of the highest surface under a point, for spawning, for planting
@@ -524,7 +542,7 @@ impl Arena {
     /// ground beneath it. Every solid that stands on the floor counts however
     /// high the point is, which is what lets a spawn ask from anywhere.
     pub fn ground_under(&self, pos: V3) -> Fx {
-        ground_among(&[self.solids()], pos)
+        ground_among(self, &[self.solids()], pos)
     }
 
     /// What the surface under a point is made of: the top of the solid it is
@@ -584,6 +602,7 @@ fn each<'a>(lists: &'a [&'a [Solid]]) -> impl Iterator<Item = &'a Solid> + 'a {
 /// The resolve, against any run of solid lists: the arena's own, then the
 /// solids raised in this fight ([`Terrain`]), in that order.
 fn resolve_among(
+    arena: &Arena,
     lists: &[&[Solid]],
     mut pos: V3,
     mut vel: V3,
@@ -595,9 +614,11 @@ fn resolve_among(
         let mut grounded = false;
         let mut wall = false;
 
-        // Ground plane first.
-        if pos.y.raw() <= 0 {
-            pos.y = Fx::ZERO;
+        // The floor first: its relief under this point ([`relief`]), zero on
+        // a flat floor.
+        let floor = arena.relief_at(pos.x, pos.z);
+        if pos.y.raw() <= floor.raw() {
+            pos.y = floor;
             if vel.y.raw() < 0 {
                 vel.y = Fx::ZERO;
             }
@@ -671,8 +692,32 @@ fn resolve_among(
 
         // Standing exactly on a surface reads as grounded even when the
         // resolver did not have to move anything this tick.
-        if !grounded && was_grounded && vel.y.raw() <= 0 && supported_among(lists, pos, radius) {
-            grounded = true;
+        if !grounded && was_grounded && vel.y.raw() <= 0 {
+            if supported_among(arena, lists, pos, radius) {
+                grounded = true;
+            } else {
+                // **Feet follow a floor that falls away gently.** Walking
+                // down a hill puts the feet on the floor below rather than
+                // leaving them in the air for gravity to find: without this
+                // a body walked down every slope in a stutter of tiny falls.
+                // Only onto the open floor, only by `tuning::step_down` --
+                // one frame of the steepest slope -- and only where there is
+                // relief at all: a flat arena has nothing that falls away
+                // gently, and plays exactly as it did before there were
+                // hills (the pair's fight changed when this ran everywhere).
+                // Anything further down is a drop, and a drop is a fall.
+                let floor = arena.relief_at(pos.x, pos.z);
+                let ground = ground_among(arena, lists, pos);
+                let gap = pos.y.sub(ground);
+                if !relief::of(arena.id).is_empty()
+                    && ground.raw() == floor.raw()
+                    && gap.raw() > 0
+                    && gap.raw() <= t::step_down().raw()
+                {
+                    pos.y = ground;
+                    grounded = true;
+                }
+            }
         }
 
         Resolved {
@@ -684,16 +729,16 @@ fn resolve_among(
     }
 }
 
-fn supported_among(lists: &[&[Solid]], pos: V3, radius: Fx) -> bool {
-    if pos.y.abs().raw() <= SKIN.raw() {
+fn supported_among(arena: &Arena, lists: &[&[Solid]], pos: V3, radius: Fx) -> bool {
+    if pos.y.sub(arena.relief_at(pos.x, pos.z)).abs().raw() <= SKIN.raw() {
         return true;
     }
     each(lists)
         .any(|s| s.over(pos.x, pos.z, radius) && pos.y.sub(s.max.y).abs().raw() <= SKIN.raw())
 }
 
-fn ground_among(lists: &[&[Solid]], pos: V3) -> Fx {
-    let mut best = Fx::ZERO;
+fn ground_among(arena: &Arena, lists: &[&[Solid]], pos: V3) -> Fx {
+    let mut best = arena.relief_at(pos.x, pos.z);
     for s in each(lists) {
         let overhead = s.hangs() && s.min.y.raw() > pos.y.raw();
         if s.over(pos.x, pos.z, Fx::ZERO) && !overhead && s.max.y.raw() > best.raw() {
@@ -704,8 +749,9 @@ fn ground_among(lists: &[&[Solid]], pos: V3) -> Fx {
 }
 
 fn material_among(arena: &Arena, lists: &[&[Solid]], pos: V3) -> Material {
-    let ground = ground_among(lists, pos);
-    if ground.raw() > 0 && pos.y.sub(ground).abs().raw() <= SKIN.raw() {
+    let ground = ground_among(arena, lists, pos);
+    let floor = arena.relief_at(pos.x, pos.z);
+    if ground.raw() > floor.raw() && pos.y.sub(ground).abs().raw() <= SKIN.raw() {
         // The last solid in order that tops out here: the arena's own, then
         // the raised ones, searched from the end.
         let mut found = None;
@@ -829,6 +875,11 @@ impl Terrain {
         [self.arena.solids(), self.raised()]
     }
 
+    /// [`Arena::relief_at`]: the floor itself, with nothing on it.
+    pub fn relief_at(&self, x: Fx, z: Fx) -> Fx {
+        self.arena.relief_at(x, z)
+    }
+
     /// Every solid: the arena's, then the raised ones.
     pub fn solids(&self) -> impl Iterator<Item = &Solid> + '_ {
         self.arena.solids().iter().chain(self.raised().iter())
@@ -848,12 +899,20 @@ impl Terrain {
         radius: Fx,
         height: Fx,
     ) -> Resolved {
-        resolve_among(&self.lists(), pos, vel, was_grounded, radius, height)
+        resolve_among(
+            self.arena,
+            &self.lists(),
+            pos,
+            vel,
+            was_grounded,
+            radius,
+            height,
+        )
     }
 
     /// [`Arena::ground_under`], with the raised solids standing on the floor.
     pub fn ground_under(&self, pos: V3) -> Fx {
-        ground_among(&self.lists(), pos)
+        ground_among(self.arena, &self.lists(), pos)
     }
 
     /// **The floor a point is over**: the highest top under it that is no
@@ -862,7 +921,7 @@ impl Terrain {
     /// your feet. What a floor marker is drawn on: the Cliffs' plateau, not the
     /// shelf twelve metres under it.
     pub fn floor_below(&self, pos: V3) -> Fx {
-        let mut best = Fx::ZERO;
+        let mut best = self.arena.relief_at(pos.x, pos.z);
         for s in self.solids() {
             let top = s.max.y;
             if s.over(pos.x, pos.z, Fx::ZERO)
