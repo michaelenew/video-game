@@ -36,6 +36,13 @@ edition 2024 -- dropping the workspace to edition 2021 would not lower it.
 manifest parse error naming `edition2024`, which is misleading: the edition is
 the first thing Cargo trips over, not the actual constraint.
 
+**One system library, on Linux.** Since the game has sound
+([sound.md](sound.md)), Bevy's audio reaches the card through ALSA and
+`alsa-sys` needs its headers to compile: `libasound2-dev` on Debian and
+Ubuntu, which `./scripts/setup-tools.sh desktop` installs. A build error
+naming `alsa-sys` is that and nothing else. The browser build has no such
+need; a page's audio is the browser's.
+
 ## What rollback actually demands
 
 Three requirements, and they decide the engine question — not performance, and not
@@ -936,6 +943,8 @@ Everything below builds and passes today.
 | Riding | Mount by landing, move relative to the surface, brace, and get bucked off by acceleration |
 | Fight report | `cargo run -p hunt --bin fight` — a scripted hunter, and the dozen numbers that say whether the fight is any good |
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
+| **Sound** | **Derived from the fight's own numbers, `crates/sound`; `cargo run -p sound --example sheet` renders every sound** — see [sound.md](sound.md) |
+| **Replays** | **`Y` / `--record` save the fight's inputs; `cargo run -p hunt --bin replay` judges them; `--replay` plays them back** — see [replays.md](replays.md) |
 | **Skeleton** | **Sixteen joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
 | **Animation factory** | **`cargo run -p anim --bin bake`**; `--bin preview` draws a clip as a PNG |
 | **Animation hub** | **F9** — every clip, live: timeline, spline editor, joint sliders, save and bake |

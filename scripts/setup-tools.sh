@@ -9,6 +9,8 @@
 #                                    # its Chromium, for scripts/web-smoke.sh
 #   ./scripts/setup-tools.sh broker  # an MQTT broker on this machine, for
 #                                    # scripts/room-desktop.sh
+#   ./scripts/setup-tools.sh desktop # the desktop build on Linux: ALSA's
+#                                    # headers, for the game's sound
 #   ./scripts/setup-tools.sh all
 #
 # Idempotent: a tool already there at the right version is skipped in under a
@@ -51,6 +53,13 @@
 #       `scripts/room-desktop.sh` has a page and the desktop build meet in a
 #       room, through mosquitto on this machine rather than a public broker.
 #       A Debian package, like `shot`.
+#
+# desktop
+#       The desktop build itself, on Linux: the game has sound
+#       (`docs/design/sound.md`), Bevy's audio reaches the card through ALSA,
+#       and `alsa-sys` wants ALSA's headers to compile. `libasound2-dev`, a
+#       Debian package like `shot`. The browser build needs nothing: a page's
+#       audio is the browser's.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -120,6 +129,11 @@ broker() {
   apt_packages broker "mosquitto" mosquitto
 }
 
+# --- the desktop build's own system library ---------------------------------------
+desktop() {
+  apt_packages desktop "ALSA's headers" libasound2-dev
+}
+
 # --- the page in a browser -----------------------------------------------------
 browser() {
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -159,7 +173,7 @@ browser() {
 }
 
 if [ $# -eq 0 ]; then
-  sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 fi
 for target in "$@"; do
@@ -168,8 +182,9 @@ for target in "$@"; do
     shot) shot ;;
     browser) browser ;;
     broker) broker ;;
-    all) web; shot; browser; broker ;;
-    *) echo "unknown target '$target': web, shot, browser, broker or all" >&2; exit 2 ;;
+    desktop) desktop ;;
+    all) desktop; web; shot; browser; broker ;;
+    *) echo "unknown target '$target': desktop, web, shot, browser, broker or all" >&2; exit 2 ;;
   esac
 done
 exit $status

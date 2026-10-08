@@ -65,6 +65,14 @@ pub const SECTIONS: &[Section] = &[
                 "Start against the sparring bot: easy, normal or hard. 5, 6 and 7 switch to it in game.",
             ),
             e(
+                "cargo run -p game -- --record",
+                "Save a replay on its own at the end of every round, to the replays folder, named for the fight (ridgeback-champion-3412f-9c1a.replay). Y and the Esc menu's Save replay do the same for any moment. A replay is the fight's start and every frame's inputs, a few kilobytes a minute, exact: cargo run -p hunt --bin replay -- <file> judges it the way fight judges the scripted hunter, and says whether this build reproduced the fight bit for bit.",
+            ),
+            e(
+                "cargo run -p game -- --replay <file>",
+                "Play a replay back in the game: both seats' inputs come off the file and the camera follows the look it recorded, until it runs out and the controls are yours. A desktop only -- a page has no file to open. It has to be the build and the tuning the replay was made on, or the fight goes somewhere else from the same inputs; the file names both.",
+            ),
+            e(
                 "cargo run -p hunt --bin duel",
                 "Play the sparring bot against itself, every pairing, and count throws, hits and rounds. --level and --against set the two sides.",
             ),
@@ -170,7 +178,11 @@ pub const SECTIONS: &[Section] = &[
             e("Click / Esc", "Capture the mouse, and release it."),
             e(
                 "Esc menu",
-                "Esc steps out of the fight and brings up the menu; a click in the arena goes back. In it: Create a room, which makes a link for the fight you are practising, and a box to paste a friend's link and Join; while a room is active, its name, how meeting is going, the link with a Copy link button, and Leave. The creature list with your trophies and tempers is on the right, and only there while the menu is up.",
+                "Esc steps out of the fight and brings up the menu; a click in the arena goes back. In it: Create a room, which makes a link for the fight you are practising, and a box to paste a friend's link and Join; while a room is active, its name, how meeting is going, the link with a Copy link button, and Leave. Save replay writes the fight so far -- every frame of it, from its start -- to a file (a download, in a browser) that cargo run -p hunt --bin replay judges. The creature list with your trophies and tempers is on the right, and only there while the menu is up.",
+            ),
+            e(
+                "Y",
+                "Save a replay of the fight so far, without opening the menu: the moment that felt wrong, kept after it happened. On a desktop it goes to ~/.config/arena/replays/ (or the folder ARENA_REPLAYS names), in a browser it downloads; the terminal or the console says where. Online, both players' inputs are on it as they were confirmed. cargo run -p hunt --bin replay -- <file> puts it through the harness, and cargo run -p game -- --replay <file> plays it back in the game.",
             ),
             e("W A S D", "Move, relative to the camera."),
             e(
@@ -556,6 +568,10 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e("- and =", "Mouse sensitivity, in multiplicative notches."),
             e("F3 and F4", "Field of view, 2 degrees a step."),
+            e(
+                "Page Up and Page Down",
+                "Volume, a tenth a step. Every sound is made from the fight's own numbers -- a blow's weight is its impact freeze, a telegraph is as long as its startup, a footfall is the floor it lands on -- and nothing is recorded (docs/design/sound.md). cargo run -p sound --example sheet renders the whole voice to WAVs and a sheet of spectrograms without the game.",
+            ),
             // Camera distance was on F5 and F6 and is not a setting any more:
             // it is the framing sphere's radius, the radius decides where the
             // eye is, and the eye is where the aiming ray starts -- so two
@@ -704,6 +720,14 @@ pub const SECTIONS: &[Section] = &[
                 "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/), at a temper (0 to 3). Every class is played as itself (crates/hunt/src/class.rs), and THE CLASS -- or, with --repeats, the last line -- counts what it did: shadows sent and lotuses, pillars and shots, spikes and blinks, the Dual mage's hands and goads, the Bulwark's guards. --gamble plays the creature's second plan, the one that takes a risk the first will not (the Mireback's: let the tongue land once the toad is low, to be swallowed and hit the stomach), where it has one. Against the Mantis, MANTIS_PLAN=repeater, jumper or dodger plays one of the duellist's three ablations, MANTIS_HABIT=off turns its habit memory off for the run, and MANTIS_DEBUG=1 prints the hunt frame by frame. Against the Siegeshell, --hunters 2 is the pair it is tuned for: one on the legs and one climbing for the crown, the call between them read off where the climber stands; SIEGE_DEBUG=1 prints the hunt frame by frame.",
             ),
             e(
+                "cargo run -p sound --example sheet",
+                "Every sound the game makes, on one sheet, without starting it: a WAV per cell in target/sound-sheet/ and one picture of spectrograms -- blows by weight, by edge, by what was struck and how big it was; footfalls by floor; telegraphs by startup; growls by the animal; the parry, stone, fire, blood and wind. Listen, look, change a number in crates/sound/src/patch.rs, run it again: the same loop the skies have.",
+            ),
+            e(
+                "cargo run -p hunt --bin replay -- <file> --trace",
+                "Judge a fight somebody played. The file is a replay the game saved (Y, the Esc menu, or --record). It is put back through the simulation, checked against the frame and checksum the game ended on, and judged by the creature's report -- the one fight prints for the scripted hunter -- with a table of what each fighter threw, landed, dodged and took beside it; a versus replay gets the rounds and the two tables. --trace adds the play sequence. Exits non-zero if this build does not reproduce the fight (a different build or tuning: the file names both).",
+            ),
+            e(
                 "cargo run -p hunt --bin brood -- --class <name> --all --repeats <n> --seed <n> --hunters <1|2> --balanced --quiet",
                 "The Broodmother's three plans side by side -- balanced, brood only, mother only -- with her own lines: time and damage on the brood, the sacs and her; sacs popped, burst and held; pops per slam window; guarded bites; rooted time; strand trips; clutches. The balanced plan has to beat both.",
             ),
@@ -798,6 +822,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "ARENA_SETTINGS=<path>",
                 "Use a different settings file. How two people share one machine.",
+            ),
+            e(
+                "ARENA_REPLAYS=<folder>",
+                "Where Y, Save replay and --record put replays, instead of ~/.config/arena/replays/.",
             ),
         ],
     },

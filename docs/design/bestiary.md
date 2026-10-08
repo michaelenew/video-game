@@ -391,6 +391,10 @@ settled when P6 is built. The Ridgeback's back (5.5 m) must stay free.
 
 ### The game has no sound
 
+*Since 2026-10-08 it does: [sound.md](sound.md), derived from the fight's own
+numbers and unheard by a person. The three stand-ins below stay until it has
+been heard; sound.md §6 says what each becomes.*
+
 Three documents ran into it. The Pair add a glint at the screen edge while an
 unseen cat winds up, standing in for a snarl. The Veilstalker never reveals
 itself off-screen, because a strike from behind with no sound would be a hit

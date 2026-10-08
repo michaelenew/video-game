@@ -238,6 +238,17 @@ screen.
 mesh, a material, a fog component, and the vertex colours that carry the
 accent. Nothing in either decides what a colour should be.
 
+**Sound is the same rule, in `crates/sound`.** A sound is a function from a
+few numbers the simulation already has -- a blow's weight is its impact
+freeze, what it struck and how big that was, a telegraph is exactly as long
+as its startup, a footfall is the floor's material -- to a waveform, and
+nothing is recorded. `cargo run -p sound --example sheet` renders the whole
+voice to WAVs and a sheet of spectrograms in a second; `crates/sound/src/cue.rs`
+is the one place the simulation's transitions are read as sounds, and
+`crates/game/src/sound.rs` only plays them. If you find yourself deciding what
+something sounds like in the game crate, stop: it goes in a patch. The
+reasoning is [`docs/design/sound.md`](docs/design/sound.md).
+
 ## Tools that are not on every machine
 
 Four things this repository does need tools a fresh machine does not have: the
@@ -248,7 +259,10 @@ to the browser build is checked) needs Playwright and its Chromium, and **a
 desktop joining a page's room** (`./scripts/room-desktop.sh`, how a change to
 `net::native` is checked) needs all of those and mosquitto.
 `./scripts/setup-tools.sh web`, `shot`, `browser`, `broker` or `all` installs
-them, once, and is the only place the steps are written. The Pages workflow runs it; a
+them, once, and is the only place the steps are written. A fifth, `desktop`,
+is not a tool but the one system library the **desktop build** itself needs
+on Linux: ALSA's headers, for the game's sound; a build error naming
+`alsa-sys` is that. The Pages workflow runs it; a
 cloud environment's setup script should run it too, so a session starts with
 them.
 

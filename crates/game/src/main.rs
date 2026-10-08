@@ -38,6 +38,7 @@ mod settings;
 mod shapes;
 mod signs;
 mod sky;
+mod sound;
 mod species;
 mod trophies;
 mod veil;
@@ -103,11 +104,15 @@ fn any_temper() -> bool {
 /// nothing. `cargo run -p hunt --bin fight` has always taken absent hunters
 /// out for the same reason; the game did not, which is why the harness never
 /// saw it. Pressing `4` and then `R` brings the second hunter in.
-fn seated(mut w: World, dummy: Dummy) -> World {
-    if w.hunting() && dummy != Dummy::Human {
-        w.players[1].health = 0;
-    }
-    w
+fn seated(w: World, dummy: Dummy) -> World {
+    w.seated(seats_of(dummy))
+}
+
+/// How many seats a dummy mode plays: both when a person has the second
+/// keys, one otherwise. The simulation keeps the count (`World::seats`) so a
+/// fresh fight built inside a tick seats itself.
+fn seats_of(dummy: Dummy) -> u8 {
+    if dummy == Dummy::Human { 2 } else { 1 }
 }
 
 fn chosen_classes(opts: &platform::Options) -> [sim::Class; 2] {
@@ -161,6 +166,7 @@ fn main() {
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .init_resource::<menu::Menu>()
+        .init_resource::<sound::Soundscape>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -208,7 +214,14 @@ fn main() {
                 // camera afterwards: it is 480 m across, and a jump course is
                 // longer than that, so a dome left at the origin is a sphere
                 // the player can walk out of.
-                (tick_sim, arenas::dress, sky::follow).chain(),
+                (
+                    tick_sim,
+                    arenas::dress,
+                    sky::follow,
+                    sound::play,
+                    sound::setup,
+                )
+                    .chain(),
                 apply_poses,
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
@@ -352,6 +365,30 @@ pub struct Sim {
     /// [`picker`]. On the wire rather than a fresh `World` built here, so a
     /// peer changes arena on the same frame.
     travel: sim::input::Travel,
+    /// **The fight so far, as a replay** (`sim::replay`): where it started
+    /// and every frame's inputs, kept from the first frame so that "that felt
+    /// wrong" can be saved after the fact (`Y`, or the Esc menu) and put
+    /// through the harness. Begun again whenever the world is replaced
+    /// outside a tick -- a match starting, the rehearsal -- and cut back when
+    /// `[` rewinds, so it always describes exactly the world on screen.
+    tape: sim::replay::Tape,
+    /// A replay being played back in the game (`--replay <file>`): the
+    /// inputs come off it instead of the keyboard, for both seats, and the
+    /// camera follows the look it recorded. `None` once it runs out.
+    playing: Option<Playback>,
+    /// Where the last save went, for the menu.
+    pub saved: Option<String>,
+    /// `--record`: save a replay on its own at the end of every round.
+    record: bool,
+    /// The round whose end was saved, so `--record` saves each once.
+    round_saved: bool,
+}
+
+/// A tape on its way through the game. See [`Sim::playing`].
+struct Playback {
+    tape: sim::replay::Tape,
+    /// The next frame to play.
+    at: usize,
 }
 
 /// A ring of past snapshots, and how far back through it we have stepped.
@@ -483,6 +520,25 @@ impl Default for Sim {
         shot_bars(&mut w);
         shot_weight(&mut w);
         shot_move(&mut w);
+        // `--replay <file>`: the fight is the tape's, from its own start.
+        let playing = platform::value("--replay").and_then(|path| {
+            let text = platform::load_replay(path)?;
+            match sim::replay::Tape::from_text(&text).and_then(|t| t.world().map(|w| (t, w))) {
+                Ok((tape, start)) => {
+                    platform::log(&format!(
+                        "replaying {path}: {} frames of {}",
+                        tape.len(),
+                        tape.start.to_line()
+                    ));
+                    w = start;
+                    Some(Playback { tape, at: 0 })
+                }
+                Err(e) => {
+                    platform::log(&format!("not replaying {path}: {e}"));
+                    None
+                }
+            }
+        });
         let seed = w.clone();
         let driver = online::start(opts, &w);
         Sim {
@@ -500,8 +556,19 @@ impl Default for Sim {
             history: Rewind::new(&seed),
             rehearsing: None,
             travel: sim::input::Travel::NONE,
+            tape: sim::replay::Tape::begin(&seed, build()),
+            playing,
+            saved: None,
+            record: platform::flag("--record"),
+            round_saved: false,
         }
     }
+}
+
+/// The build this is, as the tape names it: the commit, the way the hello
+/// two players trade names it (`online::terms`).
+pub fn build() -> &'static str {
+    env!("ARENA_BUILD")
 }
 
 /// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
@@ -983,6 +1050,11 @@ impl Sim {
     pub fn stepping(&self) -> bool {
         self.paused || self.cur.paused
     }
+
+    /// How many frames the replay of this fight holds so far.
+    pub fn tape_len(&self) -> usize {
+        self.tape.len()
+    }
 }
 
 /// The scripted hunter, when `DEMO=1` is driving a hunt.
@@ -1077,6 +1149,14 @@ impl Default for Look {
 impl Look {
     fn aim(&self) -> u16 {
         aim_from_radians(self.yaw)
+    }
+
+    /// Turn to the look a recorded input carries, so a replay's camera is
+    /// the camera the person had. The inverse of [`Look::aim`] and
+    /// [`Look::tilt`], to within the wire's quantum.
+    fn follow(&mut self, input: SimInput) {
+        self.yaw = input.aim as f32 / 65536.0 * std::f32::consts::TAU;
+        self.pitch = input.pitch as f32 / 65536.0 * std::f32::consts::TAU;
     }
 
     fn tilt(&self) -> i16 {
@@ -3207,6 +3287,7 @@ fn tick_sim(
     mut scripted: ResMut<Scripted>,
     mut sparring: ResMut<Sparring>,
     mut trophies: ResMut<trophies::Trophies>,
+    mut scape: ResMut<sound::Soundscape>,
 ) {
     // A won hunt is the player's trophy (world W1), whoever's machine it was
     // won on: each peer writes its own. Read from the world as it stands at
@@ -3268,6 +3349,8 @@ fn tick_sim(
             // `prev` as well, or the interpolator spends a frame drawing the
             // step we just undid.
             sim.prev = back.clone();
+            sim.tape.rewind_to(back.frame);
+            scape.rewound_to(back.frame);
             sim.cur = back;
             // A rewind past the start of a rehearsal is a rewind out of it.
             if sim.rehearsing.is_some_and(|from| sim.cur.frame < from) {
@@ -3287,6 +3370,8 @@ fn tick_sim(
         let classes = [sim::Class::Elementalist, sim.cur.players[1].class];
         let w = World::with_classes(classes);
         sim.prev = w.clone();
+        sim.tape = sim::replay::Tape::begin(&w, build());
+        scape.restart(w.frame);
         sim.cur = w;
         sim.history.clear();
         sim.rehearsing = Some(0);
@@ -3309,15 +3394,11 @@ fn tick_sim(
         let next = ALL[(sim.cur.players[me].class as usize + 1) % ALL.len()];
         sim.travel = sim::input::Travel::class(me, next);
     }
+    // A restart goes on the wire in training too, now that the simulation
+    // seats the fresh fight itself (`World::seats`): one path, and the one
+    // the replay records.
     if keys.just_pressed(KeyCode::Backspace) {
-        if training {
-            let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
-            let w = seated(sim.cur.restarted(classes), sim.dummy);
-            sim.prev = w.clone();
-            sim.cur = w;
-        } else {
-            sim.travel = sim::input::Travel::RESTART;
-        }
+        sim.travel = sim::input::Travel::RESTART;
     }
     // The picker. `H` swaps between hunting the Ridgeback and fighting each
     // other; `Shift+H` steps to the next creature there is, in its own arena.
@@ -3358,7 +3439,21 @@ fn tick_sim(
     ] {
         if keys.just_pressed(key) {
             sim.dummy = mode;
+            // Whether player two is in the next fresh fight is the
+            // simulation's to know, and the tape's: see `World::seats`.
+            let seats = seats_of(mode);
+            if seats != sim.cur.seats {
+                let frame = sim.cur.frame;
+                sim.tape.note(frame, sim::replay::Event::Seats(seats));
+                sim.cur.seats = seats;
+            }
         }
+    }
+    // `Y`: save the fight so far as a replay. Any time, in any mode -- the
+    // tape is always running -- so a moment that felt wrong can be kept
+    // after it happened and judged by `cargo run -p hunt --bin replay`.
+    if keys.just_pressed(KeyCode::KeyY) {
+        save_replay(&mut sim);
     }
 
     // The meeting first: the tick it opens the line on is the tick the match
@@ -3433,26 +3528,60 @@ fn tick_sim(
             // A trip rides on the first tick after it was asked for, and
             // only that one.
             let travel = std::mem::take(&mut sim.travel);
-            let pair = [
+            let mut pair = [
                 rehearsed
                     .unwrap_or_else(|| scripted_or(scripted, held))
                     .travelling(travel),
                 two,
             ];
+            // A replay playing back outranks everything: both seats are
+            // the tape's, and the camera turns with the look it recorded.
+            // It runs out by handing the controls back.
+            if let Some(playback) = sim.playing.as_mut() {
+                // What changed outside the inputs before this frame -- the
+                // dummy keys' seating -- is applied as the tape says.
+                let at = playback.at as u32;
+                let mut seats = None;
+                for (frame, event) in &playback.tape.events {
+                    if *frame == at {
+                        let sim::replay::Event::Seats(n) = event;
+                        seats = Some(*n);
+                    }
+                }
+                match playback.tape.frames.get(playback.at) {
+                    Some(inputs) => {
+                        pair = *inputs;
+                        playback.at += 1;
+                        look.follow(inputs[0]);
+                    }
+                    None => {
+                        platform::log("the replay has run out; the controls are yours");
+                        sim.playing = None;
+                    }
+                }
+                if let Some(n) = seats {
+                    sim.cur.seats = n;
+                }
+            }
             // Remembered before the tick, so one press of `[` lands on the
             // frame you were just looking at. Split out of the field access
             // because the ring and the world live on the same struct.
-            let Sim { history, cur, .. } = &mut *sim;
+            let Sim {
+                history, cur, tape, ..
+            } = &mut *sim;
             history.push(cur);
+            tape.record(cur.frame, pair);
             sim.prev = sim.cur.clone();
             sim.cur.advance(pair);
+            scape.observe(&sim.prev, &sim.cur);
             if travel != sim::input::Travel::NONE {
-                // A new fight: nothing to interpolate from, and player two
-                // sits a hunt out unless a person has their keys.
-                sim.cur = seated(sim.cur.clone(), sim.dummy);
+                // A new fight: nothing to interpolate from. (Player two sits
+                // a hunt out unless a person has their keys -- the
+                // simulation's doing now, from `World::seats`.)
                 sim.prev = sim.cur.clone();
             }
         }
+        record_round_end(&mut sim);
     } else {
         let ticks = sim.clock.advance(time.delta_secs());
         let ticks = online::pace(&mut sim, ticks);
@@ -3460,8 +3589,56 @@ fn tick_sim(
             let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
             let travel = std::mem::take(&mut sim.travel);
             let local = scripted_or(scripted, held).travelling(travel);
-            online::step(&mut sim, local);
+            online::step(&mut sim, local, &mut scape);
         }
+        record_round_end(&mut sim);
+    }
+}
+
+/// `--record`: the moment a round ends, save it -- once per round, and
+/// sixteen frames in, past any rollback, the way a trophy is written.
+fn record_round_end(sim: &mut Sim) {
+    if !sim.record {
+        return;
+    }
+    match sim.cur.phase {
+        sim::state::Phase::RoundOver { left, .. } => {
+            // The same wait a trophy makes (`trophies::notice`): twice the
+            // rollback window, so a round ending that is taken back is not
+            // saved.
+            if !sim.round_saved && left.saturating_add(16) < sim::tuning::round_over_frames() {
+                sim.round_saved = true;
+                save_replay(sim);
+            }
+        }
+        _ => sim.round_saved = false,
+    }
+}
+
+/// Save the fight so far: the tape, finished where the world stands, to a
+/// file beside the settings on a desktop or a download in a browser
+/// (`platform::save_replay`). Named for what it was, so a folder of them
+/// reads: `ridgeback-champion-3412f-9c1a.replay`.
+pub fn save_replay(sim: &mut Sim) {
+    sim.tape.finish(&sim.cur);
+    let start = &sim.tape.start;
+    let name = format!(
+        "{}-{}-{}f-{:04x}.replay",
+        start.hunt.map_or("versus".to_string(), |s| s.get().slug()),
+        sim::replay::class_slug(start.classes[0]),
+        sim.cur.frame,
+        sim.cur.state_checksum() & 0xffff
+    );
+    let text = sim.tape.to_text();
+    match platform::save_replay(&name, &text) {
+        Some(at) => {
+            platform::log(&format!(
+                "replay saved: {at} ({} frames). Judge it: cargo run -p hunt --bin replay -- <file>",
+                sim.tape.len()
+            ));
+            sim.saved = Some(at);
+        }
+        None => platform::log("the replay could not be saved"),
     }
 }
 
@@ -3942,6 +4119,8 @@ fn mouse_look(
         (KeyCode::NumpadAdd, settings::Knob::Sensitivity, true),
         (KeyCode::F3, settings::Knob::Fov, false),
         (KeyCode::F4, settings::Knob::Fov, true),
+        (KeyCode::PageDown, settings::Knob::Volume, false),
+        (KeyCode::PageUp, settings::Knob::Volume, true),
     ] {
         if keys.just_pressed(key) {
             settings.nudge(knob, up);

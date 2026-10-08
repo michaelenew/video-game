@@ -344,6 +344,9 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                     let start = *start;
                     sim.prev = start.clone();
                     sim.history = crate::Rewind::new(&start);
+                    // The match is a new fight from an agreed start, and so
+                    // is its replay.
+                    sim.tape = sim::replay::Tape::begin(&start, crate::build());
                     sim.cur = start;
                     sim.paused = false;
                     sim.rehearsing = None;
@@ -416,7 +419,14 @@ const FAR_AHEAD: i32 = 3;
 /// GGRS decides when to save, load and advance; `handle_requests` services
 /// those against the simulation. Rollbacks land here as a load followed by
 /// several advances, all inside one call.
-pub fn step(sim: &mut crate::Sim, local: SimInput) {
+pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Soundscape) {
+    let crate::Sim {
+        driver,
+        cur,
+        prev,
+        tape,
+        ..
+    } = sim;
     let Driver::Online {
         session,
         handle,
@@ -424,7 +434,7 @@ pub fn step(sim: &mut crate::Sim, local: SimInput) {
         gone,
         quiet,
         ..
-    } = &mut sim.driver
+    } = driver
     else {
         return;
     };
@@ -467,11 +477,18 @@ pub fn step(sim: &mut crate::Sim, local: SimInput) {
         return;
     }
 
-    let prev = sim.cur.clone();
+    let was = cur.clone();
     match session.advance_frame() {
         Ok(requests) => {
-            net::handle_requests(&mut sim.cur, requests);
-            sim.prev = prev;
+            // Every frame advanced goes on the tape by its frame number, so
+            // a rollback's re-advance overwrites the prediction with what the
+            // other player really pressed.
+            net::handle_requests_watched(cur, requests, |before, inputs, after| {
+                tape.record(before.frame, inputs);
+                // And sounded, the first time each frame is simulated.
+                scape.observe(before, after);
+            });
+            *prev = was;
         }
         Err(net::ggrs::GgrsError::PredictionThreshold) => {}
         Err(e) => eprintln!("advance failed: {e}"),

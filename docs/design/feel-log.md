@@ -7493,3 +7493,46 @@ regenerated.
 
 **Verdict** kept on the user's word, unplayed. Watch: a full hop held into an aerial is now
 the rising attack, which may surprise anyone used to jump-then-aerial.
+
+### 2026-10-08 — the game has a voice, derived; and a fight can be sent
+
+**Changed**
+- **Sound** ([sound.md](sound.md)): a `sound` crate beside `look`, and the
+  first sound the game has made. A blow's weight is its impact freeze
+  (`Move::hitstop`, blended with damage), its edge is the kit's weapon, its
+  material is what it struck and its pitch is that thing's size; a telegraph
+  is a rising whoosh exactly as long as the startup, a creature's a growl
+  pitched by its head height; footfalls and landings are blows on the floor's
+  material; the parry is the one chime; stones rumble up and ring when broken;
+  fire crackles, blood is wet, air is a gust. Nothing recorded. Played from the
+  cue's place in the arena, heard from the camera; a frame is sounded once
+  under rollback. Volume on Page Up / Page Down, kept with the settings.
+- **Replays** ([replays.md](replays.md)): the fight so far is always being
+  recorded as its start and every frame's inputs; `Y`, the Esc menu or
+  `--record` save it; `cargo run -p hunt --bin replay` judges it with the
+  creature's own report and a table of what the person threw; `--replay`
+  plays it back. `World::seats` is new (unhashed): the simulation seats a
+  fresh fight itself, so training's Backspace goes on the wire like online's.
+
+**Why** Every kit, creature and course is marked *unplayed*, and nothing a
+person did in the game reached the harness; and three creatures were built
+around the game having no sound (bestiary §"The game has no sound"). The two
+are one week's answer to the same word.
+
+**Measured** Sound: `crates/sound` tests hold the instruments to their physics
+(heavier is louder and longer, bigger rings lower, an edge is brighter than a
+club, a shield rings longer than flesh, a telegraph is loudest just before its
+cut), the cue tests that a swing is a telegraph then a swing, a jump and a
+landing sound like the floor, the Ridgeback growls for its startup, a quiet
+frame is silent; `cargo run -p sound --example sheet` is 66 sounds and one
+picture, which is what the instruments were tuned against. Three of the five
+physics tests failed on the first build: modes written as Qs vanished under
+the contact (a resonator at constant peak gain passes almost none of a burst
+the narrower it is), so modes are written as ring times, their gain is the
+inverse of their width, and hard materials carry little of the low thump.
+Replays: a browser-saved tape reproduces bit for bit through the harness
+(`scripts/web-smoke.sh`); the scripted pins did not move.
+
+**Verdict** kept, **unheard** -- judged by spectrogram and by test, not by
+ear. sound.md §7 is the listening list. Watch: whether a flesh thud reads as a
+thud or an arcade, and whether the parry chime stands out in a fight.
