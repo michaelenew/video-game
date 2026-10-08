@@ -7663,3 +7663,19 @@ measures the blade the game draws (`view::arms::champion_arms`), from the
 hands to the volume's far end.
 
 **Verdict** kept, **unplayed**.
+
+### 2026-10-08 — footsteps that are not pans
+
+**Changed** Footfalls, landings, a jump leaving the floor and a creature
+going down are a new sound, a step, instead of a blow on the floor
+([sound.md](sound.md) §7). A walk's peak fell from about 0.55 to about 0.27.
+
+**Why** Heard by the owner: "walking sounds like pans clattering", and
+landing too. The valley made it constant: Hearth is paved in stone and the
+reaches are rock, and both were struck as if a floor were a plate hung in
+the air, ringing at 330 to 1300 Hz for a fifth of a second.
+
+**Verdict** kept, **unheard** since: judged on the sheet's spectrograms
+(no line of tone under any step but wood's short knock) and by
+`the_ground_does_not_ring`. Listen to `target/sound-sheet/04-*` and
+`05-*` first.

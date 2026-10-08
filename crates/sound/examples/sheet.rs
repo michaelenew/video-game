@@ -17,7 +17,7 @@
 
 use look::sheet::{text, write};
 use sound::patch::{
-    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Strike, Wet, Whoosh,
+    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Step, Strike, Wet, Whoosh,
 };
 use sound::{spectrum, wav};
 
@@ -32,6 +32,15 @@ fn strike(weight: f32, sharp: f32, material: Material, size: f32) -> Patch {
         sharp,
         material,
         size,
+    })
+}
+
+fn step(weight: f32, material: Material) -> Patch {
+    Patch::Step(Step {
+        weight,
+        material,
+        size: FIGHTER,
+        seed: 1,
     })
 }
 
@@ -84,18 +93,18 @@ fn rows() -> Vec<(&'static str, Vec<Patch>)> {
                 Material::Water,
             ]
             .iter()
-            .map(|m| strike(0.25, 0.15, *m, FIGHTER))
+            .map(|m| step(0.3, *m))
             .collect(),
         ),
         (
-            "a footfall, more floors; a landing",
+            "a footfall, more floors; landings on stone",
             vec![
-                strike(0.25, 0.15, Material::Ash, FIGHTER),
-                strike(0.25, 0.15, Material::Peat, FIGHTER),
-                strike(0.25, 0.15, Material::Wood, FIGHTER),
-                strike(0.25, 0.15, Material::Stone, FIGHTER),
-                strike(0.6, 0.1, Material::Earth, FIGHTER),
-                strike(1.0, 0.1, Material::Earth, FIGHTER),
+                step(0.3, Material::Ash),
+                step(0.3, Material::Peat),
+                step(0.3, Material::Wood),
+                step(0.3, Material::Stone),
+                step(0.6, Material::Stone),
+                step(1.0, Material::Stone),
             ],
         ),
         (

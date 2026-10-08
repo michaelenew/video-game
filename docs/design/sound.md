@@ -27,7 +27,7 @@ events, and each is described by numbers the simulation already has:
 | A telegraph | A rise exactly as long as the startup | `Move::startup`; a creature's `Attack::startup` |
 | A swing | A short fall, as long as the active frames | `Move::active` |
 | A growl | A pulse train through formants, climbing as it gathers | the creature's size (head height); its move's startup |
-| A footfall, a landing | A blow of the body's weight on the floor | the arena's `Material` under the foot; the fall speed |
+| A footfall, a landing | **Not a blow** (2026-10-08): a damped thud of the body's weight and the floor's texture -- a tick on stone, grit on rock, a swish through grass, a crunch in snow, a splash -- and never the floor's modes, because the ground does not ring. Wood alone knocks, once | the arena's `Material` under the foot; the speed or the fall speed; the body's size; which step it is, so two in a row differ |
 | A parry | A clean chime nothing else makes | — |
 | Stone coming up, breaking | Rumble under gravel; a stone's modes struck | a structure appearing, or gone |
 | Fire, blood, wind | Crackle; a wet, dull drop; a band sweep | the effect that appeared |
@@ -133,6 +133,16 @@ Each of the stand-ins can now be re-asked, and none is removed here:
   is the first thing the creature is listening to anyway.
 
 ## 7 · Open, and unheard
+
+**Heard, 2026-10-08: walking sounded like pans clattering, and so did
+landing.** Both were blows on the floor's material at a fighter's size, so
+stone and rock rang their modes for a fifth of a second -- the sound of a
+struck plate, which is what a modal resonator is for and what the ground
+is not -- and a walk peaked at about half a hammer. A step is its own patch
+now (`patch::Step`): a thud as long as the landing is heavy, the floor's
+texture as shaped noise, a level well under a blow. `the_ground_does_not_ring`
+holds it: nineteen twentieths of a step on any floor but water is over in
+120 ms.
 
 Nothing here has been heard by a person. The sheet was judged by its
 spectrograms and by the tests that measure it. The first things to listen for:

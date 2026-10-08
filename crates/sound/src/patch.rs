@@ -5,7 +5,8 @@
 //! the game's numbers decide both. A blow is a burst of noise -- as long and
 //! as dull as the blow is heavy and blunt -- driving the modes of whatever
 //! was struck, pitched by its size. A telegraph is a rise exactly as long as
-//! the startup it warns of. A footfall is a blow on the floor's material. So
+//! the startup it warns of. A footfall is a body meeting the ground, which
+//! does not ring: a thud and the floor's own texture, never its modes. So
 //! each patch below is a handful of parameters the simulation already has,
 //! and `Patch::render` is the only place a waveform is made.
 //!
@@ -151,6 +152,124 @@ pub struct Strike {
     pub size: f32,
 }
 
+/// **A foot on the floor**: a footfall, a jump leaving it, a landing, a
+/// body going down.
+///
+/// Not a [`Strike`]. A struck thing is a body in the air that rings at its
+/// modes; a floor is the ground, held on every side, and the ground does not
+/// ring -- a foot on paving is a dull thud and a tick of grit, never a bell.
+/// Struck with a fighter's modes, every step on Hearth's stone was a pan
+/// dropped on a pan. So a step is two things: **the thud** of a weight
+/// arriving, low and damped, as heavy as the landing; and **the texture**
+/// of what is underfoot -- a tick on stone, grit on rock, a swish through
+/// grass, a crunch in snow, a splash -- shaped noise, never a mode. Wood is
+/// the one floor with a body under it, and it knocks once, briefly.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Step {
+    /// How hard, nought to one. A walk is about 0.3, a long fall 1.
+    pub weight: f32,
+    pub material: Material,
+    /// Whose weight, in metres: a fighter is 1.8, and a creature going down
+    /// lands lower and longer.
+    pub size: f32,
+    /// Which step this is, so two in a row are not the same sample.
+    pub seed: u8,
+}
+
+/// What a floor sounds like underfoot.
+struct Underfoot {
+    /// The thud: its pitch in Hz, how long it lasts (seconds to fall by
+    /// `e`), and how loud.
+    thud: (f32, f32, f32),
+    /// The texture: a band of noise (low and high cutoffs, Hz), its attack
+    /// and its fall (seconds), how many grains a second (none: a continuous
+    /// hiss), and how loud.
+    band: (f32, f32),
+    attack: f32,
+    fall: f32,
+    grains: f32,
+    texture: f32,
+    /// A board's knock, for a floor with a body under it: pitch, fall, gain.
+    knock: &'static [(f32, f32, f32)],
+}
+
+impl Material {
+    fn underfoot(self) -> Underfoot {
+        let u = |thud, band, attack, fall, grains, texture| Underfoot {
+            thud,
+            band,
+            attack,
+            fall,
+            grains,
+            texture,
+            knock: &[],
+        };
+        match self {
+            // Paving: a dull heel and a crisp tick, gone in a hundredth.
+            Material::Stone | Material::Plate | Material::Shield => u(
+                (80.0, 0.018, 0.8),
+                (1800.0, 7000.0),
+                0.001,
+                0.010,
+                0.0,
+                0.35,
+            ),
+            // Bare rock: the same heel, and grit under it.
+            Material::Rock => u(
+                (75.0, 0.020, 0.8),
+                (1500.0, 5000.0),
+                0.002,
+                0.025,
+                1500.0,
+                0.5,
+            ),
+            Material::Earth | Material::Flesh | Material::Hide => {
+                u((65.0, 0.030, 1.0), (200.0, 900.0), 0.002, 0.020, 0.0, 0.5)
+            }
+            // A swish more than a step.
+            Material::Grass => u(
+                (60.0, 0.025, 0.7),
+                (2000.0, 6500.0),
+                0.010,
+                0.050,
+                0.0,
+                0.35,
+            ),
+            Material::Sand => u(
+                (55.0, 0.030, 0.5),
+                (2500.0, 9000.0),
+                0.006,
+                0.050,
+                4000.0,
+                0.6,
+            ),
+            // Crunch: fewer, lower grains, held longer.
+            Material::Snow => u(
+                (55.0, 0.035, 0.5),
+                (900.0, 4000.0),
+                0.008,
+                0.070,
+                900.0,
+                0.8,
+            ),
+            Material::Ash => u((55.0, 0.030, 0.6), (300.0, 1500.0), 0.006, 0.050, 0.0, 0.5),
+            Material::Peat => u((50.0, 0.040, 1.0), (150.0, 700.0), 0.010, 0.060, 0.0, 0.6),
+            Material::Water => u(
+                (60.0, 0.020, 0.4),
+                (800.0, 6000.0),
+                0.004,
+                0.090,
+                2500.0,
+                0.9,
+            ),
+            Material::Wood => Underfoot {
+                knock: &[(190.0, 0.030, 0.6), (430.0, 0.020, 0.3)],
+                ..u((90.0, 0.020, 0.7), (1200.0, 4000.0), 0.001, 0.008, 0.0, 0.3)
+            },
+        }
+    }
+}
+
 /// A body moving through the air: a swing, a dodge, a jump. Rising, it is a
 /// telegraph that climbs for exactly `frames`; falling, it is the swing
 /// itself, a short loud sweep down.
@@ -208,6 +327,7 @@ pub struct Gust {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Patch {
     Strike(Strike),
+    Step(Step),
     Whoosh(Whoosh),
     Growl(Growl),
     Ring(Ring),
@@ -225,6 +345,7 @@ impl Patch {
     pub fn render(&self) -> Vec<f32> {
         match self {
             Patch::Strike(s) => strike(s),
+            Patch::Step(s) => step(s),
             Patch::Whoosh(w) => whoosh(w),
             Patch::Growl(g) => growl(g),
             Patch::Ring(r) => ring(r),
@@ -245,6 +366,7 @@ impl Patch {
                 s.sharp,
                 s.size
             ),
+            Patch::Step(s) => format!("step {} w{:.1} {:.1}m", s.material.name(), s.weight, s.size),
             Patch::Whoosh(w) => format!(
                 "{} {}f {:.1}m",
                 if w.rising { "windup" } else { "swing" },
@@ -340,6 +462,80 @@ fn strike(s: &Strike) -> Vec<f32> {
         *out = y;
     }
     synth::finish(&mut out, 0.35 + 0.65 * weight);
+    out
+}
+
+fn step(s: &Step) -> Vec<f32> {
+    let weight = s.weight.clamp(0.0, 1.0);
+    let u = s.material.underfoot();
+    // Two steps in a row are two feet: a few percent apart in pitch and
+    // brightness, from the step's own seed rather than a clock.
+    let mut vary = Noise::new(0x57E9_0000 ^ (s.seed as u32).wrapping_mul(0x9E37_79B9));
+    let pitch = 1.0 + 0.06 * vary.sample();
+    let bright = 1.0 + 0.15 * vary.sample();
+    // A bigger body lands lower and longer.
+    let ratio = size_ratio(s.size).powf(0.5);
+    let (thud_f, thud_tau, thud_gain) = u.thud;
+    let thud_f = thud_f * pitch * ratio;
+    let thud_tau = thud_tau * (1.0 + 0.8 * weight) / ratio.min(1.0);
+    let thud_gain = thud_gain * (0.4 + 0.6 * weight);
+    let fall = u.fall * (1.0 + 0.5 * weight);
+    let texture = u.texture * (0.6 + 0.4 * weight);
+    let ring = u
+        .knock
+        .iter()
+        .map(|(_, tau, _)| *tau)
+        .fold(0.0f32, f32::max);
+    let length = (thud_tau * 5.0).max(u.attack + fall * 5.0).max(ring * 5.0) + 0.02;
+    let n = samples(length);
+    let mut out = vec![0.0f32; n];
+    let mut noise = Noise::new(0x57E9_0001 ^ (s.material as u32) << 8 ^ s.seed as u32);
+    let mut low = LowPass::new((u.band.1 * bright).min(18_000.0));
+    let mut high = HighPass::new(u.band.0 * bright);
+    let mut body = LowPass::new(260.0 * ratio);
+    let mut thud = Sine::default();
+    let mut knocks: Vec<(Resonator, f32)> = u
+        .knock
+        .iter()
+        .map(|(f, tau, g)| {
+            let r = Resonator::new(f * pitch, std::f32::consts::PI * f * tau);
+            (r, g * r.impulse_gain())
+        })
+        .collect();
+    // Grains: a crunch is many small breaks, each an impulse into the band.
+    let grain_p = u.grains / synth::RATE as f32;
+    for (i, out) in out.iter_mut().enumerate() {
+        let t = i as f32 / synth::RATE as f32;
+        let n0 = noise.sample();
+        // The heel: a low sine dropping a little as the weight settles, and
+        // a little low noise for the mass of it. Damped hard: the ground
+        // takes it.
+        let heel = decay(t, thud_tau);
+        let mut y = thud.tick(glide(t, 0.015, thud_f * 1.3, thud_f)) * heel * thud_gain;
+        y += body.tick(n0) * decay(t, thud_tau * 0.6) * thud_gain * 0.8;
+        // The texture.
+        let shape = rise(t, u.attack) * decay((t - u.attack).max(0.0), fall);
+        let x = if u.grains > 0.0 {
+            let k = noise.sample();
+            if (k * 0.5 + 0.5) < grain_p {
+                noise.sample() * 4.0
+            } else {
+                0.0
+            }
+        } else {
+            n0
+        };
+        y += high.tick(low.tick(x)) * shape * texture;
+        // A board under the foot knocks once, from the heel's first instant.
+        let strike = if t < 0.003 { n0 } else { 0.0 };
+        for (r, g) in knocks.iter_mut() {
+            y += r.tick(strike) * *g * 0.25 * (0.5 + 0.5 * weight);
+        }
+        *out = y;
+    }
+    // Underfoot is quiet: a walk sits well under a blow, a long fall about
+    // as loud as a light one.
+    synth::finish(&mut out, 0.10 + 0.55 * weight);
     out
 }
 
@@ -577,6 +773,12 @@ mod tests {
                 frames: 20,
                 weight: 0.5,
             }),
+            Patch::Step(Step {
+                weight: 0.3,
+                material: Material::Stone,
+                size: FIGHTER,
+                seed: 1,
+            }),
         ];
         for p in all {
             let v = p.render();
@@ -692,5 +894,125 @@ mod tests {
             );
             assert!(after < before * 0.3, "{f} frames: {after} after the cut");
         }
+    }
+
+    /// The share of a sound's energy that comes after `t` seconds.
+    fn tail(v: &[f32], t: f32) -> f32 {
+        let k = samples(t).min(v.len());
+        let all: f32 = v.iter().map(|s| s * s).sum();
+        let late: f32 = v[k..].iter().map(|s| s * s).sum();
+        late / all.max(1e-12)
+    }
+
+    const FLOORS: [Material; 10] = [
+        Material::Stone,
+        Material::Rock,
+        Material::Earth,
+        Material::Grass,
+        Material::Sand,
+        Material::Snow,
+        Material::Ash,
+        Material::Peat,
+        Material::Water,
+        Material::Wood,
+    ];
+
+    #[test]
+    fn the_ground_does_not_ring() {
+        // **Footsteps sounded like pans.** A footfall was a blow on the
+        // floor's material at a fighter's size, and stone's modes rang a
+        // fifth of a second at 540, 860 and 1300 Hz: a pan. The ground is
+        // held on every side and takes a step: whatever it is, almost all of
+        // a step -- a walk or a hard landing -- is over in a tenth of a
+        // second. Water's splash is the longest.
+        for material in FLOORS {
+            for weight in [0.3, 1.0] {
+                let v = Patch::Step(Step {
+                    weight,
+                    material,
+                    size: FIGHTER,
+                    seed: 3,
+                })
+                .render();
+                let late = tail(&v, 0.12);
+                // A splash is spray, not a tone: allowed to hang a little.
+                let allowed = if material == Material::Water {
+                    0.2
+                } else {
+                    0.05
+                };
+                assert!(
+                    late < allowed,
+                    "a step on {} at weight {weight} still has {:.0}% of itself after 120 ms",
+                    material.name(),
+                    late * 100.0
+                );
+            }
+        }
+        // And the blow it replaced did ring, which is why this exists.
+        let old = Patch::Strike(Strike {
+            weight: 0.3,
+            sharp: 0.15,
+            material: Material::Stone,
+            size: FIGHTER,
+        })
+        .render();
+        assert!(tail(&old, 0.12) > 0.05);
+    }
+
+    #[test]
+    fn a_walk_is_quieter_than_a_blow() {
+        let walk = Patch::Step(Step {
+            weight: 0.3,
+            material: Material::Stone,
+            size: FIGHTER,
+            seed: 0,
+        })
+        .render();
+        let poke = Patch::Strike(Strike {
+            weight: 0.2,
+            sharp: 0.5,
+            material: Material::Flesh,
+            size: FIGHTER,
+        })
+        .render();
+        assert!(
+            peak(&walk) < 0.6 * peak(&poke),
+            "{} {}",
+            peak(&walk),
+            peak(&poke)
+        );
+    }
+
+    #[test]
+    fn two_steps_are_not_one_sample() {
+        let at = |seed| {
+            Patch::Step(Step {
+                weight: 0.3,
+                material: Material::Grass,
+                size: FIGHTER,
+                seed,
+            })
+            .render()
+        };
+        assert_ne!(at(1), at(2));
+    }
+
+    #[test]
+    fn a_floor_sounds_like_itself() {
+        // Grit and grass are brighter than a dull earth thud.
+        let c = |material| {
+            centroid(
+                &Patch::Step(Step {
+                    weight: 0.3,
+                    material,
+                    size: FIGHTER,
+                    seed: 5,
+                })
+                .render(),
+            )
+        };
+        assert!(c(Material::Grass) > c(Material::Earth));
+        assert!(c(Material::Rock) > c(Material::Earth));
     }
 }
