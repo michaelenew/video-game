@@ -58,16 +58,16 @@ they were on the boxes, so an arena's palette is unchanged.
    simulation's: its colour wanders a little (`shapes::mottle`, 7 % over
    features a few metres across), and dressing is scattered over it by a hash
    of the arena -- tussocks in grass, pebbles on earth, peat, ash and sand,
-   drifts on snow, chips on rock -- one per twenty-two square metres, never
+   drifts on snow, chips on rock -- one per forty square metres (half that on a paved floor), never
    inside a solid, never in water, small enough to walk through unnoticed and
    half buried so nothing has an underside to float on. Not on a course,
    which has no floor.
 
 ## What to decide
 
-1. Is the amount right? Each is one number: the rock's roughness (0.18 of
+1. Is the amount right? Each is one number: the rock's roughness (0.28 of
    its size), the chamfer (0.12), the mottle (7 %), the scatter's spacing
-   (22 m² a piece).
+   (40 m² a piece).
 2. The scattered dressing is procedural and the same every time for an
    arena; a creature's document may want its own (the Sandmaw's Pan has
    islands and bones already). The hand-placed props win on the eye, the

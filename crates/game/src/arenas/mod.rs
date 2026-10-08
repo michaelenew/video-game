@@ -451,7 +451,7 @@ pub fn dress(
 }
 
 /// How much floor one scattered thing stands for, in square metres.
-const SCATTER_SPACING: f32 = 22.0;
+const SCATTER_SPACING: f32 = 40.0;
 
 fn scatter(
     commands: &mut Commands,
@@ -491,9 +491,9 @@ fn scatter(
         let base = palette.of(material);
         let (mesh, size) = match material {
             Material::Grass => {
-                let s = 0.35 + 0.55 * r(3);
-                let h = 0.12 + 0.14 * r(4);
-                let rgb = shade(base, 0.86 + 0.08 * r(5));
+                let s = 0.25 + 0.3 * r(3);
+                let h = 0.07 + 0.08 * r(4);
+                let rgb = shade(base, 0.78 + 0.1 * r(5));
                 (
                     crate::shapes::soft_box(
                         Vec3::new(s, h * 2.0, s * (0.8 + 0.4 * r(6))),
@@ -505,8 +505,8 @@ fn scatter(
                 )
             }
             Material::Ground | Material::Peat | Material::Ash | Material::Sand => {
-                let s = 0.12 + 0.22 * r(3);
-                let h = 0.06 + 0.08 * r(4);
+                let s = 0.1 + 0.16 * r(3);
+                let h = 0.05 + 0.06 * r(4);
                 let rock = palette.of(Material::Rock);
                 let mix = 0.55;
                 let rgb = [
@@ -537,8 +537,12 @@ fn scatter(
                 )
             }
             Material::Rock | Material::Stone => {
-                let s = 0.1 + 0.18 * r(3);
-                let h = 0.04 + 0.06 * r(4);
+                // A paved floor is swept: half as many, and small.
+                if i % 2 == 1 {
+                    continue;
+                }
+                let s = 0.08 + 0.1 * r(3);
+                let h = 0.03 + 0.04 * r(4);
                 (
                     crate::shapes::rock(
                         Vec3::new(s, h * 2.0, s * (0.6 + 0.6 * r(6))),

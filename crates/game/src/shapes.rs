@@ -236,13 +236,13 @@ pub fn soft_cylinder(size: Vec3, ends: f32, segments: usize) -> Mesh {
 /// rocks.
 pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
     let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
-    superellipsoid(size, (0.45, 0.45), 14, paint, move |p, _| {
+    superellipsoid(size, (0.55, 0.55), 16, paint, move |p, _| {
         // Two octaves of a smooth value noise over the direction, scaled by
         // the rock's own size so a boulder and a pebble are rough alike.
         let q = p / size.max_element().max(1e-3);
         let n = value_noise(q * 2.3 + Vec3::splat(s)) * 0.65
             + value_noise(q * 5.1 + Vec3::splat(s * 1.7)) * 0.35;
-        1.0 - 0.18 * (0.5 + 0.5 * n)
+        1.0 - 0.28 * (0.5 + 0.5 * n)
     })
 }
 
