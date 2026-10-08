@@ -50,10 +50,12 @@ they were on the boxes, so an arena's palette is unchanged.
    through a straight limb and only fills the wedge a bend opens -- the rule
    the creatures' knuckles already follow. The head is nearly an ellipsoid;
    the torso keeps its shoulders.
-3. **Dressed stone is chamfered**, not rounded: 0.12, enough that an arris
-   does not catch the light as a wire, not enough to stop being cut stone.
-   Timber a little more (0.2). Water stays flat. Props drawn as boxes get
-   the same chamfer.
+3. **Dressed stone is chamfered**, not rounded (`shapes::chamfered_box`): a
+   mason's forty-five-degree bevel of six centimetres on every edge, the
+   faces flat. A rounded box at a low rounding was tried first and bent its
+   whole face a little, which on a platform six metres across read as a
+   cushion. Timber four centimetres; water stays flat; props drawn as boxes
+   get the same bevel. Small bodies (the packs' critters) are rounded too.
 4. **The floor is broken up by what lies on it**, since its height is the
    simulation's: its colour wanders a little (`shapes::mottle`, 7 % over
    features a few metres across), and dressing is scattered over it by a hash
@@ -66,7 +68,7 @@ they were on the boxes, so an arena's palette is unchanged.
 ## What to decide
 
 1. Is the amount right? Each is one number: the rock's roughness (0.28 of
-   its size), the chamfer (0.12), the mottle (7 %), the scatter's spacing
+   its size), the chamfer (6 cm), the mottle (7 %), the scatter's spacing
    (40 m² a piece).
 2. The scattered dressing is procedural and the same every time for an
    arena; a creature's document may want its own (the Sandmaw's Pan has

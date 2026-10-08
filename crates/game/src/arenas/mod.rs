@@ -398,8 +398,8 @@ pub fn dress(
             | Material::Peat => crate::shapes::soft_box(size, 0.3, 12, Some((at, rgb, &brush))),
             // Dressed stone is cut square and keeps its arris, chamfered just
             // enough not to catch the light as a wire; timber a little more.
-            Material::Stone => crate::shapes::soft_box(size, 0.12, 8, Some((at, rgb, &brush))),
-            Material::Wood => crate::shapes::soft_box(size, 0.2, 8, Some((at, rgb, &brush))),
+            Material::Stone => crate::shapes::chamfered_box(size, 0.06, Some((at, rgb, &brush))),
+            Material::Wood => crate::shapes::chamfered_box(size, 0.04, Some((at, rgb, &brush))),
             Material::Water => crate::shapes::boxy(size, at, rgb, &brush),
         };
         commands.spawn((
@@ -417,7 +417,7 @@ pub fn dress(
         let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
         let mesh = match prop.shape {
             Shape::Box => {
-                crate::shapes::soft_box(Vec3::new(w, h, d), 0.15, 8, Some((at, rgb, &brush)))
+                crate::shapes::chamfered_box(Vec3::new(w, h, d), 0.04, Some((at, rgb, &brush)))
             }
             Shape::Cylinder => {
                 let mut m = Cylinder::new(w * 0.5, h).mesh().build();

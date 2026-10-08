@@ -382,3 +382,125 @@ pub fn hash01(a: u32, b: u32, c: u32) -> f32 {
     h ^= h >> 15;
     (h & 0xff_ffff) as f32 / 0xff_ffff as f32
 }
+
+/// Cut stone: a box with every edge taken off at forty-five degrees by
+/// `bevel` metres, faces flat. Not a rounded box -- a superellipsoid at a
+/// low rounding bends its whole face a little, which on a platform six metres
+/// across reads as a cushion -- but a mason's chamfer, which is what dressed
+/// stone and sawn timber have. The bevel is clamped to a quarter of the
+/// smallest side, so a thin slab keeps a face.
+///
+/// Twenty-four vertices placed, then every polygon given its own copies with
+/// its own flat normal: six inset faces, twelve bevel strips, eight corner
+/// triangles. Painted with the brush like [`boxy`], from where it will stand.
+pub fn chamfered_box(size: Vec3, bevel: f32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    let half = size * 0.5;
+    let b = bevel.clamp(0.0, size.min_element() * 0.25);
+    // v(corner, axis): the corner with `axis` kept at the face and the other
+    // two pulled in by the bevel.
+    let v = |c: [f32; 3], axis: usize| -> Vec3 {
+        let mut p = Vec3::ZERO;
+        for i in 0..3 {
+            let h = if i == axis { half[i] } else { half[i] - b };
+            p[i] = c[i] * h;
+        }
+        p
+    };
+    let corners: Vec<[f32; 3]> = (0..8)
+        .map(|k| {
+            [
+                if k & 1 == 0 { -1.0 } else { 1.0 },
+                if k & 2 == 0 { -1.0 } else { 1.0 },
+                if k & 4 == 0 { -1.0 } else { 1.0 },
+            ]
+        })
+        .collect();
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut colours: Vec<[f32; 4]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    // One polygon, flat, wound to face `outward`; a quad is two triangles.
+    let mut polygon = |pts: &[Vec3], outward: Vec3| {
+        let n = (pts[1] - pts[0])
+            .cross(pts[2] - pts[0])
+            .normalize_or(outward);
+        let n = if n.dot(outward) < 0.0 { -n } else { n };
+        let flip = (pts[1] - pts[0]).cross(pts[2] - pts[0]).dot(outward) < 0.0;
+        let base = positions.len() as u32;
+        for p in pts {
+            positions.push(p.to_array());
+            normals.push(n.to_array());
+            colours.push(match paint {
+                Some((centre, rgb, brush)) => {
+                    let mut to_edge = f32::MAX;
+                    for axis in 0..3 {
+                        if 1.0 - n[axis].abs() > 0.3 {
+                            to_edge = to_edge.min((half[axis] - p[axis].abs()).max(0.0));
+                        }
+                    }
+                    brush.at(rgb, to_edge, n.y, centre.y + p.y)
+                }
+                None => [1.0, 1.0, 1.0, 1.0],
+            });
+        }
+        for t in 1..pts.len() as u32 - 1 {
+            if flip {
+                indices.extend_from_slice(&[base, base + t + 1, base + t]);
+            } else {
+                indices.extend_from_slice(&[base, base + t, base + t + 1]);
+            }
+        }
+    };
+    // The six faces: the four corners on that side, in a ring.
+    for axis in 0..3usize {
+        for side in [-1.0f32, 1.0] {
+            let (u, w) = ((axis + 1) % 3, (axis + 2) % 3);
+            let ring = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+            let pts: Vec<Vec3> = ring
+                .iter()
+                .map(|(a, c)| {
+                    let mut corner = [0.0; 3];
+                    corner[axis] = side;
+                    corner[u] = *a;
+                    corner[w] = *c;
+                    v(corner, axis)
+                })
+                .collect();
+            let mut outward = Vec3::ZERO;
+            outward[axis] = side;
+            polygon(&pts, outward);
+        }
+    }
+    // The twelve edges: along axis `along`, between faces `a` and `c`.
+    for along in 0..3usize {
+        let (a, c) = ((along + 1) % 3, (along + 2) % 3);
+        for sa in [-1.0f32, 1.0] {
+            for sc in [-1.0f32, 1.0] {
+                let mut lo = [0.0; 3];
+                lo[along] = -1.0;
+                lo[a] = sa;
+                lo[c] = sc;
+                let mut hi = lo;
+                hi[along] = 1.0;
+                let pts = [v(lo, a), v(hi, a), v(hi, c), v(lo, c)];
+                let mut outward = Vec3::ZERO;
+                outward[a] = sa;
+                outward[c] = sc;
+                polygon(&pts, outward);
+            }
+        }
+    }
+    // The eight corners.
+    for c in &corners {
+        let pts = [v(*c, 0), v(*c, 1), v(*c, 2)];
+        polygon(&pts, Vec3::from(*c));
+    }
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+    .with_inserted_indices(Indices::U32(indices))
+}
