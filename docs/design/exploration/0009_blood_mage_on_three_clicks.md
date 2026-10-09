@@ -1,5 +1,5 @@
 ---
-status: exploration — direction set by the person 2026-10-09, details proposed; not built
+status: decided 2026-10-09 by the person, combos first; being built
 started: 2026-10-09
 supersedes: 0007 §4 (the Blood mage), where they differ
 depends: 0007_core_kits.md, ../kits/blood-mage.md, ../blood-mage.md
@@ -10,6 +10,38 @@ depends: 0007_core_kits.md, ../kits/blood-mage.md, ../blood-mage.md
 The same treatment the Elementalist got in 0008: the class's core on left, middle and right
 click, each with a move on the floor, an aerial and a jump attack (space and the click), in the
 Champion's grid. To be built after the Elementalist.
+
+## Decided, 2026-10-09: the combos come first
+
+The person's method, from what worked on the Champion and the Elementalist: **decide the combos,
+decompose them into their pieces, and let each piece stand on its own**, so a player can
+recombine them freely. Her combos run on four shared states: **pools on the floor** (hers or
+theirs), **grey health** (spent and not yet gone; it grows the scythe and fades), **a body in
+the air** (lifted or pinned), and **a bleed** (a target who drips pools as they go).
+
+1. **The Hanging.** Marionette lifts him → Hook pulls her up to him → Nail pins him in the air →
+   his blood drips pools on to the floor below → she drops among them and Black-spikes the pool
+   under him, or Harvests through them.
+2. **Spend to swing.** A charged Blood nova shoves him off and costs red, so her grey climbs →
+   the Reaping sweep at full size at the range he was shoved to.
+3. **The return ticket.** The Blood jet leaves her pool where she took off → air game → blink
+   back to her own pool.
+4. **The trail and the chain.** Haemorrhage from the air → his bleed lays a trail → the Black
+   spike on the nearest pool chains along it to him.
+5. **Reel and raise.** Grasp hauls him to her feet → Marionette straight off the haul.
+6. **The harvest run.** Harvest's spinning jump along the line that crosses the most pools.
+
+**Hook is a grappling hook** (the person, 2026-10-09): thrown along the aim, it catches the first
+thing it meets — a fighter, a creature, a stone or a wall — and **pulls her to it**. That puts it
+in every combo: to a lifted or pinned body, to a pool's victim, out of trouble.
+
+**Creatures bleed** (the person, 2026-10-09). Her hits on a creature spill a pool on the floor
+under the part she struck, and the Haemorrhage's bleed runs on a creature as on a fighter. This
+is the fix for `CLASS-2`: combos 1, 4 and 6 run on *their* blood, and "the creature does not
+bleed" was the sentence that cost her most.
+
+**The Bloodletter** is in no combo. It moves to `Q` for now, as the candidate to cut once she
+has been played; the Black spike stays on `E`.
 
 ## The direction, from the person
 
@@ -62,9 +94,8 @@ Champion's grid. To be built after the Elementalist.
 - **Harvest (jump attack).** A big jump inside a wide scythe spin, which **drinks the pools it
   passes over** — picking up bloodstains becomes a movement skill. Proposal: only what the
   blade's arc actually covers is drunk, so the line she jumps along matters.
-- **Hook (aerial).** The scythe catches a wall, a stone, a ledge or a body and swings her over
-  it: a cross-up against a person, a climb against a wall. Proposed by Claude; the person has
-  not answered this slot yet.
+- **Hook (aerial).** A grappling hook: thrown along the aim, it catches the first fighter,
+  creature, stone or wall and pulls her to it. Decided 2026-10-09.
 
 ## The rule her own blood needs
 
