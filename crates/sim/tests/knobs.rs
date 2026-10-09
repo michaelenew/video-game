@@ -52,8 +52,12 @@ const EXEMPT: &[(&str, &str)] = &[
          test is the capsule, and no flame is drawn wider than it.",
     ),
     (
-        "Fx::ONE.sub(share.sub(third).div(Fx::ONE.sub(third)).mul(Fx::ratio(3, 4)))",
+        "let thins_by = Fx::ratio(3, 4)",
         "Presentation: how far a drawn carpet flame thins by the end of its trip.",
+    ),
+    (
+        "let half = Fx::ratio(1, 2)",
+        "Presentation: how small a drawn carpet flame starts, against the strip that burns.",
     ),
     (
         "const CARPET_FLOW: u16 = 30",

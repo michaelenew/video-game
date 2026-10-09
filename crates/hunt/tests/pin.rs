@@ -35,7 +35,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     (Class::ShadowReaver, 31, 0xb2ab9338138ce5f0),
-    (Class::Elementalist, 59, 0x33eb170574ec1780),
+    // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
+    // and the class layer presses her Bolt through the button it learns
+    // rather than through left click. No other pin moved. See feel-log.md.
+    (Class::Elementalist, 59, 0xb57ef071ed5bdd1c),
     (Class::BloodMage, 83, 0x72ec7ddafe8f9fd9),
 ];
 

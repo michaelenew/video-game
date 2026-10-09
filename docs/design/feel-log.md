@@ -7768,7 +7768,9 @@ spray kept `F`. Every number on the four new moves is a first guess. See
 - The Air ball's speed follows the size it is *now*, so it slows as it shrinks; with the
   shipped numbers a tapped ball rolls about 5 m and a full one about 37.
 - The Ridgeback pin (`tests/ridgeback_pin.rs`) re-pinned for the Elementalist: the same random
-  presses throw different moves. Her envelope fixtures re-recorded for the same reason
+  presses throw different moves; so is her scripted Ridgeback hunt (`hunt/tests/pin.rs`),
+  whose class layer now presses her Bolt through the button it learns. Her envelope fixtures
+  re-recorded for the same reason
   (`envelope -- search --fixtures --class Elementalist`, a new flag). **What the search found
   moved a lot**: with the *shared* blocks alone (the jump, the airdodge, the air clicks, the
   strafe) her best gap across the lab's lanes roughly doubled or tripled -- lane 6 from 10.5 m

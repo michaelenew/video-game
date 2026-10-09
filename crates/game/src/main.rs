@@ -3880,10 +3880,12 @@ const REHEARSAL_FRAMES: u32 = 40;
 /// One frame of the double structure jump, `since` frames into it.
 ///
 /// **The input, not a description of it.** Two structures raised three frames
-/// apart -- the second press needs the button up in between, because the
-/// mechanic fires on a press edge, which is also why the gap cannot be shorter
-/// than two frames -- and then the jump nine frames after the first, held so
-/// the rise sustains.
+/// apart -- the second press needs the button up in between, because Raise
+/// fires on the earth click's press edge, which is also why the gap cannot be
+/// shorter than two frames -- and then the jump nine frames after the first,
+/// held so the rise sustains. The earth click is her left click since
+/// 2026-10-09 (`sim::moves::elementalist::keys`); space is pressed only after
+/// both raises, since space with the earth click is the earth jump.
 ///
 /// Three frames rather than two is deliberate: two is a metre higher at its
 /// best, and three gives five different jump frames that reach a third takeoff
@@ -3896,7 +3898,7 @@ fn rehearsal(since: u32, w: &World) -> SimInput {
     let mut v = 0u16;
     // Frame 0 and frame 3, with frames 1 and 2 releasing the button.
     if since == 0 || since == 3 {
-        v |= SimInput::MECHANIC;
+        v |= sim::moves::elementalist::keys::EARTH;
     }
     if since >= 9 {
         v |= SimInput::SPACE;
@@ -4927,10 +4929,10 @@ mod rehearsing {
         // And the shape of the input is the thing the kit document describes:
         // two presses three frames apart with the button up between them.
         let w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
-        assert!(rehearsal(0, &w).has(SimInput::MECHANIC));
-        assert!(!rehearsal(1, &w).has(SimInput::MECHANIC));
-        assert!(!rehearsal(2, &w).has(SimInput::MECHANIC));
-        assert!(rehearsal(3, &w).has(SimInput::MECHANIC));
+        assert!(rehearsal(0, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(!rehearsal(1, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(!rehearsal(2, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(rehearsal(3, &w).has(sim::moves::elementalist::keys::EARTH));
         assert!(!rehearsal(8, &w).has(SimInput::SPACE));
         assert!(rehearsal(9, &w).has(SimInput::SPACE));
     }

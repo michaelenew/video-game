@@ -1258,15 +1258,12 @@ impl Effect {
         let (a, b) = self.carpet_line();
         let at = crate::math::lerp3(a, b, share);
         let third = Fx::ratio(1, 3);
+        let thins_by = Fx::ratio(3, 4);
+        let half = Fx::ratio(1, 2);
         let swell = if share.raw() < third.raw() {
-            Fx::ratio(1, 2).add(share.div(third).mul(Fx::ratio(1, 2)))
+            half.add(share.div(third).mul(half))
         } else {
-            Fx::ONE.sub(
-                share
-                    .sub(third)
-                    .div(Fx::ONE.sub(third))
-                    .mul(Fx::ratio(3, 4)),
-            )
+            Fx::ONE.sub(share.sub(third).div(Fx::ONE.sub(third)).mul(thins_by))
         };
         (at, self.field_radius().mul(swell))
     }
