@@ -372,7 +372,7 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "Left click",
-                "Earth. Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning while you crawl; let go and Fissure races from it toward the crosshair, as far as you held for, and the stone erupts at the crack's end. In the air it is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
+                "Earth. Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Clicked out past an edge it stays up at your level; pointed at the floor below, it goes down there. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning while you crawl; let go and Fissure races from it toward the crosshair, as far as you held for, and the stone erupts at the crack's end. In the air it is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
             ),
             e(
                 "Middle click (or U)",
@@ -380,15 +380,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Right click",
-                "Wind. The Air ball: raised on the floor where the crosshair is, growing for as long as you hold, and sent toward the crosshair when you let go. It shrinks as it rolls and everything standing in it goes with it -- you included; jump out and you keep its speed. The bigger you let it grow, the faster and further it goes. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones, and through fire it comes out burning.",
+                "Wind. The Air ball: raised on the floor where the crosshair is, growing for as long as you hold, and sent toward the crosshair when you let go. It shrinks as it rolls and everything standing in it goes with it -- you included; jump out and you keep its speed, walk sideways in it (A and D) and you steer it. Off an edge it sinks slowly and keeps carrying you; a wall or a stone knocks it off at an angle and costs it some size. The bigger you let it grow, the faster and further it goes. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones, and through fire it comes out burning.",
             ),
             e(
                 "Space + a click",
-                "The jump attacks. Space and left click is the earth jump: a jump that brings a stone up with you -- keep going straight and you land on it in the air; off a stone on the floor the stone shatters and you go higher; off a stone in the air it is driven down to shatter. Space and middle click is the Fire fountain: a burst at your feet and a wash of fire left where you took off. Space and right click is the Updraft: a column of air that lifts you and anyone beside you and keeps your run -- and in the air, holding space, once a jump, it stretches the jump. An Updraft that meets your own fire is a Thermal: much higher, and along the carpet if it was the carpet.",
+                "The jump attacks. Space and left click is the earth jump: a jump that brings a stone up with you -- keep going straight and you land on it in the air; off a stone on the floor the stone shatters and you go higher (running, look straight down and left-click to put a stone under your feet, then space and left click at once: the big jump, keeping all your run); off a stone in the air it is driven down to shatter. Space and middle click is the Fire fountain: a burst at your feet and a wash of fire left where you took off. Space and right click is the Updraft: a column of air that lifts you and anyone beside you and keeps your run -- and in the air, holding space, once a jump, it stretches the jump. An Updraft that meets your own fire is a Thermal: much higher, and along the carpet if it was the carpet.",
             ),
             e(
                 "Q",
-                "The weak push. Bolt: an instant line to whatever the crosshair is on -- it kicks a stone along the line and lights a fire bolt out of a pillar, and passes through people. In the air it is the Air bolt, a long slow shot with a real flight, lit if it flew through fire.",
+                "The weak push. Bolt: an instant line to whatever the crosshair is on -- it kicks a stone along the line and lights a fire bolt out of a pillar, and passes through people. The same in the air: Q is always the weak push.",
             ),
             e(
                 "E",

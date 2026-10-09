@@ -248,6 +248,11 @@ pub struct Rise {
     pub lifted: u8,
     /// This trip off the ground has had its takeoff.
     pub used: bool,
+    /// The height of what her feet were last on -- the floor, or the top of
+    /// a stone. A takeoff clicked a frame or two into the jump is put back
+    /// here (`back_to_the_floor`); asking the arena for its floor instead put
+    /// somebody jumping off a stone back on the ground under it.
+    pub floor: Fx,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -2390,11 +2395,14 @@ impl World {
             // up behind her is not a thing a mouse flick can produce.
             if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
                 let field = stones::gather(&self.players);
-                let at = aim::planted_ahead(p.pos, p.facing, t::landfall_ahead(), &field, here);
-                stones::raise(
-                    &mut self.players[i],
-                    class::Structure::slammed(at, p.facing),
-                );
+                if let Some(at) =
+                    aim::planted_ahead(p.pos, p.facing, t::landfall_ahead(), &field, here)
+                {
+                    stones::raise(
+                        &mut self.players[i],
+                        class::Structure::slammed(at, p.facing),
+                    );
+                }
             }
             // Fissure: the crack races from the stone she held churning. See
             // `race_the_crack`.
@@ -3124,6 +3132,7 @@ impl World {
                 p.rise.window as i32,
                 p.rise.lifted as i32,
                 p.rise.used as i32,
+                p.rise.floor.raw(),
                 p.self_spent,
             ];
             if late.iter().any(|v| *v != 0) {
@@ -5340,8 +5349,10 @@ fn elementalist_takeoff(class: Class, kind: u8) -> bool {
 fn keyed_q(p: &Player) -> Option<u8> {
     match p.class {
         Class::Champion => None,
-        Class::Elementalist if p.grounded => Some(SLOT_POKE),
-        Class::Elementalist => Some(moves::elementalist::AIR_BOLT),
+        // The weak push on the floor and off it, like `E`'s strong one: the
+        // Air bolt it threw in the air read as something else at the moment a
+        // push was wanted (2026-10-09, from play), and is unbound for now.
+        Class::Elementalist => Some(SLOT_POKE),
         // Hers is the Bloodletter, since 2026-10-09: the Grasp went to middle
         // click.
         Class::BloodMage => Some(moves::blood::BLOODLETTER),
@@ -5369,6 +5380,9 @@ fn rise_window(p: &mut Player, input: Input) {
     } else {
         r.lifted.saturating_add(1)
     };
+    if p.grounded {
+        r.floor = p.pos.y;
+    }
     if p.grounded && p.action.actionable() {
         r.used = false;
     }
@@ -5384,7 +5398,9 @@ fn back_to_the_floor(p: &mut Player, kind: u8, scene: &Scene) {
     if p.rise.lifted == 0 || p.rise.lifted > t::floor_grace() || p.vel.y.raw() <= 0 {
         return;
     }
-    let floor = scene.arena.ground_under(p.pos);
+    // Where her feet were last: the stone she jumped off, if it was one.
+    // The arena's floor is the fallback for a body that never stood here.
+    let floor = p.rise.floor.max(scene.arena.ground_under(p.pos));
     if floor.raw() > p.pos.y.raw() {
         return;
     }
@@ -5715,7 +5731,9 @@ fn rise_from_the_floor(p: &mut Player, kind: u8, scene: &Scene) {
     if lifted == 0 || lifted > t::floor_grace() || p.vel.y.raw() <= 0 {
         return;
     }
-    let floor = scene.arena.ground_under(p.pos);
+    // Where her feet were last: the stone she jumped off, if it was one.
+    // The arena's floor is the fallback for a body that never stood here.
+    let floor = p.rise.floor.max(scene.arena.ground_under(p.pos));
     if floor.raw() > p.pos.y.raw() {
         return;
     }
@@ -6491,7 +6509,7 @@ fn begin_move(
         return Action::Channel { kind, held: 0 };
     }
     if moves::charge(p.class, kind) == Some(moves::Charge::Gather) {
-        p.ball_at = aim::grounded_path(who, input, moves::get(p.class, kind).reach, scene).to;
+        p.ball_at = aim::grounded_kept(who, input, moves::get(p.class, kind).reach, scene).to;
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
@@ -6694,6 +6712,11 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
     let m = moves::get(p.class, kind);
     p.stoop = Fx::ZERO;
     p.aim_path = match m.aim() {
+        // Hers stay at her level when she did not point down
+        // (`aim::grounded_kept`); everybody else's are the plain rule.
+        aim::Kind::Grounded if p.class == Class::Elementalist => {
+            aim::grounded_kept(who, input, reach, scene)
+        }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, reach, scene),
         // Not aimed at anything -- a body moving. What it commits to is the
@@ -6903,7 +6926,9 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
     // The mechanic fires on the press with no startup, so there is nothing to
     // lock it against -- it asks `crate::aim` the same question an ability
     // does and uses the answer immediately.
-    let placed = |reach| aim::grounded_path(who, input, reach, scene).to;
+    // Only the Elementalist's stones are placed by this; they stay at her
+    // level when she did not point down (`aim::grounded_kept`).
+    let placed = |reach| aim::grounded_kept(who, input, reach, scene).to;
     match p.mechanic {
         // Throw commits you: faster, exposed, and unable to block until it is
         // back. Recall damages along the return path; reactivating mid-flight
@@ -10898,7 +10923,6 @@ impl World {
     fn race_the_crack(&mut self, i: usize, input: Input) {
         let p = self.players[i];
         let m = moves::get(p.class, SLOT_COMMITTED);
-        let path = p.aim_path;
         let field = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
@@ -10913,6 +10937,9 @@ impl World {
             critters: &crowd,
             arena: &self.terrain(),
         };
+        // Along the floor it was raised on: stopped at an edge rather than
+        // run off it into the floor below (`aim::kept_along`).
+        let path = aim::kept_along(p.aim_path, &scene);
         let met = aim::first_along(
             path,
             m.radius,
@@ -11475,7 +11502,8 @@ impl World {
     /// apart where it stands. Sent, it rolls along the floor at the speed its
     /// size gives it (`effects::ball_speed`), shrinking at the steady rate --
     /// faster while it carries somebody -- and is gone when it has shrunk
-    /// away or met a wall or a stone.
+    /// away. A wall or a stone turns it and costs it size; an edge it rolls
+    /// off, and sinks.
     ///
     /// **Carrying** is a moving floor: a body standing in it is moved with it,
     /// frame for frame, and can still walk inside it; a body that jumps inside
@@ -11501,36 +11529,91 @@ impl World {
         }
 
         let speed = crate::effects::ball_speed(effect.reach);
+        // **Steered by her walk** (2026-10-09, from play): while she is in it,
+        // the share of her own walking that is sideways to its roll turns it
+        // -- A and D, looking where it goes. The ball keeps its speed; only
+        // the heading bends, by her sideways speed over its own.
+        if effect.already_hit(0, owner) {
+            let walk = self.players[owner].vel;
+            let side = V3::new(Fx::ZERO.sub(effect.dir.z), Fx::ZERO, effect.dir.x);
+            let lateral = walk.x.mul(side.x).add(walk.z.mul(side.z));
+            let turn = lateral
+                .mul(t::air_ball_steer())
+                .mul(DT)
+                .div(speed.max(Fx::ONE));
+            let bent = effect.dir.add(side.scale(turn));
+            let bent = V3::new(bent.x, Fx::ZERO, bent.z).normalized();
+            if bent != V3::ZERO {
+                effect.dir = bent;
+            }
+        }
         let step = effect.dir.scale(speed.mul(DT));
-        // A ball climbs a step up to half its own size, and rolls off a drop
-        // on to whatever is below it.
+        // A ball climbs a step up to half its own size.
         let climbs = effect.reach.mul(Fx::ratio(1, 2));
         let terrain = self.terrain();
         let next = effect.pos.add(step);
+        let probe = V3::new(next.x, next.y.add(climbs), next.z);
         let r = terrain.resolve_sized(
-            V3::new(next.x, next.y.add(climbs), next.z),
+            probe,
             step.scale(Fx::ONE.div(DT)),
             true,
             effect.reach,
             effect.reach.add(effect.reach),
         );
-        let blocked_by_a_stone = stones::gather(&self.players).iter().flatten().any(|stone| {
-            let apart = V3::new(stone.at.x.sub(next.x), Fx::ZERO, stone.at.z.sub(next.z));
-            apart.flat_len().raw() < stone.radius().add(effect.reach.mul(Fx::ratio(1, 2))).raw()
-                && stone.top().raw() > next.y.add(climbs).raw()
-                && stone.at.y.raw() < next.y.add(effect.reach).raw()
+        // What it ran into, as the way back out of it: the side of a stone,
+        // or the wall the arena pushed it off.
+        let stone_in_the_way = stones::gather(&self.players)
+            .iter()
+            .flatten()
+            .find_map(|stone| {
+                let apart = V3::new(next.x.sub(stone.at.x), Fx::ZERO, next.z.sub(stone.at.z));
+                let meets = apart.flat_len().raw()
+                    < stone.radius().add(effect.reach.mul(Fx::ratio(1, 2))).raw()
+                    && stone.top().raw() > next.y.add(climbs).raw()
+                    && stone.at.y.raw() < next.y.add(effect.reach).raw();
+                meets.then(|| apart.normalized())
+            });
+        let knocked = stone_in_the_way.or_else(|| {
+            r.wall.then(|| {
+                let out = V3::new(r.pos.x.sub(probe.x), Fx::ZERO, r.pos.z.sub(probe.z));
+                out.normalized()
+            })
         });
-        if r.wall || blocked_by_a_stone {
-            effect.reach = Fx::ZERO;
-            return;
-        }
-        let floor = terrain.floor_below(V3::new(r.pos.x, r.pos.y.add(effect.reach), r.pos.z));
-        let moved = V3::new(
-            r.pos.x.sub(effect.pos.x),
-            floor.sub(effect.pos.y),
-            r.pos.z.sub(effect.pos.z),
-        );
-        effect.pos = V3::new(r.pos.x, floor, r.pos.z);
+        let new_pos = if let Some(out) = knocked {
+            // **Knocked off, not stopped** (2026-10-09, from play): it turns
+            // off the surface it met, as a ball off a wall, and loses some of
+            // its size -- so its speed and what is left of its life -- and
+            // stays where it was this frame.
+            let out = if out == V3::ZERO {
+                V3::ZERO.sub(effect.dir)
+            } else {
+                out
+            };
+            let into = effect.dir.x.mul(out.x).add(effect.dir.z.mul(out.z));
+            if into.raw() < 0 {
+                let back = out.scale(into.add(into));
+                let turned = V3::new(effect.dir.x.sub(back.x), Fx::ZERO, effect.dir.z.sub(back.z));
+                effect.dir = turned.normalized();
+            }
+            effect.reach = effect.reach.mul(t::air_ball_knock());
+            effect.pos
+        } else {
+            // **Off an edge it sinks** rather than dropping (2026-10-09, from
+            // play): over a floor no further down than a slope as steep as
+            // its own frame's roll, it rolls on that floor; past an edge it
+            // keeps going and comes down slowly, at `tuning::air_ball_sink`,
+            // carrying whoever is in it, until it meets the floor below.
+            let floor = terrain.floor_below(V3::new(r.pos.x, r.pos.y.add(effect.reach), r.pos.z));
+            let slope = step.flat_len();
+            let y = if floor.raw() >= effect.pos.y.sub(slope).raw() {
+                floor
+            } else {
+                effect.pos.y.sub(t::air_ball_sink().mul(DT)).max(floor)
+            };
+            V3::new(r.pos.x, y, r.pos.z)
+        };
+        let moved = new_pos.sub(effect.pos);
+        effect.pos = new_pos;
 
         let holds = effect.reach.raw() >= t::air_ball_holds().raw();
         let mut carrying = false;
@@ -11555,9 +11638,19 @@ impl World {
             effect.take_hit(0, i);
             carrying = true;
             let q = &mut self.players[i];
-            if q.grounded {
+            // Held up by it where there is no floor: off an edge, a body
+            // standing in it stands on it, and sinks with it.
+            let held = !q.grounded
+                && q.vel.y.raw() <= 0
+                && q.pos.y.raw() <= effect.pos.y.add(climbs).raw();
+            if q.grounded || held {
                 q.pos.x = q.pos.x.add(moved.x);
                 q.pos.z = q.pos.z.add(moved.z);
+                if held {
+                    q.pos.y = effect.pos.y;
+                    q.vel.y = Fx::ZERO;
+                    q.grounded = true;
+                }
             } else {
                 q.vel.x = effect.dir.x.mul(speed);
                 q.vel.z = effect.dir.z.mul(speed);

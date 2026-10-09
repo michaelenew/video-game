@@ -27,8 +27,6 @@ const RAISE: u16 = keys::EARTH;
 const FISSURE: u16 = keys::EARTH;
 /// The weak push on the floor: the Bolt.
 const BOLT: u16 = keys::WEAK_PUSH;
-/// The weak push in the air: the Air bolt.
-const AIR_BOLT: u16 = keys::WEAK_PUSH;
 /// The wind click in the air: the Gale.
 const GALE: u16 = keys::WIND;
 /// The fire click: the Fire pillar on a tap, the Strike held.
@@ -134,6 +132,23 @@ fn throw(w: &mut World, button: u16) {
 }
 
 /// The same, holding a pitch.
+/// The Air bolt, which has no button since the second playtest (`Q` is the
+/// Bolt in the air too): pressed by its slot, then flown as `throw_looking`
+/// flies a thrown move.
+fn throw_the_air_bolt(w: &mut World, pitch: i16) {
+    let step = |w: &mut World| {
+        w.advance([
+            Input::looking_at(0, LOOK_RIGHT, pitch),
+            Input::looking_at(0, LOOK_LEFT, 0),
+        ]);
+    };
+    w.press(0, e::AIR_BOLT, Input::looking_at(0, LOOK_RIGHT, pitch));
+    let (startup, active, _) = sim::moves::frames(Class::Elementalist, e::AIR_BOLT);
+    for _ in 0..(startup + active + 1) {
+        step(w);
+    }
+}
+
 fn throw_looking(w: &mut World, button: u16, pitch: i16) {
     let step = |w: &mut World, bits: u16| {
         w.advance([
@@ -380,7 +395,7 @@ fn air_bolt_through(fire: bool) -> (World, i32) {
     // and meets the standing body.
     let reach = sim::moves::get(Class::Elementalist, e::AIR_BOLT).reach;
     let pitch = crosshair_onto_the_floor_at(&w, w.players[1].pos, reach);
-    throw_looking(&mut w, AIR_BOLT, pitch);
+    throw_the_air_bolt(&mut w, pitch);
     fly_out(&mut w, pitch, 120);
     let dealt = full - w.players[1].health;
     (w, dealt)
@@ -430,7 +445,7 @@ fn a_shot_is_lit_by_a_fire_pillar_as_well_as_by_a_cloud() {
     aloft(&mut w, 1.0);
     let reach = sim::moves::get(Class::Elementalist, e::AIR_BOLT).reach;
     let pitch = crosshair_onto_the_floor_at(&w, w.players[1].pos, reach);
-    throw_looking(&mut w, AIR_BOLT, pitch);
+    throw_the_air_bolt(&mut w, pitch);
     assert_eq!(shots(&w).len(), 1);
     // A few frames of flight is enough to cross the pillar's base.
     for _ in 0..30 {

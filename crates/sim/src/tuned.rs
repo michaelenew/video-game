@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 371] = [
+pub const SCALARS: [i32; 375] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -379,6 +379,10 @@ pub const SCALARS: [i32; 371] = [
               14, // blood_mage.nail,_flies_for = 14
          1966080, // blood_mage.hook,_pulls_her_at_(m/s) = 30
                1, // blood_mage.haemorrhage_bleeds_a_creature = on
+          131072, // elementalist.placed,_at_most_below_her_(m) = 2
+          163840, // elementalist.air_ball,_sinks_off_an_edge_(m/s) = 2.5
+           65536, // elementalist.air_ball,_steered_by_her_walk_(x) = 1
+           45875, // elementalist.air_ball,_size_kept_off_a_wall_(x) = 0.7
 ];
 
 #[rustfmt::skip]

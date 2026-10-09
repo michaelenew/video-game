@@ -33,7 +33,7 @@ Ranged control that creates its own targets.
 
 | Key | On foot | In the air |
 | --- | --- | --- |
-| `Q` — the weak push | Bolt | Air bolt |
+| `Q` — the weak push | Bolt | Bolt (the Air bolt is unbound since the second playtest) |
 | `E` — the strong push | Cataclysm | Cataclysm |
 | `F` | Cinder spray | Downdraft |
 | Side button | Quake | Quake |
@@ -62,8 +62,54 @@ inside it is given its speed, so they leave with it. It holds nobody once it is 
 `Air ball, holds a body down to`, so a rider is put down a moment before it vanishes. It
 shrinks faster while it carries anybody (`Air ball, shrinks faster carrying`), which is the
 answer 0008 leaned to on a charge that moves her: carrying is paid for, and the long trips come
-from what she does after she jumps off. A wall or a stone stops it; it climbs a step up to half
-its own size and rolls off a drop. It hurts nobody. One at a time.
+from what she does after she jumps off. It climbs a step up to half its own size. It hurts
+nobody. One at a time. *Changed after the second playtest — see below:* off an edge it sinks
+rather than drops, a wall or a stone knocks it off rather than stopping it, and she steers it.
+
+### After the second playtest — 2026-10-09
+
+What the person reported from three replays, what the replays showed, and what changed.
+`tests/elementalist_playtest.rs` holds each as a property.
+
+- **On a stone is on it.** On a stone that is still moving — an eruption's tail, the earth
+  jump's stone coming to its stop — she kept the speed it had carried her at, drifted a hair
+  clear of the top, and read as airborne every few frames; a left click on one of those frames
+  was Landfall, which slammed her back to the floor. Now a body that was standing on a stone and
+  is not leaving it faster than half a jump is put back on its top at its speed
+  (`stones::resolve_body`). A jump still leaves it.
+- **A takeoff a frame after leaving a stone leaves from the stone.** Space a frame before the
+  click put her back on *the arena's* floor for the takeoff — the ground under the stone — and
+  she was pushed out of the stone's side. The takeoff window now remembers the height of what
+  her feet were last on (`Rise::floor`), and puts her back there; off a stone, the stone
+  shatters under the jump as it should.
+- **The stone under her feet, and off it at once** — the person's find, kept on purpose.
+  Running, look straight down and left-click: Raise puts a stone exactly under her feet. Space
+  and left click a frame later is then an earth jump *off a stone*, so the stone shatters and she
+  gets the bigger jump (`Earth jump, off a stone`, ×1.35 of her rise, about 23 m/s up against
+  17) — and, unlike the plain earth jump, which costs some of her run, it keeps all of it. The
+  look straight down is only so the crosshair puts the stone under her; flicking up afterwards
+  is for where she is going. Two presses a frame apart and a structure slot, for a long fast jump
+  forward. `the_stone_under_her_feet_and_off_it_at_once_is_the_big_running_jump`.
+- **`Q` is the Bolt in the air too**, as `E` is Cataclysm in both rows. The Air bolt has no
+  button for now.
+- **A stone she did not point down at stays at her level** (`aim::grounded_kept`, hers only).
+  Raise clicked out past an edge, or at the side of an island across a pit, put its stone on the
+  floor far below — often a course's void. Now the edge of the range, and the floor under a wall
+  she pointed at, come back toward her to the last footing no more than
+  `Placed, at most below her` (2 m) under her own (`aim::kept_up`). A crosshair *on* the floor
+  below still puts it there. A Fissure held from a stone up top runs along that ground and stops
+  at the edge (`aim::kept_along`), so its stone erupts at the lip, not in the pit; one started
+  down there runs down there. Landfall's slab never comes up off a ledge (`aim::planted_ahead`):
+  past one it comes back to her level, and with no footing between there is no slab. The Reaver's
+  send, the Black spike and Judgement keep the plain rule — the send's refusal past an edge was
+  decided from play on 2026-10-04.
+- **The Air ball rolls off edges**: past one it keeps going and sinks at
+  `Air ball, sinks off an edge` (2.5 m/s), holding up whoever is in it, until it meets the floor.
+  **She steers it** by walking sideways in it — A and D, looking where it goes; the sideways
+  share of her walk bends its heading (`Air ball, steered by her walk`). **A wall or a stone
+  knocks it off** rather than stopping it: it turns off the surface and keeps
+  `Air ball, size kept off a wall` (0.7) of its size, so of its speed and what is left of its
+  life.
 
 **Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
 along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and

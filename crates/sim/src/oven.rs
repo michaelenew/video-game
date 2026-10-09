@@ -694,6 +694,13 @@ scalars! {
     NailFlight,           "Blood mage", "Nail, flies for", Frames, 1, 60;
     HookSpeed,            "Blood mage", "Hook, pulls her at (m/s)", Fixed, fx(1,1), fx(80,1);
     BleedOnCreatures,     "Blood mage", "Haemorrhage bleeds a creature", Flag, 0, 1;
+    // **The Elementalist from the second playtest**, 2026-10-09: how far a
+    // stone nobody pointed down at may land below her (`aim::kept_up`), and
+    // the Air ball off an edge, steered and knocked off a wall.
+    PlacementDrop,        "Elementalist", "Placed, at most below her (m)", Fixed, 0, fx(20,1);
+    AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
+    AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
+    AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
 }
 
 // ---------------------------------------------------------------------------

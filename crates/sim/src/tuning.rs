@@ -3009,3 +3009,27 @@ pub fn hook_speed() -> Fx {
 pub fn bleed_on_creatures() -> bool {
     oven::scalar(Scalar::BleedOnCreatures) != 0
 }
+
+/// How far below her own footing a stone she did not point down at may land:
+/// past an edge, a placement comes back toward her rather than falling to the
+/// floor below. See `aim::kept_up`.
+pub fn placement_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlacementDrop)).max(Fx::ZERO)
+}
+
+/// How fast an Air ball that has rolled off an edge sinks, carrying whoever
+/// is in it, until it meets the floor.
+pub fn air_ball_sink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallSink)).max(Fx::ZERO)
+}
+
+/// How much of her sideways walk inside her Air ball turns it.
+pub fn air_ball_steer() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallSteer)).max(Fx::ZERO)
+}
+
+/// What share of its size an Air ball keeps when it is knocked off a wall or
+/// a stone.
+pub fn air_ball_knock() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallKnock)).clamp(Fx::ZERO, Fx::ONE)
+}

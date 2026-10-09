@@ -1359,13 +1359,15 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // weak and strong. See `elementalist::keys` and
         // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
         Class::Elementalist => match slot {
-            0 => "Q",
+            0 => "Q, floor and air",
             // Raise is left click, an instant; held past the stone's rise it
             // is Fissure. See [`Charge::Crack`].
             1 => "LMB held",
             2 => "MMB",
             3 => "E",
-            4 => "Q air",
+            // `Q` is the Bolt in the air too, since the second playtest: the
+            // Air bolt has no button for now.
+            4 => "unbound",
             5 => "RMB air",
             6 => "LMB air",
             // Off the clicks: the fire is the pillar's and the carpet's now,

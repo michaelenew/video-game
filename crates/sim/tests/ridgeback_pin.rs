@@ -55,13 +55,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Blood mage's was re-pinned the same day** for her own three clicks,
 /// and **the Elementalist's again**: her takeoff window and held earth click
 /// went into `state_checksum`, which had been leaving them out.
+///
+/// **Both again after the second playtest** (2026-10-09, later): the takeoff
+/// window remembers the height of what her feet were last on
+/// (`Rise::floor`), which both classes keep, and the Elementalist's stones
+/// carry a body that stands on them while they move. See the feel log.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x92d2fe3e7aa9f640),
     (Class::Bulwark, 0x343a49eb275a9f8c),
     (Class::ShadowReaver, 0xe53fcf6df7af6f65),
-    (Class::BloodMage, 0x5f5eb48b38d32eec),
+    (Class::BloodMage, 0x1d800ee722377057),
     (Class::DualMage, 0x93e81a0b1b363049),
-    (Class::Elementalist, 0x52a00e93621823ed),
+    (Class::Elementalist, 0x70811b99d05c7254),
 ];
 
 #[test]

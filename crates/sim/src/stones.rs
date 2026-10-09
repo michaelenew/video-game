@@ -945,6 +945,27 @@ pub fn resolve_body(
         grounded = true;
     }
 
+    // **On a moving stone, on it.** A stone that is still climbing but slowing
+    // -- an eruption's tail, the earth jump's stone coming to its stop --
+    // leaves the speed it carried her at in her `vel`, so she drifts a hair
+    // clear of the top every frame and reads as airborne every few: a click
+    // there is an air move, which on the earth click is Landfall slamming her
+    // back to the floor (the person's report, 2026-10-09). Somebody who was
+    // standing on it and is not moving away from it faster than a jump does
+    // is put back on the top, at its speed. A jump is the one thing that
+    // leaves it: half a jump clear of the stone's own climb.
+    if !grounded && was_grounded {
+        if let Some(stone) = riding(field, pos) {
+            let climb = stone.surface_speed().mul(t::stone_lift()).max(Fx::ZERO);
+            let away = vel.y.sub(climb);
+            if away.raw() <= t::jump_speed().mul(Fx::ratio(1, 2)).raw() {
+                pos.y = stone.top();
+                vel.y = climb;
+                grounded = true;
+            }
+        }
+    }
+
     // A fighter sliding off the side of a stone is not a wall contact in the
     // sense `stones::step` cares about -- that flag is for a *stone* meeting
     // the arena, not a body meeting a stone.
@@ -954,6 +975,20 @@ pub fn resolve_body(
         grounded,
         wall: false,
     }
+}
+
+/// The stone a body is on or just over, by the skin widened by how far the
+/// stone moved this frame (the same widening [`under`] uses): a body on a
+/// stone that is moving is a frame behind it.
+fn riding(field: &Field, pos: V3) -> Option<Structure> {
+    field.iter().flatten().copied().find(|stone| {
+        let reach = t::body_radius().add(stone.radius());
+        let apart = V3::new(pos.x.sub(stone.at.x), Fx::ZERO, pos.z.sub(stone.at.z));
+        let skin = arena::SKIN.add(stone.vel.y.abs().add(stone.surface_speed().abs()).mul(DT));
+        apart.flat_len().raw() < reach.raw()
+            && pos.y.sub(stone.top()).abs().raw() <= skin.raw()
+            && stone.standing_height().raw() > 0
+    })
 }
 
 /// Is there a stone directly beneath the feet?

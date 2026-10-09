@@ -167,10 +167,13 @@ fn the_same_buttons_mean_different_moves_off_the_ground() {
         Some(SLOT_HEAVY),
         "the strong push, standing"
     );
+    // The Bolt in the air too, since the second playtest (2026-10-09): the
+    // weak push is one move wherever her feet are, as the strong one is. The
+    // Air bolt is unbound for now; `World::press` still throws it.
     assert_eq!(
         pressing(PUSH, Some(2.0)),
-        Some(air::AIR_BOLT),
-        "the weak push in the air should be the Air bolt"
+        Some(SLOT_POKE),
+        "the weak push in the air should be the Bolt"
     );
     assert_eq!(
         pressing(SHOVE, Some(2.0)),
@@ -205,11 +208,11 @@ fn the_earth_click_is_still_an_instant_on_the_floor() {
 fn shift_does_not_reach_the_air_row() {
     // Shift is the dodge and nothing else; it is not an attack modifier on the
     // floor (Fissure is the earth click held now) and it must not become one
-    // in the air. Ignoring it has to come out as the Air bolt rather than as
+    // in the air. Ignoring it has to come out as the Bolt rather than as
     // silence, or the input is eaten.
     assert_eq!(
         pressing(SHIFT | PUSH, Some(2.0)),
-        Some(air::AIR_BOLT),
+        Some(SLOT_POKE),
         "shift in the air should throw what the weak push throws up there"
     );
 }
@@ -224,11 +227,16 @@ fn both_air_shots_leave_her_hand_and_fly() {
     // Bolt and Cataclysm are instant lines, resolved on the frame they come
     // out. These have a speed, so there is something to lead and something to
     // walk out of.
-    for (button, gale) in [(PUSH, Gale::Bolt), (BLOW, Gale::Disc)] {
+    // The Air bolt has no button since 2026-10-09 (`Q` is the Bolt in the
+    // air), so it is pressed by its slot.
+    for (button, gale) in [(None, Gale::Bolt), (Some(BLOW), Gale::Disc)] {
         let mut w = elementalist();
         aloft(&mut w, 2.0);
         let m = sim::moves::get(Class::Elementalist, gale.slot());
-        run(&mut w, 1, button, 0);
+        match button {
+            Some(button) => run(&mut w, 1, button, 0),
+            None => w.press(0, gale.slot(), Input::looking_at(0, 0, 0)),
+        }
         run(&mut w, m.startup as u32 + 1, 0, 0);
 
         let flying = shots(&w);
@@ -277,7 +285,7 @@ fn a_shot_expires_at_its_own_range() {
     let mut w = elementalist();
     aloft(&mut w, 2.0);
     let m = sim::moves::get(Class::Elementalist, air::AIR_BOLT);
-    run(&mut w, 1, PUSH, 0);
+    w.press(0, air::AIR_BOLT, Input::looking_at(0, 0, 0));
     // Long enough to cover the whole range at the shot's own speed, and then
     // some.
     let legs = (m.reach.raw() as i64 * 60 / t::air_bolt_speed().raw().max(1) as i64) as u32;

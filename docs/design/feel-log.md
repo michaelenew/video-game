@@ -7820,3 +7820,47 @@ guess. See [kits/blood-mage.md](kits/blood-mage.md) §"On three clicks".
   so the falls may be routes this run did not find again.
 **Verdict** — unplayed. Known from the start: a pinned body and the jet's wake are not drawn.
 The Bloodletter is in no combo and is the candidate to cut.
+
+### 2026-10-09 — the Elementalist after the second playtest
+**Changed**, from three replays the person sent, played back frame by frame on the build they
+were recorded on:
+- **On a stone is on it.** Standing on a stone that was still moving (the earth jump's stone
+  coming to its stop) she kept the speed it had carried her at and drifted clear of its top —
+  `grounded` flickered 1, 0, 1 — so a left click there was Landfall and slammed her down. A body
+  that was standing on a stone and is not leaving it faster than half a jump is now put back on
+  its top at its speed (`stones::resolve_body`).
+- **A takeoff a frame after leaving a stone leaves from the stone.** Space then left click a
+  frame apart, standing on a stone, put her back on the arena's floor *under* the stone (1.8 m
+  down, and pushed out of its side) and the earth jump came out of the ground. The window now
+  remembers the height of what her feet were last on (`Rise::floor`).
+- **The person's find, explained and kept**: look straight down, left click (Raise puts a stone
+  exactly under her feet), then space and left click a frame later — an earth jump off a stone,
+  so the stone shatters and she gets the ×1.35 jump (22.95 m/s up in the replay against 17.00),
+  and it keeps all her run where the plain earth jump costs some. Pinned by
+  `the_stone_under_her_feet_and_off_it_at_once_is_the_big_running_jump`.
+- **`Q` is the Bolt in the air too.** The Air bolt is unbound — a candidate to cut, or to find
+  another button for.
+- **Her stones stay at her level when she did not point down** (`aim::grounded_kept`,
+  `kept_up`, `kept_along`, and Landfall's `planted_ahead`): `Placed, at most below her` = 2 m.
+  Hers only; the Reaver's send keeps its refusal past an edge (2026-10-04).
+- **The Air ball** sinks off an edge at 2.5 m/s instead of dropping, still carrying; is steered
+  by the sideways share of her walk inside it (×1); and is knocked off a wall or a stone keeping
+  0.7 of its size instead of stopping.
+**Tried and changed while building**
+- *Keeping her stones up for every grounded cast*, in `aim::grounded_path` itself: it turned the
+  Reaver's refused send past an island's edge into a send to the lip, undoing a decision from
+  play. Now a separate `aim::grounded_kept` for the Elementalist's placements only.
+- *The scan back to her level, asked from the floor below*: from the pit's floor an island over
+  it is a ceiling, so the scan never found the island. It asks from her own height.
+- *The Air ball snapping down any step within half its size*: past a 1.5 m dais it fell most of
+  a metre in a frame. It now rolls on a floor only as far down as a slope as steep as one frame
+  of its roll, and sinks past that.
+- The Ridgeback pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned for both classes
+  that keep `Rise` (the Elementalist and the Blood mage: `Rise::floor` is new hashed state, and
+  the stone carry changes her runs); her envelope fixtures re-recorded. Mixed, as a search
+  is: some lanes rose (lane 11 from 6.9 to 30.0 m, lane 0 from 6.5 to 17.3), some fell (lane 15
+  from 24.0 to 9.4, lane 5 from 20.4 to 10.0) -- a lower bound, so a fall may be a route this
+  run did not find again.
+**Verdict** — unplayed. To check in play: whether 2 m is the right drop on the valley's sloping
+land (a Raise at full range downhill now comes back toward her), and whether the steer is
+enough to be felt.

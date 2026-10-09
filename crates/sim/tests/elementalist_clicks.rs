@@ -151,7 +151,8 @@ fn in_the_air_the_clicks_are_landfall_the_carpet_and_the_gale() {
         (keys::EARTH, e::LANDFALL),
         (keys::FIRE, e::FIRE_CARPET),
         (keys::WIND, e::GALE),
-        (keys::WEAK_PUSH, e::AIR_BOLT),
+        // The Bolt, as on the floor (2026-10-09, the second playtest).
+        (keys::WEAK_PUSH, SLOT_POKE),
         (keys::STRONG_PUSH, SLOT_HEAVY),
     ] {
         let mut w = elementalist();
