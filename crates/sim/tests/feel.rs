@@ -388,7 +388,11 @@ fn best_case(m: &Move) -> i32 {
             // nobody, a carpet and a wash whose burns are fields of their own.
             | EffectKind::AirBall
             | EffectKind::FireCarpet
-            | EffectKind::Fountain,
+            | EffectKind::Fountain
+            // The Blood mage's nova and nail are placed by the world from the
+            // move, and are the move's own one hit.
+            | EffectKind::Nova
+            | EffectKind::Nail,
         )
         | None => m.damage * swings,
     }
@@ -561,10 +565,11 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
             Class::Elementalist => 16,
             Class::ShadowReaver => 4,
-            // Five: the auto was appended when the scythe arrived, so the
-            // four rows that came before it kept their knobs. See
-            // `moves::blood`.
-            Class::BloodMage => 5,
+            // Eleven: the five of the scythe's arrival and the six of
+            // 2026-10-09 -- the Blood nova, the Blood jet, Marionette, Nail,
+            // Hook and Harvest. See
+            // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+            Class::BloodMage => 11,
             // Six on five inputs: both forms of Lance answer to middle click,
             // and which one comes out is the force she is carrying. See
             // `moves::dual`.

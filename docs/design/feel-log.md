@@ -7782,3 +7782,41 @@ spray kept `F`. Every number on the four new moves is a first guess. See
   play** (the courses rule: reach paid in execution).
 **Verdict** — unplayed. Known from the start: the carpet is hard to use at speed, and from her
 own seat it is edge-on and reads as one ball of fire.
+
+### 2026-10-09 — the Blood mage on three clicks
+**Changed** Her core moved on to the three clicks, the same treatment as the Elementalist's:
+left is *my blood* (a new **Blood nova** held on the floor, the Haemorrhage in the air), middle
+is *your blood* (the Grasp held, a new **Nail** in the air), right is the scythe (the Reaping
+sweep, a new **Hook** in the air). Space with a click is a takeoff in the shared window: the
+new **Blood jet** (held), **Marionette** and **Harvest**. `Q` is the Bloodletter, `E` the
+Black spike. Decided with the person combos-first: six combos, then the pieces
+([exploration/0009](exploration/0009_blood_mage_on_three_clicks.md)). Three rules changed with
+it: **her own pools never heal her**, **a hit on somebody in the air spills under them**, and
+**creatures bleed** (the Haemorrhage's bleed ticks on a creature; `CLASS-2`). The nova and the
+jet are paid in red health **as she holds**, one point every 6 frames — the first costs in the
+game paid over a hold rather than on the press. Every number on the six new moves is a first
+guess. See [kits/blood-mage.md](kits/blood-mage.md) §"On three clicks".
+**Tried and changed while building**
+- *Marionette* at launch 14 / self-lift 12 lifted the victim about 2 m and left her below them,
+  too low for the Nail to meet and too short a hang for the Hook: the Hanging did not connect.
+  Now launch 22, self-lift 20, hitstun 40, recovery 10, and `tests/blood_mage_clicks.rs` runs
+  the Hanging end to end (lift, hook, nail, pin, pool below).
+- *Harvest* at hitstun 16 was −17 on hit (a jump of 18 active and 16 recovery frames); now 36,
+  so landing it keeps the initiative (`feel.rs`).
+- *The Blood jet's wake* hurt fighters only; it now reaches a creature at either end of the line
+  and any critter on it (`critters.rs`: a move that touches a fighter touches a gnat).
+- *Harvest passes over a 0.6 m gnat* at 1–2 m: she is in the air before the blade comes round.
+  Kept, and recorded as a known exception beside the Guillotine
+  ([critters.md](critters.md) §7) — a person's call.
+- *The pins.* Her Ridgeback pin (`tests/ridgeback_pin.rs`) and scripted hunt
+  (`hunt/tests/pin.rs`, whose class layer now asks for her scythe and Grasp by button) re-pinned.
+  The Elementalist's both moved again too: `state_checksum` had been leaving her takeoff window
+  and held earth click out, and they went in with the Blood mage's new fields. A first attempt
+  hashed the held left button for **every** class and moved every pin; it is hashed for hers
+  alone. No other class's pin moved.
+- *Her envelope fixtures* re-recorded (`envelope -- search --fixtures --class Blood_mage`).
+  Mixed: lane 5 rose from 5.3 m to 20.8 m and lane 3 from 4.7 to 14.1 (the Blood jet, the
+  Hook), lane 0 fell from 20.9 to 8.0 and lane 2 from 13.1 to 8.8. A search is a lower bound,
+  so the falls may be routes this run did not find again.
+**Verdict** — unplayed. Known from the start: a pinned body and the jet's wake are not drawn.
+The Bloodletter is in no combo and is the candidate to cut.

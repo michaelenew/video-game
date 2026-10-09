@@ -1015,6 +1015,14 @@ actually lives.
 
 ### Blood mage
 
+> **Superseded 2026-10-09: she is on three clicks.** Left is *my blood* (the Blood nova held on
+> the floor, the Haemorrhage in the air), middle is *your blood* (the Grasp held, the Nail in
+> the air), right is the scythe (the Reaping sweep, the Hook in the air); space with a click is
+> a takeoff in the Champion's window (the Blood jet, Marionette, Harvest); `Q` is the
+> Bloodletter and `E` the Black spike. The table is [kits/blood-mage.md](kits/blood-mage.md)
+> §"On three clicks", and the buttons are named once in `sim::moves::blood::keys`. What
+> follows is the v1 layout it replaced.
+
 Current as of 2026-09-23, the v1 rebuild. Every row is **bound**.
 
 | Input | Result |

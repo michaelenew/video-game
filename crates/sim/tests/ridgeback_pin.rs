@@ -51,13 +51,17 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Elementalist's was re-pinned on 2026-10-09**, when her buttons were
 /// remapped on to three clicks: the same random presses now throw different
 /// moves. See `docs/design/feel-log.md` for that date.
+///
+/// **The Blood mage's was re-pinned the same day** for her own three clicks,
+/// and **the Elementalist's again**: her takeoff window and held earth click
+/// went into `state_checksum`, which had been leaving them out.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x92d2fe3e7aa9f640),
     (Class::Bulwark, 0x343a49eb275a9f8c),
     (Class::ShadowReaver, 0xe53fcf6df7af6f65),
-    (Class::BloodMage, 0xa0aa0d5ca0dae7e5),
+    (Class::BloodMage, 0x5f5eb48b38d32eec),
     (Class::DualMage, 0x93e81a0b1b363049),
-    (Class::Elementalist, 0x60e4d8af6e3b5457),
+    (Class::Elementalist, 0x52a00e93621823ed),
 ];
 
 #[test]

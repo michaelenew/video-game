@@ -8,6 +8,7 @@
 use sim::class::{ALL_CLASSES, Class};
 use sim::effects::{Effect, EffectKind};
 use sim::moves::blood as b;
+use sim::moves::blood::keys;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
 
@@ -94,7 +95,7 @@ fn every_hit_she_lands_spills_a_pool_under_the_target() {
     let mut w = mage();
     in_reach(&mut w);
     let full = w.players[1].health;
-    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 2, keys::SCYTHE, 0);
     run(&mut w, 20, 0, 0);
     let dealt = full - w.players[1].health;
     assert!(dealt > 0, "fixture: the sweep never landed");
@@ -172,7 +173,7 @@ fn hits_that_land_on_one_spot_make_one_pool() {
         .add(V3::new(grasp.channel_from, Fx::ZERO, Fx::ZERO));
     let pitch = pitch_at(&w, w.players[1].pos);
     let full = w.players[1].health;
-    looking(&mut w, 2, Input::SPECIAL, pitch, 0);
+    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, 0);
     looking(
         &mut w,
         grasp.whiff_cost() as u32 + t::grasp_flight() as u32,
@@ -211,7 +212,7 @@ fn a_fifth_pool_merges_into_the_newest() {
     }
     let newest = w.effects[t::pool_cap() - 1].expect("placed").pool_volume();
     in_reach(&mut w);
-    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 2, keys::SCYTHE, 0);
     run(&mut w, 20, 0, 0);
     let made = pools(&w);
     assert_eq!(
@@ -231,15 +232,26 @@ fn a_fifth_pool_merges_into_the_newest() {
 
 #[test]
 fn her_own_costs_never_pool() {
+    // Every move that is paid for and aimed at somebody, cast at nobody. The
+    // *my blood* moves on the floor -- the Blood nova and the Blood jet -- are
+    // the deliberate exception and are left out: they spill her on purpose, a
+    // pool of her own blood that is a door and never a heal
+    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md;
+    // `tests/blood_mage_clicks.rs` holds them to it). Haemorrhage is the left
+    // click in the air, so it is cast from a height.
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
-    for button in [
-        Input::LEFT,
-        Input::RIGHT,
-        Input::MIDDLE,
-        Input::SPECIAL,
-        Input::MECHANIC,
+    for (button, airborne) in [
+        (keys::SCYTHE, false),
+        (keys::MY_BLOOD, true),
+        (keys::BLOODLETTER, false),
+        (keys::YOUR_BLOOD, false),
+        (keys::SPIKE, false),
     ] {
+        if airborne {
+            w.players[0].pos.y = Fx::from_int(3);
+            w.players[0].grounded = false;
+        }
         run(&mut w, 2, button, 0);
         run(&mut w, 70, 0, 0);
     }
@@ -286,7 +298,7 @@ fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_is_gone() {
     let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(sweep.cost);
-    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 2, keys::SCYTHE, 0);
     run(&mut w, sweep.startup as u32 + 4, 0, 0);
     let got = w.players[0].health - (before - paid);
     let expect = sweep.drinks(200);
@@ -326,7 +338,7 @@ fn a_drink_is_capped_by_grey_and_the_pool_is_spent_regardless() {
     let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     // At full health the only grey she has is the cast's own cost, less what
     // faded during the wind-up.
-    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 2, keys::SCYTHE, 0);
     run(&mut w, sweep.startup as u32 + 4, 0, 0);
     assert!(
         w.players[0].health <= t::max_health()
@@ -339,7 +351,7 @@ fn a_drink_is_capped_by_grey_and_the_pool_is_spent_regardless() {
         "there was grey left with a pool to drink"
     );
     // And the pool is spent all the same: what she could not fill is lost
-    // with it. Only the Reap's own spill is left on the floor.
+    // with it. Only the sweep's own spill is left on the floor.
     let dealt = w.players[1].full_health() - w.players[1].health;
     let left = pools(&w);
     assert_eq!(left.len(), 1);
@@ -356,7 +368,7 @@ fn a_hit_on_bare_floor_returns_nothing_on_the_frame_it_lands() {
     in_reach(&mut w);
     wounded(&mut w, 300);
     let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
-    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 2, keys::SCYTHE, 0);
     let paid = w.players[0].health;
     run(&mut w, sweep.startup as u32 + 4, 0, 0);
     assert!(
@@ -378,7 +390,7 @@ fn the_blade_drinks_from_pools_it_crosses_on_the_way_home() {
         .pos
         .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
     w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, along, 100));
-    looking(&mut w, 2, Input::MIDDLE, 0, 0);
+    looking(&mut w, 2, keys::BLOODLETTER, 0, 0);
     let paid = w.players[0].health;
     let flight = t::bloodletter_flight() as u32;
     // The way out drinks nothing.
@@ -407,7 +419,10 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // and landed over a pool of its own making it returns more than it cost.
     // The first cast makes the pool; the second, thrown as soon as she is
     // free, is the one measured.
-    let cases = [(b::SWEEP, Input::LEFT), (b::BLOODLETTER, Input::MIDDLE)];
+    let cases = [
+        (b::SWEEP, keys::SCYTHE),
+        (b::BLOODLETTER, keys::BLOODLETTER),
+    ];
     for (slot, button) in cases {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
@@ -480,7 +495,7 @@ fn a_grasp_landed_on_somebody_standing_in_a_pool_drinks_its_share_once() {
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(grasp.cost);
     let full = w.players[1].health;
-    looking(&mut w, 2, Input::SPECIAL, pitch, 0);
+    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, 0);
     looking(
         &mut w,
         grasp.whiff_cost() as u32 + t::grasp_flight() as u32,

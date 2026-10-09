@@ -1,5 +1,5 @@
 ---
-status: decided 2026-10-09 by the person, combos first; being built
+status: decided 2026-10-09 by the person, combos first; built 2026-10-09, unplayed
 started: 2026-10-09
 supersedes: 0007 §4 (the Blood mage), where they differ
 depends: 0007_core_kits.md, ../kits/blood-mage.md, ../blood-mage.md
@@ -9,7 +9,7 @@ depends: 0007_core_kits.md, ../kits/blood-mage.md, ../blood-mage.md
 
 The same treatment the Elementalist got in 0008: the class's core on left, middle and right
 click, each with a move on the floor, an aerial and a jump attack (space and the click), in the
-Champion's grid. To be built after the Elementalist.
+Champion's grid. Built 2026-10-09; what was built is [../kits/blood-mage.md](../kits/blood-mage.md) §"On three clicks".
 
 ## Decided, 2026-10-09: the combos come first
 

@@ -268,6 +268,23 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             }
             // A cloud of embers: the slab the shot test traces and the body
             // test reads, about its centre -- see `Effect::ember_volume`.
+            // The Blood nova and the Nail: the spheres they hit with.
+            EffectKind::Nova => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(
+                        at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+                    ),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            EffectKind::Nail => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(crate::fx3(effect.bolt_at())),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
             // The Air ball: the ball the carry reads, at its size now.
             EffectKind::AirBall => {
                 gizmos.sphere(

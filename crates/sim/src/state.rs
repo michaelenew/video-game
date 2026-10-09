@@ -50,6 +50,11 @@ const GROUND_Y: Fx = Fx::ZERO;
 /// what lets one control scheme drive six kits. See `controls.md`.
 /// `held_by` when nobody is holding you.
 pub const NOBODY: u8 = u8::MAX;
+/// `Player::held_by` for a body the Blood mage's Nail has pinned in the air:
+/// held by nobody who drags it anywhere, and -- unlike a creature's spikes,
+/// which hold a fighter where they stand -- held **off the floor**, gravity
+/// and all. See `moves::blood::NAIL`.
+pub const NAILED: u8 = u8::MAX - 1;
 
 /// `Player::blinked` when she did not blink this frame.
 pub const NO_POOL: u8 = u8::MAX;
@@ -647,6 +652,13 @@ pub struct Player {
     /// from here toward where the crosshair is then. A position, so it is
     /// moved by `World::shift` with everything else a fighter keeps.
     pub ball_at: V3,
+    /// Where the Blood mage's jet left the floor, while it runs: the far end
+    /// of the wake it hurts, and where the pool of her own blood goes. A
+    /// position, so `World::shift` moves it.
+    pub launched_from: V3,
+    /// Red the Blood mage has paid into the hold she is in -- the nova's or the
+    /// jet's -- and so how much of her own blood the pool it leaves holds.
+    pub self_spent: i32,
     /// Which of her structure slots the Elementalist's dodge is breaking
     /// through this frame, or [`NO_STONE`].
     ///
@@ -1231,6 +1243,8 @@ impl Default for Player {
             earth_held: false,
             rise: Rise::default(),
             ball_at: V3::ZERO,
+            launched_from: V3::ZERO,
+            self_spent: 0,
             breaking: NO_STONE,
             fall_over: Fx::ZERO,
         }
@@ -2401,6 +2415,33 @@ impl World {
             if p.class == Class::Elementalist && kind == moves::elementalist::EARTH_JUMP {
                 self.earth_jump(i);
             }
+            // The Blood mage's held bloods, let go: the nova bursts round her,
+            // the jet's wake is hurt; each leaves a pool of her own blood.
+            if p.class == Class::BloodMage && kind == moves::blood::BLOOD_NOVA {
+                self.burst_the_nova(i);
+            }
+            if p.class == Class::BloodMage && kind == moves::blood::BLOOD_JET {
+                self.end_the_jet(i);
+            }
+            // The Nail leaves her hand along the solved line.
+            if p.class == Class::BloodMage && kind == moves::blood::NAIL {
+                spawn_effect(
+                    &mut self.effects,
+                    Effect::cast(
+                        EffectKind::Nail,
+                        i as u8,
+                        p.class,
+                        kind,
+                        p.aim_path.from,
+                        p.aim_path.dir(),
+                        m.reach,
+                    ),
+                );
+            }
+            // The Hook: caught on something, or nothing.
+            if p.class == Class::BloodMage && kind == moves::blood::HOOK {
+                self.throw_the_hook(i);
+            }
             // The Air ball let go: it rolls from where it was raised, the way
             // the release's aim says. See `roll_the_ball`.
             if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
@@ -3072,6 +3113,29 @@ impl World {
             h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.right_held as u32);
             h.write_u32(p.shadow_queued as u32);
+            // The fields of 2026-10-09, the Elementalist's and the Blood
+            // mage's, hashed only when they hold something -- the convention
+            // the creature's `own` words keep -- so a fight with neither class
+            // in it hashes as it always did.
+            // `earth_held` is the left button's edge, kept for every class
+            // but read only by hers; hashed for hers alone.
+            let late = [
+                (p.class == Class::Elementalist && p.earth_held) as i32,
+                p.rise.window as i32,
+                p.rise.lifted as i32,
+                p.rise.used as i32,
+                p.self_spent,
+            ];
+            if late.iter().any(|v| *v != 0) {
+                for v in late {
+                    h.write_i32(v);
+                }
+            }
+            for at in [p.ball_at, p.launched_from] {
+                if at != V3::ZERO {
+                    hash_v3(&mut h, &at);
+                }
+            }
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
             h.write_u32(p.blinked as u32);
@@ -3175,6 +3239,12 @@ impl World {
                 h.write_u32(m.rooted as u32);
                 h.write_u32(m.marks as u32);
                 h.write_u32(m.mark_clock as u32);
+                // A bleed on a creature, since 2026-10-09: only when there is
+                // one, so a hunt nobody bled hashes as it always did.
+                if m.bleeding != 0 {
+                    h.write_u32(m.bleeding as u32);
+                    h.write_u32(m.bled_by as u32);
+                }
                 for part in 0..m.sp().parts.len() {
                     h.write_i32(m.part_health(part));
                 }
@@ -4720,7 +4790,14 @@ fn step_player(
     let hauling = step_haul(p);
 
     let dashing = shadow::dash_drive(p);
-    if hauling {
+    // **The Blood jet**, while it is held: her blood out under her drives her
+    // along the line she is aiming, never less than a little up. Gravity is
+    // off while it drives, as it is for a haul. See `moves::blood::BLOOD_JET`.
+    let jetting = blood_jet_drive(p);
+    if let Some(drive) = jetting {
+        p.vel = drive;
+        p.grounded = false;
+    } else if hauling {
         // Ahead of the dash and of everything below it, and it ignores the
         // stick outright: the arms have hold of a wall and she is on the end of
         // them. Like the dash it drives all three axes, so a Grasp thrown up on
@@ -4899,7 +4976,12 @@ fn step_player(
         p.leap_used = true;
     }
 
-    if !p.grounded && dashing.is_none() && !hauling {
+    // Pinned by the Nail: held in the air, and nothing pulls it down.
+    let nailed = matches!(p.action, Action::Held { .. }) && p.held_by == NAILED;
+    if nailed {
+        p.vel = V3::ZERO;
+    }
+    if !p.grounded && dashing.is_none() && !hauling && jetting.is_none() && !nailed {
         if plunging(p) {
             // **The descent.** Driven rather than fallen: gravity would make
             // the plunge take longer the lower she started, which is backwards
@@ -5080,7 +5162,7 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
     match p.class {
         Class::Champion => champion_move(p, input),
         Class::DualMage => dual_move(p, input),
-        Class::BloodMage => blood_move(input),
+        Class::BloodMage => blood_move(p, input),
         // The Reaver breaks it a third way: right click sends the shadow. It is
         // the one thing in her kit the **crosshair aims**, and the mouse is
         // where aiming lives -- so the mechanic is on the mouse and the swing
@@ -5142,15 +5224,45 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 /// the same reading as the Elementalist's clicks, with the third button taking
 /// the ranged move because the mouse means where. See `moves::blood` for why
 /// the auto is the fifth row of the table rather than the first.
-fn blood_move(input: Input) -> Option<u8> {
+fn blood_move(p: &Player, input: Input) -> Option<u8> {
     use moves::blood as b;
-    if input.has(Input::LEFT) {
-        Some(b::SWEEP)
-    } else if input.has(Input::RIGHT) {
-        Some(b::HAEMORRHAGE)
+    use moves::blood::keys;
+    // Left before middle before right, the tie-break every class makes.
+    let click = if input.has(keys::MY_BLOOD) {
+        keys::MY_BLOOD
+    } else if input.has(keys::YOUR_BLOOD) {
+        keys::YOUR_BLOOD
+    } else if input.has(keys::SCYTHE) {
+        keys::SCYTHE
     } else {
-        input.has(Input::MIDDLE).then_some(b::BLOODLETTER)
+        return None;
+    };
+    let takeoff = match click {
+        keys::MY_BLOOD => b::BLOOD_JET,
+        keys::YOUR_BLOOD => b::MARIONETTE,
+        _ => b::HARVEST,
+    };
+    // **My blood, your blood, the scythe** (2026-10-09): each on the floor,
+    // in the air, and off the floor with space, on the window the
+    // Elementalist's takeoffs use. See `rise_window`.
+    if p.grounded {
+        if !p.aboard() && p.rise.window > 0 {
+            return Some(takeoff);
+        }
+        return Some(match click {
+            keys::MY_BLOOD => b::BLOOD_NOVA,
+            keys::YOUR_BLOOD => b::GRASP,
+            _ => b::SWEEP,
+        });
     }
+    if !p.aboard() && p.rise.window > 0 && p.rise.lifted <= t::floor_grace() {
+        return Some(takeoff);
+    }
+    Some(match click {
+        keys::MY_BLOOD => b::HAEMORRHAGE,
+        keys::YOUR_BLOOD => b::NAIL,
+        _ => b::HOOK,
+    })
 }
 
 fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
@@ -5209,10 +5321,16 @@ fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
     })
 }
 
-/// Is this one of the Elementalist's three takeoffs?
+/// Is this one of a class's three takeoffs, on the window kept in
+/// [`Player::rise`]? The Elementalist's and the Blood mage's.
 fn elementalist_takeoff(class: Class, kind: u8) -> bool {
+    use moves::blood as b;
     use moves::elementalist as e;
-    class == Class::Elementalist && matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT)
+    match class {
+        Class::Elementalist => matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT),
+        Class::BloodMage => matches!(kind, b::BLOOD_JET | b::MARIONETTE | b::HARVEST),
+        _ => false,
+    }
 }
 
 /// Which move `Q` throws: the class special, except on the two classes that
@@ -5224,6 +5342,9 @@ fn keyed_q(p: &Player) -> Option<u8> {
         Class::Champion => None,
         Class::Elementalist if p.grounded => Some(SLOT_POKE),
         Class::Elementalist => Some(moves::elementalist::AIR_BOLT),
+        // Hers is the Bloodletter, since 2026-10-09: the Grasp went to middle
+        // click.
+        Class::BloodMage => Some(moves::blood::BLOODLETTER),
         _ => Some(SLOT_SPECIAL),
     }
 }
@@ -5234,7 +5355,7 @@ fn keyed_q(p: &Player) -> Option<u8> {
 /// the feet are down and free. The Champion's three of the same live in
 /// `Mechanic::Forms` and are run by `arm_takeoff` and `refresh_the_rise`.
 fn rise_window(p: &mut Player, input: Input) {
-    if p.class != Class::Elementalist {
+    if !matches!(p.class, Class::Elementalist | Class::BloodMage) {
         return;
     }
     let r = &mut p.rise;
@@ -6089,6 +6210,22 @@ fn begin_haul(p: &mut Player, to: V3, speed: Fx, frames: u16) {
     p.vel = V3::ZERO;
 }
 
+/// The drive the Blood jet puts under her this frame, while it is held: along
+/// the line `crate::aim` solved for the hold -- the crosshair's, not the
+/// chest's -- at `tuning::jet_speed`, and never less than
+/// `tuning::jet_least_rise` upward.
+fn blood_jet_drive(p: &Player) -> Option<V3> {
+    let Action::Channel { kind, .. } = p.action else {
+        return None;
+    };
+    if p.class != Class::BloodMage || kind != moves::blood::BLOOD_JET {
+        return None;
+    }
+    let mut drive = p.aim_path.dir().scale(t::jet_speed());
+    drive.y = drive.y.max(t::jet_least_rise());
+    Some(drive)
+}
+
 /// The drive a **stepping** move is putting under the body this frame.
 ///
 /// `None` for almost everything. A move with no [`step`] does not carry you, and
@@ -6344,6 +6481,15 @@ fn begin_move(
     // ball goes: on the floor under the crosshair, asked of `crate::aim` the
     // way Raise asks it. The world raises the ball there on this frame, and
     // the release sends it from there. See `World::roll_the_ball`.
+    // The held blood, the nova's and the jet's: the hold is before the move,
+    // paid as it goes. Where the jet leaves the floor is where its wake ends
+    // and its pool goes.
+    if moves::charge(p.class, kind) == Some(moves::Charge::Bleed) {
+        p.self_spent = 0;
+        p.launched_from = p.pos;
+        aim_channel(p, who, kind, 0, input, scene);
+        return Action::Channel { kind, held: 0 };
+    }
     if moves::charge(p.class, kind) == Some(moves::Charge::Gather) {
         p.ball_at = aim::grounded_path(who, input, moves::get(p.class, kind).reach, scene).to;
         aim_channel(p, who, kind, 0, input, scene);
@@ -6415,6 +6561,13 @@ fn step_channel(
     // ability they have already paid for.
     if input.has(channel_button(p.class, kind)) && held < cap {
         let held = held + 1;
+        // Held blood is paid as it goes: one percent of her red every few
+        // frames, into grey like any cost, and remembered for the pool.
+        if charge == Some(moves::Charge::Bleed) && held % t::blood_pays_every() == 0 {
+            let before = p.health;
+            p.spend_health(1);
+            p.self_spent += before - p.health;
+        }
         aim_channel(p, who, kind, held, input, scene);
         return Action::Channel { kind, held };
     }
@@ -6443,6 +6596,12 @@ fn step_channel(
         // `aerial` is always true here and always harmless: `arm_aerial`
         // returns on the spot for anybody whose feet are on something, and
         // aboard the creature they always are.
+        // The held blood: what was bought is a share of the longest hold --
+        // the nova's size, the jet's wake.
+        Some(moves::Charge::Bleed) => {
+            p.channelled = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
+            throw_move(p, kind, input, true)
+        }
         _ => {
             p.channelled = p.aim_path.length();
             throw_move(p, kind, input, true)
@@ -6460,6 +6619,12 @@ const fn channel_button(class: Class, kind: u8) -> u16 {
         // the Air ball is the wind click held.
         SLOT_COMMITTED if matches!(class, Class::Elementalist) => moves::elementalist::keys::EARTH,
         SLOT_SPECIAL if matches!(class, Class::Elementalist) => moves::elementalist::keys::FIRE,
+        // The Blood mage's Grasp is middle click held; her two held bloods,
+        // the nova and the jet, are left click.
+        SLOT_SPECIAL if matches!(class, Class::BloodMage) => moves::blood::keys::YOUR_BLOOD,
+        moves::blood::BLOOD_NOVA | moves::blood::BLOOD_JET if matches!(class, Class::BloodMage) => {
+            moves::blood::keys::MY_BLOOD
+        }
         moves::elementalist::AIR_BALL if matches!(class, Class::Elementalist) => {
             moves::elementalist::keys::WIND
         }
@@ -6502,7 +6667,7 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
     // read for the way it rolls.
     if !matches!(
         moves::charge(p.class, kind),
-        Some(moves::Charge::Strike | moves::Charge::Gather)
+        Some(moves::Charge::Strike | moves::Charge::Gather | moves::Charge::Bleed)
     ) {
         p.aim_path.to = p.aim_path.at(m.reach_after(held));
     }
@@ -7866,11 +8031,13 @@ impl World {
             // and goes now rather than being drawn one more frame at the far
             // end of a flight it never made. Nothing else expires here: a
             // tornado, for one, is older than its life by design.
-            let spent = (effect.kind == EffectKind::Haemorrhage && effect.age >= effect.life)
+            let spent = (matches!(effect.kind, EffectKind::Haemorrhage | EffectKind::Nail)
+                && effect.age >= effect.life)
                 || (effect.kind == EffectKind::AirBall && effect.reach.raw() <= 0);
             self.effects[i] = (!spent).then_some(effect);
         }
         self.step_bleeds();
+        self.bleed_the_creatures();
         // The slow's tail, for every source of one -- a drain field here, a
         // stone churning under your feet in `stones`. It runs down before either
         // of them gets to refresh it, so standing in one holds the slow at full
@@ -8820,6 +8987,77 @@ impl World {
                     }
                     spent = true;
                 }
+                // **The creature bleeds** (2026-10-09): what the bolt cuts on
+                // it opens a bleed, ticking and spilling under it as a
+                // fighter's does. See `World::bleed_the_creatures`.
+                let cut = self.gore_each(effect, 0, at, radius, Fx::ONE);
+                for (slot, dealt) in cut.iter().enumerate() {
+                    if *dealt > 0 {
+                        spent = true;
+                        if t::bleed_on_creatures() {
+                            if let Some(beast) = self.monsters[slot].as_mut() {
+                                beast.bleeding = beast.bleeding.max(t::bleed_lasts());
+                                beast.bled_by = effect.owner;
+                            }
+                        }
+                    }
+                }
+                if self.gore_critters(effect, at, radius, Fx::ONE) > 0 {
+                    spent = true;
+                }
+                if spent {
+                    effect.age = effect.life;
+                }
+            }
+
+            // The Blood nova: on its first frame, everyone inside is hurt and
+            // thrown outward from where she stood; the creature is hurt.
+            EffectKind::Nova => {
+                if effect.age != 1 {
+                    return;
+                }
+                let radius = effect.field_radius();
+                let centre = V3::new(
+                    effect.pos.x,
+                    effect.pos.y.add(t::body_height().mul(Fx::ratio(1, 2))),
+                    effect.pos.z,
+                );
+                for i in 0..MAX_PLAYERS {
+                    if self.effects_reach(i, effect.owner) && self.inside(i, centre, radius) {
+                        let dealt = self.cut(i, effect, effect.pos, effect.damage());
+                        let victim = self.players[i];
+                        self.spill_under(effect.owner, effect.class, effect.slot, &victim, dealt);
+                    }
+                }
+                self.gore_the_creature(effect, 0, effect.pos, radius);
+            }
+
+            // The Nail: the Haemorrhage's flight, spent on the first body it
+            // reaches. In the air, that body is pinned; on the floor, hit.
+            EffectKind::Nail => {
+                let at = effect.bolt_at();
+                let radius = effect.field_radius();
+                let mut spent = false;
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let aloft = !self.players[i].grounded;
+                    let dealt = self.cut(i, effect, at, effect.source().damage);
+                    let victim = self.players[i];
+                    self.spill_under(effect.owner, effect.class, effect.slot, &victim, dealt);
+                    if dealt > 0 && aloft && t::nail_pin() > 0 {
+                        let q = &mut self.players[i];
+                        q.seized(NAILED, t::nail_pin(), 0);
+                        q.vel = V3::ZERO;
+                        q.grounded = false;
+                    }
+                    spent = true;
+                }
                 if self.gore_the_creature(effect, 0, at, radius) > 0 {
                     spent = true;
                 }
@@ -9371,10 +9609,20 @@ impl World {
     /// launch is airborne and spills nowhere, which would make the one move
     /// meant to seed a pool at range the one move that never does.
     fn spill_under(&mut self, owner: u8, class: Class, slot: u8, victim: &Player, volume: i32) {
-        if !victim.grounded {
-            return;
-        }
-        self.spill(owner, class, slot, victim.pos, volume);
+        // **In the air, it falls**: on to the floor under them, since
+        // 2026-10-09. Marionette and the Nail put people in the air, and a hit
+        // up there that spilled nowhere would starve the class of the very
+        // blood its combos run on. See `docs/design/exploration/0009`.
+        let at = if victim.grounded {
+            victim.pos
+        } else {
+            V3::new(
+                victim.pos.x,
+                self.terrain().ground_under(victim.pos),
+                victim.pos.z,
+            )
+        };
+        self.spill(owner, class, slot, at, volume);
     }
 
     /// Put `volume` of blood on the floor at `at`, owned by `owner`.
@@ -9474,7 +9722,11 @@ impl World {
         let mut best: Option<(usize, i32)> = None;
         for (slot, e) in self.effects.iter().enumerate() {
             let Some(e) = e else { continue };
-            if !e.is_a_pool() || e.owner != owner as u8 || e.age <= older_than {
+            if !e.is_a_pool()
+                || e.owner != owner as u8
+                || e.age <= older_than
+                || moves::blood::own_blood(e.slot)
+            {
                 continue;
             }
             let standing_in = feet.is_some_and(|f| e.covers(f));
@@ -9592,6 +9844,7 @@ impl World {
             let over = self.effects[slot].is_some_and(|e| {
                 e.is_a_pool()
                     && e.owner == who as u8
+                    && !moves::blood::own_blood(e.slot)
                     && e.age > swing_so_far
                     && crate::math::segment_gap(
                         V3::new(hb.from.x, e.pos.y, hb.from.z),
@@ -9618,6 +9871,12 @@ impl World {
             return 0;
         };
         if !pool.is_a_pool() {
+            return 0;
+        }
+        // Her own blood is a door, not a heal: what uses it -- a spike's
+        // eruption -- spends it, and nothing comes back.
+        if moves::blood::own_blood(pool.slot) {
+            self.effects[slot] = None;
             return 0;
         }
         let take = m.drinks(pool.banked);
@@ -10961,6 +11220,156 @@ impl World {
                 reach,
             ),
         );
+    }
+
+    /// **The Blood nova bursts**: a sphere of her blood round where she
+    /// stands, from the move's near size to its full one by how long she held
+    /// it, and a pool of her own blood at her feet holding what she paid.
+    fn burst_the_nova(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::blood::BLOOD_NOVA);
+        let radius = m
+            .channel_from
+            .add(m.reach.sub(m.channel_from).mul(p.channelled));
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                EffectKind::Nova,
+                i as u8,
+                p.class,
+                moves::blood::BLOOD_NOVA,
+                p.pos,
+                V3::ZERO,
+                radius,
+            ),
+        );
+        let paid = p.self_spent.max(1);
+        self.spill(i as u8, p.class, moves::blood::BLOOD_NOVA, p.pos, paid);
+        self.players[i].self_spent = 0;
+    }
+
+    /// **The Blood jet is let go**: whoever is in its wake -- the line from
+    /// where it left the floor to where she is -- is hurt, more the longer it
+    /// ran, and a pool of her own blood is left where she took off.
+    fn end_the_jet(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::blood::BLOOD_JET);
+        let (from, to) = (p.launched_from, p.pos);
+        let held = Fx::from_int(m.channel as i32).mul(p.channelled).to_int();
+        let damage = m.damage + t::jet_damage_per_frame() * held;
+        let mut wake = Effect {
+            power: Fx::from_int(damage).div(Fx::from_int(m.damage.max(1))),
+            ..Effect::cast(
+                EffectKind::Nail,
+                i as u8,
+                p.class,
+                moves::blood::BLOOD_JET,
+                from,
+                V3::ZERO,
+                m.reach,
+            )
+        };
+        for v in 0..MAX_PLAYERS {
+            if self.effects_reach(v, i as u8) && self.on_the_line(v, from, to, m.radius) {
+                let dealt = self.cut(v, &wake, from, damage);
+                let victim = self.players[v];
+                self.spill_under(i as u8, p.class, moves::blood::BLOOD_JET, &victim, dealt);
+            }
+        }
+        // Creatures and critters in the wake too: a column at each end of
+        // the line for a creature's parts, once at most (one part of the
+        // wake), and the line itself for the small bodies.
+        for at in [from, to] {
+            let _ = self.gore_each(&mut wake, 0, at, m.radius, Fx::ONE);
+        }
+        self.gore_critters_by(&mut wake, EffectReach::Line(from, to, m.radius), Fx::ONE);
+        let floor = V3::new(from.x, self.terrain().ground_under(from), from.z);
+        let paid = p.self_spent.max(1);
+        self.spill(i as u8, p.class, moves::blood::BLOOD_JET, floor, paid);
+        self.players[i].self_spent = 0;
+    }
+
+    /// **The Hook**: thrown along the line `crate::aim` solved, it catches the
+    /// first fighter, creature, stone or wall, and pulls her to it -- beside a
+    /// body, against a surface. Nothing caught, nothing happens; the throw
+    /// was the cost.
+    fn throw_the_hook(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::blood::HOOK);
+        let path = p.aim_path;
+        let stones = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &seen,
+            effects: &effects,
+            quarry: &self.monsters,
+            critters: &self.critters,
+            arena: &self.terrain(),
+        };
+        let found = aim::first_along(
+            path,
+            m.radius,
+            i as u8,
+            &scene,
+            aim::Targets::none()
+                .fighters(true)
+                .terrain()
+                .stones()
+                .quarry(true),
+        );
+        let Some(caught) = found else {
+            return;
+        };
+        // Short of what it caught by a body, so she arrives beside it rather
+        // than inside it -- in the air, if that is where it is.
+        let stop = path.at(caught
+            .dist()
+            .sub(t::body_radius().add(t::body_radius()))
+            .max(Fx::ZERO));
+        let speed = t::hook_speed();
+        let frames = caught.dist().div(speed.mul(DT)).to_int().clamp(1, 240) as u16 + 1;
+        begin_haul(&mut self.players[i], stop, speed, frames);
+    }
+
+    /// Every creature's bleed runs down a frame, and on its tick takes its
+    /// damage and spills under it -- the fighter's bleed (`step_bleeds`) on a
+    /// body that has no `Player` to keep one.
+    fn bleed_the_creatures(&mut self) {
+        for slot in 0..crate::monster::MAX_MONSTERS {
+            let Some(mut beast) = self.monsters[slot] else {
+                continue;
+            };
+            if beast.bleeding == 0 {
+                continue;
+            }
+            let owner = beast.bled_by as usize;
+            if !beast.alive() || owner >= MAX_PLAYERS {
+                beast.bleeding = 0;
+                self.monsters[slot] = Some(beast);
+                continue;
+            }
+            beast.bleeding -= 1;
+            let ticks = beast.bleeding % t::bleed_tick() == 0;
+            let dealt = if ticks {
+                let dealt = t::bleed_damage().min(beast.health).max(0);
+                beast.health -= dealt;
+                dealt
+            } else {
+                0
+            };
+            self.monsters[slot] = Some(beast);
+            if dealt > 0 {
+                let class = self.players[owner].class;
+                let at = V3::new(
+                    beast.pos.x,
+                    self.terrain().ground_under(beast.pos),
+                    beast.pos.z,
+                );
+                self.spill(owner as u8, class, moves::blood::HAEMORRHAGE, at, dealt);
+            }
+        }
     }
 
     /// Raise an Air ball where she pressed for it. One of hers at a time: a

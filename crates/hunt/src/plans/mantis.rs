@@ -334,7 +334,7 @@ fn breaker(class: Class) -> Option<u16> {
     match class {
         Class::Bulwark => Some(Input::SPECIAL),
         Class::Elementalist => Some(Input::KEY_F),
-        Class::BloodMage => Some(Input::SPECIAL),
+        Class::BloodMage => Some(Input::MIDDLE),
         _ => None,
     }
 }

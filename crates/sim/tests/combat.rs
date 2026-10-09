@@ -620,11 +620,11 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
     let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
     w.players[1].pos = w.players[0].pos;
     let before = w.players[1].health;
-    // Middle click: the blade moved off the left button when the scythe took
-    // it. See `moves::blood`.
+    // `Q`: the blade moved there when the three clicks became her blood,
+    // theirs and the scythe. See `moves::blood::keys`.
     for _ in 0..40 {
         w.advance([
-            Input::aimed(Input::MIDDLE, LOOK_RIGHT),
+            Input::aimed(sim::moves::blood::keys::BLOODLETTER, LOOK_RIGHT),
             Input::aimed(0, LOOK_LEFT),
         ]);
         assert!(

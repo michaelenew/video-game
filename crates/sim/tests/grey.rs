@@ -8,6 +8,7 @@
 
 use sim::class::{ALL_CLASSES, Class};
 use sim::moves::blood as b;
+use sim::moves::blood::keys;
 use sim::state::Action;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
@@ -44,12 +45,17 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
         .pos
         .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
     let mut was_gone = gone(&w);
+    // On the three-clicks map
+    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md): the left
+    // click on the floor is the Blood nova now, where the right click was
+    // Haemorrhage -- another cost, and one that spills a pool of her own
+    // blood, which must not heal her either.
     let script = [
-        (Input::LEFT, 30u32),
-        (Input::RIGHT, 60),
-        (Input::MIDDLE, 30),
-        (Input::MECHANIC, 70),
-        (Input::LEFT, 30),
+        (keys::SCYTHE, 30u32),
+        (keys::MY_BLOOD, 60),
+        (keys::BLOODLETTER, 30),
+        (keys::SPIKE, 70),
+        (keys::SCYTHE, 30),
     ];
     for (button, then) in script {
         for frame in 0..then + 2 {
@@ -87,15 +93,22 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
 
 #[test]
 fn a_cast_at_full_health_opens_grey_by_its_cost() {
-    for (slot, button) in [
-        (b::SWEEP, Input::LEFT),
-        (b::HAEMORRHAGE, Input::RIGHT),
-        (b::BLOODLETTER, Input::MIDDLE),
-        (b::GRASP, Input::SPECIAL),
-        (b::BLACK_SPIKE, Input::MECHANIC),
+    // Haemorrhage is the left click in the air since the three-clicks remap
+    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md), so it is
+    // cast from a height.
+    for (slot, button, airborne) in [
+        (b::SWEEP, keys::SCYTHE, false),
+        (b::HAEMORRHAGE, keys::MY_BLOOD, true),
+        (b::BLOODLETTER, keys::BLOODLETTER, false),
+        (b::GRASP, keys::YOUR_BLOOD, false),
+        (b::BLACK_SPIKE, keys::SPIKE, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
+        if airborne {
+            w.players[0].pos.y = Fx::from_int(3);
+            w.players[0].grounded = false;
+        }
         let paid = w.players[0].cost_of(m.cost);
         assert!(paid > 0, "{}: costs nothing at full health", m.name);
         run(&mut w, 2, button, 0);
@@ -168,7 +181,7 @@ fn a_committed_casts_worth_of_grey_survives_one_exchange() {
     let mut w = mage();
     let paid = w.players[0].cost_of(spike.cost);
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    run(&mut w, 2, Input::MECHANIC, 0);
+    run(&mut w, 2, keys::SPIKE, 0);
     let opened = w.players[0].grey;
     assert_eq!(opened, paid);
     run(&mut w, exchange, 0, 0);
@@ -240,7 +253,7 @@ fn the_scythe_hits_harder_the_greyer_she_is() {
             Fx::ZERO,
         ));
         let full = w.players[1].health;
-        run(&mut w, 2, Input::LEFT, 0);
+        run(&mut w, 2, keys::SCYTHE, 0);
         run(&mut w, 30, 0, 0);
         full - w.players[1].health
     };
@@ -274,16 +287,24 @@ fn nobody_else_goes_grey() {
 }
 
 #[test]
-fn right_click_is_the_haemorrhage_and_left_is_the_sweep() {
-    // The three clicks, and what each one throws.
+fn left_click_in_the_air_is_the_haemorrhage_and_right_is_the_sweep() {
+    // The buttons, and what each one throws -- on the three-clicks map
+    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md). It was
+    // right click for Haemorrhage, left for the sweep and middle for the
+    // Bloodletter; now Haemorrhage is the left click in the air (on the floor
+    // the left click is the Blood nova), the sweep is the right click on the
+    // floor, and the Bloodletter is `Q`. `tests/blood_mage_clicks.rs` holds
+    // the whole map.
     let mut w = mage();
-    run(&mut w, 1, Input::RIGHT, 0);
+    w.players[0].pos.y = Fx::from_int(3);
+    w.players[0].grounded = false;
+    run(&mut w, 1, keys::MY_BLOOD, 0);
     assert_eq!(w.players[0].action.attack_kind(), Some(b::HAEMORRHAGE));
     let mut w = mage();
-    run(&mut w, 1, Input::LEFT, 0);
+    run(&mut w, 1, keys::SCYTHE, 0);
     assert_eq!(w.players[0].action.attack_kind(), Some(b::SWEEP));
     let mut w = mage();
-    run(&mut w, 1, Input::MIDDLE, 0);
+    run(&mut w, 1, keys::BLOODLETTER, 0);
     assert_eq!(w.players[0].action.attack_kind(), Some(b::BLOODLETTER));
     assert!(matches!(w.players[0].action, Action::Startup { .. }));
 }
@@ -299,7 +320,7 @@ fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
         let mut w = mage();
         w.players[0].health = health;
         w.players[0].grey = 0;
-        run(&mut w, 2, Input::MECHANIC, 0);
+        run(&mut w, 2, keys::SPIKE, 0);
         health - w.players[0].health
     };
     let full = at(t::max_health());

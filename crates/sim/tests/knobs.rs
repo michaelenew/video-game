@@ -85,6 +85,26 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is her weak push.",
     ),
     (
+        "pub const MY_BLOOD: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
+    ),
+    (
+        "pub const YOUR_BLOOD: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Blood mage's your-blood click.",
+    ),
+    (
+        "pub const SCYTHE: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Blood mage's scythe click.",
+    ),
+    (
+        "pub const BLOODLETTER: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Blood mage's Bloodletter.",
+    ),
+    (
+        "pub const SPIKE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Blood mage's Black spike.",
+    ),
+    (
         "rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()",
         "Rounding slack in the steepness test: two samples of the land a step apart differ \
          by a few thousandths along a contour. The steepness itself is the knob.",

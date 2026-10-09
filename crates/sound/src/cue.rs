@@ -469,6 +469,9 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
             EffectKind::FireCarpet | EffectKind::Fountain => {
                 Patch::Crackle(Crackle { seconds: 0.6 })
             }
+            // The Blood mage's burst is wet and heavy; the nail a short ring.
+            EffectKind::Nova => Patch::Wet(Wet { weight: 0.8 }),
+            EffectKind::Nail => Patch::Ring(Ring { pitch: 440.0 }),
             // The Air ball is a held gust, the heaviest of her air.
             EffectKind::AirBall => Patch::Gust(Gust {
                 frames: 30,

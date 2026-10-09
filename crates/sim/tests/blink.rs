@@ -9,6 +9,7 @@
 use sim::class::Class;
 use sim::effects::{Effect, EffectKind};
 use sim::moves::blood as b;
+use sim::moves::blood::keys;
 use sim::state::Action;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
@@ -198,7 +199,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     // Where the spike lands with the crosshair level: find it once.
-    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    looking(&mut w, 2, keys::SPIKE, 0, 0);
     let mut where_ = None;
     for _ in 0..spike.startup as u32 + 4 {
         run(&mut w, 1, 0, 0);
@@ -230,7 +231,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let full = w.players[1].health;
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(spike.cost);
-    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    looking(&mut w, 2, keys::SPIKE, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     let erupted = w
         .effects
@@ -274,7 +275,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     w.players[0].health = t::max_health() - 500;
     w.players[0].grey = 500;
     // Find where it lands, then stand the dummy there.
-    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    looking(&mut w, 2, keys::SPIKE, 0, 0);
     let mut at = None;
     for _ in 0..spike.startup as u32 + 4 {
         run(&mut w, 1, 0, 0);
@@ -295,7 +296,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     w.players[1].pos = V3::new(at.x, Fx::ZERO, at.z);
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(spike.cost);
-    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    looking(&mut w, 2, keys::SPIKE, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     assert!(
         w.players[1].health < w.players[1].full_health(),
@@ -370,7 +371,7 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
         .expect("the scan is not empty");
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(grasp.cost);
-    looking(&mut w, grasp.channel as u32 + 1, Input::SPECIAL, pitch, 0);
+    looking(&mut w, grasp.channel as u32 + 1, keys::YOUR_BLOOD, pitch, 0);
     looking(&mut w, 1, 0, pitch, 0);
     let mut held = false;
     let mut let_go_at = None;
@@ -422,7 +423,7 @@ fn all_four_arms_on_the_creature_haul_her_to_it() {
     let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
     let start = w.players[0].pos;
     // Wound the Grasp all the way out, level at the flank.
-    looking(&mut w, grasp.channel as u32 + 1, Input::SPECIAL, 0, 0);
+    looking(&mut w, grasp.channel as u32 + 1, keys::YOUR_BLOOD, 0, 0);
     looking(&mut w, 1, 0, 0, 0);
     let mut hauled = false;
     for _ in 0..120 {
@@ -450,7 +451,7 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     // cashes them in at once.
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    looking(&mut w, 2, keys::SPIKE, 0, 0);
     let mut at = None;
     for _ in 0..spike.startup as u32 + 4 {
         run(&mut w, 1, 0, 0);
@@ -492,7 +493,7 @@ fn an_eruption_sets_off_every_pool_it_covers() {
         100,
     ));
     let before = w.players[0].health;
-    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    looking(&mut w, 2, keys::SPIKE, 0, 0);
     run(&mut w, spike.startup as u32 + 2, 0, 0);
     let eruptions = w
         .effects
@@ -525,7 +526,7 @@ fn the_scythe_collects_a_pool_it_passes_over_with_nobody_in_it() {
     w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, ahead, 100));
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(sweep.cost);
-    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 2, keys::SCYTHE, 0);
     run(&mut w, sweep.whiff_cost() as u32, 0, 0);
     assert!(
         pools(&w).is_empty(),

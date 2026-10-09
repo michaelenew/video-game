@@ -2959,3 +2959,53 @@ pub fn earth_shatter_jump() -> Fx {
 pub fn earth_meteor_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EarthMeteorSpeed)).max(Fx::ONE)
 }
+
+// ---------------------------------------------------------------------------
+// The Blood mage on three clicks, 2026-10-09
+// ---------------------------------------------------------------------------
+//
+// See `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+
+/// A held Blood nova or Blood jet takes one percent of her red every this
+/// many frames: the hold is paid in blood as it goes.
+pub fn blood_pays_every() -> u16 {
+    oven::scalar(Scalar::BloodPaysEvery).max(1) as u16
+}
+
+/// How fast the Blood jet drives her along her aim while it is held.
+pub fn jet_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JetSpeed)).max(Fx::ZERO)
+}
+
+/// The least the jet lifts her, however level she aims it: a jet aimed at the
+/// horizon still leaves the floor.
+pub fn jet_least_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JetLeastRise)).max(Fx::ZERO)
+}
+
+/// What the jet's wake deals for every frame it was held, over the move's own
+/// damage.
+pub fn jet_damage_per_frame() -> i32 {
+    oven::scalar(Scalar::JetDamagePerFrame).max(0)
+}
+
+/// How long the Nail holds somebody it caught in the air.
+pub fn nail_pin() -> u16 {
+    oven::scalar(Scalar::NailPin).max(0) as u16
+}
+
+/// How long the Nail flies its reach.
+pub fn nail_flight() -> u16 {
+    oven::scalar(Scalar::NailFlight).max(1) as u16
+}
+
+/// How fast the Hook pulls her to what it caught.
+pub fn hook_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HookSpeed)).max(Fx::ONE)
+}
+
+/// Does the Haemorrhage's bleed run on a creature? On since 2026-10-09: the
+/// creature bleeds. A flag so the old answer can be played against the new.
+pub fn bleed_on_creatures() -> bool {
+    oven::scalar(Scalar::BleedOnCreatures) != 0
+}

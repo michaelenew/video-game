@@ -17,6 +17,16 @@ use sim::{Fx, Input, World};
 const Q: u16 = Input::SPECIAL;
 const E: u16 = Input::MECHANIC;
 
+// The Blood mage's buttons, by what they do. Her clicks are *my blood*, *your
+// blood* and the scythe since the three-clicks remap
+// (docs/design/exploration/0009_blood_mage_on_three_clicks.md): the
+// Bloodletter moved from the middle click to `Q`, and the Grasp from `Q` to the
+// middle click, held.
+/// The Bloodletter, the blade thrown out and back: `Q`.
+const BLOODLETTER: u16 = sim::moves::blood::keys::BLOODLETTER;
+/// The Grasp, held: the middle click on the floor.
+const GRASP: u16 = sim::moves::blood::keys::YOUR_BLOOD;
+
 // The Elementalist's buttons, by what they do. Her three clicks are earth,
 // fire and wind since 2026-10-09 (docs/design/kits/elementalist.md, "On three
 // clicks"), so `Q` and `E` above mean something else for her: the Bolt and
@@ -586,7 +596,7 @@ fn in_the_grasp(w: &mut World) -> i16 {
 /// these tests is thrown, would send the arms out three metres.
 fn grasp(w: &mut World, pitch: i16) {
     let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
-    looking(w, hold as u32 + 1, Q, pitch, 0);
+    looking(w, hold as u32 + 1, GRASP, pitch, 0);
     looking(w, 1, 0, pitch, 0);
 }
 
@@ -680,13 +690,19 @@ fn casting_costs_the_blood_mage_health() {
     // -- see `docs/design/kits/blood-mage.md`. Asserted on all five rather than
     // on one, because "all of them" is the design and a free ability would be
     // the one everybody pressed.
+    //
+    // The buttons are the three-clicks map
+    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md).
+    // Haemorrhage is the left click **in the air** -- on the floor the same
+    // click is the Blood nova -- so it is cast from a height.
     use sim::moves::blood as b;
-    for (slot, button) in [
-        (b::BLOODLETTER, Input::MIDDLE),
-        (b::HAEMORRHAGE, Input::RIGHT),
-        (b::GRASP, Q),
-        (b::BLACK_SPIKE, E),
-        (b::SWEEP, Input::LEFT),
+    use sim::moves::blood::keys;
+    for (slot, button, airborne) in [
+        (b::BLOODLETTER, keys::BLOODLETTER, false),
+        (b::HAEMORRHAGE, keys::MY_BLOOD, true),
+        (b::GRASP, keys::YOUR_BLOOD, false),
+        (b::BLACK_SPIKE, keys::SPIKE, false),
+        (b::SWEEP, keys::SCYTHE, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert!(m.cost > 0, "{} is free to cast", m.name);
@@ -694,6 +710,10 @@ fn casting_costs_the_blood_mage_health() {
         // Cast it at nothing, so the only thing that can move the bar is the
         // price of pressing the button.
         let mut w = as_class(Class::BloodMage);
+        if airborne {
+            w.players[0].pos.y = Fx::from_int(3);
+            w.players[0].grounded = false;
+        }
         let before = w.players[0].health;
         let paid = w.players[0].cost_of(m.cost);
         run(&mut w, 2, button, 0);
@@ -753,7 +773,7 @@ fn the_bloodletter_cuts_on_the_way_out_and_on_the_way_back() {
 
     let full = w.players[1].health;
     let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, Input::MIDDLE, pitch, 0);
+    looking(&mut w, 2, BLOODLETTER, pitch, 0);
     let mut cuts = 0;
     let mut last = full;
     for _ in 0..120 {
@@ -780,7 +800,7 @@ fn the_blade_comes_back_to_the_mage_and_not_to_the_spot_she_threw_it_from() {
     // up under the old rule: the throw point is still there to compare with.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, Input::MIDDLE, 0, 0);
+    looking(&mut w, 2, BLOODLETTER, 0, 0);
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
     let thrown_from = effects_of(&w, EffectKind::Bloodletter)
         .first()
@@ -824,7 +844,7 @@ fn the_blade_tracks_the_mage_the_whole_way_home_rather_than_snapping_to_her() {
     // the test above and read, in the hand, as a bug.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, Input::MIDDLE, 0, 0);
+    looking(&mut w, 2, BLOODLETTER, 0, 0);
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
 
     let flight = sim::tuning::bloodletter_flight();
@@ -889,7 +909,7 @@ fn the_bloodletter_brings_back_a_cut_and_not_health() {
         w.players[0].pos.z,
     );
     let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, Input::MIDDLE, pitch, 0);
+    looking(&mut w, 2, BLOODLETTER, pitch, 0);
     let flight = sim::tuning::bloodletter_flight();
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
     let paid = w.players[0].health;
@@ -922,7 +942,7 @@ fn holding_the_grasp_longer_sends_it_further() {
     let thrown = |hold: u16| {
         let mut w = as_class(Class::BloodMage);
         let pitch = in_the_grasp(&mut w);
-        looking(&mut w, hold as u32 + 1, Q, pitch, 0);
+        looking(&mut w, hold as u32 + 1, GRASP, pitch, 0);
         looking(&mut w, 1, 0, pitch, 0);
         for _ in 0..90 {
             run(&mut w, 1, 0, 0);
@@ -972,7 +992,7 @@ fn a_still_mouse_holds_the_line_and_only_the_marker_moves() {
         let mut line: Option<sim::V3> = None;
         let mut was = sim::fixed::Fx::ZERO;
         for held in 0..=m.channel {
-            looking(&mut w, 1, Q, pitch, 0);
+            looking(&mut w, 1, GRASP, pitch, 0);
             if w.players[0].action.channelling().is_none() {
                 continue;
             }
@@ -1027,7 +1047,7 @@ fn the_marker_is_as_far_out_as_the_hold_and_nothing_else() {
     for pitch in [4096i16, 0, -4096, -8192, -12000, -16384] {
         let mut w = as_class(Class::BloodMage);
         for held in 0..=m.channel {
-            looking(&mut w, 1, Q, pitch, 0);
+            looking(&mut w, 1, GRASP, pitch, 0);
             let Some((_, wound)) = w.players[0].action.channelling() else {
                 continue;
             };
@@ -1056,7 +1076,7 @@ fn a_grasp_wound_to_full_range_reaches_full_range_through_a_wall() {
     let mut w = as_class(Class::BloodMage);
     // Straight down: whatever the ray meets, it meets it at once.
     let pitch = -16384;
-    looking(&mut w, m.channel as u32 + 1, Q, pitch, 0);
+    looking(&mut w, m.channel as u32 + 1, GRASP, pitch, 0);
     let wound = w.players[0].aim_path.length();
     assert!(
         wound.sub(m.reach).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
@@ -1117,7 +1137,7 @@ fn a_channel_that_is_never_released_throws_itself() {
     let pitch = in_the_grasp(&mut w);
     let mut out = None;
     for f in 0..(m.channel as u32 * 3) {
-        looking(&mut w, 1, Q, pitch, 0);
+        looking(&mut w, 1, GRASP, pitch, 0);
         if out.is_none() && !effects_of(&w, EffectKind::Grasp).is_empty() {
             out = Some(f);
         }

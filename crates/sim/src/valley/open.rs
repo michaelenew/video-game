@@ -243,6 +243,7 @@ fn shift_player(p: &mut Player, d: V3) {
     p.pos = p.pos.add(d);
     p.haul_to = p.haul_to.add(d);
     p.ball_at = p.ball_at.add(d);
+    p.launched_from = p.launched_from.add(d);
     p.fall_over = p.fall_over.add(d.y);
     p.aim_path.from = p.aim_path.from.add(d);
     p.aim_path.to = p.aim_path.to.add(d);

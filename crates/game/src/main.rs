@@ -3297,6 +3297,20 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         EffectKind::Fountain if part == 1 && effect.age <= sim::tuning::fountain_burst() => Some(
             floating_in(Skin::Fire, at, effect.source().radius.to_f32_for_render()),
         ),
+        // The Blood nova's burst: the sphere the hit test reads, round where
+        // she stood, for the moment it is there.
+        EffectKind::Nova if part == 0 => Some(floating_in(
+            Skin::Blood,
+            at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Nail: a ball where its hit test is, in the Reaver's near-black,
+        // because a nail is black.
+        EffectKind::Nail if part == 0 => Some(floating_in(
+            Skin::Shade,
+            fx3(effect.bolt_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),

@@ -226,6 +226,15 @@ pub enum EffectKind {
     /// `tuning::fountain_burst` frames are the move's own hit, once per body;
     /// after that it burns on the tick like any fire on the floor.
     Fountain,
+    /// Blood mage. **The Blood nova's burst**: a sphere of her blood round
+    /// where she stood, `reach` across, sized by how long she held it. It hurts
+    /// and throws off whoever is inside it on its first frame, and the rest of
+    /// its short life is what is drawn. See `state::World::burst_the_nova`.
+    Nova,
+    /// Blood mage. **The Nail**: a long black spike thrown along her aim,
+    /// spent on the first body it reaches. Somebody in the air is **pinned**
+    /// there; somebody on the floor is only hit.
+    Nail,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -332,6 +341,8 @@ impl EffectKind {
             EffectKind::AirBall => "air ball",
             EffectKind::FireCarpet => "fire carpet",
             EffectKind::Fountain => "fire fountain",
+            EffectKind::Nova => "blood nova",
+            EffectKind::Nail => "nail",
         }
     }
 
@@ -393,6 +404,9 @@ impl EffectKind {
             // hangs in the air where she laid it.
             EffectKind::AirBall | EffectKind::Fountain => true,
             EffectKind::FireCarpet => false,
+            // Round her, wherever she stood; thrown along her aim.
+            EffectKind::Nova => true,
+            EffectKind::Nail => false,
         }
     }
 
@@ -414,6 +428,7 @@ impl EffectKind {
                 | EffectKind::Grasp
                 | EffectKind::Tether
                 | EffectKind::Haemorrhage
+                | EffectKind::Nail
         )
     }
 
@@ -557,6 +572,9 @@ impl EffectKind {
             EffectKind::AirBall => u16::MAX,
             EffectKind::FireCarpet => t::carpet_life(),
             EffectKind::Fountain => t::fountain_life(),
+            // The burst is its first frame; the rest is the picture of it.
+            EffectKind::Nova => t::air_ring_life(),
+            EffectKind::Nail => t::nail_flight(),
         }
     }
 
@@ -607,6 +625,9 @@ impl EffectKind {
             // The wash's tick. The burst it opens with is the move's number,
             // and is a different event -- the pillar's reason.
             EffectKind::Fountain => t::fountain_damage(),
+            // Both are the move's own hit: nothing else hits when they are
+            // thrown. The nova's is scaled by the hold where it bursts.
+            EffectKind::Nova | EffectKind::Nail => m.damage,
         }
     }
 }
@@ -919,6 +940,8 @@ impl Effect {
             EffectKind::Quake => t::quake_radius(),
             EffectKind::AirBall | EffectKind::Fountain => self.reach,
             EffectKind::FireCarpet => self.source().radius,
+            EffectKind::Nova => self.reach,
+            EffectKind::Nail => self.source().radius,
         }
     }
 

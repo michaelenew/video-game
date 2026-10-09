@@ -38,8 +38,13 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
-    (Class::Elementalist, 59, 0xb57ef071ed5bdd1c),
-    (Class::BloodMage, 83, 0x72ec7ddafe8f9fd9),
+    // And again the same day: her takeoff window and held earth click went
+    // into `state_checksum`, which had been leaving them out.
+    (Class::Elementalist, 59, 0x7eeb7b82c16465f4),
+    // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
+    // (the class layer presses her scythe and her Grasp through the buttons
+    // it learns), and creatures bleed. See feel-log.md.
+    (Class::BloodMage, 83, 0x79a933f18a371c65),
 ];
 
 #[test]
