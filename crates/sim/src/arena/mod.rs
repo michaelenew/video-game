@@ -1039,6 +1039,17 @@ impl Terrain {
         }
     }
 
+    /// **The lowest a floor can be**, in this place's coordinates: zero for
+    /// an arena alone, whose floor is at zero; on a map, its void, which is
+    /// under every place on it. What the fall rule measures a drop down to,
+    /// so a fall into a place lower than this one costs what it should.
+    pub fn lowest(&self) -> Fx {
+        match self.atlas {
+            None => Fx::ZERO,
+            Some(a) => a.void.sub(self.origin.y),
+        }
+    }
+
     /// Is the floor one plane here? [`relief::is_flat`], for whichever place
     /// is under the point.
     pub fn is_flat_at(&self, x: Fx, z: Fx) -> bool {

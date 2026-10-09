@@ -37,6 +37,11 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "pub const MAX_SPAN_M: i32 = 16_000",
+        "What 16.16 can hold, not a size anything is: the widest a map can be with \
+         every place still able to see every other.",
+    ),
+    (
         "const RESOLVE_REACH: Fx = Fx::from_int(2)",
         "How far round a body the map's tiles are read for the resolve: a search radius, \
          not a size. It has to exceed the furthest one box's push can carry a body in a \

@@ -148,6 +148,9 @@ another 60 m (so the edge never flickers):
 - **A box**: each box of the map on its own, found through the tiles round
   the camera, so loading reads the tiles near the camera and not the map.
 
+Building is spread over frames: the nearest place and the 48 nearest boxes
+still wanted, each frame, until everything in reach is drawn.
+
 The reach is the current sky's own (`look::Sky::reach`, clamped to 160–600 m):
 past it the fog is the horizon's colour, so a piece loading there cannot be
 seen arriving. Everything hangs off one root at the map's origin as seen from
@@ -161,31 +164,48 @@ shows how much is loaded under the place's name.
 What is built scales; what will need doing when the content arrives:
 
 - **Fixed-point range.** Positions are 16.16, so about ±32 km from the place
-  the world is in. The valley is 1.4 km across. A world much past 30 km needs
-  places beyond that range to never be in the same frame, which the
-  per-place frame already gives, as long as the queries' boxes are converted
-  in 64 bits; they are not yet.
+  the world is in, and the map is refused past 16 km each way
+  (`atlas::MAX_SPAN_M`) so every place can still see every other. The valley
+  is 1.4 km. A bigger world needs map coordinates in 64 bits, with only the
+  tiles near the current place converted into its 16.16 frame.
 - **Where the boxes come from.** The valley's map is composed from Rust
   tables at start-up. A million boxes wants a baked file loaded once (the
   simulation does no I/O, so the game hands it over), with the same tiles;
   nothing in a query would change.
 - **Streaming the map's data**, not just its meshes, is only needed if the
   map stops fitting in memory, which at 28 bytes a box is far past a million.
-- **Mesh building on the main thread.** Loading a place builds its meshes in
-  one frame. With 600 boxes that is invisible; with dense content it wants
-  spreading over frames or a task pool.
+- **Mesh building on the main thread.** Loading is spread over frames,
+  nearest first; with very dense content a task pool would take it off the
+  main thread altogether.
 
 ## Open
 
 1. **Nobody has walked it.** Every doorway is walked by a test; nobody has
    looked at how the joins read, in particular the rooms' aprons and cliffs.
-2. **The sky changes at a doorway.** Each place still has its own sky and
-   light, and the world takes the new one when it moves. A blend across a
-   doorway is the obvious next step.
-3. **The Long Valley's loop** (above): whether a return trail from the Saddle
+2. **The Long Valley's loop** (above): whether a return trail from the Saddle
    to Hearth's west is worth building.
-4. **`seam_hold`** is in the Oven and read by nothing since seams stopped
-   being teleports; it goes when the tuning hash is next re-pinned on purpose.
-5. **A fighter in a place lower than the one the world is in** takes no fall
-   damage there: the fall rule measures from zero up. It only happens to the
-   second player while apart from the first.
+3. **One live hunt at a time**, and two players: both are the region layer's
+   (above, §Two players), not this map's.
+
+## Fixed, 2026-10-09 (the same day)
+
+- **The sky changed in one jump at a doorway.** Each place still has its own
+  sky, but the air now blends between the two over 24 m either side of the
+  nearest doorway, half-way at the doorway itself, so nothing jumps as the
+  camera crosses and nothing jumps when the world moves into the next
+  place's coordinates: dome, fog, clear colour, the sky's light and the
+  sun's bearing (`look::Sky::toward`, `game::sky::weather`).
+- **A fall into a place lower than the world's was free.** The fall rule
+  measured a drop down to zero, the floor of every arena alone; on the map a
+  place below the current one has floors under zero. It now measures down to
+  the map's void (`Terrain::lowest`), and an arena alone still uses zero, so
+  every pinned fight is unchanged (`tests/valley.rs`,
+  `a_fall_into_a_lower_place_costs_the_same`).
+- **`seam_hold`** left the Oven: nothing has read it since seams stopped
+  being teleports. Pinned fights hash without the tuning, so none moved.
+- **A map too wide for 16.16 is refused as it is built** (`MAX_SPAN_M`,
+  16 km), instead of a sum saturating mid-frame and a wall turning up
+  somewhere else.
+- **Loading built everything in reach on one frame.** It builds nearest
+  first, one place and 48 boxes a frame, and comes back next frame for the
+  rest.

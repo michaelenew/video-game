@@ -236,3 +236,19 @@ fn a_neighbour_is_ground_in_this_place_s_coordinates() {
         );
     }
 }
+
+/// **A map too wide for the numbers is refused as it is built**, not found
+/// out in the middle of a frame when a sum saturates.
+#[test]
+#[should_panic(expected = "wider than")]
+fn a_map_too_wide_for_fixed_point_is_refused() {
+    let far = atlas::MAX_SPAN_M * 100 + 100_000;
+    Atlas::compose(&Plan {
+        extras: vec![
+            Solid::cm([0, 0, 0], [100, 100, 100], Material::Rock),
+            Solid::cm([far, 0, 0], [far + 100, 100, 100], Material::Rock),
+        ],
+        void: Fx::from_int(-100),
+        ..Plan::default()
+    });
+}

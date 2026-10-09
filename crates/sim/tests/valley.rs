@@ -606,3 +606,43 @@ fn every_class_can_make_the_hops_nobody_can_go_round() {
         }
     }
 }
+
+/// **A fall into a place lower than the world's costs what it costs
+/// anywhere.** The second fighter drops twenty metres onto the Mouth's floor
+/// while the first, in the Bank, holds the world in the Bank's coordinates,
+/// where the Mouth's floor is under zero. The fall rule used to measure
+/// down to zero and call it free.
+#[test]
+fn a_fall_into_a_lower_place_costs_the_same() {
+    let atlas = sim::atlas::valley();
+    let mouth = atlas.placed(ArenaId::MOUTH).unwrap().at;
+    let drop = |frame: ArenaId| {
+        let mut w = World::arrive(CLASSES, valley::Journey::default(), frame, Some(0), 2);
+        let origin = w.map_origin();
+        // The first fighter where the frame is; the second over the Mouth's
+        // floor at x -60, twenty metres up.
+        let floor = Terrain::bare(ArenaId::MOUTH.get()).ground_under(V3::new(
+            Fx::from_int(-60),
+            Fx::from_int(100),
+            Fx::ZERO,
+        ));
+        let at = V3::new(Fx::from_int(-60), floor.add(Fx::from_int(20)), Fx::ZERO)
+            .add(mouth)
+            .sub(origin);
+        let p = &mut w.players[1];
+        p.pos = at;
+        p.vel = V3::ZERO;
+        p.grounded = false;
+        p.fall_over = at.y.sub(sim::tuning::fall_free());
+        let before = p.health;
+        for _ in 0..240 {
+            w.advance(idle());
+        }
+        assert_eq!(w.arena, frame, "the frame moved");
+        before - w.players[1].health
+    };
+    let in_mouth = drop(ArenaId::MOUTH);
+    let from_bank = drop(ArenaId::BANK);
+    assert!(in_mouth > 0, "a twenty-metre fall was free");
+    assert_eq!(from_bank, in_mouth, "the frame changed what a fall costs");
+}

@@ -42,6 +42,11 @@ use crate::valley::{Gate, Zone};
 /// a query still reads four.
 pub const TILE_M: i32 = 16;
 
+/// **The widest a map may be**, in metres each way: 16.16 holds about
+/// 32 km either side of zero, and a place at one edge of the map has to see
+/// the other edge, with room for anything thrown past it.
+pub const MAX_SPAN_M: i32 = 16_000;
+
 /// The most tiles one query merges at a time. A box wider than this many
 /// tiles is answered by walking every solid in order instead, which is
 /// correct and slow -- and only the rare whole-place questions ask one.
@@ -375,6 +380,19 @@ impl Atlas {
             lo = (Fx::ZERO, Fx::ZERO);
             hi = (Fx::ZERO, Fx::ZERO);
         }
+        // **The map has to fit the numbers.** Positions are 16.16, about
+        // 32 km either side of zero, and the world runs in the coordinates of
+        // one place with the rest of the map around it -- so everything on
+        // the map has to be within that of every place, which is the map no
+        // wider than [`MAX_SPAN_M`] each way. Past it a sum would saturate in
+        // the middle of a frame and a wall would be somewhere else; that is
+        // a map to build differently (`docs/design/atlas.md`), and finding it
+        // out here, as the map is built, is better than finding it there.
+        let wide = |a: Fx, b: Fx| (b.raw() as i64 - a.raw() as i64) > MAX_SPAN_M as i64 * 65536;
+        assert!(
+            !wide(lo.0, hi.0) && !wide(lo.1, hi.1),
+            "the map is wider than {MAX_SPAN_M} m: 16.16 cannot hold one place's view of the rest"
+        );
 
         let (x0, z0) = (tile_of(lo.0), tile_of(lo.1));
         let (w, h) = (tile_of(hi.0) - x0 + 1, tile_of(hi.1) - z0 + 1);

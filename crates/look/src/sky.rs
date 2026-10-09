@@ -142,6 +142,29 @@ impl Sky {
         }
     }
 
+    /// **Part of the way from this sky to another**: every colour mixed
+    /// (`tint::mix`, so the ends come back exactly), the reach in between.
+    /// A sky with no glow lends its horizon to the mix, so a glow fades in
+    /// rather than switching on.
+    ///
+    /// What the valley's doorways are drawn under: one map, each place with
+    /// its own sky, and the air between them is both.
+    pub fn toward(self, other: Sky, t: f32) -> Sky {
+        let (a, b) = (self.resolved(), other.resolved());
+        let t = t.clamp(0.0, 1.0);
+        let m = |x, y| tint::mix(x, y, t);
+        Sky {
+            zenith: m(a.zenith, b.zenith),
+            horizon: m(a.horizon, b.horizon),
+            ground: m(a.ground, b.ground),
+            glow: match (a.glow, b.glow) {
+                (None, None) => None,
+                (x, y) => Some(m(x.unwrap_or(a.horizon), y.unwrap_or(b.horizon))),
+            },
+            reach: a.reach + (b.reach - a.reach) * t,
+        }
+    }
+
     /// Where fog begins and ends, in metres.
     ///
     /// Linear, and only one of the two numbers is worth an arena's attention,
@@ -197,6 +220,24 @@ impl Sky {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn toward_keeps_its_ends_and_meets_halfway() {
+        let a = Sky::over([0.8, 0.6, 0.5]);
+        let b = Sky {
+            reach: 300.0,
+            ..Sky::over([0.4, 0.6, 0.9])
+        };
+        let start = a.toward(b, 0.0);
+        let end = a.toward(b, 1.0);
+        assert_eq!(start.horizon, a.resolved().horizon);
+        assert_eq!(end.horizon, b.resolved().horizon);
+        assert_eq!(end.reach, 300.0);
+        let mid = a.toward(b, 0.5);
+        assert!(mid.reach > 300.0 && mid.reach < a.reach);
+        assert_ne!(mid.horizon, a.horizon);
+        assert_ne!(mid.horizon, b.horizon);
+    }
+
     use super::*;
     use crate::tint::Lch;
 

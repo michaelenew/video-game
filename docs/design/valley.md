@@ -206,7 +206,7 @@ for a pair who does not.** The five reaches are 974 m end to end with about
    fifth waystone, from either end.
 4. **The armoury, the bot's corner and the hunter's notes** in Hearth are
    solids with nothing in them yet.
-5. **The seam hold** is gone with the teleports (2026-10-09); its knob is
-   still in the Oven, unread, until the tuning hash is next re-pinned.
+5. **The seam hold** is gone with the teleports (2026-10-09), and its knob
+   with it.
 6. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
    read, the sky changing at a doorway, the Long Valley's loop.

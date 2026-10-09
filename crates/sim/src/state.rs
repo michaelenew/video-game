@@ -1063,7 +1063,7 @@ fn climb_and_ride(p: &mut Player, input: Input, ground: &Terrain) {
             p.vel.x = crate::math::half(p.vel.x);
             p.vel.z = crate::math::half(p.vel.z);
             p.jump_hold = 0;
-            p.fall_over = p.pos.y.sub(t::fall_free()).max(Fx::ZERO);
+            p.fall_over = p.pos.y.sub(t::fall_free()).max(ground.lowest());
         }
         return;
     }
@@ -1080,10 +1080,18 @@ fn climb_and_ride(p: &mut Player, input: Input, ground: &Terrain) {
 /// [`Player::fall_over`]. Zero for anything but a landing past the free
 /// height. The fight report reads it too, to count what falls cost.
 pub fn landing_damage(was: &Player, now: &Player) -> i32 {
-    if was.footed() || !now.footed() || was.fall_over.raw() <= 0 {
+    landing_damage_over(was, now, Fx::ZERO)
+}
+
+/// [`landing_damage`], in a world whose lowest floor is `lowest` rather than
+/// zero: in the valley, a place below the one the world is in has floors
+/// under zero, and a fall onto one of them is a fall like any other
+/// ([`Terrain::lowest`]).
+pub fn landing_damage_over(was: &Player, now: &Player, lowest: Fx) -> i32 {
+    if was.footed() || !now.footed() || was.fall_over.raw() <= lowest.raw() {
         return 0;
     }
-    let past = was.fall_over.sub(now.pos.y.max(Fx::ZERO));
+    let past = was.fall_over.sub(now.pos.y.max(lowest));
     if past.raw() <= 0 {
         return 0;
     }
@@ -1106,8 +1114,13 @@ pub fn landing_damage(was: &Player, now: &Player) -> i32 {
 /// Halved for a landing slower than `fall_soft`, which only the Dual mage's
 /// slow fall manages.
 pub fn fall_rule(was: &Player, p: &mut Player) -> i32 {
-    let damage = landing_damage(was, p);
-    let over_here = p.pos.y.sub(t::fall_free()).max(Fx::ZERO);
+    fall_rule_over(was, p, Fx::ZERO)
+}
+
+/// [`fall_rule`], over a lowest floor of `lowest` ([`landing_damage_over`]).
+pub fn fall_rule_over(was: &Player, p: &mut Player, lowest: Fx) -> i32 {
+    let damage = landing_damage_over(was, p, lowest);
+    let over_here = p.pos.y.sub(t::fall_free()).max(lowest);
     if p.footed() {
         p.fall_over = over_here;
     } else if p.vel.y.raw() > 0 {
@@ -11440,8 +11453,9 @@ impl World {
     /// **Falls** (P6): the rule for each fighter, against the body the frame
     /// started with. See [`fall_rule`].
     fn land(&mut self, before: &[Player; MAX_PLAYERS]) {
+        let lowest = self.terrain().lowest();
         for (was, p) in before.iter().zip(self.players.iter_mut()) {
-            let damage = fall_rule(was, p);
+            let damage = fall_rule_over(was, p, lowest);
             if damage > 0 && p.health > 0 {
                 p.wound(damage);
             }

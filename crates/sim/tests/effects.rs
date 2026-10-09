@@ -2996,10 +2996,12 @@ fn the_flower_opens_twelve_blades() {
     // mask fitted a `u32` exactly and twelve would have truncated in silence --
     // a blade that shares a bit with another goes quiet the moment that one
     // lands.
-    assert!(
-        sim::effects::LOTUS_BLADES * sim::effects::VICTIMS <= 64,
-        "the hit mask cannot address every blade against every victim"
-    );
+    const {
+        assert!(
+            sim::effects::LOTUS_BLADES * sim::effects::VICTIMS <= 64,
+            "the hit mask cannot address every blade against every victim"
+        );
+    }
 }
 
 #[test]

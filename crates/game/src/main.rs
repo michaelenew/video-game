@@ -236,6 +236,7 @@ fn main() {
                     tick_sim,
                     same_frame,
                     arenas::dress,
+                    sky::weather,
                     stream::stream,
                     valley::update,
                     sky::follow,

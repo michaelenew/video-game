@@ -44,6 +44,15 @@ const REACH: (f32, f32) = (160.0, 600.0);
 /// How far the camera moves before the loaded set is worked out again.
 const RESTREAM: f32 = 6.0;
 
+/// **How much is built in one frame**: places, and boxes. Building a place's
+/// floor and its scatter, or a cliff's roughened mesh, is real work on the
+/// frame that does it; a hundred of them at once is a frame dropped. So what
+/// is wanted is built nearest first, this much a frame, and the rest waits
+/// for the next -- arriving at the far edge of the fog, where nobody sees the
+/// order it came in.
+const PLACES_PER_FRAME: usize = 1;
+const BOXES_PER_FRAME: usize = 48;
+
 /// What is loaded, and where it hangs.
 #[derive(Resource, Default)]
 pub struct Stream {
@@ -192,39 +201,47 @@ pub fn stream(
         .reach
         .clamp(REACH.0, REACH.1);
 
-    // Places: their floors and everything on them.
+    // Places: their floors and everything on them. Dropped at once; built
+    // nearest first, a few a frame.
+    let mut wanted: Vec<(f32, usize)> = Vec::new();
     for (k, p) in atlas.places.iter().enumerate() {
         let d = distance_to(p, at);
         let loaded = st.places.contains_key(&k);
         if !loaded && d <= reach {
-            let arena = p.get();
-            let look = st
-                .looks
-                .entry(p.arena)
-                .or_insert_with(|| PlaceLook::of(arena))
-                .clone();
-            let place = commands
-                .spawn((
-                    Transform::from_translation(v3(p.at)),
-                    Visibility::default(),
-                    ChildOf(root),
-                ))
-                .id();
-            draw_place(
-                &mut commands,
-                &mut meshes,
-                &mut materials,
-                arena,
-                &look,
-                &white,
-                Under::Parent(place),
-            );
-            st.places.insert(k, place);
+            wanted.push((d, k));
         } else if loaded && d > reach + SLACK {
             if let Some(e) = st.places.remove(&k) {
                 commands.entity(e).despawn();
             }
         }
+    }
+    wanted.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut behind = wanted.len() > PLACES_PER_FRAME;
+    for &(_, k) in wanted.iter().take(PLACES_PER_FRAME) {
+        let p = &atlas.places[k];
+        let arena = p.get();
+        let look = st
+            .looks
+            .entry(p.arena)
+            .or_insert_with(|| PlaceLook::of(arena))
+            .clone();
+        let place = commands
+            .spawn((
+                Transform::from_translation(v3(p.at)),
+                Visibility::default(),
+                ChildOf(root),
+            ))
+            .id();
+        draw_place(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            arena,
+            &look,
+            &white,
+            Under::Parent(place),
+        );
+        st.places.insert(k, place);
     }
 
     // Boxes: through the tiles.
@@ -245,7 +262,15 @@ pub fn stream(
         .into_iter()
         .filter(|i| !st.solids.contains_key(i))
         .collect();
-    new.sort_unstable();
+    // Nearest first, by the middle of the box; ties in map order.
+    let middle = |i: u32| {
+        let s = &atlas.solids[i as usize];
+        let m = (v3(s.min) + v3(s.max)) * 0.5;
+        (m.x - at.x).powi(2) + (m.z - at.z).powi(2)
+    };
+    new.sort_by(|a, b| middle(*a).total_cmp(&middle(*b)).then(a.cmp(b)));
+    behind |= new.len() > BOXES_PER_FRAME;
+    new.truncate(BOXES_PER_FRAME);
     for i in new {
         let s = &atlas.solids[i as usize];
         let src = atlas.sources[i as usize];
@@ -281,6 +306,11 @@ pub fn stream(
             Under::Parent(root),
         );
         st.solids.insert(i, e);
+    }
+    // More to build: work the set out again next frame rather than waiting
+    // for the camera to move.
+    if behind {
+        st.at = None;
     }
 }
 
