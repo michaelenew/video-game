@@ -51,6 +51,8 @@ use crate::tuning as t;
 
 pub mod relief;
 
+pub mod rim;
+
 pub mod proving_ground;
 
 pub mod range;
@@ -493,6 +495,11 @@ pub struct Arena {
     /// cart's road. Geometry, so the arena's; what stands there and what it
     /// is worth is the species' (`objective::ObjectiveDecl`).
     pub sites: &'static [crate::objective::Site],
+    /// **The ground behind its edge** ([`rim`]): a bank too steep to climb
+    /// rising off the outside of its walls, and hills past it. `None` for
+    /// the floor going on flat forever, which a dev arena and a jump course
+    /// (whose floor is a drop) keep.
+    pub rim: Option<rim::Rim>,
 }
 
 // ---------------------------------------------------------------------------
@@ -538,7 +545,22 @@ impl Arena {
     /// simulation finds -- collision, the aiming ray, a creature's fence --
     /// starts from this.
     pub fn relief_at(&self, x: Fx, z: Fx) -> Fx {
+        if let Some(h) = self.rim.as_ref().and_then(|r| r.height(x, z)) {
+            return h;
+        }
         relief::height_at(self.id, x, z)
+    }
+
+    /// **Is the floor one plane here**: inside the rim (or with none), the
+    /// arena's relief is flat; on the rim, never. What keeps a flat fight
+    /// playing exactly as it did before it had a rim.
+    pub fn is_flat_at(&self, x: Fx, z: Fx) -> bool {
+        relief::is_flat(self.id) && !self.on_rim(x, z)
+    }
+
+    /// Is a point on the rim's ground, outside the arena's own floor?
+    pub fn on_rim(&self, x: Fx, z: Fx) -> bool {
+        self.rim.as_ref().is_some_and(|r| r.outside(x, z))
     }
 
     /// A name for flags and URLs: lower case, underscores.
@@ -1138,7 +1160,9 @@ impl Terrain {
                 let (mx, mz) = (x.add(self.origin.x), z.add(self.origin.z));
                 a.pad_at(mx, mz).is_none()
             }
-            _ => false,
+            Some(_) => false,
+            // Alone, an arena's rim is land.
+            None => self.arena.on_rim(x, z),
         }
     }
 
@@ -1160,7 +1184,7 @@ impl Terrain {
     /// is under the point.
     pub fn is_flat_at(&self, x: Fx, z: Fx) -> bool {
         match self.atlas {
-            None => relief::is_flat(self.arena.id),
+            None => self.arena.is_flat_at(x, z),
             Some(a) => a.is_flat_at(x.add(self.origin.x), z.add(self.origin.z)),
         }
     }

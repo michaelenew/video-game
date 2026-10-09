@@ -53,6 +53,7 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &SITES,
+    rim: None,
 };
 
 /// Two places for a defended thing, at the grass end: a gate across a gap

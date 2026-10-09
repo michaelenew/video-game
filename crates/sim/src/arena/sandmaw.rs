@@ -19,6 +19,7 @@
 //! half sunk in the sand are drawn (`game/src/arenas/sandmaw.rs`) and collide
 //! with nothing.
 
+use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Solid, Spawns};
 use crate::species::SpeciesId;
 
@@ -49,6 +50,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &[],
+    rim: Some(Rim::new(
+        (-1900, 1900),
+        (-1900, 1900),
+        [150, 150, 150, 150],
+        600,
+    )),
 };
 
 /// The middle of each island, in centimetres: a triangle fourteen metres a

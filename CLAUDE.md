@@ -161,6 +161,18 @@ map coordinates; trees, rocks, crags and cairns are made by
 `tests/valley.rs`: a change to the land that leaves a way unwalkable fails
 there.
 
+**A fight's edge is its rim** (`arena::rim`, `Arena::rim`): land too steep
+to climb, rising off the outside of its walls -- not a hedge, a thicket or a
+cliff of boxes. Inside the rim the floor is exactly what it was, so a new
+arena's edge is a rim, never a tall box; on the map the land holds a room's
+rim up except at its own door (`tests/rim.rs`).
+
+**A box is drawn as what it is** (`game::forms::form_of`): masonry, a
+dry-stone dyke, cordwood, a log, a column, a floating island -- chosen from
+its material and shape, built inside its box. The town's buildings and props
+are tables in `sim::arena::hearth` that its collision is made from and
+`game::town` draws from; a building is never a box drawn by its material.
+
 ## Tuning: every magnitude is a knob in the Oven
 
 Feel numbers live in the Oven (`crates/sim/src/oven.rs`), are edited in the

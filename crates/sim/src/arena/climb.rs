@@ -81,6 +81,7 @@ pub static STAIR: Arena = Arena {
     solids: &STAIR_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const STAIR_SOLIDS: [Solid; 7] = [
@@ -175,6 +176,7 @@ pub static CAUSEWAY: Arena = Arena {
     solids: &CAUSEWAY_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const CAUSEWAY_SOLIDS: [Solid; 8] = [
@@ -278,6 +280,7 @@ pub static SPIRAL: Arena = Arena {
     solids: &SPIRAL_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const SPIRAL_SOLIDS: [Solid; 26] = [
@@ -529,6 +532,7 @@ pub static FALLS: Arena = Arena {
     solids: &FALLS_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const FALLS_SOLIDS: [Solid; 16] = [
@@ -704,6 +708,7 @@ pub static SLALOM: Arena = Arena {
     solids: &SLALOM_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const SLALOM_SOLIDS: [Solid; 24] = [
@@ -881,6 +886,7 @@ pub static FORK: Arena = Arena {
     solids: &FORK_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const FORK_SOLIDS: [Solid; 17] = [
@@ -1065,6 +1071,7 @@ pub static SPIRE: Arena = Arena {
     solids: &SPIRE_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const SPIRE_SOLIDS: [Solid; 4] = [
@@ -1132,6 +1139,7 @@ pub static GULF: Arena = Arena {
     solids: &GULF_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const GULF_SOLIDS: [Solid; 6] = [
@@ -1217,6 +1225,7 @@ pub static REACH: Arena = Arena {
     solids: &REACH_SOLIDS,
     spawns: SPAWNS,
     sites: &[],
+    rim: None,
 };
 
 const REACH_SOLIDS: [Solid; 20] = [

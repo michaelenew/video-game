@@ -20,6 +20,7 @@
 //! and a forty-metre body that stops with its head twenty metres short of the
 //! wall needs a valley longer than the walk by its own length and the gap.
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Solid, Spawns};
 use crate::objective::Site;
 use crate::species::SpeciesId;
@@ -51,6 +52,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &SITES,
+    rim: Some(Rim::new(
+        (-15000, 15200),
+        (-2500, 2500),
+        [0, 0, 0, 1400],
+        1600,
+    )),
 };
 
 /// The town wall: across the whole valley at its east end, three metres
@@ -106,11 +113,7 @@ pub const BOULDERS: [(i32, i32); 8] = [
 /// Where the standing stones are along the valley: every forty metres.
 pub const STONES: [i32; 7] = [-12000, -8000, -4000, 0, 4000, 8000, 12000];
 
-const SOLIDS: [Solid; 26] = [
-    // The cliffs, both long sides, and the west end.
-    Solid::cm([-15200, 0, -2700], [15200, 1400, -2500], Rock),
-    Solid::cm([-15200, 0, 2500], [15200, 1400, 2700], Rock),
-    Solid::cm([-15200, 0, -2700], [-15000, 1400, 2700], Rock),
+const SOLIDS: [Solid; 23] = [
     // Behind the wall, the town: nobody goes there.
     Solid::cm([14650, 0, -2700], [15200, 1400, 2700], Stone),
     boulder(BOULDERS[0].0, BOULDERS[0].1),

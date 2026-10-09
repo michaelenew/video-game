@@ -606,7 +606,7 @@ worrying at a carcass, the Big One on the bank watching.
 `crates/game/src/arenas/gnawers.rs`): 36 by 30 metres of grass; the bank 3 m
 high along the north, the den a notch in its middle three metres wide; low
 walls round the other three sides and a six-metre hedge behind them and the
-bank; the trunk (1.5 m, scrambled) west of the middle, two boulders (3.5 m)
+bank (since 2026-10-09 the rim's bank, [arenas.md](../arenas.md) §1a); the trunk (1.5 m, scrambled) west of the middle, two boulders (3.5 m)
 east; the carcass and the den's dark drawn as dressing. The hunters walk in
 from the south, the pack musters at the den. The Big One on the bank and the
 pack at the carcass before the hunt (the idle life) is not built: the pack
@@ -742,7 +742,8 @@ whether the fight is too easy for a person is the first question below.
   nine metres behind, through the wall. It asks the cone of the eye and the
   line of sight of the character now.
 - **A hunter jumping a maul against the south wall went over it** and fought
-  from outside the arena. A six-metre hedge rings the Commons.
+  from outside the arena. A six-metre hedge rings the Commons (since
+  2026-10-09, a bank of land too steep to climb: the rim).
 - **A rout was a free win.** Routed gnawers do not fight, so a hunter who
   followed them to the den killed them there. A rout cornered at the den
   (`CorneredAt`, 4 m) turns and fights; one watched from further off stays
@@ -807,8 +808,10 @@ crouch), and they are a person's to pull with the fight in their hands.
 - **The rout cornered at the den** is a decision the build made; a person
   should say whether being fought at the mouth reads as cornered animals or as
   the rout not working.
-- **The hedge** makes the Commons a box from some angles; arenas.md says tall
-  walls read badly. Six metres is what nobody hops.
+- **The hedge** made the Commons a box from some angles; arenas.md says tall
+  walls read badly. Six metres is what nobody hops. *Answered 2026-10-09*: the
+  hedge is gone, and the rim's bank -- land, too steep to climb, wooded past
+  its crest -- is the edge.
 - **The Dual mage** wins 20 of 24 now (2026-10-01), in 87 s, the slowest
   class; her dark auto also runs through a gnawer inside two metres
   (`critcheck`), the lunge-through question critters.md §7 leaves to a person.

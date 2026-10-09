@@ -603,7 +603,8 @@ The Hornback herd migrates across it, and it is the first region past the starti
 ground.
 
 **The arena.** A meadow **48 × 40 m** (P2). Its edge is a slope and thicket the bull
-pulls up short of, not a wall. There are **four boulders**, each 2.5 m across and
+pulls up short of, not a wall (since 2026-10-09 the rim's bank,
+[arenas.md](../arenas.md) §1a, at the same bound). There are **four boulders**, each 2.5 m across and
 2.0 m tall, so every class can stand on them and none is a stun if the fight has
 worn it down to rubble. There is **one bank** along the north side, 1.5 m high and
 4 m deep, with ramps at both ends. There is a **ford** in the east edge where the

@@ -11,6 +11,7 @@
 //! west of it. Reeds are drawn (`game/src/arenas/mireback.rs`) and collide
 //! with nothing. See `docs/design/creatures/mireback.md` §11.
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Solid, Spawns};
 use crate::objective::Site;
 use crate::species::SpeciesId;
@@ -36,6 +37,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &SITES,
+    rim: Some(Rim::new(
+        (-1900, 1900),
+        (-1900, 1900),
+        [150, 150, 150, 150],
+        600,
+    )),
 };
 
 /// The four braziers, at the middle of each bank, on their plinths. The box

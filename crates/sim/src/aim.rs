@@ -2077,13 +2077,31 @@ fn floor_hit(from: V3, dir: V3, arena: &Terrain, limit: Fx) -> Option<Fx> {
     // On a map the floor is every place's, each at its own height, so it is
     // walked as relief whether or not the place the ray starts in is flat.
     if arena.atlas().is_none() && crate::arena::relief::is_flat(arena.id) {
-        if dir.y.raw() >= 0 || from.y.raw() < 0 {
-            return None;
+        // Flat inside its rim: the plane, exactly, wherever the ray meets
+        // it inside the rim from inside the rim -- a straight line between
+        // two points of a rectangle never leaves it. Anything else may meet
+        // the rim's bank first, and is walked.
+        let plane = if dir.y.raw() >= 0 || from.y.raw() < 0 {
+            None
+        } else {
+            Some(from.y.div(dir.y.neg()))
+        };
+        let Some(rim) = arena.rim else {
+            return plane;
+        };
+        if let Some(t) = plane {
+            let hit = from.add(dir.scale(t));
+            if !rim.outside(from.x, from.z) && !rim.outside(hit.x, hit.z) {
+                return plane;
+            }
         }
-        return Some(from.y.div(dir.y.neg()));
     }
     let b = arena.bounds;
-    let across = b.hi_x.sub(b.lo_x).add(b.hi_z.sub(b.lo_z));
+    // A rim's bank is past the bounds: reach it as well.
+    let past = arena.rim.map_or(Fx::ZERO, |r| {
+        r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))
+    });
+    let across = b.hi_x.sub(b.lo_x).add(b.hi_z.sub(b.lo_z)).add(past);
     let far = if limit.raw() < across.raw() {
         limit
     } else {

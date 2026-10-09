@@ -1,5 +1,5 @@
 ---
-status: proposed 2026-10-08; two passes built, the second on the word
+status: proposed 2026-10-08; five passes built, the fifth for the Guild Wars look (2026-10-09)
 ---
 
 # Forms — less box, same collision
@@ -141,6 +141,69 @@ they were on the boxes, so an arena's palette is unchanged.
    of minus ninety degrees is a hair below zero. `shapes::tests` now checks
    that every closed form's triangles face out and every floor's face up,
    which is the check that would have caught all three.
+
+## The fifth pass (built, 2026-10-09: "like Guild Wars 2")
+
+The owner, on the valley turned to land: *fix the town, all the fights, and
+every jump map in the same style -- directionally more like Guild Wars 2 --
+not just the walls, but the terrain, buildings, and objects too.*
+
+1. **A box is drawn as what it is** (`game::forms`, `form_of`): one rule from
+   its material, its shape and whether it floats, so a new arena's walls come
+   out walls without anybody choosing. Each form is one mesh built of parts
+   (`forms::Kit`), **inside its box** with its top at the box's top wherever a
+   body stands (`forms::tests::every_form_stays_in_its_box`).
+
+   | Box | Form |
+   | --- | --- |
+   | Dressed stone | **Masonry**: a mortar core, every face laid in courses of blocks a little proud of it, joints staggered, the odd top stone mossed, the top flagged |
+   | Dressed stone, tall and thin | a **column** (plinth, fluted shaft in drums, capital, abacus) over six metres; a **standing stone** with a carved band under it |
+   | A long low run of rock | a **dry-stone dyke**: field stones through the wall's thickness, the top course mossed |
+   | Rock, tall | a **spire** (`rock_column`, banded, mossed where it faces up), in the crag's lighter rock (`Palette::crag`) |
+   | Timber, long and tall | **cordwood**: logs laid lengthways, staggered, between posts |
+   | Timber, long and low | a **fallen log**: an ellipse to fit the box, bark, a root plate, stubs of branches |
+   | Timber, tall and thin | a **dead trunk**, flared at the foot, broken off round a flat heart |
+   | On a course: turf or snow, floating | a **floating island**: a slab of turf with a lip of soil over a lump of rock tapering beneath it, a few short roots |
+   | On a course: sand | a **stepping stone**, a fallen column's drum |
+   | On a course: timber | a **scaffold**: planks on beams on braced posts |
+   | Anything else | what it was: a rock, a cliff (a low outcrop of rock mossed on top), a soft mound |
+
+2. **A fight's ground is land** (`game::land::draw_arena`): the floor and its
+   rim ([arenas.md](arenas.md) §1a) drawn a tile at a time like the valley's,
+   at the simulation's heights, coloured by `Palette::land` (rock where it
+   steepens, with strata on a face too steep to stand on), and past the rim
+   the woods: trees beyond the crest (`land::Trees`, broadleaf or pine by
+   place), bushes and boulders on the bank. The old dressing that stood past
+   a wall (birches round the Ashwood) gives way to it.
+3. **The floor's scatter is one mesh of thousands** -- broad short tufts of
+   grass (tall thin blades took the outline round every one and drew the
+   meadow in ink), a flower now and then, pebbles on earth and sand -- on the
+   floor and on any top broad enough to be ground (the Cliffs' plateau).
+4. **The town is a town** (`sim::arena::hearth`, `game::town`): buildings,
+   towers, props and trees are tables, and their collision is made from the
+   tables -- a house is a box to its eaves, three boxes stacked inside its
+   roof's slopes, a chimney -- and the renderer draws each from the same
+   entry: a stone footing, plaster between dark timbers with braces, windows
+   with shutters, a door to the street, tiled roofs in overlapping courses
+   with overhanging eaves, gables, ridges. Crenellated walls and towers,
+   arches over the gates, banners, the bell tower's spire, flagstones, an
+   inn's sign, stalls under striped awnings, barrels, crates, a cart, hay,
+   lamps that glow, a well with a roof.
+5. **A course floats over somewhere** (`game::land::draw_below`): hills and
+   woods far under the islands, hazed by the air, instead of a dark floor.
+6. **Trees are trees**: a trunk as thick as the tree is tall would have it, a
+   broadleaf a canopy of clumps rather than a ball on a stick, bark weathered
+   grey (`Palette::bark`) rather than painted red.
+
+![Hearth's street](gallery/valley-hearth.jpg)
+![Hearth's square](gallery/hearth-square.jpg)
+![The Commons: masonry walls, the rim's bank, woods past it](gallery/forms-commons.jpg)
+![The Ashwood: cordwood, dead trunks, pines on the snowy rim](gallery/forms-ashwood.jpg)
+![The Long Valley between its banks](gallery/forms-long-valley.jpg)
+![The Spiral: floating islands over the land below](gallery/course-spiral.jpg)
+
+New colours, all derived from a place's palette (`look::palette`): `mortar`,
+`moss`, `soil`, `roof`, `plaster`, `framing`, `cloth`, `bloom`, `crag`.
 
 ## What to decide
 

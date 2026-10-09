@@ -43,9 +43,17 @@ One climb from Hearth's gate to the Saddle, **one map** of land since
 mountains, a river in its first meadow and a tarn under the Shelves' north
 slope, woods thickening into the Pinewood and thinning into the Saddle's
 snow. The creatures' arenas are **rooms** in clearings off the road, each at
-the end of a side path, so every fight is the arena it was tuned in. Hearth
-sits at the bottom of the climb, the Ring north of it and the Long Valley
-west, where the Siegeshell walks toward the town.
+the end of a side path and ringed by its rim's bank, so every fight is the
+arena it was tuned in. Hearth sits at the bottom of the climb, the Ring north
+of it and the Long Valley west, where the Siegeshell walks toward the town.
+
+**Hearth is a market town** (rebuilt 2026-10-09, `sim::arena::hearth`): a
+paved street gate to gate through a square with a well and two trees,
+half-timbered houses under tiled roofs, an inn, the hall, the armoury, a
+barn, market stalls, lamps, and the bell tower, inside a crenellated wall
+with towers at its corners and either side of its gates. Its buildings and
+props are tables the collision is made from and the renderer draws from
+(`game::town`), so a roof you see is a roof you land on.
 
 ![The Bank, looking back at the town](gallery/valley-bank.png)
 
