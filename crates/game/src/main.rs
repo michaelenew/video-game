@@ -1379,7 +1379,9 @@ const EFFECT_PARTS: usize = {
     let beads = sim::effects::TETHER_BEADS;
     let rough = sim::effects::ROUGH_BEADS;
     let ring = sim::effects::RING_PIECES;
+    let flames = sim::effects::CARPET_FLAMES;
     let most = if blades > arms { blades } else { arms };
+    let most = if flames > most { flames } else { most };
     let most = if beads > most { beads } else { most };
     let most = if rough > most { rough } else { most };
     if ring > most { ring } else { most }
@@ -3261,6 +3263,56 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             at,
             effect.ember_volume().radius.to_f32_for_render(),
         )),
+        // The Air ball: the ball the carry reads, at the size it is now --
+        // growing while she holds it, shrinking as it rolls.
+        EffectKind::AirBall if part == 0 => Some(floating_in(
+            Skin::Air,
+            fx3(effect.ball_middle()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Fire carpet: a stream of flames carried along its line from the
+        // near end to the far one, so the fire is seen being pushed outward.
+        // Each flame is no wider than the strip that burns. See
+        // `Effect::carpet_flame`.
+        EffectKind::FireCarpet if part < sim::effects::CARPET_FLAMES => {
+            let (flame, radius) = effect.carpet_flame(part);
+            Some(floating_in(
+                Skin::Fire,
+                fx3(flame),
+                radius.to_f32_for_render(),
+            ))
+        }
+        // The Fire fountain: the wash standing where she took off, and over
+        // its first frames the burst -- a ball of fire at the move's radius,
+        // the size it hits at.
+        EffectKind::Fountain if part == 0 => {
+            let slab = effect.fountain_volume();
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
+        EffectKind::Fountain if part == 1 && effect.age <= sim::tuning::fountain_burst() => Some(
+            floating_in(Skin::Fire, at, effect.source().radius.to_f32_for_render()),
+        ),
+        // The Blood nova's burst: the sphere the hit test reads, round where
+        // she stood, for the moment it is there.
+        EffectKind::Nova if part == 0 => Some(floating_in(
+            Skin::Blood,
+            at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Nail: a ball where its hit test is, in the Reaver's near-black,
+        // because a nail is black.
+        EffectKind::Nail if part == 0 => Some(floating_in(
+            Skin::Shade,
+            fx3(effect.bolt_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
@@ -3844,10 +3896,12 @@ const REHEARSAL_FRAMES: u32 = 40;
 /// One frame of the double structure jump, `since` frames into it.
 ///
 /// **The input, not a description of it.** Two structures raised three frames
-/// apart -- the second press needs the button up in between, because the
-/// mechanic fires on a press edge, which is also why the gap cannot be shorter
-/// than two frames -- and then the jump nine frames after the first, held so
-/// the rise sustains.
+/// apart -- the second press needs the button up in between, because Raise
+/// fires on the earth click's press edge, which is also why the gap cannot be
+/// shorter than two frames -- and then the jump nine frames after the first,
+/// held so the rise sustains. The earth click is her left click since
+/// 2026-10-09 (`sim::moves::elementalist::keys`); space is pressed only after
+/// both raises, since space with the earth click is the earth jump.
 ///
 /// Three frames rather than two is deliberate: two is a metre higher at its
 /// best, and three gives five different jump frames that reach a third takeoff
@@ -3860,7 +3914,7 @@ fn rehearsal(since: u32, w: &World) -> SimInput {
     let mut v = 0u16;
     // Frame 0 and frame 3, with frames 1 and 2 releasing the button.
     if since == 0 || since == 3 {
-        v |= SimInput::MECHANIC;
+        v |= sim::moves::elementalist::keys::EARTH;
     }
     if since >= 9 {
         v |= SimInput::SPACE;
@@ -4891,10 +4945,10 @@ mod rehearsing {
         // And the shape of the input is the thing the kit document describes:
         // two presses three frames apart with the button up between them.
         let w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
-        assert!(rehearsal(0, &w).has(SimInput::MECHANIC));
-        assert!(!rehearsal(1, &w).has(SimInput::MECHANIC));
-        assert!(!rehearsal(2, &w).has(SimInput::MECHANIC));
-        assert!(rehearsal(3, &w).has(SimInput::MECHANIC));
+        assert!(rehearsal(0, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(!rehearsal(1, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(!rehearsal(2, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(rehearsal(3, &w).has(sim::moves::elementalist::keys::EARTH));
         assert!(!rehearsal(8, &w).has(SimInput::SPACE));
         assert!(rehearsal(9, &w).has(SimInput::SPACE));
     }

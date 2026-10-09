@@ -2835,3 +2835,201 @@ pub fn eye_ceiling_slope() -> Fx {
 pub fn eye_under_ceiling() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EyeUnderCeiling))
 }
+
+// ---------------------------------------------------------------------------
+// The Elementalist on three clicks, 2026-10-09
+// ---------------------------------------------------------------------------
+//
+// See `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
+
+/// The Air ball's radius on a tap: where a ball let go at once starts.
+pub fn air_ball_radius_tap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallRadiusTap)).max(Fx::ratio(1, 10))
+}
+
+/// The Air ball's radius at the longest hold.
+pub fn air_ball_radius_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallRadiusFull)).max(air_ball_radius_tap())
+}
+
+/// How fast a tapped ball travels.
+pub fn air_ball_speed_tap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallSpeedTap)).max(Fx::ZERO)
+}
+
+/// How fast a fully held ball travels. Between the two, the speed follows the
+/// size, so a bigger ball is a faster one -- and since it also lasts longer,
+/// how far it goes grows with the square of how big it was let go.
+pub fn air_ball_speed_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallSpeedFull)).max(air_ball_speed_tap())
+}
+
+/// How fast a travelling ball shrinks, in metres of radius a second. Steady,
+/// so how long a ball lasts is its size at the release over this, and anybody
+/// looking at it can read how far it will go.
+pub fn air_ball_shrink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallShrink)).max(Fx::ratio(1, 100))
+}
+
+/// The smallest a ball can be and still hold a body. Below it, whatever it was
+/// carrying drops out with the ball's speed and the ball goes on empty.
+pub fn air_ball_holds() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallHolds)).max(Fx::ZERO)
+}
+
+/// How much faster a ball shrinks while it carries somebody: carrying is paid
+/// for, which is the answer 0008 leans to on a charge that moves her.
+pub fn air_ball_carried_shrink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallCarriedShrink)).max(Fx::ONE)
+}
+
+/// How long a Fire carpet hangs where she laid it.
+pub fn carpet_life() -> u16 {
+    oven::scalar(Scalar::CarpetLife).max(1) as u16
+}
+
+/// How far in front of her the carpet starts, along her look.
+pub fn carpet_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetAhead)).max(Fx::ZERO)
+}
+
+/// What the Fire carpet burns for on each damage tick. A number of its own,
+/// as the pillar's and the cloud's are: the move that lays it hits nobody.
+pub fn carpet_damage() -> i32 {
+    oven::scalar(Scalar::CarpetDamage).max(0)
+}
+
+/// What a Thermal throws her up at: an Updraft that shares space with her own
+/// fire.
+pub fn thermal_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThermalLift)).max(Fx::ZERO)
+}
+
+/// What a Thermal off a Fire carpet throws her along it at.
+pub fn thermal_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThermalPush)).max(Fx::ZERO)
+}
+
+/// How long the Fire fountain's wash burns where she took off.
+pub fn fountain_life() -> u16 {
+    oven::scalar(Scalar::FountainLife).max(1) as u16
+}
+
+/// How wide the Fire fountain's wash is.
+pub fn fountain_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FountainRadius)).max(Fx::ratio(1, 10))
+}
+
+/// How many of the fountain's first frames are the burst: the move's own hit,
+/// once per body, at the move's radius.
+pub fn fountain_burst() -> u16 {
+    oven::scalar(Scalar::FountainBurst).max(1) as u16
+}
+
+/// What the wash burns for on each damage tick after the burst.
+pub fn fountain_damage() -> i32 {
+    oven::scalar(Scalar::FountainDamage).max(0)
+}
+
+/// How much of her upward speed the earth jump's stone leaves with.
+pub fn earth_stone_keep_up() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EarthStoneKeepUp)).max(Fx::ZERO)
+}
+
+/// How much of her run the earth jump's stone leaves with.
+pub fn earth_stone_keep_flat() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EarthStoneKeepFlat)).max(Fx::ZERO)
+}
+
+/// The earth jump's stone falls at this share of the world's gravity, which is
+/// gentler than she falls. It is what makes the two meet: a stone that left a little slower and falls a
+/// little softer is under her again when she comes down, if she has not
+/// changed her mind on the way.
+pub fn earth_stone_gravity() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EarthStoneGravity)).max(Fx::ZERO)
+}
+
+/// How much bigger the earth jump is off a stone that shatters under her.
+pub fn earth_shatter_jump() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EarthShatterJump)).max(Fx::ONE)
+}
+
+/// How fast a stone in the air is driven back into the ground when she
+/// earth-jumps off it.
+pub fn earth_meteor_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EarthMeteorSpeed)).max(Fx::ONE)
+}
+
+// ---------------------------------------------------------------------------
+// The Blood mage on three clicks, 2026-10-09
+// ---------------------------------------------------------------------------
+//
+// See `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+
+/// A held Blood nova or Blood jet takes one percent of her red every this
+/// many frames: the hold is paid in blood as it goes.
+pub fn blood_pays_every() -> u16 {
+    oven::scalar(Scalar::BloodPaysEvery).max(1) as u16
+}
+
+/// How fast the Blood jet drives her along her aim while it is held.
+pub fn jet_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JetSpeed)).max(Fx::ZERO)
+}
+
+/// The least the jet lifts her, however level she aims it: a jet aimed at the
+/// horizon still leaves the floor.
+pub fn jet_least_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JetLeastRise)).max(Fx::ZERO)
+}
+
+/// What the jet's wake deals for every frame it was held, over the move's own
+/// damage.
+pub fn jet_damage_per_frame() -> i32 {
+    oven::scalar(Scalar::JetDamagePerFrame).max(0)
+}
+
+/// How long the Nail holds somebody it caught in the air.
+pub fn nail_pin() -> u16 {
+    oven::scalar(Scalar::NailPin).max(0) as u16
+}
+
+/// How long the Nail flies its reach.
+pub fn nail_flight() -> u16 {
+    oven::scalar(Scalar::NailFlight).max(1) as u16
+}
+
+/// How fast the Hook pulls her to what it caught.
+pub fn hook_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HookSpeed)).max(Fx::ONE)
+}
+
+/// Does the Haemorrhage's bleed run on a creature? On since 2026-10-09: the
+/// creature bleeds. A flag so the old answer can be played against the new.
+pub fn bleed_on_creatures() -> bool {
+    oven::scalar(Scalar::BleedOnCreatures) != 0
+}
+
+/// How far below her own footing a stone she did not point down at may land:
+/// past an edge, a placement comes back toward her rather than falling to the
+/// floor below. See `aim::kept_up`.
+pub fn placement_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlacementDrop)).max(Fx::ZERO)
+}
+
+/// How fast an Air ball that has rolled off an edge sinks, carrying whoever
+/// is in it, until it meets the floor.
+pub fn air_ball_sink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallSink)).max(Fx::ZERO)
+}
+
+/// How much of her sideways walk inside her Air ball turns it.
+pub fn air_ball_steer() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallSteer)).max(Fx::ZERO)
+}
+
+/// What share of its size an Air ball keeps when it is knocked off a wall or
+/// a stone.
+pub fn air_ball_knock() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBallKnock)).clamp(Fx::ZERO, Fx::ONE)
+}

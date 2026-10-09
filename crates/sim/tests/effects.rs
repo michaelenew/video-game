@@ -10,11 +10,33 @@
 use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
 use sim::moves;
+use sim::moves::elementalist::keys;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::{Fx, Input, World};
 
 const Q: u16 = Input::SPECIAL;
 const E: u16 = Input::MECHANIC;
+
+// The Blood mage's buttons, by what they do. Her clicks are *my blood*, *your
+// blood* and the scythe since the three-clicks remap
+// (docs/design/exploration/0009_blood_mage_on_three_clicks.md): the
+// Bloodletter moved from the middle click to `Q`, and the Grasp from `Q` to the
+// middle click, held.
+/// The Bloodletter, the blade thrown out and back: `Q`.
+const BLOODLETTER: u16 = sim::moves::blood::keys::BLOODLETTER;
+/// The Grasp, held: the middle click on the floor.
+const GRASP: u16 = sim::moves::blood::keys::YOUR_BLOOD;
+
+// The Elementalist's buttons, by what they do. Her three clicks are earth,
+// fire and wind since 2026-10-09 (docs/design/kits/elementalist.md, "On three
+// clicks"), so `Q` and `E` above mean something else for her: the Bolt and
+// Cataclysm, the weak push and the strong one.
+/// Raise a stone: a press of the earth click on the floor.
+const RAISE: u16 = keys::EARTH;
+/// The Fire pillar: a tap of the fire click on the floor.
+const PILLAR: u16 = keys::FIRE;
+/// The Bolt, her auto: the weak push.
+const BOLT: u16 = keys::WEAK_PUSH;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -155,7 +177,7 @@ fn the_fire_pillar_stands_after_the_move_is_over() {
     // stops mattering. If the pillar died with the recovery frames it would
     // just be a slow poke.
     let mut w = engaged(Class::Elementalist);
-    tap(&mut w, Q, 60);
+    tap(&mut w, PILLAR, 60);
     assert!(
         w.players[0].action.actionable(),
         "still swinging 60 frames later, so this proves nothing"
@@ -174,15 +196,15 @@ fn one_fire_pillar_at_a_time_and_a_second_press_does_nothing() {
     // nothing -- no pillar, no eruption, and none of her frames spent. Once
     // it has burned out she may cast the next.
     let mut w = engaged(Class::Elementalist);
-    tap(&mut w, Q, 60);
+    tap(&mut w, PILLAR, 60);
     let first = effects_of(&w, EffectKind::FirePillar);
     assert_eq!(first.len(), 1, "fixture: the first pillar did not go up");
-    run(&mut w, 1, Q, 0);
+    run(&mut w, 1, PILLAR, 0);
     assert!(
         w.players[0].action.actionable(),
         "a second press committed her to something while her pillar still burned"
     );
-    tap(&mut w, Q, 60);
+    tap(&mut w, PILLAR, 60);
     let now = effects_of(&w, EffectKind::FirePillar);
     assert_eq!(now.len(), 1, "a second pillar went up beside the first");
     assert_eq!(
@@ -199,7 +221,7 @@ fn one_fire_pillar_at_a_time_and_a_second_press_does_nothing() {
     );
     let lock = sim::moves::get(Class::Elementalist, sim::state::SLOT_SPECIAL).repeat_lock();
     run(&mut w, lock as u32 + 2, 0, 0);
-    tap(&mut w, Q, 60);
+    tap(&mut w, PILLAR, 60);
     assert_eq!(
         effects_of(&w, EffectKind::FirePillar).len(),
         1,
@@ -214,7 +236,7 @@ fn the_fire_pillar_spreads_at_the_base_and_climbs_at_the_top() {
     // jumping over. If both grew the same way the pillar would be one decision
     // instead of two.
     let mut w = engaged(Class::Elementalist);
-    tap(&mut w, Q, 30);
+    tap(&mut w, PILLAR, 30);
     let young = effects_of(&w, EffectKind::FirePillar)[0].pillar_volumes();
     run(&mut w, 120, 0, 0);
     let old = effects_of(&w, EffectKind::FirePillar)[0].pillar_volumes();
@@ -242,7 +264,7 @@ fn standing_in_a_fire_pillar_costs_you_and_standing_in_your_own_does_not() {
     // be in. The caster can stand in her own, or she could never fight beside
     // the thing she just made.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, Q, 20); // the pillar lands well ahead of her
+    tap(&mut w, PILLAR, 20); // the pillar lands well ahead of her
     let caster_before = w.players[0].health;
     let victim_before = w.players[1].health;
     run(&mut w, 140, Input::W, Input::W); // both walk in
@@ -270,7 +292,7 @@ fn an_auto_aimed_through_a_fire_pillar_lights_a_fire_bolt() {
     // out of the way, so what the beam meets first is the fire.
     w.players[0].pos = sim::V3::new(Fx::from_int(-10), Fx::ZERO, Fx::from_int(8));
     w.players[1].pos = sim::V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(8));
-    tap(&mut w, Q, 60); // plant a pillar ahead, and let her recover from it
+    tap(&mut w, PILLAR, 60); // plant a pillar ahead, and let her recover from it
     let pillars = effects_of(&w, EffectKind::FirePillar);
     assert_eq!(pillars.len(), 1, "fixture planted no pillar to aim through");
     assert!(
@@ -296,7 +318,7 @@ fn an_auto_aimed_through_a_fire_pillar_lights_a_fire_bolt() {
     );
 
     for _ in 0..60 {
-        run(&mut w, 1, Input::LEFT, 0);
+        run(&mut w, 1, BOLT, 0);
         if matches!(w.players[0].action, Action::Active { kind: 0, .. }) {
             break;
         }
@@ -340,7 +362,7 @@ fn a_structure_has_no_clock() {
     // vanished. A structure is a cap-of-three resource, and the only thing
     // that spends it is raising a fourth.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, E, 4);
+    tap(&mut w, RAISE, 4);
     assert!(has_structure(&w), "fixture never raised a structure");
     run(&mut w, 3_000, 0, 0); // fifty seconds of doing nothing
     assert!(has_structure(&w), "the structure went away on its own");
@@ -353,9 +375,9 @@ fn casting_the_pillar_never_costs_a_structure() {
     // pillar does not even need one out any more, but it still must not eat
     // one that happens to be there.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, E, 4);
+    tap(&mut w, RAISE, 4);
     for _ in 0..20 {
-        tap(&mut w, Q, 12);
+        tap(&mut w, PILLAR, 12);
         assert!(has_structure(&w), "casting the pillar ate the structure");
     }
 }
@@ -381,9 +403,9 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
         "fixture laid no pool"
     );
 
-    tap(&mut w, E, 4);
+    tap(&mut w, RAISE, 4);
     for _ in 0..20 {
-        tap(&mut w, Q, 4);
+        tap(&mut w, PILLAR, 4);
     }
     assert_eq!(
         effects_of(&w, EffectKind::Pool).len(),
@@ -398,7 +420,7 @@ fn a_fourth_structure_costs_the_first() {
     // only thing that owns structures.
     let mut w = as_class(Class::Elementalist);
     for _ in 0..4 {
-        tap(&mut w, E, 2);
+        tap(&mut w, RAISE, 2);
         run(&mut w, 10, Input::D, 0); // move, so each one lands somewhere new
     }
     let Mechanic::Structures(slots) = w.players[0].mechanic else {
@@ -427,8 +449,14 @@ fn the_mechanic_fires_on_the_press_not_while_the_button_is_down() {
     for class in sim::class::ALL_CLASSES {
         let mut w = World::with_classes([class, Class::Bulwark]);
         let mut held = w.clone();
-        run(&mut held, 40, E, 0);
-        run(&mut w, 2, E, 0);
+        // Her stone is on the earth click now; `E` is Cataclysm.
+        let press = if class == Class::Elementalist {
+            RAISE
+        } else {
+            E
+        };
+        run(&mut held, 40, press, 0);
+        run(&mut w, 2, press, 0);
         run(&mut w, 38, 0, 0);
         if class == Class::Elementalist {
             let count = |w: &World| match w.players[0].mechanic {
@@ -451,7 +479,7 @@ fn the_mechanic_fires_on_the_press_not_while_the_button_is_down() {
 #[test]
 fn holding_the_mechanic_raises_exactly_one_structure() {
     let mut w = as_class(Class::Elementalist);
-    run(&mut w, 40, E, 0);
+    run(&mut w, 40, RAISE, 0);
     let Mechanic::Structures(slots) = w.players[0].mechanic else {
         panic!("the Elementalist lost her mechanic");
     };
@@ -466,8 +494,8 @@ fn holding_the_mechanic_raises_exactly_one_structure() {
 fn a_second_press_raises_a_second_structure() {
     // The edge must not latch: letting go and pressing again has to work.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, E, 4);
-    tap(&mut w, E, 4);
+    tap(&mut w, RAISE, 4);
+    tap(&mut w, RAISE, 4);
     let Mechanic::Structures(slots) = w.players[0].mechanic else {
         panic!("the Elementalist lost her mechanic");
     };
@@ -483,7 +511,7 @@ fn a_structure_climbs_out_of_the_ground_and_then_stops_counting() {
     // It is earth. The age drives the rise and nothing else -- it must not
     // become a lifetime by the back door, so it saturates rather than wrapping.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, E, 0);
+    tap(&mut w, RAISE, 0);
     let age_of = |w: &World| {
         let Mechanic::Structures(slots) = w.players[0].mechanic else {
             panic!("no mechanic")
@@ -568,7 +596,7 @@ fn in_the_grasp(w: &mut World) -> i16 {
 /// these tests is thrown, would send the arms out three metres.
 fn grasp(w: &mut World, pitch: i16) {
     let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
-    looking(w, hold as u32 + 1, Q, pitch, 0);
+    looking(w, hold as u32 + 1, GRASP, pitch, 0);
     looking(w, 1, 0, pitch, 0);
 }
 
@@ -662,13 +690,19 @@ fn casting_costs_the_blood_mage_health() {
     // -- see `docs/design/kits/blood-mage.md`. Asserted on all five rather than
     // on one, because "all of them" is the design and a free ability would be
     // the one everybody pressed.
+    //
+    // The buttons are the three-clicks map
+    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md).
+    // Haemorrhage is the left click **in the air** -- on the floor the same
+    // click is the Blood nova -- so it is cast from a height.
     use sim::moves::blood as b;
-    for (slot, button) in [
-        (b::BLOODLETTER, Input::MIDDLE),
-        (b::HAEMORRHAGE, Input::RIGHT),
-        (b::GRASP, Q),
-        (b::BLACK_SPIKE, E),
-        (b::SWEEP, Input::LEFT),
+    use sim::moves::blood::keys;
+    for (slot, button, airborne) in [
+        (b::BLOODLETTER, keys::BLOODLETTER, false),
+        (b::HAEMORRHAGE, keys::MY_BLOOD, true),
+        (b::GRASP, keys::YOUR_BLOOD, false),
+        (b::BLACK_SPIKE, keys::SPIKE, false),
+        (b::SWEEP, keys::SCYTHE, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert!(m.cost > 0, "{} is free to cast", m.name);
@@ -676,6 +710,10 @@ fn casting_costs_the_blood_mage_health() {
         // Cast it at nothing, so the only thing that can move the bar is the
         // price of pressing the button.
         let mut w = as_class(Class::BloodMage);
+        if airborne {
+            w.players[0].pos.y = Fx::from_int(3);
+            w.players[0].grounded = false;
+        }
         let before = w.players[0].health;
         let paid = w.players[0].cost_of(m.cost);
         run(&mut w, 2, button, 0);
@@ -735,7 +773,7 @@ fn the_bloodletter_cuts_on_the_way_out_and_on_the_way_back() {
 
     let full = w.players[1].health;
     let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, Input::MIDDLE, pitch, 0);
+    looking(&mut w, 2, BLOODLETTER, pitch, 0);
     let mut cuts = 0;
     let mut last = full;
     for _ in 0..120 {
@@ -762,7 +800,7 @@ fn the_blade_comes_back_to_the_mage_and_not_to_the_spot_she_threw_it_from() {
     // up under the old rule: the throw point is still there to compare with.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, Input::MIDDLE, 0, 0);
+    looking(&mut w, 2, BLOODLETTER, 0, 0);
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
     let thrown_from = effects_of(&w, EffectKind::Bloodletter)
         .first()
@@ -806,7 +844,7 @@ fn the_blade_tracks_the_mage_the_whole_way_home_rather_than_snapping_to_her() {
     // the test above and read, in the hand, as a bug.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, Input::MIDDLE, 0, 0);
+    looking(&mut w, 2, BLOODLETTER, 0, 0);
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
 
     let flight = sim::tuning::bloodletter_flight();
@@ -871,7 +909,7 @@ fn the_bloodletter_brings_back_a_cut_and_not_health() {
         w.players[0].pos.z,
     );
     let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, Input::MIDDLE, pitch, 0);
+    looking(&mut w, 2, BLOODLETTER, pitch, 0);
     let flight = sim::tuning::bloodletter_flight();
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
     let paid = w.players[0].health;
@@ -904,7 +942,7 @@ fn holding_the_grasp_longer_sends_it_further() {
     let thrown = |hold: u16| {
         let mut w = as_class(Class::BloodMage);
         let pitch = in_the_grasp(&mut w);
-        looking(&mut w, hold as u32 + 1, Q, pitch, 0);
+        looking(&mut w, hold as u32 + 1, GRASP, pitch, 0);
         looking(&mut w, 1, 0, pitch, 0);
         for _ in 0..90 {
             run(&mut w, 1, 0, 0);
@@ -954,7 +992,7 @@ fn a_still_mouse_holds_the_line_and_only_the_marker_moves() {
         let mut line: Option<sim::V3> = None;
         let mut was = sim::fixed::Fx::ZERO;
         for held in 0..=m.channel {
-            looking(&mut w, 1, Q, pitch, 0);
+            looking(&mut w, 1, GRASP, pitch, 0);
             if w.players[0].action.channelling().is_none() {
                 continue;
             }
@@ -1009,7 +1047,7 @@ fn the_marker_is_as_far_out_as_the_hold_and_nothing_else() {
     for pitch in [4096i16, 0, -4096, -8192, -12000, -16384] {
         let mut w = as_class(Class::BloodMage);
         for held in 0..=m.channel {
-            looking(&mut w, 1, Q, pitch, 0);
+            looking(&mut w, 1, GRASP, pitch, 0);
             let Some((_, wound)) = w.players[0].action.channelling() else {
                 continue;
             };
@@ -1038,7 +1076,7 @@ fn a_grasp_wound_to_full_range_reaches_full_range_through_a_wall() {
     let mut w = as_class(Class::BloodMage);
     // Straight down: whatever the ray meets, it meets it at once.
     let pitch = -16384;
-    looking(&mut w, m.channel as u32 + 1, Q, pitch, 0);
+    looking(&mut w, m.channel as u32 + 1, GRASP, pitch, 0);
     let wound = w.players[0].aim_path.length();
     assert!(
         wound.sub(m.reach).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
@@ -1099,7 +1137,7 @@ fn a_channel_that_is_never_released_throws_itself() {
     let pitch = in_the_grasp(&mut w);
     let mut out = None;
     for f in 0..(m.channel as u32 * 3) {
-        looking(&mut w, 1, Q, pitch, 0);
+        looking(&mut w, 1, GRASP, pitch, 0);
         if out.is_none() && !effects_of(&w, EffectKind::Grasp).is_empty() {
             out = Some(f);
         }
@@ -2686,9 +2724,9 @@ fn a_pillar_is_part_of_the_state_a_rollback_restores() {
     // If effects were not in the checksum, a peer could have a pillar the other
     // does not and neither would notice until someone died to it.
     let mut w = engaged(Class::Elementalist);
-    tap(&mut w, E, 4);
+    tap(&mut w, RAISE, 4);
     let bare = w.checksum();
-    tap(&mut w, Q, 40);
+    tap(&mut w, PILLAR, 40);
     assert!(
         !effects_of(&w, EffectKind::FirePillar).is_empty(),
         "fixture made no pillar"

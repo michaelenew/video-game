@@ -382,7 +382,17 @@ fn best_case(m: &Move) -> i32 {
             | EffectKind::Updraft
             | EffectKind::Downdraft
             | EffectKind::AirRing
-            | EffectKind::FireRing,
+            | EffectKind::FireRing
+            // The three of 2026-10-09 are placed by the world from the move
+            // that makes them, never by a row's code: a ball that hurts
+            // nobody, a carpet and a wash whose burns are fields of their own.
+            | EffectKind::AirBall
+            | EffectKind::FireCarpet
+            | EffectKind::Fountain
+            // The Blood mage's nova and nail are placed by the world from the
+            // move, and are the move's own one hit.
+            | EffectKind::Nova
+            | EffectKind::Nail,
         )
         | None => m.damage * swings,
     }
@@ -549,15 +559,17 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 19,
-            // Twelve: the seven, the Cinder spray on middle click in both
-            // rows, the two drafts on `F`, and Quake on the second side
-            // button with Tremor on `R`. See `docs/design/elementalist-v2.md`.
-            Class::Elementalist => 12,
+            // Sixteen: the twelve of v2 (the seven, the Cinder spray, the two
+            // drafts, Quake and Tremor) and the four of 2026-10-09 -- the Air
+            // ball, the Fire carpet, the Fire fountain and the earth jump. See
+            // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
+            Class::Elementalist => 16,
             Class::ShadowReaver => 4,
-            // Five: the auto was appended when the scythe arrived, so the
-            // four rows that came before it kept their knobs. See
-            // `moves::blood`.
-            Class::BloodMage => 5,
+            // Eleven: the five of the scythe's arrival and the six of
+            // 2026-10-09 -- the Blood nova, the Blood jet, Marionette, Nail,
+            // Hook and Harvest. See
+            // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+            Class::BloodMage => 11,
             // Six on five inputs: both forms of Lance answer to middle click,
             // and which one comes out is the force she is carrying. See
             // `moves::dual`.
@@ -639,6 +651,17 @@ fn a_committed_move_is_a_crawl_and_never_a_stop() {
     }
 }
 
+/// The button that throws a class's basic attack on the floor: left click,
+/// except on the Elementalist, whose left click raises a stone (an instant,
+/// not a move) and whose Bolt is the weak push on `Q` since 2026-10-09. See
+/// `sim::moves::elementalist::keys`.
+fn attack_button(class: sim::class::Class) -> u16 {
+    match class {
+        sim::class::Class::Elementalist => sim::moves::elementalist::keys::WEAK_PUSH,
+        _ => sim::Input::LEFT,
+    }
+}
+
 /// Aim angle for a fighter looking the way they spawn. Movement and attacks are
 /// camera-relative, so a fixture that does not say where it is looking is not
 /// saying what its buttons mean.
@@ -680,7 +703,8 @@ fn no_attack_lets_you_jump_or_dodge_out_of_it() {
     // differently -- whatever comes out is still an attack, which is the claim.
     use sim::Input;
     for class in ALL_CLASSES {
-        for throw in [Input::LEFT, Input::SHIFT | Input::LEFT] {
+        let attack = attack_button(class);
+        for throw in [attack, Input::SHIFT | attack] {
             let quiet = four_frames_into(class, throw, 0);
             assert_eq!(
                 four_frames_into(class, throw, Input::SPACE),
@@ -723,7 +747,7 @@ fn a_move_never_snaps_you_to_its_speed() {
         // is the committed move on four of the six, and the Champion's left
         // click is the sword whatever the modifier says -- so the speed to ramp
         // to is read off whatever actually came out rather than assumed.
-        let held = Input::SHIFT | Input::LEFT | Input::W;
+        let held = Input::SHIFT | attack_button(class) | Input::W;
         w.advance([Input::aimed(held, LOOKING), Input::default()]);
         let kind = w.players[0]
             .action

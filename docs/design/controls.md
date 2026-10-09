@@ -975,6 +975,14 @@ differentiation.
 
 ### Elementalist
 
+> **Superseded 2026-10-09: she is on three clicks.** Left is earth, middle is fire, right is
+> wind, each a tap and a hold on the floor and something else in the air; space with a click
+> is a takeoff (the Champion's window); `Q` is the weak push (the Bolt, in the air too since the
+> second playtest; the Air bolt is unbound) and `E` the
+> strong push (Cataclysm); `F` is the Cinder spray standing and the Downdraft in the air. The
+> table is [kits/elementalist.md](kits/elementalist.md) §"On three clicks", and the buttons
+> are named once in `sim::moves::elementalist::keys`. What follows is the v2 layout it replaced.
+
 Current as of 2026-09-30, the v2 build: middle click, both mouse side buttons, `F` and `R` are
 all bound, and `Q`/`E` charge when held. **The row is where her feet are** — the same buttons
 mean one thing standing up and another off the floor, which is the Champion's grid read one
@@ -1007,6 +1015,14 @@ Raise was on right click before Cataclysm took the button, and the mechanic key 
 actually lives.
 
 ### Blood mage
+
+> **Superseded 2026-10-09: she is on three clicks.** Left is *my blood* (the Blood nova held on
+> the floor, the Haemorrhage in the air), middle is *your blood* (the Grasp held, the Nail in
+> the air), right is the scythe (the Reaping sweep, the Hook in the air); space with a click is
+> a takeoff in the Champion's window (the Blood jet, Marionette, Harvest); `Q` is the
+> Bloodletter and `E` the Black spike. The table is [kits/blood-mage.md](kits/blood-mage.md)
+> §"On three clicks", and the buttons are named once in `sim::moves::blood::keys`. What
+> follows is the v1 layout it replaced.
 
 Current as of 2026-09-23, the v1 rebuild. Every row is **bound**.
 

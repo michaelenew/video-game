@@ -49,6 +49,64 @@ const LEVEL_DATA: &[&str] = &["land.rs", "layout.rs", "rim.rs", "hearth.rs"];
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "let third = Fx::ratio(1, 3)",
+        "Presentation: where a Fire carpet's drawn flame is widest along its trip. The hit \
+         test is the capsule, and no flame is drawn wider than it.",
+    ),
+    (
+        "let thins_by = Fx::ratio(3, 4)",
+        "Presentation: how far a drawn carpet flame thins by the end of its trip.",
+    ),
+    (
+        "let half = Fx::ratio(1, 2)",
+        "Presentation: how small a drawn carpet flame starts, against the strip that burns.",
+    ),
+    (
+        "const CARPET_FLOW: u16 = 30",
+        "Presentation: how fast the drawn flames run along a Fire carpet, like the bead \
+         counts beside it. The carpet burns the same whatever this is.",
+    ),
+    (
+        "pub const EARTH: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Elementalist's earth click.",
+    ),
+    (
+        "pub const FIRE: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is her fire click.",
+    ),
+    (
+        "pub const WIND: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is her wind click.",
+    ),
+    (
+        "pub const STRONG_PUSH: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is her strong push.",
+    ),
+    (
+        "pub const WEAK_PUSH: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is her weak push.",
+    ),
+    (
+        "pub const MY_BLOOD: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
+    ),
+    (
+        "pub const YOUR_BLOOD: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Blood mage's your-blood click.",
+    ),
+    (
+        "pub const SCYTHE: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Blood mage's scythe click.",
+    ),
+    (
+        "pub const BLOODLETTER: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Blood mage's Bloodletter.",
+    ),
+    (
+        "pub const SPIKE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Blood mage's Black spike.",
+    ),
+    (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",
         "How far past an arena's bounds the aiming ray walks the floor to reach its rim's \
          bank: the bank and the foothills past it, both sides. A reach, not a tuning value.",

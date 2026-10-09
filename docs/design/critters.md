@@ -347,6 +347,10 @@ one shifts every later index in the baked file.
   0.6 m would fix it and changes versus; leaving it makes the Reaver's flower
   a Big One tool and her Slash the gnawer tool, which the Gnawers' §7 almost
   says anyway. A person's call.
+- **The Blood mage's Harvest passes over a 0.6 m body** at 1–2 m (2026-10-09):
+  she leaves the floor on the first active frame and the spin is flat at her
+  waist. It is the jump that drinks the pools under it, not a gnawer tool; her
+  Reaping sweep on foot is. A person's call if it should stoop.
 - **Lunges run through critters**, because fighters pass through them. An attack
   step that stopped at a critter would be a second rule for what blocks a body.
 - **A blade cuts a critter once per throw**, not once per pass.

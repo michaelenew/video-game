@@ -645,6 +645,10 @@ const NAMES: [&[&str]; 6] = [
         "Downdraft",
         "Quake",
         "Tremor",
+        "Air ball",
+        "Fire carpet",
+        "Fire fountain",
+        "Earth jump",
     ],
     // Blood mage -- her blood goes out, and theirs comes back. Everything
     // costs health, every hit she lands spills the target onto the floor, and
@@ -667,6 +671,12 @@ const NAMES: [&[&str]; 6] = [
         "Grasp",
         "Black spike",
         "Reaping sweep",
+        "Blood nova",
+        "Blood jet",
+        "Marionette",
+        "Nail",
+        "Hook",
+        "Harvest",
     ],
     // Dual mage -- melee mage riding between two forces, one in each arm. Six
     // moves on five inputs, and the two on the bare clicks are the class: see
@@ -977,8 +987,64 @@ pub mod blood {
     pub const BLACK_SPIKE: u8 = 3;
     /// Left click. Appended last: see the module note.
     pub const SWEEP: u8 = 4;
+    /// Left click, standing, held: **the Blood nova**. She bleeds into a sphere
+    /// round herself for as long as the click is down -- red health every few
+    /// frames -- and lets it burst: whoever is close is hurt and thrown off,
+    /// her grey has climbed, and a pool of her own blood is left where she
+    /// stood. The first of the *my blood* moves, which need no enemy at all.
+    /// See `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+    pub const BLOOD_NOVA: u8 = 5;
+    /// Space and left click, held: **the Blood jet**. Her blood out under her
+    /// drives her along her aim for as long as it is held, paid in red as it
+    /// goes; let go and whoever was in the jet's wake is hurt, more the longer
+    /// it ran. A pool of her own blood is left where she took off.
+    pub const BLOOD_JET: u8 = 6;
+    /// Space and middle click: **Marionette**. The victim's own blood hauls
+    /// them up off the floor -- a launcher, and she goes up with them. It lifts
+    /// and nothing more: the pin is the Nail's.
+    pub const MARIONETTE: u8 = 7;
+    /// Middle click, airborne: **the Nail**. A long black spike driven along
+    /// her aim. On somebody in the air it **pins them there** for a moment; on
+    /// somebody on the floor it is a heavy hit and nothing else. Marionette
+    /// and then the Nail is the Hanging.
+    pub const NAIL: u8 = 8;
+    /// Right click, airborne: **the Hook**. The scythe thrown along her aim on a
+    /// thread of blood: it catches the first fighter, creature, stone or wall
+    /// and **pulls her to it**. A grappling hook, and it hurts nobody.
+    pub const HOOK: u8 = 9;
+    /// Space and right click: **Harvest**. A high jump inside a full circle of
+    /// the scythe, which drinks every pool it passes over on the way -- the
+    /// heal as a line to take across the fight.
+    pub const HARVEST: u8 = 10;
 
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 11;
+
+    /// **Which button is which of her verbs**, in one place, as the
+    /// Elementalist's are: left is *my blood*, middle is *your blood*, right
+    /// is the scythe and how she moves.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: the Blood nova, Haemorrhage in the air, the Blood jet
+        /// with space.
+        pub const MY_BLOOD: u16 = Input::LEFT;
+        /// Middle click: the Grasp, the Nail in the air, Marionette with space.
+        pub const YOUR_BLOOD: u16 = Input::MIDDLE;
+        /// Right click: the Reaping sweep, the Hook in the air, Harvest with
+        /// space.
+        pub const SCYTHE: u16 = Input::RIGHT;
+        /// `Q`: the Bloodletter.
+        pub const BLOODLETTER: u16 = Input::SPECIAL;
+        /// `E`: the Black spike.
+        pub const SPIKE: u16 = Input::MECHANIC;
+    }
+
+    /// **Is a pool spilled by this move her own blood?** The *my blood* moves
+    /// spill her, not a victim; a pool of hers is a door -- the blink, the
+    /// spike's eruption -- and never a heal, or spending health would be a way
+    /// to drink it straight back.
+    pub const fn own_blood(slot: u8) -> bool {
+        matches!(slot, BLOOD_NOVA | BLOOD_JET)
+    }
 
     /// Is this the scythe -- the move whose reach, width and damage grow with
     /// the grey on her bar?
@@ -988,7 +1054,7 @@ pub mod blood {
     /// size and the growth is drawn as essence around it; `view::scythe`
     /// reads this to know which move to draw the volume for.
     pub const fn scythe(kind: u8) -> bool {
-        matches!(kind, SWEEP)
+        matches!(kind, SWEEP | HARVEST)
     }
 }
 
@@ -1063,8 +1129,59 @@ pub mod elementalist {
     /// stone comes up **under her** and takes her with it -- the structure
     /// jump with a telegraph attached.
     pub const TREMOR: u8 = 11;
+    /// Right click, standing. **The Air ball**: a ball of spinning air raised
+    /// where the crosshair meets the floor, grown while the button is held,
+    /// and sent flat along the floor toward where the crosshair meets it on
+    /// the release. It shrinks at a steady rate as it goes, so how far it gets
+    /// is a function of how big it was let go -- and everything inside it,
+    /// her included, goes with it. See `crate::effects::EffectKind::AirBall`
+    /// and `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
+    pub const AIR_BALL: u8 = 12;
+    /// Middle click, airborne. **The Fire carpet**: a strip of fire laid out
+    /// in front of her along her look, hanging where she put it. A shot flown
+    /// down it comes out lit, and an Updraft whose column reaches it is a
+    /// Thermal that throws her up *and along it*. See
+    /// `crate::effects::EffectKind::FireCarpet`.
+    pub const FIRE_CARPET: u8 = 13;
+    /// Space and middle click, from the floor. **The Fire fountain**: a burst
+    /// at her feet that hits all round her as she leaves the floor, and a wash
+    /// of fire left standing where she took off. See
+    /// `crate::effects::EffectKind::Fountain`.
+    pub const FIRE_FOUNTAIN: u8 = 14;
+    /// Space and left click, from the floor. **The earth jump**: an ordinary
+    /// jump that brings a stone up with her, a little slower than she is, so a
+    /// straight jump lands her on it in the air. Off a resting stone the stone
+    /// shatters and the jump is bigger; off a stone in the air the stone is
+    /// driven back into the ground, where it shatters. See
+    /// `state::World::earth_jump`.
+    pub const EARTH_JUMP: u8 = 15;
 
-    pub const COUNT: usize = 12;
+    pub const COUNT: usize = 16;
+
+    /// **Which button is which of her verbs**, in one place.
+    ///
+    /// The three clicks are what she makes -- earth, fire, wind -- and `Q`
+    /// and `E` are what she does to it, a weak push and a strong one. The
+    /// bindings moved once already (2026-10-09, when the clicks became the
+    /// class) and every test, bot and rehearsal that presses her buttons
+    /// presses them through these names, so the next move is one edit here
+    /// rather than a hunt through forty files for `Input::MECHANIC`.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: Raise on a tap, Fissure held, Landfall in the air,
+        /// the earth jump with space.
+        pub const EARTH: u16 = Input::LEFT;
+        /// Middle click: the Fire pillar on a tap, the Strike held, the Fire
+        /// carpet in the air, the Fire fountain with space.
+        pub const FIRE: u16 = Input::MIDDLE;
+        /// Right click: the Air ball, the Gale in the air, the Updraft with
+        /// space.
+        pub const WIND: u16 = Input::RIGHT;
+        /// `Q`: the Bolt, and the Air bolt in the air. The weak push.
+        pub const WEAK_PUSH: u16 = Input::SPECIAL;
+        /// `E`: Cataclysm, on the floor and off it. The strong push.
+        pub const STRONG_PUSH: u16 = Input::MECHANIC;
+    }
 
     // **No `is_airborne` here, deliberately.** "Which move is this button" is
     // answered once, in `state::elementalist_move` and `state::keyed_move`, and
@@ -1236,35 +1353,52 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             4 => "RMB",
             _ => "MMB, dark",
         },
-        // Right click is otherwise dead weight on a class with no shield, the
-        // same argument the Reaver makes -- Cataclysm takes it instead.
+        // **The three clicks are the class**, since 2026-10-09: left is earth,
+        // middle is fire, right is wind, each a tap and a hold on the floor,
+        // and the row is where her feet are. `Q` and `E` are the two pushes,
+        // weak and strong. See `elementalist::keys` and
+        // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
         Class::Elementalist => match slot {
-            0 => "LMB",
-            // Since v2: the mechanic key held past the stone's rise, and let
-            // go. See [`Charge::Crack`].
-            1 => "E held",
-            2 => "Q",
-            3 => "RMB",
-            // The air row. The button is the same; the situation is what
-            // changes what it throws. See [`elementalist`].
-            4 => "LMB air",
+            0 => "Q, floor and air",
+            // Raise is left click, an instant; held past the stone's rise it
+            // is Fissure. See [`Charge::Crack`].
+            1 => "LMB held",
+            2 => "MMB",
+            3 => "E",
+            // `Q` is the Bolt in the air too, since the second playtest: the
+            // Air bolt has no button for now.
+            4 => "unbound",
             5 => "RMB air",
-            6 => "E air",
-            // Both rows: the one move on the class the floor does not change.
-            7 => "MMB",
-            8 => "F",
+            6 => "LMB air",
+            // Off the clicks: the fire is the pillar's and the carpet's now,
+            // and the spray kept the key the Updraft left.
+            7 => "F",
+            8 => "Space+RMB",
             9 => "F air",
             10 => "Side B",
-            _ => "R",
+            11 => "R",
+            12 => "RMB",
+            13 => "MMB air",
+            14 => "Space+MMB",
+            _ => "Space+LMB",
         },
         // Three clicks, three moves, and the auto on the last row: see
         // [`blood`] for why the button order and the storage order differ.
+        // **My blood, your blood, the scythe**, since 2026-10-09: left,
+        // middle and right, each on the floor, in the air and with space. See
+        // `blood::keys`.
         Class::BloodMage => match slot {
-            0 => "MMB",
-            1 => "RMB",
-            2 => "Q",
+            0 => "Q",
+            1 => "LMB air",
+            2 => "MMB held",
             3 => "E",
-            _ => "LMB",
+            4 => "RMB",
+            5 => "LMB held",
+            6 => "Space+LMB held",
+            7 => "Space+MMB",
+            8 => "MMB air",
+            9 => "RMB air",
+            _ => "Space+RMB",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
@@ -1362,6 +1496,14 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // on the floor at her own feet.
         Class::Elementalist => match kind {
             elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
+            // The four of 2026-10-09 put a thing in the world -- a ball, a
+            // carpet, a wash of fire, a stone -- and let it do whatever is
+            // done. The fountain's burst is the wash's first frames, not a
+            // volume on her body.
+            elementalist::AIR_BALL
+            | elementalist::FIRE_CARPET
+            | elementalist::FIRE_FOUNTAIN
+            | elementalist::EARTH_JUMP => Shape::None,
             // Fissure, since v2: the crack does the hitting, racing from the
             // stone she held churning to the first body it meets -- see
             // `state::World::advance`. Her own body puts out nothing. Nor
@@ -1388,7 +1530,10 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // in the kit. Everything else she has puts something in the world and
         // lets it do the hitting, or lands on the floor where it was aimed.
         Class::BloodMage => match kind {
-            blood::SWEEP => Shape::Swing(Plane::Flat),
+            blood::SWEEP | blood::HARVEST => Shape::Swing(Plane::Flat),
+            // Each puts something in the world and lets it do the hitting --
+            // a burst, a jet's wake, a nail, a hook -- or hits nobody.
+            blood::BLOOD_NOVA | blood::BLOOD_JET | blood::NAIL | blood::HOOK => Shape::None,
             _ => Shape::Cylinder,
         },
         // Every other class is still the original disc at arm's length.
@@ -1459,14 +1604,27 @@ pub enum Charge {
     /// how far the crack of Fissure races from that stone along her look
     /// before the stone erupts at its end. The rise is the tap window.
     Crack,
+    /// The Elementalist's Air ball: the hold is **before** the release, like
+    /// the Grasp's, and buys **size** -- the ball grows where it was raised
+    /// for as long as the button is down, and a bigger ball goes faster and
+    /// lasts longer. The press raises it; the release sends it.
+    Gather,
+    /// The Blood mage's nova and jet: the hold is her own blood, **paid as it
+    /// goes** -- red health every `tuning::blood_pays_every` frames held --
+    /// and it buys size (the nova's burst) or distance (the jet's drive).
+    Bleed,
 }
 
 /// Which charge a move has, if any.
 pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
     match class {
         Class::BloodMage if kind == crate::state::SLOT_SPECIAL => Some(Charge::Reach),
+        Class::BloodMage if kind == blood::BLOOD_NOVA || kind == blood::BLOOD_JET => {
+            Some(Charge::Bleed)
+        }
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
+        Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
         _ => None,
     }
 }

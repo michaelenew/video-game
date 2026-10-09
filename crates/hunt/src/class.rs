@@ -506,7 +506,8 @@ impl Hands {
             }
         }
         self.uses.shots += 1;
-        self.look_keeping(me, plan, self.spot(w, me, at, false), Input::LEFT)
+        let bolt = self.button(me, SLOT_POKE).unwrap_or(Input::LEFT);
+        self.look_keeping(me, plan, self.spot(w, me, at, false), bolt)
     }
 
     /// The Reaver: **the lotus on a shadow standing at the work**, dragged home
@@ -588,13 +589,12 @@ impl Hands {
         // is her Haemorrhage, four in a hundred of her red for thirty against
         // something that does not bleed, where the scythe costs one and
         // drinks the pools under it.
-        if plan.bits & ATTACKS != Input::LEFT {
+        // The scythe is her right click since 2026-10-09; asked of the kit
+        // rather than written down, as every other button here is.
+        let scythe = self.button(me, moves::blood::SWEEP).unwrap_or(Input::LEFT);
+        if plan.bits & ATTACKS != scythe {
             if far.raw() < sweep.add(Fx::ratio(5, 10)).raw() {
-                return Input::looking_at(
-                    (plan.bits & !ATTACKS) | Input::LEFT,
-                    plan.aim,
-                    plan.pitch,
-                );
+                return Input::looking_at((plan.bits & !ATTACKS) | scythe, plan.aim, plan.pitch);
             }
             if red < RED_CUT {
                 return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
@@ -828,7 +828,8 @@ impl Hands {
         {
             self.uses.shots += 1;
             self.rest();
-            return Some(self.look(me, self.spot(w, me, at, false), Input::LEFT));
+            let b = self.button(me, SLOT_POKE).unwrap_or(Input::LEFT);
+            return Some(self.look(me, self.spot(w, me, at, false), b));
         }
         None
     }

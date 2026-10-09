@@ -208,7 +208,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "U or middle click",
-                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying -- and the Elementalist's is the Cinder spray.",
+                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying -- and the Elementalist's is fire: the pillar on the floor, the carpet in the air.",
             ),
             e(
                 "Mouse side buttons (or I and O)",
@@ -368,31 +368,35 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Elementalist",
         in_browser: true,
-        blurb: "Terrain author. She raises stones, plants fire, and then combos through what she built -- and off the floor the same buttons throw air. The v2 kit is built and unplayed; docs/design/elementalist-v2.md is the decision.",
+        blurb: "Terrain author. Her three clicks are the class: left is earth, middle is fire, right is wind -- each a tap and a hold on the floor, something else in the air, and a jump attack with space. Q and E are the two pushes she uses on what she built. Built 2026-10-09 and unplayed; docs/design/exploration/0008_elementalist_on_three_clicks.md is the direction.",
         entries: &[
             e(
                 "Left click",
-                "Bolt: an instant line to whatever the crosshair is on. A fighter loses the move they were winding up; a stone is kicked along the line; a fire pillar lights a fire bolt. In the air it is the Air bolt, a long slow shot with a real flight -- and one that comes out lit, worth more and bursting where it lands, if it flew through fire.",
-            ),
-            e(
-                "Right click",
-                "Cataclysm: a slow heavy along the same line that breaks a stone into debris or tears a pillar loose as a tornado. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones it passes, and through fire it comes out burning.",
+                "Earth. Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Clicked out past an edge it stays up at your level; pointed at the floor below, it goes down there. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning while you crawl; let go and Fissure races from it toward the crosshair, as far as you held for, and the stone erupts at the crack's end. In the air it is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
             ),
             e(
                 "Middle click (or U)",
-                "Cinder spray, on the floor and off it. A thrown coal that bursts where its range runs out or on the first thing in the way, into a cloud of embers that hangs a couple of seconds -- or a low burning patch, on the floor. Fly a shot through it and the shot is fire. It is also the fire you have when the pillar is too far away.",
+                "Fire. The fire pillar, planted where the crosshair is; one at a time. **Hold it past the wind-up** and the fire gathers in your hands: you crawl, and letting go lands the pillar's whole burn as one Strike. In the air it is the Fire carpet: a strip of fire laid out in front of you along your look. Fly a Gale down it and the Gale is lit; Updraft into it and it is a Thermal.",
+            ),
+            e(
+                "Right click",
+                "Wind. The Air ball: raised on the floor where the crosshair is, growing for as long as you hold, and sent toward the crosshair when you let go. It shrinks as it rolls and everything standing in it goes with it -- you included; jump out and you keep its speed, walk sideways in it (A and D) and you steer it. Off an edge it sinks slowly and keeps carrying you; a wall or a stone knocks it off at an angle and costs it some size. The bigger you let it grow, the faster and further it goes. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones, and through fire it comes out burning.",
+            ),
+            e(
+                "Space + a click",
+                "The jump attacks. Space and left click is the earth jump: a jump that brings a stone up with you -- keep going straight and you land on it in the air; off a stone on the floor the stone shatters and you go higher (running, look straight down and left-click to put a stone under your feet, then space and left click at once: the big jump, keeping all your run); off a stone in the air it is driven down to shatter. Space and middle click is the Fire fountain: a burst at your feet and a wash of fire left where you took off. Space and right click is the Updraft: a column of air that lifts you and anyone beside you and keeps your run -- and in the air, holding space, once a jump, it stretches the jump. An Updraft that meets your own fire is a Thermal: much higher, and along the carpet if it was the carpet.",
             ),
             e(
                 "Q",
-                "Fire pillar, planted where the crosshair is. One at a time. **Hold it past the wind-up** and the fire gathers in your hands instead: you crawl, the aim stays live, and letting go lands the pillar's whole burn as one Strike in the pillar's shape -- all of it at a full hold, and nothing left standing. Every frame you hold is a walk's worth of the gap gone, so the hold is only safe with the space to spend.",
+                "The weak push. Bolt: an instant line to whatever the crosshair is on -- it kicks a stone along the line and lights a fire bolt out of a pillar, and passes through people. The same in the air: Q is always the weak push.",
             ),
             e(
                 "E",
-                "Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning under the floor while you crawl; let go and Fissure races from it along your look, as far as you held for, staggering the first body it meets, and the stone erupts at the crack's end. Where it ran is rough ground for a while. In the air E is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
+                "The strong push. Cataclysm: a slow heavy along the same line that breaks a stone into debris or tears a pillar loose as a tornado -- on the floor and in the air alike.",
             ),
             e(
                 "F",
-                "Updraft, standing: a column of air on your own body, and everything in it goes up -- you included, each by their own weight; a stone in it is lofted. In the air it is Downdraft: the same column under you, driving you and everything in it down. Land while it is still blowing and the air breaks outward from your feet, shoving everyone near you away. Land it into fire -- a pillar, a cloud of embers -- and the fire goes out and a ring of it races outward instead.",
+                "Cinder spray, standing: a thrown coal that bursts into a cloud of embers -- fire for your shots to fly through. In the air it is Downdraft: a column under you driving you and everything in it down. Land while it blows and the air breaks outward from your feet; land it into fire and a ring of fire races outward instead.",
             ),
             e(
                 "Mouse side button B (or O)",
@@ -404,11 +408,46 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift + direction, crosshair on a stone",
-                "The dodge breaks through it: the stone is gone as you pass, its slot is free again, and where it stood is rough ground -- burning ground and a cloud of embers, if it was lit. The one thing in the kit that beats a string rather than a hit: whoever was chasing you has broken ground between you and them. In the air it is the airdodge, and costs the airdodge.",
+                "The dodge breaks through it: the stone is gone as you pass, its slot is free again, and where it stood is rough ground -- burning ground and a cloud of embers, if it was lit. In the air it is the airdodge, and costs the airdodge.",
             ),
             e(
                 "Fire on a stone",
-                "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it -- your beam's kick included. Earth builds the field; fire decides who may use it.",
+                "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it. Earth builds the field; fire decides who may use it.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Blood mage",
+        in_browser: true,
+        blurb: "Her blood goes out and theirs comes back. Her three clicks are my blood, your blood and the scythe -- each a move on the floor, something else in the air, and a jump attack with space. Her own pools are doors, not heals: only somebody else's blood closes her wounds. Built 2026-10-09 and unplayed; docs/design/exploration/0009_blood_mage_on_three_clicks.md is the direction.",
+        entries: &[
+            e(
+                "Left click",
+                "My blood. Hold to charge the Blood nova, paid in your own health as you hold; let go and a sphere of blood bursts round you, hurts and throws back whoever is close, and leaves a pool of your blood where you stood. In the air it is the Haemorrhage: a bolt that opens a bleed, and a bleeding body -- fighter or creature -- drips pools as it goes.",
+            ),
+            e(
+                "Middle click",
+                "Your blood. Hold for reach and four arms close on the crosshair: all four catch, and the victim is hauled to your feet -- or, if they close on a wall, a stone or the creature, you are hauled to it. In the air it is the Nail: a long black spike thrown down the crosshair. Nail somebody who is already in the air and they are pinned there for a moment, bleeding on to the floor below.",
+            ),
+            e(
+                "Right click",
+                "The scythe. The Reaping sweep, whose reach grows with your grey health. In the air it is the Hook: thrown along the crosshair, it catches the first fighter, creature, stone or wall and pulls you to it.",
+            ),
+            e(
+                "Space + a click",
+                "The jump attacks. Space and left (held) is the Blood jet: you leave the floor on a jet of your own blood, further and harder the longer you hold, paid as you hold; whoever is in its wake is hurt, and a pool of your blood is left where you took off -- blink back to it. Space and middle is Marionette: their blood lifts them into the air (and you after them) -- Nail them up there. Space and right is Harvest: a big jump inside a scythe spin that drinks the pools it passes over.",
+            ),
+            e(
+                "Q",
+                "The Bloodletter: a blade thrown out a fixed distance and back, cutting on both passes. In no combo yet, and the candidate to cut once she has been played.",
+            ),
+            e(
+                "E",
+                "The Black spike: a spike out of the floor after a delay. On a pool, the pool erupts, and on a bleed's trail it chains along the pools to the bleeding body.",
+            ),
+            e(
+                "Shift + direction, crosshair on a pool",
+                "The blink: you are at the pool, and it is spent. Your own pools are for this -- they never heal you.",
             ),
         ],
     },

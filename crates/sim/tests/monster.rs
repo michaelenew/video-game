@@ -274,7 +274,11 @@ fn the_creature_turning_carries_the_camera_too() {
     // Her bolt, thrown with the hand perfectly still. The mouse has not moved
     // all ride; everything the shot knows about where to go came from the
     // animal turning underneath her.
-    run(&mut w, 1, Input::aimed(Input::LEFT, 0));
+    run(
+        &mut w,
+        1,
+        Input::aimed(sim::moves::elementalist::keys::WEAK_PUSH, 0),
+    );
     let me = w.players[0];
     assert!(me.aboard(), "fell off before the shot went out");
     let shot = me.aim_path;

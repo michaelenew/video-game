@@ -11,12 +11,17 @@
 //! would be asserting something about the rig instead of about the aim.
 
 use sim::class::{Class, Mechanic};
+use sim::moves::elementalist::keys;
 use sim::state::Action;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World, aim};
 
-const L: u16 = Input::LEFT;
-const E: u16 = Input::MECHANIC;
+/// The Bolt, her auto: the weak push, on `Q` since 2026-10-09.
+const BOLT: u16 = keys::WEAK_PUSH;
+/// Raise a stone: the earth click, pressed on the floor.
+const RAISE: u16 = keys::EARTH;
+/// The Fire pillar: the fire click, tapped on the floor.
+const PILLAR: u16 = keys::FIRE;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -48,7 +53,7 @@ fn run(w: &mut World, frames: u32, buttons: u16, pitch: i16) {
 
 /// Throw the auto at a given pitch and let it play out.
 fn shoot(w: &mut World, pitch: i16) {
-    run(w, 1, L, pitch);
+    run(w, 1, BOLT, pitch);
     run(w, 24, 0, pitch);
 }
 
@@ -140,7 +145,7 @@ fn the_drawn_beam_ends_where_the_shot_stopped() {
     // that met nothing runs to the edge of its range. Drawing either as the
     // other is how you end up unable to tell why a shot did not connect.
     let mut w = elementalist();
-    run(&mut w, 2, E, 0); // a stone, a few metres ahead
+    run(&mut w, 2, RAISE, 0); // a stone, a few metres ahead
     run(&mut w, 30, 0, 0);
     let stone = stones_of(&w)[0].at;
 
@@ -149,7 +154,7 @@ fn the_drawn_beam_ends_where_the_shot_stopped() {
 
     let mut seen = None;
     for _ in 0..30 {
-        run(&mut w, 1, L, pitch);
+        run(&mut w, 1, BOLT, pitch);
         if let Some(hb) = sim::state::hitbox(&w.players[0]) {
             seen = Some(hb);
             break;
@@ -172,7 +177,7 @@ fn the_drawn_beam_ends_where_the_shot_stopped() {
     clear.players[1].pos = at(13.0, 0.0, -13.0);
     let mut seen = None;
     for _ in 0..30 {
-        run(&mut clear, 1, L, 0);
+        run(&mut clear, 1, BOLT, 0);
         if let Some(hb) = sim::state::hitbox(&clear.players[0]) {
             seen = Some(hb);
             break;
@@ -213,7 +218,7 @@ fn the_shot_goes_through_a_fighter_without_hurting_or_interrupting_them() {
             0
         };
         w.advance([
-            Input::looking_at(L, LOOK_RIGHT, pitch),
+            Input::looking_at(BOLT, LOOK_RIGHT, pitch),
             Input::aimed(them, LOOK_LEFT),
         ]);
         if w.players[0].beam_reach.raw() > 0 {
@@ -239,7 +244,7 @@ fn a_fighter_in_front_of_a_stone_does_not_shield_it() {
     // shot spending itself on the body in the way. The crosshair is on the
     // stone, a fighter stands on the line, and the stone is what moves.
     let mut w = elementalist();
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, RAISE, 0);
     run(&mut w, 30, 0, 0);
     let stone = stones_of(&w)[0].at;
     let pitch = crosshair_onto(&w, |seen| on_the_stone(stone, seen))
@@ -301,7 +306,7 @@ fn a_stone_goes_where_on_it_you_were_pointing() {
     // stone is a line angled upward, and the stone takes that line.
     let raised = || {
         let mut w = elementalist();
-        run(&mut w, 2, E, 0);
+        run(&mut w, 2, RAISE, 0);
         run(&mut w, 30, 0, 0); // let it finish climbing out
         w
     };
@@ -309,7 +314,7 @@ fn a_stone_goes_where_on_it_you_were_pointing() {
     // The stone as it leaves, rather than wherever it has got to afterwards:
     // gravity is pulling on it from the next frame onward.
     let kicked = |w: &mut World, pitch: i16| {
-        run(w, 1, L, pitch);
+        run(w, 1, BOLT, pitch);
         for _ in 0..24 {
             run(w, 1, 0, pitch);
             let stone = stones_of(w)[0];
@@ -353,7 +358,7 @@ fn a_shot_aimed_over_a_stone_passes_over_it() {
     // actually meets it. Aiming above one is how you shoot past your own
     // terrain, and it could not be done while the trace ignored height.
     let mut w = elementalist();
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, RAISE, 0);
     run(&mut w, 30, 0, 0);
     shoot(&mut w, tenths(400));
 
@@ -379,7 +384,7 @@ fn a_fire_bolt_carries_the_shot_past_the_beams_own_range() {
     w.players[0].pos = at(-10.0, 0.0, 8.0);
     w.players[1].pos = at(10.0, 0.0, 8.0);
 
-    run(&mut w, 2, Input::SPECIAL, 0); // plant a pillar ahead of her
+    run(&mut w, 2, PILLAR, 0); // plant a pillar ahead of her
     run(&mut w, 60, 0, 0); // and let her recover from planting it
     let pillar = w.effects.iter().flatten().next().copied();
     let pillar = pillar.expect("fixture planted no pillar");
@@ -412,7 +417,7 @@ fn a_fire_bolt_carries_the_shot_past_the_beams_own_range() {
     .expect("no angle put the crosshair on the ground beyond the pillar");
 
     let before = w.players[1].health;
-    run(&mut w, 1, L, pitch);
+    run(&mut w, 1, BOLT, pitch);
     let mut staggered = false;
     for _ in 0..120 {
         run(&mut w, 1, 0, pitch);

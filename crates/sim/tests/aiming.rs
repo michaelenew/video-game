@@ -14,14 +14,19 @@
 use sim::aim;
 use sim::class::{Mechanic, Structure};
 use sim::effects::EffectKind;
+use sim::moves::elementalist::keys;
 use sim::species::ridgeback;
 use sim::state::SLOT_SPECIAL;
 use sim::stones::Phase;
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
-const E: u16 = Input::MECHANIC;
+/// `Q`, the Reaver's special: the Guillotine lotus, at her shadow.
 const Q: u16 = Input::SPECIAL;
+/// The Elementalist's Raise: the earth click, pressed on the floor.
+const RAISE: u16 = keys::EARTH;
+/// The Elementalist's Fire pillar: the fire click, tapped on the floor.
+const PILLAR: u16 = keys::FIRE;
 /// Right click, which is how the Reaver sends her shadow -- the one thing in
 /// her kit the crosshair aims, on the button that means "where".
 const R: u16 = Input::RIGHT;
@@ -99,7 +104,7 @@ fn ahead(w: &World, at: V3) -> f32 {
 /// Raise a stone without moving, for the tests that want one on the field as
 /// terrain -- Fire pillar itself no longer needs one out to be cast.
 fn with_a_stone(w: &mut World) {
-    tap(w, E, 0, 4);
+    tap(w, RAISE, 0, 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -118,11 +123,11 @@ fn an_area_ability_lands_where_you_are_looking_rather_than_a_step_ahead() {
     // where the reticle *is* at each angle, which is the whole contract.
     let mut near = elementalist();
     with_a_stone(&mut near);
-    tap(&mut near, Q, down(75), 30);
+    tap(&mut near, PILLAR, down(75), 30);
 
     let mut far = elementalist();
     with_a_stone(&mut far);
-    tap(&mut far, Q, down(5), 30);
+    tap(&mut far, PILLAR, down(5), 30);
 
     let close = ahead(&near, pillar(&near).pos);
     let out = ahead(&far, pillar(&far).pos);
@@ -145,7 +150,7 @@ fn an_area_ability_cannot_be_placed_past_its_reach() {
     let mut w = elementalist();
     with_a_stone(&mut w);
     let reach = sim::moves::get(Class::Elementalist, SLOT_SPECIAL).reach;
-    tap(&mut w, Q, up(2), 30); // at the far wall, well beyond reach
+    tap(&mut w, PILLAR, up(2), 30); // at the far wall, well beyond reach
 
     // Measured from the point it is cast from, because that is what the range
     // is a radius about -- the crosshair's ray only chooses the direction, and
@@ -175,7 +180,7 @@ fn a_grounded_ability_always_lands_on_the_ground() {
     for tilt in [up(80), up(40), up(5), 0, down(20), down(60)] {
         let mut w = elementalist();
         with_a_stone(&mut w);
-        tap(&mut w, Q, tilt, 30);
+        tap(&mut w, PILLAR, tilt, 30);
         let at = pillar(&w).pos;
         // At ground level, or standing on the stone the caster has up -- which
         // is the only other surface in the arena here, and is still "on the
@@ -198,7 +203,7 @@ fn the_target_locks_when_the_move_starts() {
     with_a_stone(&mut w);
 
     // Throw it looking well down, then look level for the rest of the move.
-    run(&mut w, 2, Q, down(45));
+    run(&mut w, 2, PILLAR, down(45));
     let locked = w.players[0].aim_at();
     run(&mut w, 40, 0, up(2));
 
@@ -215,7 +220,7 @@ fn an_aimed_move_hits_where_it_was_aimed() {
     // pointing in different directions.
     let mut w = elementalist();
     with_a_stone(&mut w);
-    run(&mut w, 2, Q, down(45));
+    run(&mut w, 2, PILLAR, down(45));
     let locked = w.players[0].aim_at();
     run(&mut w, 20, 0, down(45));
 
@@ -244,7 +249,7 @@ fn a_stone_can_be_raised_at_your_own_feet() {
     // launch into the air" -- and what it could not do while the stone went a
     // fixed distance straight ahead.
     let mut w = elementalist();
-    tap(&mut w, E, down(75), 2);
+    tap(&mut w, RAISE, down(75), 2);
     let under = ahead(&w, stones_of(&w)[0].at);
     assert!(
         under.abs()
@@ -266,7 +271,7 @@ fn aiming_at_the_side_of_a_stone_puts_the_next_one_on_the_floor_behind_it() {
     //
     // The first one well inside Raise's reach, so the floor behind it is too.
     let mut w = elementalist();
-    tap(&mut w, E, down(45), 30);
+    tap(&mut w, RAISE, down(45), 30);
     let first = stones_of(&w)[0];
     assert_eq!(
         first.phase(),
@@ -291,7 +296,7 @@ fn aiming_at_the_side_of_a_stone_puts_the_next_one_on_the_floor_behind_it() {
         let rise = face.y.sub(eye.y).to_f32_for_render();
         tilt = (-rise.atan2(flat)).to_degrees().round() as i32;
     }
-    tap(&mut w, E, down(tilt), 2);
+    tap(&mut w, RAISE, down(tilt), 2);
 
     let second = stones_of(&w)[1];
     assert_eq!(
@@ -314,7 +319,7 @@ fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_the_floor_under_it()
     // placement either, so the ray goes through to the floor and the new stone
     // comes up underneath -- which is the eruption that lifts the old one.
     let mut w = elementalist();
-    tap(&mut w, E, down(30), 30);
+    tap(&mut w, RAISE, down(30), 30);
     let first = stones_of(&w)[0];
     let over = first.at;
 
@@ -322,13 +327,13 @@ fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_the_floor_under_it()
     // inside Raise's reach, which is measured from the chest.
     //
     // **Standing on something three metres up**, rather than hanging in the
-    // air: `E` is only the mechanic with her feet on a surface, and off one it
-    // throws Landfall instead (`state::keyed_move`). Standing above a stone is
-    // the situation this is about anyway -- stacking one on another needs you
+    // air: the earth click is Raise only with her feet on a surface, and off
+    // one it throws Landfall instead (`state::elementalist_move`). Standing
+    // above a stone is the situation this is about anyway -- stacking one on another needs you
     // over the cap, which is what the class's own kit document says.
     w.players[0].pos = V3::new(over.x, Fx::from_int(3), over.z);
     w.players[0].grounded = true;
-    tap(&mut w, E, down(89), 40);
+    tap(&mut w, RAISE, down(89), 40);
 
     let second = stones_of(&w)[1];
     assert_eq!(
@@ -348,7 +353,7 @@ fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_the_floor_under_it()
 #[test]
 fn a_stone_cannot_be_raised_out_of_reach() {
     let mut w = elementalist();
-    tap(&mut w, E, up(2), 2);
+    tap(&mut w, RAISE, up(2), 2);
     let out = ahead(&w, stones_of(&w)[0].at);
     assert!(
         out <= t::raise_reach().to_f32_for_render() + 0.01,
@@ -465,8 +470,8 @@ fn pitch_reaches_the_simulation_and_changes_it() {
     let mut tilted = elementalist();
     with_a_stone(&mut level);
     with_a_stone(&mut tilted);
-    tap(&mut level, Q, down(5), 30);
-    tap(&mut tilted, Q, down(45), 30);
+    tap(&mut level, PILLAR, down(5), 30);
+    tap(&mut tilted, PILLAR, down(45), 30);
     assert_ne!(
         level.checksum(),
         tilted.checksum(),
@@ -482,7 +487,7 @@ fn looking_level_is_what_it_always_was() {
     // effect of changing how it is aimed.
     let mut w = elementalist();
     with_a_stone(&mut w);
-    tap(&mut w, Q, 0, 30);
+    tap(&mut w, PILLAR, 0, 30);
     let reach = sim::moves::get(Class::Elementalist, SLOT_SPECIAL).reach;
     // A hair short of flat-out reach rather than exactly it, and the hair is
     // the point: level aim runs out along a ray that starts at the eye, which

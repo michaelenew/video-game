@@ -624,7 +624,11 @@ fn bolt_lands(w: &World, behind: V3, pitch: i16) -> bool {
     let mut w = w.clone();
     let before = w.players[0].health;
     for f in 0..60 {
-        let bits = if f == 0 { Input::LEFT } else { 0 };
+        let bits = if f == 0 {
+            sim::moves::elementalist::keys::WEAK_PUSH
+        } else {
+            0
+        };
         w.advance([
             Input::aimed(0, Input::QUARTER_TURN),
             Input::looking_at(bits, 3 * Input::QUARTER_TURN, pitch),

@@ -19,7 +19,10 @@ use sim::oven::{self, Scalar};
 use sim::{Fx, Input, V3, World};
 use std::sync::{Mutex, MutexGuard};
 
-const Q: u16 = Input::SPECIAL;
+/// The Grasp: middle click, held, on the floor -- *your blood*. It was `Q`
+/// until the three-clicks remap
+/// (`docs/design/exploration/0009_blood_mage_on_three_clicks.md`).
+const GRASP: u16 = sim::moves::blood::keys::YOUR_BLOOD;
 const SHIFT: u16 = Input::SHIFT;
 const W: u16 = Input::W;
 const LOOK_LEFT: u16 = 1 << 15;
@@ -86,8 +89,8 @@ fn in_the_open(w: &mut World) {
 /// Wind a Grasp all the way out along `yaw`/`pitch` and let go, then let the
 /// arms fly and whatever they did play out.
 fn grasp(w: &mut World, yaw: u16, pitch: i16) {
-    let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
-    looking(w, hold as u32 + 1, Q, yaw, pitch);
+    let hold = sim::moves::get(Class::BloodMage, sim::moves::blood::GRASP).channel;
+    looking(w, hold as u32 + 1, GRASP, yaw, pitch);
     looking(w, 1, 0, yaw, pitch);
     // Long enough for the arms to converge, the effect to expire and the haul
     // it may have armed to finish.
@@ -163,7 +166,7 @@ fn a_grasp_that_catches_somebody_hauls_them_and_not_her() {
     let _flags = Flags::new(true, false);
     let mut w = mage();
     in_the_open(&mut w);
-    let reach = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).reach;
+    let reach = sim::moves::get(Class::BloodMage, sim::moves::blood::GRASP).reach;
     // Standing where the arms converge, out in the open along positive x.
     w.players[1].pos = V3::new(reach, Fx::ZERO, Fx::from_int(8));
     let her = flat(&w);
@@ -213,7 +216,7 @@ fn hauling_costs_her_the_whole_price_of_a_whiff() {
     // A share of her current health since the v1 rebuild -- see
     // `Player::cost_of` -- so the price is worked out before the press.
     let cost =
-        w.players[0].cost_of(sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).cost);
+        w.players[0].cost_of(sim::moves::get(Class::BloodMage, sim::moves::blood::GRASP).cost);
     grasp(&mut w, TOWARD_PLUS_X, 0);
     let spent = before - w.players[0].health;
     assert_eq!(
@@ -239,9 +242,9 @@ fn a_hit_makes_the_arms_let_go() {
         w.players[0].pos = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
         // Stood in her way, a stride along the pull.
         w.players[1].pos = V3::new(Fx::from_int(10), Fx::ZERO, Fx::from_int(8));
-        let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
+        let hold = sim::moves::get(Class::BloodMage, sim::moves::blood::GRASP).channel;
         for i in 0..200u32 {
-            let mine = if i < hold as u32 + 1 { Q } else { 0 };
+            let mine = if i < hold as u32 + 1 { GRASP } else { 0 };
             w.advance([
                 Input::looking_at(mine, TOWARD_PLUS_X, 0),
                 Input::aimed(opponent, LOOK_LEFT),
@@ -364,7 +367,7 @@ fn the_two_flags_are_independent() {
         let mut w = mage();
         in_the_open(&mut w);
         looking(&mut w, 2, SHIFT | W, TOWARD_PLUS_X, 0);
-        looking(&mut w, 30, Q, TOWARD_MINUS_X, 0);
+        looking(&mut w, 30, GRASP, TOWARD_MINUS_X, 0);
         looking(&mut w, 60, 0, TOWARD_MINUS_X, 0);
         assert!(
             w.players[0].health > 0,
@@ -431,11 +434,11 @@ fn the_grasp_still_erupts_and_still_hurts_with_the_haul_on() {
     let _flags = Flags::new(true, false);
     let mut w = mage();
     in_the_open(&mut w);
-    let reach = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).reach;
+    let reach = sim::moves::get(Class::BloodMage, sim::moves::blood::GRASP).reach;
     w.players[1].pos = V3::new(reach, Fx::ZERO, Fx::from_int(8));
     let before = w.players[1].health;
-    let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
-    looking(&mut w, hold as u32 + 1, Q, TOWARD_PLUS_X, 0);
+    let hold = sim::moves::get(Class::BloodMage, sim::moves::blood::GRASP).channel;
+    looking(&mut w, hold as u32 + 1, GRASP, TOWARD_PLUS_X, 0);
     looking(&mut w, 1, 0, TOWARD_PLUS_X, 0);
     let mut armed = false;
     for _ in 0..60 {

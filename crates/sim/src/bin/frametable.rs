@@ -35,6 +35,15 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
             tenths(m.channel_from),
             tenths(m.reach)
         ),
+        moves::Charge::Bleed => format!(
+            "1% of red every {}f, a pool of her own blood",
+            t::blood_pays_every()
+        ),
+        moves::Charge::Gather => format!(
+            "a ball of radius {}-{} m",
+            tenths(t::air_ball_radius_tap()),
+            tenths(t::air_ball_radius_full())
+        ),
     };
     Some(format!(
         "holds {}f for {}; a walk closes {} m in that -- the safe charge distance",

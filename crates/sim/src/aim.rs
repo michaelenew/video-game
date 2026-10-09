@@ -138,9 +138,11 @@ pub enum Kind {
     /// it there. [`mechanic_path`].
     AtTheMechanic,
     /// From the stone the Elementalist is holding churning, **flat toward the
-    /// crosshair's spot on the ground**, as far as the hold bought. Fissure,
-    /// and nothing else: a crack that races through the ground from a place
-    /// she already chose, in a direction she is choosing now. [`racing_path`].
+    /// crosshair's spot on the ground**, as far as the hold bought. Fissure --
+    /// a crack that races through the ground from a place she already chose,
+    /// in a direction she is choosing now -- and, since 2026-10-09, the Air
+    /// ball, which rolls the same way from where she raised it, its hold buying
+    /// size rather than distance. [`racing_path`].
     Racing,
 }
 
@@ -648,6 +650,27 @@ fn facing(hit: Option<Fx>, from: V3, dir: V3, top: Fx) -> Met {
 /// caster was doing when they cast them. `from` is the character, so an ability
 /// that races along the ground has its path already.
 pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    grounded(who, look, reach, scene, false)
+}
+
+/// [`grounded_path`] for the Elementalist's placements -- Raise, the Fire
+/// pillar, Quake, the Air ball's spot: **a point she did not point down at
+/// stays at her own level** ([`kept_up`]). The edge of the range past a
+/// ledge, or the side of an island across a pit, comes back toward her to
+/// the last footing within `tuning::placement_drop` of hers rather than
+/// putting the stone on the floor below. A crosshair *on* that floor still
+/// goes there. From play, 2026-10-09: her stones kept appearing far below
+/// her, often in a course's void, where she had not tried to put them.
+///
+/// Hers only, for now: the Reaver's send has its own answer to the same
+/// edge -- a short forgiveness and then a refusal (`footing_toward`) --
+/// decided from play on 2026-10-04, and the other grounded casts were not
+/// part of the report.
+pub fn grounded_kept(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    grounded(who, look, reach, scene, true)
+}
+
+fn grounded(who: usize, look: Input, reach: Fx, scene: &Scene, keep: bool) -> Path {
     // **The Elementalist's stones are not ground here** -- not their tops and
     // not their sides, for anything placed, Raise included. The ray goes
     // through them to the floor behind, and a point under one settles on the
@@ -674,6 +697,12 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
         // Mounted, the ground is the footing: the edge of the range on the
         // creature's back if it reaches that far, the floor beyond it if not
         // (A3).
+        //
+        // **At her own level**, for the Elementalist ([`grounded_kept`]):
+        // the edge of the range past a ledge is a point she did not point
+        // down at, so it comes back toward her to the last footing within
+        // `tuning::placement_drop` of her own ([`kept_up`]). A crosshair *on*
+        // the floor down there is the case below, and goes there.
         Met::Reach => {
             let dir = look.look_dir();
             let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
@@ -681,16 +710,33 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
             if caster.mount != crate::monster::NO_PART {
                 settle_aboard(at, scene)
             } else {
-                settle(at, scene.stones, scene.arena)
+                let settled = settle(at, scene.stones, scene.arena);
+                if keep {
+                    kept_up(caster.pos, settled, scene.stones, scene.arena).unwrap_or(settled)
+                } else {
+                    settled
+                }
             }
         }
         // On the top of a creature's part, exactly there: it is a place the
         // floor does not know about (A3).
         Met::Ground if seen.aboard => seen.at,
         // On the ground, exactly there -- `settle` is a no-op on a surface
-        // something already stands on. On a wall, the floor beneath it,
-        // because that is where the thing being placed can exist.
-        Met::Ground | Met::Solid => settle(seen.at, scene.stones, scene.arena),
+        // something already stands on.
+        Met::Ground => settle(seen.at, scene.stones, scene.arena),
+        // On a wall, the floor beneath it, because that is where the thing
+        // being placed can exist -- **at her own level**, for the
+        // Elementalist, if that floor is a drop below her: the side of an
+        // island across a pit is not the pit's floor, and pointing at it is
+        // not pointing down (2026-10-09, from play).
+        Met::Solid => {
+            let settled = settle(seen.at, scene.stones, scene.arena);
+            if keep {
+                kept_up(caster.pos, settled, scene.stones, scene.arena).unwrap_or(settled)
+            } else {
+                settled
+            }
+        }
     };
     Path {
         from: caster.pos,
@@ -1353,7 +1399,9 @@ pub fn mechanic_path(from: V3, mechanic: &Mechanic) -> Path {
 
 /// A crack racing through the ground: from `from` -- the stone the
 /// Elementalist held churning, or her own feet if there is none -- **flat,
-/// toward the spot on the ground under the crosshair**, for `reach`.
+/// toward the spot on the ground under the crosshair**, for `reach`. The Air
+/// ball is sent along the same line from where it was raised; only the
+/// direction is read for it, since its hold buys size.
 ///
 /// The fifth line of effect, and the argument for it being one is the same as
 /// for the fourth. The place it starts was aimed already, with the crosshair,
@@ -1412,9 +1460,108 @@ pub fn racing_path(from: V3, who: usize, look: Input, reach: Fx, scene: &Scene) 
 ///
 /// [`settle`] does the last step, so the stone comes up on top of whatever is
 /// under that spot -- another stone included -- rather than inside it.
-pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field, arena: &Terrain) -> V3 {
+///
+/// **Never off a ledge** (2026-10-09, from play): a slab ahead of her past an
+/// edge comes back toward her to the footing at her own level
+/// ([`kept_up`]); with none between, there is no slab. Nobody aimed it, so
+/// it does not go down there.
+pub fn planted_ahead(
+    pos: V3,
+    facing: V3,
+    ahead: Fx,
+    stones: &Field,
+    arena: &Terrain,
+) -> Option<V3> {
     let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
-    settle(pos.add(flat.scale(ahead)), stones, arena)
+    kept_up(
+        pos,
+        settle(pos.add(flat.scale(ahead)), stones, arena),
+        stones,
+        arena,
+    )
+}
+
+/// **Where a thing that nobody pointed down at lands**: `to`, a point already
+/// settled on what it stands on, if that is no more than
+/// `tuning::placement_drop` below the footing under `from`; otherwise the
+/// first point that is, scanning back along the floor toward `from` -- and a
+/// body's width further onto it, if that is still the same top, so what comes
+/// up there is on the ledge rather than balanced on its lip. `None` when
+/// there is no such point between the two.
+///
+/// What it is for (2026-10-09, from play): a Raise clicked out past an edge,
+/// a crack held across one, a Landfall near one, all put their stone on the
+/// floor far below -- in a course's void, often -- and none of them had been
+/// pointed there. A crosshair on that floor still is (`grounded_path`'s
+/// ground case), and is not asked this. Structures count as footing exactly
+/// as `stones` says: the placements pass the field with hers taken off it.
+pub fn kept_up(from: V3, to: V3, stones: &Field, arena: &Terrain) -> Option<V3> {
+    let level = settle(from, stones, arena).y;
+    let lowest = level.sub(t::placement_drop());
+    if to.y.raw() >= lowest.raw() {
+        return Some(to);
+    }
+    let back = V3::new(from.x.sub(to.x), Fx::ZERO, from.z.sub(to.z));
+    let span = back.flat_len();
+    if span.raw() <= 0 {
+        return None;
+    }
+    let dir = back.scale(Fx::ONE.div(span));
+    // Asked from her own height: from the floor below, a ledge over it is a
+    // ceiling, not footing.
+    let up_here = V3::new(to.x, level, to.z);
+    // Half a body at a time, as `footing_toward` scans.
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    let mut along = step;
+    while along.raw() <= span.raw() {
+        let at = settle(up_here.add(dir.scale(along)), stones, arena);
+        if at.y.raw() >= lowest.raw() {
+            let further = along.add(t::body_radius()).min(span);
+            let onto = settle(up_here.add(dir.scale(further)), stones, arena);
+            return Some(if onto.y == at.y { onto } else { at });
+        }
+        along = along.add(step);
+    }
+    None
+}
+
+/// **A crack along the floor stops at an edge**: `path` cut short where the
+/// floor under it first falls more than `tuning::placement_drop` below the
+/// floor it started on. Fissure's, held from a stone up top: the crack runs
+/// along the ground it was raised on, and the stone that erupts at its end
+/// erupts at the lip rather than in the pit below (2026-10-09, from play).
+/// The direction is untouched; only the length is.
+pub fn kept_along(path: Path, scene: &Scene) -> Path {
+    let open = past_structures(scene);
+    let (stones, arena) = (&open, scene.arena);
+    let level = settle(path.from, stones, arena).y;
+    let lowest = level.sub(t::placement_drop());
+    let dir = V3::new(
+        path.to.x.sub(path.from.x),
+        Fx::ZERO,
+        path.to.z.sub(path.from.z),
+    );
+    let span = dir.flat_len();
+    if span.raw() <= 0 {
+        return path;
+    }
+    let dir = dir.scale(Fx::ONE.div(span));
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    let mut along = step;
+    let mut kept = Fx::ZERO;
+    let up_here = V3::new(path.from.x, level, path.from.z);
+    while along.raw() <= span.raw() {
+        let at = settle(up_here.add(dir.scale(along)), stones, arena);
+        if at.y.raw() < lowest.raw() {
+            return Path {
+                from: path.from,
+                to: path.from.add(dir.scale(kept)),
+            };
+        }
+        kept = along;
+        along = along.add(step);
+    }
+    path
 }
 
 /// Which way the Reaver's shadow, **out on the field**, throws its copy of
@@ -1717,6 +1864,35 @@ pub fn first_along(
                     foot,
                     slab.radius.add(girth),
                     slab.top.sub(slab.bottom),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+                continue;
+            }
+            // The Fire carpet is a strip, so it is met as a capsule along its
+            // line; the fountain's wash is a column on the floor.
+            if e.kind == EffectKind::FireCarpet {
+                let (a, b) = e.carpet_line();
+                if let Some(dist) = crate::math::ray_hits_capsule(
+                    from,
+                    dir,
+                    limit,
+                    a,
+                    b,
+                    e.field_radius().add(girth),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+                continue;
+            }
+            if e.kind == EffectKind::Fountain {
+                let slab = e.fountain_volume();
+                if let Some(dist) = crate::math::ray_hits_cylinder(
+                    from,
+                    dir,
+                    e.pos,
+                    slab.radius.add(girth),
+                    slab.top,
                 ) {
                     keep(Contact::Fire { dist });
                 }

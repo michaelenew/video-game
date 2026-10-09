@@ -482,14 +482,19 @@ pub fn stone_apexes() -> (Fx, Fx, Fx, Fx) {
         let mut apex = Fx::ZERO;
         for f in 0..240u32 {
             let mut bits = 0;
+            let mut raising = false;
             if !f_key && raised < count && f == raised * gap {
-                bits |= Input::MECHANIC;
+                bits |= crate::moves::elementalist::keys::EARTH;
                 raised += 1;
+                raising = true;
             }
+            // The Updraft is space and the wind click, since 2026-10-09.
             if f_key && f < 2 {
-                bits |= Input::KEY_F;
+                bits |= Input::SPACE | crate::moves::elementalist::keys::WIND;
             }
-            if f >= jump_at {
+            // Not on the frame of a raise: space and the earth click together
+            // is the earth jump, not a raise and a jump.
+            if f >= jump_at && !raising {
                 bits |= Input::SPACE;
             }
             let input = toward(&w, bits, here);
