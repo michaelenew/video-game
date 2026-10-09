@@ -120,6 +120,35 @@ If none of the five fits a new ability, **change `aim.rs`** rather than working
 around it. A change there is true of every ability at once, which is the point.
 The full specification is [`docs/design/aiming.md`](docs/design/aiming.md).
 
+## The valley is one map: ask the terrain, never walk a table
+
+Since 2026-10-09 the valley is one map of eighteen places
+([`docs/design/atlas.md`](docs/design/atlas.md)), indexed in 16 m tiles by
+[`crates/sim/src/atlas.rs`](crates/sim/src/atlas.rs). **Any question about
+the ground goes through `arena::Terrain`** -- `World::terrain()`, or
+`scene.arena` -- and asks for the boxes near something: `near`, `around`,
+`along`, or a query that already does (`resolve`, `ground_under`,
+`relief_at`). Walking `arena.solids` yourself reads one place's own table and
+nothing of its neighbours, so on the map it is wrong at every doorway;
+`Terrain::solids()` is every box round the whole place and is for planning,
+not for a body or a ray, because it is the expensive one.
+
+Two more things that follow from it:
+
+- **The world runs in the coordinates of the place it is in**, and moves into
+  the next place's when the fighters cross (`sim::valley::open`). Every
+  position the snapshot keeps is shifted by `World::shift`. **A new field that
+  holds a position goes into `shift`**, or the first crossing leaves it a
+  reach away; `tests/valley.rs` (`a_change_of_frame_changes_nothing`) is what
+  catches it.
+- **The renderer draws the map by distance** (`crates/game/src/stream.rs`), off
+  one root at `-World::map_origin()`. Anything the renderer remembers between
+  frames in world coordinates has to move when the origin does (the camera's
+  focus does: `CameraRig::shift`).
+
+`arena::MAX_SOLIDS` (64) now holds only for an arena fought on alone
+(`tests/arena.rs`); the town and the reaches have no cap.
+
 ## Tuning: every magnitude is a knob in the Oven
 
 Feel numbers live in the Oven (`crates/sim/src/oven.rs`), are edited in the

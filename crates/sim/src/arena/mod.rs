@@ -31,6 +31,7 @@
 //! [`Arena::ground_under`] does not count it as ground beneath anything below
 //! it. There is no second mechanism to keep in step with the first.
 
+use crate::atlas::Atlas;
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::species::SpeciesId;
@@ -164,10 +165,14 @@ impl ArenaId {
 /// How many ids there are, registered or not.
 pub const COUNT: usize = 40;
 
-/// The most solids an arena may have. Every query walks all of them, several
-/// times a frame per body, so this is what keeps a large arena inside the
-/// frame budget; `tests/arena.rs` checks every registered arena against it and
-/// `tests/budget.rs` measures the largest.
+/// The most solids an arena **fought on alone** may have. Alone, every query
+/// walks all of them, several times a frame per body, so this is what keeps a
+/// large arena inside the frame budget; `tests/arena.rs` checks every such
+/// arena against it and `tests/budget.rs` measures the largest.
+///
+/// A place that is only ever part of a map (`crate::atlas`) -- the valley's
+/// town and reaches -- is not held to it: there a query reads the few tiles
+/// near it, and the map can hold as many boxes as anybody draws.
 pub const MAX_SOLIDS: usize = 64;
 
 /// The most floor regions an arena may have, for the same reason.
@@ -520,9 +525,12 @@ pub struct Resolved {
 pub(crate) const SKIN: Fx = Fx::ratio(1, 32);
 
 impl Arena {
-    /// The solids, at most [`MAX_SOLIDS`] of them.
+    /// The solids. An arena fought on alone is held to [`MAX_SOLIDS`] by
+    /// `tests/arena.rs`, because alone every query walks all of them; one that
+    /// is only ever a place on a map (`crate::atlas`) is not, because there a
+    /// query reads the tiles near it.
     pub fn solids(&self) -> &'static [Solid] {
-        &self.solids[..self.solids.len().min(MAX_SOLIDS)]
+        self.solids
     }
 
     /// **The floor's height here**, before anything standing on it: zero on a
@@ -538,9 +546,15 @@ impl Arena {
         self.name.to_lowercase().replace([' ', '-'], "_")
     }
 
+    /// The arena alone, as ground: [`Terrain::bare`]. Every query below is
+    /// the terrain's, asked of nothing but this table.
+    fn alone(&'static self) -> Terrain {
+        Terrain::bare(self)
+    }
+
     /// Push a fighter out of the arena geometry.
-    pub fn resolve(&self, pos: V3, vel: V3, was_grounded: bool) -> Resolved {
-        self.resolve_sized(pos, vel, was_grounded, t::body_radius(), t::body_height())
+    pub fn resolve(&'static self, pos: V3, vel: V3, was_grounded: bool) -> Resolved {
+        self.alone().resolve(pos, vel, was_grounded)
     }
 
     /// Push a body of any size out of the arena geometry.
@@ -555,22 +569,15 @@ impl Arena {
     /// wrong -- and the last time a body size was written twice, attacks and
     /// walls disagreed about how wide a fighter was.
     pub fn resolve_sized(
-        &self,
+        &'static self,
         pos: V3,
         vel: V3,
         was_grounded: bool,
         radius: Fx,
         height: Fx,
     ) -> Resolved {
-        resolve_among(
-            self,
-            &[self.solids()],
-            pos,
-            vel,
-            was_grounded,
-            radius,
-            height,
-        )
+        self.alone()
+            .resolve_sized(pos, vel, was_grounded, radius, height)
     }
 
     /// Height of the highest surface under a point, for spawning, for planting
@@ -579,69 +586,42 @@ impl Arena {
     /// A solid that hangs from the roof above the point is a ceiling, not
     /// ground beneath it. Every solid that stands on the floor counts however
     /// high the point is, which is what lets a spawn ask from anywhere.
-    pub fn ground_under(&self, pos: V3) -> Fx {
-        ground_among(self, &[self.solids()], pos)
+    pub fn ground_under(&'static self, pos: V3) -> Fx {
+        self.alone().ground_under(pos)
     }
 
     /// What the surface under a point is made of: the top of the solid it is
     /// standing on (within the skin), or the floor's region there.
-    pub fn material_under(&self, pos: V3) -> Material {
-        material_among(self, &[self.solids()], pos)
+    pub fn material_under(&'static self, pos: V3) -> Material {
+        self.alone().material_under(pos)
     }
 
-    /// **The lowest ceiling near a point, sloped**: for every solid hanging
-    /// from the roof whose underside is above `above`, its underside plus
-    /// `slope` for each metre the point stands outside its footprint (the
-    /// larger of the two flat distances). Directly under a solid it is the
-    /// underside, as [`Arena::ceiling_over`] says; walking out from under an
-    /// edge it rises away instead of vanishing. That is what keeps the eye
-    /// (`camera::eye_under`) from jumping as it or the fighter crosses an
-    /// edge: on a course every island hangs, and a hard footprint test popped
-    /// the eye down and up again as you passed under one (2026-10-04, from
-    /// play: "the camera jumped on me").
-    pub fn ceiling_near(&self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
-        let mut best: Option<Fx> = None;
-        for s in self.solids().iter() {
-            if !s.hangs() || s.min.y.raw() <= above.raw() {
-                continue;
-            }
-            let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
-            let dz = s.min.z.sub(z).max(z.sub(s.max.z)).max(Fx::ZERO);
-            let at = s.min.y.add(dx.max(dz).mul(slope));
-            if best.is_none_or(|b| at.raw() < b.raw()) {
-                best = Some(at);
-            }
-        }
-        best
+    /// **The lowest ceiling near a point, sloped**: [`Terrain::ceiling_near`].
+    pub fn ceiling_near(&'static self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
+        self.alone().ceiling_near(x, z, above, slope)
     }
 
-    /// **The lowest ceiling over a point**: the underside of the lowest solid
-    /// hanging from the roof whose footprint covers it and whose underside is
-    /// above `above`. What keeps the eye inside a cave (`camera::eye_under`).
-    pub fn ceiling_over(&self, x: Fx, z: Fx, above: Fx) -> Option<Fx> {
-        let mut best: Option<Fx> = None;
-        for s in self.solids().iter() {
-            if !s.hangs() || s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) {
-                continue;
-            }
-            if best.is_none_or(|b| s.min.y.raw() < b.raw()) {
-                best = Some(s.min.y);
-            }
-        }
-        best
+    /// **The lowest ceiling over a point**: [`Terrain::ceiling_over`].
+    pub fn ceiling_over(&'static self, x: Fx, z: Fx, above: Fx) -> Option<Fx> {
+        self.alone().ceiling_over(x, z, above)
     }
 }
 
-/// Every solid in an arena: its own, then any raised this frame.
-fn each<'a>(lists: &'a [&'a [Solid]]) -> impl Iterator<Item = &'a Solid> + 'a {
-    lists.iter().flat_map(|l| l.iter())
-}
+/// How far past a body's own box the resolve looks for solids. A push out of
+/// one box can move a body into the next, and that one has to be a candidate
+/// too; nothing a frame does pushes further than this.
+const RESOLVE_REACH: Fx = Fx::from_int(2);
 
-/// The resolve, against any run of solid lists: the arena's own, then the
-/// solids raised in this fight ([`Terrain`]), in that order.
+/// How far round a point a sloped ceiling is looked for. Further than this,
+/// a ceiling sloped away by `camera_ceiling_slope` is above anything the eye
+/// would be held under.
+const CEILING_REACH: Fx = Fx::from_int(16);
+
+/// The resolve, against the ground as it stands: the arena's own solids (or
+/// the map's near the body), then the ones raised in this fight, in that
+/// order.
 fn resolve_among(
-    arena: &Arena,
-    lists: &[&[Solid]],
+    ground: &Terrain,
     mut pos: V3,
     mut vel: V3,
     was_grounded: bool,
@@ -654,7 +634,7 @@ fn resolve_among(
 
         // The floor first: its relief under this point ([`relief`]), zero on
         // a flat floor.
-        let floor = arena.relief_at(pos.x, pos.z);
+        let floor = ground.relief_at(pos.x, pos.z);
         if pos.y.raw() <= floor.raw() {
             pos.y = floor;
             if vel.y.raw() < 0 {
@@ -663,7 +643,8 @@ fn resolve_among(
             grounded = true;
         }
 
-        for solid in each(lists) {
+        let reach = radius.add(RESOLVE_REACH);
+        for solid in ground.around(pos, reach) {
             // Expand the box by the body radius horizontally, so the body can
             // be treated as a point in X and Z.
             let min_x = solid.min.x.sub(radius);
@@ -731,7 +712,7 @@ fn resolve_among(
         // Standing exactly on a surface reads as grounded even when the
         // resolver did not have to move anything this tick.
         if !grounded && was_grounded && vel.y.raw() <= 0 {
-            if supported_among(arena, lists, pos, radius) {
+            if supported_among(ground, pos, radius) {
                 grounded = true;
             } else {
                 // **Feet follow a floor that falls away gently.** Walking
@@ -744,15 +725,15 @@ fn resolve_among(
                 // gently, and plays exactly as it did before there were
                 // hills (the pair's fight changed when this ran everywhere).
                 // Anything further down is a drop, and a drop is a fall.
-                let floor = arena.relief_at(pos.x, pos.z);
-                let ground = ground_among(arena, lists, pos);
-                let gap = pos.y.sub(ground);
-                if !relief::is_flat(arena.id)
-                    && ground.raw() == floor.raw()
+                let floor = ground.relief_at(pos.x, pos.z);
+                let under = ground_among(ground, pos);
+                let gap = pos.y.sub(under);
+                if !ground.is_flat_at(pos.x, pos.z)
+                    && under.raw() == floor.raw()
                     && gap.raw() > 0
                     && gap.raw() <= t::step_down().raw()
                 {
-                    pos.y = ground;
+                    pos.y = under;
                     grounded = true;
                 }
             }
@@ -767,17 +748,18 @@ fn resolve_among(
     }
 }
 
-fn supported_among(arena: &Arena, lists: &[&[Solid]], pos: V3, radius: Fx) -> bool {
-    if pos.y.sub(arena.relief_at(pos.x, pos.z)).abs().raw() <= SKIN.raw() {
+fn supported_among(ground: &Terrain, pos: V3, radius: Fx) -> bool {
+    if pos.y.sub(ground.relief_at(pos.x, pos.z)).abs().raw() <= SKIN.raw() {
         return true;
     }
-    each(lists)
+    ground
+        .around(pos, radius)
         .any(|s| s.over(pos.x, pos.z, radius) && pos.y.sub(s.max.y).abs().raw() <= SKIN.raw())
 }
 
-fn ground_among(arena: &Arena, lists: &[&[Solid]], pos: V3) -> Fx {
-    let mut best = arena.relief_at(pos.x, pos.z);
-    for s in each(lists) {
+fn ground_among(ground: &Terrain, pos: V3) -> Fx {
+    let mut best = ground.relief_at(pos.x, pos.z);
+    for s in ground.around(pos, Fx::ZERO) {
         let overhead = s.hangs() && s.min.y.raw() > pos.y.raw();
         if s.over(pos.x, pos.z, Fx::ZERO) && !overhead && s.max.y.raw() > best.raw() {
             best = s.max.y;
@@ -786,15 +768,15 @@ fn ground_among(arena: &Arena, lists: &[&[Solid]], pos: V3) -> Fx {
     best
 }
 
-fn material_among(arena: &Arena, lists: &[&[Solid]], pos: V3) -> Material {
-    let ground = ground_among(arena, lists, pos);
-    let floor = arena.relief_at(pos.x, pos.z);
-    if ground.raw() > floor.raw() && pos.y.sub(ground).abs().raw() <= SKIN.raw() {
+fn material_among(ground: &Terrain, pos: V3) -> Material {
+    let top = ground_among(ground, pos);
+    let floor = ground.relief_at(pos.x, pos.z);
+    if top.raw() > floor.raw() && pos.y.sub(top).abs().raw() <= SKIN.raw() {
         // The last solid in order that tops out here: the arena's own, then
         // the raised ones, searched from the end.
         let mut found = None;
-        for s in each(lists) {
-            if s.over(pos.x, pos.z, Fx::ZERO) && s.max.y == ground {
+        for s in ground.around(pos, Fx::ZERO) {
+            if s.over(pos.x, pos.z, Fx::ZERO) && s.max.y == top {
                 found = Some(s.material);
             }
         }
@@ -802,7 +784,7 @@ fn material_among(arena: &Arena, lists: &[&[Solid]], pos: V3) -> Material {
             return m;
         }
     }
-    arena.floor_at(pos.x, pos.z)
+    ground.floor_at(pos.x, pos.z)
 }
 
 impl Arena {
@@ -853,12 +835,14 @@ fn min_penetration(v: Fx, lo: Fx, hi: Fx) -> Fx {
 // ---------------------------------------------------------------------------
 
 /// The most solids a fight can raise at runtime: the Mireback's six slag
-/// mounds and two objectives.
-pub const MAX_RAISED: usize = 8;
+/// mounds and two objectives -- and, in the valley, the waystone doors that
+/// are shut.
+pub const MAX_RAISED: usize = 16;
 
-/// **The ground as it stands this frame**: the arena's table, the solids a
-/// fight has raised on it -- slag hardened out of burnt tar, a wall or a cart
-/// that is a solid -- and the floor hazards lying on it.
+/// **The ground as it stands this frame**: the arena's table -- or, in the
+/// valley, the whole map around it -- the solids a fight has raised on it
+/// (slag hardened out of burnt tar, a wall or a cart that is a solid, a shut
+/// door), and the floor hazards lying on it.
 ///
 /// What every query that used to take an `&Arena` takes now, because a solid
 /// that appears in the middle of a fight has to stop bodies, hold up the
@@ -868,9 +852,19 @@ pub const MAX_RAISED: usize = 8;
 /// the queries that walk solids are its own and walk both lists, the arena's
 /// first. Built once a frame by `World::terrain`; with nothing raised it
 /// answers every question bit for bit as the arena alone does.
+///
+/// **On a map** ([`crate::atlas`]) the arena is the place the world is in,
+/// everything is in that place's coordinates as always, and the solids are
+/// the map's: a query reads the tiles near it, and every box comes back moved
+/// into the place's coordinates. The neighbours are as solid as the place
+/// itself, which is what makes the valley one piece.
 #[derive(Clone, Copy, Debug)]
 pub struct Terrain {
     pub arena: &'static Arena,
+    /// The map the arena is a place on, if it is on one.
+    atlas: Option<&'static Atlas>,
+    /// Where the arena's own origin is on that map.
+    origin: V3,
     raised: [Solid; MAX_RAISED],
     raised_len: u8,
     /// The floor hazards, placed: `crate::hazard`.
@@ -884,16 +878,86 @@ impl std::ops::Deref for Terrain {
     }
 }
 
+/// The solids a query reads, in order: the table's or the map's near it,
+/// moved into the place's coordinates, then the raised ones.
+pub struct Solids<'a> {
+    own: Own<'a>,
+    raised: std::slice::Iter<'a, Solid>,
+}
+
+// The map's arm carries a few hundred bytes of tile cursors. It lives on the
+// stack for one query and is never boxed: a frame does not allocate.
+#[allow(clippy::large_enum_variant)]
+enum Own<'a> {
+    Table(std::slice::Iter<'static, Solid>),
+    Map {
+        atlas: &'static Atlas,
+        near: crate::atlas::Near<'static>,
+        origin: V3,
+        _ground: std::marker::PhantomData<&'a ()>,
+    },
+}
+
+impl Iterator for Solids<'_> {
+    type Item = Solid;
+
+    fn next(&mut self) -> Option<Solid> {
+        let own = match &mut self.own {
+            Own::Table(it) => it.next().copied(),
+            Own::Map {
+                atlas,
+                near,
+                origin,
+                ..
+            } => near.next().map(|i| {
+                let s = atlas.solids[i as usize];
+                Solid {
+                    min: s.min.sub(*origin),
+                    max: s.max.sub(*origin),
+                    material: s.material,
+                }
+            }),
+        };
+        own.or_else(|| self.raised.next().copied())
+    }
+}
+
 impl Terrain {
     /// The arena alone: nothing raised, no hazards. What a test or a tool that
     /// holds no `World` stands on.
     pub const fn bare(arena: &'static Arena) -> Terrain {
         Terrain {
             arena,
+            atlas: None,
+            origin: V3::ZERO,
             raised: [Solid::new(V3::ZERO, V3::ZERO); MAX_RAISED],
             raised_len: 0,
             floor: crate::hazard::Floor::NONE,
         }
+    }
+
+    /// **A place on a map**: the arena as it sits on `atlas`, with every
+    /// other place on the map around it. An arena the map does not have is
+    /// the arena alone.
+    pub fn placed(atlas: &'static Atlas, arena: &'static Arena) -> Terrain {
+        match atlas.placed(arena.id) {
+            Some(p) => Terrain {
+                atlas: Some(atlas),
+                origin: p.at,
+                ..Terrain::bare(arena)
+            },
+            None => Terrain::bare(arena),
+        }
+    }
+
+    /// The map this ground is part of, if any.
+    pub fn atlas(&self) -> Option<&'static Atlas> {
+        self.atlas
+    }
+
+    /// Where the place's own origin is on the map: zero off a map.
+    pub fn origin(&self) -> V3 {
+        self.origin
     }
 
     /// The same ground with one more solid raised on it, if there is room.
@@ -909,18 +973,114 @@ impl Terrain {
         &self.raised[..self.raised_len as usize]
     }
 
-    fn lists(&self) -> [&[Solid]; 2] {
-        [self.arena.solids(), self.raised()]
+    /// **The solids near a box** (its x and z; every height): every solid
+    /// that overlaps it and possibly some that do not, in order. On a table,
+    /// all of them.
+    pub fn near(&self, lo: V3, hi: V3) -> Solids<'_> {
+        let own = match self.atlas {
+            None => Own::Table(self.arena.solids().iter()),
+            Some(atlas) => Own::Map {
+                atlas,
+                near: atlas.near(
+                    (lo.x.add(self.origin.x), lo.z.add(self.origin.z)),
+                    (hi.x.add(self.origin.x), hi.z.add(self.origin.z)),
+                ),
+                origin: self.origin,
+                _ground: std::marker::PhantomData,
+            },
+        };
+        Solids {
+            own,
+            raised: self.raised().iter(),
+        }
     }
 
-    /// [`Arena::relief_at`]: the floor itself, with nothing on it.
+    /// The solids within `reach` of a point, sideways.
+    pub fn around(&self, at: V3, reach: Fx) -> Solids<'_> {
+        let r = V3::new(reach, Fx::ZERO, reach);
+        self.near(at.sub(r), at.add(r))
+    }
+
+    /// The solids near a straight line from `from`, `length` along `dir`
+    /// (a unit vector), grown by `pad`.
+    pub fn along(&self, from: V3, dir: V3, length: Fx, pad: Fx) -> Solids<'_> {
+        let to = from.add(dir.scale(length));
+        let p = V3::new(pad, Fx::ZERO, pad);
+        let lo = V3::new(from.x.min(to.x), Fx::ZERO, from.z.min(to.z)).sub(p);
+        let hi = V3::new(from.x.max(to.x), Fx::ZERO, from.z.max(to.z)).add(p);
+        self.near(lo, hi)
+    }
+
+    /// **Every solid of this place**: the arena's own table and the raised
+    /// ones -- or, on a map, every solid near the place's footprint. What
+    /// a question about the whole place reads (a creature's planning, a
+    /// tool); anything about one body or one line asks [`Terrain::near`].
+    pub fn solids(&self) -> Solids<'_> {
+        match self.atlas.and_then(|a| a.placed(self.arena.id)) {
+            Some(p) => {
+                let pad = Fx::from_int(crate::atlas::TILE_M);
+                self.near(
+                    V3::new(p.lo.0.sub(pad), Fx::ZERO, p.lo.1.sub(pad)).sub(self.origin),
+                    V3::new(p.hi.0.add(pad), Fx::ZERO, p.hi.1.add(pad)).sub(self.origin),
+                )
+            }
+            None => self.near(V3::ZERO, V3::ZERO),
+        }
+    }
+
+    /// [`Arena::relief_at`]: the floor itself, with nothing on it -- on a
+    /// map, whichever place's floor is under the point.
     pub fn relief_at(&self, x: Fx, z: Fx) -> Fx {
-        self.arena.relief_at(x, z)
+        match self.atlas {
+            None => self.arena.relief_at(x, z),
+            Some(a) => a
+                .relief_at(x.add(self.origin.x), z.add(self.origin.z))
+                .sub(self.origin.y),
+        }
     }
 
-    /// Every solid: the arena's, then the raised ones.
-    pub fn solids(&self) -> impl Iterator<Item = &Solid> + '_ {
-        self.arena.solids().iter().chain(self.raised().iter())
+    /// **The lowest a floor can be**, in this place's coordinates: zero for
+    /// an arena alone, whose floor is at zero; on a map, its void, which is
+    /// under every place on it. What the fall rule measures a drop down to,
+    /// so a fall into a place lower than this one costs what it should.
+    pub fn lowest(&self) -> Fx {
+        match self.atlas {
+            None => Fx::ZERO,
+            Some(a) => a.void.sub(self.origin.y),
+        }
+    }
+
+    /// Is the floor one plane here? [`relief::is_flat`], for whichever place
+    /// is under the point.
+    pub fn is_flat_at(&self, x: Fx, z: Fx) -> bool {
+        match self.atlas {
+            None => relief::is_flat(self.arena.id),
+            Some(a) => a.is_flat_at(x.add(self.origin.x), z.add(self.origin.z)),
+        }
+    }
+
+    /// [`Arena::floor_at`]: what the floor is made of, ignoring every solid.
+    pub fn floor_at(&self, x: Fx, z: Fx) -> Material {
+        match self.atlas {
+            None => self.arena.floor_at(x, z),
+            Some(a) => a.floor_at(x.add(self.origin.x), z.add(self.origin.z)),
+        }
+    }
+
+    /// [`Arena::inside`]: is a point still in the world at all? On a map,
+    /// anywhere over the map and above its void.
+    pub fn inside(&self, pos: V3) -> bool {
+        match self.atlas {
+            None => self.arena.inside(pos),
+            Some(a) => {
+                let p = pos.add(self.origin);
+                p.y.raw() >= a.void.raw()
+                    && p.x.raw() >= a.lo.0.raw()
+                    && p.x.raw() <= a.hi.0.raw()
+                    && p.z.raw() >= a.lo.1.raw()
+                    && p.z.raw() <= a.hi.1.raw()
+            }
+        }
     }
 
     /// [`Arena::resolve`], against the raised solids too.
@@ -937,20 +1097,12 @@ impl Terrain {
         radius: Fx,
         height: Fx,
     ) -> Resolved {
-        resolve_among(
-            self.arena,
-            &self.lists(),
-            pos,
-            vel,
-            was_grounded,
-            radius,
-            height,
-        )
+        resolve_among(self, pos, vel, was_grounded, radius, height)
     }
 
     /// [`Arena::ground_under`], with the raised solids standing on the floor.
     pub fn ground_under(&self, pos: V3) -> Fx {
-        ground_among(self.arena, &self.lists(), pos)
+        ground_among(self, pos)
     }
 
     /// **The floor a point is over**: the highest top under it that is no
@@ -959,8 +1111,8 @@ impl Terrain {
     /// your feet. What a floor marker is drawn on: the Cliffs' plateau, not the
     /// shelf twelve metres under it.
     pub fn floor_below(&self, pos: V3) -> Fx {
-        let mut best = self.arena.relief_at(pos.x, pos.z);
-        for s in self.solids() {
+        let mut best = self.relief_at(pos.x, pos.z);
+        for s in self.around(pos, Fx::ZERO) {
             let top = s.max.y;
             if s.over(pos.x, pos.z, Fx::ZERO)
                 && !s.hangs()
@@ -975,7 +1127,60 @@ impl Terrain {
 
     /// [`Arena::material_under`], with the raised solids' tops.
     pub fn material_under(&self, pos: V3) -> Material {
-        material_among(self.arena, &self.lists(), pos)
+        material_among(self, pos)
+    }
+
+    /// **The lowest ceiling near a point, sloped**: for every solid hanging
+    /// from the roof whose underside is above `above`, its underside plus
+    /// `slope` for each metre the point stands outside its footprint (the
+    /// larger of the two flat distances). Directly under a solid it is the
+    /// underside, as [`Terrain::ceiling_over`] says; walking out from under an
+    /// edge it rises away instead of vanishing. That is what keeps the eye
+    /// (`camera::eye_under`) from jumping as it or the fighter crosses an
+    /// edge: on a course every island hangs, and a hard footprint test popped
+    /// the eye down and up again as you passed under one (2026-10-04, from
+    /// play: "the camera jumped on me").
+    ///
+    /// The arena's own solids only, as it always was: a raised solid stands
+    /// on the floor and is never a ceiling.
+    pub fn ceiling_near(&self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
+        let mut best: Option<Fx> = None;
+        let at = V3::new(x, Fx::ZERO, z);
+        for s in self.without_raised(self.around(at, CEILING_REACH)) {
+            if !s.hangs() || s.min.y.raw() <= above.raw() {
+                continue;
+            }
+            let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
+            let dz = s.min.z.sub(z).max(z.sub(s.max.z)).max(Fx::ZERO);
+            let at = s.min.y.add(dx.max(dz).mul(slope));
+            if best.is_none_or(|b| at.raw() < b.raw()) {
+                best = Some(at);
+            }
+        }
+        best
+    }
+
+    /// **The lowest ceiling over a point**: the underside of the lowest solid
+    /// hanging from the roof whose footprint covers it and whose underside is
+    /// above `above`. What keeps the eye inside a cave (`camera::eye_under`).
+    pub fn ceiling_over(&self, x: Fx, z: Fx, above: Fx) -> Option<Fx> {
+        let mut best: Option<Fx> = None;
+        let at = V3::new(x, Fx::ZERO, z);
+        for s in self.without_raised(self.around(at, Fx::ZERO)) {
+            if !s.hangs() || s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) {
+                continue;
+            }
+            if best.is_none_or(|b| s.min.y.raw() < b.raw()) {
+                best = Some(s.min.y);
+            }
+        }
+        best
+    }
+
+    /// A query's own solids, leaving off the raised ones.
+    fn without_raised<'a>(&self, mut solids: Solids<'a>) -> Solids<'a> {
+        solids.raised = [].iter();
+        solids
     }
 
     /// **A creature against the solids** (for a species that `collides`): an
@@ -990,7 +1195,7 @@ impl Terrain {
     /// when it touched nothing: the species' `bumped` hook reads it.
     pub fn fence(&self, mut pos: V3, radius: Fx, step: Fx) -> (V3, V3) {
         let start = pos;
-        for solid in self.solids() {
+        for solid in self.around(pos, radius.add(RESOLVE_REACH)) {
             if solid.hangs() || solid.max.y.raw() <= pos.y.add(step).raw() {
                 continue;
             }

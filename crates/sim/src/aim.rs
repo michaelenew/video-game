@@ -612,8 +612,8 @@ fn nearest_terrain(
 
     // Terrain. Ground is whatever faces upward, which is what decides whether
     // a skillshot flies level over the spot or straight at it.
-    keep(floor_hit(eye, dir, scene.arena.arena, limit), Met::Ground);
-    for solid in scene.arena.solids() {
+    keep(floor_hit(eye, dir, scene.arena, limit), Met::Ground);
+    for solid in scene.arena.along(eye, dir, limit, Fx::ONE) {
         let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
         keep(hit, facing(hit, eye, dir, solid.max.y));
     }
@@ -1164,7 +1164,7 @@ fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
             }
         }
     };
-    for solid in scene.arena.solids() {
+    for solid in scene.arena.along(a, dir, reach, Fx::ONE) {
         consider(crate::math::ray_hits_box(a, dir, solid.min, solid.max));
     }
     for stone in scene.stones.iter().flatten() {
@@ -1316,7 +1316,7 @@ fn nothing_between(a: V3, b: V3, scene: &Scene) -> bool {
     // Short of the far end, so a line that arrives exactly on the surface the
     // other body is standing on has not been stopped by it.
     let stopped = |hit: Option<Fx>| hit.is_some_and(|d| d.raw() < reach.raw());
-    for solid in scene.arena.solids() {
+    for solid in scene.arena.along(a, dir, reach, Fx::ONE) {
         if stopped(crate::math::ray_hits_box(a, dir, solid.min, solid.max)) {
             return false;
         }
@@ -1779,7 +1779,7 @@ pub fn first_along(
         // all three axes -- the same trick the stones use, so "do these two
         // volumes touch" stays one ray against one shape.
         let fat = V3::new(girth, girth, girth);
-        for solid in scene.arena.solids() {
+        for solid in scene.arena.along(from, dir, limit, girth.add(Fx::ONE)) {
             if let Some(dist) =
                 crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
             {
@@ -1788,7 +1788,7 @@ pub fn first_along(
         }
     }
     if targets.walls {
-        for solid in scene.arena.solids() {
+        for solid in scene.arena.along(from, dir, limit, Fx::ONE) {
             if let Some(dist) = crate::math::ray_hits_box(from, dir, solid.min, solid.max) {
                 keep(Contact::Terrain { dist });
             }
@@ -1897,8 +1897,10 @@ fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
 /// some (`arena::relief`) -- marched, out to the limit the caller has or the
 /// far side of the arena, whichever is nearer, since a ray that reaches
 /// neither has nothing to hit.
-fn floor_hit(from: V3, dir: V3, arena: &crate::arena::Arena, limit: Fx) -> Option<Fx> {
-    if crate::arena::relief::is_flat(arena.id) {
+fn floor_hit(from: V3, dir: V3, arena: &Terrain, limit: Fx) -> Option<Fx> {
+    // On a map the floor is every place's, each at its own height, so it is
+    // walked as relief whether or not the place the ray starts in is flat.
+    if arena.atlas().is_none() && crate::arena::relief::is_flat(arena.id) {
         if dir.y.raw() >= 0 || from.y.raw() < 0 {
             return None;
         }

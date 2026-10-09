@@ -647,10 +647,6 @@ scalars! {
     // drop: walking down a hill (`arena::relief`) or off a low step keeps the
     // feet on the ground below up to this; beyond it gravity takes over.
     StepDown,         "Movement",  "Terrain, step down (m)",                Fixed,  0,        fx(1,1);
-    // **How long one of you holds a seam before it takes you both on**
-    // (`crate::valley`): both in it goes at once; one alone waits this long,
-    // which is how a pair says "come on" and how one player goes on at all.
-    SeamHold,         "Valley",    "Seam, held alone before it goes",       Frames, 1,        600;
     // **How fast a vine is climbed** with the jump held, and slid down with
     // crouch: slower than any jump, because a vine is the slow way.
     VineSpeed,        "Valley",    "Vine, climbing speed (m/s)",            Fixed,  fx(1,2),  fx(8,1);

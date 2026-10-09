@@ -154,3 +154,98 @@ pub fn fog(sky: &Sky) -> DistanceFog {
         ..default()
     }
 }
+
+/// How far either side of a doorway the two places' skies blend, in metres.
+const BLEND: f32 = 24.0;
+
+/// What the air was last set to in the valley: the place the camera was in,
+/// the one across the nearest doorway, how far toward it in fiftieths, and
+/// the dome it was put on.
+#[derive(Default)]
+pub struct Weather {
+    shown: Option<(sim::arena::ArenaId, sim::arena::ArenaId, u8, Entity)>,
+}
+
+/// **The air across a doorway** (`docs/design/atlas.md`): in the valley each
+/// place keeps its own sky, and walking through a doorway goes from one to
+/// the other over [`BLEND`] metres either side of it rather than at the
+/// moment the world moves into the next place. Dome, fog, clear colour, the
+/// sky's light and the sun's bearing all follow. The blend is
+/// `look::Sky::toward`; this only says how far.
+#[allow(clippy::too_many_arguments)] // A Bevy system: one argument per resource it reads.
+pub fn weather(
+    sim: Res<crate::Sim>,
+    mut state: Local<Weather>,
+    camera: Query<(Entity, &Transform), With<crate::MainCamera>>,
+    domes: Query<(Entity, &Mesh3d), With<Dome>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut commands: Commands,
+    mut clear: ResMut<ClearColor>,
+    mut ambient: ResMut<AmbientLight>,
+    mut fill: Query<&mut DirectionalLight, With<crate::arenas::Skylight>>,
+    mut suns: Query<&mut Transform, (With<crate::arenas::Sun>, Without<crate::MainCamera>)>,
+) {
+    let w = &sim.cur;
+    if !w.valley.on {
+        state.shown = None;
+        return;
+    }
+    let (Ok((eye, at)), Ok((dome, mesh))) = (camera.single(), domes.single()) else {
+        return;
+    };
+    let atlas = sim::atlas::valley();
+    let o = w.map_origin();
+    let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+    let f = |v: sim::Fx| v.to_f32_for_render();
+    let (x, z) = (at.translation.x + f(o.x), at.translation.z + f(o.z));
+    let home = atlas
+        .place_at(to_fx(x), to_fx(z))
+        .map_or(w.arena, |p| p.arena);
+    // The nearest doorway out of where the camera is, and how far.
+    let near = atlas
+        .doors
+        .iter()
+        .filter_map(|d| {
+            let other = if d.a.0 == home {
+                d.b.0
+            } else if d.b.0 == home {
+                d.a.0
+            } else {
+                return None;
+            };
+            let dx = (f(d.cut.min.x) - x).max(x - f(d.cut.max.x)).max(0.0);
+            let dz = (f(d.cut.min.z) - z).max(z - f(d.cut.max.z)).max(0.0);
+            Some((other, (dx * dx + dz * dz).sqrt()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    // Half-way at the doorway itself, from either side, so the two places
+    // meet in the middle and nothing jumps as the camera crosses.
+    let (other, t) = match near {
+        Some((other, d)) if d < BLEND => {
+            let u = 1.0 - d / BLEND;
+            (other, 0.5 * u * u * (3.0 - 2.0 * u))
+        }
+        _ => (home, 0.0),
+    };
+    let step = (t * 50.0).round() as u8;
+    let key = (home, other, step, dome);
+    if state.shown == Some(key) {
+        return;
+    }
+    state.shown = Some(key);
+    let t = step as f32 / 50.0;
+    let sky = look::skies::of(home).toward(look::skies::of(other), t);
+    let sun = crate::arenas::sun(home).lerp(crate::arenas::sun(other), t);
+    meshes.insert(&mesh.0, self::dome(&sky, sun));
+    commands.entity(eye).insert(fog(&sky));
+    let h = sky.horizon;
+    clear.0 = Color::srgb(h[0], h[1], h[2]);
+    let shade = look::palette::Palette::under(&sky).shade;
+    ambient.color = Color::srgb(shade[0], shade[1], shade[2]);
+    for mut light in &mut fill {
+        light.color = Color::srgb(shade[0], shade[1], shade[2]);
+    }
+    for mut light in &mut suns {
+        *light = Transform::from_translation(sun).looking_at(Vec3::ZERO, Vec3::Y);
+    }
+}

@@ -269,8 +269,28 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 15] {
+fn scenarios() -> [Scenario; 17] {
     [
+        // The valley, one map of eighteen places: the Saddle, with every
+        // other place's boxes in tiles around it, and a creature's room in it.
+        ("the valley's saddle", |c| {
+            World::arrive(
+                [c; MAX_PLAYERS],
+                sim::valley::Journey::default(),
+                sim::arena::ArenaId::SADDLE,
+                Some(0),
+                MAX_PLAYERS as u8,
+            )
+        }),
+        ("the valley's cliffs", |c| {
+            World::arrive(
+                [c; MAX_PLAYERS],
+                sim::valley::Journey::default(),
+                sim::arena::ArenaId::GALEWING,
+                Some(0),
+                MAX_PLAYERS as u8,
+            )
+        }),
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
         ("two creatures", |c| {

@@ -157,12 +157,15 @@ pub fn sun(id: ArenaId) -> Vec3 {
 pub struct Skylight;
 
 /// Everything drawn for the arena, so all of it can go when the arena does.
+/// In the valley, only the sky and the light: the places and their boxes are
+/// streamed (`crate::stream`) and come and go with distance instead.
 #[derive(Component)]
 pub struct Scenery;
 
-/// Which arena is drawn, if any yet.
+/// Which arena is drawn, if any yet, and whether it was drawn as a place on
+/// the valley's map.
 #[derive(Resource, Default)]
-pub struct Drawn(Option<ArenaId>);
+pub struct Drawn(Option<(ArenaId, bool)>);
 
 /// How far the floor runs past the bounds, so the edge of the world is not the
 /// edge of the walls.
@@ -171,7 +174,74 @@ const APRON: f32 = 12.0;
 /// How wide a drop's floor is drawn: past the horizon from any island.
 const DEEP: f32 = 2000.0;
 
-/// Draw the arena the simulation is in, when it is not the one already drawn.
+/// **Where a drawn piece goes**: into the arena's scenery, cleared with the
+/// arena, or under a streamed place's entity, cleared when it is unloaded.
+#[derive(Clone, Copy, Debug)]
+pub enum Under {
+    Scenery,
+    Parent(Entity),
+}
+
+/// Spawn one drawn piece where it goes.
+pub fn put(commands: &mut Commands, under: Under, piece: impl Bundle) -> Entity {
+    match under {
+        Under::Scenery => commands.spawn((piece, Scenery)).id(),
+        Under::Parent(p) => commands.spawn((piece, ChildOf(p))).id(),
+    }
+}
+
+/// **How a place looks**: its sky, the palette that follows from it, and the
+/// brush that puts the accent on its surfaces, stretched over the heights the
+/// place actually contains.
+#[derive(Clone)]
+pub struct PlaceLook {
+    pub sky: look::Sky,
+    pub palette: look::palette::Palette,
+    pub brush: crate::shapes::Brush,
+    pub dressing: &'static Dressing,
+}
+
+impl PlaceLook {
+    pub fn of(arena: &sim::arena::Arena) -> PlaceLook {
+        // One table, keyed by arena: `look::skies`. Resolved once here rather
+        // than per frame, and shared by the dome, the fog and the drop below,
+        // which is what keeps all three agreeing about where the horizon is.
+        let sky = look::skies::of(arena.id).resolved();
+        // Derived from that sky, so an arena that has one has both.
+        let palette = look::palette::Palette::under(&sky);
+        // The crest half of the rule is stretched over the heights this arena
+        // actually contains, read off its own collision data. A fixed ramp
+        // from the ground reads beautifully in a proving ground whose walls
+        // are waist-high and paints every surface of a jump course at full
+        // strength, because a course's *lowest* island is already forty
+        // metres up.
+        let (lo, hi) = arena
+            .solids()
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(lo, hi), s| {
+                (lo.min(fx(s.min.y)), hi.max(fx(s.max.y)))
+            });
+        let brush = crate::shapes::Brush {
+            palette,
+            edge: if lo <= hi {
+                look::edge::EDGE.across(lo, hi)
+            } else {
+                look::edge::EDGE
+            },
+        };
+        PlaceLook {
+            sky,
+            palette,
+            brush,
+            dressing: dressing(arena.id),
+        }
+    }
+}
+
+/// Draw the arena the simulation is in, when it is not the one already drawn:
+/// its sky and light, and -- alone, outside the valley -- all of it. In the
+/// valley the sky and light follow the place you are in, and everything else
+/// is `crate::stream`'s.
 #[allow(clippy::too_many_arguments)] // A Bevy system: one argument per resource it reads.
 pub fn dress(
     mut commands: Commands,
@@ -188,47 +258,17 @@ pub fn dress(
     looks: Option<Res<crate::ground::Looks>>,
 ) {
     let arena = sim.cur.arena();
-    if drawn.0 == Some(arena.id) {
+    let mapped = sim.cur.valley.on;
+    if drawn.0 == Some((arena.id, mapped)) {
         return;
     }
-    drawn.0 = Some(arena.id);
+    drawn.0 = Some((arena.id, mapped));
     for entity in &old {
         commands.entity(entity).despawn();
     }
-    let dressing = dressing(arena.id);
+    let look = PlaceLook::of(arena);
+    let sky = &look.sky;
     let sun_at = sun(arena.id);
-    // One table, keyed by arena: `look::skies`. Resolved once here rather than
-    // per frame, and shared by the dome, the fog and the drop below, which is
-    // what keeps all three agreeing about where the horizon is.
-    let sky = look::skies::of(arena.id).resolved();
-    // Derived from that sky, so an arena that has one has both. Everything
-    // drawn below goes through it, props included.
-    let palette = look::palette::Palette::under(&sky);
-    // Everything the arena is made of is painted with this: the palette says
-    // what colour a thing is, the edge rule says where its accent goes, and
-    // `shapes` puts the answer in the vertices. One white material serves all
-    // of it, because every mesh carries its own colour.
-    //
-    // The crest half of the rule is stretched over the heights this arena
-    // actually contains, read off its own collision data. A fixed ramp from the
-    // ground reads beautifully in a proving ground whose walls are waist-high
-    // and paints every surface of a jump course at full strength, because a
-    // course's *lowest* island is already forty metres up.
-    let (lo, hi) = arena
-        .solids()
-        .iter()
-        .fold((f32::MAX, f32::MIN), |(lo, hi), s| {
-            (lo.min(fx(s.min.y)), hi.max(fx(s.max.y)))
-        });
-    let brush = crate::shapes::Brush {
-        palette,
-        edge: if lo <= hi {
-            look::edge::EDGE.across(lo, hi)
-        } else {
-            look::edge::EDGE
-        },
-    };
-    let white = materials.add(crate::shapes::plain());
 
     // The clear colour still matters: it is what shows in the sliver of a frame
     // before the dome is drawn, and anywhere the dome does not reach. Set to
@@ -239,20 +279,20 @@ pub fn dress(
         &mut commands,
         &mut meshes,
         &mut materials,
-        &sky,
+        sky,
         sun_at,
         Scenery,
     );
     // Fog on the camera rather than on the scene, because it is a property of
     // looking rather than of the things looked at.
     if let Ok(eye) = camera.single_mut() {
-        commands.entity(eye).insert(sky::fog(&sky));
+        commands.entity(eye).insert(sky::fog(sky));
         // The line fades over the same distance the air does -- where there is
         // a line at all.
         if crate::platform::draws_outlines() {
             commands
                 .entity(eye)
-                .insert(crate::outline::Outline::over(look::edge::LINE, &sky));
+                .insert(crate::outline::Outline::over(look::edge::LINE, sky));
         }
     }
     // The pooled hazard and raised-solid materials take this arena's colours.
@@ -261,7 +301,7 @@ pub fn dress(
     }
     // Both the ambient term and the fill light take the sky's colour, so every
     // shadow in the arena is the complement of what cast it.
-    let shade = palette.shade;
+    let shade = look.palette.shade;
     ambient.color = Color::srgb(shade[0], shade[1], shade[2]);
     for mut light in &mut fill {
         light.color = Color::srgb(shade[0], shade[1], shade[2]);
@@ -269,7 +309,53 @@ pub fn dress(
     for mut light in &mut suns {
         *light = Transform::from_translation(sun_at).looking_at(Vec3::ZERO, Vec3::Y);
     }
+    if mapped {
+        return;
+    }
 
+    // Everything the arena is made of is painted with this: the palette says
+    // what colour a thing is, the edge rule says where its accent goes, and
+    // `shapes` puts the answer in the vertices. One white material serves all
+    // of it, because every mesh carries its own colour.
+    let white = materials.add(crate::shapes::plain());
+    draw_place(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        arena,
+        &look,
+        &white,
+        Under::Scenery,
+    );
+    // The geometry, straight from the simulation's own collision data. One
+    // source of truth: if you can see it, you collide with it.
+    for solid in arena.solids() {
+        draw_solid(
+            &mut commands,
+            &mut meshes,
+            solid,
+            Vec3::ZERO,
+            &look,
+            &white,
+            Under::Scenery,
+        );
+    }
+}
+
+/// **A place, less its boxes**: its floor and the regions on it, its props,
+/// what is scattered on its floor, and -- in the valley -- its seams,
+/// waystones, vines and updrafts. In the place's own coordinates, under
+/// `under`.
+pub fn draw_place(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    arena: &'static sim::arena::Arena,
+    look: &PlaceLook,
+    white: &Handle<StandardMaterial>,
+    under: Under,
+) {
+    let (sky, palette, brush, dressing) = (&look.sky, &look.palette, &look.brush, look.dressing);
     // The drop's floor, unlit: made before `paint` borrows the materials.
     //
     // Unlit but **fogged**, which is the whole point of it now. A drop drawn
@@ -302,25 +388,50 @@ pub fn dress(
     // The floor: its own material under everything, then each region on top,
     // a hair higher than the one before so a later region wins on screen the
     // way it wins in `Arena::floor_at`.
-    let b = arena.bounds;
-    let (lo_x, hi_x) = (fx(b.lo_x), fx(b.hi_x));
-    let (lo_z, hi_z) = (fx(b.lo_z), fx(b.hi_z));
+    //
+    // On the valley's map the floor is drawn over the place's whole footprint
+    // and the ground round a room (`sim::atlas`), with no apron of its own
+    // past that: the next place's floor starts where this one's ends.
+    let (lo_x, hi_x, lo_z, hi_z, apron) = match under {
+        Under::Parent(_) => {
+            let (lo, hi) = sim::atlas::footprint(arena);
+            let pad = (sim::valley::layout::APRON as f32 / 100.0)
+                * matches!(
+                    sim::valley::place(arena.id).map(|p| p.kind),
+                    Some(sim::valley::Kind::Room(_) | sim::valley::Kind::Ring)
+                ) as i32 as f32;
+            (
+                fx(lo.0) - pad,
+                fx(hi.0) + pad,
+                fx(lo.1) - pad,
+                fx(hi.1) + pad,
+                0.0,
+            )
+        }
+        Under::Scenery => {
+            let b = arena.bounds;
+            (fx(b.lo_x), fx(b.hi_x), fx(b.lo_z), fx(b.hi_z), APRON)
+        }
+    };
     match below {
         Some(dark) => {
-            commands.spawn((
-                Mesh3d(meshes.add(Plane3d::default().mesh().size(DEEP, DEEP))),
-                MeshMaterial3d(dark),
-                Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
-                bevy::pbr::NotShadowReceiver,
-                // Nothing is under it to throw a shadow on, and it is two
-                // kilometres across: drawn into every shadow cascade it was
-                // most of each one's triangles. See the note on the floor.
-                bevy::pbr::NotShadowCaster,
-                Scenery,
-            ));
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(Plane3d::default().mesh().size(DEEP, DEEP))),
+                    MeshMaterial3d(dark),
+                    Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                    bevy::pbr::NotShadowReceiver,
+                    // Nothing is under it to throw a shadow on, and it is two
+                    // kilometres across: drawn into every shadow cascade it was
+                    // most of each one's triangles. See the note on the floor.
+                    bevy::pbr::NotShadowCaster,
+                ),
+            );
         }
         None => {
-            let (w, d) = (hi_x - lo_x + APRON * 2.0, hi_z - lo_z + APRON * 2.0);
+            let (w, d) = (hi_x - lo_x + apron * 2.0, hi_z - lo_z + apron * 2.0);
             // Subdivided, because a four-vertex plane has nowhere to put a
             // gradient. The accent runs in from the arena's own perimeter,
             // which is the edge of the world as far as anyone standing on it
@@ -349,19 +460,22 @@ pub fn dress(
                 Vec3::new(w * 0.5, 0.0, d * 0.5),
                 Vec3::ZERO,
                 palette.of(arena.floor),
-                &brush,
+                brush,
             );
             // Ground, not paint: the colour wanders a little across it.
             crate::shapes::mottle(&mut floor, 0.07, 2.5, arena.id.0 as u32);
             // A crown lighter and a hollow darker, by the look's rule.
             crate::shapes::shade_by_height(&mut floor, &look::palette::relief_shade);
-            commands.spawn((
-                Mesh3d(meshes.add(floor)),
-                MeshMaterial3d(white.clone()),
-                Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
-                bevy::pbr::NotShadowCaster,
-                Scenery,
-            ));
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(floor)),
+                    MeshMaterial3d(white.clone()),
+                    Transform::from_xyz((lo_x + hi_x) * 0.5, 0.0, (lo_z + hi_z) * 0.5),
+                    bevy::pbr::NotShadowCaster,
+                ),
+            );
         }
     }
     let hilly = !sim::arena::relief::is_flat(arena.id);
@@ -371,7 +485,7 @@ pub fn dress(
         let lift = 0.004 * (i + 1) as f32;
         // On a floor with relief the patch follows it, vertex by vertex, at
         // the simulation's own heights; on a flat one it is a flat shape.
-        let under = |x: f32, z: f32| {
+        let ground = |x: f32, z: f32| {
             let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
             fx(arena.relief_at(to_fx(x), to_fx(z)))
         };
@@ -384,107 +498,55 @@ pub fn dress(
                         Vec2::new(x1 - x0, z1 - z0),
                         Vec3::new(centre.x, 0.0, centre.z),
                         0.5,
-                        &under,
+                        &ground,
                     )
                 } else {
                     Plane3d::default().mesh().size(x1 - x0, z1 - z0).build()
                 };
-                commands.spawn((
-                    Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(look),
-                    Transform::from_translation(centre),
-                    bevy::pbr::NotShadowCaster,
-                    Scenery,
-                ));
+                put(
+                    commands,
+                    under,
+                    (
+                        Mesh3d(meshes.add(mesh)),
+                        MeshMaterial3d(look),
+                        Transform::from_translation(centre),
+                        bevy::pbr::NotShadowCaster,
+                    ),
+                );
             }
             Area::Disc { at, radius } => {
                 let centre = Vec3::new(fx(at.0), lift, fx(at.1));
                 if hilly {
-                    commands.spawn((
-                        Mesh3d(meshes.add(crate::shapes::ground_disc(
-                            fx(radius),
-                            Vec3::new(centre.x, 0.0, centre.z),
-                            0.5,
-                            &under,
-                        ))),
-                        MeshMaterial3d(look),
-                        Transform::from_translation(centre),
-                        bevy::pbr::NotShadowCaster,
-                        Scenery,
-                    ));
+                    put(
+                        commands,
+                        under,
+                        (
+                            Mesh3d(meshes.add(crate::shapes::ground_disc(
+                                fx(radius),
+                                Vec3::new(centre.x, 0.0, centre.z),
+                                0.5,
+                                &ground,
+                            ))),
+                            MeshMaterial3d(look),
+                            Transform::from_translation(centre),
+                            bevy::pbr::NotShadowCaster,
+                        ),
+                    );
                 } else {
-                    commands.spawn((
-                        Mesh3d(meshes.add(Circle::new(fx(radius)))),
-                        MeshMaterial3d(look),
-                        Transform::from_translation(centre)
-                            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-                        bevy::pbr::NotShadowCaster,
-                        Scenery,
-                    ));
+                    put(
+                        commands,
+                        under,
+                        (
+                            Mesh3d(meshes.add(Circle::new(fx(radius)))),
+                            MeshMaterial3d(look),
+                            Transform::from_translation(centre)
+                                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+                            bevy::pbr::NotShadowCaster,
+                        ),
+                    );
                 }
             }
         }
-    }
-
-    // The geometry, straight from the simulation's own collision data. One
-    // source of truth: if you can see it, you collide with it.
-    for solid in arena.solids() {
-        let min = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z));
-        let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
-        let size = max - min;
-        let at = (min + max) * 0.5;
-        // The form follows the material (`docs/design/forms.md`): bare rock
-        // is a rock, soft ground is rounded, dressed stone and timber keep
-        // their edges. Every form stays inside the box the body collides
-        // against.
-        let rgb = palette.of(solid.material);
-        let seed = (at.x * 7.0 + at.z * 13.0 + size.y * 3.0) as i32 as u32;
-        // **Terrain** -- a terrace, a bank, a valley's side, a hedge -- is a
-        // cliff, roughened in metres rather than in shares of its size, so a
-        // thirty-metre block's edge is where its collision is. Dressed stone
-        // and timber stay square at any size. A soft top on a tall block (a
-        // turf-topped terrace) shows rock in its faces; a thin one (a hedge)
-        // is its own stuff all the way down.
-        let soft = matches!(
-            solid.material,
-            Material::Ground
-                | Material::Grass
-                | Material::Sand
-                | Material::Snow
-                | Material::Ash
-                | Material::Peat
-                | Material::Rock
-        );
-        if soft && crate::shapes::is_terrain(size) {
-            let side = palette.cliff_face(solid.material, size.x.min(size.z) < 3.0);
-            commands.spawn((
-                Mesh3d(meshes.add(crate::shapes::cliff(size, seed, rgb, side, at, &brush))),
-                MeshMaterial3d(white.clone()),
-                Transform::from_translation(at),
-                Scenery,
-            ));
-            continue;
-        }
-        let mesh = match solid.material {
-            Material::Rock => crate::shapes::rock(size, seed, Some((at, rgb, &brush))),
-            Material::Ground
-            | Material::Grass
-            | Material::Sand
-            | Material::Snow
-            | Material::Ash
-            | Material::Peat => crate::shapes::soft_box(size, 0.3, 12, Some((at, rgb, &brush))),
-            // Dressed stone is cut square and keeps its arris, chamfered just
-            // enough not to catch the light as a wire; timber a little more.
-            Material::Stone => crate::shapes::chamfered_box(size, 0.06, Some((at, rgb, &brush))),
-            Material::Wood => crate::shapes::chamfered_box(size, 0.04, Some((at, rgb, &brush))),
-            Material::Water => crate::shapes::boxy(size, at, rgb, &brush),
-        };
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(white.clone()),
-            Transform::from_translation(at),
-            Scenery,
-        ));
     }
 
     for prop in dressing.props {
@@ -494,26 +556,29 @@ pub fn dress(
         let half = Vec3::new(w * 0.5, h * 0.5, d * 0.5);
         let mesh = match prop.shape {
             Shape::Box => {
-                crate::shapes::chamfered_box(Vec3::new(w, h, d), 0.04, Some((at, rgb, &brush)))
+                crate::shapes::chamfered_box(Vec3::new(w, h, d), 0.04, Some((at, rgb, brush)))
             }
             Shape::Cylinder => {
                 let mut m = Cylinder::new(w * 0.5, h).mesh().build();
-                crate::shapes::paint(&mut m, half, at, rgb, &brush);
+                crate::shapes::paint(&mut m, half, at, rgb, brush);
                 m
             }
             Shape::Sphere => {
                 let mut m = Sphere::new(w * 0.5).mesh().build();
-                crate::shapes::paint(&mut m, Vec3::splat(w * 0.5), at, rgb, &brush);
+                crate::shapes::paint(&mut m, Vec3::splat(w * 0.5), at, rgb, brush);
                 m
             }
         };
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(white.clone()),
-            Transform::from_translation(at)
-                .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
-            Scenery,
-        ));
+        put(
+            commands,
+            under,
+            (
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(white.clone()),
+                Transform::from_translation(at)
+                    .with_rotation(Quat::from_rotation_y(-prop.yaw * std::f32::consts::TAU)),
+            ),
+        );
     }
 
     // **The floor broken up**, by dressing rather than geometry: the floor's
@@ -523,19 +588,83 @@ pub fn dress(
     // hash of the arena, so the same arena scatters the same way every time.
     // Not on a course (no floor), not in water, never inside a solid.
     if !dressing.drop {
-        scatter(&mut commands, &mut meshes, arena, &palette, &brush, &white);
+        scatter(commands, meshes, arena, palette, brush, white, under);
     }
 
-    // The valley's seams, waystones, vines and updrafts, and the lookout's
-    // view from the town: `crate::valley`, for a place that is one.
-    crate::valley::draw(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        arena,
-        &palette,
-        &sky,
+    // The valley's seams, waystones, vines and updrafts: `crate::valley`, for
+    // a place that is one.
+    crate::valley::draw(commands, meshes, materials, arena, palette, under);
+}
+
+/// **One box**, from the simulation's own collision data: one source of
+/// truth, so if you can see it, you collide with it. `offset` is where its
+/// coordinates' origin is drawn -- zero for an arena's own box, the place's
+/// origin taken off a map box's -- and the colour is worked out where the box
+/// stands in its own place, so a box looks the same however it is loaded.
+pub fn draw_solid(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    solid: &sim::arena::Solid,
+    offset: Vec3,
+    look: &PlaceLook,
+    white: &Handle<StandardMaterial>,
+    under: Under,
+) -> Entity {
+    let (palette, brush) = (&look.palette, &look.brush);
+    let min = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z)) - offset;
+    let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z)) - offset;
+    let size = max - min;
+    let at = (min + max) * 0.5;
+    // The form follows the material (`docs/design/forms.md`): bare rock
+    // is a rock, soft ground is rounded, dressed stone and timber keep
+    // their edges. Every form stays inside the box the body collides
+    // against.
+    let rgb = palette.of(solid.material);
+    let seed = (at.x * 7.0 + at.z * 13.0 + size.y * 3.0) as i32 as u32;
+    // **Terrain** -- a terrace, a bank, a valley's side, a hedge -- is a
+    // cliff, roughened in metres rather than in shares of its size, so a
+    // thirty-metre block's edge is where its collision is. Dressed stone
+    // and timber stay square at any size. A soft top on a tall block (a
+    // turf-topped terrace) shows rock in its faces; a thin one (a hedge)
+    // is its own stuff all the way down.
+    let soft = matches!(
+        solid.material,
+        Material::Ground
+            | Material::Grass
+            | Material::Sand
+            | Material::Snow
+            | Material::Ash
+            | Material::Peat
+            | Material::Rock
     );
+    let mesh = if soft && crate::shapes::is_terrain(size) {
+        let side = palette.cliff_face(solid.material, size.x.min(size.z) < 3.0);
+        crate::shapes::cliff(size, seed, rgb, side, at, brush)
+    } else {
+        match solid.material {
+            Material::Rock => crate::shapes::rock(size, seed, Some((at, rgb, brush))),
+            Material::Ground
+            | Material::Grass
+            | Material::Sand
+            | Material::Snow
+            | Material::Ash
+            | Material::Peat => crate::shapes::soft_box(size, 0.3, 12, Some((at, rgb, brush))),
+            // Dressed stone is cut square and keeps its arris, chamfered just
+            // enough not to catch the light as a wire; timber a little more.
+            Material::Stone => crate::shapes::chamfered_box(size, 0.06, Some((at, rgb, brush))),
+            Material::Wood => crate::shapes::chamfered_box(size, 0.04, Some((at, rgb, brush))),
+            Material::Water => crate::shapes::boxy(size, at, rgb, brush),
+        }
+    };
+    put(
+        commands,
+        under,
+        (
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
+            Transform::from_translation(at + offset),
+        ),
+    )
 }
 
 /// How much floor one scattered thing stands for, in square metres.
@@ -544,10 +673,11 @@ const SCATTER_SPACING: f32 = 40.0;
 fn scatter(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    arena: &sim::arena::Arena,
+    arena: &'static sim::arena::Arena,
     palette: &look::palette::Palette,
     brush: &crate::shapes::Brush,
     white: &Handle<StandardMaterial>,
+    under: Under,
 ) {
     let b = arena.bounds;
     let (lo_x, hi_x) = (fx(b.lo_x), fx(b.hi_x));
@@ -644,14 +774,17 @@ fn scatter(
         };
         // Half buried: the form's middle sits on the floor, so only its top
         // half shows and nothing has a visible underside to float on.
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(white.clone()),
-            Transform::from_xyz(x, y, z)
-                .with_rotation(Quat::from_rotation_y(r(7) * std::f32::consts::TAU)),
-            bevy::pbr::NotShadowCaster,
-            Scenery,
-        ));
+        put(
+            commands,
+            under,
+            (
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(white.clone()),
+                Transform::from_xyz(x, y, z)
+                    .with_rotation(Quat::from_rotation_y(r(7) * std::f32::consts::TAU)),
+                bevy::pbr::NotShadowCaster,
+            ),
+        );
         let _ = size;
     }
 }

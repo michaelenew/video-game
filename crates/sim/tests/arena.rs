@@ -7,7 +7,7 @@
 //! one: the range, with its 240 m of floor, its 12 m tower, its cave under a
 //! vault and its five floor materials.
 
-use sim::arena::{self, Arena, ArenaId, Material};
+use sim::arena::{self, Arena, ArenaId, Material, Terrain};
 use sim::input::{Input, Travel};
 use sim::species::{self, SpeciesId};
 use sim::state::MAX_PLAYERS;
@@ -92,8 +92,13 @@ fn every_registered_arena_is_well_formed() {
             "{}",
             a.name
         );
+        // A place that is only ever on the valley's map is read a tile at a
+        // time and is not held to it (`sim::atlas`); a room is fought on
+        // alone as well, by `--hunt`, and is.
+        let only_on_the_map =
+            sim::valley::place(a.id).is_some_and(|p| !matches!(p.kind, sim::valley::Kind::Room(_)));
         assert!(
-            a.solids.len() <= arena::MAX_SOLIDS,
+            only_on_the_map || a.solids.len() <= arena::MAX_SOLIDS,
             "{} has {} solids, over the {} every query is budgeted for",
             a.name,
             a.solids.len(),
@@ -478,7 +483,7 @@ fn the_eye_is_held_under_the_cave_vault_and_nowhere_else() {
             for aim in [0u16, 16384, 32768, 49152] {
                 let look = Input::looking_at(0, aim, (pitch * 182) as i16);
                 for aloft in [Fx::ZERO, Fx::ONE] {
-                    let held = eye_under(pos, look, aloft, range());
+                    let held = eye_under(pos, look, aloft, &Terrain::bare(range()));
                     let free = eye(pos, look, aloft);
                     let cap = ceiling.sub(t::eye_under_ceiling());
                     assert!(
@@ -498,7 +503,10 @@ fn the_eye_is_held_under_the_cave_vault_and_nowhere_else() {
         for pitch in (-90..=60).step_by(15) {
             let look = Input::looking_at(0, 12345, (pitch * 182) as i16);
             let pos = at(x, 0, x / 2);
-            assert_eq!(eye_under(pos, look, Fx::ZERO, pg), eye(pos, look, Fx::ZERO));
+            assert_eq!(
+                eye_under(pos, look, Fx::ZERO, &Terrain::bare(pg)),
+                eye(pos, look, Fx::ZERO)
+            );
         }
     }
     // And the aiming ray out of it starts under the rock: a shot straight up
@@ -564,7 +572,7 @@ fn walking_under_an_island_edge_never_jumps_the_eye() {
                 let mut x = s.min.x.sub(Fx::from_int(8));
                 let mut last: Option<Fx> = None;
                 while x.raw() < s.min.x.add(Fx::ONE).raw() {
-                    let eye = eye_under(V3::new(x, y, z), look, Fx::ZERO, a);
+                    let eye = eye_under(V3::new(x, y, z), look, Fx::ZERO, &Terrain::bare(a));
                     if let Some(prev) = last {
                         assert!(
                             (eye.y.raw() - prev.raw()).abs() <= most.raw(),

@@ -35,7 +35,7 @@ fn settled(w: &World, at: [f32; 3], pitch: f32, beasts: bool, aboard: bool) -> F
     let around = Surroundings {
         beasts: if beasts { &w.monsters } else { &[] },
         aboard,
-        arena: w.arena(),
+        arena: w.terrain(),
         ..Default::default()
     };
     for _ in 0..240 {
@@ -52,7 +52,7 @@ fn aiming_eye(w: &World, at: [f32; 3], pitch: f32) -> [f32; 3] {
         V3::new(fx(at[0]), fx(at[1]), fx(at[2])),
         look,
         Fx::ZERO,
-        w.arena(),
+        &w.terrain(),
     );
     [
         e.x.to_f32_for_render(),

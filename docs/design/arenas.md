@@ -28,7 +28,7 @@ replaced.
 | `creature` | The species it is for. `arena::for_species` reads it; a creature with no arena yet is hunted in the proving ground. |
 | `bounds` | The playable rectangle. A projectile leaves by it (`Arena::inside`) and a creature is clamped to it less its keep-out. It does **not** stop bodies: author walls, banks or cliffs as solids. |
 | `floor`, `regions` | What the floor is made of: a `Material` everywhere, then rectangles and discs of other materials, later ones winning. |
-| `solids` | Axis-aligned boxes, at most `MAX_SOLIDS` (64). Every face stops a body, every top is standable however high, and each has a `Material` for its top. |
+| `solids` | Axis-aligned boxes, at most `MAX_SOLIDS` (64) for an arena fought on alone; no cap for a place that is only ever on a map ([atlas.md](atlas.md)). Every face stops a body, every top is standable however high, and each has a `Material` for its top. |
 | `spawns` | Two versus marks; and the hunt's marks (two hunters, a creature per slot), or `None` for the species' own spawn distances along x, which is how the proving ground places a hunt. A `Mark` is a point and a facing, written as "stand here, face there". |
 | `sites` | Where a fight's defended things stand (bestiary P7): a route of points and a box's size each -- a wall's place, a cart's road. What stands there is the species' ([hazards.md](hazards.md) §5). Empty for most arenas; the range has a gate and a road. |
 
@@ -245,9 +245,13 @@ there, for every arena, and say so here.
 - **Bounds are not walls.** Every arena authors its own edge as solids, so a
   cliff, a bank and a 1.5 m wall are the same kind of thing, and the edge is as
   standable as any other top. The bounds only bound.
-- **64 solids, scanned linearly.** A fight in the range (34 solids, two
-  creatures) measured 142 µs a frame in the worst class against 102 µs in the
-  proving ground, with a 520 µs budget. No grid until an arena needs one.
+- **64 solids, scanned linearly** -- for an arena fought on alone. A fight in
+  the range (34 solids, two creatures) measured 142 µs a frame in the worst
+  class against 102 µs in the proving ground, with a 520 µs budget. **The grid
+  arrived 2026-10-09** with the valley as one map ([atlas.md](atlas.md)): a
+  place that only lives on a map is read a 16 m tile at a time and has no cap,
+  and the map has six hundred boxes. A creature's own arena is still fought on
+  alone by `--hunt` and still holds to sixty-four.
 - **Lengths over 181 m saturate** in 16.16 (`V3::len`). The range is 240 m
   long, so two things at its two ends read as 181 m apart. **Done 2026-10-01**
   ([hazards.md](hazards.md) §6): `math::wide_len` and its siblings are exact at

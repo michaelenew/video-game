@@ -1,24 +1,20 @@
 //! **The valley** (`docs/design/valley.md`): a world to walk through, made
 //! of arenas.
 //!
-//! One long climb from Hearth's gate to the far end, loaded a **reach** at a
-//! time, with the creatures' own arenas as rooms off it. Every place is an
-//! arena, as it always was; what this module adds is how they join.
+//! One long climb from Hearth's gate to the far end, **one map**
+//! (`crate::atlas`, laid out by [`layout`]), with the creatures' own arenas
+//! as rooms off it. Every place is an arena, as it always was; what this
+//! module adds is how they join, and [`open`] is how the world walks across
+//! them.
 //!
 //! - **A seam** is a box at the edge of a place -- a notch in a wall, a gate,
-//!   the mouth of a cave -- that leads to a seam of another place. Seams come
-//!   in pairs: this one's `to` and `at` name the seam you come out of, and that
-//!   one's name this. Walking into a seam is a trip: a fresh world, in the
-//!   place it leads to, with the journey carried across.
-//! - **Both of you go together.** A seam fires on the frame every fighter
-//!   still on their feet is in it, or once one has held it for
-//!   `tuning::seam_hold` -- the second is how a pair says "come on" and how
-//!   one player alone goes on at all. A fighter who arrives standing in a seam
-//!   has to step out of it before it counts them, so arriving is never
-//!   leaving.
+//!   the mouth of a passage -- that leads to a seam of another place. Seams
+//!   come in pairs: this one's `to` and `at` name the seam on the other side,
+//!   and that one's name this. On the map a pair is a doorway you walk
+//!   through; the world moves into the next place's coordinates as you do.
 //! - **A waystone** gates a seam that leads on: it is lit when enough of a
 //!   tier's creatures have been beaten, counted from the journey, and an unlit
-//!   one does not fire. Going back down is never gated.
+//!   one's doorway is a wall. Going back down is never gated.
 //! - **A cairn** is a top that is a checkpoint: a fighter who touches one is
 //!   rested there (health back), and one who dies anywhere in a reach is stood
 //!   on the last cairn they touched, or where they came in. A fall costs
@@ -27,7 +23,8 @@
 //!   The Ring is the one place for that, and plays as versus does.
 //! - **A room** is a creature's own arena, and walking into it starts the
 //!   hunt. Win it and the place goes quiet: walk out the way you came. Lose it
-//!   and you wake outside, at the seam you went in by.
+//!   and you wake outside, at the seam you went in by. Leave it and the hunt
+//!   is over.
 //!
 //! The journey -- [`Journey`] -- is a few bytes of the snapshot: whether the
 //! world is the valley at all, which creatures have been beaten (from fights
@@ -41,6 +38,9 @@ use crate::fixed::Fx;
 use crate::math::V3;
 use crate::species::SpeciesId;
 use crate::state::MAX_PLAYERS;
+
+pub mod layout;
+pub mod open;
 
 /// A box of the world a body's feet can be in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -306,6 +306,48 @@ pub fn vents(id: ArenaId) -> &'static [Vent] {
     place(id).map_or(&[], |p| p.vents)
 }
 
+/// **Is a body's feet in a vine**, on whatever ground it is: on the valley's
+/// map, the vines of the place under it.
+pub fn vine_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
+    match ground.atlas() {
+        None => vine_at(ground.id, feet).is_some(),
+        Some(a) => {
+            let m = feet.add(ground.origin());
+            a.place_at(m.x, m.z)
+                .is_some_and(|p| vine_at(p.arena, p.from_map(m)).is_some())
+        }
+    }
+}
+
+/// **Is a body in an updraft's column**, on whatever ground it is.
+pub fn vent_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
+    match ground.atlas() {
+        None => vent_at(ground.id, feet).is_some(),
+        Some(a) => {
+            let m = feet.add(ground.origin());
+            a.place_at(m.x, m.z)
+                .is_some_and(|p| vent_at(p.arena, p.from_map(m)).is_some())
+        }
+    }
+}
+
+/// **The cairn under these feet**, on the map: a snow top of a reach or of
+/// the town, by its index among the map's boxes. A room's snow is a
+/// creature's floor, not a cairn.
+pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
+    atlas
+        .near((feet.x, feet.z), (feet.x, feet.z))
+        .map(|i| i as usize)
+        .find(|&i| {
+            let s = &atlas.solids[i];
+            let src = atlas.sources[i];
+            let counts = atlas.places.get(src.place as usize).is_some_and(|p| {
+                place(p.arena).is_some_and(|p| matches!(p.kind, Kind::Reach | Kind::Town))
+            });
+            counts && s.material == crate::arena::Material::Snow && on_top(s, feet)
+        })
+}
+
 /// The vine a body's feet are in, if any.
 pub fn vine_at(id: ArenaId, feet: V3) -> Option<&'static Zone> {
     vines(id).iter().find(|v| v.holds(feet))
@@ -319,7 +361,7 @@ pub fn vent_at(id: ArenaId, feet: V3) -> Option<&'static Vent> {
 /// "No seam" and "no cairn", in the journey's bytes.
 pub const NONE: u8 = 0;
 
-/// **The journey**: what the valley keeps across trips. Sixteen bytes of the
+/// **The journey**: what the valley keeps as you walk it. A few bytes of the
 /// snapshot; all zero, and not hashed, outside the valley.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Journey {
@@ -330,14 +372,9 @@ pub struct Journey {
     /// The seam of this place you came in by, plus one; [`NONE`] for the
     /// place's own start.
     pub came: u8,
-    /// The seam somebody is holding, plus one, and for how long.
-    pub held: u8,
-    pub hold: u16,
-    /// A bit per fighter: has stepped out of every seam since arriving, so a
-    /// seam now counts them.
-    pub armed: u8,
-    /// Each fighter's last cairn, plus one.
-    pub cairn: [u8; MAX_PLAYERS],
+    /// Each fighter's last cairn, plus one: a box of the valley's map, by
+    /// its index there (`crate::atlas`).
+    pub cairn: [u16; MAX_PLAYERS],
 }
 
 impl Journey {
@@ -534,34 +571,23 @@ pub mod rooms {
         )],
     );
 
-    /// The Long Valley runs from the far end of the climb back down to
-    /// Hearth's wall: in at the west from the Saddle, out at the east through
-    /// the wall's gate to Hearth. The Siegeshell walks it whichever end you
-    /// come in by.
+    /// The Long Valley runs west from Hearth's wall, through the west gate
+    /// under the fifth waystone. The Siegeshell walks it toward the town.
+    /// (It ran back from the Saddle too while the valley was rooms joined by
+    /// teleports; on one map the climb runs east and this runs west, and
+    /// they cannot meet.)
     pub static LONG_VALLEY: Place = room(
         ArenaId::SIEGESHELL,
         SpeciesId::SIEGESHELL,
-        &[
-            out(
-                Zone::cm([13700, -100, -300], [14300, 600, 300]),
-                ArenaId::HEARTH,
-                2,
-                [
-                    Mark::cm(13400, -200, (0, -200)),
-                    Mark::cm(13400, 200, (0, 200)),
-                ],
-                "Hearth",
-            ),
-            out(
-                Zone::cm([-14990, -100, -400], [-14400, 600, 400]),
-                ArenaId::SADDLE,
-                4,
-                [
-                    Mark::cm(-14000, -200, (0, -200)),
-                    Mark::cm(-14000, 200, (0, 200)),
-                ],
-                "the Saddle",
-            ),
-        ],
+        &[out(
+            Zone::cm([13700, -100, -300], [14300, 600, 300]),
+            ArenaId::HEARTH,
+            2,
+            [
+                Mark::cm(13400, -200, (0, -200)),
+                Mark::cm(13400, 200, (0, 200)),
+            ],
+            "Hearth",
+        )],
     );
 }

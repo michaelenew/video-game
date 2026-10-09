@@ -58,7 +58,7 @@ const REGIONS: [Region; 2] = [
     },
 ];
 
-const SOLIDS: [Solid; 41] = [
+const SOLIDS: [Solid; 42] = [
     // The south side, with the Ashwood's notch.
     Solid::cm([-7700, 0, -2400], [-400, 4600, -2200], Rock),
     Solid::cm([400, 0, -2400], [7700, 4600, -2200], Rock),
@@ -117,6 +117,9 @@ const SOLIDS: [Solid; 41] = [
     Solid::cm([4450, 0, -250], [4550, 3900, -150], Stone),
     // The fifth waystone: the Shrine.
     Solid::cm([7050, 0, 400], [7150, 2500, 500], Stone),
+    // The bridge from the second spire's top to the Shrine, through the
+    // north wall, thirty-six metres over the floor.
+    Solid::cm([5250, 3550, 300], [5550, 3600, 3200], Rock),
 ];
 
 /// How Saddle joins the rest of the valley.
@@ -128,7 +131,7 @@ pub static PLACE: Place = Place {
     vents: &VENTS,
 };
 
-const SEAMS: [Seam; 5] = [
+const SEAMS: [Seam; 4] = [
     // Back to the Pinewood.
     Seam {
         zone: Zone::cm([-8300, 1950, -300], [-7550, 2600, 300]),
@@ -168,31 +171,19 @@ const SEAMS: [Seam; 5] = [
         waystone: None,
         says: "the Ashwood: the Veilstalker",
     },
-    // The Shrine, on the second spire's top, past the fourth waystone: the Mantis.
+    // The Shrine, over the bridge from the second spire's top, past the
+    // fourth waystone: the Mantis.
     Seam {
-        zone: Zone::cm([5250, 3550, -250], [5550, 4000, 250]),
+        zone: Zone::cm([5250, 3550, 1800], [5550, 4200, 2200]),
         to: ArenaId::MANTIS,
         at: 0,
         marks: [
-            Mark::cm(4660, -50, (4000, -50)),
-            Mark::cm(4660, 180, (4000, 180)),
+            Mark::cm(5330, 1400, (5330, 0)),
+            Mark::cm(5470, 1400, (5470, 0)),
         ],
         gate: crate::valley::tier::FOUR,
         waystone: Some(39),
         says: "the Shrine: the Mantis",
-    },
-    // The Long Valley, past the fifth waystone: the Siegeshell.
-    Seam {
-        zone: Zone::cm([7550, 2150, -300], [8300, 2800, 300]),
-        to: ArenaId::SIEGESHELL,
-        at: 1,
-        marks: [
-            Mark::cm(7000, -150, (6000, -150)),
-            Mark::cm(7000, 150, (6000, 150)),
-        ],
-        gate: crate::valley::tier::FIVE,
-        waystone: Some(40),
-        says: "the Long Valley: the Siegeshell",
     },
 ];
 

@@ -769,8 +769,9 @@ impl Report {
     /// The ground: falls, hazards underfoot, and the defended things.
     fn observe_ground(&mut self, before: &World, after: &World) {
         let g = &mut self.ground;
+        let lowest = before.terrain().lowest();
         for (was, now) in before.players.iter().zip(after.players.iter()) {
-            let paid = sim::state::landing_damage(was, now);
+            let paid = sim::state::landing_damage_over(was, now, lowest);
             if paid > 0 {
                 g.falls += 1;
                 g.fall_damage += paid;

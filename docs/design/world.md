@@ -53,6 +53,11 @@ is where it has to be made true. So:
 
 ## 2 · Later: a valley of places
 
+*2026-10-09: the valley is **one map** now -- you walk from Hearth to the
+Saddle and into every room, with no teleports and no "only one place is
+loaded" -- see [atlas.md](atlas.md). The paragraph below about loading one
+place at a time describes the earlier build.*
+
 *2026-10-08: [exploration/0006](exploration/0006_valley.md) argued for a line
 rather than a graph -- one long climb loaded in reaches -- and **the valley
 is built**, the same day, as [valley.md](valley.md): Hearth with a Ring for

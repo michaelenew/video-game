@@ -1,34 +1,36 @@
 //! **The valley, drawn** (`docs/design/valley.md`, `sim::valley`): what the
-//! simulation's seams, waystones, vines and updrafts look like, and the
-//! lookout's view from Hearth's wall.
+//! simulation's seams, waystones, vines and updrafts look like.
 //!
 //! Nothing here decides a colour -- `look::palette` does (`beacon`, `vine`,
-//! `draft`, `far_ridge`) -- and nothing here decides where anything is: every
+//! `draft`) -- and nothing here decides where anything is: every
 //! shape is read off the place's table, so a seam moved in `sim` moves here.
 //!
 //! - **A seam** is a column of light standing in its zone and a glow on its
 //!   floor: the arena's own pastel when the way is open, a cold grey while a
-//!   dark waystone holds it, brightening as somebody holds it.
-//! - **A waystone** carries a light on its top, lit or dark with its gate.
+//!   dark waystone shuts it.
+//! - **A waystone** carries a light on its top, lit or dark with its gate,
+//!   and while it is dark its doorway is a wall of the same grey.
 //! - **A vine** is a few dark-green strands down the face it climbs.
 //! - **An updraft** is a faint column of rising air from the floor to its top.
-//! - **The lookout**: from Hearth, the reaches on the sky to the east, one
-//!   ridge behind another, rising as the valley does.
+//!
+//! The lookout's painted ridges are gone: the valley is one map now, and what
+//! you see from the wall's walk is the reaches themselves.
 
 use bevy::prelude::*;
-use sim::arena::{Arena, Terrain};
+use sim::arena::{Arena, ArenaId, Terrain};
 use sim::valley::{self, Kind};
 
-use crate::arenas::Scenery;
+use crate::arenas::{Under, put};
 
-/// A seam's light: which seam, and its two colours.
+/// A seam's light: which place and which seam, and its two colours.
 #[derive(Component)]
 pub struct Beacon {
+    place: ArenaId,
     seam: usize,
     lit: [f32; 3],
     dark: [f32; 3],
-    /// What it is showing: lit, and how far through a hold, in tenths.
-    shown: Option<(bool, u8)>,
+    /// What it is showing: lit or not.
+    shown: Option<bool>,
     /// How strong this piece of it is: the column is fainter than the floor.
     strength: f32,
 }
@@ -51,16 +53,16 @@ fn linear(rgb: [f32; 3]) -> [f32; 3] {
     look::tint::linear(rgb)
 }
 
-/// Draw a place's seams, waystones, vines and updrafts, and the lookout's
-/// view if it is the town. Called by `arenas::dress` with the arena it has
-/// just drawn; everything spawned is scenery, cleared with the arena.
+/// Draw a place's seams, waystones, vines and updrafts. Called by
+/// `arenas::draw_place` with the place it is drawing; everything spawned goes
+/// where the place's other pieces go.
 pub fn draw(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     arena: &'static Arena,
     palette: &look::Palette,
-    sky: &look::Sky,
+    under: Under,
 ) {
     let Some(place) = valley::place(arena.id) else {
         return;
@@ -74,20 +76,24 @@ pub fn draw(
         let (w, d) = (fx(z.max.x.sub(z.min.x)), fx(z.max.z.sub(z.min.z)));
         let (cx, cz) = (fx(mid.x), fx(mid.z));
         // The glow on its floor.
-        commands.spawn((
-            Mesh3d(meshes.add(Plane3d::default().mesh().size(w, d))),
-            MeshMaterial3d(materials.add(translucent(lit, 0.3))),
-            Transform::from_xyz(cx, floor + 0.04, cz),
-            bevy::pbr::NotShadowCaster,
-            Beacon {
-                seam: i,
-                lit,
-                dark,
-                shown: None,
-                strength: 0.32,
-            },
-            Scenery,
-        ));
+        put(
+            commands,
+            under,
+            (
+                Mesh3d(meshes.add(Plane3d::default().mesh().size(w, d))),
+                MeshMaterial3d(materials.add(translucent(lit, 0.3))),
+                Transform::from_xyz(cx, floor + 0.04, cz),
+                bevy::pbr::NotShadowCaster,
+                Beacon {
+                    place: arena.id,
+                    seam: i,
+                    lit,
+                    dark,
+                    shown: None,
+                    strength: 0.32,
+                },
+            ),
+        );
         // The column of light standing in it -- but not in a room, whose way
         // out is where the hunters arrive: a column there is a wall of light
         // between the camera and the creature for the first second of every
@@ -95,20 +101,24 @@ pub fn draw(
         let r = (w.min(d) * 0.32).max(0.6);
         let room = matches!(place.kind, Kind::Room(_));
         if !room {
-            commands.spawn((
-                Mesh3d(meshes.add(Cylinder::new(r, 7.0).mesh().resolution(20).build())),
-                MeshMaterial3d(materials.add(translucent(lit, 0.12))),
-                Transform::from_xyz(cx, floor + 3.5, cz),
-                bevy::pbr::NotShadowCaster,
-                Beacon {
-                    seam: i,
-                    lit,
-                    dark,
-                    shown: None,
-                    strength: 0.12,
-                },
-                Scenery,
-            ));
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(Cylinder::new(r, 7.0).mesh().resolution(20).build())),
+                    MeshMaterial3d(materials.add(translucent(lit, 0.12))),
+                    Transform::from_xyz(cx, floor + 3.5, cz),
+                    bevy::pbr::NotShadowCaster,
+                    Beacon {
+                        place: arena.id,
+                        seam: i,
+                        lit,
+                        dark,
+                        shown: None,
+                        strength: 0.12,
+                    },
+                ),
+            );
         }
         // The waystone's light, on its top.
         if let Some(k) = seam.waystone {
@@ -118,20 +128,24 @@ pub fn draw(
                 fx(s.max.y) + 0.35,
                 (fx(s.min.z) + fx(s.max.z)) * 0.5,
             );
-            commands.spawn((
-                Mesh3d(meshes.add(Sphere::new(0.38).mesh().ico(3).unwrap())),
-                MeshMaterial3d(materials.add(translucent(lit, 0.95))),
-                Transform::from_translation(top),
-                bevy::pbr::NotShadowCaster,
-                Beacon {
-                    seam: i,
-                    lit,
-                    dark,
-                    shown: None,
-                    strength: 0.95,
-                },
-                Scenery,
-            ));
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(Sphere::new(0.38).mesh().ico(3).unwrap())),
+                    MeshMaterial3d(materials.add(translucent(lit, 0.95))),
+                    Transform::from_translation(top),
+                    bevy::pbr::NotShadowCaster,
+                    Beacon {
+                        place: arena.id,
+                        seam: i,
+                        lit,
+                        dark,
+                        shown: None,
+                        strength: 0.95,
+                    },
+                ),
+            );
         }
     }
 
@@ -184,12 +198,15 @@ pub fn draw(
                 (lo.x + (hi.x - lo.x) * t, face)
             };
             let sway = 0.85 + 0.3 * ((k * 7 % 5) as f32 / 5.0);
-            commands.spawn((
-                Mesh3d(meshes.add(Cuboid::new(0.09, height * sway, 0.09))),
-                MeshMaterial3d(vine.clone()),
-                Transform::from_xyz(x, base + height * sway * 0.5, z),
-                Scenery,
-            ));
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(Cuboid::new(0.09, height * sway, 0.09))),
+                    MeshMaterial3d(vine.clone()),
+                    Transform::from_xyz(x, base + height * sway * 0.5, z),
+                ),
+            );
         }
     }
 
@@ -200,101 +217,31 @@ pub fn draw(
         let floor = fx(ground.floor_below(sim::V3::new(v.at.0, v.top, v.at.1)));
         let top = fx(v.top);
         let h = (top - floor).max(1.0);
-        commands.spawn((
-            Mesh3d(meshes.add(Cylinder::new(fx(v.radius), h).mesh().resolution(24).build())),
-            MeshMaterial3d(materials.add(translucent(draft, 0.10))),
-            Transform::from_xyz(x, floor + h * 0.5, z),
-            bevy::pbr::NotShadowCaster,
-            Scenery,
-        ));
-        commands.spawn((
-            Mesh3d(meshes.add(Annulus::new(fx(v.radius) * 0.8, fx(v.radius)))),
-            MeshMaterial3d(materials.add(translucent(draft, 0.35))),
-            Transform::from_xyz(x, floor + 0.05, z)
-                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-            bevy::pbr::NotShadowCaster,
-            Scenery,
-        ));
-    }
-
-    if place.kind == Kind::Town {
-        lookout(commands, meshes, materials, arena, palette, sky);
-    }
-}
-
-/// **The lookout's view**: the reaches on the sky east of the town, one ridge
-/// behind another and each higher than the last, as the valley climbs --
-/// what you see from the wall's walk. Painted, not built: nothing out there
-/// is in the arena, so it is far past the wall and nothing reaches it.
-fn lookout(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    arena: &Arena,
-    palette: &look::Palette,
-    sky: &look::Sky,
-) {
-    // From the town's east wall, out along the road. The rises are the
-    // reaches' own: twenty, fifty, ninety, a hundred and twenty, a hundred
-    // and sixty metres -- squashed, since a ridge that far off is a line.
-    const RISES: [f32; 5] = [20.0, 50.0, 90.0, 120.0, 160.0];
-    let east = fx(arena.bounds.hi_x);
-    for (k, rise) in RISES.iter().enumerate() {
-        let t = k as f32 / (RISES.len() - 1) as f32;
-        let x = east + 140.0 + 120.0 * k as f32;
-        let rgb = look::tint::linear(look::palette::far_ridge(
-            sky.horizon,
-            palette.of(sim::arena::Material::Rock),
-            t,
-        ));
-        let mesh = ridge(rise * 0.6 + 10.0, 900.0, k as u32);
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::linear_rgb(rgb[0], rgb[1], rgb[2]),
-                unlit: true,
-                cull_mode: None,
-                ..default()
-            })),
-            Transform::from_xyz(x, -2.0, 0.0),
-            bevy::pbr::NotShadowCaster,
-            Scenery,
-        ));
+        put(
+            commands,
+            under,
+            (
+                Mesh3d(meshes.add(Cylinder::new(fx(v.radius), h).mesh().resolution(24).build())),
+                MeshMaterial3d(materials.add(translucent(draft, 0.10))),
+                Transform::from_xyz(x, floor + h * 0.5, z),
+                bevy::pbr::NotShadowCaster,
+            ),
+        );
+        put(
+            commands,
+            under,
+            (
+                Mesh3d(meshes.add(Annulus::new(fx(v.radius) * 0.8, fx(v.radius)))),
+                MeshMaterial3d(materials.add(translucent(draft, 0.35))),
+                Transform::from_xyz(x, floor + 0.05, z)
+                    .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+                bevy::pbr::NotShadowCaster,
+            ),
+        );
     }
 }
 
-/// A ridge's silhouette: a wall facing west, `width` across, its top line
-/// about `height` with a few peaks and saddles by a hash of `seed`.
-fn ridge(height: f32, width: f32, seed: u32) -> Mesh {
-    use bevy::render::mesh::{Indices, PrimitiveTopology};
-    use bevy::render::render_asset::RenderAssetUsages;
-    let n = 64;
-    let mut positions = Vec::with_capacity((n + 1) * 2);
-    for i in 0..=n {
-        let z = -width * 0.5 + width * i as f32 / n as f32;
-        let a = crate::shapes::hash01(seed, i as u32, 3);
-        let b = crate::shapes::hash01(seed, i as u32 / 4, 5);
-        let top = height * (0.7 + 0.25 * b + 0.12 * a);
-        positions.push([0.0, 0.0, z]);
-        positions.push([0.0, top, z]);
-    }
-    let mut indices = Vec::with_capacity(n * 6);
-    for i in 0..n as u32 {
-        let (a, b, c, d) = (2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 3);
-        indices.extend_from_slice(&[a, c, b, b, c, d]);
-    }
-    let normals = vec![[-1.0f32, 0.0, 0.0]; positions.len()];
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_indices(Indices::U32(indices))
-}
-
-/// **Each frame**: a seam's light shows its gate -- lit or dark -- and
-/// brightens while somebody holds it, toward going.
+/// **Each frame**: a seam's light shows its gate -- lit or dark.
 pub fn update(
     sim: Res<crate::Sim>,
     mut beacons: Query<(
@@ -305,10 +252,6 @@ pub fn update(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let w = &sim.cur;
-    let Some(place) = valley::place(w.arena) else {
-        return;
-    };
-    let hold = sim::tuning::seam_hold().max(1) as u32;
     for (mut b, material, mut shown) in &mut beacons {
         // A room is a creature's own arena too, and a hunt picked from the
         // menu is not on a journey: its exit leads nowhere, so nothing marks
@@ -318,23 +261,17 @@ pub fn update(
         } else {
             Visibility::Hidden
         });
-        let Some(seam) = place.seams.get(b.seam) else {
+        let Some(seam) = valley::place(b.place).and_then(|p| p.seams.get(b.seam)) else {
             continue;
         };
         let lit = seam.gate.lit(w.valley.beaten);
-        let held = if w.valley.held as usize == b.seam + 1 {
-            (w.valley.hold as u32 * 10 / hold).min(10) as u8
-        } else {
-            0
-        };
-        if b.shown == Some((lit, held)) {
+        if b.shown == Some(lit) {
             continue;
         }
-        b.shown = Some((lit, held));
+        b.shown = Some(lit);
         let rgb = if lit { b.lit } else { b.dark };
-        let alpha = (b.strength * (1.0 + 1.5 * held as f32 / 10.0)).min(1.0);
         if let Some(m) = materials.get_mut(&material.0) {
-            m.base_color = Color::linear_rgba(rgb[0], rgb[1], rgb[2], alpha);
+            m.base_color = Color::linear_rgba(rgb[0], rgb[1], rgb[2], b.strength);
         }
     }
 }
@@ -391,18 +328,7 @@ pub fn text(w: &sim::World) -> String {
                     seam.gate.count(w.valley.beaten)
                 ));
             }
-            _ => {
-                let hold = sim::tuning::seam_hold() as f32 / sim::TICK_HZ as f32;
-                let held = w.valley.hold as f32 / sim::TICK_HZ as f32;
-                if seats > 1 {
-                    out.push_str(&format!(
-                        "To {} -- both of you in, or hold it ({:.1} of {:.1} s)",
-                        seam.says, held, hold
-                    ));
-                } else {
-                    out.push_str(&format!("To {} -- {:.1} of {:.1} s", seam.says, held, hold));
-                }
-            }
+            _ => out.push_str(&format!("On to {}", seam.says)),
         }
     }
     out
@@ -433,13 +359,24 @@ pub fn setup_text(mut commands: Commands) {
     ));
 }
 
-/// Rewritten only when what it says changes.
+/// Rewritten only when what it says changes. In dev mode a second line says
+/// how much of the map is loaded (`crate::stream`).
 pub fn update_text(
     sim: Res<crate::Sim>,
+    stream: Res<crate::stream::Stream>,
     mut text: Query<&mut Text, With<ValleyText>>,
     mut shown: Local<String>,
 ) {
-    let now = self::text(&sim.cur);
+    let mut now = self::text(&sim.cur);
+    if crate::dev_mode() && sim.cur.valley.on {
+        let (places, boxes) = stream.loaded();
+        let atlas = sim::atlas::valley();
+        now.push_str(&format!(
+            "\nloaded: {places} of {} places, {boxes} of {} boxes",
+            atlas.places.len(),
+            atlas.solids.len()
+        ));
+    }
     if *shown == now {
         return;
     }
