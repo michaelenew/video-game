@@ -342,6 +342,7 @@ pub fn dress(
             &look,
             &white,
             Under::Scenery,
+            true,
         );
     }
 }
@@ -652,7 +653,47 @@ pub fn draw_solid(
     look: &PlaceLook,
     white: &Handle<StandardMaterial>,
     under: Under,
+    near: bool,
 ) -> Entity {
+    let Some((mesh, relief, at)) = solid_mesh(solid, offset, hangs, look, near) else {
+        return put(
+            commands,
+            under,
+            (Transform::default(), Visibility::default()),
+        );
+    };
+    let e = put(
+        commands,
+        under,
+        (
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
+            Transform::from_translation(at + offset),
+        ),
+    );
+    if let Some(relief) = relief {
+        commands.spawn((
+            Mesh3d(meshes.add(relief)),
+            MeshMaterial3d(white.clone()),
+            Transform::default(),
+            bevy::pbr::NotShadowCaster,
+            ChildOf(e),
+        ));
+    }
+    e
+}
+
+/// **What a box is drawn as**: its mesh, in its own coordinates, and where
+/// its middle is relative to `offset` -- or nothing, for a box the town
+/// draws whole; and its relief that casts no shadow, as
+/// [`crate::forms::build_parts`] has it, as does `near`.
+pub fn solid_mesh(
+    solid: &sim::arena::Solid,
+    offset: Vec3,
+    hangs: bool,
+    look: &PlaceLook,
+    near: bool,
+) -> Option<(Mesh, Option<Mesh>, Vec3)> {
     let (palette, brush) = (&look.palette, &look.brush);
     let min = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z)) - offset;
     let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z)) - offset;
@@ -660,31 +701,20 @@ pub fn draw_solid(
     let at = (min + max) * 0.5;
     // Part of something the town draws whole: drawn there.
     if crate::town::whole(look.id, min, max) {
-        return put(
-            commands,
-            under,
-            (Transform::default(), Visibility::default()),
-        );
+        return None;
     }
     // **A form**, where the box is one (`crate::forms`): a wall in courses,
     // a log, a column, an island. Built in the box's own coordinates.
     let form = crate::forms::form_of(look.id, solid, hangs);
-    if let Some(mesh) = crate::forms::build(
+    if let Some((mesh, relief)) = crate::forms::build_parts(
         form,
         size,
         crate::forms::seed_of(at, size),
         solid.material,
         palette,
+        near,
     ) {
-        return put(
-            commands,
-            under,
-            (
-                Mesh3d(meshes.add(mesh)),
-                MeshMaterial3d(white.clone()),
-                Transform::from_translation(at + offset),
-            ),
-        );
+        return Some((mesh, relief, at));
     }
     // The form follows the material (`docs/design/forms.md`): bare rock
     // is a rock, soft ground is rounded, dressed stone and timber keep
@@ -757,15 +787,7 @@ pub fn draw_solid(
             Material::Water => crate::shapes::boxy(size, at, rgb, brush),
         }
     };
-    put(
-        commands,
-        under,
-        (
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(white.clone()),
-            Transform::from_translation(at + offset),
-        ),
-    )
+    Some((mesh, None, at))
 }
 
 /// How much floor one scattered thing stands for, in square metres.

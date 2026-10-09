@@ -88,6 +88,21 @@ impl Kit {
     /// A box between two corners, its six faces flat. `top` colours its top
     /// face, `rgb` the rest.
     pub fn cube(&mut self, lo: Vec3, hi: Vec3, rgb: [f32; 3], top: [f32; 3]) {
+        self.cube_against(lo, hi, rgb, top, Vec3::ZERO);
+    }
+
+    /// [`Kit::cube`] laid **against** something on its `against` side -- a
+    /// block proud of a wall's core, a flag on its top -- so that face, which
+    /// nothing can ever see, is left out. A sixth of every block's triangles,
+    /// in a form made of thousands of blocks, drawn six times a frame.
+    pub fn cube_against(
+        &mut self,
+        lo: Vec3,
+        hi: Vec3,
+        rgb: [f32; 3],
+        top: [f32; 3],
+        against: Vec3,
+    ) {
         let c = |x: f32, y: f32, z: f32| {
             Vec3::new(
                 if x > 0.0 { hi.x } else { lo.x },
@@ -111,6 +126,9 @@ impl Kit {
                     .collect();
                 let mut out = Vec3::ZERO;
                 out[axis] = side;
+                if out.dot(against) > 0.5 {
+                    continue;
+                }
                 let col = if axis == 1 && side > 0.0 { top } else { rgb };
                 let _ = m;
                 self.poly(&pts, out, col);
@@ -372,10 +390,29 @@ pub fn seed_of(centre: Vec3, size: Vec3) -> u32 {
 
 /// **The form, built**: a mesh in the box's own coordinates, or `None` for
 /// [`Form::Plain`], which `arenas::draw_solid` draws as it always has.
-pub fn build(form: Form, size: Vec3, seed: u32, material: Material, p: &Palette) -> Option<Mesh> {
+///
+/// `near` is how closely it will be seen: a form far from the camera keeps
+/// its colours, block by block, and loses relief nobody could see -- a block
+/// five centimetres proud of its wall is under a pixel past fifty metres
+/// (`crate::stream` decides which, by distance).
+///
+/// The second mesh, if there is one, is **relief that casts no shadow**:
+/// the blocks of a wall, standing a few centimetres proud of a core that
+/// casts the wall's shadow as well as they would. Ten triangles a block in
+/// four shadow cascades was most of what the shadow passes drew in the
+/// town; the core is twelve.
+pub fn build_parts(
+    form: Form,
+    size: Vec3,
+    seed: u32,
+    material: Material,
+    p: &Palette,
+    near: bool,
+) -> Option<(Mesh, Option<Mesh>)> {
     let mut kit = Kit::new();
+    let mut relief = Kit::new();
     match form {
-        Form::Masonry => masonry(&mut kit, size, seed, p),
+        Form::Masonry => masonry(&mut kit, &mut relief, size, seed, p, near),
         Form::DryStone => dry_stone(&mut kit, size, seed, p),
         Form::Cordwood => cordwood(&mut kit, size, seed, p),
         Form::Log => log(&mut kit, size, seed, p),
@@ -388,8 +425,10 @@ pub fn build(form: Form, size: Vec3, seed: u32, material: Material, p: &Palette)
         Form::Deck => deck(&mut kit, size, seed, p),
         Form::Plain => return None,
     }
-    kit.settle(-size.y * 0.5, 0.6_f32.min(size.y * 0.5), 0.3);
-    Some(kit.build())
+    let (floor, reach) = (-size.y * 0.5, 0.6_f32.min(size.y * 0.5));
+    kit.settle(floor, reach, 0.3);
+    relief.settle(floor, reach, 0.3);
+    Some((kit.build(), (!relief.is_empty()).then(|| relief.build())))
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +449,11 @@ fn faces(size: Vec3) -> [(Vec3, Vec3, f32); 4] {
 /// **Dressed stone**: a core of mortar, every upright face laid in courses
 /// of blocks a little proud of it, the top flagged. Blocks grow with the
 /// face, so a wall of fifty metres is not ten thousand stones.
-fn masonry(kit: &mut Kit, size: Vec3, seed: u32, p: &Palette) {
+///
+/// Seen from afar (`near` false) each block is only its face, flush with the
+/// box: the same courses in the same colours, two triangles a block rather
+/// than ten.
+fn masonry(kit: &mut Kit, relief: &mut Kit, size: Vec3, seed: u32, p: &Palette, near: bool) {
     let half = size * 0.5;
     let skin = 0.05f32.min(size.min_element() * 0.2);
     let stone = p.of(Material::Stone);
@@ -465,7 +508,23 @@ fn masonry(kit: &mut Kit, size: Vec3, seed: u32, p: &Palette) {
                 } else {
                     col
                 };
-                kit.cube(lo.min(hi), lo.max(hi), col, top_col);
+                if near {
+                    relief.cube_against(lo.min(hi), lo.max(hi), col, top_col, -out);
+                } else {
+                    let (y0, y1) = (lo.y, hi.y);
+                    let face = out * depth;
+                    let (a0, a1) = (along * lo_a, along * b);
+                    relief.poly(
+                        &[
+                            face + a0 + Vec3::Y * y0,
+                            face + a1 + Vec3::Y * y0,
+                            face + a1 + Vec3::Y * y1,
+                            face + a0 + Vec3::Y * y1,
+                        ],
+                        out,
+                        col,
+                    );
+                }
                 a = b;
                 k += 1;
             }
@@ -491,12 +550,24 @@ fn masonry(kit: &mut Kit, size: Vec3, seed: u32, p: &Palette) {
             } else {
                 col
             };
-            kit.cube(
+            let (lo, hi) = (
                 Vec3::new(x0 + joint * 0.5, half.y - skin, z0 + joint * 0.5),
                 Vec3::new(x1 - joint * 0.5, half.y, z1 - joint * 0.5),
-                col,
-                col,
             );
+            if near {
+                relief.cube_against(lo, hi, col, col, Vec3::NEG_Y);
+            } else {
+                relief.poly(
+                    &[
+                        Vec3::new(lo.x, hi.y, lo.z),
+                        Vec3::new(hi.x, hi.y, lo.z),
+                        Vec3::new(hi.x, hi.y, hi.z),
+                        Vec3::new(lo.x, hi.y, hi.z),
+                    ],
+                    Vec3::Y,
+                    col,
+                );
+            }
         }
     }
 }
@@ -1174,22 +1245,29 @@ mod tests {
             Vec3::new(36.0, 3.0, 1.5),
         ];
         for form in forms {
-            for size in sizes {
-                let mesh = build(form, size, 7, Material::Grass, &p).expect("a form");
-                let ps = mesh
-                    .attribute(Mesh::ATTRIBUTE_POSITION)
-                    .and_then(|a| a.as_float3())
-                    .expect("positions");
+            for (size, near) in sizes.into_iter().flat_map(|s| [(s, true), (s, false)]) {
+                let (body, relief) =
+                    build_parts(form, size, 7, Material::Grass, &p, near).expect("a form");
+                let ps: Vec<[f32; 3]> = [Some(body), relief]
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|mesh| {
+                        mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+                            .and_then(|a| a.as_float3())
+                            .expect("positions")
+                            .to_vec()
+                    })
+                    .collect();
                 let half = size * 0.5 + Vec3::splat(1e-3);
                 for q in ps {
-                    let v = Vec3::from(*q);
+                    let v = Vec3::from(q);
                     let roots = form == Form::Island && v.y < 0.0;
                     if roots {
                         continue;
                     }
                     assert!(
                         v.x.abs() <= half.x && v.y.abs() <= half.y && v.z.abs() <= half.z,
-                        "{form:?} at {size}: a vertex at {v} is outside its box"
+                        "{form:?} at {size} (near: {near}): a vertex at {v} is outside its box"
                     );
                 }
             }

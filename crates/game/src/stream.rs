@@ -27,6 +27,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use sim::arena::ArenaId;
 use sim::atlas::{self, Atlas, EXTRA};
@@ -53,6 +54,23 @@ const RESTREAM: f32 = 6.0;
 const PLACES_PER_FRAME: usize = 1;
 const BOXES_PER_FRAME: usize = 48;
 
+/// **And how long**: boxes and tiles stop being built once this much of the
+/// frame has gone on them, whatever the counts above allow -- at least one
+/// of each a frame, so the world always arrives. A tile of land in full
+/// detail is half a millisecond and a wall in full relief more; twenty-four
+/// tiles at once, on the frame the camera comes within reach of them, was a
+/// dropped frame every few steps.
+const BUILD_BUDGET_MS: f32 = 3.0;
+
+/// **How close a box is drawn in its full relief** (`forms::build`'s
+/// `near`), flat, to the nearest edge of its footprint; past it, plus
+/// [`NEAR_SLACK`] before a near box goes back, the same colours with the
+/// relief flattened. Five centimetres of a block proud of its wall is half a
+/// pixel here at the window's width, and a stone wall in full relief is ten
+/// triangles a block, drawn into four shadow cascades.
+const NEAR: f32 = 60.0;
+const NEAR_SLACK: f32 = 12.0;
+
 /// What is loaded, and where it hangs.
 #[derive(Resource, Default)]
 pub struct Stream {
@@ -61,8 +79,9 @@ pub struct Stream {
     origin: Option<Vec3>,
     /// Places by their index on the map.
     places: HashMap<usize, Entity>,
-    /// Boxes by their index on the map.
-    solids: HashMap<u32, Entity>,
+    /// Boxes by their index on the map, and -- for a box drawn finer close
+    /// up than far off -- whether it is drawn near.
+    solids: HashMap<u32, (Entity, Option<bool>)>,
     /// Each place's look, worked out once.
     looks: HashMap<ArenaId, PlaceLook>,
     white: Option<Handle<StandardMaterial>>,
@@ -210,6 +229,7 @@ pub fn stream(
         .reach
         .clamp(REACH.0, REACH.1);
 
+    let started = Instant::now();
     // Places: their floors and everything on them. Dropped at once; built
     // nearest first, a few a frame.
     let mut wanted: Vec<(f32, usize)> = Vec::new();
@@ -263,13 +283,28 @@ pub fn stream(
         .filter(|i| !keep.contains(i))
         .collect();
     for i in gone {
-        if let Some(e) = st.solids.remove(&i) {
+        if let Some((e, _)) = st.solids.remove(&i) {
             commands.entity(e).despawn();
         }
     }
+    // A box's flat distance from the camera, to the nearest edge of it.
+    let edge = |i: u32| {
+        let s = &atlas.solids[i as usize];
+        let (lo, hi) = (v3(s.min), v3(s.max));
+        let dx = (lo.x - at.x).max(at.x - hi.x).max(0.0);
+        let dz = (lo.z - at.z).max(at.z - hi.z).max(0.0);
+        (dx * dx + dz * dz).sqrt()
+    };
+    // What is wanted that is not loaded, and what is loaded at the wrong
+    // fineness for where the camera now is.
     let mut new: Vec<u32> = want
         .into_iter()
-        .filter(|i| !st.solids.contains_key(i))
+        .filter(|i| match st.solids.get(i) {
+            None => true,
+            Some((_, None)) => false,
+            Some((_, Some(true))) => edge(*i) > NEAR + NEAR_SLACK,
+            Some((_, Some(false))) => edge(*i) <= NEAR,
+        })
         .collect();
     // Nearest first, by the middle of the box; ties in map order.
     let middle = |i: u32| {
@@ -280,7 +315,12 @@ pub fn stream(
     new.sort_by(|a, b| middle(*a).total_cmp(&middle(*b)).then(a.cmp(b)));
     behind |= new.len() > BOXES_PER_FRAME;
     new.truncate(BOXES_PER_FRAME);
-    for i in new {
+    let spent = || started.elapsed().as_secs_f32() * 1000.0;
+    for (n, i) in new.into_iter().enumerate() {
+        if n > 0 && spent() > BUILD_BUDGET_MS {
+            behind = true;
+            break;
+        }
         let s = &atlas.solids[i as usize];
         let src = atlas.sources[i as usize];
         // A box is coloured as its own place colours it, and a box of no
@@ -318,7 +358,7 @@ pub fn stream(
                 &palette,
                 root,
             );
-            st.solids.insert(i, e);
+            st.solids.insert(i, (e, None));
             continue;
         }
         let hangs = {
@@ -329,6 +369,10 @@ pub fn stream(
             );
             s.min.y.raw() > atlas.relief_at(x, z).raw()
         };
+        // Only a form that is drawn differently near and far is ever
+        // rebuilt for it.
+        let lod = crate::forms::form_of(look.id, s, hangs) == crate::forms::Form::Masonry;
+        let near = edge(i) <= NEAR;
         let e = draw_solid(
             &mut commands,
             &mut meshes,
@@ -338,8 +382,11 @@ pub fn stream(
             &look,
             &white,
             Under::Parent(root),
+            near || !lod,
         );
-        st.solids.insert(i, e);
+        if let Some((old, _)) = st.solids.insert(i, (e, lod.then_some(near))) {
+            commands.entity(old).despawn();
+        }
     }
     // The land: every tile within reach, drawn as finely as its distance
     // asks, nearest first.
@@ -352,6 +399,7 @@ pub fn stream(
         root,
         at,
         reach,
+        &started,
     );
 
     // More to build: work the set out again next frame rather than waiting
@@ -418,6 +466,7 @@ fn land_tiles(
     root: Entity,
     at: Vec3,
     reach: f32,
+    started: &Instant,
 ) -> bool {
     if atlas.land.is_none() {
         return false;
@@ -464,7 +513,7 @@ fn land_tiles(
         }
     }
     work.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let behind = work.len() > TILES_PER_FRAME;
+    let mut behind = work.len() > TILES_PER_FRAME;
     let ground = st
         .ground
         .get_or_insert_with(|| {
@@ -476,7 +525,11 @@ fn land_tiles(
             })
         })
         .clone();
-    for (_, t, cells) in work.into_iter().take(TILES_PER_FRAME) {
+    for (n, (_, t, cells)) in work.into_iter().take(TILES_PER_FRAME).enumerate() {
+        if n > 0 && started.elapsed().as_secs_f32() * 1000.0 > BUILD_BUDGET_MS {
+            behind = true;
+            break;
+        }
         let (mesh, water) = crate::land::tile_mesh(atlas, t.0, t.1, cells, &mut st.palettes);
         let corner = Vec3::new(t.0 as f32 * size, 0.0, t.1 as f32 * size);
         let e = commands
