@@ -17,6 +17,7 @@
 //! two opposite corners are forty metres apart -- so the other two corners
 //! are covered by the platforms and by the wall's own perch.
 
+use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Solid, Spawns};
 use crate::species::SpeciesId;
 
@@ -48,6 +49,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &[],
+    rim: Some(Rim::new(
+        (-1500, 1500),
+        (-1500, 1500),
+        [150, 150, 150, 150],
+        600,
+    )),
 };
 
 /// The standing stones, by their middles in centimetres.

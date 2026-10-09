@@ -20,6 +20,7 @@
 //! the arena puts them; they stand in the open, away from the corners, so a
 //! corner beside one is a choice and not a given (§3).
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Solid, Spawns};
 use crate::objective::Site;
 use crate::species::SpeciesId;
@@ -51,6 +52,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &SITES,
+    rim: Some(Rim::new(
+        (-1800, 1800),
+        (-1800, 1800),
+        [300, 300, 300, 300],
+        600,
+    )),
 };
 
 /// The trunks, by their middles in centimetres: spread so that wherever the

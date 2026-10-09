@@ -16,6 +16,7 @@
 //! road along it a cart is escorted down, and the herd's migration crossing
 //! the road in waves (`--hunt hornback --arena crossing`).
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Solid, Spawns};
 use crate::objective::Site;
 use crate::species::SpeciesId;
@@ -47,6 +48,7 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &[],
+    rim: Some(Rim::new((-2400, 2400), (-2000, 2000), [0, 150, 0, 0], 700)),
 };
 
 const REGIONS: [Region; 4] = [
@@ -71,7 +73,7 @@ const REGIONS: [Region; 4] = [
     },
 ];
 
-const SOLIDS: [Solid; 10] = [
+const SOLIDS: [Solid; 6] = [
     // The bank along the north side: a metre and a half high, four deep.
     Solid::cm([-1600, 0, 1600], [1600, 150, 2000], Rock),
     // Its ramps at both ends: two steps a hop each, a metre and half a metre.
@@ -79,12 +81,6 @@ const SOLIDS: [Solid; 10] = [
     Solid::cm([-2400, 0, 1600], [-2000, 50, 2000], Rock),
     Solid::cm([1600, 0, 1600], [2000, 100, 2000], Rock),
     Solid::cm([2000, 0, 1600], [2400, 50, 2000], Rock),
-    // The edge: a slope up into thicket, six metres -- nobody hops it, and
-    // the charge pulls up short of it.
-    Solid::cm([-2600, 0, -2200], [-2400, 600, 2200], Grass),
-    Solid::cm([2400, 0, -2200], [2600, 600, 2200], Grass),
-    Solid::cm([-2600, 0, -2200], [2600, 600, -2000], Grass),
-    Solid::cm([-2600, 0, 2000], [2600, 600, 2200], Grass),
     // A fallen trunk by the ford: a low step, not a wall.
     Solid::cm([1500, 0, -1700], [1900, 40, -1550], Wood),
 ];
@@ -116,6 +112,7 @@ pub static CROSSING: Arena = Arena {
         }),
     },
     sites: &CROSSING_SITES,
+    rim: Some(Rim::new((-4000, 4000), (-1800, 1800), [0, 0, 0, 0], 700)),
 };
 
 /// The road: the cart starts at its west end and wins at its east.
@@ -139,9 +136,5 @@ const CROSSING_REGIONS: [Region; 2] = [
     },
 ];
 
-const CROSSING_SOLIDS: [Solid; 4] = [
-    Solid::cm([-4200, 0, -2000], [-4000, 600, 2000], Grass),
-    Solid::cm([4000, 0, -2000], [4200, 600, 2000], Grass),
-    Solid::cm([-4200, 0, -2000], [4200, 600, -1800], Grass),
-    Solid::cm([-4200, 0, 1800], [4200, 600, 2000], Grass),
-];
+// The crossing's edge is its rim: a bank up into thicket.
+const CROSSING_SOLIDS: [Solid; 0] = [];

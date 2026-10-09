@@ -31,6 +31,7 @@ replaced.
 | `solids` | Axis-aligned boxes, at most `MAX_SOLIDS` (64) for an arena fought on alone; no cap for a place that is only ever on a map ([atlas.md](atlas.md)). Every face stops a body, every top is standable however high, and each has a `Material` for its top. |
 | `spawns` | Two versus marks; and the hunt's marks (two hunters, a creature per slot), or `None` for the species' own spawn distances along x, which is how the proving ground places a hunt. A `Mark` is a point and a facing, written as "stand here, face there". |
 | `sites` | Where a fight's defended things stand (bestiary P7): a route of points and a box's size each -- a wall's place, a cart's road. What stands there is the species' ([hazards.md](hazards.md) §5). Empty for most arenas; the range has a gate and a road. |
+| `rim` | **The ground behind its edge** (`arena/rim.rs`, §1a): a bank too steep to climb, rising off the outside of its walls, and hills past it. `None` keeps the floor going on flat forever (the dev arenas, and the courses, whose floor is a drop). |
 
 **Materials** are `Ground`, `Grass`, `Rock`, `Stone`, `Sand`, `Snow`, `Ash`,
 `Peat`, `Water`, `Wood`. The simulation can ask `Arena::material_under(pos)`
@@ -57,6 +58,44 @@ walls, the aiming ray (`aim::Scene::arena`), the camera (`Surroundings::arena`)
 and the renderer. The hash writes the arena only when it is not the proving
 ground, so a fight there hashes as it always did.
 
+## 1a · A fight's edge is its rim (2026-10-09)
+
+The edge of a fight used to be a box: a six-metre hedge behind the Commons'
+low walls, a thicket round the meadow, cliffs either side of the Long
+Valley -- a box on a plane that went on forever, saying *the world ends
+here*. Since the valley became land ([atlas.md](atlas.md) §"The land"), a
+fight's edge is land too: **`Arena::rim`**, a rectangle (the outside faces of
+its walls) and the height of the ground at the foot of each side (the top of
+the wall there, so stepping off a wall's top outward is stepping onto the
+bank, never into a crack between them).
+
+- **Inside the rectangle nothing moved.** The floor is the arena's own relief,
+  `is_flat_at` is what it was, so every flat fight plays bit for bit as it did
+  (`tests/rim.rs`, `inside_a_rim_the_floor_is_what_it_was`).
+- **Outside, the ground is the rim's**: a bank as steep as three in one at its
+  foot, rounding over at a crest seven to ten tenths of `bank` high (it
+  wanders, so the skyline does), then the valley's own foothills and
+  mountainsides (`land::rise`), with noise grown from nothing at the foot.
+  **Land too steep to walk up is a wall** (`tuning::terrain_steepest`), so the
+  bank is the edge: nobody walks up it, and a jump onto it slides back
+  (`a_rims_bank_is_too_steep_to_climb_below_its_crest`,
+  `nobody_walks_or_jumps_out_of_a_fight`).
+- **The aiming ray** walks the floor wherever it may meet the bank, and takes
+  the plane exactly wherever it cannot (`aim::floor_hit`).
+- **The proving ground's rim is forty metres out**: a walled yard in a meadow
+  ringed by hills. It is the arena every measuring test stands in, and a bank
+  just behind its walls caught the level aim several of them take at a wall.
+- **On the valley's map** a room's rim is the land's (`land::Pad::rim`): held
+  up over the valley round it for its bank and a little past its crest, then
+  falling away; cut only by its own path, within twenty metres of its own
+  door (`rooms_on_the_map_are_closed_but_for_their_door`). The Cliffs' rim is
+  a drop (`Rim::falling`): to the simulation a rim like any other, drawn
+  falling away past its crest, and on the map the ravine round them.
+
+Removed for it: the Commons' hedge, the meadow's and the crossing's thickets,
+the Long Valley's cliffs. The low walls stay: they are what a fight puts its
+back to.
+
 ## 2 · The arenas there are
 
 - **The proving ground** (`arena/proving_ground.rs`): the first arena, ported
@@ -73,13 +112,14 @@ ground, so a fight there hashes as it always did.
   worst case.
 - **The Commons** (`arena/gnawers.rs`, 2026-10-01): the Gnawers' den, the first
   creature arena. A 36 × 30 m meadow, a 3 m bank along the north with the den a
-  notch in it, low walls and a six-metre hedge round the rest, a fallen trunk
-  the pack scrambles and two boulders too tall to climb. See
+  notch in it, low walls round the rest with the rim's bank behind them (a
+  six-metre hedge until 2026-10-09), a fallen trunk the pack scrambles and two
+  boulders too tall to climb. See
   [creatures/gnawers.md](creatures/gnawers.md) §11.
 - **The low meadow** (`arena/hornback.rs`, 2026-10-01): the Hornback herd's.
-  48 × 40 m of grass, a 1.5 m bank with steps along the north, thicket and slope
-  as the edge (outside the bounds, so a charge pulls up short of them rather
-  than meeting them), the ford in the east the herd leaves by. Its four boulders
+  48 × 40 m of grass, a 1.5 m bank with steps along the north, the rim's bank
+  as the edge (at the bounds, so a charge pulls up short of it rather than
+  meeting it; a thicket of boxes until 2026-10-09), the ford in the east the herd leaves by. Its four boulders
   are not arena solids: they are the herd's hazard cells, laid on the first
   frame, which crack and shatter. See [creatures/hornback.md](creatures/hornback.md) §11.
 - **The crossing** (`arena/hornback.rs`, 2026-10-01): the Hornback's defend

@@ -5,6 +5,7 @@
 //! two platforms, the same spawn distances -- on a moor, so meeting it in the
 //! valley is the fight that was tuned. Its way out is `crate::valley::rooms`.
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 
 use Material::{Grass, Peat, Rock};
@@ -23,6 +24,12 @@ pub static ARENA: Arena = Arena {
         hunt: None,
     },
     sites: &[],
+    rim: Some(Rim::new(
+        (-1500, 1500),
+        (-1500, 1500),
+        [150, 150, 150, 150],
+        600,
+    )),
 };
 
 const REGIONS: [Region; 1] = [

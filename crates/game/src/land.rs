@@ -117,8 +117,79 @@ pub fn tile_mesh(
     cache: &mut HashMap<ArenaId, look::Palette>,
 ) -> (Mesh, Option<f32>) {
     let size = TILE_M as f32;
-    let d = size / cells as f32;
     let (x0, z0) = (tx as f32 * size, tz as f32 * size);
+    let steepest = f(sim::tuning::terrain_steepest());
+    let land = atlas.land.as_ref().expect("a map with land");
+    let mut water: Option<f32> = None;
+    let mesh = grid_mesh(
+        x0,
+        z0,
+        size,
+        cells,
+        &|x, z| f(atlas.relief_at(fx(x), fx(z))),
+        &mut |x, z, slope| {
+            let (m, rise, path) = ground_at(atlas, x, z, slope, steepest);
+            let palette = palette_at(atlas, x, z, cache);
+            if m == Material::Water {
+                if let Some(surface) = land.sample(fx(x), fx(z)).water {
+                    water = Some(water.map_or(f(surface), |s: f32| s.max(f(surface))));
+                }
+            }
+            ground_colour(&palette, m, slope, steepest, rise, path, x, z)
+        },
+    );
+    (mesh, water)
+}
+
+/// **The colour of open ground**: `Palette::land` for what it is made of,
+/// how steep and how high, with the trodden path worn in by its distance
+/// `path` from the middle of the way, and patches across it -- greener here,
+/// drier there -- keyed to where it is so tiles agree at their edges.
+#[allow(clippy::too_many_arguments)]
+pub fn ground_colour(
+    palette: &look::Palette,
+    m: Material,
+    slope: f32,
+    steepest: f32,
+    rise: f32,
+    path: f32,
+    x: f32,
+    z: f32,
+) -> [f32; 3] {
+    let mut rgb = palette.land(m, slope, steepest, rise);
+    // The road, worn in: full dirt down its middle, fading out over a metre
+    // past its edge, never quite bare.
+    let half = f(sim::valley::land::PATH_HALF);
+    let worn = (1.0 - ((path - half + 0.8) / 1.4).clamp(0.0, 1.0)) * 0.75;
+    if worn > 0.0 {
+        let dirt = palette.trodden();
+        rgb = look::tint::mix(rgb, dirt, worn * worn * (3.0 - 2.0 * worn));
+    }
+    let broad = patches(x, z, 23.0, 7) - 0.5;
+    let fine = crate::shapes::hash01(x.round() as i32 as u32, z.round() as i32 as u32, 11) - 0.5;
+    let k = 1.0 + 0.16 * broad + 0.07 * fine;
+    let dry = (patches(x, z, 41.0, 9) - 0.55).max(0.0) * 0.5;
+    let rgb = if matches!(m, Material::Grass | Material::Ground | Material::Peat) {
+        look::tint::mix(rgb, palette.of(Material::Sand), dry * (1.0 - worn))
+    } else {
+        rgb
+    };
+    [rgb[0] * k, rgb[1] * k, rgb[2] * k]
+}
+
+/// **A square of ground as a mesh**: `cells` to a side, `size` metres, its
+/// corner at (`x0`, `z0`), each vertex at `height` and coloured by `colour`
+/// (of where it is and how steep the drawn surface is there, sRGB), with a
+/// skirt hanging from its edges. Vertices are relative to the corner.
+pub fn grid_mesh(
+    x0: f32,
+    z0: f32,
+    size: f32,
+    cells: usize,
+    height: &dyn Fn(f32, f32) -> f32,
+    colour: &mut dyn FnMut(f32, f32, f32) -> [f32; 3],
+) -> Mesh {
+    let d = size / cells as f32;
     let n = cells + 1;
     // Heights with a ring one cell wider, for the normals at the edges.
     let w = n + 2;
@@ -126,16 +197,13 @@ pub fn tile_mesh(
     for j in 0..w {
         for i in 0..w {
             let (x, z) = (x0 + (i as f32 - 1.0) * d, z0 + (j as f32 - 1.0) * d);
-            h[j * w + i] = f(atlas.relief_at(fx(x), fx(z)));
+            h[j * w + i] = height(x, z);
         }
     }
     let at = |i: usize, j: usize| h[(j + 1) * w + (i + 1)];
-    let steepest = f(sim::tuning::terrain_steepest());
     let mut positions = Vec::with_capacity(n * n + 4 * n);
     let mut normals = Vec::with_capacity(n * n + 4 * n);
     let mut colours = Vec::with_capacity(n * n + 4 * n);
-    let mut water: Option<f32> = None;
-    let land = atlas.land.as_ref().expect("a map with land");
     for j in 0..n {
         for i in 0..n {
             let (x, z) = (x0 + i as f32 * d, z0 + j as f32 * d);
@@ -147,35 +215,11 @@ pub fn tile_mesh(
             let t = h[(j + 2) * w + i + 1];
             let normal = Vec3::new(l - r, 2.0 * d, b - t).normalize_or(Vec3::Y);
             let slope = ((r - l).abs().max((t - b).abs())) / (2.0 * d);
-            let (m, rise, path) = ground_at(atlas, x, z, slope, steepest);
-            let palette = palette_at(atlas, x, z, cache);
-            let mut rgb = palette.land(m, slope, steepest, rise);
-            // The road, worn in: full dirt down its middle, fading out over a
-            // metre past its edge, never quite bare.
-            let half = f(sim::valley::land::PATH_HALF);
-            let worn = (1.0 - ((path - half + 0.8) / 1.4).clamp(0.0, 1.0)) * 0.75;
-            if worn > 0.0 {
-                let dirt = palette.trodden();
-                rgb = look::tint::mix(rgb, dirt, worn * worn * (3.0 - 2.0 * worn));
-            }
-            // Patches across a meadow -- greener here, drier there -- and a
-            // little wander per metre, keyed to the map so tiles agree at
-            // their edges.
-            let broad = patches(x, z, 23.0, 7) - 0.5;
-            let fine =
-                crate::shapes::hash01(x.round() as i32 as u32, z.round() as i32 as u32, 11) - 0.5;
-            let k = 1.0 + 0.16 * broad + 0.07 * fine;
-            let dry = (patches(x, z, 41.0, 9) - 0.55).max(0.0) * 0.5;
-            let rgb = look::tint::mix(rgb, palette.of(Material::Sand), dry * (1.0 - worn));
-            let c = look::tint::linear([rgb[0] * k, rgb[1] * k, rgb[2] * k]);
+            let rgb = colour(x, z, slope);
+            let c = look::tint::linear(rgb);
             positions.push([i as f32 * d, y, j as f32 * d]);
             normals.push(normal.to_array());
             colours.push([c[0], c[1], c[2], 1.0]);
-            if m == Material::Water {
-                if let Some(surface) = land.sample(fx(x), fx(z)).water {
-                    water = Some(water.map_or(f(surface), |s: f32| s.max(f(surface))));
-                }
-            }
         }
     }
     let row = n as u32;
@@ -216,15 +260,14 @@ pub fn tile_mesh(
             }
         }
     }
-    let mesh = Mesh::new(
+    Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
-    .with_inserted_indices(Indices::U32(indices));
-    (mesh, water)
+    .with_inserted_indices(Indices::U32(indices))
 }
 
 /// **The trees' shared shapes**: one trunk, one pine's crown, one
@@ -246,7 +289,10 @@ pub fn is_tree(s: &sim::arena::Solid) -> bool {
 
 /// Is a reach's wood pines?
 pub fn pines(id: ArenaId) -> bool {
-    matches!(id, ArenaId::SHELVES | ArenaId::PINEWOOD | ArenaId::SADDLE)
+    matches!(
+        id,
+        ArenaId::SHELVES | ArenaId::PINEWOOD | ArenaId::SADDLE | ArenaId::VEILSTALKER
+    )
 }
 
 impl Trees {
@@ -319,8 +365,16 @@ impl Trees {
                 ChildOf(parent),
             ))
             .id();
-        let girth = if pine { 0.42 } else { 0.5 };
-        let bole = if pine { tall * 0.35 } else { tall * 0.5 };
+        // A trunk as thick as the tree is tall would have it, and a broadleaf
+        // that branches low: a crown of clumps, the biggest in the middle,
+        // the smaller ones lower and further out, so it is a canopy and not
+        // a ball on a stick.
+        let girth = if pine {
+            0.3 + tall * 0.025
+        } else {
+            0.35 + tall * 0.045
+        };
+        let bole = if pine { tall * 0.32 } else { tall * 0.42 };
         commands.spawn((
             Mesh3d(trunk),
             MeshMaterial3d(bark),
@@ -328,35 +382,394 @@ impl Trees {
             ChildOf(tree),
         ));
         if pine {
-            // Three tiers, each narrower and overlapping the last.
+            // Four tiers, each narrower and overlapping the last.
             let body = tall - bole * 0.6;
-            for k in 0..3 {
-                let t = k as f32 / 3.0;
-                let width = (3.6 - 2.0 * t) * (0.85 + 0.3 * crate::shapes::hash01(seed, k, 3));
-                let height = body * 0.48;
+            for k in 0..4 {
+                let t = k as f32 / 4.0;
+                let width = (tall * 0.42 - tall * 0.3 * t)
+                    * (0.85 + 0.3 * crate::shapes::hash01(seed, k, 3));
+                let height = body * 0.4;
                 commands.spawn((
                     Mesh3d(cone.clone()),
                     MeshMaterial3d(leaves.clone()),
-                    Transform::from_xyz(0.0, bole * 0.6 + body * (0.24 + 0.3 * t), 0.0)
+                    Transform::from_xyz(0.0, bole * 0.6 + body * (0.2 + 0.26 * t), 0.0)
                         .with_scale(Vec3::new(width, height, width)),
                     ChildOf(tree),
                 ));
             }
         } else {
-            let spread = tall * 0.55;
-            for k in 0..3u32 {
-                let a = k as f32 * 2.1 + crate::shapes::hash01(seed, k, 4);
-                let off = Vec3::new(a.cos(), 0.0, a.sin()) * spread * 0.22;
-                let r = spread * (0.75 + 0.25 * crate::shapes::hash01(seed, k, 5));
+            let spread = tall * 0.62;
+            // The heart of the crown.
+            commands.spawn((
+                Mesh3d(crown.clone()),
+                MeshMaterial3d(leaves.clone()),
+                Transform::from_translation(Vec3::Y * (bole + spread * 0.42))
+                    .with_scale(Vec3::new(spread, spread * 0.78, spread)),
+                ChildOf(tree),
+            ));
+            for k in 0..4u32 {
+                let a = k as f32 * 1.57 + crate::shapes::hash01(seed, k, 4);
+                let off = Vec3::new(a.cos(), 0.0, a.sin()) * spread * 0.36;
+                let r = spread * (0.5 + 0.18 * crate::shapes::hash01(seed, k, 5));
+                let up = bole + spread * (0.22 + 0.3 * crate::shapes::hash01(seed, k, 6));
                 commands.spawn((
                     Mesh3d(crown.clone()),
                     MeshMaterial3d(leaves.clone()),
-                    Transform::from_translation(off + Vec3::Y * (bole + r * 0.35 + k as f32 * 0.4))
-                        .with_scale(Vec3::new(r, r * 0.85, r)),
+                    Transform::from_translation(off + Vec3::Y * up).with_scale(Vec3::new(
+                        r,
+                        r * 0.8,
+                        r,
+                    )),
                     ChildOf(tree),
                 ));
             }
         }
         tree
+    }
+}
+
+/// **A fight's ground, alone** (`sim::arena::rim`): its floor and the rim
+/// round it drawn as land, a tile at a time like the valley's -- the floor
+/// exactly the simulation's, the bank too steep to climb, the hills and
+/// mountains past it -- and what grows on the rim: trees past the crest,
+/// bushes and boulders on the bank. A rim that is a drop (the Cliffs) is
+/// drawn falling away past its crest to a floor far below.
+///
+/// Only for an arena with a rim, fought on its own; on the valley's map the
+/// land is drawn by `crate::stream`.
+pub fn draw_arena(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    arena: &'static sim::arena::Arena,
+    palette: &look::Palette,
+    white: &Handle<StandardMaterial>,
+) {
+    let Some(rim) = arena.rim else {
+        return;
+    };
+    let steepest = f(sim::tuning::terrain_steepest());
+    let run = f(rim.run());
+    let ((lo_x, lo_z), (hi_x, hi_z)) = rim.rect();
+    let (lo_x, lo_z, hi_x, hi_z) = (f(lo_x), f(lo_z), f(hi_x), f(hi_z));
+    let margin = run + 150.0;
+    let size = TILE_M as f32;
+    let (tx0, tz0) = (
+        ((lo_x - margin) / size).floor() as i32,
+        ((lo_z - margin) / size).floor() as i32,
+    );
+    let (tx1, tz1) = (
+        ((hi_x + margin) / size).ceil() as i32,
+        ((hi_z + margin) / size).ceil() as i32,
+    );
+    // How far a point is outside the rectangle, flat.
+    let out = |x: f32, z: f32| {
+        let dx = (lo_x - x).max(x - hi_x).max(0.0);
+        let dz = (lo_z - z).max(z - hi_z).max(0.0);
+        (dx * dx + dz * dz).sqrt()
+    };
+    // The drawn height: the simulation's everywhere it can be stood on; a
+    // drop's fall past its crest.
+    let height = |x: f32, z: f32| -> f32 {
+        let (px, pz) = (fx(x), fx(z));
+        match rim.out_of(px, pz) {
+            Some((d, foot)) if rim.drop && f(d) > run => {
+                let crest = f(foot.add(rim.rise(rim.run(), px, pz)));
+                let fall = crest - (f(d) - run) * 2.6;
+                let lumps = (patches(x, z, 19.0, 3) - 0.5) * 6.0;
+                fall.max(-70.0 + lumps)
+            }
+            _ => f(arena.relief_at(px, pz)),
+        }
+    };
+    let root = commands
+        .spawn((
+            Transform::default(),
+            Visibility::default(),
+            super::arenas::Scenery,
+        ))
+        .id();
+    for tz in tz0..tz1 {
+        for tx in tx0..tx1 {
+            let (x0, z0) = (tx as f32 * size, tz as f32 * size);
+            let d = out(x0 + size * 0.5, z0 + size * 0.5);
+            let cells = if d < 24.0 {
+                16
+            } else if d < 70.0 {
+                8
+            } else if d < 130.0 {
+                4
+            } else {
+                2
+            };
+            let mut colour = |x: f32, z: f32, slope: f32| {
+                let (px, pz) = (fx(x), fx(z));
+                match rim.out_of(px, pz) {
+                    None => {
+                        let m = arena.floor_at(px, pz);
+                        ground_colour(palette, m, slope, steepest, 0.0, f32::MAX, x, z)
+                    }
+                    Some((_, foot)) => {
+                        let y = height(x, z);
+                        let rise = y - f(foot);
+                        let m = match arena.floor {
+                            Material::Stone | Material::Ash => Material::Ground,
+                            m => m,
+                        };
+                        let c = ground_colour(palette, m, slope, steepest, rise, f32::MAX, x, z);
+                        // A face too steep to stand on shows its strata:
+                        // bands of lighter and darker rock, wandering.
+                        if slope > steepest {
+                            let k = 0.9 + 0.12 * (y * 1.7 + patches(x, z, 9.0, 31) * 4.0).sin();
+                            [c[0] * k, c[1] * k, c[2] * k]
+                        } else {
+                            c
+                        }
+                    }
+                }
+            };
+            let mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
+            commands.spawn((
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(white.clone()),
+                Transform::from_xyz(x0, 0.0, z0),
+                bevy::pbr::NotShadowCaster,
+                ChildOf(root),
+            ));
+        }
+    }
+
+    // What grows on it: a jittered grid over the rim, thinner further out.
+    let mut trees = Trees::default();
+    let rock = palette.of(Material::Rock);
+    let bush = palette.foliage(false);
+    let crown = meshes.add(Sphere::new(0.5).mesh().ico(1).unwrap());
+    let leaves = materials.add(StandardMaterial {
+        base_color: Color::srgb(bush[0], bush[1], bush[2]),
+        perceptual_roughness: 0.95,
+        ..default()
+    });
+    let pine = pines(arena.id);
+    let step = 4.0f32;
+    let (gx0, gz0) = (lo_x - margin * 0.8, lo_z - margin * 0.8);
+    let (nx, nz) = (
+        ((hi_x - lo_x + margin * 1.6) / step) as i32,
+        ((hi_z - lo_z + margin * 1.6) / step) as i32,
+    );
+    let seed = arena.id.0 as u32 * 977 + 13;
+    for j in 0..nz {
+        for i in 0..nx {
+            let r = |salt: u32| crate::shapes::hash01(seed + i as u32, j as u32, salt);
+            let x = gx0 + (i as f32 + r(1)) * step;
+            let z = gz0 + (j as f32 + r(2)) * step;
+            let d = out(x, z);
+            if d < 0.8 {
+                continue;
+            }
+            // Fewer the further out, past what the eye resolves.
+            let keep = if d < run + 40.0 { 1.0 } else { 0.35 };
+            if r(3) > keep {
+                continue;
+            }
+            let y = height(x, z);
+            if rim.drop && d > run + 1.0 && y < -40.0 {
+                // The floor far below the Cliffs: a wood seen from above.
+                if r(4) < 0.25 {
+                    let tall = 9.0 + 7.0 * r(5);
+                    tree(
+                        &mut trees, commands, meshes, materials, arena.id, palette, root, x, y, z,
+                        tall,
+                    );
+                }
+                continue;
+            }
+            if rim.drop && d > run * 0.6 {
+                continue;
+            }
+            // Steepness here, roughly: trees do not stand on cliffs.
+            let e = 1.0;
+            let slope = ((height(x + e, z) - height(x - e, z))
+                .abs()
+                .max((height(x, z + e) - height(x, z - e)).abs()))
+                / (2.0 * e);
+            let pick = r(6);
+            if d > run + 2.0 && slope < 1.1 && pick < 0.32 {
+                let tall = if pine {
+                    9.0 + 9.0 * r(7)
+                } else {
+                    7.0 + 7.0 * r(7)
+                };
+                tree(
+                    &mut trees, commands, meshes, materials, arena.id, palette, root, x, y, z, tall,
+                );
+            } else if pick < 0.5 {
+                // A bush, sat into the slope.
+                let s = 1.0 + 1.6 * r(8);
+                commands.spawn((
+                    Mesh3d(crown.clone()),
+                    MeshMaterial3d(leaves.clone()),
+                    Transform::from_xyz(x, y + s * 0.08, z).with_scale(Vec3::new(
+                        s * 1.3,
+                        s * 0.85,
+                        s * 1.1,
+                    )),
+                    ChildOf(root),
+                ));
+            } else if pick < 0.62 {
+                // A boulder, half buried.
+                let s = 0.8 + 2.4 * r(9) * r(9);
+                let tone = 0.85 + 0.25 * r(10);
+                let mesh = crate::shapes::rock(
+                    Vec3::new(s * 1.3, s, s * (0.8 + 0.5 * r(11))),
+                    seed ^ (i as u32 * 31 + j as u32),
+                    None,
+                );
+                let mut kit = crate::forms::Kit::new();
+                kit.mesh(
+                    &mesh,
+                    Transform::IDENTITY,
+                    [rock[0] * tone, rock[1] * tone, rock[2] * tone],
+                );
+                commands.spawn((
+                    Mesh3d(meshes.add(kit.build())),
+                    MeshMaterial3d(white.clone()),
+                    Transform::from_xyz(x, y, z)
+                        .with_rotation(Quat::from_rotation_y(r(12) * std::f32::consts::TAU)),
+                    ChildOf(root),
+                ));
+            }
+        }
+    }
+}
+
+/// One tree standing at (x, y, z), `tall` metres, under `root`.
+#[allow(clippy::too_many_arguments)]
+fn tree(
+    trees: &mut Trees,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    id: ArenaId,
+    palette: &look::Palette,
+    root: Entity,
+    x: f32,
+    y: f32,
+    z: f32,
+    tall: f32,
+) {
+    let trunk = sim::arena::Solid {
+        min: sim::V3::new(fx(x - 0.3), fx(y - 0.5), fx(z - 0.3)),
+        max: sim::V3::new(fx(x + 0.3), fx(y + tall), fx(z + 0.3)),
+        material: Material::Wood,
+    };
+    trees.spawn(commands, meshes, materials, &trunk, id, palette, root);
+}
+
+/// **The land far below a jump course**: hills and woods sixty metres and
+/// more under the islands, hazed by the air between, so a gap reads as a
+/// long fall onto somewhere rather than into a dark floor. Nothing stands on
+/// it -- a fall is caught by the course's pit long before -- so its heights
+/// are drawn, not the simulation's; they come down to the floor near the
+/// course, where its first spire stands on it.
+pub fn draw_below(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    arena: &'static sim::arena::Arena,
+    palette: &look::Palette,
+    white: &Handle<StandardMaterial>,
+) {
+    let b = arena.bounds;
+    let (lo_x, hi_x, lo_z, hi_z) = (f(b.lo_x), f(b.hi_x), f(b.lo_z), f(b.hi_z));
+    let (mx, mz) = ((lo_x + hi_x) * 0.5, (lo_z + hi_z) * 0.5);
+    let margin = 700.0;
+    let size = 48.0f32;
+    let steepest = f(sim::tuning::terrain_steepest());
+    // Rolling hills and a few big ones, flattening to the floor round the
+    // course's own footprint.
+    let height = |x: f32, z: f32| -> f32 {
+        let dx = (lo_x - x).max(x - hi_x).max(0.0);
+        let dz = (lo_z - z).max(z - hi_z).max(0.0);
+        let away = ((dx * dx + dz * dz).sqrt() / 60.0).clamp(0.0, 1.0);
+        let away = away * away * (3.0 - 2.0 * away);
+        let hills = 16.0 * (patches(x, z, 97.0, 21) - 0.5) + 7.0 * (patches(x, z, 33.0, 22) - 0.5);
+        let peaks = (patches(x, z, 260.0, 23) - 0.55).max(0.0) * 220.0;
+        (hills + peaks) * away + 2.0 * (patches(x, z, 11.0, 24) - 0.5)
+    };
+    let root = commands
+        .spawn((
+            Transform::default(),
+            Visibility::default(),
+            super::arenas::Scenery,
+        ))
+        .id();
+    let n = ((hi_x - lo_x + 2.0 * margin) / size).ceil() as i32;
+    let m = ((hi_z - lo_z + 2.0 * margin) / size).ceil() as i32;
+    for j in 0..m {
+        for i in 0..n {
+            let (x0, z0) = (
+                lo_x - margin + i as f32 * size,
+                lo_z - margin + j as f32 * size,
+            );
+            let d = ((x0 + size * 0.5 - mx).abs()).max((z0 + size * 0.5 - mz).abs());
+            let cells = if d < 250.0 {
+                12
+            } else if d < 500.0 {
+                6
+            } else {
+                3
+            };
+            let mut colour = |x: f32, z: f32, slope: f32| {
+                let h = height(x, z);
+                ground_colour(
+                    palette,
+                    Material::Grass,
+                    slope,
+                    steepest,
+                    h + 20.0,
+                    f32::MAX,
+                    x,
+                    z,
+                )
+            };
+            let mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
+            commands.spawn((
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(white.clone()),
+                Transform::from_xyz(x0, 0.0, z0),
+                bevy::pbr::NotShadowCaster,
+                bevy::pbr::NotShadowReceiver,
+                ChildOf(root),
+            ));
+        }
+    }
+    // Woods, seen from above: a tree every so often on the gentler ground.
+    let mut trees = Trees::default();
+    let step = 14.0f32;
+    let (nx, nz) = (
+        ((hi_x - lo_x + 2.0 * 400.0) / step) as i32,
+        ((hi_z - lo_z + 2.0 * 400.0) / step) as i32,
+    );
+    for j in 0..nz {
+        for i in 0..nx {
+            let r = |salt: u32| crate::shapes::hash01(i as u32 + 7, j as u32, salt);
+            if r(1) > 0.3 {
+                continue;
+            }
+            let x = lo_x - 400.0 + (i as f32 + r(2)) * step;
+            let z = lo_z - 400.0 + (j as f32 + r(3)) * step;
+            // Not right under the course, where the spires stand.
+            if x > lo_x - 10.0 && x < hi_x + 10.0 && z > lo_z - 10.0 && z < hi_z + 10.0 {
+                continue;
+            }
+            let y = height(x, z);
+            if y > 40.0 {
+                continue;
+            }
+            let tall = 10.0 + 8.0 * r(4);
+            tree(
+                &mut trees, commands, meshes, materials, arena.id, palette, root, x, y, z, tall,
+            );
+        }
     }
 }

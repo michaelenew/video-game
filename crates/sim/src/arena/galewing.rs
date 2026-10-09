@@ -22,6 +22,7 @@
 //! knowing the arena: `circle`, the middle of the circle it flies, and
 //! `perch`, the tower it rests on.
 
+use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Solid, Spawns};
 use crate::objective::Site;
 use crate::species::SpeciesId;
@@ -58,6 +59,7 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &SITES,
+    rim: Some(Rim::new((-2700, 2700), (-2700, 2400), [150, 2000, 150, 150], 400).falling()),
 };
 
 /// One step of a stair: a column from the floor to `k` steps up, in the

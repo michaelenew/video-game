@@ -40,12 +40,19 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// by looking at them, on the plan sheet (`cargo run -p look --example
 /// atlas`) and in the game, not by how a fight feels; the numbers that are
 /// about feel -- how steep a body walks, how fast it slides -- are in the
-/// Oven.
-const LEVEL_DATA: &[&str] = &["land.rs", "layout.rs"];
+/// Oven. A fight's rim (how steep its bank, how far its noise grows) and the
+/// town's tables (how far apart the merlons, how high the wall) are the same
+/// kind of thing.
+const LEVEL_DATA: &[&str] = &["land.rs", "layout.rs", "rim.rs", "hearth.rs"];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
+    (
+        "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",
+        "How far past an arena's bounds the aiming ray walks the floor to reach its rim's \
+         bank: the bank and the foothills past it, both sides. A reach, not a tuning value.",
+    ),
     (
         "rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()",
         "Rounding slack in the steepness test: two samples of the land a step apart differ \

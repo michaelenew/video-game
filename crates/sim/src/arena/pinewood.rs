@@ -31,6 +31,7 @@ pub static ARENA: Arena = Arena {
         hunt: None,
     },
     sites: &[],
+    rim: None,
 };
 
 const SOLIDS: [Solid; 1] = [

@@ -283,11 +283,31 @@ fn dice(a: i32, b: i32, salt: u32) -> u32 {
     h % 1000
 }
 
+/// A room's rim on the map, if the land holds one up round it: every room
+/// with a rim but a drop (the Cliffs sit in their ravine).
+fn rim_of(r: &Room) -> Option<arena::rim::Rim> {
+    r.arena.get().rim.filter(|rim| !rim.drop)
+}
+
+/// The level ground round a room past its footprint: none where a rim
+/// rises straight off its walls.
+fn apron_of(r: &Room) -> Fx {
+    if rim_of(r).is_some() {
+        Fx::ZERO
+    } else {
+        cm(APRON)
+    }
+}
+
 /// A room's footprint on the map with the ground round it: lo and hi (x, z).
+/// With a rim, the rim's rectangle.
 fn pad_of(r: &Room) -> ((Fx, Fx), (Fx, Fx)) {
-    let (lo, hi) = footprint(r.arena.get());
+    let (mut lo, mut hi) = footprint(r.arena.get());
+    if let Some(rim) = rim_of(r) {
+        (lo, hi) = rim.rect();
+    }
     let at = v3(r.at);
-    let a = cm(APRON);
+    let a = apron_of(r);
     (
         (lo.0.add(at.x).sub(a), lo.1.add(at.z).sub(a)),
         (hi.0.add(at.x).add(a), hi.1.add(at.z).add(a)),
@@ -361,13 +381,19 @@ fn pads() -> Vec<Pad> {
         lo: (lo.0.sub(a), lo.1.sub(a)),
         hi: (hi.0.add(a), hi.1.add(a)),
         y: Fx::ZERO,
+        rim: None,
+        door: (Fx::ZERO, Fx::ZERO),
     });
     for r in &ROOMS {
         let (lo, hi) = pad_of(r);
+        let at = v3(r.at);
+        let (edge, _) = door_of(r);
         out.push(Pad {
             lo,
             hi,
-            y: v3(r.at).y,
+            y: at.y,
+            rim: rim_of(r).map(|rim| (rim, (at.x, at.z))),
+            door: (edge.x, edge.z),
         });
     }
     out
@@ -599,7 +625,7 @@ pub fn plan() -> Plan {
         plan.places.push(PlanPlace {
             arena: r.arena,
             at: v3(r.at),
-            apron: cm(APRON),
+            apron: apron_of(r),
             pad: true,
         });
     }

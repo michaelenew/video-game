@@ -15,6 +15,7 @@
 //! a fight in it, and `tests/arena.rs` checks these numbers against the old
 //! ones.
 
+use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::species::SpeciesId;
 
@@ -35,6 +36,7 @@ pub static ARENA: Arena = Arena {
         hunt: None,
     },
     sites: &[],
+    rim: Some(Rim::new((-5500, 5500), (-5500, 5500), [0, 0, 0, 0], 700)),
 };
 
 const SOLIDS: [Solid; 6] = [

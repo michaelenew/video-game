@@ -321,11 +321,20 @@ pub fn stream(
             st.solids.insert(i, e);
             continue;
         }
+        let hangs = {
+            let mid = s.min.add(s.max);
+            let (x, z) = (
+                sim::Fx::from_raw(mid.x.raw() / 2),
+                sim::Fx::from_raw(mid.z.raw() / 2),
+            );
+            s.min.y.raw() > atlas.relief_at(x, z).raw()
+        };
         let e = draw_solid(
             &mut commands,
             &mut meshes,
             s,
             v3(place.at),
+            hangs,
             &look,
             &white,
             Under::Parent(root),

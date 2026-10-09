@@ -318,6 +318,7 @@ fn bench_arena(ledge: Solid) -> &'static Arena {
         solids,
         spawns: arena::lab::ARENA.spawns,
         sites: &[],
+        rim: None,
     }))
 }
 
