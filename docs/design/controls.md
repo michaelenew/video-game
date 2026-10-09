@@ -975,6 +975,13 @@ differentiation.
 
 ### Elementalist
 
+> **Superseded 2026-10-09: she is on three clicks.** Left is earth, middle is fire, right is
+> wind, each a tap and a hold on the floor and something else in the air; space with a click
+> is a takeoff (the Champion's window); `Q` is the weak push (Bolt, Air bolt) and `E` the
+> strong push (Cataclysm); `F` is the Cinder spray standing and the Downdraft in the air. The
+> table is [kits/elementalist.md](kits/elementalist.md) §"On three clicks", and the buttons
+> are named once in `sim::moves::elementalist::keys`. What follows is the v2 layout it replaced.
+
 Current as of 2026-09-30, the v2 build: middle click, both mouse side buttons, `F` and `R` are
 all bound, and `Q`/`E` charge when held. **The row is where her feet are** — the same buttons
 mean one thing standing up and another off the floor, which is the Champion's grid read one

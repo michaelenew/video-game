@@ -281,7 +281,10 @@ swinging, and `view/tests/kinematics.rs` fails if they ever part company.
 
 From the stone the Elementalist is holding churning — or her own feet, if there
 is none — **flat toward the crosshair's spot on the ground**, for as far as the
-hold bought. One move: Fissure, `E` held. `aim::racing_path`.
+hold bought. Two moves: Fissure (the earth click held, since 2026-10-09), and
+the Air ball (the wind click), which is raised where the crosshair meets the
+floor and sent from there along this line on the release -- its hold buys size,
+so only the line's direction is read. `aim::racing_path`.
 
 The place it starts was aimed already, with the crosshair, when the stone was
 raised; what is chosen now is a direction and a distance, and the distance is
@@ -336,7 +339,7 @@ swing.
 | **Swing** (the ones worth naming) | Reaping sweep — the Blood mage's scythe, whose reach and width grow with her grey and are drawn, as essence around the weapon, at the size they hit at |
 | **Swing** | every melee attack: Bash, Slam, Grapple, Slash, Executioner, Rend, Landfall, the Dual mage's Sweep and both of her autos, and all nineteen of the Champion's |
 | **At the mechanic** | Guillotine lotus |
-| **Racing** | Fissure |
+| **Racing** | Fissure, Air ball |
 
 The table is a convenience and the move table is the authority; where they
 disagree, the `aimed` column of the frame table is right and this is stale.

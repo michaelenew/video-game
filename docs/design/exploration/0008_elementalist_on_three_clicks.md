@@ -1,11 +1,20 @@
 ---
-status: exploration — direction set by the person, details proposed; the earth slots are theirs
+status: built 2026-10-09, unplayed — see ../kits/elementalist.md §"On three clicks", which wins where the two differ
 started: 2026-10-09
 supersedes: 0007 §3 (the Elementalist), where they differ
 depends: 0007_core_kits.md, ../kits/elementalist.md, ../elementalist-v2.md
 ---
 
 # 0008 — The Elementalist on three clicks
+
+> **Built 2026-10-09, unplayed.** What was built is
+> [../kits/elementalist.md](../kits/elementalist.md) §"On three clicks". Settled since this was
+> written, by the person: the **earth jump** (a jump that brings a stone up with her; off a
+> stone on the floor it shatters and she goes higher; off a stone in the air it is driven down
+> to shatter), the **Fire fountain** as a burst at her feet and a lasting wash of fire, and the
+> carpet built as proposed even though it is expected to be awkward at speed, drawn as fire
+> pushed outward. Where this note and the kit differ, the kit wins — notably the earth jump's
+> stone, which keeps under her only while she holds forward.
 
 ## The decision this note works from
 

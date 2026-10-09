@@ -464,6 +464,16 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
             EffectKind::Pool => Patch::Wet(Wet { weight: 0.35 }),
             // The Elementalist's fire on earth, and her air.
             EffectKind::Embers | EffectKind::FireRing => Patch::Crackle(Crackle { seconds: 0.35 }),
+            // The carpet and the fountain are fire laid down and left: a
+            // longer crackle than a burst's.
+            EffectKind::FireCarpet | EffectKind::Fountain => {
+                Patch::Crackle(Crackle { seconds: 0.6 })
+            }
+            // The Air ball is a held gust, the heaviest of her air.
+            EffectKind::AirBall => Patch::Gust(Gust {
+                frames: 30,
+                weight: 0.8,
+            }),
             EffectKind::Rough => Patch::Rumble(Rumble {
                 frames: 8,
                 size: 1.5,

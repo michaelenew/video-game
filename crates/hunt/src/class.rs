@@ -506,7 +506,8 @@ impl Hands {
             }
         }
         self.uses.shots += 1;
-        self.look_keeping(me, plan, self.spot(w, me, at, false), Input::LEFT)
+        let bolt = self.button(me, SLOT_POKE).unwrap_or(Input::LEFT);
+        self.look_keeping(me, plan, self.spot(w, me, at, false), bolt)
     }
 
     /// The Reaver: **the lotus on a shadow standing at the work**, dragged home
@@ -828,7 +829,8 @@ impl Hands {
         {
             self.uses.shots += 1;
             self.rest();
-            return Some(self.look(me, self.spot(w, me, at, false), Input::LEFT));
+            let b = self.button(me, SLOT_POKE).unwrap_or(Input::LEFT);
+            return Some(self.look(me, self.spot(w, me, at, false), b));
         }
         None
     }

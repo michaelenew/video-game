@@ -268,6 +268,37 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             }
             // A cloud of embers: the slab the shot test traces and the body
             // test reads, about its centre -- see `Effect::ember_volume`.
+            // The Air ball: the ball the carry reads, at its size now.
+            EffectKind::AirBall => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(crate::fx3(effect.ball_middle())),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The Fire carpet: the capsule a shot and a Thermal are tested
+            // against, along its line.
+            EffectKind::FireCarpet => {
+                let (a, b) = effect.carpet_line();
+                capsule(
+                    &mut gizmos,
+                    crate::fx3(a),
+                    crate::fx3(b),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The fountain's wash: the column that burns.
+            EffectKind::Fountain => {
+                let slab = effect.fountain_volume();
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    slab.radius.to_f32_for_render(),
+                    slab.top.to_f32_for_render().max(0.01),
+                    PILLAR,
+                );
+            }
             EffectKind::Embers => {
                 let slab = effect.ember_volume();
                 let bottom = slab.bottom.to_f32_for_render();

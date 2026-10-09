@@ -231,6 +231,20 @@ pub enum Phase {
     },
 }
 
+/// A jump attack's window and its trip off the ground, for a class whose
+/// mechanic does not already keep them. See [`Player::rise`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Rise {
+    /// Frames left in which a click is a takeoff rather than the move it would
+    /// otherwise be. Held open while the jump button is down on the floor.
+    pub window: u8,
+    /// Frames since the feet left the floor. A click in the first few is still
+    /// the takeoff from the floor -- `tuning::floor_grace`, the Champion's.
+    pub lifted: u8,
+    /// This trip off the ground has had its takeoff.
+    pub used: bool,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Player {
     pub pos: V3,
@@ -614,6 +628,25 @@ pub struct Player {
     pub f_held: bool,
     pub r_held: bool,
     pub side_b_held: bool,
+    /// Was the Elementalist's earth click down last frame? Raise is an
+    /// instant on the press, as it was on `E`, so it needs an edge of its own:
+    /// level-triggered, a held click would spend all three stones on one spot
+    /// in three frames -- the bug the mechanic key's own edge was made for.
+    pub earth_held: bool,
+    /// **The jump attack's window and its trip**, for a class that is not the
+    /// Champion -- today the Elementalist, whose three clicks with space are
+    /// three takeoffs. The same three numbers the Champion keeps inside its
+    /// mechanic (`Mechanic::Forms { takeoff, lifted, rise_used }`): frames left
+    /// in which a click leaves the floor, frames since the feet left it, and
+    /// whether this trip's takeoff is spent. See [`rise_window`].
+    pub rise: Rise,
+    /// Where the Elementalist's Air ball is being raised, while she holds it.
+    ///
+    /// Set on the press, from the crosshair, and read by the world on the
+    /// frame the ball appears and by the release's aim, which sends the ball
+    /// from here toward where the crosshair is then. A position, so it is
+    /// moved by `World::shift` with everything else a fighter keeps.
+    pub ball_at: V3,
     /// Which of her structure slots the Elementalist's dodge is breaking
     /// through this frame, or [`NO_STONE`].
     ///
@@ -1195,6 +1228,9 @@ impl Default for Player {
             f_held: false,
             r_held: false,
             side_b_held: false,
+            earth_held: false,
+            rise: Rise::default(),
+            ball_at: V3::ZERO,
             breaking: NO_STONE,
             fall_over: Fx::ZERO,
         }
@@ -2058,7 +2094,36 @@ impl World {
         // Stones move before the fighters do, so what a fighter walks into --
         // or stands on -- is where the stone is this frame rather than where it
         // was last one.
-        stones::step(&mut self.players, here);
+        // **The earth jump's stone keeps under her while she holds forward.**
+        // Nothing in the air slows a body down, so a stone that only left a
+        // little slower would never be a choice: held forward, it keeps pace
+        // under her and she comes down on it; let go, or strafe, and it goes
+        // on at its own slower speed and drops behind -- a stone in the air to
+        // Gale back down at somebody. See `Structure::aloft`.
+        for (i, input) in wire.iter().enumerate() {
+            let p = self.players[i];
+            if p.class == Class::Elementalist && !p.grounded && input.move_axis() == (0, 1) {
+                stones::keep_under(&mut self.players, i);
+            }
+            // Stood on, an aloft stone is a platform rather than a thing in
+            // flight: it stops going anywhere but its slow way down, so it
+            // does not slide out from under whoever is on it.
+            if p.grounded {
+                if let Some(index) = stones::under(&self.players, p.pos) {
+                    stones::bear(&mut self.players, index);
+                }
+            }
+        }
+        let landed = stones::step(&mut self.players, here);
+        for (index, at) in landed.iter().enumerate() {
+            if let Some(at) = *at {
+                debris::shatter(
+                    &mut self.debris,
+                    (index / crate::class::MAX_STRUCTURES) as u8,
+                    at,
+                );
+            }
+        }
         let field = stones::gather(&self.players);
 
         // The creature decides and moves first, so that riders are carried by
@@ -2261,6 +2326,13 @@ impl World {
                 continue;
             }
             let p = self.players[i];
+            // The Air ball is raised on the press, before the move has any
+            // frames of its own: the hold is the ball growing where it sits.
+            if let Action::Channel { kind, held: 0 } = p.action {
+                if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
+                    self.raise_the_ball(i);
+                }
+            }
             let Action::Active { kind, left } = p.action else {
                 continue;
             };
@@ -2322,6 +2394,52 @@ impl World {
             // well, which no row field says because none goes that way.
             if p.class == Class::Elementalist && kind == moves::elementalist::UPDRAFT {
                 self.raise_the_draft(i, EffectKind::Updraft);
+            }
+            // The earth jump: after the ordinary lift above, which it makes
+            // bigger off a stone that shatters under her, and with the stone
+            // it brings up leaving at a share of the speed she now has.
+            if p.class == Class::Elementalist && kind == moves::elementalist::EARTH_JUMP {
+                self.earth_jump(i);
+            }
+            // The Air ball let go: it rolls from where it was raised, the way
+            // the release's aim says. See `roll_the_ball`.
+            if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
+                self.send_the_ball(i);
+            }
+            // The Fire carpet, laid out along her look from a little ahead of
+            // her. Along the line `crate::aim` solved -- the crosshair's, not
+            // the chest's -- so it lies where she is looking.
+            if p.class == Class::Elementalist && kind == moves::elementalist::FIRE_CARPET {
+                let dir = p.aim_path.dir();
+                let near = p.aim_path.from.add(dir.scale(t::carpet_ahead()));
+                spawn_the_only_one(
+                    &mut self.effects,
+                    Effect::cast(
+                        EffectKind::FireCarpet,
+                        i as u8,
+                        p.class,
+                        kind,
+                        near,
+                        dir,
+                        m.reach,
+                    ),
+                );
+            }
+            // The Fire fountain: the burst and the wash, at the feet she is
+            // leaving. Where she stood, not where she is going.
+            if p.class == Class::Elementalist && kind == moves::elementalist::FIRE_FOUNTAIN {
+                spawn_the_only_one(
+                    &mut self.effects,
+                    Effect::cast(
+                        EffectKind::Fountain,
+                        i as u8,
+                        p.class,
+                        kind,
+                        p.pos,
+                        V3::ZERO,
+                        t::fountain_radius(),
+                    ),
+                );
             }
             if p.class == Class::Elementalist && kind == moves::elementalist::DOWNDRAFT {
                 self.raise_the_draft(i, EffectKind::Downdraft);
@@ -4248,6 +4366,8 @@ fn step_player(
     p.r_held = input.has(Input::KEY_R);
     let pressed_side_b = input.has(Input::SIDE_B) && !p.side_b_held;
     p.side_b_held = input.has(Input::SIDE_B);
+    let pressed_earth = input.has(moves::elementalist::keys::EARTH) && !p.earth_held;
+    p.earth_held = input.has(moves::elementalist::keys::EARTH);
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -4288,6 +4408,7 @@ fn step_player(
     // reason the Rush cancel does -- a recovery that has been cut short has to
     // reach the input below on the frame it was cut, not the frame after.
     arm_takeoff(p, input);
+    rise_window(p, input);
     rise_out_of_a_swing(p, who, pressed_space, input, scene);
     refresh_the_rise(p);
     bank_the_leap(p, pressed_space);
@@ -4318,11 +4439,13 @@ fn step_player(
                 //
                 // The Champion has no special: its identity is the three weapons on
                 // the three clicks, and `Q` is free.
-                if input.has(Input::SPECIAL)
-                    && p.class != Class::Champion
-                    && p.can_throw(SLOT_SPECIAL, &out)
+                if let Some(kind) = input
+                    .has(Input::SPECIAL)
+                    .then(|| keyed_q(p))
+                    .flatten()
+                    .filter(|k| p.can_throw(*k, &out))
                 {
-                    begin_move(p, who, SLOT_SPECIAL, input, scene, true)
+                    begin_move(p, who, kind, input, scene, true)
                 } else if pressed_mechanic {
                     // `E` is the class mechanic, and on half the roster that is
                     // an instant change of state with no frames to it -- throw
@@ -4373,8 +4496,17 @@ fn step_player(
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
                     rise_from_the_floor(p, kind, scene);
+                    back_to_the_floor(p, kind, scene);
+                    spend_the_rise(p, kind);
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, true)
+                }
+                // The Elementalist's Raise: an instant on the earth click's
+                // press, the way it was on the mechanic key. See
+                // `raise_on_the_click`.
+                else if raise_on_the_click(p, pressed_earth) {
+                    mechanic_action(p, who, input, scene);
+                    Action::Free
                 } else if input.has(Input::SHIFT)
                     && (ax != 0 || az != 0)
                     && !shadow::shift_spent(p, true)
@@ -5023,30 +5155,142 @@ fn blood_move(input: Input) -> Option<u8> {
 
 fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
     use moves::elementalist as e;
-    if !p.grounded {
-        // Left before right, so both buttons at once is an attack rather than
-        // silence -- the same tie-break the Dual mage and the Champion make.
-        if input.has(Input::LEFT) {
-            return Some(e::AIR_BOLT);
+    use moves::elementalist::keys;
+    // Left before middle before right, so a hand that presses two gets an
+    // attack rather than silence -- the tie-break every class makes.
+    let click = if input.has(keys::EARTH) {
+        keys::EARTH
+    } else if input.has(keys::FIRE) {
+        keys::FIRE
+    } else if input.has(keys::WIND) {
+        keys::WIND
+    } else {
+        return None;
+    };
+    let takeoff = match click {
+        keys::EARTH => e::EARTH_JUMP,
+        keys::FIRE => e::FIRE_FOUNTAIN,
+        _ => e::UPDRAFT,
+    };
+    // **The row is where her feet are, and space is a row of its own.** On
+    // the floor with the jump button's window open, a click leaves the floor
+    // -- the Champion's rule, kept in [`Player::rise`] for a class whose
+    // mechanic does not keep it. See [`rise_window`].
+    if p.grounded {
+        if !p.aboard() && p.rise.window > 0 {
+            return Some(takeoff);
         }
-        // The third click is the one button on the class the floor does not
-        // change: the Cinder spray is thrown to a place, and a place is the
-        // same place from the air. See `moves::elementalist::CINDER`.
-        if input.has(Input::MIDDLE) {
-            return Some(e::CINDER);
-        }
-        return input.has(Input::RIGHT).then_some(e::GALE);
+        return match click {
+            // Raise is an instant, not a move: the press edge is read where
+            // the mechanic's instants are, beside this. See
+            // `raise_on_the_click`.
+            keys::EARTH => None,
+            keys::FIRE => Some(SLOT_SPECIAL),
+            _ => Some(e::AIR_BALL),
+        };
     }
-    if input.has(Input::RIGHT) {
-        return Some(SLOT_HEAVY);
+    // The first few frames of a jump are still the floor's, as the
+    // Champion's are: a click in them is the takeoff from the ground, and
+    // `back_to_the_floor` puts her down for it.
+    if !p.aboard() && p.rise.window > 0 && p.rise.lifted <= t::floor_grace() {
+        return Some(takeoff);
     }
-    if input.has(Input::MIDDLE) {
-        return Some(e::CINDER);
+    // **In the air, only the wind has a takeoff.** Space held with right click
+    // is the Updraft, once per trip off the ground: it is what stretches a
+    // jump. Earth and fire take off from the floor only -- the earth jump is
+    // a jump, and the fountain is a burst at her feet.
+    if click == keys::WIND && input.has(Input::SPACE) && !p.rise.used && !p.aboard() {
+        return Some(e::UPDRAFT);
     }
-    // Fissure is stranded by the retirement of shift as an attack modifier,
-    // along with the other two committed moves in the roster. See
-    // `clicked_move`.
-    input.has(Input::LEFT).then_some(SLOT_POKE)
+    Some(match click {
+        keys::EARTH => e::LANDFALL,
+        keys::FIRE => e::FIRE_CARPET,
+        _ => e::GALE,
+    })
+}
+
+/// Is this one of the Elementalist's three takeoffs?
+fn elementalist_takeoff(class: Class, kind: u8) -> bool {
+    use moves::elementalist as e;
+    class == Class::Elementalist && matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT)
+}
+
+/// Which move `Q` throws: the class special, except on the two classes that
+/// put something else there. The Champion has none -- its three clicks are
+/// its weapons -- and the Elementalist's is the **weak push**, the Bolt on the
+/// floor and the Air bolt off it, since her special went to middle click.
+fn keyed_q(p: &Player) -> Option<u8> {
+    match p.class {
+        Class::Champion => None,
+        Class::Elementalist if p.grounded => Some(SLOT_POKE),
+        Class::Elementalist => Some(moves::elementalist::AIR_BOLT),
+        _ => Some(SLOT_SPECIAL),
+    }
+}
+
+/// **The jump attack's window**, for a class that keeps it on the fighter
+/// rather than in its mechanic. Held open while the jump button is down on
+/// the floor; counted off the floor; and the trip's takeoff handed back once
+/// the feet are down and free. The Champion's three of the same live in
+/// `Mechanic::Forms` and are run by `arm_takeoff` and `refresh_the_rise`.
+fn rise_window(p: &mut Player, input: Input) {
+    if p.class != Class::Elementalist {
+        return;
+    }
+    let r = &mut p.rise;
+    if p.grounded && input.has(Input::SPACE) {
+        r.window = t::takeoff_window().min(u8::MAX as u16) as u8;
+    } else {
+        r.window = r.window.saturating_sub(1);
+    }
+    r.lifted = if p.grounded {
+        0
+    } else {
+        r.lifted.saturating_add(1)
+    };
+    if p.grounded && p.action.actionable() {
+        r.used = false;
+    }
+}
+
+/// **A takeoff clicked just after the jump comes out of the floor**, put back
+/// on the floor it left. The Champion's `rise_from_the_floor`, for the fighter
+/// whose window is [`Player::rise`].
+fn back_to_the_floor(p: &mut Player, kind: u8, scene: &Scene) {
+    if !elementalist_takeoff(p.class, kind) || p.grounded {
+        return;
+    }
+    if p.rise.lifted == 0 || p.rise.lifted > t::floor_grace() || p.vel.y.raw() <= 0 {
+        return;
+    }
+    let floor = scene.arena.ground_under(p.pos);
+    if floor.raw() > p.pos.y.raw() {
+        return;
+    }
+    p.pos.y = floor;
+    p.vel.y = Fx::ZERO;
+    p.grounded = true;
+    p.jump_hold = 0;
+}
+
+/// Spend this trip's takeoff, if the move is one.
+fn spend_the_rise(p: &mut Player, kind: u8) {
+    if elementalist_takeoff(p.class, kind) {
+        p.rise.used = true;
+        p.rise.window = 0;
+    }
+}
+
+/// **Raise, on the earth click's press.** An instant with no frames, as it
+/// was on `E`: a stone at the crosshair, and the click held past its rise is
+/// Fissure's charge. Only on the floor, only free, and never while the jump
+/// window is open -- then the same click is the earth jump.
+fn raise_on_the_click(p: &Player, pressed_earth: bool) -> bool {
+    pressed_earth
+        && p.class == Class::Elementalist
+        && p.grounded
+        && !p.aboard()
+        && p.rise.window == 0
 }
 
 /// Which move `F` throws, here and now.
@@ -5057,7 +5301,9 @@ fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
 /// else reads the key yet. See `moves::elementalist::UPDRAFT`.
 fn keyed_f(p: &Player) -> Option<u8> {
     match p.class {
-        Class::Elementalist if p.grounded => Some(moves::elementalist::UPDRAFT),
+        // The Updraft went to space and right click on 2026-10-09; the key
+        // it left carries the Cinder spray, whose click the pillar took.
+        Class::Elementalist if p.grounded => Some(moves::elementalist::CINDER),
         Class::Elementalist => Some(moves::elementalist::DOWNDRAFT),
         _ => None,
     }
@@ -5093,8 +5339,10 @@ fn keyed_side_b(p: &Player) -> Option<u8> {
 /// Split the same way `clicked_move` and `moves::binding` are: what the kit
 /// declares lives in `moves`, and what your feet are doing is read here.
 fn keyed_move(p: &Player) -> Option<u8> {
-    if p.class == Class::Elementalist && !p.grounded {
-        return Some(moves::elementalist::LANDFALL);
+    // **The strong push**, since 2026-10-09: Cataclysm, from the floor and
+    // the air alike. Raise went to the earth click and Landfall with it.
+    if p.class == Class::Elementalist {
+        return Some(SLOT_HEAVY);
     }
     moves::on_e(p.class)
 }
@@ -6092,6 +6340,15 @@ fn begin_move(
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
+    // The Air ball's hold is before the move too, and the press is where the
+    // ball goes: on the floor under the crosshair, asked of `crate::aim` the
+    // way Raise asks it. The world raises the ball there on this frame, and
+    // the release sends it from there. See `World::roll_the_ball`.
+    if moves::charge(p.class, kind) == Some(moves::Charge::Gather) {
+        p.ball_at = aim::grounded_path(who, input, moves::get(p.class, kind).reach, scene).to;
+        aim_channel(p, who, kind, 0, input, scene);
+        return Action::Channel { kind, held: 0 };
+    }
     lock_aim(p, who, kind, input, scene);
     throw_move(p, kind, input, aerial)
 }
@@ -6197,9 +6454,15 @@ fn step_channel(
 /// front of a move rather than a thing of its own.
 const fn channel_button(class: Class, kind: u8) -> u16 {
     match kind {
-        // The Elementalist's Fissure is the mechanic key held: the stone was
-        // raised on the press and the crack is what letting go throws.
-        SLOT_COMMITTED if matches!(class, Class::Elementalist) => Input::MECHANIC,
+        // The Elementalist's three holds are her three clicks: Fissure is the
+        // earth click held (the stone was raised on the press and the crack
+        // is what letting go throws), the Strike is the fire click held, and
+        // the Air ball is the wind click held.
+        SLOT_COMMITTED if matches!(class, Class::Elementalist) => moves::elementalist::keys::EARTH,
+        SLOT_SPECIAL if matches!(class, Class::Elementalist) => moves::elementalist::keys::FIRE,
+        moves::elementalist::AIR_BALL if matches!(class, Class::Elementalist) => {
+            moves::elementalist::keys::WIND
+        }
         // Shift picks *which* click; the click is what holds the wind-up open,
         // so letting go of shift halfway through does not throw the move.
         SLOT_POKE | SLOT_COMMITTED => Input::LEFT,
@@ -6235,7 +6498,12 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
     // The Strike is aimed at the point the crosshair is on, exactly as the
     // untouched pillar is: live through the hold, and the hold buys nothing
     // about *where*. The other two buy a distance along the solved line.
-    if moves::charge(p.class, kind) != Some(moves::Charge::Strike) {
+    // The Air ball's hold buys size, not distance: its line is only ever
+    // read for the way it rolls.
+    if !matches!(
+        moves::charge(p.class, kind),
+        Some(moves::Charge::Strike | moves::Charge::Gather)
+    ) {
         p.aim_path.to = p.aim_path.at(m.reach_after(held));
     }
 }
@@ -6291,8 +6559,14 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
         // From the stone she is holding churning, flat toward the crosshair's
         // spot on the ground. Her own feet when there is none, which the
         // crack's slot cannot reach without one -- see `hold_the_churn`.
+        // The Air ball races the same way from where it was raised.
         aim::Kind::Racing => {
-            aim::racing_path(held_stone_at(p).unwrap_or(p.pos), who, input, reach, scene)
+            let from = if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
+                p.ball_at
+            } else {
+                held_stone_at(p).unwrap_or(p.pos)
+            };
+            aim::racing_path(from, who, input, reach, scene)
         }
     };
 }
@@ -6340,7 +6614,7 @@ fn hold_the_churn(p: &mut Player, input: Input) {
         p.charging_stone = NO_STONE;
         return;
     };
-    let holding = input.has(Input::MECHANIC);
+    let holding = input.has(moves::elementalist::keys::EARTH);
     match p.action {
         Action::Free if holding && p.grounded => {
             if stone.about_to_erupt() {
@@ -7592,7 +7866,8 @@ impl World {
             // and goes now rather than being drawn one more frame at the far
             // end of a flight it never made. Nothing else expires here: a
             // tornado, for one, is older than its life by design.
-            let spent = effect.kind == EffectKind::Haemorrhage && effect.age >= effect.life;
+            let spent = (effect.kind == EffectKind::Haemorrhage && effect.age >= effect.life)
+                || (effect.kind == EffectKind::AirBall && effect.reach.raw() <= 0);
             self.effects[i] = (!spent).then_some(effect);
         }
         self.step_bleeds();
@@ -8220,6 +8495,7 @@ impl World {
                         self.players[i].grounded = false;
                     }
                 }
+                self.ride_the_thermal(effect);
                 if effect.age == 1 {
                     let inside = stones::within(&self.players, effect.pos, effect.reach);
                     for (index, hit) in inside.into_iter().enumerate() {
@@ -8452,6 +8728,73 @@ impl World {
                         }
                     }
                     self.feed_the_caster(effect, 0, effect.pos, slab.radius);
+                }
+            }
+
+            // The Air ball rolls, carries, and shrinks -- all of it in one
+            // place, because each of the three reads the other two. It hurts
+            // nobody. See `roll_the_ball`.
+            EffectKind::AirBall => self.roll_the_ball(effect),
+
+            // The Fire carpet burns whoever touches the strip, on the tick.
+            // What it is *for* is the shot flown down it and the Thermal
+            // thrown along it; the burn is what makes it a thing in the way.
+            EffectKind::FireCarpet => {
+                if effect.ticks_now() {
+                    let (a, b) = effect.carpet_line();
+                    let radius = effect.field_radius();
+                    for i in 0..MAX_PLAYERS {
+                        if self.effects_reach(i, effect.owner) && self.on_the_line(i, a, b, radius)
+                        {
+                            self.drain(i, effect);
+                        }
+                    }
+                    // The small bodies along the same line a fighter is held
+                    // to, and each creature where the strip passes nearest
+                    // its middle -- one burn a tick, wherever it is touched.
+                    self.gore_critters_by(effect, EffectReach::Line(a, b, radius), Fx::ONE);
+                    for slot in 0..MAX_MONSTERS {
+                        let Some(beast) = self.monsters[slot] else {
+                            continue;
+                        };
+                        let (along, _, _) =
+                            crate::math::segment_closest(a, b, beast.pos, beast.pos);
+                        let nearest = crate::math::lerp3(a, b, along);
+                        let dealt =
+                            self.gore_for_a_share(slot, effect, 0, nearest, radius, Fx::ONE);
+                        let owed = effect.leeched(dealt);
+                        self.players[effect.owner as usize].heal(owed);
+                    }
+                }
+            }
+
+            // The Fire fountain: its first frames are the burst at her feet,
+            // the move's own hit once per body; after that a wash of fire
+            // standing where she took off, burning on the tick.
+            EffectKind::Fountain => {
+                let wash = effect.fountain_volume();
+                let (radius, height) = (t::body_radius(), t::body_height());
+                if effect.age <= t::fountain_burst() {
+                    let burst = effect.source().radius;
+                    for i in 0..MAX_PLAYERS {
+                        if self.effects_reach(i, effect.owner)
+                            && !effect.already_hit(0, i)
+                            && self.inside(i, effect.pos, burst)
+                        {
+                            effect.take_hit(0, i);
+                            self.cut(i, effect, effect.pos, effect.source().damage);
+                        }
+                    }
+                    self.gore_the_creature(effect, 0, effect.pos, burst);
+                } else if effect.ticks_now() {
+                    for i in 0..MAX_PLAYERS {
+                        let p = self.players[i];
+                        if self.effects_reach(i, effect.owner)
+                            && wash.contains(effect.pos, p.pos, radius, height)
+                        {
+                            self.drain(i, effect);
+                        }
+                    }
                 }
             }
 
@@ -9360,6 +9703,46 @@ fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
         .map(|(i, _)| i);
     if let Some(i) = oldest {
         effects[i] = Some(effect);
+    }
+}
+
+/// Put an effect into the world in place of any of the same kind its owner
+/// already has: one Air ball, one carpet, one wash of fire at a time.
+fn spawn_the_only_one(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
+    for slot in effects.iter_mut() {
+        if slot.is_some_and(|e| e.kind == effect.kind && e.owner == effect.owner) {
+            *slot = None;
+        }
+    }
+    spawn_effect(effects, effect);
+}
+
+/// **Is a body standing in this fire?** Every fire on the floor or in the
+/// air, by the same volume it burns with: a pillar's two, a tornado's two
+/// where it has got to, a cloud's ball, the carpet's strip and the
+/// fountain's wash. What a Downdraft landing asks, and what a Thermal asks.
+fn body_in_fire(e: &Effect, pos: V3, radius: Fx, height: Fx) -> bool {
+    match e.kind {
+        EffectKind::FirePillar => {
+            let (base, column) = e.pillar_volumes();
+            base.contains(e.pos, pos, radius, height) || column.contains(e.pos, pos, radius, height)
+        }
+        EffectKind::FireTornado => {
+            let at = e.tornado_pos();
+            let (base, column) = e.pillar_volumes();
+            base.contains(at, pos, radius, height) || column.contains(at, pos, radius, height)
+        }
+        EffectKind::Embers => e.ember_volume().contains(e.pos, pos, radius, height),
+        EffectKind::Fountain => e.fountain_volume().contains(e.pos, pos, radius, height),
+        EffectKind::FireCarpet => {
+            let (a, b) = e.carpet_line();
+            let mid = V3::new(pos.x, pos.y.add(height.mul(Fx::ratio(1, 2))), pos.z);
+            let body = V3::new(pos.x, pos.y.add(height), pos.z);
+            crate::math::segment_gap(a, b, pos, body).raw() <= e.field_radius().add(radius).raw()
+                || crate::math::segment_gap(a, b, mid, mid).raw()
+                    <= e.field_radius().add(radius).raw()
+        }
+        _ => false,
     }
 }
 
@@ -10551,22 +10934,7 @@ impl World {
             let Some(e) = self.effects[slot] else {
                 continue;
             };
-            let in_fire = match e.kind {
-                EffectKind::FirePillar => {
-                    let (base, column) = e.pillar_volumes();
-                    base.contains(e.pos, p.pos, radius, height)
-                        || column.contains(e.pos, p.pos, radius, height)
-                }
-                EffectKind::FireTornado => {
-                    let at = e.tornado_pos();
-                    let (base, column) = e.pillar_volumes();
-                    base.contains(at, p.pos, radius, height)
-                        || column.contains(at, p.pos, radius, height)
-                }
-                EffectKind::Embers => e.ember_volume().contains(e.pos, p.pos, radius, height),
-                _ => false,
-            };
-            if in_fire {
+            if body_in_fire(&e, p.pos, radius, height) {
                 self.effects[slot] = None;
                 burned = true;
             }
@@ -10593,6 +10961,275 @@ impl World {
                 reach,
             ),
         );
+    }
+
+    /// Raise an Air ball where she pressed for it. One of hers at a time: a
+    /// second press while one rolls starts a new one and the old one goes.
+    fn raise_the_ball(&mut self, i: usize) {
+        let p = self.players[i];
+        if self
+            .effects
+            .iter()
+            .flatten()
+            .any(|e| e.kind == EffectKind::AirBall && e.owner == i as u8 && !e.ball_sent())
+        {
+            return;
+        }
+        let cap = moves::get(p.class, moves::elementalist::AIR_BALL).channel;
+        spawn_the_only_one(
+            &mut self.effects,
+            Effect::cast(
+                EffectKind::AirBall,
+                i as u8,
+                p.class,
+                moves::elementalist::AIR_BALL,
+                p.ball_at,
+                V3::ZERO,
+                crate::effects::ball_radius_after(0, cap),
+            ),
+        );
+    }
+
+    /// Let her raised Air ball go, flat along the line the release aimed.
+    fn send_the_ball(&mut self, i: usize) {
+        let p = self.players[i];
+        let dir = p.aim_path.dir();
+        let flat = V3::new(dir.x, Fx::ZERO, dir.z);
+        if flat.flat_len().raw() == 0 {
+            return;
+        }
+        let flat = flat.normalized();
+        for e in self.effects.iter_mut().flatten() {
+            if e.kind == EffectKind::AirBall && e.owner == i as u8 && !e.ball_sent() {
+                e.dir = flat;
+            }
+        }
+    }
+
+    /// **The earth jump**, on its first active frame, after its lift.
+    ///
+    /// What it does depends on what she is standing on:
+    ///
+    /// - **The floor**: a stone comes up with her ([`Structure::brought_up`]),
+    ///   a little slower and falling more gently, so a straight jump comes down
+    ///   on to it in the air.
+    /// - **A stone on the floor**: it shatters outward under her, and the jump
+    ///   is bigger (`tuning::earth_shatter_jump`).
+    /// - **A stone in the air**: it is driven back into the ground, where it
+    ///   shatters, and she jumps off it.
+    ///
+    /// [`Structure::brought_up`]: crate::class::Structure::brought_up
+    fn earth_jump(&mut self, i: usize) {
+        let p = self.players[i];
+        let feet = p.pos;
+        match stones::under(&self.players, feet) {
+            Some(index) if stones::resting(&self.players, index) => {
+                let lit = stones::is_lit(&self.players, index);
+                if let Some(middle) = stones::destroy(&mut self.players, index) {
+                    debris::shatter(&mut self.debris, i as u8, middle);
+                    if lit {
+                        spawn_effect(
+                            &mut self.effects,
+                            Effect::cast(
+                                EffectKind::Embers,
+                                i as u8,
+                                p.class,
+                                moves::elementalist::CINDER,
+                                middle,
+                                V3::ZERO,
+                                t::embers_radius(),
+                            ),
+                        );
+                    }
+                    let q = &mut self.players[i];
+                    q.vel.y = q.vel.y.mul(t::earth_shatter_jump());
+                }
+            }
+            Some(index) => {
+                stones::drive_down(&mut self.players, index, t::earth_meteor_speed());
+            }
+            None => {
+                let vel = self.players[i].vel;
+                stones::raise(
+                    &mut self.players[i],
+                    class::Structure::brought_up(feet, vel),
+                );
+            }
+        }
+    }
+
+    /// **One frame of an Air ball**: grow while she holds it, or roll, shrink
+    /// and carry once it is sent.
+    ///
+    /// Raised, it sits where the crosshair put it and its radius follows the
+    /// hold (`effects::ball_radius_after`); knocked out of the hold, it comes
+    /// apart where it stands. Sent, it rolls along the floor at the speed its
+    /// size gives it (`effects::ball_speed`), shrinking at the steady rate --
+    /// faster while it carries somebody -- and is gone when it has shrunk
+    /// away or met a wall or a stone.
+    ///
+    /// **Carrying** is a moving floor: a body standing in it is moved with it,
+    /// frame for frame, and can still walk inside it; a body that jumps inside
+    /// it is given its speed, so it leaves with it. A ball smaller than
+    /// `tuning::air_ball_holds` holds nobody, so the rider is put down a
+    /// moment before the ball vanishes rather than dropped when it does.
+    fn roll_the_ball(&mut self, effect: &mut Effect) {
+        use moves::elementalist::AIR_BALL;
+        let owner = effect.owner as usize;
+        if !effect.ball_sent() {
+            let p = self.players[owner];
+            match p.action {
+                Action::Channel { kind, held } if kind == AIR_BALL => {
+                    let cap = moves::get(p.class, kind).channel;
+                    effect.reach = crate::effects::ball_radius_after(held, cap);
+                }
+                // Let go, and about to be sent on the move's first active
+                // frame: it holds the size it was let go at.
+                Action::Startup { kind, .. } | Action::Active { kind, .. } if kind == AIR_BALL => {}
+                _ => effect.reach = Fx::ZERO,
+            }
+            return;
+        }
+
+        let speed = crate::effects::ball_speed(effect.reach);
+        let step = effect.dir.scale(speed.mul(DT));
+        // A ball climbs a step up to half its own size, and rolls off a drop
+        // on to whatever is below it.
+        let climbs = effect.reach.mul(Fx::ratio(1, 2));
+        let terrain = self.terrain();
+        let next = effect.pos.add(step);
+        let r = terrain.resolve_sized(
+            V3::new(next.x, next.y.add(climbs), next.z),
+            step.scale(Fx::ONE.div(DT)),
+            true,
+            effect.reach,
+            effect.reach.add(effect.reach),
+        );
+        let blocked_by_a_stone = stones::gather(&self.players).iter().flatten().any(|stone| {
+            let apart = V3::new(stone.at.x.sub(next.x), Fx::ZERO, stone.at.z.sub(next.z));
+            apart.flat_len().raw() < stone.radius().add(effect.reach.mul(Fx::ratio(1, 2))).raw()
+                && stone.top().raw() > next.y.add(climbs).raw()
+                && stone.at.y.raw() < next.y.add(effect.reach).raw()
+        });
+        if r.wall || blocked_by_a_stone {
+            effect.reach = Fx::ZERO;
+            return;
+        }
+        let floor = terrain.floor_below(V3::new(r.pos.x, r.pos.y.add(effect.reach), r.pos.z));
+        let moved = V3::new(
+            r.pos.x.sub(effect.pos.x),
+            floor.sub(effect.pos.y),
+            r.pos.z.sub(effect.pos.z),
+        );
+        effect.pos = V3::new(r.pos.x, floor, r.pos.z);
+
+        let holds = effect.reach.raw() >= t::air_ball_holds().raw();
+        let mut carrying = false;
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            let apart = V3::new(
+                p.pos.x.sub(effect.pos.x),
+                Fx::ZERO,
+                p.pos.z.sub(effect.pos.z),
+            );
+            let in_it = holds
+                && p.health > 0
+                && apart.flat_len().raw() < effect.reach.raw()
+                && p.pos.y.raw() >= effect.pos.y.sub(climbs).raw()
+                && p.pos.y.raw() < effect.pos.y.add(effect.reach).add(effect.reach).raw();
+            if !in_it {
+                effect.struck &= !crate::effects::Effect::carried_bit(i);
+                continue;
+            }
+            // Whoever it has hold of -- her, or anybody it rolled over -- goes
+            // with it. Getting out is jumping out, or walking out the side.
+            effect.take_hit(0, i);
+            carrying = true;
+            let q = &mut self.players[i];
+            if q.grounded {
+                q.pos.x = q.pos.x.add(moved.x);
+                q.pos.z = q.pos.z.add(moved.z);
+            } else {
+                q.vel.x = effect.dir.x.mul(speed);
+                q.vel.z = effect.dir.z.mul(speed);
+            }
+        }
+        let mut shrink = t::air_ball_shrink().mul(DT);
+        if carrying {
+            shrink = shrink.mul(t::air_ball_carried_shrink());
+        }
+        effect.reach = effect.reach.sub(shrink).max(Fx::ZERO);
+    }
+
+    /// **The Thermal**: her Updraft and her own fire sharing space, whichever
+    /// came first.
+    ///
+    /// Asked every frame the column blows, so it does not matter whether she
+    /// took off in fire or laid the carpet into a column already blowing. Once
+    /// per column, on the owner's own bit. It throws her up harder than the
+    /// Updraft does, and if the fire is a Fire carpet, along the carpet too --
+    /// and the carpet is used up, because the heat went with her.
+    fn ride_the_thermal(&mut self, effect: &mut Effect) {
+        let owner = effect.owner as usize;
+        if effect.already_hit(1, owner) {
+            return;
+        }
+        let p = self.players[owner];
+        if p.health <= 0
+            || !effect.draft_volume().contains(
+                effect.pos,
+                p.pos,
+                t::body_radius(),
+                t::body_height(),
+            )
+        {
+            return;
+        }
+        let (radius, height) = (t::body_radius(), t::body_height());
+        // The column's own axis, for the carpet: a strip that reaches into
+        // the column anywhere along its height is in it.
+        let foot = effect.pos;
+        let crown = V3::new(foot.x, foot.y.add(t::draft_height()), foot.z);
+        let mut fire = None;
+        for slot in 0..MAX_EFFECTS {
+            let Some(e) = self.effects[slot] else {
+                continue;
+            };
+            if e.owner != effect.owner {
+                continue;
+            }
+            let meets = match e.kind {
+                EffectKind::FireCarpet => {
+                    let (a, b) = e.carpet_line();
+                    crate::math::segment_gap(a, b, foot, crown).raw()
+                        <= effect.reach.add(e.field_radius()).raw()
+                }
+                _ => body_in_fire(&e, p.pos, radius, height),
+            };
+            if meets {
+                fire = Some(slot);
+                if e.kind == EffectKind::FireCarpet {
+                    break;
+                }
+            }
+        }
+        let Some(slot) = fire else {
+            return;
+        };
+        effect.take_hit(1, owner);
+        let q = &mut self.players[owner];
+        q.vel.y = q.vel.y.max(t::thermal_lift());
+        q.grounded = false;
+        q.fall_over = Fx::ZERO;
+        if let Some(carpet) = self.effects[slot].filter(|e| e.kind == EffectKind::FireCarpet) {
+            let along = carpet.dir.scale(t::thermal_push());
+            q.vel.x = q.vel.x.add(along.x);
+            q.vel.z = q.vel.z.add(along.z);
+            if along.y.raw() > 0 {
+                q.vel.y = q.vel.y.add(along.y);
+            }
+            self.effects[slot] = None;
+        }
     }
 }
 

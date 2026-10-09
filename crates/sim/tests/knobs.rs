@@ -47,6 +47,40 @@ const LEVEL_DATA: &[&str] = &["land.rs", "layout.rs"];
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "let third = Fx::ratio(1, 3)",
+        "Presentation: where a Fire carpet's drawn flame is widest along its trip. The hit \
+         test is the capsule, and no flame is drawn wider than it.",
+    ),
+    (
+        "Fx::ONE.sub(share.sub(third).div(Fx::ONE.sub(third)).mul(Fx::ratio(3, 4)))",
+        "Presentation: how far a drawn carpet flame thins by the end of its trip.",
+    ),
+    (
+        "const CARPET_FLOW: u16 = 30",
+        "Presentation: how fast the drawn flames run along a Fire carpet, like the bead \
+         counts beside it. The carpet burns the same whatever this is.",
+    ),
+    (
+        "pub const EARTH: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Elementalist's earth click.",
+    ),
+    (
+        "pub const FIRE: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is her fire click.",
+    ),
+    (
+        "pub const WIND: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is her wind click.",
+    ),
+    (
+        "pub const STRONG_PUSH: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is her strong push.",
+    ),
+    (
+        "pub const WEAK_PUSH: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is her weak push.",
+    ),
+    (
         "rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()",
         "Rounding slack in the steepness test: two samples of the land a step apart differ \
          by a few thousandths along a contour. The steepness itself is the knob.",

@@ -20,13 +20,21 @@
 use sim::class::{Mechanic, Structure};
 use sim::gust::Gale;
 use sim::moves::elementalist as air;
+use sim::moves::elementalist::keys;
 use sim::state::{Action, SLOT_HEAVY, SLOT_POKE};
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
-const L: u16 = Input::LEFT;
-const R: u16 = Input::RIGHT;
-const E: u16 = Input::MECHANIC;
+/// The weak push: Bolt standing, the Air bolt in the air.
+const PUSH: u16 = keys::WEAK_PUSH;
+/// The strong push: Cataclysm, standing and in the air alike.
+const SHOVE: u16 = keys::STRONG_PUSH;
+/// The wind click: the Gale in the air.
+const BLOW: u16 = keys::WIND;
+/// The earth click on the floor: Raise.
+const RAISE: u16 = keys::EARTH;
+/// The same click in the air: Landfall.
+const LAND: u16 = keys::EARTH;
 const SHIFT: u16 = Input::SHIFT;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
@@ -145,49 +153,64 @@ fn pressing(button: u16, height: Option<f32>) -> Option<u8> {
 #[test]
 fn the_same_buttons_mean_different_moves_off_the_ground() {
     // The Champion's grid, read one class further: the button never changes
-    // meaning -- left is the cheap one, right is the committed one -- and the
-    // row is the situation. A player who has learnt her on the floor has
-    // learnt most of her in the air.
-    assert_eq!(pressing(L, None), Some(SLOT_POKE), "left click, standing");
-    assert_eq!(pressing(R, None), Some(SLOT_HEAVY), "right click, standing");
+    // meaning -- `Q` is the weak push, `E` the strong one, and the clicks are
+    // what she makes -- and the row is the situation. A player who has learnt
+    // her on the floor has learnt most of her in the air. The bindings are
+    // `moves::elementalist::keys` (2026-10-09, "On three clicks").
     assert_eq!(
-        pressing(L, Some(2.0)),
+        pressing(PUSH, None),
+        Some(SLOT_POKE),
+        "the weak push, standing"
+    );
+    assert_eq!(
+        pressing(SHOVE, None),
+        Some(SLOT_HEAVY),
+        "the strong push, standing"
+    );
+    assert_eq!(
+        pressing(PUSH, Some(2.0)),
         Some(air::AIR_BOLT),
-        "left click in the air should be the Air bolt"
+        "the weak push in the air should be the Air bolt"
     );
     assert_eq!(
-        pressing(R, Some(2.0)),
+        pressing(SHOVE, Some(2.0)),
+        Some(SLOT_HEAVY),
+        "the strong push in the air should still be Cataclysm"
+    );
+    assert_eq!(
+        pressing(BLOW, Some(2.0)),
         Some(air::GALE),
-        "right click in the air should be the Gale"
+        "the wind click in the air should be the Gale"
     );
     assert_eq!(
-        pressing(E, Some(2.0)),
+        pressing(LAND, Some(2.0)),
         Some(air::LANDFALL),
-        "`E` in the air should be Landfall"
+        "the earth click in the air should be Landfall"
     );
 }
 
 #[test]
-fn the_mechanic_key_is_still_an_instant_on_the_floor() {
-    // The half of `E` that did not change. Standing up it raises a stone with
-    // no frames at all -- nothing to punish, because there is nothing there --
-    // and only off the floor does it become a move with a wind-up.
+fn the_earth_click_is_still_an_instant_on_the_floor() {
+    // The half of the earth click that is Raise, as it was on `E`. Standing up
+    // it raises a stone with no frames at all -- nothing to punish, because
+    // there is nothing there -- and only off the floor does it become a move
+    // with a wind-up.
     let mut w = elementalist();
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, RAISE, 0);
     assert_eq!(doing(&w), None, "raising a stone started a move");
-    assert_eq!(stones_of(&w).len(), 1, "the mechanic key raised nothing");
+    assert_eq!(stones_of(&w).len(), 1, "the earth click raised nothing");
 }
 
 #[test]
 fn shift_does_not_reach_the_air_row() {
-    // Shift plus left click is Fissure, a crack that races *along the ground*.
-    // There is no airborne version of it, so the modifier is ignored rather
-    // than being made to mean something it does not -- and ignoring it has to
-    // come out as the Air bolt rather than as silence, or the input is eaten.
+    // Shift is the dodge and nothing else; it is not an attack modifier on the
+    // floor (Fissure is the earth click held now) and it must not become one
+    // in the air. Ignoring it has to come out as the Air bolt rather than as
+    // silence, or the input is eaten.
     assert_eq!(
-        pressing(SHIFT | L, Some(2.0)),
+        pressing(SHIFT | PUSH, Some(2.0)),
         Some(air::AIR_BOLT),
-        "shift in the air should throw what left click throws up there"
+        "shift in the air should throw what the weak push throws up there"
     );
 }
 
@@ -201,7 +224,7 @@ fn both_air_shots_leave_her_hand_and_fly() {
     // Bolt and Cataclysm are instant lines, resolved on the frame they come
     // out. These have a speed, so there is something to lead and something to
     // walk out of.
-    for (button, gale) in [(L, Gale::Bolt), (R, Gale::Disc)] {
+    for (button, gale) in [(PUSH, Gale::Bolt), (BLOW, Gale::Disc)] {
         let mut w = elementalist();
         aloft(&mut w, 2.0);
         let m = sim::moves::get(Class::Elementalist, gale.slot());
@@ -254,7 +277,7 @@ fn a_shot_expires_at_its_own_range() {
     let mut w = elementalist();
     aloft(&mut w, 2.0);
     let m = sim::moves::get(Class::Elementalist, air::AIR_BOLT);
-    run(&mut w, 1, L, 0);
+    run(&mut w, 1, PUSH, 0);
     // Long enough to cover the whole range at the shot's own speed, and then
     // some.
     let legs = (m.reach.raw() as i64 * 60 / t::air_bolt_speed().raw().max(1) as i64) as u32;
@@ -427,7 +450,7 @@ fn a_gale_is_worth_more_at_the_tip_than_at_the_hand() {
         let pitch = crosshair_onto_the_floor_at(&w, w.players[1].pos, reach);
         let before = w.players[1].health;
         for f in 0..160 {
-            let a = if f == 0 { R } else { 0 };
+            let a = if f == 0 { BLOW } else { 0 };
             w.advance([
                 Input::looking_at(a, LOOK_RIGHT, pitch),
                 Input::looking_at(0, LOOK_LEFT, 0),
@@ -461,7 +484,7 @@ fn the_wind_up_waits_for_the_floor() {
     let mut w = elementalist();
     aloft(&mut w, 12.0);
     let m = sim::moves::get(Class::Elementalist, air::LANDFALL);
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, LAND, 0);
     run(&mut w, m.startup as u32 + 2, 0, 0);
 
     assert!(
@@ -493,7 +516,7 @@ fn the_descent_is_a_descent() {
     let mut w = elementalist();
     aloft(&mut w, 12.0);
     let m = sim::moves::get(Class::Elementalist, air::LANDFALL);
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, LAND, 0);
 
     let hanging = w.players[0].pos.y;
     run(&mut w, m.air_stall as u32 - 2, 0, 0);
@@ -524,11 +547,11 @@ fn a_hit_on_the_way_down_ends_the_plunge() {
         // far above him she is.
         w.players[1].pos = at(1.0, 0.0, 8.0);
         aloft(&mut w, 6.0);
-        run(&mut w, 1, E, 0);
+        run(&mut w, 1, LAND, 0);
         // Through the hang, so what lands, lands on the descent.
         let hang = sim::moves::get(Class::Elementalist, air::LANDFALL).air_stall as u32;
         run(&mut w, hang, 0, 0);
-        run(&mut w, 40, 0, if interfere { L } else { 0 });
+        run(&mut w, 40, 0, if interfere { Input::LEFT } else { 0 });
         w
     };
 
@@ -560,7 +583,7 @@ fn landfall_drives_a_slab_up_in_front_of_her() {
     let mut w = elementalist();
     w.players[0].pos = at(0.0, 0.0, 8.0);
     aloft(&mut w, 4.0);
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, LAND, 0);
     run(&mut w, 120, 0, 0);
 
     let slab = stones_of(&w);
@@ -659,7 +682,7 @@ fn the_slam_staggers_where_she_lands() {
     w.players[1].pos = at(1.2, 0.0, 8.0);
     aloft(&mut w, 4.0);
     let before = w.players[1].health;
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, LAND, 0);
     run(&mut w, 60, 0, 0);
     assert!(
         w.players[1].health < before,
@@ -675,13 +698,13 @@ fn the_slab_spends_the_cap_of_three() {
     let mut w = elementalist();
     w.players[0].pos = at(0.0, 0.0, 8.0);
     for _ in 0..3 {
-        run(&mut w, 1, E, 0);
+        run(&mut w, 1, RAISE, 0);
         run(&mut w, 8, 0, 0);
     }
     assert_eq!(stones_of(&w).len(), 3, "the fixture did not fill the cap");
 
     aloft(&mut w, 4.0);
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, LAND, 0);
     run(&mut w, 120, 0, 0);
     assert_eq!(
         stones_of(&w).len(),

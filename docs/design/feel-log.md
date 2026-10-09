@@ -7739,3 +7739,35 @@ Bank, the Shelves, the Pinewood and the Saddle; every road and room walked by
 `tests/valley.rs`. The road needs no jump anywhere now, which drops the
 valley's "climb with a friend" thesis to the crags, by choice: whether the
 road should keep a hop or two of its own is the first thing to feel.
+
+### 2026-10-09 — the Elementalist on three clicks
+**Changed** Her core moved on to the three clicks, from the first playtest (the Champion held
+together because his three clicks *are* the class). Left is earth (Raise, Fissure held,
+Landfall in the air), middle is fire (the pillar, the Strike held, a new **Fire carpet** in the
+air), right is wind (a new **Air ball** on the floor, the Gale in the air). `Q` is the Bolt
+(Air bolt off the floor) and `E` is Cataclysm in both rows: the weak and strong push. Space
+with a click is a takeoff, on the Champion's window: the new **earth jump**, the new **Fire
+fountain**, and the **Updraft** (off `F`, mobility 20 → 100 so its startup keeps her run, and
+from the air once a trip). An Updraft that shares space with her own fire is a **Thermal**
+(lift 22 m/s against the Updraft's 14, and 12 m/s along a carpet, which it uses up). Cinder
+spray kept `F`. Every number on the four new moves is a first guess. See
+[kits/elementalist.md](kits/elementalist.md) §"On three clicks" and
+[exploration/0008](exploration/0008_elementalist_on_three_clicks.md).
+**Tried and changed while building**
+- *The earth jump's stone as "slightly slower than her"* (0.85 of her rise, 0.92 of her run):
+  measured, the stone rides about 20 cm under her feet the whole way up, so she always lands
+  on it — and a held strafe adds only about 1 m/s (air control is Quake's), so strafing never
+  missed it; an airdodge wipes her rise and the stone catches her at once. Not a choice. Now:
+  the stone keeps 0.4 of her run, and **holding forward in the air keeps it under her**; let
+  go or strafe and it drops behind. Stood on, an aloft stone stops travelling, or it slid out
+  from under her in a few frames. She lands on it about 27 frames in, at about 3.9 m.
+- The earth jump's recovery 6 → 14: at 11 frames all told it was the cheapest move in her kit,
+  which made the Air ball's lockout longer than the cheapest alternative (`feel.rs`).
+- The Fire carpet's burn moved from the move row (8) to its own knob (`Fire carpet, burn per
+  tick`), as the pillar's and the cloud's are: in the row it counted as her softest hit.
+- The Air ball's speed follows the size it is *now*, so it slows as it shrinks; with the
+  shipped numbers a tapped ball rolls about 5 m and a full one about 37.
+- The Ridgeback pin (`tests/ridgeback_pin.rs`) re-pinned for the Elementalist: the same random
+  presses throw different moves. Her envelope fixtures re-recorded for the same reason.
+**Verdict** — unplayed. Known from the start: the carpet is hard to use at speed, and from her
+own seat it is edge-on and reads as one ball of fire.

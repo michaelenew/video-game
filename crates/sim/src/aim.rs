@@ -138,9 +138,11 @@ pub enum Kind {
     /// it there. [`mechanic_path`].
     AtTheMechanic,
     /// From the stone the Elementalist is holding churning, **flat toward the
-    /// crosshair's spot on the ground**, as far as the hold bought. Fissure,
-    /// and nothing else: a crack that races through the ground from a place
-    /// she already chose, in a direction she is choosing now. [`racing_path`].
+    /// crosshair's spot on the ground**, as far as the hold bought. Fissure --
+    /// a crack that races through the ground from a place she already chose,
+    /// in a direction she is choosing now -- and, since 2026-10-09, the Air
+    /// ball, which rolls the same way from where she raised it, its hold buying
+    /// size rather than distance. [`racing_path`].
     Racing,
 }
 
@@ -1353,7 +1355,9 @@ pub fn mechanic_path(from: V3, mechanic: &Mechanic) -> Path {
 
 /// A crack racing through the ground: from `from` -- the stone the
 /// Elementalist held churning, or her own feet if there is none -- **flat,
-/// toward the spot on the ground under the crosshair**, for `reach`.
+/// toward the spot on the ground under the crosshair**, for `reach`. The Air
+/// ball is sent along the same line from where it was raised; only the
+/// direction is read for it, since its hold buys size.
 ///
 /// The fifth line of effect, and the argument for it being one is the same as
 /// for the fourth. The place it starts was aimed already, with the crosshair,
@@ -1717,6 +1721,35 @@ pub fn first_along(
                     foot,
                     slab.radius.add(girth),
                     slab.top.sub(slab.bottom),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+                continue;
+            }
+            // The Fire carpet is a strip, so it is met as a capsule along its
+            // line; the fountain's wash is a column on the floor.
+            if e.kind == EffectKind::FireCarpet {
+                let (a, b) = e.carpet_line();
+                if let Some(dist) = crate::math::ray_hits_capsule(
+                    from,
+                    dir,
+                    limit,
+                    a,
+                    b,
+                    e.field_radius().add(girth),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+                continue;
+            }
+            if e.kind == EffectKind::Fountain {
+                let slab = e.fountain_volume();
+                if let Some(dist) = crate::math::ray_hits_cylinder(
+                    from,
+                    dir,
+                    e.pos,
+                    slab.radius.add(girth),
+                    slab.top,
                 ) {
                     keep(Contact::Fire { dist });
                 }

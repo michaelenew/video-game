@@ -201,6 +201,31 @@ pub enum EffectKind {
     /// where the stone comes up under her and takes her with it. See
     /// `state::World::pay_out`.
     Quake,
+    /// Elementalist. **The Air ball**: a ball of spinning air on the floor.
+    /// `pos` is the point on the floor under its middle and `reach` is its
+    /// radius *now*, so the hit test and the drawing read one number.
+    ///
+    /// Two lives. **Raised**, `dir` is zero: it sits where the crosshair put
+    /// it and grows for as long as she holds the button. **Sent**, `dir` is
+    /// the flat way it rolls: it travels along the floor and shrinks at a
+    /// steady rate, slowing as it goes, until it is gone -- so how far it gets
+    /// is read off how big it is. Anything standing in it rolls with it, her
+    /// included; a body that jumps inside it leaves with its speed. It hurts
+    /// nobody. See `state::World::roll_the_balls`.
+    AirBall,
+    /// Elementalist. **The Fire carpet**: a strip of fire laid out in the air
+    /// along her look. `pos` is its near end, `dir` the way it runs (pitch
+    /// and all) and `reach` its length; its half-width is the move's radius.
+    /// Tested as a capsule along that line, which is the volume a shot flies
+    /// down and an Updraft's column reaches into. Fire, so a shot through it
+    /// is lit; and a Thermal off it throws her along `dir`.
+    FireCarpet,
+    /// Elementalist. **The Fire fountain's wash**: the burst at her feet as
+    /// she leaves the floor, and then a standing wash of fire where she took
+    /// off. `pos` is its foot and `reach` its radius. Its first
+    /// `tuning::fountain_burst` frames are the move's own hit, once per body;
+    /// after that it burns on the tick like any fire on the floor.
+    Fountain,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -208,6 +233,19 @@ pub enum EffectKind {
 /// Presentation, like [`ROUGH_BEADS`]: the hit test is a distance from the
 /// centre, and the renderer draws pieces around it.
 pub const RING_PIECES: usize = 12;
+
+/// How many flames a Fire carpet is drawn as.
+///
+/// Presentation, like [`ROUGH_BEADS`]: the hit test is a capsule along the
+/// carpet's line, and the renderer draws a stream of flames carried along it
+/// from the near end to the far one -- fire being pushed outward, which is
+/// what says why a Thermal off it throws her *along* it as well as up. See
+/// [`Effect::carpet_flame`].
+pub const CARPET_FLAMES: usize = 10;
+
+/// How many frames one flame takes to be carried the length of a carpet.
+/// Presentation, like the count above.
+const CARPET_FLOW: u16 = 30;
 
 /// How many pieces a stretch of rough terrain is drawn as.
 ///
@@ -291,6 +329,9 @@ impl EffectKind {
             EffectKind::AirRing => "air ring",
             EffectKind::FireRing => "fire ring",
             EffectKind::Quake => "quake",
+            EffectKind::AirBall => "air ball",
+            EffectKind::FireCarpet => "fire carpet",
+            EffectKind::Fountain => "fire fountain",
         }
     }
 
@@ -315,6 +356,8 @@ impl EffectKind {
                 | EffectKind::FireTornado
                 | EffectKind::Embers
                 | EffectKind::FireRing
+                | EffectKind::FireCarpet
+                | EffectKind::Fountain
         )
     }
 
@@ -346,6 +389,10 @@ impl EffectKind {
             | EffectKind::AirRing
             | EffectKind::FireRing => true,
             EffectKind::Quake => true,
+            // A ball rolls on the floor and the wash stands on it; the carpet
+            // hangs in the air where she laid it.
+            EffectKind::AirBall | EffectKind::Fountain => true,
+            EffectKind::FireCarpet => false,
         }
     }
 
@@ -449,6 +496,13 @@ impl EffectKind {
             15 => Some(EffectKind::AirRing),
             16 => Some(EffectKind::FireRing),
             17 => Some(EffectKind::Quake),
+            // Listed so the numbering is complete; no move's row says them.
+            // Each is placed by the world from the move that makes it -- the
+            // ball at the press, the carpet along the look, the wash under
+            // her feet -- rather than at an aimed point.
+            18 => Some(EffectKind::AirBall),
+            19 => Some(EffectKind::FireCarpet),
+            20 => Some(EffectKind::Fountain),
             _ => None,
         }
     }
@@ -498,6 +552,11 @@ impl EffectKind {
                     .to_int()
                     .max(1) as u16
             }
+            // A ball has no clock: it is gone when it has shrunk away, which
+            // is a size rather than a count -- see `state::World::roll_the_balls`.
+            EffectKind::AirBall => u16::MAX,
+            EffectKind::FireCarpet => t::carpet_life(),
+            EffectKind::Fountain => t::fountain_life(),
         }
     }
 
@@ -541,6 +600,13 @@ impl EffectKind {
             EffectKind::FireRing => t::fire_ring_damage(),
             // The eruption's number; the shake itself only staggers.
             EffectKind::Quake => t::quake_damage(),
+            // Air moves things and hurts nobody.
+            EffectKind::AirBall => 0,
+            // A number of its own, for the pillar's reason.
+            EffectKind::FireCarpet => t::carpet_damage(),
+            // The wash's tick. The burst it opens with is the move's number,
+            // and is a different event -- the pillar's reason.
+            EffectKind::Fountain => t::fountain_damage(),
         }
     }
 }
@@ -851,6 +917,8 @@ impl Effect {
             EffectKind::Updraft | EffectKind::Downdraft | EffectKind::FireRing => self.reach,
             EffectKind::AirRing => t::air_ring_radius(),
             EffectKind::Quake => t::quake_radius(),
+            EffectKind::AirBall | EffectKind::Fountain => self.reach,
+            EffectKind::FireCarpet => self.source().radius,
         }
     }
 
@@ -1107,6 +1175,11 @@ impl Effect {
     }
 
     /// Has this part already caught this victim?
+    /// The bit an Air ball keeps for a body it is carrying: its part nought.
+    pub fn carried_bit(victim: usize) -> u64 {
+        Effect::bit(0, victim)
+    }
+
     pub fn already_hit(&self, part: usize, victim: usize) -> bool {
         self.struck & Effect::bit(part, victim) != 0
     }
@@ -1147,6 +1220,63 @@ impl Effect {
             radius: self.reach,
             bottom: Fx::ZERO,
             top: t::draft_height(),
+        }
+    }
+
+    // -- The Elementalist on three clicks -----------------------------------
+
+    /// Has this Air ball been let go? Raised, it sits and grows; sent, it rolls
+    /// and shrinks. `dir` is zero until the release gives it one.
+    pub fn ball_sent(&self) -> bool {
+        self.dir != V3::ZERO
+    }
+
+    /// The middle of an Air ball: a radius up from the floor point it rolls on.
+    pub fn ball_middle(&self) -> V3 {
+        V3::new(self.pos.x, self.pos.y.add(self.reach), self.pos.z)
+    }
+
+    /// The near and far ends of a Fire carpet's line.
+    pub fn carpet_line(&self) -> (V3, V3) {
+        (self.pos, self.pos.add(self.dir.scale(self.reach)))
+    }
+
+    /// Where one of a carpet's drawn flames is this frame, and how big.
+    ///
+    /// Each flame rides the line from the near end to the far one over
+    /// [`CARPET_FLOW`] frames and starts again, the flames spaced evenly
+    /// along it, so the stream moves outward for as long as the carpet hangs.
+    /// It swells over the first third of its trip and thins after, the way a
+    /// flame pushed along burns out at the end of the push. The widest flame
+    /// is the capsule's radius: what is drawn never claims more than what
+    /// burns.
+    pub fn carpet_flame(&self, part: usize) -> (V3, Fx) {
+        let flow = CARPET_FLOW as u32;
+        let offset = (part as u32 * flow) / CARPET_FLAMES as u32;
+        let along = (self.age as u32 + offset) % flow;
+        let share = Fx::ratio(along as i32, flow as i32);
+        let (a, b) = self.carpet_line();
+        let at = crate::math::lerp3(a, b, share);
+        let third = Fx::ratio(1, 3);
+        let swell = if share.raw() < third.raw() {
+            Fx::ratio(1, 2).add(share.div(third).mul(Fx::ratio(1, 2)))
+        } else {
+            Fx::ONE.sub(
+                share
+                    .sub(third)
+                    .div(Fx::ONE.sub(third))
+                    .mul(Fx::ratio(3, 4)),
+            )
+        };
+        (at, self.field_radius().mul(swell))
+    }
+
+    /// The Fire fountain's wash, as a column standing on its foot.
+    pub fn fountain_volume(&self) -> Pillar {
+        Pillar {
+            radius: self.reach,
+            bottom: Fx::ZERO,
+            top: t::body_height(),
         }
     }
 
@@ -1347,4 +1477,41 @@ impl Pillar {
 
 fn lerp(from: Fx, to: Fx, at: Fx) -> Fx {
     from.add(to.sub(from).mul(at))
+}
+
+/// How big an Air ball is after `held` frames of a hold whose longest is `cap`.
+///
+/// From the tap's radius to the full one, straight: a ball grows at a steady
+/// rate while she holds it, which is what makes its size a readable clock.
+pub fn ball_radius_after(held: u16, cap: u16) -> Fx {
+    let tap = t::air_ball_radius_tap();
+    let full = t::air_ball_radius_full();
+    let share = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
+    tap.add(full.sub(tap).mul(share))
+}
+
+/// How fast an Air ball of this radius rolls.
+///
+/// **The speed follows the size it is now**, not the size it was let go at,
+/// so a ball slows as it shrinks: it peters out rather than stopping dead.
+/// Between the tap's radius and the full one it runs from the tap's speed to
+/// the full speed; below the tap's radius it slows in proportion, to nothing.
+/// A bigger ball therefore goes faster *and* lasts longer, and how far it gets
+/// grows with roughly the square of how big it was let go.
+pub fn ball_speed(radius: Fx) -> Fx {
+    let tap = t::air_ball_radius_tap();
+    let full = t::air_ball_radius_full();
+    let (slow, fast) = (t::air_ball_speed_tap(), t::air_ball_speed_full());
+    if radius.raw() <= 0 {
+        return Fx::ZERO;
+    }
+    if radius.raw() < tap.raw() {
+        return slow.mul(radius.div(tap));
+    }
+    let span = full.sub(tap);
+    if span.raw() <= 0 {
+        return fast;
+    }
+    let share = radius.sub(tap).div(span).min(Fx::ONE);
+    slow.add(fast.sub(slow).mul(share))
 }

@@ -1377,7 +1377,9 @@ const EFFECT_PARTS: usize = {
     let beads = sim::effects::TETHER_BEADS;
     let rough = sim::effects::ROUGH_BEADS;
     let ring = sim::effects::RING_PIECES;
+    let flames = sim::effects::CARPET_FLAMES;
     let most = if blades > arms { blades } else { arms };
+    let most = if flames > most { flames } else { most };
     let most = if beads > most { beads } else { most };
     let most = if rough > most { rough } else { most };
     if ring > most { ring } else { most }
@@ -3259,6 +3261,42 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             at,
             effect.ember_volume().radius.to_f32_for_render(),
         )),
+        // The Air ball: the ball the carry reads, at the size it is now --
+        // growing while she holds it, shrinking as it rolls.
+        EffectKind::AirBall if part == 0 => Some(floating_in(
+            Skin::Air,
+            fx3(effect.ball_middle()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Fire carpet: a stream of flames carried along its line from the
+        // near end to the far one, so the fire is seen being pushed outward.
+        // Each flame is no wider than the strip that burns. See
+        // `Effect::carpet_flame`.
+        EffectKind::FireCarpet if part < sim::effects::CARPET_FLAMES => {
+            let (flame, radius) = effect.carpet_flame(part);
+            Some(floating_in(
+                Skin::Fire,
+                fx3(flame),
+                radius.to_f32_for_render(),
+            ))
+        }
+        // The Fire fountain: the wash standing where she took off, and over
+        // its first frames the burst -- a ball of fire at the move's radius,
+        // the size it hits at.
+        EffectKind::Fountain if part == 0 => {
+            let slab = effect.fountain_volume();
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
+        EffectKind::Fountain if part == 1 && effect.age <= sim::tuning::fountain_burst() => Some(
+            floating_in(Skin::Fire, at, effect.source().radius.to_f32_for_render()),
+        ),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),

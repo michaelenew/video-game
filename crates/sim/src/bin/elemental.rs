@@ -131,16 +131,16 @@ fn charge() {
 /// How far the crack runs from a stone held `hold` frames past its churn.
 fn crack_after(hold: u16) -> Fx {
     let mut w = elementalist();
-    run(&mut w, 1, Input::MECHANIC, 0);
+    run(&mut w, 1, e::keys::EARTH, 0);
     let raised = stones_of(&w)[0].at;
     for _ in 0..200 {
         if matches!(w.players[0].action, Action::Channel { .. }) {
             break;
         }
-        run(&mut w, 1, Input::MECHANIC, 0);
+        run(&mut w, 1, e::keys::EARTH, 0);
     }
     for _ in 0..hold {
-        run(&mut w, 1, Input::MECHANIC, 0);
+        run(&mut w, 1, e::keys::EARTH, 0);
     }
     run(&mut w, 1, 0, 0);
     let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
@@ -158,13 +158,13 @@ fn crack_after(hold: u16) -> Fx {
 /// Downdraft's descent from a full hop against a plain fall from the same
 /// height.
 fn lift() {
-    println!("lift -- F standing is the Updraft, F in the air the Downdraft");
+    println!("lift -- space and right click is the Updraft, F in the air the Downdraft");
     println!("  {:<14}{:>10}", "in the column", "apex m");
     for class in sim::class::ALL_CLASSES {
         let mut w = World::with_classes([Class::Elementalist, class]);
         w.players[0].pos = metres(-6000, 0, 8000);
         w.players[1].pos = metres(-5000, 0, 8000);
-        throw(&mut w, Input::KEY_F);
+        throw(&mut w, Input::SPACE | e::keys::WIND);
         let mut apex = Fx::ZERO;
         let mut hers = Fx::ZERO;
         for _ in 0..90 {
@@ -187,7 +187,7 @@ fn lift() {
     sim::stones::raise(&mut w.players[0], Structure::raised(metres(-4000, 0, 8000)));
     run(&mut w, 30, 0, 0);
     let stood = stones_of(&w)[0].at.y;
-    throw(&mut w, Input::KEY_F);
+    throw(&mut w, Input::SPACE | e::keys::WIND);
     let mut apex = stood;
     for _ in 0..90 {
         run(&mut w, 1, 0, 0);
@@ -340,12 +340,12 @@ fn ring() {
 /// Where the ember bursts with nothing in the way and against a stone; an Air
 /// bolt's and a Gale's damage plain and lit; and a stone lit by the cloud.
 fn spray() {
-    println!("spray -- middle click, both rows; air shots through fire come out lit");
+    println!("spray -- F standing; air shots through fire come out lit");
     let m = sim::moves::get(Class::Elementalist, e::CINDER);
     // Nothing in the way.
     let mut w = elementalist();
     let from = w.players[0].pos;
-    throw(&mut w, Input::MIDDLE);
+    throw(&mut w, Input::KEY_F);
     fly_out(&mut w, 0, 120);
     let open = clouds(&w)
         .first()
@@ -355,7 +355,7 @@ fn spray() {
     let stone_at = metres(-1000, 0, 8000);
     sim::stones::raise(&mut w.players[0], Structure::raised(stone_at));
     run(&mut w, 30, 0, 0);
-    throw(&mut w, Input::MIDDLE);
+    throw(&mut w, Input::KEY_F);
     fly_out(&mut w, 0, 120);
     let blocked = clouds(&w)
         .first()
@@ -377,7 +377,7 @@ fn spray() {
         t::embers_damage()
     );
     println!("  {:<10}{:>8}{:>8}", "shot", "plain", "lit");
-    for (name, button) in [("Air bolt", Input::LEFT), ("Gale", Input::RIGHT)] {
+    for (name, button) in [("Air bolt", e::keys::WEAK_PUSH), ("Gale", Input::RIGHT)] {
         let plain = air_shot_through(button, false);
         let lit = air_shot_through(button, true);
         println!("  {:<10}{:>8}{:>8}", name, plain, lit);
@@ -422,7 +422,7 @@ fn air_shot_through(button: u16, fire: bool) -> i32 {
         ));
     }
     aloft(&mut w, 1000);
-    let slot = if button == Input::LEFT {
+    let slot = if button == e::keys::WEAK_PUSH {
         e::AIR_BOLT
     } else {
         e::GALE
@@ -692,7 +692,7 @@ fn strike(w: &mut World, pitch: i16, hold: u16) {
         ]);
     };
     if hold == 0 {
-        step(w, Input::SPECIAL);
+        step(w, e::keys::FIRE);
         for _ in 0..(startup + active) {
             step(w, 0);
         }
@@ -703,7 +703,7 @@ fn strike(w: &mut World, pitch: i16, hold: u16) {
         if matches!(w.players[0].action, Action::Channel { held, .. } if held >= hold) {
             break;
         }
-        step(w, Input::SPECIAL | Input::W);
+        step(w, e::keys::FIRE | Input::W);
     }
     for _ in 0..(active + 1) {
         step(w, 0);

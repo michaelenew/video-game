@@ -73,6 +73,28 @@ impl Structure {
             erupt: V3::ZERO,
             scale: Fx::ONE,
             lit: 0,
+            aloft: false,
+            meteor: false,
+        }
+    }
+
+    /// The stone the **earth jump** brings up with her: fully out of the
+    /// floor already, its top at her feet, leaving with a share of her
+    /// velocity (`tuning::earth_stone_keep_up`, `earth_stone_keep_flat`). See
+    /// [`Structure::aloft`].
+    pub fn brought_up(feet: V3, vel: V3) -> Structure {
+        let stone = Structure::raised(feet);
+        let flat = t::earth_stone_keep_flat();
+        Structure {
+            at: V3::new(feet.x, feet.y.sub(stone.height()), feet.z),
+            vel: V3::new(
+                vel.x.mul(flat),
+                vel.y.mul(t::earth_stone_keep_up()),
+                vel.z.mul(flat),
+            ),
+            age: stone.rise,
+            aloft: true,
+            ..stone
         }
     }
 
@@ -250,12 +272,20 @@ fn owner_of(index: usize) -> u8 {
 // The stones' own frame
 // ---------------------------------------------------------------------------
 
+/// Where each meteor that reached the ground this frame came down: its
+/// middle, for the shatter the world throws there. See [`Structure::meteor`].
+pub type Landed = [Option<V3>; MAX_STONES];
+
 /// Age the stones, move them, and settle them against each other.
 ///
 /// Runs **before** the fighters step, so what a fighter collides with this
 /// frame is where the stone actually is rather than where it was.
-pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) {
+///
+/// Returns where every meteor came down. The stone itself is gone by then:
+/// shattering throws pieces, and the pieces are the world's, not a stone's.
+pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) -> Landed {
     let mut field = gather(players);
+    let mut landed: Landed = [None; MAX_STONES];
 
     for stone in field.iter_mut().flatten() {
         // Saturating, because this is not a lifetime: once a stone is out of
@@ -265,7 +295,13 @@ pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) {
         stone.lit = stone.lit.saturating_sub(1);
         // Gravity always. A stone at rest has its fall zeroed by the floor
         // every frame, which costs nothing and means resting needs no flag.
-        stone.vel.y = stone.vel.y.add(t::gravity().mul(DT));
+        // An aloft one falls more gently -- that is what brings her down on
+        // to it.
+        let mut fall = t::gravity();
+        if stone.aloft {
+            fall = fall.mul(t::earth_stone_gravity());
+        }
+        stone.vel.y = stone.vel.y.add(fall.mul(DT));
         stone.at = stone.at.add(stone.vel.scale(DT));
     }
 
@@ -282,7 +318,17 @@ pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) {
         }
     }
 
-    for stone in field.iter_mut().flatten() {
+    for (index, slot) in field.iter_mut().enumerate() {
+        let Some(stone) = slot else { continue };
+        // Still coming up through the floor under her: not held back by it
+        // until it is out. See `Structure::brought_up`.
+        if stone.aloft
+            && stone.vel.y.raw() > 0
+            && stone.at.y.raw() < arena.ground_under(stone.at).raw()
+        {
+            continue;
+        }
+        let falling = stone.vel.y.raw() < 0;
         let r = arena.resolve_sized(
             stone.at,
             stone.vel,
@@ -292,6 +338,17 @@ pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) {
         );
         stone.at = r.pos;
         stone.vel = r.vel;
+        // Come to rest: an aloft stone is an ordinary one from here on, and
+        // a meteor has arrived.
+        if falling && stone.vel.y.raw() == 0 {
+            stone.aloft = false;
+            if stone.meteor {
+                let half = stone.standing_height().mul(Fx::ratio(1, 2));
+                landed[index] = Some(V3::new(stone.at.x, stone.at.y.add(half), stone.at.z));
+                *slot = None;
+                continue;
+            }
+        }
         if r.wall {
             // Hitting a wall is a collision, not a glance: the resolver above
             // only zeroes the component that was driving the stone into the
@@ -332,6 +389,7 @@ pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) {
     knock_touch(&mut field, players);
 
     scatter(players, &field);
+    landed
 }
 
 /// A launched stone catching a fighter on its way past. See `step`'s comment
@@ -554,8 +612,74 @@ pub fn shove(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3, speed: 
         if dir.y.raw() > 0 {
             stone.vel.y = dir.y.mul(speed);
         }
+        // **A stone in the air can be driven down**, which a stone on the
+        // floor cannot: there is no floor under it to drive it through. Shot
+        // down out of the air, it is a meteor and shatters where it lands --
+        // the earth jump's stone, Galed back down at somebody.
+        if dir.y.raw() < 0 && stone.vel.y.raw() != 0 {
+            stone.vel.y = stone.vel.y.min(dir.y.mul(speed));
+            stone.meteor = true;
+        }
     }
     scatter(players, &field);
+}
+
+/// Keep a fighter's aloft stones under her: their run is hers. Called for an
+/// Elementalist in the air holding forward, and nothing else -- see
+/// `state::World::advance`.
+pub fn keep_under(players: &mut [Player; MAX_PLAYERS], owner: usize) {
+    let run = players[owner].vel;
+    let Mechanic::Structures(mut slots) = players[owner].mechanic else {
+        return;
+    };
+    for stone in slots.iter_mut().flatten() {
+        if stone.aloft {
+            stone.vel.x = run.x;
+            stone.vel.z = run.z;
+        }
+    }
+    players[owner].mechanic = Mechanic::Structures(slots);
+}
+
+/// Somebody is standing on the stone at `index`: if it is aloft, it stops
+/// travelling and only sinks.
+pub fn bear(players: &mut [Player; MAX_PLAYERS], index: usize) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut().filter(|s| s.aloft) {
+        stone.vel.x = Fx::ZERO;
+        stone.vel.z = Fx::ZERO;
+    }
+    scatter(players, &field);
+}
+
+/// Drive the stone at `index` straight down at `speed`, to shatter where it
+/// lands: the earth jump off a stone in the air.
+pub fn drive_down(players: &mut [Player; MAX_PLAYERS], index: usize, speed: Fx) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.vel = V3::new(Fx::ZERO, Fx::ZERO.sub(speed), Fx::ZERO);
+        stone.meteor = true;
+        stone.aloft = false;
+    }
+    scatter(players, &field);
+}
+
+/// Which of the field's stones a fighter is standing on top of, if any.
+///
+/// By the same skin the body resolve uses to say a body is grounded on one:
+/// over its top, and within the arena's skin of it.
+pub fn under(players: &[Player; MAX_PLAYERS], feet: V3) -> Option<usize> {
+    let field = gather(players);
+    field.iter().enumerate().find_map(|(index, stone)| {
+        let stone = (*stone)?;
+        let apart = V3::new(stone.at.x.sub(feet.x), Fx::ZERO, stone.at.z.sub(feet.z));
+        let over = apart.flat_len().raw() <= stone.radius().add(t::body_radius()).raw();
+        // The arena's skin, widened by how far the stone moved this frame: a
+        // body on a stone in the air is a frame behind it.
+        let skin = arena::SKIN.add(stone.vel.y.abs().mul(DT));
+        let on = feet.y.sub(stone.top()).abs().raw() <= skin.raw();
+        (over && on && stone.standing_height().raw() > 0).then_some(index)
+    })
 }
 
 /// Remove the stone at `index` outright, and say where its middle was.

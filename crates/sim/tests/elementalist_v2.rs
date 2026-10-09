@@ -3,27 +3,50 @@
 //! `docs/design/elementalist-v2.md` is the specification and
 //! `docs/design/plans/elementalist-v2.md` is the brief this file follows,
 //! milestone by milestone. The first milestone is **fire in the air**: the
-//! Cinder spray on middle click in both rows, the cloud of embers it bursts
-//! into, the two air shots coming out lit when they fly through fire, and the
-//! Gale shoving a stone it passes.
+//! Cinder spray, the cloud of embers it bursts into, the two air shots coming
+//! out lit when they fly through fire, and the Gale shoving a stone it passes.
+//!
+//! **Every button here is pressed by its verb**, through
+//! `sim::moves::elementalist::keys` -- the table in
+//! `docs/design/kits/elementalist.md` §"On three clicks" -- so a remap is one
+//! edit there rather than a hunt through this file.
 
 use sim::class::{Mechanic, Structure};
 use sim::effects::{Effect, EffectKind};
 use sim::gust::Gale;
 use sim::moves::elementalist as e;
+use sim::moves::elementalist::keys;
 use sim::state::{Action, NO_STONE, SLOT_COMMITTED, SLOT_SPECIAL};
 use sim::stones::Phase;
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
-const L: u16 = Input::LEFT;
-const R: u16 = Input::RIGHT;
-const M: u16 = Input::MIDDLE;
-const E: u16 = Input::MECHANIC;
-const Q: u16 = Input::SPECIAL;
-const F: u16 = Input::KEY_F;
-const RK: u16 = Input::KEY_R;
-const SIDE_B: u16 = Input::SIDE_B;
+/// The earth click's press: Raise, an instant, on the floor.
+const RAISE: u16 = keys::EARTH;
+/// The same click held past the stone's rise: Fissure's charge.
+const FISSURE: u16 = keys::EARTH;
+/// The weak push on the floor: the Bolt.
+const BOLT: u16 = keys::WEAK_PUSH;
+/// The weak push in the air: the Air bolt.
+const AIR_BOLT: u16 = keys::WEAK_PUSH;
+/// The wind click in the air: the Gale.
+const GALE: u16 = keys::WIND;
+/// The fire click: the Fire pillar on a tap, the Strike held.
+const PILLAR: u16 = keys::FIRE;
+/// The same click in the air: the Fire carpet.
+const CARPET: u16 = keys::FIRE;
+/// `F` on the floor: the Cinder spray.
+const SPRAY: u16 = Input::KEY_F;
+/// Space and the wind click on the floor: the Updraft, a takeoff.
+const UPDRAFT: u16 = Input::SPACE | keys::WIND;
+/// `F` in the air: the Downdraft.
+const DOWNDRAFT: u16 = Input::KEY_F;
+/// `R`: Tremor, on the floor.
+const TREMOR: u16 = Input::KEY_R;
+/// The second side button: Quake.
+const QUAKE: u16 = Input::SIDE_B;
+/// The Bulwark's left click: the bash, for the tests that hit her.
+const BASH: u16 = Input::LEFT;
 const SHIFT: u16 = Input::SHIFT;
 const W: u16 = Input::W;
 const LOOK_RIGHT: u16 = 0;
@@ -179,23 +202,23 @@ fn fly_out(w: &mut World, pitch: i16, most: u32) {
 // The third click
 // ---------------------------------------------------------------------------
 
+/// Was "middle click is the Cinder spray on the floor and off it". Since the
+/// clicks went to the three elements (2026-10-09) the spray is on `F`, from
+/// the floor only, and the fire click in the air is the Fire carpet -- so
+/// what this asserts now is that new truth, both halves of it.
 #[test]
-fn middle_click_is_the_cinder_spray_on_the_floor_and_off_it() {
+fn f_is_the_cinder_spray_on_the_floor_and_the_fire_click_aloft_is_the_carpet() {
     let mut w = elementalist();
-    run(&mut w, 1, M, 0);
-    assert_eq!(
-        doing(&w),
-        Some(e::CINDER),
-        "standing, the third click is the spray"
-    );
+    run(&mut w, 1, SPRAY, 0);
+    assert_eq!(doing(&w), Some(e::CINDER), "standing, `F` is the spray");
 
     let mut w = elementalist();
     aloft(&mut w, 3.0);
-    run(&mut w, 1, M, 0);
+    run(&mut w, 1, CARPET, 0);
     assert_eq!(
         doing(&w),
-        Some(e::CINDER),
-        "airborne, the third click is the same spray"
+        Some(e::FIRE_CARPET),
+        "airborne, the fire click lays the carpet"
     );
 }
 
@@ -205,9 +228,9 @@ fn the_cinder_spray_is_a_skillshot_with_no_volume_of_its_own() {
     assert_eq!(m.aim(), sim::aim::Kind::Skillshot);
     assert!(!m.strikes(), "the ember does the hitting, not her body");
     let mut w = elementalist();
-    run(&mut w, 1, M, 0);
+    run(&mut w, 1, SPRAY, 0);
     let (startup, _, _) = sim::moves::frames(Class::Elementalist, e::CINDER);
-    run(&mut w, startup as u32, M, 0);
+    run(&mut w, startup as u32, SPRAY, 0);
     assert!(
         sim::state::hitbox(&w.players[0]).is_none(),
         "the spray puts a shot in the world and nothing out of her hands"
@@ -217,7 +240,7 @@ fn the_cinder_spray_is_a_skillshot_with_no_volume_of_its_own() {
 #[test]
 fn the_cinder_leaves_her_hand_as_an_ember_with_a_speed() {
     let mut w = elementalist();
-    throw(&mut w, M);
+    throw(&mut w, SPRAY);
     let out = shots(&w);
     assert_eq!(out.len(), 1, "one ember in flight");
     assert_eq!(out[0].gale, Gale::Ember);
@@ -235,7 +258,7 @@ fn the_cinder_leaves_her_hand_as_an_ember_with_a_speed() {
 fn the_ember_bursts_into_a_cloud_where_its_range_runs_out() {
     let mut w = elementalist();
     let from = w.players[0].pos;
-    throw(&mut w, M);
+    throw(&mut w, SPRAY);
     // Nothing in its way: let it fly out to the range sphere.
     for _ in 0..240 {
         if shots(&w).is_empty() {
@@ -265,7 +288,7 @@ fn an_ember_bursts_on_the_first_thing_it_meets() {
     let stone_at = at(-2.0, 0.0, 8.0);
     sim::stones::raise(&mut w.players[0], Structure::raised(stone_at));
     run(&mut w, 30, 0, 0);
-    throw(&mut w, M);
+    throw(&mut w, SPRAY);
     for _ in 0..120 {
         if shots(&w).is_empty() {
             break;
@@ -283,7 +306,7 @@ fn an_ember_bursts_on_the_first_thing_it_meets() {
     let mut w = elementalist();
     w.players[1].pos = at(1.0, 0.0, 8.0);
     let full = w.players[1].health;
-    throw(&mut w, M);
+    throw(&mut w, SPRAY);
     for _ in 0..120 {
         if shots(&w).is_empty() {
             break;
@@ -308,7 +331,7 @@ fn a_cloud_on_the_floor_stands_on_it_rather_than_under_it() {
     // A burst worked out below the floor is stood on the floor: the same ball,
     // now a low burning patch. Simulated by a spray aimed steeply down.
     let steep = -(65536 / 8) as i16;
-    throw_looking(&mut w, M, steep);
+    throw_looking(&mut w, SPRAY, steep);
     fly_out(&mut w, steep, 120);
     let c = clouds(&w);
     assert_eq!(c.len(), 1);
@@ -357,7 +380,7 @@ fn air_bolt_through(fire: bool) -> (World, i32) {
     // and meets the standing body.
     let reach = sim::moves::get(Class::Elementalist, e::AIR_BOLT).reach;
     let pitch = crosshair_onto_the_floor_at(&w, w.players[1].pos, reach);
-    throw_looking(&mut w, L, pitch);
+    throw_looking(&mut w, AIR_BOLT, pitch);
     fly_out(&mut w, pitch, 120);
     let dealt = full - w.players[1].health;
     (w, dealt)
@@ -407,7 +430,7 @@ fn a_shot_is_lit_by_a_fire_pillar_as_well_as_by_a_cloud() {
     aloft(&mut w, 1.0);
     let reach = sim::moves::get(Class::Elementalist, e::AIR_BOLT).reach;
     let pitch = crosshair_onto_the_floor_at(&w, w.players[1].pos, reach);
-    throw_looking(&mut w, L, pitch);
+    throw_looking(&mut w, AIR_BOLT, pitch);
     assert_eq!(shots(&w).len(), 1);
     // A few frames of flight is enough to cross the pillar's base.
     for _ in 0..30 {
@@ -429,7 +452,7 @@ fn a_shot_is_lit_by_a_fire_pillar_as_well_as_by_a_cloud() {
 fn an_ember_is_never_lit_and_a_cloud_does_not_light_itself() {
     let mut w = elementalist();
     w.effects[0] = Some(cloud(0, at(-2.0, 1.25, 8.0), t::embers_radius()));
-    throw(&mut w, M);
+    throw(&mut w, SPRAY);
     for _ in 0..30 {
         if shots(&w).is_empty() {
             break;
@@ -453,7 +476,7 @@ fn the_gale_shoves_a_stone_it_passes_and_keeps_flying() {
     aloft(&mut w, 1.0);
     let reach = sim::moves::get(Class::Elementalist, e::GALE).reach;
     let pitch = crosshair_onto_the_floor_at(&w, at(3.0, 0.0, 8.0), reach);
-    throw_looking(&mut w, R, pitch);
+    throw_looking(&mut w, GALE, pitch);
     // Fly it past the stone.
     fly_out(&mut w, pitch, 60);
     let after = stones_of(&w)[0].at;
@@ -478,7 +501,7 @@ fn the_gale_shoves_each_stone_once() {
     aloft(&mut w, 1.0);
     let reach = sim::moves::get(Class::Elementalist, e::GALE).reach;
     let pitch = crosshair_onto_the_floor_at(&w, at(3.0, 0.0, 8.0), reach);
-    throw_looking(&mut w, R, pitch);
+    throw_looking(&mut w, GALE, pitch);
     let mut pushed_frames = 0;
     let mut last = stones_of(&w)[0].vel.x;
     for _ in 0..60 {
@@ -533,11 +556,12 @@ fn the_four_new_inputs_are_pressed_buttons_and_the_word_is_full() {
 }
 
 #[test]
-fn the_mechanic_key_still_raises_a_stone_with_the_new_bits_held() {
-    // The new bits mean nothing to the mechanic path: a stray side button
-    // held while `E` is pressed changes nothing.
+fn the_earth_click_still_raises_a_stone_with_the_new_bits_held() {
+    // The new bits mean nothing to Raise: a stray side button held while the
+    // earth click is pressed changes nothing. (`R` is no longer in the stray
+    // set: it is Tremor, a move, and a move key is read before a click.)
     let mut w = elementalist();
-    run(&mut w, 1, E | Input::SIDE_A | Input::KEY_R, 0);
+    run(&mut w, 1, RAISE | Input::SIDE_A, 0);
     assert_eq!(stones_of(&w).len(), 1);
 }
 
@@ -563,7 +587,7 @@ fn scars(w: &World) -> Vec<Effect> {
         .collect()
 }
 
-/// Hold `Q` for `frames` past the pillar's startup, at a pitch, then let go
+/// Hold the fire click for `frames` past the pillar's startup, at a pitch, then let go
 /// and run the active frames. `frames` of zero is a tap.
 fn strike(w: &mut World, pitch: i16, hold: u16) {
     let (startup, active, _) = sim::moves::frames(Class::Elementalist, SLOT_SPECIAL);
@@ -574,7 +598,7 @@ fn strike(w: &mut World, pitch: i16, hold: u16) {
         ]);
     };
     if hold == 0 {
-        step(w, Q);
+        step(w, PILLAR);
         for _ in 0..(startup + active) {
             step(w, 0);
         }
@@ -588,7 +612,7 @@ fn strike(w: &mut World, pitch: i16, hold: u16) {
         if matches!(w.players[0].action, Action::Channel { held, .. } if held >= hold) {
             break;
         }
-        step(w, Q);
+        step(w, PILLAR);
     }
     for _ in 0..(active + 1) {
         step(w, 0);
@@ -596,7 +620,7 @@ fn strike(w: &mut World, pitch: i16, hold: u16) {
 }
 
 #[test]
-fn a_tap_of_q_is_the_pillar_as_built() {
+fn a_tap_of_the_fire_click_is_the_pillar_as_built() {
     let mut w = elementalist();
     let pitch = crosshair_onto_the_floor_at(&w, at(-2.0, 0.0, 8.0), t::raise_reach());
     strike(&mut w, pitch, 0);
@@ -614,10 +638,10 @@ fn a_tap_of_q_is_the_pillar_as_built() {
 }
 
 #[test]
-fn q_held_past_the_startup_is_a_hold_with_the_aim_live() {
+fn the_fire_click_held_past_the_startup_is_a_hold_with_the_aim_live() {
     let mut w = elementalist();
     let (startup, _, _) = sim::moves::frames(Class::Elementalist, SLOT_SPECIAL);
-    run(&mut w, (startup + 5) as u32, Q, 0);
+    run(&mut w, (startup + 5) as u32, PILLAR, 0);
     assert!(
         matches!(w.players[0].action, Action::Channel { kind: SLOT_SPECIAL, held } if held >= 2),
         "still holding: {:?}",
@@ -628,7 +652,7 @@ fn q_held_past_the_startup_is_a_hold_with_the_aim_live() {
     let before = w.players[0].aim_path.to;
     for _ in 0..3 {
         w.advance([
-            Input::looking_at(Q, 1 << 14, 0),
+            Input::looking_at(PILLAR, 1 << 14, 0),
             Input::looking_at(0, LOOK_LEFT, 0),
         ]);
     }
@@ -692,15 +716,15 @@ fn a_hit_during_the_hold_ends_it_and_nothing_is_placed() {
     // A Bulwark standing in her face, ready to bash.
     w.players[1].pos = at(-4.6, 0.0, 8.0);
     let (startup, _, _) = sim::moves::frames(Class::Elementalist, SLOT_SPECIAL);
-    run(&mut w, (startup + 3) as u32, Q, 0);
+    run(&mut w, (startup + 3) as u32, PILLAR, 0);
     assert!(matches!(w.players[0].action, Action::Channel { .. }));
     // He bashes; she keeps holding.
-    run(&mut w, 1, Q, L);
+    run(&mut w, 1, PILLAR, BASH);
     for _ in 0..20 {
         if w.players[0].action.stunned() {
             break;
         }
-        run(&mut w, 1, Q, L);
+        run(&mut w, 1, PILLAR, BASH);
     }
     assert!(
         w.players[0].action.stunned(),
@@ -715,9 +739,9 @@ fn a_hit_during_the_hold_ends_it_and_nothing_is_placed() {
 }
 
 #[test]
-fn a_tap_of_e_raises_a_stone_that_erupts_where_it_was_raised() {
+fn a_tap_of_the_earth_click_raises_a_stone_that_erupts_where_it_was_raised() {
     let mut w = elementalist();
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, RAISE, 0);
     let raised = stones_of(&w)[0].at;
     run(&mut w, 40, 0, 0);
     let s = stones_of(&w);
@@ -729,9 +753,9 @@ fn a_tap_of_e_raises_a_stone_that_erupts_where_it_was_raised() {
 }
 
 #[test]
-fn e_held_past_the_churn_keeps_the_stone_churning_and_becomes_the_crack_hold() {
+fn the_earth_click_held_past_the_churn_keeps_the_stone_churning_and_becomes_the_crack_hold() {
     let mut w = elementalist();
-    run(&mut w, 30, E, 0);
+    run(&mut w, 30, FISSURE, 0);
     let s = stones_of(&w);
     assert_eq!(s.len(), 1);
     assert_eq!(s[0].phase(), Phase::Churning, "held under the floor");
@@ -752,7 +776,7 @@ fn e_held_past_the_churn_keeps_the_stone_churning_and_becomes_the_crack_hold() {
 #[test]
 fn letting_go_races_the_crack_and_the_stone_erupts_at_its_end() {
     let mut w = elementalist();
-    run(&mut w, 40, E, 0);
+    run(&mut w, 40, FISSURE, 0);
     let held_at = stones_of(&w)[0].at;
     let Action::Channel { held, .. } = w.players[0].action else {
         panic!("not holding");
@@ -797,7 +821,7 @@ fn letting_go_races_the_crack_and_the_stone_erupts_at_its_end() {
 #[test]
 fn the_crack_stops_at_the_first_body_and_hits_it() {
     let mut w = elementalist();
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, RAISE, 0);
     let raised = stones_of(&w)[0].at;
     // Somebody standing four metres past the stone, on the crack's line.
     let body = V3::new(raised.x.add(Fx::from_int(4)), Fx::ZERO, raised.z);
@@ -809,7 +833,7 @@ fn the_crack_stops_at_the_first_body_and_hits_it() {
         if matches!(w.players[0].action, Action::Channel { held, .. } if held + 2 >= m.channel) {
             break;
         }
-        run(&mut w, 1, E, 0);
+        run(&mut w, 1, FISSURE, 0);
     }
     assert!(matches!(w.players[0].action, Action::Channel { .. }));
     run(&mut w, 1, 0, 0);
@@ -835,12 +859,12 @@ fn the_crack_runs_further_the_longer_the_hold() {
     let mut lengths = Vec::new();
     for extra in [2u32, 25, 50] {
         let mut w = elementalist();
-        run(&mut w, 1, E, 0);
+        run(&mut w, 1, RAISE, 0);
         // Past the churn, then `extra` more.
         while !matches!(w.players[0].action, Action::Channel { .. }) {
-            run(&mut w, 1, E, 0);
+            run(&mut w, 1, FISSURE, 0);
         }
-        run(&mut w, extra, E, 0);
+        run(&mut w, extra, FISSURE, 0);
         run(&mut w, 1, 0, 0);
         let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
         run(&mut w, (m.startup + 1) as u32, 0, 0);
@@ -858,16 +882,16 @@ fn the_crack_runs_further_the_longer_the_hold() {
 #[test]
 fn the_crack_runs_toward_the_spot_the_crosshair_is_on() {
     let mut w = elementalist();
-    run(&mut w, 1, E, 0);
+    run(&mut w, 1, RAISE, 0);
     let held_at = stones_of(&w)[0].at;
     let look = |bits: u16| Input::looking_at(bits, 1 << 12, -3000);
     let step =
         |w: &mut World, bits: u16| w.advance([look(bits), Input::looking_at(0, LOOK_LEFT, 0)]);
     while !matches!(w.players[0].action, Action::Channel { .. }) {
-        step(&mut w, E);
+        step(&mut w, FISSURE);
     }
     for _ in 0..20 {
-        step(&mut w, E);
+        step(&mut w, FISSURE);
     }
     let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
     let seen = with_scene(&w, |scene| {
@@ -937,13 +961,13 @@ fn rough_terrain_slows_whoever_crosses_it_and_never_her() {
 #[test]
 fn anything_else_ends_the_hold_and_the_stone_erupts_where_it_stands() {
     let mut w = elementalist();
-    run(&mut w, 30, E, 0);
+    run(&mut w, 30, FISSURE, 0);
     assert!(matches!(w.players[0].action, Action::Channel { .. }));
     let held_at = stones_of(&w)[0].at;
     // She is hit out of it: the Bulwark walks in and bashes.
     w.players[1].pos = at(-4.6, 0.0, 8.0);
     for _ in 0..25 {
-        run(&mut w, 1, E, L);
+        run(&mut w, 1, FISSURE, BASH);
         if w.players[0].action.stunned() {
             break;
         }
@@ -978,7 +1002,7 @@ fn lifted_apex(class: Class) -> Fx {
     let mut w = World::with_classes([Class::Elementalist, class]);
     w.players[0].pos = at(-6.0, 0.0, 8.0);
     w.players[1].pos = at(-5.0, 0.0, 8.0);
-    throw(&mut w, F);
+    throw(&mut w, UPDRAFT);
     let mut apex = Fx::ZERO;
     for _ in 0..90 {
         run(&mut w, 1, 0, 0);
@@ -988,13 +1012,13 @@ fn lifted_apex(class: Class) -> Fx {
 }
 
 #[test]
-fn f_is_the_updraft_standing_and_the_downdraft_in_the_air() {
+fn space_and_wind_is_the_updraft_standing_and_f_the_downdraft_in_the_air() {
     let mut w = elementalist();
-    run(&mut w, 1, F, 0);
+    run(&mut w, 1, UPDRAFT, 0);
     assert_eq!(doing(&w), Some(e::UPDRAFT));
     let mut w = elementalist();
     aloft(&mut w, 3.0);
-    run(&mut w, 1, F, 0);
+    run(&mut w, 1, DOWNDRAFT, 0);
     assert_eq!(doing(&w), Some(e::DOWNDRAFT));
 }
 
@@ -1002,7 +1026,7 @@ fn f_is_the_updraft_standing_and_the_downdraft_in_the_air() {
 fn the_updraft_lifts_her_and_whoever_is_in_the_column() {
     let mut w = elementalist();
     w.players[1].pos = at(-5.0, 0.0, 8.0);
-    throw(&mut w, F);
+    throw(&mut w, UPDRAFT);
     assert!(
         !w.players[0].grounded && w.players[0].vel.y.raw() > 0,
         "she goes up"
@@ -1018,7 +1042,7 @@ fn the_updraft_lifts_her_and_whoever_is_in_the_column() {
     // Somebody outside it is untouched.
     let mut w = elementalist();
     w.players[1].pos = at(0.0, 0.0, 8.0);
-    throw(&mut w, F);
+    throw(&mut w, UPDRAFT);
     assert!(
         w.players[1].grounded,
         "six metres away is out of the column"
@@ -1042,12 +1066,12 @@ fn everybody_rises_by_their_own_weight() {
 fn the_updraft_lofts_a_stone_in_it_and_not_one_outside() {
     let mut w = elementalist();
     // Two metres out: inside the column, and clear of her own feet -- a stone
-    // raised under her would carry her up and turn the press into a Downdraft.
+    // raised under her would carry her up off the floor the column stands on.
     sim::stones::raise(&mut w.players[0], Structure::raised(at(-4.0, 0.0, 8.0)));
     sim::stones::raise(&mut w.players[0], Structure::raised(at(2.0, 0.0, 8.0)));
     run(&mut w, 30, 0, 0);
     assert!(w.players[0].grounded);
-    throw(&mut w, F);
+    throw(&mut w, UPDRAFT);
     run(&mut w, 2, 0, 0);
     let s = stones_of(&w);
     assert!(
@@ -1066,7 +1090,7 @@ fn the_downdraft_drives_her_down_and_the_column_follows_her() {
     // fall cap then argues with, so what is asserted is that she is falling
     // faster than she would have been.
     let mut plain = w.clone();
-    throw(&mut w, F);
+    throw(&mut w, DOWNDRAFT);
     let (startup, active, _) = sim::moves::frames(Class::Elementalist, e::DOWNDRAFT);
     run(&mut plain, (startup + active + 2) as u32, 0, 0);
     assert!(
@@ -1092,7 +1116,7 @@ fn the_downdraft_spikes_an_airborne_body_in_it() {
     aloft(&mut w, 6.0);
     w.players[1].pos = at(-5.0, 4.0, 8.0);
     w.players[1].grounded = false;
-    throw(&mut w, F);
+    throw(&mut w, DOWNDRAFT);
     assert!(
         w.players[1].vel.y.raw() < 0,
         "driven down: {:?}",
@@ -1111,7 +1135,7 @@ fn landing_while_it_blows_breaks_the_air_outward() {
     // Somebody standing two metres from where she will land.
     w.players[1].pos = at(-4.0, 0.0, 8.0);
     let before = w.players[1].pos;
-    throw(&mut w, F);
+    throw(&mut w, DOWNDRAFT);
     for _ in 0..60 {
         run(&mut w, 1, 0, 0);
         if w.players[0].grounded {
@@ -1158,7 +1182,7 @@ fn landing_into_fire_puts_it_out_and_sends_a_ring_of_fire_outward() {
     w.players[1].pos = at(-2.5, 0.0, 8.0);
     let full = w.players[1].health;
     aloft(&mut w, 2.0);
-    throw(&mut w, F);
+    throw(&mut w, DOWNDRAFT);
     for _ in 0..60 {
         run(&mut w, 1, 0, 0);
         if w.players[0].grounded {
@@ -1189,7 +1213,7 @@ fn landing_into_fire_puts_it_out_and_sends_a_ring_of_fire_outward() {
 fn a_landing_after_the_column_has_died_bursts_nothing() {
     let mut w = elementalist();
     aloft(&mut w, 12.0);
-    throw(&mut w, F);
+    throw(&mut w, DOWNDRAFT);
     // Hang her up there until the column is spent, then let her fall.
     for _ in 0..(t::draft_life() as u32 + 2) {
         w.players[0].pos.y = metres(12.0);
@@ -1216,7 +1240,7 @@ fn a_standing_stone_under_the_downdraft_is_pressed_into_the_floor() {
     // Directly above it, so it stands in the column.
     aloft(&mut w, 5.0);
     w.players[0].pos.x = metres(-6.0);
-    throw(&mut w, F);
+    throw(&mut w, DOWNDRAFT);
     run(&mut w, 2, 0, 0);
     assert!(stones_of(&w).is_empty(), "pressed into the floor");
     assert_eq!(scars(&w).len(), 1, "and broken ground where it stood");
@@ -1233,17 +1257,17 @@ fn quakes(w: &World) -> Vec<Effect> {
 #[test]
 fn the_second_side_button_is_quake_and_r_is_tremor() {
     let mut w = elementalist();
-    run(&mut w, 1, SIDE_B, 0);
+    run(&mut w, 1, QUAKE, 0);
     assert_eq!(doing(&w), Some(e::QUAKE));
     let mut w = elementalist();
-    run(&mut w, 1, RK, 0);
+    run(&mut w, 1, TREMOR, 0);
     assert_eq!(doing(&w), Some(e::TREMOR));
     // Off the floor, R carries nothing yet; the side button still quakes.
     let mut w = elementalist();
     aloft(&mut w, 3.0);
-    run(&mut w, 1, RK, 0);
+    run(&mut w, 1, TREMOR, 0);
     assert_eq!(doing(&w), None);
-    run(&mut w, 1, SIDE_B, 0);
+    run(&mut w, 1, QUAKE, 0);
     assert_eq!(doing(&w), Some(e::QUAKE));
 }
 
@@ -1256,7 +1280,7 @@ fn a_quake_shakes_where_the_crosshair_is_and_staggers_only_what_moves() {
         spot,
         sim::moves::get(Class::Elementalist, e::QUAKE).reach,
     );
-    throw_looking(&mut w, SIDE_B, pitch);
+    throw_looking(&mut w, QUAKE, pitch);
     let q = quakes(&w);
     assert_eq!(q.len(), 1, "the patch is down");
     assert!(
@@ -1286,7 +1310,7 @@ fn a_quake_erupts_when_the_shake_ends_and_leaves_a_stone() {
         spot,
         sim::moves::get(Class::Elementalist, e::QUAKE).reach,
     );
-    throw_looking(&mut w, SIDE_B, pitch);
+    throw_looking(&mut w, QUAKE, pitch);
     w.players[1].pos = spot;
     let full = w.players[1].health;
     run(&mut w, t::quake_shake() as u32 + 2, 0, 0);
@@ -1308,7 +1332,7 @@ fn a_quake_erupts_when_the_shake_ends_and_leaves_a_stone() {
 fn a_tremor_is_a_quake_on_her_own_feet_and_the_stone_lifts_her() {
     let mut w = elementalist();
     let feet = w.players[0].pos;
-    throw(&mut w, RK);
+    throw(&mut w, TREMOR);
     let q = quakes(&w);
     assert_eq!(q.len(), 1);
     assert!(
@@ -1407,7 +1431,7 @@ fn a_cinder_bursting_beside_a_stone_lights_it() {
     sim::stones::raise(&mut w.players[0], Structure::raised(spot));
     run(&mut w, 30, 0, 0);
     // Thrown at the stone: the ember bursts on its near face, beside it.
-    throw(&mut w, M);
+    throw(&mut w, SPRAY);
     fly_out(&mut w, 0, 120);
     assert!(stones_of(&w)[0].lit > 0);
 }
@@ -1423,7 +1447,7 @@ fn kicking_a_lit_stone_bursts_it_into_burning_debris() {
     // The beam, aimed at the stone.
     let pitch =
         crosshair_onto_the_floor_at(&w, spot, sim::moves::get(Class::Elementalist, 0).reach);
-    throw_looking(&mut w, L, pitch);
+    throw_looking(&mut w, BOLT, pitch);
     assert!(stones_of(&w).is_empty(), "the stone burst");
     assert!(w.debris.iter().flatten().count() > 0, "into debris");
     assert_eq!(clouds(&w).len(), 1, "and a cloud of embers where it stood");
@@ -1437,7 +1461,7 @@ fn an_unlit_stone_kicked_is_still_only_kicked() {
     run(&mut w, 30, 0, 0);
     let pitch =
         crosshair_onto_the_floor_at(&w, spot, sim::moves::get(Class::Elementalist, 0).reach);
-    throw_looking(&mut w, L, pitch);
+    throw_looking(&mut w, BOLT, pitch);
     assert_eq!(stones_of(&w).len(), 1, "still there");
     assert!(stones_of(&w)[0].launched, "and moving");
     assert!(clouds(&w).is_empty());

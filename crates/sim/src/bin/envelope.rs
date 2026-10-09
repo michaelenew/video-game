@@ -5,6 +5,9 @@
 //!     cargo run --release -p sim --bin envelope -- jump gaps flat search
 //!     cargo run --release -p sim --bin envelope -- search --fixtures 2> crates/sim/tests/fixtures/envelope.txt
 //!
+//! `--class Name` searches one class alone (its lines then replace that
+//! class's lines in the fixture file by hand).
+//!
 //! The instrument the jump courses were built against; every number in
 //! `docs/design/courses.md` §1 is printed here. See `sim::envelope` for how
 //! each is measured. Release mode: the tool tables play a few thousand
@@ -290,7 +293,16 @@ fn search() {
         }
         println!();
     }
+    // `--class Name` searches that class alone, for re-recording one class's
+    // fixture lines when its kit changes without moving everybody else's.
+    let only = std::env::args()
+        .skip_while(|a| a != "--class")
+        .nth(1)
+        .map(|n| n.replace('_', " "));
     for class in CLASSES {
+        if only.as_ref().is_some_and(|n| *n != class.name()) {
+            continue;
+        }
         print!("  {:<9}", short(class));
         for (lane, (_, rise)) in sim::arena::lab::LANES.iter().enumerate() {
             let stage = s::Stage::lane(class, lane);
