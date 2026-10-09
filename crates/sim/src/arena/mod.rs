@@ -632,6 +632,12 @@ fn resolve_among(
         let mut grounded = false;
         let mut wall = false;
 
+        // On land, ground too steep to walk up is a wall: the step that
+        // would climb it is taken back, or slid along.
+        if ground.on_land(pos.x, pos.z) {
+            wall |= too_steep_to_climb(ground, &mut pos, &mut vel);
+        }
+
         // The floor first: its relief under this point ([`relief`]), zero on
         // a flat floor.
         let floor = ground.relief_at(pos.x, pos.z);
@@ -709,6 +715,21 @@ fn resolve_among(
             }
         }
 
+        // On land, ground too steep to stand on is no footing: the body slides
+        // down it, and cannot jump from it.
+        if grounded && ground.on_land(pos.x, pos.z) && pos.y.raw() <= floor.add(SKIN).raw() {
+            if let Some(down) = ground.downhill(pos.x, pos.z) {
+                let step = t::terrain_slide().mul(crate::DT);
+                pos.x = pos.x.add(down.x.mul(step));
+                pos.z = pos.z.add(down.z.mul(step));
+                let under = ground.relief_at(pos.x, pos.z);
+                if pos.y.raw() < under.raw() {
+                    pos.y = under;
+                }
+                grounded = false;
+            }
+        }
+
         // Standing exactly on a surface reads as grounded even when the
         // resolver did not have to move anything this tick.
         if !grounded && was_grounded && vel.y.raw() <= 0 {
@@ -748,6 +769,49 @@ fn resolve_among(
     }
 }
 
+/// **Walking up ground too steep to walk up**: a body whose step this frame
+/// (`pos` less `vel` a frame) rose faster than `tuning::terrain_steepest`
+/// keeps whichever half of the step does not -- along the slope rather than
+/// up it -- or neither. Only for a body at or under the floor where it
+/// arrived: in the air nothing is climbing anything. True if the step was
+/// stopped, which is a wall.
+fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
+    let arrived = ground.relief_at(pos.x, pos.z);
+    if pos.y.raw() > arrived.add(SKIN).raw() {
+        return false;
+    }
+    let was = V3::new(
+        pos.x.sub(vel.x.mul(crate::DT)),
+        pos.y,
+        pos.z.sub(vel.z.mul(crate::DT)),
+    );
+    let steepest = t::terrain_steepest();
+    let start = ground.relief_at(was.x, was.z);
+    let climbable = |x: Fx, z: Fx| {
+        let run = crate::math::wide_len(V3::new(x.sub(was.x), Fx::ZERO, z.sub(was.z)));
+        let rise = ground.relief_at(x, z).sub(start);
+        // A hair of slack, so walking along a slope's contour is not stopped
+        // by the rounding of one sample against the next.
+        rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()
+    };
+    if climbable(pos.x, pos.z) {
+        return false;
+    }
+    if climbable(pos.x, was.z) {
+        pos.z = was.z;
+        vel.z = Fx::ZERO;
+    } else if climbable(was.x, pos.z) {
+        pos.x = was.x;
+        vel.x = Fx::ZERO;
+    } else {
+        pos.x = was.x;
+        pos.z = was.z;
+        vel.x = Fx::ZERO;
+        vel.z = Fx::ZERO;
+    }
+    true
+}
+
 fn supported_among(ground: &Terrain, pos: V3, radius: Fx) -> bool {
     if pos.y.sub(ground.relief_at(pos.x, pos.z)).abs().raw() <= SKIN.raw() {
         return true;
@@ -760,7 +824,7 @@ fn supported_among(ground: &Terrain, pos: V3, radius: Fx) -> bool {
 fn ground_among(ground: &Terrain, pos: V3) -> Fx {
     let mut best = ground.relief_at(pos.x, pos.z);
     for s in ground.around(pos, Fx::ZERO) {
-        let overhead = s.hangs() && s.min.y.raw() > pos.y.raw();
+        let overhead = ground.hangs(&s) && s.min.y.raw() > pos.y.raw();
         if s.over(pos.x, pos.z, Fx::ZERO) && !overhead && s.max.y.raw() > best.raw() {
             best = s.max.y;
         }
@@ -1028,6 +1092,22 @@ impl Terrain {
         }
     }
 
+    /// **Does a solid hang** -- its bottom above the floor under it? A cave's
+    /// vault, a bridge: a ceiling over whatever is under it, and not ground
+    /// beneath anything below it. Alone, the floor is at zero
+    /// ([`Solid::hangs`]); on a map with land a tree or a crag stands on
+    /// ground metres up, and is not a ceiling for being there.
+    pub fn hangs(&self, s: &Solid) -> bool {
+        match self.atlas {
+            None => s.hangs(),
+            Some(_) => {
+                let x = Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2);
+                let z = Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2);
+                s.min.y.raw() > self.relief_at(x, z).raw()
+            }
+        }
+    }
+
     /// [`Arena::relief_at`]: the floor itself, with nothing on it -- on a
     /// map, whichever place's floor is under the point.
     pub fn relief_at(&self, x: Fx, z: Fx) -> Fx {
@@ -1048,6 +1128,32 @@ impl Terrain {
             None => Fx::ZERO,
             Some(a) => a.void.sub(self.origin.y),
         }
+    }
+
+    /// **Is this point on land** -- a map's open ground, not a place's own
+    /// floor? Where the steepness of the ground is a wall.
+    pub fn on_land(&self, x: Fx, z: Fx) -> bool {
+        match self.atlas {
+            Some(a) if a.land.is_some() => {
+                let (mx, mz) = (x.add(self.origin.x), z.add(self.origin.z));
+                a.pad_at(mx, mz).is_none()
+            }
+            _ => false,
+        }
+    }
+
+    /// **Which way is down**, flat, if the land here is too steep to stand
+    /// on: a unit vector down the slope. `None` where it is walkable.
+    pub fn downhill(&self, x: Fx, z: Fx) -> Option<V3> {
+        let e = Fx::ratio(1, 2);
+        let h = |x: Fx, z: Fx| self.relief_at(x, z);
+        let gx = h(x.add(e), z).sub(h(x.sub(e), z));
+        let gz = h(x, z.add(e)).sub(h(x, z.sub(e)));
+        if gx.abs().max(gz.abs()).raw() <= t::terrain_steepest().raw() {
+            return None;
+        }
+        let down = V3::new(gx.neg(), Fx::ZERO, gz.neg());
+        Some(crate::math::wide_normalized(down))
     }
 
     /// Is the floor one plane here? [`relief::is_flat`], for whichever place
@@ -1115,7 +1221,7 @@ impl Terrain {
         for s in self.around(pos, Fx::ZERO) {
             let top = s.max.y;
             if s.over(pos.x, pos.z, Fx::ZERO)
-                && !s.hangs()
+                && !self.hangs(&s)
                 && top.raw() <= pos.y.add(SKIN).raw()
                 && top.raw() > best.raw()
             {
@@ -1147,7 +1253,7 @@ impl Terrain {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
         for s in self.without_raised(self.around(at, CEILING_REACH)) {
-            if !s.hangs() || s.min.y.raw() <= above.raw() {
+            if !self.hangs(&s) || s.min.y.raw() <= above.raw() {
                 continue;
             }
             let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
@@ -1167,7 +1273,7 @@ impl Terrain {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
         for s in self.without_raised(self.around(at, Fx::ZERO)) {
-            if !s.hangs() || s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) {
+            if !self.hangs(&s) || s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) {
                 continue;
             }
             if best.is_none_or(|b| s.min.y.raw() < b.raw()) {
@@ -1196,7 +1302,7 @@ impl Terrain {
     pub fn fence(&self, mut pos: V3, radius: Fx, step: Fx) -> (V3, V3) {
         let start = pos;
         for solid in self.around(pos, radius.add(RESOLVE_REACH)) {
-            if solid.hangs() || solid.max.y.raw() <= pos.y.add(step).raw() {
+            if self.hangs(&solid) || solid.max.y.raw() <= pos.y.add(step).raw() {
                 continue;
             }
             let (min_x, max_x) = (solid.min.x.sub(radius), solid.max.x.add(radius));

@@ -67,14 +67,84 @@ pub fn draw(
     let Some(place) = valley::place(arena.id) else {
         return;
     };
-    let ground = Terrain::bare(arena);
+    // On the map, the floor under anything here is the land's, in this
+    // place's coordinates.
+    let ground = match under {
+        Under::Parent(_) => Terrain::placed(sim::atlas::valley(), arena),
+        Under::Scenery => Terrain::bare(arena),
+    };
     let (lit, dark) = (linear(palette.beacon(true)), linear(palette.beacon(false)));
+    let mapped = matches!(under, Under::Parent(_));
     for (i, seam) in place.seams.iter().enumerate() {
         let z = seam.zone;
         let mid = z.middle();
         let floor = fx(ground.floor_below(sim::V3::new(mid.x, z.max.y, mid.z)));
         let (w, d) = (fx(z.max.x.sub(z.min.x)), fx(z.max.z.sub(z.min.z)));
         let (cx, cz) = (fx(mid.x), fx(mid.z));
+        // **On the map a seam is a signpost**, not a doorway of light: a
+        // slim pillar and a pool of light at the foot of a side path to a
+        // room, or at a waystone's pass. Where one reach runs on into the
+        // next, or out of a room, there is nothing to mark -- you walk on.
+        if mapped {
+            let to_room = valley::place(seam.to)
+                .is_some_and(|p| matches!(p.kind, Kind::Room(_) | Kind::Ring));
+            let gated = !matches!(seam.gate, valley::Gate::Open);
+            let in_room = matches!(place.kind, Kind::Room(_) | Kind::Ring);
+            if in_room || !(to_room || gated) {
+                continue;
+            }
+            let beacon = |strength: f32| Beacon {
+                place: arena.id,
+                seam: i,
+                lit,
+                dark,
+                shown: None,
+                strength,
+            };
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(Circle::new(1.6))),
+                    MeshMaterial3d(materials.add(translucent(lit, 0.3))),
+                    Transform::from_xyz(cx, floor + 0.06, cz)
+                        .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+                    bevy::pbr::NotShadowCaster,
+                    beacon(0.32),
+                ),
+            );
+            put(
+                commands,
+                under,
+                (
+                    Mesh3d(meshes.add(Cylinder::new(0.22, 3.2).mesh().resolution(12).build())),
+                    MeshMaterial3d(materials.add(translucent(lit, 0.8))),
+                    Transform::from_xyz(cx, floor + 1.6, cz),
+                    bevy::pbr::NotShadowCaster,
+                    beacon(0.8),
+                ),
+            );
+            if let Some(k) = seam.waystone {
+                let s = arena.solids()[k as usize];
+                let top = Vec3::new(
+                    (fx(s.min.x) + fx(s.max.x)) * 0.5,
+                    fx(s.max.y) + 0.35,
+                    (fx(s.min.z) + fx(s.max.z)) * 0.5,
+                );
+                put(
+                    commands,
+                    under,
+                    (
+                        Mesh3d(meshes.add(Sphere::new(0.38).mesh().ico(3).unwrap())),
+                        MeshMaterial3d(materials.add(translucent(lit, 0.95))),
+                        Transform::from_translation(top),
+                        bevy::pbr::NotShadowCaster,
+                        beacon(0.95),
+                    ),
+                );
+            }
+            continue;
+        }
         // The glow on its floor.
         put(
             commands,
@@ -166,8 +236,18 @@ pub fn draw(
         // The face is on whichever thin side of the zone has rock against
         // it; the strands hang a hand in front of it.
         let along_z = (hi.x - lo.x) < (hi.z - lo.z);
+        let to_v = |p: Vec3| {
+            sim::V3::new(
+                sim::Fx::from_raw((p.x * 65536.0) as i32),
+                sim::Fx::from_raw((p.y * 65536.0) as i32),
+                sim::Fx::from_raw((p.z * 65536.0) as i32),
+            )
+        };
+        let mid = (lo + hi) * 0.5;
+        // Every box near the zone: a crag's on the map is not the place's own.
+        let near: Vec<sim::arena::Solid> = ground.around(to_v(mid), sim::Fx::from_int(3)).collect();
         let probe = |p: Vec3| {
-            arena.solids().iter().any(|s| {
+            near.iter().any(|s| {
                 p.x > fx(s.min.x)
                     && p.x < fx(s.max.x)
                     && p.y > fx(s.min.y)
@@ -176,9 +256,23 @@ pub fn draw(
                     && p.z < fx(s.max.z)
             })
         };
-        let mid_y = (lo.y + hi.y) * 0.5;
-        let height = (hi.y - lo.y - 1.0).max(1.0);
-        let base = lo.y + 1.0;
+        // From the floor at its foot to the top of the face it hangs on: a
+        // zone may run from the void to the sky, and the vine does not.
+        let floor = fx(ground.floor_below(to_v(Vec3::new(mid.x, hi.y.min(1000.0), mid.z))));
+        let face_top = near
+            .iter()
+            .filter(|s| {
+                fx(s.max.x) > lo.x - 0.5
+                    && fx(s.min.x) < hi.x + 0.5
+                    && fx(s.max.z) > lo.z - 0.5
+                    && fx(s.min.z) < hi.z + 0.5
+            })
+            .map(|s| fx(s.max.y))
+            .fold(floor + 2.0, f32::max);
+        let base = lo.y.max(floor) + 1.0;
+        let top = hi.y.min(face_top);
+        let mid_y = (base + top) * 0.5;
+        let height = (top - base).max(1.0);
         let strands = 5;
         for k in 0..strands {
             let t = (k as f32 + 0.5) / strands as f32;
@@ -369,10 +463,10 @@ pub fn update_text(
 ) {
     let mut now = self::text(&sim.cur);
     if crate::dev_mode() && sim.cur.valley.on {
-        let (places, boxes) = stream.loaded();
+        let (places, boxes, tiles) = stream.loaded();
         let atlas = sim::atlas::valley();
         now.push_str(&format!(
-            "\nloaded: {places} of {} places, {boxes} of {} boxes",
+            "\nloaded: {places} of {} places, {boxes} of {} boxes, {tiles} tiles of land",
             atlas.places.len(),
             atlas.solids.len()
         ));

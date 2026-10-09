@@ -149,6 +149,16 @@ Two more things that follow from it:
 `arena::MAX_SOLIDS` (64) now holds only for an arena fought on alone
 (`tests/arena.rs`); the town and the reaches have no cap.
 
+**The ground between places is land** (`crate::valley::land`): a height
+function, not a floor per place. Ground steeper than `terrain_steepest` is a
+wall (`Terrain::on_land`, `too_steep_to_climb`), and whether a box hangs is
+`Terrain::hangs` -- above the floor under it -- never `Solid::hangs`, which
+assumes the floor is at zero. A reach's road, seams and crags are written in
+map coordinates; trees, rocks, crags and cairns are made by
+`valley::layout`. Every road and every room is walked end to end by
+`tests/valley.rs`: a change to the land that leaves a way unwalkable fails
+there.
+
 ## Tuning: every magnitude is a knob in the Oven
 
 Feel numbers live in the Oven (`crates/sim/src/oven.rs`), are edited in the

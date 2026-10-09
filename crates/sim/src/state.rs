@@ -1390,6 +1390,16 @@ impl World {
             // The map is composed here, as the world is built, so no frame
             // ever builds it: a frame does not allocate.
             crate::atlas::valley();
+            // The marks were stood on the place's own floor; on the map the
+            // floor is the land, metres up in a reach.
+            let ground = w.terrain();
+            for p in w.players.iter_mut() {
+                let up = V3::new(p.pos.x, Fx::from_int(1000), p.pos.z);
+                p.pos.y = ground.floor_below(up);
+                if let Mechanic::Shadow(_) = p.mechanic {
+                    p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+                }
+            }
         }
         w
     }
@@ -1421,10 +1431,12 @@ impl World {
             ..crate::valley::Journey::default()
         };
         if let Some(seam) = at.and_then(|k| place.and_then(|p| p.seam(k))) {
-            let here = w.arena();
+            // On the map, the ground under a mark is the land's.
+            let here = w.terrain();
             for (i, p) in w.players.iter_mut().enumerate() {
                 let mark = seam.marks[i.min(1)];
-                p.pos = V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z);
+                let up = V3::new(mark.at.x, Fx::from_int(1000), mark.at.z);
+                p.pos = V3::new(mark.at.x, here.floor_below(up), mark.at.z);
                 p.facing = mark.facing;
                 p.vel = V3::ZERO;
                 if let Mechanic::Shadow(_) = p.mechanic {
@@ -1762,9 +1774,11 @@ impl World {
     /// last cairn they touched, or where they came in, fresh -- as a fall on
     /// a jump course stands you on your checkpoint.
     fn stand_back(&mut self, i: usize, place: &crate::valley::Place) {
-        let here = self.arena();
-        let on_mark =
-            |m: &arena::Mark| (V3::new(m.at.x, here.ground_under(m.at), m.at.z), m.facing);
+        let here = self.terrain();
+        let on_mark = |m: &arena::Mark| {
+            let up = V3::new(m.at.x, Fx::from_int(1000), m.at.z);
+            (V3::new(m.at.x, here.floor_below(up), m.at.z), m.facing)
+        };
         // A cairn is a box of the map, wherever it is; it is stood on in this
         // place's coordinates.
         let origin = self.map_origin();

@@ -59,36 +59,73 @@ So there are two problems, and they are separate:
   because alone it is still one table walked end to end. A place that only
   ever lives on a map — the town and the reaches — is not held to it.
 
+## The land (`sim::valley::land`) — since the second pass, 2026-10-09
+
+The first pass laid the old rooms end to end: a valley of vertical walls and
+right angles, every reach a corridor of boxes, every room behind a notch.
+It worked and it read as rooms. **The second pass replaced the reaches with
+land**: the ground between places is a height function, and the valley is
+shaped by it rather than walled by boxes. The aim was the field of a Guild
+Wars or Final Fantasy map — a road winding along a valley floor, foothills
+you can wander up, mountains as the edge of the world, a river, a tarn,
+woods, rocks, and the fights in clearings off the road.
+
+![The Pinewood](gallery/valley-pinewood.png)
+
+- **A way** is a line of points, each with a floor height and a half-width:
+  the floor is level across its width and eases from point to point. The
+  road is each reach's `WAY` in turn, wide in the meadows (fifty metres) and
+  narrow at the passes; each room has a side path to it. Off a floor's edge
+  the land rises: **foothills** first, a third as steep as they are long for
+  sixteen metres, and then the **mountainside**, turning to a slope of 1.4.
+- **A pad** is a place that keeps its own floor: the town, the Ring, every
+  room. Inside it the floor is the place's own relief, exactly as tuned;
+  outside, the land rises off its edge the way it does off a way.
+- **The ground is the lowest any way or pad would make it, and the highest any
+  trodden way or pad holds it up to.** The first carves valleys: two meet as
+  a saddle, a side path is a notch in a hillside. The second is an
+  embankment: a path that climbs above the valley it leaves (to the
+  Highlands, to the Shrine) holds the ground up under it, falling away off
+  its edge.
+- **Water** is a way with a surface over its floor: the Mouth's river, the
+  Shelves' tarn.
+- **Noise** over all of it: a hand's breadth on a floor, metres up a
+  mountainside, and ridged crests on the high faces. Fixed point and hashed
+  integers, so both machines raise the same mountains.
+
+**Steep ground is a wall.** A step whose ground rises faster than
+`terrain_steepest` (the Oven, 0.85) is taken back, or slid along; ground that
+steep is no footing, so a body standing on it slides down
+(`terrain_slide`) and cannot jump off it. That is what makes a mountainside
+the edge of the world without a box in sight (`tests/valley.rs`,
+`a_mountainside_is_a_wall`). Only on land: a place's own floor answers as it
+always did, so every pinned fight is unchanged.
+
+**What hangs** is relative to the land now: a box hangs (is a ceiling) if its
+bottom is above the floor under it, not above zero. A tree or a crag stands
+on ground metres up and is not a ceiling for being there.
+
 ## Where things go (`sim::valley::layout`)
 
-Nothing in a place moves. The layout says only **which seam meets which, and
-how**, and every position is derived from that, so changing a reach moves
-everything after it:
+- **The town and the reaches share the map's coordinates**: a reach's origin
+  is the map's, so its road, seams and crags are written where they are, and
+  walking from one reach to the next moves nothing.
+- **A room** sits in a clearing off the road, at the end of a side path from
+  a junction to the middle of its near side. Level ground runs six metres
+  round it and its doorway is cut through its wall where the path arrives
+  (`Plan::carves`). The Cliffs sit sunk with their plateau at the road's
+  height, reached over a bridge across the ravine round them; the Shrine is
+  at the top of a switchback twenty metres up the Saddle's north-east slope.
+- **A waystone's door** is a box across a pass, shut while the stone is dark.
+- **Crags, cairns, trees and boulders** are made by the layout, standing on
+  the land wherever it is under them: a crag is a pillar of rock with ledges
+  up one face a jump apart, a vine down another and a cairn on top; a tree's
+  trunk is a box you cannot walk through, which the renderer draws as a tree.
 
-- **A passage** meets a passage end to end. The second place goes where its
-  passage's mouth touches the first's, on the same line, with the floors at
-  the same height. The caps that closed both ends are cut.
-- **A room** sits beyond the notch that led to it. Most rooms are walled with
-  low walls, which were fine when the world ended at them and are not on one
-  map, so a room gets **6 m of ground round it and a cliff round that**: a
-  wall hopped is a fall onto grass, not out of the world. The doorway is cut
-  from the notch, through the cliff and the apron, `depth` past it into the
-  room's own wall, at the notch's floor height, with a sill under it that
-  carries you across anything lower (the Cliffs' shelf).
-
-Three things changed in the places themselves, because one map forced them:
-
-- **The Bank's den** was a cave mouth in the bank's face with the bank behind
-  it: no room fits there. It is a notch in the north wall now, like every
-  other room's.
-- **The Shrine** was on the second spire's top: a 33 m room cannot sit on a
-  spire in the middle of the Saddle. A bridge runs from the spire's top
-  through the north wall, 36 m up, and the Shrine is there.
-- **The Long Valley no longer loops back to the Saddle.** The climb runs east
-  from Hearth and the Long Valley runs west from it; they cannot meet. It is
-  reached through Hearth's west gate, under the fifth waystone, which is what
-  it was gated by from that end before. The Saddle's east passage is a dead
-  end with a dark waystone.
+Three things changed in the places themselves on the first pass and stay:
+the Bank's den is off the north of the road (it was a cave in a bank face);
+the Shrine is not on a spire; the Long Valley is reached from Hearth's west
+gate only.
 
 ## Playing it as one piece (`sim::valley::open`)
 
@@ -137,7 +174,21 @@ with peers near them. The map's tiles are not those regions and do not need
 to be — tiles are how a query finds boxes; regions are who must agree about
 a frame — but a region layer would sit on top of this map unchanged.
 
-## Distance loading (`game::stream`)
+## Distance loading (`game::stream`, `game::land`)
+
+**The land is drawn a tile at a time**: each 16 m tile of the map is a mesh at
+the simulation's own heights, a metre a vertex near the camera and coarser
+further off (two, four and eight metres), with a skirt hanging from its edges
+so two tiles drawn at different fineness never show a crack. Its colour is
+`look::Palette::land` for what the ground is there — rock as it steepens,
+snow high up a mountain — with the road worn in (`Palette::trodden`), and
+patches across a meadow. Water is a surface over the tiles under it. A tile
+is built, rebuilt finer or coarser, or dropped as the camera moves, nearest
+first, 24 a frame; the land is drawn out to 300–700 m (the sky's reach, a
+fifth more). Trees are three shared meshes — a trunk, a pine's cone, a
+broadleaf's crown — and a few materials, so a wood of a thousand trees costs
+little.
+
 
 In the valley, the renderer draws two kinds of piece, each loaded when the
 camera comes within reach and dropped when it goes further than that by

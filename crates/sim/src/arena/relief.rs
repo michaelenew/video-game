@@ -118,11 +118,6 @@ pub fn of(id: ArenaId) -> &'static [Bump] {
         ArenaId::GNAWERS => &COMMONS,
         ArenaId::SANDMAW => &PAN,
         ArenaId::VEILSTALKER => &ASHWOOD,
-        ArenaId::MOUTH => &super::mouth::BUMPS,
-        ArenaId::BANK => &super::bank::BUMPS,
-        ArenaId::SHELVES => &super::shelves::BUMPS,
-        ArenaId::PINEWOOD => &super::pinewood::BUMPS,
-        ArenaId::SADDLE => &super::saddle::BUMPS,
         _ => &[],
     }
 }
@@ -182,16 +177,11 @@ impl Ramp {
     }
 }
 
-/// An arena's ramps: the valley's reaches, and nothing else yet.
-pub fn ramps(id: ArenaId) -> &'static [Ramp] {
-    match id {
-        ArenaId::MOUTH => &super::mouth::RAMPS,
-        ArenaId::BANK => &super::bank::RAMPS,
-        ArenaId::SHELVES => &super::shelves::RAMPS,
-        ArenaId::PINEWOOD => &super::pinewood::RAMPS,
-        ArenaId::SADDLE => &super::saddle::RAMPS,
-        _ => &[],
-    }
+/// An arena's ramps. None now: the valley's reaches had them, and climb on
+/// the land instead (`crate::valley::land`). Kept for the next arena whose
+/// own floor wants to rise across it.
+pub fn ramps(_id: ArenaId) -> &'static [Ramp] {
+    &[]
 }
 
 /// Is the floor one plane at zero here? Most arenas' is.

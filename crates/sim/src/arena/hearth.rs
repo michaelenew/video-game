@@ -60,28 +60,25 @@ const REGIONS: [Region; 4] = [
     },
 ];
 
-const SOLIDS: [Solid; 30] = [
+const SOLIDS: [Solid; 27] = [
     // The east wall, either side of the valley gate.
     Solid::cm([3500, 0, -3200], [3700, 900, -300], Stone),
     Solid::cm([3500, 0, 300], [3700, 900, 3200], Stone),
-    // The valley gate's passage: its sides and the gatehouse beyond.
+    // The valley gate's passage, open at its far end onto the land.
     Solid::cm([3700, 0, -500], [4300, 900, -300], Stone),
     Solid::cm([3700, 0, 300], [4300, 900, 500], Stone),
-    Solid::cm([4300, 0, -500], [4500, 900, 500], Stone),
     // The west wall, either side of the Long Valley's gate.
     Solid::cm([-3700, 0, -3200], [-3500, 900, -300], Stone),
     Solid::cm([-3700, 0, 300], [-3500, 900, 3200], Stone),
     // The west gate's passage.
     Solid::cm([-4300, 0, -500], [-3700, 900, -300], Stone),
     Solid::cm([-4300, 0, 300], [-3700, 900, 500], Stone),
-    Solid::cm([-4500, 0, -500], [-4300, 900, 500], Stone),
     // The north wall, either side of the Ring's door.
     Solid::cm([-3700, 0, 3000], [-300, 900, 3200], Stone),
     Solid::cm([300, 0, 3000], [3700, 900, 3200], Stone),
-    // The Ring's lane: its sides and the Ring's wall beyond.
+    // The Ring's lane, open at its far end onto the path to the Ring.
     Solid::cm([-500, 0, 3200], [-300, 900, 3800], Stone),
     Solid::cm([300, 0, 3200], [500, 900, 3800], Stone),
-    Solid::cm([-500, 0, 3800], [500, 900, 4000], Stone),
     // The south wall.
     Solid::cm([-3700, 0, -3200], [3700, 900, -3000], Stone),
     // The stair up the east wall to its walk: the lookout.
@@ -153,7 +150,7 @@ const SEAMS: [Seam; 3] = [
             Mark::cm(-3100, 150, (-2100, 150)),
         ],
         gate: crate::valley::tier::FIVE,
-        waystone: Some(29),
+        waystone: Some(26),
         says: "the Long Valley",
     },
 ];

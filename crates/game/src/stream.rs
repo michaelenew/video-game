@@ -70,12 +70,20 @@ pub struct Stream {
     at: Option<Vec3>,
     /// The waystones' doors: one slab per gated doorway, shown while shut.
     gates: Vec<(usize, Entity)>,
+    /// The land's tiles by (column, row): the tile, how finely it is drawn,
+    /// and its water.
+    tiles: HashMap<(i32, i32), (Entity, usize, Option<Entity>)>,
+    /// The palette for each place, for the land's colours.
+    palettes: HashMap<ArenaId, look::Palette>,
+    trees: crate::land::Trees,
+    ground: Option<Handle<StandardMaterial>>,
+    water: Option<Handle<StandardMaterial>>,
 }
 
 impl Stream {
     /// How many places and boxes are drawn: what the dev overlay shows.
-    pub fn loaded(&self) -> (usize, usize) {
-        (self.places.len(), self.solids.len())
+    pub fn loaded(&self) -> (usize, usize, usize) {
+        (self.places.len(), self.solids.len(), self.tiles.len())
     }
 }
 
@@ -129,6 +137,7 @@ pub fn stream(
         st.places.clear();
         st.solids.clear();
         st.gates.clear();
+        st.tiles.clear();
         st.origin = None;
         st.at = None;
         return;
@@ -296,6 +305,22 @@ pub fn stream(
             .entry(place.arena)
             .or_insert_with(|| PlaceLook::of(place.get()))
             .clone();
+        // A tree's trunk is drawn as a tree.
+        if crate::land::is_tree(s) {
+            let palette = look.palette;
+            let Stream { trees, .. } = &mut *st;
+            let e = trees.spawn(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                s,
+                place.arena,
+                &palette,
+                root,
+            );
+            st.solids.insert(i, e);
+            continue;
+        }
         let e = draw_solid(
             &mut commands,
             &mut meshes,
@@ -307,6 +332,19 @@ pub fn stream(
         );
         st.solids.insert(i, e);
     }
+    // The land: every tile within reach, drawn as finely as its distance
+    // asks, nearest first.
+    behind |= land_tiles(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &mut st,
+        atlas,
+        root,
+        at,
+        reach,
+    );
+
     // More to build: work the set out again next frame rather than waiting
     // for the camera to move.
     if behind {
@@ -348,4 +386,132 @@ fn spawn_gates(
             .id();
         st.gates.push((k, e));
     }
+}
+
+/// How many tiles of land are built, or rebuilt finer or coarser, in one
+/// frame.
+const TILES_PER_FRAME: usize = 24;
+
+/// How far the land is drawn: past the sky's reach, at least far enough that
+/// the mountains round a valley are never missing, and never the whole map.
+const LAND_REACH: (f32, f32) = (300.0, 700.0);
+
+/// **The land's tiles**: load the ones within reach at the fineness their
+/// distance asks, rebuild the ones whose fineness has changed, drop the ones
+/// past reach. True if there is more to do than one frame's worth.
+#[allow(clippy::too_many_arguments)]
+fn land_tiles(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    st: &mut Stream,
+    atlas: &Atlas,
+    root: Entity,
+    at: Vec3,
+    reach: f32,
+) -> bool {
+    if atlas.land.is_none() {
+        return false;
+    }
+    let reach = (reach * 1.2).clamp(LAND_REACH.0, LAND_REACH.1);
+    let size = sim::atlas::TILE_M as f32;
+    let centre =
+        |t: (i32, i32)| Vec3::new((t.0 as f32 + 0.5) * size, 0.0, (t.1 as f32 + 0.5) * size);
+    let flat = |t: (i32, i32)| {
+        let c = centre(t);
+        ((c.x - at.x).powi(2) + (c.z - at.z).powi(2)).sqrt()
+    };
+    // Drop what is past reach.
+    let gone: Vec<(i32, i32)> = st
+        .tiles
+        .keys()
+        .copied()
+        .filter(|t| flat(*t) > reach + SLACK)
+        .collect();
+    for t in gone {
+        if let Some((e, _, water)) = st.tiles.remove(&t) {
+            commands.entity(e).despawn();
+            if let Some(w) = water {
+                commands.entity(w).despawn();
+            }
+        }
+    }
+    // What is wanted, and how finely; nearest first.
+    let to_fx = |v: f32| sim::Fx::from_raw((v * 65536.0) as i32);
+    let (x0, z0) = atlas.tile_at(to_fx(at.x - reach), to_fx(at.z - reach));
+    let (x1, z1) = atlas.tile_at(to_fx(at.x + reach), to_fx(at.z + reach));
+    let mut work: Vec<(f32, (i32, i32), usize)> = Vec::new();
+    for tz in z0..=z1 {
+        for tx in x0..=x1 {
+            let d = flat((tx, tz));
+            if d > reach {
+                continue;
+            }
+            let cells = crate::land::cells_at(d);
+            match st.tiles.get(&(tx, tz)) {
+                Some(&(_, now, _)) if now == cells => {}
+                _ => work.push((d, (tx, tz), cells)),
+            }
+        }
+    }
+    work.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let behind = work.len() > TILES_PER_FRAME;
+    let ground = st
+        .ground
+        .get_or_insert_with(|| {
+            materials.add(StandardMaterial {
+                // Seen from below only by its skirts, which face out either
+                // way round.
+                cull_mode: None,
+                ..crate::shapes::plain()
+            })
+        })
+        .clone();
+    for (_, t, cells) in work.into_iter().take(TILES_PER_FRAME) {
+        let (mesh, water) = crate::land::tile_mesh(atlas, t.0, t.1, cells, &mut st.palettes);
+        let corner = Vec3::new(t.0 as f32 * size, 0.0, t.1 as f32 * size);
+        let e = commands
+            .spawn((
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(ground.clone()),
+                Transform::from_translation(corner),
+                bevy::pbr::NotShadowCaster,
+                ChildOf(root),
+            ))
+            .id();
+        let w = water.map(|surface| {
+            let colour = st
+                .water
+                .get_or_insert_with(|| {
+                    let c = look::palette::of(sim::arena::ArenaId::MOUTH)
+                        .of(sim::arena::Material::Water);
+                    materials.add(StandardMaterial {
+                        base_color: Color::srgba(c[0], c[1], c[2], 0.78),
+                        alpha_mode: AlphaMode::Blend,
+                        perceptual_roughness: 0.15,
+                        reflectance: 0.6,
+                        ..default()
+                    })
+                })
+                .clone();
+            commands
+                .spawn((
+                    Mesh3d(meshes.add(Plane3d::default().mesh().size(size, size))),
+                    MeshMaterial3d(colour),
+                    Transform::from_translation(
+                        corner + Vec3::new(size * 0.5, surface, size * 0.5),
+                    ),
+                    bevy::pbr::NotShadowCaster,
+                    ChildOf(root),
+                ))
+                .id()
+        });
+        if let Some((old, _, old_water)) = st.tiles.insert(t, (e, cells, w)) {
+            commands.entity(old).despawn();
+            if let Some(ow) = old_water {
+                commands.entity(ow).despawn();
+            }
+        }
+    }
+    behind
 }

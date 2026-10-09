@@ -356,6 +356,9 @@ pub fn draw_place(
     under: Under,
 ) {
     let (sky, palette, brush, dressing) = (&look.sky, &look.palette, &look.brush, look.dressing);
+    // On the map the land is drawn by itself, a tile at a time
+    // (`crate::land`), and the floor of every place with it.
+    let mapped = matches!(under, Under::Parent(_));
     // The drop's floor, unlit: made before `paint` borrows the materials.
     //
     // Unlit but **fogged**, which is the whole point of it now. A drop drawn
@@ -413,7 +416,8 @@ pub fn draw_place(
             (fx(b.lo_x), fx(b.hi_x), fx(b.lo_z), fx(b.hi_z), APRON)
         }
     };
-    match below {
+    match below.filter(|_| !mapped) {
+        _ if mapped => {}
         Some(dark) => {
             put(
                 commands,
@@ -479,7 +483,8 @@ pub fn draw_place(
         }
     }
     let hilly = !sim::arena::relief::is_flat(arena.id);
-    for (i, region) in arena.regions.iter().enumerate() {
+    let regions = if mapped { &[][..] } else { arena.regions };
+    for (i, region) in regions.iter().enumerate() {
         let look = paint(palette.of(region.material));
         // A hair above the floor, each region a hair above the last.
         let lift = 0.004 * (i + 1) as f32;
@@ -587,7 +592,7 @@ pub fn draw_place(
     // chips on rock -- small enough to walk through unnoticed and placed by a
     // hash of the arena, so the same arena scatters the same way every time.
     // Not on a course (no floor), not in water, never inside a solid.
-    if !dressing.drop {
+    if !dressing.drop && !mapped {
         scatter(commands, meshes, arena, palette, brush, white, under);
     }
 
@@ -637,7 +642,31 @@ pub fn draw_solid(
             | Material::Peat
             | Material::Rock
     );
-    let mesh = if soft && crate::shapes::is_terrain(size) {
+    // **A crag**: a pillar of rock standing on the land, drawn as one --
+    // tapering, lumpy, flat on top where feet stand -- rather than as a
+    // block of cliff.
+    let crag = solid.material == Material::Rock && size.y > 8.0 && size.x <= 12.0 && size.z <= 12.0;
+    let mesh = if crag {
+        let mut m = crate::shapes::rock_column(seed);
+        if let Some(bevy::render::mesh::VertexAttributeValues::Float32x3(ps)) =
+            m.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+        {
+            for p in ps.iter_mut() {
+                *p = [p[0] * size.x, p[1] * size.y, p[2] * size.z];
+            }
+        }
+        if let Some(bevy::render::mesh::VertexAttributeValues::Float32x3(ns)) =
+            m.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
+        {
+            for n in ns.iter_mut() {
+                let v =
+                    Vec3::new(n[0] / size.x, n[1] / size.y, n[2] / size.z).normalize_or(Vec3::Y);
+                *n = v.to_array();
+            }
+        }
+        crate::shapes::paint(&mut m, size * 0.5, at, rgb, brush);
+        m
+    } else if soft && crate::shapes::is_terrain(size) {
         let side = palette.cliff_face(solid.material, size.x.min(size.z) < 3.0);
         crate::shapes::cliff(size, seed, rgb, side, at, brush)
     } else {

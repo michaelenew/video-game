@@ -32,6 +32,7 @@ use std::sync::OnceLock;
 use crate::arena::{self, Arena, ArenaId, Material, Solid};
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::valley::land::Land;
 use crate::valley::{Gate, Zone};
 
 /// The side of a tile, in whole metres.
@@ -66,6 +67,8 @@ pub struct Placed {
     /// any cut into pieces where a doorway goes through it).
     pub first: u32,
     pub end: u32,
+    /// It keeps its own floor over its footprint ([`PlanPlace::pad`]).
+    pub pad: bool,
 }
 
 impl Placed {
@@ -129,8 +132,15 @@ pub struct Plan {
     /// has round its own footprint. The order is the order their boxes are
     /// resolved in, and where footprints overlap the earlier place's floor is
     /// the floor.
-    pub places: Vec<(ArenaId, V3, Fx)>,
+    pub places: Vec<PlanPlace>,
     pub doors: Vec<DoorPlan>,
+    /// Boxes cut out of everything they meet: a room's wall where its path
+    /// arrives.
+    pub carves: Vec<Solid>,
+    /// The land between the places that keep their own floors
+    /// ([`crate::valley::land`]), if the map has any: without it, the floor
+    /// anywhere is the place's own, and the void where no place is.
+    pub land: Option<Land>,
     /// Boxes in no place, on the map: cliffs round a room, a door's sill.
     pub extras: Vec<Solid>,
     /// The floor where no place is: far enough under every place that
@@ -138,12 +148,27 @@ pub struct Plan {
     pub void: Fx,
 }
 
+/// One place of a [`Plan`].
+#[derive(Clone, Copy, Debug)]
+pub struct PlanPlace {
+    pub arena: ArenaId,
+    /// Where its origin goes on the map.
+    pub at: V3,
+    /// Level ground round its footprint.
+    pub apron: Fx,
+    /// It keeps its own floor -- the town, the Ring, a room -- where the land
+    /// would otherwise be. A place that does not (a reach) is the land.
+    pub pad: bool,
+}
+
 /// One doorway of a [`Plan`].
 #[derive(Clone, Copy, Debug)]
 pub struct DoorPlan {
     pub a: (ArenaId, u8),
     pub b: (ArenaId, u8),
-    /// The box cut out of everything it meets, on the map.
+    /// The doorway, on the map: where it is, for the sky's blend and for
+    /// which seam the world came in by, and the wall a dark waystone shuts
+    /// it with. Nothing is cut by it: [`Plan::carves`] is what cuts.
     pub cut: Solid,
 }
 
@@ -159,6 +184,8 @@ pub struct Atlas {
     pub doors: Vec<Door>,
     /// The floor where no place is.
     pub void: Fx,
+    /// The land between the pads, if there is any.
+    pub land: Option<Land>,
     /// Everything on the map lies inside this (x, z).
     pub lo: (Fx, Fx),
     pub hi: (Fx, Fx),
@@ -279,7 +306,7 @@ impl Atlas {
     /// **Compose a layout**: put each place down, cut the doorways, and sort
     /// every box into its tiles.
     pub fn compose(plan: &Plan) -> Atlas {
-        let cuts: Vec<Solid> = plan.doors.iter().map(|d| d.cut).collect();
+        let cuts: Vec<Solid> = plan.carves.clone();
         let cut_all = |s: Solid| {
             let mut pieces = vec![s];
             for cut in &cuts {
@@ -295,7 +322,8 @@ impl Atlas {
         let mut places = Vec::with_capacity(plan.places.len());
         let mut solids = Vec::new();
         let mut sources = Vec::new();
-        for (k, &(id, at, apron)) in plan.places.iter().enumerate() {
+        for (k, pp) in plan.places.iter().enumerate() {
+            let (id, at, apron) = (pp.arena, pp.at, pp.apron);
             let arena = id.get();
             let (lo, hi) = footprint(arena);
             let (lo, hi) = (
@@ -324,6 +352,7 @@ impl Atlas {
                 hi: (hi.0.add(at.x), hi.1.add(at.z)),
                 first,
                 end: solids.len() as u32,
+                pad: pp.pad,
             });
         }
         for (i, s) in plan.extras.iter().enumerate() {
@@ -459,6 +488,7 @@ impl Atlas {
             sources,
             doors,
             void: plan.void,
+            land: plan.land.clone(),
             lo,
             hi,
             grid: Grid {
@@ -501,21 +531,54 @@ impl Atlas {
     /// **The floor's height at a map point**: the relief of the place it is
     /// in, raised to where that place sits; the void anywhere else.
     pub fn relief_at(&self, x: Fx, z: Fx) -> Fx {
+        if let Some(land) = &self.land {
+            return match self.pad_at(x, z) {
+                Some(p) => p.get().relief_at(x.sub(p.at.x), z.sub(p.at.z)).add(p.at.y),
+                None => land.height(x, z),
+            };
+        }
         match self.place_at(x, z) {
             Some(p) => p.get().relief_at(x.sub(p.at.x), z.sub(p.at.z)).add(p.at.y),
             None => self.void,
         }
     }
 
+    /// The place with its own floor that a map point is on, if any: the
+    /// town, the Ring, a room. Elsewhere on a map with land, the land is the
+    /// floor.
+    pub fn pad_at(&self, x: Fx, z: Fx) -> Option<&Placed> {
+        self.place_at(x, z).filter(|p| p.pad)
+    }
+
     /// Is the floor one plane at this map point -- no hills, no ramps? The
     /// void counts as flat.
     pub fn is_flat_at(&self, x: Fx, z: Fx) -> bool {
+        if self.land.is_some() && self.pad_at(x, z).is_none() {
+            return false;
+        }
         self.place_at(x, z)
             .is_none_or(|p| arena::relief::is_flat(p.arena))
     }
 
     /// What the floor is made of at a map point, ignoring every box.
     pub fn floor_at(&self, x: Fx, z: Fx) -> Material {
+        if let Some(land) = &self.land {
+            if self.pad_at(x, z).is_none() {
+                // The land's own: under water, water; too steep to stand
+                // on, bare rock; down the middle of a way, the trodden path;
+                // otherwise whatever the place says its ground is.
+                let sample = land.sample(x, z);
+                if sample.water.is_some() {
+                    return Material::Water;
+                }
+                if land.steepness(x, z).raw() > crate::tuning::terrain_steepest().raw() {
+                    return Material::Rock;
+                }
+                if sample.path.raw() < crate::valley::land::PATH_HALF.raw() {
+                    return Material::Ground;
+                }
+            }
+        }
         match self.place_at(x, z) {
             Some(p) => p.get().floor_at(x.sub(p.at.x), z.sub(p.at.z)),
             None => Material::Rock,
