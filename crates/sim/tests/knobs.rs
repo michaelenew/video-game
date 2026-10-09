@@ -33,9 +33,50 @@ const NOT_GAMEPLAY: &[&str] = &[
     "input.rs",
 ];
 
+/// **Level data**: files that say where things are and what the ground is
+/// shaped like, the way an arena's table of boxes does -- the valley's land
+/// (how wide a floor, how steep a mountainside, how loud the noise on it) and
+/// its layout (where a crag stands, how far apart the trees). They are judged
+/// by looking at them, on the plan sheet (`cargo run -p look --example
+/// atlas`) and in the game, not by how a fight feels; the numbers that are
+/// about feel -- how steep a body walks, how fast it slides -- are in the
+/// Oven.
+const LEVEL_DATA: &[&str] = &["land.rs", "layout.rs"];
+
 /// Magnitudes that are deliberately not knobs. The reason is the point: an
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
+    (
+        "rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()",
+        "Rounding slack in the steepness test: two samples of the land a step apart differ \
+         by a few thousandths along a contour. The steepness itself is the knob.",
+    ),
+    (
+        "V3::new(p.pos.x, Fx::from_int(1000), p.pos.z)",
+        "Asking for the floor from above everything: a height over any place, not a height \
+         anything is at.",
+    ),
+    (
+        "V3::new(mark.at.x, Fx::from_int(1000), mark.at.z)",
+        "The same: the floor under a mark, asked from above everything.",
+    ),
+    (
+        "V3::new(m.at.x, Fx::from_int(1000), m.at.z)",
+        "The same: the floor under a mark, asked from above everything.",
+    ),
+    (
+        "pub const HALF: i32 = 400",
+        "Level data, like an arena's table: how wide a crag is.",
+    ),
+    (
+        "pub const RISE: i32 = 220",
+        "Level data: how far a crag's ledges are apart, sized to the plainest jump \
+         (`tests/valley.rs` holds every class to it).",
+    ),
+    (
+        "pub const OUT: i32 = 160",
+        "Level data: how far a crag's ledge stands out of its face.",
+    ),
     (
         "pub const MAX_SPAN_M: i32 = 16_000",
         "What 16.16 can hold, not a size anything is: the widest a map can be with \
@@ -255,7 +296,8 @@ fn sim_sources() -> Vec<(String, String)> {
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or_default();
-            if !name.ends_with(".rs") || NOT_GAMEPLAY.contains(&name) {
+            if !name.ends_with(".rs") || NOT_GAMEPLAY.contains(&name) || LEVEL_DATA.contains(&name)
+            {
                 continue;
             }
             let shown = path

@@ -1,315 +1,728 @@
-//! **The valley as one map**: where every place goes, worked out from how
-//! they join.
+//! **The valley as one map**: where every place goes, the land between them,
+//! and what grows on it.
 //!
-//! The places were drawn as rooms joined by teleports, each in its own
-//! coordinates. Nothing here moves a box inside one of them. What this
-//! table says is only *which seam meets which*, and how:
+//! Since 2026-10-09 (the second time that day) the valley is laid out as
+//! land rather than as rooms of boxes (`docs/design/atlas.md`,
+//! `crate::valley::land`):
 //!
-//! - **A passage** meets a passage end to end: the Mouth's way on to the Bank
-//!   and the Bank's way back are one corridor. The second place goes where
-//!   its passage's mouth touches the first's, on the same line, with the two
-//!   floors at the same height, and the caps that closed both ends are cut.
-//! - **A room** sits beyond the notch that led to it, with
-//!   [`APRON`] of ground all round it and a cliff round that, so a low wall
-//!   hopped is a fall onto grass rather than out of the world. Its doorway is
-//!   cut through the notch's back, the cliff, the apron and the room's own
-//!   wall, `depth` past the apron, at the height of the notch's floor; a sill
-//!   under the cut carries you across whatever is lower (the Cliffs' shelf).
-//!   `along` is where on that wall the door goes, in the room's own
-//!   coordinates, so it can miss what stands inside.
-//!
-//! Every position is derived: change a reach's length or a passage's floor
-//! and the next place moves with it. `tests/atlas.rs` checks what derivation
-//! cannot promise -- that no two places overlap and that every doorway's
-//! floor meets on both sides.
+//! - **The town and the reaches share the map's coordinates.** A reach's
+//!   origin is the map's, so its road, seams and crags are written where they
+//!   are. The town sits at the origin.
+//! - **The road** is each reach's `WAY`, one after another from the town's
+//!   east gate to the Saddle: the valley floor, winding, wide in the meadows
+//!   and narrow at the passes. Off its edges the land rises into hills and
+//!   mountains, too steep to walk.
+//! - **A room** sits in a clearing off the road, at the end of a side path
+//!   from a junction of the road to the middle of the room's near side. Its
+//!   floor is its own, level ground runs [`APRON`] round it, and a doorway is
+//!   cut through its wall where the path arrives. The town, the Ring and the
+//!   Long Valley are the same kind of place.
+//! - **A waystone's door** is a box across a pass: shut while the stone is
+//!   dark (`valley::open`).
+//! - **Crags, cairns, trees and boulders** are made here, standing on the
+//!   land wherever it is under them: a tree's trunk is a box you cannot walk
+//!   through, and the renderer draws a tree round it.
 
 use crate::arena::{self, ArenaId, Material, Solid};
-use crate::atlas::{DoorPlan, Plan, footprint};
+use crate::atlas::{DoorPlan, Plan, PlanPlace, footprint};
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::valley::Crag;
+use crate::valley::land::{Land, Pad, Point, Way, at};
 
-/// How two seams meet.
-#[derive(Clone, Copy, Debug)]
-pub enum Join {
-    Passage,
-    Room {
-        /// Where on the room's wall the door goes, centimetres along it in
-        /// the room's own coordinates.
-        along: i32,
-        /// How far past the apron the doorway is cut: through the room's own
-        /// wall and whatever is in the way of its floor.
-        depth: i32,
-    },
-}
+use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves};
 
-/// One joint: the seam of a place already put down, and the seam of the
-/// place it leads to.
-#[derive(Clone, Copy, Debug)]
-pub struct Joint {
-    pub a: (ArenaId, u8),
-    pub b: (ArenaId, u8),
-    pub join: Join,
-}
-
-const fn passage(a: ArenaId, sa: u8, b: ArenaId, sb: u8) -> Joint {
-    Joint {
-        a: (a, sa),
-        b: (b, sb),
-        join: Join::Passage,
-    }
-}
-
-const fn room(a: ArenaId, sa: u8, b: ArenaId, along: i32, depth: i32) -> Joint {
-    Joint {
-        a: (a, sa),
-        b: (b, 0),
-        join: Join::Room { along, depth },
-    }
-}
-
-/// Where the map starts: Hearth, at the origin.
-pub const ROOT: ArenaId = ArenaId::HEARTH;
-
-/// Ground round a room, beyond its own footprint, in centimetres.
+/// Level ground round a room, past its own footprint, in centimetres.
 pub const APRON: i32 = 600;
 
-/// How high a room's cliff stands over the tallest thing in it.
-const CLIFF_OVER: i32 = 400;
-
-/// How wide a doorway is cut into a room.
+/// How wide a doorway into a room is cut, and how high.
 const DOOR: i32 = 600;
-
-/// How high every doorway is cut, over its floor.
 const DOOR_HIGH: i32 = 600;
-
-/// How far either side of the meeting line a passage's doorway is cut: the
-/// caps that closed both ends.
-const CAP: i32 = 300;
 
 /// The floor where no place is.
 const VOID: i32 = -10_000;
 
-/// **The joints**, in the order they are put down: each one's first place is
-/// already on the map.
-pub const JOINTS: [Joint; 17] = [
-    // The town: the Ring north, the Long Valley west through the fifth
-    // waystone's gate, the climb east.
-    room(ArenaId::HEARTH, 1, ArenaId::RING, 0, 200),
-    room(ArenaId::HEARTH, 2, ArenaId::SIEGESHELL, 0, 600),
-    passage(ArenaId::HEARTH, 0, ArenaId::MOUTH, 0),
-    // The climb.
-    passage(ArenaId::MOUTH, 2, ArenaId::BANK, 0),
-    passage(ArenaId::BANK, 2, ArenaId::SHELVES, 0),
-    passage(ArenaId::SHELVES, 3, ArenaId::PINEWOOD, 0),
-    passage(ArenaId::PINEWOOD, 4, ArenaId::SADDLE, 0),
-    // The rooms off it.
-    room(ArenaId::MOUTH, 1, ArenaId::HORNBACK, 0, 250),
-    room(ArenaId::BANK, 1, ArenaId::GNAWERS, 0, 350),
-    room(ArenaId::SHELVES, 1, ArenaId::MIREBACK, 400, 150),
-    room(ArenaId::SHELVES, 2, ArenaId::SANDMAW, 0, 150),
-    room(ArenaId::PINEWOOD, 1, ArenaId::PAIR, 0, 200),
-    room(ArenaId::PINEWOOD, 2, ArenaId::BROODMOTHER, 0, 200),
-    room(ArenaId::PINEWOOD, 3, ArenaId::HIGHLANDS, 0, 150),
-    room(ArenaId::SADDLE, 1, ArenaId::GALEWING, 0, 550),
-    room(ArenaId::SADDLE, 2, ArenaId::VEILSTALKER, 0, 200),
-    room(ArenaId::SADDLE, 3, ArenaId::MANTIS, 0, 200),
+/// Which side of a room its door is on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    North,
+    South,
+    East,
+    West,
+}
+
+/// **A room off the road**: the place, where its origin goes on the map
+/// (centimetres), the side its door is on and where along it (in the room's
+/// own coordinates), how far into it the doorway is cut past the ground
+/// round it, and the point of the road its side path leaves from.
+#[derive(Clone, Copy, Debug)]
+pub struct Room {
+    pub arena: ArenaId,
+    pub at: [i32; 3],
+    pub side: Side,
+    pub along: i32,
+    pub depth: i32,
+    /// The road's junction, centimetres: x, z, floor.
+    pub from: (i32, i32, i32),
+    /// The seam of the reach the side path leaves from.
+    pub seam: (ArenaId, u8),
+}
+
+const fn room(
+    arena: ArenaId,
+    at: [i32; 3],
+    side: Side,
+    along: i32,
+    depth: i32,
+    from: (i32, i32, i32),
+    seam: (ArenaId, u8),
+) -> Room {
+    Room {
+        arena,
+        at,
+        side,
+        along,
+        depth,
+        from,
+        seam,
+    }
+}
+
+/// **The rooms**: the Ring and the Long Valley off the town, the creatures'
+/// rooms off the road.
+pub const ROOMS: [Room; 12] = [
+    room(
+        ArenaId::RING,
+        [0, 0, 7600],
+        Side::South,
+        0,
+        200,
+        (0, 3600, 0),
+        (ArenaId::HEARTH, 1),
+    ),
+    room(
+        ArenaId::SIEGESHELL,
+        [-21500, 0, 0],
+        Side::East,
+        0,
+        600,
+        (-4000, 0, 0),
+        (ArenaId::HEARTH, 2),
+    ),
+    room(
+        ArenaId::HORNBACK,
+        [11500, 50, 7400],
+        Side::South,
+        0,
+        250,
+        (11500, 1400, 50),
+        (ArenaId::MOUTH, 1),
+    ),
+    room(
+        ArenaId::GNAWERS,
+        [30500, 2100, 6500],
+        Side::South,
+        0,
+        350,
+        (30500, 1200, 2100),
+        (ArenaId::BANK, 1),
+    ),
+    room(
+        ArenaId::MIREBACK,
+        [51500, 4500, -8600],
+        Side::North,
+        400,
+        150,
+        (51500, -3000, 4500),
+        (ArenaId::SHELVES, 1),
+    ),
+    room(
+        ArenaId::SANDMAW,
+        [56800, 4650, -8400],
+        Side::North,
+        0,
+        150,
+        (56000, -2800, 4650),
+        (ArenaId::SHELVES, 2),
+    ),
+    room(
+        ArenaId::PAIR,
+        [70200, 5700, -4400],
+        Side::North,
+        0,
+        200,
+        (70200, 400, 5700),
+        (ArenaId::PINEWOOD, 1),
+    ),
+    room(
+        ArenaId::BROODMOTHER,
+        [73500, 5750, 5800],
+        Side::South,
+        0,
+        200,
+        (73500, 1000, 5750),
+        (ArenaId::PINEWOOD, 2),
+    ),
+    room(
+        ArenaId::HIGHLANDS,
+        [76500, 6400, -4600],
+        Side::North,
+        0,
+        150,
+        (76500, -200, 6000),
+        (ArenaId::PINEWOOD, 3),
+    ),
+    // The Cliffs sit sunk, their plateau at the road's height: the way in is
+    // a bridge over the ravine round them, not a doorway (`CLIFFS_BRIDGE`).
+    room(
+        ArenaId::GALEWING,
+        [90500, 7300, 7400],
+        Side::South,
+        0,
+        0,
+        (90500, 1000, 8500),
+        (ArenaId::SADDLE, 1),
+    ),
+    room(
+        ArenaId::VEILSTALKER,
+        [93500, 8600, -6100],
+        Side::North,
+        0,
+        200,
+        (93500, -600, 8600),
+        (ArenaId::SADDLE, 2),
+    ),
+    // The Shrine is at the top of its own path (`saddle::SHRINE_WAY`).
+    room(
+        ArenaId::MANTIS,
+        [99500, 11000, 8000],
+        Side::South,
+        0,
+        200,
+        (100000, 400, 9000),
+        (ArenaId::SADDLE, 3),
+    ),
 ];
 
-/// Which way a seam faces out of its place: the side of the footprint it is
-/// nearest. `(axis, sign)`, axis 0 for x and 2 for z.
-fn facing(id: ArenaId, seam: u8) -> (usize, i32) {
-    let (lo, hi) = footprint(id.get());
-    let zone = seam_zone(id, seam);
-    let c = zone.middle();
-    let gaps = [
-        (hi.0.sub(c.x), (0, 1)),
-        (c.x.sub(lo.0), (0, -1)),
-        (hi.1.sub(c.z), (2, 1)),
-        (c.z.sub(lo.1), (2, -1)),
-    ];
-    let mut best = gaps[0];
-    for g in gaps {
-        if g.0.raw() < best.0.raw() {
-            best = g;
+/// The bridge into the Cliffs: from the road's edge over the ravine to the
+/// plateau's lip, at the road's height.
+const CLIFFS_BRIDGE: Solid = Solid::cm([90200, 8440, 2600], [90800, 8500, 5250], Material::Wood);
+
+/// **The doors between reaches**, and the waystones' among them: the two
+/// seams, and the box across the pass (shut while its stone is dark).
+/// A door between two seams, and its box: two corners in centimetres.
+type Pass = ((ArenaId, u8), (ArenaId, u8), [[i32; 3]; 2]);
+
+const PASSES: [Pass; 5] = [
+    (
+        (ArenaId::HEARTH, 0),
+        (ArenaId::MOUTH, 0),
+        [[4400, 0, -300], [5200, 600, 300]],
+    ),
+    (
+        (ArenaId::MOUTH, 2),
+        (ArenaId::BANK, 0),
+        [[24800, 1900, -1200], [25200, 2600, 1200]],
+    ),
+    (
+        (ArenaId::BANK, 2),
+        (ArenaId::SHELVES, 0),
+        [[42900, 4300, -1600], [43100, 5400, 800]],
+    ),
+    (
+        (ArenaId::SHELVES, 3),
+        (ArenaId::PINEWOOD, 0),
+        [[65100, 5500, -1000], [65300, 6600, 1800]],
+    ),
+    (
+        (ArenaId::PINEWOOD, 4),
+        (ArenaId::SADDLE, 0),
+        [[85100, 8100, -800], [85300, 9200, 2000]],
+    ),
+];
+
+/// The fourth waystone's door: across the Shrine's path, above the road.
+const SHRINE_GATE: [[i32; 3]; 2] = [[99600, 8900, 1600], [102400, 10200, 1800]];
+
+/// The town's three roads out: east to the climb, north to the Ring, west to
+/// the Long Valley.
+const TOWN_ROADS: [[Point; 2]; 2] = [
+    [at(0, 3600, 0, 300), at(0, 5600, 0, 300)],
+    [at(-4000, 0, 0, 300), at(-6000, 0, 0, 300)],
+];
+
+/// How dense the trees are in each reach, in thousandths of a candidate spot,
+/// and whether they are pines.
+const WOODS: [(ArenaId, u32, bool); 5] = [
+    (ArenaId::MOUTH, 90, false),
+    (ArenaId::BANK, 120, false),
+    (ArenaId::SHELVES, 80, true),
+    (ArenaId::PINEWOOD, 520, true),
+    (ArenaId::SADDLE, 70, true),
+];
+
+/// Candidate spots for trees and boulders: a jittered grid this far apart.
+const SPACING: i32 = 600;
+
+fn cm(v: i32) -> Fx {
+    arena::cm(v)
+}
+
+fn v3(c: [i32; 3]) -> V3 {
+    V3::new(cm(c[0]), cm(c[1]), cm(c[2]))
+}
+
+/// A deterministic number in [0, 1000) from two integers and a salt.
+fn dice(a: i32, b: i32, salt: u32) -> u32 {
+    let mut h = (a as u32).wrapping_mul(0x9E37_79B1)
+        ^ (b as u32).wrapping_mul(0x85EB_CA77)
+        ^ salt.wrapping_mul(0xC2B2_AE3D);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2C1B_3C6D);
+    h ^= h >> 12;
+    h % 1000
+}
+
+/// A room's footprint on the map with the ground round it: lo and hi (x, z).
+fn pad_of(r: &Room) -> ((Fx, Fx), (Fx, Fx)) {
+    let (lo, hi) = footprint(r.arena.get());
+    let at = v3(r.at);
+    let a = cm(APRON);
+    (
+        (lo.0.add(at.x).sub(a), lo.1.add(at.z).sub(a)),
+        (hi.0.add(at.x).add(a), hi.1.add(at.z).add(a)),
+    )
+}
+
+/// Where a room's side path meets its pad, and the doorway cut through its
+/// wall there, on the map.
+fn door_of(r: &Room) -> (V3, Solid) {
+    let (lo, hi) = pad_of(r);
+    let at = v3(r.at);
+    let (lo_local, hi_local) = footprint(r.arena.get());
+    let along = cm(r.along);
+    let half = cm(DOOR / 2);
+    let y0 = at.y;
+    let y1 = at.y.add(cm(DOOR_HIGH));
+    let (edge, cut) = match r.side {
+        Side::South => {
+            let x = at.x.add(along);
+            let z = lo.1;
+            let inner = lo_local.1.add(at.z).add(cm(r.depth));
+            (
+                V3::new(x, y0, z),
+                (V3::new(x.sub(half), y0, z), V3::new(x.add(half), y1, inner)),
+            )
+        }
+        Side::North => {
+            let x = at.x.add(along);
+            let z = hi.1;
+            let inner = hi_local.1.add(at.z).sub(cm(r.depth));
+            (
+                V3::new(x, y0, z),
+                (V3::new(x.sub(half), y0, inner), V3::new(x.add(half), y1, z)),
+            )
+        }
+        Side::West => {
+            let z = at.z.add(along);
+            let x = lo.0;
+            let inner = lo_local.0.add(at.x).add(cm(r.depth));
+            (
+                V3::new(x, y0, z),
+                (V3::new(x, y0, z.sub(half)), V3::new(inner, y1, z.add(half))),
+            )
+        }
+        Side::East => {
+            let z = at.z.add(along);
+            let x = hi.0;
+            let inner = hi_local.0.add(at.x).sub(cm(r.depth));
+            (
+                V3::new(x, y0, z),
+                (V3::new(inner, y0, z.sub(half)), V3::new(x, y1, z.add(half))),
+            )
+        }
+    };
+    (
+        edge,
+        Solid {
+            min: cut.0,
+            max: cut.1,
+            material: Material::Ground,
+        },
+    )
+}
+
+/// The town's pad, and the Ring's and every room's.
+fn pads() -> Vec<Pad> {
+    let mut out = Vec::new();
+    let (lo, hi) = footprint(hearth::ARENA.id.get());
+    let a = cm(APRON);
+    out.push(Pad {
+        lo: (lo.0.sub(a), lo.1.sub(a)),
+        hi: (hi.0.add(a), hi.1.add(a)),
+        y: Fx::ZERO,
+    });
+    for r in &ROOMS {
+        let (lo, hi) = pad_of(r);
+        out.push(Pad {
+            lo,
+            hi,
+            y: v3(r.at).y,
+        });
+    }
+    out
+}
+
+/// A side path's points: from the road's junction to a few metres into the
+/// room's pad, through its door.
+fn side_path(r: &Room) -> Vec<Point> {
+    let (edge, _) = door_of(r);
+    let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
+    let (x, z, y) = (to_cm(edge.x), to_cm(edge.z), to_cm(edge.y));
+    // A step out of the pad, square to its side, so the path arrives
+    // straight on.
+    let (ox, oz) = match r.side {
+        Side::South => (0, -800),
+        Side::North => (0, 800),
+        Side::West => (-800, 0),
+        Side::East => (800, 0),
+    };
+    let (ix, iz) = (-ox / 4, -oz / 4);
+    vec![
+        at(r.from.0, r.from.1, r.from.2, 350),
+        at(x + ox, z + oz, y, 300),
+        at(x + ix, z + iz, y, 300),
+    ]
+}
+
+/// Every way of the land: the road, the town's roads, the side paths, the
+/// water.
+fn ways() -> Vec<Way> {
+    let mut out = Vec::new();
+    let road = |points: &[Point]| Way {
+        points: points.to_vec(),
+        path: true,
+        water: None,
+    };
+    out.push(road(&mouth::WAY));
+    out.push(road(&bank::WAY));
+    out.push(road(&shelves::WAY));
+    out.push(road(&shelves::CLIMB));
+    out.push(road(&pinewood::WAY));
+    out.push(road(&saddle::WAY));
+    out.push(road(&saddle::SHRINE_WAY));
+    for r in &TOWN_ROADS {
+        out.push(road(r));
+    }
+    for r in &ROOMS {
+        // The Shrine has its own path up, the Ring and the Long Valley the
+        // town's roads, and the Cliffs a bridge at the road's height.
+        if matches!(
+            r.arena,
+            ArenaId::MANTIS | ArenaId::RING | ArenaId::SIEGESHELL | ArenaId::GALEWING
+        ) {
+            continue;
+        }
+        out.push(road(&side_path(r)));
+    }
+    out.push(Way {
+        points: mouth::RIVER.to_vec(),
+        path: false,
+        water: Some(80),
+    });
+    out.push(Way {
+        points: shelves::TARN.to_vec(),
+        path: false,
+        water: Some(150),
+    });
+    out
+}
+
+/// The highest and lowest the land is over a box's footprint, sampled every
+/// metre.
+fn ground_span(land: &Land, lo: (Fx, Fx), hi: (Fx, Fx)) -> (Fx, Fx) {
+    let (mut low, mut high) = (Fx::from_int(10_000), Fx::from_int(-10_000));
+    let mut x = lo.0;
+    while x.raw() <= hi.0.raw() {
+        let mut z = lo.1;
+        while z.raw() <= hi.1.raw() {
+            let h = land.height(x, z);
+            low = low.min(h);
+            high = high.max(h);
+            z = z.add(Fx::ONE);
+        }
+        x = x.add(Fx::ONE);
+    }
+    (low, high)
+}
+
+/// **A crag's boxes**: the pillar, its ledges zig-zagging up the west face a
+/// rise apart, and a cairn on its top.
+fn crag(land: &Land, c: &Crag, out: &mut Vec<Solid>) {
+    let h = Crag::HALF;
+    let (low, high) = ground_span(land, (cm(c.x - h), cm(c.z - h)), (cm(c.x + h), cm(c.z + h)));
+    let base = high;
+    let top = base.add(cm(Crag::RISE * (c.ledges as i32 + 1)));
+    out.push(Solid {
+        min: V3::new(cm(c.x - h), low.sub(Fx::ONE), cm(c.z - h)),
+        max: V3::new(cm(c.x + h), top, cm(c.z + h)),
+        material: Material::Rock,
+    });
+    for k in 1..=c.ledges as i32 {
+        let ledge_top = base.add(cm(Crag::RISE * k));
+        // Alternating halves of the face, a metre apart: up and across.
+        let (z0, z1) = if k % 2 == 1 {
+            (c.z - h + 50, c.z - 50)
+        } else {
+            (c.z + 50, c.z + h - 50)
+        };
+        out.push(Solid {
+            min: V3::new(
+                cm(c.x - h - Crag::OUT),
+                ledge_top.sub(Fx::ratio(1, 2)),
+                cm(z0),
+            ),
+            max: V3::new(cm(c.x - h), ledge_top, cm(z1)),
+            material: Material::Rock,
+        });
+    }
+    out.push(Solid {
+        min: V3::new(cm(c.x - 100), top, cm(c.z - 100)),
+        max: V3::new(cm(c.x + 100), top.add(Fx::ratio(2, 5)), cm(c.z + 100)),
+        material: Material::Snow,
+    });
+}
+
+/// A cairn on the floor: a slab of snow two metres across.
+fn cairn(land: &Land, x: i32, z: i32, out: &mut Vec<Solid>) {
+    let (low, high) = ground_span(land, (cm(x - 100), cm(z - 100)), (cm(x + 100), cm(z + 100)));
+    out.push(Solid {
+        min: V3::new(cm(x - 100), low.sub(Fx::ratio(3, 10)), cm(z - 100)),
+        max: V3::new(cm(x + 100), high.add(Fx::ratio(2, 5)), cm(z + 100)),
+        material: Material::Snow,
+    });
+}
+
+/// Is a map point clear of everything a tree or a boulder must not stand on:
+/// a pad, the road, water, a crag, a seam?
+fn clear(land: &Land, x: Fx, z: Fx, crags: &[Crag], keep: Fx) -> bool {
+    if land.on_pad(x, z).is_some() {
+        return false;
+    }
+    let s = land.sample(x, z);
+    if s.water.is_some() || s.path.raw() < keep.raw() {
+        return false;
+    }
+    if land.steepness(x, z).raw() > Fx::ratio(7, 10).raw() {
+        return false;
+    }
+    crags.iter().all(|c| {
+        let dx = x.sub(cm(c.x)).abs();
+        let dz = z.sub(cm(c.z)).abs();
+        dx.raw() > cm(Crag::HALF + 500).raw() || dz.raw() > cm(Crag::HALF + 500).raw()
+    })
+}
+
+/// **The trees and the boulders**: every [`SPACING`] a candidate, jittered,
+/// kept by the reach's density where the ground is clear.
+fn growth(land: &Land, crags: &[Crag], out: &mut Vec<Solid>) {
+    for &(id, per_mille, pines) in &WOODS {
+        let b = id.get().bounds;
+        let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
+        let (x0, x1, z0, z1) = (to_cm(b.lo_x), to_cm(b.hi_x), to_cm(b.lo_z), to_cm(b.hi_z));
+        let mut gx = x0;
+        while gx < x1 {
+            let mut gz = z0;
+            while gz < z1 {
+                let jx = gx + (dice(gx, gz, 1) as i32 * SPACING / 1000);
+                let jz = gz + (dice(gx, gz, 2) as i32 * SPACING / 1000);
+                let (x, z) = (cm(jx), cm(jz));
+                let roll = dice(gx, gz, 3);
+                if roll < per_mille && clear(land, x, z, crags, Fx::from_int(5)) {
+                    let rise = land.sample(x, z).rise;
+                    // Thinner up the slopes, none past the tree line.
+                    if rise.raw() < Fx::from_int(28).raw()
+                        && dice(gx, gz, 4) as i32 * 28 > rise.to_int() * 1000
+                    {
+                        let tall = if pines { 700 } else { 550 } + dice(gx, gz, 5) as i32 * 3 / 10;
+                        let half = if pines { 30 } else { 35 };
+                        let (low, _) = ground_span(
+                            land,
+                            (cm(jx - half), cm(jz - half)),
+                            (cm(jx + half), cm(jz + half)),
+                        );
+                        out.push(Solid {
+                            min: V3::new(cm(jx - half), low.sub(Fx::ratio(1, 2)), cm(jz - half)),
+                            max: V3::new(cm(jx + half), low.add(cm(tall)), cm(jz + half)),
+                            material: Material::Wood,
+                        });
+                    }
+                } else if roll > 985 && clear(land, x, z, crags, Fx::from_int(4)) {
+                    // A boulder, now and then: low enough to hop.
+                    let w = 80 + dice(gx, gz, 6) as i32 / 5;
+                    let d = 80 + dice(gx, gz, 7) as i32 / 5;
+                    let h = 60 + dice(gx, gz, 8) as i32 / 8;
+                    let (low, high) = ground_span(
+                        land,
+                        (cm(jx - w / 2), cm(jz - d / 2)),
+                        (cm(jx + w / 2), cm(jz + d / 2)),
+                    );
+                    out.push(Solid {
+                        min: V3::new(cm(jx - w / 2), low.sub(Fx::ratio(1, 2)), cm(jz - d / 2)),
+                        max: V3::new(cm(jx + w / 2), high.add(cm(h)), cm(jz + d / 2)),
+                        material: Material::Rock,
+                    });
+                }
+                gz += SPACING;
+            }
+            gx += SPACING;
         }
     }
-    best.1
 }
 
-fn seam_zone(id: ArenaId, seam: u8) -> super::Zone {
-    super::place(id)
-        .and_then(|p| p.seam(seam))
-        .map(|s| s.zone)
-        .unwrap_or(super::Zone {
-            min: V3::ZERO,
-            max: V3::ZERO,
-        })
-}
-
-fn get(v: V3, axis: usize) -> Fx {
-    if axis == 0 { v.x } else { v.z }
-}
-
-fn set(v: &mut V3, axis: usize, to: Fx) {
-    if axis == 0 { v.x = to } else { v.z = to }
-}
-
-/// The floor under a point of an arena: its relief, or the highest top of
-/// anything standing on it there. A cave's roof is not a floor.
-fn floor_of(id: ArenaId, x: Fx, z: Fx) -> Fx {
-    let arena = id.get();
-    arena
-        .solids
-        .iter()
-        .filter(|s| !s.hangs() && s.over(x, z, Fx::ZERO))
-        .fold(arena.relief_at(x, z), |best, s| best.max(s.max.y))
-}
-
-/// The floor of a seam: the highest top under the middle of its zone that is
-/// no higher than the zone's top -- a bridge's deck as much as the ground.
-fn seam_floor(id: ArenaId, zone: &super::Zone) -> Fx {
-    let arena = id.get();
-    let mid = zone.middle();
-    arena
-        .solids
-        .iter()
-        .filter(|s| s.over(mid.x, mid.z, Fx::ZERO) && s.max.y.raw() <= zone.max.y.raw())
-        .fold(arena.relief_at(mid.x, mid.z), |best, s| best.max(s.max.y))
-}
-
-/// **The plan**: every place put down, every doorway, every cliff and sill.
+/// **The plan**: every place put down, the land between them, every doorway,
+/// every crag, cairn, tree and boulder.
 pub fn plan() -> Plan {
-    let cm = arena::cm;
     let mut plan = Plan {
         void: cm(VOID),
         ..Plan::default()
     };
-    plan.places.push((ROOT, V3::ZERO, Fx::ZERO));
-    let at = |plan: &Plan, id: ArenaId| plan.places.iter().find(|p| p.0 == id).map(|p| (p.1, p.2));
-    for joint in JOINTS {
-        let Some((a_at, a_apron)) = at(&plan, joint.a.0) else {
-            continue;
-        };
-        let (axis, sign) = facing(joint.a.0, joint.a.1);
-        let cross = 2 - axis;
-        let s = Fx::from_int(sign);
-        let a_zone = seam_zone(joint.a.0, joint.a.1);
-        let a_mid = a_zone.middle();
-        let (a_lo, a_hi) = footprint(joint.a.0.get());
-        let a_edge = if sign > 0 {
-            get(V3::new(a_hi.0, Fx::ZERO, a_hi.1), axis).add(a_apron)
-        } else {
-            get(V3::new(a_lo.0, Fx::ZERO, a_lo.1), axis).sub(a_apron)
-        };
-        // The floor of the seam, on the map.
-        let floor = seam_floor(joint.a.0, &a_zone).add(a_at.y);
-        let a_edge = a_edge.add(get(a_at, axis));
-        let a_cross = get(a_mid, cross).add(get(a_at, cross));
+    // The places with their own floors first, so a point on one is on it;
+    // then the reaches, which are the land.
+    plan.places.push(PlanPlace {
+        arena: ArenaId::HEARTH,
+        at: V3::ZERO,
+        apron: cm(APRON),
+        pad: true,
+    });
+    for r in &ROOMS {
+        plan.places.push(PlanPlace {
+            arena: r.arena,
+            at: v3(r.at),
+            apron: cm(APRON),
+            pad: true,
+        });
+    }
+    for id in [
+        ArenaId::MOUTH,
+        ArenaId::BANK,
+        ArenaId::SHELVES,
+        ArenaId::PINEWOOD,
+        ArenaId::SADDLE,
+    ] {
+        plan.places.push(PlanPlace {
+            arena: id,
+            at: V3::ZERO,
+            apron: Fx::ZERO,
+            pad: false,
+        });
+    }
 
-        let b = joint.b.0.get();
-        let (b_lo, b_hi) = footprint(b);
-        // The side of the second place that meets the first: its far side
-        // along the same axis.
-        let b_edge_local = if sign > 0 {
-            get(V3::new(b_lo.0, Fx::ZERO, b_lo.1), axis)
-        } else {
-            get(V3::new(b_hi.0, Fx::ZERO, b_hi.1), axis)
+    let land = Land::new(&ways(), pads());
+
+    // Doors: the passes between reaches, and each room's doorway.
+    for (a, b, cut) in PASSES {
+        plan.doors.push(DoorPlan {
+            a,
+            b,
+            cut: Solid::cm(cut[0], cut[1], Material::Stone),
+        });
+    }
+    for r in &ROOMS {
+        let (_, cut) = door_of(r);
+        let door = match r.arena {
+            ArenaId::GALEWING => CLIFFS_BRIDGE,
+            ArenaId::MANTIS => Solid::cm(SHRINE_GATE[0], SHRINE_GATE[1], Material::Stone),
+            _ => cut,
         };
-        let mut b_at = V3::ZERO;
-        match joint.join {
-            Join::Passage => {
-                let b_mid = seam_zone(joint.b.0, joint.b.1).middle();
-                set(&mut b_at, axis, a_edge.sub(b_edge_local));
-                set(&mut b_at, cross, a_cross.sub(get(b_mid, cross)));
-                let b_zone = seam_zone(joint.b.0, joint.b.1);
-                b_at.y = floor.sub(seam_floor(joint.b.0, &b_zone));
-                plan.places.push((joint.b.0, b_at, Fx::ZERO));
-                // The two caps, either side of the line, the passage's
-                // width and a door's height over its floor.
-                let (z0, z1) = (get(a_zone.min, cross), get(a_zone.max, cross));
-                let mut lo = V3::new(Fx::ZERO, floor, Fx::ZERO);
-                let mut hi = V3::new(Fx::ZERO, floor.add(cm(DOOR_HIGH)), Fx::ZERO);
-                set(&mut lo, axis, a_edge.sub(cm(CAP)));
-                set(&mut hi, axis, a_edge.add(cm(CAP)));
-                set(&mut lo, cross, z0.add(get(a_at, cross)));
-                set(&mut hi, cross, z1.add(get(a_at, cross)));
-                plan.doors.push(DoorPlan {
-                    a: joint.a,
-                    b: joint.b,
-                    cut: Solid {
-                        min: lo,
-                        max: hi,
-                        material: Material::Ground,
-                    },
-                });
-            }
-            Join::Room { along, depth } => {
-                let apron = cm(APRON);
-                let b_edge_local = b_edge_local.sub(s.mul(apron));
-                // Where the cut ends inside the room, and the floor there.
-                let inner_local = b_edge_local.add(s.mul(apron.add(cm(depth))));
-                let mut inner = V3::ZERO;
-                set(&mut inner, axis, inner_local);
-                set(&mut inner, cross, cm(along));
-                let b_floor = floor_of(joint.b.0, inner.x, inner.z);
-                set(&mut b_at, axis, a_edge.sub(b_edge_local));
-                set(&mut b_at, cross, a_cross.sub(cm(along)));
-                b_at.y = floor.sub(b_floor);
-                plan.places.push((joint.b.0, b_at, apron));
+        plan.doors.push(DoorPlan {
+            a: r.seam,
+            b: (r.arena, 0),
+            cut: door,
+        });
+        if r.depth > 0 {
+            plan.carves.push(cut);
+        }
+    }
+    plan.extras.push(CLIFFS_BRIDGE);
 
-                // The doorway: from the middle of the notch to `depth` past
-                // the apron, a door wide and a door high.
-                let half = cm(DOOR / 2);
-                let from = get(a_mid, axis).add(get(a_at, axis));
-                let to = inner_local.add(get(b_at, axis));
-                let mut lo = V3::new(Fx::ZERO, floor, Fx::ZERO);
-                let mut hi = V3::new(Fx::ZERO, floor.add(cm(DOOR_HIGH)), Fx::ZERO);
-                set(&mut lo, axis, from.min(to));
-                set(&mut hi, axis, from.max(to));
-                set(&mut lo, cross, a_cross.sub(half));
-                set(&mut hi, cross, a_cross.add(half));
-                plan.doors.push(DoorPlan {
-                    a: joint.a,
-                    b: joint.b,
-                    cut: Solid {
-                        min: lo,
-                        max: hi,
-                        material: Material::Ground,
-                    },
-                });
-                // The sill: the doorway's floor, whatever is under it.
-                plan.extras.push(Solid {
-                    min: V3::new(lo.x, floor.sub(Fx::ratio(1, 2)), lo.z),
-                    max: V3::new(hi.x, floor, hi.z),
-                    material: Material::Ground,
-                });
+    // What stands on the land.
+    let mut crags: Vec<Crag> = Vec::new();
+    crags.extend(mouth::CRAGS);
+    crags.extend(bank::CRAGS);
+    crags.extend(shelves::CRAGS);
+    crags.extend(pinewood::CRAGS);
+    crags.extend(saddle::CRAGS);
+    for c in &crags {
+        crag(&land, c, &mut plan.extras);
+    }
+    for &(x, z) in mouth::CAIRNS
+        .iter()
+        .chain(bank::CAIRNS.iter())
+        .chain(shelves::CAIRNS.iter())
+        .chain(pinewood::CAIRNS.iter())
+        .chain(saddle::CAIRNS.iter())
+    {
+        cairn(&land, x, z, &mut plan.extras);
+    }
+    growth(&land, &crags, &mut plan.extras);
 
-                // The cliff round the apron: four walls, a metre thick,
-                // standing from the void to over the tallest thing in the
-                // room. The doorway cuts the one it passes through.
-                let tallest = b
-                    .solids
-                    .iter()
-                    .fold(Fx::ZERO, |t, s| t.max(s.max.y))
-                    .add(cm(CLIFF_OVER))
-                    .add(b_at.y);
-                let (lo_x, lo_z) = (b_lo.0.sub(apron).add(b_at.x), b_lo.1.sub(apron).add(b_at.z));
-                let (hi_x, hi_z) = (b_hi.0.add(apron).add(b_at.x), b_hi.1.add(apron).add(b_at.z));
-                let one = Fx::ONE;
-                let bottom = cm(VOID);
-                let wall = |x0: Fx, z0: Fx, x1: Fx, z1: Fx| Solid {
-                    min: V3::new(x0, bottom, z0),
-                    max: V3::new(x1, tallest, z1),
-                    material: Material::Rock,
-                };
-                plan.extras
-                    .push(wall(lo_x.sub(one), lo_z.sub(one), hi_x.add(one), lo_z));
-                plan.extras
-                    .push(wall(lo_x.sub(one), hi_z, hi_x.add(one), hi_z.add(one)));
-                plan.extras.push(wall(lo_x.sub(one), lo_z, lo_x, hi_z));
-                plan.extras.push(wall(hi_x, lo_z, hi_x.add(one), hi_z));
+    plan.land = Some(land);
+    plan
+}
+
+/// **The way into a room, on foot**: points on the map from the road's
+/// junction to a few metres inside the room's ground -- by its side path, the
+/// Shrine's switchback, the Cliffs' bridge, or the town's road. What a walk
+/// through the valley follows (`tests/valley.rs`).
+pub fn approach(r: &Room) -> Vec<(Fx, Fx)> {
+    let p = |x: i32, z: i32| (cm(x), cm(z));
+    let (edge, _) = door_of(r);
+    let inward = match r.side {
+        Side::South => (Fx::ZERO, Fx::from_int(5)),
+        Side::North => (Fx::ZERO, Fx::from_int(-5)),
+        Side::West => (Fx::from_int(5), Fx::ZERO),
+        Side::East => (Fx::from_int(-5), Fx::ZERO),
+    };
+    let inside = (edge.x.add(inward.0), edge.z.add(inward.1));
+    let mut out = vec![p(r.from.0, r.from.1)];
+    match r.arena {
+        ArenaId::MANTIS => out.extend(saddle::SHRINE_WAY.iter().map(|q| p(q.x, q.z))),
+        ArenaId::GALEWING => {
+            let b = CLIFFS_BRIDGE;
+            let x = Fx::from_raw(b.min.x.raw() / 2 + b.max.x.raw() / 2);
+            out.push((x, b.min.z.add(Fx::ONE)));
+            out.push((x, b.max.z.add(Fx::from_int(3))));
+            return out;
+        }
+        _ => {
+            for q in side_path(r).iter().skip(1) {
+                out.push(p(q.x, q.z));
             }
         }
     }
-    plan
+    out.push(inside);
+    out
+}
+
+/// **The road, on foot**: from the town's east gate to the end of the
+/// Saddle, every point of it in order.
+pub fn road() -> Vec<(Fx, Fx)> {
+    let mut out = Vec::new();
+    for way in [
+        &mouth::WAY[..],
+        &bank::WAY[..],
+        &shelves::WAY[..],
+        &shelves::CLIMB[..],
+        &pinewood::WAY[..],
+        &saddle::WAY[..],
+    ] {
+        for q in way {
+            let at = (cm(q.x), cm(q.z));
+            if out.last() != Some(&at) {
+                out.push(at);
+            }
+        }
+    }
+    out
 }

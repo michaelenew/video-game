@@ -426,6 +426,60 @@ impl Palette {
     pub fn draft(&self) -> [f32; 3] {
         self.surface([0.94, 0.96, 1.0])
     }
+    /// **The land's colour** at a point (`sim::valley::land`): what its
+    /// ground is made of, turned to bare rock as it steepens past
+    /// `steepest` (slope as rise over run), and laid with old snow high up a
+    /// mountainside -- `rise` metres over the floor it rises from, snow
+    /// starting at forty and whole by sixty. A mountain reads as a mountain
+    /// because its faces are rock and its tops are white; nobody had to paint
+    /// either.
+    pub fn land(&self, ground: Material, slope: f32, steepest: f32, rise: f32) -> [f32; 3] {
+        let base = self.of(ground);
+        let rock = self.cliff_face(Material::Rock, false);
+        let bare = ((slope - steepest * 0.7) / (steepest * 0.6)).clamp(0.0, 1.0);
+        let c = tint::mix(base, rock, bare * bare * (3.0 - 2.0 * bare));
+        let snow = ((rise - 40.0) / 20.0).clamp(0.0, 1.0);
+        // Snow lies thinner on what is steeper.
+        let lies = snow * (1.0 - 0.6 * bare);
+        tint::mix(c, self.of(Material::Snow), lies)
+    }
+
+    /// **A tree's leaves**: the place's grass, deeper and darker for a pine,
+    /// a step lighter and warmer for a broadleaf -- so a wood is the same
+    /// green as the meadow it stands in, and a pine wood reads darker than a
+    /// copse from across the valley.
+    pub fn foliage(&self, pine: bool) -> [f32; 3] {
+        let g = Lch::of(self.of(Material::Grass));
+        if pine {
+            Lch {
+                l: g.l * 0.62,
+                c: g.c * 1.1,
+                h: g.h + 0.02,
+            }
+            .rgb()
+        } else {
+            Lch {
+                l: g.l * 0.85,
+                c: g.c * 1.2,
+                h: g.h - 0.03,
+            }
+            .rgb()
+        }
+    }
+
+    /// **A trodden road**: earth, the same brown everywhere, balanced into
+    /// this palette the way a prop's colour is ([`Palette::surface`]). A
+    /// road read as earth under every sky; the ground's own colour turned it
+    /// purple under a lilac one.
+    pub fn trodden(&self) -> [f32; 3] {
+        self.surface([0.58, 0.47, 0.36])
+    }
+
+    /// A tree's trunk: the place's timber, darker.
+    pub fn bark(&self) -> [f32; 3] {
+        let w = Lch::of(self.of(Material::Wood));
+        Lch { l: w.l * 0.7, ..w }.rgb()
+    }
 }
 
 /// **A far ridge**, for the lookout's view of the valley: the ground's

@@ -36,26 +36,27 @@ colours.*
 
 ---
 
-## 1 · The shape: a line, with rooms off it
+## 1 · The shape: a valley, with rooms off it
 
-One climb from Hearth's gate to the Saddle, **one map** (since 2026-10-09:
-it was loaded a reach at a time). The creatures' arenas are **rooms** off
-the reaches, entered through notches in the walls, so every fight is the
-arena it was tuned in. Hearth sits at the bottom of the climb *and* at the
-end of the Long Valley, and the last fight walks toward the town it started
-in. (It was a loop, with the Long Valley's far end opening off the Saddle;
-on one map the climb runs east and the Long Valley west, so it is reached
-from Hearth's west gate only.)
+One climb from Hearth's gate to the Saddle, **one map** of land since
+2026-10-09 ([atlas.md](atlas.md)): a road winding up a valley between
+mountains, a river in its first meadow and a tarn under the Shelves' north
+slope, woods thickening into the Pinewood and thinning into the Saddle's
+snow. The creatures' arenas are **rooms** in clearings off the road, each at
+the end of a side path, so every fight is the arena it was tuned in. Hearth
+sits at the bottom of the climb, the Ring north of it and the Long Valley
+west, where the Siegeshell walks toward the town.
 
-| Place | Size | Top | The climb | Rooms off it | The way on |
-| --- | --- | --- | --- | --- | --- |
-| **Hearth** | 90 × 72 m | — | A stair up the inside of the east wall to the lookout | **the Ring** (north door) | the valley gate east; the west gate to the Long Valley, under the fifth waystone |
-| **The Mouth** | 212 × 56 m | 20 m | Scree, then the Step (three shelves), a 6 m gap, a three-ledge traverse up the Lip's face over a 15 m slot | the low meadow (Hornback herd) | the Lip |
-| **The Bank** | 172 × 48 m | 24.5 m | Ten shelves zig-zagging up the bank, a snow balcony, then the gully | the den (Gnawers), through a notch in the north wall (it was a cave in the bank's face, with no room behind it for a room) | **first waystone**: one of the herd, the den |
-| **The Shelves** | 220 × 56 m | 32 m | A ledge along the north wall 20 m over the hollow, broken by 5 m and 6 m gaps; then a four-ledge chimney | the Mire (Mireback), the Pan behind a 7 m bluff (Sandmaw) | **second waystone**: one of the Pan, the Mire |
-| **The Pinewood** | 200 × 64 m | 26 m | Trunks; an eleven-ledge chimney between two giant trunks; the band | the Den (the Pair), the Hollows under a root roof (Broodmother), the Highlands up a six-block stair (Ridgeback) | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
-| **The Saddle** | 170 × 64 m | 22 m; the Shrine 36 m | The ridge, three metres wide and 20 m up, broken twice over updrafts; a six-ledge chimney between two spires | the Cliffs (Galewing), the Ashwood (Veilstalker); the Shrine (Mantis), over a bridge from the second spire's top through the north wall, behind the **fourth waystone**: one of the Cliffs, the Ashwood | none: the east passage is a dead end now, its fifth waystone dark |
-| **The Long Valley** | the Siegeshell's own | — | — | it *is* the room: the Siegeshell walks it toward Hearth | out of Hearth's west gate, under the **fifth waystone**: the Mantis |
+![The Bank, looking back at the town](gallery/valley-bank.png)
+
+| Place | The road | Rooms off it | The way on |
+| --- | --- | --- | --- |
+| **Hearth** | — | **the Ring** (north), **the Long Valley** (west, under the fifth waystone) | the east gate |
+| **The Mouth** | Out of the gate between low hills into a river meadow fifty metres wide; a crag with a cairn; the road climbs the scree, sixteen metres in two bends, to the Lip | the low meadow (Hornback herd), up a side path north | the Lip |
+| **The Bank** | A broad upper meadow; the old stair as a crag; the road climbs the bank, twenty-one metres | the den (Gnawers), north | **first waystone**, a pass between two shoulders of hill: one of the herd, the den |
+| **The Shelves** | A long open bowl with a tarn under its north slope; a crag by the shore; the road climbs out | the Mire (Mireback) and the Pan (Sandmaw), down side paths south | **second waystone**: one of the Pan, the Mire |
+| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road climbs out twenty-six metres in two bends | the Den (the Pair) south, the Hollows (Broodmother) north, the Highlands (Ridgeback) up a side path south four metres higher | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
+| **The Saddle** | A snowy alpine meadow between peaks; the highest crag; the road ends at a view | the Cliffs (Galewing) over a bridge north, the Ashwood (Veilstalker) south, the Shrine (Mantis) up a switchback north-east behind the **fourth waystone**: one of the Cliffs, the Ashwood | — |
 
 The tiers are world.md §3's, and the gates are exactly what that table says
 (`valley::tier`). **The Ridgeback has a room of its own**, the Highlands: the
@@ -64,8 +65,8 @@ fight it was tuned in, and `arena::for_species` still sends `--hunt ridgeback`
 to the proving ground.
 
 Not built from world.md §2: the Crossing (the herd's escort mode stays a
-`--hunt hornback-escort` fight), and looking into a room from the trail to
-see the creature's idle life. A room is behind its seam until you walk in.
+`--hunt hornback-escort` fight). A room is visible from its side path now,
+but its creature is not put on its marks until you walk in.
 
 ## 2 · The rules
 
@@ -127,49 +128,37 @@ of the map, by its index there).
 
 ## 3 · Climbing, as built
 
-The note's vocabulary — scree, shelf, stair, traverse, gap, chimney, bluff,
-cairn — is spelt in boxes and in **relief that climbs**: a reach's floor
-rises along its length by ramps (`relief::Ramp`, a smoothstep between two
-lines), so the scree is a slope you run up and the Mouth's river terrace is
-lower than its meadow. Terrain-sized boxes are drawn as cliffs (forms.md),
-roughened in metres so their edges stay where their collision is.
+**The road climbs on foot** since the valley became land: every rise on it
+is a slope a body walks up, and the whole road, and the way into every room,
+is walked from end to end by `tests/valley.rs` (`the_whole_road_can_be_walked`,
+`every_room_can_be_walked_into`). Nothing on the main route needs a jump.
 
-**The route has two speeds, and nobody is ever stuck.** Every climb a class
-might not make has a slow way round: a vine up the face, a stair, the
-hollow. The hops that have no way round are listed in `tests/valley.rs`
-(`REQUIRED`), and every class's plain running jump is checked against each
-one with `sim::envelope`. The Bulwark's jump is what sized them: its 2.7 m
-apex and 5.2 m reach on the level set the Mouth's first traverse jump at
-2.6 m out and 1.5 m up.
+**The climbs are crags beside the road**: a pillar of rock with ledges up one
+face, each a rise of 2.2 m and a metre across from the last, and a cairn on
+its top — a view, a checkpoint, and a jump every class makes with a plain
+running jump (`REQUIRED`, checked against `sim::envelope`). A vine down the
+crag's other face is the slow way up, for anyone: hold jump to climb at
+`vine_speed`, crouch to slide down, otherwise cling.
 
-Two props from [courses.md](courses.md) §4 are built, because the note
-predicted the Bulwark, the Blood mage and the Champion would have no answer
-to a bluff:
+**The mountains are the edge**: ground steeper than `terrain_steepest` is a
+wall you slide back down, so the valley needs no boxes to keep you in it
+(atlas.md §The land).
 
-- **Vines.** A strand of green down a face. Against one, hold jump to climb
-  at `vine_speed` (2.5 m/s), crouch to slide down, otherwise cling. A vine
-  counts as footing, so letting go is a fall from where you let go, not from
-  where you started. Fourteen of them across the five reaches.
-- **Updrafts.** A column of pale rings. A body in the air inside one rises
-  at `vent_rise` (8 m/s) up to its top, then falls as usual. The Saddle's
-  ridge is crossed by them, and two off the Saddle's floor are how you get
-  back up after falling off it.
-
-Both are tables in the place's file (`PLACE.vines`, `PLACE.vents`); the
-motion is `World::climb_and_ride`, before the body moves, and it is the
-same for every class.
+Updrafts (`PLACE.vents`) are still a prop the movement reads, and no place of
+the valley has one now: the Saddle's ridge they crossed is gone.
 
 ## 4 · What is drawn and said
 
 `crates/game/src/valley.rs` draws, for a place that is in the valley:
 
-- every seam as a glow on its floor and a column of light, coloured lit or
-  unlit by the look crate (`Palette::beacon`). A room's exit has the glow and
-  no column, because the hunters arrive standing in it. None of it shows
-  outside the valley;
+- the land, tile by tile out to the fog, with its road worn in, its water,
+  its trees and rocks (`game::land`, `game::stream`);
+- every seam to a room, and every waystone's pass, as a signpost: a slim
+  pillar of light and a pool at its foot, lit or dark (`Palette::beacon`).
+  Where one reach runs on into the next there is nothing to mark;
 - a dark waystone's doorway as a slab of its grey, while it is shut;
 - each waystone's light on its stone's top;
-- vines and updrafts;
+- vines, from the ground to the top of the crag they hang on;
 - from Hearth's wall, the reaches themselves, as far as the fog lets you
   see. (The painted ridges that stood in for them went when the valley
   became one map.) Only what is within the sky's reach is drawn

@@ -1,118 +1,60 @@
-//! **The Bank**: the second reach, a meadow and then the bank the Gnawers' den is
-//! dug into (`docs/design/valley.md`). The bank **is** the climb.
+//! **The Bank**: the second reach (`docs/design/valley.md`), land since
+//! 2026-10-09 (`crate::valley::land`).
 //!
-//! | Beat | What it asks |
+//! | Beat | What it is |
 //! | --- | --- |
-//! | The meadow | Nothing: walk up to the foot of the bank; the den is through a notch in the north wall -- the Gnawers' room |
-//! | **The stair** | Ten shelves zig-zagging up the bank's face, 2.2 m apart, with a snow balcony a third of the way up. Twenty-four metres: a fall from the top costs three hundred. A vine at the south end for anyone, slowly |
-//! | **The gully** | Six metres across, the trail at its bottom ten metres down. Fall in, and the vine on its far side brings you out |
-//! | The far bank | **The first waystone**: lit when the herd or the den has been beaten. The passage on to the Shelves is past it |
+//! | The upper meadow | Broad and nearly level past the Lip; the den is up a side path to the north |
+//! | The crag | The old stair, as a rock: eight ledges up a face, a cairn on top that sees back down the valley |
+//! | The bank | The road climbs twenty-one metres in two bends |
+//! | The pass | **The first waystone**: one of the herd, the den. The road narrows to a gap between two shoulders of hill; while the stone is dark the gap is shut |
 
-use super::relief::{Bump, Ramp};
-use super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
-use crate::valley::{Gate, Kind, Place, Seam, Zone};
-
-use Material::{Grass, Ground, Rock, Snow, Stone};
+use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
+use crate::valley::land::{Point, at};
+use crate::valley::{Crag, Gate, Kind, Place, Seam, Zone};
 
 pub static ARENA: Arena = Arena {
     id: ArenaId::BANK,
     name: "Bank",
     creature: None,
-    bounds: Bounds::cm((-8600, 8600), (-2400, 2400)),
-    floor: Grass,
-    regions: &REGIONS,
+    bounds: Bounds::cm((25000, 43000), (-14000, 14000)),
+    floor: Material::Grass,
+    regions: &[],
     solids: &SOLIDS,
     spawns: Spawns {
-        // Just inside the passage from the Mouth, facing the bank.
         versus: [
-            Mark::cm(-7200, -150, (-6200, -150)),
-            Mark::cm(-7200, 150, (-6200, 150)),
+            Mark::cm(26500, 300, (30500, 1200)),
+            Mark::cm(26500, 700, (30500, 1200)),
         ],
         hunt: None,
     },
     sites: &[],
 };
 
-/// The floor between the rock: gentle swells and hollows.
-pub const BUMPS: [Bump; 3] = [
-    Bump::cm(-5000, -1000, 800, 50),
-    Bump::cm(-3000, 1200, 700, 60),
-    Bump::cm(-6000, 1000, 600, -40),
+const SOLIDS: [Solid; 1] = [
+    // The first waystone, beside the pass on its north shoulder.
+    Solid::cm([41900, 4000, 400], [42000, 4720, 500], Material::Stone),
 ];
 
-/// The floor climbing: what the valley rises by between its cliffs.
-pub const RAMPS: [Ramp; 0] = [];
-
-const REGIONS: [Region; 3] = [
-    // Bare earth trodden out of the den's notch.
-    Region {
-        area: Area::disc_cm(-3000, 2000, 500),
-        material: Ground,
-    },
-    // Loose stone along the bank's foot.
-    Region {
-        area: Area::rect_cm((-400, 0), (-2200, 2200)),
-        material: Rock,
-    },
-    // The trail along the gully's bottom.
-    Region {
-        area: Area::rect_cm((3000, 3600), (-2200, 2200)),
-        material: Ground,
-    },
+/// **The road**, centimetres: x, z, floor, half its width.
+pub const WAY: [Point; 8] = [
+    at(25200, 0, 2000, 800),
+    at(27500, 800, 2000, 1800),
+    at(30500, 1200, 2100, 2400),
+    at(33500, 600, 2300, 1600),
+    at(36000, -600, 3000, 900),
+    at(38500, -1400, 3700, 800),
+    at(40800, -1000, 4200, 800),
+    at(42800, -400, 4400, 500),
 ];
 
-const SOLIDS: [Solid; 33] = [
-    // The valley's sides.
-    Solid::cm([-7800, 0, -2400], [7800, 3600, -2200], Rock),
-    // The north side, with the notch to the den.
-    Solid::cm([-7800, 0, 2200], [-3400, 3600, 2400], Rock),
-    Solid::cm([-2600, 0, 2200], [7800, 3600, 2400], Rock),
-    // the notch at x -34 to -26: its sides and back
-    Solid::cm([-3600, 0, 2400], [-3400, 1400, 3000], Rock),
-    Solid::cm([-2600, 0, 2400], [-2400, 1400, 3000], Rock),
-    Solid::cm([-3600, 0, 3000], [-2400, 1400, 3200], Rock),
-    // The west end: the passage back to the Mouth.
-    Solid::cm([-7800, 0, -2200], [-7600, 3600, -300], Rock),
-    Solid::cm([-7800, 0, 300], [-7600, 3600, 2200], Rock),
-    Solid::cm([-8400, 0, -500], [-7800, 1000, -300], Rock),
-    Solid::cm([-8400, 0, 300], [-7800, 1000, 500], Rock),
-    Solid::cm([-8600, 0, -500], [-8400, 1000, 500], Rock),
-    // The east end, on the far bank: the passage on to the Shelves.
-    Solid::cm([7600, 0, -2200], [7800, 3600, -300], Rock),
-    Solid::cm([7600, 0, 300], [7800, 3600, 2200], Rock),
-    // the passage's floor
-    Solid::cm([7600, 0, -300], [8400, 2450, 300], Rock),
-    Solid::cm([7800, 0, -500], [8400, 3450, -300], Rock),
-    Solid::cm([7800, 0, 300], [8400, 3450, 500], Rock),
-    Solid::cm([8400, 0, -500], [8600, 3450, 500], Rock),
-    // The bank, twenty-four metres.
-    Solid::cm([0, 0, -2200], [3000, 2400, 2200], Grass),
-    // The gully's bottom: the trail, ten metres under the tops.
-    Solid::cm([3000, 0, -2200], [3600, 1400, 2200], Rock),
-    // The far bank, half a metre higher.
-    Solid::cm([3600, 0, -2200], [7600, 2450, 2200], Grass),
-    // The stair: ten shelves up the bank's face.
-    Solid::cm([-160, 170, -1700], [0, 220, -1400], Grass),
-    Solid::cm([-160, 390, -1300], [0, 440, -1000], Grass),
-    Solid::cm([-160, 610, -900], [0, 660, -600], Grass),
-    // The balcony, a third of the way up: a cairn.
-    Solid::cm([-300, 830, -500], [0, 880, 100], Snow),
-    Solid::cm([-160, 1050, 200], [0, 1100, 500], Grass),
-    Solid::cm([-160, 1270, 600], [0, 1320, 900], Grass),
-    Solid::cm([-160, 1490, 1000], [0, 1540, 1300], Grass),
-    Solid::cm([-160, 1710, 1400], [0, 1760, 1700], Grass),
-    Solid::cm([-160, 1930, 1800], [0, 1980, 2100], Grass),
-    // The last, back over the eighth.
-    Solid::cm([-160, 2150, 1400], [0, 2200, 1700], Grass),
-    // A cairn in the meadow.
-    Solid::cm([-4100, 0, 700], [-3900, 80, 900], Snow),
-    // A cairn on the far bank.
-    Solid::cm([4900, 0, -1100], [5100, 2530, -900], Snow),
-    // The first waystone: the Commons.
-    Solid::cm([7150, 0, 400], [7250, 2750, 500], Stone),
-];
+pub const CRAGS: [Crag; 1] = [Crag {
+    x: 34500,
+    z: -2600,
+    ledges: 8,
+}];
 
-/// How Bank joins the rest of the valley.
+pub const CAIRNS: [(i32, i32); 1] = [(28500, 1600)];
+
 pub static PLACE: Place = Place {
     arena: ArenaId::BANK,
     kind: Kind::Reach,
@@ -121,52 +63,46 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
+const VINES: [Zone; 1] = [CRAGS[0].vine()];
+
 const SEAMS: [Seam; 3] = [
-    // Back to the Mouth.
+    // Back down to the Mouth.
     Seam {
-        zone: Zone::cm([-8400, -50, -300], [-7650, 600, 300]),
+        zone: Zone::cm([25000, 1500, -500], [25800, 2600, 700]),
         to: ArenaId::MOUTH,
         at: 2,
         marks: [
-            Mark::cm(-7200, -150, (-6200, -150)),
-            Mark::cm(-7200, 150, (-6200, 150)),
+            Mark::cm(26300, 300, (30500, 1200)),
+            Mark::cm(26300, 700, (30500, 1200)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Mouth",
     },
-    // The den, through the notch in the north wall: the Gnawers.
+    // The den, up a side path to the north: the Gnawers.
     Seam {
-        zone: Zone::cm([-3350, -100, 2250], [-2650, 600, 2950]),
+        zone: Zone::cm([30100, 1600, 3200], [30900, 2700, 4100]),
         to: ArenaId::GNAWERS,
         at: 0,
         marks: [
-            Mark::cm(-3150, 1700, (-3150, 0)),
-            Mark::cm(-2850, 1700, (-2850, 0)),
+            Mark::cm(30350, 3000, (30500, 0)),
+            Mark::cm(30650, 3000, (30500, 0)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the den: the Gnawers",
     },
-    // On to the Shelves, past the first waystone.
+    // On to the Shelves, through the pass under the first waystone.
     Seam {
-        zone: Zone::cm([7650, 2400, -300], [8400, 3050, 300]),
+        zone: Zone::cm([42000, 3900, -1000], [42800, 5000, 200]),
         to: ArenaId::SHELVES,
         at: 0,
         marks: [
-            Mark::cm(7200, -150, (6200, -150)),
-            Mark::cm(7200, 150, (6200, 150)),
+            Mark::cm(41500, -1050, (38500, -1400)),
+            Mark::cm(41500, -750, (38500, -1400)),
         ],
         gate: crate::valley::tier::ONE,
-        waystone: Some(32),
+        waystone: Some(0),
         says: "the Shelves",
     },
-];
-
-/// Climbable faces: hold the jump to go up, crouch to go down.
-const VINES: [Zone; 2] = [
-    // Up the bank's face at its south end: anybody, slowly.
-    Zone::cm([-120, -100, -2150], [0, 2500, -1900]),
-    // Out of the gully, up the far bank.
-    Zone::cm([3480, 1300, -200], [3600, 2550, 200]),
 ];

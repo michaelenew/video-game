@@ -1,133 +1,77 @@
-//! **The Mouth**: the first reach of the valley, from Hearth's gate to the Lip
-//! (`docs/design/valley.md`). A hundred and ninety metres and twenty of rise.
+//! **The Mouth**: the first reach of the valley, from Hearth's east gate up to
+//! the Lip (`docs/design/valley.md`). Since 2026-10-09 it is **land**, not
+//! boxes (`crate::valley::land`): there are no walls in this file.
 //!
-//! | Beat | What it asks |
+//! | Beat | What it is |
 //! | --- | --- |
-//! | The river terrace | Nothing: walk out of the gate with the river on your left and the herd's meadow through a notch on your right |
-//! | The scree | A slope of loose stone, five metres up over eighteen, boulders to weave between |
-//! | **The Step**, an eight-metre wall | Three grass shelves up its face, two metres apart: a hop each. A vine at its north end for anyone, slowly |
-//! | **The gap** | Six metres and half a metre up, from the Step to the second terrace, over a slot eight metres deep. Fall in and the vine on the far side brings you out |
-//! | **The traverse** | A jump of two and a half metres onto the first of three ledges along the Lip's face, then up them two metres at a time, over a slot fifteen metres deep: a fall from the last one costs a hundred and twenty-five |
-//! | The Lip | Twenty metres up, and the passage on to the Bank |
+//! | The gate road | Out of the town's east gate, a dirt road between low hills |
+//! | The river meadow | The valley opens fifty metres wide; a river runs down its south side, the road along its north. The herd's meadow is up a side path to the north |
+//! | The crag | A rock standing in the meadow: ledges up its west face, a vine down its east, a cairn on top |
+//! | The scree | The road bends south and climbs, ten metres over sixty |
+//! | The Lip | Twenty metres up, the valley narrows, and the road goes on to the Bank |
 //!
-//! Snow on a top is a cairn: touch it to rest, and a death anywhere in the reach
-//! stands you on the last one you touched.
+//! Everything here is in the map's own coordinates: a reach's origin is the
+//! map's (`valley::layout`).
 
-use super::relief::{Bump, Ramp};
-use super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
-use crate::valley::{Gate, Kind, Place, Seam, Zone};
-
-use Material::{Grass, Ground, Rock, Snow, Water};
+use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
+use crate::valley::land::{Point, at};
+use crate::valley::{Crag, Gate, Kind, Place, Seam, Zone};
 
 pub static ARENA: Arena = Arena {
     id: ArenaId::MOUTH,
     name: "Mouth",
     creature: None,
-    bounds: Bounds::cm((-10600, 10600), (-2400, 3200)),
-    floor: Grass,
-    regions: &REGIONS,
+    bounds: Bounds::cm((4500, 25000), (-14000, 14000)),
+    floor: Material::Grass,
+    regions: &[],
     solids: &SOLIDS,
     spawns: Spawns {
-        // Just inside the passage from Hearth, facing up the valley.
+        // Just out of the town's gate, facing up the valley.
         versus: [
-            Mark::cm(-9200, -150, (-8200, -150)),
-            Mark::cm(-9200, 150, (-8200, 150)),
+            Mark::cm(6000, 200, (8500, 1200)),
+            Mark::cm(6000, -200, (8500, 1000)),
         ],
         hunt: None,
     },
     sites: &[],
 };
 
-/// The floor between the rock: gentle swells and hollows.
-pub const BUMPS: [Bump; 3] = [
-    Bump::cm(-8000, 1000, 800, 50),
-    Bump::cm(-7000, -600, 700, -40),
-    Bump::cm(-5000, 1200, 600, 60),
+const SOLIDS: [Solid; 0] = [];
+
+/// **The road**: x, z, the floor's height and how far the floor runs either
+/// side, in centimetres. Out of the gate narrow, the meadow wide, the scree
+/// climbing, the Lip narrow again.
+pub const WAY: [Point; 9] = [
+    at(4000, 0, 0, 300),
+    at(6000, 300, 0, 800),
+    at(8500, 1200, 0, 2200),
+    at(11500, 1400, 50, 2600),
+    at(15000, 600, 150, 2400),
+    at(17800, -800, 400, 1400),
+    at(20500, -1800, 1000, 800),
+    at(23000, -1000, 1600, 700),
+    at(25200, 0, 2000, 800),
 ];
 
-/// The floor climbing: what the valley rises by between its cliffs.
-pub const RAMPS: [Ramp; 1] = [Ramp::x(-3800, -2000, 500)];
-
-const REGIONS: [Region; 5] = [
-    // The river, along the terrace.
-    Region {
-        area: Area::rect_cm((-9600, -4000), (-2100, -1400)),
-        material: Water,
-    },
-    // The path out of the gate.
-    Region {
-        area: Area::rect_cm((-10400, -3800), (-250, 250)),
-        material: Ground,
-    },
-    // The scree: loose stone.
-    Region {
-        area: Area::rect_cm((-3800, -1800), (-2200, 2200)),
-        material: Rock,
-    },
-    // Trodden earth in the slots under the gap and the traverse.
-    Region {
-        area: Area::rect_cm((4000, 4600), (-2200, 2200)),
-        material: Ground,
-    },
-    // The traverse's slot.
-    Region {
-        area: Area::rect_cm((7400, 7800), (-2200, 2200)),
-        material: Ground,
-    },
+/// **The river**, down the meadow's south side: its bed and half its width.
+/// It runs from the scree's foot west past the town.
+pub const RIVER: [Point; 5] = [
+    at(18500, -2600, 250, 250),
+    at(15500, -1900, 20, 320),
+    at(11500, -1300, -70, 380),
+    at(7500, -1700, -110, 380),
+    at(3000, -3600, -140, 350),
 ];
 
-const SOLIDS: [Solid; 34] = [
-    // The valley's sides: cliffs twelve metres over the Lip.
-    Solid::cm([-9800, 0, -2400], [9800, 3200, -2200], Rock),
-    // The north side, with the notch to the low meadow.
-    Solid::cm([-9800, 0, 2200], [-6600, 3200, 2400], Rock),
-    Solid::cm([-5600, 0, 2200], [9800, 3200, 2400], Rock),
-    // the notch at x -66 to -56: its sides and back
-    Solid::cm([-6800, 0, 2400], [-6600, 1400, 3000], Rock),
-    Solid::cm([-5600, 0, 2400], [-5400, 1400, 3000], Rock),
-    Solid::cm([-6800, 0, 3000], [-5400, 1400, 3200], Rock),
-    // The west end: the passage back to Hearth.
-    Solid::cm([-9800, 0, -2200], [-9600, 3200, -300], Rock),
-    Solid::cm([-9800, 0, 300], [-9600, 3200, 2200], Rock),
-    Solid::cm([-10400, 0, -500], [-9800, 1000, -300], Rock),
-    Solid::cm([-10400, 0, 300], [-9800, 1000, 500], Rock),
-    Solid::cm([-10600, 0, -500], [-10400, 1000, 500], Rock),
-    // The east end, on the Lip: the passage on to the Bank.
-    Solid::cm([9600, 0, -2200], [9800, 3200, -300], Rock),
-    Solid::cm([9600, 0, 300], [9800, 3200, 2200], Rock),
-    // the passage's floor
-    Solid::cm([9600, 0, -300], [10400, 2000, 300], Rock),
-    Solid::cm([9800, 0, -500], [10400, 3000, -300], Rock),
-    Solid::cm([9800, 0, 300], [10400, 3000, 500], Rock),
-    Solid::cm([10400, 0, -500], [10600, 3000, 500], Rock),
-    // Boulders on the scree.
-    Solid::cm([-3520, 0, -920], [-3280, 180, -680], Rock),
-    Solid::cm([-3150, 0, 300], [-2850, 360, 500], Rock),
-    Solid::cm([-2700, 0, -1600], [-2500, 500, -1400], Rock),
-    Solid::cm([-2420, 0, 980], [-2180, 620, 1220], Rock),
-    // A cairn at the top of the scree.
-    Solid::cm([-1500, 0, 700], [-1300, 600, 900], Snow),
-    // The Step: an eight-metre wall the whole way across.
-    Solid::cm([1000, 0, -2200], [4000, 1300, 2200], Grass),
-    // Its three shelves, two metres apart up the face.
-    Solid::cm([840, 670, -800], [1000, 720, -500], Grass),
-    Solid::cm([840, 880, -400], [1000, 930, -100], Grass),
-    Solid::cm([840, 1090, 0], [1000, 1140, 300], Grass),
-    // A cairn on the Step.
-    Solid::cm([1900, 0, -900], [2100, 1380, -700], Snow),
-    // The second terrace, six metres on and half a metre up.
-    Solid::cm([4600, 0, -2200], [7400, 1350, 2200], Grass),
-    // A cairn before the traverse.
-    Solid::cm([5900, 0, 900], [6100, 1430, 1100], Snow),
-    // The Lip, twenty metres up.
-    Solid::cm([7800, 0, -2200], [9600, 2000, 2200], Grass),
-    // The traverse: three ledges along the Lip's face.
-    Solid::cm([7660, 1450, -2000], [7800, 1500, -800], Ground),
-    Solid::cm([7660, 1700, -600], [7800, 1750, 600], Ground),
-    Solid::cm([7660, 1860, 800], [7800, 1910, 2000], Ground),
-    // A cairn on the Lip.
-    Solid::cm([8700, 0, -900], [8900, 2080, -700], Snow),
-];
+/// The crag in the meadow, north of the road.
+pub const CRAGS: [Crag; 1] = [Crag {
+    x: 16000,
+    z: 2600,
+    ledges: 6,
+}];
+
+/// Where the floor cairns lie: the meadow's start, and the Lip.
+pub const CAIRNS: [(i32, i32); 2] = [(7000, 1600), (24200, 400)];
 
 /// How Mouth joins the rest of the valley.
 pub static PLACE: Place = Place {
@@ -138,54 +82,46 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
+const VINES: [Zone; 1] = [CRAGS[0].vine()];
+
 const SEAMS: [Seam; 3] = [
-    // Back to Hearth.
+    // Back to the town, at its east gate.
     Seam {
-        zone: Zone::cm([-10400, -50, -300], [-9650, 600, 300]),
+        zone: Zone::cm([5200, -300, -500], [6000, 700, 500]),
         to: ArenaId::HEARTH,
         at: 0,
         marks: [
-            Mark::cm(-9200, -150, (-8200, -150)),
-            Mark::cm(-9200, 150, (-8200, 150)),
+            Mark::cm(6400, -150, (8500, 900)),
+            Mark::cm(6400, 150, (8500, 1100)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "Hearth",
     },
-    // The low meadow, through the notch: the Hornback herd.
+    // Up the side path to the herd's meadow.
     Seam {
-        zone: Zone::cm([-6550, -100, 2250], [-5650, 600, 2950]),
+        zone: Zone::cm([11100, -300, 3800], [11900, 700, 4600]),
         to: ArenaId::HORNBACK,
         at: 0,
         marks: [
-            Mark::cm(-6300, 1800, (-6300, 800)),
-            Mark::cm(-5900, 1800, (-5900, 800)),
+            Mark::cm(11350, 3500, (11500, 0)),
+            Mark::cm(11650, 3500, (11500, 0)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the low meadow: the Hornback herd",
     },
-    // On to the Bank.
+    // On to the Bank, at the Lip.
     Seam {
-        zone: Zone::cm([9650, 1950, -300], [10400, 2600, 300]),
+        zone: Zone::cm([24200, 1500, -500], [25000, 2600, 500]),
         to: ArenaId::BANK,
         at: 0,
         marks: [
-            Mark::cm(9200, -150, (8200, -150)),
-            Mark::cm(9200, 150, (8200, 150)),
+            Mark::cm(23800, -350, (20500, -1800)),
+            Mark::cm(23800, -50, (20500, -1600)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Bank",
     },
-];
-
-/// Climbable faces: hold the jump to go up, crouch to go down.
-const VINES: [Zone; 3] = [
-    // Up the Step's face, at its north end: anybody, slowly.
-    Zone::cm([880, 400, 1400], [1000, 1400, 1700]),
-    // Out of the gap's slot, up the second terrace.
-    Zone::cm([4480, 400, -400], [4600, 1450, 400]),
-    // Out of the traverse's slot, back up the second terrace.
-    Zone::cm([7400, 400, -200], [7520, 1450, 200]),
 ];

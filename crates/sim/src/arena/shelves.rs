@@ -1,132 +1,67 @@
-//! **The Shelves**: the third reach, the longest traverse in the valley
-//! (`docs/design/valley.md`). You come in on a terrace twenty metres over a
-//! hollow, and the way on runs along the north face above it.
+//! **The Shelves**: the third reach (`docs/design/valley.md`), land since
+//! 2026-10-09 (`crate::valley::land`).
 //!
-//! | Beat | What it asks |
+//! | Beat | What it is |
 //! | --- | --- |
-//! | **The traverse** | A ledge a metre and a half wide along the north wall, twenty metres over the hollow, broken twice: five metres, then six. A snow balcony between the gaps. A fall costs two hundred and seventy-five |
-//! | **The hollow** | The way down, by the vine on the terrace's face -- and the slow way across: walk the hollow and climb the vine up the second terrace, which skips the traverse and takes four times as long |
-//! | The Mire | A notch in the south wall at the hollow's floor: the Mireback |
-//! | **The bluff** | Seven-metre walls round a sandy basin in the south-east, the Pan's notch inside: over by the vine, or by a mechanic |
-//! | **The chimney** | Ten metres up from the second terrace between a block and the top's face, four ledges alternating across a four-metre slot. A vine on the face for anyone, slowly |
-//! | The top | **The second waystone**, lit by the Pan or the Mire, and the passage on to the Pinewood |
+//! | Through the pass | Out of the first waystone's gap into a long open bowl |
+//! | The tarn | A lake under the north slope; the road keeps to its south shore |
+//! | The Mire and the Pan | Two side paths down to the south: the Mireback's bog, the Sandmaw's pan |
+//! | The crag | A rock by the tarn's shore, with a cairn on top |
+//! | The second pass | The road climbs out of the bowl to **the second waystone**: one of the Pan, the Mire |
 
-use super::relief::{Bump, Ramp};
-use super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
-use crate::valley::{Gate, Kind, Place, Seam, Zone};
-
-use Material::{Grass, Ground, Peat, Rock, Sand, Snow, Stone};
+use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
+use crate::valley::land::{Point, at};
+use crate::valley::{Crag, Gate, Kind, Place, Seam, Zone};
 
 pub static ARENA: Arena = Arena {
     id: ArenaId::SHELVES,
     name: "Shelves",
     creature: None,
-    bounds: Bounds::cm((-11000, 11000), (-3200, 2400)),
-    floor: Grass,
-    regions: &REGIONS,
+    bounds: Bounds::cm((43000, 65000), (-14000, 14000)),
+    floor: Material::Grass,
+    regions: &[],
     solids: &SOLIDS,
     spawns: Spawns {
-        // On the first terrace, just inside the passage from the Bank.
         versus: [
-            Mark::cm(-9500, -150, (-8500, -150)),
-            Mark::cm(-9500, 150, (-8500, 150)),
+            Mark::cm(44500, -900, (48000, -2200)),
+            Mark::cm(44500, -500, (48000, -2200)),
         ],
         hunt: None,
     },
     sites: &[],
 };
 
-/// The floor between the rock: gentle swells and hollows.
-pub const BUMPS: [Bump; 3] = [
-    Bump::cm(-4000, 0, 800, 60),
-    Bump::cm(-800, -1400, 600, -40),
-    Bump::cm(2000, 1000, 700, 50),
+const SOLIDS: [Solid; 1] = [
+    // The second waystone, beside the pass on its north shoulder.
+    Solid::cm([64100, 5100, 1000], [64200, 5920, 1100], Material::Stone),
 ];
 
-/// The floor climbing: what the valley rises by between its cliffs.
-pub const RAMPS: [Ramp; 0] = [];
-
-const REGIONS: [Region; 3] = [
-    // Peat round the Mire's notch.
-    Region {
-        area: Area::disc_cm(-2200, -1800, 600),
-        material: Peat,
-    },
-    // Sand in the Pan's basin.
-    Region {
-        area: Area::rect_cm((1200, 4000), (-2200, -800)),
-        material: Sand,
-    },
-    // The hollow's trodden floor under the traverse.
-    Region {
-        area: Area::rect_cm((-6000, 4000), (1400, 2200)),
-        material: Ground,
-    },
+/// **The road**, centimetres: x, z, floor, half its width.
+pub const WAY: [Point; 7] = [
+    at(42800, -400, 4400, 500),
+    at(45000, -1000, 4400, 1000),
+    at(48000, -2200, 4400, 2200),
+    at(51500, -3000, 4500, 2600),
+    at(56000, -2800, 4650, 2600),
+    at(60000, -1200, 5000, 1400),
+    at(62800, -200, 5400, 800),
 ];
 
-const SOLIDS: [Solid; 41] = [
-    // The south side, with the notches to the Mire and the Pan.
-    Solid::cm([-10200, 0, -2400], [-2600, 4400, -2200], Rock),
-    Solid::cm([-1800, 0, -2400], [2200, 4400, -2200], Rock),
-    Solid::cm([2800, 0, -2400], [10200, 4400, -2200], Rock),
-    // the notch at x -26 to -18: its sides and back
-    Solid::cm([-2800, 0, -3000], [-2600, 1400, -2400], Rock),
-    Solid::cm([-1800, 0, -3000], [-1600, 1400, -2400], Rock),
-    Solid::cm([-2800, 0, -3200], [-1600, 1400, -3000], Rock),
-    // the notch at x 22 to 28: its sides and back
-    Solid::cm([2000, 0, -3000], [2200, 1400, -2400], Rock),
-    Solid::cm([2800, 0, -3000], [3000, 1400, -2400], Rock),
-    Solid::cm([2000, 0, -3200], [3000, 1400, -3000], Rock),
-    // The north side.
-    Solid::cm([-10200, 0, 2200], [10200, 4400, 2400], Rock),
-    // The west end, on the first terrace: the passage back to the Bank.
-    Solid::cm([-10200, 0, -2200], [-10000, 4400, -300], Rock),
-    Solid::cm([-10200, 0, 300], [-10000, 4400, 2200], Rock),
-    // the passage's floor
-    Solid::cm([-10800, 0, -300], [-10000, 2000, 300], Rock),
-    Solid::cm([-10800, 0, -500], [-10200, 3000, -300], Rock),
-    Solid::cm([-10800, 0, 300], [-10200, 3000, 500], Rock),
-    Solid::cm([-11000, 0, -500], [-10800, 3000, 500], Rock),
-    // The east end, on the top: the passage on to the Pinewood.
-    Solid::cm([10000, 0, -2200], [10200, 4400, -300], Rock),
-    Solid::cm([10000, 0, 300], [10200, 4400, 2200], Rock),
-    // the passage's floor
-    Solid::cm([10000, 0, -300], [10800, 3200, 300], Rock),
-    Solid::cm([10200, 0, -500], [10800, 4200, -300], Rock),
-    Solid::cm([10200, 0, 300], [10800, 4200, 500], Rock),
-    Solid::cm([10800, 0, -500], [11000, 4200, 500], Rock),
-    // The first terrace, twenty metres over the hollow.
-    Solid::cm([-10000, 0, -2200], [-6000, 2000, 2200], Grass),
-    // The traverse: a ledge along the north wall, broken twice.
-    Solid::cm([-6000, 1900, 2040], [-3000, 2050, 2200], Ground),
-    Solid::cm([-2500, 1950, 2040], [500, 2100, 2200], Ground),
-    // The balcony between the gaps: a cairn.
-    Solid::cm([-1200, 2020, 1700], [-600, 2100, 2040], Snow),
-    Solid::cm([1100, 2000, 2040], [4000, 2150, 2200], Ground),
-    // The second terrace.
-    Solid::cm([4000, 0, -2200], [6800, 2200, 2200], Grass),
-    // The chimney's block, on the second terrace.
-    Solid::cm([6000, 0, -400], [6400, 3200, 400], Rock),
-    // The top, thirty-two metres up.
-    Solid::cm([6800, 0, -2200], [10000, 3200, 2200], Grass),
-    // The chimney's ledges, alternating across the slot.
-    Solid::cm([6660, 2370, -300], [6800, 2420, 300], Rock),
-    Solid::cm([6400, 2590, -300], [6540, 2640, 300], Rock),
-    Solid::cm([6660, 2810, -300], [6800, 2860, 300], Rock),
-    Solid::cm([6400, 3030, -300], [6540, 3080, 300], Rock),
-    // The bluff round the Pan's basin, seven metres.
-    Solid::cm([1000, 0, -2200], [1200, 700, -600], Stone),
-    Solid::cm([1200, 0, -800], [4000, 700, -600], Stone),
-    // Cairns: on the first terrace, in the hollow, on the second terrace, on the top.
-    Solid::cm([-8100, 0, 700], [-7900, 2080, 900], Snow),
-    Solid::cm([-3600, 0, -1300], [-3400, 80, -1100], Snow),
-    Solid::cm([4900, 0, -1100], [5100, 2280, -900], Snow),
-    Solid::cm([8400, 0, 900], [8600, 3280, 1100], Snow),
-    // The second waystone: the lowlands.
-    Solid::cm([9550, 0, 400], [9650, 3550, 500], Stone),
-];
+/// The last stretch of the road, up to the second pass: its own way, so the
+/// road is one line through the Shelves and this is the climb.
+pub const CLIMB: [Point; 2] = [at(62800, -200, 5400, 800), at(65000, 400, 5600, 500)];
 
-/// How Shelves joins the rest of the valley.
+/// **The tarn** under the north slope: a short, wide water.
+pub const TARN: [Point; 2] = [at(51000, 3200, 4220, 1400), at(56500, 3800, 4220, 1200)];
+
+pub const CRAGS: [Crag; 1] = [Crag {
+    x: 48500,
+    z: 1200,
+    ledges: 5,
+}];
+
+pub const CAIRNS: [(i32, i32); 1] = [(46000, -400)];
+
 pub static PLACE: Place = Place {
     arena: ArenaId::SHELVES,
     kind: Kind::Reach,
@@ -135,71 +70,59 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
+const VINES: [Zone; 1] = [CRAGS[0].vine()];
+
 const SEAMS: [Seam; 4] = [
-    // Back to the Bank.
+    // Back through the first pass to the Bank.
     Seam {
-        zone: Zone::cm([-10800, 1950, -300], [-10050, 2600, 300]),
+        zone: Zone::cm([43200, 3900, -1000], [44000, 5000, 200]),
         to: ArenaId::BANK,
         at: 2,
         marks: [
-            Mark::cm(-9500, -150, (-8500, -150)),
-            Mark::cm(-9500, 150, (-8500, 150)),
+            Mark::cm(44400, -900, (48000, -2200)),
+            Mark::cm(44400, -500, (48000, -2200)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Bank",
     },
-    // The Mire, in the hollow's south wall: the Mireback.
+    // The Mire, down a side path to the south.
     Seam {
-        zone: Zone::cm([-2550, -100, -2950], [-1850, 600, -2250]),
+        zone: Zone::cm([51500, 4000, -6100], [52300, 5100, -5200]),
         to: ArenaId::MIREBACK,
         at: 0,
         marks: [
-            Mark::cm(-2300, -1800, (-2300, -800)),
-            Mark::cm(-2100, -1800, (-2100, -800)),
+            Mark::cm(51750, -5000, (51900, 0)),
+            Mark::cm(52050, -5000, (51900, 0)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Mire: the Mireback",
     },
-    // The Pan, inside the bluff: the Sandmaw.
+    // The Pan, down another to the south.
     Seam {
-        zone: Zone::cm([2250, -100, -2950], [2750, 600, -2250]),
+        zone: Zone::cm([56400, 4100, -5900], [57200, 5200, -5000]),
         to: ArenaId::SANDMAW,
         at: 0,
         marks: [
-            Mark::cm(2400, -1600, (2400, -600)),
-            Mark::cm(2600, -1600, (2600, -600)),
+            Mark::cm(56650, -4800, (56800, 0)),
+            Mark::cm(56950, -4800, (56800, 0)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Pan: the Sandmaw",
     },
-    // On to the Pinewood, past the second waystone.
+    // On to the Pinewood, through the second pass.
     Seam {
-        zone: Zone::cm([10050, 3150, -300], [10800, 3800, 300]),
+        zone: Zone::cm([64100, 5100, -200], [64900, 6200, 800]),
         to: ArenaId::PINEWOOD,
         at: 0,
         marks: [
-            Mark::cm(9500, -150, (8500, -150)),
-            Mark::cm(9500, 150, (8500, 150)),
+            Mark::cm(63500, -300, (60000, -1200)),
+            Mark::cm(63500, 0, (60000, -1200)),
         ],
         gate: crate::valley::tier::TWO,
-        waystone: Some(40),
+        waystone: Some(0),
         says: "the Pinewood",
     },
-];
-
-/// Climbable faces: hold the jump to go up, crouch to go down.
-const VINES: [Zone; 5] = [
-    // Down and up the first terrace's face, to the hollow.
-    Zone::cm([-6000, -100, -1600], [-5880, 2100, -1200]),
-    // From the hollow up the second terrace: the slow way round the traverse.
-    Zone::cm([3880, -100, 0], [4000, 2300, 400]),
-    // Over the bluff, from outside...
-    Zone::cm([880, -100, -1600], [1000, 800, -1200]),
-    // ...and out again, from inside.
-    Zone::cm([2000, -100, -920], [2400, 800, -800]),
-    // Up the top's face beside the chimney: anybody, slowly.
-    Zone::cm([6680, 2100, 1400], [6800, 3300, 1700]),
 ];

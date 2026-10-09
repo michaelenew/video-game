@@ -226,6 +226,17 @@ pub fn step_down() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepDown)).max(Fx::ZERO)
 }
 
+/// The steepest ground a body walks up, as rise over run (`valley::land`).
+pub fn terrain_steepest() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TerrainSteepest)).max(Fx::ratio(1, 10))
+}
+
+/// How fast a body slides off ground too steep to stand on, in metres a
+/// second.
+pub fn terrain_slide() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TerrainSlide)).max(Fx::ZERO)
+}
+
 /// How fast a vine is climbed, or slid down.
 pub fn vine_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VineSpeed)).max(Fx::ZERO)

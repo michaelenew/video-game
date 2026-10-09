@@ -39,6 +39,7 @@ use crate::math::V3;
 use crate::species::SpeciesId;
 use crate::state::MAX_PLAYERS;
 
+pub mod land;
 pub mod layout;
 pub mod open;
 
@@ -341,7 +342,14 @@ pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
         .find(|&i| {
             let s = &atlas.solids[i];
             let src = atlas.sources[i];
-            let counts = atlas.places.get(src.place as usize).is_some_and(|p| {
+            // A place's own snow, or one the land's layout made (a crag's
+            // top), where the place it stands in is a reach or the town.
+            let owner = if src.place == crate::atlas::EXTRA {
+                atlas.place_at(feet.x, feet.z)
+            } else {
+                atlas.places.get(src.place as usize)
+            };
+            let counts = owner.is_some_and(|p| {
                 place(p.arena).is_some_and(|p| matches!(p.kind, Kind::Reach | Kind::Town))
             });
             counts && s.material == crate::arena::Material::Snow && on_top(s, feet)
@@ -356,6 +364,41 @@ pub fn vine_at(id: ArenaId, feet: V3) -> Option<&'static Zone> {
 /// The vent carrying a body, if any.
 pub fn vent_at(id: ArenaId, feet: V3) -> Option<&'static Vent> {
     vents(id).iter().find(|v| v.carries(feet))
+}
+
+/// **A crag**: a pillar of rock standing on the land, with ledges up one face
+/// a jump apart, a vine down the other, and a cairn on its top. The climbs the
+/// valley used to be made of, kept as something to climb off the path: a
+/// view, a checkpoint, and a jump every class makes (`tests/valley.rs`).
+///
+/// Its boxes stand on whatever the land is under it, so they are made where
+/// the land is (`layout`); what is here is where it is and how tall.
+#[derive(Clone, Copy, Debug)]
+pub struct Crag {
+    /// Its middle on the map, in centimetres.
+    pub x: i32,
+    pub z: i32,
+    /// Ledges up its west face: the pillar is a ledge's rise taller than the
+    /// last of them.
+    pub ledges: u8,
+}
+
+impl Crag {
+    /// Half the pillar's side, in centimetres.
+    pub const HALF: i32 = 400;
+    /// How far each ledge is above the last, in centimetres.
+    pub const RISE: i32 = 220;
+    /// How far a ledge stands out from the face.
+    pub const OUT: i32 = 160;
+
+    /// The vine down its east face: a column a body's feet are in when they
+    /// stand against it, from the land to the sky.
+    pub const fn vine(&self) -> Zone {
+        Zone::cm(
+            [self.x + Self::HALF, -10_000, self.z - 120],
+            [self.x + Self::HALF + 60, 30_000, self.z + 120],
+        )
+    }
 }
 
 /// "No seam" and "no cairn", in the journey's bytes.

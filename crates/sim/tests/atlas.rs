@@ -7,7 +7,7 @@
 //! doorway is cut. Walking through the doorways is `tests/valley.rs`.
 
 use sim::arena::{ArenaId, Material, Solid, Terrain};
-use sim::atlas::{self, Atlas, DoorPlan, Plan};
+use sim::atlas::{self, Atlas, Plan};
 use sim::{Fx, V3};
 
 /// A small deterministic stream of numbers, for scattering boxes.
@@ -138,11 +138,11 @@ fn a_doorway_cuts_what_it_passes_through_and_leaves_the_rest() {
     let wall = Solid::cm([0, 0, -1000], [100, 500, 1000], Material::Rock);
     let atlas = Atlas::compose(&Plan {
         extras: vec![wall],
-        doors: vec![DoorPlan {
-            a: (ArenaId::HEARTH, 0),
-            b: (ArenaId::MOUTH, 0),
-            cut: Solid::cm([-100, 50, -200], [200, 300, 200], Material::Ground),
-        }],
+        carves: vec![Solid::cm(
+            [-100, 50, -200],
+            [200, 300, 200],
+            Material::Ground,
+        )],
         void: Fx::from_int(-100),
         ..Plan::default()
     });
@@ -172,10 +172,13 @@ fn a_doorway_cuts_what_it_passes_through_and_leaves_the_rest() {
 
 #[test]
 fn no_two_places_of_the_valley_sit_on_each_other() {
+    // Rooms and the town sit in clearings inside the reaches' wide bounds,
+    // and are first on the map, so a point on one is on it. What must not
+    // overlap is two rooms, or two reaches.
     let atlas = atlas::valley();
     assert!(atlas.places.len() >= 18, "{} places", atlas.places.len());
     for (i, p) in atlas.places.iter().enumerate() {
-        for q in &atlas.places[i + 1..] {
+        for q in atlas.places[i + 1..].iter().filter(|q| q.pad == p.pad) {
             let x = p.lo.0.raw() < q.hi.0.raw() && q.lo.0.raw() < p.hi.0.raw();
             let z = p.lo.1.raw() < q.hi.1.raw() && q.lo.1.raw() < p.hi.1.raw();
             assert!(
@@ -198,7 +201,18 @@ fn every_seam_with_a_door_is_on_the_map_and_every_place_is_reached() {
             place.arena.get().name
         );
     }
-    assert_eq!(atlas.doors.len(), sim::valley::layout::JOINTS.len());
+    // A pass between every two reaches next to each other, and a door into
+    // every room.
+    assert_eq!(atlas.doors.len(), 5 + sim::valley::layout::ROOMS.len());
+    for d in &atlas.doors {
+        for (id, k) in [d.a, d.b] {
+            assert!(
+                sim::valley::place(id).and_then(|p| p.seam(k)).is_some(),
+                "a door through a seam {} has not got",
+                id.get().name
+            );
+        }
+    }
 }
 
 /// More than an arena alone may have, by far: the cap was per table, and the

@@ -652,6 +652,12 @@ scalars! {
     VineSpeed,        "Valley",    "Vine, climbing speed (m/s)",            Fixed,  fx(1,2),  fx(8,1);
     // **How fast an updraft carries a body up**, to its top.
     VentRise,         "Valley",    "Updraft, rising speed (m/s)",           Fixed,  fx(1,1),  fx(20,1);
+    // **The steepest ground a body walks up** (`valley::land`), as a slope:
+    // rise over run. Steeper is a wall you slide back down, which is what
+    // makes a mountainside the edge of the world rather than a box.
+    TerrainSteepest,  "Valley",    "Terrain, steepest walkable (slope)",    Fixed,  fx(1,5),  fx(3,1);
+    // **How fast a body slides off ground too steep to stand on**.
+    TerrainSlide,     "Valley",    "Terrain, slide speed (m/s)",            Fixed,  fx(1,1),  fx(30,1);
 }
 
 // ---------------------------------------------------------------------------

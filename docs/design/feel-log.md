@@ -7718,3 +7718,24 @@ map, built to grow to millions of boxes and to stay right over rollback.
 **Verdict** Pending play. Every doorway is walked by `tests/valley.rs` and a
 crossing is clean under SyncTest; nobody has felt a hunt start by walking in
 rather than arriving on the marks, or judged how the rooms' aprons read.
+
+### 2026-10-09 — the valley is land: a road, foothills, mountains
+
+**Changed** The valley's reaches were rooms of boxes laid end to end:
+vertical cliff walls, full-width shelves, right angles everywhere. Now the
+ground between places is a height function ([atlas.md](atlas.md) §The land):
+a road winding along a valley floor fifty metres wide in the meadows, walkable
+foothills off its edges, mountains past them; a river, a tarn; woods of
+broadleaf and pine; boulders; rooms in clearings off side paths. Ground
+steeper than 0.85 (`terrain_steepest`) is a wall you slide down at 8 m/s
+(`terrain_slide`). The climbs left the road and became crags beside it:
+ledges 2.2 m apart up one face, a vine down another, a cairn on top.
+
+**Why** Asked for: "it's vertical walls and right angles. Go make it feel
+more like a Guild Wars or FF map."
+
+**Verdict** Pending play. Judged on headless screenshots of the Mouth, the
+Bank, the Shelves, the Pinewood and the Saddle; every road and room walked by
+`tests/valley.rs`. The road needs no jump anywhere now, which drops the
+valley's "climb with a friend" thesis to the crags, by choice: whether the
+road should keep a hop or two of its own is the first thing to feel.
