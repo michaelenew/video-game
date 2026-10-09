@@ -40,6 +40,7 @@ mod signs;
 mod sky;
 mod sound;
 mod species;
+mod stream;
 mod trophies;
 mod valley;
 mod veil;
@@ -167,6 +168,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
         .init_resource::<Sim>()
         .init_resource::<arenas::Drawn>()
+        .init_resource::<stream::Stream>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
@@ -232,7 +234,9 @@ fn main() {
                 // the player can walk out of.
                 (
                     tick_sim,
+                    same_frame,
                     arenas::dress,
+                    stream::stream,
                     valley::update,
                     sky::follow,
                     sound::play,
@@ -4386,6 +4390,19 @@ fn mouse_look(
     }
 }
 
+/// **The world moved into another place's coordinates this tick**
+/// (`sim::valley::open`): the frame it moved from is moved with it, so the
+/// interpolator blends two pictures of the same place rather than drawing
+/// everybody sliding a reach across the screen for one frame.
+fn same_frame(mut sim: ResMut<Sim>) {
+    if sim.prev.arena == sim.cur.arena || !sim.cur.valley.on || !sim.prev.valley.on {
+        return;
+    }
+    let by = sim.prev.map_origin().sub(sim.cur.map_origin());
+    sim.prev.shift(by);
+    sim.prev.arena = sim.cur.arena;
+}
+
 #[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 fn drive_camera(
     sim: Res<Sim>,
@@ -4396,9 +4413,23 @@ fn drive_camera(
     mut inside: ResMut<InsideOwnHead>,
     mut boom: ResMut<beast::Boom>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
+    mut origin: Local<Option<Vec3>>,
 ) {
     if settings.is_changed() {
         rig.0.set_fov(settings.fov_radians());
+    }
+    // The world moved into another place's coordinates: the camera's own
+    // memory of where it was moves with it, or it swoops across the map.
+    let o = sim.cur.map_origin();
+    let o = Vec3::new(
+        o.x.to_f32_for_render(),
+        o.y.to_f32_for_render(),
+        o.z.to_f32_for_render(),
+    );
+    if let Some(last) = origin.replace(o) {
+        if last != o {
+            rig.0.shift((last - o).to_array());
+        }
     }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
     // The camera follows whichever fighter this client is driving, turned by
@@ -4426,7 +4457,7 @@ fn drive_camera(
             carried: frame.players[me].carried,
             // Where the fight is, for the walls, towers and vaults the arm is
             // pulled in from.
-            arena: sim.cur.arena(),
+            arena: sim.cur.terrain(),
         },
     );
     inside.0 = framing.hidden;

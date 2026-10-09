@@ -188,7 +188,7 @@ fn draw_one(rig: &mut CameraRig, prev: &World, cur: &World, n: u32) {
             aboard: cur.players[0].aboard(),
             aloft: frame.players[0].aloft,
             carried: frame.players[0].carried,
-            arena: cur.arena(),
+            arena: cur.terrain(),
         },
     );
     std::hint::black_box(framing);

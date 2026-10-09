@@ -297,6 +297,15 @@ impl CameraRig {
     /// your aim -- see `sim::camera`. A wider setting therefore shows more of
     /// the arena and puts the fighter at a slightly different place on screen,
     /// which is what a wider view is.
+    /// **The world's coordinates moved by `by`** under the camera: the
+    /// valley moved into another place's (`sim::valley::open`). The smoothed
+    /// focus moves with them, so the picture does not.
+    pub fn shift(&mut self, by: [f32; 3]) {
+        for (f, d) in self.focus.iter_mut().zip(by) {
+            *f += d;
+        }
+    }
+
     pub fn set_fov(&mut self, radians: f32) {
         self.cfg.fov = radians;
     }
@@ -390,7 +399,7 @@ impl CameraRig {
         let stood = sim::V3::new(fx_of(self.focus[0]), fx_of(feet), fx_of(self.focus[2]));
         // Held under a cave's vault exactly as the aimed-from eye is, so the
         // two stay one point there too.
-        let eye = sim::camera::eye_under(stood, look, fx_of(around.aloft), around.arena);
+        let eye = sim::camera::eye_under(stood, look, fx_of(around.aloft), &around.arena);
         let (back, up) = (
             -((eye.x.to_f32_for_render() - self.focus[0]) * along[0]
                 + (eye.z.to_f32_for_render() - self.focus[2]) * along[1]),
@@ -472,7 +481,7 @@ impl CameraRig {
             }
         }
         let want = lerp(
-            unobstructed_fraction(self.focus, offset, &blockers, around.arena),
+            unobstructed_fraction(self.focus, offset, &blockers, &around.arena),
             1.0,
             sky,
         );
@@ -562,7 +571,7 @@ fn unobstructed_fraction(
     focus: [f32; 3],
     offset: [f32; 3],
     beasts: &[Option<&sim::Monster>],
-    arena: &sim::arena::Arena,
+    arena: &sim::arena::Terrain,
 ) -> f32 {
     const STEPS: usize = 24;
     // Deliberately tiny. An arm that refuses to shorten past a comfortable
@@ -593,8 +602,10 @@ fn unobstructed_fraction(
     1.0
 }
 
-fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Arena) -> bool {
-    arena.solids().iter().any(|s| {
+fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Terrain) -> bool {
+    // On a map, only the tiles round the point: the arm is a few metres long.
+    let at = sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2]));
+    arena.around(at, fx_of(pad + 1.0)).any(|s| {
         let lo = [
             s.min.x.to_f32_for_render() - pad,
             s.min.y.to_f32_for_render() - pad,
@@ -655,10 +666,11 @@ pub struct Surroundings<'a> {
     /// simulation's -- and a caller handed one number has no way to be told it
     /// forgot half of it. Zero is the default, which is the arena floor.
     pub carried: f32,
-    /// Where the fight is: `World::arena()`. Its solids are what the arm is
-    /// pulled in from -- walls, a tower, a cave's vault overhead. The default
+    /// Where the fight is, as it stands: `World::terrain()`. Its solids are
+    /// what the arm is pulled in from -- walls, a tower, a cave's vault
+    /// overhead, and in the valley every place around this one. The default
     /// is the proving ground, which is every fixture's arena.
-    pub arena: &'static sim::arena::Arena,
+    pub arena: sim::arena::Terrain,
 }
 
 impl Default for Surroundings<'_> {
@@ -668,7 +680,7 @@ impl Default for Surroundings<'_> {
             aboard: false,
             aloft: 0.0,
             carried: 0.0,
-            arena: &sim::arena::proving_ground::ARENA,
+            arena: sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
         }
     }
 }

@@ -1048,7 +1048,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
                 aboard: false,
                 aloft: 0.0,
                 carried: 0.0,
-                arena: &sim::arena::proving_ground::ARENA,
+                arena: sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
             },
         );
     }
@@ -1064,7 +1064,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
                 aboard: false,
                 aloft: 0.0,
                 carried: 0.0,
-                arena: &sim::arena::proving_ground::ARENA,
+                arena: sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
             },
         );
         let eye = sim::V3::new(
@@ -1103,7 +1103,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
             aboard: true,
             aloft: 0.0,
             carried: 0.0,
-            arena: &sim::arena::proving_ground::ARENA,
+            arena: sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
         },
     );
     for _ in 0..60 {
@@ -1117,7 +1117,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
                 aboard: true,
                 aloft: 0.0,
                 carried: 0.0,
-                arena: &sim::arena::proving_ground::ARENA,
+                arena: sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
             },
         );
     }

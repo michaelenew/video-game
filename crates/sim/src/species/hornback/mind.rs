@@ -479,8 +479,8 @@ fn near_cover(look: &Look, at: V3) -> bool {
     let reach = knob_fx(Knob::OpenWithin);
     look.arena.solids().any(|s| {
         s.max.y.raw() > Fx::ONE.raw()
-            && !edge(look.arena, s)
-            && super::rules::off_footprint(s, at).raw() <= reach.raw()
+            && !edge(look.arena, &s)
+            && super::rules::off_footprint(&s, at).raw() <= reach.raw()
     })
 }
 

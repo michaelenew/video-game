@@ -8,6 +8,7 @@
 
 pub mod aim;
 pub mod arena;
+pub mod atlas;
 pub mod beast;
 pub mod bolt;
 pub mod bulwark;

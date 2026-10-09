@@ -208,16 +208,13 @@ fn scramble_top(look: &Look, at: V3) -> Option<crate::arena::Solid> {
     }
     // Standing on it: the resolve holds a body a skin off a top.
     let skin = crate::arena::SKIN.add(crate::arena::SKIN);
-    look.arena
-        .solids()
-        .find(|s| {
-            at.x.raw() >= s.min.x.raw()
-                && at.x.raw() <= s.max.x.raw()
-                && at.z.raw() >= s.min.z.raw()
-                && at.z.raw() <= s.max.z.raw()
-                && at.y.sub(s.max.y).abs().raw() <= skin.raw()
-        })
-        .copied()
+    look.arena.solids().find(|s| {
+        at.x.raw() >= s.min.x.raw()
+            && at.x.raw() <= s.max.x.raw()
+            && at.z.raw() >= s.min.z.raw()
+            && at.z.raw() <= s.max.z.raw()
+            && at.y.sub(s.max.y).abs().raw() <= skin.raw()
+    })
 }
 
 /// How far a point is from a box's footprint, in the floor plane.

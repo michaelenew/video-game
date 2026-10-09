@@ -1,6 +1,8 @@
 //! **The valley** (`docs/design/valley.md`, `sim::valley`): the places join
-//! up, a seam takes both of you on, waystones gate the climb, a death in a
-//! reach is a cairn, and the props do what they say.
+//! up into one map you walk, a room's hunt starts when you walk into it,
+//! waystones shut the climb, a death in a reach is a cairn, and the props do
+//! what they say. The map itself -- tiles, doorways, nothing overlapping --
+//! is `tests/atlas.rs`.
 
 use sim::arena::{ArenaId, Terrain};
 use sim::input::{Destination, Travel};
@@ -24,7 +26,8 @@ fn arrived(to: ArenaId, at: Option<u8>) -> World {
 /// the zone's ceiling.
 fn standing_in(zone: &valley::Zone, arena: ArenaId) -> V3 {
     let mid = zone.middle();
-    let ground = Terrain::bare(arena.get()).floor_below(V3::new(mid.x, zone.max.y, mid.z));
+    // From the zone's top down: a bridge over the floor is a floor here.
+    let ground = Terrain::bare(arena.get()).ground_under(V3::new(mid.x, zone.max.y, mid.z));
     V3::new(mid.x, ground, mid.z)
 }
 
@@ -69,7 +72,7 @@ fn every_seam_leads_to_one_that_leads_back() {
             );
         }
     }
-    assert!(seams >= 30, "only {seams} seams");
+    assert!(seams >= 28, "only {seams} seams");
 }
 
 #[test]
@@ -146,7 +149,7 @@ fn every_waystone_is_a_solid_by_its_seam() {
             let dx = (s.min.x.raw() / 2 + s.max.x.raw() / 2 - mid.x.raw()).abs();
             let dz = (s.min.z.raw() / 2 + s.max.z.raw() / 2 - mid.z.raw()).abs();
             assert!(
-                dx < Fx::from_int(12).raw() && dz < Fx::from_int(12).raw(),
+                dx < Fx::from_int(24).raw() && dz < Fx::from_int(24).raw(),
                 "{}: seam {i}'s waystone is far from it",
                 place.arena.get().name
             );
@@ -172,63 +175,137 @@ fn the_valley_starts_in_hearth_at_peace_and_the_ring_is_versus() {
     assert!(World::with_classes(CLASSES).pvp());
 }
 
-/// Both fighters at `at`, after a frame outside every seam so they count.
-fn walk_both_into(w: &mut World, seam: u8) {
-    w.advance(idle());
-    let zone = valley::place(w.arena).unwrap().seams[seam as usize].zone;
-    let feet = standing_in(&zone, w.arena);
-    for p in w.players.iter_mut() {
-        p.pos = feet;
-        p.vel = V3::ZERO;
+/// Every creature beaten: every waystone lit, as `--open` has it.
+fn open_journey() -> valley::Journey {
+    valley::Journey {
+        beaten: u32::MAX,
+        ..valley::Journey::default()
+    }
+}
+
+/// The aim that walks a body along +x, +z, -x or -z: a quarter turn each.
+fn heading(axis: usize, sign: i32) -> u16 {
+    match (axis, sign > 0) {
+        (0, true) => 0,
+        (2, true) => Input::QUARTER_TURN,
+        (0, false) => 2 * Input::QUARTER_TURN,
+        _ => 3 * Input::QUARTER_TURN,
+    }
+}
+
+/// A fighter's feet on the valley's map.
+fn on_map(w: &World, i: usize) -> V3 {
+    w.players[i].pos.add(w.map_origin())
+}
+
+/// **Walk both fighters through every doorway of the valley.** Each stands
+/// in the seam on the near side and walks along the door's line; within a few
+/// seconds the world has to be in the place on the far side -- and in a room,
+/// hunting. Every floor meets, nothing is left across a doorway, and the frame
+/// follows.
+#[test]
+fn every_doorway_can_be_walked_through() {
+    let atlas = sim::atlas::valley();
+    for door in &atlas.doors {
+        let (a, seam) = door.a;
+        let mut w = World::arrive(CLASSES, open_journey(), a, None, 1);
+        let zone = valley::place(a).unwrap().seams[seam as usize].zone;
+        let feet = standing_in(&zone, a);
+        w.players[0].pos = feet;
+        w.players[0].vel = V3::ZERO;
+        // Along the door's line, away from the seam: the long axis of the
+        // cut, toward its far end.
+        let origin = w.map_origin();
+        let mid = feet.add(origin);
+        let (cx, cz) = (
+            door.cut.max.x.sub(door.cut.min.x),
+            door.cut.max.z.sub(door.cut.min.z),
+        );
+        let axis = if cx.raw() >= cz.raw() { 0 } else { 2 };
+        let (lo, hi, at) = if axis == 0 {
+            (door.cut.min.x, door.cut.max.x, mid.x)
+        } else {
+            (door.cut.min.z, door.cut.max.z, mid.z)
+        };
+        let sign = if hi.sub(at).raw() > at.sub(lo).raw() {
+            1
+        } else {
+            -1
+        };
+        let walk = Input::looking_at(Input::W, heading(axis, sign), 0);
+        let mut arrived = false;
+        for _ in 0..600 {
+            w.advance([walk, Input::new(0)]);
+            if w.arena == door.b.0 {
+                arrived = true;
+                break;
+            }
+        }
+        assert!(
+            arrived,
+            "{} to {}: still in {} at {:?} on the map",
+            a.get().name,
+            door.b.0.get().name,
+            w.arena().name,
+            on_map(&w, 0)
+        );
+        if let Some(Kind::Room(species)) = valley::place(door.b.0).map(|p| p.kind) {
+            assert!(
+                w.hunting(),
+                "{}: walked in, and no hunt",
+                door.b.0.get().name
+            );
+            assert!(w.hunted().contains(&Some(species)) || w.pack.is_some());
+        }
     }
 }
 
 #[test]
-fn both_in_a_seam_go_through_together() {
+fn walking_out_of_the_town_gate_is_the_mouth_and_the_map_holds_still() {
     let mut w = World::versus_in(CLASSES, valley::START);
-    walk_both_into(&mut w, 0);
     w.advance(idle());
-    assert_eq!(w.arena, ArenaId::MOUTH);
-    assert!(w.valley.on);
-    let marks = valley::place(ArenaId::MOUTH).unwrap().seams[0].marks;
-    for (p, m) in w.players.iter().zip(marks) {
-        assert_eq!((p.pos.x, p.pos.z), (m.at.x, m.at.z));
-        assert!(p.health > 0);
+    let zone = valley::place(ArenaId::HEARTH).unwrap().seams[0].zone;
+    w.players[0].pos = standing_in(&zone, ArenaId::HEARTH);
+    let walk = Input::looking_at(Input::W, 0, 0);
+    let mut last = on_map(&w, 0);
+    let mut moved = false;
+    for _ in 0..300 {
+        w.advance([walk, Input::new(0)]);
+        let now = on_map(&w, 0);
+        // The frame changes under her; where she is on the map does not jump.
+        assert!(
+            now.sub(last).flat_len().raw() < Fx::ONE.raw(),
+            "a step of {:?} on the map",
+            now.sub(last)
+        );
+        last = now;
+        moved |= w.arena == ArenaId::MOUTH;
     }
+    assert!(moved, "never reached the Mouth");
+    assert!(w.peaceful());
 }
 
 #[test]
-fn one_alone_goes_on_after_holding_the_seam() {
-    let mut w = World::versus_in(CLASSES, valley::START);
-    w.advance(idle());
-    let zone = valley::place(w.arena).unwrap().seams[0].zone;
-    w.players[0].pos = standing_in(&zone, w.arena);
-    let hold = sim::tuning::seam_hold();
-    for _ in 1..hold {
-        w.advance(idle());
-        assert_eq!(w.arena, ArenaId::HEARTH, "went before the hold was up");
-    }
-    w.advance(idle());
-    assert_eq!(w.arena, ArenaId::MOUTH, "never went");
-}
-
-#[test]
-fn an_unlit_waystone_holds_its_seam_and_a_trophy_lights_it() {
+fn a_dark_waystone_shuts_its_door_and_a_trophy_opens_it() {
     let mut w = arrived(ArenaId::BANK, Some(0));
-    walk_both_into(&mut w, 2);
-    for _ in 0..sim::tuning::seam_hold() + 5 {
-        w.advance(idle());
-        assert_eq!(w.arena, ArenaId::BANK, "the dark waystone let them through");
+    let zone = valley::place(ArenaId::BANK).unwrap().seams[2].zone;
+    w.players[0].pos = standing_in(&zone, ArenaId::BANK);
+    let walk = Input::looking_at(Input::W, 0, 0);
+    for _ in 0..240 {
+        w.advance([walk, Input::new(0)]);
+        assert_eq!(w.arena, ArenaId::BANK, "the dark waystone let her through");
     }
     // A trophy, on the wire.
-    let credit = Input::new(0).travelling(Travel::credit(SpeciesId::GNAWERS));
+    let credit = walk.travelling(Travel::credit(SpeciesId::GNAWERS));
     assert_eq!(
         credit.travel.destination(),
         Some(Destination::Credit(SpeciesId::GNAWERS))
     );
     w.advance([credit, Input::new(0)]);
-    w.advance(idle());
-    assert_eq!(w.arena, ArenaId::SHELVES);
+    for _ in 0..240 {
+        w.advance([walk, Input::new(0)]);
+    }
+    assert_eq!(w.arena, ArenaId::SHELVES, "lit, and still shut");
     assert!(
         w.valley.has_beaten(SpeciesId::GNAWERS),
         "the journey forgot"
@@ -236,18 +313,111 @@ fn an_unlit_waystone_holds_its_seam_and_a_trophy_lights_it() {
 }
 
 #[test]
-fn a_seam_into_a_room_starts_its_hunt_and_back_out_is_open() {
+fn walking_into_a_room_starts_its_hunt_and_walking_out_ends_it() {
     let mut w = arrived(ArenaId::PINEWOOD, Some(0));
-    walk_both_into(&mut w, 3);
-    w.advance(idle());
+    let zone = valley::place(ArenaId::PINEWOOD).unwrap().seams[3].zone;
+    let feet = standing_in(&zone, ArenaId::PINEWOOD);
+    for p in w.players.iter_mut() {
+        p.pos = feet;
+        p.vel = V3::ZERO;
+    }
+    let south = Input::looking_at(Input::W, heading(2, -1), 0);
+    for _ in 0..240 {
+        w.advance([south, south]);
+        if w.arena == ArenaId::HIGHLANDS {
+            break;
+        }
+    }
     assert_eq!(w.arena, ArenaId::HIGHLANDS);
     assert!(w.hunting() && w.valley.on && !w.pvp());
     assert_eq!(w.monster().map(|m| m.species), Some(SpeciesId::RIDGEBACK));
-    // Arriving stands you in the way out, and that is not leaving.
-    for _ in 0..30 {
-        w.advance(idle());
+    // Back out the way they came: the hunt is over, unwon.
+    let north = Input::looking_at(Input::W, heading(2, 1), 0);
+    for _ in 0..400 {
+        w.advance([north, north]);
+        if w.arena == ArenaId::PINEWOOD {
+            break;
+        }
     }
-    assert_eq!(w.arena, ArenaId::HIGHLANDS);
+    assert_eq!(w.arena, ArenaId::PINEWOOD);
+    assert!(!w.hunting() && w.peaceful());
+    assert!(!w.valley.has_beaten(SpeciesId::RIDGEBACK));
+}
+
+/// **A change of frame changes nothing.** The same world in another place's
+/// coordinates, every position shifted by the difference, plays the same
+/// frames and lands in the same place: whatever the shift forgot to move
+/// would show up as a fighter, a stone or a shadow somewhere else.
+#[test]
+fn a_change_of_frame_changes_nothing() {
+    let atlas = sim::atlas::valley();
+    let bank = atlas.placed(ArenaId::BANK).unwrap().at;
+    let mouth = atlas.placed(ArenaId::MOUTH).unwrap().at;
+    for class in sim::class::ALL_CLASSES {
+        let mut w = World::arrive(
+            [class; 2],
+            valley::Journey::default(),
+            ArenaId::BANK,
+            Some(0),
+            2,
+        );
+        // A minute of everything, so every mechanic has been out.
+        let script = |f: u32| {
+            let bits = match f % 90 {
+                0..=9 => Input::LEFT,
+                10..=19 => Input::RIGHT,
+                20..=24 => Input::MECHANIC,
+                25..=29 => Input::SPECIAL,
+                30..=59 => Input::W | Input::SPACE,
+                _ => Input::D,
+            };
+            Input::looking_at(bits, (f * 97) as u16, -2000)
+        };
+        for f in 0..240 {
+            w.advance([script(f), script(f + 45)]);
+        }
+        let mut moved = w.clone();
+        moved.shift(bank.sub(mouth));
+        moved.arena = ArenaId::MOUTH;
+        for f in 240..300 {
+            w.advance([script(f), script(f + 45)]);
+            moved.advance([script(f), script(f + 45)]);
+        }
+        assert_eq!(
+            moved.arena,
+            ArenaId::BANK,
+            "{}: the frame did not come back",
+            class.name()
+        );
+        assert!(
+            moved == w,
+            "{}: a world moved to the Mouth's coordinates and back came out different",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn the_valley_is_deterministic_across_a_crossing() {
+    let run = || {
+        let mut w = World::versus_in(CLASSES, valley::START);
+        let zone = valley::place(ArenaId::HEARTH).unwrap().seams[0].zone;
+        let feet = standing_in(&zone, ArenaId::HEARTH);
+        for p in w.players.iter_mut() {
+            p.pos = feet;
+        }
+        for f in 0..400u32 {
+            let bits = if f % 50 < 30 {
+                Input::W
+            } else {
+                Input::SPACE | Input::W
+            };
+            w.advance([Input::looking_at(bits, 0, 0), Input::new(Input::D)]);
+        }
+        assert_eq!(w.arena, ArenaId::MOUTH);
+        w.checksum()
+    };
+    assert_eq!(run(), run());
 }
 
 #[test]
@@ -286,8 +456,21 @@ fn a_lost_hunt_wakes_you_outside() {
 #[test]
 fn a_death_in_a_reach_stands_you_on_your_last_cairn() {
     let mut w = arrived(ArenaId::MOUTH, Some(0));
-    let place = valley::place(ArenaId::MOUTH).unwrap();
-    let (k, cairn) = place.cairns().next().expect("the Mouth has cairns");
+    let atlas = sim::atlas::valley();
+    let origin = w.map_origin();
+    let mouth = atlas.index_of(ArenaId::MOUTH).unwrap() as u16;
+    let k = (0..atlas.solids.len())
+        .find(|&i| {
+            atlas.sources[i].place == mouth
+                && atlas.solids[i].material == sim::arena::Material::Snow
+        })
+        .expect("the Mouth has cairns");
+    let s = atlas.solids[k];
+    let cairn = sim::arena::Solid {
+        min: s.min.sub(origin),
+        max: s.max.sub(origin),
+        material: s.material,
+    };
     w.players[0].pos = V3::new(
         cairn.min.x.add(Fx::ratio(1, 2)),
         cairn.max.y,
@@ -379,20 +562,6 @@ fn outside_the_valley_there_are_no_vines_or_seams() {
     assert_ne!(before, w.checksum());
     assert!(valley::vines(ArenaId::PROVING_GROUND).is_empty());
     assert!(valley::place(ArenaId::PROVING_GROUND).is_none());
-}
-
-#[test]
-fn the_valley_is_deterministic_across_a_trip() {
-    let run = || {
-        let mut w = World::versus_in(CLASSES, valley::START);
-        walk_both_into(&mut w, 0);
-        for f in 0..200u32 {
-            let bits = if f % 50 < 20 { Input::W } else { Input::SPACE };
-            w.advance([Input::new(bits), Input::new(Input::D)]);
-        }
-        w.checksum()
-    };
-    assert_eq!(run(), run());
 }
 
 /// **The hops nobody can go round**: the jumps on the valley's way up that

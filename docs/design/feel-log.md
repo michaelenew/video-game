@@ -7698,3 +7698,23 @@ the air, ringing at 330 to 1300 Hz for a fifth of a second.
 (no line of tone under any step but wood's short knock) and by
 `the_ground_does_not_ring`. Listen to `target/sound-sheet/04-*` and
 `05-*` first.
+
+### 2026-10-09 — the valley is one map: walk, do not be sent
+
+**Changed** The valley's places were rooms joined by seams: stand in one
+together, or hold it alone for two seconds (`seam_hold`), and the world was
+rebuilt in the next place. Now they are laid out on one map
+([atlas.md](atlas.md)) and you walk: through the town's gate onto the Mouth,
+up the reaches, into a room's notch, and the creature notices you. A room's
+hunt starts when anybody walks in and ends, unwon, when nobody on their feet
+is left in it. A dark waystone's doorway is a wall. The pair may be apart.
+Rooms have six metres of ground and a cliff round their low walls. The Bank's
+den moved to a notch in the north wall; the Shrine is over a bridge from the
+second spire's top; the Long Valley is reached from Hearth's west gate only.
+
+**Why** The ask: the whole valley, its fights and Hearth as one contiguous
+map, built to grow to millions of boxes and to stay right over rollback.
+
+**Verdict** Pending play. Every doorway is walked by `tests/valley.rs` and a
+crossing is clean under SyncTest; nobody has felt a hunt start by walking in
+rather than arriving on the marks, or judged how the rooms' aprons read.

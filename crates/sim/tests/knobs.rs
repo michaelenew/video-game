@@ -37,6 +37,54 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "const RESOLVE_REACH: Fx = Fx::from_int(2)",
+        "How far round a body the map's tiles are read for the resolve: a search radius, \
+         not a size. It has to exceed the furthest one box's push can carry a body in a \
+         frame, and any larger value gives the same answer more slowly.",
+    ),
+    (
+        "const CEILING_REACH: Fx = Fx::from_int(16)",
+        "How far round a point the map is searched for a sloped ceiling: a search radius. \
+         Past it the slope has carried any ceiling above the eye already; the slope is \
+         the knob.",
+    ),
+    (
+        "pub const EXTRA: u16 = u16::MAX",
+        "A marker meaning 'no place', not a quantity.",
+    ),
+    (
+        "pub const TILE_M: i32 = 16",
+        "The side of a map tile: how the world is indexed, not anything in it. Any size \
+         gives the same answers; this one only decides how fast they come.",
+    ),
+    (
+        "pub const APRON: i32 = 600",
+        "Level design, like an arena table's boxes: how much ground the valley's layout \
+         puts round a room. Where things are, not how anything feels.",
+    ),
+    (
+        "const CLIFF_OVER: i32 = 400",
+        "Level design: how high the cliff round a room stands over its tallest box.",
+    ),
+    (
+        "const DOOR: i32 = 600",
+        "Level design: how wide a doorway into a room is cut.",
+    ),
+    (
+        "const DOOR_HIGH: i32 = 600",
+        "Level design: how high every doorway is cut over its floor.",
+    ),
+    (
+        "const CAP: i32 = 300",
+        "Level design: how far either side of a joint the caps of two passages are cut. \
+         It has to take in the caps' thickness and nothing else.",
+    ),
+    (
+        "const VOID: i32 = -10_000",
+        "Where there is no place: a floor far enough under the map that a body there has \
+         fallen out of it. Not a height anything is at.",
+    ),
+    (
         "let across = t::structure_radius().mul(Fx::from_int(2))",
         "A stone's diameter, for the broken ground a pressed stone leaves: twice its \
          radius, because that is what a diameter is. The radius is the knob.",

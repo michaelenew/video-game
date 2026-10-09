@@ -14,7 +14,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
-use crate::arena::{self, Arena, ArenaId, Terrain};
+use crate::arena::{self, Arena, ArenaId, Solid, Terrain};
 use crate::bolt::{self, Flight, MAX_BOLTS};
 use crate::bulwark;
 use crate::camera;
@@ -1046,8 +1046,8 @@ impl Player {
 /// A body in the air inside an updraft's column, below its top, is carried
 /// up at `tuning::vent_rise` at least, and let go at the top to drift. That
 /// is a push up, and the fall rule already lowers a fall's start for one.
-fn climb_and_ride(p: &mut Player, input: Input, arena: ArenaId) {
-    if let Some(_vine) = crate::valley::vine_at(arena, p.pos) {
+fn climb_and_ride(p: &mut Player, input: Input, ground: &Terrain) {
+    if crate::valley::vine_on(ground, p.pos) {
         let speed = t::vine_speed();
         let climbing = input.has(Input::SPACE);
         let sliding = input.has(Input::CROUCH) && !p.grounded;
@@ -1067,12 +1067,10 @@ fn climb_and_ride(p: &mut Player, input: Input, arena: ArenaId) {
         }
         return;
     }
-    if !p.grounded {
-        if let Some(_vent) = crate::valley::vent_at(arena, p.pos) {
-            let rise = t::vent_rise();
-            if p.vel.y.raw() < rise.raw() {
-                p.vel.y = rise;
-            }
+    if !p.grounded && crate::valley::vent_on(ground, p.pos) {
+        let rise = t::vent_rise();
+        if p.vel.y.raw() < rise.raw() {
+            p.vel.y = rise;
         }
     }
 }
@@ -1376,6 +1374,9 @@ impl World {
                 .is_some_and(|p| !matches!(p.kind, crate::valley::Kind::Room(_)))
         {
             w.valley.on = true;
+            // The map is composed here, as the world is built, so no frame
+            // ever builds it: a frame does not allocate.
+            crate::atlas::valley();
         }
         w
     }
@@ -1399,6 +1400,7 @@ impl World {
             }
             _ => World::hunt_in(classes, [None; MAX_MONSTERS], to),
         };
+        crate::atlas::valley();
         w.valley = crate::valley::Journey {
             on: true,
             beaten: journey.beaten,
@@ -1525,7 +1527,12 @@ impl World {
     /// the world. What every body, ray and glance in the frame reads; see
     /// [`arena::Terrain`].
     pub fn terrain(&self) -> Terrain {
-        let mut ground = Terrain::bare(self.arena.get());
+        // In the valley the place is on a map, and the map is around it.
+        let mut ground = if self.valley.on {
+            self.valley_ground()
+        } else {
+            Terrain::bare(self.arena.get())
+        };
         if self.lore.owner.is_none() {
             return ground;
         }
@@ -1631,10 +1638,13 @@ impl World {
 
     /// **One frame of the valley** (`crate::valley`). Where it is peaceful, a
     /// fighter who has died is stood on their last cairn -- or where they
-    /// came in -- and one standing on a cairn is rested. Then the seams: the
-    /// world one leads to, if everybody still on their feet is in it, or
-    /// somebody has held it for `tuning::seam_hold`, and its waystone (if it
-    /// has one) is lit. A no-op outside the valley.
+    /// came in -- and one standing on a cairn is rested. Then the frame
+    /// follows the fighters: into the place the first of them is in, or a
+    /// room somebody has walked into, whose hunt starts
+    /// (`crate::valley::open`). A no-op outside the valley.
+    ///
+    /// Nothing here replaces the world any more: the valley is one map, and
+    /// walking is how you get anywhere in it.
     fn step_valley(&mut self) -> Option<World> {
         if !self.valley.on {
             return None;
@@ -1659,53 +1669,22 @@ impl World {
                 p.vel = V3::ZERO;
                 p.health = 0;
             }
+            let atlas = crate::atlas::valley();
+            let origin = self.map_origin();
             for i in 0..seats {
                 if self.players[i].health <= 0 {
                     self.stand_back(i, place);
                 }
-                let feet = self.players[i].pos;
-                if let Some((k, _)) = place.cairns().find(|(_, s)| crate::valley::on_top(s, feet)) {
-                    self.valley.cairn[i] = k as u8 + 1;
+                let feet = self.players[i].pos.add(origin);
+                if let Some(k) = crate::valley::cairn_at(atlas, feet) {
+                    self.valley.cairn[i] = k as u16 + 1;
                     let p = &mut self.players[i];
                     p.health = p.health.max(t::health_of(p.class));
                 }
             }
         }
-        let mut inside: [Option<usize>; MAX_PLAYERS] = [None; MAX_PLAYERS];
-        for (i, slot) in inside.iter_mut().enumerate().take(seats) {
-            let p = &self.players[i];
-            if p.health <= 0 {
-                continue;
-            }
-            *slot = place.seams.iter().position(|s| s.zone.holds(p.pos));
-            if slot.is_none() {
-                self.valley.armed |= 1 << i;
-            }
-        }
-        let armed = self.valley.armed;
-        let counts = |i: usize| armed & (1 << i) != 0;
-        let Some(k) = (0..seats).find_map(|i| if counts(i) { inside[i] } else { None }) else {
-            self.valley.held = crate::valley::NONE;
-            self.valley.hold = 0;
-            return None;
-        };
-        let seam = &place.seams[k];
-        if !seam.gate.lit(self.valley.beaten) {
-            self.valley.held = crate::valley::NONE;
-            self.valley.hold = 0;
-            return None;
-        }
-        let everybody =
-            (0..seats).all(|i| self.players[i].health <= 0 || (counts(i) && inside[i] == Some(k)));
-        if self.valley.held != k as u8 + 1 {
-            self.valley.held = k as u8 + 1;
-            self.valley.hold = 0;
-        }
-        self.valley.hold = self.valley.hold.saturating_add(1);
-        if !everybody && self.valley.hold < t::seam_hold() {
-            return None;
-        }
-        Some(self.through(seam))
+        self.reframe();
+        None
     }
 
     /// The world a seam leads to, with this one's frame and pause.
@@ -1773,9 +1752,17 @@ impl World {
         let here = self.arena();
         let on_mark =
             |m: &arena::Mark| (V3::new(m.at.x, here.ground_under(m.at), m.at.z), m.facing);
+        // A cairn is a box of the map, wherever it is; it is stood on in this
+        // place's coordinates.
+        let origin = self.map_origin();
         let cairn = self.valley.cairn[i]
             .checked_sub(1)
-            .and_then(|k| here.solids().get(k as usize));
+            .and_then(|k| crate::atlas::valley().solids.get(k as usize))
+            .map(|s| Solid {
+                min: s.min.sub(origin),
+                max: s.max.sub(origin),
+                material: s.material,
+            });
         let p = &mut self.players[i];
         let (pos, facing) = match cairn {
             Some(top) => (
@@ -3097,9 +3084,8 @@ impl World {
             let v = &self.valley;
             h.write_u32(0x7A11);
             h.write_u32(v.beaten);
-            h.write_u32(v.came as u32 | (v.held as u32) << 8 | (v.armed as u32) << 16);
-            h.write_u32(v.hold as u32);
-            h.write_u32(v.cairn[0] as u32 | (v.cairn[1] as u32) << 8);
+            h.write_u32(v.came as u32);
+            h.write_u32(v.cairn[0] as u32 | (v.cairn[1] as u32) << 16);
         }
         // A course's runs, only in a course: every other fight hashes exactly
         // as it did before there were any.
@@ -4812,7 +4798,7 @@ fn step_player(
     // **The valley's two props** (`crate::valley`), for anybody: a vine and
     // an updraft. Neither is a class's, and neither costs anything but time.
     if dashing.is_none() && !hauling {
-        climb_and_ride(p, input, scene.arena.arena.id);
+        climb_and_ride(p, input, scene.arena);
     }
 
     p.pos = p.pos.add(p.vel.scale(DT));
@@ -7563,7 +7549,7 @@ impl World {
             }
             let expired = if effect.kind == EffectKind::FireTornado {
                 let flying = effect.age.saturating_sub(effect.banked as u16);
-                flying >= t::tornado_travel_life() || !self.arena.get().inside(effect.tornado_pos())
+                flying >= t::tornado_travel_life() || !self.terrain().inside(effect.tornado_pos())
             } else if effect.is_a_pool() {
                 effect.banked <= 0
             } else {

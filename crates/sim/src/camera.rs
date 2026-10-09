@@ -476,11 +476,11 @@ pub fn eye(pos: V3, look: Input, aloft: Fx) -> V3 {
 ///
 /// The drawn camera starts from this one too (`view::camera`), so the
 /// crosshair and the eye stay the same line under a vault.
-pub fn eye_under(pos: V3, look: Input, aloft: Fx, arena: &crate::arena::Arena) -> V3 {
+pub fn eye_under(pos: V3, look: Input, aloft: Fx, arena: &crate::arena::Terrain) -> V3 {
     let mut at = eye(pos, look, aloft);
     let head = pos.y.add(t::body_height());
     // Sloped rather than a footprint test, so the eye moves continuously as
-    // it or the body passes an edge: see `Arena::ceiling_near`.
+    // it or the body passes an edge: see `Terrain::ceiling_near`.
     let slope = t::eye_ceiling_slope();
     let over_eye = arena.ceiling_near(at.x, at.z, head, slope);
     let over_body = arena.ceiling_near(pos.x, pos.z, head, slope);

@@ -636,7 +636,7 @@ fn lane_reach(w: &World, ground: &Terrain, at: V3, dir: V3) -> Fx {
     let cart = the_cart(w).map(|o| o.solid());
     for s in ground
         .solids()
-        .filter(|s| stops(ground, s) && Some(**s) != cart)
+        .filter(|s| stops(ground, s) && Some(*s) != cart)
     {
         let (lo_a, _, lo_c, hi_c) = mind::shadow(at, dir, s.min, s.max);
         let half = width.mul(Fx::ratio(1, 2));
@@ -813,7 +813,7 @@ pub(super) fn obstacles(w: &World, ground: &Terrain) -> ([Option<(V3, V3)>; 24],
     let cart = the_cart(w).map(|o| o.solid());
     for s in ground
         .solids()
-        .filter(|s| stops(ground, s) && Some(**s) != cart)
+        .filter(|s| stops(ground, s) && Some(*s) != cart)
     {
         push(s.min, s.max);
     }

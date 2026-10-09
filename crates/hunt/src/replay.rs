@@ -177,9 +177,11 @@ pub struct Leg {
     pub falls: [u32; MAX_PLAYERS],
     /// Times stood back on a cairn after a death.
     pub stood_back: [u32; MAX_PLAYERS],
-    /// Cairns touched, in order, by solid index (each new one once).
-    pub cairns: Vec<u8>,
-    /// Where it went on to, and whether everybody walked in or one held it.
+    /// Cairns touched, in order, by their index on the valley's map (each
+    /// new one once).
+    pub cairns: Vec<u16>,
+    /// Where it went on to, and whether everybody walked in together or one
+    /// went ahead.
     pub out: Option<(&'static str, bool)>,
 }
 
@@ -197,21 +199,24 @@ impl Trek {
         if self.legs.is_empty() || before.arena != after.arena {
             if let Some(last) = self.legs.last_mut() {
                 last.left = Some(after.frame);
-                // The seam it went by is the one that comes out where the
-                // new place says it was come into; it went because everybody
-                // walked in, unless somebody had been holding it the whole
-                // hold.
-                let came = after.valley.came.checked_sub(1);
-                let seam = sim::valley::place(before.arena).and_then(|p| {
-                    p.seams
-                        .iter()
-                        .enumerate()
-                        .find(|(_, s)| s.to == after.arena && Some(s.at) == came)
-                });
-                if let Some((k, seam)) = seam {
-                    let held = before.valley.held as usize == k + 1
-                        && before.valley.hold + 1 >= sim::tuning::seam_hold();
-                    last.out = Some((seam.says, !held));
+                // The seam it went on by is the one of the last place that
+                // leads here; it went together if everybody on their feet
+                // was in the new place when the world moved into it.
+                let seam = sim::valley::place(before.arena)
+                    .and_then(|p| p.seams.iter().find(|s| s.to == after.arena));
+                if let Some(seam) = seam {
+                    let origin = after.map_origin();
+                    let seats = (after.seats as usize).clamp(1, MAX_PLAYERS);
+                    let together = sim::atlas::valley().placed(after.arena).is_some_and(|to| {
+                        after.players[..seats]
+                            .iter()
+                            .filter(|p| p.health > 0)
+                            .all(|p| {
+                                let f = p.pos.add(origin);
+                                to.holds(f.x, f.z)
+                            })
+                    });
+                    last.out = Some((seam.says, together));
                 }
             }
             self.legs.push(Leg {
@@ -271,7 +276,7 @@ impl Trek {
             let left = leg.left.unwrap_or(end);
             let on = match leg.out {
                 Some((to, true)) => format!("{to}, together"),
-                Some((to, false)) => format!("{to}, held"),
+                Some((to, false)) => format!("{to}, apart"),
                 None if leg.left.is_some() => "(a trip)".to_string(),
                 None => "-".to_string(),
             };
