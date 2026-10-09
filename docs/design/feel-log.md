@@ -7739,3 +7739,29 @@ Bank, the Shelves, the Pinewood and the Saddle; every road and room walked by
 `tests/valley.rs`. The road needs no jump anywhere now, which drops the
 valley's "climb with a friend" thesis to the crags, by choice: whether the
 road should keep a hop or two of its own is the first thing to feel.
+
+### 2026-10-09 — a fight's edge is land; the town is a town
+
+**Changed** Every fight's edge-of-the-world boxes (the Commons' hedge, the
+meadow's and the crossing's thickets, the Long Valley's cliffs) are gone, and
+every fight has a **rim** ([arenas.md](arenas.md) §1a): a bank of land too
+steep to climb rising straight off the outside of its walls, its foot at the
+wall's top, wooded past its crest. Inside the rim nothing moved. The low
+walls that a fight puts its back to stay. **A low wall can no longer be hopped
+out of**: past it is the bank, and the bank slides you back. The proving
+ground's rim is forty metres out, round a meadow. Hearth was rebuilt as a
+market town with buildings, props and trees as tables (`sim::arena::hearth`),
+the collision made from them. Everything is drawn as what it is
+([forms.md](forms.md), the fifth pass).
+
+**Why** Asked for: "fix the town, all the fights, and every jump map in the
+same style as the valley, directionally something more like you'd find in
+guild wars 2 ... Not just the walls, but the terrain, buildings, and objects
+too."
+
+**Verdict** Pending play. Every pinned fight, report and pin passes
+unchanged, and `tests/rim.rs` holds that nobody walks or jumps out. Two
+things to feel: whether anybody misses hopping a low wall to reset a fight,
+and whether a bank behind a wall changes where a ranged class likes to stand
+(a level aim along a wall now meets the bank behind it rather than the sky --
+the reason the proving ground's rim moved out).

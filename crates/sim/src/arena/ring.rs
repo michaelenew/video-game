@@ -9,6 +9,7 @@
 //! south wall is a small yard with the door back to the town in it: hop the
 //! wall and walk into the door to leave.
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 use crate::valley::{Gate, Kind, Place, Seam, Zone};
 
@@ -28,6 +29,12 @@ pub static ARENA: Arena = Arena {
         hunt: None,
     },
     sites: &[],
+    rim: Some(Rim::new(
+        (-1500, 1500),
+        (-2400, 1500),
+        [300, 150, 150, 150],
+        600,
+    )),
 };
 
 const REGIONS: [Region; 1] = [

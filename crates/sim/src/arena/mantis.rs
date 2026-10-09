@@ -16,6 +16,7 @@
 //! the way in from the west is open and the first decision -- break its
 //! prayer or wait -- is made in plain sight of it.
 
+use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Solid, Spawns};
 use crate::species::SpeciesId;
 
@@ -42,6 +43,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &[],
+    rim: Some(Rim::new(
+        (-1650, 1650),
+        (-1650, 1650),
+        [150, 150, 150, 150],
+        600,
+    )),
 };
 
 /// The columns, by their middles in centimetres: on the diagonals, ten

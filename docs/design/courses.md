@@ -51,9 +51,15 @@ but are **not design inputs**.
 
 ## 1 · The courses
 
-Islands of rock hang **sixty metres and more** over a floor drawn nearly black,
-with far floating peaks and, far below, spires of rock crowned with trees for
-the eye to measure the drop by. The path is read by material: **grass** is a
+Islands of turf on rock hang **sixty metres and more** over hills and woods
+hazed by the air between (a floor drawn nearly black until 2026-10-09), with
+far floating peaks and, far below, spires of rock crowned with trees for the
+eye to measure the drop by. Since 2026-10-09 every box is drawn as what it is
+([forms.md](forms.md), the fifth pass): a path island a **floating island**
+with a lip of soil and a few roots, a stepping stone a fallen **column's
+drum**, the nest a **scaffold** of planks on braced posts, the rock that
+stands on the floor a banded **spire**. The collision is the boxes, as it
+always was: every gap measured above is unchanged. The path is read by material: **grass** is a
 path island, **sand** a stepping stone, **snow** a checkpoint (with a cairn on
 it), **wood** the nest at the end, and grey **rock** is scenery, never the
 route. Fall below the pit (six metres under the lowest island) and you are

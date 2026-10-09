@@ -17,6 +17,7 @@
 //! (`game/src/arenas/broodmother.rs`). See
 //! `docs/design/creatures/broodmother.md` §11.
 
+use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Solid, Spawns};
 use crate::objective::Site;
 use crate::species::SpeciesId;
@@ -45,6 +46,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &SITES,
+    rim: Some(Rim::new(
+        (-1650, 1650),
+        (-1450, 1450),
+        [1400, 1400, 1400, 1400],
+        500,
+    )),
 };
 
 /// Where her web line goes: old anchors in the walls, about a fighter's

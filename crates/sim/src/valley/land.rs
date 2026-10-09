@@ -64,7 +64,22 @@ pub struct Pad {
     pub lo: (Fx, Fx),
     pub hi: (Fx, Fx),
     pub y: Fx,
+    /// **Its rim** (`arena::rim`), and where the place's origin is on the
+    /// map: the bank round a room, which the land holds up against the
+    /// valley round it -- a clearing has an edge -- except where a trodden
+    /// way comes through it. `None` for level ground running off into the
+    /// foothills, as round the town.
+    pub rim: Option<(crate::arena::rim::Rim, (Fx, Fx))>,
+    /// Where on the map its door is: the one place a trodden way may cut
+    /// its rim.
+    pub door: (Fx, Fx),
 }
+
+/// How far from its door a way may cut a rim.
+const DOORWAY: Fx = Fx::from_int(20);
+
+/// How steeply the land a rim holds up falls away on its far side.
+const FALL: Fx = Fx::from_int(3);
 
 /// One straight piece of a way, ready to measure against.
 #[derive(Clone, Copy, Debug)]
@@ -182,7 +197,7 @@ fn lattice(i: i64, j: i64, seed: u64) -> i32 {
 }
 
 /// Smooth value noise at a map point, cells `cell` metres across: [-1, 1].
-fn value(x: Fx, z: Fx, cell: i64, seed: u64) -> Fx {
+pub(crate) fn value(x: Fx, z: Fx, cell: i64, seed: u64) -> Fx {
     let size = cell * Fx::ONE.raw() as i64;
     let (xr, zr) = (x.raw() as i64, z.raw() as i64);
     let (i, j) = (xr.div_euclid(size), zr.div_euclid(size));
@@ -197,7 +212,7 @@ fn value(x: Fx, z: Fx, cell: i64, seed: u64) -> Fx {
 }
 
 /// Three octaves: hills, hummocks, lumps. About [-1, 1].
-fn noise(x: Fx, z: Fx) -> Fx {
+pub(crate) fn noise(x: Fx, z: Fx) -> Fx {
     let a = value(x, z, 48, 1);
     let b = value(x, z, 17, 2);
     let c = value(x, z, 6, 3);
@@ -339,6 +354,11 @@ impl Land {
         // floor on it, falling away off its edge as an embankment. What lets
         // a path climb above the valley it leaves, to a room on a rise.
         let mut fill = Fx::from_int(-10_000);
+        // The highest a rim holds the ground up to here, and the lowest a
+        // trodden way would have it: the rim stands except where a path
+        // comes through it.
+        let mut held = Fx::from_int(-10_000);
+        let mut trail = SKY_HIGH;
         for &k in self.near(x, z) {
             let k = k as usize;
             if k < self.segs.len() {
@@ -368,6 +388,9 @@ impl Land {
                     best_rise = r;
                     by_pad = None;
                 }
+                if s.path && s.water.is_none() && h.raw() < trail.raw() {
+                    trail = h;
+                }
                 if s.path && s.water.is_none() && d.raw() < path.raw() {
                     path = d;
                 }
@@ -388,7 +411,37 @@ impl Land {
                 let dx = p.lo.0.sub(x).max(x.sub(p.hi.0)).max(Fx::ZERO);
                 let dz = p.lo.1.sub(z).max(z.sub(p.hi.1)).max(Fx::ZERO);
                 let d = crate::math::wide_len(V3::new(dx, Fx::ZERO, dz));
-                let r = rise(d);
+                let r = match &p.rim {
+                    Some((rim, at)) => {
+                        let (lx, lz) = (x.sub(at.0), z.sub(at.1));
+                        let r = rim.height(lx, lz).unwrap_or(Fx::ZERO);
+                        // Held up for its bank and a little past its
+                        // crest, then falling away to whatever is round it.
+                        let band = rim.run().add(crate::arena::rim::HELD);
+                        let up = if d.raw() <= band.raw() {
+                            r
+                        } else {
+                            let foot = rim.foot_at(lx, lz);
+                            let crest = foot.add(rim.rise(band, lx, lz));
+                            crest.sub(d.sub(band).mul(FALL))
+                        };
+                        // Only its own path, at its own door, cuts it.
+                        let to_door = crate::math::wide_len(V3::new(
+                            x.sub(p.door.0),
+                            Fx::ZERO,
+                            z.sub(p.door.1),
+                        ));
+                        let up = p.y.add(up);
+                        let up = if to_door.raw() < DOORWAY.raw() {
+                            up.min(trail)
+                        } else {
+                            up
+                        };
+                        held = held.max(up);
+                        r
+                    }
+                    None => rise(d),
+                };
                 let h = p.y.add(r);
                 if h.raw() < best.raw() {
                     best = h;
@@ -402,9 +455,17 @@ impl Land {
             best = fill;
             best_rise = Fx::ZERO;
         }
+        // A rim stands over the valley round it, but its path cuts it.
+        let rimmed = held.raw() > best.raw();
+        if rimmed {
+            best = held;
+            best_rise = Fx::ZERO;
+        }
         // A hand's breadth on a floor, metres up a mountainside.
         let amp = Fx::ratio(3, 10).add(best_rise.min(Fx::from_int(60)).mul(Fx::ratio(3, 25)));
         let amp = match by_pad {
+            // A rim carries its own noise.
+            _ if rimmed => Fx::ZERO,
             Some(d) => amp.mul(d.div(Fx::from_int(6)).min(Fx::ONE)),
             None => amp,
         };

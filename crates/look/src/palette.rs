@@ -475,10 +475,100 @@ impl Palette {
         self.surface([0.58, 0.47, 0.36])
     }
 
-    /// A tree's trunk: the place's timber, darker.
+    /// A tree's trunk: the place's timber, darker and greyer -- bark is
+    /// weathered wood, and a red trunk reads as a painted post.
     pub fn bark(&self) -> [f32; 3] {
         let w = Lch::of(self.of(Material::Wood));
-        Lch { l: w.l * 0.7, ..w }.rgb()
+        Lch {
+            l: w.l * 0.62,
+            c: w.c * 0.55,
+            ..w
+        }
+        .rgb()
+    }
+
+    /// **A crag**: a pillar of bare rock standing on its own, a step lighter
+    /// than the rock of a cliff -- it stands out in the light on every side,
+    /// where a cliff's face is in its own shadow, and drawn as dark as a
+    /// cliff it read as a monolith.
+    pub fn crag(&self) -> [f32; 3] {
+        let r = Lch::of(self.of(Material::Rock));
+        Lch {
+            l: (r.l * 1.22).min(0.85),
+            ..r
+        }
+        .rgb()
+    }
+
+    /// **Mortar**, between dressed stones: the stone, a good step darker and
+    /// greyer -- a joint is a shadow with a little lime in it.
+    pub fn mortar(&self) -> [f32; 3] {
+        let s = Lch::of(self.of(Material::Stone));
+        Lch {
+            l: s.l * 0.62,
+            c: s.c * 0.5,
+            ..s
+        }
+        .rgb()
+    }
+
+    /// **Moss**, on the tops of old stone and the north of a trunk: the
+    /// place's grass, darker and a touch yellower.
+    pub fn moss(&self) -> [f32; 3] {
+        let g = Lch::of(self.of(Material::Grass));
+        Lch {
+            l: g.l * 0.78,
+            c: g.c * 1.05,
+            h: g.h + 0.02,
+        }
+        .rgb()
+    }
+
+    /// **Soil**, where turf is cut -- the lip of a floating island, a bank's
+    /// face: the trodden road's earth, a shade darker.
+    pub fn soil(&self) -> [f32; 3] {
+        let t = Lch::of(self.trodden());
+        Lch { l: t.l * 0.72, ..t }.rgb()
+    }
+
+    /// **A roof**: fired tile, warm, balanced into the palette like a prop.
+    /// Every house in a town wears the same family of reds, so a roof line
+    /// reads as a town from across a valley.
+    pub fn roof(&self) -> [f32; 3] {
+        self.surface([0.62, 0.30, 0.22])
+    }
+
+    /// **Plaster**, a house's walls between its timbers: warm off-white.
+    pub fn plaster(&self) -> [f32; 3] {
+        self.surface([0.86, 0.80, 0.68])
+    }
+
+    /// **A house's framing**: the place's timber, dark, so the frame reads
+    /// against the plaster.
+    pub fn framing(&self) -> [f32; 3] {
+        let w = Lch::of(self.of(Material::Wood));
+        Lch { l: w.l * 0.55, ..w }.rgb()
+    }
+
+    /// **Cloth**, a banner or an awning: the place's accent at full voice.
+    pub fn cloth(&self) -> [f32; 3] {
+        let a = Lch::of(self.sheen);
+        Lch {
+            l: (a.l * 0.8).min(0.7),
+            c: (a.c * 1.6).max(0.12),
+            ..a
+        }
+        .rgb()
+    }
+
+    /// **Flowers** in a meadow: small and few, the warm complement of the
+    /// grass, so a patch of them is a point of colour rather than a stain.
+    pub fn bloom(&self, k: u32) -> [f32; 3] {
+        match k % 3 {
+            0 => self.surface([0.92, 0.82, 0.35]),
+            1 => self.surface([0.88, 0.50, 0.62]),
+            _ => self.surface([0.95, 0.94, 0.90]),
+        }
     }
 }
 

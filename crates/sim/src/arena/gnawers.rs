@@ -19,6 +19,7 @@
 //! midpoint (§10), and the extra room is the open middle a retreating fighter
 //! has to cross.
 
+use super::rim::Rim;
 use super::{Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Solid, Spawns};
 use crate::species::SpeciesId;
 
@@ -46,6 +47,12 @@ pub static ARENA: Arena = Arena {
         }),
     },
     sites: &[],
+    rim: Some(Rim::new(
+        (-1900, 1900),
+        (-1600, 1600),
+        [150, 300, 150, 150],
+        700,
+    )),
 };
 
 const REGIONS: [Region; 3] = [
@@ -65,7 +72,7 @@ const REGIONS: [Region; 3] = [
     },
 ];
 
-const SOLIDS: [Solid; 13] = [
+const SOLIDS: [Solid; 9] = [
     // Low walls on three sides, just outside the floor.
     Solid::cm([-1900, 0, -1600], [-1800, 150, 1500], Stone),
     Solid::cm([1800, 0, -1600], [1900, 150, 1500], Stone),
@@ -79,14 +86,6 @@ const SOLIDS: [Solid; 13] = [
     // above and behind (the report's hidden commits), and the pack is fought
     // there when a rout is cornered. The hole itself is the dark at its back.
     Solid::cm([-150, 0, 1450], [150, 300, 1600], Rock),
-    // A hedge of old thorn behind the walls and the bank, six metres: the
-    // walls are low enough to hop, and the meadow does not end at them. A
-    // hunter jumping a maul with her back to the south wall went over it
-    // and fought the rest of the hunt from outside.
-    Solid::cm([-2100, 0, -1800], [-1900, 600, 1800], Grass),
-    Solid::cm([1900, 0, -1800], [2100, 600, 1800], Grass),
-    Solid::cm([-2100, 0, -1800], [2100, 600, -1600], Grass),
-    Solid::cm([-2100, 0, 1600], [2100, 600, 1800], Grass),
     // A fallen trunk, west of the middle: a platform they scramble.
     Solid::cm([-1150, 0, -550], [-350, 150, -450], Wood),
     // Two standing boulders, east: backs to stand against, too tall to climb.

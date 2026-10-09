@@ -80,7 +80,13 @@ woods, rocks, and the fights in clearings off the road.
   sixteen metres, and then the **mountainside**, turning to a slope of 1.4.
 - **A pad** is a place that keeps its own floor: the town, the Ring, every
   room. Inside it the floor is the place's own relief, exactly as tuned;
-  outside, the land rises off its edge the way it does off a way.
+  outside, the land rises off its edge the way it does off a way -- or, for
+  a room with a **rim** ([arenas.md](arenas.md) §1a, since the third pass),
+  as its rim's bank, straight off its walls: held up over the valley round
+  it for the bank and four metres past its crest, then falling away three in
+  one to whatever is round it; cut only by a trodden way within twenty
+  metres of the room's own door (`land::Pad::door`), so a clearing has an
+  edge and one way in (`tests/rim.rs`).
 - **The ground is the lowest any way or pad would make it, and the highest any
   trodden way or pad holds it up to.** The first carves valleys: two meet as
   a saddle, a side path is a notch in a hillside. The second is an
@@ -111,8 +117,9 @@ on ground metres up and is not a ceiling for being there.
   is the map's, so its road, seams and crags are written where they are, and
   walking from one reach to the next moves nothing.
 - **A room** sits in a clearing off the road, at the end of a side path from
-  a junction to the middle of its near side. Level ground runs six metres
-  round it and its doorway is cut through its wall where the path arrives
+  a junction to the middle of its near side. Its rim's bank rises straight
+  off its walls (a room without one has six metres of level ground round it)
+  and its doorway is cut through its wall where the path arrives
   (`Plan::carves`). The Cliffs sit sunk with their plateau at the road's
   height, reached over a bridge across the ravine round them; the Shrine is
   at the top of a switchback twenty metres up the Saddle's north-east slope.
