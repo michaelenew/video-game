@@ -701,6 +701,22 @@ scalars! {
     AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
     AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
     AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
+    // **The Dual mage, every move a spell**, 2026-10-09: her bolts' flight,
+    // the hex and its two reactions, the well, and the air moves. See
+    // `docs/design/exploration/0010_dual_mage_spells.md`.
+    ShadeBoltFlight,      "Dual mage", "Shade bolt, flies for", Frames, 1, 60;
+    BinaryFlight,         "Dual mage", "Binary, flies for", Frames, 1, 90;
+    AbyssLife,            "Dual mage", "Abyss, lasts", Frames, 1, 300;
+    SpellFlash,           "Dual mage", "Ray and flare, seen for", Frames, 1, 30;
+    HexLasts,             "Dual mage", "Hex, lasts", Frames, 1, 600;
+    ShatterDamage,        "Dual mage", "Shatter, damage", Int, 0, 200;
+    ShatterStagger,       "Dual mage", "Shatter, staggers for", Frames, 0, 60;
+    WitherDamage,         "Dual mage", "Wither, damage", Int, 0, 200;
+    WitherSlow,           "Dual mage", "Wither, slows to (x)", Fixed, 0, fx(1,1);
+    AbyssPull,            "Dual mage", "Abyss, drags at (m/s)", Fixed, 0, fx(20,1);
+    FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
+    ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
+    EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
 }
 
 // ---------------------------------------------------------------------------

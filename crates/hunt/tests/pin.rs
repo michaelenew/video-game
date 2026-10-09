@@ -31,7 +31,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // thrown into the windows the plan finds, and she goads her bars between
     // them. The Champion's and the Bulwark's hunts did not move -- the layer
     // hands their plans' input back unchanged here. See feel-log.md.
-    (Class::DualMage, 2_222, 0x524327a652326b5c),
+    // Moved 2026-10-09, deliberately: every move of hers is a spell now, and
+    // the class layer weighs the spell a click throws. See feel-log.md.
+    (Class::DualMage, 2_222, 0x31980bd7846a71da),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     (Class::ShadowReaver, 31, 0xb2ab9338138ce5f0),

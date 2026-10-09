@@ -131,7 +131,7 @@ The majors are the same on the floor and in the air.
 
 ### The majors
 
-- **Abyss** (`Q`, dark). A well where the crosshair meets the floor. For a second and a half
+- **Abyss** (`Q`, dark). A well where the crosshair meets the floor. For a second
   it drags everything in it toward its middle, ticks damage, drains a share back to her and
   hexes Umbra. The setup for everything light.
 - **Judgement** (`E`, light). As built: a delayed strike where the crosshair meets the floor,

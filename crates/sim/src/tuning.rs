@@ -3033,3 +3033,68 @@ pub fn air_ball_steer() -> Fx {
 pub fn air_ball_knock() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallKnock)).clamp(Fx::ZERO, Fx::ONE)
 }
+
+/// How long a Shade bolt (and Reel's) is in flight across its reach: the dark is the force you can see coming.
+pub fn shade_bolt_flight() -> u16 {
+    oven::scalar(Scalar::ShadeBoltFlight).max(1) as u16
+}
+
+/// How long Binary's two orbs are in flight across their reach.
+pub fn binary_flight() -> u16 {
+    oven::scalar(Scalar::BinaryFlight).max(1) as u16
+}
+
+/// How long the Abyss well (and Nightfall's) drags, drains and hexes.
+pub fn abyss_life() -> u16 {
+    oven::scalar(Scalar::AbyssLife).max(1) as u16
+}
+
+/// Presentation: how many frames a Sunray's line and a Flare's burst stay in the world after their one frame of hitting.
+pub fn spell_flash() -> u16 {
+    oven::scalar(Scalar::SpellFlash).max(1) as u16
+}
+
+/// How long a hex stays on a body before it fades on its own.
+pub fn hex_lasts() -> u16 {
+    oven::scalar(Scalar::HexLasts).max(1) as u16
+}
+
+/// What a Shatter -- light on an Umbra hex -- deals on top of the hit that set it off, before her power.
+pub fn shatter_damage() -> i32 {
+    oven::scalar(Scalar::ShatterDamage).max(0)
+}
+
+/// How long a Shatter staggers a fighter.
+pub fn shatter_stagger() -> u16 {
+    oven::scalar(Scalar::ShatterStagger).max(0) as u16
+}
+
+/// What a Wither -- dark on a Radiance hex -- deals on top of the hit, all of it drained back to her, before her power.
+pub fn wither_damage() -> i32 {
+    oven::scalar(Scalar::WitherDamage).max(0)
+}
+
+/// What a Wither leaves the victim's walking speed at, for the slow's usual length.
+pub fn wither_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WitherSlow)).max(Fx::ZERO)
+}
+
+/// How fast the Abyss drags a body toward its middle.
+pub fn abyss_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AbyssPull)).max(Fx::ZERO)
+}
+
+/// How hard a Flare that met something kicks her back the other way.
+pub fn flare_kick() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FlareKick)).max(Fx::ZERO)
+}
+
+/// How fast Reel pulls her to the body it caught.
+pub fn reel_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReelPull)).max(Fx::ZERO)
+}
+
+/// What Equinox adds to its own lift at a full lower bar, in proportion below it: the most level mage jumps highest.
+pub fn equinox_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EquinoxLift)).max(Fx::ZERO)
+}

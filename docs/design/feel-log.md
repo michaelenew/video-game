@@ -7890,3 +7890,47 @@ things to feel: whether anybody misses hopping a low wall to reset a fight,
 and whether a bank behind a wall changes where a ranged class likes to stand
 (a level aim along a wall now meets the bank behind it rather than the sky --
 the reason the proving ground's rim moved out).
+
+### 2026-10-09 — the Dual mage, every move a spell
+**Changed** Her whole kit, from the person's brief: left dark and right light, every move a
+spell, `Q` and `E` the dark and light majors, a middle click worth having, and the autos'
+pull and push gone. Designed combos first
+([exploration/0010](exploration/0010_dual_mage_spells.md)): a **hex** on what she hits —
+Umbra from dark, Radiance from light — that the other force sets off (**Shatter**: damage and a
+stagger; **Wither**: damage drained back to her and a slow), so alternating hands is the combo
+and the climb at once. Left is the hex (Shade bolt, Reel, Nightfall), right the strike (Sunray,
+Flare, Dawn), middle twilight (Binary, Phase, Equinox) — powered by her lower bar and goading
+both. `Q` Abyss, a well that drags, drains and hexes; `E` Judgement, which now shatters the
+Abyss's hexes. Every move now has its own force (`dual::steer`); the carried-force rule and the
+two-form Lance are gone. The two bars are unchanged. Every number on the eleven moves and the
+reactions is a first guess. See [kits/dual-mage.md](kits/dual-mage.md) §"Every move a spell".
+**Tried and changed while building**
+- *The Sunray stopped at the skin* of the body it met and missed it (the hit test measures to
+  the spine): it now reaches a body's width into what it met.
+- *The Flare never found the floor*: `aim::first_along` counts walls and bodies, not open
+  ground. `aim::floor_along` asks the floor; and the aerial hang was bleeding the kick away, so
+  a Flare that kicks ends the hang.
+- *Dawn* at launch 16 lifted a Bulwark under a metre from empty bars; now 26.
+- *The Abyss* reused the Sweep's clip at 16/2/22 frames and the baked motion jumped; now
+  14/8/18. *Binary* at 40% mobility left her faster than guarding (now 25%); *Phase*'s repeat
+  lockout 80% and *Equinox*'s recovery 12, for `feel.rs`'s lockout rule.
+- *The hunting bot climbed her to the wings in the air*: off the floor her clicks throw Reel
+  and Flare, which goad by a cast's push, and the class layer weighed them as autos. It weighs
+  what is thrown now. Its "turned a hand" count is no longer a sign of anything — the plans
+  already throw the low side's auto and every spell has its own force — so `hunt/tests/class.rs`
+  asks for goads and majors instead.
+- *Retuned against the class benchmarks* (`tests/dual_mage.rs`, b1 and b2): alternating on a
+  dummy dealt 3.4 health bars in half a round (target 1 to 2.25), so the Shade bolt 22 → 14, the
+  Sunray 24 → 16, Shatter 40 → 26, Wither 30 → 20, Reel 20 → 14. One-sided spam with the Abyss
+  cost her nothing, because the well's drain healed back the burn: Abyss tick 12 → 10, drain
+  40% → 15% (10% rounds to nothing on an 8-point tick), and it lasts 1 s rather than 1.5 s.
+- *Effect hits never counted as landed while she was ascended*, so the wings' refund and the
+  shorter stagger were dead for nearly the whole kit: every spell that lands now counts.
+- Her envelope fixtures re-recorded. Some lanes fell a long way (lane 0 from 10.7 m to 1.9 m,
+  lane 1 from 19.1 to 4.4) and some rose (lane 4 from 7.7 to 13.5, lane 7 from 6.5 to 13.6): the
+  old autos' eighteen-frame hangs were a movement tool, and Reel and Flare hang 12 and 10. A
+  search is a lower bound; **her reach in the air is the thing to watch in play.**
+- The Dual mage's pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned; the hex is
+  hashed only while one is on a body, so no other class's pin moved.
+**Verdict** — unplayed. Known from the start: her new moves play the six clips she had; clips
+of their own are the next step. Open: DUAL-1 to DUAL-4 in 0010.

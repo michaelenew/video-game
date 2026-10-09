@@ -354,7 +354,9 @@ fn best_case(m: &Move) -> i32 {
             // somebody stands in it. Her tether is the same sum with the
             // move's own hit set to a catch rather than a blow.
             | EffectKind::JudgementField
-            | EffectKind::Tether),
+            | EffectKind::Tether
+            // And the Abyss, a well that ticks for as long as it stands.
+            | EffectKind::Abyss),
         ) => {
             let ticks = kind.life() / t::effect_tick_frames().max(1);
             m.damage * swings + kind.damage(m) * ticks as i32
@@ -392,7 +394,13 @@ fn best_case(m: &Move) -> i32 {
             // The Blood mage's nova and nail are placed by the world from the
             // move, and are the move's own one hit.
             | EffectKind::Nova
-            | EffectKind::Nail,
+            | EffectKind::Nail
+            // The Dual mage's bolts, burst and ray are each the move's one
+            // hit; what a reaction adds is the hex's, not the move's.
+            | EffectKind::ShadeBolt
+            | EffectKind::Binary
+            | EffectKind::Flare
+            | EffectKind::Sunray,
         )
         | None => m.damage * swings,
     }
@@ -570,10 +578,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // Hook and Harvest. See
             // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
             Class::BloodMage => 11,
-            // Six on five inputs: both forms of Lance answer to middle click,
-            // and which one comes out is the force she is carrying. See
-            // `moves::dual`.
-            Class::DualMage => 6,
+            // Eleven: three clicks on the floor, in the air and leaving it,
+            // and the two majors -- every move a spell, 2026-10-09. See
+            // `docs/design/exploration/0010_dual_mage_spells.md`.
+            Class::DualMage => 11,
             _ => 3,
         };
         assert_eq!(

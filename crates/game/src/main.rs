@@ -272,6 +272,7 @@ fn main() {
                     place_champion_arms,
                     place_champion_trails,
                     place_pips,
+                    place_hexes,
                 ),
                 beast::place,
                 drive_camera,
@@ -1612,6 +1613,17 @@ struct PipMesh {
 
 /// [`PipMesh::body`] for the creature.
 const PIP_QUARRY: usize = MAX_PLAYERS;
+
+/// The Dual mage's hex on a body, drawn as an orb over its head in the
+/// force's colour (2026-10-09): Umbra dark, Radiance light. Two per body, one
+/// of each, and the one that matches the body's hex is shown -- so the person
+/// carrying it and the mage about to set it off both see which it is. `body`
+/// is a fighter's index, or [`PIP_QUARRY`] for the creature.
+#[derive(Component)]
+struct HexMesh {
+    body: usize,
+    hex: u8,
+}
 /// Enough pips for the largest cap the Oven allows.
 const MAX_PIPS: u8 = 12;
 
@@ -2066,6 +2078,21 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 PipMesh { body, index },
+            ));
+        }
+    }
+    // The Dual mage's hexes, one orb of each force over every body.
+    for body in 0..=PIP_QUARRY {
+        for (hex, material) in [
+            (sim::dual::UMBRA, look.dark.clone()),
+            (sim::dual::RADIANCE, look.light.clone()),
+        ] {
+            commands.spawn((
+                Mesh3d(pellet.clone()),
+                MeshMaterial3d(material),
+                Transform::default(),
+                Visibility::Hidden,
+                HexMesh { body, hex },
             ));
         }
     }
@@ -2935,6 +2962,39 @@ fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut V
     }
 }
 
+/// Put the hex orbs over whoever carries a hex, in its force's colour.
+fn place_hexes(sim: Res<Sim>, mut meshes: Query<(&HexMesh, &mut Transform, &mut Visibility)>) {
+    for (mesh, mut tf, mut vis) in meshes.iter_mut() {
+        let Some((at, size)) = hex_spot(&sim.cur, mesh.body, mesh.hex) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = at;
+        tf.scale = Vec3::splat(size);
+    }
+}
+
+/// Where the hex orb of kind `hex` over `body` goes and how big, or `None`
+/// if that body is not carrying that hex. It shrinks as the hex fades, so
+/// how long is left is readable at a glance.
+fn hex_spot(w: &World, body: usize, hex: u8) -> Option<(Vec3, f32)> {
+    let (carried, left, top) = if body == PIP_QUARRY {
+        let beast = w.monster()?;
+        let head = beast.world_of(species::look(beast.species).head, sim::V3::ZERO);
+        (beast.hex, beast.hex_left, fx3(head) + Vec3::Y * 2.1)
+    } else {
+        let p = &w.players[body];
+        let height = sim::tuning::body_height().to_f32_for_render();
+        (p.hex, p.hex_left, fx3(p.pos) + Vec3::Y * (height + 0.75))
+    };
+    if left == 0 || carried != hex {
+        return None;
+    }
+    let share = left as f32 / sim::tuning::hex_lasts().max(1) as f32;
+    Some((top, 0.18 + 0.22 * share.clamp(0.0, 1.0)))
+}
+
 /// Where pip `index` over `body` goes, or `None` if that body carries fewer
 /// marks than that.
 ///
@@ -3313,6 +3373,55 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             fx3(effect.bolt_at()),
             effect.field_radius().to_f32_for_render(),
         )),
+        // The Dual mage's spells (2026-10-09). The dark ones in flight are
+        // dark balls the size the hit test reads; Binary is two, one of each
+        // force, wound round the line it flies; the Abyss a dark disc on the
+        // floor at the radius that drags; a Flare a ball of light; a Sunray a
+        // row of light beads along the line it lit, for its few frames.
+        EffectKind::ShadeBolt if part == 0 => Some(floating_in(
+            Skin::Dark,
+            fx3(effect.bolt_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        EffectKind::Binary if part < 2 => {
+            let centre = fx3(effect.bolt_at());
+            let dir = fx3(effect.dir).normalize_or_zero();
+            let side = dir.cross(Vec3::Y).normalize_or(Vec3::X);
+            let up = side.cross(dir);
+            let r = effect.field_radius().to_f32_for_render();
+            let turn = effect.age as f32 * 0.7 + part as f32 * std::f32::consts::PI;
+            let at = centre + (side * turn.cos() + up * turn.sin()) * r * 0.8;
+            let skin = if part == 0 { Skin::Dark } else { Skin::Light };
+            Some(floating_in(skin, at, r * 0.6))
+        }
+        EffectKind::Abyss if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Dark,
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            0.16,
+        )),
+        EffectKind::Flare if part == 0 => {
+            // Big on its first frame and shrinking after: the burst, then
+            // the picture of it.
+            let life = effect.life.max(1) as f32;
+            let left = 1.0 - (effect.age as f32 / life).clamp(0.0, 1.0);
+            Some(floating_in(
+                Skin::Light,
+                at,
+                effect.field_radius().to_f32_for_render() * (0.4 + 0.6 * left),
+            ))
+        }
+        EffectKind::Sunray if part < sim::effects::TETHER_BEADS => {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let end = fx3(effect.pos.add(effect.dir.scale(effect.reach)));
+            Some(floating_in(
+                Skin::Light,
+                at.lerp(end, t),
+                effect.field_radius().to_f32_for_render().max(0.12),
+            ))
+        }
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
