@@ -7768,6 +7768,15 @@ spray kept `F`. Every number on the four new moves is a first guess. See
 - The Air ball's speed follows the size it is *now*, so it slows as it shrinks; with the
   shipped numbers a tapped ball rolls about 5 m and a full one about 37.
 - The Ridgeback pin (`tests/ridgeback_pin.rs`) re-pinned for the Elementalist: the same random
-  presses throw different moves. Her envelope fixtures re-recorded for the same reason.
+  presses throw different moves. Her envelope fixtures re-recorded for the same reason
+  (`envelope -- search --fixtures --class Elementalist`, a new flag). **What the search found
+  moved a lot**: with the *shared* blocks alone (the jump, the airdodge, the air clicks, the
+  strafe) her best gap across the lab's lanes roughly doubled or tripled -- lane 6 from 10.5 m
+  to 41.8 m, lanes 9 and 10 from no landing to 30.2 and 20.6 m -- because the earth jump (onto
+  its stone, and off it) and the Updraft are now clicks with space. With the whole kit some
+  lanes rose (lane 13 from 41.0 to 55.1 m) and some fell (lane 3 from 45.7 to 28.3 m, lane 8
+  from 50.4 to 31.3 m); a search is a lower bound, and the falls may be routes this run did
+  not find again rather than reach that is gone. **Her reach on foot is the thing to watch in
+  play** (the courses rule: reach paid in execution).
 **Verdict** — unplayed. Known from the start: the carpet is hard to use at speed, and from her
 own seat it is edge-on and reads as one ball of fire.
