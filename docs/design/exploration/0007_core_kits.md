@@ -85,6 +85,11 @@ refuel below names what pays for it.
 
 ## 3 · Elementalist
 
+> **Superseded by [0008](0008_elementalist_on_three_clicks.md).** The person moved her
+> stones, fire pillar and a new wind move (the Air ball) onto the three clicks, and the Bolt
+> and Cataclysm onto `Q` and `E`. What follows is the first pass, kept for the options it
+> lists.
+
 **Where she stands today.** On foot, left click is the Bolt (a beam), right click is
 Cataclysm, and middle is Cinder spray. Since 2026-10-02 the Bolt and Cataclysm **pass
 through people**, on purpose: they set off what she built (stones, fire) rather than
