@@ -2376,6 +2376,14 @@ impl World {
                 if p.class == Class::Champion && kind == moves::champion::POLE_DRIVE {
                     pole_drive_boost(&mut self.players[i], input);
                 }
+                // The Updraft from the floor is a takeoff, and it is worth
+                // more than a jump: higher, and a push along her run.
+                if p.class == Class::Elementalist
+                    && kind == moves::elementalist::UPDRAFT
+                    && p.grounded
+                {
+                    updraft_off_the_floor(&mut self.players[i], input);
+                }
             }
             // `E` on the Reaver: the second body goes out, or comes home
             // through whatever is in the way. On the first active frame like
@@ -4634,6 +4642,12 @@ fn step_player(
     refresh_the_rise(p);
     bank_the_leap(p, pressed_space);
     chain_cancel(p, input);
+    cancel_the_carpet(
+        p,
+        input,
+        &out,
+        [pressed_mechanic, pressed_f, pressed_r, pressed_side_b],
+    );
 
     queue_the_shadow(p, input);
 
@@ -6159,6 +6173,61 @@ fn chain_cancel(p: &mut Player, input: Input) {
     p.action = Action::Free;
 }
 
+/// Cut the **Fire carpet's** recovery short into whatever she throws next.
+///
+/// The carpet is laid to be used: an Updraft into it is a Thermal, a Gale
+/// down it comes out lit. Waiting the whole recovery out left her falling by
+/// the time the follow-up came, and the carpet's hang had already taken most
+/// of her rise, so the combo it exists for was a thing nobody could reach
+/// (2026-10-10, from play).
+///
+/// **A window, not a licence.** It opens a few frames into the recovery
+/// (`tuning::carpet_cancel_from`) and stays open for a few more
+/// (`tuning::carpet_cancel_for`); a move asked for in it comes out now, and
+/// one asked for after it waits for the rest, as before. Recovery only, for
+/// the reason the Reaver's cancel is: the carpet is already out. Only into a
+/// move that would actually come out -- a second carpet is still locked out
+/// -- so the cancel cannot be spent on nothing.
+///
+/// `pressed` is the press edges of `E`, `F`, `R` and the second side button,
+/// which are read on the press; the clicks and `Q` are read held, as the
+/// input below reads them.
+fn cancel_the_carpet(
+    p: &mut Player,
+    input: Input,
+    out: &[bool; moves::MAX_SLOTS],
+    pressed: [bool; 4],
+) {
+    if p.class != Class::Elementalist {
+        return;
+    }
+    let Action::Recovery { kind, left } = p.action else {
+        return;
+    };
+    if kind != moves::elementalist::FIRE_CARPET {
+        return;
+    }
+    let into = moves::get(p.class, kind).recovery.saturating_sub(left);
+    let from = t::carpet_cancel_from();
+    if into < from || into >= from.saturating_add(t::carpet_cancel_for()) {
+        return;
+    }
+    let [mechanic, f, r, side_b] = pressed;
+    let asked = [
+        clicked_move(p, input),
+        input.has(Input::SPECIAL).then(|| keyed_q(p)).flatten(),
+        mechanic.then(|| keyed_move(p)).flatten(),
+        f.then(|| keyed_f(p)).flatten(),
+        r.then(|| keyed_r(p)).flatten(),
+        side_b.then(|| keyed_side_b(p)).flatten(),
+    ];
+    if asked.into_iter().flatten().any(|k| p.can_throw(k, out)) {
+        // Free rather than straight into the move, as `chain_cancel` does:
+        // the ordinary input path below already knows how to throw it.
+        p.action = Action::Free;
+    }
+}
+
 /// Record that a chain link landed, so its recovery may be cut short.
 ///
 /// Called from the one place a hit is resolved, and a no-op for everything that
@@ -6285,6 +6354,27 @@ fn pole_drive_boost(p: &mut Player, input: Input) {
     let boost = t::pole_drive_boost();
     p.vel.x = p.vel.x.add(dir.x.mul(boost));
     p.vel.z = p.vel.z.add(dir.z.mul(boost));
+    clamp_air_speed(p);
+}
+
+/// **The Updraft thrown from the floor**: higher than a jump, and a push the
+/// way she is steering.
+///
+/// A takeoff spends the trip's: from the floor she gives up the Updraft she
+/// could have had in the air, and the jump attack along with it, which costs
+/// her far more than pressing space does. So it buys more than space -- see
+/// `tuning::updraft_floor_lift`. The push is along the walk she is holding
+/// and nothing without one, so straight up stays straight up.
+fn updraft_off_the_floor(p: &mut Player, input: Input) {
+    p.vel.y = p.vel.y.max(t::updraft_floor_lift());
+    let (ax, az) = input.move_axis();
+    if ax == 0 && az == 0 {
+        return;
+    }
+    let dir = move_dir(input.aim_turns(), ax, az);
+    let push = t::updraft_floor_push();
+    p.vel.x = p.vel.x.add(dir.x.mul(push));
+    p.vel.z = p.vel.z.add(dir.z.mul(push));
     clamp_air_speed(p);
 }
 

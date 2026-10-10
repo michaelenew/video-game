@@ -450,7 +450,118 @@ fn an_updraft_with_no_fire_is_only_an_updraft() {
         step(&mut w, SPACE);
         top = top.max(w.players[0].vel.y);
     }
-    assert!(top.raw() <= t::updraft_lift().raw());
+    // From the floor it throws her at its own lift; the column adds nothing
+    // over that without fire in it.
+    assert!(top.raw() <= t::updraft_lift().max(t::updraft_floor_lift()).raw());
+}
+
+/// The highest she gets on a trip off the floor, holding `hold` throughout,
+/// and how far she went along +X by the time she is down again.
+fn trip_off_the_floor(first: u16, hold: u16) -> (f32, f32) {
+    let mut w = elementalist();
+    // Walking already, so the jump and the Updraft carry the same run.
+    run(&mut w, 30, Input::W);
+    let from = w.players[0].pos.x;
+    step(&mut w, first);
+    let (mut top, mut left) = (0.0f32, false);
+    for _ in 0..200 {
+        step(&mut w, hold);
+        top = top.max(as_f(w.players[0].pos.y));
+        left |= !w.players[0].grounded;
+        if left && w.players[0].grounded {
+            break;
+        }
+    }
+    (top, as_f(w.players[0].pos.x.sub(from)))
+}
+
+#[test]
+fn the_updraft_from_the_floor_beats_a_jump_up_and_along() {
+    // A held jump is the best space alone does. The Updraft from the floor
+    // spends the trip's takeoff -- no jump attack after it -- so it has to
+    // buy more: higher, and a push the way she is walking.
+    let (jump_top, jump_along) = trip_off_the_floor(SPACE | Input::W, SPACE | Input::W);
+    let (draft_top, draft_along) = trip_off_the_floor(SPACE | keys::WIND | Input::W, Input::W);
+    assert!(
+        draft_top > jump_top + 0.75,
+        "higher than a held jump: {draft_top} against {jump_top}"
+    );
+    assert!(
+        draft_along > jump_along,
+        "and further along her run: {draft_along} against {jump_along}"
+    );
+}
+
+#[test]
+fn the_updraft_from_the_floor_goes_straight_up_when_she_is_not_steering() {
+    let mut w = elementalist();
+    let from = w.players[0].pos;
+    step(&mut w, SPACE | keys::WIND);
+    run(&mut w, 30, 0);
+    assert!(!w.players[0].grounded, "she went up");
+    assert_eq!(w.players[0].pos.x, from.x, "and nowhere else");
+    assert_eq!(w.players[0].pos.z, from.z);
+}
+
+/// An Elementalist mid-jump who has just laid a carpet, and the frame its
+/// recovery began on.
+fn carpet_laid() -> World {
+    let mut w = elementalist();
+    run(&mut w, 12, SPACE);
+    step(&mut w, SPACE | keys::FIRE);
+    for _ in 0..30 {
+        if matches!(w.players[0].action, Action::Recovery { .. }) {
+            return w;
+        }
+        step(&mut w, SPACE);
+    }
+    panic!("the carpet never reached its recovery");
+}
+
+#[test]
+fn the_carpets_recovery_is_cut_short_by_a_move_asked_for_in_its_window() {
+    let mut w = carpet_laid();
+    let Action::Recovery { left, .. } = w.players[0].action else {
+        unreachable!()
+    };
+    assert!(
+        left > t::carpet_cancel_from() + t::carpet_cancel_for(),
+        "the window closes before the recovery would have"
+    );
+    // Wait to the window, then ask for the Updraft.
+    run(&mut w, t::carpet_cancel_from() as u32, SPACE);
+    step(&mut w, SPACE | keys::WIND);
+    assert_eq!(doing(&w), Some(e::UPDRAFT), "the Updraft came out now");
+    assert!(
+        !of_kind(&w, EffectKind::FireCarpet).is_empty(),
+        "and the carpet is still there for it"
+    );
+}
+
+#[test]
+fn a_move_asked_for_after_the_carpets_window_waits_for_the_recovery() {
+    let mut w = carpet_laid();
+    run(
+        &mut w,
+        (t::carpet_cancel_from() + t::carpet_cancel_for()) as u32,
+        SPACE,
+    );
+    step(&mut w, SPACE | keys::WIND);
+    assert_eq!(
+        doing(&w),
+        Some(e::FIRE_CARPET),
+        "late: the recovery is paid in full"
+    );
+}
+
+#[test]
+fn the_carpets_window_is_not_spent_on_a_second_carpet() {
+    // The fire click again in the window asks for a carpet that is locked
+    // out, so nothing comes out and the recovery stands.
+    let mut w = carpet_laid();
+    step(&mut w, SPACE | keys::FIRE);
+    assert_eq!(doing(&w), Some(e::FIRE_CARPET));
+    assert!(matches!(w.players[0].action, Action::Recovery { .. }));
 }
 
 #[test]

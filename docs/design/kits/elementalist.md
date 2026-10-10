@@ -48,7 +48,11 @@ in it — or in the first few frames of the jump, which put her back on the floo
 takeoff. The window and the trip live on the fighter (`Player::rise`), not in her mechanic.
 Earth and fire take off from the floor only. **The Updraft also goes from the air, once per
 trip, with space held and right click**: it only ever pushes up, so it keeps her run, and it is
-what stretches a jump. Its startup no longer slows her (mobility 100).
+what stretches a jump. Its startup no longer slows her (mobility 100). **From the floor it is
+worth more than a jump** (2026-10-10): `Updraft from the floor, lift` instead of the move's own,
+and `Updraft from the floor, push along her run` the way she is walking — because spending the
+takeoff on it gives up the jump attack her trip would otherwise have
+(`the_updraft_from_the_floor_beats_a_jump_up_and_along`).
 
 **Air ball** (`EffectKind::AirBall`). The press raises a ball where the crosshair meets the
 floor; holding grows it, visibly, from the tap's size to the full one over the hold; the
@@ -117,7 +121,11 @@ its half-width the move's radius. It hangs for `Fire carpet, hangs for` and burn
 touches it, on the tick. **It is fire**: a shot flown down it comes out lit
 (`a_gale_thrown_straight_down_the_carpet_comes_out_lit`), and a Downdraft landed in it is a
 ring of fire. It is drawn as a stream of flames carried from the near end to the far one, so
-the fire is seen being pushed outward. One at a time. *Known from the start to be awkward at
+the fire is seen being pushed outward. One at a time. **Its recovery cancels** (2026-10-10):
+a move asked for from `Fire carpet, cancel opens into recovery` frames into it, for `Fire carpet,
+cancel open for` frames, comes out at once, so the Updraft into it is thrown while she is still
+up (`the_carpets_recovery_is_cut_short_by_a_move_asked_for_in_its_window`); later than that, the
+recovery is paid in full. *Known from the start to be awkward at
 speed — she can outrun a carpet she has just laid — and built anyway so it can be played and
 something better found.*
 
@@ -804,7 +812,7 @@ their cover — the skill is placing them where they serve you more than the opp
   `elemental`. Whether a full Strike at 565 off a pillar's own 175 is *earned* at the nine
   metres of gap it costs, or whether the crawl makes the hold read as a trap she set for herself.
   Whether the crack's two-to-ten metres is the right span for a hold of a second. Whether the
-  Updraft's two and a half metres is a jump she wanted or a jump she is stuck at the top of.
+  Updraft's two and a half metres is a jump she wanted or a jump she is stuck at the top of. (From the floor it is 6.3 m since 2026-10-10; see the feel log.)
   Whether the fire ring at sixty is a punishment for chasing her into her own fire or free
   damage on a landing. And whether the break-through's scar, one stone's width, is enough to
   matter to a pursuer. The plan's stop condition still stands: if a full Strike does not feel

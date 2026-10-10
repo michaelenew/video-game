@@ -741,6 +741,13 @@ scalars! {
     StepLift,             "Bulwark", "Shield step, lift empty (m/s)", Fixed, 0, fx(30,1);
     StepLiftFull,         "Bulwark", "Shield step, lift added when full (m/s)", Fixed, 0, fx(30,1);
     StepForward,          "Bulwark", "Shield step, forward (m/s)", Fixed, 0, fx(20,1);
+    // **The Elementalist after the third playtest**, 2026-10-10: the Updraft
+    // from the floor worth more than a jump, and the Fire carpet's recovery
+    // cut short into her next move. See `docs/design/feel-log.md`.
+    UpdraftFloorLift,     "Elementalist", "Updraft from the floor, lift (m/s)", Fixed, 0, fx(40,1);
+    UpdraftFloorPush,     "Elementalist", "Updraft from the floor, push along her run (m/s)", Fixed, 0, fx(12,1);
+    CarpetCancelFrom,     "Elementalist", "Fire carpet, cancel opens into recovery", Frames, 0, 30;
+    CarpetCancelFor,      "Elementalist", "Fire carpet, cancel open for", Frames, 0, 30;
 }
 
 // ---------------------------------------------------------------------------
