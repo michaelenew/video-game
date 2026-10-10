@@ -40,7 +40,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
     // floor are new moves (0011), and Executioner is on middle click.
-    (Class::ShadowReaver, 31, 0xbe8ae4697c177b24),
+    (Class::ShadowReaver, 31, 0xab9b6aa881e2c239),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.

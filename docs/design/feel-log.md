@@ -8055,3 +8055,42 @@ pool at the road's height and the cliff at 22 m instead.
 easy for everyone but the Bulwark, is 9 m/s of push readable, and is the
 Bulwark's run of 2.0 m rises at 3 m tight enough to feel like a test and not
 a wall.
+
+### 2026-10-10 — the Shadow Reaver, second pass: dashing blades
+**Changed** From the owner, after playing the first three-clicks build: "the shadow reaver
+feels awkward right now. I want this class to capture a feeling more like MapleStory's Dual
+Blade where you're dashing around with spinning blades, sending the shadow out for high
+impact, and then closing gaps with strong finishers." Built as
+[0013](exploration/0013_shadow_reaver_dual_blades.md): left is finishers (Reave, Plunge,
+Gallows), middle neutral blades (Blade ring, Blade spin, Tumble), right the shadow (send,
+Whirl, Shadow arc); `E` Executioner; Deadly mistake, Slash, the Kite cut, the Guillotine drop,
+the Swap, the Moonsault and Hang the shadow retired. And two mid-build asks: the send pressed
+again **moves** the shadow rather than recalling it, and goes **only where she could walk**
+(`aim::walk_toward`, replacing the 2026-10-04 forgiveness and its knob).
+Numbers, all first guesses: Reave 6/3/14, 70, a 2.5 m step, the sweet spot ×1.5 within 0.6 m
+of the disc's middle; Plunge 4/4/18, 130, dive 26 m/s and 4 m/s forward, ring 3.5 m for 20;
+Gallows 6/4/32, 170, −19 on block; Blade ring 5/4/14, 55, radius 2.2 m; Blade spin 2/4/9, 30,
+radius 3 m, both ±0.5 m thick; Tumble 3/4/12, three blades of 28 fanned 0.04 turns, lift
+13 m/s; Whirl reach 4 m, 18 a cut every 12 frames for 70; Shadow arc 5 m ahead and 3.5 m up,
+55, hangs 60 frames; dash jump +4 m/s and a 24-frame flip.
+**Found in the build**
+- The Reave's step at a dash's speed kept its follow-through like every other step: it slid
+  her past the sweet spot and, off a platform's edge, launched her at ~20 m/s. It now stops
+  where it strikes.
+- The Shadow arc thrown on a straight-line ease went up so fast its slash missed every
+  standing body; it now goes out first and up after (vertical on the square of progress).
+- Three `feel.rs` properties caught first-guess numbers: the Plunge's knockback 8 → 12 (a heavy
+  hit has to move somebody 1.5 m), Gallows' hitstun 32 → 36 and the Blade ring's 16 → 18 (a
+  landed hit may not leave her behind).
+- Seen in a capture: the Whirl's shadow stood with its *feet* on the crosshair's point, so a
+  level look hung it four metres up, over everybody. The point is its middle now, as for every
+  skillshot. And the two spins cut with nothing on screen to say so: six blades are now drawn
+  on the edge of the disc, off the hitbox.
+- Inside 2 m the Reave runs through a knee-high gnawer, like the Dual mage's dark auto; the
+  gnawer test asks hers at 3 m, and the close answer is the Blade ring. The arc rising past a
+  gnat at 5 m is on the critter test's known list, like the lotus.
+**Movement** Her envelope fixtures re-recorded. The send no longer crosses anything, but the
+lab search still finds gaps of 50–75 m in most lanes (lane 0 m shared 55.5 m, lane +8 m whole kit 76.2 m)
+through the Whirl, the forward dodge that follows a flying shadow, and the dash jump. That is
+REAVER-5 in 0013 and the owner's call. Her Ridgeback pin re-pinned.
+**Verdict** — unplayed.

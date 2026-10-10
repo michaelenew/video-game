@@ -200,7 +200,7 @@ fn main() {
             // place something and take the other path out.
             let repeat = if moves::reactivates(class, slot as u8) {
                 format!(
-                    "press again to bring it back; then {}f before another",
+                    "press again to move it; then {}f before another",
                     m.repeat_lock()
                 )
             } else if moves::lingers(class, slot as u8) {
@@ -249,7 +249,8 @@ fn main() {
                 // all, and an effect that does every bit of the work -- and was
                 // printed as "movement, no hitbox", which is a table being
                 // confidently wrong about an ability that tethers people.
-                let leaves = sim::effects::EffectKind::from_code(m.effect).is_some();
+                let leaves = sim::effects::EffectKind::from_code(m.effect).is_some()
+                    || moves::puts_out(class, slot as u8).is_some();
                 let base = if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
                     format!("throws something; the thing it threw hits{ignored}{wound}")
                 } else if leaves || m.shape.strikes() {

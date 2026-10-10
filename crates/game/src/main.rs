@@ -277,6 +277,7 @@ fn main() {
                     place_champion_trails,
                     place_pips,
                     place_hexes,
+                    place_spins,
                 ),
                 beast::place,
                 drive_camera,
@@ -1561,6 +1562,20 @@ const WING_SLICES: usize = 12;
 #[derive(Component)]
 struct MarkMesh(usize);
 
+/// One of the blades drawn on the edge of a Reaver's spun disc -- the Blade
+/// ring and the Blade spin (2026-10-10) -- hers, or her shadow's copy of it.
+/// Placed off `sim::state::hitbox`, the disc the hit test uses, so the blades
+/// are drawn where they cut.
+#[derive(Component)]
+struct SpinMesh {
+    owner: usize,
+    copy: bool,
+    index: usize,
+}
+
+/// How many blades a spun disc is drawn as. Presentation, not a rule.
+const SPIN_BLADES: usize = 6;
+
 /// The Blood mage's scythe.
 ///
 /// One per fighter, because the class is picked at runtime and can change
@@ -2136,6 +2151,21 @@ fn setup(
             Visibility::Hidden,
             MarkMesh(owner),
         ));
+    }
+    // The Reaver's spun blades: a ring of them on the edge of the Blade ring's
+    // and the Blade spin's disc, hers and her shadow's copy.
+    for owner in 0..MAX_PLAYERS {
+        for copy in [false, true] {
+            for index in 0..SPIN_BLADES {
+                commands.spawn((
+                    Mesh3d(unit.clone()),
+                    MeshMaterial3d(look.shade.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    SpinMesh { owner, copy, index },
+                ));
+            }
+        }
     }
     // The Blood mage's scythe: a bar from her grip to the head of the blade.
     // Shade-skinned rather than blood: it is iron, and the blood is what it
@@ -2993,6 +3023,37 @@ fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut V
     }
 }
 
+/// Put the spun blades on the edge of every disc out this frame.
+fn place_spins(sim: Res<Sim>, mut meshes: Query<(&SpinMesh, &mut Transform, &mut Visibility)>) {
+    for (mesh, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(at) = spin_spot(&sim.cur, mesh.owner, mesh.copy, mesh.index) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = at;
+        tf.scale = Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE);
+    }
+}
+
+/// Where spun blade `index` of `owner`'s disc is, or `None` if no thin disc
+/// is out -- hers, or with `copy` her shadow's echo of it. On the disc's own
+/// edge and its own height, turning on the simulation's frame.
+fn spin_spot(w: &World, owner: usize, copy: bool, index: usize) -> Option<Vec3> {
+    let p = if copy {
+        sim::shadow::echo_body(&w.players[owner])?
+    } else {
+        w.players[owner]
+    };
+    let hb = sim::state::hitbox(&p)?;
+    if hb.band.raw() <= 0 {
+        return None;
+    }
+    let r = hb.radius.to_f32_for_render() * 0.85;
+    let turn = w.frame as f32 * 0.9 + index as f32 * std::f32::consts::TAU / SPIN_BLADES as f32;
+    Some(fx3(hb.from) + Vec3::new(turn.cos(), 0.0, turn.sin()) * r)
+}
+
 /// Put the hex orbs over whoever carries a hex, in its force's colour.
 fn place_hexes(sim: Res<Sim>, mut meshes: Query<(&HexMesh, &mut Transform, &mut Visibility)>) {
     for (mesh, mut tf, mut vis) in meshes.iter_mut() {
@@ -3486,6 +3547,43 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             0.0,
             0.14,
         )),
+        // The Reaver's second pass (2026-10-10). The Whirl and the arc's cut
+        // are blades spun round the shadow's middle, live -- flat discs, the
+        // lotus's shuriken -- on a ring inside the ball they cut with; the
+        // Tumble's fan is its three blades where they are; the Plunge's ring
+        // is pieces of shadow on its live radius, the fire ring's shape.
+        EffectKind::ShadowWhirl | EffectKind::ShadowSlash if part < SPUN_BLADES => {
+            let fast = if effect.kind == EffectKind::ShadowWhirl {
+                0.55
+            } else {
+                0.9
+            };
+            let r = effect.field_radius().to_f32_for_render() * 0.75;
+            let turn =
+                effect.age as f32 * fast + part as f32 * std::f32::consts::TAU / SPUN_BLADES as f32;
+            let mid = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Shade,
+                at: mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
+                scale: Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE),
+            })
+        }
+        EffectKind::ShadowFan if part < sim::effects::FAN_BLADES => {
+            let r = effect.field_radius().to_f32_for_render();
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Shade,
+                at: fx3(effect.fan_blade_at(part)),
+                scale: Vec3::new(r * 2.0, r * 0.4, r * 2.0),
+            })
+        }
+        EffectKind::ShadowRing if part < sim::effects::RING_PIECES => Some(floating_in(
+            Skin::Shade,
+            fx3(effect.ring_piece(part))
+                + Vec3::Y * sim::tuning::shadow_ring_width().to_f32_for_render(),
+            sim::tuning::shadow_ring_width().to_f32_for_render(),
+        )),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             shape: Shape::Column,
             skin: Skin::Shade,
@@ -3499,6 +3597,14 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         _ => None,
     }
 }
+
+/// How many blades the Whirl and the arc's cut are drawn as, spinning round
+/// the shadow. Presentation, not a rule: the hit test is the ball they spin
+/// inside.
+const SPUN_BLADES: usize = 6;
+
+/// How wide one of those blades is drawn. Presentation, like the count.
+const SPUN_BLADE: f32 = 0.45;
 
 /// How far the Quake's patch shivers from side to side while it shakes.
 /// Presentation, not a rule: the hit test does not move.
@@ -4304,8 +4410,9 @@ fn apply_poses(
 
     for (fighter, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
-        tf.translation = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
-        tf.rotation = body_turn(p.facing);
+        let (origin, turn) = body_frame(&p);
+        tf.translation = origin;
+        tf.rotation = turn;
     }
 
     // One solve per fighter rather than one per bone: forward kinematics is a
@@ -4339,25 +4446,24 @@ fn apply_poses(
     // so whatever is holding something can be placed against it.
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
-        let turn = body_turn(p.facing);
+        let (origin, turn) = body_frame(&p);
         // The body's **left** hand, which in a drawn pose is not the slot of
         // that name -- see `view::hand_joint`.
         let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
         hands.0[owner] = (
-            Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
+            origin + turn * Vec3::new(at[0], at[1], at[2]),
             turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
         );
         // And both hands, for whatever is held in two.
         for (side, left) in [(0, true), (1, false)] {
             let (at, _) = skins[owner].box_of(&skeletons[owner], view::hand_joint(left));
-            both.0[owner][side] =
-                Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]);
+            both.0[owner][side] = origin + turn * Vec3::new(at[0], at[1], at[2]);
         }
         // And the chest and hips, for whatever is carried on the body.
         for (slot, joint) in [(0, view::Joint::Chest), (1, view::Joint::Root)] {
             let (at, rot) = skins[owner].box_of(&skeletons[owner], joint);
             torsos.0[owner][slot] = (
-                Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
+                origin + turn * Vec3::new(at[0], at[1], at[2]),
                 turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
             );
         }
@@ -4688,6 +4794,26 @@ fn drive_camera(
 /// simulation, which swings one-armed moves from the same side the renderer
 /// draws the arm on. This is the two-line conversion into Bevy's quaternion,
 /// and it is the only place the renderer is allowed to build that rotation.
+/// Where a fighter's body is drawn from, and how it is turned: the facing,
+/// and over it the whole-body roll of a flip or a spin (`view::PlayerView::
+/// roll`), turned about the hips rather than the feet so a flip goes over
+/// rather than cartwheeling off its own toes. Everything carried on the body
+/// is placed through this, so a blade in hand flips with the hand.
+fn body_frame(p: &view::PlayerView) -> (Vec3, Quat) {
+    let feet = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
+    let turn = body_turn(p.facing);
+    if p.roll == [0.0, 0.0] {
+        return (feet, turn);
+    }
+    let rot = turn * Quat::from_rotation_y(p.roll[1]) * Quat::from_rotation_x(p.roll[0]);
+    let hips = Vec3::Y * ROLL_PIVOT;
+    (feet + turn * hips - rot * hips, rot)
+}
+
+/// How high above the feet a flip turns the body over: about the hips.
+/// Presentation, not a rule.
+const ROLL_PIVOT: f32 = 0.95;
+
 fn body_turn(facing: [f32; 3]) -> Quat {
     let q = view::body_turn([facing[0], facing[2]]).0;
     Quat::from_xyzw(q[0], q[1], q[2], q[3])

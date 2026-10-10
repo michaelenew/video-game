@@ -102,6 +102,64 @@ pub struct PlayerView {
     /// snapshot, so a rollback redraws the same shake. Presentation only: it
     /// moves the drawn hips, never the body, the camera or the aim.
     pub shudder: f32,
+    /// The whole body turned over, in radians: `[0]` is a **forward flip**,
+    /// about the body's own side, and `[1]` a **spin** about the vertical, on
+    /// top of the facing. Zero for everybody but the Reaver (2026-10-10): her
+    /// dash jump's flip, the Tumble's, and the two blade spins. Off the
+    /// simulation's clocks -- see [`roll_of`] -- so a rollback redraws it.
+    /// Presentation only: the body, the camera and the aim never turn over.
+    pub roll: [f32; 2],
+}
+
+/// How far the body is turned over this snapshot. See [`PlayerView::roll`].
+///
+/// Each is a whole number of turns over the stretch of frames it belongs to,
+/// eased in and out, so it starts and ends upright.
+pub fn roll_of(p: &sim::state::Player) -> [f32; 2] {
+    use sim::moves::reaver as r;
+    use std::f32::consts::TAU;
+    if p.class != sim::Class::ShadowReaver {
+        return [0.0, 0.0];
+    }
+    let ease = |t: f32| {
+        let t = t.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    };
+    let mut roll = [0.0, 0.0];
+    if let Some(through) = sim::shadow::flip_through(p) {
+        roll[0] = ease(through.to_f32_for_render()) * TAU;
+    }
+    // How far through a move she is, over the frames given.
+    let through = |kind: u8, over: &dyn Fn(&sim::moves::Move) -> u16| -> Option<f32> {
+        let m = sim::moves::get(p.class, kind);
+        let elapsed = match p.action {
+            Action::Startup { kind: k, left } if k == kind => m.startup.saturating_sub(left),
+            Action::Active { kind: k, left } if k == kind => m.startup + m.active - left,
+            Action::Recovery { kind: k, left } if k == kind => {
+                m.startup + m.active + m.recovery - left
+            }
+            _ => return None,
+        };
+        Some(elapsed as f32 / over(&m).max(1) as f32)
+    };
+    match p.action.attack_kind() {
+        // The Tumble turns her over once, through the throw and the rise.
+        Some(r::TUMBLE) => {
+            roll[0] =
+                ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
+                    * TAU;
+        }
+        // The spin goes round twice in its few frames; the ring once.
+        Some(r::BLADE_SPIN) => {
+            roll[1] =
+                ease(through(r::BLADE_SPIN, &|m| m.startup + m.active).unwrap_or(0.0)) * TAU * 2.0;
+        }
+        Some(r::BLADE_RING) => {
+            roll[1] = ease(through(r::BLADE_RING, &|m| m.startup + m.active).unwrap_or(0.0)) * TAU;
+        }
+        _ => {}
+    }
+    roll
 }
 
 /// How far a struck body is thrown off its mark at the start of the freeze.
@@ -266,6 +324,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
             _ => None,
         },
         shudder: shudder_of(c),
+        roll: roll_of(c),
     }
 }
 

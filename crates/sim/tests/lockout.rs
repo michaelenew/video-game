@@ -260,11 +260,12 @@ fn the_lockout_only_taxes_a_move_that_is_cheaper_than_it_is() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn sending_the_shadow_does_not_lock_the_press_that_brings_it_home() {
-    // **The trap this rule walks into.** Send shadow is one button with two
-    // meanings -- out, and home -- so a lockout armed by the send is a lockout
-    // on the recall. The press that brings the second body back is the rest of
-    // the ability, not another use of it.
+fn sending_the_shadow_does_not_lock_the_press_that_moves_it() {
+    // **The trap this rule walks into.** Send shadow is one button whose
+    // second press acts on what the first put out -- it moves the shadow,
+    // since 2026-10-10, where it used to bring it home -- so a lockout armed
+    // by the send is a lockout on the move. The press that moves the second
+    // body is the rest of the ability, not another use of it.
     let mut w = duel(Class::ShadowReaver);
     run(&mut w, 4, R);
     run(&mut w, 20, 0);
@@ -278,14 +279,19 @@ fn sending_the_shadow_does_not_lock_the_press_that_brings_it_home() {
 
     // Well inside the lockout the send armed.
     assert!(w.players[0].locked_out(SLOT_MECHANIC));
-    run(&mut w, 4, R);
-    run(&mut w, 8, 0);
+    let mut thrown = false;
+    for _ in 0..4 {
+        run(&mut w, 1, R);
+        thrown |= w.players[0].action.attack_kind() == Some(SLOT_MECHANIC);
+    }
+    run(&mut w, 2, 0);
     assert!(
-        matches!(
-            w.players[0].mechanic,
-            Mechanic::Shadow(s) if matches!(s.doing, Ghost::Returning { .. } | Ghost::Attending)
-        ),
-        "the recall was eaten by the lockout the send armed"
+        thrown
+            && matches!(
+                w.players[0].mechanic,
+                Mechanic::Shadow(s) if matches!(s.doing, Ghost::Casting { .. } | Ghost::Waiting)
+            ),
+        "the second send was eaten by the lockout the first armed"
     );
 }
 

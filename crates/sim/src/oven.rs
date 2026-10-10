@@ -629,9 +629,6 @@ scalars! {
     // How early, before the dash arrives, a jump press is kept for the dash
     // jump rather than dropped on the floor of a dodge that is not actionable.
     DashJumpBuffer,   "Reaver",    "Dash jump, press kept before arrival",  Frames, 0,        20;
-    // How far back toward her a send that points at nowhere to stand looks
-    // for somewhere that is, before it refuses (`aim::footing_toward`).
-    ShadowForgive,    "Reaver",    "Send shadow, forgiveness back (m)",     Fixed,  0,        fx(10,1);
     // How long the crosshair shows a refused send.
     ShadowRefusedShow, "Reaver",   "Send shadow, refusal shown (frames)",   Frames, 1,        60;
     // How fast the eye's ceiling rises per metre outside a hanging solid, so
@@ -717,17 +714,35 @@ scalars! {
     FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
     ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
     EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
-    // **The Shadow Reaver on three clicks**, 2026-10-09: the flip, the two
-    // drops, the hung shadow and the counter. See
-    // `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
-    MoonsaultBack,        "Shadow Reaver", "Moonsault, back (m/s)", Fixed, 0, fx(20,1);
-    GuillotineDive,       "Shadow Reaver", "Guillotine drop, dives at (m/s)", Fixed, 0, fx(60,1);
+    // **The Shadow Reaver, second pass**, 2026-10-10: the plunge and its
+    // ring, the gallows, the shadow's arc and whirl, the blade discs, the
+    // sweet spot, the tumble's fan and the flip out of the dash. See
+    // `docs/design/exploration/0013_shadow_reaver_dual_blades.md`.
+    PlungeDive,           "Shadow Reaver", "Plunge, dives at (m/s)", Fixed, 0, fx(60,1);
+    PlungeAhead,          "Shadow Reaver", "Plunge, forward (m/s)", Fixed, 0, fx(20,1);
     GallowsBlink,         "Shadow Reaver", "Gallows, blinks up (m)", Fixed, 0, fx(10,1);
     GallowsHang,          "Shadow Reaver", "Gallows, hangs for", Frames, 0, 60;
     GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
-    HangWaits,            "Shadow Reaver", "Hang the shadow, waits for", Frames, 0, 300;
-    HangSink,             "Shadow Reaver", "Hang the shadow, sinks at (m/s)", Fixed, 0, fx(20,1);
-    MistakeBehind,        "Shadow Reaver", "Deadly mistake, behind them (m)", Fixed, 0, fx(5,1);
+    ArcWaits,             "Shadow Reaver", "Shadow arc, hangs for", Frames, 0, 300;
+    ArcFlight,            "Shadow Reaver", "Shadow arc, flight", Frames, 1, 60;
+    ArcBulge,             "Shadow Reaver", "Shadow arc, bow of the flight (m)", Fixed, 0, fx(10,1);
+    ArcAhead,             "Shadow Reaver", "Shadow arc, forward (m)", Fixed, 0, fx(15,1);
+    ArcUp,                "Shadow Reaver", "Shadow arc, up (m)", Fixed, 0, fx(10,1);
+    WhirlLasts,           "Shadow Reaver", "Whirl, lasts", Frames, 1, 300;
+    WhirlEvery,           "Shadow Reaver", "Whirl, cuts every", Frames, 1, 60;
+    ShadowRingSpeed,      "Shadow Reaver", "Plunge ring, speed (m/s)", Fixed, fx(1,1), fx(60,1);
+    ShadowRingReach,      "Shadow Reaver", "Plunge ring, reach", Fixed, fx(1,1), fx(10,1);
+    ShadowRingWidth,      "Shadow Reaver", "Plunge ring, width", Fixed, fx(1,10), fx(2,1);
+    ShadowRingDamage,     "Shadow Reaver", "Plunge ring, damage", Int, 0, 200;
+    ShadowRingPush,       "Shadow Reaver", "Plunge ring, push (m/s)", Fixed, 0, fx(20,1);
+    ShadowRingStagger,    "Shadow Reaver", "Plunge ring, stagger", Frames, 0, 60;
+    DiscThickness,        "Shadow Reaver", "Blade ring and spin, half-thickness (m)", Fixed, fx(1,20), fx(2,1);
+    ReaveSweet,           "Shadow Reaver", "Reave, sweet spot radius (m)", Fixed, 0, fx(2,1);
+    ReaveSweetDamage,     "Shadow Reaver", "Reave, sweet spot damage (x)", Fixed, fx(1,1), fx(3,1);
+    TumbleSpread,         "Shadow Reaver", "Tumble, fan spread (turns)", Fixed, 0, fx(1,8);
+    TumbleFlight,         "Shadow Reaver", "Tumble, blades fly for", Frames, 1, 60;
+    DashJumpHop,          "Shadow Reaver", "Dash jump, extra hop (m/s)", Fixed, 0, fx(15,1);
+    DashFlip,             "Shadow Reaver", "Dash jump, flip lasts", Frames, 1, 60;
     // **The Bulwark on three clicks**, 2026-10-10: the ram, the bounce, the
     // battery spent on height, the sail and the step. See
     // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.

@@ -30,8 +30,8 @@ const COMMITTED: Color = Color::srgba(0.60, 0.66, 0.76, 0.65);
 /// Drawn behind the mark so it stays visible against a pale wall as well as a
 /// dark one.
 const SHADOW: Color = Color::srgba(0.0, 0.0, 0.0, 0.55);
-/// A Reaver's send refused: aimed at nowhere a body could stand
-/// (`sim::aim::footing_toward`). Brief, and the only thing the refusal says
+/// A Reaver's send refused: aimed at nowhere she could walk to
+/// (`sim::aim::walk_toward`). Brief, and the only thing the refusal says
 /// until there is a sound for it.
 const REFUSED: Color = Color::srgba(0.95, 0.25, 0.22, 0.95);
 

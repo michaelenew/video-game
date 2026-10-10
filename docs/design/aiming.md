@@ -173,8 +173,8 @@ them: a structure, a fire pillar.
   goes there. A Fissure from a stone up top stops at the edge
   (`aim::kept_along`), and Landfall's slab is never put off a ledge
   (`aim::planted_ahead`). The other grounded casts keep the plain rule: the
-  Reaver's send has its own answer to an edge, a short forgiveness and then a
-  refusal (`aim::footing_toward`).
+  Reaver's send has its own answer, **only as far as she could walk**
+  (`aim::walk_toward`, 2026-10-10).
 - **The Elementalist's stones are not on this ray**, for any placement,
   Raise included — see [Ground, and everything else](#ground-and-everything-else).
 - **If it travels**, it travels from the character model to that point.
@@ -473,16 +473,24 @@ where the **first** of the four lines meets something, less her own radius.
 it — a stone's top, a ledge, the floor — for anything that lands a thing
 somewhere it was not aimed (a thrown body, a mark on the ground).
 
-**Can a body stand there, and if not, where nearby can it?** `aim::standable`
-says whether a settled point is footing: anywhere but a course's drop, whose
-floor is a pit rather than ground. `aim::footing_toward` is the Reaver's send
-asking it (added 2026-10-04, from play: the shadow dived into the abyss). The
-grounded point itself when it is footing; otherwise the first footing scanning
-back toward her along the floor, for at most `Send shadow, forgiveness back`
-(3 m), then a body's width further onto it; otherwise nothing, and the send
-is refused. A small forgiveness and then a refusal, never a search for the
-nearest footing anywhere: a placement that goes somewhere the player did not
-point is what this document exists to prevent.
+**Can a body stand there, and could she walk to it?** `aim::standable` says
+whether a settled point is footing: anywhere but a course's drop, whose floor is
+a pit rather than ground. `aim::walk_toward` is the Reaver's send asking it, a
+step at a time (2026-10-10, from play: the send "trivialises most movement
+sections"): along the floor from her feet toward the grounded point, up nothing
+steeper than the land lets a body climb and no box taller than a skin, over no
+pit, down any drop; stopped short, a body's width back from what stopped it;
+nothing walkable at all, and the send is refused. Only along the straight line
+she pointed: a ledge she could reach by walking round is still refused, because
+a placement that goes somewhere the player did not point is what this document
+exists to prevent. It replaced `aim::footing_toward` (2026-10-04), a forgiveness
+of three metres back that asked only about pits, so a send pointed up a ledge
+put the shadow on top of it.
+
+**Where does a thing go that is thrown forward and up?** `aim::hung_ahead` —
+the Reaver's Shadow arc, a fixed distance ahead along her flat facing and a
+fixed height up, the way `planted_ahead` is a fixed distance ahead. Nobody aims
+it.
 
 **Which way is up underfoot?** `aim::underfoot_up` — `+y` on the floor and on
 anything in the arena, the mounted part's own `+y` on a creature. What the

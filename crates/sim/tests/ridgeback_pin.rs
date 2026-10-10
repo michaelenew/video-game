@@ -78,7 +78,7 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x92d2fe3e7aa9f640),
     (Class::Bulwark, 0x0ab3e7c23a090298),
-    (Class::ShadowReaver, 0x0c4c9b03cf9d3ea0),
+    (Class::ShadowReaver, 0xf407ea92cf10db07),
     (Class::BloodMage, 0x1d800ee722377057),
     (Class::DualMage, 0xa09cde216173e69f),
     (Class::Elementalist, 0x5282fc703b1113f5),

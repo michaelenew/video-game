@@ -206,14 +206,15 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     // The Reaver rather than the Bulwark, whose Slam used to be the overhead
     // here: shift stopped being an attack modifier, so Slam has no input until
     // somebody finds it a new one. Hers was on `E` until the three clicks
-    // (2026-10-09) put it on middle click. See `docs/design/controls.md`.
+    // (2026-10-09) put it on middle click, and back on `E` since the second
+    // pass (2026-10-10). See `docs/design/controls.md`.
     let reavers = || {
         let mut w = World::with_classes([Class::ShadowReaver, Class::ShadowReaver]);
         run(&mut w, 90, Input::W, 0);
         w
     };
     let mut standing = reavers();
-    run(&mut standing, 50, Input::MIDDLE, 0);
+    run(&mut standing, 50, Input::MECHANIC, 0);
     assert!(
         standing.players[1].health < standing.players[1].full_health(),
         "setup did not connect while standing"
@@ -227,7 +228,7 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     );
 
     let mut ducked = reavers();
-    run(&mut ducked, 50, Input::MIDDLE, Input::CROUCH);
+    run(&mut ducked, 50, Input::MECHANIC, Input::CROUCH);
     assert_eq!(
         ducked.players[1].health,
         ducked.players[1].full_health(),

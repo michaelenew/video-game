@@ -2034,47 +2034,88 @@ pub fn standable(at: V3, arena: &Terrain) -> bool {
     crate::course::pit_of(arena.id).is_none_or(|pit| at.y.raw() > pit.raw())
 }
 
-/// **Where a placed thing aimed at `to` can go**, from a caster standing at
-/// `from`: `to` itself when a body could stand there, and otherwise the first
-/// point that one could, scanning back along the floor toward the caster for
-/// at most `tuning::shadow_forgive` -- and then a body's width further onto
-/// it, if that is still footing, so what lands there is on the top rather
-/// than balanced on its lip. `None` when the scan finds nothing: the caller
-/// refuses the placement.
+/// **Where the Reaver's send can put the shadow** (2026-10-10, from play: the
+/// send "trivialises most movement sections"): along the floor from her feet
+/// at `from` toward `to`, as far as she could **walk** -- up nothing steeper
+/// than the land lets a body climb (`tuning::terrain_steepest`) and no box
+/// taller than a skin, over no pit (`standable`), and down any drop. Stopped
+/// short, it comes back a body's width from whatever stopped it, so the
+/// shadow is not left against a wall or on a lip. `None` when that leaves
+/// nowhere: the send is refused.
 ///
-/// The Reaver's send, aimed off an island's far edge or into the drop between
-/// two (2026-10-04, from play: the shadow dived into the abyss). A small
-/// forgiveness and then a refusal, rather than a search for the nearest
-/// footing anywhere: a send that goes somewhere the player did not point at
-/// is the thing the aiming model exists to prevent. Structures are not
-/// footing here, for the same reason they are not ground in
-/// [`grounded_path`].
-pub fn footing_toward(from: V3, to: V3, scene: &Scene) -> Option<V3> {
-    if standable(to, scene.arena) {
-        return Some(to);
-    }
+/// The question is "could she get there on foot", asked of the straight line
+/// only. A ledge she could reach by walking round is still refused; a send
+/// that searched for a way round would be a send that goes somewhere the
+/// crosshair did not point. Structures are not footing here, for the same
+/// reason they are not ground in [`grounded_path`].
+///
+/// It replaced a forgiveness of three metres back from the aimed spot
+/// (2026-10-04 to 2026-10-10), which only asked whether the spot was over a
+/// pit -- so a send pointed up a ledge put the shadow on top of it.
+pub fn walk_toward(from: V3, to: V3, scene: &Scene) -> Option<V3> {
     let open = past_structures(scene);
-    let back = V3::new(from.x.sub(to.x), Fx::ZERO, from.z.sub(to.z));
-    let span = back.flat_len();
-    if span.raw() <= 0 {
+    let span_v = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
+    let span = span_v.flat_len();
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    if span.raw() <= step.raw() {
+        let at = settle(to, &open, scene.arena);
+        return standable(at, scene.arena).then_some(at);
+    }
+    let dir = span_v.scale(Fx::ONE.div(span));
+    // How far the floor may rise in one step and still be walked up: the
+    // steepest land, or a skin's lip, whichever is more.
+    let climb = t::terrain_steepest()
+        .mul(step)
+        .max(crate::arena::SKIN)
+        .add(Fx::ratio(1, 50));
+    let mut floor = from.y;
+    let mut walked = Fx::ZERO;
+    let mut along = step.min(span);
+    let mut stopped = false;
+    loop {
+        let flat = from.add(dir.scale(along));
+        let at = settle(V3::new(flat.x, floor, flat.z), &open, scene.arena);
+        if at.y.sub(floor).raw() > climb.raw() || !standable(at, scene.arena) {
+            stopped = true;
+            break;
+        }
+        floor = at.y;
+        walked = along;
+        if along.raw() >= span.raw() {
+            break;
+        }
+        along = along.add(step).min(span);
+    }
+    let reach = if stopped {
+        walked.sub(t::body_radius())
+    } else {
+        walked
+    };
+    if reach.raw() <= step.raw() {
         return None;
     }
-    let dir = back.scale(Fx::ONE.div(span));
-    let limit = t::shadow_forgive().min(span);
-    // Half a body at a time: fine enough that no top a body could stand on
-    // is stepped over.
-    let step = Fx::from_raw(t::body_radius().raw() / 2);
-    let mut along = step;
-    while along.raw() <= limit.raw() {
-        let at = settle(to.add(dir.scale(along)), &open, scene.arena);
-        if standable(at, scene.arena) {
-            let further = along.add(t::body_radius()).min(span);
-            let onto = settle(to.add(dir.scale(further)), &open, scene.arena);
-            return Some(if onto.y == at.y { onto } else { at });
-        }
-        along = along.add(step);
-    }
-    None
+    let flat = from.add(dir.scale(reach));
+    let at = settle(
+        V3::new(flat.x, from.y.max(floor), flat.z),
+        &open,
+        scene.arena,
+    );
+    Some(if stopped || reach.raw() < span.raw() {
+        at
+    } else {
+        settle(to, &open, scene.arena)
+    })
+}
+
+/// **Where the Shadow arc hangs the shadow** (2026-10-10): `ahead` along her
+/// flat facing and `up` above her feet. Nobody aims it -- the move is a
+/// throw forward and up, the way Landfall's slab is a fixed distance ahead
+/// ([`planted_ahead`]) -- so it is a facing and two lengths, and it lives
+/// here for the reason that one does.
+pub fn hung_ahead(pos: V3, facing: V3, ahead: Fx, up: Fx) -> V3 {
+    let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
+    pos.add(flat.scale(ahead))
+        .add(V3::new(Fx::ZERO, up, Fx::ZERO))
 }
 
 /// Drop a point onto whatever it would stand on.

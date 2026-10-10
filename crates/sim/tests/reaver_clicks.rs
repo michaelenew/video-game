@@ -1,12 +1,14 @@
-//! The Shadow Reaver on three clicks (2026-10-09): what a player would notice
-//! if any of it broke.
+//! The Shadow Reaver on three clicks, second pass (2026-10-10): what a player
+//! would notice if any of it broke.
 //!
-//! `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md` is the
-//! design. Left is the blade -- quick cuts the tally is built on; middle is
-//! the execution -- committed cuts that come down onto a body; right is the
-//! shadow -- where the other body is. `E` is Deadly mistake, the counter.
+//! `docs/design/exploration/0013_shadow_reaver_dual_blades.md` is the design.
+//! Left is the finishers -- a dash strike, a plunge, a slam out of the sky;
+//! middle is the neutral blades -- a ring, a spin, a tumbling double jump that
+//! throws a fan; right is the shadow -- the send that moves it, the Whirl, the
+//! arc. `E` is Executioner.
 
 use sim::class::{Ghost, Mechanic, Shadow};
+use sim::effects::EffectKind;
 use sim::moves::reaver as r;
 use sim::moves::reaver::keys;
 use sim::state::{Action, SLOT_MECHANIC};
@@ -14,6 +16,8 @@ use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
 const SPACE: u16 = Input::SPACE;
+const SHIFT: u16 = Input::SHIFT;
+const W: u16 = Input::W;
 
 fn metres(v: f32) -> Fx {
     Fx::ratio((v * 1000.0) as i32, 1000)
@@ -79,10 +83,18 @@ fn hurt(w: &World) -> i32 {
     w.players[1].full_health() - w.players[1].health
 }
 
-/// Send the shadow `d` metres ahead along the floor and let it settle.
-fn send_ahead(w: &mut World) {
-    run(w, 2, keys::SHADOW, down(20));
-    run(w, 40, 0, 0);
+fn effects_of(w: &World, kind: EffectKind) -> usize {
+    w.effects
+        .iter()
+        .flatten()
+        .filter(|e| e.kind == kind)
+        .count()
+}
+
+/// Send the shadow ahead along the floor and let it settle.
+fn send_ahead(w: &mut World, pitch: i16) {
+    run(w, 2, keys::SHADOW, pitch);
+    run(w, 40, 0, pitch);
     assert!(
         matches!(shadow(w).doing, Ghost::Waiting),
         "the shadow did not go out"
@@ -94,10 +106,10 @@ fn send_ahead(w: &mut World) {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn on_the_floor_the_clicks_are_slash_executioner_and_the_send() {
+fn on_the_floor_the_clicks_are_the_reave_the_ring_and_the_send() {
     for (button, wanted) in [
-        (keys::BLADE, r::SLASH),
-        (keys::EXECUTION, r::EXECUTIONER),
+        (keys::FINISHER, r::REAVE),
+        (keys::NEUTRAL, r::BLADE_RING),
         (keys::SHADOW, r::SEND),
     ] {
         let mut w = alone();
@@ -112,35 +124,25 @@ fn on_the_floor_the_clicks_are_slash_executioner_and_the_send() {
 }
 
 #[test]
-fn in_the_air_the_clicks_are_the_kite_the_drop_and_the_swap() {
+fn in_the_air_the_clicks_are_the_plunge_the_spin_and_the_whirl() {
     for (button, wanted) in [
-        (keys::BLADE, r::KITE_CUT),
-        (keys::EXECUTION, r::GUILLOTINE_DROP),
+        (keys::FINISHER, r::PLUNGE),
+        (keys::NEUTRAL, r::BLADE_SPIN),
+        (keys::SHADOW, r::WHIRL),
     ] {
         let mut w = alone();
         aloft(&mut w, 3.0);
         step(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "click {button:#x} in the air");
     }
-    // With the shadow at her shoulder, right click in the air is the send.
-    let mut w = alone();
-    aloft(&mut w, 3.0);
-    step(&mut w, keys::SHADOW);
-    assert_eq!(doing(&w), Some(r::SEND), "attending: the air click sends");
-    // With it out and waiting, it is the swap.
-    let mut w = alone();
-    send_ahead(&mut w);
-    aloft(&mut w, 3.0);
-    step(&mut w, keys::SHADOW);
-    assert_eq!(doing(&w), Some(r::SWAP), "waiting: the air click swaps");
 }
 
 #[test]
 fn space_and_a_click_is_a_takeoff() {
     for (button, wanted) in [
-        (keys::BLADE, r::MOONSAULT),
-        (keys::EXECUTION, r::GALLOWS),
-        (keys::SHADOW, r::HANG),
+        (keys::FINISHER, r::GALLOWS),
+        (keys::NEUTRAL, r::TUMBLE),
+        (keys::SHADOW, r::SHADOW_ARC),
     ] {
         let mut w = alone();
         step(&mut w, SPACE | button);
@@ -149,123 +151,201 @@ fn space_and_a_click_is_a_takeoff() {
 }
 
 #[test]
-fn e_is_deadly_mistake_and_q_is_still_the_lotus() {
+fn e_is_executioner_and_q_is_still_the_lotus() {
     let mut w = alone();
-    step(&mut w, keys::MISTAKE);
-    assert_eq!(doing(&w), Some(r::DEADLY_MISTAKE));
+    step(&mut w, keys::EXECUTIONER);
+    assert_eq!(doing(&w), Some(r::EXECUTIONER));
     let mut w = alone();
     step(&mut w, keys::LOTUS);
     assert_eq!(doing(&w), Some(r::LOTUS));
 }
 
 // ---------------------------------------------------------------------------
-// The blade
+// The finishers
 // ---------------------------------------------------------------------------
 
-#[test]
-fn the_moonsault_goes_up_and_back_and_launches() {
-    let mut w = facing(1.6);
-    let x0 = w.players[0].pos.x;
-    step(&mut w, SPACE | keys::BLADE);
-    let mut highest = Fx::ZERO;
-    let mut theirs = Fx::ZERO;
+/// What her own Reave deals a body standing `gap` in front of her, before the
+/// shadow's copy can add anything.
+fn reave_on(gap: f32) -> i32 {
+    let mut w = facing(gap);
+    step(&mut w, keys::FINISHER);
     for _ in 0..20 {
         step(&mut w, 0);
-        highest = highest.max(w.players[0].pos.y);
-        theirs = theirs.max(w.players[1].pos.y);
+        if hurt(&w) > 0 {
+            return hurt(&w);
+        }
     }
+    0
+}
+
+#[test]
+fn the_reave_dashes_in_and_its_tip_is_a_sweet_spot() {
+    // Out at the end of the dash, on the middle of the blade's disc.
+    let sweet = reave_on(2.5 + 1.6);
+    // Close in: the dash runs into him, and the disc's middle is past him.
+    let close = reave_on(1.2);
+    let m = sim::moves::get(Class::ShadowReaver, r::REAVE);
     assert!(
-        highest.raw() > metres(0.8).raw(),
-        "she went up: {}",
-        as_f(highest)
+        sweet > m.damage,
+        "the sweet spot is worth more than the hit: {sweet} against {}",
+        m.damage
     );
     assert!(
-        w.players[0].pos.x.raw() < x0.raw(),
-        "she went back: {} from {}",
+        close > 0 && close < sweet,
+        "off the sweet spot is a plain hit: {close} against {sweet}"
+    );
+    // And the dash is a dash.
+    let mut w = alone();
+    let x0 = w.players[0].pos.x;
+    step(&mut w, keys::FINISHER);
+    run(&mut w, 20, 0, 0);
+    assert!(
+        w.players[0].pos.x.sub(x0).raw() > metres(1.5).raw(),
+        "she dashed forward: {}",
+        as_f(w.players[0].pos.x.sub(x0))
+    );
+}
+
+#[test]
+fn the_plunge_dives_a_little_forward_and_lands_a_ring() {
+    let mut w = facing(1.0);
+    aloft(&mut w, 2.5);
+    // A body out past the blade, inside the ring's reach.
+    w.players[1].pos = at(-6.0 + 1.2, 0.0, 8.0);
+    let x0 = w.players[0].pos.x;
+    step(&mut w, keys::FINISHER);
+    let mut ring = false;
+    for _ in 0..60 {
+        step(&mut w, 0);
+        ring |= effects_of(&w, EffectKind::ShadowRing) > 0;
+    }
+    assert!(w.players[0].grounded, "she came down");
+    assert!(
+        w.players[0].pos.x.raw() > x0.raw(),
+        "a little forward: {} from {}",
         as_f(w.players[0].pos.x),
         as_f(x0)
     );
-    assert!(hurt(&w) > 0, "the blade caught them");
-    assert!(
-        theirs.raw() > metres(0.3).raw(),
-        "and launched them: {}",
-        as_f(theirs)
+    assert!(ring, "the ring ran out from where she landed");
+    assert!(hurt(&w) > 0, "and the plunge landed");
+}
+
+#[test]
+fn the_plunges_ring_reaches_past_the_blade() {
+    let mut w = alone();
+    aloft(&mut w, 1.5);
+    // Too far for the blade's own hit, inside the ring.
+    let ring = as_f(t::shadow_ring_reach());
+    w.players[1].pos = at(-6.0 + ring * 0.8 + 0.4, 0.0, 8.0);
+    step(&mut w, keys::FINISHER);
+    run(&mut w, 60, 0, 0);
+    assert_eq!(
+        hurt(&w),
+        t::shadow_ring_damage(),
+        "the ring's small hit, and only that"
     );
 }
 
 #[test]
-fn a_kite_cut_on_a_marked_body_gives_the_airdodge_back() {
-    for marks in [0u8, 2] {
-        let mut w = facing(1.2);
-        aloft(&mut w, 1.5);
-        w.players[1].pos.y = metres(1.0);
-        w.players[1].grounded = false;
-        w.players[1].marks = marks;
-        w.players[0].air_dodged = true;
-        step(&mut w, keys::BLADE);
-        assert_eq!(doing(&w), Some(r::KITE_CUT));
-        let mut back = false;
-        for _ in 0..12 {
-            w.players[1].pos.y = metres(1.0);
-            w.players[1].vel = V3::ZERO;
-            step(&mut w, 0);
-            back |= !w.players[0].air_dodged;
-        }
-        assert!(hurt(&w) > 0, "the kite cut landed ({marks} marks)");
-        assert_eq!(
-            back,
-            marks > 0,
-            "the airdodge came back with {marks} marks on them"
-        );
+fn gallows_blinks_up_slams_down_and_is_slow_to_recover() {
+    let mut w = facing(1.4);
+    step(&mut w, SPACE | keys::FINISHER);
+    let mut highest = Fx::ZERO;
+    for _ in 0..8 {
+        step(&mut w, 0);
+        highest = highest.max(w.players[0].pos.y);
     }
+    assert!(
+        highest.raw() > metres(1.5).raw(),
+        "she blinked up: {}",
+        as_f(highest)
+    );
+    let mut landed_recovering = 0;
+    for _ in 0..90 {
+        step(&mut w, 0);
+        if w.players[0].grounded
+            && matches!(w.players[0].action, Action::Recovery { kind, .. } if kind == r::GALLOWS)
+        {
+            landed_recovering += 1;
+        }
+    }
+    assert!(hurt(&w) > 0, "the slam landed");
+    assert!(
+        landed_recovering >= 28,
+        "a long recovery on the floor: {landed_recovering} frames"
+    );
 }
 
 // ---------------------------------------------------------------------------
-// The execution
+// The neutral blades
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_guillotine_drop_goes_straight_down_and_spikes() {
-    let mut w = facing(0.6);
-    aloft(&mut w, 4.0);
-    w.players[1].pos.y = metres(2.0);
-    w.players[1].grounded = false;
-    step(&mut w, keys::EXECUTION);
-    assert_eq!(doing(&w), Some(r::GUILLOTINE_DROP));
-    let mut spiked = false;
-    for _ in 0..16 {
-        step(&mut w, 0);
-        spiked |= hurt(&w) > 0 && w.players[1].vel.y.raw() < 0;
-    }
-    assert!(
-        w.players[0].pos.y.raw() < metres(3.0).raw(),
-        "she dropped: {}",
-        as_f(w.players[0].pos.y)
-    );
-    assert!(spiked, "the body under her was driven down");
+fn the_blade_ring_cuts_behind_her_too() {
+    let mut w = facing(-1.6);
+    step(&mut w, keys::NEUTRAL);
+    run(&mut w, 20, 0, 0);
+    assert!(hurt(&w) > 0, "a body behind her was in the ring");
 }
 
 #[test]
-fn gallows_blinks_up_hangs_and_lands_blade_first() {
-    let mut w = facing(1.6);
-    step(&mut w, SPACE | keys::EXECUTION);
-    assert_eq!(doing(&w), Some(r::GALLOWS));
-    assert!(
-        w.players[0].pos.y.raw() >= t::gallows_blink().raw(),
-        "she is gone upward: {}",
-        as_f(w.players[0].pos.y)
+fn the_blade_spin_is_a_thin_disc_with_a_long_reach() {
+    // Level with her waist, far out: caught.
+    let mut w = facing(2.6);
+    aloft(&mut w, 0.0);
+    w.players[0].pos.y = Fx::ZERO;
+    w.players[0].grounded = false;
+    step(&mut w, keys::NEUTRAL);
+    run(&mut w, 8, 0, 0);
+    assert!(hurt(&w) > 0, "the spin reached 2.6 m");
+    // Well below her: not a ball, so not caught.
+    let mut w = facing(1.0);
+    aloft(&mut w, 3.5);
+    step(&mut w, keys::NEUTRAL);
+    assert_eq!(doing(&w), Some(r::BLADE_SPIN));
+    run(&mut w, 6, 0, 0);
+    assert_eq!(
+        hurt(&w),
+        0,
+        "a body three metres under the disc is not in it"
     );
-    let mut landed = false;
-    for _ in 0..60 {
+}
+
+#[test]
+fn the_tumble_is_a_double_jump_once_a_trip() {
+    let mut w = alone();
+    aloft(&mut w, 3.0);
+    w.players[0].vel.y = metres(-4.0);
+    step(&mut w, SPACE | keys::NEUTRAL);
+    assert_eq!(doing(&w), Some(r::TUMBLE), "space and middle in the air");
+    let mut rose = false;
+    for _ in 0..10 {
         step(&mut w, 0);
-        landed |= w.players[0].grounded;
-        if landed {
-            break;
-        }
+        rose |= w.players[0].vel.y.raw() > 0;
     }
-    assert!(landed, "she came down");
-    run(&mut w, 12, 0, 0);
-    assert!(hurt(&w) > 0, "the blade landed where she did");
+    assert!(rose, "the tumble lifted her");
+    run(&mut w, 20, 0, 0);
+    assert!(!w.players[0].grounded, "still in the air for the test");
+    step(&mut w, SPACE | keys::NEUTRAL);
+    assert_eq!(
+        doing(&w),
+        Some(r::BLADE_SPIN),
+        "a second tumble in one trip is the spin instead"
+    );
+}
+
+#[test]
+fn the_tumble_throws_its_blades_forward_and_down() {
+    let mut w = facing(4.0);
+    aloft(&mut w, 2.5);
+    run(&mut w, 1, SPACE | keys::NEUTRAL, down(25));
+    let mut thrown = false;
+    for _ in 0..30 {
+        run(&mut w, 1, 0, down(25));
+        thrown |= effects_of(&w, EffectKind::ShadowFan) > 0;
+    }
+    assert!(thrown, "the fan left her hand");
+    assert!(hurt(&w) > 0, "and reached the body ahead of and below her");
 }
 
 // ---------------------------------------------------------------------------
@@ -273,99 +353,188 @@ fn gallows_blinks_up_hangs_and_lands_blade_first() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_hung_shadow_waits_in_the_air_then_sinks_to_the_floor() {
+fn pressed_again_the_send_moves_the_shadow_rather_than_recalling_it() {
     let mut w = alone();
-    // Space and right click, looking up a little: the point in the air.
-    run(&mut w, 1, SPACE | keys::SHADOW, down(-15));
-    assert_eq!(doing(&w), Some(r::HANG));
-    run(&mut w, t::shadow_send_frames() as u32 + 4, 0, 0);
-    let s = shadow(&w);
-    assert!(matches!(s.doing, Ghost::Waiting), "it arrived");
+    send_ahead(&mut w, down(25));
+    let first = shadow(&w).pos;
+    // Turn and send again: it goes from where it was to the new spot.
+    for _ in 0..3 {
+        w.advance([
+            Input::looking_at(keys::SHADOW, 1 << 14, down(25)),
+            Input::default(),
+        ]);
+    }
     assert!(
-        s.pos.y.raw() > metres(1.5).raw(),
-        "it hangs in the air: {}",
+        matches!(shadow(&w).doing, Ghost::Casting { .. }),
+        "it is on its way somewhere, not coming home: {:?}",
+        shadow(&w).doing
+    );
+    run(&mut w, 40, 0, 0);
+    let second = shadow(&w).pos;
+    assert!(shadow(&w).is_waiting(), "and it waits there");
+    assert!(
+        second.sub(first).flat_len().raw() > metres(1.0).raw(),
+        "somewhere else"
+    );
+}
+
+#[test]
+fn the_whirl_goes_a_short_way_cuts_more_than_once_and_comes_home() {
+    let mut w = facing(3.0);
+    aloft(&mut w, 1.0);
+    let her = w.players[0].pos;
+    run(&mut w, 1, keys::SHADOW, down(15));
+    assert_eq!(doing(&w), Some(r::WHIRL));
+    let mut furthest = Fx::ZERO;
+    let mut cuts = 0;
+    let mut last = 0;
+    let mut home = false;
+    for _ in 0..(t::whirl_lasts() as u32 + 80) {
+        run(&mut w, 1, 0, down(15));
+        let s = shadow(&w);
+        furthest = furthest.max(s.pos.sub(her).flat_len());
+        if hurt(&w) > last {
+            cuts += 1;
+            last = hurt(&w);
+        }
+        home |= matches!(s.doing, Ghost::Attending) && cuts > 0;
+    }
+    let reach = sim::moves::get(Class::ShadowReaver, r::WHIRL).reach;
+    assert!(
+        furthest.raw() <= reach.add(metres(1.5)).raw(),
+        "a short way: {}",
+        as_f(furthest)
+    );
+    assert!(cuts >= 2, "it cut more than once: {cuts}");
+    assert!(home, "and it came home on its own");
+}
+
+#[test]
+fn the_shadow_arc_hangs_the_shadow_up_ahead_then_brings_it_home() {
+    let mut w = alone();
+    let her = w.players[0].pos;
+    step(&mut w, SPACE | keys::SHADOW);
+    assert_eq!(doing(&w), Some(r::SHADOW_ARC));
+    run(&mut w, t::arc_flight() as u32 + 4, 0, 0);
+    let s = shadow(&w);
+    assert!(s.is_waiting(), "it hangs: {:?}", s.doing);
+    assert!(
+        s.pos.y.sub(her.y).raw() > metres(2.0).raw(),
+        "up: {}",
         as_f(s.pos.y)
     );
-    let high = s.pos.y;
-    run(&mut w, t::hang_waits() as u32 - 10, 0, 0);
-    assert_eq!(shadow(&w).pos.y, high, "it waits");
-    run(&mut w, 240, 0, 0);
-    assert_eq!(shadow(&w).pos.y, Fx::ZERO, "then sinks to the floor");
+    assert!(
+        s.pos.x.sub(her.x).raw() > metres(3.0).raw(),
+        "and ahead: {}",
+        as_f(s.pos.x.sub(her.x))
+    );
+    run(&mut w, t::arc_waits() as u32 + 60, 0, 0);
+    assert!(
+        matches!(shadow(&w).doing, Ghost::Attending),
+        "and then it comes home: {:?}",
+        shadow(&w).doing
+    );
 }
 
 #[test]
-fn a_shadow_put_on_the_floor_never_sinks() {
+fn the_shadow_arc_cuts_what_it_flies_through() {
+    let mut w = facing(2.5);
+    step(&mut w, SPACE | keys::SHADOW);
+    run(&mut w, t::arc_flight() as u32, 0, 0);
+    assert!(hurt(&w) > 0, "the arc's slash");
+}
+
+#[test]
+fn a_forward_dodge_follows_the_shadow_while_it_is_still_flying() {
     let mut w = alone();
-    send_ahead(&mut w);
-    let y = shadow(&w).pos.y;
-    run(&mut w, 200, 0, 0);
-    assert_eq!(shadow(&w).pos.y, y);
+    run(&mut w, 2, keys::SHADOW, down(12));
+    // Into the throw's active frames: the shadow has left her.
+    run(&mut w, 2, 0, down(12));
+    assert!(matches!(shadow(&w).doing, Ghost::Casting { .. }));
+    assert!(doing(&w).is_some(), "still in the send's frames");
+    // Look away: following does not need the crosshair on it.
+    w.advance([Input::looking_at(SHIFT | W, 1 << 13, 0), Input::default()]);
+    assert!(
+        matches!(w.players[0].action, Action::Dodge { .. }),
+        "the dodge cut the throw: {:?}",
+        w.players[0].action
+    );
+    assert!(shadow(&w).dash > 0, "and it is the dash, chasing it");
+    run(&mut w, 30, 0, 0);
+    assert!(
+        matches!(shadow(&w).doing, Ghost::Attending),
+        "she caught it up"
+    );
 }
 
 #[test]
-fn the_swap_trades_her_and_the_shadow() {
+fn the_dash_jump_flips_and_hops() {
+    // Send it, follow it with the dash, and press space as she closes on it.
     let mut w = alone();
-    send_ahead(&mut w);
-    let there = shadow(&w).pos;
-    aloft(&mut w, 3.0);
-    let here = w.players[0].pos;
-    run(&mut w, 2, keys::SHADOW, 0);
-    assert_eq!(doing(&w), Some(r::SWAP));
-    run(&mut w, 3, 0, 0);
-    assert_eq!(w.players[0].pos.x, there.x, "she is where it was");
-    let s = shadow(&w);
-    assert_eq!(s.pos.x, here.x, "it is where she was");
-    assert!(s.pos.y.raw() > metres(2.0).raw(), "up in the air");
-    assert!(matches!(s.doing, Ghost::Waiting));
-}
-
-// ---------------------------------------------------------------------------
-// Deadly mistake
-// ---------------------------------------------------------------------------
-
-#[test]
-fn struck_in_the_stance_she_is_behind_the_attacker_and_takes_nothing() {
-    let mut w = facing(1.6);
-    let stood = w.players[0].pos;
-    // He swings; she answers with the stance as it comes out.
-    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
-    let health = w.players[0].health;
-    w.advance([
-        Input::looking_at(keys::MISTAKE, 0, 0),
-        Input::looking_at(Input::LEFT, 1 << 15, 0),
-    ]);
-    let mut caught = false;
-    for _ in 0..20 {
-        w.advance([Input::looking_at(0, 0, 0), Input::looking_at(0, 1 << 15, 0)]);
-        if w.players[0].pos.x.raw() > w.players[1].pos.x.raw() {
-            caught = true;
-            break;
+    run(&mut w, 4, keys::SHADOW, down(12));
+    let close = t::shadow_dash_speed().mul(sim::DT).mul(Fx::from_int(2));
+    let mut pressing = false;
+    let mut leaving = None;
+    for _ in 0..60 {
+        let near =
+            shadow(&w).dash > 0 && shadow(&w).pos.sub(w.players[0].pos).len().raw() <= close.raw();
+        pressing |= near;
+        let bits = if pressing { W | SPACE } else { SHIFT | W };
+        run(&mut w, 1, bits, 0);
+        if leaving.is_none() && shadow(&w).flip > 0 {
+            leaving = Some(w.players[0].vel.y);
         }
     }
-    assert!(caught, "she ended up behind him");
-    assert_eq!(w.players[0].health, health, "she took nothing");
+    let up = leaving.expect("a dash jump flips her");
+    let jump = t::jump_speed().mul(Class::ShadowReaver.mobility().jump);
     assert!(
-        matches!(w.players[0].action, Action::Free),
-        "and is free to act"
-    );
-    let s = shadow(&w);
-    assert!(matches!(s.doing, Ghost::Waiting), "her shadow stays");
-    assert!(
-        s.pos.sub(stood).flat_len().raw() < metres(0.5).raw(),
-        "where she stood"
+        up.raw() > jump.raw(),
+        "and hops higher than her jump: {} against {}",
+        as_f(up),
+        as_f(jump)
     );
 }
 
 #[test]
-fn a_whiffed_stance_is_a_long_recovery() {
-    let mut w = alone();
-    step(&mut w, keys::MISTAKE);
-    let m = sim::moves::get(Class::ShadowReaver, r::DEADLY_MISTAKE);
+fn the_send_does_not_put_the_shadow_where_she_could_not_walk() {
+    // Aim at the top of the dais from the floor in front of it: the shadow
+    // goes to the floor at its foot, not up onto it.
+    let dais = *sim::arena::proving_ground::ARENA
+        .solids()
+        .iter()
+        .filter(|s| s.max.x.raw() < sim::arena::proving_ground::half().raw())
+        .max_by_key(|s| s.min.x.raw())
+        .expect("the arena has a platform");
+    let mid_z = dais.min.z.add(dais.max.z).mul(Fx::ratio(1, 2));
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(dais.min.x.sub(metres(4.0)), Fx::ZERO, mid_z);
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = at(-12.0, 0.0, -12.0);
+    run(&mut w, 20, 0, 0);
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    let scene = sim::aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
+        arena: &w.terrain(),
+    };
+    let on_top = V3::new(dais.min.x.add(metres(1.0)), dais.max.y, mid_z);
+    let to = sim::aim::walk_toward(w.players[0].pos, on_top, &scene).expect("the floor in front");
+    assert_eq!(to.y, Fx::ZERO, "on the floor, not on the dais");
     assert!(
-        m.recovery >= 24,
-        "a stance with a short recovery is a free parry: {}",
-        m.recovery
+        to.x.raw() < dais.min.x.raw(),
+        "short of the dais: {} against its face at {}",
+        as_f(to.x),
+        as_f(dais.min.x)
     );
-    run(&mut w, (m.startup + m.active) as u32 + 3, 0, 0);
-    assert!(matches!(w.players[0].action, Action::Recovery { .. }));
+    // And on open floor it is where it was pointed.
+    let open = V3::new(w.players[0].pos.x.add(metres(2.0)), Fx::ZERO, mid_z);
+    assert_eq!(
+        sim::aim::walk_toward(w.players[0].pos, open, &scene),
+        Some(open)
+    );
 }

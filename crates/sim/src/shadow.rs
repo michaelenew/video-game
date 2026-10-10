@@ -97,16 +97,26 @@ pub fn step(p: &mut Player) {
             // fixed offset reads as a decal on the floor.
             shadow.pos = ease_to(shadow.pos, heel(p));
         }
-        Ghost::Casting { from, to, age } => {
-            let span = t::shadow_send_frames();
+        Ghost::Casting { from, to, age, arc } => {
+            let span = if arc {
+                t::arc_flight()
+            } else {
+                t::shadow_send_frames()
+            };
             // The frame it *will* be on, not the one it was: a flight whose
             // first step is a no-op reads as a hitch before the throw.
             let next = age.saturating_add(1);
-            shadow.pos = math::lerp3(
-                from,
-                to,
-                math::ease_out(Fx::ratio(next as i32, span as i32)),
-            );
+            let through = Fx::ratio(next.min(span) as i32, span.max(1) as i32);
+            shadow.pos = math::lerp3(from, to, math::ease_out(through));
+            // **The Shadow arc goes forward first and up after** (2026-10-10):
+            // out fast along the floor, rising slowly and then quickly, bowed
+            // up by `arc_bulge` at its middle. A rising cut -- its slash meets
+            // a body standing in front of her on the way out, and then it is
+            // up there hanging.
+            if arc {
+                let rise = math::lerp(from.y, to.y, through.mul(through));
+                shadow.pos.y = rise.add(t::arc_bulge().mul(math::hump(through)));
+            }
             // Out fast, and then it simply stops. The pause at the end of the
             // throw is the whole point of the ability: what the rest of the kit
             // is aimed at is a second body standing still somewhere useful.
@@ -118,17 +128,22 @@ pub fn step(p: &mut Player) {
                     from,
                     to,
                     age: next,
+                    arc,
                 }
             };
         }
         Ghost::Waiting => {
-            // **Hung in the air** (`Hang the shadow`, 2026-10-09): it waits
-            // up there, and then sinks to the floor under it.
+            // **On a clock** (2026-10-10): the Whirl's spin and the Shadow
+            // arc's hang are over when this runs out, and the shadow comes
+            // home through whatever is between, as a recall did. Only the
+            // send leaves it standing until she moves it or fetches it --
+            // and the send can only put it on ground she could walk to, so
+            // nothing on a clock is ever left on a ledge she cannot reach.
             if shadow.hang > 0 {
                 shadow.hang -= 1;
-            } else if shadow.pos.y.raw() > shadow.rest.raw() {
-                let down = t::hang_sink().mul(DT);
-                shadow.pos.y = shadow.pos.y.sub(down).max(shadow.rest);
+                if shadow.hang == 0 {
+                    shadow.doing = Ghost::Returning { struck: 0 };
+                }
             }
             // The leash. Walk out of it and the shadow comes and finds you,
             // cutting whatever is between the two of you -- which is the
@@ -152,6 +167,7 @@ pub fn step(p: &mut Player) {
         }
     }
 
+    shadow.flip = shadow.flip.saturating_sub(1);
     age_the_echo(p, &mut shadow);
     put(p, shadow);
     step_her_dash(p);
@@ -180,8 +196,8 @@ fn ease_to(from: V3, to: V3) -> V3 {
 pub fn begin_echo(p: &mut Player, kind: u8) {
     let Some(mut shadow) = of(p) else { return };
     let m = moves::get(p.class, kind);
-    // A swing that cuts nothing -- the swap, the stance -- has nothing to copy.
-    if m.aim() != aim::Kind::Swing || m.damage == 0 {
+    // A move that puts nothing out of her body has nothing to copy.
+    if m.aim() != aim::Kind::Swing || m.damage == 0 || !m.shape.strikes() {
         return;
     }
     shadow.echo = kind;
@@ -392,11 +408,7 @@ pub fn order_queued(p: &Player) -> bool {
 /// order the shadow again the moment the send could be cancelled -- which is
 /// the held-button bug with extra steps.
 pub fn spend_order(p: &mut Player, kind: u8) {
-    if matches!(
-        kind,
-        crate::state::SLOT_MECHANIC | crate::moves::reaver::SWAP | crate::moves::reaver::HANG
-    ) && of(p).is_some()
-    {
+    if moves::reaver::places_the_shadow(kind) && of(p).is_some() {
         p.shadow_queued = 0;
     }
 }
@@ -405,53 +417,54 @@ pub fn spend_order(p: &mut Player, kind: u8) {
 // Sending it, and getting it back
 // ---------------------------------------------------------------------------
 
-/// What pressing `E` does, given where the shadow already is.
+/// What a press of right click did, given where the shadow already was.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Order {
     /// It was with her, and now it is going out.
     Sent,
-    /// It was out, and now it is coming home through anybody in the way.
-    Recalled,
-    /// It was with her, and it was pointed at nowhere it could stand: it
-    /// stays, and the refusal shows. See `aim::footing_toward`.
+    /// It was out, and now it is going somewhere else -- from where it was,
+    /// not from her (2026-10-10). Taking a lotus with it.
+    Moved,
+    /// It was pointed at nowhere it could go: it stays where it is, and the
+    /// refusal shows. See `aim::walk_toward`.
     Refused,
 }
 
-/// Throw the shadow at `to`, or call it home if it is already out.
+/// Throw the shadow at `to`, from wherever it is now.
 ///
-/// One button, two meanings, decided by where the second body is — the same
-/// shape as the Bulwark's shield, and for the same reason: the mechanic has a
-/// position, so the only thing the key can mean is "change it". `to` is
-/// `None` when the send was aimed at nowhere it could stand
-/// (`aim::footing_toward`): a send then is refused, and a recall is a recall.
+/// **Pressed again, the send moves it** rather than calling it home
+/// (2026-10-10, from play: "limiting and annoying to have to keep bringing
+/// the shadow back"). Home is the dash, which collects it, or the leash.
+/// `to` is `None` when the send was aimed at nowhere she could walk to: the
+/// shadow stays where it is, with her or out, and the refusal shows.
 pub fn order(p: &mut Player, to: Option<V3>) -> Option<Order> {
-    let mut shadow = of(p)?;
-    let order = match (shadow.doing, to) {
-        (Ghost::Attending, None) => {
-            shadow.refused = t::shadow_refused_show();
-            Order::Refused
-        }
-        (Ghost::Attending, Some(to)) => {
-            shadow.hang = 0;
-            shadow.rest = Fx::MAX;
-            shadow.doing = Ghost::Casting {
-                from: shadow.pos,
-                to,
-                age: 0,
-            };
-            Order::Sent
-        }
-        // Already on its way home. Pressing again does not hurry it, but the
-        // press is still a recall as far as everything downstream is concerned
-        // -- the lotus reads the order, not the state.
-        (Ghost::Returning { .. }, _) => Order::Recalled,
-        (Ghost::Casting { .. } | Ghost::Waiting, _) => {
-            shadow.doing = Ghost::Returning { struck: 0 };
-            Order::Recalled
-        }
+    let shadow = of(p)?;
+    let Some(to) = to else {
+        let mut shadow = shadow;
+        shadow.refused = t::shadow_refused_show();
+        put(p, shadow);
+        return Some(Order::Refused);
     };
+    let was_out = shadow.is_out();
+    throw(p, to, false, 0);
+    Some(if was_out { Order::Moved } else { Order::Sent })
+}
+
+/// Send the shadow flying from where it is to `to`, and say how long it will
+/// wait there before it comes home on its own (`hang`; zero waits). `arc`
+/// bows the flight up over the straight line -- the Shadow arc. The one way
+/// the shadow is ever put anywhere: the send, the Whirl and the arc all come
+/// through here.
+pub fn throw(p: &mut Player, to: V3, arc: bool, hang: u16) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.doing = Ghost::Casting {
+        from: shadow.pos,
+        to,
+        age: 0,
+        arc,
+    };
+    shadow.hang = hang;
     put(p, shadow);
-    Some(order)
 }
 
 /// Has the return already caught this fighter?
@@ -505,9 +518,14 @@ pub fn dash_is_asked_for(
     scene: &aim::Scene,
 ) -> bool {
     let Some(shadow) = of(p) else { return false };
+    // **Still in flight, the crosshair does not have to be on it**
+    // (2026-10-10): she threw it where she was looking a moment ago, so a
+    // forward dodge while it is going is her following it -- and it cancels
+    // what is left of the throw. See `state::follow_the_shadow`.
+    let flying = matches!(shadow.doing, Ghost::Casting { .. });
     forward
         && shadow.is_out()
-        && aim::pointing_at(who, input, shadow.pos, t::shadow_lock_cone(), scene)
+        && (flying || aim::pointing_at(who, input, shadow.pos, t::shadow_lock_cone(), scene))
         && aim::clear_between(p.pos, shadow.pos, scene)
 }
 
@@ -571,7 +589,8 @@ pub fn carrying_a_dash(p: &Player) -> bool {
 /// It buys no safety. The tail it cuts is traded for the swing's own frames,
 /// and a blocked Slash is still minus five.
 pub fn swing_out_of_the_carry(p: &mut Player, input: Input) -> bool {
-    if !(carrying_a_dash(p) && (input.has(Input::LEFT) || input.has(Input::MECHANIC))) {
+    let swings = input.has(Input::LEFT) || input.has(Input::MIDDLE) || input.has(Input::MECHANIC);
+    if !(carrying_a_dash(p) && swings) {
         return false;
     }
     p.action = Action::Free;
@@ -624,6 +643,24 @@ pub fn shift_spent(p: &mut Player, shift_down: bool) -> bool {
 /// Is a jump waiting from the last frames of the dash?
 pub fn dash_jump_banked(p: &Player) -> bool {
     of(p).is_some_and(|shadow| shadow.jump_banked)
+}
+
+/// Start the forward flip of a dash jump: the renderer turns her over by it.
+pub fn begin_flip(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.flip = t::dash_flip().min(u8::MAX as u16) as u8;
+    put(p, shadow);
+}
+
+/// How far through the dash jump's forward flip she is, nought to one, or
+/// `None` when she is not flipping. For the renderer.
+pub fn flip_through(p: &Player) -> Option<Fx> {
+    let shadow = of(p)?;
+    if shadow.flip == 0 {
+        return None;
+    }
+    let span = t::dash_flip().clamp(1, u8::MAX as u16) as i32;
+    Some(Fx::ratio(span - shadow.flip as i32, span))
 }
 
 /// What a jump out of the carry takes with it: the share of the dash banked
@@ -769,68 +806,4 @@ pub fn cash_multiple(marks: u8) -> Fx {
 /// Is this a full tally -- the one that also staggers?
 pub fn full_tally(marks: u8) -> bool {
     marks >= t::mark_cap()
-}
-
-// ---------------------------------------------------------------------------
-// On three clicks (2026-10-09)
-// ---------------------------------------------------------------------------
-
-/// **Hang the shadow**: sent to a point in the air, where it waits for
-/// `tuning::hang_waits` and then sinks to `rest`, the floor under it. Only
-/// from her shoulder: a shadow already out is not sent again.
-pub fn hang_at(p: &mut Player, to: V3, rest: Fx) -> bool {
-    let Some(mut shadow) = of(p) else {
-        return false;
-    };
-    if !matches!(shadow.doing, Ghost::Attending) {
-        return false;
-    }
-    shadow.doing = Ghost::Casting {
-        from: shadow.pos,
-        to,
-        age: 0,
-    };
-    shadow.hang = t::hang_waits();
-    shadow.rest = rest.min(to.y);
-    put(p, shadow);
-    true
-}
-
-/// Is the shadow out and standing still somewhere -- what the Swap needs?
-pub fn waiting(p: &Player) -> bool {
-    of(p).is_some_and(|s| matches!(s.doing, Ghost::Waiting))
-}
-
-/// **Swap**: she and the waiting shadow trade places. She is where it stood,
-/// and it waits where she was -- in the air, if that is where she was, sinking
-/// to `rest` under it.
-pub fn swap(p: &mut Player, rest: Fx) -> bool {
-    let Some(mut shadow) = of(p) else {
-        return false;
-    };
-    if !matches!(shadow.doing, Ghost::Waiting) {
-        return false;
-    }
-    let her = p.pos;
-    p.pos = shadow.pos;
-    p.vel = V3::ZERO;
-    p.grounded = false;
-    shadow.pos = her;
-    shadow.hang = t::hang_waits();
-    shadow.rest = rest.min(her.y);
-    put(p, shadow);
-    true
-}
-
-/// **Deadly mistake**: she is gone from `from`, and the shadow is left
-/// waiting there in her place.
-pub fn leave_at(p: &mut Player, from: V3) {
-    let Some(mut shadow) = of(p) else {
-        return;
-    };
-    shadow.pos = from;
-    shadow.doing = Ghost::Waiting;
-    shadow.hang = 0;
-    shadow.rest = from.y;
-    put(p, shadow);
 }

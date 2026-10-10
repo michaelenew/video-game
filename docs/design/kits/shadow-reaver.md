@@ -7,6 +7,15 @@ sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat
 
 # Shadow Reaver — kit
 
+> **Second pass, 2026-10-10, built and unplayed** — see
+> [../exploration/0013_shadow_reaver_dual_blades.md](../exploration/0013_shadow_reaver_dual_blades.md),
+> which supersedes 0011 and the bindings below where they differ. Left is the finishers
+> (Reave, Plunge, Gallows), middle the neutral blades (Blade ring, Blade spin, Tumble — also
+> her double jump), right the shadow (the send, which **moves** the shadow when pressed again and
+> goes only where she could walk; the Whirl; the Shadow arc). `Q` is the lotus and `E` is
+> Executioner again. Slash, the Kite cut, the Guillotine drop, the Swap, the Moonsault, Hang the
+> shadow and Deadly mistake are retired.
+
 > **On three clicks, 2026-10-09, built and unplayed** — see
 > [../exploration/0011_shadow_reaver_on_three_clicks.md](../exploration/0011_shadow_reaver_on_three_clicks.md),
 > which supersedes the bindings below where they differ. Left is the blade (Slash, Kite cut,
@@ -121,7 +130,8 @@ Numbers: `cargo run -p sim --bin tally`, and the Reaver's lines in `frametable`.
 ## Auto attack
 
 Melee, on left click. Decent damage, thrown constantly, and it is the move the shadow
-copies most.
+copies most. **Since 2026-10-10 it is the Reave**: a short dash and a cut with a sweet spot at
+its tip — see 0013.
 
 > The archive's *first auto after reclaiming your shadow deals bonus damage scaled by
 > dexterity* is the cash-in now: the first swing after the dash, proportional to the marks
@@ -131,24 +141,30 @@ copies most.
 
 ### Send shadow — right click
 **Startup** fast · **Recovery** short · **Range** the throw's own reach · **Mechanic**
-sends the shadow out, or calls it home
+sends the shadow out, or moves it
 
 A real move with a wind-up you can be punished during, rather than an instant state flip —
 which is what it used to be, and what made the class's whole setup free.
 
 **Out:** the second body races to where the crosshair is pointing and stops there.
 
-**Where it cannot stand, it does not go — added 2026-10-04.** Aimed past the edge of an
-island and into a drop, the send looks back toward her along the floor, up to three metres
-(`Send shadow, forgiveness back`), and lands on the first footing it finds, a body's width in
-from the lip. If there is none, the shadow stays with her, the crosshair flashes red for a
-moment (`Send shadow, refusal shown`; a sound later), and the button is free again at once:
-a send that never went out costs no lockout. From play on the jump courses, where the shadow
-used to dive into the abyss. See `aim::footing_toward` and [aiming.md](../aiming.md).
+**Only where she could walk — since 2026-10-10.** From her feet toward the crosshair's spot,
+along the floor: up nothing steeper than the land lets a body climb and no box taller than a
+skin, over no pit, down any drop. Stopped short, it lands a body's width back from what stopped
+it — at the foot of a dais it was pointed onto, at the lip of a gap it was pointed over. If not
+one step is walkable, the shadow stays where it is, the crosshair flashes red for a moment
+(`Send shadow, refusal shown`; a sound later), and the button is free again at once: a send
+that never went out costs no lockout. From play: the send "trivialises most movement
+sections". See `aim::walk_toward` and [aiming.md](../aiming.md). From 2026-10-04 it was a
+forgiveness of three metres back from a spot over a drop, which put a shadow pointed up a
+ledge on top of it.
 
-**Home:** pressed again, it dashes back through anything between the two of you, damaging
-and slowing it. **And it takes an open Guillotine lotus with it**, which is the
-combination the kit is built around — see below.
+**Pressed again, it moves — since 2026-10-10.** From wherever the shadow is to where she
+points now, under the same rule. **And it takes an open Guillotine lotus with it**, which is
+the combination the kit is built around — see below. Until 2026-10-10 the second press called
+it home, dashing back through anything between, damaging and slowing it; from play, "limiting
+and annoying to have to keep bringing the shadow back". The way home still cuts that way when
+the leash, the Whirl's end or the arc's end sends it.
 
 #### The press answers whatever else she is doing — added 2026-09-14
 
@@ -349,24 +365,26 @@ punishable tail, and a jump out of *that* would be a universal escape rather tha
 class's tech. The dash to the shadow no longer has one: that is a real loss of punish on the
 Reaver in a fight, taken on the user's word, and worth watching in versus.
 
-### Executioner — middle click (was `E` until 2026-10-09)
+### Executioner — `E` (middle click 2026-10-09 to 2026-10-10)
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
 the shadow, which now always applies
 
 Blink upward, then slash down in a long arc. The big commitment, and an overhead — it is
 the class's answer to a turtle.
 
-On **middle click** since the three clicks; it was on `E` from 2026-09-14. The "blink upward"
-half of this description is now its own move, **Gallows** (space + middle click).
+On `E` again since the second pass (2026-10-10); it was on middle click for a day, and on `E`
+from 2026-09-14 before that. The "blink upward" half of this description is its own move,
+**Gallows** (space + left click since 2026-10-10).
 
-### Deadly mistake
+### Deadly mistake — retired 2026-10-10
 **Startup** fast · **Recovery** long on whiff · **Range** self · **Mechanic** requires the
 shadow for the teleport
 
 A brief counter stance. Passive: enemies that attack your shadow bleed. If struck during
 the stance, you appear behind the attacker and leave your shadow where you were.
 
-**Built 2026-10-09 on `E`**, which the three clicks freed. Against fighters only (REAVER-3 in
+**Retired 2026-10-10**, when Executioner went back to `E`. **Built 2026-10-09 on `E`**, which
+the three clicks freed. Against fighters only (REAVER-3 in
 0011); the passive is not built. Struck in its active frames by a blow that was not blocked,
 she takes nothing, stands `Deadly mistake, behind them` metres behind the attacker facing his
 back, and the shadow waits where she stood.

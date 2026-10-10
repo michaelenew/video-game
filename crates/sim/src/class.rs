@@ -373,21 +373,23 @@ pub struct Shadow {
     /// A jump pressed in the last frames of the dash, before it arrived,
     /// waiting to be thrown on arrival. See `shadow::bank_dash_jump`.
     pub jump_banked: bool,
-    /// Frames left of showing that a send was refused: aimed at nowhere a
-    /// body could stand, with nothing within the forgiveness either. The
-    /// crosshair reads it. See `aim::footing_toward`.
+    /// Frames left of showing that a send was refused: aimed somewhere she
+    /// could not walk even a step toward. The crosshair reads it. See
+    /// `aim::walk_toward`.
     pub refused: u8,
     /// Shift was still down when a dash landed: it dodges again only once it
     /// has come up. The dash's tail is cut on arrival (2026-10-04), so a shift
     /// held through a short dash would otherwise throw a second dodge on the
     /// frame she lands. See `shadow::shift_spent`.
     pub shift_spent: bool,
-    /// Frames a shadow hung in the air (`Hang the shadow`) waits there before
-    /// it sinks. Zero for a shadow standing on the floor.
+    /// Frames left before a waiting shadow **comes home on its own**: the
+    /// Whirl's spin and the Shadow arc's hang. Zero for one the send put down,
+    /// which waits until it is moved, collected or left behind.
     pub hang: u16,
-    /// The height of the floor under it: where a hung shadow sinks to.
-    /// `Fx::MAX` for a shadow that was put on the floor, which never sinks.
-    pub rest: Fx,
+    /// Frames left of the forward flip out of a dash jump (2026-10-10). The
+    /// renderer turns her body over by it; in the snapshot, like every other
+    /// clock a picture is drawn from, so a rollback does not pop it.
+    pub flip: u8,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -407,7 +409,15 @@ pub enum Ghost {
     /// function of the frame it left on, the same rule `crate::effects` follows
     /// and for the same reason: a rollback that lands in the middle of one
     /// reproduces it exactly instead of re-integrating it.
-    Casting { from: V3, to: V3, age: u16 },
+    ///
+    /// `arc` is the Shadow arc's flight (2026-10-10): longer, and bowed up
+    /// over the straight line by `tuning::arc_bulge` at its middle.
+    Casting {
+        from: V3,
+        to: V3,
+        age: u16,
+        arc: bool,
+    },
     /// Standing where it arrived. The state everything in the kit is set up
     /// for.
     Waiting,
@@ -435,7 +445,7 @@ impl Shadow {
             refused: 0,
             shift_spent: false,
             hang: 0,
-            rest: Fx::MAX,
+            flip: 0,
         }
     }
 

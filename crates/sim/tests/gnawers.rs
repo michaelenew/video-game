@@ -310,7 +310,10 @@ fn every_class_can_touch_a_gnawer_with_its_auto() {
     // touches a gnawer at two metres, crosshair on its middle (M2's "every
     // auto touches"). The Dual mage's dark auto is the one lunge that runs
     // through a body inside two metres -- `critters.md` §7, a person's call
-    // -- so hers is asked at three, where she throws it from.
+    // -- so hers is asked at three, where she throws it from. The Reaver's
+    // left click is the same shape since 2026-10-10: the Reave is a dash
+    // strike, and its sweet spot is out at the end of the dash, so it is
+    // asked at three too. Close in, her answer is the Blade ring.
     //
     // The Elementalist's is out since 2026-10-02: her standing clicks go
     // through every body and meet only what she built (`bolt::targets`). What
@@ -329,7 +332,11 @@ fn every_class_can_touch_a_gnawer_with_its_auto() {
             .iter()
             .find(|r| r.class == class && r.kind == auto)
             .unwrap();
-        let at = if class == Class::DualMage { 3 } else { 2 };
+        let at = if matches!(class, Class::DualMage | Class::ShadowReaver) {
+            3
+        } else {
+            2
+        };
         let k = sim::critcheck::METRES
             .iter()
             .position(|m| *m == at)

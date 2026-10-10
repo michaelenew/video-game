@@ -541,6 +541,11 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
     // down in `docs/design/critters.md`; a new entry here is a regression.
     const KNOWN: &[(&str, &str)] = &[
         ("Shadow Reaver", "Guillotine"),
+        // The arc's slash is rising by the time it is five metres out: it
+        // meets a standing fighter's shoulders there and passes over a
+        // knee-high body, by its own design -- the shadow is thrown forward
+        // and up (2026-10-10).
+        ("Shadow Reaver", "Shadow arc"),
         // A jump inside a scythe spin: she is off the floor before the blade
         // comes round, and the spin is flat at her waist. For the pools under
         // it, not for knee-high bodies; `docs/design/critters.md` §7.

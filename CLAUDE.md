@@ -99,9 +99,11 @@ on* -- `+y` on the floor, the mounted part's own on a creature -- which is what
 `aim::blink_to` answers *where does a body sent along the floor stop* -- the
 Dual mage's blink, short of the first thing its feet meet -- and `aim::settle`
 *what does this point stand on*. `aim::standable` asks *is that footing* (not a
-course's drop), and `aim::footing_toward` *where nearby is*, if the aimed spot
-is not: the Reaver's send scans a little way back toward her and is refused if
-nothing is there. **Every eye `aim.rs` starts
+course's drop), and `aim::walk_toward` *how far toward it could she walk*: the
+Reaver's send goes no further than that -- up no ledge, over no gap -- and is
+refused if not one step is walkable (2026-10-10). `aim::hung_ahead` answers
+*where does a thing thrown forward and up go* -- the Shadow arc, a facing and
+two lengths, `planted_ahead`'s reason. **Every eye `aim.rs` starts
 from is `camera::eye_under`**: the eye held under a cave's vault, which the
 drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 
