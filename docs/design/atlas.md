@@ -191,7 +191,7 @@ so two tiles drawn at different fineness never show a crack. Its colour is
 snow high up a mountain — with the road worn in (`Palette::trodden`), and
 patches across a meadow. Water is a surface over the tiles under it. A tile
 is built, rebuilt finer or coarser, or dropped as the camera moves, nearest
-first, 24 a frame; the land is drawn out to 300–700 m (the sky's reach, a
+first, up to 24 a frame and no more than 3 ms of it; the land is drawn out to 300–700 m (the sky's reach, a
 fifth more). Trees are three shared meshes — a trunk, a pine's cone, a
 broadleaf's crown — and a few materials, so a wood of a thousand trees costs
 little.
@@ -207,7 +207,20 @@ another 60 m (so the edge never flickers):
   the camera, so loading reads the tiles near the camera and not the map.
 
 Building is spread over frames: the nearest place and the 48 nearest boxes
-still wanted, each frame, until everything in reach is drawn.
+still wanted, each frame, until everything in reach is drawn -- and boxes and
+tiles stop for the frame once 3 ms has gone on building (`BUILD_BUDGET_MS`),
+at least one of each, because a tile in full detail is half a millisecond and
+twenty-four of them was a dropped frame every few steps.
+
+**A wall of dressed stone is drawn in two fineness** (`forms::build`'s
+`near`): in full relief, every block standing proud of the core, when the
+nearest edge of its box is within 60 m of the camera; past that (and 12 m
+more before a near wall goes back), the same courses in the same colours with
+each block only its face -- two triangles a block instead of ten, and a
+relief of five centimetres that is under a pixel there anyway. Either way
+**the blocks cast no shadow**; the core does, which is the same shadow
+(`forms::build_parts`). See `architecture.md` §"The valley's frame" for what
+it cost before.
 
 The reach is the current sky's own (`look::Sky::reach`, clamped to 160–600 m):
 past it the fog is the horizon's colour, so a piece loading there cannot be

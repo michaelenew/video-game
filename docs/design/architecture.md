@@ -205,6 +205,65 @@ what makes a thousand pooled entities cheap -- the pools (1,115 meshes, about a 
 hidden in a hunt) cost under half a millisecond a frame in transform and visibility work --
 and a write that is not conditional on a change opts that thing out of it.
 
+### The valley's frame (measured 2026-10-09, `--profile`)
+
+The valley -- where a run now starts -- came in at **437 ms** a frame under lavapipe, four
+times the hunt above, and the passes said where: the four shadow cascades were **250 ms**
+between them (the hunt's were 4.4 ms) and drew 2.3 million triangles. The census added to
+`--profile` (the heaviest meshes in view and casting shadows, by triangles times copies)
+said what: not the land, which casts no shadow, but **the boxes' forms** (`game::forms`) --
+3.1 million triangles across the map's 500 boxes, every one of them a shadow caster.
+
+| What | Before | After | Why |
+| --- | --- | --- | --- |
+| A stone in a dry-stone dyke | 1,024 triangles | 100 | It was built as finely as a boulder. A rock's facets now follow its size (`shapes::rock_facets`: about three bands a metre, five to sixteen). A 52 m dyke went from 192,000 triangles to 19,000. |
+| A block of dressed stone | 12 | 10 near, 2 far | The face against the wall's core is never seen (`Kit::cube_against`); past 60 m a block is only its face (`atlas.md`, §Distance loading). |
+| What a stone wall casts | every block | its core, 12 | The blocks stand five centimetres proud of a core that casts the same shadow (`forms::build_parts`). |
+| The town's paving | in every cascade | in none | Thousands of slabs three centimetres thick, for a shadow nobody can see. |
+| Shadow-casting triangles loaded at the town | 962,000 | 163,000 | |
+| **Four shadow cascades** | **250 ms** | **32 ms** | |
+| **Whole frame** | **437 ms** | **243 ms** | What is left is mostly the main pass shading every pixel, as in the hunt. |
+
+The other thing it found is a **frame dropped every few steps**: the streamer built up to
+24 tiles of land and 48 boxes on the frame the camera came within reach of them, and a tile
+in full detail is half a millisecond (a wall in full relief more). Building now stops for
+the frame at 3 ms, nearest first, and comes back on the next.
+
+The rule: **a form's detail is paid for six times a frame** -- four cascades, the depth
+prepass, the picture -- so a form built for how it looks close up has to say what it costs
+from 150 m, and what of it needs to cast a shadow at all.
+
+**What a pixel costs** (the same day). With the shadow passes down, the main pass was the
+frame: 110 ms to shade 950,000 pixels once each. Everything that stands still carries its
+colour in its vertices and sets nothing else, and the standard material reads everything
+else for every pixel anyway -- metal, reflectance, emission, clearcoat, transmission, a
+texture lookup for each -- so the obvious move was a material that only lights the vertex
+colour: `game::paint`, Bevy's own diffuse and ambient terms, its shadow lookup, and its
+fog and tonemapping by the same function, so the picture is the same picture
+(`look::palette::lit` was measured off it). Then the pass was taken apart by subtraction:
+
+| Main pass, under lavapipe | ms |
+| --- | --- |
+| Standard material | 110 |
+| `paint` | 102 |
+| `paint`, hard shadow edge (`--shadow-filter hard`) | 79 |
+| `paint`, no shadow lookup | 78 |
+| `paint`, no fog or tonemapping | 97 |
+| Unlit: the vertex colour and nothing else | 55 |
+
+So 55 ms of it is the software rasteriser's own floor, which no shader can lower, and of
+the 55 ms of shading on top the **soft shadow edge is 24** -- thirteen reads of the shadow
+map a pixel, against one -- the lighting maths 16, the fog and tonemapper 6, and all the
+standard material's unused machinery 8. The flat material is kept because it is the right
+shape -- the whole of what these surfaces need, in one file, and the place a toon ramp or
+a cheaper edge goes -- not for the 8 ms. The lever is the shadow filter, and it is a
+choice about the look, which is why it is still a flag and not a change.
+
+A software renderer cannot say what a GPU does with the same pass: a GPU's floor is far
+lower and its texture reads relatively dearer, so the shadow taps' share is if anything
+larger there. The number that matters is `main_opaque_pass_3d/elapsed_gpu` from
+`--profile` on the machine in question.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.

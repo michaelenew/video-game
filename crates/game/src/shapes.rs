@@ -42,16 +42,6 @@ impl Brush {
     }
 }
 
-/// A white material. Everything in this module carries its colour in its
-/// vertices, so the material must not tint it.
-pub fn plain() -> StandardMaterial {
-    StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 0.92,
-        ..default()
-    }
-}
-
 /// A box with the accent along its edges and on its top.
 ///
 /// Not `Cuboid`: a cuboid has four vertices per face, all of them corners, so
@@ -234,9 +224,33 @@ pub fn soft_cylinder(size: Vec3, ends: f32, segments: usize) -> Mesh {
 /// drawn for -- a body stops a hand's breadth before a rock it cannot see
 /// rather than inside one it can. `seed` makes two rocks of one size two
 /// rocks.
+///
+/// **Facets by size**: a boulder gets sixteen bands, a stone in a wall five.
+/// Every stone in a dry-stone dyke used to be built as finely as a boulder,
+/// a thousand triangles for half a metre of rock, and a fifty-metre dyke was
+/// two hundred thousand triangles drawn six times a frame (four shadow
+/// cascades, the depth prepass, the picture) for a wall nobody looks at
+/// closely. A unit rock that is scaled afterwards says how fine it wants to
+/// be with [`rock_faceted`].
 pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    rock_faceted(size, seed, rock_facets(size), paint)
+}
+
+/// How many bands a rock of this size is built in: about three a metre
+/// across its longest side, between five and sixteen.
+pub fn rock_facets(size: Vec3) -> usize {
+    ((size.max_element() * 3.0).ceil() as usize).clamp(5, 16)
+}
+
+/// [`rock`], at a fineness chosen by the caller.
+pub fn rock_faceted(
+    size: Vec3,
+    seed: u32,
+    facets: usize,
+    paint: Option<(Vec3, [f32; 3], &Brush)>,
+) -> Mesh {
     let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
-    superellipsoid(size, (0.55, 0.55), 16, paint, move |p, n| {
+    superellipsoid(size, (0.55, 0.55), facets, paint, move |p, n| {
         // Two octaves of a smooth value noise over the direction, scaled by
         // the rock's own size so a boulder and a pebble are rough alike.
         let q = p / size.max_element().max(1e-3);

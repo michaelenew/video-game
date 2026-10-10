@@ -20,6 +20,7 @@ use sim::arena::{ArenaId, Material};
 
 use crate::arenas::{Under, put};
 use crate::forms::Kit;
+use crate::paint::{Materials, Paint};
 use crate::shapes::hash01;
 
 fn m(v: i32) -> f32 {
@@ -58,14 +59,17 @@ pub fn whole(arena: ArenaId, min: Vec3, max: Vec3) -> bool {
 pub fn draw(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     palette: &Palette,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
 ) {
     let mut kit = Kit::new();
+    // What casts no shadow: the paving, and the relief of the stonework
+    // (`forms::build_parts`).
+    let mut flat = Kit::new();
     for (k, b) in hearth::BUILDINGS.iter().enumerate() {
-        building(&mut kit, b, k as u32, palette);
+        building(&mut kit, &mut flat, b, k as u32, palette);
     }
     let mut glow = Kit::new();
     for (k, (what, lo, hi)) in hearth::PROPS.iter().enumerate() {
@@ -75,7 +79,6 @@ pub fn draw(
     }
     spire(&mut kit, palette);
     banners(&mut kit, palette);
-    paving(&mut kit, palette);
     put(
         commands,
         under,
@@ -85,9 +88,23 @@ pub fn draw(
             Transform::default(),
         ),
     );
+    // The paving on its own, and **casting no shadow**: thousands of slabs
+    // three centimetres thick were drawn into every shadow cascade for a
+    // shadow nobody can see.
+    paving(&mut flat, palette);
+    put(
+        commands,
+        under,
+        (
+            Mesh3d(meshes.add(flat.build())),
+            MeshMaterial3d(white.clone()),
+            Transform::default(),
+            bevy::pbr::NotShadowCaster,
+        ),
+    );
     if !glow.is_empty() {
         let lamp = palette.surface([1.0, 0.82, 0.5]);
-        let lit = materials.add(StandardMaterial {
+        let lit = materials.standard.add(StandardMaterial {
             base_color: Color::WHITE,
             emissive: LinearRgba::rgb(lamp[0] * 4.0, lamp[1] * 3.2, lamp[2] * 2.0),
             ..default()
@@ -178,7 +195,7 @@ fn on_face(
 /// **A building**: a stone footing, walls of plaster between dark timbers
 /// (or stone, or boards), windows with shutters, a door to the street, a
 /// tiled roof with a ridge and overhanging eaves, a chimney.
-fn building(kit: &mut Kit, b: &Building, seed: u32, p: &Palette) {
+fn building(kit: &mut Kit, flat: &mut Kit, b: &Building, seed: u32, p: &Palette) {
     let lo = Vec3::new(m(b.lo.0), 0.0, m(b.lo.1));
     let hi = Vec3::new(m(b.hi.0), m(b.eave), m(b.hi.1));
     let eave = m(b.eave);
@@ -202,21 +219,23 @@ fn building(kit: &mut Kit, b: &Building, seed: u32, p: &Palette) {
     // The footing and any stone storey: dressed stone, in courses.
     {
         let size = Vec3::new(hi.x - lo.x, stone_to, hi.z - lo.z);
-        if let Some(mesh) = crate::forms::build(
+        if let Some((mesh, relief)) = crate::forms::build_parts(
             crate::forms::Form::Masonry,
             size,
             seed.wrapping_mul(7919),
             Material::Stone,
             p,
+            true,
         ) {
-            kit.keep(
-                &mesh,
-                Transform::from_translation(Vec3::new(
-                    (lo.x + hi.x) * 0.5,
-                    stone_to * 0.5,
-                    (lo.z + hi.z) * 0.5,
-                )),
-            );
+            let at = Transform::from_translation(Vec3::new(
+                (lo.x + hi.x) * 0.5,
+                stone_to * 0.5,
+                (lo.z + hi.z) * 0.5,
+            ));
+            kit.keep(&mesh, at);
+            if let Some(relief) = relief {
+                flat.keep(&relief, at);
+            }
         }
     }
     let wall = match b.kind {
@@ -729,11 +748,12 @@ fn paving(kit: &mut Kit, p: &Palette) {
             let worn = look::tint::mix(stone, p.mortar(), 0.25);
             let c = vary(worn, r, 0.08);
             let short = 0.08 * hash01(i as u32, j as u32, 42);
-            kit.cube(
+            kit.cube_against(
                 Vec3::new(x + 0.035, 0.0, z + 0.035),
                 Vec3::new(x + cell - 0.035 - short, 0.03, z + cell - 0.035),
                 c,
                 c,
+                Vec3::NEG_Y,
             );
         }
     }

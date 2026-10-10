@@ -19,6 +19,7 @@
 use bevy::prelude::*;
 use sim::arena::{Area, ArenaId, Material};
 
+use crate::paint::{Materials, Paint};
 use crate::sky;
 
 pub mod proving_ground;
@@ -252,7 +253,8 @@ pub fn dress(
     mut drawn: ResMut<Drawn>,
     old: Query<Entity, With<Scenery>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut standard: ResMut<Assets<StandardMaterial>>,
+    mut paints: ResMut<Assets<Paint>>,
     mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
     mut fill: Query<&mut DirectionalLight, With<Skylight>>,
@@ -281,7 +283,7 @@ pub fn dress(
     sky::raise(
         &mut commands,
         &mut meshes,
-        &mut materials,
+        &mut standard,
         sky,
         sun_at,
         Scenery,
@@ -300,7 +302,7 @@ pub fn dress(
     }
     // The pooled hazard and raised-solid materials take this arena's colours.
     if let Some(looks) = &looks {
-        crate::ground::repaint(looks, &mut materials, arena.id);
+        crate::ground::repaint(looks, &mut standard, arena.id);
     }
     // Both the ambient term and the fill light take the sky's colour, so every
     // shadow in the arena is the complement of what cast it.
@@ -320,7 +322,11 @@ pub fn dress(
     // what colour a thing is, the edge rule says where its accent goes, and
     // `shapes` puts the answer in the vertices. One white material serves all
     // of it, because every mesh carries its own colour.
-    let white = materials.add(crate::shapes::plain());
+    let mut materials = Materials {
+        standard: &mut standard,
+        paint: &mut paints,
+    };
+    let white = materials.paint.add(Paint::white());
     draw_place(
         &mut commands,
         &mut meshes,
@@ -342,6 +348,7 @@ pub fn dress(
             &look,
             &white,
             Under::Scenery,
+            true,
         );
     }
 }
@@ -353,10 +360,10 @@ pub fn dress(
 pub fn draw_place(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     arena: &'static sim::arena::Arena,
     look: &PlaceLook,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
 ) {
     let (sky, palette, brush, dressing) = (&look.sky, &look.palette, &look.brush, look.dressing);
@@ -370,7 +377,7 @@ pub fn draw_place(
     // same floor hazing toward the sky as it recedes is a long way down.
     let below = dressing.drop.then(|| {
         let rgb = sky.ground;
-        materials.add(StandardMaterial {
+        materials.standard.add(StandardMaterial {
             base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
             unlit: true,
             fog_enabled: true,
@@ -486,7 +493,7 @@ pub fn draw_place(
         }
     }
     let mut paint = |rgb: [f32; 3]| {
-        materials.add(StandardMaterial {
+        materials.standard.add(StandardMaterial {
             base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
             perceptual_roughness: 0.92,
             ..default()
@@ -650,9 +657,49 @@ pub fn draw_solid(
     offset: Vec3,
     hangs: bool,
     look: &PlaceLook,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
+    near: bool,
 ) -> Entity {
+    let Some((mesh, relief, at)) = solid_mesh(solid, offset, hangs, look, near) else {
+        return put(
+            commands,
+            under,
+            (Transform::default(), Visibility::default()),
+        );
+    };
+    let e = put(
+        commands,
+        under,
+        (
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(white.clone()),
+            Transform::from_translation(at + offset),
+        ),
+    );
+    if let Some(relief) = relief {
+        commands.spawn((
+            Mesh3d(meshes.add(relief)),
+            MeshMaterial3d(white.clone()),
+            Transform::default(),
+            bevy::pbr::NotShadowCaster,
+            ChildOf(e),
+        ));
+    }
+    e
+}
+
+/// **What a box is drawn as**: its mesh, in its own coordinates, and where
+/// its middle is relative to `offset` -- or nothing, for a box the town
+/// draws whole; and its relief that casts no shadow, as
+/// [`crate::forms::build_parts`] has it, as does `near`.
+pub fn solid_mesh(
+    solid: &sim::arena::Solid,
+    offset: Vec3,
+    hangs: bool,
+    look: &PlaceLook,
+    near: bool,
+) -> Option<(Mesh, Option<Mesh>, Vec3)> {
     let (palette, brush) = (&look.palette, &look.brush);
     let min = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z)) - offset;
     let max = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z)) - offset;
@@ -660,31 +707,20 @@ pub fn draw_solid(
     let at = (min + max) * 0.5;
     // Part of something the town draws whole: drawn there.
     if crate::town::whole(look.id, min, max) {
-        return put(
-            commands,
-            under,
-            (Transform::default(), Visibility::default()),
-        );
+        return None;
     }
     // **A form**, where the box is one (`crate::forms`): a wall in courses,
     // a log, a column, an island. Built in the box's own coordinates.
     let form = crate::forms::form_of(look.id, solid, hangs);
-    if let Some(mesh) = crate::forms::build(
+    if let Some((mesh, relief)) = crate::forms::build_parts(
         form,
         size,
         crate::forms::seed_of(at, size),
         solid.material,
         palette,
+        near,
     ) {
-        return put(
-            commands,
-            under,
-            (
-                Mesh3d(meshes.add(mesh)),
-                MeshMaterial3d(white.clone()),
-                Transform::from_translation(at + offset),
-            ),
-        );
+        return Some((mesh, relief, at));
     }
     // The form follows the material (`docs/design/forms.md`): bare rock
     // is a rock, soft ground is rounded, dressed stone and timber keep
@@ -757,15 +793,7 @@ pub fn draw_solid(
             Material::Water => crate::shapes::boxy(size, at, rgb, brush),
         }
     };
-    put(
-        commands,
-        under,
-        (
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(white.clone()),
-            Transform::from_translation(at + offset),
-        ),
-    )
+    Some((mesh, None, at))
 }
 
 /// How much floor one scattered thing stands for, in square metres.
@@ -781,7 +809,7 @@ fn scatter(
     arena: &'static sim::arena::Arena,
     palette: &look::palette::Palette,
     _brush: &crate::shapes::Brush,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
 ) {
     let b = arena.bounds;
