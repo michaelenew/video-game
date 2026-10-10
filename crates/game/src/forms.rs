@@ -333,6 +333,9 @@ pub enum Form {
     Drum,
     /// A scaffold: a deck of planks on beams and posts.
     Deck,
+    /// **Basalt**: irregular hexagonal columns standing side by side, the
+    /// box's top their tops -- the Waterfall (`sim::arena::waterfall`).
+    Basalt,
     /// Whatever `arenas::draw_solid` drew before there were forms: a rock,
     /// a cliff, a soft mound.
     Plain,
@@ -341,6 +344,7 @@ pub enum Form {
 /// Is this arena a jump course?
 fn course(id: ArenaId) -> bool {
     (ArenaId::CLIMB_STAIR.0..=ArenaId::CLIMB_REACH.0).contains(&id.0)
+        || id == ArenaId::CLIMB_WATERFALL
 }
 
 /// **Which form a box is drawn as**, from what it is made of, its size, and
@@ -355,6 +359,10 @@ pub fn form_of(arena: ArenaId, s: &Solid, hangs: bool) -> Form {
     );
     let (long, thin) = (size.x.max(size.z), size.x.min(size.z));
     let tall = size.y >= 2.5 && size.y >= 1.4 * long;
+    // The Waterfall is basalt, wherever it is put down.
+    if sim::arena::waterfall::part_of(s) {
+        return Form::Basalt;
+    }
     if course(arena) {
         return match s.material {
             Material::Grass | Material::Snow | Material::Wood if hangs => Form::Island,
@@ -423,6 +431,7 @@ pub fn build_parts(
         Form::Island => island(&mut kit, size, seed, material, p),
         Form::Drum => drum(&mut kit, size, seed, material, p),
         Form::Deck => deck(&mut kit, size, seed, p),
+        Form::Basalt => basalt(&mut kit, size, seed, material, p),
         Form::Plain => return None,
     }
     let (floor, reach) = (-size.y * 0.5, 0.6_f32.min(size.y * 0.5));
@@ -1215,6 +1224,116 @@ fn deck(kit: &mut Kit, size: Vec3, seed: u32, p: &Palette) {
     }
 }
 
+/// **Basalt columns** filling the box: a hexagonal grid over its footprint,
+/// each cell's corners pulled about so no two columns are the same, clipped
+/// to the box -- so its faces are the columns cut through and its edge is
+/// where the collision is -- and each column's top a hand's breadth or less
+/// under the box's, so feet stand on the highest. Large columns (about two
+/// metres across, more on a big box) so a ledge is a few column tops and a
+/// stepping stone one or two. A dark core under them all is the cracks.
+fn basalt(kit: &mut Kit, size: Vec3, seed: u32, material: Material, p: &Palette) {
+    let half = size * 0.5;
+    let side = p.basalt();
+    let top = p.basalt_top(material);
+    // The cracks: a core a little inside the columns, darker.
+    let crack = vary(side, 0.0, 0.5);
+    let inset = Vec3::new(0.04, 0.0, 0.04).min(half * 0.2);
+    kit.cube(
+        -half + inset,
+        Vec3::new(half.x, half.y - 0.12, half.z) - inset,
+        crack,
+        crack,
+    );
+    // Bigger columns on a bigger box: a ledge is a few column tops, a
+    // cliff's top a pavement.
+    let r = if size.x.min(size.z) < 3.5 {
+        0.85
+    } else if size.x * size.z > 200.0 {
+        1.35
+    } else {
+        1.05
+    };
+    let (dx, dz) = (1.5 * r, 3f32.sqrt() * r);
+    let (nx, nz) = (
+        (size.x / dx).ceil() as i32 + 1,
+        (size.z / dz).ceil() as i32 + 1,
+    );
+    // The grid is laid from a corner a little off the box's, by the seed, so
+    // two boxes the same size are not tiled the same.
+    let ox = -half.x + (hash01(seed, 1, 91) - 0.5) * dx;
+    let oz = -half.z + (hash01(seed, 2, 91) - 0.5) * dz;
+    // Shallow drops where feet go; deeper on a big rock's top.
+    let deep = if matches!(material, Material::Rock) && size.y > 4.0 {
+        0.18
+    } else {
+        0.07
+    };
+    for i in 0..=nx {
+        for k in 0..=nz {
+            let n = (i * 977 + k * 131) as u32;
+            let cx = ox + i as f32 * dx;
+            let cz = oz + k as f32 * dz + if i % 2 == 1 { dz * 0.5 } else { 0.0 };
+            // Six corners, each pulled about: an irregular hexagon.
+            let mut ring: Vec<Vec2> = (0..6)
+                .map(|c| {
+                    let a = (c as f32 + (hash01(seed, n + c, 7) - 0.5) * 0.35)
+                        * std::f32::consts::TAU
+                        / 6.0;
+                    let rr = r * (0.88 + 0.12 * hash01(seed, n + c, 8));
+                    Vec2::new(cx + rr * a.cos(), cz + rr * a.sin())
+                })
+                .collect();
+            for (axis, lo, hi) in [(0, -half.x, half.x), (1, -half.z, half.z)] {
+                ring = clip(&ring, axis, lo, true);
+                ring = clip(&ring, axis, hi, false);
+            }
+            if ring.len() < 3 {
+                continue;
+            }
+            let h = half.y - deep * hash01(seed, n, 9);
+            let k_shade = hash01(seed, n, 10);
+            let (wall, cap) = (vary(side, k_shade, 0.18), vary(top, k_shade, 0.12));
+            let up: Vec<Vec3> = ring.iter().map(|q| Vec3::new(q.x, h, q.y)).collect();
+            kit.poly(&up, Vec3::Y, cap);
+            let mid = ring.iter().copied().sum::<Vec2>() / ring.len() as f32;
+            for e in 0..ring.len() {
+                let (a, b) = (ring[e], ring[(e + 1) % ring.len()]);
+                let out = ((a + b) * 0.5 - mid).extend(0.0);
+                let out = Vec3::new(out.x, 0.0, out.y);
+                kit.poly(
+                    &[
+                        Vec3::new(a.x, -half.y, a.y),
+                        Vec3::new(b.x, -half.y, b.y),
+                        Vec3::new(b.x, h, b.y),
+                        Vec3::new(a.x, h, a.y),
+                    ],
+                    out,
+                    wall,
+                );
+            }
+        }
+    }
+}
+
+/// One side of a convex polygon's clip against a line `axis = at`: keep what
+/// is above it (`keep_above`) or below.
+fn clip(ring: &[Vec2], axis: usize, at: f32, keep_above: bool) -> Vec<Vec2> {
+    let v = |q: Vec2| if axis == 0 { q.x } else { q.y };
+    let inside = |q: Vec2| if keep_above { v(q) >= at } else { v(q) <= at };
+    let mut out = Vec::with_capacity(ring.len() + 2);
+    for e in 0..ring.len() {
+        let (a, b) = (ring[e], ring[(e + 1) % ring.len()]);
+        if inside(a) {
+            out.push(a);
+        }
+        if inside(a) != inside(b) {
+            let t = (at - v(a)) / (v(b) - v(a));
+            out.push(a + (b - a) * t);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1236,6 +1355,7 @@ mod tests {
             Form::Island,
             Form::Drum,
             Form::Deck,
+            Form::Basalt,
         ];
         let sizes = [
             Vec3::new(30.0, 1.5, 1.0),

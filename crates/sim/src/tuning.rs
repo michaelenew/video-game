@@ -246,6 +246,12 @@ pub fn vine_speed() -> Fx {
 pub fn vent_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VentRise)).max(Fx::ZERO)
 }
+
+/// How fast the falling water of a waterfall pushes a body in it down
+/// (`arena::waterfall`).
+pub fn falls_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FallsPush)).max(Fx::ZERO)
+}
 pub fn body_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyHeight))
 }

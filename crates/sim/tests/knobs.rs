@@ -42,8 +42,15 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// about feel -- how steep a body walks, how fast it slides -- are in the
 /// Oven. A fight's rim (how steep its bank, how far its noise grows) and the
 /// town's tables (how far apart the merlons, how high the wall) are the same
-/// kind of thing.
-const LEVEL_DATA: &[&str] = &["land.rs", "layout.rs", "rim.rs", "hearth.rs"];
+/// kind of thing. So is the Waterfall's table: a cliff's height and where
+/// its ledges are, put down in the valley and as a course.
+const LEVEL_DATA: &[&str] = &[
+    "land.rs",
+    "layout.rs",
+    "rim.rs",
+    "hearth.rs",
+    "waterfall.rs",
+];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an
 /// entry without one is just a way to silence the test.

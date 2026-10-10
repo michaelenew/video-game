@@ -748,6 +748,10 @@ scalars! {
     UpdraftFloorPush,     "Elementalist", "Updraft from the floor, push along her run (m/s)", Fixed, 0, fx(12,1);
     CarpetCancelFrom,     "Elementalist", "Fire carpet, cancel opens into recovery", Frames, 0, 30;
     CarpetCancelFor,      "Elementalist", "Fire carpet, cancel open for", Frames, 0, 30;
+    // **The Waterfall**, 2026-10-10 (`arena::waterfall`): how hard the falling
+    // water pushes down a body in it, so nobody jumps up through the curtain.
+    // Appended for the reason above.
+    FallsPush,            "Valley", "Waterfall, pushes down at (m/s)", Fixed, 0, fx(30,1);
 }
 
 // ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ path island, **sand** a stepping stone, **snow** a checkpoint (with a cairn on
 it), **wood** the nest at the end, and grey **rock** is scenery, never the
 route. Fall below the pit (six metres under the lowest island) and you are
 stood on your last checkpoint; the clock runs from leaving the start to the
-nest. `N` cycles all nine, in this order.
+nest. `N` cycles all ten, in this order.
 
 **Every tier is a guess. None of these has been played.**
 
@@ -76,6 +76,7 @@ nest. `N` cycles all nine, in this order.
 | The Falls | `falls` | hard | A meadow, a stone stair to a 22 m arch, a required 14 m leap down off its end onto a wide landing, a zig-zag of six small stones stepping down 1.3 m each, a pool to rest on, the nest. |
 | The Slalom | `slalom` | hard | Eight 2.2 m stones zig-zagging across a line of tall grey pillars, then islands under a cave mouth -- the one roof in the set, two metres over a head -- and a required 13 m leap out of it to the nest. |
 | The Fork | `fork` | hard | From a hub, a high road up an 8 m wall and along the tops, or a low road of eight stones a metre down; they rejoin, then a required 15 m leap down and a runway to the nest. |
+| The Waterfall | `waterfall` | hard | The valley's basalt cliff, 22 m tall, alone: three stones out of a pool, up the right of the falls, three level leaps *behind* the falling water, up the left to the lip, the nest on the top (§1c). |
 | The Spire | `spire` | barely possible (Elementalist) | The summit 32 m above the launch, half a metre out. |
 | The Gulf | `gulf` | barely possible | Open-air long jumps off a runway: 18 m level, 14 m and 3 m up, 22 m and 4 m down to the nest; a high line off to the right. |
 | The Reach | `reach` | proving ground | Not a route: gap lanes of 10–50 m, ledges 5–45 m up, two long-and-up targets and two Grasp faces, all from one hub (§1b). |
@@ -137,6 +138,49 @@ metres**. The panel lists the distances too.
 
 The 50 m lane is the course's finish, so the clock times a run from the hub
 to it.
+
+## 1c · The Waterfall, on the road and alone (2026-10-10)
+
+The owner, 2026-10-10: "I want a tall waterfall jump section on the main path
+of the valley and as a standalone jump map", and then: "irregular basalt large
+hexagons as the terrain theme". So it is **one table** of boxes
+(`sim::arena::waterfall`) put down twice: at the head of the Pinewood, where
+the road ends at its pool and goes on from its top
+([valley.md](valley.md) §3), and as this course, hanging in the courses' air.
+
+```
+cargo run -p game -- --arena waterfall --p1 bulwark   # the course
+cargo run -p game -- --arena pinewood --open          # walk east to it in the valley
+cargo test -p sim --test waterfall
+```
+
+| Beat | Hops |
+| --- | --- |
+| Out of the pool | Three mossy column tops: 1.5 m and +1.0, 2.1 m and +1.5, 2.2 m and +1.7, then the first shelf (a cairn) |
+| Up the right | A ledge 3 m along and +2.0; a column standing out of the pool, 2.6 m and +2.0; a ledge over the shelf, 2.4 m and +2.0 |
+| **Behind the falls** | Three level leaps of 3.5 m (+0.5 each) along ledges between the cliff and the water, under the lip, to the second shelf (a cairn) |
+| Up the left | Three hops of 3 m, 3 m and 2.9 m at +2.1, between face ledges and a column standing out; then 2.5 m and +2.2 onto the top |
+
+- **Every hop is inside the Bulwark's plain running jump** (apex 2.7 m; 3.9 m
+  out at +2.2), because the road is for everybody and the Bulwark sets the
+  valley's gaps (valley.md §6). For the Bulwark it is close to the edge; for
+  the Dual mage it is easy. `tests/waterfall.rs` reads every hop off the
+  table and checks each class against `sim::envelope`, and then **jumps
+  every hop with every class**, in the valley and in the course, by a
+  stand-in player that tries a few run-ups.
+- **It is hard by its height and its water, not its gaps.** The cliff is 22 m:
+  a slip from the left side costs what the fall rule says, and in the valley
+  that is a death and the last cairn. **The falling water pushes down** at
+  9 m/s (`Waterfall, pushes down at` in the Oven): nobody jumps up through the
+  curtain, and a leap behind it that drifts out into it drops. A guess.
+- **It cannot be walked round** (`the_cliff_cannot_be_walked_round`): the land
+  either side of the cliff is mountain.
+- **Drawn as basalt** (`game::forms`, `Form::Basalt`): every box a cluster of
+  irregular hexagonal columns, about two metres across, clipped to the box so
+  the edge you see is the edge you stand on. The water is `game::falls`: the
+  river over the top, a curtain bowed out from the lip, white streaks running
+  down it on the simulation's clock, and foam at the foot.
+- **Tier hard is a guess**, like every other here. Unplayed.
 
 ## 2 · The corner clip, fixed
 

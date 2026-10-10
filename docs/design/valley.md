@@ -63,7 +63,7 @@ props are tables the collision is made from and the renderer draws from
 | **The Mouth** | Out of the gate between low hills into a river meadow fifty metres wide; a crag with a cairn; the road climbs the scree, sixteen metres in two bends, to the Lip | the low meadow (Hornback herd), up a side path north | the Lip |
 | **The Bank** | A broad upper meadow; the old stair as a crag; the road climbs the bank, twenty-one metres | the den (Gnawers), north | **first waystone**, a pass between two shoulders of hill: one of the herd, the den |
 | **The Shelves** | A long open bowl with a tarn under its north slope; a crag by the shore; the road climbs out | the Mire (Mireback) and the Pan (Sandmaw), down side paths south | **second waystone**: one of the Pan, the Mire |
-| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road climbs out twenty-six metres in two bends | the Den (the Pair) south, the Hollows (Broodmother) north, the Highlands (Ridgeback) up a side path south four metres higher | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
+| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road ends at a pool under **the Waterfall**, a basalt cliff twenty-two metres tall, and goes on from its top (§3) | the Den (the Pair) south, the Hollows (Broodmother) north, the Highlands (Ridgeback) up a side path south four metres higher | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
 | **The Saddle** | A snowy alpine meadow between peaks; the highest crag; the road ends at a view | the Cliffs (Galewing) over a bridge north, the Ashwood (Veilstalker) south, the Shrine (Mantis) up a switchback north-east behind the **fourth waystone**: one of the Cliffs, the Ashwood | — |
 
 The tiers are world.md §3's, and the gates are exactly what that table says
@@ -139,7 +139,23 @@ of the map, by its index there).
 **The road climbs on foot** since the valley became land: every rise on it
 is a slope a body walks up, and the whole road, and the way into every room,
 is walked from end to end by `tests/valley.rs` (`the_whole_road_can_be_walked`,
-`every_room_can_be_walked_into`). Nothing on the main route needs a jump.
+`every_room_can_be_walked_into`) -- **but for the Waterfall**.
+
+**The Waterfall** (since 2026-10-10, the owner's ask: "a tall waterfall jump
+section on the main path"): at the head of the Pinewood, past the Highlands'
+path, the road ends at a pool under a cliff of basalt twenty-two metres tall
+with the falls down its middle, and goes on from the top to the third
+waystone. **It is the one stretch of the main route that is jumped, not
+walked**: out of the pool on three column tops, up the right of the falls,
+three level leaps behind the falling water, up the left to the lip -- a cairn
+at the foot and on each of its two shelves, and one on the top. Every hop is
+inside the Bulwark's plain jump, so every class can do it; the height and the
+water (which pushes down, so the curtain is no way up) are what make it hard.
+It is one table (`sim::arena::waterfall`) and the same cliff is a jump course
+of its own, `--arena waterfall`; [courses.md](courses.md) §1c has the hops.
+`tests/waterfall.rs` jumps every hop with every class in the valley and checks
+the cliff cannot be walked round; the road test walks to the pool, back a
+way, and on from the top.
 
 **The climbs are crags beside the road**: a pillar of rock with ledges up one
 face, each a rise of 2.2 m and a metre across from the last, and a cairn on
@@ -153,7 +169,9 @@ wall you slide back down, so the valley needs no boxes to keep you in it
 (atlas.md §The land).
 
 Updrafts (`PLACE.vents`) are still a prop the movement reads, and no place of
-the valley has one now: the Saddle's ridge they crossed is gone.
+the valley has one now: the Saddle's ridge they crossed is gone. Falling
+water is the other way about: a body in a waterfall's sheet is pushed down
+(`valley::sheet_on`, `tuning::falls_push`).
 
 ## 4 · What is drawn and said
 
@@ -194,7 +212,8 @@ for a pair who does not.** The five reaches are 974 m end to end with about
 1. **Nobody has played it.** Every height, gap and hold is a first guess
    sized against the jump envelope. Record a pair's run (`Y`) and judge it.
 2. **The Bulwark sets the gaps.** Every required hop is within its plain
-   jump, which makes them easy for everyone else. The mechanics are the
+   jump, which makes them easy for everyone else -- the Waterfall's too,
+   which is near the Bulwark's edge and nobody else's. The mechanics are the
    shortcuts (a stone, a shadow, a Grasp over a bluff), but the gaps are not
    yet wide enough to *need* one anywhere. Whether some climbs should have
    only the slow way for some classes is the next tuning question.

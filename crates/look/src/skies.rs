@@ -150,7 +150,7 @@ pub fn of(id: ArenaId) -> Sky {
 
         // --- the jump courses ---------------------------------------------
         //
-        // Nine siblings, one sky, nine turns of the wheel. See `ALOFT`.
+        // Ten siblings, one sky, ten turns of the wheel. See `ALOFT`.
         ArenaId::CLIMB_STAIR => aloft(-0.12),
         ArenaId::CLIMB_CAUSEWAY => aloft(-0.09),
         ArenaId::CLIMB_SPIRAL => aloft(-0.06),
@@ -160,6 +160,7 @@ pub fn of(id: ArenaId) -> Sky {
         ArenaId::CLIMB_SLALOM => aloft(0.06),
         ArenaId::CLIMB_FORK => aloft(0.09),
         ArenaId::CLIMB_REACH => aloft(0.12),
+        ArenaId::CLIMB_WATERFALL => aloft(0.15),
 
         _ => Sky::over([0.78, 0.87, 0.95]),
     }
@@ -267,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn the_nine_courses_are_siblings_and_not_twins() {
+    fn the_courses_are_siblings_and_not_twins() {
         // Distinguishable, but plainly the same hour of the same world: the
         // lightness structure is shared, only the key moves.
         let ids = [
@@ -280,6 +281,7 @@ mod tests {
             ArenaId::CLIMB_SLALOM,
             ArenaId::CLIMB_FORK,
             ArenaId::CLIMB_REACH,
+            ArenaId::CLIMB_WATERFALL,
         ];
         let base = Lch::of(ALOFT.horizon);
         for id in ids {

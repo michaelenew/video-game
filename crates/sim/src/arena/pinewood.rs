@@ -9,7 +9,9 @@
 //! | The Hollows | A path north to the root caves: the Broodmother |
 //! | The Highlands | A path climbing south to a moor four metres up: the Ridgeback |
 //! | The crag | A tall rock among the trees, with a cairn on top |
-//! | The climb out | Twenty-six metres in two bends to **the third waystone**: two of the Pair, the Broodmother, the Ridgeback |
+//! | The pool | Past the Highlands' path the road ends at a pool under a cliff of basalt |
+//! | **The Waterfall** | The cliff, twenty-two metres tall, with the falls down its middle: the road's one jump climb (`super::waterfall`) |
+//! | The top | The road goes on from the top of the cliff to **the third waystone**: two of the Pair, the Broodmother, the Ridgeback |
 
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::valley::land::{Point, at};
@@ -39,17 +41,25 @@ const SOLIDS: [Solid; 1] = [
     Solid::cm([84300, 7900, 1100], [84400, 8720, 1200], Material::Stone),
 ];
 
-/// **The road**, centimetres: x, z, floor, half its width.
-pub const WAY: [Point; 8] = [
+/// **The road**, centimetres: x, z, floor, half its width -- as far as the
+/// Waterfall, where it ends at the pool's shore.
+pub const WAY: [Point; 6] = [
     at(65000, 400, 5600, 500),
     at(67500, 1000, 5650, 1400),
     at(70200, 400, 5700, 2200),
     at(73500, 1000, 5750, 2200),
     at(76500, -200, 6000, 1800),
-    at(79500, 0, 6600, 1000),
-    at(82200, 600, 7500, 800),
-    at(84800, 600, 8200, 500),
+    at(78500, -300, 6000, 1000),
 ];
+
+/// **The road above the Waterfall**, from the top of the cliff to the third
+/// pass. Its own way, because between the two the road is a climb: it
+/// starts where the land holds it up to the cliff's top
+/// (`super::waterfall::PIECES`, the cliff's top runs back to here).
+pub const ABOVE: [Point; 2] = [at(82800, 0, 8200, 300), at(84800, 600, 8200, 500)];
+
+/// **The pool** under the falls.
+pub const POOL: [Point; 2] = [at(79250, -900, 5850, 650), at(79250, 200, 5850, 650)];
 
 pub const CRAGS: [Crag; 1] = [Crag {
     x: 69000,
@@ -57,7 +67,8 @@ pub const CRAGS: [Crag; 1] = [Crag {
     ledges: 6,
 }];
 
-pub const CAIRNS: [(i32, i32); 1] = [(67000, -400)];
+/// The second cairn is the Waterfall's foot, on the shore.
+pub const CAIRNS: [(i32, i32); 2] = [(67000, -400), (77900, -600)];
 
 pub static PLACE: Place = Place {
     arena: ArenaId::PINEWOOD,

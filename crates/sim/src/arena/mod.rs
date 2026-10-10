@@ -81,6 +81,8 @@ pub mod lab;
 
 pub mod climb;
 
+pub mod waterfall;
+
 pub mod bench;
 
 pub mod hearth;
@@ -156,6 +158,9 @@ impl ArenaId {
     /// moor. The Ridgeback is still hunted in the proving ground by
     /// [`for_species`]; this is only where the valley meets it.
     pub const HIGHLANDS: ArenaId = ArenaId(31);
+    /// **The Waterfall** as a jump course of its own (`waterfall`): the
+    /// same cliff the valley's road climbs at the head of the Pinewood.
+    pub const CLIMB_WATERFALL: ArenaId = ArenaId(32);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -221,6 +226,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::CLIMB_SPIRE => Some(&climb::SPIRE),
         ArenaId::CLIMB_GULF => Some(&climb::GULF),
         ArenaId::CLIMB_REACH => Some(&climb::REACH),
+        ArenaId::CLIMB_WATERFALL => Some(&climb::WATERFALL),
 
         ArenaId::HEARTH => Some(&hearth::ARENA),
         ArenaId::RING => Some(&ring::ARENA),

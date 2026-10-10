@@ -145,7 +145,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?arena=<name>",
-                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach.",
+                "Fight in another arena, exactly as --arena does: proving_ground, range, lab, or a jump course -- stair, causeway, spiral, falls, slalom, fork, waterfall, spire, gulf, reach.",
             ),
             e(
                 "?temper=<n>",
@@ -567,11 +567,11 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "Jump courses",
         in_browser: true,
-        blurb: "Islands of rock hanging over a long drop, nothing to fight: the movement system is the challenge. Two easy, four hard, two barely possible -- every tier a guess until somebody plays them; docs/design/courses.md has the list.",
+        blurb: "Islands of rock hanging over a long drop, nothing to fight: the movement system is the challenge. Two easy, five hard, two barely possible -- every tier a guess until somebody plays them; docs/design/courses.md has the list.",
         entries: &[
             e(
                 "N",
-                "The next jump course, in order of difficulty: the Stair and the Causeway (easy); the Spiral round a great pillar, the Falls over an arch and down a waterfall of stones, the Slalom between pillars and through a cave mouth, and the Fork with its high and low roads (hard); the Spire and the Gulf (barely possible); then the Reach, a proving ground of marked distances for trying each class's mechanics. The hard courses and the Gulf have big jumps for the mechanics too; the course panel says where. From anywhere else, the first. Online, both players go together.",
+                "The next jump course, in order of difficulty: the Stair and the Causeway (easy); the Spiral round a great pillar, the Falls over an arch and down a waterfall of stones, the Slalom between pillars and through a cave mouth, the Fork with its high and low roads, and the Waterfall -- the valley's basalt cliff, climbed up one side, behind the falling water and up the other (hard); the Spire and the Gulf (barely possible); then the Reach, a proving ground of marked distances for trying each class's mechanics. The hard courses and the Gulf have big jumps for the mechanics too; the course panel says where. From anywhere else, the first. Online, both players go together.",
             ),
             e(
                 "--arena stair, ?arena=stair",
@@ -916,6 +916,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_WEIGHT=<n>",
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
+            ),
+            e(
+                "SHOT_AT=<x>,<z>",
+                "Stand player one at that point of the place the world is in (metres), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
             ),
             e(
                 "SHOT_MOVE=<move>",
