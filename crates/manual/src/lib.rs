@@ -204,11 +204,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "K or right click",
-                "Guard. The first few frames parry. Three classes spend it instead, none of them having a shield to raise: the Champion's spear, the Dual mage's light auto, and the Shadow Reaver's shadow -- hers is the one the crosshair aims, so it goes on the hand doing the aiming.",
+                "Guard. The first few frames parry. Three classes spend it instead, none of them having a shield to raise: the Champion's spear, the Dual mage's light, and the Shadow Reaver's shadow -- hers is the one the crosshair aims, so it goes on the hand doing the aiming.",
             ),
             e(
                 "U or middle click",
-                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying -- and the Elementalist's is the Cinder spray.",
+                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is twilight -- both her forces at once, Binary on the floor and Phase in the air -- and the Elementalist's is fire: the pillar on the floor, the carpet in the air.",
             ),
             e(
                 "Mouse side buttons (or I and O)",
@@ -278,70 +278,70 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two forces, one in each arm, and a bar for each. Which button you attack with is which one you feed. Level, nothing moves; apart, the higher one grows, the lower one starves and you burn. The lower bar is what your body can do, and both full is wings.",
+        blurb: "Two forces, one in each hand, and a bar for each -- and every move a spell. Left is dark, the hex: things that travel and linger. Right is light, the strike: things that happen now. Middle is twilight, both at once. A dark spell hexes what it hits, a light one hexes it the other colour, and the other force on a hexed body sets it off -- so alternating your hands is both the combo and the climb. Rebuilt 2026-10-09 and unplayed; docs/design/exploration/0010_dual_mage_spells.md is the design.",
         entries: &[
             e(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. It **drags** whoever it catches a short way toward you and gives you a trickle of health back, which is how a fragile melee mage stays attached to somebody. Feeds the dark bar five, and makes you dark.",
+                "Dark. On the floor, the Shade bolt: a small dark dart from your left hand along the crosshair -- quick, but in flight, so it can be stepped out of. In the air, Reel: the same dart, and if it hits somebody it pulls you to them. Space and left click is Nightfall: you jump, and a small dark well blooms where you left the floor, dragging whoever is near it in. Every dark spell feeds the dark bar and hexes what it hits with Umbra (a dark orb over their head).",
             ),
             e(
                 "Right click",
-                "Light auto. The same punch and wing mirrored onto the right arm, and it **shoves** instead of pulling. Feeds the light bar five, and makes you light. There is no guard on this class.",
+                "Light. On the floor, the Sunray: an instant short beam from your right hand to the first thing on the crosshair's line -- already there, so it is blocked rather than dodged. In the air, Flare: a burst of light a few metres along your aim, and if it meets the floor, a wall or a body it kicks you back the other way -- aimed down, a lift. Space and right click is Dawn: a column of light that throws whoever is beside you up with you. Every light spell feeds the light bar and hexes Radiance (a light orb).",
             ),
             e(
                 "Middle click",
-                "Lance, and which of the two you get is whichever force you are carrying. Light: the line flies out and bursts at its far end, so you aim it past somebody rather than at them. Dark: it catches the first thing it hits and drains it until one of you walks out of the leash. Middle click has no side, so it feeds whichever bar you are carrying, nine -- which is what lets the form come from the arm you last punched with. The wind-ups look nothing alike on purpose.",
-            ),
-            e(
-                "E",
-                "Sweep. Both arms round past both shoulders -- the one thing you throw that reaches a little behind you, which is what makes it the panic button. Light throws them back and off their feet; dark slows them and heals you per target caught. No side of its own, so it feeds whichever bar you are carrying, nine.",
+                "Twilight, both at once: it feeds both bars and is worth your lower one. On the floor, Binary: two orbs, one of each force, wound round each other along the crosshair. In the air, Phase: you blink a few metres along the crosshair, stopped by walls, and a flash hurts whoever was beside you where you were -- it spends your airdodge. Space and middle click is Equinox: a jump as high as your lower bar is full.",
             ),
             e(
                 "Q",
-                "Judgement. The finisher: a delayed strike where the crosshair is, and the field it leaves burns them and makes you fast while you stand in it. It feeds the bar you are carrying far harder than anything else you have -- twenty -- so casting it from level throws the two apart, and the other hand has to answer.",
+                "The Abyss, the dark major: a well where the crosshair meets the floor. For a second it drags everything in it toward its middle, hurts, gives you some of it back and hexes Umbra. Feeds the dark bar twenty.",
             ),
             e(
-                "The bar you carry is power",
-                "Everything you throw is worth what the bar of its force says, all the way along it: empty is thin and disappointing, full is the most you can hold. Damage, the pull, the shove, how big it is and how long the ground it leaves burns -- all of it, continuously, with no thresholds. A cast reads the bar you are carrying; an auto reads its own. What never changes is the frame data, so a move is the same speed wherever the bars are.",
+                "E",
+                "Judgement, the light major: a delayed strike where the crosshair is, and a burning field that makes you fast while you stand in it. It hexes Radiance -- and sets off every Umbra hex it hits, which is what makes it the end of an Abyss. Feeds the light bar twenty.",
+            ),
+            e(
+                "Hexes: Shatter and Wither",
+                "One hex on a body at a time, and it fades on its own. The same force again only refreshes it. The other force sets it off: light on an Umbra hex is a **Shatter** -- a burst of damage and a stagger; dark on a Radiance hex is a **Wither** -- damage drained back to you and a slow. Binary on a clean body sets off both at half. So the bread and butter is dark, light, dark, light on one body.",
+            ),
+            e(
+                "Each bar is its spells' power",
+                "Everything you throw is worth what the bar of its force says, all the way along it: empty is thin, full is the most you can hold -- damage, the reactions, how big the well is. A middle-click spell reads your lower bar. What never changes is the frame data.",
             ),
             e(
                 "The hill",
-                "The two bars are compared every frame. Level -- within sixteen of each other -- nothing moves. Further apart than that, the higher one rises and the lower one falls, faster the wider the gap, and you burn. Both bars fall slowly on their own, always, so a height you stop feeding is a height you lose.",
+                "The two bars are compared every frame. Level -- within sixteen of each other -- nothing moves. Further apart than that, the higher one rises and the lower one falls, faster the wider the gap, and you burn. Both bars fall slowly on their own, always, so a height you stop feeding is a height you lose. Middle click feeds both and never widens the gap.",
             ),
             e(
                 "Blink, second jump, wings",
-                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower. Both full and you ascend: wings, a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and then both bars empty and a stagger -- shorter the more you landed. Climb it with both hands: dark auto, dark Lance, light auto, light Sweep.",
+                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower -- which is also why your takeoffs are from the floor only: in the air, space is that jump. Both full and you ascend: wings, a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and then both bars empty and a stagger.",
             ),
             e(
                 "On your back",
-                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar -- the great wing at half, the lower one at three quarters, the small one floating between the other two at full -- and never grows. Everybody in the arena can count them. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
-            ),
-            e(
-                "The tip",
-                "The last frame of either auto is the wing's tip, and it hits far harder -- and shoves or pulls far harder. It is the only part that reaches straight out in front of you, so landing it is a question of standing at the edge of your range rather than on top of them.",
-            ),
-            e(
-                "Which force you are",
-                "Whichever auto you threw last. Everything else you throw is made of that force and feeds that bar, so the two clicks are the steering and everything else is the accelerator.",
-            ),
-            e(
-                "Catching it",
-                "When the bars run apart, the far-side auto is the way back and it is urgent: the low bar is falling while you wait. An auto alone only holds it; the far-side cast -- a light Sweep after a dark Judgement -- wins it.",
+                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
             ),
         ],
     },
     Section {
         title: "The Shadow Reaver",
         in_browser: true,
-        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two.",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two. Her three clicks are the blade, the execution and the shadow: each has a move on the floor, one in the air and a jump attack with space. Rebuilt on three clicks 2026-10-09 and unplayed; docs/design/exploration/0011_shadow_reaver_on_three_clicks.md is the design.",
         entries: &[
             e(
                 "The shadow copies you",
                 "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
             ),
             e(
+                "Left click",
+                "The blade. Slash on the floor, the cut the tally is built on. In the air, the Kite cut: a hit on a body carrying marks gives your airdodge back -- and the airdodge pointed at the shadow is the dash. Space and left click is the Moonsault: a back flip up and away whose blade launches whoever was pressing you.",
+            ),
+            e(
+                "Middle click",
+                "The execution. Executioner on the floor, the committed overhead that cashes a tally for the most. In the air, the Guillotine drop: straight down blade first, spiking anybody under you into the floor. Space and middle click is the Gallows: you are gone upward, hang a beat, and come down blade first.",
+            ),
+            e(
                 "Right click",
-                "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it. It answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
+                "The shadow. Send it where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it. It answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped. In the air with the shadow out, right click is the Swap: you and it trade places. Space and right click hangs the shadow in the air where you point; it waits there a moment, then sinks to the floor.",
             ),
             e(
                 "Q",
@@ -349,7 +349,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E",
-                "Executioner, the committed melee. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim. That also means she is the one class the retirement of shift-plus-click cost nothing.",
+                "Deadly mistake, a short counter stance. Struck in it by a fighter, you take nothing: you are behind them, and your shadow is left standing where you were. Whiffed, it is a long recovery.",
             ),
             e(
                 "Shift + forward",
@@ -368,31 +368,35 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Elementalist",
         in_browser: true,
-        blurb: "Terrain author. She raises stones, plants fire, and then combos through what she built -- and off the floor the same buttons throw air. The v2 kit is built and unplayed; docs/design/elementalist-v2.md is the decision.",
+        blurb: "Terrain author. Her three clicks are the class: left is earth, middle is fire, right is wind -- each a tap and a hold on the floor, something else in the air, and a jump attack with space. Q and E are the two pushes she uses on what she built. Built 2026-10-09 and unplayed; docs/design/exploration/0008_elementalist_on_three_clicks.md is the direction.",
         entries: &[
             e(
                 "Left click",
-                "Bolt: an instant line to whatever the crosshair is on. A fighter loses the move they were winding up; a stone is kicked along the line; a fire pillar lights a fire bolt. In the air it is the Air bolt, a long slow shot with a real flight -- and one that comes out lit, worth more and bursting where it lands, if it flew through fire.",
-            ),
-            e(
-                "Right click",
-                "Cataclysm: a slow heavy along the same line that breaks a stone into debris or tears a pillar loose as a tornado. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones it passes, and through fire it comes out burning.",
+                "Earth. Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Clicked out past an edge it stays up at your level; pointed at the floor below, it goes down there. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning while you crawl; let go and Fissure races from it toward the crosshair, as far as you held for, and the stone erupts at the crack's end. In the air it is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
             ),
             e(
                 "Middle click (or U)",
-                "Cinder spray, on the floor and off it. A thrown coal that bursts where its range runs out or on the first thing in the way, into a cloud of embers that hangs a couple of seconds -- or a low burning patch, on the floor. Fly a shot through it and the shot is fire. It is also the fire you have when the pillar is too far away.",
+                "Fire. The fire pillar, planted where the crosshair is; one at a time. **Hold it past the wind-up** and the fire gathers in your hands: you crawl, and letting go lands the pillar's whole burn as one Strike. In the air it is the Fire carpet: a strip of fire laid out in front of you along your look. Fly a Gale down it and the Gale is lit; Updraft into it and it is a Thermal.",
+            ),
+            e(
+                "Right click",
+                "Wind. The Air ball: raised on the floor where the crosshair is, growing for as long as you hold, and sent toward the crosshair when you let go. It shrinks as it rolls and everything standing in it goes with it -- you included; jump out and you keep its speed, walk sideways in it (A and D) and you steer it. Off an edge it sinks slowly and keeps carrying you; a wall or a stone knocks it off at an angle and costs it some size. The bigger you let it grow, the faster and further it goes. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones, and through fire it comes out burning.",
+            ),
+            e(
+                "Space + a click",
+                "The jump attacks. Space and left click is the earth jump: a jump that brings a stone up with you -- keep going straight and you land on it in the air; off a stone on the floor the stone shatters and you go higher (running, look straight down and left-click to put a stone under your feet, then space and left click at once: the big jump, keeping all your run); off a stone in the air it is driven down to shatter. Space and middle click is the Fire fountain: a burst at your feet and a wash of fire left where you took off. Space and right click is the Updraft: a column of air that lifts you and anyone beside you and keeps your run -- and in the air, holding space, once a jump, it stretches the jump. An Updraft that meets your own fire is a Thermal: much higher, and along the carpet if it was the carpet.",
             ),
             e(
                 "Q",
-                "Fire pillar, planted where the crosshair is. One at a time. **Hold it past the wind-up** and the fire gathers in your hands instead: you crawl, the aim stays live, and letting go lands the pillar's whole burn as one Strike in the pillar's shape -- all of it at a full hold, and nothing left standing. Every frame you hold is a walk's worth of the gap gone, so the hold is only safe with the space to spend.",
+                "The weak push. Bolt: an instant line to whatever the crosshair is on -- it kicks a stone along the line and lights a fire bolt out of a pillar, and passes through people. The same in the air: Q is always the weak push.",
             ),
             e(
                 "E",
-                "Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning under the floor while you crawl; let go and Fissure races from it along your look, as far as you held for, staggering the first body it meets, and the stone erupts at the crack's end. Where it ran is rough ground for a while. In the air E is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
+                "The strong push. Cataclysm: a slow heavy along the same line that breaks a stone into debris or tears a pillar loose as a tornado -- on the floor and in the air alike.",
             ),
             e(
                 "F",
-                "Updraft, standing: a column of air on your own body, and everything in it goes up -- you included, each by their own weight; a stone in it is lofted. In the air it is Downdraft: the same column under you, driving you and everything in it down. Land while it is still blowing and the air breaks outward from your feet, shoving everyone near you away. Land it into fire -- a pillar, a cloud of embers -- and the fire goes out and a ring of it races outward instead.",
+                "Cinder spray, standing: a thrown coal that bursts into a cloud of embers -- fire for your shots to fly through. In the air it is Downdraft: a column under you driving you and everything in it down. Land while it blows and the air breaks outward from your feet; land it into fire and a ring of fire races outward instead.",
             ),
             e(
                 "Mouse side button B (or O)",
@@ -404,11 +408,73 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift + direction, crosshair on a stone",
-                "The dodge breaks through it: the stone is gone as you pass, its slot is free again, and where it stood is rough ground -- burning ground and a cloud of embers, if it was lit. The one thing in the kit that beats a string rather than a hit: whoever was chasing you has broken ground between you and them. In the air it is the airdodge, and costs the airdodge.",
+                "The dodge breaks through it: the stone is gone as you pass, its slot is free again, and where it stood is rough ground -- burning ground and a cloud of embers, if it was lit. In the air it is the airdodge, and costs the airdodge.",
             ),
             e(
                 "Fire on a stone",
-                "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it -- your beam's kick included. Earth builds the field; fire decides who may use it.",
+                "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it. Earth builds the field; fire decides who may use it.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Blood mage",
+        in_browser: true,
+        blurb: "Her blood goes out and theirs comes back. Her three clicks are my blood, your blood and the scythe -- each a move on the floor, something else in the air, and a jump attack with space. Her own pools are doors, not heals: only somebody else's blood closes her wounds. Built 2026-10-09 and unplayed; docs/design/exploration/0009_blood_mage_on_three_clicks.md is the direction.",
+        entries: &[
+            e(
+                "Left click",
+                "My blood. Hold to charge the Blood nova, paid in your own health as you hold; let go and a sphere of blood bursts round you, hurts and throws back whoever is close, and leaves a pool of your blood where you stood. In the air it is the Haemorrhage: a bolt that opens a bleed, and a bleeding body -- fighter or creature -- drips pools as it goes.",
+            ),
+            e(
+                "Middle click",
+                "Your blood. Hold for reach and four arms close on the crosshair: all four catch, and the victim is hauled to your feet -- or, if they close on a wall, a stone or the creature, you are hauled to it. In the air it is the Nail: a long black spike thrown down the crosshair. Nail somebody who is already in the air and they are pinned there for a moment, bleeding on to the floor below.",
+            ),
+            e(
+                "Right click",
+                "The scythe. The Reaping sweep, whose reach grows with your grey health. In the air it is the Hook: thrown along the crosshair, it catches the first fighter, creature, stone or wall and pulls you to it.",
+            ),
+            e(
+                "Space + a click",
+                "The jump attacks. Space and left (held) is the Blood jet: you leave the floor on a jet of your own blood, further and harder the longer you hold, paid as you hold; whoever is in its wake is hurt, and a pool of your blood is left where you took off -- blink back to it. Space and middle is Marionette: their blood lifts them into the air (and you after them) -- Nail them up there. Space and right is Harvest: a big jump inside a scythe spin that drinks the pools it passes over.",
+            ),
+            e(
+                "Q",
+                "The Bloodletter: a blade thrown out a fixed distance and back, cutting on both passes. In no combo yet, and the candidate to cut once she has been played.",
+            ),
+            e(
+                "E",
+                "The Black spike: a spike out of the floor after a delay. On a pool, the pool erupts, and on a bleed's trail it chains along the pools to the bleeding body.",
+            ),
+            e(
+                "Shift + direction, crosshair on a pool",
+                "The blink: you are at the pool, and it is spent. Your own pools are for this -- they never heal you.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Bulwark",
+        in_browser: true,
+        blurb: "The wall. Every blow taken on the shield is stored in it as weight, and his moves spend it. His three clicks are the strike, the weight and the guard: each has a move on the floor, one in the air and a jump attack with space. His air game is about being thrown -- the shield is a springboard, a sail and a battery. Rebuilt on three clicks 2026-10-10 and unplayed; docs/design/exploration/0012_bulwark_on_three_clicks.md is the design.",
+        entries: &[
+            e(
+                "Left click",
+                "The strike. Bash on the floor, the safe poke. In the air, Rebound: a Bash that throws you back off anything it meets -- a body, a wall, a stone, your own planted shield. Space and left click is the Battering ram: a low leap forward, shield first, carrying whoever it meets.",
+            ),
+            e(
+                "Middle click",
+                "The weight. Slam on the floor and in the air, where it waits for your feet and counts the fall. Space and middle click is Unload: the shield driven into the floor, and the stored weight throws you upward -- higher the more it held. It spends everything.",
+            ),
+            e(
+                "Right click",
+                "The guard, held; its first frames parry, and every blow it takes is weight. Held in the air it is a sail: you fall slowly behind it. Space and right click is the Shield step: the shield is planted where you stand, and you spring off its top -- higher the heavier it is. You have no shield until you call it home.",
+            ),
+            e(
+                "Q",
+                "Grapple, the command grab. It beats a guard and loses to a dodge.",
+            ),
+            e(
+                "E",
+                "The shield: thrown when it is in your hand, recalled when it is planted -- hitting whoever is in the way home -- and, while it flies, a leap to it. No frames: it happens on the press.",
             ),
         ],
     },

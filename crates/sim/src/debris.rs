@@ -93,6 +93,19 @@ pub fn blast(shrapnel: &mut Shrapnel, owner: u8, at: V3, dir: V3) {
     }
 }
 
+/// **A stone shattering outward**, rather than broken along a line: the
+/// earth jump off a stone on the floor, and a meteor arriving. Every piece
+/// flat out from the middle in a ring, tipped a little up so the ring clears
+/// the floor it was standing on. No line was aimed, so the ring has no front.
+pub fn shatter(shrapnel: &mut Shrapnel, owner: u8, at: V3) {
+    let tilt = sin_turns(t::debris_spread());
+    for k in 0..PIECES_PER_BLAST {
+        let azimuth = Fx::ratio(k as i32, PIECES_PER_BLAST as i32);
+        let dir = V3::new(cos_turns(azimuth), tilt, sin_turns(azimuth)).normalized();
+        light_one(shrapnel, owner, at, dir);
+    }
+}
+
 /// Light one piece. The one furthest along gives way when the array is full,
 /// the same rule `bolt::light` follows.
 fn light_one(shrapnel: &mut Shrapnel, owner: u8, at: V3, dir: V3) {

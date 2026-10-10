@@ -382,6 +382,12 @@ pub struct Shadow {
     /// held through a short dash would otherwise throw a second dodge on the
     /// frame she lands. See `shadow::shift_spent`.
     pub shift_spent: bool,
+    /// Frames a shadow hung in the air (`Hang the shadow`) waits there before
+    /// it sinks. Zero for a shadow standing on the floor.
+    pub hang: u16,
+    /// The height of the floor under it: where a hung shadow sinks to.
+    /// `Fx::MAX` for a shadow that was put on the floor, which never sinks.
+    pub rest: Fx,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -428,6 +434,8 @@ impl Shadow {
             jump_banked: false,
             refused: 0,
             shift_spent: false,
+            hang: 0,
+            rest: Fx::MAX,
         }
     }
 
@@ -532,6 +540,18 @@ pub struct Structure {
     /// into burning debris when anything shoves or breaks it. Earth builds
     /// the field; fire decides who may use it. See `crate::stones`.
     pub lit: u16,
+    /// **Brought up into the air by the earth jump**, and not yet down again.
+    ///
+    /// An aloft stone left the floor a little slower than she did and falls
+    /// more gently (`tuning::earth_stone_gravity`), so a straight jump comes
+    /// down on to it; it starts with its top at her feet, under the floor,
+    /// and the floor does not hold it back until it has come up through it.
+    /// It is an ordinary stone again the frame it comes to rest.
+    pub aloft: bool,
+    /// **Driven back into the ground**, and shatters when it gets there --
+    /// an aloft stone she earth-jumped off, or one a shot drove down out of
+    /// the air. See `stones::step`, which reports where each one landed.
+    pub meteor: bool,
 }
 
 // ---------------------------------------------------------------------------

@@ -190,17 +190,17 @@ fn greedy(w: &World) -> u16 {
         let after = mine.add(Fx::from_int(push));
         after.sub(other).raw() <= band.raw() && after.raw() <= top.add(Fx::from_int(push)).raw()
     };
-    if fits(t::meter_finisher_push()) && p.repeat_lock[d::JUDGEMENT as usize] == 0 {
-        Input::SPECIAL
-    } else if fits(t::meter_cast_push()) {
-        // Sweep and Lance alternate, so neither runs into its own lockout.
-        let sweep_locked = p.repeat_lock[d::SWEEP as usize] > 0;
-        let lance = d::lance_for(colour) as usize;
-        if !sweep_locked || p.repeat_lock[lance] > 0 {
-            Input::MECHANIC
-        } else {
-            Input::MIDDLE
-        }
+    // The major of the force she is carrying: the Abyss on `Q` for dark,
+    // Judgement on `E` for light (2026-10-09).
+    let (major, key) = match colour {
+        Force::Dark => (d::ABYSS, d::keys::DARK_MAJOR),
+        Force::Light => (d::JUDGEMENT, d::keys::LIGHT_MAJOR),
+    };
+    if fits(t::meter_finisher_push()) && p.repeat_lock[major as usize] == 0 {
+        key
+    } else if p.repeat_lock[d::BINARY as usize] == 0 {
+        // Binary goads both bars, so it never widens the gap.
+        d::keys::TWILIGHT
     } else {
         match colour {
             Force::Dark => Input::LEFT,
@@ -295,8 +295,8 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
     if let Some(opening) = script.opening() {
         w.players[0].mechanic = opening;
     }
-    // Where the autos land: just inside the wing's reach, dead ahead.
-    let reach = sim::moves::get(Class::DualMage, d::DARK_AUTO).reach;
+    // Where the autos land: just inside the shorter one's reach, dead ahead.
+    let reach = sim::moves::get(Class::DualMage, d::SUNRAY).reach;
     let stand = w.players[0]
         .pos
         .add(w.players[0].facing.scale(reach.sub(t::body_radius())));

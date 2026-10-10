@@ -1,9 +1,15 @@
-//! The Haemorrhage: right click, a bolt that opens a bleed, and a bleed that
-//! lays a trail of pools. See `docs/design/kits/blood-mage.md`.
+//! The Haemorrhage: left click in the air, a bolt that opens a bleed, and a
+//! bleed that lays a trail of pools. See `docs/design/kits/blood-mage.md`.
+//!
+//! It was the right click from the floor until the three-clicks remap
+//! (`docs/design/exploration/0009_blood_mage_on_three_clicks.md`): the left
+//! click is *my blood*, which on the floor is the Blood nova and only in the
+//! air the bolt. So every cast here is thrown from a height.
 
 use sim::class::Class;
 use sim::effects::{Effect, EffectKind};
 use sim::moves::blood as b;
+use sim::moves::blood::keys;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
 
@@ -69,26 +75,47 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         .expect("the scan is not empty")
 }
 
+/// Hold her a metre and a half off the floor, in the air, so the left click
+/// is the Haemorrhage and the aim taken before the press is the aim it leaves
+/// on.
+fn aloft(w: &mut World) {
+    w.players[0].pos.y = Fx::ratio(3, 2);
+    w.players[0].vel.y = Fx::ZERO;
+    w.players[0].grounded = false;
+}
+
+/// Cast the bolt from the air along `pitch`, with the other fighter pressing
+/// `b`: held up through the press and the wind-up, then let fall.
+fn cast_bolt(w: &mut World, pitch: i16, b: u16) {
+    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    for f in 0..m.startup as u32 + 2 {
+        aloft(w);
+        let mine = if f < 2 { keys::MY_BLOOD } else { 0 };
+        looking(w, 1, mine, pitch, b);
+        if bolts(w) > 0 {
+            break;
+        }
+    }
+    assert!(
+        bolts(w) > 0,
+        "fixture: the left click in the air threw no bolt"
+    );
+}
+
 /// Throw the bolt at the dummy standing `away` metres ahead, and run until it
 /// has landed or flown its whole reach. Gives back what the bolt itself dealt.
 fn bolt_the_dummy(w: &mut World, away: i32) -> i32 {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
     w.players[1].pos = V3::new(Fx::from_int(away), Fx::ZERO, Fx::ZERO);
     let full = w.players[1].health;
+    aloft(w);
     let pitch = pitch_at(w, w.players[1].pos);
-    looking(w, 2, Input::RIGHT, pitch, 0);
-    looking(
-        w,
-        m.startup as u32 + t::haemorrhage_flight() as u32 + 2,
-        0,
-        pitch,
-        0,
-    );
+    cast_bolt(w, pitch, 0);
+    looking(w, t::haemorrhage_flight() as u32 + 2, 0, pitch, 0);
     full - w.players[1].health
 }
 
 #[test]
-fn right_click_throws_a_bolt_that_cuts_and_opens_a_bleed() {
+fn left_click_in_the_air_throws_a_bolt_that_cuts_and_opens_a_bleed() {
     let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
     let mut w = mage();
     let paid = w.players[0].cost_of(m.cost);
@@ -280,7 +307,7 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             .expect("the scan is not empty")
     };
     let health = w.players[1].health;
-    looking(&mut w, 2, Input::MECHANIC, pitch, Input::A);
+    looking(&mut w, 2, keys::SPIKE, pitch, Input::A);
     looking(&mut w, m.startup as u32 + 2, 0, pitch, Input::A);
     let eruptions = w
         .effects
@@ -322,12 +349,13 @@ fn the_bolt_is_the_easier_thing_to_land() {
 fn a_guarded_bolt_is_spent_and_opens_nothing() {
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(0));
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    aloft(&mut w);
     let pitch = pitch_at(&w, w.players[1].pos);
-    looking(&mut w, 2, Input::RIGHT, pitch, Input::RIGHT);
+    // The Bulwark guards on his right click the whole time.
+    cast_bolt(&mut w, pitch, Input::RIGHT);
     looking(
         &mut w,
-        m.startup as u32 + t::haemorrhage_flight() as u32 + 2,
+        t::haemorrhage_flight() as u32 + 2,
         0,
         pitch,
         Input::RIGHT,

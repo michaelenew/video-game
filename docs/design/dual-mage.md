@@ -35,10 +35,13 @@ conduit, they are a vessel under load, and the load is two things that want to b
 **Dark** and **Light**, each from empty to full (`tuning::meter_max`, 100), side by side.
 Nothing is signed; there is no centre.
 
-- **Goading.** The dark auto raises Dark by a little; the light auto raises Light by a little.
-  A cast raises the bar of the force she is *carrying* by more, and the finisher by a lot.
-  Which force she carries is still the arm she last punched with — the whole of the
-  carried-force rule below survives, and so does the two-form Lance.
+- **Goading.** *Since 2026-10-09 every move is a spell with a force of its own*
+  ([exploration/0010](exploration/0010_dual_mage_spells.md)): every left-click spell and `Q`
+  raise Dark, every right-click spell and `E` raise Light — an auto by a little, any other
+  spell by more, a major by a lot — and the middle-click spells raise **both** by an auto's
+  step, so they never widen the gap. The force she carries is the last one-sided spell she
+  threw. (Before that, only the autos had a side and every cast took the carried force; the
+  table below is the new rule.)
 - **The struggle.** Every frame the two bars are compared. Inside a **band** around equal,
   nothing moves on its own. Outside it, **the higher bar rises and the lower falls**, at a
   rate that grows with how far outside the band they are, up to a cap. That is the hill: a
@@ -53,10 +56,11 @@ Nothing is signed; there is no centre.
 
 | Input | Which bar | How far |
 | --- | --- | --- |
-| Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
-| Light auto (`R`) | Light, and she is now light | 5 |
-| The finisher (`Q`) | Whichever force she is carrying | `tuning::meter_finisher_push` — 20 |
-| Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 9 |
+| Shade bolt (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
+| Sunray (`R`) | Light, and she is now light | 5 |
+| Any other left- or right-click spell | Its own force | `tuning::meter_cast_push` — 9 |
+| Abyss (`Q`) / Judgement (`E`) | Dark / Light | `tuning::meter_finisher_push` — 20 |
+| A middle-click spell | Both | 5 each |
 
 All of it **on the press**, whether or not it connects — see "Autos are the steering wheel"
 below. The band is measured against the pushes and the climb against the calm, so the four move

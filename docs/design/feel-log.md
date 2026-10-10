@@ -7740,6 +7740,131 @@ Bank, the Shelves, the Pinewood and the Saddle; every road and room walked by
 valley's "climb with a friend" thesis to the crags, by choice: whether the
 road should keep a hop or two of its own is the first thing to feel.
 
+### 2026-10-09 — the Elementalist on three clicks
+**Changed** Her core moved on to the three clicks, from the first playtest (the Champion held
+together because his three clicks *are* the class). Left is earth (Raise, Fissure held,
+Landfall in the air), middle is fire (the pillar, the Strike held, a new **Fire carpet** in the
+air), right is wind (a new **Air ball** on the floor, the Gale in the air). `Q` is the Bolt
+(Air bolt off the floor) and `E` is Cataclysm in both rows: the weak and strong push. Space
+with a click is a takeoff, on the Champion's window: the new **earth jump**, the new **Fire
+fountain**, and the **Updraft** (off `F`, mobility 20 → 100 so its startup keeps her run, and
+from the air once a trip). An Updraft that shares space with her own fire is a **Thermal**
+(lift 22 m/s against the Updraft's 14, and 12 m/s along a carpet, which it uses up). Cinder
+spray kept `F`. Every number on the four new moves is a first guess. See
+[kits/elementalist.md](kits/elementalist.md) §"On three clicks" and
+[exploration/0008](exploration/0008_elementalist_on_three_clicks.md).
+**Tried and changed while building**
+- *The earth jump's stone as "slightly slower than her"* (0.85 of her rise, 0.92 of her run):
+  measured, the stone rides about 20 cm under her feet the whole way up, so she always lands
+  on it — and a held strafe adds only about 1 m/s (air control is Quake's), so strafing never
+  missed it; an airdodge wipes her rise and the stone catches her at once. Not a choice. Now:
+  the stone keeps 0.4 of her run, and **holding forward in the air keeps it under her**; let
+  go or strafe and it drops behind. Stood on, an aloft stone stops travelling, or it slid out
+  from under her in a few frames. She lands on it about 27 frames in, at about 3.9 m.
+- The earth jump's recovery 6 → 14: at 11 frames all told it was the cheapest move in her kit,
+  which made the Air ball's lockout longer than the cheapest alternative (`feel.rs`).
+- The Fire carpet's burn moved from the move row (8) to its own knob (`Fire carpet, burn per
+  tick`), as the pillar's and the cloud's are: in the row it counted as her softest hit.
+- The Air ball's speed follows the size it is *now*, so it slows as it shrinks; with the
+  shipped numbers a tapped ball rolls about 5 m and a full one about 37.
+- The Ridgeback pin (`tests/ridgeback_pin.rs`) re-pinned for the Elementalist: the same random
+  presses throw different moves; so is her scripted Ridgeback hunt (`hunt/tests/pin.rs`),
+  whose class layer now presses her Bolt through the button it learns. Her envelope fixtures
+  re-recorded for the same reason
+  (`envelope -- search --fixtures --class Elementalist`, a new flag). **What the search found
+  moved a lot**: with the *shared* blocks alone (the jump, the airdodge, the air clicks, the
+  strafe) her best gap across the lab's lanes roughly doubled or tripled -- lane 6 from 10.5 m
+  to 41.8 m, lanes 9 and 10 from no landing to 30.2 and 20.6 m -- because the earth jump (onto
+  its stone, and off it) and the Updraft are now clicks with space. With the whole kit some
+  lanes rose (lane 13 from 41.0 to 55.1 m) and some fell (lane 3 from 45.7 to 28.3 m, lane 8
+  from 50.4 to 31.3 m); a search is a lower bound, and the falls may be routes this run did
+  not find again rather than reach that is gone. **Her reach on foot is the thing to watch in
+  play** (the courses rule: reach paid in execution).
+**Verdict** — unplayed. Known from the start: the carpet is hard to use at speed, and from her
+own seat it is edge-on and reads as one ball of fire.
+
+### 2026-10-09 — the Blood mage on three clicks
+**Changed** Her core moved on to the three clicks, the same treatment as the Elementalist's:
+left is *my blood* (a new **Blood nova** held on the floor, the Haemorrhage in the air), middle
+is *your blood* (the Grasp held, a new **Nail** in the air), right is the scythe (the Reaping
+sweep, a new **Hook** in the air). Space with a click is a takeoff in the shared window: the
+new **Blood jet** (held), **Marionette** and **Harvest**. `Q` is the Bloodletter, `E` the
+Black spike. Decided with the person combos-first: six combos, then the pieces
+([exploration/0009](exploration/0009_blood_mage_on_three_clicks.md)). Three rules changed with
+it: **her own pools never heal her**, **a hit on somebody in the air spills under them**, and
+**creatures bleed** (the Haemorrhage's bleed ticks on a creature; `CLASS-2`). The nova and the
+jet are paid in red health **as she holds**, one point every 6 frames — the first costs in the
+game paid over a hold rather than on the press. Every number on the six new moves is a first
+guess. See [kits/blood-mage.md](kits/blood-mage.md) §"On three clicks".
+**Tried and changed while building**
+- *Marionette* at launch 14 / self-lift 12 lifted the victim about 2 m and left her below them,
+  too low for the Nail to meet and too short a hang for the Hook: the Hanging did not connect.
+  Now launch 22, self-lift 20, hitstun 40, recovery 10, and `tests/blood_mage_clicks.rs` runs
+  the Hanging end to end (lift, hook, nail, pin, pool below).
+- *Harvest* at hitstun 16 was −17 on hit (a jump of 18 active and 16 recovery frames); now 36,
+  so landing it keeps the initiative (`feel.rs`).
+- *The Blood jet's wake* hurt fighters only; it now reaches a creature at either end of the line
+  and any critter on it (`critters.rs`: a move that touches a fighter touches a gnat).
+- *Harvest passes over a 0.6 m gnat* at 1–2 m: she is in the air before the blade comes round.
+  Kept, and recorded as a known exception beside the Guillotine
+  ([critters.md](critters.md) §7) — a person's call.
+- *The pins.* Her Ridgeback pin (`tests/ridgeback_pin.rs`) and scripted hunt
+  (`hunt/tests/pin.rs`, whose class layer now asks for her scythe and Grasp by button) re-pinned.
+  The Elementalist's both moved again too: `state_checksum` had been leaving her takeoff window
+  and held earth click out, and they went in with the Blood mage's new fields. A first attempt
+  hashed the held left button for **every** class and moved every pin; it is hashed for hers
+  alone. No other class's pin moved.
+- *Her envelope fixtures* re-recorded (`envelope -- search --fixtures --class Blood_mage`).
+  Mixed: lane 5 rose from 5.3 m to 20.8 m and lane 3 from 4.7 to 14.1 (the Blood jet, the
+  Hook), lane 0 fell from 20.9 to 8.0 and lane 2 from 13.1 to 8.8. A search is a lower bound,
+  so the falls may be routes this run did not find again.
+**Verdict** — unplayed. Known from the start: a pinned body and the jet's wake are not drawn.
+The Bloodletter is in no combo and is the candidate to cut.
+
+### 2026-10-09 — the Elementalist after the second playtest
+**Changed**, from three replays the person sent, played back frame by frame on the build they
+were recorded on:
+- **On a stone is on it.** Standing on a stone that was still moving (the earth jump's stone
+  coming to its stop) she kept the speed it had carried her at and drifted clear of its top —
+  `grounded` flickered 1, 0, 1 — so a left click there was Landfall and slammed her down. A body
+  that was standing on a stone and is not leaving it faster than half a jump is now put back on
+  its top at its speed (`stones::resolve_body`).
+- **A takeoff a frame after leaving a stone leaves from the stone.** Space then left click a
+  frame apart, standing on a stone, put her back on the arena's floor *under* the stone (1.8 m
+  down, and pushed out of its side) and the earth jump came out of the ground. The window now
+  remembers the height of what her feet were last on (`Rise::floor`).
+- **The person's find, explained and kept**: look straight down, left click (Raise puts a stone
+  exactly under her feet), then space and left click a frame later — an earth jump off a stone,
+  so the stone shatters and she gets the ×1.35 jump (22.95 m/s up in the replay against 17.00),
+  and it keeps all her run where the plain earth jump costs some. Pinned by
+  `the_stone_under_her_feet_and_off_it_at_once_is_the_big_running_jump`.
+- **`Q` is the Bolt in the air too.** The Air bolt is unbound — a candidate to cut, or to find
+  another button for.
+- **Her stones stay at her level when she did not point down** (`aim::grounded_kept`,
+  `kept_up`, `kept_along`, and Landfall's `planted_ahead`): `Placed, at most below her` = 2 m.
+  Hers only; the Reaver's send keeps its refusal past an edge (2026-10-04).
+- **The Air ball** sinks off an edge at 2.5 m/s instead of dropping, still carrying; is steered
+  by the sideways share of her walk inside it (×1); and is knocked off a wall or a stone keeping
+  0.7 of its size instead of stopping.
+**Tried and changed while building**
+- *Keeping her stones up for every grounded cast*, in `aim::grounded_path` itself: it turned the
+  Reaver's refused send past an island's edge into a send to the lip, undoing a decision from
+  play. Now a separate `aim::grounded_kept` for the Elementalist's placements only.
+- *The scan back to her level, asked from the floor below*: from the pit's floor an island over
+  it is a ceiling, so the scan never found the island. It asks from her own height.
+- *The Air ball snapping down any step within half its size*: past a 1.5 m dais it fell most of
+  a metre in a frame. It now rolls on a floor only as far down as a slope as steep as one frame
+  of its roll, and sinks past that.
+- The Ridgeback pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned for both classes
+  that keep `Rise` (the Elementalist and the Blood mage: `Rise::floor` is new hashed state, and
+  the stone carry changes her runs); her envelope fixtures re-recorded. Mixed, as a search
+  is: some lanes rose (lane 11 from 6.9 to 30.0 m, lane 0 from 6.5 to 17.3), some fell (lane 15
+  from 24.0 to 9.4, lane 5 from 20.4 to 10.0) -- a lower bound, so a fall may be a route this
+  run did not find again.
+**Verdict** — unplayed. To check in play: whether 2 m is the right drop on the valley's sloping
+land (a Raise at full range downhill now comes back toward her), and whether the steer is
+enough to be felt.
+
 ### 2026-10-09 — a fight's edge is land; the town is a town
 
 **Changed** Every fight's edge-of-the-world boxes (the Commons' hedge, the
@@ -7765,3 +7890,115 @@ things to feel: whether anybody misses hopping a low wall to reset a fight,
 and whether a bank behind a wall changes where a ranged class likes to stand
 (a level aim along a wall now meets the bank behind it rather than the sky --
 the reason the proving ground's rim moved out).
+
+### 2026-10-09 — the Dual mage, every move a spell
+**Changed** Her whole kit, from the person's brief: left dark and right light, every move a
+spell, `Q` and `E` the dark and light majors, a middle click worth having, and the autos'
+pull and push gone. Designed combos first
+([exploration/0010](exploration/0010_dual_mage_spells.md)): a **hex** on what she hits —
+Umbra from dark, Radiance from light — that the other force sets off (**Shatter**: damage and a
+stagger; **Wither**: damage drained back to her and a slow), so alternating hands is the combo
+and the climb at once. Left is the hex (Shade bolt, Reel, Nightfall), right the strike (Sunray,
+Flare, Dawn), middle twilight (Binary, Phase, Equinox) — powered by her lower bar and goading
+both. `Q` Abyss, a well that drags, drains and hexes; `E` Judgement, which now shatters the
+Abyss's hexes. Every move now has its own force (`dual::steer`); the carried-force rule and the
+two-form Lance are gone. The two bars are unchanged. Every number on the eleven moves and the
+reactions is a first guess. See [kits/dual-mage.md](kits/dual-mage.md) §"Every move a spell".
+**Tried and changed while building**
+- *The Sunray stopped at the skin* of the body it met and missed it (the hit test measures to
+  the spine): it now reaches a body's width into what it met.
+- *The Flare never found the floor*: `aim::first_along` counts walls and bodies, not open
+  ground. `aim::floor_along` asks the floor; and the aerial hang was bleeding the kick away, so
+  a Flare that kicks ends the hang.
+- *Dawn* at launch 16 lifted a Bulwark under a metre from empty bars; now 26.
+- *The Abyss* reused the Sweep's clip at 16/2/22 frames and the baked motion jumped; now
+  14/8/18. *Binary* at 40% mobility left her faster than guarding (now 25%); *Phase*'s repeat
+  lockout 80% and *Equinox*'s recovery 12, for `feel.rs`'s lockout rule.
+- *The hunting bot climbed her to the wings in the air*: off the floor her clicks throw Reel
+  and Flare, which goad by a cast's push, and the class layer weighed them as autos. It weighs
+  what is thrown now. Its "turned a hand" count is no longer a sign of anything — the plans
+  already throw the low side's auto and every spell has its own force — so `hunt/tests/class.rs`
+  asks for goads and majors instead.
+- *Retuned against the class benchmarks* (`tests/dual_mage.rs`, b1 and b2): alternating on a
+  dummy dealt 3.4 health bars in half a round (target 1 to 2.25), so the Shade bolt 22 → 14, the
+  Sunray 24 → 16, Shatter 40 → 26, Wither 30 → 20, Reel 20 → 14. One-sided spam with the Abyss
+  cost her nothing, because the well's drain healed back the burn: Abyss tick 12 → 10, drain
+  40% → 15% (10% rounds to nothing on an 8-point tick), and it lasts 1 s rather than 1.5 s.
+- *Effect hits never counted as landed while she was ascended*, so the wings' refund and the
+  shorter stagger were dead for nearly the whole kit: every spell that lands now counts.
+- Her envelope fixtures re-recorded. Some lanes fell a long way (lane 0 from 10.7 m to 1.9 m,
+  lane 1 from 19.1 to 4.4) and some rose (lane 4 from 7.7 to 13.5, lane 7 from 6.5 to 13.6): the
+  old autos' eighteen-frame hangs were a movement tool, and Reel and Flare hang 12 and 10. A
+  search is a lower bound; **her reach in the air is the thing to watch in play.**
+- The Dual mage's pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned; the hex is
+  hashed only while one is on a body, so no other class's pin moved.
+**Verdict** — unplayed. Known from the start: her new moves play the six clips she had; clips
+of their own are the next step. Open: DUAL-1 to DUAL-4 in 0010.
+
+### 2026-10-09 — the Shadow Reaver on three clicks
+**Changed** Her bindings, onto the grid every class has been moving to, from the person's
+brief ("do the same"). Designed combos first
+([exploration/0011](exploration/0011_shadow_reaver_on_three_clicks.md)): her loop is **send,
+mark, cross, cash**, and each new move is a new piece in it. Left is the blade (Slash, **Kite
+cut** in the air, **Moonsault** off the floor), middle the execution (**Executioner**, moved
+from `E`; **Guillotine drop**; **Gallows**), right the shadow (send / recall; **Swap** in the
+air with the shadow waiting; **Hang the shadow** off the floor). `Q` is still the lotus. `E` is
+**Deadly mistake** at last — the counter stance her kit has listed without a button since
+2026-09-09: struck in it by a fighter, she is behind them and the shadow is left where she stood.
+A Kite cut that cashes a tally gives her airdodge back, which is the dash pointed at the shadow.
+A shadow hung in the air waits `Hang the shadow, waits for` and then sinks to the floor under
+it; one put on the floor never sinks (`Shadow::rest` is `Fx::MAX` there). Every number on the
+seven new moves and the eight knobs is a first guess.
+**Tried and changed while building**
+- *The Kite cut as an upright arc* (reach 1.6, radius 0.5) passed over a knee-high gnat at 3 m
+  where it caught a fighter (`critters.rs`), and no longer reached the Broodmother's fore sacs
+  from the top of a hop, which the Slash did (`broodmother.rs`): it is the Slash's own volume
+  thrown in the air now, and its own thing is the refuel.
+- *Gallows* at reach 1.9 / radius 0.7 had the same gnat gap at 3 m, and at knockback 10 moved a
+  body 1.45 m for 150 damage (`feel.rs` asks a heavy hit for 1.5): Executioner's 1.7 / 1.1 / 20.
+  It drops straight down rather than forward and down as first written: she steers it with air
+  control, as Landfall is steered.
+- *The Guillotine drop's dive came late*: the dive starts on its first active frame, and eight
+  frames of wind-up in the air were most of a short hop. Startup 5.
+- *A swap's shadow sank the frame after it was left*: a swapped shadow waits as a hung one does.
+- *The shadow's copy* is thrown for every swing with damage; the swap and the stance are swings
+  with none and are not copied.
+- The Reaver's pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned; the hang and
+  the rest are hashed only when used, so no other class's pin moved. Her envelope fixtures
+  re-recorded, and her reach **grew**: lane 0 from 46.8 m to 62.7 m shared (86.2 m with the
+  whole kit), most lanes by a third or more. The Hang the shadow and the dash to it is a
+  vertical crossing she did not have, and the Kite cut's refuel is a second dash in one
+  airtime. A search is a lower bound; **her reach is the thing to watch in play**
+  (REAVER-1).
+**Verdict** — unplayed. Her new moves play the four clips she had. Open: REAVER-1 to REAVER-4
+in 0011.
+
+### 2026-10-10 — the Bulwark on three clicks
+**Changed** His bindings, onto the grid, from the person's brief ("do the same"), and with him
+no class is on the shared grammar any more (`state::clicked_move` has no fallback arm). Designed
+combos first ([exploration/0012](exploration/0012_bulwark_on_three_clicks.md)), and following
+0007 §7's recommendations: his air game is about **being thrown**, the shield a springboard, a
+sail and a battery. Left is the strike (Bash, **Rebound** in the air, **Battering ram** off the
+floor), middle the weight (Slam on the floor and in the air, **Unload** off it), right the guard
+(Guard, **Sail** — the guard held in the air caps his fall — and the **Shield step**). Unload
+spends the weight on height; the Shield step plants the shield, weight and all, and springs him
+off it. `Q` and `E` are as built. Every number on the four new moves and ten knobs is a first
+guess.
+**Tried and changed while building**
+- *Rebound asked only the line* the Flare asks, and a body standing a little below his chest
+  was under it: the blow landed and he did not bounce. A Rebound that lands on a body bounces
+  now, blocked or not; walls, stones, his planted shield and the floor are still the line's.
+- *The Battering ram* lifted him and let go, and his gravity (about 50 m/s²) put him back on
+  the floor in seven frames, a metre on: it holds its line through its active frames now, as a
+  dash does. Its active 14 and 11 m/s; hitstun 30 so a hit is not minus (`feel.rs`).
+- *The Shield step* planted the shield a step ahead and he sprang straight into its side: it
+  is planted where he stands, he leaves from its top, and its recovery is 8 so `E` can call it
+  home while he is still in the air (the mechanic only answers a free body).
+- *Unload* at 4 + 11 m/s from a full shield was 2.1 m against a 0.1 m stomp empty; the full
+  share is 22. Lifts were first written for a lighter gravity than his: the Shield step 12 + 6,
+  Rebound's lift 10.
+- `combat.rs`'s three aerial tests jumped and clicked on the next frame, which is a takeoff on
+  every class now: they wait out the window. Rebound is his fast air button for the air shove.
+- The Bulwark's pins re-pinned.
+**Verdict** — unplayed. His new moves play his three clips. Open: BULWARK-1 to BULWARK-4 in
+0012.

@@ -25,18 +25,34 @@ const PINNED: [(Class, u32, u64); 7] = [
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
     // the Ridgeback plan's walk back unchanged. Nothing else in his hunt, and
     // no other pin, moved with it. See feel-log.md.
-    (Class::Bulwark, 101, 0x6dacc95234ce6050),
+    // Moved 2026-10-10, deliberately: his three clicks (0012) -- a click in
+    // a jump's first frames is a takeoff, and left click in the air Rebound.
+    (Class::Bulwark, 101, 0xbc3a409ebde3006a),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between
     // them. The Champion's and the Bulwark's hunts did not move -- the layer
     // hands their plans' input back unchanged here. See feel-log.md.
-    (Class::DualMage, 2_222, 0x524327a652326b5c),
+    // Moved 2026-10-09, deliberately: every move of hers is a spell now, and
+    // the class layer weighs the spell a click throws. See feel-log.md.
+    (Class::DualMage, 2_222, 0x31980bd7846a71da),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
-    (Class::ShadowReaver, 31, 0xb2ab9338138ce5f0),
-    (Class::Elementalist, 59, 0x33eb170574ec1780),
-    (Class::BloodMage, 83, 0x72ec7ddafe8f9fd9),
+    // Moved 2026-10-09, deliberately: her clicks in the air and off the
+    // floor are new moves (0011), and Executioner is on middle click.
+    (Class::ShadowReaver, 31, 0xbe8ae4697c177b24),
+    // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
+    // and the class layer presses her Bolt through the button it learns
+    // rather than through left click. No other pin moved. See feel-log.md.
+    // And again the same day: her takeoff window and held earth click went
+    // into `state_checksum`, which had been leaving them out. And after the
+    // second playtest: `Rise::floor`, and a stone carries whoever stands on it.
+    (Class::Elementalist, 59, 0xf72f05367be85445),
+    // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
+    // (the class layer presses her scythe and her Grasp through the buttons
+    // it learns), and creatures bleed. See feel-log.md. Again the same day
+    // for `Rise::floor`, the height her takeoff window remembers.
+    (Class::BloodMage, 83, 0xb80d2b8057f9d9a5),
 ];
 
 #[test]

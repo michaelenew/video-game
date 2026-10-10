@@ -12,8 +12,172 @@ sources: docs/archive/combat-design/elementalist-skills.md, docs/archive/combat-
 > Tremor, lit stones and a dodge that breaks through a stone: §"v2 — space into damage" below
 > is what each does as built, and `cargo run -p sim --bin elemental` prints the numbers.
 
+> **On three clicks, 2026-10-09 — built, unplayed.** From the first playtest: the Champion was
+> the class that held together, because his three clicks *are* the class, each with an air move
+> and a jump attack. She now has the same grid. The sections below this one describe the moves
+> as they were built before it; **where they name a key, this table wins.** The direction is in
+> [../exploration/0008_elementalist_on_three_clicks.md](../exploration/0008_elementalist_on_three_clicks.md),
+> and §"On three clicks" below is what was built.
+
 **Identity.** Terrain author. You build the battlefield, then combo through what you built.
 Ranged control that creates its own targets.
+
+## On three clicks — built 2026-10-09
+
+| | Left: earth | Middle: fire | Right: wind |
+| --- | --- | --- | --- |
+| **On foot, tap** | Raise | Fire pillar | Air ball, small |
+| **On foot, held** | Fissure | Strike | Air ball, grown |
+| **In the air** | Landfall | **Fire carpet** | Gale |
+| **Leaving the floor** (space + click) | **Earth jump** | **Fire fountain** | **Updraft** (a **Thermal** in her fire) |
+
+| Key | On foot | In the air |
+| --- | --- | --- |
+| `Q` — the weak push | Bolt | Bolt (the Air bolt is unbound since the second playtest) |
+| `E` — the strong push | Cataclysm | Cataclysm |
+| `F` | Cinder spray | Downdraft |
+| Side button | Quake | Quake |
+| `R` | Tremor | — |
+
+**The clicks are what she makes and the keys are what she does to it.** Every click is a tap
+and a hold on the floor. Which button is which verb is written once, in
+`sim::moves::elementalist::keys`, and every test and bot presses through those names.
+
+**The takeoffs** use the Champion's window: space down on the floor holds it open, and a click
+in it — or in the first few frames of the jump, which put her back on the floor for it — is a
+takeoff. The window and the trip live on the fighter (`Player::rise`), not in her mechanic.
+Earth and fire take off from the floor only. **The Updraft also goes from the air, once per
+trip, with space held and right click**: it only ever pushes up, so it keeps her run, and it is
+what stretches a jump. Its startup no longer slows her (mobility 100).
+
+**Air ball** (`EffectKind::AirBall`). The press raises a ball where the crosshair meets the
+floor; holding grows it, visibly, from the tap's size to the full one over the hold; the
+release sends it flat toward where the crosshair meets the floor then (`aim::racing_path`, the
+line Fissure runs, read for its direction only). Sent, it **shrinks at a steady rate**, and its
+**speed follows the size it is now**, so it slows as it shrinks and peters out rather than
+stopping. A bigger ball is faster and lasts longer, so how far it goes grows with roughly the
+square of how big it was let go (`a_ball_held_twice_as_long_goes_much_further`). Anybody
+standing in it is moved with it — her included — and can walk inside it; anybody who jumps
+inside it is given its speed, so they leave with it. It holds nobody once it is smaller than
+`Air ball, holds a body down to`, so a rider is put down a moment before it vanishes. It
+shrinks faster while it carries anybody (`Air ball, shrinks faster carrying`), which is the
+answer 0008 leaned to on a charge that moves her: carrying is paid for, and the long trips come
+from what she does after she jumps off. It climbs a step up to half its own size. It hurts
+nobody. One at a time. *Changed after the second playtest — see below:* off an edge it sinks
+rather than drops, a wall or a stone knocks it off rather than stopping it, and she steers it.
+
+### After the second playtest — 2026-10-09
+
+What the person reported from three replays, what the replays showed, and what changed.
+`tests/elementalist_playtest.rs` holds each as a property.
+
+- **On a stone is on it.** On a stone that is still moving — an eruption's tail, the earth
+  jump's stone coming to its stop — she kept the speed it had carried her at, drifted a hair
+  clear of the top, and read as airborne every few frames; a left click on one of those frames
+  was Landfall, which slammed her back to the floor. Now a body that was standing on a stone and
+  is not leaving it faster than half a jump is put back on its top at its speed
+  (`stones::resolve_body`). A jump still leaves it.
+- **A takeoff a frame after leaving a stone leaves from the stone.** Space a frame before the
+  click put her back on *the arena's* floor for the takeoff — the ground under the stone — and
+  she was pushed out of the stone's side. The takeoff window now remembers the height of what
+  her feet were last on (`Rise::floor`), and puts her back there; off a stone, the stone
+  shatters under the jump as it should.
+- **The stone under her feet, and off it at once** — the person's find, kept on purpose.
+  Running, look straight down and left-click: Raise puts a stone exactly under her feet. Space
+  and left click a frame later is then an earth jump *off a stone*, so the stone shatters and she
+  gets the bigger jump (`Earth jump, off a stone`, ×1.35 of her rise, about 23 m/s up against
+  17) — and, unlike the plain earth jump, which costs some of her run, it keeps all of it. The
+  look straight down is only so the crosshair puts the stone under her; flicking up afterwards
+  is for where she is going. Two presses a frame apart and a structure slot, for a long fast jump
+  forward. `the_stone_under_her_feet_and_off_it_at_once_is_the_big_running_jump`.
+- **`Q` is the Bolt in the air too**, as `E` is Cataclysm in both rows. The Air bolt has no
+  button for now.
+- **A stone she did not point down at stays at her level** (`aim::grounded_kept`, hers only).
+  Raise clicked out past an edge, or at the side of an island across a pit, put its stone on the
+  floor far below — often a course's void. Now the edge of the range, and the floor under a wall
+  she pointed at, come back toward her to the last footing no more than
+  `Placed, at most below her` (2 m) under her own (`aim::kept_up`). A crosshair *on* the floor
+  below still puts it there. A Fissure held from a stone up top runs along that ground and stops
+  at the edge (`aim::kept_along`), so its stone erupts at the lip, not in the pit; one started
+  down there runs down there. Landfall's slab never comes up off a ledge (`aim::planted_ahead`):
+  past one it comes back to her level, and with no footing between there is no slab. The Reaver's
+  send, the Black spike and Judgement keep the plain rule — the send's refusal past an edge was
+  decided from play on 2026-10-04.
+- **The Air ball rolls off edges**: past one it keeps going and sinks at
+  `Air ball, sinks off an edge` (2.5 m/s), holding up whoever is in it, until it meets the floor.
+  **She steers it** by walking sideways in it — A and D, looking where it goes; the sideways
+  share of her walk bends its heading (`Air ball, steered by her walk`). **A wall or a stone
+  knocks it off** rather than stopping it: it turns off the surface and keeps
+  `Air ball, size kept off a wall` (0.7) of its size, so of its speed and what is left of its
+  life.
+
+**Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
+along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and
+its half-width the move's radius. It hangs for `Fire carpet, hangs for` and burns whoever
+touches it, on the tick. **It is fire**: a shot flown down it comes out lit
+(`a_gale_thrown_straight_down_the_carpet_comes_out_lit`), and a Downdraft landed in it is a
+ring of fire. It is drawn as a stream of flames carried from the near end to the far one, so
+the fire is seen being pushed outward. One at a time. *Known from the start to be awkward at
+speed — she can outrun a carpet she has just laid — and built anyway so it can be played and
+something better found.*
+
+**Thermal.** Whenever her Updraft's column and her own fire share space, whichever came first,
+the column throws her up at `Thermal, lift` instead of the Updraft's lift — once per column. If
+the fire is a carpet the Thermal also throws her along it at `Thermal, push along a carpet`,
+and the carpet is used up. Fire she can make and use at once: the Fire carpet in the air, then
+space and right click into it; or the pillar at her own feet, then space and right click in
+its base.
+
+**Fire fountain** (`EffectKind::Fountain`). A burst at her feet as she leaves the floor — the
+move's own hit, once per body, at the move's radius, for `Fire fountain, burst lasts` — and a
+wash of fire left standing where she took off, burning on the tick for `Fire fountain, burns
+for`. A jump about as high as an ordinary one.
+
+**Earth jump.** An ordinary jump that brings a stone up with her. What it does depends on what
+she is standing on:
+
+- **The floor.** A stone comes up with her (`Structure::brought_up`): its top at her feet,
+  leaving with a share of her rise (`Earth jump, stone keeps of her rise`, 0.85) and of her
+  run (`…of her run`, 0.4), and falling more gently than she does (`Earth jump, stone falls
+  at`, 0.55 of gravity). It is the gentler fall that brings it back up under her: measured,
+  her feet meet its top about 27 frames in, at about 3.9 m, just short of her apex, and it
+  carries her on up to about 4.4 m before it starts to sink.
+  **Holding forward keeps it under her.** Nothing in this game slows a body in the air, and a
+  held strafe adds only about a metre a second, so a stone that was merely a little slower
+  would always end up under her or always behind her; neither is a choice. So while she is
+  in the air holding forward (and only forward), her aloft stone keeps her run. Let go, or
+  strafe, and it carries on at its own 0.4 of her run and drops behind her — an ordinary
+  stone in the air to Gale, or kick, back down at somebody. Stood on, an aloft stone stops
+  travelling and only sinks, so it does not slide out from under her. It spends one of the
+  three. *This is a departure from the playtest note's "slightly less velocity", for the reason
+  above; the tests are `a_straight_earth_jump_comes_down_on_its_stone` and
+  `an_earth_jump_without_forward_held_leaves_its_stone_behind`.*
+- **A stone on the floor.** It shatters outward under her (`debris::shatter`, a ring of the
+  same pieces Cataclysm breaks a stone into) and the jump is bigger (`Earth jump, off a
+  stone`).
+- **A stone in the air** — the one she landed on. It is driven back into the ground
+  (`Earth jump, stone driven down`) and shatters where it lands.
+
+**Meteors.** A stone in the air driven down — off an earth jump, or by a shot aimed down at it
+— is a meteor, and shatters where it lands (`stones::step` reports it; the world throws the
+pieces). A stone on the floor cannot be driven down, as before.
+
+**Cinder spray** kept `F`, the key the Updraft left, since the pillar took its click.
+
+**Open, for play:**
+- Whether the carpet can be used at all at speed, and what replaces it if not.
+- Whether a full Air ball that carries her is too much reach for a charge (the courses rule:
+  reach paid in execution, never in waiting). The carried shrink is the first knob.
+- Whether the earth jump's meeting point reads — the stone arriving under her feet on the way
+  up rather than at the top. `Earth jump, stone falls at` moves it. And whether "hold forward
+  to keep it" reads, or wants a different input.
+- The earth jump off her own stone straight after landing on it waits out the 30-frame
+  repeat lockout (she lands about 27 frames after the first): pressed at once, it is an
+  ordinary jump off the stone.
+- The takeoffs reuse the Champion's window knobs (`Takeoff window`, `Rising attack, still from
+  the floor`); a click pressed just *before* space is not turned into a takeoff for her yet.
+- The sparring bot and the hunt's class layer press her buttons through `keys` and do not yet
+  use the takeoffs, the ball or the carpet.
 
 **Shape of every ability — settled 2026-09-11, from play.** Long, telegraphed startups;
 devastating, large follow-through; and only *moderate* frames after, because the cost was

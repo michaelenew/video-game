@@ -100,13 +100,22 @@ fn the_same_move_held_down_comes_out_on_the_lockout_and_not_before() {
     // three hits of a chain, so the thing this measures does not happen. The
     // rule still applies to each of the three slots, which is what
     // `a_chain_never_brings_a_locked_move_back_early` below checks instead.
-    for class in [Class::Bulwark, Class::Elementalist] {
+    //
+    // The Elementalist's auto is her weak push on `Q` since 2026-10-09; her
+    // left click raises a stone, which is an instant and not a move.
+    for (class, auto) in [
+        (Class::Bulwark, L),
+        (
+            Class::Elementalist,
+            sim::moves::elementalist::keys::WEAK_PUSH,
+        ),
+    ] {
         let mut w = duel(class);
         let m = sim::moves::get(class, SLOT_POKE);
-        run(&mut w, 1, L);
+        run(&mut w, 1, auto);
         assert_eq!(started(&w), Some(SLOT_POKE), "{}: the first press", m.name);
 
-        let again = frames_until_repeat(&mut w, L, SLOT_POKE, 300)
+        let again = frames_until_repeat(&mut w, auto, SLOT_POKE, 300)
             .unwrap_or_else(|| panic!("{}: never came out a second time", m.name));
         assert_eq!(
             again,

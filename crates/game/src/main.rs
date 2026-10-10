@@ -274,6 +274,7 @@ fn main() {
                     place_champion_arms,
                     place_champion_trails,
                     place_pips,
+                    place_hexes,
                 ),
                 beast::place,
                 drive_camera,
@@ -1381,7 +1382,9 @@ const EFFECT_PARTS: usize = {
     let beads = sim::effects::TETHER_BEADS;
     let rough = sim::effects::ROUGH_BEADS;
     let ring = sim::effects::RING_PIECES;
+    let flames = sim::effects::CARPET_FLAMES;
     let most = if blades > arms { blades } else { arms };
+    let most = if flames > most { flames } else { most };
     let most = if beads > most { beads } else { most };
     let most = if rough > most { rough } else { most };
     if ring > most { ring } else { most }
@@ -1612,6 +1615,17 @@ struct PipMesh {
 
 /// [`PipMesh::body`] for the creature.
 const PIP_QUARRY: usize = MAX_PLAYERS;
+
+/// The Dual mage's hex on a body, drawn as an orb over its head in the
+/// force's colour (2026-10-09): Umbra dark, Radiance light. Two per body, one
+/// of each, and the one that matches the body's hex is shown -- so the person
+/// carrying it and the mage about to set it off both see which it is. `body`
+/// is a fighter's index, or [`PIP_QUARRY`] for the creature.
+#[derive(Component)]
+struct HexMesh {
+    body: usize,
+    hex: u8,
+}
 /// Enough pips for the largest cap the Oven allows.
 const MAX_PIPS: u8 = 12;
 
@@ -2066,6 +2080,21 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 PipMesh { body, index },
+            ));
+        }
+    }
+    // The Dual mage's hexes, one orb of each force over every body.
+    for body in 0..=PIP_QUARRY {
+        for (hex, material) in [
+            (sim::dual::UMBRA, look.dark.clone()),
+            (sim::dual::RADIANCE, look.light.clone()),
+        ] {
+            commands.spawn((
+                Mesh3d(pellet.clone()),
+                MeshMaterial3d(material),
+                Transform::default(),
+                Visibility::Hidden,
+                HexMesh { body, hex },
             ));
         }
     }
@@ -2935,6 +2964,39 @@ fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut V
     }
 }
 
+/// Put the hex orbs over whoever carries a hex, in its force's colour.
+fn place_hexes(sim: Res<Sim>, mut meshes: Query<(&HexMesh, &mut Transform, &mut Visibility)>) {
+    for (mesh, mut tf, mut vis) in meshes.iter_mut() {
+        let Some((at, size)) = hex_spot(&sim.cur, mesh.body, mesh.hex) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = at;
+        tf.scale = Vec3::splat(size);
+    }
+}
+
+/// Where the hex orb of kind `hex` over `body` goes and how big, or `None`
+/// if that body is not carrying that hex. It shrinks as the hex fades, so
+/// how long is left is readable at a glance.
+fn hex_spot(w: &World, body: usize, hex: u8) -> Option<(Vec3, f32)> {
+    let (carried, left, top) = if body == PIP_QUARRY {
+        let beast = w.monster()?;
+        let head = beast.world_of(species::look(beast.species).head, sim::V3::ZERO);
+        (beast.hex, beast.hex_left, fx3(head) + Vec3::Y * 2.1)
+    } else {
+        let p = &w.players[body];
+        let height = sim::tuning::body_height().to_f32_for_render();
+        (p.hex, p.hex_left, fx3(p.pos) + Vec3::Y * (height + 0.75))
+    };
+    if left == 0 || carried != hex {
+        return None;
+    }
+    let share = left as f32 / sim::tuning::hex_lasts().max(1) as f32;
+    Some((top, 0.18 + 0.22 * share.clamp(0.0, 1.0)))
+}
+
 /// Where pip `index` over `body` goes, or `None` if that body carries fewer
 /// marks than that.
 ///
@@ -3263,6 +3325,105 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             at,
             effect.ember_volume().radius.to_f32_for_render(),
         )),
+        // The Air ball: the ball the carry reads, at the size it is now --
+        // growing while she holds it, shrinking as it rolls.
+        EffectKind::AirBall if part == 0 => Some(floating_in(
+            Skin::Air,
+            fx3(effect.ball_middle()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Fire carpet: a stream of flames carried along its line from the
+        // near end to the far one, so the fire is seen being pushed outward.
+        // Each flame is no wider than the strip that burns. See
+        // `Effect::carpet_flame`.
+        EffectKind::FireCarpet if part < sim::effects::CARPET_FLAMES => {
+            let (flame, radius) = effect.carpet_flame(part);
+            Some(floating_in(
+                Skin::Fire,
+                fx3(flame),
+                radius.to_f32_for_render(),
+            ))
+        }
+        // The Fire fountain: the wash standing where she took off, and over
+        // its first frames the burst -- a ball of fire at the move's radius,
+        // the size it hits at.
+        EffectKind::Fountain if part == 0 => {
+            let slab = effect.fountain_volume();
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
+        EffectKind::Fountain if part == 1 && effect.age <= sim::tuning::fountain_burst() => Some(
+            floating_in(Skin::Fire, at, effect.source().radius.to_f32_for_render()),
+        ),
+        // The Blood nova's burst: the sphere the hit test reads, round where
+        // she stood, for the moment it is there.
+        EffectKind::Nova if part == 0 => Some(floating_in(
+            Skin::Blood,
+            at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Nail: a ball where its hit test is, in the Reaver's near-black,
+        // because a nail is black.
+        EffectKind::Nail if part == 0 => Some(floating_in(
+            Skin::Shade,
+            fx3(effect.bolt_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The Dual mage's spells (2026-10-09). The dark ones in flight are
+        // dark balls the size the hit test reads; Binary is two, one of each
+        // force, wound round the line it flies; the Abyss a dark disc on the
+        // floor at the radius that drags; a Flare a ball of light; a Sunray a
+        // row of light beads along the line it lit, for its few frames.
+        EffectKind::ShadeBolt if part == 0 => Some(floating_in(
+            Skin::Dark,
+            fx3(effect.bolt_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        EffectKind::Binary if part < 2 => {
+            let centre = fx3(effect.bolt_at());
+            let dir = fx3(effect.dir).normalize_or_zero();
+            let side = dir.cross(Vec3::Y).normalize_or(Vec3::X);
+            let up = side.cross(dir);
+            let r = effect.field_radius().to_f32_for_render();
+            let turn = effect.age as f32 * 0.7 + part as f32 * std::f32::consts::PI;
+            let at = centre + (side * turn.cos() + up * turn.sin()) * r * 0.8;
+            let skin = if part == 0 { Skin::Dark } else { Skin::Light };
+            Some(floating_in(skin, at, r * 0.6))
+        }
+        EffectKind::Abyss if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Dark,
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            0.16,
+        )),
+        EffectKind::Flare if part == 0 => {
+            // Big on its first frame and shrinking after: the burst, then
+            // the picture of it.
+            let life = effect.life.max(1) as f32;
+            let left = 1.0 - (effect.age as f32 / life).clamp(0.0, 1.0);
+            Some(floating_in(
+                Skin::Light,
+                at,
+                effect.field_radius().to_f32_for_render() * (0.4 + 0.6 * left),
+            ))
+        }
+        EffectKind::Sunray if part < sim::effects::TETHER_BEADS => {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let end = fx3(effect.pos.add(effect.dir.scale(effect.reach)));
+            Some(floating_in(
+                Skin::Light,
+                at.lerp(end, t),
+                effect.field_radius().to_f32_for_render().max(0.12),
+            ))
+        }
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
@@ -3846,10 +4007,12 @@ const REHEARSAL_FRAMES: u32 = 40;
 /// One frame of the double structure jump, `since` frames into it.
 ///
 /// **The input, not a description of it.** Two structures raised three frames
-/// apart -- the second press needs the button up in between, because the
-/// mechanic fires on a press edge, which is also why the gap cannot be shorter
-/// than two frames -- and then the jump nine frames after the first, held so
-/// the rise sustains.
+/// apart -- the second press needs the button up in between, because Raise
+/// fires on the earth click's press edge, which is also why the gap cannot be
+/// shorter than two frames -- and then the jump nine frames after the first,
+/// held so the rise sustains. The earth click is her left click since
+/// 2026-10-09 (`sim::moves::elementalist::keys`); space is pressed only after
+/// both raises, since space with the earth click is the earth jump.
 ///
 /// Three frames rather than two is deliberate: two is a metre higher at its
 /// best, and three gives five different jump frames that reach a third takeoff
@@ -3862,7 +4025,7 @@ fn rehearsal(since: u32, w: &World) -> SimInput {
     let mut v = 0u16;
     // Frame 0 and frame 3, with frames 1 and 2 releasing the button.
     if since == 0 || since == 3 {
-        v |= SimInput::MECHANIC;
+        v |= sim::moves::elementalist::keys::EARTH;
     }
     if since >= 9 {
         v |= SimInput::SPACE;
@@ -4893,10 +5056,10 @@ mod rehearsing {
         // And the shape of the input is the thing the kit document describes:
         // two presses three frames apart with the button up between them.
         let w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
-        assert!(rehearsal(0, &w).has(SimInput::MECHANIC));
-        assert!(!rehearsal(1, &w).has(SimInput::MECHANIC));
-        assert!(!rehearsal(2, &w).has(SimInput::MECHANIC));
-        assert!(rehearsal(3, &w).has(SimInput::MECHANIC));
+        assert!(rehearsal(0, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(!rehearsal(1, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(!rehearsal(2, &w).has(sim::moves::elementalist::keys::EARTH));
+        assert!(rehearsal(3, &w).has(sim::moves::elementalist::keys::EARTH));
         assert!(!rehearsal(8, &w).has(SimInput::SPACE));
         assert!(rehearsal(9, &w).has(SimInput::SPACE));
     }

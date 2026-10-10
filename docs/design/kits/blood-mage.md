@@ -1,5 +1,5 @@
 ---
-status: built — v1, unplayed
+status: built — v1, then on three clicks (2026-10-09); unplayed
 decided: 2026-09-09
 revised: 2026-09-23
 sources: ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
@@ -19,6 +19,77 @@ grows with how open she has left herself, and a floor she wants to fight on.
 > are open, and the feel-log entries for the four milestones say so. The economy it replaced
 > — cost on the press, leech on the hit, a field that drains — is recorded under
 > [Was](#was) at the end.
+
+> **On three clicks, 2026-10-09 — built, unplayed.** The Champion's grid, as the Elementalist
+> got it: her three clicks are *my blood*, *your blood* and *the scythe*, each with a move on the
+> floor, one in the air and a jump attack. The sections below describe the moves as they were
+> built before it; **where they name a key, §"On three clicks" wins.** The direction, and the
+> six combos it was built towards, are
+> [../exploration/0009_blood_mage_on_three_clicks.md](../exploration/0009_blood_mage_on_three_clicks.md).
+
+## On three clicks — built 2026-10-09
+
+| | Left: my blood | Middle: your blood | Right: the scythe |
+| --- | --- | --- | --- |
+| **On foot** | **Blood nova** (held) | Grasp (held) | Reaping sweep |
+| **In the air** | Haemorrhage | **Nail** | **Hook** |
+| **Leaving the floor** (space + click) | **Blood jet** (held) | **Marionette** | **Harvest** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | Bloodletter — in no combo; the candidate to cut once she has been played |
+| `E` | Black spike |
+| `shift` + direction, crosshair on a pool | Blink |
+
+The buttons are named once, in `sim::moves::blood::keys`; the dispatch is `state::blood_move`,
+which reads where her feet are and the takeoff window (`Player::rise`, shared with the
+Elementalist). The six new rows were appended to her table, so the five before them kept their
+slots and their knobs.
+
+**Her own pools are doors, not heals.** A pool of her own blood can be blinked to, erupts under
+the Black spike, and is what the jet leaves behind; drinking skips it (`drink_over`, the
+scythe's collection), and `drink_from` on one of hers spends it for nothing. Only another
+body's blood heals her. Without this she spends health and drinks it straight back.
+
+**A hit on somebody in the air spills under them**, on the floor below (`spill_under`, through
+`Terrain::ground_under`) — reversing v1's "an airborne hit spills nothing", since Marionette
+and the Nail exist to put people in the air.
+
+**Creatures bleed.** Her hits on a creature already spilled under the part struck; now the
+Haemorrhage's bleed runs on a creature too (`Monster::bleeding`, ticked beside the fighters'
+bleeds, `bleed_on_creatures` per tick), so the trail-and-chain combo and the Hanging work on a
+hunt. This is the answer to `CLASS-2`.
+
+The new moves, each in one paragraph:
+
+- **Blood nova** (`EffectKind::Nova`). Hold to charge, paid **in red health as she holds** —
+  one point every `blood_pays_every` frames, kept on the fighter (`Player::self_spent`) — and
+  release to burst: a sphere from `channel_from` to the move's full reach by the share of the
+  hold, which hurts and throws back whoever is inside, and leaves a pool of her own blood at her
+  feet holding what she paid.
+- **Blood jet**. A held takeoff: the jet drives her along the line `aim::skillshot_path` solved
+  at `jet_speed`, never flatter than `jet_least_rise`, gravity off while it runs. On release
+  everybody on the line from where she left the floor (`Player::launched_from`) to where she
+  is is hurt — more by `jet_damage_per_frame` for each frame held — and so is any creature at
+  either end or critter on the line, and her own pool is left on the floor where she took off.
+- **Marionette**. A takeoff swing that **only lifts** (`launch`), and lifts her after them
+  (`self_lift`), so she arrives in the air beside her victim. It drinks like the Grasp.
+- **Nail** (`EffectKind::Nail`). A long black spike thrown down the crosshair. On a body **in
+  the air** it **pins** them there for `nail_pin` frames (`seized` with `NAILED`: no velocity,
+  no gravity), and their spill drops to the floor below. On a body on the floor it is a hit
+  and nothing more. The pin takes two hits — Marionette, then the Nail — by design.
+- **Hook**. Thrown along the aim, it catches the first fighter, creature, stone or wall
+  (`aim::first_along`) and hauls her to it at `hook_speed`, stopping a body's width short. A
+  miss is the cost. It is the grappling hook in every combo.
+- **Harvest**. A big jump inside a wide flat spin (`self_lift`, `arc`), which drinks the pools
+  under its blade. Since she is off the floor before the blade comes round it passes over a
+  knee-high critter (`docs/design/critters.md` §7).
+
+**Not drawn yet:** a pinned body hangs in the air with nothing showing the nail through it;
+the Nail in flight and the nova's burst are drawn, the pin is not. The jet's wake is not drawn
+either — only her body moving and the pool left behind.
+
+`tests/blood_mage_clicks.rs` holds one test per move and the Hanging end to end.
 
 The specification is [../blood-mage.md](../blood-mage.md). This document is what the game
 does, where it differs from the proposal, and why. `cargo run -p sim --bin essence` prints

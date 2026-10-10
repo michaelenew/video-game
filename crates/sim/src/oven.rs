@@ -658,6 +658,89 @@ scalars! {
     TerrainSteepest,  "Valley",    "Terrain, steepest walkable (slope)",    Fixed,  fx(1,5),  fx(3,1);
     // **How fast a body slides off ground too steep to stand on**.
     TerrainSlide,     "Valley",    "Terrain, slide speed (m/s)",            Fixed,  fx(1,1),  fx(30,1);
+    // **The Elementalist on three clicks**, 2026-10-09: the Air ball, the Fire
+    // carpet and the Thermal it makes, the Fire fountain, and the stone the
+    // earth jump brings up. Appended for the reason above. See
+    // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
+    AirBallRadiusTap,     "Elementalist", "Air ball, radius on a tap", Fixed, fx(1,5), fx(4,1);
+    AirBallRadiusFull,    "Elementalist", "Air ball, radius held full", Fixed, fx(1,2), fx(6,1);
+    AirBallSpeedTap,      "Elementalist", "Air ball, speed on a tap (m/s)", Fixed, fx(1,1), fx(40,1);
+    AirBallSpeedFull,     "Elementalist", "Air ball, speed held full (m/s)", Fixed, fx(1,1), fx(60,1);
+    AirBallShrink,        "Elementalist", "Air ball, shrinks by (m/s)", Fixed, fx(1,20), fx(4,1);
+    AirBallHolds,         "Elementalist", "Air ball, holds a body down to (m)", Fixed, 0, fx(2,1);
+    AirBallCarriedShrink, "Elementalist", "Air ball, shrinks faster carrying (x)", Fixed, fx(1,1), fx(4,1);
+    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 240;
+    CarpetAhead,          "Elementalist", "Fire carpet, starts ahead of her (m)", Fixed, 0, fx(6,1);
+    CarpetDamage,         "Elementalist", "Fire carpet, burn per tick", Int, 0, 120;
+    ThermalLift,          "Elementalist", "Thermal, lift (m/s)", Fixed, 0, fx(60,1);
+    ThermalPush,          "Elementalist", "Thermal, push along a carpet (m/s)", Fixed, 0, fx(60,1);
+    FountainLife,         "Elementalist", "Fire fountain, burns for", Frames, 1, 300;
+    FountainRadius,       "Elementalist", "Fire fountain, wash radius", Fixed, fx(1,2), fx(6,1);
+    FountainBurst,        "Elementalist", "Fire fountain, burst lasts", Frames, 1, 30;
+    FountainDamage,       "Elementalist", "Fire fountain, wash damage per tick", Int, 0, 120;
+    EarthStoneKeepUp,     "Elementalist", "Earth jump, stone keeps of her rise (x)", Fixed, 0, fx(1,1);
+    EarthStoneKeepFlat,   "Elementalist", "Earth jump, stone keeps of her run (x)", Fixed, 0, fx(1,1);
+    EarthStoneGravity,    "Elementalist", "Earth jump, stone falls at (x gravity)", Fixed, 0, fx(1,1);
+    EarthShatterJump,     "Elementalist", "Earth jump, off a stone (x)", Fixed, fx(1,1), fx(3,1);
+    EarthMeteorSpeed,     "Elementalist", "Earth jump, stone driven down (m/s)", Fixed, fx(1,1), fx(80,1);
+    // **The Blood mage on three clicks**, 2026-10-09: what her held blood costs,
+    // the jet, the Nail's pin and the Hook. See
+    // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+    BloodPaysEvery,       "Blood mage", "Held blood, 1% of red every", Frames, 1, 60;
+    JetSpeed,             "Blood mage", "Blood jet, drive (m/s)", Fixed, fx(1,1), fx(60,1);
+    JetLeastRise,         "Blood mage", "Blood jet, least rise (m/s)", Fixed, 0, fx(30,1);
+    JetDamagePerFrame,    "Blood mage", "Blood jet, damage per frame held", Int, 0, 20;
+    NailPin,              "Blood mage", "Nail, pins in the air for", Frames, 0, 120;
+    NailFlight,           "Blood mage", "Nail, flies for", Frames, 1, 60;
+    HookSpeed,            "Blood mage", "Hook, pulls her at (m/s)", Fixed, fx(1,1), fx(80,1);
+    BleedOnCreatures,     "Blood mage", "Haemorrhage bleeds a creature", Flag, 0, 1;
+    // **The Elementalist from the second playtest**, 2026-10-09: how far a
+    // stone nobody pointed down at may land below her (`aim::kept_up`), and
+    // the Air ball off an edge, steered and knocked off a wall.
+    PlacementDrop,        "Elementalist", "Placed, at most below her (m)", Fixed, 0, fx(20,1);
+    AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
+    AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
+    AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
+    // **The Dual mage, every move a spell**, 2026-10-09: her bolts' flight,
+    // the hex and its two reactions, the well, and the air moves. See
+    // `docs/design/exploration/0010_dual_mage_spells.md`.
+    ShadeBoltFlight,      "Dual mage", "Shade bolt, flies for", Frames, 1, 60;
+    BinaryFlight,         "Dual mage", "Binary, flies for", Frames, 1, 90;
+    AbyssLife,            "Dual mage", "Abyss, lasts", Frames, 1, 300;
+    SpellFlash,           "Dual mage", "Ray and flare, seen for", Frames, 1, 30;
+    HexLasts,             "Dual mage", "Hex, lasts", Frames, 1, 600;
+    ShatterDamage,        "Dual mage", "Shatter, damage", Int, 0, 200;
+    ShatterStagger,       "Dual mage", "Shatter, staggers for", Frames, 0, 60;
+    WitherDamage,         "Dual mage", "Wither, damage", Int, 0, 200;
+    WitherSlow,           "Dual mage", "Wither, slows to (x)", Fixed, 0, fx(1,1);
+    AbyssPull,            "Dual mage", "Abyss, drags at (m/s)", Fixed, 0, fx(20,1);
+    FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
+    ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
+    EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
+    // **The Shadow Reaver on three clicks**, 2026-10-09: the flip, the two
+    // drops, the hung shadow and the counter. See
+    // `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+    MoonsaultBack,        "Shadow Reaver", "Moonsault, back (m/s)", Fixed, 0, fx(20,1);
+    GuillotineDive,       "Shadow Reaver", "Guillotine drop, dives at (m/s)", Fixed, 0, fx(60,1);
+    GallowsBlink,         "Shadow Reaver", "Gallows, blinks up (m)", Fixed, 0, fx(10,1);
+    GallowsHang,          "Shadow Reaver", "Gallows, hangs for", Frames, 0, 60;
+    GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
+    HangWaits,            "Shadow Reaver", "Hang the shadow, waits for", Frames, 0, 300;
+    HangSink,             "Shadow Reaver", "Hang the shadow, sinks at (m/s)", Fixed, 0, fx(20,1);
+    MistakeBehind,        "Shadow Reaver", "Deadly mistake, behind them (m)", Fixed, 0, fx(5,1);
+    // **The Bulwark on three clicks**, 2026-10-10: the ram, the bounce, the
+    // battery spent on height, the sail and the step. See
+    // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+    RamSpeed,             "Bulwark", "Battering ram, speed (m/s)", Fixed, 0, fx(30,1);
+    RamLift,              "Bulwark", "Battering ram, lift (m/s)", Fixed, 0, fx(20,1);
+    ReboundKick,          "Bulwark", "Rebound, thrown back at (m/s)", Fixed, 0, fx(30,1);
+    ReboundLift,          "Bulwark", "Rebound, thrown up at (m/s)", Fixed, 0, fx(30,1);
+    UnloadLift,           "Bulwark", "Unload, lift empty (m/s)", Fixed, 0, fx(30,1);
+    UnloadLiftFull,       "Bulwark", "Unload, lift added when full (m/s)", Fixed, 0, fx(30,1);
+    SailFall,             "Bulwark", "Sail, falls at most (m/s)", Fixed, 0, fx(20,1);
+    StepLift,             "Bulwark", "Shield step, lift empty (m/s)", Fixed, 0, fx(30,1);
+    StepLiftFull,         "Bulwark", "Shield step, lift added when full (m/s)", Fixed, 0, fx(30,1);
+    StepForward,          "Bulwark", "Shield step, forward (m/s)", Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------

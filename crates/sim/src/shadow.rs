@@ -122,6 +122,14 @@ pub fn step(p: &mut Player) {
             };
         }
         Ghost::Waiting => {
+            // **Hung in the air** (`Hang the shadow`, 2026-10-09): it waits
+            // up there, and then sinks to the floor under it.
+            if shadow.hang > 0 {
+                shadow.hang -= 1;
+            } else if shadow.pos.y.raw() > shadow.rest.raw() {
+                let down = t::hang_sink().mul(DT);
+                shadow.pos.y = shadow.pos.y.sub(down).max(shadow.rest);
+            }
             // The leash. Walk out of it and the shadow comes and finds you,
             // cutting whatever is between the two of you -- which is the
             // mechanic's own description of itself, and the reason straying is
@@ -171,7 +179,9 @@ fn ease_to(from: V3, to: V3) -> V3 {
 /// copy of either would be the same ability fired twice from the same place.
 pub fn begin_echo(p: &mut Player, kind: u8) {
     let Some(mut shadow) = of(p) else { return };
-    if moves::get(p.class, kind).aim() != aim::Kind::Swing {
+    let m = moves::get(p.class, kind);
+    // A swing that cuts nothing -- the swap, the stance -- has nothing to copy.
+    if m.aim() != aim::Kind::Swing || m.damage == 0 {
         return;
     }
     shadow.echo = kind;
@@ -382,7 +392,11 @@ pub fn order_queued(p: &Player) -> bool {
 /// order the shadow again the moment the send could be cancelled -- which is
 /// the held-button bug with extra steps.
 pub fn spend_order(p: &mut Player, kind: u8) {
-    if kind == crate::state::SLOT_MECHANIC && of(p).is_some() {
+    if matches!(
+        kind,
+        crate::state::SLOT_MECHANIC | crate::moves::reaver::SWAP | crate::moves::reaver::HANG
+    ) && of(p).is_some()
+    {
         p.shadow_queued = 0;
     }
 }
@@ -418,6 +432,8 @@ pub fn order(p: &mut Player, to: Option<V3>) -> Option<Order> {
             Order::Refused
         }
         (Ghost::Attending, Some(to)) => {
+            shadow.hang = 0;
+            shadow.rest = Fx::MAX;
             shadow.doing = Ghost::Casting {
                 from: shadow.pos,
                 to,
@@ -753,4 +769,68 @@ pub fn cash_multiple(marks: u8) -> Fx {
 /// Is this a full tally -- the one that also staggers?
 pub fn full_tally(marks: u8) -> bool {
     marks >= t::mark_cap()
+}
+
+// ---------------------------------------------------------------------------
+// On three clicks (2026-10-09)
+// ---------------------------------------------------------------------------
+
+/// **Hang the shadow**: sent to a point in the air, where it waits for
+/// `tuning::hang_waits` and then sinks to `rest`, the floor under it. Only
+/// from her shoulder: a shadow already out is not sent again.
+pub fn hang_at(p: &mut Player, to: V3, rest: Fx) -> bool {
+    let Some(mut shadow) = of(p) else {
+        return false;
+    };
+    if !matches!(shadow.doing, Ghost::Attending) {
+        return false;
+    }
+    shadow.doing = Ghost::Casting {
+        from: shadow.pos,
+        to,
+        age: 0,
+    };
+    shadow.hang = t::hang_waits();
+    shadow.rest = rest.min(to.y);
+    put(p, shadow);
+    true
+}
+
+/// Is the shadow out and standing still somewhere -- what the Swap needs?
+pub fn waiting(p: &Player) -> bool {
+    of(p).is_some_and(|s| matches!(s.doing, Ghost::Waiting))
+}
+
+/// **Swap**: she and the waiting shadow trade places. She is where it stood,
+/// and it waits where she was -- in the air, if that is where she was, sinking
+/// to `rest` under it.
+pub fn swap(p: &mut Player, rest: Fx) -> bool {
+    let Some(mut shadow) = of(p) else {
+        return false;
+    };
+    if !matches!(shadow.doing, Ghost::Waiting) {
+        return false;
+    }
+    let her = p.pos;
+    p.pos = shadow.pos;
+    p.vel = V3::ZERO;
+    p.grounded = false;
+    shadow.pos = her;
+    shadow.hang = t::hang_waits();
+    shadow.rest = rest.min(her.y);
+    put(p, shadow);
+    true
+}
+
+/// **Deadly mistake**: she is gone from `from`, and the shadow is left
+/// waiting there in her place.
+pub fn leave_at(p: &mut Player, from: V3) {
+    let Some(mut shadow) = of(p) else {
+        return;
+    };
+    shadow.pos = from;
+    shadow.doing = Ghost::Waiting;
+    shadow.hang = 0;
+    shadow.rest = from.y;
+    put(p, shadow);
 }

@@ -676,6 +676,14 @@ pub struct Monster {
     /// open question in `docs/design/shadow-reaver-v2.md`.
     pub marks: u8,
     pub mark_clock: u16,
+    /// **A bleed**, as a fighter carries one (`state::Player::bleeding`):
+    /// frames left, and whose. The Blood mage's Haemorrhage opens one on a
+    /// creature since 2026-10-09 -- the creature bleeds.
+    pub bleeding: u16,
+    pub bled_by: u8,
+    /// The Dual mage's hex on it, as on a fighter (`state::Player::hex`).
+    pub hex: u8,
+    pub hex_left: u16,
     /// **Four words the species keeps on the body**, for the hooks that are
     /// handed the creature and nothing else: what its hide is worth this
     /// frame (`FightDecl::hide`) and what a hit does to it besides the ladder
@@ -712,6 +720,10 @@ impl Monster {
             rooted: 0,
             marks: 0,
             mark_clock: 0,
+            bleeding: 0,
+            bled_by: 0,
+            hex: 0,
+            hex_left: 0,
             own: [0; 4],
         }
     }

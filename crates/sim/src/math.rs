@@ -214,6 +214,12 @@ fn component(v: V3, axis: usize) -> Fx {
 /// and a division by a near-zero denominator saturates into a parameter that is
 /// then clamped -- so the parallel case is safe rather than special.
 pub fn segment_gap(a0: V3, a1: V3, b0: V3, b1: V3) -> Fx {
+    segment_closest(a0, a1, b0, b1).2
+}
+
+/// [`segment_gap`], with where along each segment the closest pair sits: the
+/// share of the way along the first and along the second, and the gap.
+pub fn segment_closest(a0: V3, a1: V3, b0: V3, b1: V3) -> (Fx, Fx, Fx) {
     let d1 = a1.sub(a0);
     let d2 = b1.sub(b0);
     let r = a0.sub(b0);
@@ -249,7 +255,27 @@ pub fn segment_gap(a0: V3, a1: V3, b0: V3, b1: V3) -> Fx {
             }
         }
     };
-    big_len(a0.add(d1.scale(s)).sub(b0.add(d2.scale(t))))
+    (s, t, big_len(a0.add(d1.scale(s)).sub(b0.add(d2.scale(t)))))
+}
+
+/// **A ray against a capsule**: a segment from `a` to `b`, thickened by
+/// `radius`. How far along the ray it first touches, or `None` if it does
+/// not within `far`.
+///
+/// Solved as the closest approach of two segments and then backed off along
+/// the ray by the depth of the chord at that approach -- exact for a ray
+/// that meets the capsule's middle, and a hair late for one that grazes an
+/// end cap, which is the order of a fire's own flicker. What the Elementalist's
+/// Fire carpet is tested as when a shot flies down it.
+pub fn ray_hits_capsule(from: V3, dir: V3, far: Fx, a: V3, b: V3, radius: Fx) -> Option<Fx> {
+    let to = from.add(dir.scale(far));
+    let (s, _, gap) = segment_closest(from, to, a, b);
+    if gap.raw() > radius.raw() {
+        return None;
+    }
+    let along = far.mul(s);
+    let chord = sqrt(radius.mul(radius).sub(gap.mul(gap)).max(Fx::ZERO));
+    Some(along.sub(chord).max(Fx::ZERO))
 }
 
 /// The distance from a point to an axis-aligned box: zero inside it.

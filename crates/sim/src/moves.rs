@@ -559,7 +559,17 @@ const NAMES: [&[&str]; 6] = [
     //   Bash: fast poke, slightly minus on block so it is not a free mash.
     //   Slam: the overhead. Heavily punishable if read, heavily rewarding if not.
     //   Grapple: beats guard outright, loses badly to dodge.
-    &["Bash", "Slam", "Grapple"],
+    //   And on three clicks (2026-10-10): Rebound, Battering ram, Unload and
+    //   Shield step -- see `bulwark`.
+    &[
+        "Bash",
+        "Slam",
+        "Grapple",
+        "Rebound",
+        "Battering ram",
+        "Unload",
+        "Shield step",
+    ],
     // Champion -- three weapons on three buttons, and the row of the grid is
     // the situation your feet are in. Nineteen moves: see `champion`.
     //
@@ -605,7 +615,24 @@ const NAMES: [&[&str]; 6] = [
     //   Send shadow: on right click, and a real move rather than a state flip.
     //     It throws the second body out fast and, pressed again, dashes it home
     //     through anybody in the way.
-    &["Slash", "Executioner", "Guillotine", "Send shadow"],
+    //
+    // **On three clicks**, since 2026-10-09: left is the blade, middle the
+    // execution, right the shadow, each on the floor, in the air and with
+    // space; `E` is Deadly mistake. Seven appended after the four. See
+    // [`reaver`].
+    &[
+        "Slash",
+        "Executioner",
+        "Guillotine",
+        "Send shadow",
+        "Kite cut",
+        "Guillotine drop",
+        "Swap",
+        "Moonsault",
+        "Gallows",
+        "Hang the shadow",
+        "Deadly mistake",
+    ],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
     // Seven: four on the ground, and a whole row of three off it. See
     // [`elementalist`].
@@ -645,6 +672,10 @@ const NAMES: [&[&str]; 6] = [
         "Downdraft",
         "Quake",
         "Tremor",
+        "Air ball",
+        "Fire carpet",
+        "Fire fountain",
+        "Earth jump",
     ],
     // Blood mage -- her blood goes out, and theirs comes back. Everything
     // costs health, every hit she lands spills the target onto the floor, and
@@ -667,27 +698,32 @@ const NAMES: [&[&str]; 6] = [
         "Grasp",
         "Black spike",
         "Reaping sweep",
+        "Blood nova",
+        "Blood jet",
+        "Marionette",
+        "Nail",
+        "Hook",
+        "Harvest",
     ],
-    // Dual mage -- melee mage riding between two forces, one in each arm. Six
-    // moves on five inputs, and the two on the bare clicks are the class: see
-    // [`dual`].
-    //   Dark auto / Light auto: the autos, and the steering wheel. Left is
-    //     dark, right is light, and each one is a punch that opens into a wing.
-    //     One pulls and one pushes, so which arm you throw is a spacing
-    //     decision as well as a meter one.
-    //   Light lance / Dark lance: both on middle click, which has no side --
-    //     so the form is the force she is carrying. Light detonates at the far
-    //     end of the line; dark tethers what it catches and drains it.
-    //   Sweep: on `E`, because the meter is steered by which button attacks
-    //     rather than by a key of its own, so the mechanic key is free.
-    //   Judgement: the finisher. No depth gate -- depth is what makes it big.
+    // Dual mage -- two forces, one in each hand, and every move a spell
+    // (2026-10-09). Left is dark, the hex: things that travel and linger.
+    // Right is light, the strike: things that happen now. Middle is twilight,
+    // both at once. `Q` and `E` are the dark and the light majors. In storage
+    // order: the first six rows are the old six, retuned as the new moves,
+    // and the five after them were appended. See [`dual`] and
+    // `docs/design/exploration/0010_dual_mage_spells.md`.
     &[
-        "Dark auto",
-        "Light lance",
+        "Shade bolt",
+        "Binary",
         "Judgement",
-        "Sweep",
-        "Light auto",
-        "Dark lance",
+        "Abyss",
+        "Sunray",
+        "Reel",
+        "Flare",
+        "Phase",
+        "Nightfall",
+        "Dawn",
+        "Equinox",
     ],
 ];
 
@@ -821,124 +857,224 @@ pub mod champion {
 }
 
 // ---------------------------------------------------------------------------
-// The Dual mage's six
+// The Shadow Reaver's eleven
 // ---------------------------------------------------------------------------
 
-/// The Dual mage's move list, and **which way each one pushes the meter**.
-///
-/// The class holds two forces apart, one in each arm, and the whole of its
-/// mechanic is that *which button you attacked with* decides which way you
-/// drift -- see `docs/design/dual-mage.md`. So the list is worth reading as two
-/// columns rather than as five moves:
+/// The Shadow Reaver on three clicks (2026-10-09):
 ///
 /// ```text
-///              darker              lighter        whichever she is carrying
-///   click      Dark auto (L)       Light auto (R)  Lance (M) -- and which
-///                                                  *form* of it is the force
-///                                                  she is carrying
-///   key                                           Judgement (Q), Sweep (E)
+///                     left: the blade   middle: the execution  right: the shadow
+///   on foot           Slash             Executioner            Send / recall
+///   in the air        Kite cut          Guillotine drop        Swap
+///   leaving the floor Moonsault         Gallows                Hang the shadow
+///
+///   Q  Guillotine lotus               E  Deadly mistake
 /// ```
 ///
-/// The two autos are the same punch mirrored: one arm each, one shared set of
-/// numbers, and the hand supplies the sign of the arc. Nothing else in the
-/// roster is built that way, and it is the reason [`crate::aim::Hand`] exists.
+/// The first four rows are the four she had, in their slots; the seven after
+/// them were appended. See
+/// `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+pub mod reaver {
+    pub const SLASH: u8 = 0;
+    pub const EXECUTIONER: u8 = 1;
+    pub const LOTUS: u8 = 2;
+    pub const SEND: u8 = 3;
+    /// Left click in the air: a vertical cut; on a marked body, her airdodge
+    /// comes back.
+    pub const KITE_CUT: u8 = 4;
+    /// Middle click in the air: straight down, blade first, spiking.
+    pub const GUILLOTINE_DROP: u8 = 5;
+    /// Right click in the air with the shadow out: she and it trade places.
+    pub const SWAP: u8 = 6;
+    /// Space and left click: a back flip, the blade up through the space in
+    /// front of her.
+    pub const MOONSAULT: u8 = 7;
+    /// Space and middle click: up a few metres, a beat, and down blade first.
+    pub const GALLOWS: u8 = 8;
+    /// Space and right click: the send, to a point in the air.
+    pub const HANG: u8 = 9;
+    /// `E`: the counter stance.
+    pub const DEADLY_MISTAKE: u8 = 10;
+
+    pub const COUNT: usize = 11;
+
+    /// Which button is which.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: the blade.
+        pub const BLADE: u16 = Input::LEFT;
+        /// Middle click: the execution.
+        pub const EXECUTION: u16 = Input::MIDDLE;
+        /// Right click: the shadow.
+        pub const SHADOW: u16 = Input::RIGHT;
+        /// `Q`: the lotus.
+        pub const LOTUS: u16 = Input::SPECIAL;
+        /// `E`: Deadly mistake.
+        pub const MISTAKE: u16 = Input::MECHANIC;
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        matches!(kind, MOONSAULT | GALLOWS | HANG)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Bulwark's seven
+// ---------------------------------------------------------------------------
+
+/// **The Bulwark on three clicks** (2026-10-10): the strike, the weight and
+/// the guard -- left, middle, right -- on the floor, in the air, and off the
+/// floor with space.
 ///
-/// **Only the autos have a side.** Everything else -- the committed cast, the
-/// key abilities -- is made of whichever force she is carrying, which is the
-/// last auto that landed, and pushes her further that way. Before the first
-/// auto connects she is carrying neither, and a cast pushes her further along
-/// whichever way she was already going: the rule the design document states for
-/// every input that is neither left nor right.
+/// ```text
+///                 left: the strike    middle: the weight   right: the guard
+///   on foot       Bash                Slam                 Guard / parry
+///   in the air    Rebound             Slam (waits for      Sail (the guard,
+///                                     the floor)           held)
+///   space+click   Battering ram       Unload               Shield step
+///
+///   Q  Grapple                        E  throw / recall / leap, as built
+/// ```
+///
+/// The first three rows are the three he had, in their slots; the four after
+/// them were appended. See
+/// `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+pub mod bulwark {
+    pub const BASH: u8 = 0;
+    pub const SLAM: u8 = 1;
+    pub const GRAPPLE: u8 = 2;
+    /// Left click in the air: a Bash that throws him back off what it meets.
+    pub const REBOUND: u8 = 3;
+    /// Space and left click: a low leap forward, carrying whoever it meets.
+    pub const RAM: u8 = 4;
+    /// Space and middle click: the weight, spent on height.
+    pub const UNLOAD: u8 = 5;
+    /// Space and right click: the shield planted, and a spring off its top.
+    pub const SHIELD_STEP: u8 = 6;
+
+    pub const COUNT: usize = 7;
+
+    /// Which button is which.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: the strike.
+        pub const STRIKE: u16 = Input::LEFT;
+        /// Middle click: the weight.
+        pub const WEIGHT: u16 = Input::MIDDLE;
+        /// Right click: the guard.
+        pub const GUARD: u16 = Input::RIGHT;
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        matches!(kind, RAM | UNLOAD | SHIELD_STEP)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Dual mage's eleven
+// ---------------------------------------------------------------------------
+
+/// The Dual mage's move list, since 2026-10-09: **every move a spell**, and
+/// the three clicks are three genres.
+///
+/// ```text
+///                     left: dark       middle: twilight   right: light
+///                     (the hex)        (both at once)     (the strike)
+///   on foot           Shade bolt       Binary             Sunray
+///   in the air        Reel             Phase              Flare
+///   leaving the floor Nightfall        Equinox            Dawn
+///
+///   Q  Abyss -- the dark major        E  Judgement -- the light major
+/// ```
+///
+/// **Dark travels and lingers** -- bolts in flight, wells that stay, drains;
+/// **light happens now** -- rays, bursts, columns; **twilight is both at
+/// once**, powered by her lower bar and goading both. Every dark spell hexes
+/// what it hits with Umbra and every light one with Radiance, and the other
+/// force on a hexed body sets it off -- see [`crate::dual::Hex`]. So the two
+/// hands alternating are the combo and the climb at once.
+///
+/// **Storage order is not button order.** The first six rows are the six the
+/// class had before (two autos, two Lances, Judgement, Sweep), retuned as the
+/// new moves so their slots and knob indices kept their places; the five after
+/// them were appended. See `docs/design/exploration/0010_dual_mage_spells.md`.
 pub mod dual {
-    pub const DARK_AUTO: u8 = 0;
-    /// Middle click while she is carrying light: the line flies out and
-    /// **detonates at its far end**, so it is a thing you aim *past* somebody.
-    pub const LIGHT_LANCE: u8 = 1;
+    /// Left click on the floor: a short dark dart in flight. The dark auto.
+    pub const SHADE_BOLT: u8 = 0;
+    /// Middle click on the floor: two orbs, one of each force, wound round
+    /// each other along the crosshair.
+    pub const BINARY: u8 = 1;
+    /// `E`: the light major. A delayed strike and a burning field.
     pub const JUDGEMENT: u8 = 2;
-    pub const SWEEP: u8 = 3;
-    pub const LIGHT_AUTO: u8 = 4;
-    /// Middle click while she is carrying dark: the same line, but it
-    /// **tethers** the first thing it hits and drains it until the leash
-    /// breaks on distance.
-    ///
-    /// Slot five rather than slot two, which is the one thing here that is
-    /// about storage rather than about the kit: the Oven's move store is packed
-    /// in class order with the Dual mage last, so a slot appended to her
-    /// leaves every knob index in `tuned.rs` meaning what it was baked with.
-    /// Renumbering to put the two Lances side by side would silently rewrite
-    /// every number on the class.
-    pub const DARK_LANCE: u8 = 5;
+    /// `Q`: the dark major. A well that drags, drains and hexes.
+    pub const ABYSS: u8 = 3;
+    /// Right click on the floor: an instant short beam. The light auto.
+    pub const SUNRAY: u8 = 4;
+    /// Left click in the air: the dart, and on a body it pulls *her* to them.
+    pub const REEL: u8 = 5;
+    /// Right click in the air: a burst along her aim that kicks her back off
+    /// whatever it met.
+    pub const FLARE: u8 = 6;
+    /// Middle click in the air: a short blink along the crosshair.
+    pub const PHASE: u8 = 7;
+    /// Space and left click: a jump that leaves a small dark well behind.
+    pub const NIGHTFALL: u8 = 8;
+    /// Space and right click: a column of light that takes them up with her.
+    pub const DAWN: u8 = 9;
+    /// Space and middle click: a jump as high as her lower bar is full.
+    pub const EQUINOX: u8 = 10;
 
-    pub const COUNT: usize = 6;
+    pub const COUNT: usize = 11;
 
-    /// Which force this move throws, if it is one of the two autos.
-    ///
-    /// **Only the autos have a force of their own.** Everything else takes the
-    /// one she is carrying, which is whichever auto landed last -- see
-    /// `class::Mechanic::Meter`. That is the mechanic in one sentence: the two
-    /// buttons you press constantly decide what everything else is made of.
-    ///
-    /// Read from the move rather than from the buttons held down, which is the
-    /// same reason everything else here is declared: `shift + left click` has
-    /// both a modifier and a side in it, and a reader of the input bits has to
-    /// know which one wins. The move already knows.
+    /// Which button is which force. Every test and bot presses through these.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: dark, the hex.
+        pub const DARK: u16 = Input::LEFT;
+        /// Middle click: twilight, both at once.
+        pub const TWILIGHT: u16 = Input::MIDDLE;
+        /// Right click: light, the strike.
+        pub const LIGHT: u16 = Input::RIGHT;
+        /// `Q`: Abyss, the dark major.
+        pub const DARK_MAJOR: u16 = Input::SPECIAL;
+        /// `E`: Judgement, the light major.
+        pub const LIGHT_MAJOR: u16 = Input::MECHANIC;
+    }
+
+    /// Which force this move is made of: dark for the left column and `Q`,
+    /// light for the right column and `E`, and `None` for twilight -- the
+    /// middle column, which is both.
     pub const fn force(kind: u8) -> Option<crate::class::Force> {
         use crate::class::Force;
         match kind {
-            DARK_AUTO => Some(Force::Dark),
-            LIGHT_AUTO => Some(Force::Light),
+            SHADE_BOLT | REEL | NIGHTFALL | ABYSS => Some(Force::Dark),
+            SUNRAY | FLARE | DAWN | JUDGEMENT => Some(Force::Light),
             _ => None,
         }
     }
 
-    /// Is this one of the two autos?
-    ///
-    /// The two things you press constantly, and the only two with a side of
-    /// their own. Everything else is made of whichever force they left her
-    /// carrying.
-    ///
-    /// It is also the one exception to depth scaling the *size* of what she
-    /// throws -- see `state::depth`. An auto's reach is pinned to the punch
-    /// that throws it (`view/tests/kinematics.rs` checks the blade starts where
-    /// the fist stops), and a volume that grew away from the animation would
-    /// make the one move in the kit thrown every second unreadable. What depth
-    /// does to an auto is what it *does*: the damage, and how hard it pulls or
-    /// shoves.
+    /// Is this a twilight move -- the middle column, both forces at once?
+    pub const fn twilight(kind: u8) -> bool {
+        matches!(kind, BINARY | PHASE | EQUINOX)
+    }
+
+    /// Is this one of the two autos -- the short spells on the bare clicks,
+    /// thrown every second?
     pub const fn is_an_auto(kind: u8) -> bool {
-        matches!(kind, DARK_AUTO | LIGHT_AUTO)
+        matches!(kind, SHADE_BOLT | SUNRAY)
     }
 
-    /// Which form of Lance middle click throws, given what she is carrying.
-    ///
-    /// **The one input in the game that is two moves.** Middle click has no
-    /// side, so it cannot pick a direction on the bar -- which is exactly what
-    /// makes it the right home for the cast whose *form* is picked by the arm
-    /// she last punched with. The two are separate rows in the move table
-    /// rather than one row with a flag because the thing that has to differ is
-    /// the **wind-up**: a person standing opposite has to be able to tell a
-    /// burst they should get out from under from a tether they should break,
-    /// and that is frames and a pose, not a damage number.
-    pub const fn lance_for(force: crate::class::Force) -> u8 {
-        match force {
-            crate::class::Force::Light => LIGHT_LANCE,
-            crate::class::Force::Dark => DARK_LANCE,
-        }
-    }
-
-    /// Is this either form of Lance?
-    pub const fn is_a_lance(kind: u8) -> bool {
-        matches!(kind, LIGHT_LANCE | DARK_LANCE)
-    }
-
-    /// Is this the finisher?
-    ///
-    /// Declared rather than inferred from the binding, for the same reason
-    /// everything else on this class is: what makes Judgement the finisher is
-    /// that it **throws the bar harder than anything else she has** -- see
-    /// `tuning::meter_finisher_push` -- and that is a property of the move, not
-    /// of the key it happens to be on.
+    /// Is this one of the two majors? They throw the bar furthest -- see
+    /// `tuning::meter_finisher_push`.
     pub const fn is_the_finisher(kind: u8) -> bool {
-        kind == JUDGEMENT
+        matches!(kind, JUDGEMENT | ABYSS)
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        matches!(kind, NIGHTFALL | DAWN | EQUINOX)
     }
 }
 
@@ -977,8 +1113,64 @@ pub mod blood {
     pub const BLACK_SPIKE: u8 = 3;
     /// Left click. Appended last: see the module note.
     pub const SWEEP: u8 = 4;
+    /// Left click, standing, held: **the Blood nova**. She bleeds into a sphere
+    /// round herself for as long as the click is down -- red health every few
+    /// frames -- and lets it burst: whoever is close is hurt and thrown off,
+    /// her grey has climbed, and a pool of her own blood is left where she
+    /// stood. The first of the *my blood* moves, which need no enemy at all.
+    /// See `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
+    pub const BLOOD_NOVA: u8 = 5;
+    /// Space and left click, held: **the Blood jet**. Her blood out under her
+    /// drives her along her aim for as long as it is held, paid in red as it
+    /// goes; let go and whoever was in the jet's wake is hurt, more the longer
+    /// it ran. A pool of her own blood is left where she took off.
+    pub const BLOOD_JET: u8 = 6;
+    /// Space and middle click: **Marionette**. The victim's own blood hauls
+    /// them up off the floor -- a launcher, and she goes up with them. It lifts
+    /// and nothing more: the pin is the Nail's.
+    pub const MARIONETTE: u8 = 7;
+    /// Middle click, airborne: **the Nail**. A long black spike driven along
+    /// her aim. On somebody in the air it **pins them there** for a moment; on
+    /// somebody on the floor it is a heavy hit and nothing else. Marionette
+    /// and then the Nail is the Hanging.
+    pub const NAIL: u8 = 8;
+    /// Right click, airborne: **the Hook**. The scythe thrown along her aim on a
+    /// thread of blood: it catches the first fighter, creature, stone or wall
+    /// and **pulls her to it**. A grappling hook, and it hurts nobody.
+    pub const HOOK: u8 = 9;
+    /// Space and right click: **Harvest**. A high jump inside a full circle of
+    /// the scythe, which drinks every pool it passes over on the way -- the
+    /// heal as a line to take across the fight.
+    pub const HARVEST: u8 = 10;
 
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 11;
+
+    /// **Which button is which of her verbs**, in one place, as the
+    /// Elementalist's are: left is *my blood*, middle is *your blood*, right
+    /// is the scythe and how she moves.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: the Blood nova, Haemorrhage in the air, the Blood jet
+        /// with space.
+        pub const MY_BLOOD: u16 = Input::LEFT;
+        /// Middle click: the Grasp, the Nail in the air, Marionette with space.
+        pub const YOUR_BLOOD: u16 = Input::MIDDLE;
+        /// Right click: the Reaping sweep, the Hook in the air, Harvest with
+        /// space.
+        pub const SCYTHE: u16 = Input::RIGHT;
+        /// `Q`: the Bloodletter.
+        pub const BLOODLETTER: u16 = Input::SPECIAL;
+        /// `E`: the Black spike.
+        pub const SPIKE: u16 = Input::MECHANIC;
+    }
+
+    /// **Is a pool spilled by this move her own blood?** The *my blood* moves
+    /// spill her, not a victim; a pool of hers is a door -- the blink, the
+    /// spike's eruption -- and never a heal, or spending health would be a way
+    /// to drink it straight back.
+    pub const fn own_blood(slot: u8) -> bool {
+        matches!(slot, BLOOD_NOVA | BLOOD_JET)
+    }
 
     /// Is this the scythe -- the move whose reach, width and damage grow with
     /// the grey on her bar?
@@ -988,7 +1180,7 @@ pub mod blood {
     /// size and the growth is drawn as essence around it; `view::scythe`
     /// reads this to know which move to draw the volume for.
     pub const fn scythe(kind: u8) -> bool {
-        matches!(kind, SWEEP)
+        matches!(kind, SWEEP | HARVEST)
     }
 }
 
@@ -1063,8 +1255,59 @@ pub mod elementalist {
     /// stone comes up **under her** and takes her with it -- the structure
     /// jump with a telegraph attached.
     pub const TREMOR: u8 = 11;
+    /// Right click, standing. **The Air ball**: a ball of spinning air raised
+    /// where the crosshair meets the floor, grown while the button is held,
+    /// and sent flat along the floor toward where the crosshair meets it on
+    /// the release. It shrinks at a steady rate as it goes, so how far it gets
+    /// is a function of how big it was let go -- and everything inside it,
+    /// her included, goes with it. See `crate::effects::EffectKind::AirBall`
+    /// and `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
+    pub const AIR_BALL: u8 = 12;
+    /// Middle click, airborne. **The Fire carpet**: a strip of fire laid out
+    /// in front of her along her look, hanging where she put it. A shot flown
+    /// down it comes out lit, and an Updraft whose column reaches it is a
+    /// Thermal that throws her up *and along it*. See
+    /// `crate::effects::EffectKind::FireCarpet`.
+    pub const FIRE_CARPET: u8 = 13;
+    /// Space and middle click, from the floor. **The Fire fountain**: a burst
+    /// at her feet that hits all round her as she leaves the floor, and a wash
+    /// of fire left standing where she took off. See
+    /// `crate::effects::EffectKind::Fountain`.
+    pub const FIRE_FOUNTAIN: u8 = 14;
+    /// Space and left click, from the floor. **The earth jump**: an ordinary
+    /// jump that brings a stone up with her, a little slower than she is, so a
+    /// straight jump lands her on it in the air. Off a resting stone the stone
+    /// shatters and the jump is bigger; off a stone in the air the stone is
+    /// driven back into the ground, where it shatters. See
+    /// `state::World::earth_jump`.
+    pub const EARTH_JUMP: u8 = 15;
 
-    pub const COUNT: usize = 12;
+    pub const COUNT: usize = 16;
+
+    /// **Which button is which of her verbs**, in one place.
+    ///
+    /// The three clicks are what she makes -- earth, fire, wind -- and `Q`
+    /// and `E` are what she does to it, a weak push and a strong one. The
+    /// bindings moved once already (2026-10-09, when the clicks became the
+    /// class) and every test, bot and rehearsal that presses her buttons
+    /// presses them through these names, so the next move is one edit here
+    /// rather than a hunt through forty files for `Input::MECHANIC`.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: Raise on a tap, Fissure held, Landfall in the air,
+        /// the earth jump with space.
+        pub const EARTH: u16 = Input::LEFT;
+        /// Middle click: the Fire pillar on a tap, the Strike held, the Fire
+        /// carpet in the air, the Fire fountain with space.
+        pub const FIRE: u16 = Input::MIDDLE;
+        /// Right click: the Air ball, the Gale in the air, the Updraft with
+        /// space.
+        pub const WIND: u16 = Input::RIGHT;
+        /// `Q`: the Bolt, and the Air bolt in the air. The weak push.
+        pub const WEAK_PUSH: u16 = Input::SPECIAL;
+        /// `E`: Cataclysm, on the floor and off it. The strong push.
+        pub const STRONG_PUSH: u16 = Input::MECHANIC;
+    }
 
     // **No `is_airborne` here, deliberately.** "Which move is this button" is
     // answered once, in `state::elementalist_move` and `state::keyed_move`, and
@@ -1098,13 +1341,13 @@ pub const fn slots(class: Class) -> usize {
         // arena and dashing it back through somebody is not an instant, and a
         // move with a flight, a damage number and a slow needs the same table
         // every other move is in.
-        Class::ShadowReaver => SLOTS + 1,
-        // Six: an auto on each click, because the two autos are two different
-        // moves rather than one move with a modifier; both forms of Lance on
-        // middle click, because the form is the force she is carrying rather
-        // than the button; and Sweep on `E`. See [`dual`].
+        Class::ShadowReaver => reaver::COUNT,
+        // Seven: his three, and the air's strike and the three takeoffs. See
+        // [`bulwark`].
+        Class::Bulwark => bulwark::COUNT,
+        // Eleven: three clicks on the floor, in the air and leaving it, and
+        // the two majors. See [`dual`].
         Class::DualMage => dual::COUNT,
-        _ => SLOTS,
     }
 }
 
@@ -1129,14 +1372,14 @@ pub const fn on_e(class: Class) -> Option<u8> {
         // The Dual mage for the same reason, arrived at from the other
         // direction: her mechanic is a *meter*, and it is steered by which
         // button attacks rather than by a key. There is nothing for `E` to
-        // toggle either, so it carries Sweep.
-        Class::DualMage => Some(dual::SWEEP),
+        // toggle either, so it carries the light major, Judgement.
+        Class::DualMage => Some(dual::JUDGEMENT),
         // The Reaver is the odd one, and the only class where `E` carries a
         // move that is **not** the mechanic. Her mechanic is on right click,
         // because it is the half of her kit the crosshair aims; what is left
         // for the key is the swing, which does not care where it is thrown
         // from. See the note in [`NAMES`].
-        Class::ShadowReaver => Some(crate::state::SLOT_COMMITTED),
+        Class::ShadowReaver => Some(reaver::DEADLY_MISTAKE),
         _ => None,
     }
 }
@@ -1221,57 +1464,90 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // right click is otherwise dead on a class with no shield to raise.
         Class::ShadowReaver => match slot {
             0 => "LMB",
-            1 => "E, Shift+LMB",
+            1 => "MMB",
             2 => "Q",
-            _ => "RMB",
+            3 => "RMB",
+            4 => "LMB air",
+            5 => "MMB air",
+            6 => "RMB air, shadow out",
+            7 => "Space+LMB",
+            8 => "Space+MMB",
+            9 => "Space+RMB",
+            _ => "E",
         },
         // Both clicks are attacks, because the two autos are the mechanic: the
         // button is which force you throw and therefore which way you drift.
         // See [`dual`].
         Class::DualMage => match slot {
             0 => "LMB",
-            1 => "MMB, light",
-            2 => "Q",
-            3 => "E",
+            1 => "MMB",
+            2 => "E",
+            3 => "Q",
             4 => "RMB",
-            _ => "MMB, dark",
+            5 => "LMB air",
+            6 => "RMB air",
+            7 => "MMB air",
+            8 => "Space+LMB",
+            9 => "Space+RMB",
+            _ => "Space+MMB",
         },
-        // Right click is otherwise dead weight on a class with no shield, the
-        // same argument the Reaver makes -- Cataclysm takes it instead.
+        // **The three clicks are the class**, since 2026-10-09: left is earth,
+        // middle is fire, right is wind, each a tap and a hold on the floor,
+        // and the row is where her feet are. `Q` and `E` are the two pushes,
+        // weak and strong. See `elementalist::keys` and
+        // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
         Class::Elementalist => match slot {
-            0 => "LMB",
-            // Since v2: the mechanic key held past the stone's rise, and let
-            // go. See [`Charge::Crack`].
-            1 => "E held",
-            2 => "Q",
-            3 => "RMB",
-            // The air row. The button is the same; the situation is what
-            // changes what it throws. See [`elementalist`].
-            4 => "LMB air",
+            0 => "Q, floor and air",
+            // Raise is left click, an instant; held past the stone's rise it
+            // is Fissure. See [`Charge::Crack`].
+            1 => "LMB held",
+            2 => "MMB",
+            3 => "E",
+            // `Q` is the Bolt in the air too, since the second playtest: the
+            // Air bolt has no button for now.
+            4 => "unbound",
             5 => "RMB air",
-            6 => "E air",
-            // Both rows: the one move on the class the floor does not change.
-            7 => "MMB",
-            8 => "F",
+            6 => "LMB air",
+            // Off the clicks: the fire is the pillar's and the carpet's now,
+            // and the spray kept the key the Updraft left.
+            7 => "F",
+            8 => "Space+RMB",
             9 => "F air",
             10 => "Side B",
-            _ => "R",
+            11 => "R",
+            12 => "RMB",
+            13 => "MMB air",
+            14 => "Space+MMB",
+            _ => "Space+LMB",
         },
         // Three clicks, three moves, and the auto on the last row: see
         // [`blood`] for why the button order and the storage order differ.
+        // **My blood, your blood, the scythe**, since 2026-10-09: left,
+        // middle and right, each on the floor, in the air and with space. See
+        // `blood::keys`.
         Class::BloodMage => match slot {
-            0 => "MMB",
-            1 => "RMB",
-            2 => "Q",
+            0 => "Q",
+            1 => "LMB air",
+            2 => "MMB held",
             3 => "E",
-            _ => "LMB",
+            4 => "RMB",
+            5 => "LMB held",
+            6 => "Space+LMB held",
+            7 => "Space+MMB",
+            8 => "MMB air",
+            9 => "RMB air",
+            _ => "Space+RMB",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
         Class::Bulwark => match slot {
             0 => "LMB",
-            1 => "MMB",
-            _ => "Q",
+            1 => "MMB, floor or air",
+            2 => "Q",
+            3 => "LMB air",
+            4 => "Space+LMB",
+            5 => "Space+MMB",
+            _ => "Space+RMB",
         },
     }
 }
@@ -1360,8 +1636,28 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // four grounded moves land on the floor where they were aimed, the
         // fourth is a beam drawn from the line it flew, and Landfall is a disc
         // on the floor at her own feet.
+        // The Reaver on three clicks (2026-10-09): her new cuts are vertical
+        // -- up through the flip, down out of the sky -- and the shadow's
+        // column and the stance put out nothing of her body's. The Kite cut
+        // is the Slash's own volume thrown in the air: as an upright arc it
+        // passed over a knee-high body and under a sac the Slash reached.
+        Class::ShadowReaver => match kind {
+            reaver::GUILLOTINE_DROP | reaver::MOONSAULT | reaver::GALLOWS => {
+                Shape::Swing(Plane::Upright)
+            }
+            reaver::SWAP | reaver::HANG | reaver::DEADLY_MISTAKE => Shape::None,
+            _ => Shape::Cylinder,
+        },
         Class::Elementalist => match kind {
             elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
+            // The four of 2026-10-09 put a thing in the world -- a ball, a
+            // carpet, a wash of fire, a stone -- and let it do whatever is
+            // done. The fountain's burst is the wash's first frames, not a
+            // volume on her body.
+            elementalist::AIR_BALL
+            | elementalist::FIRE_CARPET
+            | elementalist::FIRE_FOUNTAIN
+            | elementalist::EARTH_JUMP => Shape::None,
             // Fissure, since v2: the crack does the hitting, racing from the
             // stone she held churning to the first body it meets -- see
             // `state::World::advance`. Her own body puts out nothing. Nor
@@ -1371,28 +1667,32 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             }
             _ => Shape::Cylinder,
         },
-        // The Dual mage's two autos are punches with a wing behind them, and
-        // Sweep is a cut across the whole front. Lance and Judgement are still
-        // discs: one is a skillshot, whose volume is the line it flew, and the
-        // other lands on the floor where it was aimed.
+        // Every move a spell (2026-10-09): what she casts does the hitting --
+        // a bolt, a ray, a well, a burst -- and her body puts out nothing.
+        // Two exceptions. Judgement's strike is still the disc on the floor
+        // where it was aimed, and Dawn is a column of light rising with her,
+        // which is the takeoff's own upright sweep.
         Class::DualMage => match kind {
-            dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Wing,
-            dual::SWEEP => Shape::Swing(Plane::Flat),
-            // The dark Lance has no volume of its own: the line it throws is
-            // the effect, and the effect is what catches somebody and holds
-            // on. See `effects::EffectKind::Tether`.
-            dual::DARK_LANCE => Shape::None,
-            _ => Shape::Cylinder,
+            dual::JUDGEMENT => Shape::Cylinder,
+            dual::DAWN => Shape::Swing(Plane::Upright),
+            _ => Shape::None,
         },
         // The scythe. The sweep is a cut across the front, and the one swing
         // in the kit. Everything else she has puts something in the world and
         // lets it do the hitting, or lands on the floor where it was aimed.
         Class::BloodMage => match kind {
-            blood::SWEEP => Shape::Swing(Plane::Flat),
+            blood::SWEEP | blood::HARVEST => Shape::Swing(Plane::Flat),
+            // Each puts something in the world and lets it do the hitting --
+            // a burst, a jet's wake, a nail, a hook -- or hits nobody.
+            blood::BLOOD_NOVA | blood::BLOOD_JET | blood::NAIL | blood::HOOK => Shape::None,
             _ => Shape::Cylinder,
         },
-        // Every other class is still the original disc at arm's length.
-        _ => Shape::Cylinder,
+        // The Shield step puts the shield in the world as a wall and nothing
+        // of his body's; the rest come off the shield's face.
+        Class::Bulwark => match kind {
+            bulwark::SHIELD_STEP => Shape::None,
+            _ => Shape::Cylinder,
+        },
     }
 }
 
@@ -1410,19 +1710,13 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
     use crate::aim::Hand;
     match class {
         // Left is dark, right is light. The class in one line: see
-        // `docs/design/dual-mage.md`.
-        //
-        // **And the two Lances follow the same rule**, which is why they are on
-        // the list rather than down at `Hand::Centre` with everything else that
-        // is not an auto. Middle click throws whichever form the force in her
-        // arms decides, so the arm it leaves from is a second reading of the
-        // same fact: the burst comes off the light hand and the tether off the
-        // dark one. A thrust out of the sternum would say nothing at all, and
-        // on this class saying nothing is the bug.
-        Class::DualMage => match kind {
-            dual::DARK_AUTO | dual::DARK_LANCE => Hand::Left,
-            dual::LIGHT_AUTO | dual::LIGHT_LANCE => Hand::Right,
-            _ => Hand::Centre,
+        // `docs/design/dual-mage.md`. Every spell of a column leaves that
+        // column's hand (2026-10-09), and twilight -- both at once -- leaves
+        // the body's own line.
+        Class::DualMage => match dual::force(kind) {
+            Some(crate::class::Force::Dark) => Hand::Left,
+            Some(crate::class::Force::Light) => Hand::Right,
+            None => Hand::Centre,
         },
         // The spear's opener is the one attack in the class thrown with one
         // arm: a jab off the leading hand, with the butt of the shaft still
@@ -1459,14 +1753,27 @@ pub enum Charge {
     /// how far the crack of Fissure races from that stone along her look
     /// before the stone erupts at its end. The rise is the tap window.
     Crack,
+    /// The Elementalist's Air ball: the hold is **before** the release, like
+    /// the Grasp's, and buys **size** -- the ball grows where it was raised
+    /// for as long as the button is down, and a bigger ball goes faster and
+    /// lasts longer. The press raises it; the release sends it.
+    Gather,
+    /// The Blood mage's nova and jet: the hold is her own blood, **paid as it
+    /// goes** -- red health every `tuning::blood_pays_every` frames held --
+    /// and it buys size (the nova's burst) or distance (the jet's drive).
+    Bleed,
 }
 
 /// Which charge a move has, if any.
 pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
     match class {
         Class::BloodMage if kind == crate::state::SLOT_SPECIAL => Some(Charge::Reach),
+        Class::BloodMage if kind == blood::BLOOD_NOVA || kind == blood::BLOOD_JET => {
+            Some(Charge::Bleed)
+        }
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
+        Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
         _ => None,
     }
 }

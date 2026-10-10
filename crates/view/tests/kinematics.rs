@@ -481,88 +481,6 @@ fn a_hand_is_about_as_far_out_as_the_shoulder_it_hangs_from() {
     }
 }
 
-#[test]
-fn the_wing_starts_where_the_punch_stops() {
-    // The Dual mage's autos are punches that throw a curved blade around her --
-    // the shape is `moves::Shape::Wing` and the fantasy is in
-    // `docs/design/kits/dual-mage.md`: the beings inside her extending the
-    // movement past where an arm could take it.
-    //
-    // That fantasy is two numbers, both stated against her own body rather than
-    // in metres, and this is the only place they can be checked, because the
-    // simulation has no idea where a fist is:
-    //
-    //   the blade's near edge passes just outside where the fist finishes
-    //   the tip reaches two to three times as far out as the fist gets
-    //
-    // Read off the baked clip and the live hit volume, so retiming the punch,
-    // re-authoring the pose or moving any of the four wing knobs moves the
-    // check with it.
-    let s = skeleton::skeleton_for(sim::Class::DualMage);
-    let clip = view::Clip::DualDark;
-    let (last_startup, _, first_recovery) = clip.phases().expect("an attack clip");
-    let out = |frame: u16, joint: Joint| {
-        let skin = skeleton::solve(&s, &clip.at(frame as u32));
-        let p = skin.origin[joint.index()];
-        (p[0] * p[0] + p[2] * p[2]).sqrt()
-    };
-    // The cock, and the end of the punch: where the elbow is drawn back to, and
-    // how far the fist gets. The furthest the hand reaches across the active
-    // window rather than its position on one frame -- "where their hand
-    // finishes" is the end of the extension, and which frame that lands on is
-    // the animator's business.
-    // The dark auto is authored on the left arm, and a drawn pose keeps it in
-    // the slot of the other name -- see `view::hand_joint`.
-    let elbow = out(1, view::drawn_joint(Joint::ForearmL));
-    let hand = (last_startup..=first_recovery)
-        .map(|f| out(f, view::hand_joint(true)))
-        .fold(0.0f32, f32::max);
-    assert!(
-        hand > elbow + 0.2,
-        "the punch does not travel: elbow {elbow:.2} m, hand {hand:.2} m"
-    );
-
-    // The volume the simulation actually puts out, sampled off her own axis.
-    // The ring is not centred on her any more, so how close the blade comes is
-    // a thing to measure rather than a knob to read.
-    let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
-    w.advance([sim::Input::aimed(sim::Input::LEFT, 0), sim::Input::new(0)]);
-    let (mut nearest, mut tip) = (f32::MAX, 0.0f32);
-    for _ in 0..40 {
-        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
-            let far = |at: sim::V3| at.sub(w.players[0].pos).flat_len().to_f32_for_render();
-            if hb.tipper {
-                tip = far(hb.to);
-            } else {
-                nearest = nearest.min(far(hb.from));
-            }
-        }
-        w.advance([sim::Input::aimed(0, 0), sim::Input::new(0)]);
-    }
-    assert!(tip > 0.0 && nearest < f32::MAX, "the auto put nothing out");
-    assert!(
-        nearest > hand && nearest < hand + 0.4,
-        "the blade's near edge comes to {nearest:.2} m and the fist finishes at \
-         {hand:.2} m: the wing has to start where the punch stops"
-    );
-    let times = tip / hand;
-    assert!(
-        (2.0..=3.0).contains(&times),
-        "the tip lands {times:.1} times as far out as the fist gets \
-         (fist {hand:.2} m, tip {tip:.2} m)"
-    );
-}
-
-#[test]
-fn both_autos_are_sized_the_same() {
-    // The light one is the dark one mirrored, and the check above only looks at
-    // the dark one.
-    let dark = sim::moves::get(sim::Class::DualMage, sim::moves::dual::DARK_AUTO);
-    let light = sim::moves::get(sim::Class::DualMage, sim::moves::dual::LIGHT_AUTO);
-    assert_eq!(dark.reach.raw(), light.reach.raw());
-    assert_eq!(dark.arc.raw(), light.arc.raw());
-}
-
 fn fx(v: f32) -> sim::Fx {
     sim::Fx::from_raw((v * 65536.0).round() as i32)
 }
@@ -731,13 +649,12 @@ fn the_champion_swings_the_weapon_the_player_can_see() {
 }
 
 #[test]
-fn the_two_lances_leave_from_the_arm_that_throws_them() {
+fn the_two_autos_leave_from_the_arm_that_throws_them() {
     // **Anything that comes out of the middle of her chest is a bug on this
-    // class.** The two arms are the whole readout of the mechanic: middle click
-    // throws one of two moves and the force in her arms picks which, so the
-    // side the line leaves from is the second thing the person opposite has to
-    // go on after the wind-up. A skillshot on the centre line would throw half
-    // of that away.
+    // class.** The two arms are the whole readout of the mechanic: left is
+    // dark and right is light, so the side a spell leaves from is the second
+    // thing the person opposite has to go on after the wind-up. A skillshot on
+    // the centre line would throw half of that away.
     //
     // Checked against the **baked clip** as well as against the move table, so
     // the arm the volume comes out of is the arm the player can see reaching.
@@ -751,17 +668,20 @@ fn the_two_lances_leave_from_the_arm_that_throws_them() {
     use sim::aim::Hand;
     use sim::moves::dual;
     let s = skeleton::skeleton_for(sim::Class::DualMage);
-    for (slot, clip, force, name) in [
+    // Since 2026-10-09 the arms are the autos': the Shade bolt leaves the
+    // left hand and the Sunray the right, and every other spell in a column
+    // leaves the same hand as its auto (`moves::hand`).
+    for (slot, clip, button, name) in [
         (
-            dual::LIGHT_LANCE,
-            view::Clip::DualLightLance,
-            sim::class::Force::Light,
+            dual::SUNRAY,
+            view::Clip::DualLight,
+            dual::keys::LIGHT,
             "light",
         ),
         (
-            dual::DARK_LANCE,
-            view::Clip::DualDarkLance,
-            sim::class::Force::Dark,
+            dual::SHADE_BOLT,
+            view::Clip::DualDark,
+            dual::keys::DARK,
             "dark",
         ),
     ] {
@@ -777,7 +697,7 @@ fn the_two_lances_leave_from_the_arm_that_throws_them() {
         );
         assert!(
             (out_l - out_r).abs() > 0.15,
-            "the {name} Lance reaches with both arms equally ({out_l:.2} m and {out_r:.2} m), \
+            "the {name} auto reaches with both arms equally ({out_l:.2} m and {out_r:.2} m), \
              so which force threw it cannot be read off the body"
         );
         let reaching = if out_r > out_l {
@@ -788,20 +708,17 @@ fn the_two_lances_leave_from_the_arm_that_throws_them() {
         assert_eq!(
             sim::moves::get(sim::Class::DualMage, slot).hand,
             reaching,
-            "the {name} Lance's volume comes out of the arm the clip is not reaching with"
+            "the {name} auto's volume comes out of the arm the clip is not reaching with"
         );
 
         // And the simulation really does start the line off the centre line,
         // on that side, when middle click throws this form.
         let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
-        if let sim::class::Mechanic::Meter { colour, .. } = &mut w.players[0].mechanic {
-            *colour = force;
-        }
-        w.advance([sim::Input::aimed(sim::Input::MIDDLE, 0), sim::Input::new(0)]);
+        w.advance([sim::Input::aimed(button, 0), sim::Input::new(0)]);
         assert_eq!(
             w.players[0].action.attack_kind(),
             Some(slot),
-            "carrying the {name}, middle click threw the wrong form"
+            "the {name} click threw the wrong spell"
         );
         let p = &w.players[0];
         let across = sim::aim::across(p.facing, reaching);
@@ -812,73 +729,10 @@ fn the_two_lances_leave_from_the_arm_that_throws_them() {
             .to_f32_for_render();
         assert!(
             off > 0.1,
-            "the {name} Lance leaves {off:.2} m along its own arm's side -- from the \
+            "the {name} auto leaves {off:.2} m along its own arm's side -- from the \
              sternum, or from the wrong shoulder"
         );
     }
-}
-
-#[test]
-fn the_two_lances_do_not_look_alike_while_they_are_winding_up() {
-    // **The load-bearing claim of the whole two-form idea.** Middle click throws
-    // one of two moves and the force she is carrying picks which, so the person
-    // standing opposite gets the wind-up and nothing else to decide between
-    // getting out from under a burst and closing to break a tether. Those are
-    // opposite answers, so a pair of startups that read alike is worse than
-    // having one move.
-    //
-    // Measured where it is actually read: the hands, through the startup,
-    // against the body rather than against the world -- an opponent is looking
-    // at a silhouette, not at a position on the floor.
-    let s = skeleton::skeleton_for(sim::Class::DualMage);
-    let light = view::Clip::DualLightLance;
-    let dark = view::Clip::DualDarkLance;
-
-    let (light_startup, _, _) = light.phases().expect("an attack clip");
-    let (dark_startup, _, _) = dark.phases().expect("an attack clip");
-    assert!(
-        dark_startup > light_startup,
-        "the dark Lance winds up in {dark_startup} frames and the light one in \
-         {light_startup} -- they are the same speed, so the first thing an opponent \
-         could use to tell them apart is missing"
-    );
-
-    // Hands relative to the hips, a matched fraction of the way through each
-    // wind-up, so a difference in length is not what is being measured.
-    let hands = |clip: view::Clip, through: f32| {
-        let (startup, _, _) = clip.phases().expect("an attack clip");
-        let frame = (startup as f32 * through).round() as u32;
-        let skin = skeleton::solve(&s, &clip.at(frame));
-        let hip = skin.origin[Joint::Root.index()];
-        [Joint::HandL, Joint::HandR].map(|j| {
-            let p = skin.origin[j.index()];
-            [p[0] - hip[0], p[1] - hip[1], p[2] - hip[2]]
-        })
-    };
-    let mut worst: f32 = 0.0;
-    for step in 1..=4 {
-        let through = step as f32 / 4.0;
-        let (a, b) = (hands(light, through), hands(dark, through));
-        let apart: f32 = a
-            .iter()
-            .zip(b.iter())
-            .map(|(p, q)| {
-                let d = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-                (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
-            })
-            .fold(0.0f32, f32::max);
-        worst = worst.max(apart);
-        assert!(
-            apart > 0.18,
-            "a quarter-{step} of the way through, the two Lances hold their hands \
-             {apart:.2} m apart -- close enough to be the same pose"
-        );
-    }
-    assert!(
-        worst > 0.45,
-        "the two wind-ups never get further apart than {worst:.2} m, which is a \
-         difference you would have to be told about"
-    );
 }
 
 // ---------------------------------------------------------------------------

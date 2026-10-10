@@ -1,5 +1,5 @@
 ---
-status: built; the six moves are unchanged under the two bars of 2026-09-23
+status: built — every move a spell since 2026-10-09; unplayed
 decided: 2026-09-10
 revised: 2026-09-23
 formerly: Statera
@@ -15,6 +15,74 @@ it is the gap between them.
 
 Read [../dual-mage.md](../dual-mage.md) first — this kit implements that mechanic and is
 meaningless without it.
+
+> **Every move a spell, 2026-10-09 — built, unplayed.** The person's brief: a complete rework,
+> left dark and right light, every move a spell (the autos short-range spells), `Q` and `E`
+> the dark and light majors, a middle click worth having, and the autos' pull and push gone.
+> The design is [../exploration/0010_dual_mage_spells.md](../exploration/0010_dual_mage_spells.md);
+> §"Every move a spell" below is what was built. **Everything after it — the punches, the
+> wing, the Lance, the Sweep, the pull and the shove — describes the kit it replaced.** The
+> two bars are unchanged.
+
+## Every move a spell — built 2026-10-09
+
+| | Left: dark (the hex) | Middle: twilight | Right: light (the strike) |
+| --- | --- | --- | --- |
+| **On foot** | Shade bolt | Binary | Sunray |
+| **In the air** | Reel | Phase | Flare |
+| **Leaving the floor** (space + click) | Nightfall | Equinox | Dawn |
+
+`Q` is the **Abyss** (dark major) and `E` is **Judgement** (light major), on the floor and in
+the air. The buttons are named once in `sim::moves::dual::keys`; the dispatch is
+`state::dual_move`, on the shared takeoff window (`Player::rise`). In the air space is still her
+second jump and her wing beat, so her takeoffs are from the floor only.
+
+**Three genres.** Dark travels and lingers — bolts in flight, wells that stay, drains; light
+happens now — rays, bursts, columns; twilight is both at once, powered by her **lower** bar and
+goading **both**. That is also how an opponent reads her: dark you dodge, light you block.
+
+**The hex** (`dual::hexed`, `Player::hex`/`hex_left`, `Monster::hex`/`hex_left`). Every dark
+spell that lands hexes the body Umbra, every light one Radiance — one hex at a time, fading after
+`Hex, lasts` (3 s). The same force refreshes it; the other force **sets it off**:
+
+- **Shatter** — light on Umbra: `Shatter, damage` (40, by power) and a `Shatter, staggers for`
+  (14 frames) stagger on a fighter.
+- **Wither** — dark on Radiance: `Wither, damage` (30, by power), all of it drained back to her,
+  and a slow to `Wither, slows to` (0.7).
+- **Binary on a clean body sets off both at half**, and leaves no hex.
+
+A creature is hexed and reacts like a fighter, without the stagger (its flinch is its own). The
+hex is drawn as an orb over the body's head in the force's colour, shrinking as it fades.
+
+The moves, each in a line:
+
+- **Shade bolt** (`EffectKind::ShadeBolt`): a dark dart from her left hand along the crosshair,
+  in flight for `Shade bolt, flies for` across its 9 m reach, spent on the first body.
+- **Sunray** (`EffectKind::Sunray`): instant, from her right hand to the first body, wall or
+  floor on the crosshair's line, 7 m; the line is drawn for `Ray and flare, seen for`.
+- **Binary** (`EffectKind::Binary`): two orbs wound round each other in flight, 12 m.
+- **Reel**: the Shade bolt, and on a body it hauls her to them at `Reel, pulls her at`.
+- **Flare** (`EffectKind::Flare`): a burst where her aim first meets a body, a wall or the
+  floor within 3.5 m — and if it met one, she is kicked back along the line at
+  `Flare, kicks her` (aimed down, a lift). The kick ends the aerial hang.
+- **Phase**: a blink along the crosshair for 6 m, stopped a body short of a wall
+  (`aim::phase_to`), with a Flare-sized flash where she left. It spends the airdodge, so once a
+  trip.
+- **Nightfall**: a jump (`self_lift`) and a small Abyss where she left the floor.
+- **Dawn**: an upright sweep of light rising with her (`self_lift`), launching whoever it
+  catches.
+- **Equinox**: a jump whose lift adds `Equinox, lift at both full` times her lower bar.
+- **Abyss** (`EffectKind::Abyss`): a well where the crosshair meets the floor, for
+  `Abyss, lasts` (1 s): it drags bodies toward its middle at `Abyss, drags at`, ticks,
+  drains back to her (the row's leech) and hexes Umbra.
+- **Judgement**: as built — and its strike now hexes Radiance and shatters Umbra.
+
+**What went:** the pull and the shove, the steps on the autos and the wing-shaped blades, the
+two-form Lance and the tether, and the Sweep. Their machinery (`Shape::Wing`,
+`EffectKind::LanceBurst`, `EffectKind::Tether`) is still in the simulation, unused by any move.
+**Not done yet:** her new moves play the six clips she had (the left-handed casts for dark, the
+right-handed for light, the Lance and Sweep clips for the rest); clips of their own are the next
+step. `tests/dual_spells.rs` holds one test per move and per reaction.
 
 ## Mechanic — two bars, and the hill between them — rebuilt 2026-09-23
 

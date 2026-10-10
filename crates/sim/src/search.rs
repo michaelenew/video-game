@@ -63,6 +63,12 @@ pub struct Aim {
 }
 
 /// The buttons an event can press, by number.
+/// The Elementalist's earth and fire clicks, as indices into [`BUTTONS`]:
+/// Raise (a stone at the crosshair) and the pillar on the floor, Landfall and
+/// the Fire carpet in the air. See `moves::elementalist::keys`.
+const EARTH: u8 = 0;
+const FIRE: u8 = 2;
+
 pub const BUTTONS: [u16; 7] = [
     Input::LEFT,
     Input::RIGHT,
@@ -630,7 +636,7 @@ fn palette(class: Class, kit: Kit, rng: &mut Rng) -> Act {
         },
         Class::Elementalist => match rng.range(0, 3) {
             0 | 1 => Act::At(
-                6,
+                EARTH,
                 Aim {
                     base: Base::Feet,
                     fwd: rng.range(0, 450) as i16,
@@ -638,7 +644,7 @@ fn palette(class: Class, kit: Kit, rng: &mut Rng) -> Act {
                 },
                 1,
             ),
-            2 => Act::Press(4),
+            2 => Act::Press(FIRE),
             _ => Act::Press(3),
         },
         Class::BloodMage => match rng.range(0, 2) {
@@ -788,7 +794,7 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                         (
                             0,
                             Act::At(
-                                6,
+                                EARTH,
                                 Aim {
                                     base: Base::Feet,
                                     fwd: 0,
@@ -800,7 +806,7 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                         (
                             2,
                             Act::At(
-                                6,
+                                EARTH,
                                 Aim {
                                     base: Base::Feet,
                                     fwd: 0,
@@ -826,8 +832,8 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                     strafe_at: 0,
                     still: 0,
                     events: vec![
-                        (e.saturating_sub(14), Act::At(6, feet(150), 1)),
-                        (e.saturating_sub(12), Act::At(6, feet(150), 1)),
+                        (e.saturating_sub(14), Act::At(EARTH, feet(150), 1)),
+                        (e.saturating_sub(12), Act::At(EARTH, feet(150), 1)),
                         (e.saturating_sub(4), Act::Jump(90)),
                     ],
                 });
@@ -837,7 +843,7 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                     strafe_at: e + 20,
                     still: 0,
                     events: vec![
-                        (e.saturating_sub(14), Act::At(6, feet(150), 1)),
+                        (e.saturating_sub(14), Act::At(EARTH, feet(150), 1)),
                         (e.saturating_sub(4), Act::Jump(60)),
                         (e + 30, Act::Press(0)),
                         (e + 45, Act::Press(1)),

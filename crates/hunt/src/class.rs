@@ -506,7 +506,8 @@ impl Hands {
             }
         }
         self.uses.shots += 1;
-        self.look_keeping(me, plan, self.spot(w, me, at, false), Input::LEFT)
+        let bolt = self.button(me, SLOT_POKE).unwrap_or(Input::LEFT);
+        self.look_keeping(me, plan, self.spot(w, me, at, false), bolt)
     }
 
     /// The Reaver: **the lotus on a shadow standing at the work**, dragged home
@@ -588,13 +589,12 @@ impl Hands {
         // is her Haemorrhage, four in a hundred of her red for thirty against
         // something that does not bleed, where the scythe costs one and
         // drinks the pools under it.
-        if plan.bits & ATTACKS != Input::LEFT {
+        // The scythe is her right click since 2026-10-09; asked of the kit
+        // rather than written down, as every other button here is.
+        let scythe = self.button(me, moves::blood::SWEEP).unwrap_or(Input::LEFT);
+        if plan.bits & ATTACKS != scythe {
             if far.raw() < sweep.add(Fx::ratio(5, 10)).raw() {
-                return Input::looking_at(
-                    (plan.bits & !ATTACKS) | Input::LEFT,
-                    plan.aim,
-                    plan.pitch,
-                );
+                return Input::looking_at((plan.bits & !ATTACKS) | scythe, plan.aim, plan.pitch);
             }
             if red < RED_CUT {
                 return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
@@ -655,13 +655,13 @@ impl Hands {
             .map(|(p, _)| p)
     }
 
-    /// The Dual mage: **a finisher or a sweep in a long window**, if it does
+    /// The Dual mage: **one of her two majors in a long window**, if it does
     /// not push her bars past the band; otherwise the auto, which `finish`
     /// puts in the hand that keeps the bars level -- and turned so the punch
     /// leaving that shoulder meets the point rather than passing beside it.
     fn punch(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let far = flat(at.sub(me.pos)).flat_len();
-        for kind in [moves::dual::JUDGEMENT, moves::dual::SWEEP] {
+        for kind in [moves::dual::JUDGEMENT, moves::dual::ABYSS] {
             let m = moves::get(me.class, kind);
             let reach = sim::state::live_reach(me, &m);
             if window >= (m.startup + m.active) as i32 + SPARE
@@ -671,7 +671,10 @@ impl Hands {
                 && let Some(b) = self.button(me, kind)
             {
                 self.uses.finishers += 1;
-                let point = if m.aim().is_a_skillshot() || kind == moves::dual::JUDGEMENT {
+                let point = if m.aim().is_a_skillshot()
+                    || kind == moves::dual::JUDGEMENT
+                    || kind == moves::dual::ABYSS
+                {
                     floor_under(me, at)
                 } else {
                     at
@@ -703,21 +706,22 @@ impl Hands {
     /// burn her, then the other, and neither if both would. With its move.
     fn auto_for(&self, me: &Player) -> (u16, u8) {
         let low_dark = sim::dual::bars(me).is_none_or(|(d, l)| d.raw() <= l.raw());
-        let order = if low_dark {
-            [
-                (Input::LEFT, moves::dual::DARK_AUTO),
-                (Input::RIGHT, moves::dual::LIGHT_AUTO),
-            ]
+        // Off the floor the same clicks throw Reel and Flare, which goad by a
+        // cast's push rather than an auto's: weighed as what they are.
+        let (dark, light) = if me.grounded {
+            (moves::dual::SHADE_BOLT, moves::dual::SUNRAY)
         } else {
-            [
-                (Input::RIGHT, moves::dual::LIGHT_AUTO),
-                (Input::LEFT, moves::dual::DARK_AUTO),
-            ]
+            (moves::dual::REEL, moves::dual::FLARE)
+        };
+        let order = if low_dark {
+            [(Input::LEFT, dark), (Input::RIGHT, light)]
+        } else {
+            [(Input::RIGHT, light), (Input::LEFT, dark)]
         };
         order
             .into_iter()
             .find(|(_, k)| keeps(me, *k))
-            .unwrap_or((0, moves::dual::DARK_AUTO))
+            .unwrap_or((0, moves::dual::SHADE_BOLT))
     }
 
     // -----------------------------------------------------------------------
@@ -828,7 +832,8 @@ impl Hands {
         {
             self.uses.shots += 1;
             self.rest();
-            return Some(self.look(me, self.spot(w, me, at, false), Input::LEFT));
+            let b = self.button(me, SLOT_POKE).unwrap_or(Input::LEFT);
+            return Some(self.look(me, self.spot(w, me, at, false), b));
         }
         None
     }
@@ -884,7 +889,7 @@ impl Hands {
     /// hit: half is the blink, three quarters the second jump.
     fn idle_dual(&mut self, w: &World, me: &Player, at: V3, safe: i32) -> Option<Input> {
         let _ = w;
-        let auto = moves::get(me.class, moves::dual::DARK_AUTO);
+        let auto = moves::get(me.class, moves::dual::SHADE_BOLT);
         let lower = sim::dual::lower(me).to_int();
         if self.cool > 0
             || lower >= GOAD_TO
@@ -1268,9 +1273,9 @@ impl Hands {
         if bits & casts != 0 {
             let mut keep = 0;
             for (b, kind) in [
-                (Input::MIDDLE, moves::dual::LIGHT_LANCE),
-                (Input::SPECIAL, moves::dual::JUDGEMENT),
-                (Input::MECHANIC, moves::dual::SWEEP),
+                (Input::MIDDLE, moves::dual::BINARY),
+                (Input::SPECIAL, moves::dual::ABYSS),
+                (Input::MECHANIC, moves::dual::JUDGEMENT),
             ] {
                 if bits & b != 0 && keeps(me, kind) {
                     keep |= b;

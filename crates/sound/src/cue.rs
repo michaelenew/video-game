@@ -464,6 +464,38 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
             EffectKind::Pool => Patch::Wet(Wet { weight: 0.35 }),
             // The Elementalist's fire on earth, and her air.
             EffectKind::Embers | EffectKind::FireRing => Patch::Crackle(Crackle { seconds: 0.35 }),
+            // The carpet and the fountain are fire laid down and left: a
+            // longer crackle than a burst's.
+            EffectKind::FireCarpet | EffectKind::Fountain => {
+                Patch::Crackle(Crackle { seconds: 0.6 })
+            }
+            // The Blood mage's burst is wet and heavy; the nail a short ring.
+            EffectKind::Nova => Patch::Wet(Wet { weight: 0.8 }),
+            EffectKind::Nail => Patch::Ring(Ring { pitch: 440.0 }),
+            // The Dual mage's two forces, by ear as by eye: dark is a low
+            // whoosh you can hear coming and a heavy rumble where it stays;
+            // light is a high ring that has already arrived.
+            EffectKind::ShadeBolt => Patch::Whoosh(Whoosh {
+                frames: 10,
+                size: FIGHTER,
+                rising: false,
+                weight: 0.35,
+            }),
+            EffectKind::Binary => Patch::Ring(Ring { pitch: 660.0 }),
+            EffectKind::Abyss => Patch::Rumble(Rumble {
+                frames: 30,
+                size: 2.5,
+            }),
+            EffectKind::Flare => Patch::Gust(Gust {
+                frames: 10,
+                weight: 0.5,
+            }),
+            EffectKind::Sunray => Patch::Ring(Ring { pitch: 1320.0 }),
+            // The Air ball is a held gust, the heaviest of her air.
+            EffectKind::AirBall => Patch::Gust(Gust {
+                frames: 30,
+                weight: 0.8,
+            }),
             EffectKind::Rough => Patch::Rumble(Rumble {
                 frames: 8,
                 size: 1.5,

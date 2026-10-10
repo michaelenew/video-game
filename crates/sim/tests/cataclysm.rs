@@ -1,4 +1,5 @@
-//! The Elementalist's heavy: Cataclysm, on right click.
+//! The Elementalist's heavy: Cataclysm, on `E` -- her strong push, since her
+//! three clicks became earth, fire and wind on 2026-10-09.
 //!
 //! Structurally the same trick her auto is -- an instant line, resolved on the
 //! spot rather than by the hitbox loop -- but heavier, and with the opposite
@@ -9,11 +10,17 @@
 
 use sim::class::{MAX_STRUCTURES, Mechanic, Structure};
 use sim::effects::{Effect, EffectKind};
+use sim::moves::elementalist::keys;
 use sim::state::{Action, SLOT_HEAVY, SLOT_SPECIAL};
 use sim::{Class, Fx, Input, V3, World};
 
-const R: u16 = Input::RIGHT;
-const E: u16 = Input::MECHANIC;
+/// Cataclysm: the strong push.
+const CATACLYSM: u16 = keys::STRONG_PUSH;
+/// Raise a stone: the earth click, pressed on the floor.
+const RAISE: u16 = keys::EARTH;
+/// The Fire pillar: the fire click, tapped on the floor.
+const PILLAR: u16 = keys::FIRE;
+/// The Bulwark's special, for the fighter caught in the line.
 const Q: u16 = Input::SPECIAL;
 
 fn run(w: &mut World, frames: u32, a: u16, b: u16) {
@@ -142,9 +149,9 @@ fn light_tornado(w: &mut World, owner: u8, at: V3, dir: V3, age: u16, life: u16)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn right_click_throws_cataclysm_for_the_elementalist() {
+fn the_strong_push_throws_cataclysm_for_the_elementalist() {
     let mut w = elementalist();
-    run(&mut w, 1, R, 0);
+    run(&mut w, 1, CATACLYSM, 0);
     assert!(
         matches!(
             w.players[0].action,
@@ -153,7 +160,7 @@ fn right_click_throws_cataclysm_for_the_elementalist() {
                 ..
             }
         ),
-        "right click did not start the fourth move"
+        "the strong push did not start the fourth move"
     );
 }
 
@@ -167,7 +174,7 @@ fn cataclysm_needs_no_structure_or_pillar_to_be_thrown() {
         w.players[0].mechanic_ready(SLOT_HEAVY),
         "Cataclysm is gated on having a structure or pillar out"
     );
-    run(&mut w, 1, R, 0);
+    run(&mut w, 1, CATACLYSM, 0);
     assert!(
         matches!(
             w.players[0].action,
@@ -194,7 +201,7 @@ fn a_fighter_in_the_line_is_neither_hurt_nor_stopped() {
     // shot arrives while they are still in its startup.
     for f in 0..30 {
         let them = if f == 0 { Q } else { 0 };
-        let her = if f < 2 { R } else { 0 };
+        let her = if f < 2 { CATACLYSM } else { 0 };
         w.advance([Input::aimed(her, 0), Input::aimed(them, 0)]);
         assert!(
             !matches!(
@@ -221,7 +228,7 @@ fn a_fighter_in_the_line_is_neither_hurt_nor_stopped() {
 #[test]
 fn cataclysm_destroys_a_structure_and_scatters_it_as_debris() {
     let mut w = elementalist();
-    tap(&mut w, E, 30); // raise one ahead, and let it finish rising
+    tap(&mut w, RAISE, 30); // raise one ahead, and let it finish rising
     assert!(has_structure(&w), "fixture never raised a structure");
 
     // Stand just past where the structure lands, on the same line Cataclysm
@@ -236,7 +243,7 @@ fn cataclysm_destroys_a_structure_and_scatters_it_as_debris() {
     // Longer than the other fixtures wait: destroying the structure is not
     // the hit, only the moment the debris is thrown, and it still has to fly
     // the distance.
-    tap(&mut w, R, 60);
+    tap(&mut w, CATACLYSM, 60);
 
     assert!(!has_structure(&w), "the structure survived Cataclysm");
     assert!(
@@ -301,7 +308,7 @@ fn debris_shatters_on_the_first_stone_it_hits() {
         // punching through it could ever reach him.
         w.players[1].pos = V3::new(Fx::from_int(11), Fx::ZERO, CLEAR_LANE);
         let before = w.players[1].health;
-        tap(&mut w, R, 90);
+        tap(&mut w, CATACLYSM, 90);
         let far_survived = matches!(
             w.players[0].mechanic,
             Mechanic::Structures(slots) if slots[1].is_some()
@@ -329,10 +336,10 @@ fn debris_shatters_on_the_first_stone_it_hits() {
 #[test]
 fn cataclysm_never_blasts_its_own_caster() {
     let mut w = elementalist();
-    tap(&mut w, E, 30);
+    tap(&mut w, RAISE, 30);
     assert!(has_structure(&w), "fixture never raised a structure");
     let before = w.players[0].health;
-    tap(&mut w, R, 30);
+    tap(&mut w, CATACLYSM, 30);
     assert!(
         !has_structure(&w),
         "fixture never destroyed its own structure"
@@ -350,7 +357,7 @@ fn cataclysm_never_blasts_its_own_caster() {
 #[test]
 fn cataclysm_turns_a_fire_pillar_into_a_travelling_tornado() {
     let mut w = elementalist();
-    tap(&mut w, Q, 50); // plant a pillar ahead, and let her fully recover
+    tap(&mut w, PILLAR, 50); // plant a pillar ahead, and let her fully recover
     assert_eq!(
         fire_pillars(&w),
         1,
@@ -366,7 +373,7 @@ fn cataclysm_turns_a_fire_pillar_into_a_travelling_tornado() {
         "fixture is still recovering from Fire pillar"
     );
 
-    tap(&mut w, R, 30);
+    tap(&mut w, CATACLYSM, 30);
 
     assert_eq!(
         fire_pillars(&w),
@@ -643,14 +650,14 @@ fn cataclysm_aimed_at_a_dais_corner_still_turns_the_pillar_into_a_tornado() {
     let lower_corner = V3::new(Fx::from_int(-9), Fx::ZERO, Fx::from_int(4));
     let upper_corner = V3::new(Fx::from_int(-9), Fx::ratio(3, 2), Fx::from_int(4));
 
-    tap_at(&mut w, Q, lower_corner, 50);
+    tap_at(&mut w, PILLAR, lower_corner, 50);
     assert_eq!(
         fire_pillars(&w),
         1,
         "fixture planted no pillar at the dais's base corner"
     );
 
-    tap_at(&mut w, R, upper_corner, 30);
+    tap_at(&mut w, CATACLYSM, upper_corner, 30);
     assert_eq!(
         fire_pillars(&w),
         0,

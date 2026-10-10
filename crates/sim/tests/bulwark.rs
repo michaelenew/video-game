@@ -9,6 +9,7 @@ use sim::class::{Class, Mechanic, Shield};
 use sim::fixed::Fx;
 use sim::math::atan2_turns;
 use sim::monster::Doing;
+use sim::moves::elementalist::keys;
 use sim::species::ridgeback;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::tuning as t;
@@ -618,7 +619,8 @@ fn bolt_reach(recall: bool) -> Fx {
     w.players[0].pos = behind;
     let mut longest = Fx::ZERO;
     for f in 0..60 {
-        let bits = if f == 0 { L } else { 0 };
+        // The Bolt is her weak push, on `Q` since 2026-10-09.
+        let bits = if f == 0 { keys::WEAK_PUSH } else { 0 };
         w.advance([Input::aimed(0, NORTH), Input::looking_at(bits, SOUTH, 0)]);
         w.players[0].pos = behind;
         longest = longest.max(w.players[1].beam_reach);

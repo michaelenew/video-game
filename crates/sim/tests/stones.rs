@@ -6,12 +6,16 @@
 //! terms of what happens on the field rather than which number moved.
 
 use sim::class::{MAX_STRUCTURES, Mechanic, Structure};
+use sim::moves::elementalist::keys;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::stones::Phase;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
 
-const E: u16 = Input::MECHANIC;
+/// The earth click: Raise, on the press, with her feet on the floor.
+const RAISE: u16 = keys::EARTH;
+/// The weak push: the Bolt, standing.
+const BOLT: u16 = keys::WEAK_PUSH;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -21,7 +25,7 @@ fn run(w: &mut World, frames: u32, a: u16, b: u16) {
     }
 }
 
-/// Press, let go, and let it play out. Holding the mechanic raises one stone,
+/// Press, let go, and let it play out. Holding the earth click raises one stone,
 /// but letting go is what lets the next press raise another.
 fn tap(w: &mut World, button: u16, then: u32) {
     run(w, 2, button, 0);
@@ -125,7 +129,7 @@ fn flat_speed(v: V3) -> Fx {
 fn raise_under_the_other(w: &mut World) {
     let victim = w.players[1].pos;
     w.players[0].pos = V3::new(victim.x.sub(t::raise_reach()), Fx::ZERO, victim.z);
-    run(w, 2, E, 0);
+    run(w, 2, RAISE, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +142,7 @@ fn a_stone_raised_underneath_another_throws_it_into_the_air() {
     // already stands cannot simply arrive inside it, and the only direction
     // that makes sense for earth erupting from below is up.
     let mut w = elementalist();
-    tap(&mut w, E, 30); // one up, fully risen
+    tap(&mut w, RAISE, 30); // one up, fully risen
     let resting = stone(&w, 0).at.y;
     assert_eq!(
         resting.raw(),
@@ -153,7 +157,7 @@ fn a_stone_raised_underneath_another_throws_it_into_the_air() {
         let first = stone(&w, 0).at;
         V3::new(first.x, Fx::ratio(1, 10), first.z)
     };
-    tap_at(&mut w, E, foot, 0);
+    tap_at(&mut w, RAISE, foot, 0);
     let mut highest = Fx::ZERO;
     for _ in 0..90 {
         run(&mut w, 1, 0, 0);
@@ -174,7 +178,7 @@ fn a_stone_raised_off_centre_throws_the_other_one_clear() {
     // field that gives a stone horizontal speed today -- and therefore the only
     // way one stone ever knocks into another.
     let mut w = elementalist();
-    tap(&mut w, E, 30);
+    tap(&mut w, RAISE, 30);
     let from = stone(&w, 0).at;
 
     // Step aside, and aim at the floor under the edge of the first, on the
@@ -186,7 +190,7 @@ fn a_stone_raised_off_centre_throws_the_other_one_clear() {
     let toward = V3::new(toward.x, Fx::ZERO, toward.z).normalized();
     let foot = from.add(toward.scale(t::structure_radius()));
     let foot = V3::new(foot.x, Fx::ZERO, foot.z);
-    tap_at(&mut w, E, foot, 120);
+    tap_at(&mut w, RAISE, foot, 120);
 
     let thrown = stone(&w, 0).at.sub(from).flat_len();
     assert!(
@@ -400,7 +404,7 @@ fn cast_bolt(w: &mut World) {
     let (yaw, tilt) = look_at(w, middle);
     for _ in 0..30 {
         w.advance([
-            Input::looking_at(Input::LEFT, yaw, tilt),
+            Input::looking_at(BOLT, yaw, tilt),
             Input::aimed(0, LOOK_LEFT),
         ]);
         if matches!(w.players[0].action, Action::Active { kind: 0, .. }) {
@@ -415,7 +419,7 @@ fn a_bolt_aimed_through_a_structure_kicks_it_instead_of_reaching_past_it() {
     // The auto reads what it is aimed through. See
     // docs/design/kits/elementalist.md.
     let mut w = elementalist();
-    tap(&mut w, E, 30); // raise a structure ahead, and let it fully rise
+    tap(&mut w, RAISE, 30); // raise a structure ahead, and let it fully rise
     assert_eq!(
         stone(&w, 0).vel,
         V3::ZERO,
@@ -446,7 +450,7 @@ fn a_kicked_stone_dies_off_over_the_back_of_its_travel() {
     // note this implements: full speed for most of the travel, decaying
     // toward the end rather than a flat friction the whole way.
     let mut w = elementalist();
-    tap(&mut w, E, 30);
+    tap(&mut w, RAISE, 30);
     cast_bolt(&mut w);
     let launch_speed = flat_speed(stone(&w, 0).vel);
     assert!(launch_speed.raw() > 0, "fixture never kicked the stone");
@@ -484,7 +488,7 @@ fn a_kicked_stone_hurts_a_fighter_it_is_still_moving_fast_enough_to_catch() {
     w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
     let gap = t::raise_reach().add(Fx::ratio(3, 2));
     w.players[1].pos = V3::new(gap, Fx::ZERO, Fx::from_int(8));
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, RAISE, 0);
     run(&mut w, 30, 0, 0); // let the structure fully rise
 
     let before = w.players[1].health;
@@ -515,7 +519,7 @@ fn a_stone_churns_first_and_erupts_second() {
     // reshaping the rise moves the telegraph with it. Both phases have to
     // actually happen, and in that order.
     let mut w = elementalist();
-    tap(&mut w, E, 0);
+    tap(&mut w, RAISE, 0);
     let mut seen = Vec::new();
     for _ in 0..(t::structure_rise() + 4) {
         let phase = stone(&w, 0).phase();
@@ -637,7 +641,7 @@ fn a_stone_never_touches_the_fighter_who_raised_it() {
     // moving, so the second one comes up where she is standing after walking
     // on to the first.
     w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, RAISE, 0);
     w.players[0].pos = V3::new(t::raise_reach(), Fx::ZERO, Fx::ZERO);
     run(&mut w, 600, 0, 0);
 
@@ -683,7 +687,7 @@ fn stones_are_stepped_for_both_fighters() {
     // Indexing the field by owner is what lets two Elementalists share an
     // arena. Nothing in the loop may assume there is only one of them.
     let mut w = World::with_classes([sim::Class::Elementalist; MAX_PLAYERS]);
-    run(&mut w, 2, E, E);
+    run(&mut w, 2, RAISE, RAISE);
     run(&mut w, 60, 0, 0);
     for player in 0..MAX_PLAYERS {
         assert_eq!(
@@ -728,6 +732,14 @@ fn destroying_a_stone_reports_its_middle_rather_than_its_base() {
 ///
 /// `gap` frames between the presses; space goes down on `jump_at` and stays
 /// down, which is what a player actually does. Returns the highest she gets.
+///
+/// Each press is one frame of the earth click, so two of them are always a
+/// press, a release and a press -- Raise reads the press edge. Since
+/// 2026-10-09 space held on the floor with the earth click is the **earth
+/// jump**, not a raise and a jump, so a `jump_at` on or before a press turns
+/// that press into the earth jump. Those timings stay in the sweep: they are
+/// what a player who jumps too early gets, and the old binding's best timings
+/// all put space after the last press, so the numbers below did not move.
 fn structure_jump(count: usize, gap: u32, jump_at: u32) -> f32 {
     let mut w = elementalist();
     let here = w.players[0].pos;
@@ -739,7 +751,7 @@ fn structure_jump(count: usize, gap: u32, jump_at: u32) -> f32 {
     for i in 0..200u32 {
         let mut bits = 0u16;
         if raised < count && i == raised as u32 * gap {
-            bits |= E;
+            bits |= RAISE;
         }
         if i >= jump_at {
             bits |= Input::SPACE;
@@ -748,7 +760,7 @@ fn structure_jump(count: usize, gap: u32, jump_at: u32) -> f32 {
             Input::looking_at(bits, yaw, tilt),
             Input::aimed(0, LOOK_LEFT),
         ]);
-        if bits & E != 0 {
+        if bits & RAISE != 0 {
             raised += 1;
         }
         apex = apex.max(w.players[0].pos.y.to_f32_for_render());
