@@ -42,16 +42,6 @@ impl Brush {
     }
 }
 
-/// A white material. Everything in this module carries its colour in its
-/// vertices, so the material must not tint it.
-pub fn plain() -> StandardMaterial {
-    StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 0.92,
-        ..default()
-    }
-}
-
 /// A box with the accent along its edges and on its top.
 ///
 /// Not `Cuboid`: a cuboid has four vertices per face, all of them corners, so

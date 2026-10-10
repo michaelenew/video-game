@@ -20,6 +20,7 @@ use sim::arena::{ArenaId, Material};
 
 use crate::arenas::{Under, put};
 use crate::forms::Kit;
+use crate::paint::{Materials, Paint};
 use crate::shapes::hash01;
 
 fn m(v: i32) -> f32 {
@@ -58,9 +59,9 @@ pub fn whole(arena: ArenaId, min: Vec3, max: Vec3) -> bool {
 pub fn draw(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     palette: &Palette,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
 ) {
     let mut kit = Kit::new();
@@ -103,7 +104,7 @@ pub fn draw(
     );
     if !glow.is_empty() {
         let lamp = palette.surface([1.0, 0.82, 0.5]);
-        let lit = materials.add(StandardMaterial {
+        let lit = materials.standard.add(StandardMaterial {
             base_color: Color::WHITE,
             emissive: LinearRgba::rgb(lamp[0] * 4.0, lamp[1] * 3.2, lamp[2] * 2.0),
             ..default()

@@ -33,6 +33,7 @@ use sim::arena::ArenaId;
 use sim::atlas::{self, Atlas, EXTRA};
 
 use crate::arenas::{PlaceLook, Under, draw_place, draw_solid};
+use crate::paint::{Materials, Paint};
 
 /// How much further than the reach a piece is kept before it is dropped.
 const SLACK: f32 = 60.0;
@@ -84,7 +85,7 @@ pub struct Stream {
     solids: HashMap<u32, (Entity, Option<bool>)>,
     /// Each place's look, worked out once.
     looks: HashMap<ArenaId, PlaceLook>,
-    white: Option<Handle<StandardMaterial>>,
+    white: Option<Handle<Paint>>,
     /// Where on the map the camera was when the set was last worked out.
     at: Option<Vec3>,
     /// The waystones' doors: one slab per gated doorway, shown while shut.
@@ -95,7 +96,7 @@ pub struct Stream {
     /// The palette for each place, for the land's colours.
     palettes: HashMap<ArenaId, look::Palette>,
     trees: crate::land::Trees,
-    ground: Option<Handle<StandardMaterial>>,
+    ground: Option<Handle<Paint>>,
     water: Option<Handle<StandardMaterial>>,
 }
 
@@ -145,9 +146,14 @@ pub fn stream(
     mut st: ResMut<Stream>,
     camera: Query<&Transform, With<crate::MainCamera>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut standard: ResMut<Assets<StandardMaterial>>,
+    mut paints: ResMut<Assets<Paint>>,
     mut gates: Query<&mut Visibility>,
 ) {
+    let mut materials = Materials {
+        standard: &mut standard,
+        paint: &mut paints,
+    };
     let w = &sim.cur;
     if !w.valley.on {
         if let Some(root) = st.root.take() {
@@ -185,7 +191,7 @@ pub fn stream(
     }
     let white = st
         .white
-        .get_or_insert_with(|| materials.add(crate::shapes::plain()))
+        .get_or_insert_with(|| materials.paint.add(Paint::white()))
         .clone();
     if st.gates.is_empty() {
         spawn_gates(
@@ -414,7 +420,7 @@ pub fn stream(
 fn spawn_gates(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     atlas: &Atlas,
     root: Entity,
     st: &mut Stream,
@@ -429,7 +435,7 @@ fn spawn_gates(
         let e = commands
             .spawn((
                 Mesh3d(meshes.add(Cuboid::from_size(hi - lo))),
-                MeshMaterial3d(materials.add(StandardMaterial {
+                MeshMaterial3d(materials.standard.add(StandardMaterial {
                     base_color: Color::linear_rgba(c[0], c[1], c[2], 0.55),
                     alpha_mode: AlphaMode::Blend,
                     unlit: true,
@@ -460,7 +466,7 @@ const LAND_REACH: (f32, f32) = (300.0, 700.0);
 fn land_tiles(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     st: &mut Stream,
     atlas: &Atlas,
     root: Entity,
@@ -517,11 +523,11 @@ fn land_tiles(
     let ground = st
         .ground
         .get_or_insert_with(|| {
-            materials.add(StandardMaterial {
-                // Seen from below only by its skirts, which face out either
-                // way round.
-                cull_mode: None,
-                ..crate::shapes::plain()
+            // Seen from below only by its skirts, which face out either
+            // way round.
+            materials.paint.add(Paint {
+                two_sided: true,
+                ..Paint::white()
             })
         })
         .clone();
@@ -547,7 +553,7 @@ fn land_tiles(
                 .get_or_insert_with(|| {
                     let c = look::palette::of(sim::arena::ArenaId::MOUTH)
                         .of(sim::arena::Material::Water);
-                    materials.add(StandardMaterial {
+                    materials.standard.add(StandardMaterial {
                         base_color: Color::srgba(c[0], c[1], c[2], 0.78),
                         alpha_mode: AlphaMode::Blend,
                         perceptual_roughness: 0.15,

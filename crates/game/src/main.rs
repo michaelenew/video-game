@@ -32,6 +32,7 @@ mod land;
 mod menu;
 mod online;
 mod outline;
+mod paint;
 mod palette;
 mod picker;
 mod platform;
@@ -197,6 +198,7 @@ fn main() {
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
+        .add_plugins(paint::PaintPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
         // `platform::draws_outlines`. Registering it anyway would not fail

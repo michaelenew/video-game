@@ -233,6 +233,37 @@ The rule: **a form's detail is paid for six times a frame** -- four cascades, th
 prepass, the picture -- so a form built for how it looks close up has to say what it costs
 from 150 m, and what of it needs to cast a shadow at all.
 
+**What a pixel costs** (the same day). With the shadow passes down, the main pass was the
+frame: 110 ms to shade 950,000 pixels once each. Everything that stands still carries its
+colour in its vertices and sets nothing else, and the standard material reads everything
+else for every pixel anyway -- metal, reflectance, emission, clearcoat, transmission, a
+texture lookup for each -- so the obvious move was a material that only lights the vertex
+colour: `game::paint`, Bevy's own diffuse and ambient terms, its shadow lookup, and its
+fog and tonemapping by the same function, so the picture is the same picture
+(`look::palette::lit` was measured off it). Then the pass was taken apart by subtraction:
+
+| Main pass, under lavapipe | ms |
+| --- | --- |
+| Standard material | 110 |
+| `paint` | 102 |
+| `paint`, hard shadow edge (`--shadow-filter hard`) | 79 |
+| `paint`, no shadow lookup | 78 |
+| `paint`, no fog or tonemapping | 97 |
+| Unlit: the vertex colour and nothing else | 55 |
+
+So 55 ms of it is the software rasteriser's own floor, which no shader can lower, and of
+the 55 ms of shading on top the **soft shadow edge is 24** -- thirteen reads of the shadow
+map a pixel, against one -- the lighting maths 16, the fog and tonemapper 6, and all the
+standard material's unused machinery 8. The flat material is kept because it is the right
+shape -- the whole of what these surfaces need, in one file, and the place a toon ramp or
+a cheaper edge goes -- not for the 8 ms. The lever is the shadow filter, and it is a
+choice about the look, which is why it is still a flag and not a change.
+
+A software renderer cannot say what a GPU does with the same pass: a GPU's floor is far
+lower and its texture reads relatively dearer, so the shadow taps' share is if anything
+larger there. The number that matters is `main_opaque_pass_3d/elapsed_gpu` from
+`--profile` on the machine in question.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.

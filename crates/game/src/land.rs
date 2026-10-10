@@ -11,6 +11,7 @@
 
 use std::collections::HashMap;
 
+use crate::paint::{Materials, Paint};
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
@@ -278,7 +279,7 @@ pub struct Trees {
     trunk: Option<Handle<Mesh>>,
     cone: Option<Handle<Mesh>>,
     crown: Option<Handle<Mesh>>,
-    materials: HashMap<(ArenaId, u8), Handle<StandardMaterial>>,
+    materials: HashMap<(ArenaId, u8), Handle<Paint>>,
 }
 
 /// Is a box of the map a tree's trunk: timber, thin and tall?
@@ -298,20 +299,14 @@ pub fn pines(id: ArenaId) -> bool {
 impl Trees {
     fn material(
         &mut self,
-        materials: &mut Assets<StandardMaterial>,
+        materials: &mut Materials,
         id: ArenaId,
         part: u8,
         rgb: [f32; 3],
-    ) -> Handle<StandardMaterial> {
+    ) -> Handle<Paint> {
         self.materials
             .entry((id, part))
-            .or_insert_with(|| {
-                materials.add(StandardMaterial {
-                    base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
-                    perceptual_roughness: 0.95,
-                    ..default()
-                })
-            })
+            .or_insert_with(|| materials.paint.add(Paint::srgb(rgb)))
             .clone()
     }
 
@@ -323,7 +318,7 @@ impl Trees {
         &mut self,
         commands: &mut Commands,
         meshes: &mut Assets<Mesh>,
-        materials: &mut Assets<StandardMaterial>,
+        materials: &mut Materials,
         s: &sim::arena::Solid,
         id: ArenaId,
         palette: &look::Palette,
@@ -440,10 +435,10 @@ impl Trees {
 pub fn draw_arena(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     arena: &'static sim::arena::Arena,
     palette: &look::Palette,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
 ) {
     let Some(rim) = arena.rim else {
         return;
@@ -544,11 +539,7 @@ pub fn draw_arena(
     let rock = palette.of(Material::Rock);
     let bush = palette.foliage(false);
     let crown = meshes.add(Sphere::new(0.5).mesh().ico(1).unwrap());
-    let leaves = materials.add(StandardMaterial {
-        base_color: Color::srgb(bush[0], bush[1], bush[2]),
-        perceptual_roughness: 0.95,
-        ..default()
-    });
+    let leaves = materials.paint.add(Paint::srgb(bush));
     let pine = pines(arena.id);
     let step = 4.0f32;
     let (gx0, gz0) = (lo_x - margin * 0.8, lo_z - margin * 0.8);
@@ -648,7 +639,7 @@ fn tree(
     trees: &mut Trees,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     id: ArenaId,
     palette: &look::Palette,
     root: Entity,
@@ -674,10 +665,10 @@ fn tree(
 pub fn draw_below(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     arena: &'static sim::arena::Arena,
     palette: &look::Palette,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
 ) {
     let b = arena.bounds;
     let (lo_x, hi_x, lo_z, hi_z) = (f(b.lo_x), f(b.hi_x), f(b.lo_z), f(b.hi_z));

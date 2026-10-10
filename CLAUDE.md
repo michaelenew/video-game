@@ -286,9 +286,17 @@ differences flattened out of it by the tonemapper's knee. A harness that does
 not predict the screen is a harness that will be tuned against *instead of* the
 screen.
 
-`crates/game/src/sky.rs` and `crates/game/src/shapes.rs` are the Bevy half: a
-mesh, a material, a fog component, and the vertex colours that carry the
-accent. Nothing in either decides what a colour should be.
+`crates/game/src/sky.rs`, `crates/game/src/shapes.rs` and
+`crates/game/src/paint.rs` are the Bevy half: a mesh, a material, a fog
+component, and the vertex colours that carry the accent. Nothing in any of
+them decides what a colour should be. `paint.rs` is the one material
+everything standing still is drawn in -- the vertex colour, lit -- and its
+shader is `paint.wgsl`. **A shader that fails to compile is silent here**:
+the game has no log plugin, and the thing drawn in it simply vanishes from
+the picture while its outline stays. A change to a shader is checked with a
+screenshot, or with the logging build
+(`cargo run --release -p game --features bevy/bevy_log`), which prints the
+error.
 
 **Sound is the same rule, in `crates/sound`.** A sound is a function from a
 few numbers the simulation already has -- a blow's weight is its impact

@@ -19,6 +19,7 @@
 use bevy::prelude::*;
 use sim::arena::{Area, ArenaId, Material};
 
+use crate::paint::{Materials, Paint};
 use crate::sky;
 
 pub mod proving_ground;
@@ -252,7 +253,8 @@ pub fn dress(
     mut drawn: ResMut<Drawn>,
     old: Query<Entity, With<Scenery>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut standard: ResMut<Assets<StandardMaterial>>,
+    mut paints: ResMut<Assets<Paint>>,
     mut clear: ResMut<ClearColor>,
     mut suns: Query<&mut Transform, With<Sun>>,
     mut fill: Query<&mut DirectionalLight, With<Skylight>>,
@@ -281,7 +283,7 @@ pub fn dress(
     sky::raise(
         &mut commands,
         &mut meshes,
-        &mut materials,
+        &mut standard,
         sky,
         sun_at,
         Scenery,
@@ -300,7 +302,7 @@ pub fn dress(
     }
     // The pooled hazard and raised-solid materials take this arena's colours.
     if let Some(looks) = &looks {
-        crate::ground::repaint(looks, &mut materials, arena.id);
+        crate::ground::repaint(looks, &mut standard, arena.id);
     }
     // Both the ambient term and the fill light take the sky's colour, so every
     // shadow in the arena is the complement of what cast it.
@@ -320,7 +322,11 @@ pub fn dress(
     // what colour a thing is, the edge rule says where its accent goes, and
     // `shapes` puts the answer in the vertices. One white material serves all
     // of it, because every mesh carries its own colour.
-    let white = materials.add(crate::shapes::plain());
+    let mut materials = Materials {
+        standard: &mut standard,
+        paint: &mut paints,
+    };
+    let white = materials.paint.add(Paint::white());
     draw_place(
         &mut commands,
         &mut meshes,
@@ -354,10 +360,10 @@ pub fn dress(
 pub fn draw_place(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     arena: &'static sim::arena::Arena,
     look: &PlaceLook,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
 ) {
     let (sky, palette, brush, dressing) = (&look.sky, &look.palette, &look.brush, look.dressing);
@@ -371,7 +377,7 @@ pub fn draw_place(
     // same floor hazing toward the sky as it recedes is a long way down.
     let below = dressing.drop.then(|| {
         let rgb = sky.ground;
-        materials.add(StandardMaterial {
+        materials.standard.add(StandardMaterial {
             base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
             unlit: true,
             fog_enabled: true,
@@ -487,7 +493,7 @@ pub fn draw_place(
         }
     }
     let mut paint = |rgb: [f32; 3]| {
-        materials.add(StandardMaterial {
+        materials.standard.add(StandardMaterial {
             base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
             perceptual_roughness: 0.92,
             ..default()
@@ -651,7 +657,7 @@ pub fn draw_solid(
     offset: Vec3,
     hangs: bool,
     look: &PlaceLook,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
     near: bool,
 ) -> Entity {
@@ -803,7 +809,7 @@ fn scatter(
     arena: &'static sim::arena::Arena,
     palette: &look::palette::Palette,
     _brush: &crate::shapes::Brush,
-    white: &Handle<StandardMaterial>,
+    white: &Handle<Paint>,
     under: Under,
 ) {
     let b = arena.bounds;
