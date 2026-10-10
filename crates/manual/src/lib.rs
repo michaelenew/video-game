@@ -918,6 +918,10 @@ pub const SECTIONS: &[Section] = &[
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
             ),
             e(
+                "SHOT_AT=<x>,<z>",
+                "Stand player one at that point of the place the world is in (metres), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
+            ),
+            e(
                 "SHOT_MOVE=<move>",
                 "Start a hunt with the creature winding up that move at player one (the Ridgeback's bite, stomp, sweep, charge, slam, kick, spray; the Mireback's spew, flop, tongue, belch, backwash, inflate, wallow, a lob aimed at player one; the Sandmaw's rise, breach, undertow, spit, lash, swallow, sound, from under the sand or standing as the move is thrown; the Pair's pounce, rake, swat, feint, ambush, trip, twin -- both cats, either side of you; the Broodmother's stab, lunge, slam, screech, web shot, web line; the Mantis's scythe, second slash, lunge, guard, leap, dive, flare, pivot, prayer, ready; the Veilstalker's lunge, spear, rake, pounce -- off a trunk top -- quill, smoke, mimic; the Galewing's stoop, talon, downwash, volley -- from its cruising height -- screech, buffet, hop -- on the plateau; the Siegeshell's footfall, stamp and drag on a foot in front of you, shed off its flank, plough down the valley behind you, shrug, shiver, and the beam at the siege line), so a capture can look at its floor marker. A pack puts one body of a kind that throws it there instead, and --hunt gnawers with SHOT_MOVE=pile calls a pile-on on a ring of them; --hunt hornback lays each of the herd's moves out (charge at a boulder, best with SHOT_YAW=1.57; bellow, hook, guard, trample, shoulder, kick, buck). Pair it with SHOT_FRAME and DEMO=0.",
             ),
