@@ -127,6 +127,18 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Shadow Reaver's Deadly mistake key.",
     ),
     (
+        "pub const STRIKE: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Bulwark's strike click.",
+    ),
+    (
+        "pub const WEIGHT: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Bulwark's weight click.",
+    ),
+    (
+        "pub const GUARD: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Bulwark's guard click.",
+    ),
+    (
         "pub const MY_BLOOD: u16 = Input::LEFT",
         "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
     ),

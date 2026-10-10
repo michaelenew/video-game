@@ -452,6 +452,33 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "The Bulwark",
+        in_browser: true,
+        blurb: "The wall. Every blow taken on the shield is stored in it as weight, and his moves spend it. His three clicks are the strike, the weight and the guard: each has a move on the floor, one in the air and a jump attack with space. His air game is about being thrown -- the shield is a springboard, a sail and a battery. Rebuilt on three clicks 2026-10-10 and unplayed; docs/design/exploration/0012_bulwark_on_three_clicks.md is the design.",
+        entries: &[
+            e(
+                "Left click",
+                "The strike. Bash on the floor, the safe poke. In the air, Rebound: a Bash that throws you back off anything it meets -- a body, a wall, a stone, your own planted shield. Space and left click is the Battering ram: a low leap forward, shield first, carrying whoever it meets.",
+            ),
+            e(
+                "Middle click",
+                "The weight. Slam on the floor and in the air, where it waits for your feet and counts the fall. Space and middle click is Unload: the shield driven into the floor, and the stored weight throws you upward -- higher the more it held. It spends everything.",
+            ),
+            e(
+                "Right click",
+                "The guard, held; its first frames parry, and every blow it takes is weight. Held in the air it is a sail: you fall slowly behind it. Space and right click is the Shield step: the shield is planted where you stand, and you spring off its top -- higher the heavier it is. You have no shield until you call it home.",
+            ),
+            e(
+                "Q",
+                "Grapple, the command grab. It beats a guard and loses to a dodge.",
+            ),
+            e(
+                "E",
+                "The shield: thrown when it is in your hand, recalled when it is planted -- hitting whoever is in the way home -- and, while it flies, a leap to it. No frames: it happens on the press.",
+            ),
+        ],
+    },
+    Section {
         title: "The valley",
         in_browser: true,
         blurb: "A run starts in Hearth, the walled town at the valley's mouth: walk out of its gates into a world of places joined together, a climb from the river to the Saddle with every creature in a room off the way, and the Ring in town for fighting each other. docs/design/valley.md has the whole map.",

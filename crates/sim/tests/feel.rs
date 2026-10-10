@@ -577,6 +577,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // `E` -- 2026-10-09, see
             // `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
             Class::ShadowReaver => 11,
+            // Seven: Bash, Slam and the Grapple, then Rebound in the air and
+            // the three takeoffs -- 2026-10-10, see
+            // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+            Class::Bulwark => 7,
             // Eleven: the five of the scythe's arrival and the six of
             // 2026-10-09 -- the Blood nova, the Blood jet, Marionette, Nail,
             // Hook and Harvest. See
@@ -586,7 +590,6 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // and the two majors -- every move a spell, 2026-10-09. See
             // `docs/design/exploration/0010_dual_mage_spells.md`.
             Class::DualMage => 11,
-            _ => 3,
         };
         assert_eq!(
             n,

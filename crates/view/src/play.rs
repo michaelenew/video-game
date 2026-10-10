@@ -594,7 +594,12 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
     match (class, slot) {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
         (Class::Bulwark, 1) => Clip::BulwarkCommitted,
-        (Class::Bulwark, _) => Clip::BulwarkSpecial,
+        (Class::Bulwark, 2) => Clip::BulwarkSpecial,
+        // The three clicks (2026-10-10), on the clips they are versions of:
+        // Rebound and the ram are the Bash's shield-first shove, Unload and
+        // the Shield step drive the shield down as the Slam does.
+        (Class::Bulwark, 3) | (Class::Bulwark, 4) => Clip::BulwarkPoke,
+        (Class::Bulwark, _) => Clip::BulwarkCommitted,
         (Class::Champion, 0) => Clip::ChampionSword,
         (Class::Champion, 1) => Clip::ChampionHammer,
         (Class::Champion, 2) => Clip::ChampionSpear,

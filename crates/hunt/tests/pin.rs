@@ -25,7 +25,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
     // the Ridgeback plan's walk back unchanged. Nothing else in his hunt, and
     // no other pin, moved with it. See feel-log.md.
-    (Class::Bulwark, 101, 0x6dacc95234ce6050),
+    // Moved 2026-10-10, deliberately: his three clicks (0012) -- a click in
+    // a jump's first frames is a takeoff, and left click in the air Rebound.
+    (Class::Bulwark, 101, 0xbc3a409ebde3006a),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between

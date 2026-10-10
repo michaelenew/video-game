@@ -7972,3 +7972,33 @@ seven new moves and the eight knobs is a first guess.
   (REAVER-1).
 **Verdict** — unplayed. Her new moves play the four clips she had. Open: REAVER-1 to REAVER-4
 in 0011.
+
+### 2026-10-10 — the Bulwark on three clicks
+**Changed** His bindings, onto the grid, from the person's brief ("do the same"), and with him
+no class is on the shared grammar any more (`state::clicked_move` has no fallback arm). Designed
+combos first ([exploration/0012](exploration/0012_bulwark_on_three_clicks.md)), and following
+0007 §7's recommendations: his air game is about **being thrown**, the shield a springboard, a
+sail and a battery. Left is the strike (Bash, **Rebound** in the air, **Battering ram** off the
+floor), middle the weight (Slam on the floor and in the air, **Unload** off it), right the guard
+(Guard, **Sail** — the guard held in the air caps his fall — and the **Shield step**). Unload
+spends the weight on height; the Shield step plants the shield, weight and all, and springs him
+off it. `Q` and `E` are as built. Every number on the four new moves and ten knobs is a first
+guess.
+**Tried and changed while building**
+- *Rebound asked only the line* the Flare asks, and a body standing a little below his chest
+  was under it: the blow landed and he did not bounce. A Rebound that lands on a body bounces
+  now, blocked or not; walls, stones, his planted shield and the floor are still the line's.
+- *The Battering ram* lifted him and let go, and his gravity (about 50 m/s²) put him back on
+  the floor in seven frames, a metre on: it holds its line through its active frames now, as a
+  dash does. Its active 14 and 11 m/s; hitstun 30 so a hit is not minus (`feel.rs`).
+- *The Shield step* planted the shield a step ahead and he sprang straight into its side: it
+  is planted where he stands, he leaves from its top, and its recovery is 8 so `E` can call it
+  home while he is still in the air (the mechanic only answers a free body).
+- *Unload* at 4 + 11 m/s from a full shield was 2.1 m against a 0.1 m stomp empty; the full
+  share is 22. Lifts were first written for a lighter gravity than his: the Shield step 12 + 6,
+  Rebound's lift 10.
+- `combat.rs`'s three aerial tests jumped and clicked on the next frame, which is a takeoff on
+  every class now: they wait out the window. Rebound is his fast air button for the air shove.
+- The Bulwark's pins re-pinned.
+**Verdict** — unplayed. His new moves play his three clips. Open: BULWARK-1 to BULWARK-4 in
+0012.

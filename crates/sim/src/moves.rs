@@ -559,7 +559,17 @@ const NAMES: [&[&str]; 6] = [
     //   Bash: fast poke, slightly minus on block so it is not a free mash.
     //   Slam: the overhead. Heavily punishable if read, heavily rewarding if not.
     //   Grapple: beats guard outright, loses badly to dodge.
-    &["Bash", "Slam", "Grapple"],
+    //   And on three clicks (2026-10-10): Rebound, Battering ram, Unload and
+    //   Shield step -- see `bulwark`.
+    &[
+        "Bash",
+        "Slam",
+        "Grapple",
+        "Rebound",
+        "Battering ram",
+        "Unload",
+        "Shield step",
+    ],
     // Champion -- three weapons on three buttons, and the row of the grid is
     // the situation your feet are in. Nineteen moves: see `champion`.
     //
@@ -906,6 +916,59 @@ pub mod reaver {
     /// Is this move thrown as the feet leave the floor?
     pub const fn is_takeoff(kind: u8) -> bool {
         matches!(kind, MOONSAULT | GALLOWS | HANG)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Bulwark's seven
+// ---------------------------------------------------------------------------
+
+/// **The Bulwark on three clicks** (2026-10-10): the strike, the weight and
+/// the guard -- left, middle, right -- on the floor, in the air, and off the
+/// floor with space.
+///
+/// ```text
+///                 left: the strike    middle: the weight   right: the guard
+///   on foot       Bash                Slam                 Guard / parry
+///   in the air    Rebound             Slam (waits for      Sail (the guard,
+///                                     the floor)           held)
+///   space+click   Battering ram       Unload               Shield step
+///
+///   Q  Grapple                        E  throw / recall / leap, as built
+/// ```
+///
+/// The first three rows are the three he had, in their slots; the four after
+/// them were appended. See
+/// `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+pub mod bulwark {
+    pub const BASH: u8 = 0;
+    pub const SLAM: u8 = 1;
+    pub const GRAPPLE: u8 = 2;
+    /// Left click in the air: a Bash that throws him back off what it meets.
+    pub const REBOUND: u8 = 3;
+    /// Space and left click: a low leap forward, carrying whoever it meets.
+    pub const RAM: u8 = 4;
+    /// Space and middle click: the weight, spent on height.
+    pub const UNLOAD: u8 = 5;
+    /// Space and right click: the shield planted, and a spring off its top.
+    pub const SHIELD_STEP: u8 = 6;
+
+    pub const COUNT: usize = 7;
+
+    /// Which button is which.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: the strike.
+        pub const STRIKE: u16 = Input::LEFT;
+        /// Middle click: the weight.
+        pub const WEIGHT: u16 = Input::MIDDLE;
+        /// Right click: the guard.
+        pub const GUARD: u16 = Input::RIGHT;
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        matches!(kind, RAM | UNLOAD | SHIELD_STEP)
     }
 }
 
@@ -1279,10 +1342,12 @@ pub const fn slots(class: Class) -> usize {
         // move with a flight, a damage number and a slow needs the same table
         // every other move is in.
         Class::ShadowReaver => reaver::COUNT,
+        // Seven: his three, and the air's strike and the three takeoffs. See
+        // [`bulwark`].
+        Class::Bulwark => bulwark::COUNT,
         // Eleven: three clicks on the floor, in the air and leaving it, and
         // the two majors. See [`dual`].
         Class::DualMage => dual::COUNT,
-        _ => SLOTS,
     }
 }
 
@@ -1477,8 +1542,12 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // weight, and the button was free. See `bulwark-v2.md`.
         Class::Bulwark => match slot {
             0 => "LMB",
-            1 => "MMB",
-            _ => "Q",
+            1 => "MMB, floor or air",
+            2 => "Q",
+            3 => "LMB air",
+            4 => "Space+LMB",
+            5 => "Space+MMB",
+            _ => "Space+RMB",
         },
     }
 }
@@ -1618,8 +1687,12 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             blood::BLOOD_NOVA | blood::BLOOD_JET | blood::NAIL | blood::HOOK => Shape::None,
             _ => Shape::Cylinder,
         },
-        // Every other class is still the original disc at arm's length.
-        _ => Shape::Cylinder,
+        // The Shield step puts the shield in the world as a wall and nothing
+        // of his body's; the rest come off the shield's face.
+        Class::Bulwark => match kind {
+            bulwark::SHIELD_STEP => Shape::None,
+            _ => Shape::Cylinder,
+        },
     }
 }
 

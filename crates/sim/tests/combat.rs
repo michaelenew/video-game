@@ -1267,7 +1267,10 @@ fn an_aerial_slows_the_rise_rather_than_deleting_it() {
     // from under you mid-rise. The control over jump height is worth keeping;
     // it has to arrive as a slowing.
     let mut w = World::new();
-    press(&mut w, Input::SPACE, 1);
+    // Held past the takeoff window: a click in the jump's first frames is a
+    // takeoff on every class now (the Bulwark's since 2026-10-10), not an
+    // aerial.
+    press(&mut w, Input::SPACE, 6);
     let rising = w.players[0].vel.y;
     assert!(rising.raw() > 0, "fixture is not rising");
 
@@ -1299,7 +1302,8 @@ fn an_aerial_slows_the_rise_rather_than_deleting_it() {
 /// as the shove.
 fn airborne_nudge(bits: u16) -> i32 {
     let mut w = World::new();
-    press(&mut w, Input::SPACE, 1);
+    // Past the takeoff window, as above.
+    press(&mut w, Input::SPACE, 6);
     press(&mut w, bits, 1);
     w.players[0].vel.x.raw()
 }

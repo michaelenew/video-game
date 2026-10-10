@@ -873,30 +873,30 @@ three rows of three is as much as one class should ask a player to hold.
 
 ## Bulwark
 
-Current as of 2026-09-23, and the five rows marked **bound** are what the game does. This
-table read `M` for the mechanic and `shift` + click for the whole kit until then, which was
-the pre-2026-09-11 scheme rather than anything in the game.
+Current as of 2026-10-10: **on three clicks** — the strike, the weight and the guard, each
+with a floor move, an aerial and a jump attack. The design is
+[exploration/0012](exploration/0012_bulwark_on_three_clicks.md). Built and unplayed. With him,
+no class is on the shared grammar any more.
+
+| | Left: the strike | Middle: the weight | Right: the guard |
+| --- | --- | --- | --- |
+| **On foot** | Bash | Slam | Guard / parry (held) |
+| **In the air** | Rebound — bounces him off what it meets | Slam — waits for the floor | Sail — the guard held, falling slowly |
+| **`space` + click** | Battering ram — low leap, carries them | Unload — the weight spent on height | Shield step — planted where he stands, and a spring off its top |
 
 | Input | Result |
 | --- | --- |
-| `L` | **Bash** — the shield strike, and the safe poke. **Bound** |
-| `M` | **Slam** — the shield driven into the ground, spending its weight. A crouch does not duck the shake. Thrown in the air it lands with the feet. **Bound** since 2026-09-23; it had no input from 2026-09-16 |
-| `Q` | **Grapple** — the command grab, and the answer to a turtle. **Bound** |
-| `R` (hold) | **Guard.** Opening frames are the parry, and it is the mechanic that gates it rather than the button: `R` guards while the shield is in hand and does nothing while it is not. **Bound** |
-| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight — and the shield turns to meet the leap, so he arrives with it in hand. One key, three states, no frames — the mechanic fires on the press. **Bound** |
-| direction + `L` | Basic moves |
-| `LR` | Reserved — the candidate slot for a dedicated ally-cover stance |
+| `Q` | **Grapple** — the command grab, and the answer to a turtle |
+| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight. One key, three states, no frames |
 
 Shield position lives on `E`, so the whole three-state mechanic is one key with context —
 which is the ordinary arrangement rather than an exception: the shield is a state to change,
 and changing it is free. Guard on the right button matches every game where alt-fire is the
 defensive option. There is no separate off-hand auto: `L` is the shield itself.
 
-> **The auto and the committed slot are one rung lower than this table used to show.** Bash is
-> left click rather than `shift` + left, because the shared grammar gives every class a poke on
-> the bare click. Slam was `shift` + left until shift stopped modifying clicks, and is the third
-> click now. What the class does *not* have yet is the sixth ability the kit
-> document specifies — see [kits/bulwark.md](kits/bulwark.md).
+> Slam was `shift` + left until shift stopped modifying clicks (2026-09-16), had no input
+> until it took the free middle click (2026-09-23), and is the middle column's floor move on the
+> three clicks.
 
 ## Shadow Reaver
 

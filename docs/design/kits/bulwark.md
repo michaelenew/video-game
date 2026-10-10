@@ -6,6 +6,13 @@ depends: ../bulwark.md, ../defense.md
 
 # Bulwark — kit
 
+> **On three clicks, 2026-10-10, built and unplayed** — see
+> [../exploration/0012_bulwark_on_three_clicks.md](../exploration/0012_bulwark_on_three_clicks.md),
+> which supersedes the bindings below where they differ. Left is the strike (Bash, **Rebound**,
+> **Battering ram**), middle the weight (Slam on the floor and in the air, **Unload**), right
+> the guard (Guard, **Sail** in the air, **Shield step**); `Q` Grapple and `E` the shield, as
+> built. Unload and the Shield step are two new ways to spend the weight: on height.
+
 > ⚠️ **A v2 of the mechanic is built, 2026-09-23, and unplayed** — see [../bulwark-v2.md](../bulwark-v2.md)
 > and [../plans/bulwark-v2.md](../plans/bulwark-v2.md). Every hit taken on the shield is stored as
 > **weight**; Slam (on middle click) and Throw spend it, and a planted shield becomes a real

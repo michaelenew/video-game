@@ -67,9 +67,13 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Shadow Reaver's was re-pinned the same day** for her three clicks:
 /// her clicks in the air and off the floor are new moves. See
 /// `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+///
+/// **The Bulwark's was re-pinned 2026-10-10** for his: a click in a jump's
+/// first frames is a takeoff, and left click in the air is Rebound. See
+/// `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x92d2fe3e7aa9f640),
-    (Class::Bulwark, 0x343a49eb275a9f8c),
+    (Class::Bulwark, 0x0ab3e7c23a090298),
     (Class::ShadowReaver, 0x0c4c9b03cf9d3ea0),
     (Class::BloodMage, 0x1d800ee722377057),
     (Class::DualMage, 0xa09cde216173e69f),

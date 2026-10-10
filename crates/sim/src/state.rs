@@ -2411,6 +2411,34 @@ impl World {
                     _ => {}
                 }
             }
+            // The Bulwark on three clicks (2026-10-10): the same, for his.
+            if p.class == Class::Bulwark {
+                match kind {
+                    moves::bulwark::REBOUND => self.rebound(i),
+                    moves::bulwark::RAM => {
+                        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+                            .normalized()
+                            .scale(t::ram_speed());
+                        let q = &mut self.players[i];
+                        q.vel = V3::new(ahead.x, t::ram_lift(), ahead.z);
+                        q.grounded = false;
+                        q.air_stall = 0;
+                    }
+                    moves::bulwark::UNLOAD => {
+                        let full = bulwark::fullness(&p);
+                        let lift = t::unload_lift().add(t::unload_lift_full().mul(full));
+                        let q = &mut self.players[i];
+                        if let Mechanic::Shield(sh) = q.mechanic {
+                            q.mechanic = Mechanic::Shield(sh.with_weight(Fx::ZERO));
+                        }
+                        q.vel.y = lift;
+                        q.grounded = false;
+                        q.air_stall = 0;
+                    }
+                    moves::bulwark::SHIELD_STEP => self.shield_step(i),
+                    _ => {}
+                }
+            }
             // Her two air shots leave her hand here, along the line
             // `crate::aim` already solved -- and *along* it rather than to the
             // end of it, the same rule the two travelling effects follow: the
@@ -2759,6 +2787,8 @@ impl World {
                 // direction locked at the throw, because the whole point is
                 // that you choose where to go *as* it connects.
                 champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
+                // The Bulwark's Rebound off a body, blocked or not: it is solid.
+                rebound_off_a_body(&mut self.players[attacker]);
                 // The Dual mage's hex: what her blow leaves on them, or sets
                 // off. Only a blow that landed. A no-op for everybody else.
                 if let Some(kind) = snapshot[attacker].action.attack_kind() {
@@ -4949,6 +4979,12 @@ fn step_player(
         // mid-jump is not immediately steered out of.
         p.vel.x = p.vel.x.mul(t::stun_decay());
         p.vel.z = p.vel.z.mul(t::stun_decay());
+    } else if let Some(drive) = ramming(p) {
+        // **The Battering ram** holds its line for its active frames, on the
+        // floor and off it: he goes along the ground, not up, and whoever the
+        // shield meets goes with him (2026-10-10).
+        p.vel.x = drive.x;
+        p.vel.z = drive.z;
     } else if let Some(drive) = rushing(p) {
         // A dash holds its line. Facing follows the mouse whenever you are
         // free to act, so a Rush steered by where you happen to be looking
@@ -5154,7 +5190,12 @@ fn step_player(
             }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
             // Slower at the Dual mage's second tier; one for everybody else.
-            let floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
+            let mut floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
+            // **Sail** (2026-10-10): the Bulwark's guard held in the air is a
+            // sail, and he falls no faster than it lets him.
+            if p.class == Class::Bulwark && p.action.guarding() {
+                floor = floor.max(Fx::ZERO.sub(t::sail_fall()));
+            }
             if p.vel.y.raw() < floor.raw() {
                 p.vel.y = floor;
             }
@@ -5318,10 +5359,10 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // Slam is where his weight is spent, so it wanted a button of its own
         // rather than a modifier -- see `bulwark-v2.md`. Left first, so both at
         // once is the poke, the same tie-break every other class makes.
-        Class::Bulwark if !input.has(Input::LEFT) && input.has(Input::MIDDLE) => {
-            Some(SLOT_COMMITTED)
-        }
-        _ => input.has(Input::LEFT).then_some(SLOT_POKE),
+        //
+        // And on three clicks since 2026-10-10, the last of the six: see
+        // `bulwark_move`. No class is on the shared grammar any more.
+        Class::Bulwark => bulwark_move(p, input),
     }
 }
 
@@ -5457,6 +5498,7 @@ fn elementalist_takeoff(class: Class, kind: u8) -> bool {
         Class::BloodMage => matches!(kind, b::BLOOD_JET | b::MARIONETTE | b::HARVEST),
         Class::DualMage => moves::dual::is_takeoff(kind),
         Class::ShadowReaver => moves::reaver::is_takeoff(kind),
+        Class::Bulwark => moves::bulwark::is_takeoff(kind),
         _ => false,
     }
 }
@@ -5489,7 +5531,11 @@ fn keyed_q(p: &Player) -> Option<u8> {
 fn rise_window(p: &mut Player, input: Input) {
     if !matches!(
         p.class,
-        Class::Elementalist | Class::BloodMage | Class::DualMage | Class::ShadowReaver
+        Class::Elementalist
+            | Class::BloodMage
+            | Class::DualMage
+            | Class::ShadowReaver
+            | Class::Bulwark
     ) {
         return;
     }
@@ -5685,6 +5731,38 @@ fn lands_on_the_floor(class: Class, kind: u8) -> bool {
 /// Right click is still the remembered press (`shadow::order_queued`), so the
 /// mechanic cannot be eaten by her own frames; what it throws is the row's.
 /// See `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+/// Which of the Bulwark's seven a click asks for (2026-10-10): **the strike,
+/// the weight, the guard** -- left, middle, right -- on the floor, in the air,
+/// and off the floor with space, on the shared window (`Player::rise`). Right
+/// click on its own is the guard, which is not a move: it is only a move as
+/// the Shield step. Left first, so both at once is the strike, the tie-break
+/// every class makes. See
+/// `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+fn bulwark_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::bulwark as b;
+    use moves::bulwark::keys;
+    let window =
+        !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
+    if window {
+        return if input.has(keys::STRIKE) {
+            Some(b::RAM)
+        } else if input.has(keys::WEIGHT) {
+            Some(b::UNLOAD)
+        } else if input.has(keys::GUARD) && p.shield().is_some_and(|s| s.in_hand()) {
+            Some(b::SHIELD_STEP)
+        } else {
+            None
+        };
+    }
+    if input.has(keys::STRIKE) {
+        Some(if p.grounded { b::BASH } else { b::REBOUND })
+    } else if input.has(keys::WEIGHT) {
+        Some(b::SLAM)
+    } else {
+        None
+    }
+}
+
 fn reaver_move(p: &Player, input: Input) -> Option<u8> {
     use moves::reaver as r;
     use moves::reaver::keys;
@@ -6463,6 +6541,52 @@ fn blood_jet_drive(p: &Player) -> Option<V3> {
 ///
 /// [`step`]: moves::Move::step
 /// [`tuning::step_lead`]: crate::tuning::step_lead
+/// **Rebound**'s bounce: back off what the shield met, the way it was thrown,
+/// and up.
+fn bounce(p: &mut Player, along: V3) {
+    let back = V3::new(along.x, Fx::ZERO, along.z)
+        .normalized()
+        .scale(t::rebound_kick());
+    p.vel = V3::new(
+        Fx::ZERO.sub(back.x),
+        t::rebound_lift(),
+        Fx::ZERO.sub(back.z),
+    );
+    p.grounded = false;
+    // The bounce is the move's whole answer to the air: the hang an aerial
+    // holds you in would bleed it away.
+    p.air_stall = 0;
+}
+
+/// A Rebound whose shield met a body -- a fighter's, a creature's -- bounces
+/// off it. The line `World::rebound` asks finds walls, stones and the floor;
+/// a body is found by the blow itself.
+fn rebound_off_a_body(p: &mut Player) {
+    if p.class == Class::Bulwark
+        && !p.grounded
+        && p.action.attack_kind() == Some(moves::bulwark::REBOUND)
+        && p.vel.y.raw() <= 0
+    {
+        let facing = p.facing;
+        bounce(p, facing);
+    }
+}
+
+/// The Bulwark's drive through a Battering ram's active frames, if he is in
+/// one.
+fn ramming(p: &Player) -> Option<V3> {
+    if p.class != Class::Bulwark
+        || !matches!(p.action, Action::Active { kind, .. } if kind == moves::bulwark::RAM)
+    {
+        return None;
+    }
+    Some(
+        V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+            .normalized()
+            .scale(t::ram_speed()),
+    )
+}
+
 fn attack_step(p: &Player) -> Option<V3> {
     let kind = p.action.attack_kind()?;
     let m = moves::get(p.class, kind);
@@ -7075,7 +7199,9 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
         // same button: left click. The Air bolt is the thing she throws
         // constantly up there, so it is the one that gets to be part of moving
         // rather than a pause in it.
-        || (p.class == Class::Elementalist && kind == moves::elementalist::AIR_BOLT);
+        || (p.class == Class::Elementalist && kind == moves::elementalist::AIR_BOLT)
+        // And the Bulwark's Rebound is his Bash in the air (2026-10-10).
+        || (p.class == Class::Bulwark && kind == moves::bulwark::REBOUND);
     if !fast || (ax == 0 && az == 0) {
         return;
     }
@@ -11818,6 +11944,47 @@ impl World {
     /// line first meets a body, a wall or the floor, or at its reach. If it
     /// met something, it kicks *her* back the other way: light pushes, and in
     /// the air she is the lighter thing. Aimed down, that is a lift.
+    /// **Rebound**: the Bash in the air, and if the shield's face met
+    /// anything solid within its reach -- a body, a wall, a stone, his own
+    /// planted shield, the floor -- he is thrown back off it and up. Asked of
+    /// the line the swing is thrown along, the way the Flare asks it.
+    fn rebound(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::bulwark::REBOUND);
+        let path = aim::Path {
+            from: p.aim_path.from,
+            to: p.aim_path.from.add(p.aim_path.dir().scale(m.reach)),
+        };
+        if self.first_on_the_line(i, path, m.radius, true).raw() >= m.reach.raw() {
+            return;
+        }
+        bounce(&mut self.players[i], path.dir());
+    }
+
+    /// **Shield step**: the shield is planted where he stands, at the size its
+    /// weight makes it, and he springs off its top -- higher the heavier it
+    /// is -- and on forward. It is a planted shield like any other: `E` calls
+    /// it home.
+    fn shield_step(&mut self, i: usize) {
+        let p = self.players[i];
+        let Some(Shield::Held { weight }) = p.shield() else {
+            return;
+        };
+        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
+        let floor = self.terrain().ground_under(p.pos);
+        let base = V3::new(p.pos.x, floor, p.pos.z);
+        let top = bulwark::wall(base, weight).top();
+        let full = bulwark::fullness_of(weight);
+        let lift = t::step_lift().add(t::step_lift_full().mul(full));
+        let forward = ahead.scale(t::step_forward());
+        let q = &mut self.players[i];
+        q.mechanic = Mechanic::Shield(Shield::Planted { pos: base, weight });
+        q.pos.y = top;
+        q.vel = V3::new(forward.x, lift, forward.z);
+        q.grounded = false;
+        q.air_stall = 0;
+    }
+
     fn cast_the_flare(&mut self, i: usize) {
         let p = self.players[i];
         let m = moves::get(p.class, moves::dual::FLARE);
@@ -12971,6 +13138,7 @@ impl World {
                     kind,
                 },
             );
+            rebound_off_a_body(&mut self.players[i]);
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
             if attacker.class == Class::ShadowReaver && !guarded.turned() {

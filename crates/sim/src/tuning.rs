@@ -3138,3 +3138,53 @@ pub fn hang_sink() -> Fx {
 pub fn mistake_behind() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MistakeBehind)).max(Fx::ZERO)
 }
+
+/// How fast the Battering ram carries him forward.
+pub fn ram_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RamSpeed)).max(Fx::ZERO)
+}
+
+/// How much the Battering ram lifts him: low, because it goes along the floor.
+pub fn ram_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RamLift)).max(Fx::ZERO)
+}
+
+/// How hard Rebound throws him back off what the shield met.
+pub fn rebound_kick() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReboundKick)).max(Fx::ZERO)
+}
+
+/// How hard Rebound throws him up off what the shield met.
+pub fn rebound_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReboundLift)).max(Fx::ZERO)
+}
+
+/// Unload's lift with nothing in the shield: a stomp and barely a hop.
+pub fn unload_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UnloadLift)).max(Fx::ZERO)
+}
+
+/// What a full shield adds to Unload's lift, in proportion to how full it is.
+pub fn unload_lift_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UnloadLiftFull)).max(Fx::ZERO)
+}
+
+/// How fast he falls at most with the guard held in the air.
+pub fn sail_fall() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SailFall)).max(Fx::ZERO)
+}
+
+/// The Shield step's lift off an empty shield.
+pub fn step_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepLift)).max(Fx::ZERO)
+}
+
+/// What a full shield's height adds to the Shield step's lift.
+pub fn step_lift_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepLiftFull)).max(Fx::ZERO)
+}
+
+/// How fast the Shield step carries him forward over the shield.
+pub fn step_forward() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepForward)).max(Fx::ZERO)
+}

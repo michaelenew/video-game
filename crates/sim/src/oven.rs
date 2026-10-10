@@ -728,6 +728,19 @@ scalars! {
     HangWaits,            "Shadow Reaver", "Hang the shadow, waits for", Frames, 0, 300;
     HangSink,             "Shadow Reaver", "Hang the shadow, sinks at (m/s)", Fixed, 0, fx(20,1);
     MistakeBehind,        "Shadow Reaver", "Deadly mistake, behind them (m)", Fixed, 0, fx(5,1);
+    // **The Bulwark on three clicks**, 2026-10-10: the ram, the bounce, the
+    // battery spent on height, the sail and the step. See
+    // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+    RamSpeed,             "Bulwark", "Battering ram, speed (m/s)", Fixed, 0, fx(30,1);
+    RamLift,              "Bulwark", "Battering ram, lift (m/s)", Fixed, 0, fx(20,1);
+    ReboundKick,          "Bulwark", "Rebound, thrown back at (m/s)", Fixed, 0, fx(30,1);
+    ReboundLift,          "Bulwark", "Rebound, thrown up at (m/s)", Fixed, 0, fx(30,1);
+    UnloadLift,           "Bulwark", "Unload, lift empty (m/s)", Fixed, 0, fx(30,1);
+    UnloadLiftFull,       "Bulwark", "Unload, lift added when full (m/s)", Fixed, 0, fx(30,1);
+    SailFall,             "Bulwark", "Sail, falls at most (m/s)", Fixed, 0, fx(20,1);
+    StepLift,             "Bulwark", "Shield step, lift empty (m/s)", Fixed, 0, fx(30,1);
+    StepLiftFull,         "Bulwark", "Shield step, lift added when full (m/s)", Fixed, 0, fx(30,1);
+    StepForward,          "Bulwark", "Shield step, forward (m/s)", Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------
