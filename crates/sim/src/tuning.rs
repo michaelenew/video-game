@@ -2910,6 +2910,33 @@ pub fn thermal_push() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThermalPush)).max(Fx::ZERO)
 }
 
+/// What the Updraft throws her up at when she casts it **from the floor**.
+///
+/// More than a jump, on purpose: a takeoff spent on the Updraft is the one
+/// her trip will not have in the air, so it has to buy more than space alone
+/// would. From the air it is the move's own `self_lift`, as before.
+pub fn updraft_floor_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftFloorLift)).max(Fx::ZERO)
+}
+
+/// The push along the way she is walking that the Updraft from the floor adds
+/// to her run. Nothing when she is not steering: then it goes straight up.
+pub fn updraft_floor_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftFloorPush)).max(Fx::ZERO)
+}
+
+/// How many frames of the Fire carpet's recovery she must wait out before her
+/// next move may cut the rest short. See `state::cancel_the_carpet`.
+pub fn carpet_cancel_from() -> u16 {
+    oven::scalar(Scalar::CarpetCancelFrom).max(0) as u16
+}
+
+/// How many frames the Fire carpet's cancel stays open. Miss it and the
+/// recovery is paid in full. Zero turns the cancel off.
+pub fn carpet_cancel_for() -> u16 {
+    oven::scalar(Scalar::CarpetCancelFor).max(0) as u16
+}
+
 /// How long the Fire fountain's wash burns where she took off.
 pub fn fountain_life() -> u16 {
     oven::scalar(Scalar::FountainLife).max(1) as u16

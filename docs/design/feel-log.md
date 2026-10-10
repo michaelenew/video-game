@@ -8002,3 +8002,29 @@ guess.
 - The Bulwark's pins re-pinned.
 **Verdict** — unplayed. His new moves play his three clips. Open: BULWARK-1 to BULWARK-4 in
 0012.
+
+### 2026-10-10 — the Elementalist's carpet cancel and a bigger Updraft off the floor
+**Changed**, from play:
+- **The Fire carpet's recovery can be cut short** into any move she asks for in a window: from
+  `Fire carpet, cancel opens into recovery` (0) frames into its 16 frames of recovery, for
+  `Fire carpet, cancel open for` (6). Asked for later, the move waits for the rest as before.
+  Only into a move that would come out, so a second carpet (locked out) cannot spend it
+  (`state::cancel_the_carpet`). Why: the carpet is laid to be used — an Updraft into it is a
+  Thermal — but its hang takes most of her rise, and by the end of the recovery she was always
+  falling. Space can't be held to stretch the rise before laying it low, either, because space
+  with a click is a takeoff. In a measured trip (jump, carpet twelve frames up, then space and
+  right click) the Updraft now starts 17 frames sooner and 2.4 m higher.
+- **The Updraft from the floor is worth more than a jump.** It used to share the air Updraft's
+  14 m/s and reached 2.6 m against a held jump's 5.0 m. From the floor it is now
+  `Updraft from the floor, lift` (21.5 m/s, 6.3 m) plus `Updraft from the floor, push along her
+  run` (3 m/s, along the walk she is holding; nothing when she holds none, so straight up stays
+  straight up). Why: a takeoff spends the trip's, so the Updraft from the floor gives up the jump
+  attack she would otherwise have in the air, which costs her far more than pressing space. From
+  the air the Updraft is unchanged (its `self_lift`, 14).
+Her Ridgeback pin re-pinned and her envelope fixtures re-recorded. Mostly further (lane 3
+shared 20.7 → 49.7 m, lane 9 shared 23.5 → 39.5 m); some lanes fell (lane 4 shared 37.8 → 26.4,
+lane 7 full 38.6 → 26.4) — a search is a lower bound, so a fall may be a route this run did not
+find again.
+**Verdict** — unplayed. To check in play: whether six frames is the window wanted ("medium to
+tight"), and whether it should open on the carpet's first frame of recovery or a beat later; and
+whether 3 m/s is the "slight" push meant.
