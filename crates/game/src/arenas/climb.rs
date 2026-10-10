@@ -706,6 +706,67 @@ pub static FORK: Dressing = Dressing {
     ],
 };
 
+// The Waterfall: the valley's basalt cliff hanging in the courses' air, so
+// the deep and the peaks are the same family, a cairn on each shelf and the
+// shore, and the nest on the top (`sim::arena::waterfall`, `COURSE_AT`).
+const WATERFALL_PEAK0: [Prop; 2] = peak(-110.0, 44.0, -40.0, 30.0);
+const WATERFALL_PEAK1: [Prop; 2] = peak(150.0, 52.0, 35.0, 36.0);
+const WATERFALL_PEAK2: [Prop; 2] = peak(90.0, 38.0, 140.0, 40.0);
+const WATERFALL_PEAK3: [Prop; 2] = peak(-60.0, 56.0, -115.0, 28.0);
+const WATERFALL_PEAK4: [Prop; 2] = peak(130.0, 48.0, -105.0, 24.0);
+const WATERFALL_DEEP0: [Prop; 2] = spire(-30.0, 18.0, 11.0);
+const WATERFALL_DEEP1: [Prop; 2] = spire(60.0, -40.0, 13.0);
+const WATERFALL_DEEP2: [Prop; 2] = spire(18.0, 32.0, 10.0);
+const WATERFALL_DEEP3: [Prop; 2] = spire(75.0, 28.0, 14.0);
+const WATERFALL_CAIRN_SHORE: [Prop; 3] = cairn(6.0, 60.0, -8.5);
+const WATERFALL_CAIRN1: [Prop; 3] = cairn(30.5, 66.0, -15.5);
+const WATERFALL_CAIRN2: [Prop; 3] = cairn(30.5, 73.5, 14.5);
+const WATERFALL_NEST: [Prop; 11] = nest(49.0, 86.0, -12.0);
+
+pub static WATERFALL: Dressing = Dressing {
+    drop: true,
+    props: &[
+        WATERFALL_PEAK0[0],
+        WATERFALL_PEAK0[1],
+        WATERFALL_PEAK1[0],
+        WATERFALL_PEAK1[1],
+        WATERFALL_PEAK2[0],
+        WATERFALL_PEAK2[1],
+        WATERFALL_PEAK3[0],
+        WATERFALL_PEAK3[1],
+        WATERFALL_PEAK4[0],
+        WATERFALL_PEAK4[1],
+        WATERFALL_DEEP0[0],
+        WATERFALL_DEEP0[1],
+        WATERFALL_DEEP1[0],
+        WATERFALL_DEEP1[1],
+        WATERFALL_DEEP2[0],
+        WATERFALL_DEEP2[1],
+        WATERFALL_DEEP3[0],
+        WATERFALL_DEEP3[1],
+        WATERFALL_CAIRN_SHORE[0],
+        WATERFALL_CAIRN_SHORE[1],
+        WATERFALL_CAIRN_SHORE[2],
+        WATERFALL_CAIRN1[0],
+        WATERFALL_CAIRN1[1],
+        WATERFALL_CAIRN1[2],
+        WATERFALL_CAIRN2[0],
+        WATERFALL_CAIRN2[1],
+        WATERFALL_CAIRN2[2],
+        WATERFALL_NEST[0],
+        WATERFALL_NEST[1],
+        WATERFALL_NEST[2],
+        WATERFALL_NEST[3],
+        WATERFALL_NEST[4],
+        WATERFALL_NEST[5],
+        WATERFALL_NEST[6],
+        WATERFALL_NEST[7],
+        WATERFALL_NEST[8],
+        WATERFALL_NEST[9],
+        WATERFALL_NEST[10],
+    ],
+};
+
 // The Spire
 const SPIRE_PEAK0: [Prop; 2] = peak(-113.0, 45.2, -39.5, 30.0);
 const SPIRE_PEAK1: [Prop; 2] = peak(153.0, 53.2, 30.5, 36.0);

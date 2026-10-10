@@ -512,6 +512,50 @@ impl Palette {
         .rgb()
     }
 
+    /// **Basalt** (`sim::arena::waterfall`): the place's rock, darker, greyer
+    /// and a touch cold -- old lava, which is near black wet and slate grey
+    /// dry, and reads as a different stone from the cliffs round it.
+    pub fn basalt(&self) -> [f32; 3] {
+        let r = Lch::of(self.of(Material::Rock));
+        Lch {
+            l: r.l * 0.7,
+            c: r.c * 0.45,
+            h: 0.66,
+        }
+        .rgb()
+    }
+
+    /// **The top of a basalt column**: worn paler than its sides where
+    /// nothing grows, and wearing what the box's top is made of where
+    /// something does -- moss on a ledge, snow on a cairn.
+    pub fn basalt_top(&self, top: Material) -> [f32; 3] {
+        let worn = {
+            let b = Lch::of(self.basalt());
+            Lch {
+                l: (b.l * 1.35).min(0.8),
+                ..b
+            }
+            .rgb()
+        };
+        match top {
+            // Moss in patches on worn stone, not a lawn.
+            Material::Grass => tint::mix(worn, self.moss(), 0.45),
+            Material::Snow => self.of(Material::Snow),
+            _ => worn,
+        }
+    }
+
+    /// **Falling water**: the place's water, paler and whiter -- a fall is
+    /// mostly air and foam, and reads lighter than the pool it lands in.
+    pub fn falling_water(&self) -> [f32; 3] {
+        tint::mix(self.of(Material::Water), [0.94, 0.97, 1.0], 0.55)
+    }
+
+    /// **Foam and spray**, where a fall lands: nearly white.
+    pub fn foam(&self) -> [f32; 3] {
+        tint::mix(self.of(Material::Water), [0.97, 0.98, 1.0], 0.85)
+    }
+
     /// **Moss**, on the tops of old stone and the north of a trunk: the
     /// place's grass, darker and a touch yellower.
     pub fn moss(&self) -> [f32; 3] {

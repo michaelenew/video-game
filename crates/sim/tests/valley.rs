@@ -221,20 +221,53 @@ fn walk_to(w: &mut World, to: (Fx, Fx), frames: u32) -> Result<(), String> {
 }
 
 /// **The whole road can be walked**, from the town's east gate to the end of
-/// the Saddle, every waystone lit: one fighter, steering from point to point
-/// of the road, never more than twenty seconds between two of them. Every
-/// floor meets the next, nothing stands across the road, no slope on it is
-/// too steep, and the world is in the Saddle at the end.
+/// the Saddle, every waystone lit -- but for its one climb: one fighter,
+/// steering from point to point of each leg of the road, never more than
+/// twenty seconds between two of them. Every floor meets the next, nothing
+/// stands across the road, no slope on it is too steep, and the world is in
+/// the Saddle at the end. Between two legs is the Waterfall
+/// (`tests/waterfall.rs` climbs it): she is stood on its top, and walks back
+/// down the first leg a way to show the pool is not a dead end.
 #[test]
 fn the_whole_road_can_be_walked() {
     let mut w = World::arrive(CLASSES, open_journey(), valley::START, Some(0), 1);
     let mut seen = vec![w.arena];
-    for to in sim::valley::layout::road() {
-        if let Err(e) = walk_to(&mut w, to, 1200) {
-            panic!("{e}");
+    let legs = sim::valley::layout::road();
+    assert_eq!(legs.len(), 2, "the road is two walks and the Waterfall");
+    for (n, leg) in legs.iter().enumerate() {
+        if n > 0 {
+            // Back from the pool along the way she came, and to it again.
+            let before = &legs[n - 1];
+            for &to in before
+                .iter()
+                .rev()
+                .take(3)
+                .chain(before.iter().rev().take(1))
+            {
+                if let Err(e) = walk_to(&mut w, to, 1200) {
+                    panic!("back from the Waterfall's pool: {e}");
+                }
+            }
+            let at = sim::arena::waterfall::VALLEY_AT;
+            let top = sim::arena::waterfall::solid(
+                &sim::arena::waterfall::PIECES[*sim::arena::waterfall::ROUTE.last().unwrap()],
+                at,
+            );
+            let mid = V3::new(
+                Fx::from_raw(top.min.x.raw() / 2 + top.max.x.raw() / 2),
+                top.max.y,
+                Fx::from_raw(top.min.z.raw() / 2 + top.max.z.raw() / 2),
+            );
+            w.players[0].pos = mid.sub(w.map_origin());
+            w.players[0].vel = V3::ZERO;
         }
-        if seen.last() != Some(&w.arena) {
-            seen.push(w.arena);
+        for &to in leg {
+            if let Err(e) = walk_to(&mut w, to, 1200) {
+                panic!("{e}");
+            }
+            if seen.last() != Some(&w.arena) {
+                seen.push(w.arena);
+            }
         }
     }
     assert_eq!(

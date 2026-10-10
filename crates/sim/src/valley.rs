@@ -332,6 +332,21 @@ pub fn vent_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
     }
 }
 
+/// **Is a body in a waterfall's falling water**, on whatever ground it is:
+/// a jump course's own (`arena::waterfall`), or on the valley's map the
+/// place's under it.
+pub fn sheet_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
+    use crate::arena::waterfall::sheet_at;
+    match ground.atlas() {
+        None => sheet_at(ground.id, feet),
+        Some(a) => {
+            let m = feet.add(ground.origin());
+            a.place_at(m.x, m.z)
+                .is_some_and(|p| sheet_at(p.arena, p.from_map(m)))
+        }
+    }
+}
+
 /// **The cairn under these feet**, on the map: a snow top of a reach or of
 /// the town, by its index among the map's boxes. A room's snow is a
 /// creature's floor, not a cairn.

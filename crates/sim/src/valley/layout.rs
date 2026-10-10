@@ -30,7 +30,7 @@ use crate::math::V3;
 use crate::valley::Crag;
 use crate::valley::land::{Land, Pad, Point, Way, at};
 
-use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves};
+use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves, waterfall};
 
 /// Level ground round a room, past its own footprint, in centimetres.
 pub const APRON: i32 = 600;
@@ -435,6 +435,7 @@ fn ways() -> Vec<Way> {
     out.push(road(&shelves::WAY));
     out.push(road(&shelves::CLIMB));
     out.push(road(&pinewood::WAY));
+    out.push(road(&pinewood::ABOVE));
     out.push(road(&saddle::WAY));
     out.push(road(&saddle::SHRINE_WAY));
     for r in &TOWN_ROADS {
@@ -458,6 +459,11 @@ fn ways() -> Vec<Way> {
     });
     out.push(Way {
         points: shelves::TARN.to_vec(),
+        path: false,
+        water: Some(150),
+    });
+    out.push(Way {
+        points: pinewood::POOL.to_vec(),
         path: false,
         water: Some(150),
     });
@@ -540,6 +546,15 @@ fn clear(land: &Land, x: Fx, z: Fx, crags: &[Crag], keep: Fx) -> bool {
         return false;
     }
     if land.steepness(x, z).raw() > Fx::ratio(7, 10).raw() {
+        return false;
+    }
+    let ([x0, z0], [x1, z1]) = waterfall::CLEARING;
+    let at = waterfall::VALLEY_AT;
+    if x.raw() >= cm(at[0] + x0).raw()
+        && x.raw() <= cm(at[0] + x1).raw()
+        && z.raw() >= cm(at[2] + z0).raw()
+        && z.raw() <= cm(at[2] + z1).raw()
+    {
         return false;
     }
     crags.iter().all(|c| {
@@ -691,6 +706,11 @@ pub fn plan() -> Plan {
     {
         cairn(&land, x, z, &mut plan.extras);
     }
+    // The Waterfall, at the head of the Pinewood: the cliff the road climbs,
+    // and the cairn on its top.
+    plan.extras.extend(waterfall::placed(waterfall::VALLEY_AT));
+    plan.extras
+        .push(waterfall::solid(&waterfall::CROWN, waterfall::VALLEY_AT));
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);
@@ -732,16 +752,20 @@ pub fn approach(r: &Room) -> Vec<(Fx, Fx)> {
 }
 
 /// **The road, on foot**: from the town's east gate to the end of the
-/// Saddle, every point of it in order.
-pub fn road() -> Vec<(Fx, Fx)> {
-    let mut out = Vec::new();
-    for way in [
-        &mouth::WAY[..],
-        &bank::WAY[..],
-        &shelves::WAY[..],
-        &shelves::CLIMB[..],
-        &pinewood::WAY[..],
-        &saddle::WAY[..],
+/// Saddle, every point of it in order, in **legs**. Between two legs the road
+/// is a climb, not a walk: the Waterfall, at the head of the Pinewood, whose
+/// foot is the end of one leg and whose top is the start of the next.
+pub fn road() -> Vec<Vec<(Fx, Fx)>> {
+    let mut legs = Vec::new();
+    let mut out: Vec<(Fx, Fx)> = Vec::new();
+    for (way, climb_after) in [
+        (&mouth::WAY[..], false),
+        (&bank::WAY[..], false),
+        (&shelves::WAY[..], false),
+        (&shelves::CLIMB[..], false),
+        (&pinewood::WAY[..], true),
+        (&pinewood::ABOVE[..], false),
+        (&saddle::WAY[..], false),
     ] {
         for q in way {
             let at = (cm(q.x), cm(q.z));
@@ -749,6 +773,10 @@ pub fn road() -> Vec<(Fx, Fx)> {
                 out.push(at);
             }
         }
+        if climb_after {
+            legs.push(std::mem::take(&mut out));
+        }
     }
-    out
+    legs.push(out);
+    legs
 }

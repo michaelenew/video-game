@@ -741,6 +741,10 @@ scalars! {
     StepLift,             "Bulwark", "Shield step, lift empty (m/s)", Fixed, 0, fx(30,1);
     StepLiftFull,         "Bulwark", "Shield step, lift added when full (m/s)", Fixed, 0, fx(30,1);
     StepForward,          "Bulwark", "Shield step, forward (m/s)", Fixed, 0, fx(20,1);
+    // **The Waterfall**, 2026-10-10 (`arena::waterfall`): how hard the falling
+    // water pushes down a body in it, so nobody jumps up through the curtain.
+    // Appended for the reason above.
+    FallsPush,            "Valley", "Waterfall, pushes down at (m/s)", Fixed, 0, fx(30,1);
 }
 
 // ---------------------------------------------------------------------------

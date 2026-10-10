@@ -23,6 +23,7 @@ mod beast;
 mod critters;
 mod crosshair;
 mod debug;
+mod falls;
 mod forms;
 mod glint;
 mod ground;
@@ -244,6 +245,7 @@ fn main() {
                     sky::weather,
                     stream::stream,
                     valley::update,
+                    falls::update,
                     sky::follow,
                     sound::play,
                     sound::setup,
@@ -550,6 +552,7 @@ impl Default for Sim {
         let mut w = start_world(opts, dummy);
         shot_bars(&mut w);
         shot_weight(&mut w);
+        shot_at(&mut w);
         shot_move(&mut w);
         // `--replay <file>`: the fight is the tape's, from its own start.
         let playing = platform::value("--replay").and_then(|path| {
@@ -1172,6 +1175,32 @@ fn shot_weight(w: &mut World) {
             p.mechanic = sim::Mechanic::Shield(s.with_weight(sim::Fx::from_int(weight)));
         }
     }
+}
+
+/// `SHOT_AT=x,z` stands player one at that point of the place the world is
+/// in (metres), on whatever is under it, facing `+x`: a capture of somewhere
+/// that is not a start, such as the Waterfall at the head of the Pinewood
+/// (`SHOT_AT=772,-4` with `--arena pinewood --open`). A round start puts
+/// fighters back on their marks, so in a fight or a course it does nothing.
+/// The same kind of hook as `SHOT_WEIGHT`.
+fn shot_at(w: &mut World) {
+    let Some(spec) = platform::env("SHOT_AT") else {
+        return;
+    };
+    let mut it = spec.split(',').filter_map(|v| v.trim().parse::<i32>().ok());
+    let (Some(x), Some(z)) = (it.next(), it.next()) else {
+        return;
+    };
+    let up = sim::V3::new(
+        sim::Fx::from_int(x),
+        sim::Fx::from_int(1000),
+        sim::Fx::from_int(z),
+    );
+    let y = w.terrain().floor_below(up);
+    let p = &mut w.players[0];
+    p.pos = sim::V3::new(up.x, y, up.z);
+    p.vel = sim::V3::ZERO;
+    p.facing = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
 }
 
 impl Sim {

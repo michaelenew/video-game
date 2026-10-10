@@ -20,6 +20,7 @@
 //! | The Falls (`falls`) | hard | Hard (a guess): a stair of stones up onto a twenty-metre arch, a run along it and a leap off its end down onto a big landing, then a waterfall of small stones stepping down left and right to a pool. |
 //! | The Slalom (`slalom`) | hard | Hard (a guess): stepping stones weaving between tall pillars, then the one roof in the set -- a cave mouth over three islands -- and out into the light. |
 //! | The Fork (`fork`) | hard | Hard (a guess): a hub with two ways on -- a high road up stacked ledges and along the tops, a low road of stepping stones -- that meet again; a committed leap down onto a big landing; a long runway to the nest. |
+//! | The Waterfall (`waterfall`) | hard | A cliff 26 m tall with a waterfall down its middle: stones out of the pool, up the right of the face, three level leaps behind the falling water, up the left to the lip -- the same cliff the valley's road climbs ([`super::waterfall`]). |
 //! | The Spire (`spire`) | edge | Barely possible (a guess), the Elementalist's: two hops to the launch, and the rookery's spire 32 m above it, its face half a metre out. |
 //! | The Gulf (`gulf`) | edge | Barely possible (a guess): an expert line in the open -- a runway, then eight-, seven- and six-metre leaps onto ever smaller stones, and a last nine-metre leap down to the nest. |
 //! | The Reach (`reach`) | proving | A proving ground (unplayed): one hub, gap lanes of 10 to 50 m off its front, ledges 5 to 45 m up behind it, two long-and-up targets and two Grasp faces, each marked at its takeoff by a block per five metres. A fall stands you back on the hub. |
@@ -45,13 +46,14 @@ use crate::course::{Course, Step, Tier};
 use Material::{Grass, Peat, Rock, Sand, Snow, Stone, Wood};
 
 /// Every course, in the order `N` steps through them: by tier.
-pub static COURSES: [&Course; 9] = [
+pub static COURSES: [&Course; 10] = [
     &STAIR_COURSE,
     &CAUSEWAY_COURSE,
     &SPIRAL_COURSE,
     &FALLS_COURSE,
     &SLALOM_COURSE,
     &FORK_COURSE,
+    &WATERFALL_COURSE,
     &SPIRE_COURSE,
     &GULF_COURSE,
     &REACH_COURSE,
@@ -1054,6 +1056,122 @@ static FORK_COURSE: Course = Course {
             ask: "the nest",
         },
     ],
+};
+
+// ---------------------------------------------------------------------------
+// The Waterfall: hard
+// ---------------------------------------------------------------------------
+
+/// Hard (a guess): the valley's waterfall, alone -- a cliff 26 m tall over a
+/// pool, climbed up its right, behind the falling water and up its left, to
+/// a nest on the top. Every hop is inside the Bulwark's plain jump (the road
+/// needs it to be); the height and the water are what make it hard.
+pub static WATERFALL: Arena = Arena {
+    id: ArenaId::CLIMB_WATERFALL,
+    name: "Waterfall",
+    creature: None,
+    bounds: Bounds::cm((-2300, 8000), (-4500, 4500)),
+    floor: Peat,
+    regions: &[],
+    solids: &WATERFALL_SOLIDS,
+    spawns: SPAWNS,
+    sites: &[],
+    rim: None,
+};
+
+/// The course's own boxes, before the waterfall's table: the start, the
+/// shore, the pool and the nest.
+const WATERFALL_OWN: [Solid; 4] = [
+    // the foot: a spire standing on the floor, the start
+    Solid::cm([-300, 0, -300], [300, 6000, 300], Rock),
+    // the near shore of the pool
+    super::waterfall::solid(&super::waterfall::SHORE, super::waterfall::COURSE_AT),
+    // the pool: what a slip low on the cliff lands in
+    super::waterfall::solid(&super::waterfall::POOL, super::waterfall::COURSE_AT),
+    // the nest, across the top
+    super::waterfall::solid(
+        &super::waterfall::Piece {
+            min: [1500, super::waterfall::HEIGHT, -1500],
+            max: [2100, super::waterfall::HEIGHT + 400, -900],
+            material: Wood,
+        },
+        super::waterfall::COURSE_AT,
+    ),
+];
+
+const WATERFALL_SOLIDS: [Solid; 4 + super::waterfall::PIECES.len()] = waterfall_solids();
+
+const fn waterfall_solids() -> [Solid; 4 + super::waterfall::PIECES.len()] {
+    let table = super::waterfall::placed(super::waterfall::COURSE_AT);
+    let mut out = [WATERFALL_OWN[0]; 4 + super::waterfall::PIECES.len()];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = if i < 4 {
+            WATERFALL_OWN[i]
+        } else {
+            table[i - 4]
+        };
+        i += 1;
+    }
+    out
+}
+
+/// The route: the start, the shore, the waterfall's own route, the nest.
+const WATERFALL_ROUTE: [Step; 3 + super::waterfall::ROUTE.len()] = waterfall_route();
+
+const fn waterfall_route() -> [Step; 3 + super::waterfall::ROUTE.len()] {
+    use super::waterfall::{ASKS, PIECES, ROUTE, SHELVES, SHORE, hop};
+    let n = 3 + ROUTE.len();
+    let mut out = [Step {
+        solid: 0,
+        check: true,
+        gap: 0,
+        rise: 0,
+        ask: "the start",
+    }; 3 + ROUTE.len()];
+    out[1] = Step {
+        solid: 1,
+        check: true,
+        gap: 200,
+        rise: 0,
+        ask: "the shore of the pool",
+    };
+    let mut k = 0;
+    while k < ROUTE.len() {
+        let from = if k == 0 {
+            &SHORE
+        } else {
+            &PIECES[ROUTE[k - 1]]
+        };
+        let (gap, rise) = hop(from, &PIECES[ROUTE[k]]);
+        let check = ROUTE[k] == SHELVES[0] || ROUTE[k] == SHELVES[1] || k + 1 == ROUTE.len();
+        out[2 + k] = Step {
+            solid: 4 + ROUTE[k] as u8,
+            check,
+            gap,
+            rise,
+            ask: ASKS[k],
+        };
+        k += 1;
+    }
+    out[n - 1] = Step {
+        solid: 3,
+        check: true,
+        gap: 0,
+        rise: 400,
+        ask: "the nest, across the top",
+    };
+    out
+}
+
+static WATERFALL_COURSE: Course = Course {
+    arena: ArenaId::CLIMB_WATERFALL,
+    name: "The Waterfall",
+    tier: Tier::Hard,
+    for_class: None,
+    pit: 5400,
+    note: "26 m of cliff, every hop a plain jump:\nthe water pushes you down -- go behind it",
+    route: &WATERFALL_ROUTE,
 };
 
 // ---------------------------------------------------------------------------

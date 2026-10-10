@@ -8002,3 +8002,30 @@ guess.
 - The Bulwark's pins re-pinned.
 **Verdict** — unplayed. His new moves play his three clips. Open: BULWARK-1 to BULWARK-4 in
 0012.
+
+### 2026-10-10 — the Waterfall: a jump climb on the main road
+**Changed** The owner asked for "a tall waterfall jump section on the main
+path of the valley and as a standalone jump map", then for "irregular basalt
+large hexagons as the terrain theme". Built as one table
+(`sim::arena::waterfall`): a basalt cliff 22 m tall at the head of the
+Pinewood, where the road now ends at a pool and goes on from the cliff's top,
+and the same cliff as the course `--arena waterfall`. New knob
+`Waterfall, pushes down at` (Valley), **9 m/s**: a body in the air in the
+falling water has its rise capped to that, falling, and its held jump spent.
+Every hop is inside the Bulwark's plain running jump; rises are 2.0-2.2 m at
+gaps of 2.4-3.0 m on the faces, and 3.5 m level behind the falls.
+**Why** The valley's road was walked end to end and the challenge was all off
+it, on the crags. The Waterfall puts one stretch of skill on the route
+itself without locking anybody out: the Bulwark sets the gaps, the height and
+the water set the stakes. The push is so the curtain is not a way up and a
+leap behind it that drifts out costs height.
+**Tried and reverted** The first version was 26 m, the road dropping 4 m into
+a gorge before the pool. The land holds a trodden way's floor up in a disc as
+wide as the way round each of its points (`land::Land::sample`'s fill), so a
+road that goes *down* keeps the higher point's floor over the start of the
+descent and leaves a 1:1 bank across it -- a wall on the way back. Kept the
+pool at the road's height and the cliff at 22 m instead.
+**Verdict** Unplayed. Questions for a player: is 3.5 m behind the falls too
+easy for everyone but the Bulwark, is 9 m/s of push readable, and is the
+Bulwark's run of 2.0 m rises at 3 m tight enough to feel like a test and not
+a wall.

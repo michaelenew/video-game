@@ -1101,6 +1101,10 @@ impl Player {
 /// A body in the air inside an updraft's column, below its top, is carried
 /// up at `tuning::vent_rise` at least, and let go at the top to drift. That
 /// is a push up, and the fall rule already lowers a fall's start for one.
+///
+/// A body in the air in a waterfall's falling water is **pushed down** at
+/// `tuning::falls_push` at least, and its held jump is spent: the curtain is
+/// not a way up (`arena::waterfall`).
 fn climb_and_ride(p: &mut Player, input: Input, ground: &Terrain) {
     if crate::valley::vine_on(ground, p.pos) {
         let speed = t::vine_speed();
@@ -1127,6 +1131,13 @@ fn climb_and_ride(p: &mut Player, input: Input, ground: &Terrain) {
         if p.vel.y.raw() < rise.raw() {
             p.vel.y = rise;
         }
+    }
+    if !p.grounded && crate::valley::sheet_on(ground, p.pos) {
+        let push = t::falls_push().neg();
+        if p.vel.y.raw() > push.raw() {
+            p.vel.y = push;
+        }
+        p.jump_hold = 0;
     }
 }
 

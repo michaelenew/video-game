@@ -111,6 +111,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::CLIMB_FORK => &climb::FORK,
         ArenaId::CLIMB_SPIRE => &climb::SPIRE,
         ArenaId::CLIMB_GULF => &climb::GULF,
+        ArenaId::CLIMB_WATERFALL => &climb::WATERFALL,
         ArenaId::CLIMB_REACH => &climb::REACH,
         _ => &proving_ground::DRESSING,
     }
@@ -642,6 +643,8 @@ pub fn draw_place(
     // The valley's seams, waystones, vines and updrafts: `crate::valley`, for
     // a place that is one.
     crate::valley::draw(commands, meshes, materials, arena, palette, under);
+    // The Waterfall's water, where the place has one.
+    crate::falls::draw(commands, meshes, materials, arena, palette, under);
 }
 
 /// **One box**, from the simulation's own collision data: one source of

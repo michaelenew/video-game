@@ -49,7 +49,8 @@ Every tier is an unplayed guess. The panel lists each course's big jumps (round 
 | ![](course-spiral.jpg) **The Spiral** (hard), the Elementalist: ledges climbing round the pillar, the pad on the left, the chimney's balcony up and right. | ![](course-falls.jpg) **The Falls** (hard), the Reaver: the stair and the arch ahead. |
 | ![](course-slalom.jpg) **The Slalom** (hard), the Dual mage: stones between the pillars, the cave mouth beyond, the span's runway on the left. | ![](course-fork.jpg) **The Fork** (hard), the Champion: the high road's wall up and right, the low road's stones ahead. |
 | ![](course-spire.jpg) **The Spire** (barely possible), the Elementalist. | ![](course-gulf.jpg) **The Gulf** (barely possible), the Reaver: the runway, the 18 m gulf, the high line up and right. |
-| ![](course-reach.jpg) **The Reach** (proving ground), the Reaver on the hub: the gap lanes ahead, a yellow block per five metres at each takeoff. | |
+| ![](course-reach.jpg) **The Reach** (proving ground), the Reaver on the hub: the gap lanes ahead, a yellow block per five metres at each takeoff. | ![](course-waterfall.jpg) **The Waterfall** (hard), the Reaver: the shore's basalt pavement, the pool's stones and the cliff behind, the falls down its middle. |
+| ![](valley-waterfall.jpg) **The Waterfall in the valley**, the Champion at the head of the Pinewood (`SHOT_AT=772,-4`): the road ends at the pool, the cairn at the foot, the ledges up the cliff either side of the falls. | |
 
 ## The valley
 
