@@ -2384,6 +2384,33 @@ impl World {
             if p.class == Class::ShadowReaver && kind == SLOT_MECHANIC {
                 self.order_the_shadow(i, p.aim_at());
             }
+            // The Reaver on three clicks (2026-10-09): what each new move
+            // does on the frame it comes out, besides its volume.
+            if p.class == Class::ShadowReaver {
+                match kind {
+                    moves::reaver::HANG => {
+                        let to = p.aim_at();
+                        let rest = self.terrain().ground_under(to);
+                        shadow::hang_at(&mut self.players[i], to, rest);
+                    }
+                    moves::reaver::SWAP => {
+                        let rest = self.terrain().ground_under(p.pos);
+                        shadow::swap(&mut self.players[i], rest);
+                    }
+                    moves::reaver::GUILLOTINE_DROP => {
+                        let q = &mut self.players[i];
+                        q.vel.y = Fx::ZERO.sub(t::guillotine_dive());
+                        q.air_stall = 0;
+                    }
+                    moves::reaver::MOONSAULT => {
+                        let back = p.facing.scale(t::moonsault_back());
+                        let q = &mut self.players[i];
+                        q.vel.x = q.vel.x.sub(back.x);
+                        q.vel.z = q.vel.z.sub(back.z);
+                    }
+                    _ => {}
+                }
+            }
             // Her two air shots leave her hand here, along the line
             // `crate::aim` already solved -- and *along* it rather than to the
             // end of it, the same rule the two travelling effects follow: the
@@ -2652,6 +2679,14 @@ impl World {
             if let Some(mut hit) =
                 resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
+                // **Deadly mistake** (2026-10-09): struck in the stance, the
+                // Reaver takes nothing -- she is behind the attacker and her
+                // shadow is left where she stood.
+                if deadly_mistake_catches(&snapshot[defender]) {
+                    self.players[attacker].hit_used = true;
+                    deadly_mistake(&mut self.players, defender, attacker);
+                    continue;
+                }
                 // The Reaver's cash-in: any blow of hers spends the marks on
                 // whoever it lands on. A no-op for every other blow in the
                 // game, and for anybody carrying no marks.
@@ -5079,7 +5114,11 @@ fn step_player(
             // Vertical only. Air control is untouched above, so she still
             // steers where she is coming down, which is what makes throwing it
             // a read on where they will be rather than on where they are.
-            p.vel.y = t::landfall_dive().neg();
+            p.vel.y = if p.class == Class::ShadowReaver {
+                t::gallows_dive().neg()
+            } else {
+                t::landfall_dive().neg()
+            };
         } else if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
             // whatever vertical speed you had **bleeds away** rather than being
@@ -5199,7 +5238,8 @@ fn step_player(
         if let Action::Startup { kind, left } = p.action {
             let slam_from_the_air = !was_grounded && p.class == Class::Bulwark && left == 0;
             if lands_on_the_floor(p.class, kind)
-                && (p.class == Class::Elementalist || slam_from_the_air)
+                && (matches!(p.class, Class::Elementalist | Class::ShadowReaver)
+                    || slam_from_the_air)
             {
                 p.action = Action::Active {
                     kind,
@@ -5258,7 +5298,7 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // mechanic on a click, so it needs an edge of its own, and it is the
         // one input that outlives the frame it was pressed on. See
         // `crate::shadow` for both arguments.
-        Class::ShadowReaver if shadow::order_queued(p) => Some(SLOT_MECHANIC),
+        Class::ShadowReaver => reaver_move(p, input),
         // The Elementalist breaks it a fourth way, and then a fifth. Right
         // click is Cataclysm, for the reason the Reaver's is the mechanic --
         // no shield, so the button is otherwise dead, and Cataclysm is aimed
@@ -5416,6 +5456,7 @@ fn elementalist_takeoff(class: Class, kind: u8) -> bool {
         Class::Elementalist => matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT),
         Class::BloodMage => matches!(kind, b::BLOOD_JET | b::MARIONETTE | b::HARVEST),
         Class::DualMage => moves::dual::is_takeoff(kind),
+        Class::ShadowReaver => moves::reaver::is_takeoff(kind),
         _ => false,
     }
 }
@@ -5448,7 +5489,7 @@ fn keyed_q(p: &Player) -> Option<u8> {
 fn rise_window(p: &mut Player, input: Input) {
     if !matches!(
         p.class,
-        Class::Elementalist | Class::BloodMage | Class::DualMage
+        Class::Elementalist | Class::BloodMage | Class::DualMage | Class::ShadowReaver
     ) {
         return;
     }
@@ -5591,8 +5632,8 @@ fn plunging(p: &Player) -> bool {
     };
     !p.grounded
         && p.air_stall == 0
-        && p.class == Class::Elementalist
-        && kind == moves::elementalist::LANDFALL
+        && ((p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
+            || (p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS))
 }
 
 /// Is this startup one that waits for the floor rather than for its own clock?
@@ -5610,6 +5651,7 @@ fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
 fn lands_on_the_floor(class: Class, kind: u8) -> bool {
     (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
         || (class == Class::Bulwark && kind == SLOT_COMMITTED)
+        || (class == Class::ShadowReaver && kind == moves::reaver::GALLOWS)
 }
 
 /// Which of the Dual mage's six a click asks for.
@@ -5637,6 +5679,50 @@ fn lands_on_the_floor(class: Class, kind: u8) -> bool {
 /// Left before right before middle, so a player mashing buttons gets an attack
 /// rather than silence. The design has a use for both-click -- a finisher with
 /// no side -- and does not have one yet.
+/// Which of the Reaver's eleven a click asks for (2026-10-09): **the blade,
+/// the execution, the shadow** -- left, middle, right -- on the floor, in the
+/// air, and off the floor with space, on the shared window (`Player::rise`).
+/// Right click is still the remembered press (`shadow::order_queued`), so the
+/// mechanic cannot be eaten by her own frames; what it throws is the row's.
+/// See `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+fn reaver_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::reaver as r;
+    use moves::reaver::keys;
+    let window =
+        !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
+    if shadow::order_queued(p) {
+        if window
+            && shadow::of(p).is_some_and(|s| matches!(s.doing, crate::class::Ghost::Attending))
+        {
+            return Some(r::HANG);
+        }
+        if !p.grounded && shadow::waiting(p) {
+            return Some(r::SWAP);
+        }
+        return Some(r::SEND);
+    }
+    let click = if input.has(keys::BLADE) {
+        keys::BLADE
+    } else if input.has(keys::EXECUTION) {
+        keys::EXECUTION
+    } else {
+        return None;
+    };
+    if window {
+        return Some(if click == keys::BLADE {
+            r::MOONSAULT
+        } else {
+            r::GALLOWS
+        });
+    }
+    Some(match (click, p.grounded) {
+        (keys::BLADE, true) => r::SLASH,
+        (keys::BLADE, false) => r::KITE_CUT,
+        (_, true) => r::EXECUTIONER,
+        (_, false) => r::GUILLOTINE_DROP,
+    })
+}
+
 fn dual_move(p: &Player, input: Input) -> Option<u8> {
     use moves::dual as d;
     use moves::dual::keys;
@@ -6630,6 +6716,16 @@ fn begin_move(
         return Action::Channel { kind, held: 0 };
     }
     lock_aim(p, who, kind, input, scene);
+    // **Gallows**: she is gone upward, and hangs a beat before the plunge
+    // (2026-10-09) -- her source material's "blink upward, then slash down".
+    // The plunge and the landing are Landfall's (`plunging`,
+    // `lands_on_the_floor`).
+    if p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS {
+        p.pos.y = p.pos.y.add(t::gallows_blink());
+        p.vel = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
+        p.grounded = false;
+        p.air_stall = t::gallows_hang();
+    }
     throw_move(p, kind, input, aerial)
 }
 
@@ -7472,6 +7568,12 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.jump_banked as u32);
             h.write_u32(shadow.refused as u32);
             h.write_u32(shadow.shift_spent as u32);
+            // Hashed only when a hung or swapped shadow uses them, so the
+            // replays pinned before they existed keep their checksums.
+            if shadow.hang != 0 || shadow.rest != Fx::MAX {
+                h.write_u32(shadow.hang as u32);
+                h.write_u32(shadow.rest.raw() as u32);
+            }
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -8024,9 +8126,47 @@ fn cash_the_tally(
     hit.damage = Fx::from_int(hit.damage)
         .mul(shadow::cash_multiple(marks))
         .to_int();
+    kite_refuel(&mut players[attacker]);
     players[defender].marks = 0;
     players[defender].mark_clock = 0;
     shadow::full_tally(marks)
+}
+
+/// **The Kite cut's refuel** (2026-10-09): a Kite cut that cashed a tally
+/// gives her airdodge back -- and her airdodge pointed at the shadow is the
+/// dash. Her own loop, paying for the next crossing.
+fn kite_refuel(p: &mut Player) {
+    if p.class == Class::ShadowReaver
+        && p.action.attack_kind() == Some(moves::reaver::KITE_CUT)
+        && !p.grounded
+    {
+        p.air_dodged = false;
+    }
+}
+
+/// Is this Reaver in the window of Deadly mistake's stance?
+fn deadly_mistake_catches(p: &Player) -> bool {
+    p.class == Class::ShadowReaver
+        && matches!(p.action, Action::Active { kind, .. } if kind == moves::reaver::DEADLY_MISTAKE)
+}
+
+/// **Deadly mistake**: the blow that found her stance finds nothing. She is
+/// behind the attacker, facing his back, free; her shadow waits where she
+/// stood.
+fn deadly_mistake(players: &mut [Player; MAX_PLAYERS], reaver: usize, attacker: usize) {
+    let them = players[attacker];
+    let was = players[reaver].pos;
+    let back = V3::new(them.facing.x, Fx::ZERO, them.facing.z).normalized();
+    let q = &mut players[reaver];
+    q.pos = V3::new(
+        them.pos.x.sub(back.x.mul(t::mistake_behind())),
+        them.pos.y,
+        them.pos.z.sub(back.z.mul(t::mistake_behind())),
+    );
+    q.facing = if back == V3::ZERO { q.facing } else { back };
+    q.vel = V3::ZERO;
+    q.action = Action::Free;
+    shadow::leave_at(q, was);
 }
 
 /// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
@@ -12834,6 +12974,9 @@ impl World {
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
             if attacker.class == Class::ShadowReaver && !guarded.turned() {
+                if beast.marks > 0 {
+                    kite_refuel(&mut self.players[i]);
+                }
                 beast.spend_marks();
             }
             // Her double duty, against the creature: drink over the pool the

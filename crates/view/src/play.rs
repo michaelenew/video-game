@@ -617,7 +617,18 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::ShadowReaver, 0) => Clip::ReaverPoke,
         (Class::ShadowReaver, 1) => Clip::ReaverCommitted,
         (Class::ShadowReaver, 2) => Clip::ReaverSpecial,
-        (Class::ShadowReaver, _) => Clip::ReaverMechanic,
+        (Class::ShadowReaver, 3) => Clip::ReaverMechanic,
+        // The three clicks (2026-10-09), on the clips they are versions of:
+        // the blade's on the Slash, the execution's on the Executioner's
+        // overhead, and the shadow's -- the swap, the hang -- on the send.
+        // Deadly mistake is a stance, which is the Executioner's wind-up held.
+        (Class::ShadowReaver, 4) => Clip::ReaverPoke,
+        (Class::ShadowReaver, 5) => Clip::ReaverCommitted,
+        (Class::ShadowReaver, 6) => Clip::ReaverMechanic,
+        (Class::ShadowReaver, 7) => Clip::ReaverPoke,
+        (Class::ShadowReaver, 8) => Clip::ReaverCommitted,
+        (Class::ShadowReaver, 9) => Clip::ReaverMechanic,
+        (Class::ShadowReaver, _) => Clip::ReaverCommitted,
         (Class::Elementalist, 0) => Clip::ElementalistPoke,
         (Class::Elementalist, 1) => Clip::ElementalistCommitted,
         (Class::Elementalist, 2) => Clip::ElementalistSpecial,

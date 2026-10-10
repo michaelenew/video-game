@@ -605,7 +605,24 @@ const NAMES: [&[&str]; 6] = [
     //   Send shadow: on right click, and a real move rather than a state flip.
     //     It throws the second body out fast and, pressed again, dashes it home
     //     through anybody in the way.
-    &["Slash", "Executioner", "Guillotine", "Send shadow"],
+    //
+    // **On three clicks**, since 2026-10-09: left is the blade, middle the
+    // execution, right the shadow, each on the floor, in the air and with
+    // space; `E` is Deadly mistake. Seven appended after the four. See
+    // [`reaver`].
+    &[
+        "Slash",
+        "Executioner",
+        "Guillotine",
+        "Send shadow",
+        "Kite cut",
+        "Guillotine drop",
+        "Swap",
+        "Moonsault",
+        "Gallows",
+        "Hang the shadow",
+        "Deadly mistake",
+    ],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
     // Seven: four on the ground, and a whole row of three off it. See
     // [`elementalist`].
@@ -826,6 +843,69 @@ pub mod champion {
     /// Is this move thrown as the feet leave the floor?
     pub const fn is_takeoff(kind: u8) -> bool {
         kind >= TAKEOFF && kind < POLE_VAULT
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Shadow Reaver's eleven
+// ---------------------------------------------------------------------------
+
+/// The Shadow Reaver on three clicks (2026-10-09):
+///
+/// ```text
+///                     left: the blade   middle: the execution  right: the shadow
+///   on foot           Slash             Executioner            Send / recall
+///   in the air        Kite cut          Guillotine drop        Swap
+///   leaving the floor Moonsault         Gallows                Hang the shadow
+///
+///   Q  Guillotine lotus               E  Deadly mistake
+/// ```
+///
+/// The first four rows are the four she had, in their slots; the seven after
+/// them were appended. See
+/// `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+pub mod reaver {
+    pub const SLASH: u8 = 0;
+    pub const EXECUTIONER: u8 = 1;
+    pub const LOTUS: u8 = 2;
+    pub const SEND: u8 = 3;
+    /// Left click in the air: a vertical cut; on a marked body, her airdodge
+    /// comes back.
+    pub const KITE_CUT: u8 = 4;
+    /// Middle click in the air: straight down, blade first, spiking.
+    pub const GUILLOTINE_DROP: u8 = 5;
+    /// Right click in the air with the shadow out: she and it trade places.
+    pub const SWAP: u8 = 6;
+    /// Space and left click: a back flip, the blade up through the space in
+    /// front of her.
+    pub const MOONSAULT: u8 = 7;
+    /// Space and middle click: up a few metres, a beat, and down blade first.
+    pub const GALLOWS: u8 = 8;
+    /// Space and right click: the send, to a point in the air.
+    pub const HANG: u8 = 9;
+    /// `E`: the counter stance.
+    pub const DEADLY_MISTAKE: u8 = 10;
+
+    pub const COUNT: usize = 11;
+
+    /// Which button is which.
+    pub mod keys {
+        use crate::input::Input;
+        /// Left click: the blade.
+        pub const BLADE: u16 = Input::LEFT;
+        /// Middle click: the execution.
+        pub const EXECUTION: u16 = Input::MIDDLE;
+        /// Right click: the shadow.
+        pub const SHADOW: u16 = Input::RIGHT;
+        /// `Q`: the lotus.
+        pub const LOTUS: u16 = Input::SPECIAL;
+        /// `E`: Deadly mistake.
+        pub const MISTAKE: u16 = Input::MECHANIC;
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        matches!(kind, MOONSAULT | GALLOWS | HANG)
     }
 }
 
@@ -1198,7 +1278,7 @@ pub const fn slots(class: Class) -> usize {
         // arena and dashing it back through somebody is not an instant, and a
         // move with a flight, a damage number and a slow needs the same table
         // every other move is in.
-        Class::ShadowReaver => SLOTS + 1,
+        Class::ShadowReaver => reaver::COUNT,
         // Eleven: three clicks on the floor, in the air and leaving it, and
         // the two majors. See [`dual`].
         Class::DualMage => dual::COUNT,
@@ -1234,7 +1314,7 @@ pub const fn on_e(class: Class) -> Option<u8> {
         // because it is the half of her kit the crosshair aims; what is left
         // for the key is the swing, which does not care where it is thrown
         // from. See the note in [`NAMES`].
-        Class::ShadowReaver => Some(crate::state::SLOT_COMMITTED),
+        Class::ShadowReaver => Some(reaver::DEADLY_MISTAKE),
         _ => None,
     }
 }
@@ -1319,9 +1399,16 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // right click is otherwise dead on a class with no shield to raise.
         Class::ShadowReaver => match slot {
             0 => "LMB",
-            1 => "E, Shift+LMB",
+            1 => "MMB",
             2 => "Q",
-            _ => "RMB",
+            3 => "RMB",
+            4 => "LMB air",
+            5 => "MMB air",
+            6 => "RMB air, shadow out",
+            7 => "Space+LMB",
+            8 => "Space+MMB",
+            9 => "Space+RMB",
+            _ => "E",
         },
         // Both clicks are attacks, because the two autos are the mechanic: the
         // button is which force you throw and therefore which way you drift.
@@ -1480,6 +1567,18 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // four grounded moves land on the floor where they were aimed, the
         // fourth is a beam drawn from the line it flew, and Landfall is a disc
         // on the floor at her own feet.
+        // The Reaver on three clicks (2026-10-09): her new cuts are vertical
+        // -- up through the flip, down out of the sky -- and the shadow's
+        // column and the stance put out nothing of her body's. The Kite cut
+        // is the Slash's own volume thrown in the air: as an upright arc it
+        // passed over a knee-high body and under a sac the Slash reached.
+        Class::ShadowReaver => match kind {
+            reaver::GUILLOTINE_DROP | reaver::MOONSAULT | reaver::GALLOWS => {
+                Shape::Swing(Plane::Upright)
+            }
+            reaver::SWAP | reaver::HANG | reaver::DEADLY_MISTAKE => Shape::None,
+            _ => Shape::Cylinder,
+        },
         Class::Elementalist => match kind {
             elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
             // The four of 2026-10-09 put a thing in the world -- a ball, a

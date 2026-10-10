@@ -7934,3 +7934,41 @@ reactions is a first guess. See [kits/dual-mage.md](kits/dual-mage.md) §"Every 
   hashed only while one is on a body, so no other class's pin moved.
 **Verdict** — unplayed. Known from the start: her new moves play the six clips she had; clips
 of their own are the next step. Open: DUAL-1 to DUAL-4 in 0010.
+
+### 2026-10-09 — the Shadow Reaver on three clicks
+**Changed** Her bindings, onto the grid every class has been moving to, from the person's
+brief ("do the same"). Designed combos first
+([exploration/0011](exploration/0011_shadow_reaver_on_three_clicks.md)): her loop is **send,
+mark, cross, cash**, and each new move is a new piece in it. Left is the blade (Slash, **Kite
+cut** in the air, **Moonsault** off the floor), middle the execution (**Executioner**, moved
+from `E`; **Guillotine drop**; **Gallows**), right the shadow (send / recall; **Swap** in the
+air with the shadow waiting; **Hang the shadow** off the floor). `Q` is still the lotus. `E` is
+**Deadly mistake** at last — the counter stance her kit has listed without a button since
+2026-09-09: struck in it by a fighter, she is behind them and the shadow is left where she stood.
+A Kite cut that cashes a tally gives her airdodge back, which is the dash pointed at the shadow.
+A shadow hung in the air waits `Hang the shadow, waits for` and then sinks to the floor under
+it; one put on the floor never sinks (`Shadow::rest` is `Fx::MAX` there). Every number on the
+seven new moves and the eight knobs is a first guess.
+**Tried and changed while building**
+- *The Kite cut as an upright arc* (reach 1.6, radius 0.5) passed over a knee-high gnat at 3 m
+  where it caught a fighter (`critters.rs`), and no longer reached the Broodmother's fore sacs
+  from the top of a hop, which the Slash did (`broodmother.rs`): it is the Slash's own volume
+  thrown in the air now, and its own thing is the refuel.
+- *Gallows* at reach 1.9 / radius 0.7 had the same gnat gap at 3 m, and at knockback 10 moved a
+  body 1.45 m for 150 damage (`feel.rs` asks a heavy hit for 1.5): Executioner's 1.7 / 1.1 / 20.
+  It drops straight down rather than forward and down as first written: she steers it with air
+  control, as Landfall is steered.
+- *The Guillotine drop's dive came late*: the dive starts on its first active frame, and eight
+  frames of wind-up in the air were most of a short hop. Startup 5.
+- *A swap's shadow sank the frame after it was left*: a swapped shadow waits as a hung one does.
+- *The shadow's copy* is thrown for every swing with damage; the swap and the stance are swings
+  with none and are not copied.
+- The Reaver's pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned; the hang and
+  the rest are hashed only when used, so no other class's pin moved. Her envelope fixtures
+  re-recorded, and her reach **grew**: lane 0 from 46.8 m to 62.7 m shared (86.2 m with the
+  whole kit), most lanes by a third or more. The Hang the shadow and the dash to it is a
+  vertical crossing she did not have, and the Kite cut's refuel is a second dash in one
+  airtime. A search is a lower bound; **her reach is the thing to watch in play**
+  (REAVER-1).
+**Verdict** — unplayed. Her new moves play the four clips she had. Open: REAVER-1 to REAVER-4
+in 0011.

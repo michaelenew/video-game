@@ -7,6 +7,12 @@ sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat
 
 # Shadow Reaver — kit
 
+> **On three clicks, 2026-10-09, built and unplayed** — see
+> [../exploration/0011_shadow_reaver_on_three_clicks.md](../exploration/0011_shadow_reaver_on_three_clicks.md),
+> which supersedes the bindings below where they differ. Left is the blade (Slash, Kite cut,
+> Moonsault), middle the execution (Executioner, Guillotine drop, Gallows), right the shadow
+> (send / recall, Swap, Hang the shadow); `Q` is the lotus and `E` is **Deadly mistake**, built.
+
 > **v2 of the damage pattern is built, 2026-09-23, and unplayed** — see
 > [../shadow-reaver-v2.md](../shadow-reaver-v2.md) and [the tally](#the-tally-and-the-cash-in--v2-2026-09-23)
 > below. The shadow, the dash, the lotus and the recall do not change. What is added: the shadow
@@ -343,15 +349,15 @@ punishable tail, and a jump out of *that* would be a universal escape rather tha
 class's tech. The dash to the shadow no longer has one: that is a real loss of punish on the
 Reaver in a fight, taken on the user's word, and worth watching in versus.
 
-### Executioner — `E`, or `shift` + left click
+### Executioner — middle click (was `E` until 2026-10-09)
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
 the shadow, which now always applies
 
 Blink upward, then slash down in a long arc. The big commitment, and an overhead — it is
 the class's answer to a turtle.
 
-On **`E`** as well as the shared grammar's `shift` + left click. See
-[Why the two buttons are swapped](#why-the-two-buttons-are-swapped).
+On **middle click** since the three clicks; it was on `E` from 2026-09-14. The "blink upward"
+half of this description is now its own move, **Gallows** (space + middle click).
 
 ### Deadly mistake
 **Startup** fast · **Recovery** long on whiff · **Range** self · **Mechanic** requires the
@@ -360,10 +366,10 @@ shadow for the teleport
 A brief counter stance. Passive: enemies that attack your shadow bleed. If struck during
 the stance, you appear behind the attacker and leave your shadow where you were.
 
-**Unbuilt**, and it needs a button that does not exist yet. Both obvious candidates are
-swallowed: right click ignores `shift` and sends the shadow either way, and `shift` + `E`
-throws Executioner for the same reason. Undecided, and the first thing that will have to
-give if this ability is built.
+**Built 2026-10-09 on `E`**, which the three clicks freed. Against fighters only (REAVER-3 in
+0011); the passive is not built. Struck in its active frames by a blow that was not blocked,
+she takes nothing, stands `Deadly mistake, behind them` metres behind the attacker facing his
+back, and the shadow waits where she stood.
 
 ## Why the two buttons are swapped
 

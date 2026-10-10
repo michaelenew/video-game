@@ -325,15 +325,23 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Shadow Reaver",
         in_browser: true,
-        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two.",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two. Her three clicks are the blade, the execution and the shadow: each has a move on the floor, one in the air and a jump attack with space. Rebuilt on three clicks 2026-10-09 and unplayed; docs/design/exploration/0011_shadow_reaver_on_three_clicks.md is the design.",
         entries: &[
             e(
                 "The shadow copies you",
                 "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
             ),
             e(
+                "Left click",
+                "The blade. Slash on the floor, the cut the tally is built on. In the air, the Kite cut: a hit on a body carrying marks gives your airdodge back -- and the airdodge pointed at the shadow is the dash. Space and left click is the Moonsault: a back flip up and away whose blade launches whoever was pressing you.",
+            ),
+            e(
+                "Middle click",
+                "The execution. Executioner on the floor, the committed overhead that cashes a tally for the most. In the air, the Guillotine drop: straight down blade first, spiking anybody under you into the floor. Space and middle click is the Gallows: you are gone upward, hang a beat, and come down blade first.",
+            ),
+            e(
                 "Right click",
-                "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it. It answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
+                "The shadow. Send it where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it. It answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped. In the air with the shadow out, right click is the Swap: you and it trade places. Space and right click hangs the shadow in the air where you point; it waits there a moment, then sinks to the floor.",
             ),
             e(
                 "Q",
@@ -341,7 +349,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E",
-                "Executioner, the committed melee. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim. That also means she is the one class the retirement of shift-plus-click cost nothing.",
+                "Deadly mistake, a short counter stance. Struck in it by a fighter, you take nothing: you are behind them, and your shadow is left standing where you were. Whiffed, it is a long recovery.",
             ),
             e(
                 "Shift + forward",

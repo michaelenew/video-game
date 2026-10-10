@@ -717,6 +717,17 @@ scalars! {
     FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
     ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
     EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
+    // **The Shadow Reaver on three clicks**, 2026-10-09: the flip, the two
+    // drops, the hung shadow and the counter. See
+    // `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+    MoonsaultBack,        "Shadow Reaver", "Moonsault, back (m/s)", Fixed, 0, fx(20,1);
+    GuillotineDive,       "Shadow Reaver", "Guillotine drop, dives at (m/s)", Fixed, 0, fx(60,1);
+    GallowsBlink,         "Shadow Reaver", "Gallows, blinks up (m)", Fixed, 0, fx(10,1);
+    GallowsHang,          "Shadow Reaver", "Gallows, hangs for", Frames, 0, 60;
+    GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
+    HangWaits,            "Shadow Reaver", "Hang the shadow, waits for", Frames, 0, 300;
+    HangSink,             "Shadow Reaver", "Hang the shadow, sinks at (m/s)", Fixed, 0, fx(20,1);
+    MistakeBehind,        "Shadow Reaver", "Deadly mistake, behind them (m)", Fixed, 0, fx(5,1);
 }
 
 // ---------------------------------------------------------------------------

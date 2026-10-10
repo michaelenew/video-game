@@ -572,7 +572,11 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // ball, the Fire carpet, the Fire fountain and the earth jump. See
             // `docs/design/exploration/0008_elementalist_on_three_clicks.md`.
             Class::Elementalist => 16,
-            Class::ShadowReaver => 4,
+            // Eleven: the blade, the execution and the shadow on the floor,
+            // in the air and leaving it, the lotus, and Deadly mistake on
+            // `E` -- 2026-10-09, see
+            // `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+            Class::ShadowReaver => 11,
             // Eleven: the five of the scythe's arrival and the six of
             // 2026-10-09 -- the Blood nova, the Blood jet, Marionette, Nail,
             // Hook and Harvest. See

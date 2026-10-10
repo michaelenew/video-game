@@ -3098,3 +3098,43 @@ pub fn reel_pull() -> Fx {
 pub fn equinox_lift() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EquinoxLift)).max(Fx::ZERO)
 }
+
+/// How fast the Moonsault carries her backward as she flips up.
+pub fn moonsault_back() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MoonsaultBack)).max(Fx::ZERO)
+}
+
+/// How fast the Guillotine drop drives her down.
+pub fn guillotine_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GuillotineDive)).max(Fx::ZERO)
+}
+
+/// How far up Gallows puts her before she comes down.
+pub fn gallows_blink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsBlink)).max(Fx::ZERO)
+}
+
+/// How long Gallows holds her up there before the plunge: the beat the defender reads.
+pub fn gallows_hang() -> u16 {
+    oven::scalar(Scalar::GallowsHang).max(0) as u16
+}
+
+/// How fast Gallows comes down.
+pub fn gallows_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsDive)).max(Fx::ZERO)
+}
+
+/// How long a shadow hung in the air waits there before it sinks.
+pub fn hang_waits() -> u16 {
+    oven::scalar(Scalar::HangWaits).max(0) as u16
+}
+
+/// How fast a hung shadow sinks to the floor under it once its wait is up.
+pub fn hang_sink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HangSink)).max(Fx::ZERO)
+}
+
+/// How far behind the attacker Deadly mistake puts her.
+pub fn mistake_behind() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MistakeBehind)).max(Fx::ZERO)
+}

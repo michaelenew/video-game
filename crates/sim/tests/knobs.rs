@@ -107,6 +107,26 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Dual mage's light major.",
     ),
     (
+        "pub const BLADE: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Shadow Reaver's blade click.",
+    ),
+    (
+        "pub const EXECUTION: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Shadow Reaver's execution click.",
+    ),
+    (
+        "pub const SHADOW: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Shadow Reaver's shadow click.",
+    ),
+    (
+        "pub const LOTUS: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Shadow Reaver's lotus key.",
+    ),
+    (
+        "pub const MISTAKE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Shadow Reaver's Deadly mistake key.",
+    ),
+    (
         "pub const MY_BLOOD: u16 = Input::LEFT",
         "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
     ),
