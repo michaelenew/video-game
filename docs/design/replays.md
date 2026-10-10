@@ -2,6 +2,7 @@
 status: built 2026-10-08
 proposed: 2026-10-08
 built: 2026-10-08
+revised: 2026-10-10 (§6, the link)
 ---
 
 # Replays — a fight somebody played, judged like the bot's
@@ -137,12 +138,71 @@ The backlog's word is *unplayed*. The loop this makes possible:
 Ghosts on the courses, a spectator's view and a replay viewer with stepping
 are all the same file with a different reader, and none is built.
 
-## 6 · Measured
+## 6 · The link: where a match got laggy, and why
+
+The first report from playing with a friend was *"some stretches got very
+laggy, especially when we were far apart."* A tape of inputs cannot answer
+that: lag is not in the fight, it is in how the fight reached the screen. So
+**online, the tape also keeps the link** (format version 2): a header line
+naming which seat this machine played and its input delay, and one `net` line
+a second of the match.
+
+```text
+online seat=1 delay=0
+net 3660 ping=48 ahead=1 rollbacks=7 resimulated=19 deepest=4 stalls=0 held=1 slowest=18 sim=310 queue=3 kbps=11 quiet=0
+```
+
+Per second: the round trip (`ping`, ms), how many frames this machine was
+ahead of the friend's, how many rollbacks and the frames they replayed and
+the deepest, **ticks stalled** -- the game standing still because the
+friend's inputs were too far behind, which is what lag feels like -- ticks
+held back on purpose for being ahead (`online::pace`), **the slowest frame
+this machine drew** (wall clock, ms), the most one tick spent simulating
+rollback and all (µs), the unacknowledged send queue and bandwidth, and
+whether the friend went silent. It is counted in `crates/game/src/online.rs`
+(`Meter`) and is nothing the replay needs to rebuild the fight; a version-one
+tape still reads, with no link. The words are named so a reader skips one it
+does not know.
+
+`hunt --bin replay` adds **THE LINK** (`crates/hunt/src/link.rs`). It plays
+the tape, notes for every frame how far apart the fighters were on the ground
+and what the frame cost to simulate *here*, and lays the tape's seconds
+beside that:
+
+- the link at a glance: typical and worst ping, rollbacks, time spent waiting,
+  the slowest frame;
+- **the rough stretches**, worst first, each with when, where, how far apart,
+  and its likeliest cause. Lag comes from three places and they leave
+  different marks: **the line** (high ping, deep rollbacks, stalls),
+  **the friend's machine** (this one stalls while its own frames are quick
+  and the ping is ordinary), and **this machine** (a slow frame, whatever
+  the line did);
+- **the match cut by distance apart** (0–10, 10–40, 40–150, 150+ m), and a
+  sentence on which column moved between close and far.
+
+Each machine's tape is its own side of the line. **Both players saving the
+same match** (`Y`) is what tells "the friend's machine" from "the line" for
+certain: the friend's tape shows its own slow frames.
+
+A tape with no link -- offline, or saved before this -- still gets the cut by
+distance with the simulation's cost in it, because that question the replay
+can answer alone. It was the first thing checked: walking one fighter the
+whole valley road while the other stood in Hearth, a frame cost 25–30 µs at
+every distance apart (both walking together, 50), inside the budget. Distance
+does not make the simulation slower; whatever was felt was the line or a
+machine drawing, which is what the link is there to say.
+
+## 7 · Measured
 
 - `crates/sim/src/replay.rs` tests: a tape round-trips through its text; a
   replay reproduces the fight to the bit; repeats collapse and expand; a rewind
   forgets; a re-advanced frame overwrites; every world a start builds reads
   back as that start; an edited start is refused with a reason.
+- The link (§6): its lines round-trip, and a version-one tape still reads
+  (`sim::replay` tests); a match whose friend falls behind once the two are
+  forty metres apart is reported as a rough stretch with that cause, and the
+  cut by distance says so (`hunt/tests/replay.rs`); a tape with no link still
+  gets the simulation's cost by distance.
 - `crates/hunt/tests/replay.rs`: a taped scripted Ridgeback hunt replays to
   the same end and the same report; the hands count what the hunter threw; a
   pack hunt replays; a versus tape is judged without a creature.

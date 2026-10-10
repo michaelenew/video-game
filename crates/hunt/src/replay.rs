@@ -308,6 +308,8 @@ pub struct Judgement {
     pub rounds: [u8; MAX_PLAYERS],
     /// The valley, place by place, when the replay was in it.
     pub trek: Trek,
+    /// The link, beside where the fighters were, when it was online.
+    pub lag: crate::link::Lag,
     /// The world the replay ended on.
     pub end: World,
     /// Whether it is the one the game ended on: `None` for a tape with no
@@ -326,7 +328,12 @@ pub fn judge(tape: &Tape) -> Result<Judgement, String> {
         .collect();
     let mut hands: [Hands; MAX_PLAYERS] = Default::default();
     let mut trek = Trek::default();
+    let mut lag = crate::link::Lag::new(tape.first_frame);
+    // What a frame cost to simulate: the time from the end of one watch to
+    // the start of the next is the copy of the world and its `advance`.
+    let mut mark = std::time::Instant::now();
     let end = tape.play(|before, inputs, after| {
+        lag.observe(after, mark.elapsed().as_micros() as u32);
         trek.observe(before, after);
         for person in people.iter_mut() {
             person.playback(inputs[person.who]);
@@ -337,7 +344,9 @@ pub fn judge(tape: &Tape) -> Result<Judgement, String> {
         if let Some(report) = report.as_mut() {
             report.observe(before, after, &people);
         }
+        mark = std::time::Instant::now();
     })?;
+    lag.join(tape);
     if let Some(report) = report.as_mut() {
         report.finish(&end);
     }
@@ -347,6 +356,7 @@ pub fn judge(tape: &Tape) -> Result<Judgement, String> {
         hands,
         rounds: end.players.map(|p| p.rounds_won),
         trek,
+        lag,
         matched,
         end,
     })
@@ -386,6 +396,7 @@ impl Judgement {
             None => out.push_str("  unchecked: the tape has no end line\n"),
         }
         out.push_str(&self.trek.render(self.end.frame));
+        out.push_str(&self.lag.render(tape));
         if tape.start.hunt.is_none() && self.trek.legs.is_empty() {
             out.push_str(&format!(
                 "  rounds: player one {}, player two {}\n",
