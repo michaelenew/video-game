@@ -216,8 +216,8 @@ pub fn setup(
     let disc = meshes.add(Cylinder::new(1.0, 1.0));
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let rocks = [
-        meshes.add(crate::shapes::rock(Vec3::ONE, 3, None)),
-        meshes.add(crate::shapes::rock(Vec3::ONE, 11, None)),
+        meshes.add(crate::shapes::rock_faceted(Vec3::ONE, 3, 16, None)),
+        meshes.add(crate::shapes::rock_faceted(Vec3::ONE, 11, 16, None)),
     ];
     let pieces = (0..MAX_HAZARDS)
         .map(Piece::Hazard)

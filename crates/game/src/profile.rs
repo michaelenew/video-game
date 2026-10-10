@@ -7,6 +7,8 @@
 //! beside them, and it is off unless asked for because the readout itself
 //! is not free.
 
+use std::collections::HashMap;
+
 use bevy::diagnostic::{
     DiagnosticsStore, EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
 };
@@ -27,7 +29,7 @@ impl Plugin for ProfilePlugin {
             RenderDiagnosticsPlugin,
         ))
         .add_systems(Startup, experiment.after(crate::setup))
-        .add_systems(Update, census);
+        .add_systems(Update, (census, heaviest, quit_after));
     }
 }
 
@@ -143,5 +145,75 @@ fn experiment(
     .collect();
     if !overrides.is_empty() {
         eprintln!("profiling with {}", overrides.join(", "));
+    }
+}
+
+/// **What the triangles are**, once, twelve seconds in: the meshes the
+/// camera can see and the meshes that cast shadows, heaviest first, each
+/// with how many copies of it there are and how far it is from the camera.
+/// A pass's triangle count in the census says *that* it is drawing too much;
+/// this says what. It is how the valley's walls were found drawing three
+/// million triangles into four shadow cascades.
+fn heaviest(
+    time: Res<Time>,
+    mut done: Local<bool>,
+    meshes: Res<Assets<Mesh>>,
+    all: Query<(
+        &Mesh3d,
+        &GlobalTransform,
+        &ViewVisibility,
+        Has<bevy::pbr::NotShadowCaster>,
+    )>,
+    cameras: Query<&GlobalTransform, With<crate::MainCamera>>,
+) {
+    if *done || time.elapsed_secs() < 12.0 {
+        return;
+    }
+    *done = true;
+    let eye = cameras
+        .single()
+        .map(|c| c.translation())
+        .unwrap_or_default();
+    let tris = |m: &Mesh3d| {
+        meshes
+            .get(&m.0)
+            .and_then(|m| m.indices())
+            .map_or(0, |i| i.len() / 3)
+    };
+    let list = |title: &str, keep: &dyn Fn(bool, bool) -> bool| {
+        let mut by: HashMap<AssetId<Mesh>, (usize, usize, f32)> = HashMap::new();
+        let mut total = 0;
+        for (m, at, seen, no_shadow) in &all {
+            if !keep(seen.get(), !no_shadow) {
+                continue;
+            }
+            let n = tris(m);
+            let row = by
+                .entry(m.0.id())
+                .or_insert((n, 0, at.translation().distance(eye)));
+            row.1 += 1;
+            total += n;
+        }
+        let mut rows: Vec<_> = by.into_values().collect();
+        rows.sort_by_key(|r| std::cmp::Reverse(r.0 * r.1));
+        eprintln!("{title}: {total} triangles in {} meshes", rows.len());
+        for (n, copies, far) in rows.into_iter().take(20) {
+            eprintln!("  {n:>8} triangles x {copies:>4}, {far:>5.0} m away");
+        }
+    };
+    list("in view", &|seen, _| seen);
+    list("casting shadows", &|_, casts| casts);
+}
+
+/// `--quit-after <seconds>`: leave cleanly after that long, so a build with
+/// `bevy/trace_chrome` gets to write its trace (it is written on the way
+/// out, and a killed game never takes that way).
+fn quit_after(time: Res<Time>, mut exit: EventWriter<AppExit>) {
+    let Some(after) = crate::platform::value("--quit-after").and_then(|v| v.parse::<f32>().ok())
+    else {
+        return;
+    };
+    if time.elapsed_secs() > after {
+        exit.write(AppExit::Success);
     }
 }

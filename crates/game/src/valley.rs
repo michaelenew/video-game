@@ -21,6 +21,7 @@ use sim::arena::{Arena, ArenaId, Terrain};
 use sim::valley::{self, Kind};
 
 use crate::arenas::{Under, put};
+use crate::paint::Materials;
 
 /// A seam's light: which place and which seam, and its two colours.
 #[derive(Component)]
@@ -59,7 +60,7 @@ fn linear(rgb: [f32; 3]) -> [f32; 3] {
 pub fn draw(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Materials,
     arena: &'static Arena,
     palette: &look::Palette,
     under: Under,
@@ -106,7 +107,7 @@ pub fn draw(
                 under,
                 (
                     Mesh3d(meshes.add(Circle::new(1.6))),
-                    MeshMaterial3d(materials.add(translucent(lit, 0.3))),
+                    MeshMaterial3d(materials.standard.add(translucent(lit, 0.3))),
                     Transform::from_xyz(cx, floor + 0.06, cz)
                         .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
                     bevy::pbr::NotShadowCaster,
@@ -118,7 +119,7 @@ pub fn draw(
                 under,
                 (
                     Mesh3d(meshes.add(Cylinder::new(0.22, 3.2).mesh().resolution(12).build())),
-                    MeshMaterial3d(materials.add(translucent(lit, 0.8))),
+                    MeshMaterial3d(materials.standard.add(translucent(lit, 0.8))),
                     Transform::from_xyz(cx, floor + 1.6, cz),
                     bevy::pbr::NotShadowCaster,
                     beacon(0.8),
@@ -136,7 +137,7 @@ pub fn draw(
                     under,
                     (
                         Mesh3d(meshes.add(Sphere::new(0.38).mesh().ico(3).unwrap())),
-                        MeshMaterial3d(materials.add(translucent(lit, 0.95))),
+                        MeshMaterial3d(materials.standard.add(translucent(lit, 0.95))),
                         Transform::from_translation(top),
                         bevy::pbr::NotShadowCaster,
                         beacon(0.95),
@@ -151,7 +152,7 @@ pub fn draw(
             under,
             (
                 Mesh3d(meshes.add(Plane3d::default().mesh().size(w, d))),
-                MeshMaterial3d(materials.add(translucent(lit, 0.3))),
+                MeshMaterial3d(materials.standard.add(translucent(lit, 0.3))),
                 Transform::from_xyz(cx, floor + 0.04, cz),
                 bevy::pbr::NotShadowCaster,
                 Beacon {
@@ -176,7 +177,7 @@ pub fn draw(
                 under,
                 (
                     Mesh3d(meshes.add(Cylinder::new(r, 7.0).mesh().resolution(20).build())),
-                    MeshMaterial3d(materials.add(translucent(lit, 0.12))),
+                    MeshMaterial3d(materials.standard.add(translucent(lit, 0.12))),
                     Transform::from_xyz(cx, floor + 3.5, cz),
                     bevy::pbr::NotShadowCaster,
                     Beacon {
@@ -203,7 +204,7 @@ pub fn draw(
                 under,
                 (
                     Mesh3d(meshes.add(Sphere::new(0.38).mesh().ico(3).unwrap())),
-                    MeshMaterial3d(materials.add(translucent(lit, 0.95))),
+                    MeshMaterial3d(materials.standard.add(translucent(lit, 0.95))),
                     Transform::from_translation(top),
                     bevy::pbr::NotShadowCaster,
                     Beacon {
@@ -220,7 +221,7 @@ pub fn draw(
     }
 
     // Vines: a few strands down the face each one climbs.
-    let vine = materials.add(StandardMaterial {
+    let vine = materials.standard.add(StandardMaterial {
         base_color: {
             let c = linear(palette.vine());
             Color::linear_rgb(c[0], c[1], c[2])
@@ -316,7 +317,7 @@ pub fn draw(
             under,
             (
                 Mesh3d(meshes.add(Cylinder::new(fx(v.radius), h).mesh().resolution(24).build())),
-                MeshMaterial3d(materials.add(translucent(draft, 0.10))),
+                MeshMaterial3d(materials.standard.add(translucent(draft, 0.10))),
                 Transform::from_xyz(x, floor + h * 0.5, z),
                 bevy::pbr::NotShadowCaster,
             ),
@@ -326,7 +327,7 @@ pub fn draw(
             under,
             (
                 Mesh3d(meshes.add(Annulus::new(fx(v.radius) * 0.8, fx(v.radius)))),
-                MeshMaterial3d(materials.add(translucent(draft, 0.35))),
+                MeshMaterial3d(materials.standard.add(translucent(draft, 0.35))),
                 Transform::from_xyz(x, floor + 0.05, z)
                     .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
                 bevy::pbr::NotShadowCaster,
