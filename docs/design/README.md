@@ -169,7 +169,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
 | [forms.md](forms.md) | **Forms**: the collision box stays the truth and the form is drawn inside it -- rounded fighters and creature parts, rocks and the Elementalist's stones pulled inward by noise, soft earth, dressed stone chamfered; and **relief**, four arenas' floors with hills and hollows the simulation stands on | Three passes built 2026-10-08, unplayed |
 | [sound.md](sound.md) | **Sound, derived**: a sound is an excitation shaped by a resonator, and the simulation's own numbers decide both -- a blow's weight is its impact freeze, a telegraph is as long as its startup, a footfall is the floor's material, a struck thing rings by its size. Nothing recorded; a sheet of every sound in a second; one frame sounded once under rollback | **Built 2026-10-08**, unheard |
-| [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness | **Built 2026-10-08** |
+| [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness. Online, the tape keeps the link a second at a time, and the judgement says where a match got laggy and why (§6) | **Built 2026-10-08**, link 2026-10-10 |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -345,7 +345,8 @@ decision, and belongs in a test.
    [web.md](web.md), and `?hunt=<creature>` opens any fight. **Since 2026-10-08 a played
    fight can reach the harness**: `Y` saves it as a replay, and
    `cargo run -p hunt --bin replay` judges it with the creature's own report
-   ([replays.md](replays.md)). Send the file.
+   ([replays.md](replays.md)). Send the file. Online, if it got laggy, **both** of you
+   press `Y`: the replay's link section says where and whether it was the line or a machine.
 4. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is whether the
    4-frame parry window is findable by a human. **It has a chime now** ([sound.md](sound.md),
    2026-10-08): the whole voice is derived and nobody has heard it, and sound.md §7 is the

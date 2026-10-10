@@ -135,3 +135,76 @@ fn a_taped_walk_through_the_valley_reports_its_places() {
     assert_eq!(legs[1].arena, sim::arena::ArenaId::MOUTH);
     assert!(judged.render(&back, false).contains("THE VALLEY"));
 }
+
+/// Two fighters on the floor, metres apart.
+fn apart(w: &World) -> f32 {
+    let d = w.players[0].pos.sub(w.players[1].pos);
+    sim::math::wide_len(sim::V3::new(d.x, sim::Fx::ZERO, d.z)).to_f32_for_render()
+}
+
+#[test]
+fn the_link_is_laid_beside_how_far_apart_the_fighters_were() {
+    // Two people online in the valley walk away from each other. The line
+    // stays quick, but once they are past forty metres this machine waits
+    // on the other one: the friend's machine falling behind, out there.
+    let mut w = World::versus_in([Class::Champion, Class::Elementalist], sim::valley::START);
+    let mut tape = Tape::begin(&w, "test");
+    tape.online = Some((0, 0));
+    let (out, back) = (
+        Input::aimed(Input::W, 0),
+        Input::aimed(Input::W, 2 * Input::QUARTER_TURN),
+    );
+    let mut far = 0;
+    for f in 0..2_400 {
+        // Twenty seconds side by side, then away from each other.
+        let inputs = if f < 1_200 {
+            [Input::default(); MAX_PLAYERS]
+        } else {
+            [out, back]
+        };
+        tape.record(w.frame, inputs);
+        w.advance(inputs);
+        if f % 60 == 59 {
+            let distant = apart(&w) > 40.0;
+            far += u32::from(distant);
+            tape.measure(sim::replay::Link {
+                frame: w.frame,
+                ping: 40,
+                rollbacks: 3,
+                resimulated: 9,
+                deepest: 4,
+                stalls: if distant { 25 } else { 0 },
+                slowest: 17,
+                ..Default::default()
+            });
+        }
+    }
+    tape.finish(&w);
+    assert!(far >= 10, "they never got far apart: {} m", apart(&w));
+    assert!(far <= 30, "they were never close: {far} s apart");
+    let back = Tape::from_text(&tape.to_text()).expect("the tape parses");
+    let judged = hunt::replay::judge(&back).expect("the start rebuilds");
+    assert_eq!(judged.matched, Some(true));
+    assert_eq!(judged.lag.seconds.len(), 40);
+    let text = judged.render(&back, false);
+    assert!(text.contains("THE LINK  as player 1's machine"), "{text}");
+    assert!(text.contains("ROUGH STRETCHES"), "{text}");
+    assert!(text.contains("waiting on the friend's machine"), "{text}");
+    assert!(text.contains("falling behind"), "{text}");
+}
+
+#[test]
+fn a_tape_with_no_link_still_says_what_the_simulation_costs_apart() {
+    let w = World::versus_in([Class::Champion, Class::Elementalist], sim::valley::START);
+    let mut tape = Tape::begin(&w, "test");
+    let mut w = w;
+    for _ in 0..300 {
+        let inputs = [Input::aimed(Input::W, 0), Input::default()];
+        tape.record(w.frame, inputs);
+        w.advance(inputs);
+    }
+    let judged = hunt::replay::judge(&tape).expect("the start rebuilds");
+    let text = judged.render(&tape, false);
+    assert!(text.contains("THE LINK  not on this tape"), "{text}");
+    assert!(text.contains("BY DISTANCE APART"), "{text}");
+}

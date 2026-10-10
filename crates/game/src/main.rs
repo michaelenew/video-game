@@ -3912,6 +3912,7 @@ fn tick_sim(
         }
         record_round_end(&mut sim);
     } else {
+        online::drawn(&mut sim, real.delta());
         let ticks = sim.clock.advance(time.delta_secs());
         let ticks = online::pace(&mut sim, ticks);
         for _ in 0..ticks {

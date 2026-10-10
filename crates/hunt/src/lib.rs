@@ -31,6 +31,7 @@
 
 pub mod class;
 pub mod duel;
+pub mod link;
 pub mod plans;
 pub mod replay;
 pub mod report;

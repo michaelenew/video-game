@@ -22,6 +22,13 @@
 //! mouse moving. A ten-minute hunt is about a megabyte; a minute of versus a
 //! hundred kilobytes.
 //!
+//! **Online, a tape also keeps the link** ([`Link`]): one `net` line a
+//! second of how the connection and this machine were doing -- the ping, the
+//! rollbacks, the frames spent waiting for the friend, the slowest frame --
+//! so "it got laggy over there" can be found on the tape and put beside
+//! where the two of you were. None of it is needed to rebuild the fight;
+//! it is what the fight felt like from one side of the line.
+//!
 //! Nothing here runs inside a frame. Recording is the game's business
 //! (`crates/game`), and it records *into* a `Vec` that grows -- which is why
 //! this is the one module of `sim` that allocates, and why it is read by the
@@ -34,8 +41,9 @@ use crate::species::{self, SpeciesId};
 use crate::state::MAX_PLAYERS;
 use crate::{Class, World};
 
-/// The format's version, the first line of every tape.
-pub const VERSION: u32 = 1;
+/// The format's version, the first line of every tape. Two added the link's
+/// `online` and `net` lines; a version one tape still reads, with no link.
+pub const VERSION: u32 = 2;
 
 /// A fight as the settings that start it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -188,6 +196,95 @@ pub enum Event {
     Seats(u8),
 }
 
+/// **One second of a match against a person, as this machine saw it.** The
+/// game fills one in as it plays (`crates/game/src/online.rs`) and puts it on
+/// the tape when the second is up; `hunt --bin replay` lays them beside where
+/// the fighters were. Counts are over the second; the rest are as they stood
+/// at its end, or the worst of it where it says so.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Link {
+    /// The world's frame when the second was up.
+    pub frame: u32,
+    /// The round trip to the friend's machine, in milliseconds.
+    pub ping: u32,
+    /// Frames this machine was ahead of the friend's (negative: behind).
+    pub ahead: i32,
+    /// Rollbacks: a frame reloaded because a guess about the friend was wrong.
+    pub rollbacks: u32,
+    /// Frames simulated again by them.
+    pub resimulated: u32,
+    /// The longest of them, in frames.
+    pub deepest: u32,
+    /// Ticks not played because the friend's inputs were too far behind --
+    /// the game standing still waiting, which is what lag feels like.
+    pub stalls: u32,
+    /// Ticks held back on purpose for being ahead (`online::pace`).
+    pub held: u32,
+    /// The longest frame this machine drew, wall clock, in milliseconds.
+    pub slowest: u32,
+    /// The most time one tick spent simulating -- rollback and all -- in
+    /// microseconds.
+    pub sim_us: u32,
+    /// Packets sent and not yet acknowledged, and the bandwidth sent.
+    pub queue: u32,
+    pub kbps: u32,
+    /// The friend's game went silent at some point in the second.
+    pub quiet: bool,
+}
+
+impl Link {
+    /// `net <frame> ping=… ahead=…`: named, so a reader can skip a word it
+    /// does not know and a person can read the line.
+    fn to_line(self) -> String {
+        format!(
+            "net {} ping={} ahead={} rollbacks={} resimulated={} deepest={} stalls={} held={} slowest={} sim={} queue={} kbps={} quiet={}",
+            self.frame,
+            self.ping,
+            self.ahead,
+            self.rollbacks,
+            self.resimulated,
+            self.deepest,
+            self.stalls,
+            self.held,
+            self.slowest,
+            self.sim_us,
+            self.queue,
+            self.kbps,
+            u8::from(self.quiet)
+        )
+    }
+
+    fn parse(rest: &str) -> Option<Link> {
+        let mut words = rest.split_whitespace();
+        let mut link = Link {
+            frame: words.next()?.parse().ok()?,
+            ..Link::default()
+        };
+        for word in words {
+            let Some((key, value)) = word.split_once('=') else {
+                continue;
+            };
+            let n = || value.parse::<u32>().ok();
+            match key {
+                "ping" => link.ping = n()?,
+                "ahead" => link.ahead = value.parse().ok()?,
+                "rollbacks" => link.rollbacks = n()?,
+                "resimulated" => link.resimulated = n()?,
+                "deepest" => link.deepest = n()?,
+                "stalls" => link.stalls = n()?,
+                "held" => link.held = n()?,
+                "slowest" => link.slowest = n()?,
+                "sim" => link.sim_us = n()?,
+                "queue" => link.queue = n()?,
+                "kbps" => link.kbps = n()?,
+                "quiet" => link.quiet = value != "0",
+                _ => {}
+            }
+        }
+        Some(link)
+    }
+}
+
 /// A fight, recorded: where it started and what was pressed.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tape {
@@ -209,6 +306,10 @@ pub struct Tape {
     pub events: Vec<(u32, Event)>,
     /// The frame and `state_checksum` the fight ended on, once finished.
     pub end: Option<(u32, u64)>,
+    /// Against a person: which seat this machine played and its input
+    /// delay, and the link a second at a time. `None` and empty offline.
+    pub online: Option<(u8, u8)>,
+    pub link: Vec<Link>,
 }
 
 /// About twenty minutes at 60 Hz: what a tape holds before it grows.
@@ -226,6 +327,8 @@ impl Tape {
             frames: Vec::with_capacity(RESERVED),
             events: Vec::new(),
             end: None,
+            online: None,
+            link: Vec::new(),
         }
     }
 
@@ -251,6 +354,7 @@ impl Tape {
         let keep = frame.saturating_sub(self.first_frame) as usize;
         self.frames.truncate(keep);
         self.events.retain(|(f, _)| (*f as usize) < keep);
+        self.link.retain(|l| l.frame <= frame);
         self.end = None;
     }
 
@@ -259,6 +363,11 @@ impl Tape {
         if let Some(i) = frame.checked_sub(self.first_frame) {
             self.events.push((i, event));
         }
+    }
+
+    /// A second of the link is up: keep it.
+    pub fn measure(&mut self, link: Link) {
+        self.link.push(link);
     }
 
     /// Where the fight stands now, for the end line.
@@ -350,6 +459,9 @@ impl Tape {
             "world {} {:016x}\n",
             self.first_frame, self.start_hash
         ));
+        if let Some((seat, delay)) = self.online {
+            out.push_str(&format!("online seat={} delay={delay}\n", seat + 1));
+        }
         let mut events = self.events.iter().peekable();
         let mut i = 0;
         while i < self.frames.len() {
@@ -383,6 +495,17 @@ impl Tape {
                 Event::Seats(n) => out.push_str(&format!("@{at} seats {n}\n")),
             }
         }
+        if !self.link.is_empty() {
+            out.push_str(
+                "# The link, a second at a time, as this machine saw it: ping in ms, frames ahead of the\n\
+                 # friend, rollbacks and the frames they replayed, ticks stalled waiting and held back,\n\
+                 # the slowest frame drawn (ms), the most one tick simulated (us).\n",
+            );
+            for link in &self.link {
+                out.push_str(&link.to_line());
+                out.push('\n');
+            }
+        }
         if let Some((frame, hash)) = self.end {
             out.push_str(&format!("end {frame} {hash:016x}\n"));
         }
@@ -399,6 +522,8 @@ impl Tape {
             frames: Vec::new(),
             events: Vec::new(),
             end: None,
+            online: None,
+            link: Vec::new(),
         };
         let mut lines = text.lines().enumerate();
         let mut versioned = false;
@@ -430,12 +555,29 @@ impl Tape {
                         .trim()
                         .parse()
                         .map_err(|_| format!("{}: bad version", at()))?;
-                    if v != VERSION {
-                        return Err(format!("replay format {v}; this build reads {VERSION}"));
+                    if !(1..=VERSION).contains(&v) {
+                        return Err(format!(
+                            "replay format {v}; this build reads 1 to {VERSION}"
+                        ));
                     }
                     versioned = true;
                 }
                 "build" => tape.build = rest.trim().to_string(),
+                "online" => {
+                    let mut seat = 1;
+                    let mut delay = 0;
+                    for word in rest.split_whitespace() {
+                        match word.split_once('=') {
+                            Some(("seat", v)) => seat = v.parse().unwrap_or(1),
+                            Some(("delay", v)) => delay = v.parse().unwrap_or(0),
+                            _ => {}
+                        }
+                    }
+                    tape.online = Some((u8::max(seat, 1) - 1, delay));
+                }
+                "net" => tape
+                    .link
+                    .push(Link::parse(rest).ok_or_else(|| format!("{}: bad net line", at()))?),
                 "tuning" => {
                     tape.tuning = hex(rest.trim()).ok_or_else(|| format!("{}: bad tuning", at()))?
                 }
@@ -556,6 +698,51 @@ mod tests {
         let text = tape.to_text();
         let back = Tape::from_text(&text).expect("parses");
         assert_eq!(back, tape);
+    }
+
+    #[test]
+    fn the_link_round_trips_and_a_first_version_tape_still_reads() {
+        let w = World::with_classes([Class::Champion, Class::Bulwark]);
+        let mut tape = Tape::begin(&w, "test");
+        tape.online = Some((1, 2));
+        let mut w = w;
+        for (i, inputs) in script(130, 3).into_iter().enumerate() {
+            tape.record(w.frame, inputs);
+            w.advance(inputs);
+            if i % 60 == 59 {
+                tape.measure(Link {
+                    frame: w.frame,
+                    ping: 84,
+                    ahead: -2,
+                    rollbacks: 9,
+                    resimulated: 31,
+                    deepest: 6,
+                    stalls: 4,
+                    held: 1,
+                    slowest: 71,
+                    sim_us: 412,
+                    queue: 5,
+                    kbps: 12,
+                    quiet: i > 100,
+                });
+            }
+        }
+        tape.finish(&w);
+        let text = tape.to_text();
+        assert!(text.contains("\nonline seat=2 delay=2\n"), "{text}");
+        assert!(text.contains("\nnet 60 ping=84 ahead=-2 "), "{text}");
+        let back = Tape::from_text(&text).expect("parses");
+        assert_eq!(back, tape);
+        // The same fight without its link, as the first version wrote it.
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("net ") && !l.starts_with("online "))
+            .map(|l| if l == "replay 2" { "replay 1" } else { l })
+            .flat_map(|l| [l, "\n"])
+            .collect();
+        let old = Tape::from_text(&old).expect("a version one tape reads");
+        assert_eq!(old.frames, tape.frames);
+        assert!(old.link.is_empty() && old.online.is_none());
     }
 
     #[test]

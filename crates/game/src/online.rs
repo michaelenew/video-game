@@ -70,8 +70,31 @@ pub enum Driver {
         /// The friend's game has gone quiet for a moment: loading an arena,
         /// say, or in a window the system has stopped drawing.
         quiet: bool,
+        /// This second of the link, being counted; see [`Meter`].
+        meter: Meter,
     },
 }
+
+/// **The link, counted a second at a time**, onto the tape
+/// (`sim::replay::Link`), so a match that felt laggy says on its replay where
+/// and why: the line (ping), the friend's machine (stalls while this one ran
+/// smoothly), or this one (a slow frame). See `docs/design/replays.md` §6.
+#[derive(Default)]
+pub struct Meter {
+    now: sim::replay::Link,
+    /// The frame the second began on.
+    since: u32,
+}
+
+impl Meter {
+    /// A frame drawn, and how long it took on the wall clock.
+    pub fn drawn(&mut self, wall: std::time::Duration) {
+        self.now.slowest = self.now.slowest.max(wall.as_millis() as u32);
+    }
+}
+
+/// The world's frames in a second of the link.
+const SECOND: u32 = sim::TICK_HZ;
 
 impl Driver {
     /// Which fighter this client drives. Online it is the GGRS handle; locally
@@ -347,6 +370,7 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                     // The match is a new fight from an agreed start, and so
                     // is its replay.
                     sim.tape = sim::replay::Tape::begin(&start, crate::build());
+                    sim.tape.online = Some((handle as u8, delay as u8));
                     sim.cur = start;
                     sim.paused = false;
                     sim.rehearsing = None;
@@ -358,6 +382,10 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                         room,
                         paced: 0,
                         quiet: false,
+                        meter: Meter {
+                            since: sim.cur.frame,
+                            ..Meter::default()
+                        },
                     }
                 }
                 Err(e) => Driver::Alone {
@@ -389,7 +417,13 @@ pub fn announce(sim: bevy::prelude::Res<crate::Sim>, mut last: bevy::prelude::Lo
 /// [`PACE_EVERY`] frames: about a tenth slower, for as long as it is ahead,
 /// which is too little to see and closes a frame's gap in under a second.
 pub fn pace(sim: &mut crate::Sim, ticks: u32) -> u32 {
-    let Driver::Online { session, paced, .. } = &mut sim.driver else {
+    let Driver::Online {
+        session,
+        paced,
+        meter,
+        ..
+    } = &mut sim.driver
+    else {
         return ticks;
     };
     if ticks == 0 {
@@ -405,6 +439,7 @@ pub fn pace(sim: &mut crate::Sim, ticks: u32) -> u32 {
     };
     if session.frames_ahead() > 0 && *paced >= every {
         *paced = 0;
+        meter.now.held += 1;
         return ticks - 1;
     }
     ticks
@@ -433,6 +468,7 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
         desynced,
         gone,
         quiet,
+        meter,
         ..
     } = driver
     else {
@@ -464,6 +500,7 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
             _ => {}
         }
     }
+    meter.now.quiet |= *quiet;
 
     if session.current_state() != net::ggrs::SessionState::Running {
         return;
@@ -474,12 +511,30 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
         .is_err()
     {
         // Too far ahead of the peer. Waiting is the correct response.
+        meter.now.stalls += 1;
         return;
     }
 
     let was = cur.clone();
     match session.advance_frame() {
         Ok(requests) => {
+            // A rollback is a load and then every frame since played again;
+            // the last advance is the new frame, the rest are the replay.
+            let loads = requests
+                .iter()
+                .filter(|r| matches!(r, net::ggrs::GgrsRequest::LoadGameState { .. }))
+                .count() as u32;
+            if loads > 0 {
+                let advances = requests
+                    .iter()
+                    .filter(|r| matches!(r, net::ggrs::GgrsRequest::AdvanceFrame { .. }))
+                    .count() as u32;
+                let again = advances.saturating_sub(1);
+                meter.now.rollbacks += loads;
+                meter.now.resimulated += again;
+                meter.now.deepest = meter.now.deepest.max(again);
+            }
+            let began = bevy::platform::time::Instant::now();
             // Every frame advanced goes on the tape by its frame number, so
             // a rollback's re-advance overwrites the prediction with what the
             // other player really pressed.
@@ -488,9 +543,30 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
                 // And sounded, the first time each frame is simulated.
                 scape.observe(before, after);
             });
+            meter.now.sim_us = meter.now.sim_us.max(began.elapsed().as_micros() as u32);
             *prev = was;
         }
-        Err(net::ggrs::GgrsError::PredictionThreshold) => {}
+        Err(net::ggrs::GgrsError::PredictionThreshold) => meter.now.stalls += 1,
         Err(e) => eprintln!("advance failed: {e}"),
+    }
+
+    // A second is up: what the line looks like now, and the second's counts.
+    if cur.frame >= meter.since + SECOND {
+        if let Ok(stats) = session.network_stats(1 - *handle) {
+            meter.now.ping = stats.ping as u32;
+            meter.now.queue = stats.send_queue_len as u32;
+            meter.now.kbps = stats.kbps_sent as u32;
+        }
+        meter.now.ahead = session.frames_ahead();
+        meter.now.frame = cur.frame;
+        tape.measure(std::mem::take(&mut meter.now));
+        meter.since = cur.frame;
+    }
+}
+
+/// A frame was drawn online: how long it took, for the link's record.
+pub fn drawn(sim: &mut crate::Sim, wall: std::time::Duration) {
+    if let Driver::Online { meter, .. } = &mut sim.driver {
+        meter.drawn(wall);
     }
 }
