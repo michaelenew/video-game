@@ -69,10 +69,15 @@ fn every_class_plays_its_own_kit_against_a_creature() {
         blood.blinks > 0,
         "the Blood mage never blinked to a pool: {blood:?}"
     );
+    // Since 2026-10-09 every spell of hers has its own force, and the plans
+    // already throw the low side's auto, so the layer seldom has to turn a
+    // hand: what shows it working is the goading between openings and the
+    // majors thrown into the windows (`the_dual_mage_never_ascends_on_a_hunt`
+    // holds the other half -- that it stops short of the wings).
     let dual = uses(Class::DualMage, SpeciesId::RIDGEBACK, 6_000);
     assert!(
-        dual.turned > 0 && dual.goads > 0,
-        "the Dual mage never kept her hands level: {dual:?}"
+        dual.goads > 0 && dual.finishers > 0,
+        "the Dual mage never goaded her bars or threw a major: {dual:?}"
     );
     let bulwark = uses(Class::Bulwark, SpeciesId::HORNBACK, 6_000);
     assert!(

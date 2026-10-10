@@ -382,6 +382,12 @@ pub struct Shadow {
     /// held through a short dash would otherwise throw a second dodge on the
     /// frame she lands. See `shadow::shift_spent`.
     pub shift_spent: bool,
+    /// Frames a shadow hung in the air (`Hang the shadow`) waits there before
+    /// it sinks. Zero for a shadow standing on the floor.
+    pub hang: u16,
+    /// The height of the floor under it: where a hung shadow sinks to.
+    /// `Fx::MAX` for a shadow that was put on the floor, which never sinks.
+    pub rest: Fx,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -428,6 +434,8 @@ impl Shadow {
             jump_banked: false,
             refused: 0,
             shift_spent: false,
+            hang: 0,
+            rest: Fx::MAX,
         }
     }
 

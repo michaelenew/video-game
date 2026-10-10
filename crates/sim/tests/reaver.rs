@@ -19,7 +19,8 @@ use sim::state::{Action, SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL}
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
-const E: u16 = Input::MECHANIC;
+/// Middle click: the execution (2026-10-09), where Executioner moved to.
+const M: u16 = Input::MIDDLE;
 const L: u16 = Input::LEFT;
 /// Right click, which on this class sends the shadow -- it is the half of the
 /// kit the crosshair aims, and the mouse is where aiming lives.
@@ -996,8 +997,8 @@ fn the_lotus_cuts_the_creature_a_couple_of_times_a_pass_not_twelve() {
 //
 // The two are swapped against every other class, and the swap is the point:
 // **the mouse means where.** Sending the shadow is the only thing in this kit
-// the crosshair aims, so it is on the mouse; Executioner is a swing off the
-// body and does not care, so it is on the key.
+// the crosshair aims, so it is on the mouse. Executioner was on the key until
+// the three clicks (2026-10-09) gave it middle click, the execution's column.
 
 #[test]
 fn right_click_sends_the_shadow() {
@@ -1011,16 +1012,16 @@ fn right_click_sends_the_shadow() {
 }
 
 #[test]
-fn the_mechanic_key_throws_her_committed_melee() {
-    // The one class where `E` carries a move that is not the mechanic. Worth a
-    // test rather than a comment: `on_e` is the only thing that says so, and it
-    // is one word away from being the slot everybody else puts there.
+fn middle_click_throws_her_committed_melee() {
+    // Executioner was on `E` from 2026-09 until the three clicks (2026-10-09),
+    // which put it on middle click with the execution and left `E` to
+    // Deadly mistake.
     let mut w = duel();
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, M, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_COMMITTED),
-        "`E` did not throw Executioner"
+        "middle click did not throw Executioner"
     );
 }
 
@@ -1089,11 +1090,11 @@ fn right_click_cuts_a_recovery_short() {
     let mut w = duel();
     // Executioner is the longest commitment in the kit -- sixteen frames of
     // wind-up, four of blade, and twenty-six of standing there afterwards.
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, M, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_COMMITTED),
-        "`E` did not throw Executioner"
+        "middle click did not throw Executioner"
     );
     let left = run_to_recovery(&mut w);
     assert!(
@@ -1125,7 +1126,7 @@ fn right_click_does_not_cut_a_startup_short() {
     // not the decision. A cancel that reached back into the startup would let
     // her take a committed swing back after throwing it.
     let mut w = duel();
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, M, 0);
     assert!(
         matches!(w.players[0].action, Action::Startup { .. }),
         "Executioner should still be winding up two frames in"
@@ -1235,7 +1236,7 @@ fn a_press_thrown_alongside_any_of_her_moves_still_comes_out() {
     // arithmetic.
     for (name, bits, slot) in [
         ("Slash", L, SLOT_POKE),
-        ("Executioner", E, SLOT_COMMITTED),
+        ("Executioner", M, SLOT_COMMITTED),
         ("Guillotine", Q, SLOT_SPECIAL),
     ] {
         let mut w = duel();

@@ -494,7 +494,7 @@ same job on every class.
 | --- | --- |
 | **Unmodified `L`/`R`** | Autos. The neutral vocabulary, roughly shared across classes. |
 | **`Q` and `E`** | The class special and the class mechanic. This is where identity lives, and it is different on every class. |
-| **Unmodified `M`** | The third click. The Champion's hammer; the Dual mage's Lance, where "no side" is the point. |
+| **Unmodified `M`** | The third click. The Champion's hammer; the Dual mage's twilight — both forces at once, where "no side" is the point (her Lance until 2026-10-09; see [kits/dual-mage.md](kits/dual-mage.md) §"Every move a spell"). |
 | **Direction + click** | Basic moves. A shared vocabulary — roughly the same shapes on every class. The two casters are the exception. |
 | ~~**Shift + click**~~ | ~~The six-ability kit.~~ **Retired 2026-09-16.** Shift is one verb — see [Shift is one verb now](#shift-is-one-verb-now-2026-09-16). Where the six-ability kit goes instead is open. |
 | **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
@@ -873,48 +873,57 @@ three rows of three is as much as one class should ask a player to hold.
 
 ## Bulwark
 
-Current as of 2026-09-23, and the five rows marked **bound** are what the game does. This
-table read `M` for the mechanic and `shift` + click for the whole kit until then, which was
-the pre-2026-09-11 scheme rather than anything in the game.
+Current as of 2026-10-10: **on three clicks** — the strike, the weight and the guard, each
+with a floor move, an aerial and a jump attack. The design is
+[exploration/0012](exploration/0012_bulwark_on_three_clicks.md). Built and unplayed. With him,
+no class is on the shared grammar any more.
+
+| | Left: the strike | Middle: the weight | Right: the guard |
+| --- | --- | --- | --- |
+| **On foot** | Bash | Slam | Guard / parry (held) |
+| **In the air** | Rebound — bounces him off what it meets | Slam — waits for the floor | Sail — the guard held, falling slowly |
+| **`space` + click** | Battering ram — low leap, carries them | Unload — the weight spent on height | Shield step — planted where he stands, and a spring off its top |
 
 | Input | Result |
 | --- | --- |
-| `L` | **Bash** — the shield strike, and the safe poke. **Bound** |
-| `M` | **Slam** — the shield driven into the ground, spending its weight. A crouch does not duck the shake. Thrown in the air it lands with the feet. **Bound** since 2026-09-23; it had no input from 2026-09-16 |
-| `Q` | **Grapple** — the command grab, and the answer to a turtle. **Bound** |
-| `R` (hold) | **Guard.** Opening frames are the parry, and it is the mechanic that gates it rather than the button: `R` guards while the shield is in hand and does nothing while it is not. **Bound** |
-| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight — and the shield turns to meet the leap, so he arrives with it in hand. One key, three states, no frames — the mechanic fires on the press. **Bound** |
-| direction + `L` | Basic moves |
-| `LR` | Reserved — the candidate slot for a dedicated ally-cover stance |
+| `Q` | **Grapple** — the command grab, and the answer to a turtle |
+| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight. One key, three states, no frames |
 
 Shield position lives on `E`, so the whole three-state mechanic is one key with context —
 which is the ordinary arrangement rather than an exception: the shield is a state to change,
 and changing it is free. Guard on the right button matches every game where alt-fire is the
 defensive option. There is no separate off-hand auto: `L` is the shield itself.
 
-> **The auto and the committed slot are one rung lower than this table used to show.** Bash is
-> left click rather than `shift` + left, because the shared grammar gives every class a poke on
-> the bare click. Slam was `shift` + left until shift stopped modifying clicks, and is the third
-> click now. What the class does *not* have yet is the sixth ability the kit
-> document specifies — see [kits/bulwark.md](kits/bulwark.md).
+> Slam was `shift` + left until shift stopped modifying clicks (2026-09-16), had no input
+> until it took the free middle click (2026-09-23), and is the middle column's floor move on the
+> three clicks.
 
 ## Shadow Reaver
 
-Current as of 2026-09-14, and the four rows marked **bound** are what the game does.
+Current as of 2026-10-09: **on three clicks**, the grid every class has been moving to — the
+blade, the execution and the shadow, each with a floor move, an aerial and a jump attack. The
+design is [exploration/0011](exploration/0011_shadow_reaver_on_three_clicks.md). Built and
+unplayed.
 
 A half-caster. Click abilities should feel like real melee — strong individually rather than
 combo-dependent — and the shadow abilities should reward being close and fast.
 
+| | Left: the blade | Middle: the execution | Right: the shadow |
+| --- | --- | --- | --- |
+| **On foot** | Slash | Executioner | Send / recall |
+| **In the air** | Kite cut — a hit on a marked body gives the airdodge back | Guillotine drop — straight down, spikes | Swap — trade places with the waiting shadow (the send, if it is with her) |
+| **`space` + click** | Moonsault — back flip, launches | Gallows — blink up, hang, plunge | Hang the shadow — in the air, then it sinks |
+
 | Input | Result |
 | --- | --- |
-| `L` | **Slash** — the melee auto. The shadow throws it too, a beat later, for a quarter. **Bound** |
-| `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. Cuts any recovery short, and the press is remembered for a few frames rather than dropped. **Bound** |
-| `Q` | **Guillotine lotus** — twelve blades out of the shadow, held open, then chasing it home. **Bound** |
-| `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
-| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
-| `space`, in the dash's last frames | **The dash jump.** Pressed before she lands on the shadow, it launches her the frame she arrives with the dash's whole speed. A press after landing is an ordinary jump: she is free the moment she lands (2026-10-04) |
+| `Q` | **Guillotine lotus** — blades out of the shadow, held open, then chasing it home |
+| `E` | **Deadly mistake** — a counter stance: struck by a fighter, she is behind them and the shadow is left where she stood |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Airborne, it is the airdodge that does it, and it spends the airdodge |
+| `space`, in the dash's last frames | **The dash jump.** It launches her the frame she arrives with the dash's whole speed |
 | `shift` + forward, anywhere else | The ordinary dodge |
-| — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
+
+Right click still cuts any recovery short and is still remembered for a few frames — what
+follows is that rule's history, and it holds for the swap and the hang as well as the send.
 
 **The mechanic is on the mouse and the melee is on the key.** That is the whole of what is
 unusual here, and it reads as an exception to the grammar when it is the opposite — it is
@@ -954,9 +963,9 @@ Executioner goes from −12 to about −5 and stays a punish. What is *pinned* i
 a blocked commitment safe, so the two frame counts can be tuned and the rule cannot be lost.
 
 Executioner does not care where anything is — it is a swing off the body, yaw from the facing
-and pitch from the camera — so it can live on a key, and it does. Four of the six classes get
-the ordinary arrangement for free by having a mechanic with nothing to aim; this one had to be
-told.
+and pitch from the camera — so it could live on a key, and from 2026-09-14 to 2026-10-09 it
+did. The three clicks moved it to middle click, the execution's column, and gave `E` to Deadly
+mistake, which had waited a month for a button.
 
 It was the other way round for a day, with Executioner on right click and the shadow on `E`,
 and the argument against that is not on paper: placing something with the hand that is not

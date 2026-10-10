@@ -313,15 +313,28 @@ pub fn steer(p: &mut Player, kind: u8) {
     // Three tiers of push, and the order of the arms is the order of the
     // commitment. An auto is the unit the bars are measured in, and it also
     // *sets* which force she is carrying.
-    let (push, colour) = match crate::moves::dual::force(kind) {
-        Some(thrown) => (t::meter_auto_push(), thrown),
-        None if crate::moves::dual::is_the_finisher(kind) => (t::meter_finisher_push(), colour),
-        None => (t::meter_cast_push(), colour),
+    // **Every move has a force now** (2026-10-09): the left column and `Q`
+    // are dark, the right column and `E` light, and the middle column is
+    // twilight -- both at once, each bar by an auto's push, so it never
+    // widens the gap. An auto is the unit; any other spell a cast; a major
+    // the finisher's push. The force thrown is the one she is carrying after;
+    // twilight leaves that as it was.
+    let push = if crate::moves::dual::is_an_auto(kind) {
+        t::meter_auto_push()
+    } else if crate::moves::dual::is_the_finisher(kind) {
+        t::meter_finisher_push()
+    } else {
+        t::meter_cast_push()
     };
-    let goad = |bar: Fx| bar.add(Fx::from_int(push)).min(top());
-    let (dark, light) = match colour {
-        Force::Dark => (goad(dark), light),
-        Force::Light => (dark, goad(light)),
+    let goad = |bar: Fx, by: i32| bar.add(Fx::from_int(by)).min(top());
+    let (dark, light, colour) = match crate::moves::dual::force(kind) {
+        Some(Force::Dark) => (goad(dark, push), light, Force::Dark),
+        Some(Force::Light) => (dark, goad(light, push), Force::Light),
+        None => (
+            goad(dark, t::meter_auto_push()),
+            goad(light, t::meter_auto_push()),
+            colour,
+        ),
     };
     p.mechanic = Mechanic::Meter {
         dark,
@@ -366,10 +379,14 @@ pub fn depth_at(p: &Player, kind: Option<u8>) -> Fx {
     if ascending > 0 {
         return t::depth_ceiling();
     }
-    let force = kind.and_then(crate::moves::dual::force).unwrap_or(colour);
-    let bar = match force {
-        Force::Dark => dark,
-        Force::Light => light,
+    // A twilight move is both forces at once, and is worth her lower bar:
+    // the balance is what it spends.
+    let bar = match kind {
+        Some(kind) if crate::moves::dual::twilight(kind) => dark.min(light),
+        _ => match kind.and_then(crate::moves::dual::force).unwrap_or(colour) {
+            Force::Dark => dark,
+            Force::Light => light,
+        },
     };
     let out = bar.div(top()).clamp(Fx::ZERO, Fx::ONE);
     crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
@@ -465,4 +482,77 @@ pub fn dodge_travel(grounded: bool) -> Fx {
         step = step.mul(t::dodge_decay());
     }
     total
+}
+
+// ---------------------------------------------------------------------------
+// The hex, and its two reactions
+// ---------------------------------------------------------------------------
+//
+// Every move a spell (2026-10-09): a dark spell hexes what it hits with
+// Umbra, a light one with Radiance, and the other force on a hexed body sets
+// it off. So the two hands alternating are the combo and the climb at once.
+// See `docs/design/exploration/0010_dual_mage_spells.md`.
+
+/// No hex on a body.
+pub const NO_HEX: u8 = 0;
+/// Umbra: what a dark spell leaves.
+pub const UMBRA: u8 = 1;
+/// Radiance: what a light spell leaves.
+pub const RADIANCE: u8 = 2;
+
+/// What the other force does to a hex.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Reaction {
+    /// Nothing went off: the hex was set, or refreshed.
+    None,
+    /// Light on Umbra: a burst of damage now, and a stagger.
+    Shatter,
+    /// Dark on Radiance: damage drained back to her, and a slow.
+    Wither,
+    /// A twilight spell on a clean body: both, each at half.
+    Both,
+}
+
+/// What a spell of hers does to a body carrying `hex`: the reaction it sets
+/// off, and the hex it leaves there.
+///
+/// The same force again refreshes the hex; the other force sets it off and
+/// it is spent; twilight sets off whichever hex is there, or both at half on
+/// a clean body, and leaves none.
+pub const fn hexed(hex: u8, kind: u8) -> (Reaction, u8) {
+    use crate::class::Force;
+    if crate::moves::dual::twilight(kind) {
+        return match hex {
+            UMBRA => (Reaction::Shatter, NO_HEX),
+            RADIANCE => (Reaction::Wither, NO_HEX),
+            _ => (Reaction::Both, NO_HEX),
+        };
+    }
+    match crate::moves::dual::force(kind) {
+        Some(Force::Dark) if hex == RADIANCE => (Reaction::Wither, NO_HEX),
+        Some(Force::Dark) => (Reaction::None, UMBRA),
+        Some(Force::Light) if hex == UMBRA => (Reaction::Shatter, NO_HEX),
+        Some(Force::Light) => (Reaction::None, RADIANCE),
+        None => (Reaction::None, hex),
+    }
+}
+
+/// How much of each reaction a reaction is: a Shatter's share and a
+/// Wither's. `Both` is half of each.
+pub const fn shares(r: Reaction) -> (Fx, Fx) {
+    match r {
+        Reaction::None => (Fx::ZERO, Fx::ZERO),
+        Reaction::Shatter => (Fx::ONE, Fx::ZERO),
+        Reaction::Wither => (Fx::ZERO, Fx::ONE),
+        Reaction::Both => (
+            Fx::from_raw(Fx::ONE.raw() / 2),
+            Fx::from_raw(Fx::ONE.raw() / 2),
+        ),
+    }
+}
+
+/// How level she is: her lower bar as a share of full, nought to one. What
+/// Equinox's height reads.
+pub fn balance(p: &Player) -> Fx {
+    lower(p).div(top()).clamp(Fx::ZERO, Fx::ONE)
 }

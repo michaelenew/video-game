@@ -205,15 +205,15 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     //
     // The Reaver rather than the Bulwark, whose Slam used to be the overhead
     // here: shift stopped being an attack modifier, so Slam has no input until
-    // somebody finds it a new one. Hers is on `E`, which is a key of its own
-    // and did not move. See `docs/design/controls.md`.
+    // somebody finds it a new one. Hers was on `E` until the three clicks
+    // (2026-10-09) put it on middle click. See `docs/design/controls.md`.
     let reavers = || {
         let mut w = World::with_classes([Class::ShadowReaver, Class::ShadowReaver]);
         run(&mut w, 90, Input::W, 0);
         w
     };
     let mut standing = reavers();
-    run(&mut standing, 50, E, 0);
+    run(&mut standing, 50, Input::MIDDLE, 0);
     assert!(
         standing.players[1].health < standing.players[1].full_health(),
         "setup did not connect while standing"
@@ -227,7 +227,7 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     );
 
     let mut ducked = reavers();
-    run(&mut ducked, 50, E, Input::CROUCH);
+    run(&mut ducked, 50, Input::MIDDLE, Input::CROUCH);
     assert_eq!(
         ducked.players[1].health,
         ducked.players[1].full_health(),
@@ -1267,7 +1267,10 @@ fn an_aerial_slows_the_rise_rather_than_deleting_it() {
     // from under you mid-rise. The control over jump height is worth keeping;
     // it has to arrive as a slowing.
     let mut w = World::new();
-    press(&mut w, Input::SPACE, 1);
+    // Held past the takeoff window: a click in the jump's first frames is a
+    // takeoff on every class now (the Bulwark's since 2026-10-10), not an
+    // aerial.
+    press(&mut w, Input::SPACE, 6);
     let rising = w.players[0].vel.y;
     assert!(rising.raw() > 0, "fixture is not rising");
 
@@ -1299,7 +1302,8 @@ fn an_aerial_slows_the_rise_rather_than_deleting_it() {
 /// as the shove.
 fn airborne_nudge(bits: u16) -> i32 {
     let mut w = World::new();
-    press(&mut w, Input::SPACE, 1);
+    // Past the takeoff window, as above.
+    press(&mut w, Input::SPACE, 6);
     press(&mut w, bits, 1);
     w.players[0].vel.x.raw()
 }

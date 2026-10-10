@@ -592,23 +592,33 @@ impl Duelist {
     }
 }
 
-/// The Dual mage's two bars as they would be after `kind` is thrown: an auto
-/// pushes its own bar, every cast -- the lance included, whatever colour the
-/// table names it -- the bar she is carrying. With the force it pushed.
+/// The Dual mage's two bars as they would be after `kind` is thrown, by
+/// `dual::steer`'s rule since 2026-10-09: every move has its own force and
+/// pushes its own bar -- an auto a little, a cast more, a major most -- and a
+/// twilight move pushes both by an auto's step. With the force she is left
+/// carrying.
 pub(crate) fn dual_after(me: &Player, kind: u8) -> Option<(Fx, Fx, Force)> {
     let (dark, light) = sim::dual::bars(me)?;
-    let (push, force) = match moves::dual::force(kind) {
-        Some(f) if moves::dual::is_an_auto(kind) => (sim::tuning::meter_auto_push(), f),
-        _ if moves::dual::is_the_finisher(kind) => {
-            (sim::tuning::meter_finisher_push(), state::carrying(me))
-        }
-        _ => (sim::tuning::meter_cast_push(), state::carrying(me)),
+    let push = if moves::dual::is_an_auto(kind) {
+        sim::tuning::meter_auto_push()
+    } else if moves::dual::is_the_finisher(kind) {
+        sim::tuning::meter_finisher_push()
+    } else {
+        sim::tuning::meter_cast_push()
     };
     let top = Fx::from_int(sim::tuning::meter_max());
     let push = Fx::from_int(push);
-    Some(match force {
-        Force::Dark => (dark.add(push).min(top), light, force),
-        Force::Light => (dark, light.add(push).min(top), force),
+    Some(match moves::dual::force(kind) {
+        Some(Force::Dark) => (dark.add(push).min(top), light, Force::Dark),
+        Some(Force::Light) => (dark, light.add(push).min(top), Force::Light),
+        None => {
+            let step = Fx::from_int(sim::tuning::meter_auto_push());
+            (
+                dark.add(step).min(top),
+                light.add(step).min(top),
+                state::carrying(me),
+            )
+        }
     })
 }
 

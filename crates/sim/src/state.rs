@@ -664,6 +664,11 @@ pub struct Player {
     /// Red the Blood mage has paid into the hold she is in -- the nova's or the
     /// jet's -- and so how much of her own blood the pool it leaves holds.
     pub self_spent: i32,
+    /// The Dual mage's hex on this body: none, Umbra or Radiance
+    /// (`dual::NO_HEX`, `UMBRA`, `RADIANCE`), and the frames until it fades.
+    /// The other force sets it off -- see `dual::hexed`.
+    pub hex: u8,
+    pub hex_left: u16,
     /// Which of her structure slots the Elementalist's dodge is breaking
     /// through this frame, or [`NO_STONE`].
     ///
@@ -1250,6 +1255,8 @@ impl Default for Player {
             ball_at: V3::ZERO,
             launched_from: V3::ZERO,
             self_spent: 0,
+            hex: 0,
+            hex_left: 0,
             breaking: NO_STONE,
             fall_over: Fx::ZERO,
         }
@@ -2377,6 +2384,61 @@ impl World {
             if p.class == Class::ShadowReaver && kind == SLOT_MECHANIC {
                 self.order_the_shadow(i, p.aim_at());
             }
+            // The Reaver on three clicks (2026-10-09): what each new move
+            // does on the frame it comes out, besides its volume.
+            if p.class == Class::ShadowReaver {
+                match kind {
+                    moves::reaver::HANG => {
+                        let to = p.aim_at();
+                        let rest = self.terrain().ground_under(to);
+                        shadow::hang_at(&mut self.players[i], to, rest);
+                    }
+                    moves::reaver::SWAP => {
+                        let rest = self.terrain().ground_under(p.pos);
+                        shadow::swap(&mut self.players[i], rest);
+                    }
+                    moves::reaver::GUILLOTINE_DROP => {
+                        let q = &mut self.players[i];
+                        q.vel.y = Fx::ZERO.sub(t::guillotine_dive());
+                        q.air_stall = 0;
+                    }
+                    moves::reaver::MOONSAULT => {
+                        let back = p.facing.scale(t::moonsault_back());
+                        let q = &mut self.players[i];
+                        q.vel.x = q.vel.x.sub(back.x);
+                        q.vel.z = q.vel.z.sub(back.z);
+                    }
+                    _ => {}
+                }
+            }
+            // The Bulwark on three clicks (2026-10-10): the same, for his.
+            if p.class == Class::Bulwark {
+                match kind {
+                    moves::bulwark::REBOUND => self.rebound(i),
+                    moves::bulwark::RAM => {
+                        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+                            .normalized()
+                            .scale(t::ram_speed());
+                        let q = &mut self.players[i];
+                        q.vel = V3::new(ahead.x, t::ram_lift(), ahead.z);
+                        q.grounded = false;
+                        q.air_stall = 0;
+                    }
+                    moves::bulwark::UNLOAD => {
+                        let full = bulwark::fullness(&p);
+                        let lift = t::unload_lift().add(t::unload_lift_full().mul(full));
+                        let q = &mut self.players[i];
+                        if let Mechanic::Shield(sh) = q.mechanic {
+                            q.mechanic = Mechanic::Shield(sh.with_weight(Fx::ZERO));
+                        }
+                        q.vel.y = lift;
+                        q.grounded = false;
+                        q.air_stall = 0;
+                    }
+                    moves::bulwark::SHIELD_STEP => self.shield_step(i),
+                    _ => {}
+                }
+            }
             // Her two air shots leave her hand here, along the line
             // `crate::aim` already solved -- and *along* it rather than to the
             // end of it, the same rule the two travelling effects follow: the
@@ -2450,6 +2512,22 @@ impl World {
             if p.class == Class::BloodMage && kind == moves::blood::HOOK {
                 self.throw_the_hook(i);
             }
+            // The Dual mage's spells that are not a thing thrown from her hand
+            // along the aim (those are the bolts, by their row's `effect`):
+            // the ray, the burst, the blink and the level jump.
+            if p.class == Class::DualMage {
+                match kind {
+                    moves::dual::SUNRAY => self.cast_the_sunray(i),
+                    moves::dual::FLARE => self.cast_the_flare(i),
+                    moves::dual::PHASE => self.phase(i),
+                    moves::dual::EQUINOX => {
+                        let lift = t::equinox_lift().mul(dual::balance(&p));
+                        self.players[i].vel.y = self.players[i].vel.y.add(lift);
+                        self.players[i].grounded = false;
+                    }
+                    _ => {}
+                }
+            }
             // The Air ball let go: it rolls from where it was raised, the way
             // the release's aim says. See `roll_the_ball`.
             if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
@@ -2513,6 +2591,11 @@ impl World {
                 // and a look angle is how the two came to disagree.
                 let (from, along) = if leaves.travels() {
                     (p.aim_path.from, p.aim_path.dir())
+                } else if p.class == Class::DualMage && kind == moves::dual::NIGHTFALL {
+                    // Where she left the floor: the well blooms behind the
+                    // jump rather than at anything aimed.
+                    let floor = self.terrain().ground_under(p.pos);
+                    (V3::new(p.pos.x, floor.min(p.pos.y), p.pos.z), V3::ZERO)
                 } else if p.class == Class::Elementalist && kind == moves::elementalist::TREMOR {
                     // On her own feet: Tremor is Quake with its centre set
                     // to where she is standing, so the stone it leaves comes
@@ -2624,6 +2707,14 @@ impl World {
             if let Some(mut hit) =
                 resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
+                // **Deadly mistake** (2026-10-09): struck in the stance, the
+                // Reaver takes nothing -- she is behind the attacker and her
+                // shadow is left where she stood.
+                if deadly_mistake_catches(&snapshot[defender]) {
+                    self.players[attacker].hit_used = true;
+                    deadly_mistake(&mut self.players, defender, attacker);
+                    continue;
+                }
                 // The Reaver's cash-in: any blow of hers spends the marks on
                 // whoever it lands on. A no-op for every other blow in the
                 // game, and for anybody carrying no marks.
@@ -2696,19 +2787,14 @@ impl World {
                 // direction locked at the throw, because the whole point is
                 // that you choose where to go *as* it connects.
                 champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
-                // The dark Sweep's half of the form split: their legs, and her
-                // health, per target it caught. A no-op for everybody else.
-                if snapshot[attacker]
-                    .action
-                    .attack_kind()
-                    .is_some_and(|kind| sweeping_dark(&snapshot[attacker], kind))
-                {
-                    dual_sweep_dark(
-                        &mut self.players,
-                        attacker,
-                        defender,
-                        !hit.blocked && !hit.parried,
-                    );
+                // The Bulwark's Rebound off a body, blocked or not: it is solid.
+                rebound_off_a_body(&mut self.players[attacker]);
+                // The Dual mage's hex: what her blow leaves on them, or sets
+                // off. Only a blow that landed. A no-op for everybody else.
+                if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                    if dealt > 0 && snapshot[attacker].class == Class::DualMage {
+                        hex_the_fighter(&mut self.players, attacker, defender, kind);
+                    }
                 }
                 // And the other half of the hammer finisher: the knock-up went
                 // out in `resolve_hit`, and this is the Champion following it
@@ -3140,6 +3226,12 @@ impl World {
                     h.write_i32(v);
                 }
             }
+            // The Dual mage's hex on this body, only while there is one, so a
+            // fight she is not in hashes as it did.
+            if p.hex_left != 0 {
+                h.write_u32(p.hex as u32);
+                h.write_u32(p.hex_left as u32);
+            }
             for at in [p.ball_at, p.launched_from] {
                 if at != V3::ZERO {
                     hash_v3(&mut h, &at);
@@ -3253,6 +3345,10 @@ impl World {
                 if m.bleeding != 0 {
                     h.write_u32(m.bleeding as u32);
                     h.write_u32(m.bled_by as u32);
+                }
+                if m.hex_left != 0 {
+                    h.write_u32(m.hex as u32);
+                    h.write_u32(m.hex_left as u32);
                 }
                 for part in 0..m.sp().parts.len() {
                     h.write_i32(m.part_health(part));
@@ -4003,18 +4099,6 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     } else {
         launch
     };
-    // **Sweep is one move with two answers**, and taking somebody off their
-    // feet is the light one's. Both forms shove -- it is the panic button, and
-    // what a panic button is for is moving whoever has got inside the punches
-    // -- but light throws them off the floor while dark takes their legs and
-    // pays her for it. The slow and the heal arrive in `advance` beside the
-    // other things a landed blow does; what belongs here is the half of the
-    // split that is a number in this row.
-    let launch = if sweeping_dark(attacker, kind) {
-        Fx::ZERO
-    } else {
-        launch
-    };
 
     // The Bulwark's Slam spends his weight and his fall. The base for
     // everybody else and every other move.
@@ -4037,42 +4121,100 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     })
 }
 
-/// Is this the Dark form of Sweep?
+/// **The Dual mage's hex, on a fighter**: what a spell of hers that landed
+/// leaves on them, or sets off. See `dual::hexed`.
 ///
-/// The form is the force she is carrying, which is the arm she last punched
-/// with -- the same question every other ability on the class asks. Sweep is
-/// one move rather than two because the *shape* is the same either way: both
-/// arms across the whole front, driven from the hips. Only what happens to the
-/// people it caught changes, which is a thing to branch on at the moment of
-/// contact rather than a second move with a second animation.
-fn sweeping_dark(p: &Player, kind: u8) -> bool {
-    p.class == Class::DualMage && kind == moves::dual::SWEEP && carrying(p) == Force::Dark
-}
-
-/// The dark Sweep's payment, on the frame it lands: their legs, and her health.
-///
-/// **Per target caught**, not a share of the damage, which is what makes the
-/// answer to being swarmed the same move as the answer to being cornered. It
-/// is here in the hit loop rather than in `resolve_hit` because both halves of
-/// it act on somebody -- one on the victim and one on the caster -- and
-/// `resolve_hit` is a pure question about what a blow is worth.
-fn dual_sweep_dark(
-    players: &mut [Player; MAX_PLAYERS],
-    attacker: usize,
-    victim: usize,
-    paid: bool,
-) {
-    // Blocked or parried buys nothing. The slow is a hit effect and the heal is
-    // the reward for landing it, which is the same rule leeching already
-    // follows everywhere else in the game.
-    if !paid {
+/// A Shatter is damage now and a stagger; a Wither is damage drained back to
+/// her and a slow; twilight on a clean body is both at half. All of it is
+/// scaled by the power the move was thrown with -- a twilight move's is her
+/// lower bar.
+fn hex_the_fighter(players: &mut [Player; MAX_PLAYERS], by: usize, victim: usize, kind: u8) {
+    if players[by].class != Class::DualMage || by == victim {
         return;
     }
-    players[victim].slow(t::slow_frames(), t::sweep_slow());
-    let owed = Fx::from_int(t::sweep_heal())
-        .mul(depth(&players[attacker]))
-        .to_int();
-    players[attacker].heal(owed);
+    let v = players[victim];
+    let had = if v.hex_left > 0 { v.hex } else { dual::NO_HEX };
+    let (reaction, left) = dual::hexed(had, kind);
+    players[victim].hex = left;
+    players[victim].hex_left = if left == dual::NO_HEX {
+        0
+    } else {
+        t::hex_lasts()
+    };
+    let (shatter, wither) = dual::shares(reaction);
+    let power = dual::depth_at(&players[by], Some(kind));
+    if shatter.raw() > 0 {
+        let hurt = Fx::from_int(t::shatter_damage())
+            .mul(power)
+            .mul(shatter)
+            .to_int();
+        players[victim].wound(hurt);
+        let q = &mut players[victim];
+        if !q.action.invulnerable() {
+            let stagger = Fx::from_int(t::shatter_stagger() as i32)
+                .mul(shatter)
+                .to_int()
+                .max(1) as u16;
+            q.stun_total = q.stun_total.max(stagger);
+            q.action = Action::Stagger { left: stagger };
+        }
+    }
+    if wither.raw() > 0 {
+        let hurt = Fx::from_int(t::wither_damage())
+            .mul(power)
+            .mul(wither)
+            .to_int();
+        let dealt = players[victim].wound(hurt);
+        players[victim].slow(t::slow_frames(), t::wither_slow());
+        players[by].heal(dealt);
+    }
+}
+
+/// **The Dual mage's hex, on a creature**: the fighter's rule on a body with
+/// no `Player`. A Shatter is damage; a Wither is damage drained back to her
+/// and a slow on the animal. No stagger: what a creature feels is its own
+/// flinch and poise rules' business.
+fn hex_the_creature(beast: &mut monster::Monster, by: &mut Player, kind: u8) {
+    if by.class != Class::DualMage || !beast.alive() {
+        return;
+    }
+    let had = if beast.hex_left > 0 {
+        beast.hex
+    } else {
+        dual::NO_HEX
+    };
+    let (reaction, left) = dual::hexed(had, kind);
+    beast.hex = left;
+    beast.hex_left = if left == dual::NO_HEX {
+        0
+    } else {
+        t::hex_lasts()
+    };
+    let (shatter, wither) = dual::shares(reaction);
+    let power = dual::depth_at(by, Some(kind));
+    let mut hurt = 0;
+    if shatter.raw() > 0 {
+        hurt += Fx::from_int(t::shatter_damage())
+            .mul(power)
+            .mul(shatter)
+            .to_int();
+    }
+    let mut drained = 0;
+    if wither.raw() > 0 {
+        drained = Fx::from_int(t::wither_damage())
+            .mul(power)
+            .mul(wither)
+            .to_int();
+        beast.slowed = beast.slowed.max(t::slow_frames());
+        beast.slow_mul = if beast.slow_mul.raw() > 0 {
+            beast.slow_mul.min(t::wither_slow())
+        } else {
+            t::wither_slow()
+        };
+    }
+    let total = (hurt + drained).min(beast.health).max(0);
+    beast.health -= total;
+    by.heal(drained.min(total));
 }
 
 /// Is this defender guarding against something arriving from `from`, and did
@@ -4837,6 +4979,12 @@ fn step_player(
         // mid-jump is not immediately steered out of.
         p.vel.x = p.vel.x.mul(t::stun_decay());
         p.vel.z = p.vel.z.mul(t::stun_decay());
+    } else if let Some(drive) = ramming(p) {
+        // **The Battering ram** holds its line for its active frames, on the
+        // floor and off it: he goes along the ground, not up, and whoever the
+        // shield meets goes with him (2026-10-10).
+        p.vel.x = drive.x;
+        p.vel.z = drive.z;
     } else if let Some(drive) = rushing(p) {
         // A dash holds its line. Facing follows the mouse whenever you are
         // free to act, so a Rush steered by where you happen to be looking
@@ -5002,7 +5150,11 @@ fn step_player(
             // Vertical only. Air control is untouched above, so she still
             // steers where she is coming down, which is what makes throwing it
             // a read on where they will be rather than on where they are.
-            p.vel.y = t::landfall_dive().neg();
+            p.vel.y = if p.class == Class::ShadowReaver {
+                t::gallows_dive().neg()
+            } else {
+                t::landfall_dive().neg()
+            };
         } else if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
             // whatever vertical speed you had **bleeds away** rather than being
@@ -5038,7 +5190,12 @@ fn step_player(
             }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
             // Slower at the Dual mage's second tier; one for everybody else.
-            let floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
+            let mut floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
+            // **Sail** (2026-10-10): the Bulwark's guard held in the air is a
+            // sail, and he falls no faster than it lets him.
+            if p.class == Class::Bulwark && p.action.guarding() {
+                floor = floor.max(Fx::ZERO.sub(t::sail_fall()));
+            }
             if p.vel.y.raw() < floor.raw() {
                 p.vel.y = floor;
             }
@@ -5122,7 +5279,8 @@ fn step_player(
         if let Action::Startup { kind, left } = p.action {
             let slam_from_the_air = !was_grounded && p.class == Class::Bulwark && left == 0;
             if lands_on_the_floor(p.class, kind)
-                && (p.class == Class::Elementalist || slam_from_the_air)
+                && (matches!(p.class, Class::Elementalist | Class::ShadowReaver)
+                    || slam_from_the_air)
             {
                 p.action = Action::Active {
                     kind,
@@ -5181,7 +5339,7 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // mechanic on a click, so it needs an edge of its own, and it is the
         // one input that outlives the frame it was pressed on. See
         // `crate::shadow` for both arguments.
-        Class::ShadowReaver if shadow::order_queued(p) => Some(SLOT_MECHANIC),
+        Class::ShadowReaver => reaver_move(p, input),
         // The Elementalist breaks it a fourth way, and then a fifth. Right
         // click is Cataclysm, for the reason the Reaver's is the mechanic --
         // no shield, so the button is otherwise dead, and Cataclysm is aimed
@@ -5201,10 +5359,10 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // Slam is where his weight is spent, so it wanted a button of its own
         // rather than a modifier -- see `bulwark-v2.md`. Left first, so both at
         // once is the poke, the same tie-break every other class makes.
-        Class::Bulwark if !input.has(Input::LEFT) && input.has(Input::MIDDLE) => {
-            Some(SLOT_COMMITTED)
-        }
-        _ => input.has(Input::LEFT).then_some(SLOT_POKE),
+        //
+        // And on three clicks since 2026-10-10, the last of the six: see
+        // `bulwark_move`. No class is on the shared grammar any more.
+        Class::Bulwark => bulwark_move(p, input),
     }
 }
 
@@ -5338,6 +5496,9 @@ fn elementalist_takeoff(class: Class, kind: u8) -> bool {
     match class {
         Class::Elementalist => matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT),
         Class::BloodMage => matches!(kind, b::BLOOD_JET | b::MARIONETTE | b::HARVEST),
+        Class::DualMage => moves::dual::is_takeoff(kind),
+        Class::ShadowReaver => moves::reaver::is_takeoff(kind),
+        Class::Bulwark => moves::bulwark::is_takeoff(kind),
         _ => false,
     }
 }
@@ -5356,6 +5517,8 @@ fn keyed_q(p: &Player) -> Option<u8> {
         // Hers is the Bloodletter, since 2026-10-09: the Grasp went to middle
         // click.
         Class::BloodMage => Some(moves::blood::BLOODLETTER),
+        // Hers is the dark major, the Abyss; the light one is on `E`.
+        Class::DualMage => Some(moves::dual::ABYSS),
         _ => Some(SLOT_SPECIAL),
     }
 }
@@ -5366,7 +5529,14 @@ fn keyed_q(p: &Player) -> Option<u8> {
 /// the feet are down and free. The Champion's three of the same live in
 /// `Mechanic::Forms` and are run by `arm_takeoff` and `refresh_the_rise`.
 fn rise_window(p: &mut Player, input: Input) {
-    if !matches!(p.class, Class::Elementalist | Class::BloodMage) {
+    if !matches!(
+        p.class,
+        Class::Elementalist
+            | Class::BloodMage
+            | Class::DualMage
+            | Class::ShadowReaver
+            | Class::Bulwark
+    ) {
         return;
     }
     let r = &mut p.rise;
@@ -5508,8 +5678,8 @@ fn plunging(p: &Player) -> bool {
     };
     !p.grounded
         && p.air_stall == 0
-        && p.class == Class::Elementalist
-        && kind == moves::elementalist::LANDFALL
+        && ((p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
+            || (p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS))
 }
 
 /// Is this startup one that waits for the floor rather than for its own clock?
@@ -5527,6 +5697,7 @@ fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
 fn lands_on_the_floor(class: Class, kind: u8) -> bool {
     (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
         || (class == Class::Bulwark && kind == SLOT_COMMITTED)
+        || (class == Class::ShadowReaver && kind == moves::reaver::GALLOWS)
 }
 
 /// Which of the Dual mage's six a click asks for.
@@ -5554,15 +5725,124 @@ fn lands_on_the_floor(class: Class, kind: u8) -> bool {
 /// Left before right before middle, so a player mashing buttons gets an attack
 /// rather than silence. The design has a use for both-click -- a finisher with
 /// no side -- and does not have one yet.
+/// Which of the Reaver's eleven a click asks for (2026-10-09): **the blade,
+/// the execution, the shadow** -- left, middle, right -- on the floor, in the
+/// air, and off the floor with space, on the shared window (`Player::rise`).
+/// Right click is still the remembered press (`shadow::order_queued`), so the
+/// mechanic cannot be eaten by her own frames; what it throws is the row's.
+/// See `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+/// Which of the Bulwark's seven a click asks for (2026-10-10): **the strike,
+/// the weight, the guard** -- left, middle, right -- on the floor, in the air,
+/// and off the floor with space, on the shared window (`Player::rise`). Right
+/// click on its own is the guard, which is not a move: it is only a move as
+/// the Shield step. Left first, so both at once is the strike, the tie-break
+/// every class makes. See
+/// `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+fn bulwark_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::bulwark as b;
+    use moves::bulwark::keys;
+    let window =
+        !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
+    if window {
+        return if input.has(keys::STRIKE) {
+            Some(b::RAM)
+        } else if input.has(keys::WEIGHT) {
+            Some(b::UNLOAD)
+        } else if input.has(keys::GUARD) && p.shield().is_some_and(|s| s.in_hand()) {
+            Some(b::SHIELD_STEP)
+        } else {
+            None
+        };
+    }
+    if input.has(keys::STRIKE) {
+        Some(if p.grounded { b::BASH } else { b::REBOUND })
+    } else if input.has(keys::WEIGHT) {
+        Some(b::SLAM)
+    } else {
+        None
+    }
+}
+
+fn reaver_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::reaver as r;
+    use moves::reaver::keys;
+    let window =
+        !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
+    if shadow::order_queued(p) {
+        if window
+            && shadow::of(p).is_some_and(|s| matches!(s.doing, crate::class::Ghost::Attending))
+        {
+            return Some(r::HANG);
+        }
+        if !p.grounded && shadow::waiting(p) {
+            return Some(r::SWAP);
+        }
+        return Some(r::SEND);
+    }
+    let click = if input.has(keys::BLADE) {
+        keys::BLADE
+    } else if input.has(keys::EXECUTION) {
+        keys::EXECUTION
+    } else {
+        return None;
+    };
+    if window {
+        return Some(if click == keys::BLADE {
+            r::MOONSAULT
+        } else {
+            r::GALLOWS
+        });
+    }
+    Some(match (click, p.grounded) {
+        (keys::BLADE, true) => r::SLASH,
+        (keys::BLADE, false) => r::KITE_CUT,
+        (_, true) => r::EXECUTIONER,
+        (_, false) => r::GUILLOTINE_DROP,
+    })
+}
+
 fn dual_move(p: &Player, input: Input) -> Option<u8> {
     use moves::dual as d;
-    if input.has(Input::LEFT) {
-        return Some(d::DARK_AUTO);
+    use moves::dual::keys;
+    // Left before middle before right, the tie-break every class makes.
+    let click = if input.has(keys::DARK) {
+        keys::DARK
+    } else if input.has(keys::TWILIGHT) {
+        keys::TWILIGHT
+    } else if input.has(keys::LIGHT) {
+        keys::LIGHT
+    } else {
+        return None;
+    };
+    let takeoff = match click {
+        keys::DARK => d::NIGHTFALL,
+        keys::TWILIGHT => d::EQUINOX,
+        _ => d::DAWN,
+    };
+    // **Dark, twilight and light** (2026-10-09): each on the floor, in the
+    // air, and off the floor with space, on the shared window (`Player::rise`).
+    // In the air space is still her second jump and her wing beat, so her
+    // takeoffs are from the floor only -- the first few frames of a jump
+    // count, as everybody's do. See `docs/design/exploration/0010`.
+    if p.grounded {
+        if !p.aboard() && p.rise.window > 0 {
+            return Some(takeoff);
+        }
+        return Some(match click {
+            keys::DARK => d::SHADE_BOLT,
+            keys::TWILIGHT => d::BINARY,
+            _ => d::SUNRAY,
+        });
     }
-    if input.has(Input::RIGHT) {
-        return Some(d::LIGHT_AUTO);
+    if !p.aboard() && p.rise.window > 0 && p.rise.lifted <= t::floor_grace() {
+        return Some(takeoff);
     }
-    input.has(Input::MIDDLE).then(|| d::lance_for(carrying(p)))
+    match click {
+        keys::DARK => Some(d::REEL),
+        // Phase spends the airdodge, so once a trip.
+        keys::TWILIGHT => (!p.air_dodged).then_some(d::PHASE),
+        _ => Some(d::FLARE),
+    }
 }
 
 /// Which of the two forces she is holding right now.
@@ -6261,6 +6541,52 @@ fn blood_jet_drive(p: &Player) -> Option<V3> {
 ///
 /// [`step`]: moves::Move::step
 /// [`tuning::step_lead`]: crate::tuning::step_lead
+/// **Rebound**'s bounce: back off what the shield met, the way it was thrown,
+/// and up.
+fn bounce(p: &mut Player, along: V3) {
+    let back = V3::new(along.x, Fx::ZERO, along.z)
+        .normalized()
+        .scale(t::rebound_kick());
+    p.vel = V3::new(
+        Fx::ZERO.sub(back.x),
+        t::rebound_lift(),
+        Fx::ZERO.sub(back.z),
+    );
+    p.grounded = false;
+    // The bounce is the move's whole answer to the air: the hang an aerial
+    // holds you in would bleed it away.
+    p.air_stall = 0;
+}
+
+/// A Rebound whose shield met a body -- a fighter's, a creature's -- bounces
+/// off it. The line `World::rebound` asks finds walls, stones and the floor;
+/// a body is found by the blow itself.
+fn rebound_off_a_body(p: &mut Player) {
+    if p.class == Class::Bulwark
+        && !p.grounded
+        && p.action.attack_kind() == Some(moves::bulwark::REBOUND)
+        && p.vel.y.raw() <= 0
+    {
+        let facing = p.facing;
+        bounce(p, facing);
+    }
+}
+
+/// The Bulwark's drive through a Battering ram's active frames, if he is in
+/// one.
+fn ramming(p: &Player) -> Option<V3> {
+    if p.class != Class::Bulwark
+        || !matches!(p.action, Action::Active { kind, .. } if kind == moves::bulwark::RAM)
+    {
+        return None;
+    }
+    Some(
+        V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+            .normalized()
+            .scale(t::ram_speed()),
+    )
+}
+
 fn attack_step(p: &Player) -> Option<V3> {
     let kind = p.action.attack_kind()?;
     let m = moves::get(p.class, kind);
@@ -6514,6 +6840,16 @@ fn begin_move(
         return Action::Channel { kind, held: 0 };
     }
     lock_aim(p, who, kind, input, scene);
+    // **Gallows**: she is gone upward, and hangs a beat before the plunge
+    // (2026-10-09) -- her source material's "blink upward, then slash down".
+    // The plunge and the landing are Landfall's (`plunging`,
+    // `lands_on_the_floor`).
+    if p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS {
+        p.pos.y = p.pos.y.add(t::gallows_blink());
+        p.vel = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
+        p.grounded = false;
+        p.air_stall = t::gallows_hang();
+    }
     throw_move(p, kind, input, aerial)
 }
 
@@ -6863,7 +7199,9 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
         // same button: left click. The Air bolt is the thing she throws
         // constantly up there, so it is the one that gets to be part of moving
         // rather than a pause in it.
-        || (p.class == Class::Elementalist && kind == moves::elementalist::AIR_BOLT);
+        || (p.class == Class::Elementalist && kind == moves::elementalist::AIR_BOLT)
+        // And the Bulwark's Rebound is his Bash in the air (2026-10-10).
+        || (p.class == Class::Bulwark && kind == moves::bulwark::REBOUND);
     if !fast || (ax == 0 && az == 0) {
         return;
     }
@@ -7356,6 +7694,12 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.jump_banked as u32);
             h.write_u32(shadow.refused as u32);
             h.write_u32(shadow.shift_spent as u32);
+            // Hashed only when a hung or swapped shadow uses them, so the
+            // replays pinned before they existed keep their checksums.
+            if shadow.hang != 0 || shadow.rest != Fx::MAX {
+                h.write_u32(shadow.hang as u32);
+                h.write_u32(shadow.rest.raw() as u32);
+            }
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -7908,9 +8252,47 @@ fn cash_the_tally(
     hit.damage = Fx::from_int(hit.damage)
         .mul(shadow::cash_multiple(marks))
         .to_int();
+    kite_refuel(&mut players[attacker]);
     players[defender].marks = 0;
     players[defender].mark_clock = 0;
     shadow::full_tally(marks)
+}
+
+/// **The Kite cut's refuel** (2026-10-09): a Kite cut that cashed a tally
+/// gives her airdodge back -- and her airdodge pointed at the shadow is the
+/// dash. Her own loop, paying for the next crossing.
+fn kite_refuel(p: &mut Player) {
+    if p.class == Class::ShadowReaver
+        && p.action.attack_kind() == Some(moves::reaver::KITE_CUT)
+        && !p.grounded
+    {
+        p.air_dodged = false;
+    }
+}
+
+/// Is this Reaver in the window of Deadly mistake's stance?
+fn deadly_mistake_catches(p: &Player) -> bool {
+    p.class == Class::ShadowReaver
+        && matches!(p.action, Action::Active { kind, .. } if kind == moves::reaver::DEADLY_MISTAKE)
+}
+
+/// **Deadly mistake**: the blow that found her stance finds nothing. She is
+/// behind the attacker, facing his back, free; her shadow waits where she
+/// stood.
+fn deadly_mistake(players: &mut [Player; MAX_PLAYERS], reaver: usize, attacker: usize) {
+    let them = players[attacker];
+    let was = players[reaver].pos;
+    let back = V3::new(them.facing.x, Fx::ZERO, them.facing.z).normalized();
+    let q = &mut players[reaver];
+    q.pos = V3::new(
+        them.pos.x.sub(back.x.mul(t::mistake_behind())),
+        them.pos.y,
+        them.pos.z.sub(back.z.mul(t::mistake_behind())),
+    );
+    q.facing = if back == V3::ZERO { q.facing } else { back };
+    q.vel = V3::ZERO;
+    q.action = Action::Free;
+    shadow::leave_at(q, was);
 }
 
 /// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
@@ -8056,13 +8438,19 @@ impl World {
             // and goes now rather than being drawn one more frame at the far
             // end of a flight it never made. Nothing else expires here: a
             // tornado, for one, is older than its life by design.
-            let spent = (matches!(effect.kind, EffectKind::Haemorrhage | EffectKind::Nail)
-                && effect.age >= effect.life)
+            let spent = (matches!(
+                effect.kind,
+                EffectKind::Haemorrhage
+                    | EffectKind::Nail
+                    | EffectKind::ShadeBolt
+                    | EffectKind::Binary
+            ) && effect.age >= effect.life)
                 || (effect.kind == EffectKind::AirBall && effect.reach.raw() <= 0);
             self.effects[i] = (!spent).then_some(effect);
         }
         self.step_bleeds();
         self.bleed_the_creatures();
+        self.fade_hexes();
         // The slow's tail, for every source of one -- a drain field here, a
         // stone churning under your feet in `stones`. It runs down before either
         // of them gets to refresh it, so standing in one holds the slow at full
@@ -9033,6 +9421,166 @@ impl World {
                 if spent {
                     effect.age = effect.life;
                 }
+            }
+
+            // The Dual mage's two bolts: a Shade bolt (and Reel's) and
+            // Binary's orbs, spent on the first body they reach, which they
+            // hex -- or set off. Reel's pulls her to what it caught.
+            EffectKind::ShadeBolt | EffectKind::Binary => {
+                let at = effect.bolt_at();
+                let radius = effect.field_radius();
+                let owner = effect.owner as usize;
+                let mut caught = None;
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, at, effect.source().damage);
+                    if dealt > 0 {
+                        hex_the_fighter(&mut self.players, owner, i, effect.slot);
+                        dual::landed_a_hit(&mut self.players[owner]);
+                    }
+                    caught = Some(at);
+                }
+                let cut = self.gore_each(effect, 0, at, radius, Fx::ONE);
+                for (slot, dealt) in cut.iter().enumerate() {
+                    if *dealt > 0 {
+                        caught = Some(at);
+                        if let Some(mut beast) = self.monsters[slot] {
+                            hex_the_creature(&mut beast, &mut self.players[owner], effect.slot);
+                            dual::landed_a_hit(&mut self.players[owner]);
+                            self.monsters[slot] = Some(beast);
+                        }
+                    }
+                }
+                if self.gore_critters(effect, at, radius, Fx::ONE) > 0 {
+                    caught = Some(at);
+                }
+                if let Some(to) = caught {
+                    effect.age = effect.life;
+                    if effect.slot == moves::dual::REEL {
+                        self.reel_to(owner, to);
+                    }
+                }
+            }
+
+            // The Abyss (and Nightfall's): a well that drags whoever is in it
+            // toward its middle every frame, and on the tick hurts, drains back
+            // to her and hexes Umbra.
+            EffectKind::Abyss => {
+                let radius = effect.field_radius();
+                let owner = effect.owner as usize;
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner) || !self.inside(i, effect.pos, radius) {
+                        continue;
+                    }
+                    let q = self.players[i];
+                    let to = V3::new(
+                        effect.pos.x.sub(q.pos.x),
+                        Fx::ZERO,
+                        effect.pos.z.sub(q.pos.z),
+                    );
+                    let far = to.flat_len();
+                    let step = t::abyss_pull().mul(DT);
+                    if far.raw() > step.raw() {
+                        let drag = to.normalized().scale(step);
+                        self.players[i].pos.x = q.pos.x.add(drag.x);
+                        self.players[i].pos.z = q.pos.z.add(drag.z);
+                    }
+                    if effect.ticks_now() {
+                        let dealt = self.cut(i, effect, effect.pos, effect.damage());
+                        if dealt > 0 {
+                            self.players[owner].heal(effect.leeched(dealt));
+                            hex_the_fighter(&mut self.players, owner, i, effect.slot);
+                            dual::landed_a_hit(&mut self.players[owner]);
+                        }
+                    }
+                }
+                if effect.ticks_now() {
+                    let cut = self.gore_each(effect, 0, effect.pos, radius, Fx::ONE);
+                    for (slot, dealt) in cut.iter().enumerate() {
+                        if *dealt > 0 {
+                            self.players[owner].heal(effect.leeched(*dealt));
+                            if let Some(mut beast) = self.monsters[slot] {
+                                hex_the_creature(&mut beast, &mut self.players[owner], effect.slot);
+                                dual::landed_a_hit(&mut self.players[owner]);
+                                self.monsters[slot] = Some(beast);
+                            }
+                        }
+                    }
+                    // A tick is a fresh pass at the animal.
+                    effect.forget_hits();
+                    self.gore_critters(effect, effect.pos, radius, Fx::ONE);
+                }
+            }
+
+            // A Flare's burst, and Phase's flash where she left: out on the
+            // first frame, at whoever is inside it, once.
+            EffectKind::Flare => {
+                if effect.age != 1 {
+                    return;
+                }
+                let radius = effect.field_radius();
+                let owner = effect.owner as usize;
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner) || !self.inside(i, effect.pos, radius) {
+                        continue;
+                    }
+                    let dealt = self.cut(i, effect, effect.pos, effect.damage());
+                    if dealt > 0 {
+                        hex_the_fighter(&mut self.players, owner, i, effect.slot);
+                        dual::landed_a_hit(&mut self.players[owner]);
+                    }
+                }
+                let cut = self.gore_each(effect, 0, effect.pos, radius, Fx::ONE);
+                for (slot, dealt) in cut.iter().enumerate() {
+                    if *dealt > 0 {
+                        if let Some(mut beast) = self.monsters[slot] {
+                            hex_the_creature(&mut beast, &mut self.players[owner], effect.slot);
+                            dual::landed_a_hit(&mut self.players[owner]);
+                            self.monsters[slot] = Some(beast);
+                        }
+                    }
+                }
+                self.gore_critters(effect, effect.pos, radius, Fx::ONE);
+            }
+
+            // A Sunray: on its first frame, the line from her hand to where
+            // it stopped -- the first body on it, or its reach.
+            EffectKind::Sunray => {
+                if effect.age != 1 {
+                    return;
+                }
+                let radius = effect.field_radius();
+                let owner = effect.owner as usize;
+                let far = effect.pos.add(effect.dir.scale(effect.reach));
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || !self.on_the_line(i, effect.pos, far, radius)
+                    {
+                        continue;
+                    }
+                    let dealt = self.cut(i, effect, effect.pos, effect.damage());
+                    if dealt > 0 {
+                        hex_the_fighter(&mut self.players, owner, i, effect.slot);
+                        dual::landed_a_hit(&mut self.players[owner]);
+                    }
+                }
+                let cut = self.gore_each(effect, 0, far, radius.max(t::body_radius()), Fx::ONE);
+                for (slot, dealt) in cut.iter().enumerate() {
+                    if *dealt > 0 {
+                        if let Some(mut beast) = self.monsters[slot] {
+                            hex_the_creature(&mut beast, &mut self.players[owner], effect.slot);
+                            dual::landed_a_hit(&mut self.players[owner]);
+                            self.monsters[slot] = Some(beast);
+                        }
+                    }
+                }
+                self.gore_critters_by(effect, EffectReach::Line(effect.pos, far, radius), Fx::ONE);
             }
 
             // The Blood nova: on its first frame, everyone inside is hurt and
@@ -11360,6 +11908,231 @@ impl World {
         begin_haul(&mut self.players[i], stop, speed, frames);
     }
 
+    /// **A Sunray**: from her hand along the line `crate::aim` solved, to the
+    /// first body on it -- or a wall, or its reach -- at once. The light is
+    /// the force that has already arrived: it is an effect only so the line
+    /// can be seen for a few frames.
+    fn cast_the_sunray(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::dual::SUNRAY);
+        // Along the crosshair's line for the whole of its reach, wherever on
+        // it the crosshair happened to rest.
+        let path = aim::Path {
+            from: p.aim_path.from,
+            to: p.aim_path.from.add(p.aim_path.dir().scale(m.reach)),
+        };
+        // Into what it met by a body's width, so the line reaches the body
+        // it stopped at rather than ending on its skin.
+        let length = self
+            .first_on_the_line(i, path, m.radius, true)
+            .add(t::body_radius().add(m.radius))
+            .min(m.reach);
+        let mut ray = Effect::cast(
+            EffectKind::Sunray,
+            i as u8,
+            p.class,
+            moves::dual::SUNRAY,
+            path.from,
+            path.dir(),
+            length,
+        );
+        ray.power = depth(&p);
+        spawn_effect(&mut self.effects, ray);
+    }
+
+    /// **A Flare**: a burst of light a few metres along her aim -- where the
+    /// line first meets a body, a wall or the floor, or at its reach. If it
+    /// met something, it kicks *her* back the other way: light pushes, and in
+    /// the air she is the lighter thing. Aimed down, that is a lift.
+    /// **Rebound**: the Bash in the air, and if the shield's face met
+    /// anything solid within its reach -- a body, a wall, a stone, his own
+    /// planted shield, the floor -- he is thrown back off it and up. Asked of
+    /// the line the swing is thrown along, the way the Flare asks it.
+    fn rebound(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::bulwark::REBOUND);
+        let path = aim::Path {
+            from: p.aim_path.from,
+            to: p.aim_path.from.add(p.aim_path.dir().scale(m.reach)),
+        };
+        if self.first_on_the_line(i, path, m.radius, true).raw() >= m.reach.raw() {
+            return;
+        }
+        bounce(&mut self.players[i], path.dir());
+    }
+
+    /// **Shield step**: the shield is planted where he stands, at the size its
+    /// weight makes it, and he springs off its top -- higher the heavier it
+    /// is -- and on forward. It is a planted shield like any other: `E` calls
+    /// it home.
+    fn shield_step(&mut self, i: usize) {
+        let p = self.players[i];
+        let Some(Shield::Held { weight }) = p.shield() else {
+            return;
+        };
+        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
+        let floor = self.terrain().ground_under(p.pos);
+        let base = V3::new(p.pos.x, floor, p.pos.z);
+        let top = bulwark::wall(base, weight).top();
+        let full = bulwark::fullness_of(weight);
+        let lift = t::step_lift().add(t::step_lift_full().mul(full));
+        let forward = ahead.scale(t::step_forward());
+        let q = &mut self.players[i];
+        q.mechanic = Mechanic::Shield(Shield::Planted { pos: base, weight });
+        q.pos.y = top;
+        q.vel = V3::new(forward.x, lift, forward.z);
+        q.grounded = false;
+        q.air_stall = 0;
+    }
+
+    fn cast_the_flare(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::dual::FLARE);
+        let path = aim::Path {
+            from: p.aim_path.from,
+            to: p.aim_path.from.add(p.aim_path.dir().scale(m.reach)),
+        };
+        let full = m.reach;
+        let length = self.first_on_the_line(i, path, m.radius, true);
+        if length.raw() < full.raw() {
+            let back = Fx::ZERO.sub(t::flare_kick());
+            let kick = path.dir().scale(back);
+            let q = &mut self.players[i];
+            q.vel = V3::new(kick.x, kick.y.max(q.vel.y), kick.z);
+            if kick.y.raw() > 0 {
+                q.vel.y = kick.y;
+            }
+            q.grounded = false;
+            // The kick is the move's whole answer to the air: the hang an
+            // aerial holds you in would bleed it away.
+            q.air_stall = 0;
+        }
+        let mut burst = Effect::cast(
+            EffectKind::Flare,
+            i as u8,
+            p.class,
+            moves::dual::FLARE,
+            path.from.add(path.dir().scale(length)),
+            V3::ZERO,
+            m.radius,
+        );
+        burst.power = depth(&p);
+        spawn_effect(&mut self.effects, burst);
+    }
+
+    /// **Phase**: she is through -- along the crosshair for the move's reach,
+    /// stopped a body short of the first wall, platform or stone
+    /// (`aim::phase_to`) -- and a flash of light is left where she was. It
+    /// spends the airdodge.
+    fn phase(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::dual::PHASE);
+        let stones = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &seen,
+            effects: &effects,
+            quarry: &self.monsters,
+            critters: &self.critters,
+            arena: &self.terrain(),
+        };
+        let to = aim::phase_to(i, p.aim_path.dir(), m.reach, &scene);
+        let mid = V3::new(
+            p.pos.x,
+            p.pos.y.add(t::body_height().mul(Fx::ratio(1, 2))),
+            p.pos.z,
+        );
+        let mut flash = Effect::cast(
+            EffectKind::Flare,
+            i as u8,
+            p.class,
+            moves::dual::PHASE,
+            mid,
+            V3::ZERO,
+            m.radius,
+        );
+        flash.power = depth(&p);
+        spawn_effect(&mut self.effects, flash);
+        let q = &mut self.players[i];
+        q.pos = to;
+        q.vel.y = q.vel.y.max(Fx::ZERO);
+        q.air_dodged = true;
+    }
+
+    /// How far along `path` the first thing is -- a body (fighters in versus,
+    /// the creature and the critters in a hunt), a wall, a stone, the floor --
+    /// or the whole path. The question the ray and the flare both ask.
+    fn first_on_the_line(&self, i: usize, path: aim::Path, radius: Fx, terrain: bool) -> Fx {
+        let stones = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &seen,
+            effects: &effects,
+            quarry: &self.monsters,
+            critters: &self.critters,
+            arena: &self.terrain(),
+        };
+        let mut targets = aim::Targets::none().fighters(self.pvp()).quarry(true);
+        if terrain {
+            targets = targets.terrain().stones();
+        }
+        let full = path.to.sub(path.from).len();
+        let met = aim::first_along(path, radius, i as u8, &scene, targets)
+            .map_or(full, |c| c.dist().min(full));
+        if terrain {
+            aim::floor_along(path, &scene).map_or(met, |floor| floor.min(met))
+        } else {
+            met
+        }
+    }
+
+    /// Reel's pull: she is hauled to what her bolt caught, a body short of
+    /// it, at `tuning::reel_speed`.
+    fn reel_to(&mut self, i: usize, to: V3) {
+        let p = self.players[i];
+        let apart = to.sub(p.pos);
+        let dist = apart.len();
+        let short = t::body_radius().add(t::body_radius());
+        if dist.raw() <= short.raw() {
+            return;
+        }
+        let stop = p.pos.add(apart.normalized().scale(dist.sub(short)));
+        // The bolt was at a body's middle; her feet go half a body under it.
+        let stop = V3::new(
+            stop.x,
+            stop.y.sub(t::body_height().mul(Fx::ratio(1, 2))),
+            stop.z,
+        );
+        let speed = t::reel_pull();
+        let frames = dist.div(speed.mul(DT)).to_int().clamp(1, 240) as u16 + 1;
+        begin_haul(&mut self.players[i], stop, speed, frames);
+    }
+
+    /// Every hex runs down a frame and is gone when it has run out -- on the
+    /// fighters and on the creatures.
+    fn fade_hexes(&mut self) {
+        for p in self.players.iter_mut() {
+            if p.hex_left > 0 {
+                p.hex_left -= 1;
+                if p.hex_left == 0 {
+                    p.hex = dual::NO_HEX;
+                }
+            }
+        }
+        for beast in self.monsters.iter_mut().flatten() {
+            if beast.hex_left > 0 {
+                beast.hex_left -= 1;
+                if beast.hex_left == 0 {
+                    beast.hex = dual::NO_HEX;
+                }
+            }
+        }
+    }
+
     /// Every creature's bleed runs down a frame, and on its tick takes its
     /// damage and spills under it -- the fighter's bleed (`step_bleeds`) on a
     /// body that has no `Player` to keep one.
@@ -12365,9 +13138,13 @@ impl World {
                     kind,
                 },
             );
+            rebound_off_a_body(&mut self.players[i]);
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
             if attacker.class == Class::ShadowReaver && !guarded.turned() {
+                if beast.marks > 0 {
+                    kite_refuel(&mut self.players[i]);
+                }
                 beast.spend_marks();
             }
             // Her double duty, against the creature: drink over the pool the
@@ -12400,6 +13177,7 @@ impl World {
             self.players[i].hit_used = true;
             if dealt > 0 {
                 dual::landed_a_hit(&mut self.players[i]);
+                hex_the_creature(&mut beast, &mut self.players[i], kind);
             }
             // **No freeze here, on either side.** The animal does not stop for
             // one fighter, and a fighter who stopped for it was held still

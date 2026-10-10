@@ -87,6 +87,58 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is her weak push.",
     ),
     (
+        "pub const DARK: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Dual mage's dark click.",
+    ),
+    (
+        "pub const TWILIGHT: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Dual mage's twilight click.",
+    ),
+    (
+        "pub const LIGHT: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Dual mage's light click.",
+    ),
+    (
+        "pub const DARK_MAJOR: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Dual mage's dark major.",
+    ),
+    (
+        "pub const LIGHT_MAJOR: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Dual mage's light major.",
+    ),
+    (
+        "pub const BLADE: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Shadow Reaver's blade click.",
+    ),
+    (
+        "pub const EXECUTION: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Shadow Reaver's execution click.",
+    ),
+    (
+        "pub const SHADOW: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Shadow Reaver's shadow click.",
+    ),
+    (
+        "pub const LOTUS: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Shadow Reaver's lotus key.",
+    ),
+    (
+        "pub const MISTAKE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Shadow Reaver's Deadly mistake key.",
+    ),
+    (
+        "pub const STRIKE: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Bulwark's strike click.",
+    ),
+    (
+        "pub const WEIGHT: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Bulwark's weight click.",
+    ),
+    (
+        "pub const GUARD: u16 = Input::RIGHT",
+        "A binding, not a magnitude: which button is the Bulwark's guard click.",
+    ),
+    (
         "pub const MY_BLOOD: u16 = Input::LEFT",
         "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
     ),

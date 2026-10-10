@@ -7890,3 +7890,115 @@ things to feel: whether anybody misses hopping a low wall to reset a fight,
 and whether a bank behind a wall changes where a ranged class likes to stand
 (a level aim along a wall now meets the bank behind it rather than the sky --
 the reason the proving ground's rim moved out).
+
+### 2026-10-09 — the Dual mage, every move a spell
+**Changed** Her whole kit, from the person's brief: left dark and right light, every move a
+spell, `Q` and `E` the dark and light majors, a middle click worth having, and the autos'
+pull and push gone. Designed combos first
+([exploration/0010](exploration/0010_dual_mage_spells.md)): a **hex** on what she hits —
+Umbra from dark, Radiance from light — that the other force sets off (**Shatter**: damage and a
+stagger; **Wither**: damage drained back to her and a slow), so alternating hands is the combo
+and the climb at once. Left is the hex (Shade bolt, Reel, Nightfall), right the strike (Sunray,
+Flare, Dawn), middle twilight (Binary, Phase, Equinox) — powered by her lower bar and goading
+both. `Q` Abyss, a well that drags, drains and hexes; `E` Judgement, which now shatters the
+Abyss's hexes. Every move now has its own force (`dual::steer`); the carried-force rule and the
+two-form Lance are gone. The two bars are unchanged. Every number on the eleven moves and the
+reactions is a first guess. See [kits/dual-mage.md](kits/dual-mage.md) §"Every move a spell".
+**Tried and changed while building**
+- *The Sunray stopped at the skin* of the body it met and missed it (the hit test measures to
+  the spine): it now reaches a body's width into what it met.
+- *The Flare never found the floor*: `aim::first_along` counts walls and bodies, not open
+  ground. `aim::floor_along` asks the floor; and the aerial hang was bleeding the kick away, so
+  a Flare that kicks ends the hang.
+- *Dawn* at launch 16 lifted a Bulwark under a metre from empty bars; now 26.
+- *The Abyss* reused the Sweep's clip at 16/2/22 frames and the baked motion jumped; now
+  14/8/18. *Binary* at 40% mobility left her faster than guarding (now 25%); *Phase*'s repeat
+  lockout 80% and *Equinox*'s recovery 12, for `feel.rs`'s lockout rule.
+- *The hunting bot climbed her to the wings in the air*: off the floor her clicks throw Reel
+  and Flare, which goad by a cast's push, and the class layer weighed them as autos. It weighs
+  what is thrown now. Its "turned a hand" count is no longer a sign of anything — the plans
+  already throw the low side's auto and every spell has its own force — so `hunt/tests/class.rs`
+  asks for goads and majors instead.
+- *Retuned against the class benchmarks* (`tests/dual_mage.rs`, b1 and b2): alternating on a
+  dummy dealt 3.4 health bars in half a round (target 1 to 2.25), so the Shade bolt 22 → 14, the
+  Sunray 24 → 16, Shatter 40 → 26, Wither 30 → 20, Reel 20 → 14. One-sided spam with the Abyss
+  cost her nothing, because the well's drain healed back the burn: Abyss tick 12 → 10, drain
+  40% → 15% (10% rounds to nothing on an 8-point tick), and it lasts 1 s rather than 1.5 s.
+- *Effect hits never counted as landed while she was ascended*, so the wings' refund and the
+  shorter stagger were dead for nearly the whole kit: every spell that lands now counts.
+- Her envelope fixtures re-recorded. Some lanes fell a long way (lane 0 from 10.7 m to 1.9 m,
+  lane 1 from 19.1 to 4.4) and some rose (lane 4 from 7.7 to 13.5, lane 7 from 6.5 to 13.6): the
+  old autos' eighteen-frame hangs were a movement tool, and Reel and Flare hang 12 and 10. A
+  search is a lower bound; **her reach in the air is the thing to watch in play.**
+- The Dual mage's pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned; the hex is
+  hashed only while one is on a body, so no other class's pin moved.
+**Verdict** — unplayed. Known from the start: her new moves play the six clips she had; clips
+of their own are the next step. Open: DUAL-1 to DUAL-4 in 0010.
+
+### 2026-10-09 — the Shadow Reaver on three clicks
+**Changed** Her bindings, onto the grid every class has been moving to, from the person's
+brief ("do the same"). Designed combos first
+([exploration/0011](exploration/0011_shadow_reaver_on_three_clicks.md)): her loop is **send,
+mark, cross, cash**, and each new move is a new piece in it. Left is the blade (Slash, **Kite
+cut** in the air, **Moonsault** off the floor), middle the execution (**Executioner**, moved
+from `E`; **Guillotine drop**; **Gallows**), right the shadow (send / recall; **Swap** in the
+air with the shadow waiting; **Hang the shadow** off the floor). `Q` is still the lotus. `E` is
+**Deadly mistake** at last — the counter stance her kit has listed without a button since
+2026-09-09: struck in it by a fighter, she is behind them and the shadow is left where she stood.
+A Kite cut that cashes a tally gives her airdodge back, which is the dash pointed at the shadow.
+A shadow hung in the air waits `Hang the shadow, waits for` and then sinks to the floor under
+it; one put on the floor never sinks (`Shadow::rest` is `Fx::MAX` there). Every number on the
+seven new moves and the eight knobs is a first guess.
+**Tried and changed while building**
+- *The Kite cut as an upright arc* (reach 1.6, radius 0.5) passed over a knee-high gnat at 3 m
+  where it caught a fighter (`critters.rs`), and no longer reached the Broodmother's fore sacs
+  from the top of a hop, which the Slash did (`broodmother.rs`): it is the Slash's own volume
+  thrown in the air now, and its own thing is the refuel.
+- *Gallows* at reach 1.9 / radius 0.7 had the same gnat gap at 3 m, and at knockback 10 moved a
+  body 1.45 m for 150 damage (`feel.rs` asks a heavy hit for 1.5): Executioner's 1.7 / 1.1 / 20.
+  It drops straight down rather than forward and down as first written: she steers it with air
+  control, as Landfall is steered.
+- *The Guillotine drop's dive came late*: the dive starts on its first active frame, and eight
+  frames of wind-up in the air were most of a short hop. Startup 5.
+- *A swap's shadow sank the frame after it was left*: a swapped shadow waits as a hung one does.
+- *The shadow's copy* is thrown for every swing with damage; the swap and the stance are swings
+  with none and are not copied.
+- The Reaver's pins (`tests/ridgeback_pin.rs`, `hunt/tests/pin.rs`) re-pinned; the hang and
+  the rest are hashed only when used, so no other class's pin moved. Her envelope fixtures
+  re-recorded, and her reach **grew**: lane 0 from 46.8 m to 62.7 m shared (86.2 m with the
+  whole kit), most lanes by a third or more. The Hang the shadow and the dash to it is a
+  vertical crossing she did not have, and the Kite cut's refuel is a second dash in one
+  airtime. A search is a lower bound; **her reach is the thing to watch in play**
+  (REAVER-1).
+**Verdict** — unplayed. Her new moves play the four clips she had. Open: REAVER-1 to REAVER-4
+in 0011.
+
+### 2026-10-10 — the Bulwark on three clicks
+**Changed** His bindings, onto the grid, from the person's brief ("do the same"), and with him
+no class is on the shared grammar any more (`state::clicked_move` has no fallback arm). Designed
+combos first ([exploration/0012](exploration/0012_bulwark_on_three_clicks.md)), and following
+0007 §7's recommendations: his air game is about **being thrown**, the shield a springboard, a
+sail and a battery. Left is the strike (Bash, **Rebound** in the air, **Battering ram** off the
+floor), middle the weight (Slam on the floor and in the air, **Unload** off it), right the guard
+(Guard, **Sail** — the guard held in the air caps his fall — and the **Shield step**). Unload
+spends the weight on height; the Shield step plants the shield, weight and all, and springs him
+off it. `Q` and `E` are as built. Every number on the four new moves and ten knobs is a first
+guess.
+**Tried and changed while building**
+- *Rebound asked only the line* the Flare asks, and a body standing a little below his chest
+  was under it: the blow landed and he did not bounce. A Rebound that lands on a body bounces
+  now, blocked or not; walls, stones, his planted shield and the floor are still the line's.
+- *The Battering ram* lifted him and let go, and his gravity (about 50 m/s²) put him back on
+  the floor in seven frames, a metre on: it holds its line through its active frames now, as a
+  dash does. Its active 14 and 11 m/s; hitstun 30 so a hit is not minus (`feel.rs`).
+- *The Shield step* planted the shield a step ahead and he sprang straight into its side: it
+  is planted where he stands, he leaves from its top, and its recovery is 8 so `E` can call it
+  home while he is still in the air (the mechanic only answers a free body).
+- *Unload* at 4 + 11 m/s from a full shield was 2.1 m against a 0.1 m stomp empty; the full
+  share is 22. Lifts were first written for a lighter gravity than his: the Shield step 12 + 6,
+  Rebound's lift 10.
+- `combat.rs`'s three aerial tests jumped and clicked on the next frame, which is a takeoff on
+  every class now: they wait out the window. Rebound is his fast air button for the air shove.
+- The Bulwark's pins re-pinned.
+**Verdict** — unplayed. His new moves play his three clips. Open: BULWARK-1 to BULWARK-4 in
+0012.

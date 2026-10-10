@@ -1481,6 +1481,45 @@ pub fn planted_ahead(
     )
 }
 
+/// **How far along a path it meets the floor**, if it does within the path:
+/// the open ground under it, which [`first_along`] does not count as
+/// something a thing runs into. What the Dual mage's Flare asks so a burst
+/// aimed at the floor finds it -- and kicks her off it.
+pub fn floor_along(path: Path, scene: &Scene) -> Option<Fx> {
+    let span = path.to.sub(path.from).len();
+    floor_hit(path.from, path.dir(), scene.arena, span)
+}
+
+/// **Where the Dual mage's Phase puts her**: along `dir` -- the crosshair's
+/// line, as `crate::aim` solved it -- from the middle of her body, for
+/// `travel`, stopped a body short of the first wall, platform or stone it
+/// would meet; and her feet half a body under that, never below what is
+/// under them. A blink rather than a dash, so nothing on the way is hit and
+/// nothing stops it but the world. The same question [`blink_to`] answers
+/// along the floor, asked along a look. See
+/// `docs/design/exploration/0010_dual_mage_spells.md`.
+pub fn phase_to(who: usize, dir: V3, travel: Fx, scene: &Scene) -> V3 {
+    let feet = scene.players[who].pos;
+    let half = t::body_height().mul(Fx::ratio(1, 2));
+    let mid = V3::new(feet.x, feet.y.add(half), feet.z);
+    let path = Path {
+        from: mid,
+        to: mid.add(dir.scale(travel)),
+    };
+    let short = t::body_radius().add(t::body_radius());
+    let go = first_along(
+        path,
+        t::body_radius(),
+        who as u8,
+        scene,
+        Targets::none().terrain().stones(),
+    )
+    .map_or(travel, |c| c.dist().sub(short).max(Fx::ZERO));
+    let at = mid.add(dir.scale(go));
+    let floor = settle(at, scene.stones, scene.arena).y;
+    V3::new(at.x, at.y.sub(half).max(floor), at.z)
+}
+
 /// **Where a thing that nobody pointed down at lands**: `to`, a point already
 /// settled on what it stands on, if that is no more than
 /// `tuning::placement_drop` below the footing under `from`; otherwise the

@@ -701,6 +701,46 @@ scalars! {
     AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
     AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
     AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
+    // **The Dual mage, every move a spell**, 2026-10-09: her bolts' flight,
+    // the hex and its two reactions, the well, and the air moves. See
+    // `docs/design/exploration/0010_dual_mage_spells.md`.
+    ShadeBoltFlight,      "Dual mage", "Shade bolt, flies for", Frames, 1, 60;
+    BinaryFlight,         "Dual mage", "Binary, flies for", Frames, 1, 90;
+    AbyssLife,            "Dual mage", "Abyss, lasts", Frames, 1, 300;
+    SpellFlash,           "Dual mage", "Ray and flare, seen for", Frames, 1, 30;
+    HexLasts,             "Dual mage", "Hex, lasts", Frames, 1, 600;
+    ShatterDamage,        "Dual mage", "Shatter, damage", Int, 0, 200;
+    ShatterStagger,       "Dual mage", "Shatter, staggers for", Frames, 0, 60;
+    WitherDamage,         "Dual mage", "Wither, damage", Int, 0, 200;
+    WitherSlow,           "Dual mage", "Wither, slows to (x)", Fixed, 0, fx(1,1);
+    AbyssPull,            "Dual mage", "Abyss, drags at (m/s)", Fixed, 0, fx(20,1);
+    FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
+    ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
+    EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
+    // **The Shadow Reaver on three clicks**, 2026-10-09: the flip, the two
+    // drops, the hung shadow and the counter. See
+    // `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+    MoonsaultBack,        "Shadow Reaver", "Moonsault, back (m/s)", Fixed, 0, fx(20,1);
+    GuillotineDive,       "Shadow Reaver", "Guillotine drop, dives at (m/s)", Fixed, 0, fx(60,1);
+    GallowsBlink,         "Shadow Reaver", "Gallows, blinks up (m)", Fixed, 0, fx(10,1);
+    GallowsHang,          "Shadow Reaver", "Gallows, hangs for", Frames, 0, 60;
+    GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
+    HangWaits,            "Shadow Reaver", "Hang the shadow, waits for", Frames, 0, 300;
+    HangSink,             "Shadow Reaver", "Hang the shadow, sinks at (m/s)", Fixed, 0, fx(20,1);
+    MistakeBehind,        "Shadow Reaver", "Deadly mistake, behind them (m)", Fixed, 0, fx(5,1);
+    // **The Bulwark on three clicks**, 2026-10-10: the ram, the bounce, the
+    // battery spent on height, the sail and the step. See
+    // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
+    RamSpeed,             "Bulwark", "Battering ram, speed (m/s)", Fixed, 0, fx(30,1);
+    RamLift,              "Bulwark", "Battering ram, lift (m/s)", Fixed, 0, fx(20,1);
+    ReboundKick,          "Bulwark", "Rebound, thrown back at (m/s)", Fixed, 0, fx(30,1);
+    ReboundLift,          "Bulwark", "Rebound, thrown up at (m/s)", Fixed, 0, fx(30,1);
+    UnloadLift,           "Bulwark", "Unload, lift empty (m/s)", Fixed, 0, fx(30,1);
+    UnloadLiftFull,       "Bulwark", "Unload, lift added when full (m/s)", Fixed, 0, fx(30,1);
+    SailFall,             "Bulwark", "Sail, falls at most (m/s)", Fixed, 0, fx(20,1);
+    StepLift,             "Bulwark", "Shield step, lift empty (m/s)", Fixed, 0, fx(30,1);
+    StepLiftFull,         "Bulwark", "Shield step, lift added when full (m/s)", Fixed, 0, fx(30,1);
+    StepForward,          "Bulwark", "Shield step, forward (m/s)", Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------

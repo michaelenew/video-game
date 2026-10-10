@@ -594,7 +594,12 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
     match (class, slot) {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
         (Class::Bulwark, 1) => Clip::BulwarkCommitted,
-        (Class::Bulwark, _) => Clip::BulwarkSpecial,
+        (Class::Bulwark, 2) => Clip::BulwarkSpecial,
+        // The three clicks (2026-10-10), on the clips they are versions of:
+        // Rebound and the ram are the Bash's shield-first shove, Unload and
+        // the Shield step drive the shield down as the Slam does.
+        (Class::Bulwark, 3) | (Class::Bulwark, 4) => Clip::BulwarkPoke,
+        (Class::Bulwark, _) => Clip::BulwarkCommitted,
         (Class::Champion, 0) => Clip::ChampionSword,
         (Class::Champion, 1) => Clip::ChampionHammer,
         (Class::Champion, 2) => Clip::ChampionSpear,
@@ -617,7 +622,18 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::ShadowReaver, 0) => Clip::ReaverPoke,
         (Class::ShadowReaver, 1) => Clip::ReaverCommitted,
         (Class::ShadowReaver, 2) => Clip::ReaverSpecial,
-        (Class::ShadowReaver, _) => Clip::ReaverMechanic,
+        (Class::ShadowReaver, 3) => Clip::ReaverMechanic,
+        // The three clicks (2026-10-09), on the clips they are versions of:
+        // the blade's on the Slash, the execution's on the Executioner's
+        // overhead, and the shadow's -- the swap, the hang -- on the send.
+        // Deadly mistake is a stance, which is the Executioner's wind-up held.
+        (Class::ShadowReaver, 4) => Clip::ReaverPoke,
+        (Class::ShadowReaver, 5) => Clip::ReaverCommitted,
+        (Class::ShadowReaver, 6) => Clip::ReaverMechanic,
+        (Class::ShadowReaver, 7) => Clip::ReaverPoke,
+        (Class::ShadowReaver, 8) => Clip::ReaverCommitted,
+        (Class::ShadowReaver, 9) => Clip::ReaverMechanic,
+        (Class::ShadowReaver, _) => Clip::ReaverCommitted,
         (Class::Elementalist, 0) => Clip::ElementalistPoke,
         (Class::Elementalist, 1) => Clip::ElementalistCommitted,
         (Class::Elementalist, 2) => Clip::ElementalistSpecial,
@@ -648,12 +664,24 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, 2) => Clip::BloodSpecial,
         (Class::BloodMage, 3) => Clip::BloodMechanic,
         (Class::BloodMage, _) => Clip::BloodSweep,
+        // Every move a spell, since 2026-10-09, on the six clips she has: a
+        // column's spells are thrown from that column's arm, so the dark ones
+        // are the left-handed casts and the light ones the right-handed.
+        // Binary and Phase are the light Lance's two-handed thrust, the Abyss
+        // and Dawn the sweep's whole-body heave, and Equinox the raised
+        // special. Her own clips for the new five are the next step, logged
+        // in `docs/design/feel-log.md`.
         (Class::DualMage, 0) => Clip::DualDark,
         (Class::DualMage, 1) => Clip::DualLightLance,
         (Class::DualMage, 2) => Clip::DualSpecial,
         (Class::DualMage, 3) => Clip::DualSweep,
         (Class::DualMage, 4) => Clip::DualLight,
-        (Class::DualMage, _) => Clip::DualDarkLance,
+        (Class::DualMage, 5) => Clip::DualDark,
+        (Class::DualMage, 6) => Clip::DualLight,
+        (Class::DualMage, 7) => Clip::DualLightLance,
+        (Class::DualMage, 8) => Clip::DualDarkLance,
+        (Class::DualMage, 9) => Clip::DualSweep,
+        (Class::DualMage, _) => Clip::DualSpecial,
     }
 }
 

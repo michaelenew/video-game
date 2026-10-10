@@ -235,6 +235,26 @@ pub enum EffectKind {
     /// spent on the first body it reaches. Somebody in the air is **pinned**
     /// there; somebody on the floor is only hit.
     Nail,
+    /// Dual mage, dark. **A Shade bolt**: a small dark dart in flight along
+    /// her aim, spent on the first body it reaches, which it hexes with
+    /// Umbra. Reel's too, and on Reel's a body pulls her to it. See
+    /// `docs/design/exploration/0010_dual_mage_spells.md`.
+    ShadeBolt,
+    /// Dual mage, twilight. **Binary**: two orbs, one of each force, wound
+    /// round each other in flight. On a hexed body it sets off that hex's
+    /// reaction; on a clean one, both at half.
+    Binary,
+    /// Dual mage, dark. **The Abyss**: a well on the floor that drags whoever
+    /// is in it toward its middle, ticks, drains back to her and hexes Umbra.
+    /// Nightfall's is the same well, smaller, where she left the floor.
+    Abyss,
+    /// Dual mage, light. **A Flare**: a burst of light a few metres along her
+    /// aim, out on its first frame. The rest of its short life is the picture.
+    Flare,
+    /// Dual mage, light. **A Sunray**: an instant beam from her hand to the
+    /// first body on the crosshair's line, or its reach. It hits on its first
+    /// frame; the few after are the line being seen.
+    Sunray,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -343,6 +363,11 @@ impl EffectKind {
             EffectKind::Fountain => "fire fountain",
             EffectKind::Nova => "blood nova",
             EffectKind::Nail => "nail",
+            EffectKind::ShadeBolt => "shade bolt",
+            EffectKind::Binary => "binary",
+            EffectKind::Abyss => "abyss",
+            EffectKind::Flare => "flare",
+            EffectKind::Sunray => "sunray",
         }
     }
 
@@ -407,6 +432,12 @@ impl EffectKind {
             // Round her, wherever she stood; thrown along her aim.
             EffectKind::Nova => true,
             EffectKind::Nail => false,
+            // Her bolts, the burst and the ray are in the air where they were
+            // thrown; the well is on the floor.
+            EffectKind::ShadeBolt | EffectKind::Binary | EffectKind::Flare | EffectKind::Sunray => {
+                false
+            }
+            EffectKind::Abyss => true,
         }
     }
 
@@ -429,6 +460,8 @@ impl EffectKind {
                 | EffectKind::Tether
                 | EffectKind::Haemorrhage
                 | EffectKind::Nail
+                | EffectKind::ShadeBolt
+                | EffectKind::Binary
         )
     }
 
@@ -518,6 +551,11 @@ impl EffectKind {
             18 => Some(EffectKind::AirBall),
             19 => Some(EffectKind::FireCarpet),
             20 => Some(EffectKind::Fountain),
+            // The Dual mage's, 2026-10-09: the bolts fly from her hand along
+            // the aim, and the well lands where the crosshair met the floor.
+            21 => Some(EffectKind::ShadeBolt),
+            22 => Some(EffectKind::Binary),
+            23 => Some(EffectKind::Abyss),
             _ => None,
         }
     }
@@ -575,6 +613,10 @@ impl EffectKind {
             // The burst is its first frame; the rest is the picture of it.
             EffectKind::Nova => t::air_ring_life(),
             EffectKind::Nail => t::nail_flight(),
+            EffectKind::ShadeBolt => t::shade_bolt_flight(),
+            EffectKind::Binary => t::binary_flight(),
+            EffectKind::Abyss => t::abyss_life(),
+            EffectKind::Flare | EffectKind::Sunray => t::spell_flash(),
         }
     }
 
@@ -628,6 +670,12 @@ impl EffectKind {
             // Both are the move's own hit: nothing else hits when they are
             // thrown. The nova's is scaled by the hold where it bursts.
             EffectKind::Nova | EffectKind::Nail => m.damage,
+            // Her spells are each the move's own hit; the well's is per tick.
+            EffectKind::ShadeBolt
+            | EffectKind::Binary
+            | EffectKind::Abyss
+            | EffectKind::Flare
+            | EffectKind::Sunray => m.damage,
         }
     }
 }
@@ -942,6 +990,11 @@ impl Effect {
             EffectKind::FireCarpet => self.source().radius,
             EffectKind::Nova => self.reach,
             EffectKind::Nail => self.source().radius,
+            EffectKind::ShadeBolt
+            | EffectKind::Binary
+            | EffectKind::Abyss
+            | EffectKind::Flare
+            | EffectKind::Sunray => self.source().radius,
         }
     }
 

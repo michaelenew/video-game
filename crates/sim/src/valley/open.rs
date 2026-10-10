@@ -254,6 +254,9 @@ fn shift_player(p: &mut Player, d: V3) {
         },
         Mechanic::Shadow(shadow) => {
             shadow.pos = shadow.pos.add(d);
+            if shadow.rest != crate::fixed::Fx::MAX {
+                shadow.rest = shadow.rest.add(d.y);
+            }
             if let crate::class::Ghost::Casting { from, to, .. } = &mut shadow.doing {
                 *from = from.add(d);
                 *to = to.add(d);

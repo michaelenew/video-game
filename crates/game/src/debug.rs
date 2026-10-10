@@ -278,12 +278,33 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            EffectKind::Nail => {
+            EffectKind::Nail | EffectKind::ShadeBolt | EffectKind::Binary => {
                 gizmos.sphere(
                     Isometry3d::from_translation(crate::fx3(effect.bolt_at())),
                     effect.field_radius().to_f32_for_render(),
                     PILLAR,
                 );
+            }
+            // The Dual mage's well, burst and ray: the volumes they test.
+            EffectKind::Abyss => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    sim::tuning::body_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            EffectKind::Flare => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(at),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            EffectKind::Sunray => {
+                let end = v3(effect.pos.add(effect.dir.scale(effect.reach)));
+                gizmos.line(at, end, PILLAR);
             }
             // The Air ball: the ball the carry reads, at its size now.
             EffectKind::AirBall => {
