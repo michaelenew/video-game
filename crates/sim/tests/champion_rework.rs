@@ -574,3 +574,65 @@ fn a_blow_taken_costs_a_share_of_the_meter() {
         "the Bash cost him a share"
     );
 }
+
+// -- Break and the Clash (C6, C7) ----------------------------------------
+
+#[test]
+fn the_champions_heavy_blows_weigh_on_a_creature_more_than_they_cut() {
+    use sim::species::SpeciesId;
+    // The hammer on the Ridgeback: on the frame it lands, the animal's strain
+    // climbs by more than its health falls.
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::RIDGEBACK).seated(1);
+    let beast = w.monster().unwrap().pos;
+    let y = w.players[0].pos.y;
+    w.players[0].pos = sim::V3::new(beast.x.sub(sim::Fx::from_int(3)), y, beast.z);
+    let mut seen = None;
+    for f in 0..60 {
+        let before = *w.monster().unwrap();
+        let aim = Input::looking_at(if f == 0 { Input::MIDDLE } else { 0 }, LOOK_RIGHT, -2000);
+        w.advance([aim, Input::default()]);
+        let after = w.monster().unwrap();
+        if after.health < before.health {
+            seen = Some((before.health - after.health, after.strain - before.strain));
+            break;
+        }
+    }
+    let (cut, weighed) = seen.expect("the hammer never reached the Ridgeback");
+    assert!(weighed > cut, "the hammer cut {cut} and weighed {weighed}");
+}
+
+#[test]
+fn a_heavy_blow_meeting_a_lighter_one_wins_it_outright() {
+    // Two Champions in reach: one swinging the sword, one in the Shockwave's
+    // active frames. The heavier blow lands; the sword is cancelled and its
+    // thrower staggered.
+    let mut w = World::with_classes([Class::Champion, Class::Champion]);
+    for _ in 0..90 {
+        w.advance([
+            Input::aimed(Input::W, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    let shockwave = sim::moves::get(Class::Champion, c::SHOCKWAVE);
+    let sword = sim::moves::get(Class::Champion, c::SWORD_GROUND);
+    w.players[0].action = Action::Active {
+        kind: c::SHOCKWAVE,
+        left: shockwave.active,
+    };
+    w.players[1].action = Action::Active {
+        kind: c::SWORD_GROUND,
+        left: sword.active,
+    };
+    let (h0, h1) = (w.players[0].health, w.players[1].health);
+    w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    assert_eq!(w.players[0].health, h0, "the lighter blow was cancelled");
+    assert!(w.players[1].health < h1, "the heavier one landed");
+    assert!(
+        matches!(
+            w.players[1].action,
+            Action::Stagger { .. } | Action::HitStun { .. }
+        ),
+        "and the lighter's thrower is in no state to go on: {:?}",
+        w.players[1].action
+    );
+}

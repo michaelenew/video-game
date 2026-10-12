@@ -1,5 +1,5 @@
 ---
-status: decided 2026-10-12 by the owner, three rounds; being built
+status: decided 2026-10-12 by the owner over three rounds; built the same day, unplayed -- ../kits/champion.md §"The rework"
 started: 2026-10-12
 depends: ../kits/champion.md, ../champion.md, ../monsters.md, ../creatures/mantis.md, 0014_shadow_reaver_marks_and_throws.md
 ---
@@ -348,3 +348,7 @@ new machinery) is answered by C5: every full charge is new.
 - **CHAMP-9** — answered: no free full charges on a downed creature; a full charge on a third
   hit is a grand finisher, and an uncharged third hit is a third hit.
 - **CHAMP-10** — answered: the six as proposed; build it.
+- **CHAMP-11** (from the build). The full charges are movement too: Heaven-piercer's run after
+  its spear is 25 m, the Comet 8 m and Thousand Cuts 7 m, and a string advances on the throw,
+  whiffed or not. The lab search's whole-kit reach went from 55.8 to 85.3 m at lane 0. Should
+  they cross the gaps the movement sections were built against?

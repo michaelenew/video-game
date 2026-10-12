@@ -1511,11 +1511,10 @@ fn a_struck_body_shudders_through_the_freeze_and_the_striker_does_not() {
     w.players[0].pos = sim::V3::new(sim::Fx::ZERO, y, sim::Fx::from_int(8));
     w.players[1].pos = sim::V3::new(sim::Fx::ratio(6, 5), y, sim::Fx::from_int(8));
     let mut shook = Vec::new();
-    for _ in 0..80 {
-        w.advance([
-            sim::Input::aimed(sim::Input::MIDDLE, 0),
-            sim::Input::aimed(0, 1 << 15),
-        ]);
+    // Pressed once: held, the hammer is a charge (exploration 0015).
+    for f in 0..80 {
+        let press = if f == 0 { sim::Input::MIDDLE } else { 0 };
+        w.advance([sim::Input::aimed(press, 0), sim::Input::aimed(0, 1 << 15)]);
         let struck = view::interp::shudder_of(&w.players[1]);
         let striker = view::interp::shudder_of(&w.players[0]);
         assert_eq!(striker, 0.0, "the body that landed the blow shook");

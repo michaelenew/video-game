@@ -69,8 +69,10 @@ fn throw(kind: u8, mut each: impl FnMut(&sim::state::Player, u16)) {
     };
     let (startup, active, _) = sim::moves::frames(sim::Class::Champion, kind);
     let mut seen = 0;
-    for _ in 0..120u16 {
-        w.advance([sim::Input::aimed(button, 0), sim::Input::aimed(0, 1 << 15)]);
+    // Pressed once: a weapon held down is a charge (exploration 0015).
+    for f in 0..120u16 {
+        let press = if f == 0 { button } else { 0 };
+        w.advance([sim::Input::aimed(press, 0), sim::Input::aimed(0, 1 << 15)]);
         if let sim::state::Action::Active { kind: k, left } = w.players[0].action {
             if k == kind {
                 each(&w.players[0], startup + active.saturating_sub(left));

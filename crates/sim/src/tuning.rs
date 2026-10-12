@@ -3591,3 +3591,51 @@ pub fn momentum_quick1() -> i32 {
 pub fn momentum_quick2() -> i32 {
     oven::scalar(Scalar::MomentumQuick2).max(0)
 }
+
+// Break and the Clash (exploration 0015, C6 and C7). See `state::impact`
+// and `state::clashing`.
+
+/// Impact, hammer blows into strain (%).
+pub fn impact_hammer() -> i32 {
+    oven::scalar(Scalar::ImpactHammer).max(0)
+}
+
+/// Impact, third links into strain (%).
+pub fn impact_third() -> i32 {
+    oven::scalar(Scalar::ImpactThird).max(0)
+}
+
+/// Impact, true links into strain (%).
+pub fn impact_beat() -> i32 {
+    oven::scalar(Scalar::ImpactBeat).max(0)
+}
+
+/// Impact, full charges into strain (%).
+pub fn impact_full() -> i32 {
+    oven::scalar(Scalar::ImpactFull).max(0)
+}
+
+/// Impact, of a full charge's extra into poise (%).
+pub fn impact_poise() -> i32 {
+    oven::scalar(Scalar::ImpactPoise).max(0)
+}
+
+/// Meteor, stumbles a creature for.
+pub fn meteor_stumble() -> u16 {
+    oven::scalar(Scalar::MeteorStumble).max(0) as u16
+}
+
+/// Clash, a creature flinches for.
+pub fn clash_flinch() -> u16 {
+    oven::scalar(Scalar::ClashFlinch).max(0) as u16
+}
+
+/// Clash, the lighter blow staggers for.
+pub fn clash_stagger() -> u16 {
+    oven::scalar(Scalar::ClashStagger).max(0) as u16
+}
+
+/// Clash, both freeze for.
+pub fn clash_freeze() -> u16 {
+    oven::scalar(Scalar::ClashFreeze).max(0) as u16
+}

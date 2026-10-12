@@ -5,6 +5,7 @@ rebuilt: 2026-09-12
 chained: 2026-09-14
 shaped: 2026-09-15
 weighted: 2026-09-26
+reworked: 2026-10-12, unplayed (exploration 0015)
 formerly: Bellator, Shifter
 sources: docs/archive/combat-design/shifter-skills.md
 depends: ../champion.md
@@ -16,6 +17,61 @@ depends: ../champion.md
 buttons, a three-hit string where every hit is a free choice of all three, a dash that
 changes what all three of them do, and an air game that is the point of the class rather
 than a place it visits.
+
+## The rework -- 2026-10-12
+
+From three of the owner's replays: the reward lived at the string's third hit,
+and against a creature that guards the third hit almost never arrived (three
+finishers landed of thirty thrown); Rush was barely faster than a dodge; and
+nothing carried from one exchange to the next, so the right play was to hold
+range and poke. The design and its three rounds of answers are
+[exploration 0015](../exploration/0015_champion_momentum_and_the_charge.md);
+what was built, in one place:
+
+- **Rush** is 32 m/s for 12 frames, **braced**: a blow through most of the run
+  costs half and does not stop him, one in its last four frames costs nothing
+  (once a run), and 150 taken over a run breaks it. Running into a body is
+  **the shoulder**, the string's first hit -- the next click is the second
+  link. A third hit that lands **refunds** the Rush. The Rush stab carries what
+  it catches along the rest of the run. (`state::brace_the_rush`,
+  `World::shoulder`.)
+- **The Beat**: a weapon pressed inside the impact freeze of a link that landed
+  makes the next link a **true link** -- 20% more damage, 4 more frames of
+  freeze. The press is held for him until the link comes out. (`find_the_beat`.)
+- **The Hold**: any link whose button was pressed for it and is still down at
+  the top of its wind-up waits there and charges (`moves::Charge::Heft`). Part
+  held is the link harder and further; **full** (40 frames) is that weapon's
+  **full charge** -- a different move. He crawls and turns; Rush takes it back.
+  **Holding is a charge, so linear play is tapping**, not holding: a button held
+  down no longer walks the string.
+- **The full charges**, the first and second links' and then the third's, which
+  are the grand finishers:
+
+  | | Full charge, hit 1 or 2 | Full charge, hit 3 |
+  | --- | --- | --- |
+  | **Sword** | **Crescent** -- a 10 m blade of light down the crosshair's line | **Thousand Cuts** -- a 7 m run through them; six cuts land on the line a beat later, the last throwing up |
+  | **Hammer** | **Shockwave** -- a 5 m ring of broken ground that throws up what it passes | **Meteor** -- a leap to where the crosshair is, a 7 m crater, a creature knocked off its feet |
+  | **Spear** | **Comet** -- an 8 m lunge that carries what it catches, and splats it on a wall | **Heaven-piercer** -- the spear thrown; it pins the first body it stops in and he rushes after it and tears it out |
+
+- **Momentum**: a meter on him, fed by every blow that lands (more for a
+  different weapon from the last, a true link, a full charge), held two seconds,
+  then drained; a blow taken costs 30%. A third full (*Heated*) and two thirds
+  (*Blazing*) fill a hold 25% and 50% faster; **full, the next press is its
+  full charge on a tap**, and spends it. On the HUD under his health, and as a
+  glow on the weapon in his hands.
+- **Break**: against a creature his hammer blows and third links count double
+  into its strain, true links half again, full charges triple -- and a full
+  charge's extra goes half into poise. He is the class that puts a creature on
+  the floor.
+- **The Clash**: a full charge's or Earthbreaker's active frames, or a Rush's
+  last frames, meeting a creature's swing cancel it -- the creature flinches and
+  he takes nothing. Between fighters, two blows meeting where one is his: the
+  longer impact freeze wins outright, the other is cancelled into a stagger,
+  and two of a weight bounce both apart.
+
+Also fixed in the building: **a chain link that landed on a creature never
+confirmed the chain**, so every string against a creature paid every recovery
+in full. It does now.
 
 ## The grid
 

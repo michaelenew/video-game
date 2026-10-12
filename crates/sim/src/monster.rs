@@ -1950,6 +1950,33 @@ impl Monster {
         dealt
     }
 
+    /// **Weight the damage did not carry** (exploration 0015, C6): strain,
+    /// and some of it poise, added over and above what a blow dealt. The
+    /// Champion's heavy blows land here -- he is the class that puts a
+    /// creature on the floor -- and the ladder reads it on the next blow, as
+    /// it reads any other strain.
+    pub fn take_weight(&mut self, strain: i32, poise: i32) {
+        if !self.alive() {
+            return;
+        }
+        self.strain += strain.max(0);
+        self.poise += poise.max(0);
+    }
+
+    /// Knocked off its feet for `frames`, whatever it was doing -- the
+    /// Meteor's crater. Not on something already down, and not on the dead.
+    pub fn stumble_for(&mut self, frames: u16) {
+        if !self.alive() || self.doing.grounded_route() || frames == 0 {
+            return;
+        }
+        self.doing = Doing::Stumble {
+            left: frames,
+            front: true,
+        };
+        self.speed = Fx::ZERO;
+        self.yaw_rate = Fx::ZERO;
+    }
+
     /// A foot has gone. Down it comes.
     ///
     /// The stumble is the moment; `lame_layer` is the rest of the fight. Both

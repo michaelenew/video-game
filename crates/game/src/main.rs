@@ -275,6 +275,7 @@ fn main() {
                     place_essence_swings,
                     place_champion_arms,
                     place_champion_trails,
+                    place_champion_glow,
                     place_pips,
                     place_hexes,
                 ),
@@ -306,6 +307,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                hud::update_momentum,
                 valley::update_text,
                 glint::update,
                 veil::place,
@@ -552,6 +554,7 @@ impl Default for Sim {
         let mut w = start_world(opts, dummy);
         shot_bars(&mut w);
         shot_weight(&mut w);
+        shot_momentum(&mut w);
         shot_at(&mut w);
         shot_move(&mut w);
         // `--replay <file>`: the fight is the tape's, from its own start.
@@ -1177,6 +1180,22 @@ fn shot_weight(w: &mut World) {
     }
 }
 
+/// `SHOT_MOMENTUM=n` starts every Champion with `n` momentum (exploration
+/// 0015), so a capture can look at the meter and the glow on his weapon
+/// without landing his way up to them. The same kind of hook as
+/// `SHOT_WEIGHT`; it holds for two seconds and then drains.
+fn shot_momentum(w: &mut World) {
+    let Some(n) = platform::env("SHOT_MOMENTUM").and_then(|s| s.trim().parse::<i32>().ok()) else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Forms { fury, .. } = &mut p.mechanic {
+            fury.momentum = n.clamp(0, u16::MAX as i32) as u16;
+            fury.momentum_left = sim::tuning::momentum_holds();
+        }
+    }
+}
+
 /// `SHOT_AT=x,z` stands player one at that point of the place the world is
 /// in (metres), on whatever is under it, facing `+x`: a capture of somewhere
 /// that is not a start, such as the Waterfall at the head of the Pinewood
@@ -1608,6 +1627,15 @@ const TRAIL_STEPS: usize = 6;
 #[derive(Resource)]
 struct ArmsLook {
     trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 3],
+    /// **The glow at the head of the weapon in his hands** (exploration
+    /// 0015): one per momentum tier, ember to white, the HUD bar's colours.
+    glow: [Handle<StandardMaterial>; 4],
+}
+
+/// The glow itself, one per fighter. See `place_champion_glow`.
+#[derive(Component)]
+struct GlowMesh {
+    owner: usize,
 }
 
 /// The essence around the Blood mage's swing: the hit volume itself, drawn
@@ -2254,7 +2282,24 @@ fn setup(
                 TrailMesh { owner, segment },
             ));
         }
+        commands.spawn((
+            Mesh3d(look.ball.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            GlowMesh { owner },
+        ));
     }
+    let glow = std::array::from_fn(|tier| {
+        let c = hud::momentum_colour(tier as u8).to_linear();
+        materials.add(StandardMaterial {
+            base_color: Color::LinearRgba(LinearRgba::new(c.red, c.green, c.blue, 0.7)),
+            emissive: LinearRgba::rgb(c.red * 3.0, c.green * 3.0, c.blue * 3.0),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        })
+    });
     // The trail, one colour per weapon so the three arcs are told apart as
     // well as the three silhouettes: the sword's cold and white, the hammer's
     // a hot ember, the spear's a thin blue streak. Unlit, so it reads the same
@@ -2275,7 +2320,7 @@ fn setup(
             })
         })
     });
-    commands.insert_resource(ArmsLook { trail });
+    commands.insert_resource(ArmsLook { trail, glow });
     commands.insert_resource(look);
 }
 
@@ -2854,6 +2899,73 @@ fn place_champion_arms(
         tf.translation = Vec3::from(piece.centre);
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
         tf.scale = Vec3::from(piece.size);
+    }
+}
+
+/// **The glow on the Champion's weapon** (exploration 0015): a ball of light
+/// at the head of whichever weapon is in his hands. It is his momentum -- none
+/// below a third, then ember, *Heated*, *Blazing* and white at full, the HUD
+/// bar's own colours -- and it swells while he holds a charge, to its full
+/// size at a full charge, so the hold is read off the weapon as it winds.
+fn place_champion_glow(
+    sim: Res<Sim>,
+    look: Res<ArmsLook>,
+    hands: Res<Hands>,
+    torsos: Res<Torsos>,
+    mut meshes: Query<(
+        &GlowMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let sim::class::Mechanic::Forms { fury, .. } = p.mechanic else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let [left, right] = hands.0[tag.owner];
+        let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[tag.owner];
+        let torso = view::arms::Torso {
+            chest: chest.into(),
+            chest_turn: quat(chest_turn),
+            hips: hips.into(),
+            hips_turn: quat(hips_turn),
+        };
+        let Some(arms) = view::arms::champion_arms(p, left.into(), right.into(), &torso) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let tier = fury.tier();
+        // The hold, as a share of a full charge.
+        let held = match p.action {
+            sim::state::Action::Channel { held, .. } => {
+                (held as f32 / sim::tuning::hold_full().max(1) as f32).min(1.0)
+            }
+            _ => 0.0,
+        };
+        let size = match tier {
+            0 => 0.0,
+            1 => 0.16,
+            2 => 0.24,
+            _ => 0.34,
+        } + 0.3 * held;
+        if size <= 0.0 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        let w = arms.weapons[arms.held as usize];
+        tf.translation = Vec3::from(w.tip);
+        tf.scale = Vec3::splat(size);
+        // At full charge it is white whatever the meter says: the charge is
+        // the one big hit, and it looks like one.
+        let shade = if held >= 1.0 { 3 } else { tier as usize };
+        let want = &look.glow[shade.min(3)];
+        if mat.0 != *want {
+            mat.0 = want.clone();
+        }
     }
 }
 

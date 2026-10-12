@@ -196,7 +196,7 @@ pub const SECTIONS: &[Section] = &[
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword, and held down it walks that weapon's whole three-hit string.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword: tapped, it walks that weapon's whole three-hit string; held down, it charges.",
             ),
             e(
                 "Q",
@@ -231,7 +231,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Champion",
         in_browser: true,
-        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move.",
+        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move. Reworked 2026-10-12 and unplayed: a braced Rush that opens the string, the beat, a hold that charges any hit, six full charges and a momentum meter -- docs/design/exploration/0015_champion_momentum_and_the_charge.md is the design.",
         entries: &[
             e(
                 "Left click",
@@ -251,7 +251,23 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "The third hit",
-                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, and is the only attack in the game that threatens behind you. All three commit your feet.",
+                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, is the only attack in the game that threatens behind you, and shoves them furthest. All three commit your feet. One that lands gives you your Rush back.",
+            ),
+            e(
+                "On the beat",
+                "Press the next hit while the last one's impact is still holding both of you still and it is a true link: it hits harder and sticks longer. The window is the weapon's weight -- wide on the hammer, three frames on the sword.",
+            ),
+            e(
+                "Hold a weapon",
+                "Any hit you pressed for, held down, waits at the top of its wind-up and charges -- to keep a swing you started too late, to hold a threat over a gap, or to throw a hit late. Let go part way for a harder hit; hold to full and it becomes that weapon's full charge. You crawl and turn while you hold, and Rush takes a hold back.",
+            ),
+            e(
+                "Full charges",
+                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Comet, a long lunge that carries whoever it catches into the nearest wall. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out.",
+            ),
+            e(
+                "Momentum",
+                "The bar under your health. Every hit that lands fills it; a different weapon from the last, a true link and a full charge fill it more. It holds for two seconds, then drains, and a hit you take costs a share. A third and two thirds full, your holds charge faster -- the glow on your weapon says which. Full, the next hit you press comes out as its full charge, and empties it.",
             ),
             e(
                 "Jump during Earthbreaker",
@@ -267,11 +283,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E",
-                "Rush. A dash on one charge, and it cancels any recovery. It does not end a string — one charge buys you a reposition in the middle of one.",
+                "Rush. A fast dash on one charge, and it cancels any recovery or a hold. It does not end a string. You are braced while you run -- a hit costs you half and does not stop you, one in the last few frames costs nothing, though enough of them will. Run into somebody and the shoulder is the string's first hit: the next click is the second.",
             ),
             e(
                 "While rushing",
-                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs for the biggest single hit in the class, or vaults if you are pointing at the floor.",
+                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs and carries whoever it catches along the rest of the run, or vaults if you are pointing at the floor.",
             ),
         ],
     },
@@ -916,6 +932,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_WEIGHT=<n>",
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
+            ),
+            e(
+                "SHOT_MOMENTUM=<n>",
+                "Start every Champion with n momentum, so a capture can look at the meter and the glow on his weapon without landing his way up to them. It holds two seconds and then drains, so pair it with an early SHOT_FRAME.",
             ),
             e(
                 "SHOT_AT=<x>,<z>",

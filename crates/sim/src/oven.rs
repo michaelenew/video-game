@@ -845,6 +845,17 @@ scalars! {
     MomentumHurt,         "Champion", "Momentum, a hit taken costs (%)",                 Percent, 0, 100;
     MomentumQuick1,       "Champion", "Momentum, Heated: a hold fills faster by (%)",    Percent, 0, 90;
     MomentumQuick2,       "Champion", "Momentum, Blazing: a hold fills faster by (%)",   Percent, 0, 90;
+    // **Break and the Clash** (C6, C7): what his blows do to a creature's
+    // strain over their damage, and what meeting a swing does.
+    ImpactHammer,         "Champion", "Impact, hammer blows into strain (%)",              Percent, 100, 500;
+    ImpactThird,          "Champion", "Impact, third links into strain (%)",               Percent, 100, 500;
+    ImpactBeat,           "Champion", "Impact, true links into strain (%)",                Percent, 100, 500;
+    ImpactFull,           "Champion", "Impact, full charges into strain (%)",              Percent, 100, 800;
+    ImpactPoise,          "Champion", "Impact, share of a full charge's extra into poise (%)",  Percent, 0, 100;
+    MeteorStumble,        "Champion", "Meteor, stumbles a creature for",                   Frames, 0, 300;
+    ClashFlinch,          "Champion", "Clash, a creature flinches for",                    Frames, 0, 180;
+    ClashStagger,         "Champion", "Clash, the lighter blow staggers for",              Frames, 0, 120;
+    ClashFreeze,          "Champion", "Clash, both freeze for",                            Frames, 0, 60;
 }
 
 // ---------------------------------------------------------------------------

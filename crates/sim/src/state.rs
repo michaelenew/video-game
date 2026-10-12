@@ -2711,9 +2711,21 @@ impl World {
         // creature's presence rather than a separate flag, so there is nothing
         // for the two to get out of step about.
         let snapshot = self.players;
+        // **The Clash, between fighters** (exploration 0015, C7): two live
+        // blows meeting on one frame, at least one of them a Champion's heavy
+        // one. The heavier wins outright and the lighter is cancelled into a
+        // short stagger; two of a weight bounce both apart.
+        let cancelled = if self.pvp() {
+            self.clash(&snapshot)
+        } else {
+            [false; MAX_PLAYERS]
+        };
         for attacker in 0..MAX_PLAYERS {
             if !self.pvp() {
                 break;
+            }
+            if cancelled[attacker] {
+                continue;
             }
             let defender = 1 - attacker;
             if let Some(mut hit) =
@@ -4504,6 +4516,48 @@ impl World {
         }
     }
 
+    /// Settle a Clash between the two fighters, if their blows meet this
+    /// frame: who is cancelled. See the call in `advance`.
+    fn clash(&mut self, snapshot: &[Player; MAX_PLAYERS]) -> [bool; MAX_PLAYERS] {
+        let mut cancelled = [false; MAX_PLAYERS];
+        let hits = [
+            resolve_hit(&snapshot[0], &snapshot[1], 0),
+            resolve_hit(&snapshot[1], &snapshot[0], 1),
+        ];
+        if hits.iter().any(|h| h.is_none()) || !(clashing(&snapshot[0]) || clashing(&snapshot[1])) {
+            return cancelled;
+        }
+        let weight = |p: &Player| {
+            p.action
+                .attack_kind()
+                .map_or(0, |kind| moves::get(p.class, kind).hitstop)
+        };
+        let (w0, w1) = (weight(&snapshot[0]), weight(&snapshot[1]));
+        let losers: &[usize] = if w0 > w1 {
+            &[1]
+        } else if w1 > w0 {
+            &[0]
+        } else {
+            &[0, 1]
+        };
+        for &i in losers {
+            cancelled[i] = true;
+            let q = &mut self.players[i];
+            q.action = Action::Stagger {
+                left: t::clash_stagger(),
+            };
+            q.stun_total = t::clash_stagger();
+            q.hit_used = true;
+        }
+        for i in 0..MAX_PLAYERS {
+            freeze(&mut self.players[i], t::clash_freeze());
+            if clashing(&snapshot[i]) && !cancelled[i] {
+                self.players[i].parried = PARRY_FLOURISH;
+            }
+        }
+        cancelled
+    }
+
     /// **The Comet's wall-splat** (exploration 0015, C5): a lunge with
     /// somebody on the point that is stopped short by something solid has
     /// put them into it. They are staggered against it, long, and the lunge
@@ -4776,6 +4830,63 @@ fn surge(p: &mut Player, kind: u8) -> Option<(u8, u8)> {
     fury.momentum = 0;
     fury.momentum_left = 0;
     Some((big, place))
+}
+
+/// **Break** (exploration 0015, C6): what a Champion's blow that landed
+/// `dealt` on a creature adds to its strain over the damage -- a hammer, a
+/// third link, a true link and a full charge each weigh more than they cut,
+/// the heaviest of them counting -- and a full charge's extra goes some way
+/// to its poise as well. The Meteor's crater knocks it off its feet outright.
+/// He is the class that puts a creature on the floor.
+pub(crate) fn impact(beast: &mut Monster, p: &Player, kind: u8, dealt: i32) {
+    use moves::champion as c;
+    if p.class != Class::Champion || dealt <= 0 {
+        return;
+    }
+    let true_link = matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.true_link);
+    let full = c::is_full(kind);
+    let mut weight = 100;
+    if c::weapon(kind) == c::HAMMER {
+        weight = weight.max(t::impact_hammer());
+    }
+    if c::link_of(kind) == Some(2) {
+        weight = weight.max(t::impact_third());
+    }
+    if true_link {
+        weight = weight.max(t::impact_beat());
+    }
+    if full {
+        weight = weight.max(t::impact_full());
+    }
+    let extra = dealt * (weight - 100).max(0) / 100;
+    let poise = if full {
+        extra * t::impact_poise() / 100
+    } else {
+        0
+    };
+    beast.take_weight(extra, poise);
+}
+
+/// **Is this a blow that clashes** (exploration 0015, C7): a Champion in
+/// the active frames of a full charge or of the hammer's third link, or in a
+/// Rush's last frames with the shoulder down. Meeting a swing with one of
+/// these cancels the swing rather than taking it.
+fn clashing(p: &Player) -> bool {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return false;
+    }
+    let heavy = matches!(
+        p.action,
+        Action::Active { kind, .. } if c::is_full(kind) || kind == c::EARTHBREAKER
+    );
+    let shoulder_down = match p.mechanic {
+        Mechanic::Forms { rush, fury, .. } => {
+            rush > 0 && rush <= t::rush_eat_frames() && !fury.eaten && p.action.actionable()
+        }
+        _ => false,
+    };
+    heavy || shoulder_down
 }
 
 /// **Feed the meter** (exploration 0015, C4): a blow of his landed. Every
@@ -11496,6 +11607,19 @@ impl World {
         // state to feel. See `monster::Monster::take_control`.
         if guarded == monster::Guarded::Lands {
             beast.take_control(effect.control());
+            // The Champion's full charges weigh on it like his blows do, and
+            // the Meteor's crater knocks it off its feet (exploration 0015).
+            if effect.class == Class::Champion && (effect.owner as usize) < MAX_PLAYERS {
+                impact(
+                    &mut beast,
+                    &self.players[effect.owner as usize],
+                    effect.slot,
+                    dealt,
+                );
+                if effect.slot == moves::champion::METEOR && dealt > 0 {
+                    beast.stumble_for(t::meteor_stumble());
+                }
+            }
         }
         self.monsters[slot] = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
@@ -14509,6 +14633,23 @@ impl World {
                 let parried = !m.unblockable
                     && matches!(victim.action, Action::Guard { held } if held < t::parry_window())
                     && facing_it;
+                // **The Clash** (exploration 0015, C7): its swing met a
+                // Champion's heavy blow in the middle of being thrown. The
+                // swing is cancelled -- the creature is knocked out of it --
+                // and he takes nothing. Hitting the scythe, rather than
+                // getting out of its way.
+                if clashing(&victim) {
+                    beast.doing = Doing::Flinch {
+                        left: t::clash_flinch(),
+                    };
+                    let q = &mut self.players[i];
+                    freeze(q, t::clash_freeze());
+                    q.parried = PARRY_FLOURISH;
+                    feed_the_momentum(q, None);
+                    landed = true;
+                    *struck_one = Some((kind, true));
+                    continue;
+                }
                 apply_hit(
                     &mut self.players[i],
                     Hit {
@@ -14620,6 +14761,7 @@ impl World {
             confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
             if dealt > 0 {
                 feed_the_momentum(&mut self.players[i], Some(kind));
+                impact(&mut beast, &attacker, kind, dealt);
             }
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
@@ -15112,6 +15254,35 @@ mod fury_tests {
             p.action
         );
         assert!(rushing(&p).is_none(), "and ends the run");
+    }
+
+    #[test]
+    fn only_heavy_blows_and_a_shoulder_down_clash() {
+        let mut p = Player::new(Class::Champion);
+        p.action = Action::Active {
+            kind: moves::champion::SHOCKWAVE,
+            left: 2,
+        };
+        assert!(clashing(&p), "a full charge's active frames clash");
+        p.action = Action::Active {
+            kind: moves::champion::EARTHBREAKER,
+            left: 2,
+        };
+        assert!(clashing(&p), "so does the hammer's third link");
+        p.action = Action::Active {
+            kind: moves::champion::SWORD_GROUND,
+            left: 2,
+        };
+        assert!(!clashing(&p), "a sword cut does not");
+        let mut q = rushing_champion(t::rush_eat_frames());
+        assert!(clashing(&q), "a Rush with the shoulder down does");
+        if let Mechanic::Forms { fury, .. } = &mut q.mechanic {
+            fury.eaten = true;
+        }
+        assert!(!clashing(&q), "once a run");
+        let mut r = Player::new(Class::Bulwark);
+        r.action = Action::Active { kind: 1, left: 2 };
+        assert!(!clashing(&r), "and nobody else's does");
     }
 
     #[test]

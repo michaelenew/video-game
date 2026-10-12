@@ -8168,3 +8168,64 @@ them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back t
 has left the hunt, and the creature is gone as before. 30 m was tried first and held the
 Pinewood road inside a hunt.
 **Verdict** — unplayed.
+
+### 2026-10-12 — the Champion reworked: the braced Rush, the Beat, the Hold, six full charges, momentum, Break and the Clash
+**Changed** From the owner, with three replays: the Champion "just has a really linear
+playstyle and not a lot of options for outplay", and "the monster fights especially feel
+really bad because there's no semblance of a stun/combo game". Designed over three rounds in
+[exploration 0015](exploration/0015_champion_momentum_and_the_charge.md); the kit document's
+§"The rework" is what was built. In short: Rush 32 m/s for 12 frames, braced (half damage
+through the run, the last four frames eat one blow, 150 breaks it), and the shoulder into a
+body is the string's first hit; a landed third hit refunds it; the Rush stab carries. A weapon
+pressed inside a landed link's freeze is a true link (+20%, +4 frames of freeze). Any link
+pressed for and held at the top of its wind-up charges; held 40 frames it is its weapon's full
+charge -- Crescent, Shockwave, Comet, and for the third link Thousand Cuts, Meteor and
+Heaven-piercer. Momentum on him, fed by landed blows, filling holds faster at a third and two
+thirds and making a tap a full charge when full. Against a creature his heavy blows add strain
+over their damage (hammer and third links ×2, true links ×1.5, full charges ×3, half of a full
+charge's extra into poise), and the Meteor knocks it off its feet. A full charge's,
+Earthbreaker's or a Rush's last frames meeting a creature's swing cancel it; between fighters,
+the longer freeze wins a meeting of two blows outright.
+**Why** The replays, through `hunt --bin replay`: three finishers landed of thirty thrown; the
+hammer opened nine times; Earthbreaker never thrown; Rush stab 0 of 17 and the Rush slash 10 of
+10; in the air 23 % of the time against the Reaver's 57 % and the Elementalist's 46 %.
+**Found in the build**
+- **A chain link that landed on a creature never confirmed the chain.** `confirm_chain` was
+  called only where a fighter is hit, so every string against a creature paid every recovery
+  in full -- the Champion's whole string was slower against an animal than the frame table
+  says. It is confirmed where a creature is hit now, and the refund rides on it.
+- **The replay's hand tables folded every class into one.** `hunt::replay::Hands` keyed moves by
+  slot and named them by the last class played; a tape with a class change was mislabelled
+  (the owner's "Elementalist" tape was mostly a Dual mage). One table per class now.
+- Holding is a charge, so **linear play is tapping**: a button held down no longer walks the
+  string, it charges the opener. A press is spent on the link it threw, so a button held on
+  into the next link does not charge it. A dozen tests that held a Champion's button to throw
+  a swing press it once or tap it now; the scripted hunter's hands press a held weapon every
+  other frame for the same reason.
+- A press inside the sword's three-frame freeze was over before the chain would take it: the
+  beat's press is held for him until the link comes out.
+- The Crescent aimed at the sword's 1.85 m climbed from the chest to a point an arm's length
+  off the eye and flew over everybody: a thrown move is aimed at the length it is thrown
+  (`state::aimed_reach`).
+- Thousand Cuts stopped against the body it was cutting: bodies are not separated while it
+  runs. The javelin flew on past the body it pierced and he tore it out of the floor 15 m
+  behind them: it stops in the first body it pins.
+- Six more move slots widened each fighter's two lockout tables past the snapshot's 4 KiB cap
+  (4144 bytes). The full charges keep no lockout -- a hold or a full meter is their price --
+  and the tables stop at `moves::LOCKED_SLOTS`.
+- `feel.rs` caught three first guesses: the Crescent's swing shoved 0.6 m for 110 (knockback
+  4 → 12); the Comet was −1 on hit (hitstun 30 → 40); Heaven-piercer killed a Reaver in two
+  (260 → 240). The class has 25 moves.
+- The valley's frame test walked the faster Champion to the Bank's far edge, where a world
+  framed in the den reads the nearer place first; it shifts two seconds in rather than four.
+**Pins** The Champion's Ridgeback pin and both of his scripted-hunt pins; his envelope
+fixtures re-recorded. Nobody else's moved.
+**Movement** His whole-kit reach in the lab search grew sharply, his shared reach not at
+all: lane 0 m 55.8 → 85.3 m, lane +4 m 45.0 → 65.3 m, lane +10 m 28.5 → 44.1 m. A string
+advances on the throw, whiffed or not, so in an empty lab two swings and a held third are
+Thousand Cuts' 7 m dash or Heaven-piercer's 25 m run after its spear, and the first two held
+are the Comet's 8 m. **CHAMP-11 is the owner's**, as REAVER-5 is: whether the full charges
+should cross gaps the movement sections were built against, or be held to the ground they
+were thrown on.
+**Verdict** — unplayed. Every number is a first guess; the six full charges borrow clips
+(Backcut, Hammer, Rush stab, Rush slash, Air hammer, Skewer) until they have their own.

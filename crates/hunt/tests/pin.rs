@@ -23,9 +23,14 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // aims from is let back out of the head looking up. The Reaver's moved again
 // for her third pass and her class layer (she cashes with the Reave, sends the
 // shadow past the work, keeps it out and lotuses it between openings).
+//
+// The Champion's moved again later that day, for his rework (exploration
+// 0015): the braced Rush, the hold and its full charges, momentum, Break and
+// the Clash -- and his hands press a weapon the plan holds on every other
+// frame, because held it is a charge.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x53b27530caad3810),
-    (Class::Champion, 7, 0x28db214ab3e65861),
+    (Class::Champion, 0x2545_F491, 0xd1dbd395875ecb99),
+    (Class::Champion, 7, 0x6888e046e18a713e),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed

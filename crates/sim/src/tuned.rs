@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 484] = [
+pub const SCALARS: [i32; 493] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -492,6 +492,15 @@ pub const SCALARS: [i32; 484] = [
               30, // champion.momentum,_a_hit_taken_costs_(%) = 30
               25, // champion.momentum,_heated:_a_hold_fills_faster_by_(%) = 25
               50, // champion.momentum,_blazing:_a_hold_fills_faster_by_(%) = 50
+             200, // champion.impact,_hammer_blows_into_strain_(%) = 200
+             200, // champion.impact,_third_links_into_strain_(%) = 200
+             150, // champion.impact,_true_links_into_strain_(%) = 150
+             300, // champion.impact,_full_charges_into_strain_(%) = 300
+              50, // champion.impact,_share_of_a_full_charge's_extra_into_poise_(%) = 50
+              90, // champion.meteor,_stumbles_a_creature_for = 90
+              70, // champion.clash,_a_creature_flinches_for = 70
+              30, // champion.clash,_the_lighter_blow_staggers_for = 30
+              20, // champion.clash,_both_freeze_for = 20
 ];
 
 #[rustfmt::skip]
