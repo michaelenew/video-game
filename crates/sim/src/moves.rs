@@ -696,7 +696,6 @@ const NAMES: [&[&str]; 6] = [
         "Reaper's chain",
         "Reaper's leap",
         "Frenzy",
-        "Blood burst",
     ],
     // Dual mage -- two forces, one in each hand, and every move a spell
     // (2026-10-09). Left is dark, the hex: things that travel and linger.
@@ -1136,7 +1135,7 @@ pub mod dual {
 /// blaster's moves -- the Bloodletter's row is the Transfusion, the Grasp's the
 /// Hemoplague, the nova's the Tides, the jet's the wings, Marionette's the
 /// Upheaval, the Nail's the Stake, the Hook's the chain, Harvest's the leap --
-/// and the two the blaster added, Frenzy and the burst, were appended. See
+/// and the one the blaster added, Frenzy, was appended. See
 /// `docs/design/exploration/0015_blood_mage_blaster.md`.
 pub mod blood {
     /// Left click, standing, held through three tiers: **Transfusion**. A
@@ -1186,12 +1185,8 @@ pub mod blood {
     /// stains rush to her and explode, everyone near her bleeds, nothing
     /// heals her and nothing she loses comes back. Appended.
     pub const FRENZY: u8 = 11;
-    /// No button: **a burst of blood**, what the teleport arrives in and what
-    /// a stain explodes as. A row so its damage and its shove are knobs like
-    /// any other blow's. Appended.
-    pub const BURST: u8 = 12;
 
-    pub const COUNT: usize = 13;
+    pub const COUNT: usize = 12;
 
     /// **Which button is which of her verbs**, in one place, as the
     /// Elementalist's are: left is *my blood*, middle is *your blood*, right
@@ -1604,8 +1599,7 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             8 => "MMB air",
             9 => "RMB air",
             10 => "Space+RMB",
-            11 => "Q",
-            _ => "--",
+            _ => "Q",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.

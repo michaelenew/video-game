@@ -80,11 +80,15 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// room under the eye, went into `state_checksum` whenever it is not nought,
 /// which is every jump; and the Reaver's kit moved. See
 /// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
+///
+/// **The Blood mage's was re-pinned the same day** for the blaster: her
+/// clicks are new moves held in tiers, every stain is collected, and every
+/// hit bleeds. See `docs/design/exploration/0015_blood_mage_blaster.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x339bb2066878e1c8),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0x125b4fc5c2559d9d),
-    (Class::BloodMage, 0x083464c03c9c85e2),
+    (Class::BloodMage, 0xb548bb1224f77e8d),
     (Class::DualMage, 0xd1dc8709fa4d36db),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];

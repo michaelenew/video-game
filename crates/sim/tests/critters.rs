@@ -552,10 +552,6 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         // knee-high body, by its own design -- the shadow is thrown forward
         // and up (2026-10-10).
         ("Shadow Reaver", "Shadow arc"),
-        // A jump inside a scythe spin: she is off the floor before the blade
-        // comes round, and the spin is flat at her waist. For the pools under
-        // it, not for knee-high bodies; `docs/design/critters.md` §7.
-        ("Blood mage", "Harvest"),
     ];
     let rows = sim::critcheck::table(SpeciesId::GNATS, gnats::GNAT);
     let mut over = Vec::new();

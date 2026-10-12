@@ -946,13 +946,23 @@ fn a_spike_on_bare_floor_hits_the_creature_and_spills_under_it() {
     // is one event now rather than a field, and the event has to reach the
     // creature the same way it reaches a fighter: damage, and a pool of its
     // blood on the floor under the part it struck.
+    // A tap of the middle click: the spike's first tier, aimed down at the
+    // floor under the animal -- it reaches twenty metres since the blaster, so
+    // a level crosshair puts it well past.
+    let full = beast_health(&parked());
     let mut w = parked();
-    let full = beast_health(&w);
-    for _ in 0..2 {
-        w.advance([Input::new(Input::MECHANIC), Input::default()]);
-    }
-    for _ in 0..60 {
-        w.advance([Input::default(), Input::default()]);
+    for pitch in [-2000, -3000, -4000, -5000, -6000] {
+        w = parked();
+        for _ in 0..2 {
+            w.advance([Input::looking_at(Input::MIDDLE, 0, pitch), Input::default()]);
+        }
+        w.advance([Input::looking_at(0, 0, pitch), Input::default()]);
+        for _ in 0..60 {
+            w.advance([Input::default(), Input::default()]);
+        }
+        if beast_health(&w) < full {
+            break;
+        }
     }
     assert!(
         beast_health(&w) < full,
@@ -1014,9 +1024,9 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
     // poses happened to agree -- which the animal's geometry stopped offering
     // the day its legs grew.
     //
-    // The Bloodletter, because it is her thrown blade and reaches a hind foot
-    // from behind without walking into the animal: on middle click since the
-    // Blood mage's v1 put the scythe on left.
+    // The Transfusion, tapped, because it is her bolt and reaches a hind foot
+    // from behind without walking into the animal: the left click on the
+    // floor since the blaster.
     let blade = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
     let up = Doing::Prowl;
     let knee = Doing::Stumble {
@@ -1030,7 +1040,7 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
         let feet_before =
             ridgeback::FEET.map(|p| w.monster().expect("a hunt has a creature").part_health(p));
         let before = beast_health(&w);
-        let flight = sim::tuning::bloodletter_flight();
+        let flight = sim::tuning::haemorrhage_flight();
         for f in 0..(blade.startup + blade.active + flight + 4) {
             // Held down, and held still: the creature would otherwise stand up,
             // walk off, or decide to bite. Held on the *first* frame of the
@@ -1046,7 +1056,7 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
             // thrown down the centreline passes between the legs and grazes
             // whichever one the animal's breathing happens to sway into it.
             w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ratio(9, 10));
-            let held = if f < 2 { Input::MIDDLE } else { 0 };
+            let held = if f < 2 { Input::LEFT } else { 0 };
             // Facing the creature's tail, which is toward -x: it stands at the
             // origin pointed the other way.
             w.advance([Input::aimed(held, 1 << 15), Input::default()]);

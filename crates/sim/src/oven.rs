@@ -814,6 +814,8 @@ scalars! {
     PlagueLasts, "Blood mage", "Hemoplague, cloud lasts", Frames, 1, 900;
     PlagueTick, "Blood mage", "Hemoplague, hurts every", Frames, 1, 120;
     PlagueHeight, "Blood mage", "Hemoplague, cloud height", Fixed, fx(1,1), fx(10,1);
+    ChargeCrawl, "Blood mage", "Charge, walk while holding (%)", Int, 0, 100;
+    EruptChain, "Blood mage", "Black spike, an eruption sets off stains this far past its edge (m)", Fixed, 0, fx(8,1);
 }
 
 // ---------------------------------------------------------------------------

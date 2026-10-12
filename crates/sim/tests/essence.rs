@@ -59,7 +59,7 @@ fn wounded(w: &mut World, grey: i32) {
 
 /// A pitch that points the Bloodletter at the other fighter's middle.
 fn pitch_at(w: &World, target: V3) -> i16 {
-    let m = sim::moves::get(Class::BloodMage, b::BLOODLETTER);
+    let m = sim::moves::get(Class::BloodMage, b::TRANSFUSION);
     let stones = sim::stones::gather(&w.players);
     let players = w.players;
     let effects = w.effects;
@@ -158,44 +158,39 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
 
 #[test]
 fn hits_that_land_on_one_spot_make_one_pool() {
-    // Four arms of a Grasp converge on one point and each spills there. One
-    // figure, not four -- and the Grasp is the move to ask, because its four
-    // hits land on one spot in one frame: a hit an effect delivers drinks
-    // only pools older than the effect, so the arms cannot each drink what
-    // the arm before spilled, and their four spills gather into one figure.
-    // (A sweep repeated on one spot leaves one fresh pool each time rather
-    // than a growing one, because each drinks the last one's first.)
+    // The Hemoplague's ticks land on one body standing in it, again and again,
+    // and every one spills to the cloud's centre. One stain, not one a tick --
+    // the merge is what keeps a fight that stays in one place from becoming
+    // a floor of clutter.
     let mut w = mage();
-    let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
-    // At the reach a tap converges on, so no hold is needed.
-    w.players[1].pos = w.players[0]
-        .pos
-        .add(V3::new(grasp.channel_from, Fx::ZERO, Fx::ZERO));
-    let pitch = pitch_at(&w, w.players[1].pos);
+    let spot = w.players[0].pos.add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
+    w.players[1].pos = spot;
+    let plague = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE);
+    let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
+    w.effects[slot] = Some(Effect::cast(
+        EffectKind::Plague,
+        0,
+        Class::BloodMage,
+        b::HEMOPLAGUE,
+        spot,
+        V3::ZERO,
+        plague.radius,
+    ));
     let full = w.players[1].health;
-    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, 0);
-    looking(
-        &mut w,
-        grasp.whiff_cost() as u32 + t::grasp_flight() as u32,
-        0,
-        pitch,
-        0,
-    );
+    for _ in 0..(t::plague_tick() as u32 * 3 + 1) {
+        w.players[1].pos = spot;
+        run(&mut w, 1, 0, 0);
+    }
     let dealt = full - w.players[1].health;
     assert!(
-        dealt > grasp.damage * 2,
-        "fixture: only {dealt} landed of four arms"
+        dealt >= plague.damage * 3,
+        "fixture: only {dealt} landed of three ticks"
     );
     let made = pools(&w);
-    assert_eq!(
-        made.len(),
-        1,
-        "four arms on one spot made {} pools",
-        made.len()
-    );
+    assert_eq!(made.len(), 1, "three ticks made {} pools", made.len());
     assert!(
-        made[0].pool_volume() > grasp.damage * 2,
-        "the pool did not gather the arms: {} after {dealt} dealt",
+        made[0].pool_volume() > plague.damage * 2,
+        "the stain did not gather the ticks: {} after {dealt} dealt",
         made[0].pool_volume()
     );
 }
@@ -244,9 +239,9 @@ fn her_own_costs_never_pool() {
     for (button, airborne) in [
         (keys::SCYTHE, false),
         (keys::MY_BLOOD, true),
-        (keys::BLOODLETTER, false),
+        (keys::MY_BLOOD, false),
         (keys::YOUR_BLOOD, false),
-        (keys::SPIKE, false),
+        (keys::YOUR_BLOOD, false),
     ] {
         if airborne {
             w.players[0].pos.y = Fx::from_int(3);
@@ -380,39 +375,6 @@ fn a_hit_on_bare_floor_returns_nothing_on_the_frame_it_lands() {
 }
 
 #[test]
-fn the_blade_drinks_from_pools_it_crosses_on_the_way_home() {
-    let mut w = mage();
-    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    wounded(&mut w, 300);
-    let m = sim::moves::get(Class::BloodMage, b::BLOODLETTER);
-    // A pool along the throw, a metre and a half out, with nobody in it.
-    let along = w.players[0]
-        .pos
-        .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, along, 100));
-    looking(&mut w, 2, keys::BLOODLETTER, 0, 0);
-    let paid = w.players[0].health;
-    let flight = t::bloodletter_flight() as u32;
-    // The way out drinks nothing.
-    run(&mut w, m.startup as u32 + flight / 4, 0, 0);
-    assert_eq!(w.players[0].health, paid, "the blade drank on the way out");
-    run(&mut w, flight, 0, 0);
-    let got = w.players[0].health - paid;
-    assert!(
-        got > 0,
-        "the blade crossed a pool on the way home and drank nothing"
-    );
-    assert!(
-        got <= m.drinks(100),
-        "the blade drank {got} from one pool, which is more than its share"
-    );
-    assert!(
-        pools(&w).is_empty(),
-        "the pool the blade drank is still there"
-    );
-}
-
-#[test]
 fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // The feel relationship, rewritten from *thrown perfectly returns more
     // than it cost*: landed on bare floor it returns nothing (the test above),
@@ -421,7 +383,7 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // free, is the one measured.
     let cases = [
         (b::SWEEP, keys::SCYTHE),
-        (b::BLOODLETTER, keys::BLOODLETTER),
+        (b::TRANSFUSION, keys::MY_BLOOD),
     ];
     for (slot, button) in cases {
         let m = sim::moves::get(Class::BloodMage, slot);
@@ -479,45 +441,3 @@ fn a_pool_is_an_effect_and_the_world_still_fits_its_budget() {
     assert_eq!(EffectKind::Pool.name(), "essence pool");
 }
 
-#[test]
-fn a_grasp_landed_on_somebody_standing_in_a_pool_drinks_its_share_once() {
-    // Four arms, one drink: the share of the pool that was there before the
-    // Grasp was thrown, and nothing of what its own arms spill.
-    let mut w = mage();
-    wounded(&mut w, 400);
-    let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
-    w.players[1].pos = w.players[0]
-        .pos
-        .add(V3::new(grasp.channel_from, Fx::ZERO, Fx::ZERO));
-    let at = w.players[1].pos;
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
-    let pitch = pitch_at(&w, w.players[1].pos);
-    let before = w.players[0].health;
-    let paid = w.players[0].cost_of(grasp.cost);
-    let full = w.players[1].health;
-    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, 0);
-    looking(
-        &mut w,
-        grasp.whiff_cost() as u32 + t::grasp_flight() as u32,
-        0,
-        pitch,
-        0,
-    );
-    let dealt = full - w.players[1].health;
-    assert!(dealt > grasp.damage * 2, "fixture: only {dealt} landed");
-    let got = w.players[0].health - (before - paid);
-    let expect = grasp.drinks(200);
-    assert!(
-        got >= expect - 8 && got <= expect,
-        "the Grasp drank {got} of a pool of 200 at {}%, against a share of {expect}",
-        grasp.drink
-    );
-    // And what its arms spilled is still on the floor, in one figure.
-    let left = pools(&w);
-    assert_eq!(left.len(), 1, "{} pools after a Grasp over one", left.len());
-    assert!(
-        left[0].pool_volume() > grasp.damage * 2,
-        "the arms' own spill was drunk back: {} on the floor after {dealt} dealt",
-        left[0].pool_volume()
-    );
-}

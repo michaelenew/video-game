@@ -543,10 +543,13 @@ fn swings_with(class: sim::class::Class) -> u16 {
     if sim::moves::get(class, sim::state::SLOT_POKE).strikes() {
         return L;
     }
-    // One class's poke does not: the Blood mage's blade is thrown and the blade
-    // does the hitting. `E` is the nearest thing she has to a swing off the
-    // body -- Black spike, which puts a real volume out in front of her.
-    // (It used to be shift + left click, back when that was an input.)
+    // The Blood mage's poke does not: her Transfusion is a bolt, and the bolt
+    // does the hitting. Her swing is the scythe, tapped.
+    if class == sim::class::Class::BloodMage {
+        return sim::moves::blood::keys::SCYTHE;
+    }
+    // Nor the Dual mage's, whose every move is a spell: `E` is Judgement, a
+    // real volume where it lands.
     E
 }
 
@@ -566,7 +569,10 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     let mut w = World::with_classes([class, class]);
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
-    let held = [Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
+    let mut held = [Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
+    // The Blood mage's scythe is a tap: held past its startup it is Tides,
+    // her charge, which has no volume of its own. Let go after the press.
+    let tapped = class == sim::class::Class::BloodMage;
 
     // The volume the **next** frame will test with, found by stepping a copy.
     //
@@ -584,8 +590,11 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
             break;
         }
         w.advance(held);
+        if tapped {
+            held[0] = Input::aimed(0, LOOK_RIGHT);
+        }
     }
-    let hb = found.expect("never reached an active frame");
+    let hb = found.unwrap_or_else(|| panic!("{class:?} never reached an active frame"));
 
     // Exactly the threshold the hit test uses: the attack radius plus the
     // defender's body radius, which is why the overlay draws both cylinders.
@@ -619,23 +628,29 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
     // here with empty hands.
     use sim::state::hitbox;
     let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
-    w.players[1].pos = w.players[0].pos;
+    // Close in front of her, where a swing would reach.
+    w.players[1].pos = w.players[0].pos.add(sim::V3::new(
+        Fx::from_int(2),
+        Fx::ZERO,
+        Fx::ZERO,
+    ));
     let before = w.players[1].health;
-    // `Q`: the blade moved there when the three clicks became her blood,
-    // theirs and the scythe. See `moves::blood::keys`.
-    for _ in 0..40 {
-        w.advance([
-            Input::aimed(sim::moves::blood::keys::BLOODLETTER, LOOK_RIGHT),
-            Input::aimed(0, LOOK_LEFT),
-        ]);
+    // The Transfusion, tapped: a bolt from her hand, which does the hitting.
+    for i in 0..40 {
+        let bits = if i < 2 {
+            sim::moves::blood::keys::MY_BLOOD
+        } else {
+            0
+        };
+        w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         assert!(
             hitbox(&w.players[0]).is_none(),
-            "the thrown blade drew a hitbox on the caster"
+            "the thrown bolt drew a hitbox on the caster"
         );
     }
     assert!(
         w.players[1].health < before,
-        "fixture: the blade never came round to hit anybody"
+        "fixture: the bolt never hit anybody"
     );
 }
 

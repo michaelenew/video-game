@@ -3488,3 +3488,15 @@ pub fn plague_tick() -> u16 {
 pub fn plague_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PlagueHeight).max(0))
 }
+
+/// How fast she walks while holding a charge, as a share of a walk: a crawl,
+/// whatever the move's own row says about its cast.
+pub fn charge_crawl() -> i32 {
+    oven::scalar(Scalar::ChargeCrawl).clamp(0, 100)
+}
+
+/// How far past an eruption's edge a stain of hers is still set off by it:
+/// what lets a spike on the start of a bleeding fighter's trail run the trail.
+pub fn erupt_chain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EruptChain).max(0))
+}

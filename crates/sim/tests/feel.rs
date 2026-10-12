@@ -331,9 +331,21 @@ fn best_case(m: &Move) -> i32 {
         Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
         Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
         // The bolt cuts once, and then the bleed it opened runs its length.
+        // The Transfusion flies the same bolt and opens nothing; its best is
+        // its third tier.
+        Some(EffectKind::Haemorrhage) if m.name == "Transfusion" => {
+            sim::fixed::Fx::from_int(m.damage)
+                .mul(t::tier_three_power())
+                .to_int()
+        }
         Some(EffectKind::Haemorrhage) => {
             EffectKind::Haemorrhage.damage(m)
                 + t::bleed_damage() * (t::bleed_lasts() / t::bleed_tick()) as i32
+        }
+        // The Hemoplague ticks for as long as the cloud stands, on whoever
+        // stays in it.
+        Some(EffectKind::Plague) => {
+            m.damage * (t::plague_lasts() / t::plague_tick().max(1)) as i32
         }
         // A field, for as long as it stands. The move's own hit lands too.
         //
@@ -474,31 +486,6 @@ fn the_blood_mage_does_not_kill_in_two_buttons() {
 }
 
 #[test]
-fn a_grasp_always_finishes_hauling_before_it_lets_go() {
-    // The catch is a bind and then a haul (`state::drag_the_held`), and the
-    // haul covers real ground at a real speed. If the hold runs out first, a
-    // Grasp landed at full range drops its victim halfway home -- standing in
-    // mid-air, mid-drag, suddenly able to walk. The failure is invisible at
-    // short range and total at long range, which is the worst way for a number
-    // to be wrong.
-    use sim::state::SLOT_SPECIAL;
-    let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
-    let arm = t::body_radius().add(t::body_radius());
-    let furthest = grasp.reach.sub(arm);
-    let hauling = grasp.grabs.saturating_sub(t::grasp_bind());
-    let covered = t::reel_speed()
-        .mul(Fx::from_int(hauling as i32))
-        .div(Fx::from_int(60));
-    assert!(
-        covered.raw() >= furthest.raw(),
-        "the hold leaves {hauling} frames to haul, which covers {} m of the {} m \
-         a full-range Grasp has to cross",
-        covered.to_f32_for_render(),
-        furthest.to_f32_for_render()
-    );
-}
-
-#[test]
 fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
     // Both ends. Below about a fifth extra it is a number nobody notices and
     // the Grasp goes back to being a root with no payoff; far above it and
@@ -588,11 +575,11 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // the three takeoffs -- 2026-10-10, see
             // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
             Class::Bulwark => 7,
-            // Eleven: the five of the scythe's arrival and the six of
-            // 2026-10-09 -- the Blood nova, the Blood jet, Marionette, Nail,
-            // Hook and Harvest. See
-            // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
-            Class::BloodMage => 11,
+            // Twelve: the three clicks on the floor (Tides is the scythe
+            // held), in the air and leaving it, Tides itself, the Hemoplague
+            // on `E` and Frenzy on `Q` -- the blaster, 2026-10-12. See
+            // `docs/design/exploration/0015_blood_mage_blaster.md`.
+            Class::BloodMage => 12,
             // Eleven: three clicks on the floor, in the air and leaving it,
             // and the two majors -- every move a spell, 2026-10-09. See
             // `docs/design/exploration/0010_dual_mage_spells.md`.

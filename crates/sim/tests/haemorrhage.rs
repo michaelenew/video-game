@@ -228,10 +228,10 @@ fn bleeding(w: &mut World) {
 fn a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart() {
     // The point of the spell: the victim's own feet make the pools, and a
     // spike on any of them runs the trail. So the trail's pools must land
-    // inside a bare spike's eruption of each other. A tick's pool is small
-    // and drains away in under a second, so the live trail is the last few
-    // strides rather than the whole walk -- which is the part a chain has to
-    // cross to reach them anyway.
+    // within what one tick's eruption sets off of each other -- its own size
+    // and `tuning::erupt_chain` past its edge. Since the blaster the ticks are
+    // fewer and heavier (2026-10-12), so the stains are a stride or two apart
+    // and the chain reaches across the gap rather than the stains touching.
     let mut w = mage();
     bleeding(&mut w);
     // Walk sideways, so the dummy neither closes on her nor leaves the arena.
@@ -244,14 +244,15 @@ fn a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart() {
     );
     let mut sorted: Vec<Fx> = trail.iter().map(|p| p.pos.z).collect();
     sorted.sort_by_key(|z| z.raw());
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let tick = Fx::from_int(t::bleed_damage()).sqrt();
+    let sets_off = t::erupt_radius().mul(tick).add(t::erupt_chain());
     for pair in sorted.windows(2) {
         let gap = pair[1].sub(pair[0]);
         assert!(
-            gap.raw() <= spike.radius.raw(),
-            "two pools of the trail are {} m apart, past a bare spike's {} m",
+            gap.raw() <= sets_off.raw(),
+            "two pools of the trail are {} m apart, past the {} m one sets off",
             gap.to_f32_for_render(),
-            spike.radius.to_f32_for_render()
+            sets_off.to_f32_for_render()
         );
     }
     // And the newest is under their feet.
@@ -259,7 +260,7 @@ fn a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart() {
     assert!(
         trail
             .iter()
-            .any(|p| p.pos.sub(feet).flat_len().raw() < spike.radius.raw()),
+            .any(|p| p.pos.sub(feet).flat_len().raw() < sets_off.raw()),
         "no pool of the trail is near the bleeding fighter"
     );
 }
@@ -307,7 +308,7 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             .expect("the scan is not empty")
     };
     let health = w.players[1].health;
-    looking(&mut w, 2, keys::SPIKE, pitch, Input::A);
+    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, Input::A);
     looking(&mut w, m.startup as u32 + 2, 0, pitch, Input::A);
     let eruptions = w
         .effects
@@ -399,5 +400,7 @@ fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
     // One and done: only the cut's own fresh pool is left.
     let left = pools(&w);
     assert_eq!(left.len(), 1, "the pool it drank is still there");
-    assert!(left[0].pool_volume() <= m.damage);
+    // What the cut spilled: its own blow, what the stain added to it, and a
+    // tick or two of the bleed it opened, gathered into the same figure.
+    assert!(left[0].pool_volume() <= m.damage + t::stain_hit_bonus(200) + 2 * t::bleed_damage());
 }

@@ -669,13 +669,6 @@ pub struct Player {
     /// from here toward where the crosshair is then. A position, so it is
     /// moved by `World::shift` with everything else a fighter keeps.
     pub ball_at: V3,
-    /// Where the Blood mage's jet left the floor, while it runs: the far end
-    /// of the wake it hurts, and where the pool of her own blood goes. A
-    /// position, so `World::shift` moves it.
-    pub launched_from: V3,
-    /// Red the Blood mage has paid into the hold she is in, and so how much of
-    /// her own blood the stain it leaves holds.
-    pub self_spent: i32,
     /// **The Blood mage's charge**: the tier the move she has out was let go
     /// at -- one to three -- or nought for anything untiered. See
     /// `moves::Charge::Tier`.
@@ -1295,8 +1288,6 @@ impl Default for Player {
             earth_held: false,
             rise: Rise::default(),
             ball_at: V3::ZERO,
-            launched_from: V3::ZERO,
-            self_spent: 0,
             tier: 0,
             vessel: NO_VESSEL,
             vessel_tier: 0,
@@ -2403,16 +2394,17 @@ impl World {
                     if !moves::blood::own_blood(pool.slot) {
                         self.players[i].drink(pool.banked * t::stain_walk_drinks() / 100);
                     }
-                    // And she arrives in a burst of it.
-                    let m = moves::get(Class::BloodMage, moves::blood::BURST);
+                    // And she arrives in a burst of it: the wings' burst, at
+                    // the wings' size.
+                    let m = moves::get(Class::BloodMage, moves::blood::WINGS);
                     self.effects[slot] = Some(Effect::cast(
                         EffectKind::Nova,
                         i as u8,
                         Class::BloodMage,
-                        moves::blood::BURST,
+                        moves::blood::WINGS,
                         pool.pos,
                         V3::ZERO,
-                        m.reach,
+                        m.radius,
                     ));
                 }
             }
@@ -3281,18 +3273,27 @@ impl World {
                 p.rise.lifted as i32,
                 p.rise.used as i32,
                 p.rise.floor.raw(),
-                p.self_spent,
-                // The blaster's, 2026-10-12: the vessel hashed as what it
-                // holds, so an empty one is nought like everything else here.
+                // The Blood mage's charge tier, in the place the jet's paid
+                // blood had until the blaster (2026-10-12): nought for every
+                // other class, so their hashes are what they were.
                 p.tier as i32,
+            ];
+            if late.iter().any(|v| *v != 0) {
+                for v in late {
+                    h.write_i32(v);
+                }
+            }
+            // The blaster's vessel and Frenzy, only while either holds
+            // something -- an empty vessel is nought like everything here.
+            let blaster = [
                 (p.vessel != NO_VESSEL) as i32 * (p.vessel as i32 + 1),
                 p.vessel_tier as i32,
                 p.vessel_ready as i32,
                 p.frenzy as i32,
                 p.frenzy_run as i32,
             ];
-            if late.iter().any(|v| *v != 0) {
-                for v in late {
+            if blaster.iter().any(|v| *v != 0) {
+                for v in blaster {
                     h.write_i32(v);
                 }
             }
@@ -3302,10 +3303,8 @@ impl World {
                 h.write_u32(p.hex as u32);
                 h.write_u32(p.hex_left as u32);
             }
-            for at in [p.ball_at, p.launched_from] {
-                if at != V3::ZERO {
-                    hash_v3(&mut h, &at);
-                }
+            if p.ball_at != V3::ZERO {
+                hash_v3(&mut h, &p.ball_at);
             }
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
@@ -5093,7 +5092,17 @@ fn step_player(
     let attack_speed = p
         .action
         .attack_kind()
-        .map(|kind| moves::get(p.class, kind).mobility)
+        .map(|kind| match p.action {
+            // The Blood mage holding a charge crawls, whatever the row says
+            // about the cast it is the front of.
+            Action::Channel { .. }
+                if p.class == Class::BloodMage
+                    && moves::charge(p.class, kind) == Some(moves::Charge::Tier) =>
+            {
+                t::charge_crawl() as u8
+            }
+            _ => moves::get(p.class, kind).mobility,
+        })
         .filter(|m| *m > 0)
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
@@ -6706,11 +6715,13 @@ fn begin_blink(p: &mut Player, who: usize, dir: V3, scene: &aim::Scene) {
     // corner a shorter move than a blink across the arena -- and how long she
     // is a smear for is the one thing the person opposite has to read it by.
     let speed = t::blink_range().div(Fx::from_int(frames as i32).mul(DT));
+    // A frame in hand, so the last step lands her on the point rather than
+    // leaving her a step short of it when the count runs out.
     begin_haul(
         p,
         aim::settle(land, scene.stones, scene.arena),
         speed,
-        frames,
+        frames + 1,
     );
 }
 
@@ -7356,7 +7367,10 @@ fn nova_blow(effect: &Effect) -> i32 {
             .mul(tier_power(effect.banked.clamp(0, 3) as u8))
             .to_int();
     }
-    if effect.class == Class::BloodMage && effect.slot == moves::blood::BURST && effect.banked > 0 {
+    // A burst of her blood -- the wings' takeoff, the teleport's arrival, an
+    // exploding stain -- is the wings' row, and an exploding stain carries
+    // its own number.
+    if effect.class == Class::BloodMage && effect.slot == moves::blood::WINGS && effect.banked > 0 {
         return effect.banked;
     }
     effect.damage()
@@ -11221,7 +11235,7 @@ impl World {
                     && V3::new(e.pos.x.sub(pool.pos.x), Fx::ZERO, e.pos.z.sub(pool.pos.z))
                         .flat_len()
                         .raw()
-                        <= radius.add(e.pool_radius()).raw()
+                        <= radius.add(e.pool_radius()).add(t::erupt_chain()).raw()
             });
             if covered {
                 self.erupt_from(owner, kind, next);
@@ -12764,7 +12778,7 @@ impl World {
             EffectKind::Nova,
             pool.owner,
             pool.class,
-            moves::blood::BURST,
+            moves::blood::WINGS,
             pool.pos,
             V3::ZERO,
             t::stain_blast_radius(),
@@ -12893,25 +12907,46 @@ impl World {
         let p = self.players[i];
         let m = moves::get(p.class, moves::blood::CHAIN);
         let path = p.aim_path;
-        let stones = stones::gather(&self.players);
-        let seen = self.players;
-        let effects = self.effects;
-        let terrain = self.terrain();
-        let scene = aim::Scene {
-            stones: &stones,
-            players: &seen,
-            effects: &effects,
-            quarry: &self.monsters,
-            critters: &self.critters,
-            arena: &terrain,
+        let dir = path.dir();
+        // What the chain meets, and how far it would carry her with nothing
+        // under the crosshair, asked of one scene before anything moves.
+        let (body, miss) = {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let terrain = self.terrain();
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &terrain,
+            };
+            let body = aim::first_along(
+                path,
+                m.radius,
+                i as u8,
+                &scene,
+                aim::Targets::none().fighters(true).quarry(true),
+            );
+            let from = aim::origin(p.pos);
+            let reach = aim::Path {
+                from,
+                to: from.add(dir.scale(t::chain_miss())),
+            };
+            let miss = match aim::first_along(
+                reach,
+                t::body_radius(),
+                i as u8,
+                &scene,
+                aim::Targets::none().terrain().stones(),
+            ) {
+                Some(c) => c.dist().sub(t::body_radius()).max(Fx::ZERO),
+                None => t::chain_miss(),
+            };
+            (body, miss)
         };
-        let body = aim::first_along(
-            path,
-            m.radius,
-            i as u8,
-            &scene,
-            aim::Targets::none().fighters(true).quarry(true),
-        );
         let short = t::body_radius().add(t::body_radius());
         if let Some(aim::Contact::Fighter { index, .. }) = body {
             if self.effects_reach(index, i as u8) {
@@ -12937,36 +12972,41 @@ impl World {
                 return;
             }
         }
+        // **Every attack deals damage**: a creature or a small body the chain
+        // catches is cut where it caught, and she is pulled to it.
+        if let Some(c @ (aim::Contact::Quarry { .. } | aim::Contact::Critter { .. })) = body {
+            let at = path.at(c.dist());
+            let mut hook = Effect::cast(
+                EffectKind::Nova,
+                i as u8,
+                p.class,
+                moves::blood::CHAIN,
+                at,
+                V3::ZERO,
+                m.radius,
+            );
+            self.gore_each(&mut hook, 0, at, m.radius, Fx::ONE);
+            // Into the body by its own girth: the contact is where the chain
+            // first touched, and the line has to reach what it caught.
+            let into = path.at(c.dist().add(m.radius).add(m.radius));
+            self.gore_critters_by(
+                &mut hook,
+                EffectReach::Line(path.from, into, m.radius),
+                Fx::ONE,
+            );
+        }
         let (to, far) = match body {
-            Some(c @ aim::Contact::Quarry { .. }) => {
+            Some(c @ (aim::Contact::Quarry { .. } | aim::Contact::Critter { .. })) => {
                 let d = c.dist().sub(short).max(Fx::ZERO);
                 (path.at(d), d)
             }
+            // Something under the crosshair: pulled to it, a body short.
             _ if path.length().raw() < m.reach.sub(Fx::ratio(1, 4)).raw() => {
-                // Something under the crosshair: pulled to it, a body short.
                 let d = path.length().sub(short).max(Fx::ZERO);
                 (path.at(d), d)
             }
-            _ => {
-                // Sky: a little way along the aim, short of anything solid.
-                let dir = path.dir();
-                let from = aim::origin(p.pos);
-                let miss = aim::Path {
-                    from,
-                    to: from.add(dir.scale(t::chain_miss())),
-                };
-                let d = match aim::first_along(
-                    miss,
-                    t::body_radius(),
-                    i as u8,
-                    &scene,
-                    aim::Targets::none().terrain().stones(),
-                ) {
-                    Some(c) => c.dist().sub(t::body_radius()).max(Fx::ZERO),
-                    None => t::chain_miss(),
-                };
-                (p.pos.add(dir.scale(d)), d)
-            }
+            // Sky: a little way along the aim, short of anything solid.
+            _ => (p.pos.add(dir.scale(miss)), miss),
         };
         if far.raw() <= 0 {
             return;

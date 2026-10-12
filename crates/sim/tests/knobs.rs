@@ -164,12 +164,30 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Blood mage's scythe click.",
     ),
     (
-        "pub const BLOODLETTER: u16 = Input::SPECIAL",
-        "A binding, not a magnitude: which button is the Blood mage's Bloodletter.",
+        "pub const SPIKE_FIELD: i32 = 2",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (a field of waves).",
     ),
     (
-        "pub const SPIKE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Blood mage's Black spike.",
+        "pub const SPIKE_AREA: i32 = 3",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (an area that only hits).",
+    ),
+    (
+        "_ if path.length().raw() < m.reach.sub(Fx::ratio(1, 4)).raw() => {",
+        "A tolerance on a comparison: how near the range sphere the end of Reaper's chain's \
+         path counts as having met nothing at all. Not a feel number.",
+    ),
+    (
+        ".max(Fx::ratio(1, 5))",
+        "A floor on the time Reaper's leap takes, so a leap aimed at her own feet is not a \
+         division by nothing. The leap's speed is the knob (`tuning::reaper_leap_speed`).",
+    ),
+    (
+        "pub const FRENZY: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Blood mage's Frenzy.",
+    ),
+    (
+        "pub const PLAGUE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Blood mage's Hemoplague.",
     ),
     (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",
