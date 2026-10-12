@@ -74,6 +74,12 @@ const SHADOW_NEAR: Fx = Fx::ratio(3, 1);
 /// A shadow further than this from the work, for this long, is called home.
 const SHADOW_FAR: Fx = Fx::ratio(45, 10);
 const SHADOW_STALE: u16 = 45;
+/// How far past the work, from her, the shadow is sent: clear of where she
+/// stands to fight, so it is not collected by her walking onto it.
+const SHADOW_BEYOND: Fx = Fx::ratio(25, 10);
+/// Frames left on a waiting shadow's clock home when she sends it again to
+/// keep it out at the work.
+const SHADOW_KEEP: u16 = 20;
 /// Frames after the lotus opens before the recall drags it home.
 const LOTUS_DRAG: u16 = 24;
 /// The furthest the mouse goes off a plan's camera in one frame: a flick,
@@ -511,7 +517,7 @@ impl Hands {
     }
 
     /// The Reaver: **the lotus on a shadow standing at the work**, dragged home
-    /// through it; **the Executioner on a marked creature**, which cashes the
+    /// through it; **the Reave on a marked creature**, which cashes the
     /// marks; and otherwise her own swing, which the shadow copies from where
     /// it stands. The shadow is sent between openings ([`Hands::idle`]), not
     /// in one: the send is nineteen frames the window was for, and sending it
@@ -536,13 +542,15 @@ impl Hands {
             self.fresh = true;
             return self.look_keeping(me, plan, at, b);
         }
+        // Cashed by a finisher -- the Reave, since 2026-10-12, when only the
+        // finishers cash and Executioner does not.
         let far = flat(at.sub(me.pos)).flat_len();
-        let exe = moves::get(me.class, SLOT_COMMITTED);
+        let reave = moves::get(me.class, moves::reaver::REAVE);
         if marks_near(w, at) >= CASH_AT
-            && window >= busy(&exe)
-            && far.raw() < exe.reach.add(exe.step).add(Fx::ratio(8, 10)).raw()
-            && self.ready(w, me, SLOT_COMMITTED)
-            && let Some(b) = self.button(me, SLOT_COMMITTED)
+            && window >= busy(&reave)
+            && far.raw() < reave.reach.add(reave.step).add(Fx::ratio(8, 10)).raw()
+            && self.ready(w, me, moves::reaver::REAVE)
+            && let Some(b) = self.button(me, moves::reaver::REAVE)
         {
             self.uses.cashed += 1;
             return self.look_keeping(me, plan, at, b);
@@ -769,7 +777,12 @@ impl Hands {
             {
                 self.uses.sent += 1;
                 self.rest();
-                return Some(self.look(me, self.spot(w, me, floor_under(me, at), true), b));
+                // **Past the work, not on it**: since 2026-10-12 a waiting
+                // shadow she walks onto rejoins her, and she fights standing
+                // at the work, so a shadow put under it was picked straight
+                // back up.
+                let beyond = at.add(flat(at.sub(me.pos)).normalized().scale(SHADOW_BEYOND));
+                return Some(self.look(me, self.spot(w, me, floor_under(me, beyond), true), b));
             }
             return None;
         }
@@ -785,6 +798,39 @@ impl Hands {
             self.uses.recalls += 1;
             self.rest();
             return Some(self.look(me, at, b));
+        }
+        // **The lotus on it**, between openings too: since 2026-10-12 a
+        // waiting shadow is out for three seconds rather than until the
+        // leash, which is often over before an opening comes.
+        let lotus = moves::get(me.class, SLOT_SPECIAL);
+        if from.raw() < SHADOW_NEAR.raw()
+            && shadow.is_waiting()
+            && safe > (lotus.startup + lotus.active + lotus.recovery) as i32
+            && self.cool == 0
+            && self.ready(w, me, SLOT_SPECIAL)
+            && let Some(q) = self.button(me, SLOT_SPECIAL)
+        {
+            self.uses.lotuses += 1;
+            self.seq = Some(Seq::Later {
+                bits: Input::RIGHT,
+                left: LOTUS_DRAG + self.roll(8) as u16,
+            });
+            self.fresh = true;
+            return Some(self.look(me, at, q));
+        }
+        // **Kept out**: since 2026-10-12 a send comes home on its own after
+        // three seconds, and another send starts the clock over. With the
+        // work still beside it and the clock nearly out, she presses again,
+        // which moves it -- counted with the recalls, the second press.
+        if from.raw() < SHADOW_NEAR.raw()
+            && shadow.is_waiting()
+            && shadow.hang < SHADOW_KEEP
+            && self.last_bits & b == 0
+        {
+            self.uses.recalls += 1;
+            self.rest();
+            let beyond = at.add(flat(at.sub(me.pos)).normalized().scale(SHADOW_BEYOND));
+            return Some(self.look(me, self.spot(w, me, floor_under(me, beyond), true), b));
         }
         let slash = moves::get(me.class, SLOT_POKE);
         if from.raw() < SHADOW_NEAR.raw()
@@ -1361,7 +1407,7 @@ impl Hands {
             yaw = camera.add(off);
         }
         let wire = turns_to_aim(yaw.sub(me.carry_yaw));
-        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, me.clear, at);
         Input::looking_at(bits, wire, pitch)
     }
 

@@ -705,7 +705,7 @@ fn a_fighter_at_an_anchor_can_break_it() {
         let d = V3::new(at.x.sub(me.pos.x), Fx::ZERO, at.z.sub(me.pos.z));
         let yaw = sim::math::atan2_turns(d.z, d.x);
         let wire = (yaw.sub(me.carry_yaw).raw() as u32 & 0xFFFF) as u16;
-        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, me.clear, at);
         let bits = if f % 20 == 0 { Input::LEFT } else { 0 };
         step(&mut w, Input::looking_at(bits, wire, pitch));
     }
@@ -841,7 +841,7 @@ fn the_crown_cannot_be_hit_from_the_floor() {
             let d = V3::new(at.x.sub(me.pos.x), Fx::ZERO, at.z.sub(me.pos.z));
             let yaw = sim::math::atan2_turns(d.z, d.x);
             let wire = (yaw.raw() as u32 & 0xFFFF) as u16;
-            let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+            let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, me.clear, at);
             let bits = [Input::LEFT, Input::RIGHT, Input::MIDDLE, Input::SPECIAL][(f / 40) % 4];
             let bits = if f % 40 == 0 { bits } else { 0 };
             step(&mut w, Input::looking_at(bits, wire, pitch));

@@ -19,8 +19,13 @@ use sim::state::{Action, SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL}
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
-/// Middle click: the execution (2026-10-09), where Executioner moved to.
-const M: u16 = Input::MIDDLE;
+/// `E`: Executioner, back on the key since the second pass (2026-10-10).
+const M: u16 = Input::MECHANIC;
+/// The swing the tests about a press during a swing, and about the copies,
+/// throw: Executioner, on `E`, a cut that stays where she is. The Reave on left
+/// click dashes her off whatever she is standing on, and middle click throws
+/// blades rather than swinging (2026-10-12).
+const RING: u16 = Input::MECHANIC;
 const L: u16 = Input::LEFT;
 /// Right click, which on this class sends the shadow -- it is the half of the
 /// kit the crosshair aims, and the mouse is where aiming lives.
@@ -118,6 +123,15 @@ fn put_the_shadow_at(w: &mut World, at: V3) {
     let mut s = shadow(w);
     s.pos = at;
     s.doing = Ghost::Waiting;
+    w.players[0].mechanic = Mechanic::Shadow(s);
+}
+
+/// Start the shadow on its way home, as the leash, the Whirl's end and the
+/// arc's do. The button that used to recall it moves it now (2026-10-10); the
+/// way home is still the same cut, and these tests are about the cut.
+fn call_home(w: &mut World) {
+    let mut s = shadow(w);
+    s.doing = Ghost::Returning { struck: 0 };
     w.players[0].mechanic = Mechanic::Shadow(s);
 }
 
@@ -347,44 +361,24 @@ fn the_shadow_flies_out_and_then_stops() {
 }
 
 #[test]
-fn the_leash_fits_the_throw() {
-    // A leash shorter than the throw would have the shadow turn round on the
-    // frame it landed, which is the class's setup deleting itself.
-    //
-    // **Doubled on 2026-09-17**: a leash only a third longer than the throw
-    // meant a shadow placed at full range expired almost as soon as it arrived,
-    // so a placement was something to spend rather than something to keep. The
-    // shadow is this class's movement, and movement you have to use immediately
-    // is not a decision. Two throws of slack is the room to leave it out there.
-    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
-    let slack = t::shadow_leash().div(send.reach);
-    assert!(
-        slack.raw() >= Fx::from_int(2).raw(),
-        "the shadow can be thrown {} m and is leashed at {} m -- under twice the \
-         throw, so a shadow left at range comes home before she has used it",
-        send.reach.to_f32_for_render(),
-        t::shadow_leash().to_f32_for_render()
-    );
-}
-
-#[test]
-fn the_dash_crosses_the_whole_leash() {
+fn the_dash_reaches_further_than_the_send() {
     // **What makes the dash an escape rather than a gamble.** It ends when the
-    // dodge does -- it does not outlive it -- so a dash that cannot cover the
-    // distance spends the dodge and arrives nowhere, in the open, out of
-    // invulnerability. Whether that can happen is a question about the leash
-    // and the dodge together, and neither of them knows about the other.
+    // dodge does -- it does not outlive it -- so it is only offered where it
+    // can arrive (`shadow::dash_is_asked_for`). That has to include anywhere
+    // she can put the shadow from where she stands, with room to walk off the
+    // line: twice the send's reach.
     //
-    // Untested until 2026-09-17, when the leash doubled and the only thing
-    // holding the property up was a sentence in `tuning::shadow_dash_speed`.
+    // It was "the dash crosses the whole leash" until 2026-10-12, when the
+    // return clock replaced the leash.
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     let covered = t::shadow_dash_speed().mul(Fx::ratio(t::dodge_frames() as i32, 60));
     assert!(
-        covered.raw() >= t::shadow_leash().raw(),
-        "a dash covers {} m in the {} frames a dodge lasts, against a leash of {} m -- \
-         she can be left stranded at the far end of her own mechanic",
+        covered.raw() >= send.reach.mul(Fx::from_int(2)).raw(),
+        "a dash covers {} m in the {} frames a dodge lasts, against a {} m send -- \
+         a shadow she just sent could be out of her dash's reach",
         covered.to_f32_for_render(),
         t::dodge_frames(),
-        t::shadow_leash().to_f32_for_render()
+        send.reach.to_f32_for_render()
     );
 }
 
@@ -414,7 +408,8 @@ fn the_recall_cuts_and_slows_what_it_comes_home_through() {
         out.z.add(w.players[0].pos.z).mul(Fx::ratio(1, 2)),
     );
     w.players[1].pos = midway;
-    run(&mut w, 2, R, down(25));
+    call_home(&mut w);
+    run(&mut w, 2, 0, down(25));
     let mut slowed = false;
     for _ in 0..60 {
         run(&mut w, 1, 0, down(25));
@@ -913,14 +908,17 @@ fn the_shadow_fights_the_creature_too() {
     // A mechanic that only works in versus is half a mechanic, and this is
     // exactly the shape of bug that hid in the Blood mage's fields for months:
     // it is invisible in the mode most tests are written in.
+    //
+    // With the Blade ring, which cuts where she stands: the Reave dashes her
+    // past the copy's reach of the head.
     let mut w = hunting();
     let full = beast_health(&w);
-    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let poke = sim::moves::get(Class::ShadowReaver, sim::moves::reaver::EXECUTIONER);
 
     // Her own swing lands first, alone.
     let mut hers = None;
     for frame in 0..(poke.whiff_cost() as u32 + t::shadow_lag() as u32 + 8) {
-        let bits = if frame < 2 { L } else { 0 };
+        let bits = if frame < 2 { RING } else { 0 };
         run(&mut w, 1, bits, 0);
         if hers.is_none() && beast_health(&w) < full {
             hers = Some(full - beast_health(&w));
@@ -934,7 +932,7 @@ fn the_shadow_fights_the_creature_too() {
 }
 
 #[test]
-fn the_recall_cuts_the_creature_on_its_way_home() {
+fn the_way_home_cuts_the_creature() {
     let mut w = hunting();
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     // Out past the animal, so the way home crosses it.
@@ -946,7 +944,8 @@ fn the_recall_cuts_the_creature_on_its_way_home() {
     );
     assert!(shadow(&w).is_waiting(), "the shadow never got out");
     let before = beast_health(&w);
-    tap(&mut w, R, 0, 60);
+    call_home(&mut w);
+    run(&mut w, 60, 0, 0);
     assert!(
         beast_health(&w) < before,
         "the shadow came home through the creature without touching it"
@@ -1012,16 +1011,17 @@ fn right_click_sends_the_shadow() {
 }
 
 #[test]
-fn middle_click_throws_her_committed_melee() {
+fn e_throws_her_committed_melee() {
     // Executioner was on `E` from 2026-09 until the three clicks (2026-10-09),
     // which put it on middle click with the execution and left `E` to
-    // Deadly mistake.
+    // Deadly mistake -- and back on `E` since the second pass (2026-10-10),
+    // which gave middle click to the neutral blades and retired the stance.
     let mut w = duel();
     run(&mut w, 2, M, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_COMMITTED),
-        "middle click did not throw Executioner"
+        "`E` did not throw Executioner"
     );
 }
 
@@ -1094,7 +1094,7 @@ fn right_click_cuts_a_recovery_short() {
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_COMMITTED),
-        "middle click did not throw Executioner"
+        "`E` did not throw Executioner"
     );
     let left = run_to_recovery(&mut w);
     assert!(
@@ -1182,23 +1182,24 @@ fn right_click_does_not_cut_a_stun_short() {
 
 #[test]
 fn a_right_click_thrown_during_a_swing_is_not_dropped() {
-    // The complaint this was built for. Slash is the move she chains from
-    // constantly; a right click pressed while it is still swinging used to
+    // The complaint this was built for. Slash was the move she chained from
+    // constantly; a right click pressed while it was still swinging used to
     // vanish, so sending the shadow meant waiting for the swing to end and
-    // hitting a single frame.
+    // hitting a single frame. The Blade ring now: a swing that keeps her
+    // where she stands.
     let mut w = duel();
-    run(&mut w, 1, L, 0);
+    run(&mut w, 1, RING, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
-        Some(SLOT_POKE),
-        "left click did not throw Slash"
+        Some(sim::moves::reaver::EXECUTIONER),
+        "`E` did not throw Executioner"
     );
     // One frame of right click, while the swing is still winding up, and then
     // the button is never touched again.
     run(&mut w, 1, R, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
-        Some(SLOT_POKE),
+        Some(sim::moves::reaver::EXECUTIONER),
         "the press interrupted the swing instead of waiting for it"
     );
 
@@ -1212,7 +1213,7 @@ fn a_right_click_thrown_during_a_swing_is_not_dropped() {
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_MECHANIC),
-        "a right click pressed during Slash was dropped instead of remembered"
+        "a right click pressed during Executioner was dropped instead of remembered"
     );
     run(&mut w, 30, 0, 0);
     assert!(
@@ -1235,7 +1236,8 @@ fn a_press_thrown_alongside_any_of_her_moves_still_comes_out() {
     // become cancellable. Hence every move, and hence pressing rather than
     // arithmetic.
     for (name, bits, slot) in [
-        ("Slash", L, SLOT_POKE),
+        ("Reave", L, SLOT_POKE),
+        ("Executioner again", RING, sim::moves::reaver::EXECUTIONER),
         ("Executioner", M, SLOT_COMMITTED),
         ("Guillotine", Q, SLOT_SPECIAL),
     ] {
@@ -1263,9 +1265,10 @@ fn a_press_thrown_alongside_any_of_her_moves_still_comes_out() {
 #[test]
 fn the_lotus_drag_does_not_have_to_wait_for_the_lotus() {
     // The chain the class is named for: `Q` opens the flower wherever the
-    // shadow is standing, right click drags it home and the six blades scythe
-    // the length of the arena behind it. Two buttons, and the second one used
-    // to have to be held back until the first had finished animating.
+    // shadow is standing, right click moves the shadow and the blades scythe
+    // across the arena behind it -- home, until 2026-10-10, and wherever she
+    // points since. Two buttons, and the second one used to have to be held
+    // back until the first had finished animating.
     let mut w = duel();
     run(&mut w, 2, R, 0);
     run(&mut w, 40, 0, 0);
@@ -1283,25 +1286,28 @@ fn the_lotus_drag_does_not_have_to_wait_for_the_lotus() {
     // Three frames into the eruption -- deep inside a startup that is nine
     // frames long, nowhere near a frame she is free on.
     run(&mut w, 3, 0, 0);
-    run(&mut w, 1, R, 0);
+    run(&mut w, 1, R, down(40));
 
-    let mut recalled = false;
+    let mut moved = false;
     for _ in 0..60 {
-        run(&mut w, 1, 0, 0);
+        run(&mut w, 1, 0, down(40));
         if w.players[0].action.attack_kind() == Some(SLOT_MECHANIC) {
-            recalled = true;
+            moved = true;
             break;
         }
     }
     assert!(
-        recalled,
-        "the recall pressed inside the lotus was dropped, so the class's \
+        moved,
+        "the send pressed inside the lotus was dropped, so the class's \
          biggest turn is still a timing test"
     );
-    run(&mut w, 60, 0, 0);
+    run(&mut w, 8, 0, down(40));
     assert!(
-        !shadow(&w).is_out(),
-        "the recall came out but the shadow never came home"
+        w.effects
+            .iter()
+            .flatten()
+            .any(|e| e.kind == sim::effects::EffectKind::GuillotineLotus && e.lotus_coming_back()),
+        "the send came out but the blades never followed the shadow"
     );
 }
 
@@ -1502,11 +1508,12 @@ fn the_recall_does_not_take_an_enemys_frames() {
         "the dummy never started his move"
     );
 
-    // And she recalls through him.
+    // And the shadow comes home through him.
     let before = hurt(&w);
     let mut caught_mid_move = false;
     let mut still_swinging = true;
-    w.advance([Input::new(R), Input::default()]);
+    call_home(&mut w);
+    w.advance([Input::default(), Input::default()]);
     for _ in 0..(his.whiff_cost() as usize) {
         w.advance([Input::default(), Input::default()]);
         if hurt(&w) > before {
@@ -1581,7 +1588,7 @@ fn cutting_a_recovery_short_does_not_rescue_her_from_the_punish() {
 }
 
 #[test]
-fn the_repeat_lockout_never_holds_up_the_recall() {
+fn the_repeat_lockout_never_holds_up_the_second_send() {
     // Where this class's mechanic meets the roster-wide rule that an ability
     // you have just thrown cannot be thrown again for thirty frames.
     //
@@ -1611,19 +1618,21 @@ fn the_repeat_lockout_never_holds_up_the_recall() {
          being ignored"
     );
 
-    // And the recall answers anyway.
-    run(&mut w, 1, R, 0);
+    // And the second send -- which moves it, since 2026-10-10 -- answers
+    // anyway.
+    run(&mut w, 1, R, down(40));
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_MECHANIC),
-        "the repeat lockout swallowed the recall. The shadow is the escape, \
-         and an escape on a thirty-frame gate is the input lag the frame-1 \
-         startup exists to avoid."
+        "the repeat lockout swallowed the second send. The shadow is the \
+         escape, and an escape on a thirty-frame gate is the input lag the \
+         frame-1 startup exists to avoid."
     );
-    run(&mut w, 90, 0, 0);
+    run(&mut w, 4, 0, down(40));
     assert!(
-        !shadow(&w).is_out(),
-        "the recall came out but the shadow never came home"
+        matches!(shadow(&w).doing, Ghost::Casting { .. }),
+        "the second send came out but the shadow never moved: {:?}",
+        shadow(&w).doing
     );
 }
 
@@ -1738,12 +1747,14 @@ fn the_attending_copy_keeps_her_yaw() {
 // v2: the tally
 // ---------------------------------------------------------------------------
 
-/// Swing once and let the copy play out.
+/// Swing once and let the copy play out. The Blade ring, which cuts where
+/// she stands: the Reave dashes her into range of the body the copy is meant
+/// to be marking, and her own hit spends the marks.
 fn swing_and_let_it_copy(w: &mut World) {
-    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let poke = sim::moves::get(Class::ShadowReaver, sim::moves::reaver::EXECUTIONER);
     tap(
         w,
-        L,
+        RING,
         0,
         poke.whiff_cost() as u32 + t::shadow_lag() as u32 + 8,
     );
@@ -1770,8 +1781,14 @@ fn every_hit_the_shadow_lands_from_the_field_marks_once() {
 
 #[test]
 fn the_attending_copy_marks_nothing() {
-    // It is at her shoulder; there is nothing being set up.
-    let mut w = duel();
+    // It is at her shoulder; there is nothing being set up. On the open floor
+    // with him a step in front: `duel` stands her on a platform's edge with
+    // him on the floor below, under the Blade ring's thin disc.
+    let mut w = in_the_open();
+    w.players[1].pos = w.players[0]
+        .pos
+        .add(V3::new(Fx::ratio(11, 10), Fx::ZERO, Fx::ZERO));
+    run(&mut w, 2, 0, 0);
     let before = w.players[1].health;
     swing_and_let_it_copy(&mut w);
     assert!(w.players[1].health < before, "fixture: nothing landed");
@@ -1849,8 +1866,8 @@ fn the_recall_marks_once() {
         .add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
     w.players[1].pos = midway;
     let before = w.players[1].health;
-    run(&mut w, 2, R, down(25));
-    run(&mut w, 60, 0, down(25));
+    call_home(&mut w);
+    run(&mut w, 62, 0, down(25));
     assert!(
         w.players[1].health < before,
         "fixture: the recall never cut him"
@@ -2063,7 +2080,8 @@ fn the_shadow_marks_the_creature_from_the_field() {
 
 #[test]
 fn a_cash_in_lands_on_the_creature_too() {
-    // The shadow works a Ridgeback's flank from range and she cashes on a leg.
+    // The shadow works a Ridgeback's flank from range and she cashes on a leg,
+    // with a finisher (2026-10-12).
     let first_blow_on_it = |marks: u8| {
         let mut w = hunting();
         let mut beast = w.monster().copied().unwrap();
@@ -2071,12 +2089,16 @@ fn a_cash_in_lands_on_the_creature_too() {
         beast.mark_clock = t::mark_fade();
         w.monsters[0] = Some(beast);
         let full = beast_health(&w);
-        run(&mut w, 2, L, 0);
+        // A Plunge straight down onto it from a body's height above: the
+        // Reave dashes her past the head this fixture puts in front of her.
+        w.players[0].pos.y = Fx::from_int(2);
+        w.players[0].grounded = false;
+        run(&mut w, 2, L, down(89));
         for _ in 0..30 {
             if beast_health(&w) < full {
                 return (full - beast_health(&w), w.monster().copied().unwrap().marks);
             }
-            run(&mut w, 1, 0, 0);
+            run(&mut w, 1, 0, down(89));
         }
         (0, marks)
     };
@@ -2116,9 +2138,9 @@ fn a_send_just_past_the_edge_lands_on_the_edge() {
     let top = w.players[0].pos.y;
     let off = V3::new(Fx::ratio(7, 2), Fx::ZERO, Fx::ZERO);
     let got = with_scene(&w, |scene| {
-        sim::aim::footing_toward(w.players[0].pos, off, scene)
+        sim::aim::walk_toward(w.players[0].pos, off, scene)
     })
-    .expect("a metre and a half past the edge, the forgiveness found nothing");
+    .expect("a metre and a half past the edge, the walk found nothing");
     assert_eq!(got.y, top, "it settled somewhere other than the hub's top");
     assert!(
         got.x.raw() <= Fx::from_int(2).sub(t::body_radius()).raw() + Fx::ratio(1, 4).raw(),
@@ -2128,23 +2150,32 @@ fn a_send_just_past_the_edge_lands_on_the_edge() {
 }
 
 #[test]
-fn a_send_far_into_the_drop_finds_nothing() {
+fn a_send_far_into_the_drop_still_stops_at_the_edge() {
+    // Since 2026-10-10 the send goes as far as she could walk, so pointed
+    // five metres out over the drop it stops where she would have: at the
+    // lip, rather than refusing.
     let w = on_the_reach(-8);
+    let top = w.players[0].pos.y;
     let far = V3::new(Fx::from_int(7), Fx::ZERO, Fx::ZERO);
     let got = with_scene(&w, |scene| {
-        sim::aim::footing_toward(w.players[0].pos, far, scene)
-    });
+        sim::aim::walk_toward(w.players[0].pos, far, scene)
+    })
+    .expect("ten metres of hub between her and the lip");
+    assert_eq!(got.y, top, "it went off the hub");
     assert!(
-        got.is_none(),
-        "five metres out over the drop, it found footing at {got:?}"
+        got.x.raw() < Fx::from_int(2).raw(),
+        "it stood {:.2} m along, past the lip at 2",
+        got.x.to_f32_for_render()
     );
 }
 
 #[test]
 fn a_refused_send_stays_with_her_and_can_be_tried_again() {
-    // Level look: the send's full range on the flat, nine metres, which from
-    // the lip is seven metres out over the drop -- past the forgiveness.
+    // At the very lip, facing the drop: not one step of the way is footing,
+    // so there is nowhere to put it.
     let mut w = on_the_reach(0);
+    w.players[0].pos.x = Fx::from_int(2).sub(Fx::ratio(1, 10));
+    run(&mut w, 2, 0, 0);
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     tap(&mut w, R, 0, send.startup as u32 + 2);
     let s = shadow(&w);

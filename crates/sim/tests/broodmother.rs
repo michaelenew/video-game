@@ -138,7 +138,7 @@ fn skillshot_lands(doing: Doing, site: usize, metres: i32, bearing: i32) -> bool
             let p = &w.players[0];
             let d = target.sub(p.pos);
             let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
-            let pitch = sim::aim::look_onto_closely(p.pos, aim, p.aloft, target);
+            let pitch = sim::aim::look_onto_closely(p.pos, aim, p.aloft, p.clear, target);
             let bits = if frame == 3 { button } else { 0 };
             w.advance([Input::looking_at(bits, aim, pitch), Input::default()]);
             w.monsters[0].expect("her").breaks[slot] < before

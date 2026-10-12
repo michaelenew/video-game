@@ -41,6 +41,12 @@ timing, aim, precision -- never in waiting, and never free.** (Also in
 (approach undecided); the Reaver's shadow is to be made less trivial; the Blood
 mage wants a way to make a pool to blink to without an enemy.
 
+**The Reaver, 2026-10-10.** Her send now goes only where she could walk
+([0013](exploration/0013_shadow_reaver_dual_blades.md), `aim::walk_toward`), so it
+crosses no gap and climbs no ledge. The search still finds her 50–75 m through the
+Whirl (the shadow four metres out in the air), the forward dodge that follows a flying
+shadow, and the dash jump; which lever, if any, is REAVER-5 there.
+
 **Round four, 2026-10-04.** The owner, on round three's roofed courses: "Your
 simulations are not really close to a useful representation of what a player
 can or wants to do right now, but you're tweaking as if they are. Remove most of

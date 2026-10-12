@@ -900,30 +900,36 @@ defensive option. There is no separate off-hand auto: `L` is the shield itself.
 
 ## Shadow Reaver
 
-Current as of 2026-10-09: **on three clicks**, the grid every class has been moving to — the
-blade, the execution and the shadow, each with a floor move, an aerial and a jump attack. The
-design is [exploration/0011](exploration/0011_shadow_reaver_on_three_clicks.md). Built and
-unplayed.
+Current as of 2026-10-12: **on three clicks, third pass** — finishers that cash the marks,
+three throws and the shadow, each with a floor move, an aerial and a jump attack, after the
+owner's brief for a MapleStory-Dual-Blade feel: dashing about with spinning blades, sending the
+shadow out for high impact, closing gaps with strong finishers. The design is
+[exploration/0014](exploration/0014_shadow_reaver_marks_and_throws.md), on top of
+[0013](exploration/0013_shadow_reaver_dual_blades.md); the first pass is
+[0011](exploration/0011_shadow_reaver_on_three_clicks.md). Built and unplayed.
 
-A half-caster. Click abilities should feel like real melee — strong individually rather than
-combo-dependent — and the shadow abilities should reward being close and fast.
-
-| | Left: the blade | Middle: the execution | Right: the shadow |
+| | Left: finishers (cash the marks) | Middle: throws | Right: the shadow |
 | --- | --- | --- | --- |
-| **On foot** | Slash | Executioner | Send / recall |
-| **In the air** | Kite cut — a hit on a marked body gives the airdodge back | Guillotine drop — straight down, spikes | Swap — trade places with the waiting shadow (the send, if it is with her) |
-| **`space` + click** | Moonsault — back flip, launches | Gallows — blink up, hang, plunge | Hang the shadow — in the air, then it sinks |
+| **On foot** | Reave — a short dash and a cut, a sweet spot at the tip | Shuriken — a line to the crosshair, and the shadow throws one too, from wherever it is | Send — and pressed again it **moves** the shadow; only onto ground she could walk to |
+| **In the air** | Plunge — a dive along the crosshair, held inside 45° of straight down, and a ring of shadow from the landing | Fan — five level blades, and she stalls a moment | Whirl — the shadow as far as the send, spinning and cutting; a second one moves it |
+| **`space` + click** | Gallows — the shadow up first, she blinks to it, and plunges in the same cone; heavy, long recovery | Tumble — a flipping jump that throws three blades forward and down; **in the air, once a jump, the double jump** | Rising whirl — a jump and a Whirl |
 
 | Input | Result |
 | --- | --- |
-| `Q` | **Guillotine lotus** — blades out of the shadow, held open, then chasing it home |
-| `E` | **Deadly mistake** — a counter stance: struck by a fighter, she is behind them and the shadow is left where she stood |
-| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Airborne, it is the airdodge that does it, and it spends the airdodge |
-| `space`, in the dash's last frames | **The dash jump.** It launches her the frame she arrives with the dash's whole speed |
+| `Q` | **Guillotine lotus** — blades out of the shadow, held open, then chasing it wherever it goes |
+| `E` | **Executioner** — the committed overhead, on the key; it does not cash the marks |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow — which bursts. Airborne, it is the airdodge that does it, and it spends the airdodge |
+| walking onto a waiting shadow | **Collects it**, as the dash does, and it bursts |
+| `shift` + forward, while a throw's shadow is still flying | **The dash after it**, cancelling the rest of the throw — no need to point at it |
+| `space`, in the dash's last frames | **The dash jump.** It launches her the frame she arrives with the dash's whole speed, in a forward flip with a little more height than a jump |
 | `shift` + forward, anywhere else | The ordinary dodge |
 
+Every send — the send, the Whirl, the Rising whirl, Gallows — brings the shadow home three
+seconds after it arrives, unless another send moves it first. Nothing brings it home for
+distance any more.
+
 Right click still cuts any recovery short and is still remembered for a few frames — what
-follows is that rule's history, and it holds for the swap and the hang as well as the send.
+follows is that rule's history, and it holds for the Whirl as well as the send.
 
 **The mechanic is on the mouse and the melee is on the key.** That is the whole of what is
 unusual here, and it reads as an exception to the grammar when it is the opposite — it is
@@ -965,7 +971,8 @@ a blocked commitment safe, so the two frame counts can be tuned and the rule can
 Executioner does not care where anything is — it is a swing off the body, yaw from the facing
 and pitch from the camera — so it could live on a key, and from 2026-09-14 to 2026-10-09 it
 did. The three clicks moved it to middle click, the execution's column, and gave `E` to Deadly
-mistake, which had waited a month for a button.
+mistake, which had waited a month for a button. The second pass (2026-10-10) gave middle click
+to the neutral blades, put Executioner back on `E` and retired Deadly mistake.
 
 It was the other way round for a day, with Executioner on right click and the shadow on `E`,
 and the argument against that is not on paper: placing something with the hand that is not

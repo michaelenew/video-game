@@ -121,16 +121,20 @@ fn main() {
         // a multiplier on moves listed below. See `sim::shadow`.
         if class == sim::class::Class::ShadowReaver {
             let full = sim::shadow::cash_multiple(t::mark_cap());
+            let curve: Vec<String> = (1..=t::mark_cap())
+                .map(|m| format!("x{}", hundredths(sim::shadow::cash_multiple(m))))
+                .collect();
             let swings: Vec<String> = sim::moves::table(class)
                 .iter()
-                .filter(|m| m.aim() == sim::aim::Kind::Swing && m.damage > 0)
-                .map(|m| format!("{} {}", m.name, Fx::from_int(m.damage).mul(full).to_int()))
+                .enumerate()
+                .filter(|(slot, m)| sim::moves::reaver::cashes(*slot as u8) && m.damage > 0)
+                .map(|(_, m)| format!("{} {}", m.name, Fx::from_int(m.damage).mul(full).to_int()))
                 .collect();
             println!(
-                "  tally: cap {}, one fades every {}f  |  any hit of hers cashes; full x{}: {}, and staggers {}f",
+                "  tally: cap {}, one fades every {}f  |  her finishers cash it, {} a mark; full: {}, and staggers {}f",
                 t::mark_cap(),
                 t::mark_fade(),
-                hundredths(full),
+                curve.join(" "),
                 swings.join(", "),
                 t::cash_stagger(),
             );
@@ -200,7 +204,7 @@ fn main() {
             // place something and take the other path out.
             let repeat = if moves::reactivates(class, slot as u8) {
                 format!(
-                    "press again to bring it back; then {}f before another",
+                    "press again to move it; then {}f before another",
                     m.repeat_lock()
                 )
             } else if moves::lingers(class, slot as u8) {
@@ -249,7 +253,8 @@ fn main() {
                 // all, and an effect that does every bit of the work -- and was
                 // printed as "movement, no hitbox", which is a table being
                 // confidently wrong about an ability that tethers people.
-                let leaves = sim::effects::EffectKind::from_code(m.effect).is_some();
+                let leaves = sim::effects::EffectKind::from_code(m.effect).is_some()
+                    || moves::puts_out(class, slot as u8).is_some();
                 let base = if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
                     format!("throws something; the thing it threw hits{ignored}{wound}")
                 } else if leaves || m.shape.strikes() {

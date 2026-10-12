@@ -107,7 +107,7 @@ impl Plan for Gnats {
         let to = target.at.sub(me.pos);
         let yaw = atan2_turns(to.z, to.x);
         let aim = turns_to_aim(yaw.sub(me.carry_yaw));
-        let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, target.middle);
+        let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, me.clear, target.middle);
         let reach = sim::moves::get(me.class, 0).reach.max(Fx::from_int(1));
         let mut bits = 0;
         if near(&target).raw() > reach.add(Fx::ratio(1, 2)).raw() {

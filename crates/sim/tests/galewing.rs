@@ -739,7 +739,7 @@ fn a_skillshot_aimed_at_the_circling_galewing_hits_it_inside_its_reach() {
     let p = w.players[0];
     let yaw = sim::math::atan2_turns(middle.z.sub(p.pos.z), middle.x.sub(p.pos.x));
     let aim = (yaw.raw() as u32 & 0xFFFF) as u16;
-    let pitch = aim::look_onto_closely(p.pos, aim, p.aloft, middle);
+    let pitch = aim::look_onto_closely(p.pos, aim, p.aloft, p.clear, middle);
     let input = Input::looking_at(0, aim, pitch);
     let field = sim::stones::gather(&w.players);
     let ground = w.terrain();

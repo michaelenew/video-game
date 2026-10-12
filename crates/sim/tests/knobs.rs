@@ -56,6 +56,12 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "u.mul(u).mul(Fx::from_int(3).sub(u.mul(Fx::from_int(2))))",
+        "The smoothstep polynomial 3u^2 - 2u^3 in the camera's eye bubble: the coefficients are \
+         what make the ease flat at both ends, a shape rather than a magnitude. How wide the ease \
+         is, is the Oven's `Eye bubble, soft edge`.",
+    ),
+    (
         "let third = Fx::ratio(1, 3)",
         "Presentation: where a Fire carpet's drawn flame is widest along its trip. The hit \
          test is the capsule, and no flame is drawn wider than it.",
@@ -114,12 +120,12 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Dual mage's light major.",
     ),
     (
-        "pub const BLADE: u16 = Input::LEFT",
-        "A binding, not a magnitude: which button is the Shadow Reaver's blade click.",
+        "pub const FINISHER: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Shadow Reaver's finisher click.",
     ),
     (
-        "pub const EXECUTION: u16 = Input::MIDDLE",
-        "A binding, not a magnitude: which button is the Shadow Reaver's execution click.",
+        "pub const NEUTRAL: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Shadow Reaver's neutral click.",
     ),
     (
         "pub const SHADOW: u16 = Input::RIGHT",
@@ -130,8 +136,8 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Shadow Reaver's lotus key.",
     ),
     (
-        "pub const MISTAKE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Shadow Reaver's Deadly mistake key.",
+        "pub const EXECUTIONER: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Shadow Reaver's Executioner key.",
     ),
     (
         "pub const STRIKE: u16 = Input::LEFT",
@@ -174,6 +180,11 @@ const EXEMPT: &[(&str, &str)] = &[
         "rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()",
         "Rounding slack in the steepness test: two samples of the land a step apart differ \
          by a few thousandths along a contour. The steepness itself is the knob.",
+    ),
+    (
+        ".add(Fx::ratio(1, 50))",
+        "Rounding slack in the walk test of the Reaver's send (`aim::walk_toward`), the same \
+         hair the steepness test above allows: the steepness itself is the knob.",
     ),
     (
         "V3::new(p.pos.x, Fx::from_int(1000), p.pos.z)",

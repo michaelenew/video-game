@@ -751,26 +751,6 @@ pub fn heavy_pushback() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HeavyPushback))
 }
 
-/// How far the Reaver may stray from a shadow standing out on the field before
-/// it comes and finds her.
-///
-/// **Longer than the throw**, and it has to be: the shadow arrives at up to the
-/// send's own reach, and a leash shorter than that would have it turn round on
-/// the frame it landed. The gap between the two is how far she may walk off the
-/// line before the line comes after her.
-///
-/// **Twice the throw since 2026-09-17**, where it used to be a third longer.
-/// The shadow is the Reaver's whole movement game -- she sends it somewhere
-/// useful and then chooses when to cross to it -- and a leash that close to the
-/// throw meant the placement expired while she was still deciding, so the
-/// answer to "when do I take this" was usually "now, before it leaves". Twice
-/// the throw is room to leave it somewhere and go and do something else.
-/// [`shadow_dash_speed`] went up with it, because the dash has to be able to
-/// cross whatever this is.
-pub fn shadow_leash() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
-}
-
 /// How far behind her the attending shadow stands.
 ///
 /// Presentation with teeth: the shadow copies her swings, so where it stands is
@@ -868,7 +848,7 @@ pub fn shadow_buffer() -> u16 {
 /// arrives is already a window of exactly this kind -- she is still sliding,
 /// and the slide decays -- but its length is however much of the dodge the
 /// crossing did not spend, which is a function of how far away she left the
-/// shadow. At the end of the leash that is about a frame, and a tech nobody
+/// shadow. At the end of a long dash that is about a frame, and a tech nobody
 /// can hit at the range the class is built around is a tech that does not
 /// exist. So arriving tops the dodge up to at least this many frames, and the
 /// window is the same length however far she came.
@@ -877,14 +857,6 @@ pub fn shadow_buffer() -> u16 {
 /// has always had, and only the first frames of that tail are the window.
 pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
-}
-
-/// How far back toward her a send aimed at nowhere to stand looks for
-/// somewhere that is, before it refuses. A small forgiveness, not a search:
-/// aimed off the far edge of an island, the shadow lands on the edge; aimed
-/// at the middle of the drop, it stays with her. See `aim::footing_toward`.
-pub fn shadow_forgive() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShadowForgive)).max(Fx::ZERO)
 }
 
 /// How many frames the crosshair shows that a send was refused.
@@ -1009,6 +981,12 @@ pub fn dash_jump_keep() -> Fx {
 /// the one thing standing between that and a dash that runs out of dodge
 /// halfway across the arena was a sentence in this comment. The dash ends with
 /// the dodge, so falling short means spending the dodge and arriving nowhere.
+///
+/// **Since 2026-10-12 there is no leash**, and the property runs the other
+/// way: the dash is only offered to a shadow within what a dodge's frames
+/// cover at this speed (`shadow::dash_is_asked_for`), so it still never falls
+/// short. `reaver::the_dash_reaches_further_than_the_send` holds that this
+/// covers at least a send's reach.
 pub fn shadow_dash_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
 }
@@ -3132,44 +3110,148 @@ pub fn equinox_lift() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EquinoxLift)).max(Fx::ZERO)
 }
 
-/// How fast the Moonsault carries her backward as she flips up.
-pub fn moonsault_back() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::MoonsaultBack)).max(Fx::ZERO)
+/// How fast the Plunge drives her down its line.
+pub fn plunge_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlungeDive)).max(Fx::ZERO)
 }
 
-/// How fast the Guillotine drop drives her down.
-pub fn guillotine_dive() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GuillotineDive)).max(Fx::ZERO)
+/// How far off straight down, in turns, the Plunge and Gallows may be aimed: the edge of the cone `aim::plunge_dir` holds them in.
+pub fn plunge_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlungeCone)).max(Fx::ZERO)
 }
 
-/// How far up Gallows puts her before she comes down.
+/// How far up Gallows sends the shadow she then blinks to.
 pub fn gallows_blink() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GallowsBlink)).max(Fx::ZERO)
 }
 
-/// How long Gallows holds her up there before the plunge: the beat the defender reads.
+/// How far ahead, along her facing, Gallows sends the shadow.
+pub fn gallows_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsAhead)).max(Fx::ZERO)
+}
+
+/// How long Gallows holds her where the shadow was before the plunge: the beat the defender reads.
 pub fn gallows_hang() -> u16 {
     oven::scalar(Scalar::GallowsHang).max(0) as u16
 }
 
-/// How fast Gallows comes down.
+/// How fast Gallows comes down its line.
 pub fn gallows_dive() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GallowsDive)).max(Fx::ZERO)
 }
 
-/// How long a shadow hung in the air waits there before it sinks.
-pub fn hang_waits() -> u16 {
-    oven::scalar(Scalar::HangWaits).max(0) as u16
+/// How long a sent shadow waits before it comes home on its own, from when it arrives. Every send starts it over (2026-10-12).
+pub fn shadow_return() -> u16 {
+    oven::scalar(Scalar::ShadowReturn).max(1) as u16
 }
 
-/// How fast a hung shadow sinks to the floor under it once its wait is up.
-pub fn hang_sink() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::HangSink)).max(Fx::ZERO)
+/// How close she has to stand to a waiting shadow to collect it -- and burst.
+pub fn shadow_collect_within() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowCollectWithin)).max(Fx::ZERO)
 }
 
-/// How far behind the attacker Deadly mistake puts her.
-pub fn mistake_behind() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::MistakeBehind)).max(Fx::ZERO)
+/// What the burst deals each body it cuts as she collects her shadow.
+pub fn burst_damage() -> i32 {
+    oven::scalar(Scalar::BurstDamage).max(0)
+}
+
+/// How far round her the burst reaches, across the floor.
+pub fn burst_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BurstRadius)).max(Fx::ZERO)
+}
+
+/// How long the burst is seen. It cuts each body once whenever it reaches them.
+pub fn burst_life() -> u16 {
+    oven::scalar(Scalar::BurstLife).max(1) as u16
+}
+
+/// How long the Whirl spins, from the throw.
+pub fn whirl_lasts() -> u16 {
+    oven::scalar(Scalar::WhirlLasts).max(1) as u16
+}
+
+/// How many frames apart the Whirl's cuts are: a body standing in it is cut once each.
+pub fn whirl_every() -> u16 {
+    oven::scalar(Scalar::WhirlEvery).max(1) as u16
+}
+
+/// How fast the Plunge's ring of shadow runs outward from where she lands.
+pub fn shadow_ring_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowRingSpeed)).max(Fx::ZERO)
+}
+
+/// How far out the Plunge's ring runs before it is gone -- past the blade's own hit, which is the point of it.
+pub fn shadow_ring_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowRingReach)).max(Fx::ZERO)
+}
+
+/// How thick the Plunge's ring is, either side of its radius.
+pub fn shadow_ring_width() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowRingWidth)).max(Fx::ZERO)
+}
+
+/// What the Plunge's ring deals to each body it passes: a little, for the
+/// feeling of the blow landing, not a second hit.
+pub fn shadow_ring_damage() -> i32 {
+    oven::scalar(Scalar::ShadowRingDamage).max(0)
+}
+
+/// How hard the Plunge's ring shoves a body outward.
+pub fn shadow_ring_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowRingPush)).max(Fx::ZERO)
+}
+
+/// How long the Plunge's ring staggers a body it passes.
+pub fn shadow_ring_stagger() -> u16 {
+    oven::scalar(Scalar::ShadowRingStagger).max(0) as u16
+}
+
+/// How far above or below her waist the burst reaches: it is a disc, not a ball.
+pub fn disc_thickness() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DiscThickness)).max(Fx::ZERO)
+}
+
+/// How wide the sweet spot at the end of the Reave is: a body this close to the middle of the blade's disc takes the sweet spot's damage.
+pub fn reave_sweet() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReaveSweet)).max(Fx::ZERO)
+}
+
+/// What the Reave's sweet spot is worth, as a multiple of the hit.
+pub fn reave_sweet_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReaveSweetDamage)).max(Fx::ONE)
+}
+
+/// What the dash jump adds upward on top of an ordinary jump: the hop of the forward flip.
+pub fn dash_jump_hop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DashJumpHop)).max(Fx::ZERO)
+}
+
+/// How long the forward flip out of a dash jump takes. Read by the renderer; kept in the snapshot so a rollback does not pop it.
+pub fn dash_flip() -> u16 {
+    oven::scalar(Scalar::DashFlip).max(1) as u16
+}
+
+/// How far apart, in turns, the blades of a fan are: the Tumble's down from the crosshair's line, the Fan's level either side of it.
+pub fn thrown_spread() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrownSpread)).max(Fx::ZERO)
+}
+
+/// How fast thrown blades fly: the Shuriken, the Tumble and the Fan.
+pub fn thrown_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrownSpeed)).max(Fx::ZERO)
+}
+
+/// **How far outside its room a hunt holds**: while anybody on their feet is
+/// within this far past the room's footprint, the hunt goes on, creature and
+/// all, and stepping back in finds it as it was. A step out of a door
+/// mid-fight is not giving up; walking this far away is.
+pub fn hunt_held_past() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HuntHeldPast)).max(Fx::ZERO)
+}
+
+/// What a cash-in adds for each mark squared, on top of `mark_worth` a mark: what makes the last mark worth the most.
+pub fn mark_curve() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MarkCurve)).max(Fx::ZERO)
 }
 
 /// How fast the Battering ram carries him forward.

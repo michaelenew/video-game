@@ -408,7 +408,7 @@ pub fn aloft_step(now: Fx, target: Fx) -> Fx {
 /// Nothing else about the sphere moves. The zones decide where a fighter sits
 /// on screen and this does not argue with them; it only declines to follow one
 /// upward for a while.
-pub fn ball(pitch: Fx, aloft: Fx) -> Ball {
+pub fn ball(pitch: Fx, aloft: Fx, clear: Fx) -> Ball {
     let (down, up) = limits();
     let pitch = pitch.clamp(down.neg(), up);
     let z = edges()
@@ -417,22 +417,20 @@ pub fn ball(pitch: Fx, aloft: Fx) -> Ball {
         .unwrap_or(EYES);
     let standing = ball_of(z, pitch);
     let dropped = hold(&standing).mul(aloft.clamp(Fx::ZERO, Fx::ONE));
-    Ball {
+    let held = Ball {
         centre: standing.centre.sub(dropped),
         ..standing
+    };
+    Ball {
+        radius: let_out(&held, pitch, clear),
+        ..held
     }
 }
 
-/// Where the eye is, for a fighter at `pos` looking this way.
-///
-/// `aloft` is how far the framing has swung over to the airborne one -- zero
-/// with their feet on something, one well above it, and whatever
-/// [`aloft_step`] has walked it to in between. It is a fighter's own state
-/// rather than a function of this position, because it has memory: see
-/// `state::Player::aloft`.
-pub fn eye(pos: V3, look: Input, aloft: Fx) -> V3 {
-    let ball = ball(look.pitch_turns(), aloft);
-
+/// The tilt's and the elevation's sines and cosines for this sphere at this
+/// pitch: `(cos_e, sin_e)`, where the elevation is how far above the sphere's
+/// centre the eye stands, as an angle. Never takes an angle -- see [`eye`].
+fn elevation(ball: &Ball, pitch: Fx) -> (Fx, Fx) {
     // The tilt, as a tangent, straight from the screen position it means.
     let tan_tilt = Fx::ONE
         .sub(ball.at.mul(Fx::from_int(2)))
@@ -447,12 +445,141 @@ pub fn eye(pos: V3, look: Input, aloft: Fx) -> V3 {
 
     // elevation = tilt - pitch, as a sine and a cosine, by the difference
     // identities -- so the eye lands without an angle being named anywhere.
-    let pitch = look.pitch_turns();
-    let (down, up) = limits();
-    let pitch = pitch.clamp(down.neg(), up);
     let (cos_p, sin_p) = (cos_turns(pitch), sin_turns(pitch));
     let cos_e = cos_tilt.mul(cos_p).add(sin_tilt.mul(sin_p));
     let sin_e = sin_tilt.mul(cos_p).sub(cos_tilt.mul(sin_p));
+    (cos_e, sin_e)
+}
+
+/// The room the eye has under the sphere's centre before it comes within the
+/// bubble of the floor, in metres -- and **never more than the fighter's own
+/// height off that floor**, so that with their feet on something it is at most
+/// nothing whatever the knobs say. That is the whole of the promise that
+/// standing on the ground the camera is exactly the one it always was.
+fn room(centre: Fx, clear: Fx) -> Fx {
+    let bubble = metres(V::EyeBubble);
+    clear.min(clear.add(centre).sub(bubble))
+}
+
+/// How far into its pull-back the bubble is, nought to one: the soft edge.
+///
+/// Nought with no room, one once there are `Eye bubble, soft edge` metres of
+/// it, and eased at both ends between -- so the camera leaves the head, and
+/// arrives at the distance the floor allows, without a corner in either.
+fn opened(room: Fx) -> Fx {
+    let soft = metres(V::EyeBubbleSoft);
+    let u = if soft.raw() > 0 {
+        room.div(soft).clamp(Fx::ZERO, Fx::ONE)
+    } else if room.raw() > 0 {
+        Fx::ONE
+    } else {
+        Fx::ZERO
+    };
+    // `u * u * (3 - 2u)`: flat at both ends.
+    u.mul(u).mul(Fx::from_int(3).sub(u.mul(Fx::from_int(2))))
+}
+
+/// **The bubble**: the radius the zones asked for, let back out toward the
+/// full sphere as far as the floor under the fighter allows.
+///
+/// Looking up, the zones shrink the sphere onto the head -- the handover --
+/// because on the ground an eye swung down behind a fighter looking up would
+/// go into the floor. That is the floor's reason, and off the ground the floor
+/// is somewhere else. So the camera keeps the sphere's own radius **unless
+/// that would bring the eye within `Eye bubble` of the floor under the
+/// fighter**, and stops exactly there if so: a hard edge, not a slope. The
+/// soft edge is [`opened`], easing the pull-back in over the first two metres of
+/// room so that leaving the floor is not a switch.
+///
+/// Three things it never does, and they are the no-regression argument:
+///
+/// - **It never moves a camera on the ground.** [`room`] is at most the
+///   fighter's height off the floor, nought standing, and nought room is the
+///   zones' radius exactly.
+/// - **It never moves the crosshair.** The tilt -- where the sphere's centre
+///   sits on screen -- is the zones', untouched; only the distance changes,
+///   and a distance along the line to the centre does not move the centre on
+///   screen. Looking up, the zones have centred the head, so the crosshair is
+///   on the fighter at every distance.
+/// - **It never jumps.** Continuous in room through [`opened`], room
+///   continuous in height through [`clear_step`]'s rate limit, and continuous
+///   in pitch because the floor's limit is (it runs to the full sphere as the
+///   eye comes level with the centre, which is where the zones' own radius
+///   already is).
+///
+/// What it does not see is anything but the floor: a wall or a ledge behind
+/// the fighter is the drawn camera's to pull in from, as it always was in
+/// third person (`view::camera`).
+fn let_out(ball: &Ball, pitch: Fx, clear: Fx) -> Fx {
+    let sphere = metres(V::Sphere);
+    if ball.radius.raw() >= sphere.raw() {
+        return ball.radius;
+    }
+    let room = room(ball.centre, clear);
+    let share = opened(room);
+    if share.raw() <= 0 {
+        return ball.radius;
+    }
+    let (_, sin_e) = elevation(ball, pitch);
+    let below = sin_e.neg();
+    // How far back the eye may go before the floor's bubble stops it. Asked as
+    // a product rather than a quotient first, so a level eye -- `below` near
+    // nothing -- never divides.
+    let floor_allows = if below.raw() <= 0 || below.mul(sphere).raw() <= room.raw() {
+        sphere
+    } else {
+        room.div(below)
+    };
+    let wants = floor_allows.max(ball.radius);
+    ball.radius.add(wants.sub(ball.radius).mul(share))
+}
+
+/// How far the bubble has let the camera back out of the head, nought to one:
+/// for the drawn camera, which treats an eye inside the head and an eye in
+/// the air behind it differently (its floor clamp and its arm's pull-in only
+/// apply to the second).
+pub fn let_out_share(pitch: Fx, aloft: Fx, clear: Fx) -> Fx {
+    let (down, up) = limits();
+    let pitch = pitch.clamp(down.neg(), up);
+    let inside = ball(pitch, aloft, Fx::ZERO);
+    let sphere = metres(V::Sphere);
+    let span = sphere.sub(inside.radius);
+    if span.raw() <= 0 {
+        return Fx::ZERO;
+    }
+    let out = ball(pitch, aloft, clear).radius.sub(inside.radius);
+    out.div(span).clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// One frame of the fighter's height off the floor **as the camera is allowed
+/// to know it** (`state::Player::clear`).
+///
+/// Down at once, because the bubble is a hard edge: an eye that learned of a
+/// floor late would already be in it. Up by at most `Eye bubble, most it opens
+/// a frame`, because stepping off a ledge puts the floor metres away in one
+/// frame, and the camera would follow it out in that frame.
+pub fn clear_step(now: Fx, height: Fx) -> Fx {
+    let height = height.max(Fx::ZERO);
+    let rate = metres(V::EyeBubbleRate).max(Fx::ZERO);
+    height.min(now.add(rate))
+}
+
+/// Where the eye is, for a fighter at `pos` looking this way.
+///
+/// `aloft` is how far the framing has swung over to the airborne one -- zero
+/// with their feet on something, one well above it, and whatever
+/// [`aloft_step`] has walked it to in between. It is a fighter's own state
+/// rather than a function of this position, because it has memory: see
+/// `state::Player::aloft`.
+///
+/// `clear` is how high their feet are off the floor under them, as the camera
+/// may know it -- `state::Player::clear`, nought standing -- which is how far
+/// the bubble lets the eye back out of the head looking up: see [`let_out`].
+pub fn eye(pos: V3, look: Input, aloft: Fx, clear: Fx) -> V3 {
+    let (down, up) = limits();
+    let pitch = look.pitch_turns().clamp(down.neg(), up);
+    let ball = ball(pitch, aloft, clear);
+    let (cos_e, sin_e) = elevation(&ball, pitch);
 
     let along = V3::from_turns(look.aim_turns());
     let back = ball.radius.mul(cos_e);
@@ -476,8 +603,8 @@ pub fn eye(pos: V3, look: Input, aloft: Fx) -> V3 {
 ///
 /// The drawn camera starts from this one too (`view::camera`), so the
 /// crosshair and the eye stay the same line under a vault.
-pub fn eye_under(pos: V3, look: Input, aloft: Fx, arena: &crate::arena::Terrain) -> V3 {
-    let mut at = eye(pos, look, aloft);
+pub fn eye_under(pos: V3, look: Input, aloft: Fx, clear: Fx, arena: &crate::arena::Terrain) -> V3 {
+    let mut at = eye(pos, look, aloft, clear);
     let head = pos.y.add(t::body_height());
     // Sloped rather than a footprint test, so the eye moves continuously as
     // it or the body passes an edge: see `Terrain::ceiling_near`.

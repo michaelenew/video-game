@@ -483,7 +483,13 @@ fn one_gnat(class: Class, metres: i32) -> (World, Input) {
         w.advance([Input::looking_at(0, 0, 0), Input::default()]);
     }
     let middle = w.critters[0].body(sp).middle();
-    let pitch = aim::look_onto_closely(w.players[0].pos, 0, w.players[0].aloft, middle);
+    let pitch = aim::look_onto_closely(
+        w.players[0].pos,
+        0,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     (w, Input::looking_at(0, 0, pitch))
 }
 
@@ -541,6 +547,11 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
     // down in `docs/design/critters.md`; a new entry here is a regression.
     const KNOWN: &[(&str, &str)] = &[
         ("Shadow Reaver", "Guillotine"),
+        // The arc's slash is rising by the time it is five metres out: it
+        // meets a standing fighter's shoulders there and passes over a
+        // knee-high body, by its own design -- the shadow is thrown forward
+        // and up (2026-10-10).
+        ("Shadow Reaver", "Shadow arc"),
         // A jump inside a scythe spin: she is off the floor before the blade
         // comes round, and the spin is flat at her waist. For the pools under
         // it, not for knee-high bodies; `docs/design/critters.md` §7.
@@ -768,7 +779,7 @@ fn a_bite_from_behind(back: bool, late: Option<u16>) -> bool {
         Input::looking_at(
             0,
             0,
-            aim::look_onto_closely(w.players[0].pos, 0, Fx::ZERO, up),
+            aim::look_onto_closely(w.players[0].pos, 0, Fx::ZERO, Fx::ZERO, up),
         )
     };
     w.advance([look, Input::default()]);

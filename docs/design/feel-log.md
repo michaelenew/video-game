@@ -8055,3 +8055,116 @@ pool at the road's height and the cliff at 22 m instead.
 easy for everyone but the Bulwark, is 9 m/s of push readable, and is the
 Bulwark's run of 2.0 m rises at 3 m tight enough to feel like a test and not
 a wall.
+
+### 2026-10-10 — the Shadow Reaver, second pass: dashing blades
+**Changed** From the owner, after playing the first three-clicks build: "the shadow reaver
+feels awkward right now. I want this class to capture a feeling more like MapleStory's Dual
+Blade where you're dashing around with spinning blades, sending the shadow out for high
+impact, and then closing gaps with strong finishers." Built as
+[0013](exploration/0013_shadow_reaver_dual_blades.md): left is finishers (Reave, Plunge,
+Gallows), middle neutral blades (Blade ring, Blade spin, Tumble), right the shadow (send,
+Whirl, Shadow arc); `E` Executioner; Deadly mistake, Slash, the Kite cut, the Guillotine drop,
+the Swap, the Moonsault and Hang the shadow retired. And two mid-build asks: the send pressed
+again **moves** the shadow rather than recalling it, and goes **only where she could walk**
+(`aim::walk_toward`, replacing the 2026-10-04 forgiveness and its knob).
+Numbers, all first guesses: Reave 6/3/14, 70, a 2.5 m step, the sweet spot ×1.5 within 0.6 m
+of the disc's middle; Plunge 4/4/18, 130, dive 26 m/s and 4 m/s forward, ring 3.5 m for 20;
+Gallows 6/4/32, 170, −19 on block; Blade ring 5/4/14, 55, radius 2.2 m; Blade spin 2/4/9, 30,
+radius 3 m, both ±0.5 m thick; Tumble 3/4/12, three blades of 28 fanned 0.04 turns, lift
+13 m/s; Whirl reach 4 m, 18 a cut every 12 frames for 70; Shadow arc 5 m ahead and 3.5 m up,
+55, hangs 60 frames; dash jump +4 m/s and a 24-frame flip.
+**Found in the build**
+- The Reave's step at a dash's speed kept its follow-through like every other step: it slid
+  her past the sweet spot and, off a platform's edge, launched her at ~20 m/s. It now stops
+  where it strikes.
+- The Shadow arc thrown on a straight-line ease went up so fast its slash missed every
+  standing body; it now goes out first and up after (vertical on the square of progress).
+- Three `feel.rs` properties caught first-guess numbers: the Plunge's knockback 8 → 12 (a heavy
+  hit has to move somebody 1.5 m), Gallows' hitstun 32 → 36 and the Blade ring's 16 → 18 (a
+  landed hit may not leave her behind).
+- Seen in a capture: the Whirl's shadow stood with its *feet* on the crosshair's point, so a
+  level look hung it four metres up, over everybody. The point is its middle now, as for every
+  skillshot. And the two spins cut with nothing on screen to say so: six blades are now drawn
+  on the edge of the disc, off the hitbox.
+- Inside 2 m the Reave runs through a knee-high gnawer, like the Dual mage's dark auto; the
+  gnawer test asks hers at 3 m, and the close answer is the Blade ring. The arc rising past a
+  gnat at 5 m is on the critter test's known list, like the lotus.
+**Movement** Her envelope fixtures re-recorded. The send no longer crosses anything, but the
+lab search still finds gaps of 50–75 m in most lanes (lane 0 m shared 55.5 m, lane +8 m whole kit 76.2 m)
+through the Whirl, the forward dodge that follows a flying shadow, and the dash jump. That is
+REAVER-5 in 0013 and the owner's call. Her Ridgeback pin re-pinned.
+**Verdict** — unplayed.
+
+### 2026-10-12 — the Shadow Reaver, third pass: marks, throws and the shadow's clock
+**Changed** From the owner, after the second pass: "Much better, but needs some polish still."
+Built as [0014](exploration/0014_shadow_reaver_marks_and_throws.md). Middle click is three
+throws (the Shuriken, hers and the shadow's; the Tumble as it was; the Fan, five level blades
+and a 16-frame stall); the Plunge aims inside a 45° cone round straight down; Gallows sends the
+shadow up first and blinks to it; the Whirl reaches as far as the send (4 → 9 m) and a second
+one moves the one set of blades; `space` + right is the Rising whirl. Every send starts a
+three-second clock home (180 frames, reset by any send); **the leash is gone**; standing within
+1.2 m of a waiting shadow collects it, and collecting — the dash, standing on it, Gallows'
+blink — **bursts** (45, a 2.5 m disc, marking). Every shadow blade marks; **only the finishers
+cash** (Reave, Plunge, Gallows — not Executioner); the tally is on one clock, a mark resetting
+it to 120 frames (was 90), one mark fading when it runs out. The cash is
+`1 + 0.25m + 0.07m²` (was `1 + 0.4m`, straight): ×1.32 ×1.78 ×2.38 ×3.12 ×4.00, each
+step bigger than the last, as asked. Retired: the Blade ring, the Blade spin, the Shadow arc,
+`Shape::Disc` and the hitbox's height band, `Shadow leash`, the arc's knobs, the Plunge's
+forward knob, the Tumble's flight knob.
+**Found in the build**
+- From the floor, Gallows went active on its first frame: the landing hook that starts the
+  hit of a move that lands on the floor saw her feet on it before the blink. It waits for the
+  blink now.
+- Collecting by standing near stole the dash's arrival (the dash stopped 0.23 m short and
+  carried nothing). Nearness does not collect while a dash is running.
+- A Whirl aimed at the Broodmother's fore sac went through her to the floor behind: the
+  crosshair's point is not on bodies, by design (CLAUDE.md, "Bodies are not on that ray"), and
+  the whirl took it as the place. It now stops at the first body or creature along the way
+  (`aim::first_along`), and the creature test is a column round the whirl's middle.
+- The creature cash test used Executioner, which no longer cashes; it is a Plunge now.
+- The hunter bot never worked her shadow against the Hornback any more: it sent the shadow
+  under the creature she was about to stand beside, so she picked it straight back up, and
+  the shadow's three seconds were over before an opening came. It now sends it 2.5 m past the
+  work, presses again to keep it out, opens the lotus on it between openings, and cashes with
+  the Reave.
+**Movement** The lab search finds her going further, not less: lane +3 m whole kit 89.4 m (was
+67.4), lane +4 m 43 m (was 16), lane +10 m 52 m (was nothing) — Gallows' blink and the Fan's
+stall are new height and air time. Table in 0014. Her envelope fixtures, both pins and every
+other class's pins re-recorded (the camera's `clear` is in the checksum).
+**Verdict** — unplayed. REAVER-10 to 13 in 0014.
+
+### 2026-10-12 — the camera: a bubble round the eye, off the ground
+**Changed** Looking up, the zones shrink the sphere onto the head (the handover). In the air,
+that radius is now let back out toward the full sphere as far as keeping the eye a body's
+height (`Eye bubble`, 1.8 m) off the floor under the fighter allows — a hard edge — eased in
+over the first two metres of room (`Eye bubble, soft edge`). The room is `Player::clear`, the
+feet's height off the floor, nought standing, opening at most 0.25 m a frame. In the drawn
+camera, the floor clamp and the wall pull-in return in proportion as the eye leaves the head.
+**Why** The owner: "I want the camera to pull back to third person" in the air, with the
+crosshair fixed and on the character, and "I DO NOT want regressions in how the camera works".
+**The no-regression argument**, in `tests/eye_bubble.rs`: standing, the room is nought and the
+eye is the zones' exactly; looking level or down, nothing changes (the zones keep the full
+sphere there); the tilt is untouched, so the crosshair stays on the head; nothing is solved
+(lesson of 2026-09-12); the eye is still the aim, hashed, and the bots ask the same camera; the
+eye never comes within the bubble of the floor by being let out.
+**Tried** A one-metre soft edge. Where the handover's shrink and the floor's limit arrive in the
+same degree (about a metre up, a few degrees above level) the eye moved half again as fast per
+degree as the ground's handover at its fastest. Two metres brings that to about a fifth; a
+smooth minimum instead of the hard one was worse, and was reverted.
+**Not done** It sees the floor, not a wall or ledge behind: that is the drawn camera's pull-in,
+as in third person anywhere.
+**Verdict** — unplayed.
+
+### 2026-10-12 — a step out of a room's door no longer ends its hunt
+**Changed** A hunt held while anybody on their feet was inside the room's footprint, and ended
+the frame nobody was; walking back in started a new one. It now holds while anybody is within
+`Hunt, held this far outside its room` (15 m) of the room's edge (`valley::open::reframe`,
+`atlas::Placed::holds_within`).
+**Why** From play: "I keep on accidentally exiting an arena during a fight and the creature's
+health and position reset but mine don't." A dodge or a knock through the door was a free
+full heal for the creature and none for the hunter.
+**How far** The road junctions are 16 to 60 m from their rooms; 15 m is less than all of
+them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back to the road
+has left the hunt, and the creature is gone as before. 30 m was tried first and held the
+Pinewood road inside a hunt.
+**Verdict** — unplayed.

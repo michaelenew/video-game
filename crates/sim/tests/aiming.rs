@@ -291,6 +291,7 @@ fn aiming_at_the_side_of_a_stone_puts_the_next_one_on_the_floor_behind_it() {
             w.players[0].pos,
             Input::looking_at(0, 0, down(tilt)),
             w.players[0].aloft,
+            w.players[0].clear,
         );
         let flat = face.sub(eye).flat_len().to_f32_for_render();
         let rise = face.y.sub(eye.y).to_f32_for_render();
@@ -1106,10 +1107,12 @@ fn the_blades_erupt_at_the_shadow_rather_than_on_the_caster() {
 }
 
 #[test]
-fn the_blades_chase_a_recalled_shadow() {
-    // The combination the kit is built around: recall the shadow with a lotus
-    // open and the six blades are dragged after it, so a Reaver who has opened
-    // one across the arena can pull it back through everything in between.
+fn the_blades_chase_a_moved_shadow() {
+    // The combination the kit is built around: move the shadow with a lotus
+    // open and the blades are dragged after it, so a Reaver who has opened one
+    // across the arena can pull it through everything in between. Since
+    // 2026-10-10 the send moves the shadow rather than recalling it, so the
+    // drag goes wherever she points.
     let (mut w, opened_at) = with_a_shadow();
     let cast = sim::moves::get(Class::ShadowReaver, SLOT_SPECIAL);
     tap(&mut w, Q, down(20), cast.startup as u32 + 2);
@@ -1118,23 +1121,23 @@ fn the_blades_chase_a_recalled_shadow() {
         "the lotus did not open on the shadow"
     );
 
-    // Recall, once she is out of the cast's recovery and can press a button
-    // again, and let the return get under way.
+    // Send it somewhere nearer, once she is out of the cast's recovery and
+    // can press a button again, and let it get under way.
     run(&mut w, cast.whiff_cost() as u32, 0, down(20));
     assert!(
         !lotus(&w).lotus_coming_back(),
-        "the lotus turned for home on its own before the recall could do it"
+        "the lotus turned for home on its own before the send could do it"
     );
     let send = sim::moves::get(Class::ShadowReaver, sim::state::SLOT_MECHANIC);
-    tap(&mut w, R, down(20), send.startup as u32 + 6);
+    tap(&mut w, R, down(45), send.startup as u32 + 12);
     assert!(
         lotus(&w).lotus_coming_back(),
-        "recalling the shadow did not send the blades after it"
+        "moving the shadow did not send the blades after it"
     );
     let moved = shadow_of(&w).pos;
     assert!(
         moved.sub(opened_at).flat_len().raw() > Fx::ONE.raw(),
-        "the shadow never left on the recall"
+        "the shadow never moved on the second send"
     );
     assert!(
         lotus(&w).pos.sub(moved).flat_len().raw() < Fx::ONE.raw(),

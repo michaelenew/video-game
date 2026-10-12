@@ -249,7 +249,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            EffectKind::FireRing => {
+            EffectKind::FireRing | EffectKind::ShadowRing => {
                 cylinder(
                     &mut gizmos,
                     at,
@@ -284,6 +284,37 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     effect.field_radius().to_f32_for_render(),
                     PILLAR,
                 );
+            }
+            // The Reaver's Whirl and arc: the ball round the shadow's middle
+            // they cut in. The Tumble's fan: each blade's ball.
+            EffectKind::ShadowWhirl => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(
+                        at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+                    ),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The burst: the disc round her waist it cuts in.
+            EffectKind::ShadowBurst => {
+                gizmos.circle(
+                    Isometry3d::new(
+                        at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+                        Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+                    ),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            EffectKind::ShadowFan => {
+                for blade in 0..sim::moves::reaver::blades(effect.slot) {
+                    gizmos.sphere(
+                        Isometry3d::from_translation(crate::fx3(effect.fan_blade_at(blade))),
+                        effect.field_radius().to_f32_for_render(),
+                        PILLAR,
+                    );
+                }
             }
             // The Dual mage's well, burst and ray: the volumes they test.
             EffectKind::Abyss => {

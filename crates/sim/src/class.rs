@@ -373,21 +373,26 @@ pub struct Shadow {
     /// A jump pressed in the last frames of the dash, before it arrived,
     /// waiting to be thrown on arrival. See `shadow::bank_dash_jump`.
     pub jump_banked: bool,
-    /// Frames left of showing that a send was refused: aimed at nowhere a
-    /// body could stand, with nothing within the forgiveness either. The
-    /// crosshair reads it. See `aim::footing_toward`.
+    /// Frames left of showing that a send was refused: aimed somewhere she
+    /// could not walk even a step toward. The crosshair reads it. See
+    /// `aim::walk_toward`.
     pub refused: u8,
     /// Shift was still down when a dash landed: it dodges again only once it
     /// has come up. The dash's tail is cut on arrival (2026-10-04), so a shift
     /// held through a short dash would otherwise throw a second dodge on the
     /// frame she lands. See `shadow::shift_spent`.
     pub shift_spent: bool,
-    /// Frames a shadow hung in the air (`Hang the shadow`) waits there before
-    /// it sinks. Zero for a shadow standing on the floor.
+    /// Frames left before a waiting shadow **comes home on its own**: every
+    /// send starts it at `tuning::shadow_return` (2026-10-12), another send
+    /// starts it over, and collecting the shadow clears it.
     pub hang: u16,
-    /// The height of the floor under it: where a hung shadow sinks to.
-    /// `Fx::MAX` for a shadow that was put on the floor, which never sinks.
-    pub rest: Fx,
+    /// She collected the shadow this frame -- the dash, standing on it,
+    /// Gallows -- and the burst is owed. Spent by `shadow::take_collected`.
+    pub collected: bool,
+    /// Frames left of the forward flip out of a dash jump (2026-10-10). The
+    /// renderer turns her body over by it; in the snapshot, like every other
+    /// clock a picture is drawn from, so a rollback does not pop it.
+    pub flip: u8,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -435,7 +440,8 @@ impl Shadow {
             refused: 0,
             shift_spent: false,
             hang: 0,
-            rest: Fx::MAX,
+            flip: 0,
+            collected: false,
         }
     }
 

@@ -1441,12 +1441,14 @@ impl Duelist {
         self.yaw = self.yaw.add(off.clamp(turn.neg(), turn));
         let wire = turns_to_aim(self.yaw.sub(me.carry_yaw));
         let pitch = match kind {
-            Kind::Grounded | Kind::Skillshot => aim::look_onto(me.pos, wire, me.aloft, target),
+            Kind::Grounded | Kind::Skillshot => {
+                aim::look_onto(me.pos, wire, me.aloft, me.clear, target)
+            }
             // A swing takes its pitch from the camera outside a dead zone, and
             // level is the standard arc. Only look up at somebody above you.
             _ if them.pos.y.sub(me.pos.y).raw() > Fx::ONE.raw() => {
                 let middle = aim::standing_middle(them.pos, sim::tuning::body_height());
-                aim::look_onto(me.pos, wire, me.aloft, middle).max(0)
+                aim::look_onto(me.pos, wire, me.aloft, me.clear, middle).max(0)
             }
             _ => 0,
         };

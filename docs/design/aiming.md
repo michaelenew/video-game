@@ -173,8 +173,8 @@ them: a structure, a fire pillar.
   goes there. A Fissure from a stone up top stops at the edge
   (`aim::kept_along`), and Landfall's slab is never put off a ledge
   (`aim::planted_ahead`). The other grounded casts keep the plain rule: the
-  Reaver's send has its own answer to an edge, a short forgiveness and then a
-  refusal (`aim::footing_toward`).
+  Reaver's send has its own answer, **only as far as she could walk**
+  (`aim::walk_toward`, 2026-10-10).
 - **The Elementalist's stones are not on this ray**, for any placement,
   Raise included — see [Ground, and everything else](#ground-and-everything-else).
 - **If it travels**, it travels from the character model to that point.
@@ -429,7 +429,10 @@ crosshair on a point. It is not a line of effect and the simulation never calls
 it; it is for whatever *plays* — a bot choosing where to put its mouse, the
 Elementalist rehearsal aiming at her own feet. It lives here because the answer
 depends on where the eye is, and the eye moves round the body as the pitch
-changes, so it is settled by a few rounds of asking the camera. A bot that
+changes, so it is settled by a few rounds of asking the camera. It takes the
+fighter's `aloft` and, since 2026-10-12, its `clear` -- how high its feet are
+off the floor, which the camera's bubble reads (§"The eye's bubble" below) --
+so a bot asks the camera the player sees. A bot that
 aimed from its chest along the line to its target would be making the mistake
 this document exists to prevent, with a player's hands.
 
@@ -473,16 +476,32 @@ where the **first** of the four lines meets something, less her own radius.
 it — a stone's top, a ledge, the floor — for anything that lands a thing
 somewhere it was not aimed (a thrown body, a mark on the ground).
 
-**Can a body stand there, and if not, where nearby can it?** `aim::standable`
-says whether a settled point is footing: anywhere but a course's drop, whose
-floor is a pit rather than ground. `aim::footing_toward` is the Reaver's send
-asking it (added 2026-10-04, from play: the shadow dived into the abyss). The
-grounded point itself when it is footing; otherwise the first footing scanning
-back toward her along the floor, for at most `Send shadow, forgiveness back`
-(3 m), then a body's width further onto it; otherwise nothing, and the send
-is refused. A small forgiveness and then a refusal, never a search for the
-nearest footing anywhere: a placement that goes somewhere the player did not
-point is what this document exists to prevent.
+**Can a body stand there, and could she walk to it?** `aim::standable` says
+whether a settled point is footing: anywhere but a course's drop, whose floor is
+a pit rather than ground. `aim::walk_toward` is the Reaver's send asking it, a
+step at a time (2026-10-10, from play: the send "trivialises most movement
+sections"): along the floor from her feet toward the grounded point, up nothing
+steeper than the land lets a body climb and no box taller than a skin, over no
+pit, down any drop; stopped short, a body's width back from what stopped it;
+nothing walkable at all, and the send is refused. Only along the straight line
+she pointed: a ledge she could reach by walking round is still refused, because
+a placement that goes somewhere the player did not point is what this document
+exists to prevent. It replaced `aim::footing_toward` (2026-10-04), a forgiveness
+of three metres back that asked only about pits, so a send pointed up a ledge
+put the shadow on top of it.
+
+**Where does a thing go that is thrown forward and up?** `aim::hung_ahead` —
+where the Reaver's Gallows sends the shadow before she blinks to it (the Shadow
+arc's, until 2026-10-12), a fixed distance ahead along her flat facing and a
+fixed height up, the way `planted_ahead` is a fixed distance ahead. Nobody aims
+it.
+
+**Which way does a dive go?** `aim::plunge_dir` (2026-10-12) — the swing's line,
+held inside a cone round straight down: the Reaver's Plunge and the dive out of
+Gallows. Pointed inside the cone it goes where the crosshair is; shallower, down
+the cone's edge on the same bearing. It points a body rather than an ability,
+but it is a look direction turned into where something goes, which is what
+this file is for.
 
 **Which way is up underfoot?** `aim::underfoot_up` — `+y` on the floor and on
 anything in the arena, the mounted part's own `+y` on a creature. What the
@@ -551,6 +570,21 @@ eye, which this module places nine metres behind and above a standing fighter
 wall counted as begun off screen. The renderer's camera is pulled in off that
 wall, so what can hide a point is what stands between the character and it:
 the cone stays the eye's, the line is the character's.
+
+### The eye's bubble (2026-10-12)
+
+Looking up, the camera's sphere shrinks onto the head (the handover), because
+on the ground an eye swung down behind a fighter looking up would go into the
+floor. Off the ground the floor is somewhere else, so `camera::ball` lets the
+radius back out toward the full sphere **as far as keeping the eye a body's
+height (`Eye bubble`) off the floor under the fighter allows**, eased in over
+the first two metres of that room. The room is `Player::clear`, in the
+snapshot and the checksum like `aloft`, nought with the feet on anything --
+so on the ground every eye is the eye it was. Only the distance changes, never
+the tilt, so the crosshair stays where the zones put it: on the head, looking
+up. `tests/eye_bubble.rs` holds the properties; the design is
+[exploration/0014](exploration/0014_shadow_reaver_marks_and_throws.md)
+§"The camera".
 
 ### The eye under a ceiling (2026-10-01)
 

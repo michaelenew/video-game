@@ -84,6 +84,15 @@ impl Placed {
             && z.raw() <= self.hi.1.raw()
     }
 
+    /// Is the map point (x, z) within `margin` of its footprint -- in it, or
+    /// that far past any edge? Edges count.
+    pub fn holds_within(&self, x: Fx, z: Fx, margin: Fx) -> bool {
+        x.raw() >= self.lo.0.sub(margin).raw()
+            && x.raw() <= self.hi.0.add(margin).raw()
+            && z.raw() >= self.lo.1.sub(margin).raw()
+            && z.raw() <= self.hi.1.add(margin).raw()
+    }
+
     /// A point in its own coordinates, on the map.
     pub fn to_map(&self, p: V3) -> V3 {
         p.add(self.at)

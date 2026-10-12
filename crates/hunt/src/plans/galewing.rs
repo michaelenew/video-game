@@ -259,7 +259,7 @@ const SWING_UP: i16 = 0;
 fn wire(me: &Player, yaw: Fx, at: Option<V3>, bits: u16) -> Input {
     let aim = turns_to_aim(yaw.sub(me.carry_yaw));
     let pitch = match at {
-        Some(at) => sim::aim::look_onto(me.pos, aim, me.aloft, at),
+        Some(at) => sim::aim::look_onto(me.pos, aim, me.aloft, me.clear, at),
         None => WATCH_PITCH,
     };
     Input::looking_at(bits, aim, pitch)

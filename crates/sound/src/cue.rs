@@ -506,6 +506,32 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                     weight: 0.7,
                 })
             }
+            // The Reaver's second pass (2026-10-10): the shadow's blades are
+            // the lotus's whoosh, a long one for the Whirl's spin and a short
+            // one for the arc and the fan; the Plunge's ring is the ground
+            // taking the blow, low and wide.
+            EffectKind::ShadowWhirl => Patch::Whoosh(Whoosh {
+                frames: 30,
+                size: FIGHTER,
+                rising: false,
+                weight: 0.6,
+            }),
+            EffectKind::ShadowBurst => Patch::Whoosh(Whoosh {
+                frames: 12,
+                size: FIGHTER,
+                rising: true,
+                weight: 0.7,
+            }),
+            EffectKind::ShadowFan => Patch::Whoosh(Whoosh {
+                frames: 8,
+                size: FIGHTER,
+                rising: false,
+                weight: 0.35,
+            }),
+            EffectKind::ShadowRing => Patch::Rumble(Rumble {
+                frames: 12,
+                size: 2.0,
+            }),
             // Anything a later build adds speaks until it is given a voice.
             #[allow(unreachable_patterns)]
             _ => Patch::Gust(Gust {

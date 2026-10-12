@@ -255,6 +255,35 @@ pub enum EffectKind {
     /// first body on the crosshair's line, or its reach. It hits on its first
     /// frame; the few after are the line being seen.
     Sunray,
+    /// Shadow Reaver, the Whirl (2026-10-10). Blades spinning round the
+    /// shadow, wherever it is, live -- like the lotus, it **follows the
+    /// mechanic**. A ball of `reach` round its middle that cuts every body in
+    /// it once every `tuning::whirl_every` frames, for `tuning::whirl_lasts`
+    /// after the flight out. One per Reaver: pressed again, it starts over
+    /// (2026-10-12). Its first cut on a body marks it.
+    ShadowWhirl,
+    /// Shadow Reaver, **the burst** (2026-10-12): blades thrown round her as
+    /// she collects her shadow -- the dash's arrival, standing on it, Gallows'
+    /// blink. A thin disc round her waist, `reach` across and
+    /// `tuning::disc_thickness` above and below, under her live; it cuts each
+    /// body once, and marks it. What the Blade ring and the Blade spin were,
+    /// made a consequence of going and getting the shadow rather than an
+    /// input of their own.
+    ShadowBurst,
+    /// Shadow Reaver, **thrown blades**: the Shuriken (one, from her hand or
+    /// the shadow's to the crosshair's point), the Tumble's fan (three, turned
+    /// down from the crosshair's line) and the Fan's (five, turned level
+    /// across it). Which is the move that threw it -- `slot`. Each flies
+    /// `reach` at `tuning::thrown_speed` and cuts each body it passes once;
+    /// the first blade of a throw to reach a body marks it. See
+    /// [`Effect::fan_blade_at`].
+    ShadowFan,
+    /// Shadow Reaver, the Plunge's landing (2026-10-10). A ring of shadow
+    /// running outward from where she landed, out past the blade's own hit,
+    /// at `tuning::shadow_ring_speed` to `tuning::shadow_ring_reach`. A small
+    /// hit and a shove on each body it passes: the feeling of the blow, not a
+    /// second one. The Elementalist's fire ring, made of shadow.
+    ShadowRing,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -368,6 +397,10 @@ impl EffectKind {
             EffectKind::Abyss => "abyss",
             EffectKind::Flare => "flare",
             EffectKind::Sunray => "sunray",
+            EffectKind::ShadowWhirl => "shadow whirl",
+            EffectKind::ShadowBurst => "shadow burst",
+            EffectKind::ShadowFan => "shadow blades",
+            EffectKind::ShadowRing => "shadow ring",
         }
     }
 
@@ -438,6 +471,10 @@ impl EffectKind {
                 false
             }
             EffectKind::Abyss => true,
+            // On the shadow, wherever it is; thrown along her aim; and a ring
+            // on the floor where she landed.
+            EffectKind::ShadowWhirl | EffectKind::ShadowFan => false,
+            EffectKind::ShadowBurst | EffectKind::ShadowRing => true,
         }
     }
 
@@ -462,6 +499,7 @@ impl EffectKind {
                 | EffectKind::Nail
                 | EffectKind::ShadeBolt
                 | EffectKind::Binary
+                | EffectKind::ShadowFan
         )
     }
 
@@ -474,7 +512,11 @@ impl EffectKind {
     /// marked the creature struck and every one of them touching it cut it
     /// again on every frame: well over a thousand health for one Guillotine.
     pub const fn once_a_pass(self) -> bool {
-        self.travels() || matches!(self, EffectKind::GuillotineLotus)
+        self.travels()
+            || matches!(
+                self,
+                EffectKind::GuillotineLotus | EffectKind::ShadowBurst | EffectKind::ShadowRing
+            )
     }
 
     /// Does a grab in the move table mean anything for this effect?
@@ -497,7 +539,7 @@ impl EffectKind {
     /// aimed: what a lotus is thrown at is not a direction, and what it does
     /// after is not standing still.
     pub const fn follows_the_mechanic(self) -> bool {
-        matches!(self, EffectKind::GuillotineLotus)
+        matches!(self, EffectKind::GuillotineLotus | EffectKind::ShadowWhirl)
     }
 
     /// Does its centre stay under its **caster's feet**?
@@ -505,7 +547,7 @@ impl EffectKind {
     /// One does. The Downdraft is a column she carries down with her: it is
     /// under her while she falls, and where she lands is where it bursts.
     pub const fn follows_the_caster(self) -> bool {
-        matches!(self, EffectKind::Downdraft)
+        matches!(self, EffectKind::Downdraft | EffectKind::ShadowBurst)
     }
 
     /// Does it come back to whoever threw it, rather than to where it was
@@ -556,6 +598,13 @@ impl EffectKind {
             21 => Some(EffectKind::ShadeBolt),
             22 => Some(EffectKind::Binary),
             23 => Some(EffectKind::Abyss),
+            // The Reaver's, 2026-10-10: listed so the numbering is complete;
+            // each is put in the world by the move that makes it, at the
+            // shadow, her hand or her feet. See `state::World::advance`.
+            24 => Some(EffectKind::ShadowWhirl),
+            25 => Some(EffectKind::ShadowBurst),
+            26 => Some(EffectKind::ShadowFan),
+            27 => Some(EffectKind::ShadowRing),
             _ => None,
         }
     }
@@ -617,6 +666,20 @@ impl EffectKind {
             EffectKind::Binary => t::binary_flight(),
             EffectKind::Abyss => t::abyss_life(),
             EffectKind::Flare | EffectKind::Sunray => t::spell_flash(),
+            // The flight out and the spin, which is when the shadow comes home.
+            EffectKind::ShadowWhirl => t::shadow_send_frames().saturating_add(t::whirl_lasts()),
+            EffectKind::ShadowBurst => t::burst_life(),
+            // A throw's flight is set by how far it goes, at the throw: see
+            // `state::World::throw_blades`. This is only the default.
+            EffectKind::ShadowFan => 1,
+            EffectKind::ShadowRing => {
+                let speed = t::shadow_ring_speed().max(Fx::ONE);
+                t::shadow_ring_reach()
+                    .div(speed)
+                    .div(crate::DT)
+                    .to_int()
+                    .max(1) as u16
+            }
         }
     }
 
@@ -676,6 +739,12 @@ impl EffectKind {
             | EffectKind::Abyss
             | EffectKind::Flare
             | EffectKind::Sunray => m.damage,
+            // The move's own cut, each time it lands; the ring's is its own,
+            // because the blow it follows already hit.
+            EffectKind::ShadowWhirl | EffectKind::ShadowFan => m.damage,
+            // Not a move's: it is what collecting the shadow does.
+            EffectKind::ShadowBurst => t::burst_damage(),
+            EffectKind::ShadowRing => t::shadow_ring_damage(),
         }
     }
 }
@@ -995,6 +1064,9 @@ impl Effect {
             | EffectKind::Abyss
             | EffectKind::Flare
             | EffectKind::Sunray => self.source().radius,
+            EffectKind::ShadowWhirl | EffectKind::ShadowFan => self.source().radius,
+            EffectKind::ShadowBurst => self.reach,
+            EffectKind::ShadowRing => self.reach,
         }
     }
 
@@ -1355,10 +1427,66 @@ impl Effect {
 
     /// How far out a ring of fire has raced: its speed times its age.
     pub fn ring_radius(&self) -> Fx {
-        t::fire_ring_speed()
+        let speed = if self.kind == EffectKind::ShadowRing {
+            t::shadow_ring_speed()
+        } else {
+            t::fire_ring_speed()
+        };
+        speed
             .mul(Fx::from_int(self.age as i32))
             .mul(crate::DT)
             .min(self.reach)
+    }
+
+    /// Which way thrown `blade` flies. The first is the line it was thrown
+    /// along; each after it turns off that line by another
+    /// `tuning::thrown_spread`: **down** for the Tumble's (about the line's own
+    /// level side -- forward and down), **level** for the Fan's, either side
+    /// in turn (about the vertical). A Shuriken is one blade on its line.
+    pub fn fan_dir(&self, blade: usize) -> V3 {
+        use crate::moves::reaver as r;
+        if blade == 0 || self.slot == r::SHURIKEN {
+            return self.dir;
+        }
+        if self.slot == r::FAN {
+            // Level, alternating sides: 0, +1, -1, +2, -2.
+            let step = blade.div_ceil(2) as i32;
+            let side = if blade % 2 == 1 { step } else { -step };
+            let turn = t::thrown_spread().mul(Fx::from_int(side));
+            let (c, s) = (crate::fixed::cos_turns(turn), crate::fixed::sin_turns(turn));
+            return V3::new(
+                self.dir.x.mul(c).sub(self.dir.z.mul(s)),
+                self.dir.y,
+                self.dir.x.mul(s).add(self.dir.z.mul(c)),
+            )
+            .normalized();
+        }
+        let (side, _) = crate::math::frame_about(self.dir);
+        let side = if side == V3::ZERO {
+            V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
+        } else {
+            side
+        };
+        let below = side.cross(self.dir).normalized();
+        // Whichever of the two perpendiculars points down.
+        let below = if below.y.raw() > 0 {
+            below.scale(Fx::ONE.neg())
+        } else {
+            below
+        };
+        let turn = t::thrown_spread().mul(Fx::from_int(blade as i32));
+        self.dir
+            .scale(crate::fixed::cos_turns(turn))
+            .add(below.scale(crate::fixed::sin_turns(turn)))
+            .normalized()
+    }
+
+    /// Where thrown `blade` is this frame: out along its own line by
+    /// how far through its flight it is. A function of age, like every other
+    /// thrown thing here.
+    pub fn fan_blade_at(&self, blade: usize) -> V3 {
+        self.pos
+            .add(self.fan_dir(blade).scale(self.reach.mul(self.progress())))
     }
 
     /// Where the `i`th of the ring's drawn pieces sits, on its live radius.

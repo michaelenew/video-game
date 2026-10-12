@@ -343,7 +343,7 @@ fn wire(me: &Player, yaw: Fx, at: V3, bits: u16) -> Input {
     let aim = turns_to_aim(yaw.sub(me.carry_yaw));
     let throwing = Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::MECHANIC | Input::SPECIAL;
     let pitch = if bits & throwing != 0 {
-        sim::aim::look_onto(me.pos, aim, me.aloft, at)
+        sim::aim::look_onto(me.pos, aim, me.aloft, me.clear, at)
     } else {
         WATCH_PITCH
     };

@@ -325,43 +325,43 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Shadow Reaver",
         in_browser: true,
-        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two. Her three clicks are the blade, the execution and the shadow: each has a move on the floor, one in the air and a jump attack with space. Rebuilt on three clicks 2026-10-09 and unplayed; docs/design/exploration/0011_shadow_reaver_on_three_clicks.md is the design.",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two. Her three clicks are the finishers, the throws and the shadow: each has a move on the floor, one in the air and a jump attack with space. Every blade of the shadow's marks a body; only the finishers cash the marks, and each mark is worth more than the last. Reworked 2026-10-10 and 2026-10-12 toward a dashing, spinning-blades feel, and unplayed; docs/design/exploration/0014_shadow_reaver_marks_and_throws.md is the design.",
         entries: &[
             e(
                 "The shadow copies you",
-                "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
+                "Whatever you swing, it swings a few frames later for a share of the damage. Held at your shoulder that is a little on everything; sent out, it is a second threat somewhere you are not, and every hit it lands out there marks the target for your next blow to cash.",
             ),
             e(
                 "Left click",
-                "The blade. Slash on the floor, the cut the tally is built on. In the air, the Kite cut: a hit on a body carrying marks gives your airdodge back -- and the airdodge pointed at the shadow is the dash. Space and left click is the Moonsault: a back flip up and away whose blade launches whoever was pressing you.",
+                "The finishers -- the only moves that cash the marks, and each mark is worth more than the last: five of them is four times the hit. On the floor, the Reave: a short dash forward and a cut, and the tip of the blade at the end of the dash is a sweet spot that hits half again as hard. In the air, the Plunge: you stop and dive where you point, never more than forty-five degrees off straight down, and a ring of shadow runs out from where you land. Space and left click is the Gallows, from the floor or the air: the shadow goes up first, you blink to it, and you plunge from there in the same cone for the biggest hit you have -- and the longest recovery.",
             ),
             e(
                 "Middle click",
-                "The execution. Executioner on the floor, the committed overhead that cashes a tally for the most. In the air, the Guillotine drop: straight down blade first, spiking anybody under you into the floor. Space and middle click is the Gallows: you are gone upward, hang a beat, and come down blade first.",
+                "The throws. On the floor, the Shuriken: a blade straight to the crosshair -- and the shadow throws one too, from wherever it is, at the same spot. In the air, the Fan: five blades level across your front, and you stall a moment. Space and middle click is the Tumble: a flipping jump that throws three blades forward and down -- and in the air, once a jump, it is your double jump. Every one of those blades marks what it cuts.",
             ),
             e(
                 "Right click",
-                "The shadow. Send it where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it. It answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped. In the air with the shadow out, right click is the Swap: you and it trade places. Space and right click hangs the shadow in the air where you point; it waits there a moment, then sinks to the floor.",
+                "The shadow. On the floor, send it where you are pointing, fast, and it stops there -- but only onto ground you could walk to: never up a ledge or over a drop. Press again and it moves from where it is to where you point now, dragging an open Guillotine lotus with it. In the air it is the Whirl: the shadow goes where you point, as far as the send, and spins, cutting and marking everything round it; another Whirl moves it. Space and right click is the Rising whirl: a jump and a Whirl. Every send comes home on its own three seconds after it arrives, unless you send it again first. Right click answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
             ),
             e(
                 "Q",
-                "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow with right click drags them the length of the arena.",
+                "Guillotine lotus. Twelve blades erupt from the shadow, hang open, and chase it -- so moving the shadow with right click drags them across the arena after it.",
             ),
             e(
                 "E",
-                "Deadly mistake, a short counter stance. Struck in it by a fighter, you take nothing: you are behind them, and your shadow is left standing where you were. Whiffed, it is a long recovery.",
+                "Executioner, the committed overhead. It does not cash the marks: that is the finishers' job.",
             ),
             e(
                 "Shift + forward",
-                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. Straight to wherever it is standing -- up onto a platform included -- and only something with no way through at all can refuse it. In the air it is the airdodge that does it, and it costs the airdodge. Pointed anywhere else it is the ordinary dodge.",
+                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive -- and picking it up throws a burst of blades round you. While the shadow is still flying from a throw you do not need to point at it -- the dodge cancels the rest of the throw and follows it. Straight to wherever it is -- up in the air included -- and only something with no way through at all can refuse it. In the air it is the airdodge that does it, and it costs the airdodge. Pointed anywhere else it is the ordinary dodge.",
             ),
             e(
-                "Space, the moment a dash lands",
-                "The dash jump. You arrive still moving, and a jump pressed in that short window takes the speed up with you instead of leaving it on the floor -- the earlier you find it, the further you go. It is the one thing that can cut a dodge's tail short, and it only answers a dash.",
+                "Space, as a dash lands",
+                "The dash jump. Pressed in the dash's last few frames, you leave the shadow with all of the dash's speed, in a forward flip with a little more height than a jump.",
             ),
             e(
-                "The leash",
-                "Walk far enough from a shadow standing out on the field and it comes and finds you, cutting on the way. Straying is a decision, not a mistake.",
+                "Picking it up",
+                "Walk onto a shadow standing out on the field and you pick it up, as the dash does -- with the same burst of blades. Nothing brings it home for distance: only its three seconds, or you.",
             ),
         ],
     },

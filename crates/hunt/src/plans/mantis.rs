@@ -265,7 +265,7 @@ fn wire(me: &Player, yaw: Fx, at: V3, bits: u16) -> Input {
         | Input::SPECIAL
         | Input::KEY_F;
     let pitch = if bits & throwing != 0 {
-        sim::aim::look_onto(me.pos, aim, me.aloft, at)
+        sim::aim::look_onto(me.pos, aim, me.aloft, me.clear, at)
     } else {
         0
     };

@@ -66,6 +66,9 @@ pub struct PlayerView {
     /// view does not step at the simulation's cadence -- see
     /// `sim::state::Player::aloft`.
     pub aloft: f32,
+    /// How high the fighter's feet are off the floor, as the camera may know
+    /// it: `sim::state::Player::clear`, blended like `aloft`.
+    pub clear: f32,
     /// How far the creature has turned under this fighter, in radians, and so
     /// how far their whole frame of reference has turned with it -- **the
     /// simulation's own number**, out of `sim::state::Player::carry_yaw`.
@@ -102,6 +105,53 @@ pub struct PlayerView {
     /// snapshot, so a rollback redraws the same shake. Presentation only: it
     /// moves the drawn hips, never the body, the camera or the aim.
     pub shudder: f32,
+    /// The whole body turned over, in radians: `[0]` is a **forward flip**,
+    /// about the body's own side, and `[1]` a **spin** about the vertical, on
+    /// top of the facing. Zero for everybody but the Reaver (2026-10-10): her
+    /// dash jump's flip and the Tumble's. Off the
+    /// simulation's clocks -- see [`roll_of`] -- so a rollback redraws it.
+    /// Presentation only: the body, the camera and the aim never turn over.
+    pub roll: [f32; 2],
+}
+
+/// How far the body is turned over this snapshot. See [`PlayerView::roll`].
+///
+/// Each is a whole number of turns over the stretch of frames it belongs to,
+/// eased in and out, so it starts and ends upright.
+pub fn roll_of(p: &sim::state::Player) -> [f32; 2] {
+    use sim::moves::reaver as r;
+    use std::f32::consts::TAU;
+    if p.class != sim::Class::ShadowReaver {
+        return [0.0, 0.0];
+    }
+    let ease = |t: f32| {
+        let t = t.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    };
+    let mut roll = [0.0, 0.0];
+    if let Some(through) = sim::shadow::flip_through(p) {
+        roll[0] = ease(through.to_f32_for_render()) * TAU;
+    }
+    // How far through a move she is, over the frames given.
+    let through = |kind: u8, over: &dyn Fn(&sim::moves::Move) -> u16| -> Option<f32> {
+        let m = sim::moves::get(p.class, kind);
+        let elapsed = match p.action {
+            Action::Startup { kind: k, left } if k == kind => m.startup.saturating_sub(left),
+            Action::Active { kind: k, left } if k == kind => m.startup + m.active - left,
+            Action::Recovery { kind: k, left } if k == kind => {
+                m.startup + m.active + m.recovery - left
+            }
+            _ => return None,
+        };
+        Some(elapsed as f32 / over(&m).max(1) as f32)
+    };
+    // The Tumble turns her over once, through the throw and the rise.
+    if p.action.attack_kind() == Some(r::TUMBLE) {
+        roll[0] =
+            ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
+                * TAU;
+    }
+    roll
 }
 
 /// How far a struck body is thrown off its mark at the start of the freeze.
@@ -229,6 +279,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     let pitch_of = |v: &sim::state::Player| fx(v.aim_dir().y).clamp(-1.0, 1.0).asin();
     let aim_pitch = lerp(pitch_of(p), pitch_of(c), a);
     let aloft = lerp(fx(p.aloft), fx(c.aloft), a);
+    let clear = lerp(fx(p.clear), fx(c.clear), a);
     // The carried yaw, blended the **short way round**. It is kept wrapped into
     // half a turn either side, so a rider turning past the back of the animal
     // steps from just under a half to just over minus a half, and a plain lerp
@@ -259,6 +310,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         turn_rate,
         aim_pitch,
         aloft,
+        clear,
         carried,
         floating: sim::state::floating(c),
         force: match c.mechanic {
@@ -266,6 +318,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
             _ => None,
         },
         shudder: shudder_of(c),
+        roll: roll_of(c),
     }
 }
 

@@ -187,6 +187,7 @@ fn draw_one(rig: &mut CameraRig, prev: &World, cur: &World, n: u32) {
             beasts: &cur.monsters,
             aboard: cur.players[0].aboard(),
             aloft: frame.players[0].aloft,
+            clear: frame.players[0].clear,
             carried: frame.players[0].carried,
             arena: cur.terrain(),
         },

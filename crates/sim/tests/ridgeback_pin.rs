@@ -75,13 +75,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Elementalist's was re-pinned 2026-10-10**: the Updraft from the
 /// floor throws her higher and along her run, and the Fire carpet's recovery
 /// cancels. See the feel log.
+///
+/// **Every class was re-pinned 2026-10-12**: `Player::clear`, the camera's
+/// room under the eye, went into `state_checksum` whenever it is not nought,
+/// which is every jump; and the Reaver's kit moved. See
+/// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x92d2fe3e7aa9f640),
-    (Class::Bulwark, 0x0ab3e7c23a090298),
-    (Class::ShadowReaver, 0x0c4c9b03cf9d3ea0),
-    (Class::BloodMage, 0x1d800ee722377057),
-    (Class::DualMage, 0xa09cde216173e69f),
-    (Class::Elementalist, 0x5282fc703b1113f5),
+    (Class::Champion, 0x339bb2066878e1c8),
+    (Class::Bulwark, 0x8465a86bccb8ef32),
+    (Class::ShadowReaver, 0x125b4fc5c2559d9d),
+    (Class::BloodMage, 0x083464c03c9c85e2),
+    (Class::DualMage, 0xd1dc8709fa4d36db),
+    (Class::Elementalist, 0x19fbc249420a6a17),
 ];
 
 #[test]

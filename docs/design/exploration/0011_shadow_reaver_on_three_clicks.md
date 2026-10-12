@@ -1,11 +1,15 @@
 ---
-status: decided 2026-10-09 by the person's brief ("do the same"), designed and built by Claude; unplayed
+status: superseded 2026-10-10 by 0013_shadow_reaver_dual_blades.md (the grid kept, every cell but the four originals reworked); decided 2026-10-09 by the person's brief ("do the same"), designed and built by Claude
 started: 2026-10-09
 supersedes: kits/shadow-reaver.md §"What is bound" where they differ; 0007 §6 where they differ
 depends: 0007_core_kits.md §6, ../kits/shadow-reaver.md, ../shadow-reaver-v2.md
 ---
 
 # 0011 — The Shadow Reaver on three clicks
+
+> **Superseded 2026-10-10** by [0013](0013_shadow_reaver_dual_blades.md): the owner played it,
+> found it awkward, and asked for a MapleStory-Dual-Blade feel. Kept as the record of the first
+> pass.
 
 ## The brief
 

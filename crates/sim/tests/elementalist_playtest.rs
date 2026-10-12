@@ -331,7 +331,13 @@ fn a_raise_pointed_down_off_a_ledge_goes_there() {
     w.players[0].pos = lip;
     run(&mut w, 2, 0);
     let target = V3::new(d.min.x.sub(Fx::from_int(3)), Fx::ZERO, z);
-    let pitch = sim::aim::look_onto_closely(lip, LOOK_LEFT, w.players[0].aloft, target);
+    let pitch = sim::aim::look_onto_closely(
+        lip,
+        LOOK_LEFT,
+        w.players[0].aloft,
+        w.players[0].clear,
+        target,
+    );
     step_aimed(&mut w, keys::EARTH, LOOK_LEFT, pitch);
     run(&mut w, 4, 0);
     let stones = stones_of(&w);

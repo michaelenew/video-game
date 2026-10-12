@@ -69,7 +69,13 @@ fn gnats_at(at: &[i32]) -> World {
 /// The crosshair on gnat `i`'s middle.
 fn onto_gnat(w: &World, i: usize) -> Input {
     let middle = w.critters[i].body(w.critters.sp()).middle();
-    let pitch = aim::look_onto_closely(w.players[0].pos, EAST, w.players[0].aloft, middle);
+    let pitch = aim::look_onto_closely(
+        w.players[0].pos,
+        EAST,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     Input::looking_at(0, EAST, pitch)
 }
 
@@ -209,7 +215,13 @@ fn the_thrown_shield_hits_a_creature_it_meets() {
     w.players[0].pos = V3::new(stand.x, w.terrain().ground_under(stand), stand.z);
     w.players[0].vel = V3::ZERO;
     w.players[0].facing = out.scale(Fx::ONE.neg());
-    let pitch = aim::look_onto_closely(w.players[0].pos, yaw, w.players[0].aloft, leg);
+    let pitch = aim::look_onto_closely(
+        w.players[0].pos,
+        yaw,
+        w.players[0].aloft,
+        w.players[0].clear,
+        leg,
+    );
     let look = Input::looking_at(0, yaw, pitch);
     let before = w.monsters[0].unwrap().health;
     hold(&mut w);
@@ -387,7 +399,13 @@ fn the_mantis_guard_turns_a_thrown_shield_and_an_open_one_takes_it() {
         w.players[0].vel = V3::ZERO;
         w.players[0].facing = V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO);
         let middle = base.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
-        let pitch = aim::look_onto_closely(stand, 1 << 15, w.players[0].aloft, middle);
+        let pitch = aim::look_onto_closely(
+            stand,
+            1 << 15,
+            w.players[0].aloft,
+            w.players[0].clear,
+            middle,
+        );
         let look = Input::looking_at(0, 1 << 15, pitch);
         let before = w.monsters[0].unwrap().health;
         w.advance([throw(look), Input::default()]);

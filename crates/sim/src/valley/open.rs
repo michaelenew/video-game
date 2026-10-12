@@ -15,7 +15,9 @@
 //! - **Walking into a room starts its hunt**, when anybody does: the world
 //!   moves to the room and its creature is put on its marks, noticing you as
 //!   it always has. A hunt holds the world in the room while anybody is in
-//!   it; when nobody is, it is over, unwon, and the creature is gone.
+//!   it or near it (`tuning::hunt_held_past` past its edge, so a step out of
+//!   the door mid-fight changes nothing); when nobody is, it is over, unwon,
+//!   and the creature is gone.
 //! - **A waystone's door is a wall** while the stone is dark: a box the
 //!   shape of the doorway, raised on the ground like a slag mound is, unless
 //!   somebody already stands on its far side.
@@ -94,13 +96,19 @@ impl World {
         };
         let feet = |w: &World, i: usize| w.players[i].pos.add(here.at);
         if self.hunting() {
-            // Held while anybody on their feet is in the room -- and while
-            // nobody is on their feet anywhere, which is a hunt being lost,
-            // and the round's end decides that.
+            // Held while anybody on their feet is in the room **or near it**
+            // -- within `hunt_held_past` of its edge (2026-10-12): a step back
+            // out of the door mid-fight is not giving up, and ending the hunt
+            // there put the creature back on its marks at full health when
+            // they stepped in again, with theirs as they had left it. The
+            // creature keeps inside its own bounds, so it waits. And held
+            // while nobody is on their feet anywhere, which is a hunt being
+            // lost, and the round's end decides that.
+            let margin = crate::tuning::hunt_held_past();
             let held = self.standing().next().is_none()
                 || self.standing().any(|i| {
                     let f = feet(self, i);
-                    here.holds(f.x, f.z)
+                    here.holds_within(f.x, f.z, margin)
                 });
             if held {
                 return;
@@ -254,9 +262,6 @@ fn shift_player(p: &mut Player, d: V3) {
         },
         Mechanic::Shadow(shadow) => {
             shadow.pos = shadow.pos.add(d);
-            if shadow.rest != crate::fixed::Fx::MAX {
-                shadow.rest = shadow.rest.add(d.y);
-            }
             if let crate::class::Ghost::Casting { from, to, .. } = &mut shadow.doing {
                 *from = from.add(d);
                 *to = to.add(d);

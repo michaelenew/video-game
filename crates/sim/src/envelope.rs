@@ -84,7 +84,10 @@ pub fn look_at(w: &World, at: V3) -> (u16, i16) {
     let p = &w.players[0];
     let d = at.sub(p.pos);
     let yaw = (math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
-    (yaw, crate::aim::look_onto_closely(p.pos, yaw, p.aloft, at))
+    (
+        yaw,
+        crate::aim::look_onto_closely(p.pos, yaw, p.aloft, p.clear, at),
+    )
 }
 
 /// Buttons, looking at a point.

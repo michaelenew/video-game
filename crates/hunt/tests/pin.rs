@@ -17,9 +17,15 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
     acc
 }
 
+// Every hunt moved 2026-10-12, deliberately: `Player::clear`, the camera's
+// room under the eye (exploration 0014), is in `state_checksum` whenever it is
+// not nought, which is every jump -- and off the ground the eye the hunter
+// aims from is let back out of the head looking up. The Reaver's moved again
+// for her third pass and her class layer (she cashes with the Reave, sends the
+// shadow past the work, keeps it out and lotuses it between openings).
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x143611fd55677fcb),
-    (Class::Champion, 7, 0xfe52c37d05a0c38e),
+    (Class::Champion, 0x2545_F491, 0x53b27530caad3810),
+    (Class::Champion, 7, 0x28db214ab3e65861),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
@@ -27,7 +33,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // no other pin, moved with it. See feel-log.md.
     // Moved 2026-10-10, deliberately: his three clicks (0012) -- a click in
     // a jump's first frames is a takeoff, and left click in the air Rebound.
-    (Class::Bulwark, 101, 0xbc3a409ebde3006a),
+    (Class::Bulwark, 101, 0x3fa044fb6cf577a5),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between
@@ -35,24 +41,24 @@ const PINNED: [(Class, u32, u64); 7] = [
     // hands their plans' input back unchanged here. See feel-log.md.
     // Moved 2026-10-09, deliberately: every move of hers is a spell now, and
     // the class layer weighs the spell a click throws. See feel-log.md.
-    (Class::DualMage, 2_222, 0x31980bd7846a71da),
+    (Class::DualMage, 2_222, 0x054b32fa5a4155db),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
     // floor are new moves (0011), and Executioner is on middle click.
-    (Class::ShadowReaver, 31, 0xbe8ae4697c177b24),
+    (Class::ShadowReaver, 31, 0x1d584066a6e51c49),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
     // And again the same day: her takeoff window and held earth click went
     // into `state_checksum`, which had been leaving them out. And after the
     // second playtest: `Rise::floor`, and a stone carries whoever stands on it.
-    (Class::Elementalist, 59, 0xf72f05367be85445),
+    (Class::Elementalist, 59, 0x16759ffa51c07b35),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
     // for `Rise::floor`, the height her takeoff window remembers.
-    (Class::BloodMage, 83, 0xb80d2b8057f9d9a5),
+    (Class::BloodMage, 83, 0x24b139d8bfe531dd),
 ];
 
 #[test]

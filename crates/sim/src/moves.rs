@@ -608,30 +608,30 @@ const NAMES: [&[&str]; 6] = [
     // mouse means where.** Sending the shadow is the one thing in this kit the
     // crosshair aims, so it is on the mouse; Executioner is a swing off the
     // body and does not care, so it is on the key.
-    //   Slash: the auto, on left click.
-    //   Executioner: the committed melee, on `E` as well as shift+left.
+    //   Reave: the grounded finisher, on left click -- a short dash and a
+    //     sweet spot at the blade's tip.
+    //   Executioner: the committed melee, on `E`.
     //   Guillotine: twelve blades erupt from the shadow and come back to it, so it
     //     is aimed at the mechanic and the mechanic does all the hitting.
     //   Send shadow: on right click, and a real move rather than a state flip.
     //     It throws the second body out fast and, pressed again, dashes it home
     //     through anybody in the way.
     //
-    // **On three clicks**, since 2026-10-09: left is the blade, middle the
-    // execution, right the shadow, each on the floor, in the air and with
-    // space; `E` is Deadly mistake. Seven appended after the four. See
-    // [`reaver`].
+    // **On three clicks**, since 2026-10-10 (the second pass): left is the
+    // finishers, middle the neutral blades, right the shadow, each on the
+    // floor, in the air and with space; `E` is Executioner. See [`reaver`].
     &[
-        "Slash",
+        "Reave",
         "Executioner",
         "Guillotine",
         "Send shadow",
-        "Kite cut",
-        "Guillotine drop",
-        "Swap",
-        "Moonsault",
+        "Plunge",
+        "Fan",
+        "Whirl",
         "Gallows",
-        "Hang the shadow",
-        "Deadly mistake",
+        "Tumble",
+        "Rising whirl",
+        "Shuriken",
     ],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
     // Seven: four on the ground, and a whole row of three off it. See
@@ -860,63 +860,105 @@ pub mod champion {
 // The Shadow Reaver's eleven
 // ---------------------------------------------------------------------------
 
-/// The Shadow Reaver on three clicks (2026-10-09):
+/// The Shadow Reaver on three clicks, third pass (2026-10-12):
 ///
 /// ```text
-///                     left: the blade   middle: the execution  right: the shadow
-///   on foot           Slash             Executioner            Send / recall
-///   in the air        Kite cut          Guillotine drop        Swap
-///   leaving the floor Moonsault         Gallows                Hang the shadow
+///                     left: finishers   middle: thrown blades  right: the shadow
+///   on foot           Reave             Shuriken (and the      Send (moves it)
+///                                       shadow throws one too)
+///   in the air        Plunge            Fan                    Whirl
+///   leaving the floor Gallows           Tumble                 Rising whirl
 ///
-///   Q  Guillotine lotus               E  Deadly mistake
+///   Q  Guillotine lotus               E  Executioner
 /// ```
 ///
-/// The first four rows are the four she had, in their slots; the seven after
-/// them were appended. See
-/// `docs/design/exploration/0011_shadow_reaver_on_three_clicks.md`.
+/// Gallows and the Tumble are also space and their click **in the air**, once
+/// a trip off the ground. **Only the finishers cash the tally**; everything the
+/// shadow's blades do -- the throws, the whirl, the copies, the lotus, the
+/// burst when she collects the shadow -- puts marks on. See
+/// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
 pub mod reaver {
-    pub const SLASH: u8 = 0;
+    /// Left click on the floor: a short dash forward, and the blade's tip is
+    /// a sweet spot. A finisher: it cashes the tally.
+    pub const REAVE: u8 = 0;
+    /// `E`: the big overhead.
     pub const EXECUTIONER: u8 = 1;
     pub const LOTUS: u8 = 2;
+    /// Right click on the floor: the shadow to the crosshair -- from wherever
+    /// it is, so pressed again it moves rather than coming home.
     pub const SEND: u8 = 3;
-    /// Left click in the air: a vertical cut; on a marked body, her airdodge
-    /// comes back.
-    pub const KITE_CUT: u8 = 4;
-    /// Middle click in the air: straight down, blade first, spiking.
-    pub const GUILLOTINE_DROP: u8 = 5;
-    /// Right click in the air with the shadow out: she and it trade places.
-    pub const SWAP: u8 = 6;
-    /// Space and left click: a back flip, the blade up through the space in
-    /// front of her.
-    pub const MOONSAULT: u8 = 7;
-    /// Space and middle click: up a few metres, a beat, and down blade first.
-    pub const GALLOWS: u8 = 8;
-    /// Space and right click: the send, to a point in the air.
-    pub const HANG: u8 = 9;
-    /// `E`: the counter stance.
-    pub const DEADLY_MISTAKE: u8 = 10;
+    /// Left click in the air: a dive along the crosshair, held inside a cone
+    /// round straight down, and a ring of shadow out from where she lands. A
+    /// finisher.
+    pub const PLUNGE: u8 = 4;
+    /// Middle click in the air: a level fan of thrown blades, and a moment's
+    /// stall in the air.
+    pub const FAN: u8 = 5;
+    /// Right click in the air: the shadow sent to the crosshair, where it
+    /// whirls, cutting. One set of blades: pressed again it moves them and
+    /// starts their clock again.
+    pub const WHIRL: u8 = 6;
+    /// Space and left click, off the floor or once in the air: the shadow goes
+    /// up, she is where it is -- collecting it -- and plunges as the Plunge
+    /// does, heavier. A finisher.
+    pub const GALLOWS: u8 = 7;
+    /// Space and middle click, off the floor or once in the air: a tumbling
+    /// double jump, throwing a fan of blades forward and down.
+    pub const TUMBLE: u8 = 8;
+    /// Space and right click: the Whirl, with a jump.
+    pub const RISING_WHIRL: u8 = 9;
+    /// Middle click on the floor: a blade thrown to the crosshair, and the
+    /// shadow throws one to the same point from wherever it is.
+    pub const SHURIKEN: u8 = 10;
 
     pub const COUNT: usize = 11;
 
     /// Which button is which.
     pub mod keys {
         use crate::input::Input;
-        /// Left click: the blade.
-        pub const BLADE: u16 = Input::LEFT;
-        /// Middle click: the execution.
-        pub const EXECUTION: u16 = Input::MIDDLE;
+        /// Left click: the finishers.
+        pub const FINISHER: u16 = Input::LEFT;
+        /// Middle click: the thrown blades.
+        pub const NEUTRAL: u16 = Input::MIDDLE;
         /// Right click: the shadow.
         pub const SHADOW: u16 = Input::RIGHT;
         /// `Q`: the lotus.
         pub const LOTUS: u16 = Input::SPECIAL;
-        /// `E`: Deadly mistake.
-        pub const MISTAKE: u16 = Input::MECHANIC;
+        /// `E`: Executioner.
+        pub const EXECUTIONER: u16 = Input::MECHANIC;
     }
 
     /// Is this move thrown as the feet leave the floor?
     pub const fn is_takeoff(kind: u8) -> bool {
-        matches!(kind, MOONSAULT | GALLOWS | HANG)
+        matches!(kind, GALLOWS | TUMBLE | RISING_WHIRL)
     }
+
+    /// Does this move put the shadow somewhere? The three on right click, and
+    /// Gallows, which sends it up to be followed.
+    pub const fn places_the_shadow(kind: u8) -> bool {
+        matches!(kind, SEND | WHIRL | RISING_WHIRL | GALLOWS)
+    }
+
+    /// Does this move spend the marks on what it hits? The three finishers on
+    /// left click, and nothing else: the pokes build the tally and the
+    /// finishers cash it (2026-10-12).
+    pub const fn cashes(kind: u8) -> bool {
+        matches!(kind, REAVE | PLUNGE | GALLOWS)
+    }
+
+    /// How many blades a throw is: one for the Shuriken, three for the
+    /// Tumble's fan and five for the Fan's. A count rather than a knob, the
+    /// lotus's reason: it is what the move is.
+    pub const fn blades(kind: u8) -> usize {
+        match kind {
+            TUMBLE => 3,
+            FAN => 5,
+            _ => 1,
+        }
+    }
+
+    /// The most blades any throw has: what the effect's hit mask is sized for.
+    pub const MOST_BLADES: usize = 5;
 }
 
 // ---------------------------------------------------------------------------
@@ -1378,8 +1420,9 @@ pub const fn on_e(class: Class) -> Option<u8> {
         // move that is **not** the mechanic. Her mechanic is on right click,
         // because it is the half of her kit the crosshair aims; what is left
         // for the key is the swing, which does not care where it is thrown
-        // from. See the note in [`NAMES`].
-        Class::ShadowReaver => Some(reaver::DEADLY_MISTAKE),
+        // from -- Executioner, back on `E` since 2026-10-10. See the note in
+        // [`NAMES`].
+        Class::ShadowReaver => Some(reaver::EXECUTIONER),
         _ => None,
     }
 }
@@ -1460,20 +1503,19 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             17 => "Space+RMB",
             _ => "RMB rush, low",
         },
-        // The Reaver's committed melee answers to right click as well, because
-        // right click is otherwise dead on a class with no shield to raise.
+        // Finishers, neutral, the shadow: left, middle, right (2026-10-10).
         Class::ShadowReaver => match slot {
             0 => "LMB",
-            1 => "MMB",
+            1 => "E",
             2 => "Q",
             3 => "RMB",
             4 => "LMB air",
             5 => "MMB air",
-            6 => "RMB air, shadow out",
+            6 => "RMB air",
             7 => "Space+LMB",
             8 => "Space+MMB",
             9 => "Space+RMB",
-            _ => "E",
+            _ => "MMB",
         },
         // Both clicks are attacks, because the two autos are the mechanic: the
         // button is which force you throw and therefore which way you drift.
@@ -1636,16 +1678,18 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // four grounded moves land on the floor where they were aimed, the
         // fourth is a beam drawn from the line it flew, and Landfall is a disc
         // on the floor at her own feet.
-        // The Reaver on three clicks (2026-10-09): her new cuts are vertical
-        // -- up through the flip, down out of the sky -- and the shadow's
-        // column and the stance put out nothing of her body's. The Kite cut
-        // is the Slash's own volume thrown in the air: as an upright arc it
-        // passed over a knee-high body and under a sac the Slash reached.
+        // The Reaver's second pass (2026-10-10): the two that come down out
+        // of the sky are vertical cuts, the two neutral spins are thin discs
+        // round her own body, and the shadow's three and the Tumble put
+        // nothing out of her body -- the shadow, and the blades it throws, do
+        // the hitting.
         Class::ShadowReaver => match kind {
-            reaver::GUILLOTINE_DROP | reaver::MOONSAULT | reaver::GALLOWS => {
-                Shape::Swing(Plane::Upright)
-            }
-            reaver::SWAP | reaver::HANG | reaver::DEADLY_MISTAKE => Shape::None,
+            reaver::PLUNGE | reaver::GALLOWS => Shape::Swing(Plane::Upright),
+            reaver::WHIRL
+            | reaver::RISING_WHIRL
+            | reaver::TUMBLE
+            | reaver::FAN
+            | reaver::SHURIKEN => Shape::None,
             _ => Shape::Cylinder,
         },
         Class::Elementalist => match kind {
@@ -1837,6 +1881,25 @@ pub const fn lingers(class: Class, kind: u8) -> bool {
 /// the first one is still hanging, so its answer is no.
 pub const fn reactivates(class: Class, kind: u8) -> bool {
     matches!(class, Class::ShadowReaver) && kind == crate::state::SLOT_MECHANIC
+}
+
+/// What a move puts in the world that **the world places itself**, rather
+/// than at its aimed point through the row's `leaves_behind` column: the
+/// Reaver's Whirl and Shadow arc set the shadow cutting wherever it goes, the
+/// Tumble's fan leaves her hand, and the Plunge's ring runs out from where
+/// her feet arrive. Declared, so the frame table can say these hit rather
+/// than calling them movement. See `state::World::reaver_comes_out`.
+pub const fn puts_out(class: Class, kind: u8) -> Option<crate::effects::EffectKind> {
+    use crate::effects::EffectKind as E;
+    match class {
+        Class::ShadowReaver => match kind {
+            reaver::WHIRL | reaver::RISING_WHIRL => Some(E::ShadowWhirl),
+            reaver::TUMBLE | reaver::FAN | reaver::SHURIKEN => Some(E::ShadowFan),
+            reaver::PLUNGE => Some(E::ShadowRing),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 /// Does this class use this slot at all?
