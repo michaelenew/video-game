@@ -848,7 +848,7 @@ pub fn shadow_buffer() -> u16 {
 /// arrives is already a window of exactly this kind -- she is still sliding,
 /// and the slide decays -- but its length is however much of the dodge the
 /// crossing did not spend, which is a function of how far away she left the
-/// shadow. At the end of the leash that is about a frame, and a tech nobody
+/// shadow. At the end of a long dash that is about a frame, and a tech nobody
 /// can hit at the range the class is built around is a tech that does not
 /// exist. So arriving tops the dodge up to at least this many frames, and the
 /// window is the same length however far she came.
@@ -981,6 +981,12 @@ pub fn dash_jump_keep() -> Fx {
 /// the one thing standing between that and a dash that runs out of dodge
 /// halfway across the arena was a sentence in this comment. The dash ends with
 /// the dodge, so falling short means spending the dodge and arriving nowhere.
+///
+/// **Since 2026-10-12 there is no leash**, and the property runs the other
+/// way: the dash is only offered to a shadow within what a dodge's frames
+/// cover at this speed (`shadow::dash_is_asked_for`), so it still never falls
+/// short. `reaver::the_dash_reaches_further_than_the_send` holds that this
+/// covers at least a send's reach.
 pub fn shadow_dash_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
 }

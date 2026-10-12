@@ -737,7 +737,7 @@ scalars! {
     ShadowRingDamage,     "Shadow Reaver", "Plunge ring, damage", Int, 0, 200;
     ShadowRingPush,       "Shadow Reaver", "Plunge ring, push (m/s)", Fixed, 0, fx(20,1);
     ShadowRingStagger,    "Shadow Reaver", "Plunge ring, stagger", Frames, 0, 60;
-    DiscThickness,        "Shadow Reaver", "Blade ring and spin, half-thickness (m)", Fixed, fx(1,20), fx(2,1);
+    DiscThickness,        "Shadow Reaver", "Burst, half-thickness (m)", Fixed, fx(1,20), fx(2,1);
     ReaveSweet,           "Shadow Reaver", "Reave, sweet spot radius (m)", Fixed, 0, fx(2,1);
     ReaveSweetDamage,     "Shadow Reaver", "Reave, sweet spot damage (x)", Fixed, fx(1,1), fx(3,1);
     DashJumpHop,          "Shadow Reaver", "Dash jump, extra hop (m/s)", Fixed, 0, fx(15,1);

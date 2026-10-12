@@ -56,6 +56,12 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "u.mul(u).mul(Fx::from_int(3).sub(u.mul(Fx::from_int(2))))",
+        "The smoothstep polynomial 3u^2 - 2u^3 in the camera's eye bubble: the coefficients are \
+         what make the ease flat at both ends, a shape rather than a magnitude. How wide the ease \
+         is, is the Oven's `Eye bubble, soft edge`.",
+    ),
+    (
         "let third = Fx::ratio(1, 3)",
         "Presentation: where a Fire carpet's drawn flame is widest along its trip. The hit \
          test is the capsule, and no flame is drawn wider than it.",

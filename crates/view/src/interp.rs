@@ -145,14 +145,11 @@ pub fn roll_of(p: &sim::state::Player) -> [f32; 2] {
         };
         Some(elapsed as f32 / over(&m).max(1) as f32)
     };
-    match p.action.attack_kind() {
-        // The Tumble turns her over once, through the throw and the rise.
-        Some(r::TUMBLE) => {
-            roll[0] =
-                ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
-                    * TAU;
-        }
-        _ => {}
+    // The Tumble turns her over once, through the throw and the rise.
+    if p.action.attack_kind() == Some(r::TUMBLE) {
+        roll[0] =
+            ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
+                * TAU;
     }
     roll
 }

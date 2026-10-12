@@ -77,6 +77,9 @@ const SHADOW_STALE: u16 = 45;
 /// How far past the work, from her, the shadow is sent: clear of where she
 /// stands to fight, so it is not collected by her walking onto it.
 const SHADOW_BEYOND: Fx = Fx::ratio(25, 10);
+/// Frames left on a waiting shadow's clock home when she sends it again to
+/// keep it out at the work.
+const SHADOW_KEEP: u16 = 20;
 /// Frames after the lotus opens before the recall drags it home.
 const LOTUS_DRAG: u16 = 24;
 /// The furthest the mouse goes off a plan's camera in one frame: a flick,
@@ -795,6 +798,39 @@ impl Hands {
             self.uses.recalls += 1;
             self.rest();
             return Some(self.look(me, at, b));
+        }
+        // **The lotus on it**, between openings too: since 2026-10-12 a
+        // waiting shadow is out for three seconds rather than until the
+        // leash, which is often over before an opening comes.
+        let lotus = moves::get(me.class, SLOT_SPECIAL);
+        if from.raw() < SHADOW_NEAR.raw()
+            && shadow.is_waiting()
+            && safe > (lotus.startup + lotus.active + lotus.recovery) as i32
+            && self.cool == 0
+            && self.ready(w, me, SLOT_SPECIAL)
+            && let Some(q) = self.button(me, SLOT_SPECIAL)
+        {
+            self.uses.lotuses += 1;
+            self.seq = Some(Seq::Later {
+                bits: Input::RIGHT,
+                left: LOTUS_DRAG + self.roll(8) as u16,
+            });
+            self.fresh = true;
+            return Some(self.look(me, at, q));
+        }
+        // **Kept out**: since 2026-10-12 a send comes home on its own after
+        // three seconds, and another send starts the clock over. With the
+        // work still beside it and the clock nearly out, she presses again,
+        // which moves it -- counted with the recalls, the second press.
+        if from.raw() < SHADOW_NEAR.raw()
+            && shadow.is_waiting()
+            && shadow.hang < SHADOW_KEEP
+            && self.last_bits & b == 0
+        {
+            self.uses.recalls += 1;
+            self.rest();
+            let beyond = at.add(flat(at.sub(me.pos)).normalized().scale(SHADOW_BEYOND));
+            return Some(self.look(me, self.spot(w, me, floor_under(me, beyond), true), b));
         }
         let slash = moves::get(me.class, SLOT_POKE);
         if from.raw() < SHADOW_NEAR.raw()

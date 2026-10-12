@@ -118,9 +118,20 @@ Thrown blades fly at `thrown blades, fly at` (32 m/s) and cut each body once.
 
 ## What it does to movement
 
-Gallows is now a blink — 3 m up and 1 m ahead, and then a dive she can aim. The search is
-re-run at the end of the build; the numbers are in the feel log's entry for this pass.
-REAVER-5 (0013) is still open and still the owner's.
+Gallows is now a blink — 3 m up and 1 m ahead, and then a dive she can aim — and the Fan
+stalls her in the air. **The lab search finds her going further than after 0013, not less.**
+`cargo run --release -p sim --bin envelope -- search --class "Shadow Reaver"`, shared / whole
+kit, metres:
+
+| Rise | −8 | −4 | −2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0013 | 29.5/62.7 | 45.5/56.7 | 58.5/60.3 | 55.5/70.3 | 48.3/61.2 | 53.2/63.4 | 66.6/67.4 | 15.9/16.1 | 49.1/62.8 | 16.6/51.1 | 53.8/76.2 | –/– | 57.9/62.6 | –/58.0 | –/– |
+| 0014 | 26.5/61.3 | 34.0/42.2 | 53.2/53.6 | 59.8/78.4 | 44.5/50.1 | 45.1/45.1 | 61.7/89.4 | 43.2/44.0 | 47.9/60.6 | 46.6/70.2 | 55.9/78.6 | 52.3/52.6 | –/14.9 | 51.7/61.6 | –/61.2 |
+
+A search is a lower bound, so a cell that fell may be a route this run did not find again; the
+ones that rose (lane +4 m, from 16 to 43 m; lane +10 m, from nothing to 52 m) are new routes.
+Her fixture lines in `tests/fixtures/envelope.txt` are re-recorded. REAVER-5 (0013) is still
+open, still the owner's, and the new levers are Gallows' blink and the Fan's stall.
 
 ## Questions for play
 

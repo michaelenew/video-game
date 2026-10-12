@@ -7577,7 +7577,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
     }
 }
 
-/// Per-tick mechanic upkeep: shields in flight, shadows on a leash, the meter
+/// Per-tick mechanic upkeep: shields in flight, shadows on a clock, the meter
 /// burning at depth.
 fn step_mechanic(p: &mut Player, arena: &Terrain) {
     bulwark::drain(p);
@@ -7696,7 +7696,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
             }
         }
 
-        // The second body: where it is, what it is copying, and the leash.
+        // The second body: where it is, what it is copying, and its clock.
         // See `crate::shadow`.
         Mechanic::Shadow(_) => shadow::step(p),
 

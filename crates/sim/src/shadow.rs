@@ -69,7 +69,7 @@ fn heel(p: &Player) -> V3 {
 // The tick
 // ---------------------------------------------------------------------------
 
-/// Move the shadow, age its echo, and answer the leash.
+/// Move the shadow, age its echo, and run its clock home.
 ///
 /// Called from `state::step_mechanic`, which is the one place per-frame
 /// mechanic upkeep happens for every class.
@@ -122,8 +122,9 @@ pub fn step(p: &mut Player) {
             // **On a clock** (2026-10-12): every send puts the shadow on
             // `tuning::shadow_return`, and when it runs out the shadow comes
             // home through whatever is between, cutting. Another send starts
-            // it over. It replaced the leash: from play, "I find myself in
-            // combat trying to figure out how to get my shadow back".
+            // it over. It replaced the leash; the owner's brief: "Every
+            // send-the-shadow move I need to be on a 3ish second timer to
+            // bring the shadow back".
             if shadow.hang > 0 {
                 shadow.hang -= 1;
                 if shadow.hang == 0 {
@@ -426,7 +427,8 @@ pub enum Order {
 ///
 /// **Pressed again, the send moves it** rather than calling it home
 /// (2026-10-10, from play: "limiting and annoying to have to keep bringing
-/// the shadow back"). Home is the dash, which collects it, or the leash.
+/// the shadow back"). Home is the dash or walking onto it, which collect it,
+/// or its clock (2026-10-12; the leash until then).
 /// `to` is `None` when the send was aimed at nowhere she could walk to: the
 /// shadow stays where it is, with her or out, and the refusal shows.
 pub fn order(p: &mut Player, to: Option<V3>) -> Option<Order> {

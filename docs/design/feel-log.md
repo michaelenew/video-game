@@ -8122,6 +8122,15 @@ forward knob, the Tumble's flight knob.
   the whirl took it as the place. It now stops at the first body or creature along the way
   (`aim::first_along`), and the creature test is a column round the whirl's middle.
 - The creature cash test used Executioner, which no longer cashes; it is a Plunge now.
+- The hunter bot never worked her shadow against the Hornback any more: it sent the shadow
+  under the creature she was about to stand beside, so she picked it straight back up, and
+  the shadow's three seconds were over before an opening came. It now sends it 2.5 m past the
+  work, presses again to keep it out, opens the lotus on it between openings, and cashes with
+  the Reave.
+**Movement** The lab search finds her going further, not less: lane +3 m whole kit 89.4 m (was
+67.4), lane +4 m 43 m (was 16), lane +10 m 52 m (was nothing) — Gallows' blink and the Fan's
+stall are new height and air time. Table in 0014. Her envelope fixtures, both pins and every
+other class's pins re-recorded (the camera's `clear` is in the checksum).
 **Verdict** — unplayed. REAVER-10 to 13 in 0014.
 
 ### 2026-10-12 — the camera: a bubble round the eye, off the ground
