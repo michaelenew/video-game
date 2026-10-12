@@ -1,5 +1,5 @@
 ---
-status: open — two rounds of the owner's answers, 2026-10-12; nothing built
+status: decided 2026-10-12 by the owner, three rounds; being built
 started: 2026-10-12
 depends: ../kits/champion.md, ../champion.md, ../monsters.md, ../creatures/mantis.md, 0014_shadow_reaver_marks_and_throws.md
 ---
@@ -127,9 +127,20 @@ The second, on the first write-up of the hold:
 > I do want the charge effects to be genuinely net new moves, bigger, faster, stronger, and
 > more spectacular than what's existed before.
 
-So, in one line: **there is one kind of big hit — the full charge — and there are several
-doors to it.** Hold for it; or earn it with momentum, and it comes out on a tap; or catch a
-creature on the floor. Six of them, one per weapon per place in the string, and every one a new
+The third round, building it:
+
+> [Heaven-piercer's spear coming home on its own] is antithetical to the class. The spear comes
+> back immediately. The class isn't actually 3 different weapons, it's supposed to be 1 weapon
+> that shape shifts. The rush should be the second part of the move, not a choice later.
+>
+> [On a downed creature, every third hit is a full charge] — not accurate. Every full charge on
+> a third hit is a grand finisher. An uncharged third hit is a third hit.
+>
+> Good with the move proposals, build it.
+
+So, in one line: **there is one kind of big hit — the full charge — and two doors to it.**
+Hold for it, or earn it with momentum and it comes out on a tap. A full charge on a third hit is
+a grand finisher; an uncharged third hit is a third hit. Six of them, one per weapon per place in the string, and every one a new
 move rather than an old one with a bigger number.
 
 To keep two things called "charge" apart, the dash is called by its in-game name, **Rush**,
@@ -250,7 +261,7 @@ weapon**: the sword owns a line ahead, the hammer the ground around him, the spe
 | --- | --- | --- |
 | **Sword** | **Crescent.** The cut leaves the blade: a wide crescent of light flies ~10 m along the aim, cutting everything it passes. The sword's answer to the kiting the owner describes, and a neutral deterrent down a line | **Thousand Cuts.** A drawn-sword dash *through* them, ~7 m in a flash, and he is past. A beat later the cuts appear in the air along the line he took and land, five of them, then a last one that throws them up. The samurai who walks through a line of people and they fall over behind him, finally literal |
 | **Hammer** | **Shockwave.** The head driven into the floor and a ring of broken ground bursting out ~5 m round him: everything standing in it is thrown up, and a guard that blocks the head itself is crushed. The deterrent all round, where the sword's is a line | **Meteor.** He leaps — high, ~5 m — and comes down where the crosshair is (`aim::grounded_path`) as a falling star. A crater, a wide ring that launches, a scorched floor for a few seconds, and against a creature a guaranteed stumble. The hit that turns a fight |
-| **Spear** | **Comet.** The spear levelled and him behind it, ~8 m along the aim in an instant. Everything on the line is pierced; a fighter is caught on the point and carried to the end, and **slammed into a wall** if there is one (a wall-splat: a long stagger) | **Heaven-piercer.** The spear *thrown*: a javelin that crosses ~25 m, pierces everything, and **pins** whoever it ends in to the floor or wall behind them, with the biggest knockback in the class. The spear stays where it lands; right click (or Rush) sends him to it, and he arrives with a hit as he tears it out. Until then he fights with two weapons |
+| **Spear** | **Comet.** The spear levelled and him behind it, ~8 m along the aim in an instant. Everything on the line is pierced; a fighter is caught on the point and carried to the end, and **slammed into a wall** if there is one (a wall-splat: a long stagger) | **Heaven-piercer.** The spear *thrown*: a javelin that crosses ~25 m, pierces everything, and **pins** whoever it ends in, with the biggest knockback in the class — and he goes after it at once: the throw's second half is a rush along its line to where it stopped, arriving with a hit as he tears it out. One weapon that changes shape, never two weapons and a missing third |
 
 The ordinary third hits are unchanged and stay what they are: **Upcut** pops them up,
 **Earthbreaker** breaks guard and launches, and **Whirl is a big knockback** — the ring cleared,
@@ -264,11 +275,6 @@ built), a carry and a wall-splat (Comet), and a thrown weapon that stays in the 
 gone from his hands (Heaven-piercer). Every one goes through `aim.rs` for where it goes, the
 Oven for its numbers and `state::hitbox` for its volume, like everything else.
 
-**Against a creature on the floor** — stumbled or toppled — **every third hit comes out fully
-charged**, Elden Ring's critical on a broken stance. This is the third door, not a seventh move:
-the payoff for putting a monster down is the same six hits, free. (It replaces the separate
-"Ruin" of the first write-up, so that there is one kind of big hit.)
-
 ### C6 · Break — the stun game against monsters
 
 The owner's sharpest complaint: no stun or combo game against creatures. The creature model
@@ -278,7 +284,7 @@ Champion just does not climb it.
 **Impact.** Champion blows feed a creature's strain *beyond their damage*: hammer hits and third
 hits count double, true links half again, full charges a great deal. He is the class that puts
 monsters on the floor, the way Monster Hunter's hammer is. Other classes keep strain as damage.
-And on the floor, every third hit is a full charge (C5): the loop closes.
+A creature on the floor is the time to hold for a grand finisher.
 
 ### C7 · The Clash — meeting the swing
 
@@ -306,7 +312,7 @@ how a player does it on purpose.
 > refunds the Rush, banks momentum → **Rush out, through, or back in** → again. Momentum climbs
 > across loops until a tap is a full charge. When they will not let you in, **hold**: a full
 > charge is a wall, a feint, or a hit that turns the fight. Against a creature every loop fills
-> its break; when it falls, every third hit is a full charge; when it swings at you, **Clash**.
+> its break; when it falls, hold for the grand finisher; when it swings at you, **Clash**.
 
 About one press every third of a second in a string, fewer in neutral; the skill has moved from
 *which button* to *when*, and to *how long*.
@@ -322,7 +328,7 @@ About one press every third of a second in a string, fewer in neutral; the skill
    spear (Comet, Heaven-piercer), the sword last (the Crescent and the delayed cuts are the
    newest machinery).
 5. **C4, Momentum**, the meter and the glow, once there are full charges for it to buy.
-6. **C6, Break**, and the free full charges on a downed creature.
+6. **C6, Break.**
 7. **C7, the Clash**, creatures and fighters.
 
 Replaying the owner's Mantis tape after each step is the measurement: the third-hits-landed
@@ -337,10 +343,8 @@ new machinery) is answered by C5: every full charge is new.
 
 - **CHAMP-6.** The air share (23 %) is the other half of "less dynamic". Holds are grounded for
   now; a held aerial, or a Rush in the air with the shoulder, is the obvious next door.
-- **CHAMP-8.** Heaven-piercer leaves him without the spear until he fetches it. Is fighting on
-  two weapons for a few seconds the price, or should the spear come back on its own (the
-  Reaver's shadow comes home after three seconds)?
-- **CHAMP-9.** Is "every third hit is a full charge" on a downed creature too generous for a
-  topple's 150 frames? It may want to be the *first* third hit only.
-- **CHAMP-10.** The six names and shapes are first proposals; the table is the thing to argue
-  with before any of them is built.
+- **CHAMP-8** — answered: the spear comes back at once; the rush to it is the throw's own second
+  half.
+- **CHAMP-9** — answered: no free full charges on a downed creature; a full charge on a third
+  hit is a grand finisher, and an uncharged third hit is a third hit.
+- **CHAMP-10** — answered: the six as proposed; build it.
