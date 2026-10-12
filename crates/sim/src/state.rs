@@ -2831,6 +2831,12 @@ impl World {
             self.collect_with_the_scythe(i);
         }
 
+        // A Rush that runs into a body hits it with the shoulder, and that is
+        // the string's first hit. See `World::shoulder`.
+        for i in 0..MAX_PLAYERS {
+            self.shoulder(i);
+        }
+
         // A thrown shield is its own threat while it travels.
         let shields = [self.players[0].shield(), self.players[1].shield()];
         for (owner, shield) in shields.iter().enumerate() {
@@ -4318,6 +4324,11 @@ fn thaw(p: &mut Player, input: Input) -> Input {
 }
 
 pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
+    // A Champion mid-Rush is braced: most blows cost him a share and do not
+    // stop him, and one in the run's last frames costs nothing at all.
+    let Some(hit) = brace_the_rush(defender, hit) else {
+        return;
+    };
     // Taken on the shield, either way: stored as weight. A parry stores more.
     // See `crate::bulwark` -- this is the one place a blocked blow is
     // resolved, which is why the creature's blows load it without asking.
@@ -4397,6 +4408,181 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         // it. The arms let go.
         defender.haul = 0;
     }
+}
+
+impl World {
+    /// **The shoulder** (exploration 0015, C1): a Champion's Rush that runs
+    /// into a body -- a fighter, or a creature -- hits it, once a run, and the
+    /// hit is **the string's first**. The next click throws the second link,
+    /// so the core combo starts from the move that crossed the gap rather than
+    /// after it.
+    ///
+    /// Only a bare Rush shoulders: a Rush move thrown out of it is its own
+    /// blow. On contact the run stops where it struck. Blocked, it is a
+    /// blocked hit and opens nothing; parried, he is staggered like any
+    /// parried swing.
+    fn shoulder(&mut self, i: usize) {
+        let p = self.players[i];
+        let Mechanic::Forms {
+            rush,
+            rush_vel,
+            fury,
+            ..
+        } = p.mechanic
+        else {
+            return;
+        };
+        if rush == 0 || fury.shouldered || !p.action.actionable() || p.health <= 0 {
+            return;
+        }
+        let ahead = V3::new(rush_vel.x, Fx::ZERO, rush_vel.z).normalized();
+        let reach = t::body_radius()
+            .add(t::body_radius())
+            .add(t::shoulder_reach());
+        let mut struck = false;
+        let mut blocked = false;
+        if self.pvp() {
+            let other = 1 - i;
+            let q = self.players[other];
+            let d = q.pos.sub(p.pos);
+            let level = d.y.abs().raw() < t::body_height().raw();
+            if q.health > 0
+                && level
+                && d.flat_len().raw() <= reach.raw()
+                && ahead.dot(V3::new(d.x, Fx::ZERO, d.z)).raw() > 0
+                && !q.action.invulnerable()
+            {
+                let (guarding, parried) = guard_against(&q, p.pos, false);
+                apply_hit(
+                    &mut self.players[other],
+                    Hit {
+                        damage: t::shoulder_damage(),
+                        hitstun: t::shoulder_hitstun(),
+                        blockstun: t::shoulder_blockstun(),
+                        knockback: t::shoulder_knockback(),
+                        launch: Fx::ZERO,
+                        grabs: 0,
+                        by: i as u8,
+                        dir: ahead,
+                        blocked: guarding,
+                        parried,
+                        interrupts: true,
+                    },
+                );
+                if parried {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[other].parried = PARRY_FLOURISH;
+                }
+                let hold = impact_freeze(t::shoulder_freeze(), guarding && !parried);
+                freeze(&mut self.players[other], hold);
+                freeze(&mut self.players[i], hold);
+                struck = true;
+                blocked = guarding || parried;
+            }
+        }
+        if !struck {
+            let at = p.pos.add(ahead.scale(t::body_radius()));
+            for slot in 0..MAX_MONSTERS {
+                let Some(mut beast) = self.monsters[slot] else {
+                    continue;
+                };
+                if !beast.alive() {
+                    continue;
+                }
+                let Some(part) =
+                    beast.part_struck(at, reach.sub(t::body_radius()), p.hurt_height())
+                else {
+                    continue;
+                };
+                let (_, guarded) = beast.take_blow(
+                    part,
+                    t::shoulder_damage(),
+                    &monster::Blow {
+                        from: p.pos,
+                        unblockable: false,
+                        who: i as u8,
+                        class: p.class,
+                        kind: monster::Blow::NO_MOVE,
+                    },
+                );
+                self.monsters[slot] = Some(beast);
+                // The animal does not stop for one fighter; he does, a beat,
+                // which is the shoulder landing.
+                freeze(&mut self.players[i], t::shoulder_freeze());
+                struck = true;
+                blocked = guarded.turned();
+                break;
+            }
+        }
+        if !struck {
+            return;
+        }
+        let me = &mut self.players[i];
+        me.vel.x = Fx::ZERO;
+        me.vel.z = Fx::ZERO;
+        if let Mechanic::Forms {
+            rush,
+            fury,
+            chain,
+            chain_left,
+            chain_hit,
+            ..
+        } = &mut me.mechanic
+        {
+            *rush = 0;
+            fury.shouldered = true;
+            if !blocked {
+                *chain = 1;
+                *chain_left = t::chain_grace();
+                *chain_hit = true;
+            }
+        }
+    }
+}
+
+/// **The Rush, braced** (exploration 0015, C1): what a blow does to a
+/// Champion who is running.
+///
+/// Three bands, and nothing outlasts the run, so there is no soak to sit in:
+///
+/// * **the last frames** (`tuning::rush_eat_frames`) eat one blow whole, once
+///   a Rush -- the shoulder down as he arrives, a timing rather than a buff;
+/// * **the rest of the run** takes a share of the damage
+///   (`tuning::rush_damage_taken`) and keeps going -- no stun, no shove;
+/// * **too much**: the shares are summed over the run, and the blow that
+///   takes the sum past `tuning::rush_breaks` lands the ordinary way, at its
+///   braced share, and ends the Rush as any hit does.
+///
+/// `None` when the blow is spent here; the hit to apply otherwise. Blocks,
+/// parries and blows that take no frames are not his to brace against.
+fn brace_the_rush(defender: &mut Player, hit: Hit) -> Option<Hit> {
+    if hit.blocked || hit.parried || !hit.interrupts {
+        return Some(hit);
+    }
+    let Mechanic::Forms { rush, fury, .. } = &mut defender.mechanic else {
+        return Some(hit);
+    };
+    if *rush == 0 {
+        return Some(hit);
+    }
+    if *rush <= t::rush_eat_frames() && !fury.eaten {
+        fury.eaten = true;
+        return None;
+    }
+    let taken = (hit.damage.max(0) as i64 * t::rush_damage_taken() as i64 / 100) as i32;
+    let braced = fury.braced as i32 + taken;
+    fury.braced = braced.min(u16::MAX as i32) as u16;
+    if braced > t::rush_breaks() {
+        return Some(Hit {
+            damage: taken,
+            ..hit
+        });
+    }
+    defender.wound(taken);
+    None
 }
 
 /// Turn a stick reading into a world direction, given where the player looks.
@@ -6297,11 +6483,23 @@ fn confirm_chain(p: &mut Player, blocked: bool) {
     let Some(kind) = p.action.attack_kind() else {
         return;
     };
-    if moves::champion::link_of(kind).is_none() {
+    let Some(link) = moves::champion::link_of(kind) else {
         return;
-    }
-    if let Mechanic::Forms { chain_hit, .. } = &mut p.mechanic {
+    };
+    if let Mechanic::Forms {
+        chain_hit,
+        recharge,
+        rush,
+        ..
+    } = &mut p.mechanic
+    {
         *chain_hit = true;
+        // **The refund** (exploration 0015, C1): a third hit that lands gives
+        // the Rush back, so the way out -- or back in -- is already there when
+        // the string is over. Not mid-dash: a Rush cannot refill itself.
+        if link + 1 == moves::champion::DEPTH && *rush == 0 {
+            *recharge = 0;
+        }
     }
 }
 
@@ -6349,9 +6547,16 @@ fn begin_champion(p: &mut Player, kind: u8) {
             let m = moves::get(p.class, kind);
             (m.startup + m.active, rush_vel.scale(t::vault_carry()))
         }
-        // The stab is the one Rush move that *stops*. All of the speed goes
-        // into the point, which is what buys it the damage.
-        c::RUSH_STAB => (0, V3::ZERO),
+        // The stab **carries** (exploration 0015, C1): it used to be the one
+        // Rush move that stopped dead, and it landed none of seventeen in the
+        // owner's tape. It rides the run out now, and what it catches it
+        // holds on the point and takes along (its `grabs`): the run is kept
+        // alive through the thrust and for as long as the hold, so there is a
+        // run left to carry them on.
+        c::RUSH_STAB => {
+            let m = moves::get(p.class, kind);
+            (rush.max(m.startup + m.active + m.grabs), rush_vel)
+        }
         // Everything else rides the dash out.
         _ => (rush, rush_vel),
     };
@@ -6885,10 +7090,19 @@ fn start_rush(p: &mut Player, input: Input) -> bool {
         rush,
         recharge,
         rush_vel,
+        fury,
         ..
     } = &mut p.mechanic
     {
         *rush = t::rush_frames();
+        // A fresh run is braced afresh: nothing taken, the last frames' one
+        // free blow unspent, the shoulder still to throw.
+        *fury = class::Fury {
+            braced: 0,
+            eaten: false,
+            shouldered: false,
+            ..*fury
+        };
         // The charge is gone until the dash has finished *and* the recharge has
         // run, so the two never overlap and "rush ready" on the HUD means it.
         *recharge = t::rush_frames() + t::rush_recharge();
@@ -7664,6 +7878,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 .attack_kind()
                 .is_some_and(|kind| moves::champion::link_of(kind).is_some());
             let standing = p.action.actionable() && p.grounded;
+            let stunned = p.action.stunned();
             if let Mechanic::Forms {
                 rush,
                 recharge,
@@ -7674,7 +7889,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 ..
             } = &mut p.mechanic
             {
-                *rush = rush.saturating_sub(1);
+                *rush = if stunned { 0 } else { rush.saturating_sub(1) };
                 *recharge = recharge.saturating_sub(1);
                 *takeoff = takeoff.saturating_sub(1);
                 if live {
@@ -7854,6 +8069,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             leap_banked,
             rise_used,
             lifted,
+            fury,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
@@ -7867,6 +8083,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*leap_banked as u32);
             h.write_u32(*rise_used as u32);
             h.write_u32(*lifted as u32);
+            h.write_u32(fury.braced as u32);
+            h.write_u32(fury.eaten as u32 | (fury.shouldered as u32) << 1);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -13692,6 +13910,13 @@ impl World {
                 },
             );
             rebound_off_a_body(&mut self.players[i]);
+            // A chain link that lands on the animal is a hit confirm like one
+            // that lands on a fighter: its recovery may be cut short for the
+            // next, and a third gives the Rush back. One its guard turned is a
+            // blocked link and pays in full. (Until 2026-10-12 nothing here
+            // confirmed the chain, so every string against a creature paid
+            // every recovery in full.)
+            confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
             if finisher && !guarded.turned() {
@@ -14110,5 +14335,108 @@ impl World {
             Some(f) => f(self, slot, part).clamp(Fx::ZERO, Fx::ONE),
             None => Fx::ONE,
         }
+    }
+}
+
+#[cfg(test)]
+mod fury_tests {
+    //! The Champion's rework (exploration 0015) at the level of one blow: the
+    //! things a fight is too noisy to pin.
+    use super::*;
+
+    fn rushing_champion(left: u16) -> Player {
+        let mut p = Player::new(Class::Champion);
+        if let Mechanic::Forms { rush, rush_vel, .. } = &mut p.mechanic {
+            *rush = left;
+            *rush_vel = V3::new(t::rush_speed(), Fx::ZERO, Fx::ZERO);
+        }
+        p
+    }
+
+    fn blow(damage: i32) -> Hit {
+        Hit {
+            damage,
+            hitstun: 20,
+            blockstun: 10,
+            knockback: Fx::ONE,
+            launch: Fx::ZERO,
+            grabs: 0,
+            by: 1,
+            dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            blocked: false,
+            parried: false,
+            interrupts: true,
+        }
+    }
+
+    #[test]
+    fn a_rush_takes_a_share_and_keeps_going() {
+        let mut p = rushing_champion(t::rush_eat_frames() + 5);
+        let before = p.health;
+        apply_hit(&mut p, blow(60));
+        assert_eq!(
+            before - p.health,
+            60 * t::rush_damage_taken() as i32 / 100,
+            "a braced blow costs its share"
+        );
+        assert!(
+            p.action.actionable(),
+            "and does not stop him: {:?}",
+            p.action
+        );
+        assert!(rushing(&p).is_some(), "the run goes on");
+    }
+
+    #[test]
+    fn the_last_frames_eat_one_blow_whole_and_only_one() {
+        let mut p = rushing_champion(t::rush_eat_frames());
+        let before = p.health;
+        apply_hit(&mut p, blow(80));
+        assert_eq!(p.health, before, "the shoulder down eats it whole");
+        apply_hit(&mut p, blow(80));
+        assert!(p.health < before, "but only once a Rush");
+    }
+
+    #[test]
+    fn enough_damage_breaks_the_rush() {
+        let mut p = rushing_champion(t::rush_eat_frames() + 5);
+        let big = (t::rush_breaks() + 1) * 100 / t::rush_damage_taken().max(1) as i32 + 1;
+        apply_hit(&mut p, blow(big));
+        assert!(
+            matches!(p.action, Action::HitStun { .. }),
+            "a bite past the break stops him the ordinary way: {:?}",
+            p.action
+        );
+        assert!(rushing(&p).is_none(), "and ends the run");
+    }
+
+    #[test]
+    fn a_landed_third_hit_gives_the_rush_back() {
+        let mut p = Player::new(Class::Champion);
+        if let Mechanic::Forms { recharge, .. } = &mut p.mechanic {
+            *recharge = 50;
+        }
+        p.action = Action::Active {
+            kind: moves::champion::UPCUT,
+            left: 2,
+        };
+        confirm_chain(&mut p, false);
+        assert!(
+            matches!(p.mechanic, Mechanic::Forms { recharge: 0, .. }),
+            "the third hit refunds the Rush"
+        );
+        let mut q = Player::new(Class::Champion);
+        if let Mechanic::Forms { recharge, .. } = &mut q.mechanic {
+            *recharge = 50;
+        }
+        q.action = Action::Active {
+            kind: moves::champion::BACKCUT,
+            left: 2,
+        };
+        confirm_chain(&mut q, false);
+        assert!(
+            matches!(q.mechanic, Mechanic::Forms { recharge: 50, .. }),
+            "a second hit does not"
+        );
     }
 }

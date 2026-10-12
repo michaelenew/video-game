@@ -1206,6 +1206,52 @@ pub fn rush_recharge() -> u16 {
     oven::scalar(Scalar::RushRecharge) as u16
 }
 
+/// **Braced, not armoured.** The share of a blow's damage the Champion takes
+/// through most of a Rush; the blow does not stop him. See
+/// `docs/design/exploration/0015_champion_momentum_and_the_charge.md`, C1.
+pub fn rush_damage_taken() -> u16 {
+    oven::scalar(Scalar::RushDamageTaken).clamp(0, 100) as u16
+}
+
+/// The last frames of a Rush, in which one blow is **eaten whole**: the
+/// shoulder down as he arrives. Once a Rush.
+pub fn rush_eat_frames() -> u16 {
+    oven::scalar(Scalar::RushEatFrames).max(0) as u16
+}
+
+/// Damage taken over one Rush, after the bracing, that ends it the ordinary
+/// way: a creature's bite stops him, a poke does not.
+pub fn rush_breaks() -> i32 {
+    oven::scalar(Scalar::RushBreaks).max(0)
+}
+
+/// How far past touching a body the Rush's shoulder reaches.
+pub fn shoulder_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShoulderReach))
+}
+
+/// **The shoulder**, which is the string's first hit when a Rush runs into a
+/// body: its damage, its stuns, its shove and its freeze.
+pub fn shoulder_damage() -> i32 {
+    oven::scalar(Scalar::ShoulderDamage)
+}
+
+pub fn shoulder_hitstun() -> u16 {
+    oven::scalar(Scalar::ShoulderHitstun) as u16
+}
+
+pub fn shoulder_blockstun() -> u16 {
+    oven::scalar(Scalar::ShoulderBlockstun) as u16
+}
+
+pub fn shoulder_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShoulderKnockback))
+}
+
+pub fn shoulder_freeze() -> u16 {
+    oven::scalar(Scalar::ShoulderFreeze) as u16
+}
+
 /// How far below the horizon you have to be pointing for a spear thrown out of
 /// a Rush to plant in the floor and vault instead of stabbing.
 ///

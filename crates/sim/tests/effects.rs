@@ -1635,7 +1635,9 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     // pole vault *is* a spear planted in the floor.
     let down = -(1 << 13); // an eighth of a turn below the horizon
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015).
+    run(&mut w, 1, E | Input::D, 0);
     for _ in 0..2 {
         w.advance([
             Input::looking_at(RMB, LOOK_RIGHT, down),
@@ -1649,7 +1651,9 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     );
 
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015).
+    run(&mut w, 1, E | Input::D, 0);
     run(&mut w, 2, RMB, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
@@ -1664,7 +1668,9 @@ fn the_vault_trades_the_dash_for_height() {
     // buys is a way into the air that a jump cannot reach.
     let down = -(1 << 13);
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015).
+    run(&mut w, 1, E | Input::D, 0);
     let mut top = 0.0f32;
     for f in 0..80 {
         let bits = if (1..3).contains(&f) { RMB } else { 0 };

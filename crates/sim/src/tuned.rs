@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 429] = [
+pub const SCALARS: [i32; 438] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -127,8 +127,8 @@ pub const SCALARS: [i32; 429] = [
            91750, // blood_mage.damage_to_the_disabled_(x) = 1.4
             9830, // blood_mage.grasp,_aim_marker_radius = 0.15
          2818048, // defence.grab_haul_speed = 43
-         1245184, // champion.rush_speed = 19
-              20, // champion.rush_length = 20
+         2097152, // champion.rush_speed = 32
+              12, // champion.rush_length = 12
               70, // champion.rush_recharge = 70
             3604, // champion.vault_plants_below_(turns) = 0.055
            36045, // champion.vault_keeps_of_the_dash_(x) = 0.55
@@ -437,6 +437,15 @@ pub const SCALARS: [i32; 429] = [
                6, // elementalist.fire_carpet,_cancel_open_for = 6
           589824, // valley.waterfall,_pushes_down_at_(m/s) = 9
           983040, // valley.hunt,_held_this_far_outside_its_room_(m) = 15
+              50, // champion.rush,_damage_taken_while_braced_(%) = 50
+               4, // champion.rush,_last_frames_that_eat_a_hit = 4
+             150, // champion.rush,_damage_that_breaks_it = 150
+           26214, // champion.shoulder,_reach_past_touching_(m) = 0.4
+              45, // champion.shoulder,_damage = 45
+              28, // champion.shoulder,_hitstun = 28
+              14, // champion.shoulder,_blockstun = 14
+          131072, // champion.shoulder,_knockback_(m/s) = 2
+               9, // champion.shoulder,_impact_freeze = 9
 ];
 
 #[rustfmt::skip]
@@ -1115,7 +1124,7 @@ pub const MOVES: [i32; 2250] = [
                0, // move.champion.rush_stab.needs_mechanic = off
                0, // move.champion.rush_stab.launch = 0
                0, // move.champion.rush_stab.self_lift = 0
-               0, // move.champion.rush_stab.grab_hold = 0
+              10, // move.champion.rush_stab.grab_hold = 10
                0, // move.champion.rush_stab.leaves_behind = 0
                0, // move.champion.rush_stab.health_cost = 0
                0, // move.champion.rush_stab.leech_(%) = 0

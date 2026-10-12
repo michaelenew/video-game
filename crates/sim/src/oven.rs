@@ -774,6 +774,22 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **The Champion's Rush, braced** (2026-10-12, exploration 0015 C1).
+    // Appended, as every scalar is. A hit taken through most of the run costs
+    // a share of its damage and does not stop him; one taken in its last few
+    // frames is eaten whole, once; and damage summed over one Rush past the
+    // break ends it the ordinary way. Nothing outlasts the run.
+    RushDamageTaken,      "Champion", "Rush, damage taken while braced (%)", Percent, 0, 100;
+    RushEatFrames,        "Champion", "Rush, last frames that eat a hit",    Frames, 0, 30;
+    RushBreaks,           "Champion", "Rush, damage that breaks it",         Int,    0, 1000;
+    // **The shoulder.** Running into a body is a hit, and it is the string's
+    // first: the next click is the second link.
+    ShoulderReach,        "Champion", "Shoulder, reach past touching (m)",   Fixed,  0, fx(3,1);
+    ShoulderDamage,       "Champion", "Shoulder, damage",                    Int,    0, 400;
+    ShoulderHitstun,      "Champion", "Shoulder, hitstun",                   Frames, 0, 90;
+    ShoulderBlockstun,    "Champion", "Shoulder, blockstun",                 Frames, 0, 90;
+    ShoulderKnockback,    "Champion", "Shoulder, knockback (m/s)",           Fixed,  0, fx(30,1);
+    ShoulderFreeze,       "Champion", "Shoulder, impact freeze",             Frames, 0, 30;
 }
 
 // ---------------------------------------------------------------------------

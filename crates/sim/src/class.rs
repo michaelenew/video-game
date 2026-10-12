@@ -146,6 +146,11 @@ impl Class {
                 leap_banked: false,
                 rise_used: false,
                 lifted: 0,
+                fury: Fury {
+                    braced: 0,
+                    eaten: false,
+                    shouldered: false,
+                },
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -305,6 +310,23 @@ impl Form {
             _ => Form::Sword,
         }
     }
+}
+
+/// **What the 2026-10-12 rework added to the Champion**, kept together so the
+/// rest of [`Mechanic::Forms`] reads as it did. See
+/// `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+///
+/// Every field is a clock or a count the simulation needs to replay a frame,
+/// so it is in the snapshot and the checksum like the rest.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Fury {
+    /// Damage taken during the current Rush, after the bracing. Past
+    /// `tuning::rush_breaks` the Rush ends the ordinary way.
+    pub braced: u16,
+    /// The one blow a Rush's last frames eat whole has been eaten.
+    pub eaten: bool,
+    /// The shoulder has landed, or been blocked, this Rush. Once a run.
+    pub shouldered: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +661,8 @@ pub enum Mechanic {
         /// wind-up and is spent on contact, so it sits here in between -- see
         /// `state::bank_the_leap`.
         leap_banked: bool,
+        /// The rework's state: the bracing, the shoulder. See [`Fury`].
+        fury: Fury,
     },
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),
