@@ -607,16 +607,6 @@ impl Body {
             // body, as wide as the body is across.
             return ring.touches(self.foot, self.height, hb.radius.add(self.half_wid));
         }
-        if hb.flat && hb.band.raw() > 0 {
-            // A thin disc: does its plane pass through the body, give or take
-            // the band? Then the flat test, as for any disc.
-            let y = hb.centre().y;
-            if y.raw() < self.foot.y.sub(hb.band).raw()
-                || y.raw() > self.foot.y.add(self.height).add(hb.band).raw()
-            {
-                return false;
-            }
-        }
         if hb.flat {
             let c = self.to_local(hb.centre());
             return crate::math::flat_box_gap(c, self.min(), self.max()).raw() <= hb.radius.raw();

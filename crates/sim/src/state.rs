@@ -545,6 +545,16 @@ pub struct Player {
     /// See [`step_aloft`].
     pub aloft: Fx,
 
+    /// How high this fighter's feet are off the floor under them **as the
+    /// camera may know it**: nought on anything, the height in the air, and
+    /// rate-limited on the way up (`camera::clear_step`) so that a ledge
+    /// stepped off eases the eye out rather than throwing it. What the
+    /// camera's bubble measures the room under the eye from -- looking up off
+    /// the ground, the eye is let back out of the head as far as that room
+    /// allows (`camera::ball`). Stepped beside [`Player::aloft`], for its
+    /// reasons.
+    pub clear: Fx,
+
     /// Which part of the creature this fighter is standing on, or
     /// `monster::NO_PART`.
     ///
@@ -1247,6 +1257,7 @@ impl Default for Player {
             frozen: 0,
             frozen_bits: 0,
             aloft: Fx::ZERO,
+            clear: Fx::ZERO,
             mount: monster::NO_PART,
             local: V3::ZERO,
             carry_yaw: Fx::ZERO,
@@ -2917,6 +2928,7 @@ impl World {
         }
 
         self.step_shadows();
+        self.burst_the_collected();
         self.step_effects();
         let standing = self.effects;
         let versus = self.pvp();
@@ -3252,6 +3264,11 @@ impl World {
             h.write_u32(p.frozen as u32);
             h.write_u32(p.frozen_bits as u32);
             h.write_i32(p.aloft.raw());
+            // Written only once it is something, so a fight that never leaves
+            // the floor hashes as it did before there was a bubble.
+            if p.clear.raw() != 0 {
+                h.write_i32(p.clear.raw());
+            }
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
             let kind = match p.action {
@@ -3564,10 +3581,6 @@ pub struct Hitbox {
     /// The last frame of a wing: its edge alone, and it hits harder. See
     /// `tuning::wing_tipper`.
     pub tipper: bool,
-    /// How far above or below `from` a flat disc still reaches, or zero for
-    /// no limit -- the old rule. Only `moves::Shape::Disc` sets it: blades
-    /// spun round her waist are a disc, not a column.
-    pub band: Fx,
 }
 
 impl Hitbox {
@@ -3638,7 +3651,6 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         spent: p.hit_used,
         sector: None,
         tipper: false,
-        band: Fx::ZERO,
     };
     let (from, to, flat) = match m.aim() {
         // A line from her hand to the point the crosshair was on, ending
@@ -3675,19 +3687,6 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         // body.
         aim::Kind::Swing => match m.shape {
             moves::Shape::None => return None,
-            // Blades spun round her waist: a thin disc of `radius` on her own
-            // middle, wherever she is pointing. See `moves::Shape::Disc`.
-            moves::Shape::Disc => {
-                let waist = p.pos.add(V3::new(
-                    Fx::ZERO,
-                    t::body_height().mul(Fx::ratio(1, 2)),
-                    Fx::ZERO,
-                ));
-                return Some(Hitbox {
-                    band: t::disc_thickness(),
-                    ..disc(waist)
-                });
-            }
             // The original: a disc at arm's length, along the line the
             // swing came out on -- the facing's yaw, the camera's pitch.
             //
@@ -3792,7 +3791,6 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                         spent: p.hit_used,
                         sector: None,
                         tipper: true,
-                        band: Fx::ZERO,
                     });
                 }
                 let sector = ring.opened(through);
@@ -3807,7 +3805,6 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                     spent: p.hit_used,
                     sector: Some(sector),
                     tipper: false,
-                    band: Fx::ZERO,
                 });
             }
         },
@@ -3826,7 +3823,6 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         spent: p.hit_used,
         sector: None,
         tipper: false,
-        band: Fx::ZERO,
     })
 }
 
@@ -3850,17 +3846,6 @@ fn reave_sweet(
     } else {
         Fx::ONE
     }
-}
-
-/// Is a standing body inside a disc's height band? Always, for a disc with
-/// none -- the old flat rule. See [`Hitbox::band`].
-fn within_band(box_out: &Hitbox, body: &Player) -> bool {
-    if box_out.band.raw() <= 0 {
-        return true;
-    }
-    let y = box_out.from.y;
-    y.raw() >= body.pos.y.sub(box_out.band).raw()
-        && y.raw() <= body.pos.y.add(body.hurt_height()).add(box_out.band).raw()
 }
 
 /// How far through its swing a move is, and whether this swing is the return
@@ -4076,7 +4061,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
         let delta = defender.pos.sub(box_out.centre());
-        delta.flat_len().raw() <= reach.raw() && within_band(&box_out, defender)
+        delta.flat_len().raw() <= reach.raw()
     } else {
         // A capsule against a standing body. Height genuinely decides this
         // one, which is the whole point of the Champion's air game: a hammer
@@ -4701,6 +4686,7 @@ fn step_player(
     // the swing comes out on this frame rather than a slide's length later.
     // See `shadow::swing_out_of_the_carry`.
     shadow::swing_out_of_the_carry(p, input);
+    gallows_blinks(p);
 
     // A channel resolves **instead of** the countdown, because it is the one
     // action whose next state depends on a button and on the scene rather than
@@ -5217,14 +5203,20 @@ fn step_player(
             // Vertical only. Air control is untouched above, so she still
             // steers where she is coming down, which is what makes throwing it
             // a read on where they will be rather than on where they are.
-            p.vel.y = if p.class == Class::ShadowReaver {
-                match p.action.attack_kind() {
-                    Some(moves::reaver::PLUNGE) => t::plunge_dive().neg(),
-                    _ => t::gallows_dive().neg(),
-                }
+            //
+            // **The Reaver's two go where she is looking** (2026-10-12): down
+            // the crosshair's line, held inside a cone round straight down
+            // (`aim::plunge_dir`), at their own speed -- the whole velocity,
+            // so the line she picked is the line she flies.
+            if p.class == Class::ShadowReaver {
+                let speed = match p.action.attack_kind() {
+                    Some(moves::reaver::PLUNGE) => t::plunge_dive(),
+                    _ => t::gallows_dive(),
+                };
+                p.vel = aim::plunge_dir(p.aim_dir(), t::plunge_cone()).scale(speed);
             } else {
-                t::landfall_dive().neg()
-            };
+                p.vel.y = t::landfall_dive().neg();
+            }
         } else if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
             // whatever vertical speed you had **bleeds away** rather than being
@@ -5348,7 +5340,13 @@ fn step_player(
         // make my slowest move instant" is "hop first".
         if let Action::Startup { kind, left } = p.action {
             let slam_from_the_air = !was_grounded && p.class == Class::Bulwark && left == 0;
+            // Gallows the same way (2026-10-12): its wind-up is the shadow
+            // going up and her blinking to it, so a landing before that --
+            // the takeoff put back on the floor it left -- is not its slam.
+            let gallows_early =
+                p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS && left > 0;
             if lands_on_the_floor(p.class, kind)
+                && !gallows_early
                 && (matches!(p.class, Class::Elementalist | Class::ShadowReaver)
                     || slam_from_the_air)
             {
@@ -5840,9 +5838,12 @@ fn reaver_move(p: &Player, input: Input) -> Option<u8> {
     use moves::reaver::keys;
     let window =
         !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
+    // Space with a click in the air, once a trip off the ground: Gallows and
+    // the Tumble are hers there too (2026-10-12).
+    let in_the_air = !p.grounded && !p.aboard() && input.has(Input::SPACE) && !p.rise.used;
     if shadow::order_queued(p) {
         return Some(if window {
-            r::SHADOW_ARC
+            r::RISING_WHIRL
         } else if p.grounded {
             r::SEND
         } else {
@@ -5856,28 +5857,18 @@ fn reaver_move(p: &Player, input: Input) -> Option<u8> {
     } else {
         return None;
     };
-    if window {
+    if window || in_the_air {
         return Some(if click == keys::FINISHER {
             r::GALLOWS
         } else {
             r::TUMBLE
         });
     }
-    // **The Tumble is her double jump** as well as a takeoff: space held with
-    // middle click in the air, once a trip off the ground (`Player::rise`).
-    if click == keys::NEUTRAL
-        && !p.grounded
-        && !p.aboard()
-        && input.has(Input::SPACE)
-        && !p.rise.used
-    {
-        return Some(r::TUMBLE);
-    }
     Some(match (click, p.grounded) {
         (keys::FINISHER, true) => r::REAVE,
         (keys::FINISHER, false) => r::PLUNGE,
-        (_, true) => r::BLADE_RING,
-        (_, false) => r::BLADE_SPIN,
+        (_, true) => r::SHURIKEN,
+        (_, false) => r::FAN,
     })
 }
 
@@ -6471,7 +6462,6 @@ pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
         spent: struck,
         sector: None,
         tipper: false,
-        band: Fx::ZERO,
     })
 }
 
@@ -6493,13 +6483,6 @@ pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
 /// poise is a matter of putting the head of the right weapon on the weak point,
 /// not of standing next to it and swinging.
 fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<usize> {
-    if box_out.flat && box_out.band.raw() > 0 {
-        // A thin disc: the band either side of it, not a column the height
-        // of her body standing on it.
-        let c = box_out.centre();
-        let low = V3::new(c.x, c.y.sub(box_out.band), c.z);
-        return beast.part_struck(low, box_out.radius, box_out.band.add(box_out.band));
-    }
     if box_out.flat {
         return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
     }
@@ -6952,6 +6935,30 @@ fn queue_the_shadow(p: &mut Player, input: Input) {
     }
 }
 
+/// **Gallows' blink** (2026-10-12): in its wind-up, the moment the shadow it
+/// sent up has arrived -- or the wind-up is about to run out, whichever is
+/// first -- she is where the shadow is, collecting it (and so bursting), and
+/// hangs a beat (`tuning::gallows_hang`) before `plunging` drives her down.
+fn gallows_blinks(p: &mut Player) {
+    let Action::Startup { kind, left } = p.action else {
+        return;
+    };
+    if p.class != Class::ShadowReaver || kind != moves::reaver::GALLOWS {
+        return;
+    }
+    let Some(sh) = shadow::of(p) else { return };
+    let arrived = matches!(sh.doing, crate::class::Ghost::Waiting);
+    let flying = matches!(sh.doing, crate::class::Ghost::Casting { .. });
+    if !(arrived || (flying && left <= 1)) {
+        return;
+    }
+    p.pos = sh.pos;
+    p.vel = V3::ZERO;
+    p.grounded = false;
+    p.air_stall = t::gallows_hang();
+    shadow::collect(p);
+}
+
 /// **Following the shadow out** (2026-10-10): a forward dodge while the
 /// shadow she just threw is still flying cuts the throw's remaining frames
 /// short, so the dodge below is the dash, chasing it. Only once it has left
@@ -7027,23 +7034,21 @@ fn begin_move(
         return Action::Channel { kind, held: 0 };
     }
     lock_aim(p, who, kind, input, scene);
-    // **Gallows**: she is gone upward, and hangs a beat before the plunge
-    // (2026-10-09) -- her source material's "blink upward, then slash down".
-    // The plunge and the landing are Landfall's (`plunging`,
-    // `lands_on_the_floor`).
+    // **Gallows** (2026-10-12): the shadow goes first, up and a little
+    // ahead, and she holds still while it flies -- in the air too, where the
+    // move's own hang holds her. When it is there she is where it is
+    // (`gallows_blinks`), and then she plunges as the Plunge does. Her source
+    // material's "blink upward, then slash down", with the blink made of her
+    // shadow.
     if p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS {
-        p.pos.y = p.pos.y.add(t::gallows_blink());
-        p.vel = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
-        p.grounded = false;
-        p.air_stall = t::gallows_hang();
+        let to = aim::hung_ahead(p.pos, p.facing, t::gallows_ahead(), t::gallows_blink());
+        shadow::throw(p, to, t::shadow_return());
+        p.vel = V3::ZERO;
     }
-    // **The Plunge**: straight into the dive, a little forward of where she
-    // was -- her drift is replaced, and she still steers it from there.
+    // **The Plunge**: straight into the dive, along the line she picked. Her
+    // drift is spent; `plunging` drives it from the next frame.
     if p.class == Class::ShadowReaver && kind == moves::reaver::PLUNGE {
-        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z)
-            .normalized()
-            .scale(t::plunge_ahead());
-        p.vel = V3::new(ahead.x, Fx::ZERO, ahead.z);
+        p.vel = V3::ZERO;
         p.air_stall = 0;
     }
     throw_move(p, kind, input, aerial)
@@ -7869,16 +7874,11 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             hash_v3(h, &shadow.facing);
             match shadow.doing {
                 Ghost::Attending => h.write_u32(0),
-                Ghost::Casting { from, to, age, arc } => {
+                Ghost::Casting { from, to, age } => {
                     h.write_u32(1);
                     hash_v3(h, &from);
                     hash_v3(h, &to);
                     h.write_u32(age as u32);
-                    // Only when it is one, so the replays pinned before the
-                    // arc existed keep their checksums.
-                    if arc {
-                        h.write_u32(1);
-                    }
                 }
                 Ghost::Waiting => h.write_u32(2),
                 Ghost::Returning { struck } => {
@@ -7897,9 +7897,10 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.shift_spent as u32);
             // Hashed only when the clocks are running, so the replays
             // pinned before they existed keep their checksums.
-            if shadow.hang != 0 || shadow.flip != 0 {
+            if shadow.hang != 0 || shadow.flip != 0 || shadow.collected {
                 h.write_u32(shadow.hang as u32);
                 h.write_u32(shadow.flip as u32);
+                h.write_u32(shadow.collected as u32);
             }
         }
         Mechanic::Structures(slots) => {
@@ -7975,6 +7976,7 @@ fn step_aloft(p: &mut Player, field: &Field, arena: &Terrain) {
         p.pos.y.sub(aim::settle(p.pos, field, arena).y)
     };
     p.aloft = camera::aloft_step(p.aloft, camera::aloft_target(height));
+    p.clear = camera::clear_step(p.clear, height);
 }
 
 /// Advance the four clocks the renderer needs and combat does not.
@@ -8182,6 +8184,31 @@ impl World {
         }
     }
 
+    /// A shadow's blade landing on the creatures: cut each in reach once for
+    /// this part of the effect, and mark it the first time this effect does.
+    /// The Whirl, the burst and the thrown blades share it, so all three mark
+    /// the same way.
+    fn shadow_blades_on_the_creatures(
+        &mut self,
+        effect: &mut Effect,
+        part: usize,
+        at: V3,
+        radius: Fx,
+    ) {
+        for slot in 0..MAX_MONSTERS {
+            let victim = quarry_victim(slot);
+            let dealt = self.gore_for_a_share(slot, effect, part, at, radius, Fx::ONE);
+            if dealt > 0 {
+                effect.take_hit(part, victim);
+                if marks_once(effect, victim) {
+                    if let Some(beast) = self.monsters[slot].as_mut() {
+                        beast.mark();
+                    }
+                }
+            }
+        }
+    }
+
     /// What the Reaver's moves do on the frame they come out, besides their
     /// volume (2026-10-10). The shadow's two in the air and off the floor put
     /// it somewhere and set it cutting; the Tumble throws its fan; the
@@ -8191,53 +8218,104 @@ impl World {
         use moves::reaver as r;
         let p = self.players[who];
         let m = moves::get(p.class, kind);
-        let cast = |kind_of: EffectKind, at: V3, dir: V3, reach: Fx| {
-            Effect::cast(kind_of, who as u8, p.class, kind, at, dir, reach)
-        };
         match kind {
-            r::WHIRL => {
+            r::WHIRL | r::RISING_WHIRL => {
                 let was_out = shadow::of(&p).is_some_and(|s| s.is_out());
                 // **The crosshair's point is the whirl's middle**, as it is
                 // the middle of what stands there for every skillshot
                 // (`aim::standing_middle`): the shadow's feet go half a body
                 // under it, and never under the floor. With its feet on the
                 // point, a level look hung the whirl over everybody's heads.
-                let to = p.aim_at();
+                //
+                // **And it stops at the first body on its way** (2026-10-12):
+                // the crosshair's ray goes through bodies to the place behind
+                // them, so a whirl aimed at somebody -- or at a sac on the
+                // Broodmother -- would otherwise spin on the floor past them.
+                // What the throw runs into is `aim::first_along`'s.
+                let to = {
+                    let stones = stones::gather(&self.players);
+                    let scene = aim::Scene {
+                        stones: &stones,
+                        players: &self.players,
+                        effects: &self.effects,
+                        quarry: &self.monsters,
+                        critters: &self.critters,
+                        arena: &self.terrain(),
+                    };
+                    let path = aim::Path {
+                        from: p.aim_path.from,
+                        to: p.aim_at(),
+                    };
+                    let targets = aim::Targets::none().fighters(self.pvp()).quarry(true);
+                    match aim::first_along(path, Fx::ZERO, who as u8, &scene, targets) {
+                        Some(met) => path.from.add(path.dir().scale(met.dist())),
+                        None => path.to,
+                    }
+                };
                 let floor = self.terrain().ground_under(to);
                 let feet = to.y.sub(t::body_height().mul(Fx::ratio(1, 2))).max(floor);
                 let to = V3::new(to.x, feet.min(to.y), to.z);
-                shadow::throw(&mut self.players[who], to, false, t::whirl_lasts());
+                shadow::throw(&mut self.players[who], to, t::shadow_return());
                 if was_out {
                     self.drag_the_lotus(who);
                 }
+                // **One set of blades** (2026-10-12): pressed again, the
+                // whirl already spinning goes with the shadow and starts its
+                // clock over, rather than a second set joining it. A fresh
+                // spin is a fresh attack, so it may mark again.
                 let at = self.players[who].mechanic.placed().unwrap_or(p.pos);
-                spawn_effect(
-                    &mut self.effects,
-                    cast(EffectKind::ShadowWhirl, at, V3::ZERO, m.reach),
-                );
-            }
-            r::SHADOW_ARC => {
-                let was_out = shadow::of(&p).is_some_and(|s| s.is_out());
-                let to = aim::hung_ahead(p.pos, p.facing, t::arc_ahead(), t::arc_up());
-                shadow::throw(&mut self.players[who], to, true, t::arc_waits());
-                if was_out {
-                    self.drag_the_lotus(who);
+                let spinning = self
+                    .effects
+                    .iter_mut()
+                    .flatten()
+                    .find(|e| e.kind == EffectKind::ShadowWhirl && e.owner == who as u8);
+                match spinning {
+                    Some(e) => {
+                        e.age = 0;
+                        e.slot = kind;
+                        e.pos = at;
+                        e.banked = 0;
+                        e.forget_hits();
+                    }
+                    None => spawn_effect(
+                        &mut self.effects,
+                        Effect::cast(
+                            EffectKind::ShadowWhirl,
+                            who as u8,
+                            p.class,
+                            kind,
+                            at,
+                            V3::ZERO,
+                            m.reach,
+                        ),
+                    ),
                 }
-                let at = self.players[who].mechanic.placed().unwrap_or(p.pos);
-                spawn_effect(
-                    &mut self.effects,
-                    cast(EffectKind::ShadowSlash, at, V3::ZERO, m.reach),
-                );
             }
-            r::TUMBLE => spawn_effect(
-                &mut self.effects,
-                cast(
-                    EffectKind::ShadowFan,
-                    p.aim_path.from,
-                    p.aim_path.dir(),
-                    m.reach,
-                ),
-            ),
+            // The Tumble's fan, down the crosshair's line, and the Fan's,
+            // level across it.
+            r::TUMBLE | r::FAN => {
+                self.throw_blades(who, kind, p.aim_path.from, p.aim_path.dir(), m.reach);
+            }
+            // **The Shuriken**: hers to the crosshair's point, and the
+            // shadow's to the same point from wherever it is standing.
+            r::SHURIKEN => {
+                let to = p.aim_at();
+                let from_her = p.aim_path.from;
+                let from_it = p.mechanic.placed().map(|at| {
+                    at.add(V3::new(
+                        Fx::ZERO,
+                        t::body_height().mul(Fx::ratio(1, 2)),
+                        Fx::ZERO,
+                    ))
+                });
+                for from in [Some(from_her), from_it].into_iter().flatten() {
+                    let span = to.sub(from);
+                    let far = span.len();
+                    if far.raw() > 0 {
+                        self.throw_blades(who, kind, from, span.normalized(), far);
+                    }
+                }
+            }
             // **The Reave's dash stops where it strikes.** The step's speed
             // is a dash's -- thirty-odd metres a second for a few frames --
             // and the follow-through every other step keeps would slide her
@@ -8248,14 +8326,66 @@ impl World {
             }
             r::PLUNGE => spawn_effect(
                 &mut self.effects,
-                cast(
+                Effect::cast(
                     EffectKind::ShadowRing,
+                    who as u8,
+                    p.class,
+                    kind,
                     p.pos,
                     V3::ZERO,
                     t::shadow_ring_reach(),
                 ),
             ),
             _ => {}
+        }
+    }
+
+    /// Thrown blades from `from` along `dir`, out to `reach` at
+    /// `tuning::thrown_speed`: a Shuriken, the Tumble's fan or the Fan's.
+    /// How many and how they spread is the move's (`moves::reaver::blades`,
+    /// `Effect::fan_dir`).
+    fn throw_blades(&mut self, who: usize, kind: u8, from: V3, dir: V3, reach: Fx) {
+        let p = self.players[who];
+        let mut born = Effect::cast(
+            EffectKind::ShadowFan,
+            who as u8,
+            p.class,
+            kind,
+            from,
+            dir,
+            reach,
+        );
+        let step = t::thrown_speed().mul(DT);
+        born.life = if step.raw() > 0 {
+            reach.div(step).to_int().clamp(1, u16::MAX as i32) as u16
+        } else {
+            1
+        };
+        spawn_effect(&mut self.effects, born);
+    }
+
+    /// The shadow is back with her because she went and got it -- the dash,
+    /// standing on it, Gallows' blink: **the burst** (2026-10-12), blades
+    /// thrown round her as it rejoins her. Its coming home on its own clock is
+    /// not a collection and bursts nothing.
+    fn burst_the_collected(&mut self) {
+        for who in 0..MAX_PLAYERS {
+            if !shadow::take_collected(&mut self.players[who]) {
+                continue;
+            }
+            let p = self.players[who];
+            spawn_effect(
+                &mut self.effects,
+                Effect::cast(
+                    EffectKind::ShadowBurst,
+                    who as u8,
+                    p.class,
+                    moves::reaver::SEND,
+                    p.pos,
+                    V3::ZERO,
+                    t::burst_radius(),
+                ),
+            );
         }
     }
 
@@ -8522,9 +8652,13 @@ impl World {
 /// Spend the marks on `defender` if this blow is the Reaver's own, and say
 /// whether it was a full tally -- the one that also staggers.
 ///
-/// **Any hit of hers cashes.** Every blow her body lands on a marked target
-/// multiplies by the marks and clears them; the shadow puts them on, she takes
-/// them off. The copies are not her body -- they go through
+/// **Only her finishers cash** (2026-10-12): the Reave, the Plunge and
+/// Gallows -- `moves::reaver::cashes`. Every one of them landing on a marked
+/// target multiplies by the marks and clears them; the shadow's blades put
+/// them on, the finishers take them off. Until 2026-10-12 any hit of hers
+/// cashed, so a poke spent the tally a poke had built and going in was
+/// worth nothing extra; from play, "the pattern should be low damage into a
+/// high, super impactful burst with the lclick moves". The copies are not her body -- they go through
 /// `echo_cuts_the_other_fighter` and mark rather than spend, or the tally
 /// could never climb past one. **Blocked or parried, nothing is spent**: it
 /// was not a hit, and the tally stays on him. That is the counterplay the pips
@@ -8536,7 +8670,16 @@ fn cash_the_tally(
     hit: &mut Hit,
 ) -> bool {
     let marks = players[defender].marks;
-    if players[attacker].class != Class::ShadowReaver || hit.blocked || hit.parried || marks == 0 {
+    let finisher = players[attacker]
+        .action
+        .attack_kind()
+        .is_some_and(moves::reaver::cashes);
+    if players[attacker].class != Class::ShadowReaver
+        || !finisher
+        || hit.blocked
+        || hit.parried
+        || marks == 0
+    {
         return false;
     }
     hit.damage = Fx::from_int(hit.damage)
@@ -8545,6 +8688,17 @@ fn cash_the_tally(
     players[defender].marks = 0;
     players[defender].mark_clock = 0;
     shadow::full_tally(marks)
+}
+
+/// **A shadow-blade attack marks each body once** (2026-10-12): the first
+/// time an effect of the Reaver's lands on a victim, and never again for that
+/// effect -- a throw, a spin, a burst. Kept in the effect's `banked`, a bit a
+/// victim. Says whether this was that first time.
+fn marks_once(effect: &mut Effect, victim: usize) -> bool {
+    let bit = 1i32 << victim;
+    let first = effect.banked & bit == 0;
+    effect.banked |= bit;
+    first
 }
 
 /// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
@@ -8619,17 +8773,15 @@ impl World {
                     effect.pos = owner.pos;
                 }
             }
-            // The Whirl and the arc's cut are the shadow's own blades: once it
-            // is back with her -- collected by the dash, or on its way home
-            // -- they are over, rather than spinning at her heel.
-            if matches!(
-                effect.kind,
-                EffectKind::ShadowWhirl | EffectKind::ShadowSlash
-            ) && !self
-                .players
-                .get(effect.owner as usize)
-                .and_then(shadow::of)
-                .is_some_and(|s| s.is_out() && !s.is_returning())
+            // The Whirl is the shadow's own blades: once it is back with her
+            // -- collected, or on its way home -- they are over, rather than
+            // spinning at her heel.
+            if effect.kind == EffectKind::ShadowWhirl
+                && !self
+                    .players
+                    .get(effect.owner as usize)
+                    .and_then(shadow::of)
+                    .is_some_and(|s| s.is_out() && !s.is_returning())
             {
                 effect.age = effect.life;
             }
@@ -9526,15 +9678,12 @@ impl World {
                 }
             }
 
-            // The Reaver's shadow spinning (the Whirl) or cutting as it flies
-            // (the arc): a ball round its middle, live. The Whirl takes a
-            // fresh pass at everybody on its beat; the arc cuts each body
-            // once. The first cut on a body marks it, once an effect -- the
-            // marks it has given are kept in `banked`, a bit a victim.
-            EffectKind::ShadowWhirl | EffectKind::ShadowSlash => {
-                let whirl = effect.kind == EffectKind::ShadowWhirl;
+            // The Reaver's shadow spinning (the Whirl): a ball round its
+            // middle, live, taking a fresh pass at everybody on its beat. Its
+            // first cut on a body marks it, once a spin.
+            EffectKind::ShadowWhirl => {
                 let every = t::whirl_every().max(1);
-                let beat = whirl && effect.age > 1 && (effect.age - 1) % every == 0;
+                let beat = effect.age > 1 && (effect.age - 1) % every == 0;
                 if beat {
                     effect.forget_hits();
                 }
@@ -9544,12 +9693,6 @@ impl World {
                     t::body_height().mul(Fx::ratio(1, 2)),
                     Fx::ZERO,
                 ));
-                let marks_once = |effect: &mut Effect, victim: usize| -> bool {
-                    let bit = 1i32 << victim;
-                    let first = effect.banked & bit == 0;
-                    effect.banked |= bit;
-                    first
-                };
                 for i in 0..MAX_PLAYERS {
                     if !self.effects_reach(i, effect.owner)
                         || effect.already_hit(0, i)
@@ -9564,34 +9707,63 @@ impl World {
                     }
                 }
                 // The creature and the small bodies are asked about an upright
-                // column, a fighter tall, from the bottom of the ball: the
-                // same reach the ball has on a fighter, and a knee-high body
-                // under the middle of it is in it.
-                let low = V3::new(mid.x, mid.y.sub(radius), mid.z);
-                for slot in 0..MAX_MONSTERS {
-                    let victim = quarry_victim(slot);
-                    let dealt = self.gore_for_a_share(slot, effect, 0, low, radius, Fx::ONE);
-                    if dealt > 0 {
-                        effect.take_hit(0, victim);
-                        if marks_once(effect, victim) {
-                            if let Some(beast) = self.monsters[slot].as_mut() {
-                                beast.mark();
-                            }
-                        }
-                    }
-                }
-                // The small bodies on the Whirl's beat (and its first frame),
-                // and once for the arc -- they remember it themselves.
-                if !whirl || beat || effect.age == 1 {
+                // column, a fighter tall, centred on the ball's middle: the
+                // crosshair's point is in it, and so is a knee-high body under
+                // a whirl on the floor.
+                let low = V3::new(
+                    mid.x,
+                    mid.y.sub(t::body_height().mul(Fx::ratio(1, 2))),
+                    mid.z,
+                );
+                self.shadow_blades_on_the_creatures(effect, 0, low, radius);
+                // The small bodies on the beat (and the first frame) -- they
+                // remember a cut themselves.
+                if beat || effect.age == 1 {
                     self.gore_critters(effect, low, radius, Fx::ONE);
                 }
             }
 
-            // The Tumble's three blades, each its own part: a body is cut once
-            // by each blade that reaches it.
+            // **The burst** as she collects her shadow: a thin disc round her
+            // waist, each body once, and marked.
+            EffectKind::ShadowBurst => {
+                let radius = effect.field_radius();
+                let band = t::disc_thickness();
+                let mid = effect.pos.add(V3::new(
+                    Fx::ZERO,
+                    t::body_height().mul(Fx::ratio(1, 2)),
+                    Fx::ZERO,
+                ));
+                for i in 0..MAX_PLAYERS {
+                    let q = self.players[i];
+                    let across =
+                        V3::new(q.pos.x.sub(mid.x), Fx::ZERO, q.pos.z.sub(mid.z)).flat_len();
+                    let level = mid.y.raw() >= q.pos.y.sub(band).raw()
+                        && mid.y.raw() <= q.pos.y.add(q.hurt_height()).add(band).raw();
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !level
+                        || across.raw() > radius.add(t::body_radius()).raw()
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, mid, effect.damage());
+                    if dealt > 0 && marks_once(effect, i) {
+                        shadow::mark(&mut self.players[i]);
+                    }
+                }
+                let low = V3::new(mid.x, mid.y.sub(band), mid.z);
+                self.shadow_blades_on_the_creatures(effect, 0, low, radius);
+                if effect.age == 1 {
+                    self.gore_critters(effect, low, radius, Fx::ONE);
+                }
+            }
+
+            // Thrown blades, each its own part: a body is cut once by each
+            // blade that reaches it, and marked once by the throw.
             EffectKind::ShadowFan => {
                 let radius = effect.field_radius();
-                for blade in 0..crate::effects::FAN_BLADES {
+                for blade in 0..moves::reaver::blades(effect.slot) {
                     let at = effect.fan_blade_at(blade);
                     for i in 0..MAX_PLAYERS {
                         if !self.effects_reach(i, effect.owner)
@@ -9601,9 +9773,12 @@ impl World {
                             continue;
                         }
                         effect.take_hit(blade, i);
-                        self.cut(i, effect, at, effect.damage());
+                        let dealt = self.cut(i, effect, at, effect.damage());
+                        if dealt > 0 && marks_once(effect, i) {
+                            shadow::mark(&mut self.players[i]);
+                        }
                     }
-                    self.gore_each(effect, blade, at, radius, Fx::ONE);
+                    self.shadow_blades_on_the_creatures(effect, blade, at, radius);
                     self.gore_critters(effect, at, radius, Fx::ONE);
                 }
             }
@@ -13484,12 +13659,13 @@ impl World {
                 continue;
             };
             let m = moves::get(attacker.class, kind);
-            // The Reaver's cash-in, on a leg rather than a person: any blow of
-            // hers spends the creature's marks, and it cannot block.
+            // The Reaver's cash-in, on a leg rather than a person: a finisher
+            // of hers spends the creature's marks, and it cannot block.
             // What a full tally does to something this size is its own flinch
             // and poise rules' business -- a hit three times the size is
             // already the thing those read.
-            let cash = if attacker.class == Class::ShadowReaver {
+            let finisher = attacker.class == Class::ShadowReaver && moves::reaver::cashes(kind);
+            let cash = if finisher {
                 shadow::cash_multiple(beast.marks)
             } else {
                 Fx::ONE
@@ -13518,7 +13694,7 @@ impl World {
             rebound_off_a_body(&mut self.players[i]);
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
-            if attacker.class == Class::ShadowReaver && !guarded.turned() {
+            if finisher && !guarded.turned() {
                 beast.spend_marks();
             }
             // Her double duty, against the creature: drink over the pool the

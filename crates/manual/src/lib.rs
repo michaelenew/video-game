@@ -325,7 +325,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Shadow Reaver",
         in_browser: true,
-        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two. Her three clicks are the finishers, the neutral blades and the shadow: each has a move on the floor, one in the air and a jump attack with space. Reworked 2026-10-10 toward a dashing, spinning-blades feel, and unplayed; docs/design/exploration/0013_shadow_reaver_dual_blades.md is the design.",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two. Her three clicks are the finishers, the throws and the shadow: each has a move on the floor, one in the air and a jump attack with space. Every blade of the shadow's marks a body; only the finishers cash the marks, and each mark is worth more than the last. Reworked 2026-10-10 and 2026-10-12 toward a dashing, spinning-blades feel, and unplayed; docs/design/exploration/0014_shadow_reaver_marks_and_throws.md is the design.",
         entries: &[
             e(
                 "The shadow copies you",
@@ -333,15 +333,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Left click",
-                "The finishers. On the floor, the Reave: a short dash forward and a cut, and the tip of the blade at the end of the dash is a sweet spot that hits half again as hard. In the air, the Plunge: a short dive, a little forward, blade first, and a ring of shadow runs out from where you land past the blade's own reach. Space and left click is the Gallows: you blink up a few metres and slam back down in an arc for the biggest hit you have -- and the longest recovery.",
+                "The finishers -- the only moves that cash the marks, and each mark is worth more than the last: five of them is four times the hit. On the floor, the Reave: a short dash forward and a cut, and the tip of the blade at the end of the dash is a sweet spot that hits half again as hard. In the air, the Plunge: you stop and dive where you point, never more than forty-five degrees off straight down, and a ring of shadow runs out from where you land. Space and left click is the Gallows, from the floor or the air: the shadow goes up first, you blink to it, and you plunge from there in the same cone for the biggest hit you have -- and the longest recovery.",
             ),
             e(
                 "Middle click",
-                "The neutral blades. On the floor, the Blade ring: blades spun round your waist, cutting everyone close, behind you too. In the air, the Blade spin: a very fast, wide, thin disc of blades for little damage. Space and middle click is the Tumble: a flipping jump that throws three blades forward and down -- and in the air, once a jump, it is your double jump.",
+                "The throws. On the floor, the Shuriken: a blade straight to the crosshair -- and the shadow throws one too, from wherever it is, at the same spot. In the air, the Fan: five blades level across your front, and you stall a moment. Space and middle click is the Tumble: a flipping jump that throws three blades forward and down -- and in the air, once a jump, it is your double jump. Every one of those blades marks what it cuts.",
             ),
             e(
                 "Right click",
-                "The shadow. On the floor, send it where you are pointing, fast, and it stops there -- but only onto ground you could walk to: never up a ledge or over a drop. Press again and it moves from where it is to where you point now, dragging an open Guillotine lotus with it. In the air it is the Whirl: the shadow goes a short way where you point and spins, cutting everything round it, then comes home on its own. Space and right click is the Shadow arc: it flies forward and up, cutting what it passes, and hangs there for a second before it comes home. Right click answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
+                "The shadow. On the floor, send it where you are pointing, fast, and it stops there -- but only onto ground you could walk to: never up a ledge or over a drop. Press again and it moves from where it is to where you point now, dragging an open Guillotine lotus with it. In the air it is the Whirl: the shadow goes where you point, as far as the send, and spins, cutting and marking everything round it; another Whirl moves it. Space and right click is the Rising whirl: a jump and a Whirl. Every send comes home on its own three seconds after it arrives, unless you send it again first. Right click answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
             ),
             e(
                 "Q",
@@ -349,19 +349,19 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E",
-                "Executioner, the committed overhead that cashes a tally for the most.",
+                "Executioner, the committed overhead. It does not cash the marks: that is the finishers' job.",
             ),
             e(
                 "Shift + forward",
-                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. While the shadow is still flying from a throw you do not need to point at it -- the dodge cancels the rest of the throw and follows it. Straight to wherever it is -- up in the air included -- and only something with no way through at all can refuse it. In the air it is the airdodge that does it, and it costs the airdodge. Pointed anywhere else it is the ordinary dodge.",
+                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive -- and picking it up throws a burst of blades round you. While the shadow is still flying from a throw you do not need to point at it -- the dodge cancels the rest of the throw and follows it. Straight to wherever it is -- up in the air included -- and only something with no way through at all can refuse it. In the air it is the airdodge that does it, and it costs the airdodge. Pointed anywhere else it is the ordinary dodge.",
             ),
             e(
                 "Space, as a dash lands",
                 "The dash jump. Pressed in the dash's last few frames, you leave the shadow with all of the dash's speed, in a forward flip with a little more height than a jump.",
             ),
             e(
-                "The leash",
-                "Walk far enough from a shadow standing out on the field and it comes and finds you, cutting on the way. Straying is a decision, not a mistake.",
+                "Picking it up",
+                "Walk onto a shadow standing out on the field and you pick it up, as the dash does -- with the same burst of blades. Nothing brings it home for distance: only its three seconds, or you.",
             ),
         ],
     },

@@ -291,6 +291,7 @@ fn aiming_at_the_side_of_a_stone_puts_the_next_one_on_the_floor_behind_it() {
             w.players[0].pos,
             Input::looking_at(0, 0, down(tilt)),
             w.players[0].aloft,
+            w.players[0].clear,
         );
         let flat = face.sub(eye).flat_len().to_f32_for_render();
         let rise = face.y.sub(eye.y).to_f32_for_render();

@@ -57,7 +57,13 @@ fn onto_them(w: &World) -> i16 {
         them.y.add(t::body_height().div(Fx::from_int(2))),
         them.z,
     );
-    sim::aim::look_onto_closely(w.players[0].pos, LOOK_RIGHT, w.players[0].aloft, middle)
+    sim::aim::look_onto_closely(
+        w.players[0].pos,
+        LOOK_RIGHT,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    )
 }
 
 fn step_looking(w: &mut World, bits: u16, pitch: i16) {
@@ -363,8 +369,13 @@ fn the_abyss_drags_hexes_and_drains() {
     let hers = w.players[0].health;
     let them = w.players[1].pos;
     let at_them = V3::new(them.x.sub(metres(1.5)), Fx::ZERO, them.z);
-    let pitch =
-        sim::aim::look_onto_closely(w.players[0].pos, LOOK_RIGHT, w.players[0].aloft, at_them);
+    let pitch = sim::aim::look_onto_closely(
+        w.players[0].pos,
+        LOOK_RIGHT,
+        w.players[0].aloft,
+        w.players[0].clear,
+        at_them,
+    );
     step_looking(&mut w, keys::DARK_MAJOR, pitch);
     run(&mut w, 70, 0);
     assert_eq!(effects(&w, EffectKind::Abyss), 1, "the well is open");
@@ -383,7 +394,13 @@ fn judgement_on_the_well_shatters_what_the_abyss_hexed() {
     let mut w = facing(7.0);
     level(&mut w, 60);
     let them = w.players[1].pos;
-    let pitch = sim::aim::look_onto_closely(w.players[0].pos, LOOK_RIGHT, w.players[0].aloft, them);
+    let pitch = sim::aim::look_onto_closely(
+        w.players[0].pos,
+        LOOK_RIGHT,
+        w.players[0].aloft,
+        w.players[0].clear,
+        them,
+    );
     step_looking(&mut w, keys::DARK_MAJOR, pitch);
     run(&mut w, 60, 0);
     assert_eq!(w.players[1].hex, UMBRA, "fixture: hexed by the well");
@@ -391,6 +408,7 @@ fn judgement_on_the_well_shatters_what_the_abyss_hexed() {
         w.players[0].pos,
         LOOK_RIGHT,
         w.players[0].aloft,
+        w.players[0].clear,
         w.players[1].pos,
     );
     step_looking(&mut w, keys::LIGHT_MAJOR, pitch);
@@ -564,7 +582,13 @@ fn a_creature_is_hexed_and_reacts_like_a_fighter() {
     let yaw = sim::math::atan2_turns(dir.z, dir.x);
     let aim = (yaw.raw() as u32 & 0xffff) as u16;
     let middle = V3::new(beast.pos.x, beast.pos.y.add(Fx::from_int(1)), beast.pos.z);
-    let pitch = sim::aim::look_onto_closely(w.players[0].pos, aim, w.players[0].aloft, middle);
+    let pitch = sim::aim::look_onto_closely(
+        w.players[0].pos,
+        aim,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     let mut hexed = false;
     w.advance([Input::looking_at(keys::LIGHT, aim, pitch), Input::default()]);
     for _ in 0..20 {

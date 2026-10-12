@@ -465,7 +465,7 @@ fn looking(me: &Player, at: V3, bits: u16) -> Input {
     let d = flat(at.sub(me.pos));
     let yaw = atan2_turns(d.z, d.x);
     let wire = turns_to_aim(yaw.sub(me.carry_yaw));
-    let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+    let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, me.clear, at);
     Input::looking_at(bits, wire, pitch)
 }
 

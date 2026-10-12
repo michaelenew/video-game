@@ -171,7 +171,13 @@ fn one_gnawer(class: Class, metres: i32, kind: u8) -> (World, Input) {
         w.advance([Input::looking_at(0, 0, 0), Input::default()]);
     }
     let middle = w.critters[0].body(sp).middle();
-    let pitch = aim::look_onto_closely(w.players[0].pos, 0, w.players[0].aloft, middle);
+    let pitch = aim::look_onto_closely(
+        w.players[0].pos,
+        0,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     (w, Input::looking_at(0, 0, pitch))
 }
 

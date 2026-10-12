@@ -275,7 +275,7 @@ impl Plan for Gnawers {
             let to = at.sub(me.pos);
             let yaw = atan2_turns(to.z, to.x);
             let aim = turns_to_aim(yaw.sub(me.carry_yaw));
-            let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, middle);
+            let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, me.clear, middle);
             (yaw, aim, pitch)
         };
         let facing_pack = centroid.unwrap_or(me.pos.add(me.facing));

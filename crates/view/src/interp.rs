@@ -66,6 +66,9 @@ pub struct PlayerView {
     /// view does not step at the simulation's cadence -- see
     /// `sim::state::Player::aloft`.
     pub aloft: f32,
+    /// How high the fighter's feet are off the floor, as the camera may know
+    /// it: `sim::state::Player::clear`, blended like `aloft`.
+    pub clear: f32,
     /// How far the creature has turned under this fighter, in radians, and so
     /// how far their whole frame of reference has turned with it -- **the
     /// simulation's own number**, out of `sim::state::Player::carry_yaw`.
@@ -105,7 +108,7 @@ pub struct PlayerView {
     /// The whole body turned over, in radians: `[0]` is a **forward flip**,
     /// about the body's own side, and `[1]` a **spin** about the vertical, on
     /// top of the facing. Zero for everybody but the Reaver (2026-10-10): her
-    /// dash jump's flip, the Tumble's, and the two blade spins. Off the
+    /// dash jump's flip and the Tumble's. Off the
     /// simulation's clocks -- see [`roll_of`] -- so a rollback redraws it.
     /// Presentation only: the body, the camera and the aim never turn over.
     pub roll: [f32; 2],
@@ -148,14 +151,6 @@ pub fn roll_of(p: &sim::state::Player) -> [f32; 2] {
             roll[0] =
                 ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
                     * TAU;
-        }
-        // The spin goes round twice in its few frames; the ring once.
-        Some(r::BLADE_SPIN) => {
-            roll[1] =
-                ease(through(r::BLADE_SPIN, &|m| m.startup + m.active).unwrap_or(0.0)) * TAU * 2.0;
-        }
-        Some(r::BLADE_RING) => {
-            roll[1] = ease(through(r::BLADE_RING, &|m| m.startup + m.active).unwrap_or(0.0)) * TAU;
         }
         _ => {}
     }
@@ -287,6 +282,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     let pitch_of = |v: &sim::state::Player| fx(v.aim_dir().y).clamp(-1.0, 1.0).asin();
     let aim_pitch = lerp(pitch_of(p), pitch_of(c), a);
     let aloft = lerp(fx(p.aloft), fx(c.aloft), a);
+    let clear = lerp(fx(p.clear), fx(c.clear), a);
     // The carried yaw, blended the **short way round**. It is kept wrapped into
     // half a turn either side, so a rider turning past the back of the animal
     // steps from just under a half to just over minus a half, and a plain lerp
@@ -317,6 +313,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         turn_rate,
         aim_pitch,
         aloft,
+        clear,
         carried,
         floating: sim::state::floating(c),
         force: match c.mechanic {

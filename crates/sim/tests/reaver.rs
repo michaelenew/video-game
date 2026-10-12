@@ -21,10 +21,11 @@ use sim::{Class, Fx, Input, V3, World};
 
 /// `E`: Executioner, back on the key since the second pass (2026-10-10).
 const M: u16 = Input::MECHANIC;
-/// Middle click: the Blade ring on the floor, a neutral cut that stays where
-/// she is -- what the tests about a press during a swing throw, since the
-/// Reave on left click dashes her off whatever she is standing on.
-const RING: u16 = Input::MIDDLE;
+/// The swing the tests about a press during a swing, and about the copies,
+/// throw: Executioner, on `E`, a cut that stays where she is. The Reave on left
+/// click dashes her off whatever she is standing on, and middle click throws
+/// blades rather than swinging (2026-10-12).
+const RING: u16 = Input::MECHANIC;
 const L: u16 = Input::LEFT;
 /// Right click, which on this class sends the shadow -- it is the half of the
 /// kit the crosshair aims, and the mouse is where aiming lives.
@@ -360,44 +361,24 @@ fn the_shadow_flies_out_and_then_stops() {
 }
 
 #[test]
-fn the_leash_fits_the_throw() {
-    // A leash shorter than the throw would have the shadow turn round on the
-    // frame it landed, which is the class's setup deleting itself.
-    //
-    // **Doubled on 2026-09-17**: a leash only a third longer than the throw
-    // meant a shadow placed at full range expired almost as soon as it arrived,
-    // so a placement was something to spend rather than something to keep. The
-    // shadow is this class's movement, and movement you have to use immediately
-    // is not a decision. Two throws of slack is the room to leave it out there.
-    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
-    let slack = t::shadow_leash().div(send.reach);
-    assert!(
-        slack.raw() >= Fx::from_int(2).raw(),
-        "the shadow can be thrown {} m and is leashed at {} m -- under twice the \
-         throw, so a shadow left at range comes home before she has used it",
-        send.reach.to_f32_for_render(),
-        t::shadow_leash().to_f32_for_render()
-    );
-}
-
-#[test]
-fn the_dash_crosses_the_whole_leash() {
+fn the_dash_reaches_further_than_the_send() {
     // **What makes the dash an escape rather than a gamble.** It ends when the
-    // dodge does -- it does not outlive it -- so a dash that cannot cover the
-    // distance spends the dodge and arrives nowhere, in the open, out of
-    // invulnerability. Whether that can happen is a question about the leash
-    // and the dodge together, and neither of them knows about the other.
+    // dodge does -- it does not outlive it -- so it is only offered where it
+    // can arrive (`shadow::dash_is_asked_for`). That has to include anywhere
+    // she can put the shadow from where she stands, with room to walk off the
+    // line: twice the send's reach.
     //
-    // Untested until 2026-09-17, when the leash doubled and the only thing
-    // holding the property up was a sentence in `tuning::shadow_dash_speed`.
+    // It was "the dash crosses the whole leash" until 2026-10-12, when the
+    // return clock replaced the leash.
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     let covered = t::shadow_dash_speed().mul(Fx::ratio(t::dodge_frames() as i32, 60));
     assert!(
-        covered.raw() >= t::shadow_leash().raw(),
-        "a dash covers {} m in the {} frames a dodge lasts, against a leash of {} m -- \
-         she can be left stranded at the far end of her own mechanic",
+        covered.raw() >= send.reach.mul(Fx::from_int(2)).raw(),
+        "a dash covers {} m in the {} frames a dodge lasts, against a {} m send -- \
+         a shadow she just sent could be out of her dash's reach",
         covered.to_f32_for_render(),
         t::dodge_frames(),
-        t::shadow_leash().to_f32_for_render()
+        send.reach.to_f32_for_render()
     );
 }
 
@@ -932,7 +913,7 @@ fn the_shadow_fights_the_creature_too() {
     // past the copy's reach of the head.
     let mut w = hunting();
     let full = beast_health(&w);
-    let poke = sim::moves::get(Class::ShadowReaver, sim::moves::reaver::BLADE_RING);
+    let poke = sim::moves::get(Class::ShadowReaver, sim::moves::reaver::EXECUTIONER);
 
     // Her own swing lands first, alone.
     let mut hers = None;
@@ -1210,15 +1191,15 @@ fn a_right_click_thrown_during_a_swing_is_not_dropped() {
     run(&mut w, 1, RING, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
-        Some(sim::moves::reaver::BLADE_RING),
-        "middle click did not throw the Blade ring"
+        Some(sim::moves::reaver::EXECUTIONER),
+        "`E` did not throw Executioner"
     );
     // One frame of right click, while the swing is still winding up, and then
     // the button is never touched again.
     run(&mut w, 1, R, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
-        Some(sim::moves::reaver::BLADE_RING),
+        Some(sim::moves::reaver::EXECUTIONER),
         "the press interrupted the swing instead of waiting for it"
     );
 
@@ -1232,7 +1213,7 @@ fn a_right_click_thrown_during_a_swing_is_not_dropped() {
     assert_eq!(
         w.players[0].action.attack_kind(),
         Some(SLOT_MECHANIC),
-        "a right click pressed during the Blade ring was dropped instead of remembered"
+        "a right click pressed during Executioner was dropped instead of remembered"
     );
     run(&mut w, 30, 0, 0);
     assert!(
@@ -1256,7 +1237,7 @@ fn a_press_thrown_alongside_any_of_her_moves_still_comes_out() {
     // arithmetic.
     for (name, bits, slot) in [
         ("Reave", L, SLOT_POKE),
-        ("Blade ring", RING, sim::moves::reaver::BLADE_RING),
+        ("Executioner again", RING, sim::moves::reaver::EXECUTIONER),
         ("Executioner", M, SLOT_COMMITTED),
         ("Guillotine", Q, SLOT_SPECIAL),
     ] {
@@ -1770,7 +1751,7 @@ fn the_attending_copy_keeps_her_yaw() {
 /// she stands: the Reave dashes her into range of the body the copy is meant
 /// to be marking, and her own hit spends the marks.
 fn swing_and_let_it_copy(w: &mut World) {
-    let poke = sim::moves::get(Class::ShadowReaver, sim::moves::reaver::BLADE_RING);
+    let poke = sim::moves::get(Class::ShadowReaver, sim::moves::reaver::EXECUTIONER);
     tap(
         w,
         RING,
@@ -2099,7 +2080,8 @@ fn the_shadow_marks_the_creature_from_the_field() {
 
 #[test]
 fn a_cash_in_lands_on_the_creature_too() {
-    // The shadow works a Ridgeback's flank from range and she cashes on a leg.
+    // The shadow works a Ridgeback's flank from range and she cashes on a leg,
+    // with a finisher (2026-10-12).
     let first_blow_on_it = |marks: u8| {
         let mut w = hunting();
         let mut beast = w.monster().copied().unwrap();
@@ -2107,12 +2089,16 @@ fn a_cash_in_lands_on_the_creature_too() {
         beast.mark_clock = t::mark_fade();
         w.monsters[0] = Some(beast);
         let full = beast_health(&w);
-        run(&mut w, 2, RING, 0);
+        // A Plunge straight down onto it from a body's height above: the
+        // Reave dashes her past the head this fixture puts in front of her.
+        w.players[0].pos.y = Fx::from_int(2);
+        w.players[0].grounded = false;
+        run(&mut w, 2, L, down(89));
         for _ in 0..30 {
             if beast_health(&w) < full {
                 return (full - beast_health(&w), w.monster().copied().unwrap().marks);
             }
-            run(&mut w, 1, 0, 0);
+            run(&mut w, 1, 0, down(89));
         }
         (0, marks)
     };

@@ -7,6 +7,16 @@ sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat
 
 # Shadow Reaver — kit
 
+> **Third pass, 2026-10-12, built and unplayed** — see
+> [../exploration/0014_shadow_reaver_marks_and_throws.md](../exploration/0014_shadow_reaver_marks_and_throws.md),
+> which supersedes 0013 where they differ. Middle click is three throws (the Shuriken — and the
+> shadow throws one too; the Tumble; the Fan, with a stall); the Plunge aims inside 45° of
+> straight down and Gallows blinks to the shadow it sent up; the Whirl reaches as far as the
+> send and is one set; `space` + right is the Rising whirl. **Every shadow blade marks and only
+> the finishers cash** (Reave, Plunge, Gallows), each mark worth more than the last, on one
+> two-second clock. Every send comes home after three seconds; **the leash below is gone**;
+> walking onto a waiting shadow collects it, and collecting bursts.
+
 > **Second pass, 2026-10-10, built and unplayed** — see
 > [../exploration/0013_shadow_reaver_dual_blades.md](../exploration/0013_shadow_reaver_dual_blades.md),
 > which supersedes 0011 and the bindings below where they differ. Left is the finishers
@@ -53,6 +63,10 @@ has them, and *where* the far end is is the only question the class ever asks.
 | **Going out** | Racing to the spot the crosshair picked, ten frames, and then it stops |
 | **Waiting** | Standing there. The state everything else in the kit is aimed at |
 | **Coming home** | Dashing back through anything in the way, cutting and slowing it |
+
+> **Retired 2026-10-12** (0014): nothing brings the shadow home for distance now. Every send
+> brings it home three seconds after it arrives, unless another send moves it first. What
+> follows is the leash's history.
 
 **Leash.** Stray far enough from a waiting shadow and it comes and finds you, on the same
 path a recall takes and doing the same damage. The leash is deliberately longer than the
@@ -164,7 +178,7 @@ points now, under the same rule. **And it takes an open Guillotine lotus with it
 the combination the kit is built around — see below. Until 2026-10-10 the second press called
 it home, dashing back through anything between, damaging and slowing it; from play, "limiting
 and annoying to have to keep bringing the shadow back". The way home still cuts that way when
-the leash, the Whirl's end or the arc's end sends it.
+the send's three-second clock (since 2026-10-12) or the Whirl's end sends it.
 
 #### The press answers whatever else she is doing — added 2026-09-14
 
@@ -280,8 +294,8 @@ two buttons: `Q`, then right click.
 > standing there — missing the one victim the ability is named for.
 
 ### The dash to the shadow — `shift` + forward
-**Startup** instant · **Range** the leash · **Mechanic** requires the shadow out;
-collects it
+**Startup** instant · **Range** what a dodge's frames cover at the dash's speed (the leash
+until 2026-10-12) · **Mechanic** requires the shadow out; collects it, and it bursts
 
 **With the crosshair on the shadow, a forward dodge becomes the dash to it.** Invulnerable
 across the gap, at a constant speed that crosses the whole leash inside one dodge, and

@@ -516,11 +516,11 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                 rising: false,
                 weight: 0.6,
             }),
-            EffectKind::ShadowSlash => Patch::Whoosh(Whoosh {
+            EffectKind::ShadowBurst => Patch::Whoosh(Whoosh {
                 frames: 12,
                 size: FIGHTER,
                 rising: true,
-                weight: 0.55,
+                weight: 0.7,
             }),
             EffectKind::ShadowFan => Patch::Whoosh(Whoosh {
                 frames: 8,

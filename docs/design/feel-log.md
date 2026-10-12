@@ -8094,3 +8094,54 @@ lab search still finds gaps of 50–75 m in most lanes (lane 0 m shared 55.5 m, 
 through the Whirl, the forward dodge that follows a flying shadow, and the dash jump. That is
 REAVER-5 in 0013 and the owner's call. Her Ridgeback pin re-pinned.
 **Verdict** — unplayed.
+
+### 2026-10-12 — the Shadow Reaver, third pass: marks, throws and the shadow's clock
+**Changed** From the owner, after the second pass: "Much better, but needs some polish still."
+Built as [0014](exploration/0014_shadow_reaver_marks_and_throws.md). Middle click is three
+throws (the Shuriken, hers and the shadow's; the Tumble as it was; the Fan, five level blades
+and a 16-frame stall); the Plunge aims inside a 45° cone round straight down; Gallows sends the
+shadow up first and blinks to it; the Whirl reaches as far as the send (4 → 9 m) and a second
+one moves the one set of blades; `space` + right is the Rising whirl. Every send starts a
+three-second clock home (180 frames, reset by any send); **the leash is gone**; standing within
+1.2 m of a waiting shadow collects it, and collecting — the dash, standing on it, Gallows'
+blink — **bursts** (45, a 2.5 m disc, marking). Every shadow blade marks; **only the finishers
+cash** (Reave, Plunge, Gallows — not Executioner); the tally is on one clock, a mark resetting
+it to 120 frames (was 90), one mark fading when it runs out. The cash is
+`1 + 0.25m + 0.07m²` (was `1 + 0.4m`, straight): ×1.32 ×1.78 ×2.38 ×3.12 ×4.00, each
+step bigger than the last, as asked. Retired: the Blade ring, the Blade spin, the Shadow arc,
+`Shape::Disc` and the hitbox's height band, `Shadow leash`, the arc's knobs, the Plunge's
+forward knob, the Tumble's flight knob.
+**Found in the build**
+- From the floor, Gallows went active on its first frame: the landing hook that starts the
+  hit of a move that lands on the floor saw her feet on it before the blink. It waits for the
+  blink now.
+- Collecting by standing near stole the dash's arrival (the dash stopped 0.23 m short and
+  carried nothing). Nearness does not collect while a dash is running.
+- A Whirl aimed at the Broodmother's fore sac went through her to the floor behind: the
+  crosshair's point is not on bodies, by design (CLAUDE.md, "Bodies are not on that ray"), and
+  the whirl took it as the place. It now stops at the first body or creature along the way
+  (`aim::first_along`), and the creature test is a column round the whirl's middle.
+- The creature cash test used Executioner, which no longer cashes; it is a Plunge now.
+**Verdict** — unplayed. REAVER-10 to 13 in 0014.
+
+### 2026-10-12 — the camera: a bubble round the eye, off the ground
+**Changed** Looking up, the zones shrink the sphere onto the head (the handover). In the air,
+that radius is now let back out toward the full sphere as far as keeping the eye a body's
+height (`Eye bubble`, 1.8 m) off the floor under the fighter allows — a hard edge — eased in
+over the first two metres of room (`Eye bubble, soft edge`). The room is `Player::clear`, the
+feet's height off the floor, nought standing, opening at most 0.25 m a frame. In the drawn
+camera, the floor clamp and the wall pull-in return in proportion as the eye leaves the head.
+**Why** The owner: "I want the camera to pull back to third person" in the air, with the
+crosshair fixed and on the character, and "I DO NOT want regressions in how the camera works".
+**The no-regression argument**, in `tests/eye_bubble.rs`: standing, the room is nought and the
+eye is the zones' exactly; looking level or down, nothing changes (the zones keep the full
+sphere there); the tilt is untouched, so the crosshair stays on the head; nothing is solved
+(lesson of 2026-09-12); the eye is still the aim, hashed, and the bots ask the same camera; the
+eye never comes within the bubble of the floor by being let out.
+**Tried** A one-metre soft edge. Where the handover's shrink and the floor's limit arrive in the
+same degree (about a metre up, a few degrees above level) the eye moved half again as fast per
+degree as the ground's handover at its fastest. Two metres brings that to about a fifth; a
+smooth minimum instead of the hard one was worse, and was reverted.
+**Not done** It sees the floor, not a wall or ledge behind: that is the drawn camera's pull-in,
+as in third person anywhere.
+**Verdict** — unplayed.

@@ -483,8 +483,8 @@ fn the_eye_is_held_under_the_cave_vault_and_nowhere_else() {
             for aim in [0u16, 16384, 32768, 49152] {
                 let look = Input::looking_at(0, aim, (pitch * 182) as i16);
                 for aloft in [Fx::ZERO, Fx::ONE] {
-                    let held = eye_under(pos, look, aloft, &Terrain::bare(range()));
-                    let free = eye(pos, look, aloft);
+                    let held = eye_under(pos, look, aloft, Fx::ZERO, &Terrain::bare(range()));
+                    let free = eye(pos, look, aloft, Fx::ZERO);
                     let cap = ceiling.sub(t::eye_under_ceiling());
                     assert!(
                         held.y.raw() <= cap.raw() || held.y == pos.y.add(t::body_height()),
@@ -504,8 +504,8 @@ fn the_eye_is_held_under_the_cave_vault_and_nowhere_else() {
             let look = Input::looking_at(0, 12345, (pitch * 182) as i16);
             let pos = at(x, 0, x / 2);
             assert_eq!(
-                eye_under(pos, look, Fx::ZERO, &Terrain::bare(pg)),
-                eye(pos, look, Fx::ZERO)
+                eye_under(pos, look, Fx::ZERO, Fx::ZERO, &Terrain::bare(pg)),
+                eye(pos, look, Fx::ZERO, Fx::ZERO)
             );
         }
     }
@@ -572,7 +572,13 @@ fn walking_under_an_island_edge_never_jumps_the_eye() {
                 let mut x = s.min.x.sub(Fx::from_int(8));
                 let mut last: Option<Fx> = None;
                 while x.raw() < s.min.x.add(Fx::ONE).raw() {
-                    let eye = eye_under(V3::new(x, y, z), look, Fx::ZERO, &Terrain::bare(a));
+                    let eye = eye_under(
+                        V3::new(x, y, z),
+                        look,
+                        Fx::ZERO,
+                        Fx::ZERO,
+                        &Terrain::bare(a),
+                    );
                     if let Some(prev) = last {
                         assert!(
                             (eye.y.raw() - prev.raw()).abs() <= most.raw(),

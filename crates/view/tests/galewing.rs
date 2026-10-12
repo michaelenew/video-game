@@ -52,6 +52,7 @@ fn aiming_eye(w: &World, at: [f32; 3], pitch: f32) -> [f32; 3] {
         V3::new(fx(at[0]), fx(at[1]), fx(at[2])),
         look,
         Fx::ZERO,
+        Fx::ZERO,
         &w.terrain(),
     );
     [

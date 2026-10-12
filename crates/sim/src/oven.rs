@@ -172,7 +172,6 @@ scalars! {
     ShieldKnockback,  "Bulwark",  "Shield knockback",           Fixed,   0,         fx(30,1);
     LeapSpeed,        "Bulwark",  "Leap speed",                 Fixed,   fx(1,1),   fx(40,1);
     LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
-    ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
     StructureAhead,   "Stones",   "Raise reach",                Fixed,   0,         fx(10,1);
     StructureHeight,  "Stones",   "Stone height",               Fixed,   fx(1,10),  fx(8,1);
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
@@ -714,20 +713,22 @@ scalars! {
     FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
     ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
     EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
-    // **The Shadow Reaver, second pass**, 2026-10-10: the plunge and its
-    // ring, the gallows, the shadow's arc and whirl, the blade discs, the
-    // sweet spot, the tumble's fan and the flip out of the dash. See
-    // `docs/design/exploration/0013_shadow_reaver_dual_blades.md`.
+    // **The Shadow Reaver**, 2026-10-10 and 2026-10-12: the aimed plunge
+    // and its ring, Gallows' blink to the shadow, the return clock and the
+    // burst on collecting it, the whirl, the throws, the sweet spot, the
+    // flip out of the dash and the tally's curve. See
+    // `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
     PlungeDive,           "Shadow Reaver", "Plunge, dives at (m/s)", Fixed, 0, fx(60,1);
-    PlungeAhead,          "Shadow Reaver", "Plunge, forward (m/s)", Fixed, 0, fx(20,1);
-    GallowsBlink,         "Shadow Reaver", "Gallows, blinks up (m)", Fixed, 0, fx(10,1);
-    GallowsHang,          "Shadow Reaver", "Gallows, hangs for", Frames, 0, 60;
+    PlungeCone,           "Shadow Reaver", "Plunge and Gallows, cone round straight down (turns)", Fixed, 0, fx(1,4);
+    GallowsBlink,         "Shadow Reaver", "Gallows, the shadow goes up (m)", Fixed, 0, fx(10,1);
+    GallowsAhead,         "Shadow Reaver", "Gallows, the shadow goes ahead (m)", Fixed, 0, fx(10,1);
+    GallowsHang,          "Shadow Reaver", "Gallows, hangs after the blink", Frames, 0, 60;
     GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
-    ArcWaits,             "Shadow Reaver", "Shadow arc, hangs for", Frames, 0, 300;
-    ArcFlight,            "Shadow Reaver", "Shadow arc, flight", Frames, 1, 60;
-    ArcBulge,             "Shadow Reaver", "Shadow arc, bow of the flight (m)", Fixed, 0, fx(10,1);
-    ArcAhead,             "Shadow Reaver", "Shadow arc, forward (m)", Fixed, 0, fx(15,1);
-    ArcUp,                "Shadow Reaver", "Shadow arc, up (m)", Fixed, 0, fx(10,1);
+    ShadowReturn,         "Shadow Reaver", "Shadow, comes home after a send", Frames, 1, 900;
+    ShadowCollectWithin,  "Shadow Reaver", "Shadow, collected standing within (m)", Fixed, 0, fx(5,1);
+    BurstDamage,          "Shadow Reaver", "Burst, damage", Int, 0, 300;
+    BurstRadius,          "Shadow Reaver", "Burst, radius (m)", Fixed, fx(1,2), fx(6,1);
+    BurstLife,            "Shadow Reaver", "Burst, seen for", Frames, 1, 60;
     WhirlLasts,           "Shadow Reaver", "Whirl, lasts", Frames, 1, 300;
     WhirlEvery,           "Shadow Reaver", "Whirl, cuts every", Frames, 1, 60;
     ShadowRingSpeed,      "Shadow Reaver", "Plunge ring, speed (m/s)", Fixed, fx(1,1), fx(60,1);
@@ -739,10 +740,11 @@ scalars! {
     DiscThickness,        "Shadow Reaver", "Blade ring and spin, half-thickness (m)", Fixed, fx(1,20), fx(2,1);
     ReaveSweet,           "Shadow Reaver", "Reave, sweet spot radius (m)", Fixed, 0, fx(2,1);
     ReaveSweetDamage,     "Shadow Reaver", "Reave, sweet spot damage (x)", Fixed, fx(1,1), fx(3,1);
-    TumbleSpread,         "Shadow Reaver", "Tumble, fan spread (turns)", Fixed, 0, fx(1,8);
-    TumbleFlight,         "Shadow Reaver", "Tumble, blades fly for", Frames, 1, 60;
     DashJumpHop,          "Shadow Reaver", "Dash jump, extra hop (m/s)", Fixed, 0, fx(15,1);
     DashFlip,             "Shadow Reaver", "Dash jump, flip lasts", Frames, 1, 60;
+    ThrownSpread,         "Shadow Reaver", "Thrown blades, fan spread (turns)", Fixed, 0, fx(1,8);
+    ThrownSpeed,          "Shadow Reaver", "Thrown blades, fly at (m/s)", Fixed, fx(1,1), fx(80,1);
+    MarkCurve,            "Shadow Reaver", "Cash-in, extra per mark squared (x)", Fixed, 0, fx(1,1);
     // **The Bulwark on three clicks**, 2026-10-10: the ram, the bounce, the
     // battery spent on height, the sail and the step. See
     // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
@@ -886,6 +888,16 @@ view_knobs! {
     AloftCurveY1,   "Airborne framing, curve: leaves lift", Fixed, 0, fx(1,1);
     AloftCurveX2,   "Airborne framing, curve: arrives",     Fixed, 0, fx(1,1);
     AloftCurveY2,   "Airborne framing, curve: arrives lift",Fixed, 0, fx(1,1);
+    // **The eye's bubble** (2026-10-12), appended for the same reason. Off the
+    // ground, looking up, the camera is let back out of the head to the
+    // sphere's own radius as far as the floor under the fighter allows: the
+    // eye keeps `Eye bubble` clear of it (the hard edge), and the first `soft`
+    // metres of room ease the pull-back in (the soft edge). How fast the room
+    // may grow is the third, so stepping off a ledge eases the camera back
+    // rather than throwing it. See `camera::clear_step` and `camera::ball`.
+    EyeBubble,      "Eye bubble, kept off the floor (m)", Fixed, 0, fx(4,1);
+    EyeBubbleSoft,  "Eye bubble, soft edge (m)",          Fixed, fx(1,10), fx(6,1);
+    EyeBubbleRate,  "Eye bubble, most it opens a frame (m)", Fixed, fx(1,100), fx(2,1);
 }
 
 /// Counted from the table rather than written down, the same way

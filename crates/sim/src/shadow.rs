@@ -97,26 +97,13 @@ pub fn step(p: &mut Player) {
             // fixed offset reads as a decal on the floor.
             shadow.pos = ease_to(shadow.pos, heel(p));
         }
-        Ghost::Casting { from, to, age, arc } => {
-            let span = if arc {
-                t::arc_flight()
-            } else {
-                t::shadow_send_frames()
-            };
+        Ghost::Casting { from, to, age } => {
+            let span = t::shadow_send_frames();
             // The frame it *will* be on, not the one it was: a flight whose
             // first step is a no-op reads as a hitch before the throw.
             let next = age.saturating_add(1);
             let through = Fx::ratio(next.min(span) as i32, span.max(1) as i32);
             shadow.pos = math::lerp3(from, to, math::ease_out(through));
-            // **The Shadow arc goes forward first and up after** (2026-10-10):
-            // out fast along the floor, rising slowly and then quickly, bowed
-            // up by `arc_bulge` at its middle. A rising cut -- its slash meets
-            // a body standing in front of her on the way out, and then it is
-            // up there hanging.
-            if arc {
-                let rise = math::lerp(from.y, to.y, through.mul(through));
-                shadow.pos.y = rise.add(t::arc_bulge().mul(math::hump(through)));
-            }
             // Out fast, and then it simply stops. The pause at the end of the
             // throw is the whole point of the ability: what the rest of the kit
             // is aimed at is a second body standing still somewhere useful.
@@ -128,29 +115,34 @@ pub fn step(p: &mut Player) {
                     from,
                     to,
                     age: next,
-                    arc,
                 }
             };
         }
         Ghost::Waiting => {
-            // **On a clock** (2026-10-10): the Whirl's spin and the Shadow
-            // arc's hang are over when this runs out, and the shadow comes
-            // home through whatever is between, as a recall did. Only the
-            // send leaves it standing until she moves it or fetches it --
-            // and the send can only put it on ground she could walk to, so
-            // nothing on a clock is ever left on a ledge she cannot reach.
+            // **On a clock** (2026-10-12): every send puts the shadow on
+            // `tuning::shadow_return`, and when it runs out the shadow comes
+            // home through whatever is between, cutting. Another send starts
+            // it over. It replaced the leash: from play, "I find myself in
+            // combat trying to figure out how to get my shadow back".
             if shadow.hang > 0 {
                 shadow.hang -= 1;
                 if shadow.hang == 0 {
                     shadow.doing = Ghost::Returning { struck: 0 };
                 }
             }
-            // The leash. Walk out of it and the shadow comes and finds you,
-            // cutting whatever is between the two of you -- which is the
-            // mechanic's own description of itself, and the reason straying is
-            // a decision rather than a mistake.
-            if shadow.pos.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
-                shadow.doing = Ghost::Returning { struck: 0 };
+            // **And she can simply go and stand on it**: within
+            // `tuning::shadow_collect_within`, it is hers again -- and that
+            // is a collection, so it bursts. Not while it is still flying,
+            // or every send would be collected at her heel as it left.
+            // Nor mid-dash: the dash's own arrival collects it, on the shadow,
+            // with the carry the dash jump leaves from.
+            if shadow.pos.sub(p.pos).len().raw() <= t::shadow_collect_within().raw()
+                && matches!(shadow.doing, Ghost::Waiting)
+                && shadow.dash == 0
+            {
+                shadow.doing = Ghost::Attending;
+                shadow.hang = 0;
+                shadow.collected = true;
             }
         }
         Ghost::Returning { struck } => {
@@ -446,25 +438,48 @@ pub fn order(p: &mut Player, to: Option<V3>) -> Option<Order> {
         return Some(Order::Refused);
     };
     let was_out = shadow.is_out();
-    throw(p, to, false, 0);
+    throw(p, to, t::shadow_return());
     Some(if was_out { Order::Moved } else { Order::Sent })
 }
 
 /// Send the shadow flying from where it is to `to`, and say how long it will
-/// wait there before it comes home on its own (`hang`; zero waits). `arc`
-/// bows the flight up over the straight line -- the Shadow arc. The one way
-/// the shadow is ever put anywhere: the send, the Whirl and the arc all come
-/// through here.
-pub fn throw(p: &mut Player, to: V3, arc: bool, hang: u16) {
+/// wait there before it comes home on its own (`hang`; zero waits). The one
+/// way the shadow is ever put anywhere: the send, the Whirl and Gallows all
+/// come through here.
+pub fn throw(p: &mut Player, to: V3, hang: u16) {
     let Some(mut shadow) = of(p) else { return };
     shadow.doing = Ghost::Casting {
         from: shadow.pos,
         to,
         age: 0,
-        arc,
     };
     shadow.hang = hang;
     put(p, shadow);
+}
+
+/// **She has the shadow back because she went and got it**: it is at her
+/// shoulder from this frame, and the burst is owed (`take_collected`). The
+/// dash's arrival, standing on it, and Gallows' blink to it all come here.
+pub fn collect(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    if shadow.is_out() {
+        shadow.doing = Ghost::Attending;
+        shadow.hang = 0;
+        shadow.collected = true;
+    }
+    put(p, shadow);
+}
+
+/// Was the shadow collected this frame? Answers once: the burst is spent by
+/// asking. See `state::World::burst_the_collected`.
+pub fn take_collected(p: &mut Player) -> bool {
+    let Some(mut shadow) = of(p) else {
+        return false;
+    };
+    let was = shadow.collected;
+    shadow.collected = false;
+    put(p, shadow);
+    was
 }
 
 /// Has the return already caught this fighter?
@@ -523,8 +538,16 @@ pub fn dash_is_asked_for(
     // forward dodge while it is going is her following it -- and it cancels
     // what is left of the throw. See `state::follow_the_shadow`.
     let flying = matches!(shadow.doing, Ghost::Casting { .. });
+    // **Only a dash that can arrive is offered** (2026-10-12): it is the
+    // dodge, aimed, and does not outlive it, so a shadow further than one
+    // dodge's worth of dash leaves her the ordinary dodge. There used to be a
+    // leash that kept the shadow inside that; the return clock replaced it.
+    let reach = t::shadow_dash_speed()
+        .mul(DT)
+        .mul(Fx::from_int(t::dodge_frames() as i32));
     forward
         && shadow.is_out()
+        && shadow.pos.sub(p.pos).len().raw() <= reach.raw()
         && (flying || aim::pointing_at(who, input, shadow.pos, t::shadow_lock_cone(), scene))
         && aim::clear_between(p.pos, shadow.pos, scene)
 }
@@ -754,6 +777,8 @@ fn step_her_dash(p: &mut Player) {
         shadow.shift_spent = true;
         if shadow.is_out() {
             shadow.doing = Ghost::Attending;
+            shadow.hang = 0;
+            shadow.collected = true;
         }
     }
     put(p, shadow);
@@ -797,10 +822,19 @@ pub fn fade_mark(p: &mut Player) {
     }
 }
 
-/// What a swing that spends `marks` is worth, as a multiple of itself: one,
-/// plus `mark_worth` a mark.
+/// What a finisher that spends `marks` is worth, as a multiple of itself:
+/// one, plus `mark_worth` a mark, plus `mark_curve` for each mark squared.
+///
+/// **Each mark is worth more than the one before** (2026-10-12, from play:
+/// "consuming 4 to 5 stacks should get relatively more damage than going 3
+/// to 4"): the square is what makes holding off for the last mark the play,
+/// and the poke-into-assassinate combo a thing to master rather than a
+/// thing to spam.
 pub fn cash_multiple(marks: u8) -> Fx {
-    Fx::ONE.add(t::mark_worth().mul(Fx::from_int(marks as i32)))
+    let m = Fx::from_int(marks as i32);
+    Fx::ONE
+        .add(t::mark_worth().mul(m))
+        .add(t::mark_curve().mul(m).mul(m))
 }
 
 /// Is this a full tally -- the one that also staggers?

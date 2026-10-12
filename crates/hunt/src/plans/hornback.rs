@@ -367,7 +367,7 @@ impl Plan for Hornback {
             let to = at.sub(me.pos);
             let yaw = atan2_turns(to.z, to.x);
             let aim = turns_to_aim(yaw.sub(me.carry_yaw));
-            let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, middle);
+            let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, me.clear, middle);
             (yaw, aim, pitch)
         };
         let (bull_yaw, bull_aim, bull_pitch) = look_at(bull.pos, bull.middle);
@@ -630,7 +630,8 @@ impl Plan for Hornback {
                         self.cooldown = SWING_GAP;
                         let floor = V3::new(head.x, Fx::ZERO, head.z);
                         let (_, aim, _) = look_at(floor, floor);
-                        let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, floor);
+                        let pitch =
+                            sim::aim::look_onto_closely(me.pos, aim, me.aloft, me.clear, floor);
                         return Input::looking_at(Input::MECHANIC, aim, pitch);
                     }
                 }
@@ -708,7 +709,7 @@ impl Plan for Hornback {
                         .pos
                         .add(flat(bull.pos.sub(me.pos)).normalized().scale(STONE_AHEAD));
                     let (_, aim, _) = look_at(spot, spot);
-                    let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, spot);
+                    let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, me.clear, spot);
                     return Input::looking_at(Input::MECHANIC, aim, pitch);
                 }
                 self.intent = STEP_OUT;

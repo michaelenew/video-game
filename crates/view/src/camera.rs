@@ -379,7 +379,18 @@ impl CameraRig {
 
         let zones = Zones::tuned();
         let pitch = pitch.clamp(-zones.down_limit, zones.up_limit);
-        let sky = zones.first_person(pitch);
+        // How far into the head the arm has gone -- less whatever the
+        // simulation's bubble has let it back out of the head again, off the
+        // ground (`sim::camera::let_out_share`). An eye let back out is an eye
+        // in third person: the floor and the walls behind it are its business
+        // again, exactly as they are looking level.
+        let let_out = sim::camera::let_out_share(
+            sim::Input::looking_at(0, 0, crate::pitch_from_radians(pitch)).pitch_turns(),
+            fx_of(around.aloft),
+            fx_of(around.clear),
+        )
+        .to_f32_for_render();
+        let sky = zones.first_person(pitch) * (1.0 - let_out);
 
         // **Where the eye goes is not decided here.** It is decided by
         // `sim::camera`, because the crosshair is the aim and the aim is a ray
@@ -399,7 +410,13 @@ impl CameraRig {
         let stood = sim::V3::new(fx_of(self.focus[0]), fx_of(feet), fx_of(self.focus[2]));
         // Held under a cave's vault exactly as the aimed-from eye is, so the
         // two stay one point there too.
-        let eye = sim::camera::eye_under(stood, look, fx_of(around.aloft), &around.arena);
+        let eye = sim::camera::eye_under(
+            stood,
+            look,
+            fx_of(around.aloft),
+            fx_of(around.clear),
+            &around.arena,
+        );
         let (back, up) = (
             -((eye.x.to_f32_for_render() - self.focus[0]) * along[0]
                 + (eye.z.to_f32_for_render() - self.focus[2]) * along[1]),
@@ -650,6 +667,11 @@ pub struct Surroundings<'a> {
     /// Zero is the default, which is the grounded framing and is exactly what
     /// every fixture that never leaves the floor wants.
     pub aloft: f32,
+    /// How high the fighter's feet are off the floor under them, as the camera
+    /// may know it -- **the simulation's own number** too
+    /// (`sim::state::Player::clear`), for the same reason as `aloft`: it moves
+    /// the eye, so it moves the aim. Zero is the default, standing.
+    pub clear: f32,
     /// How far the ground has turned under the fighter since the match began,
     /// in radians -- `sim::state::Player::carry_yaw`, carried across by
     /// `view::interp`.
@@ -679,6 +701,7 @@ impl Default for Surroundings<'_> {
             beasts: &[],
             aboard: false,
             aloft: 0.0,
+            clear: 0.0,
             carried: 0.0,
             arena: sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
         }

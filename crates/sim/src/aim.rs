@@ -260,7 +260,7 @@ pub fn standing_middle(ground: V3, height: Fx) -> V3 {
 /// the crosshair is a question about the world, not about the move asking.
 pub fn stands_at(who: usize, look: Input, scene: &Scene) -> Stand {
     let caster = &scene.players[who];
-    let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
+    let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, caster.clear, scene.arena);
     let dir = look.look_dir();
     let near = near_clip(eye, dir, origin(caster.pos));
     let limit = nearest_terrain(eye, dir, near, Fx::MAX, scene, false).map_or(Fx::MAX, |(d, _)| d);
@@ -519,7 +519,7 @@ pub fn sight_for_attack(who: usize, look: Input, reach: Fx, scene: &Scene) -> Si
 /// The raycast itself; `lids` is whether the top of a stone counts as ground.
 fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> Sighted {
     let caster = &scene.players[who];
-    let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
+    let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, caster.clear, scene.arena);
     let dir = look.look_dir();
     let cast = origin(caster.pos);
 
@@ -775,7 +775,8 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
         // goes through whoever is on that spot instead of burying itself in
         // the dirt. See [`standing_middle`].
         Met::Ground => {
-            let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
+            let eye =
+                crate::camera::eye_under(caster.pos, look, caster.aloft, caster.clear, scene.arena);
             let dir = look.look_dir();
             let near = near_clip(eye, dir, from);
             let stand = stands_along(who, eye, dir, near, seen.dist, scene);
@@ -1010,6 +1011,7 @@ pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) ->
         scene.players[who].pos,
         look,
         scene.players[who].aloft,
+        scene.players[who].clear,
         scene.arena,
     );
     let column = t::body_radius().add(slack);
@@ -1040,8 +1042,8 @@ pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) ->
 /// and a few rounds agree to within a unit of the wire's angle. The yaw is
 /// taken as given rather than solved for, since the eye sits straight behind
 /// the body along it -- and a point directly underfoot has no yaw of its own.
-pub fn look_onto(pos: V3, aim: u16, aloft: Fx, at: V3) -> i16 {
-    settle_look(pos, aim, aloft, at, LOOK_ROUNDS)
+pub fn look_onto(pos: V3, aim: u16, aloft: Fx, clear: Fx, at: V3) -> i16 {
+    settle_look(pos, aim, aloft, clear, at, LOOK_ROUNDS)
 }
 
 /// [`look_onto`], settled for as many rounds as a steep look needs.
@@ -1053,19 +1055,24 @@ pub fn look_onto(pos: V3, aim: u16, aloft: Fx, at: V3) -> i16 {
 /// degrees down six rounds leave the crosshair a metre above the point -- over
 /// a knee-high body entirely. `critcheck` puts the crosshair on a gnawer at
 /// three metres, which is exactly there, so it asks this.
-pub fn look_onto_closely(pos: V3, aim: u16, aloft: Fx, at: V3) -> i16 {
-    settle_look(pos, aim, aloft, at, LOOK_ROUNDS_CLOSELY)
+pub fn look_onto_closely(pos: V3, aim: u16, aloft: Fx, clear: Fx, at: V3) -> i16 {
+    settle_look(pos, aim, aloft, clear, at, LOOK_ROUNDS_CLOSELY)
 }
 
 /// Rounds of [`look_onto_closely`]: enough that the steepest look the camera
 /// allows has stopped moving by a unit of the wire's angle.
 const LOOK_ROUNDS_CLOSELY: usize = 32;
 
-fn settle_look(pos: V3, aim: u16, aloft: Fx, at: V3, rounds: usize) -> i16 {
+fn settle_look(pos: V3, aim: u16, aloft: Fx, clear: Fx, at: V3, rounds: usize) -> i16 {
     let (down, up) = crate::camera::limits();
     let mut pitch = Fx::ZERO;
     for _ in 0..rounds {
-        let eye = crate::camera::eye(pos, Input::looking_at(0, aim, pitch.raw() as i16), aloft);
+        let eye = crate::camera::eye(
+            pos,
+            Input::looking_at(0, aim, pitch.raw() as i16),
+            aloft,
+            clear,
+        );
         let to = at.sub(eye);
         pitch = crate::math::atan2_turns(to.y, to.flat_len()).clamp(down.neg(), up);
     }
@@ -1097,6 +1104,7 @@ pub fn pointing_at_disc(
         scene.players[who].pos,
         look,
         scene.players[who].aloft,
+        scene.players[who].clear,
         scene.arena,
     );
     crate::math::ray_hits_cylinder(eye, look.look_dir(), at, radius, height).is_some()
@@ -1294,7 +1302,7 @@ pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -
 /// with the ledge between them.
 pub fn on_screen(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
     let p = &scene.players[who];
-    let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
+    let eye = crate::camera::eye_under(p.pos, look, p.aloft, p.clear, scene.arena);
     let to = at.sub(eye);
     if crate::math::wide_len(to).raw() <= 0 {
         return true;
@@ -1311,10 +1319,12 @@ pub fn on_screen(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene)
 /// built here, from `camera::eye_under`, as every eye the simulation aims
 /// from is. Level, because the facing carries no pitch: a 40° cone round a
 /// level look from a fighter's eye takes in a body standing anywhere from a
-/// stride out to across the arena.
+/// stride out to across the arena. And level is why no height off the floor
+/// is asked for: the camera's bubble only lets an eye out of the head looking
+/// up, and looking level it is already at the sphere's full radius.
 pub fn in_view_from(pos: V3, aloft: Fx, yaw: Fx, at: V3, half_angle: Fx, scene: &Scene) -> bool {
     let look = Input::aimed(0, (yaw.raw() as u32 & 0xFFFF) as u16);
-    let eye = crate::camera::eye_under(pos, look, aloft, scene.arena);
+    let eye = crate::camera::eye_under(pos, look, aloft, Fx::ZERO, scene.arena);
     let to = at.sub(eye);
     if crate::math::wide_len(to).raw() <= 0 {
         return true;
@@ -1329,7 +1339,7 @@ pub fn in_view_from(pos: V3, aloft: Fx, yaw: Fx, at: V3, half_angle: Fx, scene: 
 /// from the same eye as [`in_view_from`], so "the edge" means one thing.
 pub fn off_look(pos: V3, aloft: Fx, yaw: Fx, at: V3, scene: &Scene) -> Fx {
     let look = Input::aimed(0, (yaw.raw() as u32 & 0xFFFF) as u16);
-    let eye = crate::camera::eye_under(pos, look, aloft, scene.arena);
+    let eye = crate::camera::eye_under(pos, look, aloft, Fx::ZERO, scene.arena);
     let to = at.sub(eye);
     let want = crate::math::atan2_turns(to.z, to.x);
     crate::math::wrap_turns(want.sub(yaw)).abs()
@@ -2107,8 +2117,8 @@ pub fn walk_toward(from: V3, to: V3, scene: &Scene) -> Option<V3> {
     })
 }
 
-/// **Where the Shadow arc hangs the shadow** (2026-10-10): `ahead` along her
-/// flat facing and `up` above her feet. Nobody aims it -- the move is a
+/// **Where Gallows sends the shadow up** (2026-10-12; the Shadow arc's,
+/// retired, before it): `ahead` along her flat facing and `up` above her feet. Nobody aims it -- the move is a
 /// throw forward and up, the way Landfall's slab is a fixed distance ahead
 /// ([`planted_ahead`]) -- so it is a facing and two lengths, and it lives
 /// here for the reason that one does.
@@ -2116,6 +2126,33 @@ pub fn hung_ahead(pos: V3, facing: V3, ahead: Fx, up: Fx) -> V3 {
     let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
     pos.add(flat.scale(ahead))
         .add(V3::new(Fx::ZERO, up, Fx::ZERO))
+}
+
+/// **Which way a plunge goes** (2026-10-12): along `dir` -- the swing's line,
+/// which in the air follows the camera's pitch exactly -- held inside a cone
+/// of `cone` turns round straight down. Pointed inside the cone it goes where
+/// the crosshair is; pointed shallower, it goes down the cone's edge on the
+/// same bearing. Straight down when there is no bearing at all.
+///
+/// The Reaver's Plunge and Gallows. The owner's brief: the aerial left click
+/// lets you choose a direction, but not "outside of a 45 degree cone
+/// downward" -- a dive along the look with no limit would be a dash, which is
+/// the Reave's.
+pub fn plunge_dir(dir: V3, cone: Fx) -> V3 {
+    let down = V3::new(Fx::ZERO, Fx::ONE.neg(), Fx::ZERO);
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z);
+    let across = flat.len();
+    if across.raw() <= 0 {
+        return down;
+    }
+    let edge = crate::fixed::cos_turns(cone);
+    // Already inside the cone: how far down it points is at least the cone's.
+    if dir.y.neg().raw() >= edge.raw() {
+        return dir.normalized();
+    }
+    flat.scale(Fx::ONE.div(across))
+        .scale(crate::fixed::sin_turns(cone))
+        .add(down.scale(edge))
 }
 
 /// Drop a point onto whatever it would stand on.

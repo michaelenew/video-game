@@ -405,7 +405,7 @@ fn best_case(m: &Move) -> i32 {
             // (`moves::puts_out`), never by a row's code. Each is the move's
             // own cut; the Whirl's repeats are the shadow's, not the move's.
             | EffectKind::ShadowWhirl
-            | EffectKind::ShadowSlash
+            | EffectKind::ShadowBurst
             | EffectKind::ShadowFan
             | EffectKind::ShadowRing,
         )

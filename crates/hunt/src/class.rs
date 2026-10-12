@@ -1361,7 +1361,7 @@ impl Hands {
             yaw = camera.add(off);
         }
         let wire = turns_to_aim(yaw.sub(me.carry_yaw));
-        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, me.clear, at);
         Input::looking_at(bits, wire, pitch)
     }
 

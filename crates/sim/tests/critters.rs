@@ -483,7 +483,13 @@ fn one_gnat(class: Class, metres: i32) -> (World, Input) {
         w.advance([Input::looking_at(0, 0, 0), Input::default()]);
     }
     let middle = w.critters[0].body(sp).middle();
-    let pitch = aim::look_onto_closely(w.players[0].pos, 0, w.players[0].aloft, middle);
+    let pitch = aim::look_onto_closely(
+        w.players[0].pos,
+        0,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     (w, Input::looking_at(0, 0, pitch))
 }
 
@@ -773,7 +779,7 @@ fn a_bite_from_behind(back: bool, late: Option<u16>) -> bool {
         Input::looking_at(
             0,
             0,
-            aim::look_onto_closely(w.players[0].pos, 0, Fx::ZERO, up),
+            aim::look_onto_closely(w.players[0].pos, 0, Fx::ZERO, Fx::ZERO, up),
         )
     };
     w.advance([look, Input::default()]);

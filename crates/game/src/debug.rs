@@ -287,7 +287,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             }
             // The Reaver's Whirl and arc: the ball round the shadow's middle
             // they cut in. The Tumble's fan: each blade's ball.
-            EffectKind::ShadowWhirl | EffectKind::ShadowSlash => {
+            EffectKind::ShadowWhirl => {
                 gizmos.sphere(
                     Isometry3d::from_translation(
                         at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
@@ -296,8 +296,19 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
+            // The burst: the disc round her waist it cuts in.
+            EffectKind::ShadowBurst => {
+                gizmos.circle(
+                    Isometry3d::new(
+                        at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
+                        Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+                    ),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
             EffectKind::ShadowFan => {
-                for blade in 0..sim::effects::FAN_BLADES {
+                for blade in 0..sim::moves::reaver::blades(effect.slot) {
                     gizmos.sphere(
                         Isometry3d::from_translation(crate::fx3(effect.fan_blade_at(blade))),
                         effect.field_radius().to_f32_for_render(),

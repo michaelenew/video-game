@@ -277,7 +277,6 @@ fn main() {
                     place_champion_trails,
                     place_pips,
                     place_hexes,
-                    place_spins,
                 ),
                 beast::place,
                 drive_camera,
@@ -1562,20 +1561,6 @@ const WING_SLICES: usize = 12;
 #[derive(Component)]
 struct MarkMesh(usize);
 
-/// One of the blades drawn on the edge of a Reaver's spun disc -- the Blade
-/// ring and the Blade spin (2026-10-10) -- hers, or her shadow's copy of it.
-/// Placed off `sim::state::hitbox`, the disc the hit test uses, so the blades
-/// are drawn where they cut.
-#[derive(Component)]
-struct SpinMesh {
-    owner: usize,
-    copy: bool,
-    index: usize,
-}
-
-/// How many blades a spun disc is drawn as. Presentation, not a rule.
-const SPIN_BLADES: usize = 6;
-
 /// The Blood mage's scythe.
 ///
 /// One per fighter, because the class is picked at runtime and can change
@@ -2151,21 +2136,6 @@ fn setup(
             Visibility::Hidden,
             MarkMesh(owner),
         ));
-    }
-    // The Reaver's spun blades: a ring of them on the edge of the Blade ring's
-    // and the Blade spin's disc, hers and her shadow's copy.
-    for owner in 0..MAX_PLAYERS {
-        for copy in [false, true] {
-            for index in 0..SPIN_BLADES {
-                commands.spawn((
-                    Mesh3d(unit.clone()),
-                    MeshMaterial3d(look.shade.clone()),
-                    Transform::default(),
-                    Visibility::Hidden,
-                    SpinMesh { owner, copy, index },
-                ));
-            }
-        }
     }
     // The Blood mage's scythe: a bar from her grip to the head of the blade.
     // Shade-skinned rather than blood: it is iron, and the blood is what it
@@ -3023,37 +2993,6 @@ fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut V
     }
 }
 
-/// Put the spun blades on the edge of every disc out this frame.
-fn place_spins(sim: Res<Sim>, mut meshes: Query<(&SpinMesh, &mut Transform, &mut Visibility)>) {
-    for (mesh, mut tf, mut vis) in meshes.iter_mut() {
-        let Some(at) = spin_spot(&sim.cur, mesh.owner, mesh.copy, mesh.index) else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        *vis = Visibility::Inherited;
-        tf.translation = at;
-        tf.scale = Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE);
-    }
-}
-
-/// Where spun blade `index` of `owner`'s disc is, or `None` if no thin disc
-/// is out -- hers, or with `copy` her shadow's echo of it. On the disc's own
-/// edge and its own height, turning on the simulation's frame.
-fn spin_spot(w: &World, owner: usize, copy: bool, index: usize) -> Option<Vec3> {
-    let p = if copy {
-        sim::shadow::echo_body(&w.players[owner])?
-    } else {
-        w.players[owner]
-    };
-    let hb = sim::state::hitbox(&p)?;
-    if hb.band.raw() <= 0 {
-        return None;
-    }
-    let r = hb.radius.to_f32_for_render() * 0.85;
-    let turn = w.frame as f32 * 0.9 + index as f32 * std::f32::consts::TAU / SPIN_BLADES as f32;
-    Some(fx3(hb.from) + Vec3::new(turn.cos(), 0.0, turn.sin()) * r)
-}
-
 /// Put the hex orbs over whoever carries a hex, in its force's colour.
 fn place_hexes(sim: Res<Sim>, mut meshes: Query<(&HexMesh, &mut Transform, &mut Visibility)>) {
     for (mesh, mut tf, mut vis) in meshes.iter_mut() {
@@ -3547,18 +3486,26 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             0.0,
             0.14,
         )),
-        // The Reaver's second pass (2026-10-10). The Whirl and the arc's cut
-        // are blades spun round the shadow's middle, live -- flat discs, the
-        // lotus's shuriken -- on a ring inside the ball they cut with; the
-        // Tumble's fan is its three blades where they are; the Plunge's ring
-        // is pieces of shadow on its live radius, the fire ring's shape.
-        EffectKind::ShadowWhirl | EffectKind::ShadowSlash if part < SPUN_BLADES => {
+        // The Reaver's (2026-10-10, 2026-10-12). The Whirl is blades spun round
+        // the shadow's middle, live -- flat discs, the lotus's shuriken -- on a
+        // ring inside the ball it cuts with, and the burst the same round her
+        // own waist, flying out to its edge; the thrown blades are where they
+        // are; the Plunge's ring is pieces of shadow on its live radius, the
+        // fire ring's shape.
+        EffectKind::ShadowWhirl | EffectKind::ShadowBurst if part < SPUN_BLADES => {
             let fast = if effect.kind == EffectKind::ShadowWhirl {
                 0.55
             } else {
                 0.9
             };
-            let r = effect.field_radius().to_f32_for_render() * 0.75;
+            // The burst flies out to its disc's edge over its short life; the
+            // whirl spins inside its ball.
+            let r = if effect.kind == EffectKind::ShadowBurst {
+                let out = (effect.age as f32 / effect.life.max(1) as f32 * 3.0).min(1.0);
+                effect.field_radius().to_f32_for_render() * (0.35 + 0.55 * out)
+            } else {
+                effect.field_radius().to_f32_for_render() * 0.75
+            };
             let turn =
                 effect.age as f32 * fast + part as f32 * std::f32::consts::TAU / SPUN_BLADES as f32;
             let mid = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
@@ -3569,7 +3516,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 scale: Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE),
             })
         }
-        EffectKind::ShadowFan if part < sim::effects::FAN_BLADES => {
+        EffectKind::ShadowFan if part < sim::moves::reaver::blades(effect.slot) => {
             let r = effect.field_radius().to_f32_for_render();
             Some(Piece {
                 shape: Shape::Column,
@@ -4186,7 +4133,10 @@ fn rehearsal(since: u32, w: &World) -> SimInput {
 /// the raycast run backwards, and the same function the sparring bot aims with.
 fn looking_at_her_feet(w: &World) -> (u16, i16) {
     let stood = w.players[0].pos;
-    (0, sim::aim::look_onto(stood, 0, sim::Fx::ZERO, stood))
+    (
+        0,
+        sim::aim::look_onto(stood, 0, sim::Fx::ZERO, sim::Fx::ZERO, stood),
+    )
 }
 
 /// `DEMO=1` drives player one from a script instead of the keyboard. Used to
@@ -4755,6 +4705,7 @@ fn drive_camera(
             // Interpolated with everything else the fighter is drawn from, so
             // the framing does not step at the simulation's cadence.
             aloft: frame.players[me].aloft,
+            clear: frame.players[me].clear,
             // Where the ground has turned them. `look.yaw` is the mouse and
             // only the mouse; the simulation has already added this to their
             // facing and to the ray the crosshair draws, so the camera has to

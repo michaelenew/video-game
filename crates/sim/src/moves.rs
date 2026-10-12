@@ -308,13 +308,6 @@ pub enum Shape {
     /// The geometry is [`crate::moves::wing`], and the last active frame is not
     /// a section at all: see [`Wing::tip`].
     Wing,
-    /// **A thin disc round the caster's own middle**: everything within
-    /// `radius` across the floor and within `tuning::disc_thickness` above or
-    /// below her waist. Blades spun round the body, which is a disc and not a
-    /// ball -- a ball that reached three metres sideways reached three metres
-    /// down too, and in the air that is somebody standing on the floor under
-    /// her. The Reaver's Blade ring and Blade spin (2026-10-10).
-    Disc,
 }
 
 impl Shape {
@@ -633,12 +626,12 @@ const NAMES: [&[&str]; 6] = [
         "Guillotine",
         "Send shadow",
         "Plunge",
-        "Blade spin",
+        "Fan",
         "Whirl",
         "Gallows",
         "Tumble",
-        "Shadow arc",
-        "Blade ring",
+        "Rising whirl",
+        "Shuriken",
     ],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
     // Seven: four on the ground, and a whole row of three off it. See
@@ -867,24 +860,26 @@ pub mod champion {
 // The Shadow Reaver's eleven
 // ---------------------------------------------------------------------------
 
-/// The Shadow Reaver on three clicks, second pass (2026-10-10):
+/// The Shadow Reaver on three clicks, third pass (2026-10-12):
 ///
 /// ```text
-///                     left: finishers   middle: neutral   right: the shadow
-///   on foot           Reave             Blade ring        Send (moves it)
-///   in the air        Plunge            Blade spin        Whirl
-///   leaving the floor Gallows           Tumble            Shadow arc
+///                     left: finishers   middle: thrown blades  right: the shadow
+///   on foot           Reave             Shuriken (and the      Send (moves it)
+///                                       shadow throws one too)
+///   in the air        Plunge            Fan                    Whirl
+///   leaving the floor Gallows           Tumble                 Rising whirl
 ///
 ///   Q  Guillotine lotus               E  Executioner
 /// ```
 ///
-/// Tumble is also space and middle click **in the air**, once a trip off the
-/// ground: it is her double jump. The first four rows are the four she has
-/// always had, in their slots; the seven after them were reworked in place.
-/// See `docs/design/exploration/0013_shadow_reaver_dual_blades.md`.
+/// Gallows and the Tumble are also space and their click **in the air**, once
+/// a trip off the ground. **Only the finishers cash the tally**; everything the
+/// shadow's blades do -- the throws, the whirl, the copies, the lotus, the
+/// burst when she collects the shadow -- puts marks on. See
+/// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
 pub mod reaver {
     /// Left click on the floor: a short dash forward, and the blade's tip is
-    /// a sweet spot.
+    /// a sweet spot. A finisher: it cashes the tally.
     pub const REAVE: u8 = 0;
     /// `E`: the big overhead.
     pub const EXECUTIONER: u8 = 1;
@@ -892,26 +887,29 @@ pub mod reaver {
     /// Right click on the floor: the shadow to the crosshair -- from wherever
     /// it is, so pressed again it moves rather than coming home.
     pub const SEND: u8 = 3;
-    /// Left click in the air: a short dive, slightly forward, blade first, and
-    /// a ring of shadow out from where she lands.
+    /// Left click in the air: a dive along the crosshair, held inside a cone
+    /// round straight down, and a ring of shadow out from where she lands. A
+    /// finisher.
     pub const PLUNGE: u8 = 4;
-    /// Middle click in the air: a very fast spin, a thin disc of blades round
-    /// her with a long reach and little weight.
-    pub const BLADE_SPIN: u8 = 5;
-    /// Right click in the air: the shadow sent a short way to the crosshair,
-    /// where it whirls, cutting, and then comes home on its own.
+    /// Middle click in the air: a level fan of thrown blades, and a moment's
+    /// stall in the air.
+    pub const FAN: u8 = 5;
+    /// Right click in the air: the shadow sent to the crosshair, where it
+    /// whirls, cutting. One set of blades: pressed again it moves them and
+    /// starts their clock again.
     pub const WHIRL: u8 = 6;
-    /// Space and left click: up a short way in a blink, and down in an arc,
-    /// blade first. Heavy, and a long recovery.
+    /// Space and left click, off the floor or once in the air: the shadow goes
+    /// up, she is where it is -- collecting it -- and plunges as the Plunge
+    /// does, heavier. A finisher.
     pub const GALLOWS: u8 = 7;
     /// Space and middle click, off the floor or once in the air: a tumbling
     /// double jump, throwing a fan of blades forward and down.
     pub const TUMBLE: u8 = 8;
-    /// Space and right click: the shadow thrown forward and up in an arc,
-    /// cutting on the way, and hung there a second before it comes home.
-    pub const SHADOW_ARC: u8 = 9;
-    /// Middle click on the floor: a ring of blades round her own body.
-    pub const BLADE_RING: u8 = 10;
+    /// Space and right click: the Whirl, with a jump.
+    pub const RISING_WHIRL: u8 = 9;
+    /// Middle click on the floor: a blade thrown to the crosshair, and the
+    /// shadow throws one to the same point from wherever it is.
+    pub const SHURIKEN: u8 = 10;
 
     pub const COUNT: usize = 11;
 
@@ -920,7 +918,7 @@ pub mod reaver {
         use crate::input::Input;
         /// Left click: the finishers.
         pub const FINISHER: u16 = Input::LEFT;
-        /// Middle click: the neutral blades.
+        /// Middle click: the thrown blades.
         pub const NEUTRAL: u16 = Input::MIDDLE;
         /// Right click: the shadow.
         pub const SHADOW: u16 = Input::RIGHT;
@@ -932,13 +930,35 @@ pub mod reaver {
 
     /// Is this move thrown as the feet leave the floor?
     pub const fn is_takeoff(kind: u8) -> bool {
-        matches!(kind, GALLOWS | TUMBLE | SHADOW_ARC)
+        matches!(kind, GALLOWS | TUMBLE | RISING_WHIRL)
     }
 
-    /// Does this move put the shadow somewhere? The three on right click.
+    /// Does this move put the shadow somewhere? The three on right click, and
+    /// Gallows, which sends it up to be followed.
     pub const fn places_the_shadow(kind: u8) -> bool {
-        matches!(kind, SEND | WHIRL | SHADOW_ARC)
+        matches!(kind, SEND | WHIRL | RISING_WHIRL | GALLOWS)
     }
+
+    /// Does this move spend the marks on what it hits? The three finishers on
+    /// left click, and nothing else: the pokes build the tally and the
+    /// finishers cash it (2026-10-12).
+    pub const fn cashes(kind: u8) -> bool {
+        matches!(kind, REAVE | PLUNGE | GALLOWS)
+    }
+
+    /// How many blades a throw is: one for the Shuriken, three for the
+    /// Tumble's fan and five for the Fan's. A count rather than a knob, the
+    /// lotus's reason: it is what the move is.
+    pub const fn blades(kind: u8) -> usize {
+        match kind {
+            TUMBLE => 3,
+            FAN => 5,
+            _ => 1,
+        }
+    }
+
+    /// The most blades any throw has: what the effect's hit mask is sized for.
+    pub const MOST_BLADES: usize = 5;
 }
 
 // ---------------------------------------------------------------------------
@@ -1665,8 +1685,11 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // the hitting.
         Class::ShadowReaver => match kind {
             reaver::PLUNGE | reaver::GALLOWS => Shape::Swing(Plane::Upright),
-            reaver::BLADE_RING | reaver::BLADE_SPIN => Shape::Disc,
-            reaver::WHIRL | reaver::SHADOW_ARC | reaver::TUMBLE => Shape::None,
+            reaver::WHIRL
+            | reaver::RISING_WHIRL
+            | reaver::TUMBLE
+            | reaver::FAN
+            | reaver::SHURIKEN => Shape::None,
             _ => Shape::Cylinder,
         },
         Class::Elementalist => match kind {
@@ -1870,9 +1893,8 @@ pub const fn puts_out(class: Class, kind: u8) -> Option<crate::effects::EffectKi
     use crate::effects::EffectKind as E;
     match class {
         Class::ShadowReaver => match kind {
-            reaver::WHIRL => Some(E::ShadowWhirl),
-            reaver::SHADOW_ARC => Some(E::ShadowSlash),
-            reaver::TUMBLE => Some(E::ShadowFan),
+            reaver::WHIRL | reaver::RISING_WHIRL => Some(E::ShadowWhirl),
+            reaver::TUMBLE | reaver::FAN | reaver::SHURIKEN => Some(E::ShadowFan),
             reaver::PLUNGE => Some(E::ShadowRing),
             _ => None,
         },

@@ -197,7 +197,7 @@ pub fn trial(
         pin_with(&mut w, doing, at, prepare);
         let p = &w.players[0];
         let aim = yaw_to(p.pos, target);
-        let pitch = crate::aim::look_onto_closely(p.pos, aim, p.aloft, target);
+        let pitch = crate::aim::look_onto_closely(p.pos, aim, p.aloft, p.clear, target);
         let mut bits = if !hop || !p.grounded { Input::W } else { 0 };
         // Held while rising: the Dual mage's float is a held jump.
         if hop && !pressed && (frame < 4 || p.vel.y.raw() > 0) {

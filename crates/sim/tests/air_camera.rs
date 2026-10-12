@@ -98,6 +98,7 @@ fn eye(w: &World, pitch: i16) -> V3 {
         w.players[0].pos,
         Input::looking_at(0, LOOK_RIGHT, pitch),
         w.players[0].aloft,
+        w.players[0].clear,
     )
 }
 
@@ -185,9 +186,9 @@ fn a_shot_aimed_at_the_floor_lands_on_it_from_any_height() {
 /// whole of the hold, read off the two ends of it.
 fn hold_at(pitch: i16) -> Fx {
     let turns = Input::looking_at(0, LOOK_RIGHT, pitch).pitch_turns();
-    sim::camera::ball(turns, Fx::ZERO)
+    sim::camera::ball(turns, Fx::ZERO, Fx::ZERO)
         .centre
-        .sub(sim::camera::ball(turns, Fx::ONE).centre)
+        .sub(sim::camera::ball(turns, Fx::ONE, Fx::ZERO).centre)
 }
 
 #[test]

@@ -63,7 +63,13 @@ fn step_looking(w: &mut World, bits: u16, pitch: i16) {
 /// and a major lands where the crosshair meets the floor.
 fn onto_them(w: &World) -> i16 {
     let them = w.players[1].pos;
-    sim::aim::look_onto_closely(w.players[0].pos, LOOK, w.players[0].aloft, them)
+    sim::aim::look_onto_closely(
+        w.players[0].pos,
+        LOOK,
+        w.players[0].aloft,
+        w.players[0].clear,
+        them,
+    )
 }
 
 /// The move a button throws from the floor.

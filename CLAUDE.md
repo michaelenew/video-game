@@ -72,6 +72,8 @@ swing; this is only its yaw. `aim::look_onto` is the raycast run backwards —
 *which pitch puts the crosshair on that point* — for anything that plays the
 game rather than referees it: the sparring bot, and the Elementalist rehearsal.
 A bot that aimed from its chest would be the mistake below, made by a player.
+It takes the fighter's `aloft` and `clear` (how high its feet are off the floor,
+which the camera's bubble reads, 2026-10-12): pass both off the fighter.
 `aim::look_onto_closely` is the same, settled for as many rounds as a steep look
 needs (`critcheck`, and the dev pack's hunter); the bot keeps its six.
 `aim::stands_at` answers *how tall is the thing under the crosshair* — the last
@@ -102,8 +104,10 @@ Dual mage's blink, short of the first thing its feet meet -- and `aim::settle`
 course's drop), and `aim::walk_toward` *how far toward it could she walk*: the
 Reaver's send goes no further than that -- up no ledge, over no gap -- and is
 refused if not one step is walkable (2026-10-10). `aim::hung_ahead` answers
-*where does a thing thrown forward and up go* -- the Shadow arc, a facing and
-two lengths, `planted_ahead`'s reason. **Every eye `aim.rs` starts
+*where does a thing thrown forward and up go* -- where Gallows sends the shadow,
+a facing and two lengths, `planted_ahead`'s reason -- and `aim::plunge_dir`
+*which way does a dive go*: the look, held inside a cone round straight down
+(the Plunge and Gallows, 2026-10-12). **Every eye `aim.rs` starts
 from is `camera::eye_under`**: the eye held under a cave's vault, which the
 drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 

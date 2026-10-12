@@ -102,7 +102,13 @@ pub fn fighter_trial(class: Class, move_kind: u8, metres: Fx) -> bool {
     }
     let p1 = w.players[1].pos;
     let middle = crate::aim::standing_middle(p1, crate::tuning::body_height());
-    let pitch = crate::aim::look_onto_closely(w.players[0].pos, 0, w.players[0].aloft, middle);
+    let pitch = crate::aim::look_onto_closely(
+        w.players[0].pos,
+        0,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     let look = Input::looking_at(0, 0, pitch);
     let before = w.players[1].health;
     w.press(0, move_kind, look);
@@ -193,7 +199,13 @@ pub fn trial(species: SpeciesId, kind: u8, class: Class, move_kind: u8, metres: 
         w.advance([Input::looking_at(0, 0, 0), idle]);
     }
     let middle = w.critters[0].body(sp).middle();
-    let pitch = crate::aim::look_onto_closely(w.players[0].pos, 0, w.players[0].aloft, middle);
+    let pitch = crate::aim::look_onto_closely(
+        w.players[0].pos,
+        0,
+        w.players[0].aloft,
+        w.players[0].clear,
+        middle,
+    );
     let look = Input::looking_at(0, 0, pitch);
     let before = w.critters[0].health;
     w.press(0, move_kind, look);

@@ -121,16 +121,20 @@ fn main() {
         // a multiplier on moves listed below. See `sim::shadow`.
         if class == sim::class::Class::ShadowReaver {
             let full = sim::shadow::cash_multiple(t::mark_cap());
+            let curve: Vec<String> = (1..=t::mark_cap())
+                .map(|m| format!("x{}", hundredths(sim::shadow::cash_multiple(m))))
+                .collect();
             let swings: Vec<String> = sim::moves::table(class)
                 .iter()
-                .filter(|m| m.aim() == sim::aim::Kind::Swing && m.damage > 0)
-                .map(|m| format!("{} {}", m.name, Fx::from_int(m.damage).mul(full).to_int()))
+                .enumerate()
+                .filter(|(slot, m)| sim::moves::reaver::cashes(*slot as u8) && m.damage > 0)
+                .map(|(_, m)| format!("{} {}", m.name, Fx::from_int(m.damage).mul(full).to_int()))
                 .collect();
             println!(
-                "  tally: cap {}, one fades every {}f  |  any hit of hers cashes; full x{}: {}, and staggers {}f",
+                "  tally: cap {}, one fades every {}f  |  her finishers cash it, {} a mark; full: {}, and staggers {}f",
                 t::mark_cap(),
                 t::mark_fade(),
-                hundredths(full),
+                curve.join(" "),
                 swings.join(", "),
                 t::cash_stagger(),
             );

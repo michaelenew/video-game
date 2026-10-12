@@ -429,7 +429,10 @@ crosshair on a point. It is not a line of effect and the simulation never calls
 it; it is for whatever *plays* — a bot choosing where to put its mouse, the
 Elementalist rehearsal aiming at her own feet. It lives here because the answer
 depends on where the eye is, and the eye moves round the body as the pitch
-changes, so it is settled by a few rounds of asking the camera. A bot that
+changes, so it is settled by a few rounds of asking the camera. It takes the
+fighter's `aloft` and, since 2026-10-12, its `clear` -- how high its feet are
+off the floor, which the camera's bubble reads (§"The eye's bubble" below) --
+so a bot asks the camera the player sees. A bot that
 aimed from its chest along the line to its target would be making the mistake
 this document exists to prevent, with a player's hands.
 
@@ -488,9 +491,17 @@ of three metres back that asked only about pits, so a send pointed up a ledge
 put the shadow on top of it.
 
 **Where does a thing go that is thrown forward and up?** `aim::hung_ahead` —
-the Reaver's Shadow arc, a fixed distance ahead along her flat facing and a
+where the Reaver's Gallows sends the shadow before she blinks to it (the Shadow
+arc's, until 2026-10-12), a fixed distance ahead along her flat facing and a
 fixed height up, the way `planted_ahead` is a fixed distance ahead. Nobody aims
 it.
+
+**Which way does a dive go?** `aim::plunge_dir` (2026-10-12) — the swing's line,
+held inside a cone round straight down: the Reaver's Plunge and the dive out of
+Gallows. Pointed inside the cone it goes where the crosshair is; shallower, down
+the cone's edge on the same bearing. It points a body rather than an ability,
+but it is a look direction turned into where something goes, which is what
+this file is for.
 
 **Which way is up underfoot?** `aim::underfoot_up` — `+y` on the floor and on
 anything in the arena, the mounted part's own `+y` on a creature. What the
@@ -559,6 +570,21 @@ eye, which this module places nine metres behind and above a standing fighter
 wall counted as begun off screen. The renderer's camera is pulled in off that
 wall, so what can hide a point is what stands between the character and it:
 the cone stays the eye's, the line is the character's.
+
+### The eye's bubble (2026-10-12)
+
+Looking up, the camera's sphere shrinks onto the head (the handover), because
+on the ground an eye swung down behind a fighter looking up would go into the
+floor. Off the ground the floor is somewhere else, so `camera::ball` lets the
+radius back out toward the full sphere **as far as keeping the eye a body's
+height (`Eye bubble`) off the floor under the fighter allows**, eased in over
+the first two metres of that room. The room is `Player::clear`, in the
+snapshot and the checksum like `aloft`, nought with the feet on anything --
+so on the ground every eye is the eye it was. Only the distance changes, never
+the tilt, so the crosshair stays where the zones put it: on the head, looking
+up. `tests/eye_bubble.rs` holds the properties; the design is
+[exploration/0014](exploration/0014_shadow_reaver_marks_and_throws.md)
+§"The camera".
 
 ### The eye under a ceiling (2026-10-01)
 

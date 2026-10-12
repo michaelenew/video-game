@@ -900,30 +900,36 @@ defensive option. There is no separate off-hand auto: `L` is the shield itself.
 
 ## Shadow Reaver
 
-Current as of 2026-10-10: **on three clicks, second pass** — finishers, neutral blades and
-the shadow, each with a floor move, an aerial and a jump attack, after the owner's brief for a
-MapleStory-Dual-Blade feel: dashing about with spinning blades, sending the shadow out for high
-impact, closing gaps with strong finishers. The design is
-[exploration/0013](exploration/0013_shadow_reaver_dual_blades.md); the first pass, which this
-replaces, is [0011](exploration/0011_shadow_reaver_on_three_clicks.md). Built and unplayed.
+Current as of 2026-10-12: **on three clicks, third pass** — finishers that cash the marks,
+three throws and the shadow, each with a floor move, an aerial and a jump attack, after the
+owner's brief for a MapleStory-Dual-Blade feel: dashing about with spinning blades, sending the
+shadow out for high impact, closing gaps with strong finishers. The design is
+[exploration/0014](exploration/0014_shadow_reaver_marks_and_throws.md), on top of
+[0013](exploration/0013_shadow_reaver_dual_blades.md); the first pass is
+[0011](exploration/0011_shadow_reaver_on_three_clicks.md). Built and unplayed.
 
-| | Left: finishers | Middle: neutral | Right: the shadow |
+| | Left: finishers (cash the marks) | Middle: throws | Right: the shadow |
 | --- | --- | --- | --- |
-| **On foot** | Reave — a short dash and a cut, a sweet spot at the tip | Blade ring — blades round her waist | Send — and pressed again it **moves** the shadow; only onto ground she could walk to |
-| **In the air** | Plunge — a short dive a little forward, and a ring of shadow out from the landing | Blade spin — very fast, a thin wide disc, weak | Whirl — the shadow a short way out, spinning and cutting, then home on its own |
-| **`space` + click** | Gallows — blink up, slam down; heavy, long recovery | Tumble — a flipping jump that throws three blades forward and down; **in the air, once a jump, the double jump** | Shadow arc — forward and up, cutting; hangs a second, then home |
+| **On foot** | Reave — a short dash and a cut, a sweet spot at the tip | Shuriken — a line to the crosshair, and the shadow throws one too, from wherever it is | Send — and pressed again it **moves** the shadow; only onto ground she could walk to |
+| **In the air** | Plunge — a dive along the crosshair, held inside 45° of straight down, and a ring of shadow from the landing | Fan — five level blades, and she stalls a moment | Whirl — the shadow as far as the send, spinning and cutting; a second one moves it |
+| **`space` + click** | Gallows — the shadow up first, she blinks to it, and plunges in the same cone; heavy, long recovery | Tumble — a flipping jump that throws three blades forward and down; **in the air, once a jump, the double jump** | Rising whirl — a jump and a Whirl |
 
 | Input | Result |
 | --- | --- |
 | `Q` | **Guillotine lotus** — blades out of the shadow, held open, then chasing it wherever it goes |
-| `E` | **Executioner** — the committed overhead, back on the key |
-| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Airborne, it is the airdodge that does it, and it spends the airdodge |
+| `E` | **Executioner** — the committed overhead, on the key; it does not cash the marks |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow — which bursts. Airborne, it is the airdodge that does it, and it spends the airdodge |
+| walking onto a waiting shadow | **Collects it**, as the dash does, and it bursts |
 | `shift` + forward, while a throw's shadow is still flying | **The dash after it**, cancelling the rest of the throw — no need to point at it |
 | `space`, in the dash's last frames | **The dash jump.** It launches her the frame she arrives with the dash's whole speed, in a forward flip with a little more height than a jump |
 | `shift` + forward, anywhere else | The ordinary dodge |
 
+Every send — the send, the Whirl, the Rising whirl, Gallows — brings the shadow home three
+seconds after it arrives, unless another send moves it first. Nothing brings it home for
+distance any more.
+
 Right click still cuts any recovery short and is still remembered for a few frames — what
-follows is that rule's history, and it holds for the Whirl and the arc as well as the send.
+follows is that rule's history, and it holds for the Whirl as well as the send.
 
 **The mechanic is on the mouse and the melee is on the key.** That is the whole of what is
 unusual here, and it reads as an exception to the grammar when it is the opposite — it is
