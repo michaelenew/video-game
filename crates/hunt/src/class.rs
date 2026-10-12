@@ -74,6 +74,9 @@ const SHADOW_NEAR: Fx = Fx::ratio(3, 1);
 /// A shadow further than this from the work, for this long, is called home.
 const SHADOW_FAR: Fx = Fx::ratio(45, 10);
 const SHADOW_STALE: u16 = 45;
+/// How far past the work, from her, the shadow is sent: clear of where she
+/// stands to fight, so it is not collected by her walking onto it.
+const SHADOW_BEYOND: Fx = Fx::ratio(25, 10);
 /// Frames after the lotus opens before the recall drags it home.
 const LOTUS_DRAG: u16 = 24;
 /// The furthest the mouse goes off a plan's camera in one frame: a flick,
@@ -511,7 +514,7 @@ impl Hands {
     }
 
     /// The Reaver: **the lotus on a shadow standing at the work**, dragged home
-    /// through it; **the Executioner on a marked creature**, which cashes the
+    /// through it; **the Reave on a marked creature**, which cashes the
     /// marks; and otherwise her own swing, which the shadow copies from where
     /// it stands. The shadow is sent between openings ([`Hands::idle`]), not
     /// in one: the send is nineteen frames the window was for, and sending it
@@ -536,13 +539,15 @@ impl Hands {
             self.fresh = true;
             return self.look_keeping(me, plan, at, b);
         }
+        // Cashed by a finisher -- the Reave, since 2026-10-12, when only the
+        // finishers cash and Executioner does not.
         let far = flat(at.sub(me.pos)).flat_len();
-        let exe = moves::get(me.class, SLOT_COMMITTED);
+        let reave = moves::get(me.class, moves::reaver::REAVE);
         if marks_near(w, at) >= CASH_AT
-            && window >= busy(&exe)
-            && far.raw() < exe.reach.add(exe.step).add(Fx::ratio(8, 10)).raw()
-            && self.ready(w, me, SLOT_COMMITTED)
-            && let Some(b) = self.button(me, SLOT_COMMITTED)
+            && window >= busy(&reave)
+            && far.raw() < reave.reach.add(reave.step).add(Fx::ratio(8, 10)).raw()
+            && self.ready(w, me, moves::reaver::REAVE)
+            && let Some(b) = self.button(me, moves::reaver::REAVE)
         {
             self.uses.cashed += 1;
             return self.look_keeping(me, plan, at, b);
@@ -769,7 +774,12 @@ impl Hands {
             {
                 self.uses.sent += 1;
                 self.rest();
-                return Some(self.look(me, self.spot(w, me, floor_under(me, at), true), b));
+                // **Past the work, not on it**: since 2026-10-12 a waiting
+                // shadow she walks onto rejoins her, and she fights standing
+                // at the work, so a shadow put under it was picked straight
+                // back up.
+                let beyond = at.add(flat(at.sub(me.pos)).normalized().scale(SHADOW_BEYOND));
+                return Some(self.look(me, self.spot(w, me, floor_under(me, beyond), true), b));
             }
             return None;
         }
