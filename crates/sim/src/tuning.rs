@@ -3303,3 +3303,15 @@ pub fn step_lift_full() -> Fx {
 pub fn step_forward() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepForward)).max(Fx::ZERO)
 }
+
+/// What a hit through one of her stains adds to itself, as a share of the
+/// stain's essence: the stain is drunk, and the blow is harder for it.
+pub fn stain_hit_bonus(essence: i32) -> i32 {
+    essence.max(0) * oven::scalar(Scalar::StainHitBonus).max(0) / 100
+}
+
+/// What walking into one of her stains drinks of it, as a share of its
+/// essence. All of it, to begin with: getting health back was too hard.
+pub fn stain_walk_drinks() -> i32 {
+    oven::scalar(Scalar::StainWalkDrinks).clamp(0, 100)
+}

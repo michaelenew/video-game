@@ -774,6 +774,12 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **The Blood mage as the blaster**, 2026-10-12: every stain is
+    // collected -- walked into, teleported to, hit through -- and a hit
+    // through one is harder for it. See
+    // `docs/design/exploration/0015_blood_mage_blaster.md`.
+    StainHitBonus,        "Blood mage", "Stain, a hit through one adds (% of its essence)", Int, 0, 300;
+    StainWalkDrinks,      "Blood mage", "Stain, walked into drinks (% of its essence)", Int, 0, 100;
 }
 
 // ---------------------------------------------------------------------------

@@ -2357,11 +2357,18 @@ impl World {
                 self.break_through(i, slot as usize);
             }
         }
-        // A blink spends its pool. Done here rather than in the dodge branch
+        // A blink **drinks** its pool (2026-10-12): the teleport is a heal and
+        // a door at once, as walking into it would be -- her own blood is
+        // still only a door. Done here rather than in the dodge branch
         // because the branch only has her body, and the pool is an effect.
         for i in 0..MAX_PLAYERS {
             let slot = self.players[i].blinked as usize;
-            if slot < MAX_EFFECTS && self.effects[slot].is_some_and(|e| e.is_a_pool()) {
+            if slot < MAX_EFFECTS
+                && let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool())
+            {
+                if !moves::blood::own_blood(pool.slot) {
+                    self.players[i].drink(pool.banked * t::stain_walk_drinks() / 100);
+                }
                 self.effects[slot] = None;
             }
             self.players[i].blinked = NO_POOL;
@@ -2762,15 +2769,26 @@ impl World {
                         self.players[defender].slow(t::slow_frames(), t::spike_slow());
                     }
                     if dealt > 0 {
+                        // Through a stain, the blow is harder for it, and the
+                        // blood it spills is the whole of what it dealt.
+                        let mut spilt = dealt;
                         if let Some(hb) = hitbox(&snapshot[attacker]) {
-                            self.drink_over(attacker, &m, hb.from, hb.to, Some(defender), 0);
+                            let bonus = self.stain_bonus(
+                                attacker,
+                                &m,
+                                hb.from,
+                                hb.to,
+                                Some(defender),
+                                0,
+                            );
+                            spilt += self.players[defender].wound(bonus);
                         }
                         self.spill_under(
                             attacker as u8,
                             snapshot[attacker].class,
                             kind,
                             &snapshot[defender],
-                            dealt,
+                            spilt,
                         );
                     }
                 }
@@ -2830,6 +2848,8 @@ impl World {
         for i in 0..MAX_PLAYERS {
             self.collect_with_the_scythe(i);
         }
+        // And so do her feet: a stain she walks into is drunk.
+        self.drink_underfoot();
 
         // A thrown shield is its own threat while it travels.
         let shields = [self.players[0].shield(), self.players[1].shield()];
@@ -10402,9 +10422,10 @@ impl World {
         // melee loop in `advance` for the order. **Not for the blade**: it
         // drinks on its way home, from each pool it crosses, once -- a cut
         // that also drank would take three shares of one pool in one throw.
+        let mut dealt = dealt;
         if dealt > 0 {
             if !effect.kind.comes_home() {
-                self.drink_over(
+                let bonus = self.stain_bonus(
                     effect.owner as usize,
                     &m,
                     from,
@@ -10412,6 +10433,7 @@ impl World {
                     Some(victim),
                     effect.age,
                 );
+                dealt += self.players[victim].wound(bonus);
             }
             self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
         }
@@ -10507,12 +10529,14 @@ impl World {
             if dealt > 0 {
                 let m = effect.source();
                 self.drink_over(effect.owner as usize, &m, from, from, None, effect.age);
+                // A small body bleeds what the blow was worth, not the little
+                // it had left to lose.
                 self.spill(
                     effect.owner,
                     effect.class,
                     effect.slot,
                     floor_under(self.arena(), body.pos),
-                    dealt,
+                    dealt.max(raw),
                 );
             }
             total += dealt;
@@ -10561,6 +10585,14 @@ impl World {
             .mul(share)
             .mul(preying(effect.class, beast.disabled()))
             .to_int();
+        // A stain under the struck part is drunk, and the blow is harder for
+        // it -- asked before the blow, so the creature takes the whole.
+        let raw = if raw > 0 {
+            let m = effect.source();
+            raw + self.stain_bonus(effect.owner as usize, &m, at, at, None, effect.age)
+        } else {
+            raw
+        };
         // Asked of its guard from where the effect is: a burst behind a
         // guard, or a pillar under it, comes from outside it.
         let (dealt, guarded) = beast.take_blow(
@@ -10589,15 +10621,16 @@ impl World {
         // The creature bleeds too: under the struck part, projected to the
         // floor, which is what makes the pool under a toppled Ridgeback a
         // door onto its back.
-        if dealt > 0 {
-            let m = effect.source();
-            self.drink_over(effect.owner as usize, &m, at, at, None, effect.age);
+        // **Every hit on a creature leaves a stain** (2026-10-12), sized by
+        // what the blow was worth rather than by what its hide let through:
+        // a hit on a plate still opens it.
+        if dealt > 0 || (raw > 0 && !guarded.turned()) {
             self.spill(
                 effect.owner,
                 effect.class,
                 effect.slot,
                 floor_under(self.arena(), at),
-                dealt,
+                dealt.max(raw),
             );
         }
         dealt
@@ -10822,6 +10855,10 @@ impl World {
     /// What comes back is the move's own share of the pool, converted out of
     /// grey and never past it, and the pool loses exactly what she got.
     ///
+    /// Gives back the **essence** of the stain it drank -- what was in it, not
+    /// what came back -- or nothing; what a hit through it adds is read off
+    /// that (`stain_bonus`).
+    ///
     /// `older_than` is the age of the thing delivering the hit, and only pools
     /// older than it count. Nought for a swing, whose one hit has nothing of
     /// its own to find; for an effect it is the effect's own age, so four arms
@@ -10859,8 +10896,53 @@ impl World {
             }
         }
         match best {
-            Some((slot, _)) => self.drink_from(slot, owner, m),
+            Some((slot, essence)) => {
+                self.drink_from(slot, owner, m);
+                essence
+            }
             None => 0,
+        }
+    }
+
+    /// [`Self::drink_over`], and what the stain it drank adds to the blow
+    /// that went through it (`tuning::stain_hit_bonus`): every attack of hers
+    /// that lands over a stain heals her **and** hits harder for it.
+    fn stain_bonus(
+        &mut self,
+        owner: usize,
+        m: &moves::Move,
+        from: V3,
+        to: V3,
+        victim: Option<usize>,
+        older_than: u16,
+    ) -> i32 {
+        let essence = self.drink_over(owner, m, from, to, victim, older_than);
+        t::stain_hit_bonus(essence)
+    }
+
+    /// **Walking into a stain drinks it** (2026-10-12): every stain of hers --
+    /// not her own blood -- that her feet are against is drunk, at
+    /// `tuning::stain_walk_drinks` of its essence, and is gone. The Demon
+    /// Avenger's orbs: the heal is a place, and going there is enough.
+    fn drink_underfoot(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if p.health <= 0 || !p.class.wounds_go_grey() {
+                continue;
+            }
+            for slot in 0..MAX_EFFECTS {
+                let Some(e) = self.effects[slot] else { continue };
+                if !e.is_a_pool()
+                    || e.owner != i as u8
+                    || e.age == 0
+                    || moves::blood::own_blood(e.slot)
+                    || !e.covers(p.pos)
+                {
+                    continue;
+                }
+                self.players[i].drink(e.banked * t::stain_walk_drinks() / 100);
+                self.effects[slot] = None;
+            }
         }
     }
 
@@ -13528,7 +13610,7 @@ impl World {
                         attacker.class,
                         kind,
                         floor_under(self.arena(), body.pos),
-                        dealt,
+                        dealt.max(worth),
                     );
                     self.players[i].heal(m.leeched(dealt));
                     dual::landed_a_hit(&mut self.players[i]);
@@ -13678,6 +13760,10 @@ impl World {
                 .mul(cash)
                 .mul(sweet)
                 .to_int();
+            // Her double duty, against the creature: drink the stain the
+            // blade passes through, and the blow is harder for it. Before
+            // the blow, so the creature takes the whole.
+            let raw = raw + self.stain_bonus(i, &m, box_out.from, box_out.to, None, 0);
             // Asked of its guard first, from where the swing comes from:
             // the same point the fighters' guard is handed.
             let (dealt, guarded) = beast.take_blow(
@@ -13699,14 +13785,13 @@ impl World {
             }
             // Her double duty, against the creature: drink over the pool the
             // blade passes through, then spill under the part it struck.
-            if dealt > 0 {
-                self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
+            if dealt > 0 || (raw > 0 && !guarded.turned()) {
                 self.spill(
                     i as u8,
                     attacker.class,
                     kind,
                     floor_under(self.arena(), box_out.centre()),
-                    dealt,
+                    dealt.max(raw),
                 );
             }
             // An uppercut does not put thirteen metres of animal in the air and
