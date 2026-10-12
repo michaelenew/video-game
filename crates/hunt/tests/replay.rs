@@ -59,11 +59,12 @@ fn the_hands_count_what_the_hunter_threw() {
     let judged = hunt::replay::judge(&tape).expect("the start rebuilds");
     let hands = &judged.hands[0];
     assert_eq!(hands.class, Some(Class::Champion));
-    let thrown: u32 = hands.thrown.iter().map(|(_, n)| *n).sum();
+    let thrown: u32 = hands.thrown.iter().map(|(_, _, n)| *n).sum();
+    assert_eq!(hands.played.len(), 1, "one class, one table");
     assert!(thrown > 0, "the hunter threw nothing in fifty seconds");
     assert!(hands.frames > 0);
     let text = judged.render(&tape, true);
-    assert!(text.contains("WHAT THEY THREW"), "{text}");
+    assert!(text.contains("AS CHAMPION"), "{text}");
     assert!(text.contains("reproduced bit for bit"), "{text}");
 }
 

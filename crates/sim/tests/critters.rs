@@ -516,7 +516,11 @@ fn the_overlay_draws_the_volume_the_hit_test_uses() {
                     let drawn =
                         hitbox(&w.players[0]).is_some_and(|hb| before.body(sp).touched_by(&hb));
                     let struck_already = before.has(flag::STRUCK);
-                    if !struck_already {
+                    // Something else of hers out in the world -- a sigil the
+                    // Descent wrote where she landed, burning -- may be what
+                    // hurt it: this asks about the body's own volume.
+                    let hers_out = w.effects.iter().flatten().any(|e| e.owner == 0);
+                    if !struck_already && !hers_out {
                         assert_eq!(
                             hurt,
                             drawn,

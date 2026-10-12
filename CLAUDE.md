@@ -100,7 +100,11 @@ on* -- `+y` on the floor, the mounted part's own on a creature -- which is what
 `swing_path`'s dead zone is measured against (bestiary A4, the Galewing).
 `aim::blink_to` answers *where does a body sent along the floor stop* -- the
 Dual mage's blink, short of the first thing its feet meet -- and `aim::settle`
-*what does this point stand on*. `aim::standable` asks *is that footing* (not a
+*what does this point stand on*. `aim::shadowstep_to` answers *where does her
+Shadowstep put her* -- behind the first body on the crosshair's line, further
+for a cursed one, a creature's part found by a thin probe carried along the
+line (`column_meets_quarry`), and along it as Phase goes with nobody there
+(2026-10-12). `aim::standable` asks *is that footing* (not a
 course's drop), and `aim::walk_toward` *how far toward it could she walk*: the
 Reaver's send goes no further than that -- up no ledge, over no gap -- and is
 refused if not one step is walkable (2026-10-10). `aim::hung_ahead` answers

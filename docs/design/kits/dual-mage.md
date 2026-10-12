@@ -1,7 +1,7 @@
 ---
-status: built — every move a spell since 2026-10-09; unplayed
+status: built — her spellbook since 2026-10-12; unplayed
 decided: 2026-09-10
-revised: 2026-09-23
+revised: 2026-10-12
 formerly: Statera
 sources: docs/archive/combat-design/statera-skills.md, docs/archive/combat-design/class-builds.md
 depends: ../dual-mage.md
@@ -16,15 +16,108 @@ it is the gap between them.
 Read [../dual-mage.md](../dual-mage.md) first — this kit implements that mechanic and is
 meaningless without it.
 
-> **Every move a spell, 2026-10-09 — built, unplayed.** The person's brief: a complete rework,
-> left dark and right light, every move a spell (the autos short-range spells), `Q` and `E`
-> the dark and light majors, a middle click worth having, and the autos' pull and push gone.
-> The design is [../exploration/0010_dual_mage_spells.md](../exploration/0010_dual_mage_spells.md);
-> §"Every move a spell" below is what was built. **Everything after it — the punches, the
-> wing, the Lance, the Sweep, the pull and the shove — describes the kit it replaced.** The
-> two bars are unchanged.
+> **Her spellbook, 2026-10-12 — built, unplayed.** The owner's brief after playing the
+> 0010 kit: every ability an MMO spell, recast into melee range — cast to fight, cast to move,
+> cast to defend — with dark and light told apart from each other and from the middle click,
+> no push and pull, and the majors spectacle that grows along each bar. The design is
+> [../exploration/0015_dual_mage_spellbook.md](../exploration/0015_dual_mage_spellbook.md);
+> §"Her spellbook" below is what was built. **Everything after it — the 0010 spells, and the
+> punches, the Lance and the Sweep before them — describes kits it replaced.** The two bars
+> are unchanged.
 
-## Every move a spell — built 2026-10-09
+## Her spellbook — built 2026-10-12
+
+**The click is what a spell is cast on, and the row is the verb.**
+
+| | Left: dark — on them | Middle: twilight — on herself | Right: light — on the ground |
+| --- | --- | --- | --- |
+| **On foot — fight** | Litany of night: **Umbral lash › Grasping shade › Devour** | **Binary** | Litany of dawn: **Radiant palm › Halo › Smite** |
+| **In the air — move** | **Shadowstep** | **Phase** | **Descent** |
+| **Leaving the floor — defend** (space + click) | **Veil** | **Equinox** | **Sanctuary** |
+
+`Q` is the **Abyss** and `E` is **Judgement**, on the floor and in the air. The buttons are
+named once in `sim::moves::dual::keys`; the dispatch is `state::dual_move`, on the shared
+takeoff window (`Player::rise`). In the air space is still her second jump and her wing beat,
+so her takeoffs are from the floor only.
+
+**The litanies** (`moves::dual::NIGHT`, `DAWN`; `dual::litany_link`). The bare left and right
+clicks are strings of three spells: a press inside `litany, window` (24 frames) of the last
+link ending throws the next link, and otherwise the first. It advances on the press, landed or
+not, so the third link is a commitment you can whiff.
+
+**The curse** (`Player::curse`/`curse_clock`, `Monster::curse`/`curse_clock`; `dual::lay_curse`).
+Every dark spell that lands lays stacks of her curse — the lash, the Grasp, the Shadowstep's
+arrival and the Veil's puff one, the Devour two, the Abyss one every half second — up to
+`curse, most stacks` (5). One clock: a stack resets it to `curse, one fades every` (1.5 s), and
+when it runs out one stack goes. Every half second each stack ticks for `curse, tick per stack`
+(2) times her Dark power, a tenth of it drained to her. Drawn as dark motes circling the body,
+one per stack.
+
+**The purge** (`dual::purge_damage`). A light spell that lands on a curse sets every stack off
+at once: `purge, damage per stack` (9) × *n*(1 + `purge, extra per stack` (0.3) × *n*), times
+the light spell's power — 11, 28, 51, 79 and 112 at power one, 157 for five from a full Light
+bar. Three stacks or more (`purge, staggers from`) stagger a fighter for `purge, staggers for`.
+A creature takes the damage and no stagger.
+
+**Sigils** (`EffectKind::Sigil`; `World::write_sigil`). The Smite, the Descent, Sanctuary and
+Judgement's field write consecrated ground for `sigil, lasts` (4 s), `sigils, at once` (two)
+of hers at a time. Standing in her own she is **warded**: every wound is cut by `sigil, wards
+her by` (33%; `dual::through_the_ward`, in `Player::wound`). Anybody else standing in one burns
+for `sigil, burns` on the tick.
+
+The moves, each in a line:
+
+- **Umbral lash**: a flat swing of shadow off the left hand, 3.5 m. One stack.
+- **Grasping shade**: hands out of the floor at the crosshair's point, 5 m; a **root**
+  (`root, lasts` 30 frames at `root, speed while rooted` 0.1) and one stack.
+- **Devour**: a maw where she points, 5 m, snapping shut on the active frames. Two stacks, 15%
+  drained.
+- **Radiant palm**: a burst of light at arm's length. Purges.
+- **Halo**: a ring all round her, 3.4 m. Purges.
+- **Smite**: a column from the sky where she points, 6 m, telegraphed by a ring on the floor
+  over its 16-frame startup; lifts (launch 12), purges, writes a sigil.
+- **Binary** (`EffectKind::Stars`): twin stars round her at `binary, orbit radius` for
+  `binary, orbits for` (4 s); each strikes a body once every `binary, strikes a body every`
+  for `binary, damage a strike` — the dark curses, the light purges. One pair; a second
+  renews it.
+- **Shadowstep** (`aim::shadowstep_to`): behind the first body on the line, 8 m, or 14 m
+  (`shadowstep, reaches a cursed body`) for a cursed one, arriving in a burst that curses; a
+  body refunds the airdodge and catches her fall. With nobody, `shadowstep, without a body`
+  (5 m), once a trip.
+- **Phase**: as built, a 6 m blink with a flash where she left; spends the airdodge.
+- **Descent**: the Plunge's dive (`aim::plunge_dir`, its cone) at `descent, dives at`; the
+  landing is a ring of light round her that purges, and a sigil under her.
+- **Veil**: a jump (`self_lift` 13) untouchable for `veil, untouchable for` (18 frames,
+  `Player::untouchable`), cursing whoever was beside her.
+- **Equinox**: both bars by an auto's push, then `equinox, levels by` (12, never more than
+  half the gap) from the higher to the lower, and the level jump as before.
+- **Sanctuary**: a sigil at her feet (`sanctuary, sigil radius`), a pulse through it that
+  purges, and a hop.
+- **Abyss** (`EffectKind::Abyss`): a black sun at the crosshair's floor for `abyss, lasts`
+  (1.5 s): pins, ticks (10% drained), curses every `abyss, curses every`, and collapses in
+  `abyss, collapse damage`. 24 frames of startup, telegraphed.
+- **Judgement**: the middle column is the move's own blow; `dual::judgement_columns` more
+  come down round it (one from empty Light, five from full, `judgement, columns stand apart`
+  2.5 m, grown on the majors' curve so they stay five pillars), every one purging; its field
+  is the great sigil. 32 frames of startup, telegraphed.
+
+**The majors grow along a steeper curve** (`dual::major_size`: `majors, size at empty` 0.4 to
+`majors, size at full` 1.6, against the depth curve's 0.6 to 1.4), and Judgement's columns
+count up with Light. Range and frames never scale.
+
+**Apotheosis.** The frame she ascends (`World::apotheosis`), a nova of both forces
+(`EffectKind::Burst`, slot `effects::APOTHEOSIS`) bursts round her: `apotheosis, damage` to
+everybody in `apotheosis, reaches` (5 m), and every curse in it purged at the top of the curve.
+
+**Drawn**: the curse's motes (`game::curse_spot`), the stars with tails, the black sun hanging
+over its ground with motes spiralling in, sigils as turning rings of light, Judgement's columns,
+Apotheosis bursting out, and her own spells off her body with their telegraphs
+(`game::spell_piece`). **Not done yet:** her fifteen moves play her six old clips (DUAL-12).
+
+`tests/dual_spells.rs` holds one test per move, the litanies, the curse, the purge, the sigils,
+the stars, the majors' growth and Apotheosis; `tests/dual_mage.rs` the benchmarks, B9 new.
+
+## Every move a spell — built 2026-10-09, replaced 2026-10-12
 
 | | Left: dark (the hex) | Middle: twilight | Right: light (the strike) |
 | --- | --- | --- | --- |

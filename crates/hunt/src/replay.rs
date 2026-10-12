@@ -26,11 +26,18 @@ use crate::{Hunter, Report};
 /// What one fighter did, counted off the world rather than off a plan.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Hands {
+    /// The class they ended on.
     pub class: Option<Class>,
-    /// Moves started, by kind, and the frames one of them was out when a
-    /// blow of this fighter's landed on anybody.
-    pub thrown: Vec<(u8, u32)>,
-    pub landed: Vec<(u8, u32)>,
+    /// Every class they fought as, in the order they first took it up, and
+    /// the frames spent as each. A tape is one session, and a class change
+    /// travels as input, so a replay can hold several.
+    pub played: Vec<(Class, u32)>,
+    /// Moves started, by class and kind, and the frames one of them was out
+    /// when a blow of this fighter's landed on anybody. By class because a
+    /// kind is only a number within one: the Dual mage's fifth move and the
+    /// Reaver's fifth are different moves.
+    pub thrown: Vec<(Class, u8, u32)>,
+    pub landed: Vec<(Class, u8, u32)>,
     pub dodges: u32,
     pub guards: u32,
     pub jumps: u32,
@@ -43,15 +50,17 @@ pub struct Hands {
 }
 
 impl Hands {
-    fn bump(list: &mut Vec<(u8, u32)>, kind: u8) {
-        match list.iter_mut().find(|(k, _)| *k == kind) {
-            Some((_, n)) => *n += 1,
-            None => list.push((kind, 1)),
+    fn bump(list: &mut Vec<(Class, u8, u32)>, class: Class, kind: u8) {
+        match list.iter_mut().find(|(c, k, _)| *c == class && *k == kind) {
+            Some((_, _, n)) => *n += 1,
+            None => list.push((class, kind, 1)),
         }
     }
 
-    fn count(list: &[(u8, u32)], kind: u8) -> u32 {
-        list.iter().find(|(k, _)| *k == kind).map_or(0, |(_, n)| *n)
+    fn count(list: &[(Class, u8, u32)], class: Class, kind: u8) -> u32 {
+        list.iter()
+            .find(|(c, k, _)| *c == class && *k == kind)
+            .map_or(0, |(_, _, n)| *n)
     }
 
     /// One frame: what changed for seat `who`.
@@ -61,6 +70,10 @@ impl Hands {
             return;
         }
         self.class = Some(now.class);
+        match self.played.iter_mut().find(|(c, _)| *c == now.class) {
+            Some((_, n)) => *n += 1,
+            None => self.played.push((now.class, 1)),
+        }
         self.frames += 1;
         if !now.grounded {
             self.airborne += 1;
@@ -70,7 +83,7 @@ impl Hands {
             && (!begun(was.action) || now.action.attack_kind() != was.action.attack_kind())
             && let Some(kind) = now.action.attack_kind()
         {
-            Hands::bump(&mut self.thrown, kind);
+            Hands::bump(&mut self.thrown, now.class, kind);
         }
         if matches!(now.action, Action::Dodge { .. }) && !matches!(was.action, Action::Dodge { .. })
         {
@@ -122,12 +135,12 @@ impl Hands {
                 .zip(after.critters.all.iter())
                 .any(|(b, a)| a.health < b.health);
             if hit_fighter || hit_creature || hit_critter {
-                Hands::bump(&mut self.landed, kind);
+                Hands::bump(&mut self.landed, was.class, kind);
             }
         }
     }
 
-    /// The table, move by move.
+    /// The table, move by move, a table for each class they fought as.
     pub fn render(&self, who: usize) -> String {
         let Some(class) = self.class else {
             return format!("\nPLAYER {}  sat out\n", who + 1);
@@ -144,17 +157,31 @@ impl Hands {
                 self.airborne as f32 * 100.0 / self.frames as f32
             }
         );
-        out.push_str("  WHAT THEY THREW           thrown   landed\n");
-        let mut kinds: Vec<u8> = self.thrown.iter().map(|(k, _)| *k).collect();
-        kinds.sort_unstable();
-        for kind in kinds {
-            let m = sim::moves::get(class, kind);
+        for &(as_class, frames) in &self.played {
+            let mut kinds: Vec<u8> = self
+                .thrown
+                .iter()
+                .filter(|(c, _, _)| *c == as_class)
+                .map(|(_, k, _)| *k)
+                .collect();
+            if kinds.is_empty() {
+                continue;
+            }
+            kinds.sort_unstable();
             out.push_str(&format!(
-                "  {:<24}   {:>4}     {:>4}\n",
-                m.name,
-                Hands::count(&self.thrown, kind),
-                Hands::count(&self.landed, kind)
+                "  AS {:<22}   thrown   landed   ({:.1} s)\n",
+                as_class.name().to_uppercase(),
+                frames as f32 / 60.0
             ));
+            for kind in kinds {
+                let m = sim::moves::get(as_class, kind);
+                out.push_str(&format!(
+                    "  {:<24}   {:>4}     {:>4}\n",
+                    m.name,
+                    Hands::count(&self.thrown, as_class, kind),
+                    Hands::count(&self.landed, as_class, kind)
+                ));
+            }
         }
         out.push_str(&format!(
             "  dodges {}   guards raised {}   jumps {}\n  blows taken {}   damage taken {}\n",

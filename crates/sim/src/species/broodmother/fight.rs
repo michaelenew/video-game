@@ -591,7 +591,7 @@ fn splash(w: &mut World, at: V3) {
     let a = SPECIES.attack(super::HATCH);
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
-        if p.health <= 0 || p.action.invulnerable() || p.aboard() {
+        if p.health <= 0 || p.untouchable() || p.aboard() {
             continue;
         }
         let away = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z));
@@ -955,7 +955,7 @@ fn line_strikes(w: &mut World, m: &Monster, from: V3) {
     let mut struck = w.lore.word(word::LINE_STRUCK);
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
-        if struck & 1 << i != 0 || p.health <= 0 || p.action.invulnerable() {
+        if struck & 1 << i != 0 || p.health <= 0 || p.untouchable() {
             continue;
         }
         let gap = math::flat_segment_gap(p.pos, from, m.pos);

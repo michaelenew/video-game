@@ -80,12 +80,19 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// room under the eye, went into `state_checksum` whenever it is not nought,
 /// which is every jump; and the Reaver's kit moved. See
 /// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
+///
+/// **The Dual mage's and the Reaver's were re-pinned 2026-10-12** for her
+/// spellbook: the same random presses now throw the litanies, the stars and
+/// the curse. The Reaver's fight did not change -- an effect is hashed by its
+/// kind's number, and the Shade bolt that retired sat before her shadow's
+/// blades in the list, so their numbers moved down one. See
+/// `docs/design/exploration/0015_dual_mage_spellbook.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x339bb2066878e1c8),
     (Class::Bulwark, 0x8465a86bccb8ef32),
-    (Class::ShadowReaver, 0x125b4fc5c2559d9d),
+    (Class::ShadowReaver, 0xda05d8a8d6903ae9),
     (Class::BloodMage, 0x083464c03c9c85e2),
-    (Class::DualMage, 0xd1dc8709fa4d36db),
+    (Class::DualMage, 0x92958f4cd8da3def),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];
 

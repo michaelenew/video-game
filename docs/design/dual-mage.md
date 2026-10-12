@@ -41,7 +41,10 @@ Nothing is signed; there is no centre.
   spell by more, a major by a lot — and the middle-click spells raise **both** by an auto's
   step, so they never widen the gap. The force she carries is the last one-sided spell she
   threw. (Before that, only the autos had a side and every cast took the carried force; the
-  table below is the new rule.)
+  table below is the new rule.) *Her spellbook of 2026-10-12*
+  ([exploration/0015](exploration/0015_dual_mage_spellbook.md)) kept the rule and named new
+  spells: the first two links of each litany are the autos, the third and the air and takeoff
+  spells the casts, and Equinox also levels her by 12.
 - **The struggle.** Every frame the two bars are compared. Inside a **band** around equal,
   nothing moves on its own. Outside it, **the higher bar rises and the lower falls**, at a
   rate that grows with how far outside the band they are, up to a cap. That is the hill: a
@@ -56,11 +59,11 @@ Nothing is signed; there is no centre.
 
 | Input | Which bar | How far |
 | --- | --- | --- |
-| Shade bolt (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
-| Sunray (`R`) | Light, and she is now light | 5 |
-| Any other left- or right-click spell | Its own force | `tuning::meter_cast_push` — 9 |
+| Umbral lash, Grasping shade (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
+| Radiant palm, Halo (`R`) | Light, and she is now light | 5 |
+| Any other left- or right-click spell — Devour, Smite, the air and takeoff spells | Its own force | `tuning::meter_cast_push` — 9 |
 | Abyss (`Q`) / Judgement (`E`) | Dark / Light | `tuning::meter_finisher_push` — 20 |
-| A middle-click spell | Both | 5 each |
+| A middle-click spell | Both | 5 each; Equinox then moves 12 from the higher to the lower |
 
 All of it **on the press**, whether or not it connects — see "Autos are the steering wheel"
 below. The band is measured against the pushes and the climb against the calm, so the four move
@@ -95,15 +98,16 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 
 | | The player does | What happens | Measured |
 | --- | --- | --- | --- |
-| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two and a quarter health bars, the last quarter being the six seconds of ascension the climb reaches near the end. Against a person a third lands, which is one kill a round from the sustained game | 2.20 bars |
-| **B2** | One dark auto, then dark casts only, a Judgement every time it is up, on a target standing in all of it | The biggest number the class makes: two to three and a half bars, and it costs her at least half of her own | 2.24 bars dealt, 0.64 lost |
-| **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | 25%; 9% |
-| **B4** | Alternates cleanly from empty | The blink in ten to fourteen seconds, the second jump in sixteen to twenty-one, the wings in twenty to twenty-six — once a round, with commitment | 10.9 s, 16.8 s, 21.2 s |
+| **B1** | Alternates hands for half a round with everything landing on a target that never moves — since 2026-10-12 a litany of each hand, the dummy in sword range | One to two and a quarter health bars, the last quarter being the six seconds of ascension the climb reaches near the end. Against a person a third lands, which is one kill a round from the sustained game | 1.85 bars (2.20 with the 0010 kit) |
+| **B2** | The dark hand only, its major every time it is up — since 2026-10-12 the litany of night and the Abyss — on a target standing in all of it | The biggest number the class makes: two to three and a half bars, and it costs her at least half of her own | 2.07 bars dealt, 0.57 lost |
+| **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | 21%; 8% (25%; 9% with the 0010 numbers). From both bars full it also tips her into ascension, and Apotheosis adds its own |
+| **B4** | Alternates cleanly from empty | The blink in ten to fourteen seconds, the second jump in sixteen to twenty-one, the wings in twenty to twenty-six — once a round, with commitment | 12.1 s, 18.8 s, 23.8 s, a lash and a palm in turn (10.9, 16.8 and 21.2 with the 0010 bolt and ray); a full litany of each hand in turn is 13.9, 20.8 and 27.0 |
 | **B5** | Stops at three quarters | The second jump is gone within an exchange; the blink is kept for at least two and gone inside seven | 6.8 exchanges |
 | **B6** | Throws a Judgement from level and does nothing | The lower bar is empty in eight to twelve seconds | 10 s |
 | | …and answers it with the other hand: the far-side auto, the far-side cast, an auto or two | Back inside the band within one exchange of the finisher recovering; far-side autos alone hold it or claw it back | passes |
 | **B7** | Ignores the runaway for ten seconds | Fifteen to twenty-five per cent of a health bar, about what the Judgement did to them. Fully one-sided for half a round: half to four fifths, and never all of it | 20%; 75% |
-| **B8** | One cast from level; two; the finisher; alternating | Inside the band; outside; outside; never outside | passes |
+| **B8** | One cast from level; two; the finisher; alternating | Inside the band; outside; outside; never outside | passes. A whole litany of one hand is two autos and a cast, 19 against a band of 16: it steps just outside, which is the hill asking for the other hand |
+| **B9** | Throws the Abyss and Judgement in turn, over and over, on a target standing in all of it (added 2026-10-12) | The spectacle, and level, so nothing burns: what bounds it is the majors' frames. Two to three and a half bars | 3.35 bars |
 
 What moved to get there, from the first pass: the pushes 8/18/38 → 5/9/20 and the band 30 →
 16; the calm 6 → 2 a second; the drift 2 per unit and 10 at most → 1 and 3; the burn 1.5 per
@@ -177,6 +181,13 @@ the hardest thing the class can do and is meant to be.
   design asked for — and **landing hits pulls some back**: `ascension_refund` (40) per hit, the
   refund the old design wrote and never built. It was three seconds, and at three a player had
   time for two or three abilities and it was over before they had noticed it had begun.
+- **It arrives as Apotheosis** (2026-10-12, [exploration/0015](exploration/0015_dual_mage_spellbook.md)):
+  the frame the wings erupt, a nova of both forces bursts round her — `apotheosis, damage` (60)
+  to everybody within `apotheosis, reaches` (5 m), and every curse in it purged at the top of
+  the curve. Every spell she casts goads a bar, so near the top she *will* ascend if she keeps
+  casting: the arrival is what makes the moment a decision. Hold at the brink, let the calm take
+  a little off, step in beside a body carrying five stacks, and cast the spell that tips her
+  over — or ascend alone in a corner and get wings and nothing else.
 - **It ends with both bars empty** and a stagger graduated by how much she landed: the share of
   the drain her hits refunded, read against a ceiling (`ascension_stun`, 40 frames, for landing
   nothing) and a floor (`ascension_stun_floor`, 10, for paying it all back). The vent. Then she

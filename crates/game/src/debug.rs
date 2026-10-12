@@ -278,7 +278,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            EffectKind::Nail | EffectKind::ShadeBolt | EffectKind::Binary => {
+            EffectKind::Nail => {
                 gizmos.sphere(
                     Isometry3d::from_translation(crate::fx3(effect.bolt_at())),
                     effect.field_radius().to_f32_for_render(),
@@ -316,8 +316,10 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
-            // The Dual mage's well, burst and ray: the volumes they test.
-            EffectKind::Abyss => {
+            // The Dual mage's spellbook: the black sun's and a sigil's ground,
+            // each star's ball, and every place a burst strikes -- the
+            // volumes they test (`World::inside`).
+            EffectKind::Abyss | EffectKind::Sigil => {
                 cylinder(
                     &mut gizmos,
                     at,
@@ -326,16 +328,25 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            EffectKind::Flare => {
-                gizmos.sphere(
-                    Isometry3d::from_translation(at),
-                    effect.field_radius().to_f32_for_render(),
-                    PILLAR,
-                );
+            EffectKind::Stars => {
+                for star in 0..2 {
+                    gizmos.sphere(
+                        Isometry3d::from_translation(crate::fx3(effect.star_at(star))),
+                        effect.field_radius().to_f32_for_render(),
+                        PILLAR,
+                    );
+                }
             }
-            EffectKind::Sunray => {
-                let end = v3(effect.pos.add(effect.dir.scale(effect.reach)));
-                gizmos.line(at, end, PILLAR);
+            EffectKind::Burst => {
+                for k in 0..sim::effects::BURST_CENTRES {
+                    if let Some(centre) = effect.burst_at(k) {
+                        gizmos.sphere(
+                            Isometry3d::from_translation(crate::fx3(centre)),
+                            effect.field_radius().to_f32_for_render(),
+                            PILLAR,
+                        );
+                    }
+                }
             }
             // The Air ball: the ball the carry reads, at its size now.
             EffectKind::AirBall => {

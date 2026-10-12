@@ -8168,3 +8168,52 @@ them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back t
 has left the hunt, and the creature is gone as before. 30 m was tried first and held the
 Pinewood road inside a hunt.
 **Verdict** — unplayed.
+
+### 2026-10-12 — the Dual mage's spellbook
+**Changed** Her whole kit ([exploration/0015](exploration/0015_dual_mage_spellbook.md)). The
+click is what a spell is cast on -- dark on *them* (curses), light on *the ground* (sigils),
+twilight on *herself* -- and the row is the verb: fight on foot, move in the air, defend off
+the floor. Two litanies of three on the bare clicks, Binary's twin stars, Shadowstep and
+Descent in the air, the Veil and Sanctuary off the floor. The hex and its Shatter and Wither
+are gone; a curse stacks to five, ticks, and light purges it, each stack worth more than the
+last. The Abyss pins and curses rather than drags; Judgement brings down one to five columns;
+the majors grow along a steeper curve (0.4x to 1.6x). Ascending bursts in Apotheosis.
+**Why** The owner, after playing 0010: "Left and right click are extremely basic attacks, it
+doesn't have interesting tools for mobility", read against three replays of one session
+(`cargo run -p hunt --bin replay`, which now splits its table by class). The Dual mage threw
+about 240 spells in the Hollows and landed 10, every hit 3 to 9 but one; 164 of them were her
+air row thrown as movement into nothing (Flare 62/0, Phase 49/0, Reel 53/8), and she burned
+for most of it on a one-sided dark bar. The Reaver's Whirl cut 18 a tick for seconds while she
+did other things and her Plunge cashed 505; the Elementalist's Cataclysm hit 190 to 238.
+**Numbers, first pass and why they moved** On a dummy for half a round, with the benchmarks'
+dummy brought from 5 m into sword range (2 m) -- at 5 m the litanies reached nothing:
+- The litanies alternating were 2.4 bars against B1's 1 to 2¼: the litanies' blows came down
+  (lash and Grasp 16 → 10, Devour 34 → 23, palm and Halo 20 → 12, Smite 42 → 26).
+- **The drink paid for the burn.** The dark hand and the Abyss with no light at all cost her
+  nothing in half a round: five ticking stacks drained to her in full out-healed the burn's
+  cap. The curse now drains a tenth (`curse, drained to her`, appended), the Devour 15%
+  rather than half, the Abyss 10% rather than 15. B2's cost is 0.57 bars.
+- **The majors in turn were 6.7 bars**, free, because alternating them keeps her level. Frames
+  are the price in this game: the Abyss went from 14 frames of startup to 24 and Judgement from
+  22 to 32 (both reactable now, and telegraphed by a ring on the floor), their recoveries to 36
+  and 44, their lockout to 255% (the column's ceiling -- 400 was tried and clamps), the Abyss's
+  curse every half second rather than every third, Judgement 140 → 121. New benchmark B9 holds
+  the pair to 3½ bars: 3.35.
+- Binary's stars struck every half second for 12 each and roughly doubled anything thrown
+  beside them: every three quarters of a second, for 8.
+- The purge was 12 × n(1 + 0.2n) and then 8 × n(1 + 0.2n) on the way down; it ended at
+  9 × n(1 + 0.3n) -- 112 for five at power one, 157 from full Light -- so the fourth and fifth
+  stacks are worth chasing.
+- The Smite's launch was 9, which from an empty bar (×0.6) lifted a body a quarter of a metre:
+  12.
+**Movement** The Shadowstep at nothing first reset her fall and could be thrown every half
+second, and the lab search found her crossing 35 to 41 m (she had crossed 21 to 25). A step at
+nothing now keeps her falling and is once a trip, as Phase and the airdodge are; a step to a
+body refunds it. Her envelope is 21 to 31 m; her fixture lines are re-recorded. Against a
+creature the Shadowstep finds the part on the crosshair's line with a thin probe carried along
+it -- with a body-sized one it met the Broodmother's flank under the sac it was aimed at, and
+the fore pair stopped being a hop for her (`tests/broodmother.rs`).
+**Pins** Hers re-pinned, and the Reaver's: her fight did not change, but effects are hashed by
+their kind's number and the retired Shade bolt sat before her shadow's blades in the list.
+**Not done** Her fifteen moves play her six old clips (DUAL-12).
+**Verdict** — unplayed.

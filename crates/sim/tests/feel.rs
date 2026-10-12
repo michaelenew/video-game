@@ -355,8 +355,12 @@ fn best_case(m: &Move) -> i32 {
             // move's own hit set to a catch rather than a blow.
             | EffectKind::JudgementField
             | EffectKind::Tether
-            // And the Abyss, a well that ticks for as long as it stands.
-            | EffectKind::Abyss),
+            // And the Abyss, a black sun that ticks for as long as it stands;
+            // Binary's stars and a sigil, which strike and burn on a clock
+            // for as long as they last.
+            | EffectKind::Abyss
+            | EffectKind::Stars
+            | EffectKind::Sigil),
         ) => {
             let ticks = kind.life() / t::effect_tick_frames().max(1);
             m.damage * swings + kind.damage(m) * ticks as i32
@@ -395,12 +399,11 @@ fn best_case(m: &Move) -> i32 {
             // move, and are the move's own one hit.
             | EffectKind::Nova
             | EffectKind::Nail
-            // The Dual mage's bolts, burst and ray are each the move's one
-            // hit; what a reaction adds is the hex's, not the move's.
-            | EffectKind::ShadeBolt
-            | EffectKind::Binary
-            | EffectKind::Flare
-            | EffectKind::Sunray
+            // The Dual mage's bursts are placed by the world from the move --
+            // a Shadowstep's arrival, Judgement's ring of columns, Apotheosis
+            // -- never by a row's code; what a purge adds is the curse's, not
+            // the move's.
+            | EffectKind::Burst
             // The Reaver's, 2026-10-10: placed by the world from the move
             // (`moves::puts_out`), never by a row's code. Each is the move's
             // own cut; the Whirl's repeats are the shadow's, not the move's.
@@ -593,10 +596,11 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // Hook and Harvest. See
             // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
             Class::BloodMage => 11,
-            // Eleven: three clicks on the floor, in the air and leaving it,
-            // and the two majors -- every move a spell, 2026-10-09. See
-            // `docs/design/exploration/0010_dual_mage_spells.md`.
-            Class::DualMage => 11,
+            // Fifteen: three clicks on the floor (two of them litanies of
+            // three), in the air and leaving it, and the two majors -- her
+            // spellbook, 2026-10-12. See
+            // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+            Class::DualMage => 15,
         };
         assert_eq!(
             n,

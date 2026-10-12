@@ -697,21 +697,22 @@ scalars! {
     AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
     AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
     AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
-    // **The Dual mage, every move a spell**, 2026-10-09: her bolts' flight,
-    // the hex and its two reactions, the well, and the air moves. See
-    // `docs/design/exploration/0010_dual_mage_spells.md`.
-    ShadeBoltFlight,      "Dual mage", "Shade bolt, flies for", Frames, 1, 60;
-    BinaryFlight,         "Dual mage", "Binary, flies for", Frames, 1, 90;
-    AbyssLife,            "Dual mage", "Abyss, lasts", Frames, 1, 300;
-    SpellFlash,           "Dual mage", "Ray and flare, seen for", Frames, 1, 30;
-    HexLasts,             "Dual mage", "Hex, lasts", Frames, 1, 600;
-    ShatterDamage,        "Dual mage", "Shatter, damage", Int, 0, 200;
-    ShatterStagger,       "Dual mage", "Shatter, staggers for", Frames, 0, 60;
-    WitherDamage,         "Dual mage", "Wither, damage", Int, 0, 200;
-    WitherSlow,           "Dual mage", "Wither, slows to (x)", Fixed, 0, fx(1,1);
-    AbyssPull,            "Dual mage", "Abyss, drags at (m/s)", Fixed, 0, fx(20,1);
-    FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
-    ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
+    // **The Dual mage, every move a spell**, 2026-10-09, re-cast in place for
+    // her spellbook, 2026-10-12: the curse and its purge, the stars, the black
+    // sun, the Descent and the Shadowstep. See
+    // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    CurseEvery, "Dual mage", "Curse, ticks every", Frames, 1, 120;
+    BinaryOrbits, "Dual mage", "Binary, orbits for", Frames, 1, 600;
+    AbyssLife, "Dual mage", "Abyss, lasts", Frames, 1, 300;
+    SpellFlash, "Dual mage", "Spell, seen for", Frames, 1, 60;
+    CurseFades, "Dual mage", "Curse, one fades every", Frames, 1, 600;
+    PurgeDamage, "Dual mage", "Purge, damage per stack", Int, 0, 200;
+    PurgeStagger, "Dual mage", "Purge, staggers for", Frames, 0, 60;
+    CurseTick, "Dual mage", "Curse, tick per stack", Int, 0, 100;
+    RootSlow, "Dual mage", "Root, speed while rooted (x)", Fixed, 0, fx(1,1);
+    AbyssCurseEvery, "Dual mage", "Abyss, curses every", Frames, 1, 120;
+    DescentDive, "Dual mage", "Descent, dives at (m/s)", Fixed, 0, fx(60,1);
+    ShadowstepCursed, "Dual mage", "Shadowstep, reaches a cursed body (m)", Fixed, fx(1,1), fx(30,1);
     EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
     // **The Shadow Reaver**, 2026-10-10 and 2026-10-12: the aimed plunge
     // and its ring, Gallows' blink to the shadow, the return clock and the
@@ -774,6 +775,41 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **The Dual mage's spellbook**, 2026-10-12: the curse's cap and the
+    // purge's curve, the root, the sigils, the litanies, the twin stars, the
+    // Shadowstep, the Veil, the Equinox's levelling, the majors' steeper
+    // growth and Judgement's columns, the Abyss's collapse and Apotheosis.
+    // Appended for the reason above. See
+    // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    PurgeCurve, "Dual mage", "Purge, extra per stack (x)", Fixed, 0, fx(1,1);
+    PurgeStaggerFrom, "Dual mage", "Purge, staggers from (stacks)", Int, 1, 9;
+    CurseMost, "Dual mage", "Curse, most stacks", Int, 1, 7;
+    RootFor, "Dual mage", "Root, lasts", Frames, 0, 120;
+    SigilLasts, "Dual mage", "Sigil, lasts", Frames, 1, 900;
+    SigilRadius, "Dual mage", "Sigil, radius (m)", Fixed, fx(1,2), fx(8,1);
+    SanctuaryRadius, "Dual mage", "Sanctuary, sigil radius (m)", Fixed, fx(1,2), fx(8,1);
+    SigilWards, "Dual mage", "Sigil, wards her by (%)", Percent, 0, 100;
+    SigilBurn, "Dual mage", "Sigil, burns", Int, 0, 100;
+    SigilsAtOnce, "Dual mage", "Sigils, at once", Int, 1, 4;
+    LitanyWindow, "Dual mage", "Litany, window", Frames, 0, 90;
+    BinaryRadius, "Dual mage", "Binary, orbit radius (m)", Fixed, fx(1,2), fx(4,1);
+    BinaryStar, "Dual mage", "Binary, star radius (m)", Fixed, fx(1,10), fx(2,1);
+    BinaryEvery, "Dual mage", "Binary, strikes a body every", Frames, 1, 120;
+    BinaryDamage, "Dual mage", "Binary, damage a strike", Int, 0, 200;
+    BinarySpin, "Dual mage", "Binary, turns a second", Fixed, 0, fx(4,1);
+    ShadowstepBare, "Dual mage", "Shadowstep, without a body (m)", Fixed, 0, fx(20,1);
+    ShadowstepBehind, "Dual mage", "Shadowstep, arrives behind them (m)", Fixed, 0, fx(4,1);
+    VeilFor, "Dual mage", "Veil, untouchable for", Frames, 0, 60;
+    EquinoxLevels, "Dual mage", "Equinox, levels by", Int, 0, 100;
+    MajorSizeEmpty, "Dual mage", "Majors, size at empty (x)", Fixed, fx(1,10), fx(2,1);
+    MajorSizeFull, "Dual mage", "Majors, size at full (x)", Fixed, fx(1,1), fx(4,1);
+    JudgementColumns, "Dual mage", "Judgement, columns at full", Int, 1, 9;
+    JudgementApart, "Dual mage", "Judgement, columns stand apart (m)", Fixed, fx(1,2), fx(8,1);
+    AbyssCollapse, "Dual mage", "Abyss, collapse damage", Int, 0, 400;
+    ApotheosisReach, "Dual mage", "Apotheosis, reaches (m)", Fixed, fx(1,1), fx(12,1);
+    ApotheosisDamage, "Dual mage", "Apotheosis, damage", Int, 0, 400;
+    CurseDrains, "Dual mage", "Curse, drained to her (%)", Percent, 0, 100;
+    ShadowstepProbe, "Dual mage", "Shadowstep, probe for a creature, half-width (m)", Fixed, fx(1,50), fx(1,1);
 }
 
 // ---------------------------------------------------------------------------

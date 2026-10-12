@@ -72,16 +72,16 @@ fn onto_them(w: &World) -> i16 {
     )
 }
 
-/// The move a button throws from the floor.
+/// The move a button throws from the floor, as the first link of a litany.
 fn floor_kind(bits: u16) -> u8 {
     match bits {
-        b if b == L => dual::SHADE_BOLT,
-        b if b == R => dual::SUNRAY,
+        b if b == L => dual::UMBRAL_LASH,
+        b if b == R => dual::RADIANT_PALM,
         b if b == M => dual::BINARY,
         b if b == Q => dual::ABYSS,
         b if b == E => dual::JUDGEMENT,
-        b if b == SPACE | L => dual::NIGHTFALL,
-        b if b == SPACE | R => dual::DAWN,
+        b if b == SPACE | L => dual::VEIL,
+        b if b == SPACE | R => dual::SANCTUARY,
         b if b == SPACE | M => dual::EQUINOX,
         _ => panic!("no floor move on {bits:b}"),
     }
@@ -92,7 +92,13 @@ fn floor_kind(bits: u16) -> u8 {
 /// counting presses that threw nothing.
 fn ready(w: &World, bits: u16) -> bool {
     let p = &w.players[0];
-    p.action.actionable() && p.grounded && !p.locked_out(floor_kind(bits))
+    // The bare clicks are litanies: the move is whichever link comes next.
+    let kind = match bits {
+        b if b == L => dual::NIGHT[sim::dual::litany_link(p, true) as usize],
+        b if b == R => dual::DAWN[sim::dual::litany_link(p, false) as usize],
+        _ => floor_kind(bits),
+    };
+    p.action.actionable() && p.grounded && !p.locked_out(kind)
 }
 
 /// Up in the open, high enough that a click is the air's move for a while.
@@ -119,8 +125,8 @@ fn both_clicks_are_attacks_and_they_are_different_attacks() {
     // The class has no shield, so right click is not guard -- it is the other
     // half of the mechanic. A right click that did nothing would leave the
     // player able to travel in one direction along the meter only.
-    assert_eq!(kind_thrown(L), dual::SHADE_BOLT);
-    assert_eq!(kind_thrown(R), dual::SUNRAY);
+    assert_eq!(kind_thrown(L), dual::UMBRAL_LASH);
+    assert_eq!(kind_thrown(R), dual::RADIANT_PALM);
 }
 
 #[test]
@@ -148,8 +154,8 @@ fn shift_is_only_a_dodge_now() {
     // The grammar change, checked from the class it cost a binding: shift plus
     // a click is not an attack input any more, on any class, so shift plus left
     // click is the bare left click's move. See `docs/design/controls.md`.
-    assert_eq!(kind_thrown(L | Input::SHIFT), dual::SHADE_BOLT);
-    assert_eq!(kind_thrown(R | Input::SHIFT), dual::SUNRAY);
+    assert_eq!(kind_thrown(L | Input::SHIFT), dual::UMBRAL_LASH);
+    assert_eq!(kind_thrown(R | Input::SHIFT), dual::RADIANT_PALM);
 }
 
 #[test]
@@ -176,8 +182,8 @@ fn nothing_in_the_kit_is_locked_at_the_centre() {
     // A major you cannot press is not one.
     let mut w = mage();
     for (bits, name) in [
-        (L, "shade bolt"),
-        (R, "sunray"),
+        (L, "umbral lash"),
+        (R, "radiant palm"),
         (E, "judgement"),
         (Q, "abyss"),
         (M, "binary"),
@@ -204,11 +210,11 @@ fn the_two_autos_come_out_of_opposite_hands() {
     // right. (Where a skillshot actually leaves the body is
     // `aim::skillshot_path`'s question, and today that is the chest for both.)
     assert_eq!(
-        sim::moves::get(Class::DualMage, dual::SHADE_BOLT).hand,
+        sim::moves::get(Class::DualMage, dual::UMBRAL_LASH).hand,
         Hand::Left
     );
     assert_eq!(
-        sim::moves::get(Class::DualMage, dual::SUNRAY).hand,
+        sim::moves::get(Class::DualMage, dual::RADIANT_PALM).hand,
         Hand::Right
     );
 }
@@ -221,23 +227,28 @@ fn a_side_is_always_declared_and_the_list_is_short() {
     // visible one-line change to this list rather than something a reader of the
     // move table has to go looking for.
     //
-    // Nine, and eight of them are the Dual mage. Since the 2026-10-09 rework
-    // every move of hers but the twilight column is made of one force, and the
-    // hand it leaves from is that force: left dark, right light. A spell off
+    // Thirteen, and twelve of them are the Dual mage. Since the 2026-10-09
+    // rework every move of hers but the twilight column is made of one force,
+    // and the hand it leaves from is that force: left dark, right light (the
+    // spellbook of 2026-10-12 kept the rule and added the litanies' links). A spell off
     // the centre line could not say which one it was. The Champion's spear
     // opener is sided because it is the one attack in that class thrown with
     // one arm: a jab off the leading hand with the butt of the shaft still at
     // the hip, which is most of why it reads as a poke rather than as a short
     // lunge.
     let declared: &[(Class, u8)] = &[
-        (Class::DualMage, dual::SHADE_BOLT),
-        (Class::DualMage, dual::REEL),
-        (Class::DualMage, dual::NIGHTFALL),
+        (Class::DualMage, dual::UMBRAL_LASH),
+        (Class::DualMage, dual::SHADOWSTEP),
+        (Class::DualMage, dual::VEIL),
         (Class::DualMage, dual::ABYSS),
-        (Class::DualMage, dual::SUNRAY),
-        (Class::DualMage, dual::FLARE),
-        (Class::DualMage, dual::DAWN),
+        (Class::DualMage, dual::RADIANT_PALM),
+        (Class::DualMage, dual::DESCENT),
+        (Class::DualMage, dual::SANCTUARY),
         (Class::DualMage, dual::JUDGEMENT),
+        (Class::DualMage, dual::GRASPING_SHADE),
+        (Class::DualMage, dual::DEVOUR),
+        (Class::DualMage, dual::HALO),
+        (Class::DualMage, dual::SMITE),
         (Class::Champion, sim::moves::champion::SPEAR_GROUND),
     ];
     for class in sim::class::ALL_CLASSES {
@@ -301,6 +312,10 @@ fn meter_at(dark: i32, light: i32, colour: Force) -> Mechanic {
         jumped: false,
         landed: 0,
         singe: Fx::ZERO,
+        litany: 0,
+        litany_left: 0,
+        veil: 0,
+        warded: false,
     }
 }
 
@@ -314,6 +329,10 @@ fn ascended(dark: i32, light: i32, colour: Force) -> Mechanic {
         jumped: false,
         landed: 0,
         singe: Fx::ZERO,
+        litany: 0,
+        litany_left: 0,
+        veil: 0,
+        warded: false,
     }
 }
 
@@ -346,8 +365,8 @@ fn every_attack_goads_a_bar_with_nothing_in_range() {
     // press every button on the class and watch the bar sit at zero. A resource
     // you cannot move without a target is one nobody can learn or tune.
     for (bits, name) in [
-        (L, "shade bolt"),
-        (R, "sunray"),
+        (L, "umbral lash"),
+        (R, "radiant palm"),
         (M, "binary"),
         (Q, "abyss"),
         (E, "judgement"),
@@ -457,10 +476,10 @@ fn a_cast_goads_its_own_bar_and_further_than_an_auto_does() {
         "a cast moves her no further than an auto"
     );
     for (bits, air, kind, force) in [
-        (L, true, dual::REEL, Force::Dark),
-        (R, true, dual::FLARE, Force::Light),
-        (SPACE | L, false, dual::NIGHTFALL, Force::Dark),
-        (SPACE | R, false, dual::DAWN, Force::Light),
+        (L, true, dual::SHADOWSTEP, Force::Dark),
+        (R, true, dual::DESCENT, Force::Light),
+        (SPACE | L, false, dual::VEIL, Force::Dark),
+        (SPACE | R, false, dual::SANCTUARY, Force::Light),
     ] {
         for carrying in [Force::Dark, Force::Light] {
             let w = cast_from_empty(bits, air, carrying);
@@ -664,14 +683,14 @@ fn one_cast_from_level_stays_inside_the_band_two_do_not_and_a_finisher_never_doe
     w.players[0].mechanic = meter_at(50, 50, Force::Dark);
     aloft(&mut w, 20);
     step(&mut w, 1, L);
-    assert_eq!(w.players[0].action.attack_kind(), Some(dual::REEL));
+    assert_eq!(w.players[0].action.attack_kind(), Some(dual::SHADOWSTEP));
     assert!(
         sim::dual::level(&w.players[0]),
         "one cast from level left the band"
     );
     for _ in 0..200 {
         let p = &w.players[0];
-        if p.action.actionable() && !p.locked_out(dual::REEL) {
+        if p.action.actionable() && !p.locked_out(dual::SHADOWSTEP) {
             break;
         }
         step(&mut w, 1, 0);
@@ -681,7 +700,7 @@ fn one_cast_from_level_stays_inside_the_band_two_do_not_and_a_finisher_never_doe
         "fixture: she landed between the casts"
     );
     step(&mut w, 1, L);
-    assert_eq!(w.players[0].action.attack_kind(), Some(dual::REEL));
+    assert_eq!(w.players[0].action.attack_kind(), Some(dual::SHADOWSTEP));
     assert!(
         !sim::dual::level(&w.players[0]),
         "two casts from level are still inside the band"
@@ -704,8 +723,10 @@ fn one_cast_from_level_stays_inside_the_band_two_do_not_and_a_finisher_never_doe
 }
 
 /// The rhythm the tiers are climbed with: dark, light, dark, light -- the
-/// bread and butter of the design (0010 §"The six combos"), the Shade bolt
-/// and the Sunray in turn.
+/// first link of each litany in turn, the Umbral lash and the Radiant palm
+/// (2026-10-12; the Shade bolt and the Sunray before). A whole litany of one
+/// hand is two autos and a cast, which steps just outside the band: the hill
+/// asking for the other hand.
 const CLIMB: [u16; 2] = [L, R];
 
 #[test]
@@ -830,14 +851,17 @@ fn neither_the_burn_nor_ascension_can_be_what_kills_her() {
 // `cargo run -p sim --bin goad` prints the same numbers. The full list is in
 // `docs/design/dual-mage.md` under "Benchmarks".
 //
-// The scripts were rewritten for the 2026-10-09 spell rework: alternating is
-// the Shade bolt and the Sunray, one-sided is one hand, and the finisher is
-// the carried force's major.
+// The scripts were rewritten for the 2026-10-09 spell rework, and again for
+// the spellbook of 2026-10-12: alternating is a litany of each hand -- three
+// left clicks, three right -- one-sided is the litany of night and the Abyss,
+// and the finisher is the carried force's major. The dummy stands in sword
+// range.
 
-/// How far in front of her the dummy stands: inside both autos' reach (the
-/// Sunray's seven metres is the shorter) and Binary's.
+/// How far in front of her the dummy stands: **sword range** since the
+/// spellbook (2026-10-12) -- inside the lash's reach, the Halo's ring and the
+/// orbit of Binary's stars, where every spell of hers is cast.
 fn dummy_gap() -> Fx {
-    Fx::from_int(5)
+    Fx::from_int(2)
 }
 
 /// Run a script of presses against a dummy standing in range, the crosshair
@@ -879,7 +903,7 @@ fn b1_alternating_on_a_dummy_for_half_a_round_deals_about_a_health_bar_and_a_hal
     // the last quarter being the six seconds of ascension the climb reaches
     // near the end, cast at the top of the curve. Against a person a third of
     // it lands, which is one kill a round from the sustained game.
-    let (dealt, _) = against_a_dummy(1800, |n| [L, R][(n % 2) as usize]);
+    let (dealt, _) = against_a_dummy(1800, |n| [L, L, L, R, R, R][(n % 6) as usize]);
     let bar = sim::state::max_health();
     assert!(
         dealt >= bar && dealt * 4 <= 9 * bar,
@@ -889,10 +913,10 @@ fn b1_alternating_on_a_dummy_for_half_a_round_deals_about_a_health_bar_and_a_hal
 
 #[test]
 fn b2_one_sided_spam_on_a_dummy_deals_at_most_three_and_a_half_bars_and_costs_her_half_of_one() {
-    // The burst play: the dark hand only, an Abyss every time it is up, on a
+    // The burst play: the dark hand only, an Abyss every fourth spell, on a
     // target that stands in all of it. It is allowed to be the biggest number
     // the class can produce, and it has to cost her.
-    let (dealt, cost) = against_a_dummy(1800, |n| [L, L, Q][(n % 3) as usize]);
+    let (dealt, cost) = against_a_dummy(1800, |n| [L, L, L, Q][(n % 4) as usize]);
     let bar = sim::state::max_health();
     assert!(
         dealt >= 2 * bar && dealt * 2 <= 7 * bar,
@@ -901,6 +925,21 @@ fn b2_one_sided_spam_on_a_dummy_deals_at_most_three_and_a_half_bars_and_costs_he
     assert!(
         cost * 2 >= bar,
         "one-sided spam for half a round cost her only {cost} of {bar}"
+    );
+}
+
+#[test]
+fn b9_the_majors_in_turn_are_the_spectacle_and_still_the_budget() {
+    // The black sun, then the columns through it, over and over, on a target
+    // that stands in all of it: the class's spectacle, and since alternating
+    // the two keeps her level it costs her nothing -- so what it may deal is
+    // bounded by the frames, and the frames are set so the most it can be is
+    // the most the class makes, three and a half bars in half a round.
+    let (dealt, _) = against_a_dummy(1800, |n| [Q, E][(n % 2) as usize]);
+    let bar = sim::state::max_health();
+    assert!(
+        dealt >= 2 * bar && dealt * 2 <= 7 * bar,
+        "the majors in turn for half a round dealt {dealt} of a {bar} health bar"
     );
 }
 
@@ -996,7 +1035,8 @@ fn b6_a_finisher_from_level_is_caught_by_the_other_hand_inside_an_exchange() {
     );
 
     // Answered with the light hand, from the frame the finisher recovers: a
-    // Sunray, a Dawn (the light cast on the floor), then Sunrays.
+    // Radiant palm, a Sanctuary (the light cast off the floor), then the
+    // litany of dawn.
     let answer = [R, SPACE | R, R, R, R, R];
     let mut presses = 0;
     let mut recovered_at = None;
@@ -1028,21 +1068,25 @@ fn b6_a_finisher_from_level_is_caught_by_the_other_hand_inside_an_exchange() {
         exchange()
     );
 
-    // Autos alone: the gap does not grow.
+    // The far-side click alone -- the litany of dawn, over and over: the dark
+    // lead does not grow. Since the spellbook the litany's third link is a
+    // cast, so it does more than hold: it can carry the light past the dark,
+    // which is the other hand's problem and the next exchange's.
     let mut w = mage();
     w.players[1].pos = V3::new(fx(-12.0), Fx::ZERO, fx(-12.0));
     w.players[0].mechanic = meter_at(50, 50, Force::Dark);
     step(&mut w, 1, Q);
     step(&mut w, 60, 0);
-    let gap_before = sim::dual::gap(&w.players[0]);
+    let lead = |w: &World| dark(w).sub(light(w));
+    let lead_before = lead(&w);
     for _ in 0..300 {
         let bits = if ready(&w, R) { R } else { 0 };
         step(&mut w, 1, bits);
     }
     assert!(
-        sim::dual::gap(&w.players[0]).raw() <= gap_before.raw(),
-        "far-side autos alone lost ground: the gap went {gap_before:?} to {:?}",
-        sim::dual::gap(&w.players[0])
+        lead(&w).raw() <= lead_before.raw(),
+        "the far-side click alone lost ground: the dark lead went {lead_before:?} to {:?}",
+        lead(&w)
     );
 }
 
@@ -1582,8 +1626,8 @@ fn a_cast_at_the_centre_is_a_weaker_cast_than_one_at_the_edge() {
     // because the point is that the curve reaches all the way through to the
     // thing that hurts.
     for (bits, name) in [
-        (L, "shade bolt"),
-        (R, "sunray"),
+        (L, "umbral lash"),
+        (R, "radiant palm"),
         (M, "binary"),
         (Q, "abyss"),
         (E, "judgement"),
@@ -1655,13 +1699,13 @@ fn a_move_reads_its_own_bar_and_twilight_reads_the_lower() {
     let p = &w.players[0];
     let at = |kind: Option<u8>| sim::dual::depth_at(p, kind).to_f32_for_render();
     for (kind, strong) in [
-        (dual::SHADE_BOLT, true),
-        (dual::REEL, true),
-        (dual::NIGHTFALL, true),
+        (dual::UMBRAL_LASH, true),
+        (dual::SHADOWSTEP, true),
+        (dual::VEIL, true),
         (dual::ABYSS, true),
-        (dual::SUNRAY, false),
-        (dual::FLARE, false),
-        (dual::DAWN, false),
+        (dual::RADIANT_PALM, false),
+        (dual::DESCENT, false),
+        (dual::SANCTUARY, false),
         (dual::JUDGEMENT, false),
         (dual::BINARY, false),
         (dual::PHASE, false),
@@ -1676,11 +1720,11 @@ fn a_move_reads_its_own_bar_and_twilight_reads_the_lower() {
         );
     }
     assert!(
-        (at(Some(dual::SUNRAY)) - at(Some(dual::JUDGEMENT))).abs() < 0.001,
+        (at(Some(dual::RADIANT_PALM)) - at(Some(dual::JUDGEMENT))).abs() < 0.001,
         "two light moves read different bars"
     );
     assert!(
-        (at(None) - at(Some(dual::SUNRAY))).abs() < 0.001,
+        (at(None) - at(Some(dual::RADIANT_PALM))).abs() < 0.001,
         "carrying the light, a question between moves did not read the light bar"
     );
 }
@@ -1758,7 +1802,9 @@ fn alternating_clicks_in_the_air_is_a_slow_fall_and_not_a_hover() {
     // twice -- so a class with two interchangeable air clicks can alternate
     // them, and she is that class by construction. An unlimited hang would
     // mean pressing left, right, left, right and never touching the floor
-    // again. In the air her clicks are Reel and Flare, thrown here at nothing.
+    // again. In the air her clicks move her (2026-10-12): the Shadowstep and
+    // Phase are thrown here at nothing, and the Descent -- the way down, by
+    // design -- is left out.
     //
     // Measured against falling with the hands down, which is the thing it is
     // allowed to be better than, and thrown after the apex: a hang damps
@@ -1771,7 +1817,7 @@ fn alternating_clicks_in_the_air_is_a_slow_fall_and_not_a_hover() {
         let mut button = L;
         for i in 0..600 {
             let bits = if attacking && i % 10 == 0 {
-                button = if button == L { R } else { L };
+                button = if button == L { M } else { L };
                 button
             } else {
                 0

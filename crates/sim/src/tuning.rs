@@ -3045,64 +3045,64 @@ pub fn air_ball_knock() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallKnock)).clamp(Fx::ZERO, Fx::ONE)
 }
 
-/// How long a Shade bolt (and Reel's) is in flight across its reach: the dark is the force you can see coming.
-pub fn shade_bolt_flight() -> u16 {
-    oven::scalar(Scalar::ShadeBoltFlight).max(1) as u16
+/// How often a curse ticks: every stack on a body deals `curse_tick` and drains it to whoever laid it.
+pub fn curse_every() -> u16 {
+    oven::scalar(Scalar::CurseEvery).max(0) as u16
 }
 
-/// How long Binary's two orbs are in flight across their reach.
-pub fn binary_flight() -> u16 {
-    oven::scalar(Scalar::BinaryFlight).max(1) as u16
+/// How long Binary's twin stars orbit her.
+pub fn binary_orbits() -> u16 {
+    oven::scalar(Scalar::BinaryOrbits).max(0) as u16
 }
 
-/// How long the Abyss well (and Nightfall's) drags, drains and hexes.
+/// How long the Abyss's black sun pins, ticks and curses before it collapses.
 pub fn abyss_life() -> u16 {
-    oven::scalar(Scalar::AbyssLife).max(1) as u16
+    oven::scalar(Scalar::AbyssLife).max(0) as u16
 }
 
-/// Presentation: how many frames a Sunray's line and a Flare's burst stay in the world after their one frame of hitting.
+/// Presentation: how many frames a burst -- Judgement's outer columns, Apotheosis -- stays in the world after its one frame of hitting.
 pub fn spell_flash() -> u16 {
-    oven::scalar(Scalar::SpellFlash).max(1) as u16
+    oven::scalar(Scalar::SpellFlash).max(0) as u16
 }
 
-/// How long a hex stays on a body before it fades on its own.
-pub fn hex_lasts() -> u16 {
-    oven::scalar(Scalar::HexLasts).max(1) as u16
+/// The curse's one clock: a new stack resets it; when it runs out one stack goes and it starts again.
+pub fn curse_fades() -> u16 {
+    oven::scalar(Scalar::CurseFades).max(0) as u16
 }
 
-/// What a Shatter -- light on an Umbra hex -- deals on top of the hit that set it off, before her power.
-pub fn shatter_damage() -> i32 {
-    oven::scalar(Scalar::ShatterDamage).max(0)
+/// What one stack of a curse is worth when light purges it, before the curve and her power.
+pub fn purge_damage() -> i32 {
+    oven::scalar(Scalar::PurgeDamage).max(0)
 }
 
-/// How long a Shatter staggers a fighter.
-pub fn shatter_stagger() -> u16 {
-    oven::scalar(Scalar::ShatterStagger).max(0) as u16
+/// How long a big enough purge staggers a fighter.
+pub fn purge_stagger() -> u16 {
+    oven::scalar(Scalar::PurgeStagger).max(0) as u16
 }
 
-/// What a Wither -- dark on a Radiance hex -- deals on top of the hit, all of it drained back to her, before her power.
-pub fn wither_damage() -> i32 {
-    oven::scalar(Scalar::WitherDamage).max(0)
+/// What each stack of a curse deals on its tick, before her Dark power, all of it drained to her.
+pub fn curse_tick() -> i32 {
+    oven::scalar(Scalar::CurseTick).max(0)
 }
 
-/// What a Wither leaves the victim's walking speed at, for the slow's usual length.
-pub fn wither_slow() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WitherSlow)).max(Fx::ZERO)
+/// What the Grasping shade and the Abyss leave a body's walking speed at while they hold it.
+pub fn root_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RootSlow)).max(Fx::ZERO)
 }
 
-/// How fast the Abyss drags a body toward its middle.
-pub fn abyss_pull() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::AbyssPull)).max(Fx::ZERO)
+/// How often the Abyss lays a curse stack on everything under it.
+pub fn abyss_curse_every() -> u16 {
+    oven::scalar(Scalar::AbyssCurseEvery).max(0) as u16
 }
 
-/// How hard a Flare that met something kicks her back the other way.
-pub fn flare_kick() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::FlareKick)).max(Fx::ZERO)
+/// How fast Descent drives her down its line.
+pub fn descent_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DescentDive)).max(Fx::ZERO)
 }
 
-/// How fast Reel pulls her to the body it caught.
-pub fn reel_pull() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ReelPull)).max(Fx::ZERO)
+/// How far along the line Shadowstep finds a cursed body; a clean one only as far as the row's reach.
+pub fn shadowstep_cursed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepCursed)).max(Fx::ZERO)
 }
 
 /// What Equinox adds to its own lift at a full lower bar, in proportion below it: the most level mage jumps highest.
@@ -3302,4 +3302,152 @@ pub fn step_lift_full() -> Fx {
 /// How fast the Shield step carries him forward over the shield.
 pub fn step_forward() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepForward)).max(Fx::ZERO)
+}
+
+/// The purge's convexity: n stacks are worth n(1 + this x n) of `purge_damage`, so each is worth more than the last.
+pub fn purge_curve() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PurgeCurve)).max(Fx::ZERO)
+}
+
+/// The fewest stacks whose purge staggers a fighter.
+pub fn purge_stagger_from() -> u8 {
+    oven::scalar(Scalar::PurgeStaggerFrom).clamp(0, 255) as u8
+}
+
+/// The most stacks a curse holds.
+pub fn curse_most() -> u8 {
+    oven::scalar(Scalar::CurseMost).clamp(0, 255) as u8
+}
+
+/// How long the Grasping shade roots a body.
+pub fn root_for() -> u16 {
+    oven::scalar(Scalar::RootFor).max(0) as u16
+}
+
+/// How long a sigil stays written on the ground.
+pub fn sigil_lasts() -> u16 {
+    oven::scalar(Scalar::SigilLasts).max(0) as u16
+}
+
+/// How wide a sigil is before her power: Smite's and Descent's.
+pub fn sigil_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SigilRadius)).max(Fx::ZERO)
+}
+
+/// How wide the sigil Sanctuary writes at her feet is, before her power.
+pub fn sanctuary_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SanctuaryRadius)).max(Fx::ZERO)
+}
+
+/// How much of every wound her own sigil takes off while she stands in it.
+pub fn sigil_wards() -> i32 {
+    oven::scalar(Scalar::SigilWards).max(0)
+}
+
+/// What her sigil deals anybody else standing in it, on the curse's tick.
+pub fn sigil_burn() -> i32 {
+    oven::scalar(Scalar::SigilBurn).max(0)
+}
+
+/// How many sigils of hers may be written at once; another replaces the oldest.
+pub fn sigils_at_once() -> usize {
+    oven::scalar(Scalar::SigilsAtOnce).max(1) as usize
+}
+
+/// How long after a litany link ends a press of the same click throws the next link.
+pub fn litany_window() -> u16 {
+    oven::scalar(Scalar::LitanyWindow).max(0) as u16
+}
+
+/// How far from her middle Binary's stars orbit.
+pub fn binary_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BinaryRadius)).max(Fx::ZERO)
+}
+
+/// How big each of Binary's stars is, as a hit, before her power.
+pub fn binary_star() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BinaryStar)).max(Fx::ZERO)
+}
+
+/// The shortest gap between one star striking the same body twice.
+pub fn binary_every() -> u16 {
+    oven::scalar(Scalar::BinaryEvery).max(0) as u16
+}
+
+/// What one of Binary's stars deals when it strikes, before her power.
+pub fn binary_damage() -> i32 {
+    oven::scalar(Scalar::BinaryDamage).max(0)
+}
+
+/// How fast Binary's stars go round her, in whole turns a second.
+pub fn binary_spin() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BinarySpin)).max(Fx::ZERO)
+}
+
+/// How far Shadowstep takes her along the line when there is no body on it.
+pub fn shadowstep_bare() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepBare)).max(Fx::ZERO)
+}
+
+/// How far past the body she arrives behind.
+pub fn shadowstep_behind() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepBehind)).max(Fx::ZERO)
+}
+
+/// How long the Veil keeps her untouchable as she rises.
+pub fn veil_for() -> u8 {
+    oven::scalar(Scalar::VeilFor).clamp(0, 255) as u8
+}
+
+/// How much Equinox moves from her higher bar to her lower one, at most half the gap.
+pub fn equinox_levels() -> i32 {
+    oven::scalar(Scalar::EquinoxLevels).max(0)
+}
+
+/// How big the Abyss and Judgement arrive from an empty bar, as a multiple of their row.
+pub fn major_size_empty() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorSizeEmpty)).max(Fx::ZERO)
+}
+
+/// How big the Abyss and Judgement arrive from a full bar, as a multiple of their row.
+pub fn major_size_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorSizeFull)).max(Fx::ZERO)
+}
+
+/// How many columns of light Judgement brings down from a full Light bar: one from empty, in proportion between.
+pub fn judgement_columns() -> u8 {
+    oven::scalar(Scalar::JudgementColumns).clamp(0, 255) as u8
+}
+
+/// How far Judgement's outer columns stand from its middle one.
+pub fn judgement_apart() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JudgementApart)).max(Fx::ZERO)
+}
+
+/// The last blow the Abyss deals everything under it as it collapses, before her power.
+pub fn abyss_collapse() -> i32 {
+    oven::scalar(Scalar::AbyssCollapse).max(0)
+}
+
+/// How far the nova that bursts from her as she ascends reaches.
+pub fn apotheosis_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ApotheosisReach)).max(Fx::ZERO)
+}
+
+/// What the nova deals, at the top of her power.
+pub fn apotheosis_damage() -> i32 {
+    oven::scalar(Scalar::ApotheosisDamage).max(0)
+}
+
+/// How much of a curse's tick comes back to whoever laid it: less than all of
+/// it, or one hand's curse pays for the burn of a runaway on its own.
+pub fn curse_drains() -> i32 {
+    oven::scalar(Scalar::CurseDrains).clamp(0, 100)
+}
+
+/// How thick the probe is that the Shadowstep carries along the crosshair's
+/// line to find a creature's part: thin, because the crosshair is a point and
+/// a sac on a spider's back is above her flank by less than a body's width.
+pub fn shadowstep_probe() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepProbe)).max(Fx::ratio(1, 100))
 }

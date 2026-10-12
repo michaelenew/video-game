@@ -666,23 +666,29 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, 2) => Clip::BloodSpecial,
         (Class::BloodMage, 3) => Clip::BloodMechanic,
         (Class::BloodMage, _) => Clip::BloodSweep,
-        // Every move a spell, since 2026-10-09, on the six clips she has: a
-        // column's spells are thrown from that column's arm, so the dark ones
-        // are the left-handed casts and the light ones the right-handed.
-        // Binary and Phase are the light Lance's two-handed thrust, the Abyss
-        // and Dawn the sweep's whole-body heave, and Equinox the raised
-        // special. Her own clips for the new five are the next step, logged
-        // in `docs/design/feel-log.md`.
+        // Her spellbook, since 2026-10-12, on the six clips she has: a dark
+        // spell is thrown from the left arm and a light one from the right,
+        // so the litanies' blows are the one-armed casts (the lash and the
+        // Devour the dark thrust, the palm the light one; the Grasp the dark
+        // Lance's reach to the floor, the Smite the light Lance's), the Halo,
+        // the Sanctuary and the Abyss the sweep's whole-body heave, Binary,
+        // Phase and Equinox the raised special, and the two moves of the air
+        // the one-armed casts of their column. Clips of her own for the
+        // spellbook are the next step, logged in `docs/design/feel-log.md`.
         (Class::DualMage, 0) => Clip::DualDark,
-        (Class::DualMage, 1) => Clip::DualLightLance,
+        (Class::DualMage, 1) => Clip::DualSpecial,
         (Class::DualMage, 2) => Clip::DualSpecial,
         (Class::DualMage, 3) => Clip::DualSweep,
         (Class::DualMage, 4) => Clip::DualLight,
         (Class::DualMage, 5) => Clip::DualDark,
         (Class::DualMage, 6) => Clip::DualLight,
-        (Class::DualMage, 7) => Clip::DualLightLance,
+        (Class::DualMage, 7) => Clip::DualSpecial,
         (Class::DualMage, 8) => Clip::DualDarkLance,
         (Class::DualMage, 9) => Clip::DualSweep,
+        (Class::DualMage, 11) => Clip::DualDarkLance,
+        (Class::DualMage, 12) => Clip::DualDark,
+        (Class::DualMage, 13) => Clip::DualSweep,
+        (Class::DualMage, 14) => Clip::DualLightLance,
         (Class::DualMage, _) => Clip::DualSpecial,
     }
 }

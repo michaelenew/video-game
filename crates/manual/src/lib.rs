@@ -208,7 +208,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "U or middle click",
-                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is twilight -- both her forces at once, Binary on the floor and Phase in the air -- and the Elementalist's is fire: the pillar on the floor, the carpet in the air.",
+                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is twilight -- spells on herself, Binary's stars on the floor and Phase in the air -- and the Elementalist's is fire: the pillar on the floor, the carpet in the air.",
             ),
             e(
                 "Mouse side buttons (or I and O)",
@@ -278,35 +278,39 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two forces, one in each hand, and a bar for each -- and every move a spell. Left is dark, the hex: things that travel and linger. Right is light, the strike: things that happen now. Middle is twilight, both at once. A dark spell hexes what it hits, a light one hexes it the other colour, and the other force on a hexed body sets it off -- so alternating your hands is both the combo and the climb. Rebuilt 2026-10-09 and unplayed; docs/design/exploration/0010_dual_mage_spells.md is the design.",
+        blurb: "Two forces, one in each hand, and a bar for each -- and a spellbook in sword range. The click is what a spell is cast on: left is dark, on them -- curses that stack, tick and drain; right is light, on the ground -- sigils, columns from the sky, wards; middle is twilight, on yourself -- twin stars, a blink, your bars levelled. The row is the verb: on the floor you fight, in the air you move, leaving the floor you defend. Dark builds a curse and light purges it, so alternating your hands is both the combo and the climb. Rebuilt 2026-10-12 and unplayed; docs/design/exploration/0015_dual_mage_spellbook.md is the design.",
         entries: &[
             e(
                 "Left click",
-                "Dark. On the floor, the Shade bolt: a small dark dart from your left hand along the crosshair -- quick, but in flight, so it can be stepped out of. In the air, Reel: the same dart, and if it hits somebody it pulls you to them. Space and left click is Nightfall: you jump, and a small dark well blooms where you left the floor, dragging whoever is near it in. Every dark spell feeds the dark bar and hexes what it hits with Umbra (a dark orb over their head).",
+                "Dark, on them. On the floor, the litany of night -- press again inside a moment of the last ending for the next spell: the Umbral lash (a whip of shadow across your front), the Grasping shade (hands out of the floor where you point, rooting whoever stands there), then Devour (a maw that snaps shut: two curses, and half of it drained back to you). In the air, the Shadowstep: you are behind the first body on the crosshair's line, further for a cursed one, and arrive with a lash, and a body found gives you your airdodge back, so you can step from body to body -- with nobody there you still go a few metres, once a jump, as you would with Phase. Space and left click is the Veil: you leave the floor as shadow, untouchable on the way up, cursing whoever was beside you.",
             ),
             e(
                 "Right click",
-                "Light. On the floor, the Sunray: an instant short beam from your right hand to the first thing on the crosshair's line -- already there, so it is blocked rather than dodged. In the air, Flare: a burst of light a few metres along your aim, and if it meets the floor, a wall or a body it kicks you back the other way -- aimed down, a lift. Space and right click is Dawn: a column of light that throws whoever is beside you up with you. Every light spell feeds the light bar and hexes Radiance (a light orb).",
+                "Light, on the ground. On the floor, the litany of dawn: the Radiant palm (a burst of light point-blank), the Halo (a ring of light all round you), then the Smite (a column out of the sky where you point, lifting whoever it catches and writing a sigil there). In the air, Descent: you come down as a pillar of light onto the ground the crosshair is on, inside a cone round straight down -- a smite where you land, and a sigil under you. Space and right click is Sanctuary: a sigil at your feet, a pulse of light through it, and a hop up out of it.",
             ),
             e(
                 "Middle click",
-                "Twilight, both at once: it feeds both bars and is worth your lower one. On the floor, Binary: two orbs, one of each force, wound round each other along the crosshair. In the air, Phase: you blink a few metres along the crosshair, stopped by walls, and a flash hurts whoever was beside you where you were -- it spends your airdodge. Space and middle click is Equinox: a jump as high as your lower bar is full.",
+                "Twilight, on yourself: it feeds both bars and is worth your lower one. On the floor, Binary: twin stars, one dark and one light, orbit you for four seconds -- the dark one curses what it passes through and the light one purges. In the air, Phase: you blink a few metres along the crosshair, stopped by walls, leaving a flash where you were -- it spends your airdodge. Space and middle click is Equinox: your bars are levelled -- twelve from the higher to the lower -- and you jump as high as the lower is full.",
             ),
             e(
                 "Q",
-                "The Abyss, the dark major: a well where the crosshair meets the floor. For a second it drags everything in it toward its middle, hurts, gives you some of it back and hexes Umbra. Feeds the dark bar twenty.",
+                "The Abyss, the dark major: a black sun where the crosshair meets the floor, bigger the fuller your dark bar. Everything under it is pinned, hurt on the tick, drained to you, and cursed again every third of a second; when it ends it collapses in one more blow. Feeds the dark bar twenty.",
             ),
             e(
                 "E",
-                "Judgement, the light major: a delayed strike where the crosshair is, and a burning field that makes you fast while you stand in it. It hexes Radiance -- and sets off every Umbra hex it hits, which is what makes it the end of an Abyss. Feeds the light bar twenty.",
+                "Judgement, the light major: columns of light out of the sky where the crosshair is -- one from an empty light bar, up to five from a full one, every one purging -- and a great sigil left burning that makes you fast. Bigger the fuller your light bar. Abyss, then Judgement through it, is the class's spectacle. Feeds the light bar twenty.",
             ),
             e(
-                "Hexes: Shatter and Wither",
-                "One hex on a body at a time, and it fades on its own. The same force again only refreshes it. The other force sets it off: light on an Umbra hex is a **Shatter** -- a burst of damage and a stagger; dark on a Radiance hex is a **Wither** -- damage drained back to you and a slow. Binary on a clean body sets off both at half. So the bread and butter is dark, light, dark, light on one body.",
+                "The curse and the purge",
+                "Every dark spell that lands lays stacks of a curse, up to five, drawn as dark motes circling the body. They tick, a little each, drained to you, and fade one at a time. A light spell that lands on a curse purges it: every stack at once, each worth more than the last -- five stacks is the biggest thing your hands make, and three or more staggers. So: dark, dark, dark, then light.",
+            ),
+            e(
+                "Sigils",
+                "The Smite, Descent, Sanctuary and Judgement write a sigil -- a turning ring of light on the floor -- for four seconds, two at a time. Stand in your own and you are warded: every wound is cut by a third. Anybody else standing in it burns.",
             ),
             e(
                 "Each bar is its spells' power",
-                "Everything you throw is worth what the bar of its force says, all the way along it: empty is thin, full is the most you can hold -- damage, the reactions, how big the well is. A middle-click spell reads your lower bar. What never changes is the frame data.",
+                "Everything you throw is worth what the bar of its force says, all the way along it: empty is thin, full is the most you can hold -- damage, the purge, how big a sigil or the black sun is. A middle-click spell reads your lower bar. What never changes is the frame data, or how far anything is thrown.",
             ),
             e(
                 "The hill",
@@ -314,7 +318,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Blink, second jump, wings",
-                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower -- which is also why your takeoffs are from the floor only: in the air, space is that jump. Both full and you ascend: wings, a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and then both bars empty and a stagger.",
+                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower -- which is also why your takeoffs are from the floor only: in the air, space is that jump. Both full and you ascend, and every spell climbs you, so near the top you choose the moment: the wings erupt in Apotheosis, a nova of both forces round you that purges every curse in it at full power -- ascend beside a cursed body, not alone in a corner. Then a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and both bars empty and a stagger.",
             ),
             e(
                 "On your back",

@@ -1530,6 +1530,150 @@ pub fn phase_to(who: usize, dir: V3, travel: Fx, scene: &Scene) -> V3 {
     V3::new(at.x, at.y.sub(half).max(floor), at.z)
 }
 
+/// Where a Shadowstep takes her, and the body it took her to.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Shadowstep {
+    /// Her feet, where she arrives.
+    pub to: V3,
+    /// The middle of the body she arrived behind -- where the lash she
+    /// arrives in lands -- or `None` if the line had nobody on it.
+    pub struck: Option<V3>,
+}
+
+/// **Where the Dual mage's Shadowstep puts her** (2026-10-12): along `dir` --
+/// the crosshair's line, as this module solved it -- from the middle of her
+/// body, to the **first body on it**, and `behind` past it -- or, a creature
+/// being as big as it is, up against the part the line met. A body is found as
+/// far as `reach`, or as far as `cursed_reach` if it carries a curse: a cursed
+/// body is a door. Behind it, she travels as Phase does, stopped a body short
+/// of the first wall. With nobody on the line, or a wall before anybody, she
+/// still goes, `bare` along it, as Phase would. Bodies are fighters when
+/// `pvp`, and the creatures and the critters. See
+/// `docs/design/exploration/0015_dual_mage_spellbook.md`.
+#[allow(clippy::too_many_arguments)]
+pub fn shadowstep_to(
+    who: usize,
+    dir: V3,
+    reach: Fx,
+    cursed_reach: Fx,
+    bare: Fx,
+    behind: Fx,
+    pvp: bool,
+    scene: &Scene,
+) -> Shadowstep {
+    let feet = scene.players[who].pos;
+    let half = t::body_height().mul(Fx::ratio(1, 2));
+    let mid = V3::new(feet.x, feet.y.add(half), feet.z);
+    let far = reach.max(cursed_reach);
+    let path = Path {
+        from: mid,
+        to: mid.add(dir.scale(far)),
+    };
+    let met = first_along(
+        path,
+        t::body_radius(),
+        who as u8,
+        scene,
+        Targets::none()
+            .fighters(pvp)
+            .quarry(true)
+            .terrain()
+            .stones(),
+    );
+    // **A creature is found the way a thrown thing finds it**: a probe carried
+    // along the line, asking the animal which part it is in
+    // (`Monster::part_struck`) -- the test every bolt and blade is put to.
+    // The line's own first box, grown by a body, can be a flank under the
+    // line while the crosshair is on the sac above it; the probe is what
+    // reaches the part she pointed at.
+    let met = match (met, column_meets_quarry(path, far, scene)) {
+        (Some(c), Some((slot, part, dist)))
+            if dist.raw() <= c.dist().raw() || matches!(c, Contact::Quarry { .. }) =>
+        {
+            Some(Contact::Quarry { slot, part, dist })
+        }
+        (None, Some((slot, part, dist))) => Some(Contact::Quarry { slot, part, dist }),
+        (Some(Contact::Quarry { .. }), None) => None,
+        (c, _) => c,
+    };
+    let cursed = |c: Contact| match c {
+        Contact::Fighter { index, .. } => {
+            crate::dual::stacks(scene.players[index.min(MAX_PLAYERS - 1)].curse) > 0
+        }
+        Contact::Quarry { slot, .. } => scene
+            .quarry
+            .get(slot)
+            .copied()
+            .flatten()
+            .is_some_and(|m| crate::dual::stacks(m.curse) > 0),
+        _ => false,
+    };
+    let body = met.filter(|c| {
+        matches!(
+            c,
+            Contact::Fighter { .. } | Contact::Quarry { .. } | Contact::Critter { .. }
+        ) && (c.dist().raw() <= reach.raw() || (cursed(*c) && c.dist().raw() <= cursed_reach.raw()))
+    });
+    // Behind a fighter or a critter; against a creature, whose far side may
+    // be ten metres off, right up to the part the line met.
+    let past = |c: Contact| match c {
+        Contact::Quarry { .. } => c
+            .dist()
+            .sub(t::body_radius().add(t::body_radius()))
+            .max(Fx::ZERO),
+        _ => c.dist().add(behind),
+    };
+    // Where the lash she arrives in lands: the body's middle on the line --
+    // and for a creature the foot of the column that found it, since that is
+    // the volume a burst is tested with against a creature's parts.
+    let struck = |c: Contact| {
+        let on = mid.add(dir.scale(c.dist()));
+        match c {
+            Contact::Quarry { .. } => V3::new(on.x, on.y.sub(half), on.z),
+            _ => on,
+        }
+    };
+    match body {
+        Some(c) => Shadowstep {
+            to: phase_to(who, dir, past(c), scene),
+            struck: Some(struck(c)),
+        },
+        None => Shadowstep {
+            to: phase_to(who, dir, bare, scene),
+            struck: None,
+        },
+    }
+}
+
+/// The first creature part a thin probe carried along `path` is in, out to
+/// `far`: which creature, which part, and how far along. The probe is centred
+/// on the line.
+fn column_meets_quarry(path: Path, far: Fx, scene: &Scene) -> Option<(usize, usize, Fx)> {
+    let dir = path.dir();
+    // Thin, and short: a probe of the line itself rather than of a whole body
+    // carried along it, because the crosshair is a point -- a sac on a
+    // spider's back is behind her flank from below by less than a body's
+    // width.
+    let width = t::shadowstep_probe();
+    let step = width;
+    let half = width.add(width);
+    let mut along = Fx::ZERO;
+    while along.raw() <= far.raw() {
+        let at = path.from.add(dir.scale(along));
+        let foot = V3::new(at.x, at.y.sub(half), at.z);
+        for (slot, beast) in scene.quarry.iter().enumerate() {
+            let Some(beast) = beast.filter(|b| b.alive()) else {
+                continue;
+            };
+            if let Some(part) = beast.part_struck(foot, width, half.add(half)) {
+                return Some((slot, part, along));
+            }
+        }
+        along = along.add(step);
+    }
+    None
+}
+
 /// **Where a thing that nobody pointed down at lands**: `to`, a point already
 /// settled on what it stands on, if that is no more than
 /// `tuning::placement_drop` below the footing under `from`; otherwise the
@@ -1876,7 +2020,7 @@ pub fn first_along(
 
     if targets.fighters {
         for (index, p) in scene.players.iter().enumerate() {
-            if index as u8 == owner || p.health <= 0 || p.action.invulnerable() {
+            if index as u8 == owner || p.health <= 0 || p.untouchable() {
                 continue;
             }
             if let Some(dist) = body_hit(from, dir, p, girth) {
