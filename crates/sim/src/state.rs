@@ -58,6 +58,10 @@ pub const NAILED: u8 = u8::MAX - 1;
 
 /// `Player::blinked` when she did not blink this frame.
 pub const NO_POOL: u8 = u8::MAX;
+/// `Player::blinked` when the Blood mage's dodge **sent her blood** ahead
+/// rather than going to a stain: the world throws it this frame
+/// (`World::send_the_blood`).
+pub const SENDS: u8 = u8::MAX - 1;
 /// `Player::vessel` when the Blood mage has no charge stored.
 pub const NO_VESSEL: u8 = u8::MAX;
 /// `Player::charging_stone` when the Elementalist is holding no stone.
@@ -2378,7 +2382,12 @@ impl World {
         // a door at once, as walking into it would be -- her own blood is
         // still only a door. Done here rather than in the dodge branch
         // because the branch only has her body, and the pool is an effect.
-        for i in 0..MAX_PLAYERS {
+        for (i, input) in inputs.into_iter().enumerate() {
+            if self.players[i].blinked == SENDS {
+                self.players[i].blinked = NO_POOL;
+                self.send_the_blood(i, input);
+                continue;
+            }
             let slot = self.players[i].blinked as usize;
             if slot < MAX_EFFECTS
                 && let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool())
@@ -4923,7 +4932,7 @@ fn step_player(
                         // instead, and loss of control is loss of the option
                         // to decline. See `docs/design/dual-mage.md`.
                         Action::Free
-                    } else if let Some(pool) = may_commit
+                    } else if let Some(pool) = (may_commit || p.class == Class::BloodMage)
                         .then(|| pool_under_the_crosshair(p, who, input, scene))
                         .flatten()
                     {
@@ -4932,7 +4941,10 @@ fn step_player(
                         // pool is spent. The Reaver's dash pointed at the
                         // class's object instead of at a body -- and with
                         // nothing to cross, the crossing is instant. The
-                        // airborne one spends the airdodge, like hers.
+                        // airborne one spends the airdodge, like hers -- and is
+                        // there even once it is spent, since a stain is on the
+                        // floor and so is she when she arrives: the zip to the
+                        // blood she sent from a jump (2026-10-12).
                         if !p.grounded {
                             p.air_dodged = true;
                         }
@@ -5029,6 +5041,9 @@ fn step_player(
                         // different and much worse ability, and the one honest
                         // thing about this answer is that it is only a distance.
                         begin_blink(p, who, dir, scene);
+                        // **And she sends her blood ahead** to the crosshair's
+                        // spot on the floor: the door the next dodge zips to.
+                        p.blinked = SENDS;
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
@@ -5043,6 +5058,10 @@ fn step_player(
                         // direction in the air, where you otherwise have almost no
                         // say.
                         p.air_dodged = true;
+                        // The Blood mage sends her blood from the air as well.
+                        if p.class == Class::BloodMage {
+                            p.blinked = SENDS;
+                        }
                         p.vel.x = dir.x.mul(t::air_dodge_speed());
                         p.vel.z = dir.z.mul(t::air_dodge_speed());
                         // Vertical speed is wiped rather than added to, so an
@@ -7360,10 +7379,9 @@ fn nova_blow(effect: &Effect) -> i32 {
             .mul(tier_power(effect.banked.clamp(0, 3) as u8))
             .to_int();
     }
-    // A burst of her blood -- the wings' takeoff, the teleport's arrival, an
-    // exploding stain -- is the wings' row, and an exploding stain carries
-    // its own number.
-    if effect.class == Class::BloodMage && effect.slot == moves::blood::WINGS && effect.banked > 0 {
+    // An exploding stain is Frenzy's, and carries its own number.
+    if effect.class == Class::BloodMage && effect.slot == moves::blood::FRENZY && effect.banked > 0
+    {
         return effect.banked;
     }
     effect.damage()
@@ -9157,6 +9175,13 @@ impl World {
             self.erupt_the_quake(effect);
             return;
         }
+        if effect.kind == EffectKind::Haemorrhage
+            && effect.class == Class::BloodMage
+            && effect.slot == moves::blood::WINGS
+        {
+            self.land_the_sent(effect);
+            return;
+        }
         if effect.kind == EffectKind::Nail
             && effect.class == Class::BloodMage
             && effect.slot == moves::blood::STAKE
@@ -10169,6 +10194,9 @@ impl World {
             // body it reaches: the cut lands and the bleed opens, and from
             // then on the victim's own feet make the pools. A guarded bolt is
             // still spent -- it hit something -- and opens nothing.
+            // The blood she sent ahead hurts nobody: it is a door in flight.
+            EffectKind::Haemorrhage
+                if effect.class == Class::BloodMage && effect.slot == moves::blood::WINGS => {}
             EffectKind::Haemorrhage => {
                 let at = effect.bolt_at();
                 let radius = effect.field_radius();
@@ -11031,6 +11059,14 @@ impl World {
         if volume <= 0 || !class.wounds_go_grey() {
             return;
         }
+        // **Frenzy's own blows spill nothing** -- the area and the stains it
+        // explodes. It burns what is already on the floor and what the bleed
+        // drips; a blow of its that spilled would be a stain inside its own
+        // area, exploding for twice itself, spilling twice that: a loop that
+        // took a Mireback's eleven thousand in twenty frames (2026-10-12).
+        if slot == moves::blood::FRENZY && class == Class::BloodMage {
+            return;
+        }
         let born = Effect::pool(owner, class, slot, at, volume);
         // Onto one of hers already there: merge.
         let overlapping = self.effects.iter().position(|e| {
@@ -11204,7 +11240,7 @@ impl World {
                     took * 100 / t::stain_walk_drinks().max(1)
                 };
                 let left = e.banked - spent;
-                self.effects[slot] = (left > 0).then(|| Effect { banked: left, ..e });
+                self.effects[slot] = (left > 0).then_some(Effect { banked: left, ..e });
             }
         }
     }
@@ -12792,7 +12828,7 @@ impl World {
             EffectKind::Nova,
             pool.owner,
             pool.class,
-            moves::blood::WINGS,
+            moves::blood::FRENZY,
             pool.pos,
             V3::ZERO,
             t::stain_blast_radius(),
@@ -12894,6 +12930,71 @@ impl World {
             frames + 1,
         );
         self.players[i].grounded = false;
+    }
+
+    /// **She sends her blood** (2026-10-12): a glob of it thrown from her
+    /// hand to the crosshair's spot on the floor, `tuning::send_reach` at
+    /// most, which lands as a stain of her own blood -- a door, never a heal --
+    /// for the next dodge to zip to. The traversal cycle: send, zip, send.
+    /// It hurts nobody and stops for nothing but the floor it lands on.
+    fn send_the_blood(&mut self, i: usize, input: Input) {
+        let p = self.players[i];
+        let to = {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let terrain = self.terrain();
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &terrain,
+            };
+            aim::grounded_path(i, input, t::send_reach(), &scene).to
+        };
+        let from = aim::origin(p.pos);
+        let gap = to.sub(from);
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                EffectKind::Haemorrhage,
+                i as u8,
+                p.class,
+                moves::blood::WINGS,
+                from,
+                gap.normalized(),
+                gap.len().max(Fx::ONE),
+            ),
+        );
+    }
+
+    /// **The sent blood lands**: a stain of her own at the end of its flight,
+    /// and the only one -- a door at a time, so the last she sent is the one
+    /// she goes to. Not on a stain already there, which is a door as it is.
+    fn land_the_sent(&mut self, effect: &Effect) {
+        let owner = effect.owner;
+        let at = effect.pos.add(effect.dir.scale(effect.reach));
+        let lift = V3::new(at.x, at.y.add(Fx::ONE), at.z);
+        let floor = V3::new(at.x, self.terrain().ground_under(lift), at.z);
+        if self.pool_covering(owner, floor).is_some() {
+            return;
+        }
+        for slot in 0..MAX_EFFECTS {
+            if self.effects[slot].is_some_and(|e| {
+                e.is_a_pool() && e.owner == owner && moves::blood::own_blood(e.slot)
+            }) {
+                self.effects[slot] = None;
+            }
+        }
+        self.spill(
+            owner,
+            effect.class,
+            moves::blood::WINGS,
+            floor,
+            t::send_essence(),
+        );
     }
 
     /// **The Stake** leaves her hand along the solved line, to the point the

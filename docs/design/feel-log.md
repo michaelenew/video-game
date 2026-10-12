@@ -8219,3 +8219,26 @@ reach. No other class's pin moved: the checksum keeps their layout.
 **Not done** Her own clips: the new moves borrow the five she has (`view::play`). The Frenzy
 area and the vessel's glow are not drawn yet; the cloud, the spike field and the stains are.
 **Verdict** — unplayed. BLAST-4 to BLAST-8 in 0015.
+
+### 2026-10-12 — Frenzy fed itself; the Blood mage sends her blood and zips to it
+**Changed** Frenzy's own blows -- its area and the stains it explodes -- spill nothing
+(`World::spill` refuses the Frenzy row). **And her traversal**: a dodge with no stain under
+the crosshair still slides 6 m as blood, and now also **sends a glob of her blood** to the
+crosshair's spot on the floor (`Dodge, sends her blood up to` 20 m), which lands as a stain of
+her own blood (`Dodge, sent blood lands as a stain of` 60) -- a door, never a heal, one at a
+time. The next dodge with the crosshair on it teleports her there (`Teleport, to a stain
+within` 20 → 22 m), from the air too, even once the airdodge is spent: the door is on the
+floor and so is she when she arrives.
+**Why** From play: "whatever is on Q does way too much damage. The Mireback dies in about
+half a second." A blow of Frenzy's on the creature spilled a stain inside her own area, which
+exploded for twice itself, spilling twice that -- a loop that took the Mireback's 11 000 in
+about twenty frames. Without it a Frenzy beside a creature with nothing on the floor deals
+about 90 a second (`frenzy_beside_a_creature_burns_and_does_not_feed_itself`). And: "we want
+some kind of core cycle of sending blood -> zipping to the blood so that world traversal
+isn't so slow" -- with Reaper's chain "awkward, I can't tell how far it's going to take me or
+why". The door is where she will go, on the floor in front of her, before she goes.
+**Measured** Send and zip crosses about 55 m in 2.5 s on flat ground against 17.5 m walking
+(`send_and_zip_crosses_the_ground_far_faster_than_walking`).
+**Not done** Reaper's chain is unchanged; whether it stays, now that the zip carries her, is
+the owner's call.
+**Verdict** — unplayed.

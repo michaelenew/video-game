@@ -816,6 +816,8 @@ scalars! {
     PlagueHeight, "Blood mage", "Hemoplague, cloud height", Fixed, fx(1,1), fx(10,1);
     ChargeCrawl, "Blood mage", "Charge, walk while holding (%)", Int, 0, 100;
     EruptChain, "Blood mage", "Black spike, an eruption sets off stains this far past its edge (m)", Fixed, 0, fx(8,1);
+    SendReach, "Blood mage", "Dodge, sends her blood up to (m)", Fixed, fx(1,1), fx(40,1);
+    SendEssence, "Blood mage", "Dodge, sent blood lands as a stain of", Int, 1, 300;
 }
 
 // ---------------------------------------------------------------------------

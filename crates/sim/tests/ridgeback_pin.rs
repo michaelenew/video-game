@@ -84,11 +84,13 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Blood mage's was re-pinned the same day** for the blaster: her
 /// clicks are new moves held in tiers, every stain is collected, and every
 /// hit bleeds. See `docs/design/exploration/0015_blood_mage_blaster.md`.
+/// **And again the same day**: her dodge sends her blood ahead, and Frenzy's
+/// own blows spill nothing. See the feel log.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x339bb2066878e1c8),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0x125b4fc5c2559d9d),
-    (Class::BloodMage, 0xb548bb1224f77e8d),
+    (Class::BloodMage, 0x9f43741b437785c2),
     (Class::DualMage, 0xd1dc8709fa4d36db),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];

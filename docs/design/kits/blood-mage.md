@@ -106,7 +106,9 @@ blood -- the wings' takeoff -- is still only a door.
 
 ### Frenzy
 
-`Q`. She is **planted** for `Frenzy, lasts` (180 frames): no walking and no jumping; her
+`Q`. **Its own blows spill nothing** -- the area and the explosions -- or each would be a
+stain inside the area exploding for twice itself (the loop that killed a Mireback in twenty
+frames). She is **planted** for `Frenzy, lasts` (180 frames): no walking and no jumping; her
 only movement is the teleport. Within the row's reach (6 m) everyone takes the row's damage
 every `Frenzy, hurts every` (10 frames) and starts to bleed. Every stain of hers within
 `Frenzy, pulls stains within` (15 m) **rushes** to her at 12 m/s and **explodes** at the edge
@@ -116,13 +118,18 @@ and when it ends whatever grey is left is gone. A **teleport to a stain** explod
 arrives and adds `Frenzy, a teleport adds` (60 frames), to `Frenzy, lasts at most` (480).
 `Frenzy, needs grey of at least` is 0: it is BLAST-7 in 0015.
 
-### The teleport and the flow
+### Send and zip: the teleport and the flow
 
-`shift` with a stain of hers under the crosshair, within `Teleport, to a stain within` (20 m)
+`shift` with a stain of hers under the crosshair, within `Teleport, to a stain within` (22 m)
 and with a clear line: she is there, drinks it, and arrives in a burst of blood (the wings'
-row: 40 in 2 m). With none, the dodge is the **Sanguine flow**: `Dodge is a blink` is on, a
-flat 6 m slide in `Blink, frames to cross`, invulnerable for the dodge's frames, drinking every
-stain she crosses on the way.
+row: 40 in 2 m) -- in the air too, even with the airdodge spent, since the stain is on the
+floor. With none, the dodge is the **Sanguine flow**: `Dodge is a blink` is on, a flat 6 m
+slide in `Blink, frames to cross`, invulnerable for the dodge's frames, drinking every stain
+she crosses on the way -- **and it sends her blood**: a glob thrown to the crosshair's spot on
+the floor, up to `Dodge, sends her blood up to` (20 m), that lands as a stain of her own blood
+(60) -- a door, never a heal, and the only one: a new one replaces the last
+(`World::send_the_blood`, `land_the_sent`). An airdodge sends it too. **The traversal cycle is
+send, zip, send**: about 55 m in 2.5 s on flat ground, against 17.5 m walking.
 
 **Not drawn yet:** the vessel's glow, and the Frenzy area. The Hemoplague is a faint disc with
 wisps inside its column, the spike field a ring of spikes rising with each wave, and the moves

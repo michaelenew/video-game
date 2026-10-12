@@ -451,7 +451,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift + direction, crosshair on a stain",
-                "The teleport: you are at the stain, you drink it, and you arrive in a burst of blood. With no stain under the crosshair the dodge is the Sanguine flow, a slide along the floor as blood that drinks every stain you cross. Your own blood never heals you -- it is only a door.",
+                "The teleport: you are at the stain, you drink it, and you arrive in a burst of blood -- from the air too. With no stain under the crosshair the dodge is the Sanguine flow, a slide along the floor as blood that drinks every stain you cross, and it sends a glob of your blood to the crosshair's spot on the floor: a door. Dodge again with the crosshair on it and you are there. Send, zip, send. Your own blood never heals you -- it is only a door.",
             ),
             e(
                 "Walking into a stain",

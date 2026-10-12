@@ -849,3 +849,131 @@ fn meteor_storm_the_upheaval_then_the_stake() {
         "a Stake after the Upheaval pins him in the air"
     );
 }
+
+#[test]
+fn frenzy_beside_a_creature_burns_and_does_not_feed_itself() {
+    // Its own blows spill nothing: a blow that spilled would be a stain inside
+    // its own area, exploding for twice itself and spilling twice that -- the
+    // loop that took a Mireback's eleven thousand in twenty frames.
+    let mut w = World::hunt_of([Class::BloodMage; 2], sim::species::SpeciesId::MIREBACK);
+    let beast = w.monsters[0].expect("a creature");
+    w.players[0].pos = beast.pos.add(at(3.0, 0.0, 0.0));
+    wounded(&mut w);
+    let full = beast.health;
+    for f in 0..(t::frenzy_lasts() as u32 + 30) {
+        if let Some(mut b) = w.monsters[0] {
+            b.brain.think_left = u16::MAX;
+            w.monsters[0] = Some(b);
+        }
+        let bits = if f == 0 { keys::FRENZY } else { 0 };
+        w.advance([Input::new(bits), Input::default()]);
+    }
+    let took = full - w.monsters[0].map_or(0, |m| m.health);
+    assert!(took > 0, "the Frenzy burned it");
+    assert!(
+        took < full / 10,
+        "a Frenzy with nothing on the floor took {took} of {full}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Send and zip
+// ---------------------------------------------------------------------------
+
+/// Her own stains: the doors.
+fn doors(w: &World) -> Vec<Effect> {
+    pools(w)
+        .into_iter()
+        .filter(|p| b::own_blood(p.slot))
+        .collect()
+}
+
+#[test]
+fn a_dodge_sends_her_blood_to_the_crosshairs_floor() {
+    let mut w = mage();
+    step_looking(&mut w, Input::SHIFT | Input::W, -2500);
+    run(&mut w, 30, 0);
+    let door = doors(&w);
+    assert_eq!(door.len(), 1, "one door where she looked");
+    let far = as_f(door[0].pos.x.sub(metres(-6.0)));
+    assert!(far > 8.0, "sent well ahead of her: {far} m");
+    assert!(
+        far <= as_f(t::send_reach()) + 0.5,
+        "and no further than the send reaches: {far} m"
+    );
+}
+
+#[test]
+fn the_next_dodge_zips_her_to_it() {
+    let mut w = mage();
+    step_looking(&mut w, Input::SHIFT | Input::W, -2500);
+    run(&mut w, 30, 0);
+    let door = doors(&w)[0].pos;
+    let zipped = at_some_pitch(
+        &w,
+        &PITCHES,
+        |w, pitch| step_looking(w, Input::SHIFT | Input::W, pitch),
+        |w| w.players[0].pos.sub(door).flat_len().raw() < metres(0.5).raw(),
+        2,
+    );
+    assert!(
+        zipped.is_some(),
+        "the dodge with the crosshair on the door is there"
+    );
+}
+
+#[test]
+fn one_door_at_a_time() {
+    let mut w = mage();
+    for pitch in [-2500, -4000] {
+        step_looking(&mut w, Input::SHIFT | Input::W, pitch);
+        run(&mut w, 40, 0);
+    }
+    assert_eq!(doors(&w).len(), 1, "the newest door replaced the last");
+}
+
+#[test]
+fn sent_blood_hurts_nobody_and_never_heals_her() {
+    let mut w = mage();
+    wounded(&mut w);
+    w.players[1].pos = at(2.0, 0.0, 8.0);
+    let (red, his) = (w.players[0].health, w.players[1].health);
+    step_looking(&mut w, Input::SHIFT | Input::W, -2000);
+    run(&mut w, 40, 0);
+    assert_eq!(w.players[1].health, his, "a door in flight hurts nobody");
+    assert!(w.players[0].health <= red, "and her own blood is no heal");
+}
+
+#[test]
+fn send_and_zip_crosses_the_ground_far_faster_than_walking() {
+    // The traversal the class was missing: dodge, and the blood goes ahead;
+    // dodge at it, and she is there.
+    let mut w = mage();
+    w.players[0].pos = at(-60.0, 0.0, 8.0);
+    let from = w.players[0].pos.x;
+    let mut frames = 0;
+    for _ in 0..3 {
+        step_looking(&mut w, Input::SHIFT | Input::W, -2200);
+        run(&mut w, t::dodge_frames() as u32 + 2, 0);
+        let door = doors(&w).first().map(|d| d.pos);
+        let Some(door) = door else { break };
+        let zip = at_some_pitch(
+            &w,
+            &PITCHES,
+            |w, pitch| step_looking(w, Input::SHIFT | Input::W, pitch),
+            |w| w.players[0].pos.sub(door).flat_len().raw() < metres(0.5).raw(),
+            2,
+        );
+        let Some(next) = zip else { break };
+        w = next;
+        run(&mut w, t::dodge_frames() as u32 + 2, 0);
+        frames += 2 * (t::dodge_frames() as u32 + 3);
+    }
+    let went = as_f(w.players[0].pos.x.sub(from));
+    let walked = as_f(t::move_speed()) * frames as f32 / 60.0;
+    println!("send and zip: {went} m in {frames} frames; walking: {walked} m");
+    assert!(
+        went > walked * 1.5,
+        "{went} m by send and zip in {frames} frames, against {walked} m walking"
+    );
+}

@@ -142,11 +142,12 @@ fn the_blink_is_refused_when_a_stone_blocks_the_line() {
 }
 
 #[test]
-fn the_blink_is_taken_in_the_air_and_refused_once_the_airdodge_is_spent() {
-    // Off the floor the blink is the airdodge, aimed: it costs the one
-    // airborne commitment, so a fighter who has already spent it stays where
-    // she is. A pool is on the floor, so a blink taken in the air lands her
-    // -- and landing hands the airdodge back, the way it always does.
+fn the_blink_is_taken_in_the_air_even_once_the_airdodge_is_spent() {
+    // Off the floor the blink is the airdodge, aimed. A pool is on the floor,
+    // so a blink taken in the air lands her -- and since 2026-10-12 it is
+    // there even with the airdodge already spent: the zip to the blood she
+    // sent from a jump is her traversal, and a door on the floor is no second
+    // jump.
     let mut w = mage();
     let at = pool_ahead(&mut w, 8);
     run(&mut w, 1, Input::SPACE, 0);
@@ -170,13 +171,13 @@ fn the_blink_is_taken_in_the_air_and_refused_once_the_airdodge_is_spent() {
     run(&mut w, 1, Input::SPACE, 0);
     run(&mut w, 6, 0, 0);
     w.players[0].air_dodged = true;
-    let before = w.players[0].pos;
     dodge_at(&mut w, at);
+    let landed = w.players[0].pos.sub(at).flat_len();
     assert!(
-        w.players[0].pos.sub(before).flat_len().raw() < Fx::from_int(2).raw(),
-        "she blinked in the air with the airdodge already spent"
+        landed.raw() < Fx::ratio(1, 4).raw(),
+        "with the airdodge spent she stayed {} m from the pool",
+        landed.to_f32_for_render()
     );
-    assert_eq!(pools(&w).len(), 1, "a refused blink spent the pool");
 }
 
 #[test]

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 467] = [
+pub const SCALARS: [i32; 469] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -459,7 +459,7 @@ pub const SCALARS: [i32; 467] = [
          1966080, // blood_mage.reaper's_chain,_yanks_a_fighter_at_(m/s) = 30
           917504, // blood_mage.reaper's_leap,_across_(m/s) = 14
           196608, // blood_mage.reaper's_leap,_drinks_stains_within_(m) = 3
-         1310720, // blood_mage.teleport,_to_a_stain_within_(m) = 20
+         1441792, // blood_mage.teleport,_to_a_stain_within_(m) = 22
              180, // blood_mage.frenzy,_lasts = 180
              480, // blood_mage.frenzy,_lasts_at_most = 480
               60, // blood_mage.frenzy,_a_teleport_adds = 60
@@ -475,6 +475,8 @@ pub const SCALARS: [i32; 467] = [
           262144, // blood_mage.hemoplague,_cloud_height = 4
               35, // blood_mage.charge,_walk_while_holding_(%) = 35
           163840, // blood_mage.black_spike,_an_eruption_sets_off_stains_this_far_past_its_edge_(m) = 2.5
+         1310720, // blood_mage.dodge,_sends_her_blood_up_to_(m) = 20
+              60, // blood_mage.dodge,_sent_blood_lands_as_a_stain_of = 60
 ];
 
 #[rustfmt::skip]

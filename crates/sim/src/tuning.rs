@@ -3500,3 +3500,14 @@ pub fn charge_crawl() -> i32 {
 pub fn erupt_chain() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EruptChain).max(0))
 }
+
+/// How far the Blood mage's dodge sends her blood ahead: the most the door it
+/// makes can be from her, at the crosshair's spot on the floor.
+pub fn send_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SendReach).max(Fx::ONE.raw()))
+}
+
+/// How much of her own blood the sent glob lands as: how long the door lasts.
+pub fn send_essence() -> i32 {
+    oven::scalar(Scalar::SendEssence).max(1)
+}
