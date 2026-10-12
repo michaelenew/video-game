@@ -146,11 +146,7 @@ impl Class {
                 leap_banked: false,
                 rise_used: false,
                 lifted: 0,
-                fury: Fury {
-                    braced: 0,
-                    eaten: false,
-                    shouldered: false,
-                },
+                fury: Fury::default(),
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -327,6 +323,15 @@ pub struct Fury {
     pub eaten: bool,
     /// The shoulder has landed, or been blocked, this Rush. Once a run.
     pub shouldered: bool,
+    /// The three weapon buttons as they were held last frame, as bits in
+    /// button order -- so a press can be told from a hold. See `beat`.
+    pub clicks: u8,
+    /// **The Beat** (C2): the weapon pressed inside the impact freeze of a
+    /// chain link that landed, as `clicks` bits; zero for none. It is held for
+    /// him until the next link comes out, and that link is a true link.
+    pub beat: u8,
+    /// The move running now is a true link: it hits harder and sticks longer.
+    pub true_link: bool,
 }
 
 // ---------------------------------------------------------------------------

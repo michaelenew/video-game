@@ -790,6 +790,10 @@ scalars! {
     ShoulderBlockstun,    "Champion", "Shoulder, blockstun",                 Frames, 0, 90;
     ShoulderKnockback,    "Champion", "Shoulder, knockback (m/s)",           Fixed,  0, fx(30,1);
     ShoulderFreeze,       "Champion", "Shoulder, impact freeze",             Frames, 0, 30;
+    // **The Beat** (C2): the next link pressed inside the freeze of a link
+    // that landed is a true link, and it hits harder and sticks longer.
+    TrueLinkDamage,       "Champion", "True link, extra damage (%)",         Percent, 0, 200;
+    TrueLinkFreeze,       "Champion", "True link, extra freeze",             Frames, 0, 30;
 }
 
 // ---------------------------------------------------------------------------

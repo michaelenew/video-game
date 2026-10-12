@@ -1252,6 +1252,18 @@ pub fn shoulder_freeze() -> u16 {
     oven::scalar(Scalar::ShoulderFreeze) as u16
 }
 
+/// **The Beat** (exploration 0015, C2): what a true link -- the next link
+/// pressed inside the freeze of one that landed -- adds to its damage, as a
+/// percentage, and to its freeze, in frames. The window is the freeze itself,
+/// so it is the weapon's weight: wide on the hammer, tight on the sword.
+pub fn true_link_damage() -> u16 {
+    oven::scalar(Scalar::TrueLinkDamage).max(0) as u16
+}
+
+pub fn true_link_freeze() -> u16 {
+    oven::scalar(Scalar::TrueLinkFreeze).max(0) as u16
+}
+
 /// How far below the horizon you have to be pointing for a spear thrown out of
 /// a Rush to plant in the floor and vault instead of stabbing.
 ///

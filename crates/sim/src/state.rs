@@ -2817,7 +2817,8 @@ impl World {
                 // that arrived and was taken, and freezes for less.
                 if let Some(kind) = snapshot[attacker].action.attack_kind() {
                     let m = moves::get(snapshot[attacker].class, kind);
-                    let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried);
+                    let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried)
+                        + true_link_freeze(&snapshot[attacker]);
                     freeze(&mut self.players[attacker], hold);
                     freeze(&mut self.players[defender], hold);
                 }
@@ -4055,6 +4056,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
             Fx::ONE
         })
         .mul(grey_power(attacker, &m))
+        .mul(true_link_mul(attacker))
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
@@ -4314,6 +4316,7 @@ fn freeze(p: &mut Player, frames: u16) {
 /// skipped. Out of it: whatever was remembered is pressed on this frame, once.
 /// Buttons only; where the stick points is always where it points now.
 fn thaw(p: &mut Player, input: Input) -> Input {
+    find_the_beat(p, input);
     if p.frozen > 0 {
         p.frozen_bits |= input.bits & Input::PRESSES;
         return input;
@@ -4543,6 +4546,79 @@ impl World {
     }
 }
 
+/// What a true link multiplies its damage by: one for anything else.
+fn true_link_mul(p: &Player) -> Fx {
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if fury.true_link => {
+            Fx::ONE.add(Fx::ratio(t::true_link_damage() as i32, 100))
+        }
+        _ => Fx::ONE,
+    }
+}
+
+/// The frames a true link adds to its freeze: none for anything else.
+fn true_link_freeze(p: &Player) -> u16 {
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if fury.true_link => t::true_link_freeze(),
+        _ => 0,
+    }
+}
+
+/// The Champion's three weapon buttons, as bits in button order.
+fn weapon_bits(input: Input) -> u8 {
+    (input.has(Input::LEFT) as u8)
+        | (input.has(Input::MIDDLE) as u8) << 1
+        | (input.has(Input::RIGHT) as u8) << 2
+}
+
+/// **The Beat** (exploration 0015, C2): a weapon pressed -- not held over --
+/// inside the impact freeze of a chain link that landed makes the next link a
+/// true link. Read off the raw input, before the freeze swallows it.
+///
+/// The window is the freeze itself, so it is the weapon's mass: the hammer's
+/// is wide and forgiving, the sword's three frames are precise. Nothing about
+/// how many buttons are pressed changes; when they are pressed does.
+fn find_the_beat(p: &mut Player, input: Input) {
+    let frozen = p.frozen > 0;
+    let in_a_link = p
+        .action
+        .attack_kind()
+        .is_some_and(|k| moves::champion::link_of(k).is_some());
+    let Mechanic::Forms {
+        chain_hit, fury, ..
+    } = &mut p.mechanic
+    else {
+        return;
+    };
+    let now = weapon_bits(input);
+    let fresh = now & !fury.clicks;
+    fury.clicks = now;
+    if frozen && fresh != 0 && *chain_hit && in_a_link {
+        fury.beat = fresh;
+    }
+}
+
+/// The weapon pressed on the beat, held down for him until the link it asked
+/// for comes out: a press inside a three-frame freeze is over before the
+/// chain will take it, and the beat is the whole of the skill -- it should
+/// not also have to be held. Any other input is passed through.
+fn hold_the_beat(p: &Player, input: Input) -> Input {
+    let Mechanic::Forms { fury, .. } = p.mechanic else {
+        return input;
+    };
+    let mut bits = input.bits;
+    if fury.beat & 1 != 0 {
+        bits |= Input::LEFT;
+    }
+    if fury.beat & 2 != 0 {
+        bits |= Input::MIDDLE;
+    }
+    if fury.beat & 4 != 0 {
+        bits |= Input::RIGHT;
+    }
+    Input { bits, ..input }
+}
+
 /// **The Rush, braced** (exploration 0015, C1): what a blow does to a
 /// Champion who is running.
 ///
@@ -4697,6 +4773,7 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
+    let input = hold_the_beat(p, input);
     // The repeat lockouts run down first, and above the rider branch so they
     // run exactly once a frame on either tick. Before the input is read rather
     // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
@@ -6563,6 +6640,12 @@ fn begin_champion(p: &mut Player, kind: u8) {
     if kind == c::UPPERCUT {
         p.leap_used = false;
     }
+    // A link thrown on the beat is a true link; anything else spends the
+    // beat on nothing. See `find_the_beat`.
+    if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
+        fury.true_link = fury.beat != 0 && c::link_of(kind).is_some_and(|l| l > 0);
+        fury.beat = 0;
+    }
     // The chain moves on, or ends, depending on what this move was.
     advance_chain(p, kind);
     if let Mechanic::Forms {
@@ -7886,6 +7969,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 chain_left,
                 chain_hit,
                 takeoff,
+                fury,
                 ..
             } = &mut p.mechanic
             {
@@ -7907,6 +7991,10 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 if *chain_left == 0 {
                     *chain = 0;
                     *chain_hit = false;
+                    fury.beat = 0;
+                }
+                if !live {
+                    fury.true_link = false;
                 }
             }
         }
@@ -8084,7 +8172,13 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*rise_used as u32);
             h.write_u32(*lifted as u32);
             h.write_u32(fury.braced as u32);
-            h.write_u32(fury.eaten as u32 | (fury.shouldered as u32) << 1);
+            h.write_u32(
+                fury.eaten as u32
+                    | (fury.shouldered as u32) << 1
+                    | (fury.true_link as u32) << 3
+                    | (fury.clicks as u32) << 8
+                    | (fury.beat as u32) << 16,
+            );
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -13895,6 +13989,7 @@ impl World {
                 .mul(preying(attacker.class, beast.disabled()))
                 .mul(cash)
                 .mul(sweet)
+                .mul(true_link_mul(&attacker))
                 .to_int();
             // Asked of its guard first, from where the swing comes from:
             // the same point the fighters' guard is handed.
