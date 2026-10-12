@@ -226,7 +226,13 @@ fn the_scythe_is_at_least_half_again_as_long_at_full_grey() {
         );
     }
     // And nothing else she throws grows.
-    for slot in [b::TRANSFUSION, b::HAEMORRHAGE, b::HEMOPLAGUE, b::BLACK_SPIKE, b::LEAP] {
+    for slot in [
+        b::TRANSFUSION,
+        b::HAEMORRHAGE,
+        b::HEMOPLAGUE,
+        b::BLACK_SPIKE,
+        b::LEAP,
+    ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut p = sim::state::Player::new(Class::BloodMage);
         p.health = 1;
@@ -365,7 +371,13 @@ fn the_sweeps_volume_widens_with_grey_and_the_row_does_not() {
         wide.raw(),
         "the hit test does not read the live radius"
     );
-    for slot in [b::TRANSFUSION, b::HAEMORRHAGE, b::HEMOPLAGUE, b::BLACK_SPIKE, b::LEAP] {
+    for slot in [
+        b::TRANSFUSION,
+        b::HAEMORRHAGE,
+        b::HEMOPLAGUE,
+        b::BLACK_SPIKE,
+        b::LEAP,
+    ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert_eq!(
             sim::state::live_radius(&p, &m).raw(),

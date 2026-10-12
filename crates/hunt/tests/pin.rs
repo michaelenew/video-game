@@ -58,7 +58,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
     // for `Rise::floor`, the height her takeoff window remembers.
-    (Class::BloodMage, 83, 0x24b139d8bfe531dd),
+    // Moved 2026-10-12, deliberately: the blaster -- the class layer holds a
+    // Transfusion to its third tier and drops a Hemoplague where it held a
+    // Grasp, and every stain she makes is collected. See feel-log.md.
+    (Class::BloodMage, 83, 0x3543ab56ecbd99bd),
 ];
 
 #[test]

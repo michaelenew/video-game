@@ -3244,6 +3244,31 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // out of a pool -- has the skirt: the disc of floor it came up
         // through, which is the disc it hit across.
         EffectKind::BlackSpike if part == 0 && !effect.erupted() => None,
+        // The third tier's field (2026-10-12): the disc it hits across, and a
+        // ring of spikes inside it that come up with each wave and sink back
+        // between them -- a field of them, not one fat spike.
+        EffectKind::BlackSpike
+            if effect.banked == sim::state::SPIKE_FIELD && part <= FIELD_SPIKES =>
+        {
+            let volume = effect.spike_volume();
+            let radius = volume.radius.to_f32_for_render();
+            if part == 0 {
+                return Some(standing(Shape::Column, Skin::Blood, at, radius, 0.0, 0.12));
+            }
+            let every = sim::tuning::spike_wave_every().max(1) as f32;
+            let into = ((effect.age.max(1) - 1) as f32 % every) / every;
+            let up = (1.0 - into).powi(2);
+            let turn = part as f32 / FIELD_SPIKES as f32 * std::f32::consts::TAU;
+            let spot = at + Vec3::new(turn.cos(), 0.0, turn.sin()) * radius * 0.6;
+            Some(standing(
+                Shape::Spike,
+                Skin::Blood,
+                spot,
+                radius * 0.12,
+                0.0,
+                volume.top.to_f32_for_render() * up.max(0.05),
+            ))
+        }
         EffectKind::BlackSpike if part < 2 => {
             let volume = effect.spike_volume();
             let radius = volume.radius.to_f32_for_render();
@@ -3425,6 +3450,32 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let skin = if part == 0 { Skin::Dark } else { Skin::Light };
             Some(floating_in(skin, at, r * 0.6))
         }
+        // The Hemoplague (2026-10-12): a faint disc of blood on the floor at
+        // exactly the radius it hurts in, and wisps of it drifting round
+        // inside the column, rising and falling -- a cloud, and the edge of
+        // it is the decision it offers.
+        EffectKind::Plague if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Essence(1),
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            0.1,
+        )),
+        EffectKind::Plague if part <= PLAGUE_WISPS => {
+            let radius = effect.field_radius().to_f32_for_render();
+            let height = sim::tuning::plague_height().to_f32_for_render();
+            let t = effect.age as f32 / 60.0;
+            let k = part as f32;
+            let turn = k / PLAGUE_WISPS as f32 * std::f32::consts::TAU + t * 0.4;
+            let out = radius * (0.35 + 0.45 * ((k * 1.7 + t * 0.6).sin() * 0.5 + 0.5));
+            let rise = height * (0.25 + 0.6 * ((k * 2.3 + t * 0.9).sin() * 0.5 + 0.5));
+            Some(floating_in(
+                Skin::Essence(2),
+                at + Vec3::new(turn.cos() * out, rise, turn.sin() * out),
+                radius * 0.18,
+            ))
+        }
         EffectKind::Abyss if part == 0 => Some(standing(
             Shape::Column,
             Skin::Dark,
@@ -3574,6 +3625,14 @@ const TETHER_BEAD: f32 = 0.3;
 /// a cone that wide would be a tent rather than a spike. The disc underneath is
 /// what tells you where the edge is.
 const SPIKE_WAIST: f32 = 0.35;
+
+/// How many spikes a third-tier Black spike's field is drawn as, round its
+/// disc. Presentation: the hit test is the disc.
+const FIELD_SPIKES: usize = 7;
+
+/// How many wisps a Hemoplague is drawn as, drifting inside its column.
+/// Presentation: the hit test is the column.
+const PLAGUE_WISPS: usize = 8;
 
 /// Where the class mechanic sits in the world, if anywhere. A shield in hand
 /// rides on the character and draws nothing; a thrown one, a placed shadow or a

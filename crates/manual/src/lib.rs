@@ -419,35 +419,43 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Blood mage",
         in_browser: true,
-        blurb: "Her blood goes out and theirs comes back. Her three clicks are my blood, your blood and the scythe -- each a move on the floor, something else in the air, and a jump attack with space. Her own pools are doors, not heals: only somebody else's blood closes her wounds. Built 2026-10-09 and unplayed; docs/design/exploration/0009_blood_mage_on_three_clicks.md is the direction.",
+        blurb: "The blaster. Her blood goes out and theirs comes back: every cast costs health, every hit she lands leaves a stain of the other body's blood, and a stain is health -- walk into it, teleport to it or hit through it. Her three clicks are my blood, your blood and the scythe: held on the floor through three tiers, quick in the air, a takeoff with space. A jump or a dodge out of a hold keeps the charge to let go later. Built 2026-10-12 and unplayed; docs/design/exploration/0015_blood_mage_blaster.md is the design.",
         entries: &[
             e(
                 "Left click",
-                "My blood. Hold to charge the Blood nova, paid in your own health as you hold; let go and a sphere of blood bursts round you, hurts and throws back whoever is close, and leaves a pool of your blood where you stood. In the air it is the Haemorrhage: a bolt that opens a bleed, and a bleeding body -- fighter or creature -- drips pools as it goes.",
+                "My blood. Hold for the Transfusion: a bolt down the crosshair -- tapped, a quick one; at the second tier a heavy bolt through everybody on the line; at the third a lance that throws its victim back. Each tier costs more of your health as you reach it. In the air it is the Haemorrhage: a bolt that opens a bleed, and a bleeding body drips stains as it goes.",
             ),
             e(
                 "Middle click",
-                "Your blood. Hold for reach and four arms close on the crosshair: all four catch, and the victim is hauled to your feet -- or, if they close on a wall, a stone or the creature, you are hauled to it. In the air it is the Nail: a long black spike thrown down the crosshair. Nail somebody who is already in the air and they are pinned there for a moment, bleeding on to the floor below.",
+                "Your blood. Hold for the Black spike: tapped, one spike out of the floor at the crosshair after a delay; at the second tier three in a triangle; at the third a field that comes up in waves. On a stain the stain erupts, and every stain near it with it. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor.",
             ),
             e(
                 "Right click",
-                "The scythe. The Reaping sweep, whose reach grows with your grey health. In the air it is the Hook: thrown along the crosshair, it catches the first fighter, creature, stone or wall and pulls you to it.",
+                "The scythe. Tapped, the Reaping sweep, whose reach grows with your grey health. Held past the swing's wind-up, Tides: the scythe whirled overhead and let go as a ring of blood round you, wider and harder by the tier. In the air it is Reaper's chain: thrown at exactly where the crosshair is, it yanks a fighter to you, pulls you to anything else, and with nothing there still pulls you a little way.",
             ),
             e(
                 "Space + a click",
-                "The jump attacks. Space and left (held) is the Blood jet: you leave the floor on a jet of your own blood, further and harder the longer you hold, paid as you hold; whoever is in its wake is hurt, and a pool of your blood is left where you took off -- blink back to it. Space and middle is Marionette: their blood lifts them into the air (and you after them) -- Nail them up there. Space and right is Harvest: a big jump inside a scythe spin that drinks the pools it passes over.",
+                "The takeoffs. Space and left is Blood wings: a burst along your aim, any way at all, hurting whoever is beside you and leaving a stain of your own blood to teleport back to. Space and middle is the Upheaval: a geyser at the crosshair that launches, with a hop for you -- Stake them up there. Space and right is Reaper's leap: a jump to the crosshair's spot on the floor, the scythe brought down as you land, drinking every stain round it.",
+            ),
+            e(
+                "Jump or dodge while holding a charge",
+                "Stores it in your vessel at the tier it reached: you jump or dodge as normal, and a fresh press of the same click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
             ),
             e(
                 "Q",
-                "The Bloodletter: a blade thrown out a fixed distance and back, cutting on both passes. In no combo yet, and the candidate to cut once she has been played.",
+                "Frenzy. You plant, and everything bends round you: everybody close is hurt and starts to bleed, and your stains rush to you and explode. Nothing heals you while it lasts, your grey drains fast, and when it ends whatever grey is left is gone for good. A teleport to a stain -- a runner's bleed leaves a road of them -- buys more of it.",
             ),
             e(
                 "E",
-                "The Black spike: a spike out of the floor after a delay. On a pool, the pool erupts, and on a bleed's trail it chains along the pools to the bleeding body.",
+                "The Hemoplague: a slow cast, then a cloud at the crosshair that hurts everybody inside it on a tick, holds nobody, and gathers all it spills into one stain at its centre. Keeping them in it is your job.",
             ),
             e(
-                "Shift + direction, crosshair on a pool",
-                "The blink: you are at the pool, and it is spent. Your own pools are for this -- they never heal you.",
+                "Shift + direction, crosshair on a stain",
+                "The teleport: you are at the stain, you drink it, and you arrive in a burst of blood. With no stain under the crosshair the dodge is the Sanguine flow, a slide along the floor as blood that drinks every stain you cross. Your own blood never heals you -- it is only a door.",
+            ),
+            e(
+                "Walking into a stain",
+                "Drinks it. Every stain of another body's blood is health: walk into it, teleport to it, or hit through it -- a blow through a stain is harder for it.",
             ),
         ],
     },

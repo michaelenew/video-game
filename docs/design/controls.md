@@ -1032,6 +1032,14 @@ actually lives.
 
 ### Blood mage
 
+> **Superseded 2026-10-12: she is the blaster.** The three clicks held on the floor through
+> three tiers (left the Transfusion, middle the Black spike, right the sweep tapped and Tides
+> held), quick in the air (the Haemorrhage, the Stake, Reaper's chain), takeoffs with space
+> (Blood wings, the Upheaval, Reaper's leap); `Q` is Frenzy and `E` the Hemoplague; a jump or
+> a dodge out of a hold stores the charge. The dodge with a stain under the crosshair is the
+> teleport, otherwise the Sanguine flow. The table is [kits/blood-mage.md](kits/blood-mage.md)
+> §"The blaster"; what follows it here is older still.
+>
 > **Superseded 2026-10-09: she is on three clicks.** Left is *my blood* (the Blood nova held on
 > the floor, the Haemorrhage in the air), middle is *your blood* (the Grasp held, the Nail in
 > the air), right is the scythe (the Reaping sweep, the Hook in the air); space with a click is

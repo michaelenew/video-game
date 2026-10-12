@@ -1,5 +1,5 @@
 ---
-status: proposed 2026-10-12; revised the same day with the owner's answers (§0); nothing built
+status: built 2026-10-12 along §0 and §6, unplayed; what is in the game is ../kits/blood-mage.md §"The blaster"
 started: 2026-10-12
 supersedes: 0009 where they differ, once decided
 depends: ../kits/blood-mage.md, ../blood-mage.md, 0009_blood_mage_on_three_clicks.md

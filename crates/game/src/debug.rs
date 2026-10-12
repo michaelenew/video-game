@@ -268,6 +268,16 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             }
             // A cloud of embers: the slab the shot test traces and the body
             // test reads, about its centre -- see `Effect::ember_volume`.
+            // The Hemoplague: the column it hurts in.
+            EffectKind::Plague => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    sim::tuning::plague_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
             // The Blood nova and the Nail: the spheres they hit with.
             EffectKind::Nova => {
                 gizmos.sphere(

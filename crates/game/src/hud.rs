@@ -871,6 +871,33 @@ fn mechanic(p: &sim::state::Player) -> String {
 /// The action, and how many frames of it remain. `4/3/10` alongside it is the
 /// move's startup, active and recovery, so a number can be judged in context.
 fn describe(p: &sim::state::Player) -> String {
+    let mut line = describe_action(p);
+    // The Blood mage's blaster (2026-10-12): what her vessel is carrying and
+    // how long her Frenzy has left, beside whatever she is doing. Text on the
+    // state line until each has a picture of its own.
+    if p.vessel != sim::state::NO_VESSEL {
+        let m = sim::moves::get(p.class, p.vessel);
+        line.push_str(&format!("   | stored: {} {}", m.name, roman(p.vessel_tier)));
+    }
+    if p.frenzy > 0 {
+        line.push_str(&format!(
+            "   | FRENZY {:.1}s",
+            p.frenzy as f32 / sim::TICK_HZ as f32
+        ));
+    }
+    line
+}
+
+/// One to three, the way a tier is written.
+fn roman(tier: u8) -> &'static str {
+    match tier {
+        3 => "III",
+        2 => "II",
+        _ => "I",
+    }
+}
+
+fn describe_action(p: &sim::state::Player) -> String {
     let phase_of = |kind: u8, name: &str, left: u16| {
         let m = sim::moves::get(p.class, kind);
         format!(
@@ -922,6 +949,10 @@ fn describe(p: &sim::state::Player) -> String {
                 // The Strike buys a share of the burn, not a distance.
                 Some(sim::moves::Charge::Strike) => {
                     format!("{} gathering {held}/{}f", m.name, m.channel)
+                }
+                // The Blood mage's charges buy a tier.
+                Some(sim::moves::Charge::Tier) => {
+                    format!("{} charging {}  {held}f", m.name, roman(p.tier))
                 }
                 _ => format!(
                     "{} channel {held}/{}f   {} m",

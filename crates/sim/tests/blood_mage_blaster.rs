@@ -98,10 +98,7 @@ fn place(w: &mut World, effect: Effect) {
 
 /// A stain of the other fighter's blood, hers to collect, at `pos`.
 fn stain(w: &mut World, pos: V3, essence: i32) {
-    place(
-        w,
-        Effect::pool(0, Class::BloodMage, b::SWEEP, pos, essence),
-    );
+    place(w, Effect::pool(0, Class::BloodMage, b::SWEEP, pos, essence));
 }
 
 /// Hurt her, so there is grey to drink back.
@@ -319,7 +316,10 @@ fn the_spike_at_two_is_three_spikes_and_at_three_a_field_in_waves() {
     let field = effects_of(&w, EffectKind::BlackSpike);
     assert_eq!(field.len(), 1, "one field at the third");
     assert_eq!(field[0].reach, t::spike_field_radius());
-    assert!(field[0].life > t::spike_erupt(), "and it stands for its waves");
+    assert!(
+        field[0].life > t::spike_erupt(),
+        "and it stands for its waves"
+    );
 }
 
 #[test]
@@ -410,7 +410,12 @@ fn blood_wings_carry_her_and_leave_a_door_home() {
     step_looking(&mut w, SPACE | keys::MY_BLOOD, 3000);
     run(&mut w, 20, 0);
     let p = w.players[0];
-    let gone = V3::new(p.pos.x.sub(from.x), p.pos.y.sub(from.y), p.pos.z.sub(from.z)).len();
+    let gone = V3::new(
+        p.pos.x.sub(from.x),
+        p.pos.y.sub(from.y),
+        p.pos.z.sub(from.z),
+    )
+    .len();
     assert!(
         gone.raw() > metres(5.0).raw(),
         "she burst a long way: {}",
@@ -571,6 +576,31 @@ fn walking_into_a_stain_drinks_it() {
 }
 
 #[test]
+fn at_full_health_walking_through_a_stain_leaves_it_standing() {
+    let mut w = mage();
+    stain(&mut w, at(-4.0, 0.0, 8.0), 100);
+    run(&mut w, 40, Input::W);
+    let left = pools(&w);
+    assert_eq!(
+        left.len(),
+        1,
+        "nothing to win back, so it stays for the spike"
+    );
+}
+
+#[test]
+fn walking_drinks_only_what_her_grey_can_hold() {
+    let mut w = mage();
+    w.players[0].wound(30);
+    stain(&mut w, at(-4.0, 0.0, 8.0), 100);
+    run(&mut w, 40, Input::W);
+    assert_eq!(w.players[0].grey, 0, "the wound is closed");
+    let left = pools(&w);
+    assert_eq!(left.len(), 1, "and the stain keeps the rest");
+    assert!(left[0].pool_volume() < 100 - 25, "less what she drank");
+}
+
+#[test]
 fn her_own_blood_never_heals_her() {
     let mut w = mage();
     wounded(&mut w);
@@ -704,7 +734,10 @@ fn e_casts_the_plague_where_she_aims() {
     run(&mut w, startup as u32 + 4, 0);
     let cloud = effects_of(&w, EffectKind::Plague);
     assert_eq!(cloud.len(), 1, "a cloud");
-    assert!(cloud[0].pos.x.raw() > metres(-4.0).raw(), "out where she aimed");
+    assert!(
+        cloud[0].pos.x.raw() > metres(-4.0).raw(),
+        "out where she aimed"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -811,5 +844,8 @@ fn meteor_storm_the_upheaval_then_the_stake() {
         |w| w.players[1].held_by == NAILED,
         30,
     );
-    assert!(pinned.is_some(), "a Stake after the Upheaval pins him in the air");
+    assert!(
+        pinned.is_some(),
+        "a Stake after the Upheaval pins him in the air"
+    );
 }

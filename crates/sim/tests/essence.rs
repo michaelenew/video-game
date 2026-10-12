@@ -163,7 +163,9 @@ fn hits_that_land_on_one_spot_make_one_pool() {
     // the merge is what keeps a fight that stays in one place from becoming
     // a floor of clutter.
     let mut w = mage();
-    let spot = w.players[0].pos.add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
+    let spot = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
     w.players[1].pos = spot;
     let plague = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE);
     let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
@@ -381,10 +383,7 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // and landed over a pool of its own making it returns more than it cost.
     // The first cast makes the pool; the second, thrown as soon as she is
     // free, is the one measured.
-    let cases = [
-        (b::SWEEP, keys::SCYTHE),
-        (b::TRANSFUSION, keys::MY_BLOOD),
-    ];
+    let cases = [(b::SWEEP, keys::SCYTHE), (b::TRANSFUSION, keys::MY_BLOOD)];
     for (slot, button) in cases {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
@@ -440,4 +439,3 @@ fn a_pool_is_an_effect_and_the_world_still_fits_its_budget() {
     assert!(std::mem::size_of::<World>() <= 4096);
     assert_eq!(EffectKind::Pool.name(), "essence pool");
 }
-

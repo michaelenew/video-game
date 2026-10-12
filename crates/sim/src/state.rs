@@ -2807,14 +2807,8 @@ impl World {
                         // blood it spills is the whole of what it dealt.
                         let mut spilt = dealt;
                         if let Some(hb) = hitbox(&snapshot[attacker]) {
-                            let bonus = self.stain_bonus(
-                                attacker,
-                                &m,
-                                hb.from,
-                                hb.to,
-                                Some(defender),
-                                0,
-                            );
+                            let bonus =
+                                self.stain_bonus(attacker, &m, hb.from, hb.to, Some(defender), 0);
                             spilt += self.players[defender].wound(bonus);
                         }
                         self.spill_under(
@@ -7191,11 +7185,10 @@ fn leap_to(p: &mut Player, to: V3) {
         .div(t::reaper_leap_speed().max(Fx::ONE))
         .max(Fx::ratio(1, 5));
     let gravity = t::gravity().mul(p.class.mobility().gravity);
-    let rise = to
-        .y
-        .sub(p.pos.y)
-        .sub(Fx::ratio(1, 2).mul(gravity).mul(time).mul(time))
-        .div(time);
+    let rise =
+        to.y.sub(p.pos.y)
+            .sub(Fx::ratio(1, 2).mul(gravity).mul(time).mul(time))
+            .div(time);
     let across = flat.normalized().scale(far.div(time));
     p.vel = V3::new(across.x, rise, across.z);
     p.grounded = false;
@@ -9402,9 +9395,8 @@ impl World {
                 // `tuning::spike_wave_every`, and each wave can catch anybody
                 // the last one did.
                 let every = t::spike_wave_every().max(1);
-                let wave = effect.banked == SPIKE_FIELD
-                    && effect.age > 1
-                    && (effect.age - 1) % every == 0;
+                let wave =
+                    effect.banked == SPIKE_FIELD && effect.age > 1 && (effect.age - 1) % every == 0;
                 if wave {
                     effect.forget_hits();
                 }
@@ -11170,8 +11162,13 @@ impl World {
 
     /// **Walking into a stain drinks it** (2026-10-12): every stain of hers --
     /// not her own blood -- that her feet are against is drunk, at
-    /// `tuning::stain_walk_drinks` of its essence, and is gone. The Demon
-    /// Avenger's orbs: the heal is a place, and going there is enough.
+    /// `tuning::stain_walk_drinks` of its essence. The Demon Avenger's orbs:
+    /// the heal is a place, and going there is enough.
+    ///
+    /// **Only what she can use.** Walking is not a choice the way a blow is,
+    /// so it takes no more than her grey can hold and the stain keeps the
+    /// rest: at full health she can walk through her stains and leave them
+    /// standing for the spike.
     fn drink_underfoot(&mut self) {
         for i in 0..MAX_PLAYERS {
             let p = self.players[i];
@@ -11179,7 +11176,9 @@ impl World {
                 continue;
             }
             for slot in 0..MAX_EFFECTS {
-                let Some(e) = self.effects[slot] else { continue };
+                let Some(e) = self.effects[slot] else {
+                    continue;
+                };
                 if !e.is_a_pool()
                     || e.owner != i as u8
                     || e.age == 0
@@ -11192,8 +11191,20 @@ impl World {
                     self.explode(slot);
                     continue;
                 }
-                self.players[i].drink(e.banked * t::stain_walk_drinks() / 100);
-                self.effects[slot] = None;
+                let worth = e.banked * t::stain_walk_drinks() / 100;
+                let took = self.players[i].drink(worth);
+                if took <= 0 {
+                    continue;
+                }
+                // What was drunk, out of what it was worth; a stain wholly
+                // drunk is gone.
+                let spent = if took >= worth {
+                    e.banked
+                } else {
+                    took * 100 / t::stain_walk_drinks().max(1)
+                };
+                let left = e.banked - spent;
+                self.effects[slot] = (left > 0).then(|| Effect { banked: left, ..e });
             }
         }
     }
@@ -12743,7 +12754,9 @@ impl World {
             // The pull, and the explosions at the edge.
             let step = t::frenzy_pull_speed().mul(DT);
             for slot in 0..MAX_EFFECTS {
-                let Some(mut e) = self.effects[slot] else { continue };
+                let Some(mut e) = self.effects[slot] else {
+                    continue;
+                };
                 if !e.is_a_pool() || e.owner != i as u8 {
                     continue;
                 }
@@ -12757,11 +12770,12 @@ impl World {
                     continue;
                 }
                 let moved = e.pos.add(gap.normalized().scale(step.min(far)));
-                e.pos = V3::new(moved.x, self.terrain().ground_under(moved.add(V3::new(
-                    Fx::ZERO,
-                    Fx::ONE,
-                    Fx::ZERO,
-                ))), moved.z);
+                e.pos = V3::new(
+                    moved.x,
+                    self.terrain()
+                        .ground_under(moved.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO))),
+                    moved.z,
+                );
                 self.effects[slot] = Some(e);
             }
         }
@@ -12834,7 +12848,13 @@ impl World {
             ),
         );
         let floor = V3::new(p.pos.x, self.terrain().ground_under(p.pos), p.pos.z);
-        self.spill(i as u8, p.class, moves::blood::WINGS, floor, m.damage.max(1));
+        self.spill(
+            i as u8,
+            p.class,
+            moves::blood::WINGS,
+            floor,
+            m.damage.max(1),
+        );
         let stones = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
@@ -13099,7 +13119,11 @@ impl World {
             if !self.effects_reach(i, owner) || p.action.invulnerable() {
                 continue;
             }
-            let flat = V3::new(p.pos.x.sub(effect.pos.x), Fx::ZERO, p.pos.z.sub(effect.pos.z));
+            let flat = V3::new(
+                p.pos.x.sub(effect.pos.x),
+                Fx::ZERO,
+                p.pos.z.sub(effect.pos.z),
+            );
             if flat.flat_len().raw() > effect.reach.add(t::body_radius()).raw()
                 || p.pos.y.raw() > top.raw()
                 || p.pos.y.add(p.hurt_height()).raw() < effect.pos.y.raw()

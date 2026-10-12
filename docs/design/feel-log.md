@@ -8168,3 +8168,54 @@ them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back t
 has left the hunt, and the creature is gone as before. 30 m was tried first and held the
 Pinewood road inside a hunt.
 **Verdict** — unplayed.
+
+### 2026-10-12 — the Blood mage as the blaster
+**Changed** Her whole kit, along [exploration/0015](exploration/0015_blood_mage_blaster.md).
+The three clicks on the floor are held through **three tiers** (two at 30 frames, three at 60,
+sooner by up to ×1.5 with a full bar of grey), each tier paid in red as it is reached (+3%,
++4%); a jump or a dodge out of a hold **stores** the charge in her vessel, let go later by a
+fresh press of the same click, and the vessel bleeds 1% of red a second. Left is the
+**Transfusion** (a bolt to 20 m: 45, then ×1.7 piercing, then ×2.6 and a 14 m/s throw-back),
+middle the **Black spike** (to 22 m: one; three in a triangle; a 3 m field in three waves),
+right the sweep tapped (22 → 45) and **Tides** held (a ring 4 / 6 / 8 m). In the air: the
+Haemorrhage (18 m), the **Stake** (thrown down; pins anybody in the air, lands in a 2.5 m area)
+and **Reaper's chain** (to the crosshair's point, 18 m; yanks a fighter to her, pulls her to
+anything else, 5 m along the aim at the sky). Takeoffs: **Blood wings** (an 8 m burst along
+the aim, tapped), the **Upheaval** (a geyser at 15 m that launches, and a hop), **Reaper's
+leap** (an arc to the crosshair's floor, 10 m, a 2.5 m slam that drinks the stains round it).
+`Q` is **Frenzy**, `E` the **Hemoplague** (a 5 m cloud at 22 m for five seconds, 30 a half
+second, no stun, all its spill to one stain at its centre). The dodge with a stain under the
+crosshair is a 20 m **teleport** that drinks it and arrives in a burst; with none it is the
+**Sanguine flow** (`Dodge is a blink` on, 6 m). Cut: the Bloodletter, the Grasp, the Blood
+nova (now Tides), the jet, Marionette, the Nail, the Hook and Harvest -- their rows retuned as
+the new moves, so no other class's numbers moved.
+**The economy.** Every stain is collected: **walking** into it (100% of its essence, but only what her grey can hold -- the stain
+keeps the rest, so walking at full health does not throw stains away),
+**teleporting** to it (100%), or **hitting through** it (every move drinks 100%, and the blow
+adds half the stain's essence to itself). Grey fades at 3 a second (was 12), stains drain at
+5 (was 10). Every move deals damage, and every hit on a creature spills by the move's own
+damage rather than what its hide let through. The bleed ticks 25 every half second for four
+seconds (was 8 every fifth for three); an eruption sets off stains up to 2.5 m past its edge,
+so a spike on a trail still runs it.
+**Frenzy.** She is planted for three seconds; within 6 m everyone takes 15 every sixth of a
+second and starts to bleed; her stains within 15 m rush to her at 12 m/s and explode at the
+edge for twice their essence; no stain heals her, grey drains at 60 a second and is gone when
+it ends; a teleport to a stain adds a second, to eight in all.
+**Why** The owner, after playing the three-click kit: the abilities were awkward and short,
+the pools too small to use, the hook did not register, and the best play was "spam Black spike
+and hope". A replay of that fight showed it: six of nine click moves thrown once or never, and
+80 stains whose median essence was 8 -- placed right, but too small to see before they drained.
+The brief: a blaster (Ragnarok Online's mages, Vladimir, the Demon Avenger) with range, charges
+and big areas, and movement that buys time for the charges and goes to collect the blood, but
+not both at once -- and getting health back much easier, "too strong first".
+**Tried** The Stake's area at the move's radius: its in-flight bolt is now the Haemorrhage's
+width and its row's radius is the landing. The Upheaval's recovery cut from 18 to 10 and its
+hop raised so a Stake can follow it (the *Meteor storm* in 0015) -- at 18 he had fallen before
+she could act. A shared "blood burst" row for the teleport's arrival was cut again: as a row it
+read as a move to every whole-kit check, and the wings' row says the same thing.
+**Re-recorded** Her Ridgeback pin, her scripted hunt's pin, and her envelope fixtures (the
+search now finds her crossing 29 m on lane 0, was 23.5) -- the wings and the chain are new
+reach. No other class's pin moved: the checksum keeps their layout.
+**Not done** Her own clips: the new moves borrow the five she has (`view::play`). The Frenzy
+area and the vessel's glow are not drawn yet; the cloud, the spike field and the stains are.
+**Verdict** — unplayed. BLAST-4 to BLAST-8 in 0015.

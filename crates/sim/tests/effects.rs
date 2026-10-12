@@ -53,84 +53,6 @@ fn looking(w: &mut World, frames: u32, a: u16, pitch: i16, b: u16) {
     }
 }
 
-/// The pitch a player would be holding to put the crosshair on a fighter
-/// standing at `target`.
-///
-/// **Searched rather than computed, and that is the point.** Where the
-/// crosshair lands is the aim resolver's business: it depends on the ability's
-/// reach, on the camera's zones and on how high the eye sits, and every one of
-/// those is a knob. A hard-coded angle is a fixture that silently stops
-/// pointing at anything the next time one of them moves.
-fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
-    let m = sim::moves::get(w.players[0].class, slot);
-    let reach = m.reach;
-    let stones = sim::stones::gather(&w.players);
-    let players = w.players;
-    let effects = w.effects;
-    let scene = sim::aim::Scene {
-        stones: &stones,
-        players: &players,
-        effects: &effects,
-        quarry: &w.monsters,
-        critters: &sim::critter::Critters::NONE,
-        arena: &w.terrain(),
-    };
-    // Their middle, measured from *their* feet. Not from the world's floor: a
-    // fighter standing on a platform is a metre and a half up, and aiming at
-    // half a body height above the arena floor is aiming into the platform
-    // they are standing on.
-    let middle = sim::V3::new(
-        target.x,
-        target
-            .y
-            .add(sim::tuning::body_height().div(sim::fixed::Fx::from_int(2))),
-        target.z,
-    );
-    // How close the *line* passes to them, rather than how close its far end
-    // lands. Bodies came off the aiming ray on 2026-09-13 -- a creature up
-    // close fills the screen and the reticle ends up on its chest, metres above
-    // the thing you meant to hit -- so a shot aimed at somebody now ends on the
-    // floor behind them and passes through them on the way. Nearest approach is
-    // what "the reticle is on them" has always meant to the player; it used to
-    // be possible to spell it as "the ray stopped there".
-    // Measured along the move's *own* flight, which is the crosshair's direction
-    // for the move's full reach -- "a blade thrown at something four metres away
-    // still flies its full distance; the crosshair picked the line." So a wall
-    // cutting the aiming ray short does not move the line the blade takes.
-    // Through the move's **own** kind of aiming, which is declared in the
-    // table. A fixture that always asked `skillshot_path` would be a second
-    // aiming model living in the tests, and the first move to change its
-    // column would start missing for reasons nothing in the game shares.
-    let miss = |pitch: i16| {
-        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
-        let one = &players[0];
-        let path = match m.aim() {
-            sim::aim::Kind::Swing => sim::aim::swing_path(
-                one.pos,
-                one.facing,
-                look,
-                one.grounded,
-                reach,
-                m.hand,
-                sim::aim::Stand::fighter(),
-                sim::V3::Y,
-            ),
-            _ => sim::aim::skillshot_path(0, look, reach, &scene),
-        };
-        let dir = path.dir();
-        let toward = middle.sub(path.from);
-        let down = toward.dot(dir).max(sim::fixed::Fx::ZERO).min(reach);
-        path.from.add(dir.scale(down)).sub(middle).len().raw()
-    };
-    // Both ways from level. A swing pitched by the dead zone is flat through
-    // the whole of the first sweep, so a target standing above the caster can
-    // only be found by looking up at it.
-    (-40..=80)
-        .map(|step| -(step * 200) as i16)
-        .min_by_key(|pitch| miss(*pitch))
-        .expect("the scan is not empty")
-}
-
 /// Press a button, let go, and let the move play out. Holding a button down
 /// re-throws the move the frame you become free again, which is fine in a match
 /// and useless in a test: two pillars is not the thing being asserted.
@@ -391,7 +313,9 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
         Class::BloodMage,
         sim::moves::blood::SWEEP,
         // Off her feet: she drinks a stain she stands in.
-        w.players[1].pos.add(sim::V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO)),
+        w.players[1]
+            .pos
+            .add(sim::V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO)),
         4000,
     ));
     run(&mut w, 60, 0, 0);

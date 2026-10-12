@@ -107,7 +107,7 @@ const ALONG: Fx = Fx::ratio(5, 10);
 const GOAD_TO: i32 = 80;
 /// The Blood mage's red, in percent, below which she stops paying for things.
 const RED_FLOOR: i32 = 25;
-const RED_GRASP: i32 = 70;
+const RED_CHARGE: i32 = 70;
 const RED_CUT: i32 = 70;
 /// **The Bulwark's throw and leap**: the nearest and furthest a window is
 /// worth crossing that way. Inside the near one he walks; past the far one
@@ -160,7 +160,8 @@ pub struct Uses {
     /// The Blood mage: spikes, spikes on a pool, Grasps, cuts, blinks.
     pub spikes: u32,
     pub erupted: u32,
-    pub grasps: u32,
+    pub charges: u32,
+    pub plagues: u32,
     pub cuts: u32,
     pub blinks: u32,
     /// The Dual mage: autos thrown with the hand the plan did not ask for so
@@ -195,7 +196,8 @@ impl Uses {
         self.shots += o.shots;
         self.spikes += o.spikes;
         self.erupted += o.erupted;
-        self.grasps += o.grasps;
+        self.charges += o.charges;
+        self.plagues += o.plagues;
         self.cuts += o.cuts;
         self.blinks += o.blinks;
         self.turned += o.turned;
@@ -254,7 +256,12 @@ impl Uses {
             Class::BloodMage => vec![
                 ("spikes", self.spikes, "Black spikes thrown"),
                 ("on a pool", self.erupted, "of those, at a pool under it"),
-                ("grasps", self.grasps, "held and let go at it"),
+                (
+                    "charges",
+                    self.charges,
+                    "Transfusions held to the third tier",
+                ),
+                ("plagues", self.plagues, "Hemoplagues on it"),
                 ("cuts", self.cuts, "Haemorrhages from range"),
                 ("blinks", self.blinks, "to a pool, in or out"),
             ],
@@ -388,6 +395,7 @@ impl Hands {
         let standing = match (me.class, kind) {
             (Class::Elementalist, SLOT_SPECIAL) => Some(EffectKind::FirePillar),
             (Class::ShadowReaver, SLOT_SPECIAL) => Some(EffectKind::GuillotineLotus),
+            (Class::BloodMage, moves::blood::HEMOPLAGUE) => Some(EffectKind::Plague),
             _ => None,
         };
         standing.is_none_or(|k| {
@@ -559,9 +567,10 @@ impl Hands {
     }
 
     /// The Blood mage: **the spike on a pool under it**, which drinks the pool
-    /// whole and comes up half again as hard; **the Grasp** from range in a
-    /// long window, which hauls her to it; **the cut** from beyond the
-    /// scythe; and the scythe, which drinks what it passes over.
+    /// whole and comes up half again as hard; **the Hemoplague** on it in a
+    /// long window; **the Transfusion held to its third tier** from range in a
+    /// long window; **the cut** from beyond the scythe; and the scythe, which
+    /// drinks what it passes over.
     fn bleed(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let red = me.health * 100 / me.full_health().max(1);
         let far = flat(at.sub(me.pos)).flat_len();
@@ -578,8 +587,18 @@ impl Hands {
             self.uses.erupted += 1;
             return self.look_keeping(me, plan, pool, b);
         }
+        let plague = moves::get(me.class, moves::blood::HEMOPLAGUE);
+        if red >= RED_CHARGE
+            && window >= (plague.startup + plague.active) as i32 + LONG_WINDOW
+            && far.raw() < plague.reach.sub(Fx::ratio(5, 10)).raw()
+            && self.ready(w, me, moves::blood::HEMOPLAGUE)
+            && let Some(b) = self.button(me, moves::blood::HEMOPLAGUE)
+        {
+            self.uses.plagues += 1;
+            return self.look_keeping(me, plan, at, b);
+        }
         let sweep = sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP));
-        if let Some(input) = self.grasp(w, me, at, plan, window, red) {
+        if let Some(input) = self.charge(w, me, at, plan, window, red) {
             return input;
         }
         let cut = moves::get(me.class, moves::blood::HAEMORRHAGE);
@@ -611,13 +630,11 @@ impl Hands {
         plan
     }
 
-    /// The Grasp, if it is worth holding: from beyond the scythe, in a long
-    /// window, with red to spare. **Against a creature it is a way in and
-    /// little else**: the arms cannot haul it, so they haul her to it, and
-    /// what they deal is one arm's worth -- forty or fifty, measured on the
-    /// Pair, for seven in a hundred of her red. The hold sets the depth, so
-    /// it is held for the frames that put the arms' meeting point on `at`.
-    fn grasp(
+    /// The Transfusion held to its third tier, if it is worth holding: from
+    /// beyond the scythe and inside the bolt's reach, in a window long enough
+    /// for the hold and the cast, with red to spare. The lance is the biggest
+    /// single blow she has from range.
+    fn charge(
         &mut self,
         w: &World,
         me: &Player,
@@ -626,24 +643,21 @@ impl Hands {
         window: i32,
         red: i32,
     ) -> Option<Input> {
-        let grasp = moves::get(me.class, moves::blood::GRASP);
+        let bolt = moves::get(me.class, moves::blood::TRANSFUSION);
         let far = flat(at.sub(me.pos)).flat_len();
-        let far_end = grasp.reach;
-        // The hold whose reach is nearest the point.
-        let frames = (1..=grasp.channel)
-            .min_by_key(|h| grasp.reach_after(*h).sub(far).abs().raw())
-            .unwrap_or(1);
-        if red < RED_GRASP
-            || far.raw() < Fx::from_int(3).raw()
-            || far.raw() > far_end.sub(Fx::ratio(5, 10)).raw()
-            || window < frames as i32 + (grasp.startup + grasp.active) as i32 + LONG_WINDOW
+        let sweep = sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP));
+        let frames = sim::tuning::tier_three() + 2;
+        if red < RED_CHARGE
+            || far.raw() < sweep.add(Fx::ONE).raw()
+            || far.raw() > bolt.reach.sub(Fx::ratio(5, 10)).raw()
+            || window < frames as i32 + (bolt.startup + bolt.active) as i32 + LONG_WINDOW
             || self.cool > 0
-            || !self.ready(w, me, moves::blood::GRASP)
+            || !self.ready(w, me, moves::blood::TRANSFUSION)
         {
             return None;
         }
-        let b = self.button(me, moves::blood::GRASP)?;
-        self.uses.grasps += 1;
+        let b = self.button(me, moves::blood::TRANSFUSION)?;
+        self.uses.charges += 1;
         self.rest();
         self.seq = Some(Seq::Hold {
             bits: b,
@@ -1004,11 +1018,11 @@ impl Hands {
                 Some(self.look(me, chest(shadow.pos), Input::SHIFT | Input::W))
             }
             Class::BloodMage => {
-                // **The Grasp is her way in**: the arms close on something
-                // that cannot be hauled and haul her to it instead, and the
-                // pool they spill is a spike's worth for the next window.
+                // **From range she does not need a way in**: a Transfusion
+                // held to its third tier is the lance, and the stain it
+                // leaves is a spike's worth for the next window.
                 let red = me.health * 100 / me.full_health().max(1);
-                if let Some(input) = self.grasp(w, me, at, self.look(me, at, 0), window, red) {
+                if let Some(input) = self.charge(w, me, at, self.look(me, at, 0), window, red) {
                     return Some(input);
                 }
                 if window <= dodge / 2 + 14 {

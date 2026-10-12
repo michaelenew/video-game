@@ -629,11 +629,9 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
     use sim::state::hitbox;
     let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
     // Close in front of her, where a swing would reach.
-    w.players[1].pos = w.players[0].pos.add(sim::V3::new(
-        Fx::from_int(2),
-        Fx::ZERO,
-        Fx::ZERO,
-    ));
+    w.players[1].pos = w.players[0]
+        .pos
+        .add(sim::V3::new(Fx::from_int(2), Fx::ZERO, Fx::ZERO));
     let before = w.players[1].health;
     // The Transfusion, tapped: a bolt from her hand, which does the hitting.
     for i in 0..40 {

@@ -1,8 +1,9 @@
 ---
-status: built — v1, then on three clicks (2026-10-09); unplayed
+status: built — v1, then on three clicks (2026-10-09), then the blaster (2026-10-12); unplayed
 decided: 2026-09-09
 revised: 2026-09-23
-sources: ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
+revised: 2026-10-12
+sources: ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
 ---
 
 # Blood mage — kit
@@ -27,7 +28,107 @@ grows with how open she has left herself, and a floor she wants to fight on.
 > six combos it was built towards, are
 > [../exploration/0009_blood_mage_on_three_clicks.md](../exploration/0009_blood_mage_on_three_clicks.md).
 
-## On three clicks — built 2026-10-09
+> **The blaster, 2026-10-12 — built, unplayed.** The owner's verdict on three clicks: short,
+> awkward, pools too small, and "spam Black spike". §"The blaster" below is what is in the game
+> now; **where anything after it disagrees, §"The blaster" wins.** The direction, the six combos
+> and the questions still open are
+> [../exploration/0015_blood_mage_blaster.md](../exploration/0015_blood_mage_blaster.md).
+
+## The blaster — built 2026-10-12
+
+| | Left: my blood | Middle: your blood | Right: the scythe |
+| --- | --- | --- | --- |
+| **On foot** (held: three tiers) | **Transfusion** | **Black spike** | Reaping sweep (tap) / **Tides** (held) |
+| **In the air** | Haemorrhage | **Stake** | **Reaper's chain** |
+| **Leaving the floor** (space + click) | **Blood wings** | **Upheaval** | **Reaper's leap** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | **Frenzy** |
+| `E` | **Hemoplague** |
+| `shift` + direction | The **teleport** to a stain under the crosshair (20 m); otherwise the **Sanguine flow** |
+
+**The rows were retuned, not renumbered**: the Bloodletter's row is the Transfusion, the
+Grasp's the Hemoplague, the nova's Tides, the jet's the wings, Marionette's the Upheaval, the
+Nail's the Stake, the Hook's the chain, Harvest's the leap, and Frenzy was appended
+(`sim::moves::blood`). The Bloodletter and Grasp effects are still in the simulation and
+nothing casts them. `tests/blood_mage_blaster.rs` holds one test per move and rule, and the
+*Meteor storm* combo end to end.
+
+### The charge
+
+Each click on the floor is **held through three tiers** (`moves::Charge::Tier`): a tap is the
+first; the second at `Charge, tier two at` (30 frames), the third at `tier three at` (60),
+sooner by up to `Charge, faster at full grey` (×1.5) with a full bar of grey. Each tier is
+paid in red as it is reached (`tier two costs` 3%, `tier three costs` 4%, on top of the
+row's own cost on the press). Holding, she crawls at `Charge, walk while holding` (35% of a
+walk). **A jump or a dodge out of the hold stores it** in her vessel (`Player::vessel`, the
+move and its tier) and she jumps or dodges that frame; a **fresh** press of the same click lets
+it go from wherever she is, in the air too, at the stored tier, with nothing paid again. The
+vessel bleeds 1% of red every `Vessel, 1% of red every` (60 frames). A hit while still holding
+loses the charge. Right click is the sweep on a tap: held past the sweep's startup it becomes
+Tides (`countdown`), paying Tides' own cost there.
+
+### Every stain is collected
+
+A stain is **drunk** -- its essence turned from grey back into red, grey still the ceiling --
+by any of three things: **walking** into it (`Stain, walked into drinks` 100%,
+`World::drink_underfoot` -- only as much as her grey can hold, the stain keeping the rest, so
+at full health she walks through her stains and leaves them for the spike), the **teleport**
+to it (the same share), or **an attack** whose
+volume, bolt or effect lands over it (every move's `Drinks of a pool` is 100%). **An attack
+through a stain is harder for it**: `stain_bonus` adds `Stain, a hit through one adds` (50%) of
+the stain's essence to the blow, on a fighter, a creature or a small body alike. A spike on a
+stain still **erupts** it instead, and every stain within the eruption and `Black spike, an
+eruption sets off stains this far past its edge` (2.5 m) erupts with it.
+
+Grey fades at 3 a second (was 12) and stains drain at 5 (was 10). **Every move deals damage**,
+the movement included, and **every hit on a creature spills** by the blow's own worth rather
+than what its hide let through. The bleed ticks 25 every half second for four seconds. Her own
+blood -- the wings' takeoff -- is still only a door.
+
+### The moves
+
+| Move | Reach | Damage | Notes |
+| --- | --- | --- | --- |
+| Transfusion | 20 m bolt | 45 / ×1.7 / ×2.6 | tier two pierces everybody on the line; tier three throws back at 14 m/s |
+| Black spike | 22 m, grounded | 100 / 3 × 80 / 3 waves × 80 | tier two: three spikes 1.6 m out from the point; tier three: a 3 m field, a wave every 30 frames |
+| Reaping sweep | 2.4 m, grows with grey | 45 | the tap |
+| Tides | a ring 4 / 6 / 8 m | 60 / ×1.7 / ×2.6 | the hold; throws out |
+| Haemorrhage | 18 m bolt | 30, then the bleed | |
+| Stake | to the crosshair, 18 m | 90 | pins anybody in the air (`NAILED`); lands in a 2.5 m area that slows |
+| Reaper's chain | to the crosshair, 18 m | 40 | a fighter is yanked to her (30 m/s); a creature, a critter, the floor or a wall pulls her (40 m/s); the sky, 5 m along the aim |
+| Blood wings | 8 m along the aim | 40 in 2 m | tapped; any way, up included; her own stain at the takeoff |
+| Upheaval | 15 m, grounded | 80, launches 18 m/s | a hop for her (12 m/s); on a stain it erupts |
+| Reaper's leap | an arc to the crosshair's floor, 10 m | 90 in 2.5 m | lands as the slam; drinks every stain within 3 m |
+| Hemoplague | 22 m, grounded | 30 every half second for 5 s | a 2.5 m-radius, 4 m-tall cloud; not a hit -- no stun, no shove; all it spills goes to one stain at its centre; one at a time |
+| Frenzy | 6 m round her | 15 every 10 frames | see below |
+
+### Frenzy
+
+`Q`. She is **planted** for `Frenzy, lasts` (180 frames): no walking and no jumping; her
+only movement is the teleport. Within the row's reach (6 m) everyone takes the row's damage
+every `Frenzy, hurts every` (10 frames) and starts to bleed. Every stain of hers within
+`Frenzy, pulls stains within` (15 m) **rushes** to her at 12 m/s and **explodes** at the edge
+of the area for `Stain, explodes for` (×2 its essence) in 2.5 m. **The price**: no stain heals
+her while it lasts -- whatever would have been drunk explodes -- grey drains at 60 a second,
+and when it ends whatever grey is left is gone. A **teleport to a stain** explodes it where she
+arrives and adds `Frenzy, a teleport adds` (60 frames), to `Frenzy, lasts at most` (480).
+`Frenzy, needs grey of at least` is 0: it is BLAST-7 in 0015.
+
+### The teleport and the flow
+
+`shift` with a stain of hers under the crosshair, within `Teleport, to a stain within` (20 m)
+and with a clear line: she is there, drinks it, and arrives in a burst of blood (the wings'
+row: 40 in 2 m). With none, the dodge is the **Sanguine flow**: `Dodge is a blink` is on, a
+flat 6 m slide in `Blink, frames to cross`, invulnerable for the dodge's frames, drinking every
+stain she crosses on the way.
+
+**Not drawn yet:** the vessel's glow, and the Frenzy area. The Hemoplague is a faint disc with
+wisps inside its column, the spike field a ring of spikes rising with each wave, and the moves
+borrow her five clips (`view::play`).
+
+## On three clicks — built 2026-10-09 (superseded 2026-10-12)
 
 | | Left: my blood | Middle: your blood | Right: the scythe |
 | --- | --- | --- | --- |
