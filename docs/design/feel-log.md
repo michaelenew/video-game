@@ -8154,3 +8154,17 @@ smooth minimum instead of the hard one was worse, and was reverted.
 **Not done** It sees the floor, not a wall or ledge behind: that is the drawn camera's pull-in,
 as in third person anywhere.
 **Verdict** — unplayed.
+
+### 2026-10-12 — a step out of a room's door no longer ends its hunt
+**Changed** A hunt held while anybody on their feet was inside the room's footprint, and ended
+the frame nobody was; walking back in started a new one. It now holds while anybody is within
+`Hunt, held this far outside its room` (15 m) of the room's edge (`valley::open::reframe`,
+`atlas::Placed::holds_within`).
+**Why** From play: "I keep on accidentally exiting an arena during a fight and the creature's
+health and position reset but mine don't." A dodge or a knock through the door was a free
+full heal for the creature and none for the hunter.
+**How far** The road junctions are 16 to 60 m from their rooms; 15 m is less than all of
+them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back to the road
+has left the hunt, and the creature is gone as before. 30 m was tried first and held the
+Pinewood road inside a hunt.
+**Verdict** — unplayed.

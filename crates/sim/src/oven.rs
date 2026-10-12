@@ -769,6 +769,11 @@ scalars! {
     // water pushes down a body in it, so nobody jumps up through the curtain.
     // Appended for the reason above.
     FallsPush,            "Valley", "Waterfall, pushes down at (m/s)", Fixed, 0, fx(30,1);
+    // **A hunt is not ended by a step out of its room**, 2026-10-12: it holds
+    // while anybody on their feet is within this far past the room's edge, so
+    // backing out through a door mid-fight leaves the creature as it was.
+    // Further than that, the hunt is over, unwon. See `valley::open`.
+    HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
 }
 
 // ---------------------------------------------------------------------------

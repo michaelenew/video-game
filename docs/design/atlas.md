@@ -152,8 +152,14 @@ gate only.
   shift forgot would show up there.
 - **Walking into a room starts its hunt.** The creature is put on its marks,
   noticing you as it always has. A hunt holds the world in its room while
-  anybody on their feet is in it; when nobody is, the hunt is over, unwon,
-  and the creature is gone. Won, the room goes quiet; lost, you wake outside
+  anybody on their feet is in it **or within `Hunt, held this far outside its
+  room` (15 m) of its edge**; when nobody is, the hunt is over, unwon, and the
+  creature is gone. The margin is since 2026-10-12, from play: stepping back
+  out of the door mid-fight ended the hunt, and stepping in again met a fresh
+  creature at full health while the fighters kept their wounds. The creature
+  keeps inside its own bounds, so it waits at the door. The margin is less
+  than any room's distance to its road junction (`tests/valley.rs`), so back
+  on the road is out of the hunt. Won, the room goes quiet; lost, you wake outside
   its door, as before.
 - **A dark waystone's door is a wall**: a box the shape of the doorway, raised
   on the ground the way a slag mound is, unless somebody already stands on

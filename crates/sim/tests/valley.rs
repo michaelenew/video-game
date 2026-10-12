@@ -412,8 +412,14 @@ fn a_dark_waystone_shuts_its_pass_and_a_trophy_opens_it() {
     );
 }
 
+/// **A step out of the door is not giving up** (2026-10-12): backing out of
+/// a room mid-fight leaves its hunt going, the creature hurt and where it
+/// was, and walking back in finds it so. Only walking well away -- past
+/// `tuning::hunt_held_past` of the room's edge -- ends the hunt, unwon. The
+/// margin is less than the nearest road junction's distance from any room
+/// (16 m), so a hunt never holds somebody who is back on the road.
 #[test]
-fn walking_out_of_a_room_ends_its_hunt() {
+fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_ends_it() {
     let r = sim::valley::layout::ROOMS
         .iter()
         .find(|r| r.arena == ArenaId::HIGHLANDS)
@@ -425,7 +431,8 @@ fn walking_out_of_a_room_ends_its_hunt() {
         Some(r.seam.1),
         2,
     );
-    for to in sim::valley::layout::approach(r) {
+    let way = sim::valley::layout::approach(r);
+    for &to in &way {
         walk_to(&mut w, to, 1200).unwrap();
         if w.arena == ArenaId::HIGHLANDS {
             break;
@@ -433,13 +440,48 @@ fn walking_out_of_a_room_ends_its_hunt() {
     }
     assert!(w.hunting() && w.valley.on && !w.pvp());
     assert_eq!(w.monster().map(|m| m.species), Some(SpeciesId::RIDGEBACK));
-    // Back out the way they came: the hunt is over, unwon.
-    walk_to(
-        &mut w,
-        (Fx::ratio(r.from.0, 100), Fx::ratio(r.from.1, 100)),
-        1200,
-    )
-    .unwrap();
+    // Hurt it, so a fresh one would show.
+    let hurt = w.monster().unwrap().health / 2;
+    for m in w.monsters.iter_mut().flatten() {
+        m.health = hurt;
+    }
+    let room = sim::atlas::valley()
+        .placed(ArenaId::HIGHLANDS)
+        .copied()
+        .unwrap();
+    // Out of the door, a few metres: still the same hunt.
+    let door = way[way.len() - 1];
+    let before = way[way.len() - 2];
+    let out = {
+        let (dx, dz) = (before.0.sub(door.0), before.1.sub(door.1));
+        let d = V3::new(dx, Fx::ZERO, dz).normalized();
+        (
+            door.0.add(d.x.mul(Fx::from_int(12))),
+            door.1.add(d.z.mul(Fx::from_int(12))),
+        )
+    };
+    walk_to(&mut w, out, 1200).unwrap();
+    let feet = on_map(&w, 0);
+    assert!(!room.holds(feet.x, feet.z), "never left the room");
+    assert!(w.hunting(), "a step out of the door ended the hunt");
+    assert_eq!(w.arena, ArenaId::HIGHLANDS);
+    assert!(
+        w.monster().unwrap().health <= hurt,
+        "the creature was healed by a step out of the door"
+    );
+    // And back in: the same creature, still hurt.
+    walk_to(&mut w, door, 1200).unwrap();
+    assert!(w.hunting());
+    assert!(w.monster().unwrap().health <= hurt, "a fresh creature");
+    // Away, all the way back to the road: the hunt is over, unwon.
+    for &to in way.iter().rev().skip(1) {
+        walk_to(&mut w, to, 1200).unwrap();
+    }
+    let feet = on_map(&w, 0);
+    assert!(
+        !room.holds_within(feet.x, feet.z, sim::tuning::hunt_held_past()),
+        "the road is within the hunt's margin: a hunt would hold a body back on the road"
+    );
     assert_eq!(w.arena, ArenaId::PINEWOOD);
     assert!(!w.hunting() && w.peaceful());
     assert!(!w.valley.has_beaten(SpeciesId::RIDGEBACK));
@@ -734,4 +776,23 @@ fn a_fall_into_a_lower_place_costs_the_same() {
         from_shrine, in_saddle,
         "the frame changed what a fall costs"
     );
+}
+
+/// **Back on the road is out of the hunt**: every room's road junction is
+/// further from the room than `tuning::hunt_held_past`, so the margin that
+/// keeps a hunt going through a step out of its door never holds somebody who
+/// has walked back to the road and means to go on.
+#[test]
+fn no_road_junction_is_inside_a_hunts_margin() {
+    let margin = sim::tuning::hunt_held_past();
+    for r in sim::valley::layout::ROOMS {
+        let room = sim::atlas::valley().placed(r.arena).copied().unwrap();
+        let (x, z) = (Fx::ratio(r.from.0, 100), Fx::ratio(r.from.1, 100));
+        assert!(
+            !room.holds_within(x, z, margin),
+            "{}'s road junction is within {} m of it",
+            r.arena.get().name,
+            margin.to_f32_for_render()
+        );
+    }
 }

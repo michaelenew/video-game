@@ -3241,6 +3241,14 @@ pub fn thrown_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrownSpeed)).max(Fx::ZERO)
 }
 
+/// **How far outside its room a hunt holds**: while anybody on their feet is
+/// within this far past the room's footprint, the hunt goes on, creature and
+/// all, and stepping back in finds it as it was. A step out of a door
+/// mid-fight is not giving up; walking this far away is.
+pub fn hunt_held_past() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HuntHeldPast)).max(Fx::ZERO)
+}
+
 /// What a cash-in adds for each mark squared, on top of `mark_worth` a mark: what makes the last mark worth the most.
 pub fn mark_curve() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MarkCurve)).max(Fx::ZERO)
