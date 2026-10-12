@@ -2064,11 +2064,15 @@ fn the_combo_the_class_is_built_around_is_playable() {
 // which move a press produces, what ends a string, and what a string costs when
 // the defender answers it.
 
-/// Hold one button down and collect every move it throws, in order.
+/// Keep tapping one button and collect every move it throws, in order.
+/// Tapped, since a Champion's weapon held down is a charge (exploration 0015).
 fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
     let mut seen: Vec<u8> = Vec::new();
-    for _ in 0..frames {
-        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    for f in 0..frames {
+        w.advance([
+            Input::aimed(tapped(f, button), LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         if let Some(kind) = w.players[0].action.attack_kind() {
             if seen.last() != Some(&kind) {
                 seen.push(kind);
@@ -2079,17 +2083,17 @@ fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
 }
 
 #[test]
-fn one_weapon_held_down_walks_the_whole_chain_and_then_starts_again() {
-    // Linear play is meant to be strong, so the simplest possible input -- hold
-    // a button -- has to produce the whole string rather than the first hit
-    // three times.
+fn one_weapon_tapped_walks_the_whole_chain_and_then_starts_again() {
+    // Linear play is meant to be strong, so the simplest possible input -- one
+    // button, tapped (held, it is a charge) -- has to produce the whole string
+    // rather than the first hit three times.
     use moves::champion as c;
     let mut w = engaged(Class::Champion);
     let seen = strung(&mut w, LMB, 180);
     assert_eq!(
         &seen[..3],
         &[c::SWORD_GROUND, c::BACKCUT, c::UPCUT],
-        "holding left click did not walk the sword chain: {seen:?}"
+        "tapping left click did not walk the sword chain: {seen:?}"
     );
     assert_eq!(
         seen.get(3),

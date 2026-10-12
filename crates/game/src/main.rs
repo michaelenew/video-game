@@ -3531,6 +3531,53 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 + Vec3::Y * sim::tuning::shadow_ring_width().to_f32_for_render(),
             sim::tuning::shadow_ring_width().to_f32_for_render(),
         )),
+        // **The Champion's full charges** (exploration 0015). The crescent:
+        // a wide flat blade of light where the hit test is, and two fading
+        // after-images behind it on its line.
+        EffectKind::Crescent if part < 3 => {
+            let r = effect.field_radius().to_f32_for_render();
+            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
+            let shrink = 1.0 - part as f32 * 0.3;
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Light,
+                at: fx3(effect.head()) - back,
+                scale: Vec3::new(r * 2.0 * shrink, 0.12, r * 2.0 * shrink),
+            })
+        }
+        // The shockwave: broken ground on its live radius, standing where
+        // it stopped for as long as it lies there.
+        EffectKind::Shockwave if part < sim::effects::RING_PIECES => {
+            let height = sim::tuning::body_height().to_f32_for_render() * 0.35;
+            Some(standing(
+                Shape::Column,
+                Skin::Stone,
+                fx3(effect.ring_piece(part)),
+                0.45,
+                0.0,
+                height,
+            ))
+        }
+        // The cuts: small and faint along the line he ran while they hang,
+        // large on the frames they land.
+        EffectKind::Cuts if part < sim::effects::TETHER_BEADS => {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let end = fx3(effect.cuts_end());
+            let r = effect.field_radius().to_f32_for_render();
+            let landing = effect.age >= sim::tuning::cuts_delay();
+            let size = if landing { r * 0.8 } else { r * 0.2 };
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Light,
+                at: at.lerp(end, t),
+                scale: Vec3::new(size * 2.0, 0.08, size * 2.0),
+            })
+        }
+        // The javelin: a line of light behind its head, a spear's length.
+        EffectKind::Javelin if part < 4 => {
+            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
+            Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
+        }
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             shape: Shape::Column,
             skin: Skin::Shade,

@@ -599,6 +599,14 @@ const NAMES: [&[&str]; 6] = [
         "Uppercut",
         "Pole drive",
         "Pole vault",
+        // The full charges (exploration 0015): a link held to full, the first
+        // two links' and then the third's -- the grand finishers.
+        "Crescent",
+        "Shockwave",
+        "Comet",
+        "Thousand Cuts",
+        "Meteor",
+        "Heaven-piercer",
     ],
     // Shadow Reaver -- two bodies. Options are a function of the line between
     // them, and the line always exists: the shadow is never nowhere.
@@ -814,13 +822,43 @@ pub mod champion {
     /// The odd one out: right click during a Rush, aimed at the floor.
     pub const POLE_VAULT: u8 = 18;
 
-    pub const COUNT: usize = 19;
+    /// **The full charges** (exploration 0015, C5): what a link held to full
+    /// becomes. Two rows, weapon by weapon like every other row: the first
+    /// two links' full charge, and the third's, which is the strongest -- the
+    /// grand finisher. Nothing throws them but a full hold, or momentum's top
+    /// tier on a tap.
+    pub const FULL: u8 = 19;
+    pub const GRAND: u8 = 22;
+    pub const CRESCENT: u8 = FULL + SWORD;
+    pub const SHOCKWAVE: u8 = FULL + HAMMER;
+    pub const COMET: u8 = FULL + SPEAR;
+    pub const THOUSAND_CUTS: u8 = GRAND + SWORD;
+    pub const METEOR: u8 = GRAND + HAMMER;
+    pub const HEAVEN_PIERCER: u8 = GRAND + SPEAR;
+
+    pub const COUNT: usize = 25;
 
     /// Which weapon a move is thrown with. The column of the grid, except for
     /// the vault, which is planted with the spear like everything else on
     /// right click.
     pub const fn weapon(kind: u8) -> u8 {
-        if kind == POLE_VAULT { SPEAR } else { kind % 3 }
+        if kind >= FULL {
+            (kind - FULL) % 3
+        } else if kind == POLE_VAULT {
+            SPEAR
+        } else {
+            kind % 3
+        }
+    }
+
+    /// Is this one of the six full charges?
+    pub const fn is_full(kind: u8) -> bool {
+        kind >= FULL && (kind as usize) < COUNT
+    }
+
+    /// Is this a grand finisher -- a third link's full charge?
+    pub const fn is_grand(kind: u8) -> bool {
+        kind >= GRAND && (kind as usize) < COUNT
     }
 
     /// How many hits into the chain this move is, if it is one of the nine.
@@ -856,10 +894,15 @@ pub mod champion {
     }
 
     /// **The full charge** of a link (exploration 0015, C5): the move a
-    /// link held to full becomes. `None` until there is one.
+    /// link held to full becomes. The first two links of a weapon share one,
+    /// and the third's is the grand finisher. `None` for anything that is not
+    /// a link.
     pub const fn full_charge(kind: u8) -> Option<u8> {
-        let _ = kind;
-        None
+        match link_of(kind) {
+            Some(2) => Some(GRAND + weapon(kind)),
+            Some(_) => Some(FULL + weapon(kind)),
+            None => None,
+        }
     }
 }
 
@@ -1464,6 +1507,23 @@ pub const MAX_SLOTS: usize = {
     n
 };
 
+/// How many slots a fighter keeps a **lockout** for: every class's every
+/// slot, but for the Champion's six full charges (exploration 0015), which
+/// are past the end and keep none. A full charge is paid for with a hold, or
+/// with momentum, and a repeat lockout on top would be a second price for
+/// the same thing. Kept apart from [`MAX_SLOTS`] because the two lockout
+/// tables are in the snapshot, and the snapshot has a cap.
+pub const LOCKED_SLOTS: usize = champion::FULL as usize;
+
+const _: () = {
+    let mut i = 0;
+    while i < crate::class::ALL_CLASSES.len() {
+        let class = crate::class::ALL_CLASSES[i];
+        assert!(matches!(class, Class::Champion) || slots(class) <= LOCKED_SLOTS);
+        i += 1;
+    }
+};
+
 /// Where a class's slots begin in that store.
 pub const fn base_slot(class: Class) -> usize {
     let mut n = 0;
@@ -1508,7 +1568,13 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             15 => "Space+LMB",
             16 => "Space+MMB",
             17 => "Space+RMB",
-            _ => "RMB rush, low",
+            18 => "RMB rush, low",
+            19 => "LMB held, 1st/2nd",
+            20 => "MMB held, 1st/2nd",
+            21 => "RMB held, 1st/2nd",
+            22 => "LMB held, 3rd",
+            23 => "MMB held, 3rd",
+            _ => "RMB held, 3rd",
         },
         // Finishers, neutral, the shadow: left, middle, right (2026-10-10).
         Class::ShadowReaver => match slot {
@@ -1670,6 +1736,17 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // hammer rise through the arc and the spear drives the other end of
             // itself into the floor.
             c::RISING_CUT | c::UPPERCUT | c::POLE_DRIVE => Shape::Swing(Plane::Upright),
+            // **The full charges**, each its weapon's own plane, because a
+            // full charge is still the weapon: the sword's cut that leaves a
+            // crescent, the hammer's overhead driven into the floor, the
+            // spear levelled. Thousand Cuts is the drawn sword run through a
+            // line of them, which is a cut across, as the Rush slash is.
+            c::CRESCENT => Shape::Swing(Plane::Diagonal(Hand::Right)),
+            c::SHOCKWAVE | c::METEOR => Shape::Swing(Plane::Upright),
+            c::COMET => Shape::Thrust,
+            c::THOUSAND_CUTS => Shape::Swing(Plane::Flat),
+            // The spear leaves his hands: the javelin does the hitting.
+            c::HEAVEN_PIERCER => Shape::None,
             // Movement, not an attack. A vault that also hit people would be
             // strictly better than the stab it shares a button with.
             _ => Shape::None,
@@ -1914,6 +1991,16 @@ pub const fn puts_out(class: Class, kind: u8) -> Option<crate::effects::EffectKi
             reaver::WHIRL | reaver::RISING_WHIRL => Some(E::ShadowWhirl),
             reaver::TUMBLE | reaver::FAN | reaver::SHURIKEN => Some(E::ShadowFan),
             reaver::PLUNGE => Some(E::ShadowRing),
+            _ => None,
+        },
+        // The full charges' second halves: the crescent leaving the blade,
+        // the ground breaking round the hammer, the cuts left hanging along
+        // the line he ran, the javelin. See `state::World::champion_comes_out`.
+        Class::Champion => match kind {
+            champion::CRESCENT => Some(E::Crescent),
+            champion::SHOCKWAVE | champion::METEOR => Some(E::Shockwave),
+            champion::THOUSAND_CUTS => Some(E::Cuts),
+            champion::HEAVEN_PIERCER => Some(E::Javelin),
             _ => None,
         },
         _ => None,

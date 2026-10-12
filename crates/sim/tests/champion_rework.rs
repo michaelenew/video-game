@@ -229,3 +229,348 @@ fn a_rush_takes_a_hold_back() {
     };
     assert!(rush > 0, "and he is running");
 }
+
+// -- The full charges (C5) -----------------------------------------------
+
+use sim::effects::EffectKind;
+
+/// A Champion with nobody near, at `place` in the string, the Bulwark parked
+/// `ahead` metres down his facing: room for a full charge to do its work.
+fn open_floor(place: u8, ahead: i32) -> World {
+    let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
+    let y = w.players[0].pos.y;
+    w.players[0].pos = sim::V3::new(sim::Fx::from_int(-6), y, sim::Fx::from_int(8));
+    w.players[1].pos = sim::V3::new(sim::Fx::from_int(-6 + ahead), y, sim::Fx::from_int(8));
+    for _ in 0..2 {
+        step(&mut w, 0);
+    }
+    if let Mechanic::Forms {
+        chain, chain_left, ..
+    } = &mut w.players[0].mechanic
+    {
+        *chain = place;
+        *chain_left = 400;
+    }
+    w
+}
+
+/// Hold `button` to a full charge and let go. Returns the world on the frame
+/// after the release, and the move it threw.
+fn full_charge(w: &mut World, button: u16) -> Option<u8> {
+    let full = sim::tuning::hold_full() as u32;
+    for _ in 0..(full + 30) {
+        step(w, button);
+        if let Action::Channel { held, .. } = w.players[0].action {
+            if held as u32 > full {
+                break;
+            }
+        }
+    }
+    step(w, 0);
+    w.players[0].action.attack_kind()
+}
+
+fn live(w: &World, kind: EffectKind) -> bool {
+    w.effects.iter().flatten().any(|e| e.kind == kind)
+}
+
+#[test]
+fn every_link_held_to_full_is_its_weapons_full_charge() {
+    for (place, button, want) in [
+        (0, Input::LEFT, c::CRESCENT),
+        (0, Input::MIDDLE, c::SHOCKWAVE),
+        (0, Input::RIGHT, c::COMET),
+        (1, Input::LEFT, c::CRESCENT),
+        (2, Input::LEFT, c::THOUSAND_CUTS),
+        (2, Input::MIDDLE, c::METEOR),
+        (2, Input::RIGHT, c::HEAVEN_PIERCER),
+    ] {
+        let mut w = open_floor(place, 12);
+        assert_eq!(
+            full_charge(&mut w, button),
+            Some(want),
+            "link {place} of {button:#x} held to full"
+        );
+    }
+}
+
+#[test]
+fn the_crescent_cuts_somebody_well_past_the_swords_reach() {
+    let mut w = open_floor(0, 7);
+    let before = w.players[1].health;
+    assert_eq!(full_charge(&mut w, Input::LEFT), Some(c::CRESCENT));
+    let mut flew = false;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        flew |= live(&w, EffectKind::Crescent);
+    }
+    assert!(flew, "no crescent left the blade");
+    assert!(
+        w.players[1].health < before,
+        "the crescent never reached somebody seven metres away"
+    );
+}
+
+#[test]
+fn the_shockwave_throws_up_somebody_outside_the_hammers_reach() {
+    let mut w = open_floor(0, 4);
+    let before = w.players[1].health;
+    assert_eq!(full_charge(&mut w, Input::MIDDLE), Some(c::SHOCKWAVE));
+    let mut up = false;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        up |= !w.players[1].grounded;
+    }
+    assert!(w.players[1].health < before, "the ring never reached them");
+    assert!(up, "and did not throw them up");
+}
+
+#[test]
+fn the_comet_crosses_eight_metres() {
+    let mut w = open_floor(0, 30);
+    let from = w.players[0].pos;
+    assert_eq!(full_charge(&mut w, Input::RIGHT), Some(c::COMET));
+    for _ in 0..40 {
+        step(&mut w, 0);
+    }
+    let gone = w.players[0].pos.sub(from).flat_len().to_f32_for_render();
+    let want = sim::tuning::comet_reach().to_f32_for_render();
+    assert!(
+        gone > want * 0.8,
+        "the Comet lunged {gone:.1} m of its {want:.1}"
+    );
+}
+
+#[test]
+fn thousand_cuts_runs_through_them_and_the_cuts_land_after() {
+    let mut w = open_floor(2, 3);
+    let before = w.players[1].health;
+    assert_eq!(full_charge(&mut w, Input::LEFT), Some(c::THOUSAND_CUTS));
+    let mut cuts = 0;
+    let mut last = before;
+    let mut thrown = false;
+    for _ in 0..90 {
+        step(&mut w, 0);
+        if w.players[1].health < last {
+            cuts += 1;
+            last = w.players[1].health;
+        }
+        thrown |= !w.players[1].grounded;
+    }
+    assert!(cuts >= 3, "the cuts landed {cuts} times");
+    assert!(thrown, "and the last did not throw them up");
+    let past = w.players[0].pos.x.to_f32_for_render() > w.players[1].pos.x.to_f32_for_render();
+    assert!(past, "he ran through them");
+}
+
+#[test]
+fn the_meteor_comes_down_where_the_crosshair_was() {
+    let mut w = open_floor(2, 6);
+    let before = w.players[1].health;
+    // Pointed down at the floor in front of him.
+    let full = sim::tuning::hold_full() as u32;
+    let look = |bits| Input::looking_at(bits, LOOK_RIGHT, -3000);
+    for _ in 0..(full + 30) {
+        w.advance([look(Input::MIDDLE), Input::aimed(0, LOOK_LEFT)]);
+        if matches!(w.players[0].action, Action::Channel { held, .. } if held as u32 > full) {
+            break;
+        }
+    }
+    w.advance([look(0), Input::aimed(0, LOOK_LEFT)]);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::METEOR));
+    let mut flew = false;
+    let mut ring = false;
+    for _ in 0..120 {
+        step(&mut w, 0);
+        flew |= !w.players[0].grounded;
+        ring |= live(&w, EffectKind::Shockwave);
+    }
+    assert!(flew, "the Meteor never left the floor");
+    assert!(ring, "and broke no ground where it came down");
+    assert!(w.players[1].health < before, "the crater reached nobody");
+}
+
+#[test]
+fn the_heaven_piercer_pins_them_and_he_tears_it_out() {
+    let mut w = open_floor(2, 10);
+    let before = w.players[1].health;
+    assert_eq!(full_charge(&mut w, Input::RIGHT), Some(c::HEAVEN_PIERCER));
+    let mut pinned = false;
+    let mut thrown = false;
+    let mut pinned_at = w.players[1].pos;
+    for _ in 0..120 {
+        step(&mut w, 0);
+        if matches!(w.players[1].action, Action::Held { .. }) {
+            pinned = true;
+            pinned_at = w.players[1].pos;
+        }
+        thrown |= !w.players[1].grounded;
+    }
+    assert!(pinned, "the javelin pinned nobody");
+    assert!(w.players[1].health < before);
+    assert!(thrown, "the tear-out did not throw them up");
+    assert!(
+        !live(&w, EffectKind::Javelin),
+        "the spear is back in his hands"
+    );
+    let near = w.players[0]
+        .pos
+        .sub(pinned_at)
+        .flat_len()
+        .to_f32_for_render();
+    assert!(
+        near < sim::tuning::tear_radius().to_f32_for_render(),
+        "he went after it and stopped where it was: {near:.1} m from it"
+    );
+}
+
+#[test]
+fn a_grand_finisher_that_lands_gives_the_rush_back() {
+    let mut w = open_floor(2, 3);
+    if let Mechanic::Forms { recharge, .. } = &mut w.players[0].mechanic {
+        *recharge = 200;
+    }
+    full_charge(&mut w, Input::MIDDLE);
+    let mut back = false;
+    for _ in 0..120 {
+        step(&mut w, 0);
+        back |= matches!(w.players[0].mechanic, Mechanic::Forms { recharge: 0, .. });
+    }
+    assert!(back, "the Meteor landed and the Rush stayed spent");
+}
+
+// -- Momentum (C4) -------------------------------------------------------
+
+fn fury(w: &World) -> sim::class::Fury {
+    match w.players[0].mechanic {
+        Mechanic::Forms { fury, .. } => fury,
+        _ => unreachable!(),
+    }
+}
+
+fn set_momentum(w: &mut World, to: i32) {
+    if let Mechanic::Forms { fury, .. } = &mut w.players[0].mechanic {
+        fury.momentum = to as u16;
+        fury.momentum_left = 200;
+    }
+}
+
+#[test]
+fn landed_hits_feed_the_meter_and_mixing_feeds_it_more() {
+    let t = sim::tuning::momentum_hit();
+    let mut same = engaged();
+    for f in 0..60 {
+        step(&mut same, if f % 4 == 0 { Input::LEFT } else { 0 });
+    }
+    let mut mixed = engaged();
+    for f in 0..60 {
+        let b = if f < 20 { Input::LEFT } else { Input::RIGHT };
+        step(&mut mixed, if f % 4 == 0 { b } else { 0 });
+    }
+    assert!(
+        fury(&same).momentum as i32 >= t * 2,
+        "two sword hits fed {}",
+        fury(&same).momentum
+    );
+    assert!(
+        fury(&mixed).momentum > fury(&same).momentum,
+        "sword into spear fed {} and sword into sword {}",
+        fury(&mixed).momentum,
+        fury(&same).momentum
+    );
+}
+
+#[test]
+fn the_meter_holds_and_then_drains() {
+    let mut w = engaged();
+    set_momentum(&mut w, 50);
+    if let Mechanic::Forms { fury, .. } = &mut w.players[0].mechanic {
+        fury.momentum_left = 10;
+    }
+    for _ in 0..10 {
+        step(&mut w, 0);
+    }
+    assert_eq!(fury(&w).momentum, 50, "it holds");
+    for _ in 0..30 {
+        step(&mut w, 0);
+    }
+    assert!(fury(&w).momentum < 50, "and then drains");
+}
+
+#[test]
+fn a_full_meter_makes_a_tap_a_full_charge_and_spends_it() {
+    let mut w = open_floor(0, 12);
+    set_momentum(&mut w, sim::tuning::momentum_max());
+    assert_eq!(fury(&w).tier(), 3);
+    step(&mut w, Input::LEFT);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(c::CRESCENT),
+        "a tap at full momentum is the full charge"
+    );
+    assert_eq!(fury(&w).momentum, 0, "and spends the meter");
+}
+
+#[test]
+fn heated_and_blazing_fill_a_hold_faster() {
+    let held_for = |m: i32| {
+        let mut w = open_floor(0, 30);
+        set_momentum(&mut w, m);
+        let mut f = 0;
+        loop {
+            step(&mut w, Input::MIDDLE);
+            f += 1;
+            if let Action::Channel { .. } = w.players[0].action {
+                break;
+            }
+            assert!(f < 60);
+        }
+        // Hold, a frame at a time, until letting go would be the full charge.
+        let mut held = 0;
+        loop {
+            let mut probe = w.clone();
+            step(&mut probe, 0);
+            if probe.players[0].action.attack_kind() == Some(c::SHOCKWAVE) {
+                return held;
+            }
+            step(&mut w, Input::MIDDLE);
+            held += 1;
+            assert!(held < 200);
+        }
+    };
+    let cold = held_for(0);
+    let max = sim::tuning::momentum_max();
+    let heated = held_for(max / 3 + 1);
+    let blazing = held_for(max * 2 / 3 + 1);
+    assert!(
+        cold > heated && heated > blazing,
+        "full at {cold}, {heated} heated and {blazing} blazing"
+    );
+}
+
+#[test]
+fn a_blow_taken_costs_a_share_of_the_meter() {
+    let mut w = World::with_classes([Class::Bulwark, Class::Champion]);
+    for _ in 0..90 {
+        w.advance([
+            Input::aimed(Input::W, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    if let Mechanic::Forms { fury, .. } = &mut w.players[1].mechanic {
+        fury.momentum = 60;
+        fury.momentum_left = 400;
+    }
+    for f in 0..40 {
+        let b = if f == 0 { Input::LEFT } else { 0 };
+        w.advance([Input::aimed(b, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    }
+    let Mechanic::Forms { fury, .. } = w.players[1].mechanic else {
+        unreachable!()
+    };
+    assert_eq!(
+        fury.momentum as i32,
+        60 - 60 * sim::tuning::momentum_hurt() / 100,
+        "the Bash cost him a share"
+    );
+}

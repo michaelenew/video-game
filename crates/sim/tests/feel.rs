@@ -368,6 +368,15 @@ fn best_case(m: &Move) -> i32 {
         Some(kind @ (EffectKind::LanceBurst | EffectKind::Quake)) => {
             m.damage * swings + kind.damage(m)
         }
+        // The Champion's full charges leave theirs through `moves::puts_out`
+        // rather than this column, so no row names them here; listed so the
+        // match is complete, at the move's hit and one of the effect's.
+        Some(
+            kind @ (EffectKind::Crescent
+            | EffectKind::Shockwave
+            | EffectKind::Cuts
+            | EffectKind::Javelin),
+        ) => m.damage * swings + kind.damage(m),
         // A pool is what a hit leaves, not what a cast places, and it deals
         // nothing on its own. No move's row says it; listed so the match is
         // complete.
@@ -573,7 +582,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         }
         let n = moves::table(class).len();
         let expected = match class {
-            Class::Champion => 19,
+            // Twenty-five: the nineteen of the grid, and the six full
+            // charges a link held to full becomes -- 2026-10-12, see
+            // `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+            Class::Champion => 25,
             // Sixteen: the twelve of v2 (the seven, the Cinder spray, the two
             // drafts, Quake and Tremor) and the four of 2026-10-09 -- the Air
             // ball, the Fire carpet, the Fire fountain and the earth jump. See

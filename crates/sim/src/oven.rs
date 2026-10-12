@@ -803,7 +803,48 @@ scalars! {
     HoldFull,             "Champion", "Hold, full at (frames held)",         Frames, 1, 180;
     HoldDamage,           "Champion", "Hold, part charge extra damage at full (%)", Percent, 0, 200;
     HoldShove,            "Champion", "Hold, part charge extra knockback at full (%)", Percent, 0, 200;
-    HoldMobility,         "Champion", "Hold, walk speed while holding (%)",  Percent, 0, 100;
+    HoldMobility,         "Champion", "Hold, walk speed while holding (%)",  Percent, 0, 100;    // **The full charges** (C5): what each one throws, how far and how fast.
+    CrescentReach,        "Champion", "Crescent, flies (m)",                       Fixed, fx(1,1), fx(30,1);
+    CrescentSpeed,        "Champion", "Crescent, speed (m/s)",                     Fixed, fx(5,1), fx(80,1);
+    CrescentRadius,       "Champion", "Crescent, half-width (m)",                  Fixed, fx(1,10), fx(3,1);
+    CrescentDamage,       "Champion", "Crescent, damage",                          Int, 0, 600;
+    ShockwaveReach,       "Champion", "Shockwave, ring out to (m)",                Fixed, fx(1,1), fx(15,1);
+    MeteorReach,          "Champion", "Meteor, ring out to (m)",                   Fixed, fx(1,1), fx(15,1);
+    ShockwaveSpeed,       "Champion", "Shockwave, ring speed (m/s)",               Fixed, fx(5,1), fx(80,1);
+    ShockwaveDamage,      "Champion", "Shockwave, ring damage",                    Int, 0, 600;
+    MeteorRingDamage,     "Champion", "Meteor, ring damage",                       Int, 0, 600;
+    ShockwaveCrush,       "Champion", "Shockwave, guard crushed for (frames)",     Frames, 0, 120;
+    MeteorRise,           "Champion", "Meteor, leap rise (m/s)",                   Fixed, 0, fx(30,1);
+    CometReach,           "Champion", "Comet, lunges (m)",                         Fixed, fx(1,1), fx(16,1);
+    CometSpeed,           "Champion", "Comet, lunge speed (m/s)",                  Fixed, fx(5,1), fx(80,1);
+    CometSplat,           "Champion", "Comet, wall-splat stagger",                 Frames, 0, 120;
+    CutsReach,            "Champion", "Thousand Cuts, dashes (m)",                 Fixed, fx(1,1), fx(16,1);
+    CutsSpeed,            "Champion", "Thousand Cuts, dash speed (m/s)",           Fixed, fx(5,1), fx(90,1);
+    CutsDelay,            "Champion", "Thousand Cuts, cuts land after",            Frames, 0, 90;
+    CutsEvery,            "Champion", "Thousand Cuts, a cut every",                Frames, 1, 30;
+    CutsCount,            "Champion", "Thousand Cuts, cuts",                       Int, 1, 10;
+    CutsDamage,           "Champion", "Thousand Cuts, damage a cut",               Int, 0, 400;
+    CutsLastDamage,       "Champion", "Thousand Cuts, the last cut",               Int, 0, 600;
+    CutsLaunch,           "Champion", "Thousand Cuts, the last cut throws up (m/s)", Fixed, 0, fx(30,1);
+    CutsRadius,           "Champion", "Thousand Cuts, cuts reach off the line (m)", Fixed, fx(1,10), fx(3,1);
+    JavelinSpeed,         "Champion", "Heaven-piercer, javelin speed (m/s)",       Fixed, fx(5,1), fx(120,1);
+    JavelinRest,          "Champion", "Heaven-piercer, waits for him",             Frames, 0, 180;
+    FollowSpeed,          "Champion", "Heaven-piercer, he follows at (m/s)",       Fixed, fx(5,1), fx(90,1);
+    TearRadius,           "Champion", "Heaven-piercer, tear-out radius (m)",       Fixed, fx(1,2), fx(6,1);
+    TearDamage,           "Champion", "Heaven-piercer, tear-out damage",           Int, 0, 600;
+    TearLaunch,           "Champion", "Heaven-piercer, tear-out throws up (m/s)",  Fixed, 0, fx(30,1);
+    // **Momentum** (C4): charge banked by fighting. Three tiers -- a third,
+    // two thirds, full -- and full is a full charge on a tap.
+    MomentumMax,          "Champion", "Momentum, the meter holds",                       Int, 1, 1000;
+    MomentumHit,          "Champion", "Momentum, a hit that lands",                      Int, 0, 200;
+    MomentumSwap,         "Champion", "Momentum, more for a different weapon",           Int, 0, 200;
+    MomentumBeat,         "Champion", "Momentum, more for a true link",                  Int, 0, 200;
+    MomentumFull,         "Champion", "Momentum, more for a full charge",                Int, 0, 200;
+    MomentumHolds,        "Champion", "Momentum, holds after a hit for",                 Frames, 0, 600;
+    MomentumDrain,        "Champion", "Momentum, drains a frame after",                  Int, 0, 100;
+    MomentumHurt,         "Champion", "Momentum, a hit taken costs (%)",                 Percent, 0, 100;
+    MomentumQuick1,       "Champion", "Momentum, Heated: a hold fills faster by (%)",    Percent, 0, 90;
+    MomentumQuick2,       "Champion", "Momentum, Blazing: a hold fills faster by (%)",   Percent, 0, 90;
 }
 
 // ---------------------------------------------------------------------------

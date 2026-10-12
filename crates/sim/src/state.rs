@@ -721,7 +721,7 @@ pub struct Player {
     /// ten fit and everybody else leaves the tail at zero. In the snapshot
     /// because it decides what a button does: a lockout kept outside it would
     /// let a rollback re-throw a move the original frame refused.
-    pub repeat_lock: [u16; moves::MAX_SLOTS],
+    pub repeat_lock: [u16; moves::LOCKED_SLOTS],
     /// Frames left before an ability that is **still out there** may be used
     /// again -- the recall, not the cast.
     ///
@@ -733,7 +733,7 @@ pub struct Player {
     /// that brings the shadow home is the same button.
     ///
     /// Zero everywhere until somebody plays it -- see `Move::reactivate`.
-    pub reactivate_lock: [u16; moves::MAX_SLOTS],
+    pub reactivate_lock: [u16; moves::LOCKED_SLOTS],
     /// The reach a channelled move wound up to before its button came back up.
     ///
     /// Kept because the move outlives the channel: the arms of a Grasp are
@@ -1223,8 +1223,8 @@ impl Default for Player {
             air_stalls: 0,
             air_dodged: false,
             hit_used: false,
-            repeat_lock: [0; moves::MAX_SLOTS],
-            reactivate_lock: [0; moves::MAX_SLOTS],
+            repeat_lock: [0; moves::LOCKED_SLOTS],
+            reactivate_lock: [0; moves::LOCKED_SLOTS],
             class: Class::Bulwark,
             mechanic: Mechanic::Shield(Shield::Held { weight: Fx::ZERO }),
             rounds_won: 0,
@@ -2419,6 +2419,10 @@ impl World {
             if p.class == Class::ShadowReaver {
                 self.reaver_comes_out(i, kind);
             }
+            // The Champion's full charges (exploration 0015): the same.
+            if p.class == Class::Champion {
+                self.champion_comes_out(i, kind);
+            }
             // The Bulwark on three clicks (2026-10-10): the same, for his.
             if p.class == Class::Bulwark {
                 match kind {
@@ -2805,6 +2809,10 @@ impl World {
                 // the string ends on a defender who answered it -- see
                 // `chain_cancel`.
                 confirm_chain(&mut self.players[attacker], hit.blocked || hit.parried);
+                if !hit.blocked && !hit.parried {
+                    let kind = snapshot[attacker].action.attack_kind();
+                    feed_the_momentum(&mut self.players[attacker], kind);
+                }
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
@@ -2836,6 +2844,7 @@ impl World {
         // the string's first hit. See `World::shoulder`.
         for i in 0..MAX_PLAYERS {
             self.shoulder(i);
+            self.splat(i);
         }
 
         // A thrown shield is its own threat while it travels.
@@ -4360,6 +4369,9 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.z = hit.dir.z.mul(knockback);
     } else {
         defender.wound(hit.damage);
+        if hit.damage > 0 {
+            hurt_the_momentum(defender);
+        }
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
@@ -4416,6 +4428,187 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
 }
 
 impl World {
+    /// **What a full charge does as it comes out** (exploration 0015, C5),
+    /// besides its own volume: the crescent leaves the blade, the ground
+    /// breaks round the hammer, the dashes start, the cuts are left hanging
+    /// along the line he will run, and the javelin is thrown with him after
+    /// it. On the first active frame, like everything else a move does.
+    fn champion_comes_out(&mut self, who: usize, kind: u8) {
+        use moves::champion as c;
+        let p = self.players[who];
+        let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z).normalized();
+        let cast = |kind_of: EffectKind, from: V3, dir: V3, reach: Fx| {
+            Effect::cast(kind_of, who as u8, p.class, kind, from, dir, reach)
+        };
+        match kind {
+            c::CRESCENT => {
+                let born = cast(
+                    EffectKind::Crescent,
+                    p.aim_path.from,
+                    p.aim_path.dir(),
+                    t::crescent_reach(),
+                );
+                spawn_effect(&mut self.effects, born);
+            }
+            c::SHOCKWAVE | c::METEOR => {
+                let reach = if kind == c::METEOR {
+                    t::meteor_reach()
+                } else {
+                    t::shockwave_reach()
+                };
+                let mut born = cast(EffectKind::Shockwave, p.pos, V3::ZERO, reach);
+                let speed = t::shockwave_speed().max(Fx::ONE);
+                // Out to its reach, and left lying there a while: the broken
+                // ground stays after the ring has run.
+                born.life = (reach.div(speed).div(DT).to_int().max(1) as u16)
+                    .saturating_add(t::shockwave_crush());
+                spawn_effect(&mut self.effects, born);
+            }
+            c::THOUSAND_CUTS => {
+                let ahead = flat(p.facing);
+                let reach = t::cuts_reach();
+                let chest = p.pos.add(V3::new(
+                    Fx::ZERO,
+                    t::body_height().mul(Fx::ratio(1, 2)),
+                    Fx::ZERO,
+                ));
+                spawn_effect(
+                    &mut self.effects,
+                    cast(EffectKind::Cuts, chest, ahead, reach),
+                );
+                drive_the_champion(&mut self.players[who], ahead, reach, t::cuts_speed());
+            }
+            c::COMET => {
+                let ahead = flat(p.aim_path.dir());
+                drive_the_champion(
+                    &mut self.players[who],
+                    ahead,
+                    t::comet_reach(),
+                    t::comet_speed(),
+                );
+            }
+            c::HEAVEN_PIERCER => {
+                let dir = p.aim_path.dir();
+                let reach = p.aim_path.length().max(t::body_radius());
+                let mut born = cast(EffectKind::Javelin, p.aim_path.from, dir, reach);
+                let speed = t::javelin_speed().max(Fx::ONE);
+                born.life = (reach.div(speed).div(DT).to_int().max(1) as u16)
+                    .saturating_add(t::javelin_rest());
+                spawn_effect(&mut self.effects, born);
+                // **He goes after it at once** -- the throw's second half, not
+                // a choice later. One weapon that changes shape: it is never
+                // out of his hands for longer than it takes him to get there.
+                drive_the_champion(&mut self.players[who], flat(dir), reach, t::follow_speed());
+            }
+            _ => {}
+        }
+    }
+
+    /// **The Comet's wall-splat** (exploration 0015, C5): a lunge with
+    /// somebody on the point that is stopped short by something solid has
+    /// put them into it. They are staggered against it, long, and the lunge
+    /// is over. Read off the run itself -- it is going far slower than it
+    /// drives -- so it asks the terrain nothing a body's collision did not.
+    fn splat(&mut self, i: usize) {
+        let p = self.players[i];
+        if p.class != Class::Champion
+            || p.action.attack_kind() != Some(moves::champion::COMET)
+            || p.frozen > 0
+        {
+            return;
+        }
+        let Mechanic::Forms { rush, rush_vel, .. } = p.mechanic else {
+            return;
+        };
+        if rush == 0 || p.vel.flat_len().raw() * 2 >= rush_vel.flat_len().raw() {
+            return;
+        }
+        let other = 1 - i;
+        let q = self.players[other];
+        if !matches!(q.action, Action::Held { .. }) || q.held_by != i as u8 {
+            return;
+        }
+        let stagger = t::comet_splat();
+        let victim = &mut self.players[other];
+        victim.action = Action::Stagger { left: stagger };
+        victim.stun_total = stagger;
+        victim.held_by = NOBODY;
+        let hold = moves::get(Class::Champion, moves::champion::COMET).hitstop;
+        freeze(victim, hold);
+        freeze(&mut self.players[i], hold);
+        if let Mechanic::Forms { rush, .. } = &mut self.players[i].mechanic {
+            *rush = 0;
+        }
+    }
+
+    /// A full charge's effect landed `dealt` on somebody: its thrower's
+    /// momentum is fed as if his own blow had.
+    fn feed_the_thrower(&mut self, effect: &Effect, dealt: i32) {
+        let owner = effect.owner as usize;
+        if dealt > 0 && owner < MAX_PLAYERS && effect.class == Class::Champion {
+            feed_the_momentum(&mut self.players[owner], Some(effect.slot));
+        }
+    }
+
+    /// **The Heaven-piercer torn out** (exploration 0015, C5): a javelin at
+    /// rest, and its thrower arrived at it. Everybody round it is hit and
+    /// thrown up, and the spear is back in his hands -- it was only ever one
+    /// weapon. Nothing happens until he gets there; a javelin he never reaches
+    /// fades where it stopped.
+    fn tear_out(&mut self, effect: &mut Effect, at: V3) {
+        let owner = effect.owner as usize;
+        if owner >= MAX_PLAYERS || effect.already_hit(1, owner) {
+            return;
+        }
+        let p = self.players[owner];
+        let near = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z)).flat_len();
+        if near.raw() > t::tear_radius().mul(Fx::ratio(1, 2)).raw() {
+            return;
+        }
+        effect.take_hit(1, owner);
+        let radius = t::tear_radius();
+        for i in 0..MAX_PLAYERS {
+            if !self.effects_reach(i, effect.owner) || !self.inside(i, at, radius) {
+                continue;
+            }
+            let q = self.players[i];
+            let away = V3::new(q.pos.x.sub(at.x), Fx::ZERO, q.pos.z.sub(at.z)).normalized();
+            let (guarding, parried) = guard_against(&q, at, false);
+            apply_hit(
+                &mut self.players[i],
+                Hit {
+                    damage: t::tear_damage(),
+                    hitstun: effect.source().hitstun,
+                    blockstun: effect.source().blockstun,
+                    knockback: effect.source().knockback,
+                    launch: t::tear_launch(),
+                    grabs: 0,
+                    by: effect.owner,
+                    dir: away,
+                    blocked: guarding,
+                    parried,
+                    interrupts: true,
+                },
+            );
+            let hold = impact_freeze(effect.source().hitstop, guarding && !parried);
+            freeze(&mut self.players[i], hold);
+            freeze(&mut self.players[owner], hold);
+        }
+        let share = Fx::ratio(t::tear_damage(), effect.damage().max(1));
+        for slot in 0..MAX_MONSTERS {
+            self.gore_for_a_share(slot, effect, 1, at, radius, share);
+        }
+        self.gore_critters(effect, at, radius, share);
+        // Torn out: gone, in his hands, and the run after it is over.
+        effect.life = effect.age;
+        if let Mechanic::Forms { rush, .. } = &mut self.players[owner].mechanic {
+            *rush = 0;
+        }
+        let me = &mut self.players[owner];
+        me.vel.x = Fx::ZERO;
+        me.vel.z = Fx::ZERO;
+    }
+
     /// **The shoulder** (exploration 0015, C1): a Champion's Rush that runs
     /// into a body -- a fighter, or a creature -- hits it, once a run, and the
     /// hit is **the string's first**. The next click throws the second link,
@@ -4545,6 +4738,82 @@ impl World {
                 *chain_hit = true;
             }
         }
+        if !blocked {
+            feed_the_momentum(me, None);
+        }
+    }
+}
+
+/// Frames held for a full charge, at this Champion's momentum: *Heated* and
+/// *Blazing* fill a hold faster (exploration 0015, C4).
+fn full_at(p: &Player) -> u16 {
+    let quick = match p.mechanic {
+        Mechanic::Forms { fury, .. } => match fury.tier() {
+            1 => t::momentum_quick1(),
+            2 | 3 => t::momentum_quick2(),
+            _ => 0,
+        },
+        _ => 0,
+    };
+    let full = t::hold_full() as i32;
+    (full - full * quick.clamp(0, 100) / 100).max(1) as u16
+}
+
+/// **Momentum full** (exploration 0015, C4): a link pressed with the meter
+/// full comes out as its full charge, at once, and spends the meter. The
+/// full charge and the place in the string it stands at; `None` for anything
+/// else.
+fn surge(p: &mut Player, kind: u8) -> Option<(u8, u8)> {
+    use moves::champion as c;
+    let place = c::link_of(kind)?;
+    let big = c::full_charge(kind)?;
+    let Mechanic::Forms { fury, .. } = &mut p.mechanic else {
+        return None;
+    };
+    if fury.tier() < 3 {
+        return None;
+    }
+    fury.momentum = 0;
+    fury.momentum_left = 0;
+    Some((big, place))
+}
+
+/// **Feed the meter** (exploration 0015, C4): a blow of his landed. Every
+/// one is worth `momentum_hit`; one of a different weapon from the last more,
+/// a true link more, a full charge more. `kind` is the move that landed, or
+/// `None` for the shoulder, which is no weapon.
+fn feed_the_momentum(p: &mut Player, kind: Option<u8>) {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return;
+    }
+    let Mechanic::Forms { fury, .. } = &mut p.mechanic else {
+        return;
+    };
+    let mut gain = t::momentum_hit();
+    if let Some(kind) = kind {
+        let weapon = c::weapon(kind);
+        if fury.last_weapon != 0 && fury.last_weapon - 1 != weapon {
+            gain += t::momentum_swap();
+        }
+        if fury.true_link {
+            gain += t::momentum_beat();
+        }
+        if c::is_full(kind) {
+            gain += t::momentum_full();
+        }
+        fury.last_weapon = weapon + 1;
+    }
+    let max = t::momentum_max().clamp(1, u16::MAX as i32);
+    fury.momentum = (fury.momentum as i32 + gain).clamp(0, max) as u16;
+    fury.momentum_left = t::momentum_holds();
+}
+
+/// A blow taken costs a share of the meter.
+fn hurt_the_momentum(p: &mut Player) {
+    if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
+        let lost = fury.momentum as i32 * t::momentum_hurt().clamp(0, 100) / 100;
+        fury.momentum = (fury.momentum as i32 - lost).max(0) as u16;
     }
 }
 
@@ -4562,12 +4831,24 @@ fn may_hold(p: &Player) -> bool {
 }
 
 /// What letting go of a held link throws. See `step_channel`.
-fn release_the_hold(p: &mut Player, kind: u8, held: u16) -> Action {
+fn release_the_hold(
+    p: &mut Player,
+    who: usize,
+    kind: u8,
+    held: u16,
+    input: Input,
+    scene: &Scene,
+) -> Action {
     let from = t::hold_from();
-    let full = t::hold_full().max(from + 1);
+    let full = full_at(p).max(from + 1);
     if held >= full {
-        if let Some(big) = moves::champion::full_charge(kind) {
-            begin_full_charge(p, big);
+        if let (Some(big), Some(place)) = (
+            moves::champion::full_charge(kind),
+            moves::champion::link_of(kind),
+        ) {
+            // Aimed now, on the release, as any move is on its first frame.
+            lock_aim(p, who, big, input, scene);
+            begin_full_charge(p, big, place);
             return Action::Startup {
                 kind: big,
                 left: moves::get(p.class, big).startup,
@@ -4585,10 +4866,41 @@ fn release_the_hold(p: &mut Player, kind: u8, held: u16) -> Action {
     }
 }
 
-/// A full charge has begun. Its own move from here: the chain, the weapon and
-/// the Rush see it as they see any move of his.
-fn begin_full_charge(p: &mut Player, kind: u8) {
-    let _ = (p, kind);
+/// A full charge has begun, from the link at `place` in the string. Its own
+/// move from here: the weapon is its weapon, the string stands where the link
+/// it came from would have left it, and the Meteor leaps for where the
+/// crosshair was.
+fn begin_full_charge(p: &mut Player, kind: u8, place: u8) {
+    use moves::champion as c;
+    if let Mechanic::Forms {
+        form,
+        chain,
+        chain_left,
+        chain_hit,
+        fury,
+        ..
+    } = &mut p.mechanic
+    {
+        *form = Form::of_move(kind);
+        *chain = place + 1;
+        *chain_left = t::chain_grace();
+        *chain_hit = false;
+        fury.true_link = false;
+        fury.place = place;
+    }
+    p.channelled = Fx::ZERO;
+    if kind == c::METEOR {
+        // Up at the knob's rise and down under gravity: the time in the air
+        // is what the rise buys, and the run across is spread over it so he
+        // comes down where the crosshair was.
+        let to = p.aim_at();
+        let air = t::meteor_rise()
+            .add(t::meteor_rise())
+            .div(t::gravity().abs().max(Fx::ONE));
+        let across = V3::new(to.x.sub(p.pos.x), Fx::ZERO, to.z.sub(p.pos.z));
+        p.vel = V3::new(across.x.div(air), t::meteor_rise(), across.z.div(air));
+        p.grounded = false;
+    }
 }
 
 /// What a part charge multiplies a number by, given what a part charge adds at
@@ -4672,6 +4984,26 @@ fn hold_the_beat(p: &Player, input: Input) -> Input {
         bits |= Input::RIGHT;
     }
     Input { bits, ..input }
+}
+
+/// Drive a Champion `reach` along `dir` at `speed`, on the Rush's own
+/// machinery: the run holds its line, is braced, and ends on a hit like a
+/// Rush. It spends no charge -- the full charge already paid for it.
+fn drive_the_champion(p: &mut Player, dir: V3, reach: Fx, speed: Fx) {
+    let frames = reach.div(speed.max(Fx::ONE)).div(DT).to_int().clamp(1, 240) as u16;
+    if let Mechanic::Forms {
+        rush,
+        rush_vel,
+        fury,
+        ..
+    } = &mut p.mechanic
+    {
+        *rush = frames;
+        *rush_vel = V3::new(dir.x.mul(speed), Fx::ZERO, dir.z.mul(speed));
+        fury.braced = 0;
+        fury.eaten = false;
+        fury.shouldered = true;
+    }
 }
 
 /// **The Rush, braced** (exploration 0015, C1): what a blow does to a
@@ -5102,7 +5434,18 @@ fn step_player(
                     rise_from_the_floor(p, kind, scene);
                     back_to_the_floor(p, kind, scene);
                     spend_the_rise(p, kind);
-                    begin_champion(p, kind);
+                    // Momentum full: the link comes out as its full charge,
+                    // on a tap (exploration 0015, C4).
+                    let kind = match surge(p, kind) {
+                        Some((big, place)) => {
+                            begin_full_charge(p, big, place);
+                            big
+                        }
+                        None => {
+                            begin_champion(p, kind);
+                            kind
+                        }
+                    };
                     begin_move(p, who, kind, input, scene, true)
                 }
                 // The Elementalist's Raise: an instant on the earth click's
@@ -5691,8 +6034,10 @@ fn step_player(
                 p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS && left > 0;
             if lands_on_the_floor(p.class, kind)
                 && !gallows_early
-                && (matches!(p.class, Class::Elementalist | Class::ShadowReaver)
-                    || slam_from_the_air)
+                && (matches!(
+                    p.class,
+                    Class::Elementalist | Class::ShadowReaver | Class::Champion
+                ) || slam_from_the_air)
             {
                 p.action = Action::Active {
                     kind,
@@ -6108,7 +6453,8 @@ fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
 
 /// The moves whose active frames begin on the frame the feet arrive.
 fn lands_on_the_floor(class: Class, kind: u8) -> bool {
-    (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
+    (class == Class::Champion && kind == moves::champion::METEOR)
+        || (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
         || (class == Class::Bulwark && kind == SLOT_COMMITTED)
         || (class == Class::ShadowReaver
             && matches!(kind, moves::reaver::GALLOWS | moves::reaver::PLUNGE))
@@ -6641,7 +6987,11 @@ fn confirm_chain(p: &mut Player, blocked: bool) {
     let Some(kind) = p.action.attack_kind() else {
         return;
     };
-    let Some(link) = moves::champion::link_of(kind) else {
+    let full = moves::champion::is_full(kind);
+    let Some(link) = moves::champion::link_of(kind).or(match p.mechanic {
+        Mechanic::Forms { fury, .. } if full => Some(fury.place),
+        _ => None,
+    }) else {
         return;
     };
     if let Mechanic::Forms {
@@ -7547,7 +7897,7 @@ fn step_channel(
         // it is a different move -- the weapon's full charge for this place in
         // the string -- wound up from its own startup. Facing locks here, on
         // the release, as it does for every other move on its first frame.
-        Some(moves::Charge::Heft) => release_the_hold(p, kind, held),
+        Some(moves::Charge::Heft) => release_the_hold(p, who, kind, held, input, scene),
         _ => {
             p.channelled = p.aim_path.length();
             throw_move(p, kind, input, true)
@@ -7637,7 +7987,20 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
 /// needs `crate::aim` to grow it, not a branch here -- deciding locally is how
 /// the crosshair and the ability came to disagree, three times.
 fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
-    aim_at(p, who, kind, moves::get(p.class, kind).reach, input, scene);
+    aim_at(p, who, kind, aimed_reach(p.class, kind), input, scene);
+}
+
+/// How far along the crosshair's line a move is aimed: its own reach, but for
+/// the one whose reach and line are two things -- the Crescent, a sword cut
+/// whose blade of light flies `tuning::crescent_reach`. Aimed at the cut's
+/// arm's length, its line would climb from the chest to a point an arm's
+/// length off the eye and fly over everybody's head.
+fn aimed_reach(class: Class, kind: u8) -> Fx {
+    if class == Class::Champion && kind == moves::champion::CRESCENT {
+        t::crescent_reach()
+    } else {
+        moves::get(class, kind).reach
+    }
 }
 
 /// The three lines themselves, at whatever reach the caller has decided on.
@@ -8057,10 +8420,9 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
         //     committing to one a decision: three hits is a plan, and the
         //     opponent gets to have an opinion about it.
         Mechanic::Forms { .. } => {
-            let live = p
-                .action
-                .attack_kind()
-                .is_some_and(|kind| moves::champion::link_of(kind).is_some());
+            let live = p.action.attack_kind().is_some_and(|kind| {
+                moves::champion::link_of(kind).is_some() || moves::champion::is_full(kind)
+            });
             let standing = p.action.actionable() && p.grounded;
             let stunned = p.action.stunned();
             if let Mechanic::Forms {
@@ -8096,6 +8458,12 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 }
                 if !live {
                     fury.true_link = false;
+                }
+                // The meter holds after a landed hit, then drains.
+                if fury.momentum_left > 0 {
+                    fury.momentum_left -= 1;
+                } else {
+                    fury.momentum = (fury.momentum as i32 - t::momentum_drain()).max(0) as u16;
                 }
             }
         }
@@ -8278,8 +8646,13 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                     | (fury.shouldered as u32) << 1
                     | (fury.true_link as u32) << 3
                     | (fury.clicks as u32) << 8
-                    | (fury.beat as u32) << 16,
+                    | (fury.beat as u32) << 16
+                    | (fury.fresh as u32) << 20
+                    | (fury.may_hold as u32) << 24
+                    | (fury.place as u32) << 25,
             );
+            h.write_u32(fury.momentum as u32 | (fury.momentum_left as u32) << 16);
+            h.write_u32(fury.last_weapon as u32);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -8487,7 +8860,19 @@ fn settle(p: &mut Player, arena: &Terrain) {
 }
 
 /// Bodies are solid. Push them apart symmetrically so neither index wins.
+///
+/// **Except to Thousand Cuts**, which is a run *through* them (exploration
+/// 0015, C5): a drawn sword that stopped against the body it was cutting
+/// would be the Rush stab again.
 fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
+    let through = |p: &Player| {
+        p.class == Class::Champion
+            && p.action.attack_kind() == Some(moves::champion::THOUSAND_CUTS)
+            && rushing(p).is_some()
+    };
+    if players.iter().any(through) {
+        return;
+    }
     let delta = players[1].pos.sub(players[0].pos);
     let dist = delta.flat_len();
     let min = t::body_radius().add(t::body_radius());
@@ -9471,6 +9856,125 @@ impl World {
         // cast, so that the hit test and the overlay are the same size without
         // the overlay having to find her. See [`depth`] and `Effect::power`.
         match effect.kind {
+            // **The Champion's full charges** (exploration 0015, C5).
+            //
+            // The crescent: one wide blade on its line, each body once.
+            EffectKind::Crescent => {
+                let at = effect.head();
+                let radius = effect.field_radius();
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, at, effect.damage());
+                    self.feed_the_thrower(effect, dealt);
+                }
+                let dealt = self.gore_the_creature(effect, 0, at, radius);
+                self.feed_the_thrower(effect, dealt);
+            }
+            // The ring: the front of it, on the floor, each body once, and
+            // the move's own launch throws them up.
+            EffectKind::Shockwave => {
+                let r = effect.ring_radius();
+                let band = t::body_radius().add(t::disc_thickness());
+                for i in 0..MAX_PLAYERS {
+                    let q = self.players[i];
+                    let across = V3::new(
+                        q.pos.x.sub(effect.pos.x),
+                        Fx::ZERO,
+                        q.pos.z.sub(effect.pos.z),
+                    )
+                    .flat_len();
+                    let low = q.pos.y.sub(effect.pos.y).raw() < t::body_height().raw();
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !low
+                        || across.sub(r).abs().raw() > band.raw()
+                        || q.action.invulnerable()
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, effect.pos, effect.damage());
+                    self.feed_the_thrower(effect, dealt);
+                }
+                // The creature and the small bodies inside its live radius,
+                // once each: the Plunge's ring's rule.
+                let reach = r.add(band);
+                for slot in 0..MAX_MONSTERS {
+                    self.gore_for_a_share(slot, effect, 0, effect.pos, reach, Fx::ONE);
+                }
+                self.gore_critters_by(effect, EffectReach::Column(effect.pos, reach), Fx::ONE);
+            }
+            // The cuts: nothing for the beat, then each lands along the whole
+            // line in turn, and the last throws up whoever is still in it.
+            EffectKind::Cuts => {
+                if let Some(n) = effect.cut_now() {
+                    let (from, to) = (effect.pos, effect.cuts_end());
+                    let radius = effect.field_radius();
+                    let damage = effect.cut_damage(n);
+                    let last = Effect::last_cut(n);
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(n, i)
+                            || !self.on_the_line(i, from, to, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(n, i);
+                        let dealt = self.cut(i, effect, from, damage);
+                        self.feed_the_thrower(effect, dealt);
+                        if last && dealt > 0 {
+                            let q = &mut self.players[i];
+                            q.vel.y = t::cuts_launch();
+                            q.grounded = false;
+                        }
+                    }
+                    let share = Fx::ratio(damage, effect.damage().max(1));
+                    for k in 0..=4 {
+                        let at = crate::math::lerp3(from, to, Fx::ratio(k, 4));
+                        for slot in 0..MAX_MONSTERS {
+                            self.gore_for_a_share(slot, effect, n, at, radius, share);
+                        }
+                        self.gore_critters(effect, at, radius, share);
+                    }
+                }
+            }
+            // The javelin: in flight it pierces and pins, each body once;
+            // at rest it waits for him, and he tears it out.
+            EffectKind::Javelin => {
+                let at = effect.head();
+                let radius = effect.field_radius();
+                if !effect.at_rest() {
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(0, i)
+                            || !self.inside(i, at, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(0, i);
+                        let dealt = self.cut(i, effect, at, effect.damage());
+                        self.feed_the_thrower(effect, dealt);
+                        if dealt > 0 {
+                            // It stops in them: pinned where it struck, and
+                            // that is where he is coming to.
+                            self.players[i].seized(NOBODY, effect.source().grabs, 0);
+                            effect.reach = effect.flown();
+                        }
+                    }
+                    if !effect.at_rest() && self.gore_the_creature(effect, 0, at, radius) > 0 {
+                        // Stuck in the animal.
+                        effect.reach = effect.flown();
+                    }
+                } else {
+                    self.tear_out(effect, at);
+                }
+            }
             EffectKind::FirePillar => {
                 if effect.ticks_now() {
                     self.burn_the_pillar(effect, effect.pos);
@@ -14114,6 +14618,9 @@ impl World {
             // confirmed the chain, so every string against a creature paid
             // every recovery in full.)
             confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
+            if dealt > 0 {
+                feed_the_momentum(&mut self.players[i], Some(kind));
+            }
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
             if finisher && !guarded.turned() {

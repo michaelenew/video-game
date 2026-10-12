@@ -341,6 +341,37 @@ pub struct Fury {
     /// The link running now was started by a fresh press of its button, and
     /// so may be held at the top of its wind-up.
     pub may_hold: bool,
+    /// The place in the string -- 0, 1 or 2 -- the full charge running now
+    /// was held from. A full charge stands where its link would have.
+    pub place: u8,
+    /// **Momentum** (C4): charge banked by fighting, from nought to
+    /// `tuning::momentum_max`. It is on him, not on whoever he hits, and he
+    /// loses it by leaving: every landed hit feeds it and re-arms
+    /// `momentum_left`, and once that runs out it drains.
+    pub momentum: u16,
+    /// Frames the meter holds before it starts to drain.
+    pub momentum_left: u16,
+    /// The weapon of the last hit that landed, plus one, for the swap's
+    /// extra; zero for none yet.
+    pub last_weapon: u8,
+}
+
+impl Fury {
+    /// Which of the three tiers the meter is in: 0 below a third, then
+    /// *Heated*, *Blazing*, and 3 -- *Champion* -- full.
+    pub fn tier(&self) -> u8 {
+        let max = crate::tuning::momentum_max().max(1);
+        let m = self.momentum as i32;
+        if m >= max {
+            3
+        } else if m * 3 >= max * 2 {
+            2
+        } else if m * 3 >= max {
+            1
+        } else {
+            0
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

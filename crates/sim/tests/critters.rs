@@ -505,6 +505,12 @@ fn the_overlay_draws_the_volume_the_hit_test_uses() {
             if m.aim() != aim::Kind::Swing || !m.strikes() || m.damage <= 0 {
                 continue;
             }
+            // A move that also puts something in the world -- the Champion's
+            // Shockwave ring, the cuts Thousand Cuts leaves hanging -- hurts
+            // with that as well, and that is not the swing's volume.
+            if sim::moves::puts_out(class, kind).is_some() {
+                continue;
+            }
             for metres in [1, 2] {
                 let (mut w, look) = one_gnat(class, metres);
                 let sp = w.critters.sp();

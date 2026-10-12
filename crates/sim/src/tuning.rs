@@ -1293,6 +1293,154 @@ pub fn hold_mobility() -> u8 {
     oven::scalar(Scalar::HoldMobility).clamp(0, 100) as u8
 }
 
+// The full charges (exploration 0015, C5). Each is read where its move
+// comes out; see `state::World::champion_comes_out`.
+
+/// Crescent, flies (m).
+pub fn crescent_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrescentReach))
+}
+
+/// Crescent, speed (m/s).
+pub fn crescent_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrescentSpeed))
+}
+
+/// Crescent, half-width (m).
+pub fn crescent_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrescentRadius))
+}
+
+/// Crescent, damage.
+pub fn crescent_damage() -> i32 {
+    oven::scalar(Scalar::CrescentDamage)
+}
+
+/// Shockwave, ring out to (m).
+pub fn shockwave_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShockwaveReach))
+}
+
+/// Meteor, ring out to (m).
+pub fn meteor_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MeteorReach))
+}
+
+/// Shockwave, ring speed (m/s).
+pub fn shockwave_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShockwaveSpeed))
+}
+
+/// Shockwave, ring damage.
+pub fn shockwave_damage() -> i32 {
+    oven::scalar(Scalar::ShockwaveDamage)
+}
+
+/// Meteor, ring damage.
+pub fn meteor_ring_damage() -> i32 {
+    oven::scalar(Scalar::MeteorRingDamage)
+}
+
+/// Shockwave, guard crushed for (frames).
+pub fn shockwave_crush() -> u16 {
+    oven::scalar(Scalar::ShockwaveCrush).max(0) as u16
+}
+
+/// Meteor, leap rise (m/s).
+pub fn meteor_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MeteorRise))
+}
+
+/// Comet, lunges (m).
+pub fn comet_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CometReach))
+}
+
+/// Comet, lunge speed (m/s).
+pub fn comet_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CometSpeed))
+}
+
+/// Comet, wall-splat stagger.
+pub fn comet_splat() -> u16 {
+    oven::scalar(Scalar::CometSplat).max(0) as u16
+}
+
+/// Thousand Cuts, dashes (m).
+pub fn cuts_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsReach))
+}
+
+/// Thousand Cuts, dash speed (m/s).
+pub fn cuts_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsSpeed))
+}
+
+/// Thousand Cuts, cuts land after.
+pub fn cuts_delay() -> u16 {
+    oven::scalar(Scalar::CutsDelay).max(0) as u16
+}
+
+/// Thousand Cuts, a cut every.
+pub fn cuts_every() -> u16 {
+    oven::scalar(Scalar::CutsEvery).max(0) as u16
+}
+
+/// Thousand Cuts, cuts.
+pub fn cuts_count() -> i32 {
+    oven::scalar(Scalar::CutsCount)
+}
+
+/// Thousand Cuts, damage a cut.
+pub fn cuts_damage() -> i32 {
+    oven::scalar(Scalar::CutsDamage)
+}
+
+/// Thousand Cuts, the last cut.
+pub fn cuts_last_damage() -> i32 {
+    oven::scalar(Scalar::CutsLastDamage)
+}
+
+/// Thousand Cuts, the last cut throws up (m/s).
+pub fn cuts_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsLaunch))
+}
+
+/// Thousand Cuts, cuts reach off the line (m).
+pub fn cuts_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsRadius))
+}
+
+/// Heaven-piercer, javelin speed (m/s).
+pub fn javelin_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JavelinSpeed))
+}
+
+/// Heaven-piercer, waits for him.
+pub fn javelin_rest() -> u16 {
+    oven::scalar(Scalar::JavelinRest).max(0) as u16
+}
+
+/// Heaven-piercer, he follows at (m/s).
+pub fn follow_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FollowSpeed))
+}
+
+/// Heaven-piercer, tear-out radius (m).
+pub fn tear_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TearRadius))
+}
+
+/// Heaven-piercer, tear-out damage.
+pub fn tear_damage() -> i32 {
+    oven::scalar(Scalar::TearDamage)
+}
+
+/// Heaven-piercer, tear-out throws up (m/s).
+pub fn tear_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TearLaunch))
+}
+
 /// How far below the horizon you have to be pointing for a spear thrown out of
 /// a Rush to plant in the floor and vault instead of stabbing.
 ///
@@ -3389,4 +3537,57 @@ pub fn step_lift_full() -> Fx {
 /// How fast the Shield step carries him forward over the shield.
 pub fn step_forward() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepForward)).max(Fx::ZERO)
+}
+
+// Momentum (exploration 0015, C4): the Champion's meter. See
+// `state::feed_the_momentum`.
+
+/// Momentum, the meter holds.
+pub fn momentum_max() -> i32 {
+    oven::scalar(Scalar::MomentumMax).max(0)
+}
+
+/// Momentum, a hit that lands.
+pub fn momentum_hit() -> i32 {
+    oven::scalar(Scalar::MomentumHit).max(0)
+}
+
+/// Momentum, more for a different weapon.
+pub fn momentum_swap() -> i32 {
+    oven::scalar(Scalar::MomentumSwap).max(0)
+}
+
+/// Momentum, more for a true link.
+pub fn momentum_beat() -> i32 {
+    oven::scalar(Scalar::MomentumBeat).max(0)
+}
+
+/// Momentum, more for a full charge.
+pub fn momentum_full() -> i32 {
+    oven::scalar(Scalar::MomentumFull).max(0)
+}
+
+/// Momentum, holds after a hit for.
+pub fn momentum_holds() -> u16 {
+    oven::scalar(Scalar::MomentumHolds).max(0) as u16
+}
+
+/// Momentum, drains a frame after.
+pub fn momentum_drain() -> i32 {
+    oven::scalar(Scalar::MomentumDrain).max(0)
+}
+
+/// Momentum, a hit taken costs (%).
+pub fn momentum_hurt() -> i32 {
+    oven::scalar(Scalar::MomentumHurt).max(0)
+}
+
+/// Momentum, Heated: a hold fills faster by (%).
+pub fn momentum_quick1() -> i32 {
+    oven::scalar(Scalar::MomentumQuick1).max(0)
+}
+
+/// Momentum, Blazing: a hold fills faster by (%).
+pub fn momentum_quick2() -> i32 {
+    oven::scalar(Scalar::MomentumQuick2).max(0)
 }
