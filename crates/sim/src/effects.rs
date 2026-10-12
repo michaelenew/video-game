@@ -284,6 +284,12 @@ pub enum EffectKind {
     /// hit and a shove on each body it passes: the feeling of the blow, not a
     /// second one. The Elementalist's fire ring, made of shadow.
     ShadowRing,
+    /// Blood mage, **the Hemoplague** (2026-10-12): a cloud at the crosshair,
+    /// `reach` across and `tuning::plague_height` tall, for
+    /// `tuning::plague_lasts`. It hurts everyone inside on its tick -- not a
+    /// hit: no stun, no shove, so it holds nobody -- and what it spills goes
+    /// to one stain at its centre. See `state::World::step_the_plague`.
+    Plague,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -401,6 +407,7 @@ impl EffectKind {
             EffectKind::ShadowBurst => "shadow burst",
             EffectKind::ShadowFan => "shadow blades",
             EffectKind::ShadowRing => "shadow ring",
+            EffectKind::Plague => "hemoplague",
         }
     }
 
@@ -475,6 +482,8 @@ impl EffectKind {
             // on the floor where she landed.
             EffectKind::ShadowWhirl | EffectKind::ShadowFan => false,
             EffectKind::ShadowBurst | EffectKind::ShadowRing => true,
+            // A cloud standing on the floor where she aimed it.
+            EffectKind::Plague => true,
         }
     }
 
@@ -605,6 +614,9 @@ impl EffectKind {
             25 => Some(EffectKind::ShadowBurst),
             26 => Some(EffectKind::ShadowFan),
             27 => Some(EffectKind::ShadowRing),
+            // The Blood mage's cloud, 2026-10-12: cast at the crosshair's
+            // spot on the floor like any grounded thing.
+            28 => Some(EffectKind::Plague),
             _ => None,
         }
     }
@@ -680,6 +692,7 @@ impl EffectKind {
                     .to_int()
                     .max(1) as u16
             }
+            EffectKind::Plague => t::plague_lasts(),
         }
     }
 
@@ -745,6 +758,8 @@ impl EffectKind {
             // Not a move's: it is what collecting the shadow does.
             EffectKind::ShadowBurst => t::burst_damage(),
             EffectKind::ShadowRing => t::shadow_ring_damage(),
+            // The move's own number, on every tick.
+            EffectKind::Plague => m.damage,
         }
     }
 }
@@ -1058,7 +1073,9 @@ impl Effect {
             EffectKind::AirBall | EffectKind::Fountain => self.reach,
             EffectKind::FireCarpet => self.source().radius,
             EffectKind::Nova => self.reach,
-            EffectKind::Nail => self.source().radius,
+            // The Stake in flight is a bolt's width; its row's radius is the
+            // area it lands in.
+            EffectKind::Nail => t::haemorrhage_radius(),
             EffectKind::ShadeBolt
             | EffectKind::Binary
             | EffectKind::Abyss
@@ -1067,6 +1084,7 @@ impl Effect {
             EffectKind::ShadowWhirl | EffectKind::ShadowFan => self.source().radius,
             EffectKind::ShadowBurst => self.reach,
             EffectKind::ShadowRing => self.reach,
+            EffectKind::Plague => self.reach,
         }
     }
 

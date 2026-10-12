@@ -780,6 +780,40 @@ scalars! {
     // `docs/design/exploration/0015_blood_mage_blaster.md`.
     StainHitBonus,        "Blood mage", "Stain, a hit through one adds (% of its essence)", Int, 0, 300;
     StainWalkDrinks,      "Blood mage", "Stain, walked into drinks (% of its essence)", Int, 0, 100;
+    TierTwo, "Blood mage", "Charge, tier two at", Frames, 1, 180;
+    TierThree, "Blood mage", "Charge, tier three at", Frames, 1, 240;
+    TierTwoCost, "Blood mage", "Charge, tier two costs (% of red)", Int, 0, 50;
+    TierThreeCost, "Blood mage", "Charge, tier three costs (% of red)", Int, 0, 50;
+    TierTwoPower, "Blood mage", "Charge, tier two hits (x)", Fixed, fx(1,1), fx(5,1);
+    TierThreePower, "Blood mage", "Charge, tier three hits (x)", Fixed, fx(1,1), fx(8,1);
+    ChargeGreyFaster, "Blood mage", "Charge, faster at full grey (x)", Fixed, fx(1,1), fx(3,1);
+    VesselBleedsEvery, "Blood mage", "Vessel, 1% of red every", Frames, 1, 600;
+    LanceKnock, "Blood mage", "Transfusion, tier three throws back (m/s)", Fixed, 0, fx(40,1);
+    SpikeSpread, "Blood mage", "Black spike, tier two spikes apart (m)", Fixed, 0, fx(6,1);
+    SpikeTwoPower, "Blood mage", "Black spike, tier two each (x)", Fixed, 0, fx(2,1);
+    SpikeFieldRadius, "Blood mage", "Black spike, tier three field radius", Fixed, fx(1,1), fx(8,1);
+    SpikeFieldPower, "Blood mage", "Black spike, tier three each wave (x)", Fixed, 0, fx(2,1);
+    SpikeWaves, "Blood mage", "Black spike, tier three waves", Int, 1, 8;
+    SpikeWaveEvery, "Blood mage", "Black spike, tier three wave every", Frames, 1, 90;
+    WingsFrames, "Blood mage", "Blood wings, frames to cross", Frames, 1, 40;
+    ChainMiss, "Blood mage", "Reaper's chain, pulls her on a miss (m)", Fixed, 0, fx(15,1);
+    ChainYank, "Blood mage", "Reaper's chain, yanks a fighter at (m/s)", Fixed, fx(1,1), fx(80,1);
+    ReaperLeapSpeed, "Blood mage", "Reaper's leap, across (m/s)", Fixed, fx(1,1), fx(40,1);
+    LeapDrinks, "Blood mage", "Reaper's leap, drinks stains within (m)", Fixed, 0, fx(8,1);
+    TeleportReach, "Blood mage", "Teleport, to a stain within (m)", Fixed, fx(1,1), fx(40,1);
+    FrenzyLasts, "Blood mage", "Frenzy, lasts", Frames, 1, 900;
+    FrenzyMost, "Blood mage", "Frenzy, lasts at most", Frames, 1, 1800;
+    FrenzyExtend, "Blood mage", "Frenzy, a teleport adds", Frames, 0, 300;
+    FrenzyTickEvery, "Blood mage", "Frenzy, hurts every", Frames, 1, 60;
+    FrenzyPull, "Blood mage", "Frenzy, pulls stains within (m)", Fixed, 0, fx(40,1);
+    FrenzyPullSpeed, "Blood mage", "Frenzy, stains rush in at (m/s)", Fixed, 0, fx(40,1);
+    FrenzyGreyDrain, "Blood mage", "Frenzy, grey drains (per second)", Int, 0, 600;
+    FrenzyEntry, "Blood mage", "Frenzy, needs grey of at least", Int, 0, 1000;
+    StainBlast, "Blood mage", "Stain, explodes for (x its essence)", Fixed, 0, fx(6,1);
+    StainBlastRadius, "Blood mage", "Stain, explosion radius", Fixed, fx(1,2), fx(6,1);
+    PlagueLasts, "Blood mage", "Hemoplague, cloud lasts", Frames, 1, 900;
+    PlagueTick, "Blood mage", "Hemoplague, hurts every", Frames, 1, 120;
+    PlagueHeight, "Blood mage", "Hemoplague, cloud height", Fixed, fx(1,1), fx(10,1);
 }
 
 // ---------------------------------------------------------------------------

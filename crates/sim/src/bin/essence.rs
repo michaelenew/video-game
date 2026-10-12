@@ -143,13 +143,12 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
 }
 
 /// Which button throws each of her moves, in the order the kit reads.
-fn kit() -> [(u8, u16); 5] {
+fn kit() -> [(u8, u16); 4] {
     [
-        (b::SWEEP, Input::LEFT),
-        (b::HAEMORRHAGE, Input::RIGHT),
-        (b::BLOODLETTER, Input::MIDDLE),
-        (b::GRASP, Input::SPECIAL),
-        (b::BLACK_SPIKE, Input::MECHANIC),
+        (b::SWEEP, Input::RIGHT),
+        (b::TRANSFUSION, Input::LEFT),
+        (b::BLACK_SPIKE, Input::MIDDLE),
+        (b::HEMOPLAGUE, Input::MECHANIC),
     ]
 }
 
@@ -159,20 +158,10 @@ fn kit() -> [(u8, u16); 5] {
 fn cast(w: &mut World, slot: u8, button: u16) -> Option<Effect> {
     let m = sim::moves::get(Class::BloodMage, slot);
     let pitch = pitch_at(w, slot, w.players[1].pos);
-    // The Grasp is thrown by the release, wound to a depth; hold it long enough
-    // to reach the dummy.
-    let hold = if m.channels() {
-        let want = w.players[1].pos.sub(w.players[0].pos).flat_len();
-        let mut held = 0;
-        while held < m.channel && m.reach_after(held).raw() < want.raw() {
-            held += 1;
-        }
-        held as u32 + 1
-    } else {
-        2
-    };
+    // A tap: the first tier of a charged move, and every other move as it is.
+    let hold = 2;
     looking(w, hold, button, pitch, 0);
-    let flight = t::bloodletter_flight().max(t::grasp_flight()) as u32;
+    let flight = t::haemorrhage_flight().max(t::plague_lasts()) as u32;
     let mut biggest: Option<Effect> = None;
     for _ in 0..m.whiff_cost() as u32 + flight {
         looking(w, 1, 0, pitch, 0);

@@ -3315,3 +3315,176 @@ pub fn stain_hit_bonus(essence: i32) -> i32 {
 pub fn stain_walk_drinks() -> i32 {
     oven::scalar(Scalar::StainWalkDrinks).clamp(0, 100)
 }
+
+// The blaster's knobs (2026-10-12). See
+// `docs/design/exploration/0015_blood_mage_blaster.md`.
+
+/// Charge, tier two at.
+pub fn tier_two() -> u16 {
+    oven::scalar(Scalar::TierTwo).max(1) as u16
+}
+
+/// Charge, tier three at.
+pub fn tier_three() -> u16 {
+    oven::scalar(Scalar::TierThree).max(1) as u16
+}
+
+/// Charge, tier two costs (% of red).
+pub fn tier_two_cost() -> i32 {
+    oven::scalar(Scalar::TierTwoCost).max(0)
+}
+
+/// Charge, tier three costs (% of red).
+pub fn tier_three_cost() -> i32 {
+    oven::scalar(Scalar::TierThreeCost).max(0)
+}
+
+/// Charge, tier two hits (x).
+pub fn tier_two_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TierTwoPower).max(0))
+}
+
+/// Charge, tier three hits (x).
+pub fn tier_three_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TierThreePower).max(0))
+}
+
+/// Charge, faster at full grey (x).
+pub fn charge_grey_faster() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChargeGreyFaster).max(0))
+}
+
+/// Vessel, 1% of red every.
+pub fn vessel_bleeds_every() -> u16 {
+    oven::scalar(Scalar::VesselBleedsEvery).max(1) as u16
+}
+
+/// Transfusion, tier three throws back (m/s).
+pub fn lance_knock() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LanceKnock).max(0))
+}
+
+/// Black spike, tier two spikes apart (m).
+pub fn spike_spread() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeSpread).max(0))
+}
+
+/// Black spike, tier two each (x).
+pub fn spike_two_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeTwoPower).max(0))
+}
+
+/// Black spike, tier three field radius.
+pub fn spike_field_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeFieldRadius).max(0))
+}
+
+/// Black spike, tier three each wave (x).
+pub fn spike_field_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeFieldPower).max(0))
+}
+
+/// Black spike, tier three waves.
+pub fn spike_waves() -> i32 {
+    oven::scalar(Scalar::SpikeWaves).max(0)
+}
+
+/// Black spike, tier three wave every.
+pub fn spike_wave_every() -> u16 {
+    oven::scalar(Scalar::SpikeWaveEvery).max(1) as u16
+}
+
+/// Blood wings, frames to cross.
+pub fn wings_frames() -> u16 {
+    oven::scalar(Scalar::WingsFrames).max(1) as u16
+}
+
+/// Reaper's chain, pulls her on a miss (m).
+pub fn chain_miss() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainMiss).max(0))
+}
+
+/// Reaper's chain, yanks a fighter at (m/s).
+pub fn chain_yank() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainYank).max(0))
+}
+
+/// Reaper's leap, across (m/s).
+pub fn reaper_leap_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReaperLeapSpeed).max(0))
+}
+
+/// Reaper's leap, drinks stains within (m).
+pub fn leap_drinks() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapDrinks).max(0))
+}
+
+/// Teleport, to a stain within (m).
+pub fn teleport_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TeleportReach).max(0))
+}
+
+/// Frenzy, lasts.
+pub fn frenzy_lasts() -> u16 {
+    oven::scalar(Scalar::FrenzyLasts).max(1) as u16
+}
+
+/// Frenzy, lasts at most.
+pub fn frenzy_most() -> u16 {
+    oven::scalar(Scalar::FrenzyMost).max(1) as u16
+}
+
+/// Frenzy, a teleport adds.
+pub fn frenzy_extend() -> u16 {
+    oven::scalar(Scalar::FrenzyExtend).max(1) as u16
+}
+
+/// Frenzy, hurts every.
+pub fn frenzy_tick_every() -> u16 {
+    oven::scalar(Scalar::FrenzyTickEvery).max(1) as u16
+}
+
+/// Frenzy, pulls stains within (m).
+pub fn frenzy_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FrenzyPull).max(0))
+}
+
+/// Frenzy, stains rush in at (m/s).
+pub fn frenzy_pull_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FrenzyPullSpeed).max(0))
+}
+
+/// Frenzy, grey drains (per second).
+pub fn frenzy_grey_drain() -> i32 {
+    oven::scalar(Scalar::FrenzyGreyDrain).max(0)
+}
+
+/// Frenzy, needs grey of at least.
+pub fn frenzy_entry() -> i32 {
+    oven::scalar(Scalar::FrenzyEntry).max(0)
+}
+
+/// Stain, explodes for (x its essence).
+pub fn stain_blast() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StainBlast).max(0))
+}
+
+/// Stain, explosion radius.
+pub fn stain_blast_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StainBlastRadius).max(0))
+}
+
+/// Hemoplague, cloud lasts.
+pub fn plague_lasts() -> u16 {
+    oven::scalar(Scalar::PlagueLasts).max(1) as u16
+}
+
+/// Hemoplague, hurts every.
+pub fn plague_tick() -> u16 {
+    oven::scalar(Scalar::PlagueTick).max(1) as u16
+}
+
+/// Hemoplague, cloud height.
+pub fn plague_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueHeight).max(0))
+}

@@ -21,9 +21,6 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
     let held = Fx::ratio(m.channel as i32, sim::TICK_HZ as i32);
     let gap = t::move_speed().mul(held);
     let buys = match charge {
-        moves::Charge::Reach => {
-            format!("{}-{} m of reach", tenths(m.channel_from), tenths(m.reach))
-        }
         moves::Charge::Strike => format!(
             "up to {} of burn as one hit",
             Fx::from_int(t::pillar_burn_total())
@@ -35,9 +32,12 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
             tenths(m.channel_from),
             tenths(m.reach)
         ),
-        moves::Charge::Bleed => format!(
-            "1% of red every {}f, a pool of her own blood",
-            t::blood_pays_every()
+        moves::Charge::Tier => format!(
+            "tier two at {}f (+{}% of red), three at {}f (+{}%); a jump or dodge stores it",
+            t::tier_two(),
+            t::tier_two_cost(),
+            t::tier_three(),
+            t::tier_three_cost()
         ),
         moves::Charge::Gather => format!(
             "a ball of radius {}-{} m",
