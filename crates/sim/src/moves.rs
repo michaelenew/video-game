@@ -854,6 +854,13 @@ pub mod champion {
     pub const fn is_takeoff(kind: u8) -> bool {
         kind >= TAKEOFF && kind < POLE_VAULT
     }
+
+    /// **The full charge** of a link (exploration 0015, C5): the move a
+    /// link held to full becomes. `None` until there is one.
+    pub const fn full_charge(kind: u8) -> Option<u8> {
+        let _ = kind;
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1773,13 +1780,14 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
     }
 }
 
-/// What holding a move's button buys, for the three moves that charge.
+/// What holding a move's button buys, for the moves that charge.
 ///
 /// **Declared, not inferred**, like [`shape`] and [`lingers`]: the move
 /// table's `channel` column says *how long* a button may be held, and this
-/// says *what the hold is*. Three answers, and they are three different
-/// shapes of the same rule -- a hold deforms a move along one axis and never
-/// selects a different one. See `docs/design/elementalist-v2.md`.
+/// says *what the hold is*. Every answer but one deforms a move along one axis
+/// and never selects a different one (see `docs/design/elementalist-v2.md`);
+/// the Champion's [`Charge::Heft`] is the exception, and the reason is in its
+/// own note.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Charge {
     /// The Blood mage's Grasp: the hold is **before** the move and buys
@@ -1806,6 +1814,15 @@ pub enum Charge {
     /// goes** -- red health every `tuning::blood_pays_every` frames held --
     /// and it buys size (the nova's burst) or distance (the jet's drive).
     Bleed,
+    /// **The Champion's hold** (exploration 0015, C3), on all nine links of
+    /// the chain: the hold comes **after** the startup, at the top of the
+    /// wind-up, as the Strike's does, and it is a charged attack in the Smash
+    /// sense -- a press regretted and kept, a threat held over a gap, a link
+    /// delayed. A part charge is the move harder and further. **A full one
+    /// selects a different move**: the weapon's full charge for that place in
+    /// the string ([`champion::full_charge`]), and the one rule in this enum
+    /// that is not a deformation. It is the class's one kind of big hit.
+    Heft,
 }
 
 /// Which charge a move has, if any.
@@ -1818,6 +1835,7 @@ pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
+        Class::Champion if champion::link_of(kind).is_some() => Some(Charge::Heft),
         _ => None,
     }
 }

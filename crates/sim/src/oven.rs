@@ -794,6 +794,16 @@ scalars! {
     // that landed is a true link, and it hits harder and sticks longer.
     TrueLinkDamage,       "Champion", "True link, extra damage (%)",         Percent, 0, 200;
     TrueLinkFreeze,       "Champion", "True link, extra freeze",             Frames, 0, 30;
+    // **The Hold** (C3): a link's button still down -- pressed for it, not
+    // held over from the last one -- at the top of its wind-up charges it.
+    // The longest hold is each link's own `channel` column; these say when a
+    // hold is anything at all, when it is full, what a part charge adds, and
+    // how fast he moves while he holds.
+    HoldFrom,             "Champion", "Hold, counts from (frames held)",     Frames, 0, 30;
+    HoldFull,             "Champion", "Hold, full at (frames held)",         Frames, 1, 180;
+    HoldDamage,           "Champion", "Hold, part charge extra damage at full (%)", Percent, 0, 200;
+    HoldShove,            "Champion", "Hold, part charge extra knockback at full (%)", Percent, 0, 200;
+    HoldMobility,         "Champion", "Hold, walk speed while holding (%)",  Percent, 0, 100;
 }
 
 // ---------------------------------------------------------------------------

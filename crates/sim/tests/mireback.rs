@@ -472,9 +472,11 @@ fn a_brazier_tipped_by_a_blow_spills_coals_that_light_the_tar_they_touch() {
         quiet(&mut w);
         w.advance([Input::aimed(0, north), Input::default()]);
     }
-    for _ in 0..30 {
+    // Pressed, then let go: a Champion's sword held down is a charge.
+    for f in 0..30 {
         quiet(&mut w);
-        w.advance([Input::aimed(Input::LEFT, north), Input::default()]);
+        let press = if f == 0 { Input::LEFT } else { 0 };
+        w.advance([Input::aimed(press, north), Input::default()]);
     }
     assert!(!fight::brazier_lit(&w.lore, i), "the blow tipped it");
     assert!(

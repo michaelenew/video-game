@@ -332,6 +332,15 @@ pub struct Fury {
     pub beat: u8,
     /// The move running now is a true link: it hits harder and sticks longer.
     pub true_link: bool,
+    /// Weapon buttons pressed and still down since, as `clicks` bits: a press
+    /// not yet spent on a move. A link whose button is in here when it starts
+    /// may be held; one thrown by a button held over from the link before it
+    /// may not, so holding a button down still runs the string as it always
+    /// did. See `state::find_the_beat`.
+    pub fresh: u8,
+    /// The link running now was started by a fresh press of its button, and
+    /// so may be held at the top of its wind-up.
+    pub may_hold: bool,
 }
 
 // ---------------------------------------------------------------------------

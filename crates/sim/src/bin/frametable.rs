@@ -35,6 +35,14 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
             tenths(m.channel_from),
             tenths(m.reach)
         ),
+        moves::Charge::Heft => format!(
+            "+{}% damage part held, full at {}f: {}",
+            t::hold_damage(),
+            t::hold_full(),
+            moves::champion::full_charge(slot)
+                .map(|k| moves::get(class, k).name)
+                .unwrap_or("nothing yet")
+        ),
         moves::Charge::Bleed => format!(
             "1% of red every {}f, a pool of her own blood",
             t::blood_pays_every()

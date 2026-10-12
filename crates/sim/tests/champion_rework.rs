@@ -133,3 +133,99 @@ fn a_link_pressed_in_the_freeze_is_a_true_link() {
         "the true one hits harder"
     );
 }
+
+/// Press a weapon fresh and keep it down for `frames`, then let go and let
+/// the swing play out. What it dealt, and whether it was ever held.
+fn held_swing(button: u16, frames: u32) -> (i32, bool) {
+    let mut w = engaged();
+    let before = w.players[1].health;
+    let mut held = false;
+    for f in 0..(frames + 60) {
+        step(&mut w, if f < frames { button } else { 0 });
+        held |= matches!(w.players[0].action, Action::Channel { .. });
+    }
+    (before - w.players[1].health, held)
+}
+
+#[test]
+fn a_link_pressed_for_and_held_waits_at_the_top_of_its_wind_up() {
+    let mut w = engaged();
+    for _ in 0..40 {
+        step(&mut w, Input::MIDDLE);
+    }
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Channel {
+                kind: c::HAMMER_GROUND,
+                ..
+            }
+        ),
+        "the hammer held is held: {:?}",
+        w.players[0].action
+    );
+    assert_eq!(
+        w.players[1].health,
+        sim::state::Player::new(Class::Bulwark).health,
+        "and nothing has landed yet"
+    );
+}
+
+#[test]
+fn a_part_charge_hits_harder_than_a_tap() {
+    let sword = sim::moves::get(Class::Champion, c::SWORD_GROUND);
+    let (tap, tap_held) = held_swing(Input::LEFT, 2);
+    assert!(!tap_held, "a tap is not a hold");
+    assert_eq!(tap, sword.damage);
+    let startup = sword.startup as u32;
+    let full = sim::tuning::hold_full() as u32;
+    let (part, part_held) = held_swing(Input::LEFT, startup + full / 2);
+    assert!(part_held, "held past the wind-up, it is held");
+    assert!(
+        part > tap,
+        "a part charge ({part}) hits harder than a tap ({tap})"
+    );
+}
+
+#[test]
+fn tapping_runs_the_string_and_holding_charges_it() {
+    // Linear play was a button held down. Holding is the charge now, so it
+    // is a button tapped: every link thrown, none of them held.
+    let mut w = engaged();
+    let mut kinds = Vec::new();
+    let mut held = false;
+    for f in 0..90 {
+        step(&mut w, if f % 4 == 0 { Input::LEFT } else { 0 });
+        held |= matches!(w.players[0].action, Action::Channel { .. });
+        if let Some(k) = w.players[0].action.attack_kind() {
+            if kinds.last() != Some(&k) {
+                kinds.push(k);
+            }
+        }
+    }
+    assert!(!held, "a tapped string held nothing");
+    assert_eq!(
+        &kinds[..3],
+        &[c::SWORD_GROUND, c::BACKCUT, c::UPCUT],
+        "a tapped sword ran {kinds:?}"
+    );
+}
+
+#[test]
+fn a_rush_takes_a_hold_back() {
+    let mut w = engaged();
+    for _ in 0..40 {
+        step(&mut w, Input::MIDDLE);
+    }
+    assert!(matches!(w.players[0].action, Action::Channel { .. }));
+    step(&mut w, Input::MIDDLE | Input::MECHANIC | Input::S);
+    assert!(
+        !matches!(w.players[0].action, Action::Channel { .. }),
+        "the Rush took the hold back: {:?}",
+        w.players[0].action
+    );
+    let Mechanic::Forms { rush, .. } = w.players[0].mechanic else {
+        unreachable!()
+    };
+    assert!(rush > 0, "and he is running");
+}

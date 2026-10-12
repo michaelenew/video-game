@@ -4057,6 +4057,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         })
         .mul(grey_power(attacker, &m))
         .mul(true_link_mul(attacker))
+        .mul(heft_mul(attacker, t::hold_damage()))
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
@@ -4116,6 +4117,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // `tuning::wing_tip_shove`.
     let shove = m
         .knockback
+        .mul(heft_mul(attacker, t::hold_shove()))
         .mul(power)
         .mul(if tipped { t::wing_tip_shove() } else { Fx::ONE });
     let (push_dir, speed) = if shove.raw() < 0 {
@@ -4546,6 +4548,58 @@ impl World {
     }
 }
 
+/// Is this Champion holding a link at the top of its wind-up?
+fn holding(p: &Player) -> bool {
+    p.class == Class::Champion
+        && p.action
+            .channelling()
+            .is_some_and(|(kind, _)| moves::charge(p.class, kind) == Some(moves::Charge::Heft))
+}
+
+/// Was the link running now started by a fresh press of its button?
+fn may_hold(p: &Player) -> bool {
+    matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.may_hold)
+}
+
+/// What letting go of a held link throws. See `step_channel`.
+fn release_the_hold(p: &mut Player, kind: u8, held: u16) -> Action {
+    let from = t::hold_from();
+    let full = t::hold_full().max(from + 1);
+    if held >= full {
+        if let Some(big) = moves::champion::full_charge(kind) {
+            begin_full_charge(p, big);
+            return Action::Startup {
+                kind: big,
+                left: moves::get(p.class, big).startup,
+            };
+        }
+    }
+    p.channelled = if held < from {
+        Fx::ZERO
+    } else {
+        Fx::ratio(held.min(full) as i32, full as i32)
+    };
+    Action::Active {
+        kind,
+        left: moves::get(p.class, kind).active,
+    }
+}
+
+/// A full charge has begun. Its own move from here: the chain, the weapon and
+/// the Rush see it as they see any move of his.
+fn begin_full_charge(p: &mut Player, kind: u8) {
+    let _ = (p, kind);
+}
+
+/// What a part charge multiplies a number by, given what a part charge adds at
+/// full, as a percentage. One for anything that was not held.
+fn heft_mul(p: &Player, at_full: u16) -> Fx {
+    if p.class != Class::Champion || p.channelled.raw() <= 0 {
+        return Fx::ONE;
+    }
+    Fx::ONE.add(Fx::ratio(at_full as i32, 100).mul(p.channelled.min(Fx::ONE)))
+}
+
 /// What a true link multiplies its damage by: one for anything else.
 fn true_link_mul(p: &Player) -> Fx {
     match p.mechanic {
@@ -4593,6 +4647,7 @@ fn find_the_beat(p: &mut Player, input: Input) {
     let now = weapon_bits(input);
     let fresh = now & !fury.clicks;
     fury.clicks = now;
+    fury.fresh = (fury.fresh | fresh) & now;
     if frozen && fresh != 0 && *chain_hit && in_a_link {
         fury.beat = fresh;
     }
@@ -4715,6 +4770,21 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
                 && moves::get(p.class, kind).channel > 0
                 && input.has(channel_button(p.class, kind)) =>
         {
+            Action::Channel { kind, held: 0 }
+        }
+        // **The Champion's hold** (exploration 0015, C3), the same arm: a
+        // link whose button was pressed for it and is still down at the top of
+        // the wind-up is held there. A true link held is a charge instead --
+        // the beat is a press, the hold is the release.
+        Action::Startup { kind, .. }
+            if moves::charge(p.class, kind) == Some(moves::Charge::Heft)
+                && moves::get(p.class, kind).channel > 0
+                && may_hold(p)
+                && input.has(channel_button(p.class, kind)) =>
+        {
+            if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
+                fury.true_link = false;
+            }
             Action::Channel { kind, held: 0 }
         }
         Action::Startup { kind, .. } => Action::Active {
@@ -4919,7 +4989,12 @@ fn step_player(
     // recovery, which is the Champion's whole answer to having committed to the
     // wrong move -- and, more often, what turns two moves into a combo. One
     // charge means that is always a decision. See `docs/design/champion.md`.
-    if pressed_mechanic && matches!(p.action, Action::Recovery { .. }) && start_rush(p, input) {
+    if pressed_mechanic
+        && (matches!(p.action, Action::Recovery { .. }) || holding(p))
+        && start_rush(p, input)
+    {
+        // A Rush also takes back a hold (exploration 0015, C3): a held swing
+        // is a threat, and a threat you can walk away from is a feint.
         p.action = Action::Free;
     }
 
@@ -5238,7 +5313,13 @@ fn step_player(
     let attack_speed = p
         .action
         .attack_kind()
-        .map(|kind| moves::get(p.class, kind).mobility)
+        .map(|kind| {
+            if holding(p) {
+                t::hold_mobility()
+            } else {
+                moves::get(p.class, kind).mobility
+            }
+        })
         .filter(|m| *m > 0)
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
@@ -6645,7 +6726,14 @@ fn begin_champion(p: &mut Player, kind: u8) {
     if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
         fury.true_link = fury.beat != 0 && c::link_of(kind).is_some_and(|l| l > 0);
         fury.beat = 0;
+        // A link may be held only if its button was pressed for it. The press
+        // is spent here, so a button held on into the next link runs the
+        // string as it always did rather than charging it.
+        let bit = 1u8 << c::weapon(kind);
+        fury.may_hold = c::link_of(kind).is_some() && fury.fresh & bit != 0;
+        fury.fresh &= !bit;
     }
+    p.channelled = Fx::ZERO;
     // The chain moves on, or ends, depending on what this move was.
     advance_chain(p, kind);
     if let Mechanic::Forms {
@@ -7454,6 +7542,12 @@ fn step_channel(
             p.channelled = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
             throw_move(p, kind, input, true)
         }
+        // The Champion's hold: under `hold_from` it was a press a little
+        // long; up to `hold_full` it is a part charge, worth its share; full,
+        // it is a different move -- the weapon's full charge for this place in
+        // the string -- wound up from its own startup. Facing locks here, on
+        // the release, as it does for every other move on its first frame.
+        Some(moves::Charge::Heft) => release_the_hold(p, kind, held),
         _ => {
             p.channelled = p.aim_path.length();
             throw_move(p, kind, input, true)
@@ -7464,6 +7558,13 @@ fn step_channel(
 /// Which button holds a channel open. The slot's own, since a channel is the
 /// front of a move rather than a thing of its own.
 const fn channel_button(class: Class, kind: u8) -> u16 {
+    if matches!(class, Class::Champion) {
+        return match moves::champion::weapon(kind) {
+            moves::champion::SWORD => Input::LEFT,
+            moves::champion::HAMMER => Input::MIDDLE,
+            _ => Input::RIGHT,
+        };
+    }
     match kind {
         // The Elementalist's three holds are her three clicks: Fissure is the
         // earth click held (the stone was raised on the press and the crack
@@ -13990,6 +14091,7 @@ impl World {
                 .mul(cash)
                 .mul(sweet)
                 .mul(true_link_mul(&attacker))
+                .mul(heft_mul(&attacker, t::hold_damage()))
                 .to_int();
             // Asked of its guard first, from where the swing comes from:
             // the same point the fighters' guard is handed.

@@ -1264,6 +1264,35 @@ pub fn true_link_freeze() -> u16 {
     oven::scalar(Scalar::TrueLinkFreeze).max(0) as u16
 }
 
+/// **The Hold** (exploration 0015, C3). Frames held at the top of the wind-up
+/// before a hold counts as one: under this it is a press a little long, and
+/// the move comes out as built.
+pub fn hold_from() -> u16 {
+    oven::scalar(Scalar::HoldFrom).max(0) as u16
+}
+
+/// Frames held for a **full** charge: the weapon's full-charge move for that
+/// place in the string, rather than the link itself.
+pub fn hold_full() -> u16 {
+    oven::scalar(Scalar::HoldFull).max(1) as u16
+}
+
+/// What a part charge adds at the very edge of full, to the damage and to the
+/// shove, as percentages. In between it is the share of `hold_full` held.
+pub fn hold_damage() -> u16 {
+    oven::scalar(Scalar::HoldDamage).max(0) as u16
+}
+
+pub fn hold_shove() -> u16 {
+    oven::scalar(Scalar::HoldShove).max(0) as u16
+}
+
+/// How fast he walks while holding, as a share of his walk: a crawl. He turns
+/// freely -- the aim is live through any channel.
+pub fn hold_mobility() -> u8 {
+    oven::scalar(Scalar::HoldMobility).clamp(0, 100) as u8
+}
+
 /// How far below the horizon you have to be pointing for a spear thrown out of
 /// a Rush to plant in the floor and vault instead of stabbing.
 ///

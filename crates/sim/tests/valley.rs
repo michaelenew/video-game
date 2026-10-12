@@ -516,13 +516,18 @@ fn a_change_of_frame_changes_nothing() {
             };
             Input::looking_at(bits, (f * 97) as u16, -2000)
         };
-        for f in 0..240 {
+        for f in 0..120 {
             w.advance([script(f), script(f + 45)]);
         }
         let mut moved = w.clone();
         moved.shift(bank.sub(den));
         moved.arena = ArenaId::GNAWERS;
-        for f in 240..300 {
+        // Two seconds in rather than four: the Champion's Rush covers enough
+        // ground since 2026-10-12 (exploration 0015) that by four seconds this
+        // script has him at the Bank's far edge, where a world framed in the
+        // den reads the nearer place first -- a crossing out of a frame the
+        // test made up, which is not the question.
+        for f in 120..180 {
             w.advance([script(f), script(f + 45)]);
             moved.advance([script(f), script(f + 45)]);
         }
