@@ -1066,7 +1066,9 @@ fn describe(p: &sim::state::Player) -> String {
 fn locked(p: &sim::state::Player) -> Option<String> {
     (0..sim::moves::table(p.class).len())
         .filter_map(|slot| {
-            let left = p.repeat_lock[slot];
+            // Past the end for the Champion's full charges, which keep none
+            // (`sim::moves::LOCKED_SLOTS`).
+            let left = p.repeat_lock.get(slot).copied().unwrap_or(0);
             (left > 0).then_some((left, slot))
         })
         .min()
@@ -1293,6 +1295,30 @@ mod tests {
         for force in [Force::Dark, Force::Light] {
             let (left, width) = fill_of(force, 500.0, 100.0);
             assert!(left >= 0.0 && left + width <= 100.0);
+        }
+    }
+
+    #[test]
+    fn the_lockout_readout_reads_every_slot_a_class_has() {
+        // The Champion's six full charges are past the end of the lockout
+        // tables (`sim::moves::LOCKED_SLOTS`): asking about them must not
+        // index off the end. It did, the first time the HUD drew a Champion.
+        for class in sim::class::ALL_CLASSES {
+            let p = sim::state::Player::new(class);
+            assert_eq!(locked(&p), None, "{} starts locked", class.name());
+        }
+    }
+
+    #[test]
+    fn only_the_champion_has_momentum() {
+        for class in sim::class::ALL_CLASSES {
+            let p = sim::state::Player::new(class);
+            assert_eq!(
+                momentum_of(&p).is_some(),
+                class == sim::Class::Champion,
+                "{} disagrees about having momentum",
+                class.name()
+            );
         }
     }
 

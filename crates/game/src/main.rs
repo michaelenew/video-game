@@ -2945,12 +2945,14 @@ fn place_champion_glow(
             }
             _ => 0.0,
         };
+        // Sized to be read from behind him across a fight: the first
+        // capture at a quarter of a metre was a bead on the tip.
         let size = match tier {
             0 => 0.0,
-            1 => 0.16,
-            2 => 0.24,
-            _ => 0.34,
-        } + 0.3 * held;
+            1 => 0.24,
+            2 => 0.36,
+            _ => 0.5,
+        } + 0.4 * held;
         if size <= 0.0 {
             *vis = Visibility::Hidden;
             continue;
