@@ -99,13 +99,40 @@ woods, rocks, and the fights in clearings off the road.
   mountainside, and ridged crests on the high faces. Fixed point and hashed
   integers, so both machines raise the same mountains.
 
-**Steep ground is a wall.** A step whose ground rises faster than
-`terrain_steepest` (the Oven, 0.85) is taken back, or slid along; ground that
-steep is no footing, so a body standing on it slides down
-(`terrain_slide`) and cannot jump off it. That is what makes a mountainside
-the edge of the world without a box in sight (`tests/valley.rs`,
-`a_mountainside_is_a_wall`). Only on land: a place's own floor answers as it
-always did, so every pinned fight is unchanged.
+**Steep ground is a wall.** Ground steeper than `terrain_steepest` (the Oven,
+1.05 since 2026-10-13, measured across a metre: `Terrain::downhill`) is no
+footing: a body standing on it slides down (`terrain_slide`) and cannot jump
+off it, and a step on to it may cross it or come down it but never go up it --
+the part of the step up the slope is taken off and the rest kept, so a body
+walked at a mountainside slants along it rather than stopping. That is what
+makes a mountainside the edge of the world without a box in sight
+(`tests/valley.rs`, `a_mountainside_is_a_wall`). Only on land: a place's own
+floor answers as it always did.
+
+**One rule for walking and for standing** (2026-10-13, from play: "any kind
+of slope or tiny step has crazy and frustrating effects on movement"). The
+wall used to be the height one frame's step gained, against the steepest
+slope plus two centimetres of slack. The slack let a walk up ground too steep
+to stand on -- so a bank was a stutter of steps up and slides down -- and in
+practice made the walkable limit about 1.02 at a walk, which the roads were
+then laid against: an embankment is a slope of exactly one. So the limit is
+1.05 now, stated rather than leaked, and the footing is the one test for both.
+
+**A seam is a step.** Where one shape of ground meets another the land can
+rise a hand or more in a centimetre: the noise switching off at a rim, a room's
+own floor meeting the land at its edge. Up to `step_over` (0.45 m) over what
+the steepest slope would rise in the same step is walked up, as a box that
+low is (`arena::resolve_among`); higher is a ledge, slid along. A scan of the
+map on 2026-10-13 found about 2,400 seams, 1,900 of them at a room's edge
+(mostly its rim, meant as a wall) and 500 in the land; the land itself is not
+yet smoothed of them.
+
+**Feet follow the ground down** by `step_down` plus the steepest slope over
+the ground the frame covered, so a run, a dodge or a Rush down any walkable
+slope stays on it; and **a body the floor lifts while it is rising has not
+landed**, as with a box's top (`tests/corner.rs`), so a jump up a slope takes
+off once. `tests/slopes.rs` holds all of it, at places on the map -- two of
+them off the replay the report came with.
 
 **What hangs** is relative to the land now: a box hangs (is a ceiling) if its
 bottom is above the floor under it, not above zero. A tree or a crag stands

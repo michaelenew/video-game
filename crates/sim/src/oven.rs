@@ -854,6 +854,12 @@ scalars! {
     ClashReach,           "Champion", "Clash, staggers a fighter within (m)",               Fixed, 0, fx(20,1);
     SlamDive,             "Champion", "Hammer slam from the air, dive speed (m/s)",         Fixed, fx(5,1), fx(80,1);
     SlamCone,             "Champion", "Hammer slam from the air, cone round straight down (turns)", Fixed, 0, fx(1,4);
+    // **The step a body walks up** (2026-10-13, from play: "trying to walk
+    // into a tiny little lip completely stops the character"). A grounded
+    // body walked into a box whose top is no further above its feet than
+    // this is put on top of it rather than stopped by it -- a kerb, a snow
+    // cap on a rock, the lip of a seam in the land. Above it, a jump.
+    StepOver,             "Movement", "Step, walked up onto (m)",                         Fixed, 0, fx(1,1);
 }
 
 // ---------------------------------------------------------------------------

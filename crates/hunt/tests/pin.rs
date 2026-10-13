@@ -40,7 +40,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // no other pin, moved with it. See feel-log.md.
     // Moved 2026-10-10, deliberately: his three clicks (0012) -- a click in
     // a jump's first frames is a takeoff, and left click in the air Rebound.
-    (Class::Bulwark, 101, 0x3fa044fb6cf577a5),
+    // Moved 2026-10-13, deliberately, with the Elementalist's: slopes, steps
+    // and lips -- the steep-ground wall is the footing, and the arena's rim
+    // is land, which the scripted hunt walks into. See feel-log.md.
+    (Class::Bulwark, 101, 0x9df65d759401d3ac),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between
@@ -60,7 +63,8 @@ const PINNED: [(Class, u32, u64); 7] = [
     // And again the same day: her takeoff window and held earth click went
     // into `state_checksum`, which had been leaving them out. And after the
     // second playtest: `Rise::floor`, and a stone carries whoever stands on it.
-    (Class::Elementalist, 59, 0x16759ffa51c07b35),
+    // And 2026-10-13: slopes, steps and lips, at the rim (see the Bulwark's).
+    (Class::Elementalist, 59, 0x3dd2441975228513),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
