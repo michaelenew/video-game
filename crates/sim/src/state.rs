@@ -2421,7 +2421,7 @@ impl World {
             }
             // The Champion's full charges (exploration 0015): the same.
             if p.class == Class::Champion {
-                self.champion_comes_out(i, kind, input);
+                self.champion_comes_out(i, kind);
             }
             // The Bulwark on three clicks (2026-10-10): the same, for his.
             if p.class == Class::Bulwark {
@@ -2869,7 +2869,6 @@ impl World {
         // the string's first hit. See `World::shoulder`.
         for i in 0..MAX_PLAYERS {
             self.shoulder(i);
-            self.splat(i);
         }
 
         // A thrown shield is its own threat while it travels.
@@ -3668,6 +3667,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     if moves::charge(p.class, kind) == Some(moves::Charge::Strike) && p.channelled.raw() > 0 {
         m.radius = m.radius.max(t::pillar_base_radius());
     }
+    // **And a Champion's finisher is as big as the meter it spent**, as what
+    // it puts in the world is (`World::champion_comes_out`): its own sweep
+    // reaches its share of `momentum_spend` further. One for everything else.
+    m.reach = m.reach.mul(Fx::ONE.add(spent_share_of(p, kind)));
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -4466,7 +4469,7 @@ impl World {
     /// breaks round the hammer, the dashes start, the cuts are left hanging
     /// along the line he will run, and the javelin is thrown with him after
     /// it. On the first active frame, like everything else a move does.
-    fn champion_comes_out(&mut self, who: usize, kind: u8, input: Input) {
+    fn champion_comes_out(&mut self, who: usize, kind: u8) {
         use moves::champion as c;
         let p = self.players[who];
         let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z).normalized();
@@ -4522,23 +4525,6 @@ impl World {
                     cast(EffectKind::Cuts, chest, ahead, reach),
                 );
                 drive_the_champion(&mut self.players[who], ahead, reach, t::cuts_speed());
-            }
-            // **The Comet is a Rush on the spear** (the fourth round): it goes
-            // where he is holding, as a Rush does -- a lunge, a retreat or a
-            // sidestep -- and along the crosshair's line with the stick let go.
-            c::COMET => {
-                let (ax, az) = input.move_axis();
-                let ahead = if ax == 0 && az == 0 {
-                    flat(p.aim_path.dir())
-                } else {
-                    move_dir(input.aim_turns(), ax, az)
-                };
-                drive_the_champion(
-                    &mut self.players[who],
-                    ahead,
-                    t::comet_reach(),
-                    t::comet_speed(),
-                );
             }
             c::HEAVEN_PIERCER => {
                 let dir = p.aim_path.dir();
@@ -4662,43 +4648,6 @@ impl World {
             }
         }
         cancelled
-    }
-
-    /// **The Comet's wall-splat** (exploration 0015, C5): a lunge with
-    /// somebody on the point that is stopped short by something solid has
-    /// put them into it. They are staggered against it, long, and the lunge
-    /// is over. Read off the run itself -- it is going far slower than it
-    /// drives -- so it asks the terrain nothing a body's collision did not.
-    fn splat(&mut self, i: usize) {
-        let p = self.players[i];
-        if p.class != Class::Champion
-            || p.action.attack_kind() != Some(moves::champion::COMET)
-            || p.frozen > 0
-        {
-            return;
-        }
-        let Mechanic::Forms { rush, rush_vel, .. } = p.mechanic else {
-            return;
-        };
-        if rush == 0 || p.vel.flat_len().raw() * 2 >= rush_vel.flat_len().raw() {
-            return;
-        }
-        let other = 1 - i;
-        let q = self.players[other];
-        if !matches!(q.action, Action::Held { .. }) || q.held_by != i as u8 {
-            return;
-        }
-        let stagger = t::comet_splat();
-        let victim = &mut self.players[other];
-        victim.action = Action::Stagger { left: stagger };
-        victim.stun_total = stagger;
-        victim.held_by = NOBODY;
-        let hold = moves::get(Class::Champion, moves::champion::COMET).hitstop;
-        freeze(victim, hold);
-        freeze(&mut self.players[i], hold);
-        if let Mechanic::Forms { rush, .. } = &mut self.players[i].mechanic {
-            *rush = 0;
-        }
     }
 
     /// A full charge's effect landed `dealt` on somebody: its thrower's
@@ -4921,7 +4870,7 @@ pub(crate) fn impact(beast: &mut Monster, p: &Player, kind: u8, dealt: i32) {
     if c::weapon(kind) == c::HAMMER {
         weight = weight.max(t::impact_hammer());
     }
-    if c::link_of(kind) == Some(2) {
+    if c::in_string(kind) && place_in_string(p, kind) == Some(c::DEPTH - 1) {
         weight = weight.max(t::impact_third());
     }
     if true_link {
@@ -5011,12 +4960,36 @@ fn hurt_the_momentum(p: &mut Player) {
     }
 }
 
+/// Where in the string a move of his stands: a link's own place, and for an
+/// aerial, a takeoff or a finisher the place he remembered when it began.
+/// `None` for anything outside the string.
+fn place_in_string(p: &Player, kind: u8) -> Option<u8> {
+    use moves::champion as c;
+    if let Some(link) = c::link_of(kind) {
+        return Some(link);
+    }
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if c::in_string(kind) || c::is_full(kind) => Some(fury.place),
+        _ => None,
+    }
+}
+
 /// Is this Champion holding a link at the top of its wind-up?
 fn holding(p: &Player) -> bool {
     p.class == Class::Champion
         && p.action
             .channelling()
             .is_some_and(|(kind, _)| moves::charge(p.class, kind) == Some(moves::Charge::Heft))
+}
+
+/// Is this Champion winding up a move he may still hold to a finisher --
+/// its button down since the press, in its startup or past it?
+fn winding_a_hold(p: &Player) -> bool {
+    may_hold(p)
+        && match p.action {
+            Action::Startup { kind, .. } => moves::charge(p.class, kind).is_some(),
+            _ => holding(p),
+        }
 }
 
 /// Was the link running now started by a fresh press of its button?
@@ -5028,15 +5001,14 @@ fn may_hold(p: &Player) -> bool {
 /// the string, aimed now and wound up from its own startup. The link itself if
 /// it has none.
 fn finish_with(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) -> Action {
-    let (Some(big), Some(place)) = (
-        moves::champion::full_charge(kind),
-        moves::champion::link_of(kind),
-    ) else {
+    use moves::champion as c;
+    let Some(place) = place_in_string(p, kind).filter(|_| c::holdable(kind)) else {
         return Action::Active {
             kind,
             left: moves::get(p.class, kind).active,
         };
     };
+    let big = c::finisher(c::weapon(kind), place);
     lock_aim(p, who, big, input, scene);
     begin_full_charge(p, big, place);
     Action::Startup {
@@ -5076,6 +5048,18 @@ fn begin_full_charge(p: &mut Player, kind: u8, place: u8) {
         fury.momentum_left = 0;
     }
     p.channelled = Fx::ZERO;
+    // **From the air** (2026-10-13, from play) a finisher keeps whatever the
+    // jump was carrying -- the Crescent off a leap goes on with him -- and
+    // hangs on nothing. The hammer's two are slammed straight back to the
+    // floor instead, down the crosshair's line held inside a cone round
+    // straight down, and break it where he lands (`lands_on_the_floor`).
+    if !p.grounded {
+        p.air_stall = 0;
+        if kind == c::SHOCKWAVE || kind == c::METEOR {
+            p.vel = aim::plunge_dir(p.aim_dir(), t::slam_cone()).scale(t::slam_dive());
+        }
+        return;
+    }
     if kind == c::METEOR {
         // Up at the knob's rise and down under gravity: the time in the air
         // is what the rise buys, and the run across is spread over it so he
@@ -5176,7 +5160,11 @@ fn find_the_beat(p: &mut Player, input: Input) {
     let in_a_link = p
         .action
         .attack_kind()
-        .is_some_and(|k| moves::champion::link_of(k).is_some());
+        .is_some_and(moves::champion::in_string);
+    let winding = match p.action {
+        Action::Startup { kind, .. } | Action::Channel { kind, .. } => Some(kind),
+        _ => None,
+    };
     let Mechanic::Forms {
         chain_hit, fury, ..
     } = &mut p.mechanic
@@ -5187,6 +5175,16 @@ fn find_the_beat(p: &mut Player, input: Input) {
     let fresh = now & !fury.clicks;
     fury.clicks = now;
     fury.fresh = (fury.fresh | fresh) & now;
+    // **A hold is one press, held** (2026-10-13, from play): let go of the
+    // button a link was pressed for and that link can no longer be held, so
+    // the next click of a string -- pressed during this one's wind-up -- is
+    // never read as this one held long. It used to be: clicking fast, a
+    // second press down at the top of a hammer's wind-up was a finisher.
+    if let Some(kind) = winding {
+        if now & 1 << moves::champion::weapon(kind) == 0 {
+            fury.may_hold = false;
+        }
+    }
     if frozen && fresh != 0 && *chain_hit && in_a_link {
         fury.beat = fresh;
     }
@@ -5569,7 +5567,7 @@ fn step_player(
     // charge means that is always a decision. See `docs/design/champion.md`.
     if pressed_mechanic
         && (matches!(p.action, Action::Recovery { .. }) || holding(p))
-        && start_rush(p, input)
+        && start_rush(p, who, input, scene)
     {
         // A Rush also takes back a hold (exploration 0015, C3): a held swing
         // is a threat, and a threat you can walk away from is a feint.
@@ -6688,7 +6686,8 @@ fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
 
 /// The moves whose active frames begin on the frame the feet arrive.
 fn lands_on_the_floor(class: Class, kind: u8) -> bool {
-    (class == Class::Champion && kind == moves::champion::METEOR)
+    (class == Class::Champion
+        && matches!(kind, moves::champion::METEOR | moves::champion::SHOCKWAVE))
         || (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
         || (class == Class::Bulwark && kind == SLOT_COMMITTED)
         || (class == Class::ShadowReaver
@@ -6941,6 +6940,14 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
         if !p.aboard() && !rise_spent(p) && (just_left || input.has(Input::SPACE)) {
             return Some(c::TAKEOFF + weapon);
         }
+        // **The third hit from the air** (2026-10-13, from play) is the
+        // aerial: with two hits behind him it is the string's third --
+        // it ends it, gives the Rush back when it lands, and held it is the
+        // grand finisher (`begin_champion` gives it its place). The button
+        // is the weapon and the feet pick the move, so the move stays the
+        // air's own. Throwing the ground's third links from the air instead
+        // was tried: the hunt bots struck a creature's back a quarter less
+        // often, 187 times against 258 across 24 hunts.
         return Some(c::IN_THE_AIR + weapon);
     }
     Some(c::link(champion_chain(p).0, weapon))
@@ -7119,7 +7126,7 @@ fn chain_cancel(p: &mut Player, input: Input) {
     let Action::Recovery { kind, left } = p.action else {
         return;
     };
-    if c::link_of(kind).is_none() {
+    if !c::in_string(kind) {
         return;
     }
     let Mechanic::Forms {
@@ -7222,11 +7229,7 @@ fn confirm_chain(p: &mut Player, blocked: bool) {
     let Some(kind) = p.action.attack_kind() else {
         return;
     };
-    let full = moves::champion::is_full(kind);
-    let Some(link) = moves::champion::link_of(kind).or(match p.mechanic {
-        Mechanic::Forms { fury, .. } if full => Some(fury.place),
-        _ => None,
-    }) else {
+    let Some(link) = place_in_string(p, kind) else {
         return;
     };
     if let Mechanic::Forms {
@@ -7248,14 +7251,16 @@ fn confirm_chain(p: &mut Player, blocked: bool) {
 
 /// Where the chain is after this move: one hit deeper, or back to nothing.
 ///
-/// **Only the nine ground moves are in it.** An aerial, a Rush move or a
-/// takeoff ends the chain outright rather than being ignored by it, and that is
-/// the design rather than an implementation shortcut: leaving the floor is a
-/// different situation, and a string you could park in the air and come back to
-/// would make the grace window meaningless.
+/// **The nine links, the aerials and the takeoffs are in it** (2026-10-13,
+/// from play: "I find myself counting to three"). A link is its own place; an
+/// aerial or a takeoff is the next one, however many hits were behind it, so
+/// ground, jump, third is three. A Rush move ends the chain outright: the Rush
+/// is its own way in.
 fn advance_chain(p: &mut Player, kind: u8) {
-    let stage = match moves::champion::link_of(kind) {
+    use moves::champion as c;
+    let stage = match c::link_of(kind) {
         Some(link) => link + 1,
+        None if c::in_string(kind) => (champion_chain(p).0 + 1).min(c::DEPTH),
         None => 0,
     };
     if let Mechanic::Forms {
@@ -7308,14 +7313,20 @@ fn begin_champion(p: &mut Player, kind: u8) {
     }
     // A link thrown on the beat is a true link; anything else spends the
     // beat on nothing. See `find_the_beat`.
+    // Where in the string this move stands: a link's own place, or for an
+    // aerial or a takeoff the hits already behind it.
+    let place = c::link_of(kind).unwrap_or(champion_chain(p).0.min(c::DEPTH - 1));
     if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
-        fury.true_link = fury.beat != 0 && c::link_of(kind).is_some_and(|l| l > 0);
+        fury.true_link = fury.beat != 0 && c::in_string(kind) && place > 0;
         fury.beat = 0;
-        // A link may be held only if its button was pressed for it. The press
+        if c::in_string(kind) {
+            fury.place = place;
+        }
+        // A move may be held only if its button was pressed for it. The press
         // is spent here, so a button held on into the next link runs the
         // string as it always did rather than charging it.
         let bit = 1u8 << c::weapon(kind);
-        fury.may_hold = c::link_of(kind).is_some() && fury.fresh & bit != 0;
+        fury.may_hold = c::holdable(kind) && fury.fresh & bit != 0;
         fury.fresh &= !bit;
     }
     p.channelled = Fx::ZERO;
@@ -7829,19 +7840,17 @@ pub(crate) fn rushing(p: &Player) -> Option<V3> {
 
 /// Spend the charge and start the dash. False if there was no charge to spend.
 ///
-/// The dash goes where you are **holding**, not where you are looking, so that
-/// Rush is a retreat and a sidestep as well as an approach -- and so that the
-/// run-through can be aimed across an opponent rather than only at one.
-fn start_rush(p: &mut Player, input: Input) -> bool {
+/// **The dash goes where the crosshair is** (2026-10-13, from play): flat
+/// along the floor toward the spot the crosshair is on, from his feet --
+/// `aim::racing_path`, the line a crack races along, run by a body. It used
+/// to go where the stick was held, so that it could be a retreat or a
+/// sidestep, and it looked and felt like it was going somewhere he was not
+/// pointing; turn the camera to retreat.
+fn start_rush(p: &mut Player, who: usize, input: Input, scene: &Scene) -> bool {
     let Mechanic::Forms { recharge: 0, .. } = p.mechanic else {
         return false;
     };
-    let (ax, az) = input.move_axis();
-    let dir = if ax == 0 && az == 0 {
-        p.facing
-    } else {
-        move_dir(input.aim_turns(), ax, az)
-    };
+    let dir = aim::racing_path(p.pos, who, input, t::rush_speed(), scene).dir();
     if let Mechanic::Forms {
         rush,
         recharge,
@@ -8557,7 +8566,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
         // rebuild deleted -- the weapon is a mouse button now, so the mechanic
         // key is free for the mechanic the class is actually built around.
         Mechanic::Forms { .. } => {
-            start_rush(p, input);
+            start_rush(p, who, input, scene);
         }
 
         // `E` on the Reaver is an ability rather than an instant -- see
@@ -8672,10 +8681,13 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
         //     opponent gets to have an opinion about it.
         Mechanic::Forms { .. } => {
             let live = p.action.attack_kind().is_some_and(|kind| {
-                moves::champion::link_of(kind).is_some() || moves::champion::is_full(kind)
+                moves::champion::in_string(kind) || moves::champion::is_full(kind)
             });
-            let standing = p.action.actionable() && p.grounded;
+            // Free, on the floor or off it: a jump no longer ends a string
+            // (2026-10-13), since a jump is how the next hit of one arrives.
+            let standing = p.action.actionable();
             let stunned = p.action.stunned();
+            let charging = winding_a_hold(p);
             if let Mechanic::Forms {
                 rush,
                 recharge,
@@ -8710,8 +8722,13 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 if !live {
                     fury.true_link = false;
                 }
-                // The meter holds after a landed hit, then drains.
-                if fury.momentum_left > 0 {
+                // The meter holds after a landed hit, then drains -- and
+                // holds still while he winds up a hold (2026-10-13, from
+                // play): a finisher started on a full meter is a finisher on
+                // a full meter, not one that watched it run down.
+                if charging {
+                    // Held where it is.
+                } else if fury.momentum_left > 0 {
                     fury.momentum_left -= 1;
                 } else {
                     fury.momentum = (fury.momentum as i32 - t::momentum_drain()).max(0) as u16;

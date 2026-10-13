@@ -169,7 +169,7 @@ fn held_any_link_is_its_weapons_finisher() {
     for (button, want) in [
         (Input::LEFT, c::CRESCENT),
         (Input::MIDDLE, c::SHOCKWAVE),
-        (Input::RIGHT, c::COMET),
+        (Input::RIGHT, c::REPEL),
     ] {
         let (_, kinds) = held_swing(button, 40);
         assert!(kinds.contains(&want), "{button:#x} held threw {kinds:?}");
@@ -227,12 +227,14 @@ fn a_rush_takes_a_hold_back() {
         "{:?}",
         w.players[0].action
     );
-    step(&mut w, Input::LEFT | Input::MECHANIC | Input::S);
+    step(&mut w, Input::LEFT | Input::MECHANIC);
     assert!(!matches!(w.players[0].action, Action::Channel { .. }));
-    let Mechanic::Forms { rush, .. } = w.players[0].mechanic else {
+    let Mechanic::Forms { recharge, .. } = w.players[0].mechanic else {
         unreachable!()
     };
-    assert!(rush > 0, "and he is running");
+    // Into the Bulwark in front of him, which the shoulder may already have
+    // ended: the charge is spent either way.
+    assert!(recharge > 0, "and he ran");
 }
 
 // -- The full charges (C5) -----------------------------------------------
@@ -281,7 +283,7 @@ fn every_link_held_to_full_is_its_weapons_full_charge() {
     for (place, button, want) in [
         (0, Input::LEFT, c::CRESCENT),
         (0, Input::MIDDLE, c::SHOCKWAVE),
-        (0, Input::RIGHT, c::COMET),
+        (0, Input::RIGHT, c::REPEL),
         (1, Input::LEFT, c::CRESCENT),
         (2, Input::LEFT, c::THOUSAND_CUTS),
         (2, Input::MIDDLE, c::METEOR),
@@ -328,19 +330,23 @@ fn the_shockwave_throws_up_somebody_outside_the_hammers_reach() {
 }
 
 #[test]
-fn the_comet_crosses_eight_metres() {
-    let mut w = open_floor(0, 30);
-    let from = w.players[0].pos;
-    assert_eq!(full_charge(&mut w, Input::RIGHT), Some(c::COMET));
+fn the_repel_shoves_them_away_and_hurts_little() {
+    // The spear's first finisher is room, not a kill: it hits for less than
+    // the spear's own opener and throws them well clear.
+    let mut w = open_floor(0, 2);
+    let (before, from) = (w.players[1].health, w.players[1].pos);
+    assert_eq!(full_charge(&mut w, Input::RIGHT), Some(c::REPEL));
     for _ in 0..40 {
         step(&mut w, 0);
     }
-    let gone = w.players[0].pos.sub(from).flat_len().to_f32_for_render();
-    let want = sim::tuning::comet_reach().to_f32_for_render();
+    let dealt = before - w.players[1].health;
+    assert!(dealt > 0, "the Repel missed somebody two metres away");
     assert!(
-        gone > want * 0.8,
-        "the Comet lunged {gone:.1} m of its {want:.1}"
+        dealt <= sim::moves::get(Class::Champion, c::SPEAR_GROUND).damage,
+        "the Repel dealt {dealt}"
     );
+    let pushed = w.players[1].pos.sub(from).flat_len().to_f32_for_render();
+    assert!(pushed > 2.0, "and moved them {pushed:.1} m");
 }
 
 #[test]
@@ -671,5 +677,181 @@ fn any_blow_that_meets_his_shoulder_is_spent_and_its_thrower_staggered() {
         staggered,
         "and its thrower was knocked out of it: {:?}",
         w.players[1].action
+    );
+}
+
+// -- From play, 2026-10-13 --------------------------------------------------
+
+/// Jump, full height, and let go of the button: in the air, with the
+/// takeoff behind him, so a click is an aerial.
+fn jump(w: &mut World) {
+    for _ in 0..12 {
+        step(w, Input::SPACE);
+    }
+    step(w, 0);
+    assert!(!w.players[0].grounded, "the jump never left the floor");
+}
+
+fn chain(w: &World) -> u8 {
+    match w.players[0].mechanic {
+        Mechanic::Forms { chain, .. } => chain,
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn clicking_fast_never_holds() {
+    // A second press during a link's wind-up is the next link, never this
+    // one held: whatever rhythm the clicks come in, a tapped string throws
+    // no finisher.
+    for button in [Input::LEFT, Input::MIDDLE, Input::RIGHT] {
+        for period in 3..9 {
+            for down in 1..period {
+                let mut w = engaged();
+                for f in 0..150 {
+                    step(&mut w, if f % period < down { button } else { 0 });
+                    let k = w.players[0].action.attack_kind();
+                    assert!(
+                        !k.is_some_and(c::is_full),
+                        "{button:#x} clicked {down} of every {period} frames threw {k:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_meter_waits_while_he_winds_up_a_hold() {
+    let mut w = engaged();
+    set_momentum(&mut w, 50);
+    if let Mechanic::Forms { fury, .. } = &mut w.players[0].mechanic {
+        fury.momentum_left = 0;
+    }
+    // The press itself is a frame of the meter's ordinary clock; from the
+    // first frame of the wind-up it waits.
+    step(&mut w, Input::LEFT);
+    let pressed = fury(&w).momentum;
+    for _ in 1..sim::tuning::hold_from() - 1 {
+        step(&mut w, Input::LEFT);
+    }
+    assert!(pressed > 0);
+    assert_eq!(
+        fury(&w).momentum,
+        pressed,
+        "the meter ran down under a hold"
+    );
+}
+
+#[test]
+fn an_aerial_is_the_next_hit_of_the_string() {
+    let mut w = open_floor(1, 12);
+    jump(&mut w);
+    step(&mut w, Input::LEFT);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::AIR_SWORD));
+    assert_eq!(chain(&w), 2, "ground, jump: two hits");
+}
+
+#[test]
+fn two_hits_behind_him_an_aerial_is_the_third() {
+    // It is still the air's move, and it is the string's third: the string
+    // is over after it, a landed one gives the Rush back, and held it is the
+    // grand finisher (`an_aerial_held_is_its_weapons_finisher`).
+    let mut w = open_floor(2, 12);
+    if let Mechanic::Forms { recharge, .. } = &mut w.players[0].mechanic {
+        *recharge = 200;
+    }
+    jump(&mut w);
+    step(&mut w, Input::MIDDLE);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::AIR_HAMMER));
+    assert_eq!(
+        chain(&w),
+        c::DEPTH,
+        "ground, jump, third: the string is spent"
+    );
+    assert_eq!(fury(&w).place, 2);
+}
+
+#[test]
+fn a_jump_does_not_end_the_string() {
+    let mut w = open_floor(1, 12);
+    if let Mechanic::Forms { chain_left, .. } = &mut w.players[0].mechanic {
+        *chain_left = sim::tuning::chain_grace();
+    }
+    jump(&mut w);
+    assert_eq!(chain(&w), 1, "the string was dropped in the air");
+}
+
+#[test]
+fn an_aerial_held_is_its_weapons_finisher() {
+    for (place, button, want) in [
+        (0, Input::LEFT, c::CRESCENT),
+        (0, Input::MIDDLE, c::SHOCKWAVE),
+        (0, Input::RIGHT, c::REPEL),
+        (2, Input::LEFT, c::THOUSAND_CUTS),
+        (2, Input::MIDDLE, c::METEOR),
+    ] {
+        let mut w = open_floor(place, 12);
+        jump(&mut w);
+        assert_eq!(
+            full_charge(&mut w, button),
+            Some(want),
+            "{button:#x} held in the air at {place}"
+        );
+    }
+}
+
+#[test]
+fn the_crescent_off_a_jump_keeps_the_jumps_speed() {
+    let mut w = open_floor(0, 12);
+    for _ in 0..12 {
+        step(&mut w, Input::SPACE | Input::W);
+    }
+    step(&mut w, Input::W);
+    let carried = w.players[0].vel.flat_len().to_f32_for_render();
+    assert_eq!(full_charge(&mut w, Input::LEFT), Some(c::CRESCENT));
+    let kept = w.players[0].vel.flat_len().to_f32_for_render();
+    assert!(
+        kept > carried * 0.8,
+        "a crescent thrown at {carried:.1} m/s left him at {kept:.1}"
+    );
+}
+
+#[test]
+fn the_hammer_held_in_the_air_slams_him_back_down_and_breaks_the_ground() {
+    let mut w = open_floor(0, 4);
+    jump(&mut w);
+    let before = w.players[1].health;
+    assert_eq!(full_charge(&mut w, Input::MIDDLE), Some(c::SHOCKWAVE));
+    let mut landed_at = None;
+    let mut ring = false;
+    for f in 0..60 {
+        step(&mut w, 0);
+        if w.players[0].grounded && landed_at.is_none() {
+            landed_at = Some(f);
+        }
+        ring |= live(&w, EffectKind::Shockwave);
+    }
+    let landed = landed_at.expect("he never came down");
+    assert!(landed < 15, "he took {landed} frames to come down");
+    assert!(ring, "and broke no ground");
+    assert!(w.players[1].health < before, "the ring reached nobody");
+}
+
+#[test]
+fn the_rush_goes_where_the_crosshair_is_not_where_the_stick_is() {
+    let mut w = open_floor(0, 30);
+    let from = w.players[0].pos;
+    // Holding back and to the side, looking ahead.
+    step(&mut w, Input::S | Input::A | Input::MECHANIC);
+    for _ in 0..6 {
+        step(&mut w, Input::S | Input::A);
+    }
+    let gone = w.players[0].pos.sub(from);
+    assert!(
+        gone.x.to_f32_for_render() > 2.0 && gone.z.to_f32_for_render().abs() < 0.5,
+        "the Rush went {:.1}, {:.1}",
+        gone.x.to_f32_for_render(),
+        gone.z.to_f32_for_render()
     );
 }

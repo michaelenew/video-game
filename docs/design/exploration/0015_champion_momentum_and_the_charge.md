@@ -391,14 +391,40 @@ braced in three bands), CHAMP-4 (no — and then superseded: a full charge is th
 and momentum is one of its doors), CHAMP-5 (yes, heavier wins). CHAMP-7 (the wave as the only
 new machinery) is answered by C5: every full charge is new.
 
-- **CHAMP-6.** The air share (23 %) is the other half of "less dynamic". Holds are grounded for
-  now; a held aerial, or a Rush in the air with the shoulder, is the obvious next door.
+- **CHAMP-6** — answered from play (2026-10-13): aerials hold, and aerials and takeoffs count in
+  the string (ground, jump, third), with the third hit thrown from the air. See the fifth round.
 - **CHAMP-8** — answered: the spear comes back at once; the rush to it is the throw's own second
   half.
 - **CHAMP-9** — answered: no free full charges on a downed creature; a full charge on a third
   hit is a grand finisher, and an uncharged third hit is a third hit.
 - **CHAMP-10** — answered: the six as proposed; build it.
 - **CHAMP-11** (from the build). The full charges are movement too: Heaven-piercer's run after
-  its spear is 25 m, the Comet 8 m and Thousand Cuts 7 m, and a string advances on the throw,
-  whiffed or not. The lab search's whole-kit reach went from 55.8 to 85.3 m at lane 0. Should
+  its spear is 25 m, the Comet 8 m (gone since the fifth round) and Thousand Cuts 7 m, and a string advances on the throw,
+  whiffed or not. The lab search's whole-kit reach went from 55.8 to 85.3 m at lane 0, and back to 68.1 m without the Comet (the fifth round). Should
   they cross the gaps the movement sections were built against?
+
+## The fifth round (2026-10-13, from play)
+
+Asked: holds on the aerials (the sword's Crescent off a jump without losing speed, the hammer
+held in the air to slam back down); the spear's first finisher as a sweep that repels, not a
+dash ("you can just keep dashing everywhere while dealing damage"); aerials and jumping attacks
+in the three-hit count, in rhythm, and a third hit from the air; fast clicks read as holds; the
+Rush and the spear's dash going where the stick was rather than the mouse; and a third hit held
+at a full meter draining it during the wind-up.
+
+Built:
+
+- **The string in the air.** An aerial or a takeoff is the next hit of the string, wherever the
+  last ones were thrown; a jump does not end it; with two hits behind him an aerial is the third
+  -- it ends the string, refunds the Rush, and held is the grand finisher. Throwing the ground's
+  third links from the air was tried and reverted: the hunt bots struck a creature's back a
+  quarter less often. (`moves::champion::in_string`, `Fury::place`.)
+- **Aerials hold** to their weapon's finisher for that place. From the air the Crescent keeps
+  the jump's speed, the Repel is thrown where he is, and the Shockwave and Meteor slam him down
+  the crosshair (inside a cone round straight down) and break the ground where he lands.
+- **The Repel** replaces the Comet: the spear swung flat a whole turn round him, little damage,
+  a long shove.
+- **A hold is one press, held**: one release and that hit is a tap. The bug was a second click
+  arriving at the top of the wind-up; on the hammer one frame of it was a finisher.
+- **The meter waits** while he winds up a hold.
+- **The Rush goes toward the crosshair**, flat along the floor from his feet.

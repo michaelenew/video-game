@@ -1642,8 +1642,9 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     let down = -(1 << 13); // an eighth of a turn below the horizon
     let mut w = engaged(Class::Champion);
     // Sideways, past them: a Rush run *into* somebody this close is
-    // the shoulder, which stops it on the first frame (exploration 0015).
-    run(&mut w, 1, E | Input::D, 0);
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     for _ in 0..2 {
         w.advance([
             Input::looking_at(RMB, LOOK_RIGHT, down),
@@ -1658,8 +1659,9 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
 
     let mut w = engaged(Class::Champion);
     // Sideways, past them: a Rush run *into* somebody this close is
-    // the shoulder, which stops it on the first frame (exploration 0015).
-    run(&mut w, 1, E | Input::D, 0);
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     run(&mut w, 2, RMB, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
@@ -1675,8 +1677,9 @@ fn the_vault_trades_the_dash_for_height() {
     let down = -(1 << 13);
     let mut w = engaged(Class::Champion);
     // Sideways, past them: a Rush run *into* somebody this close is
-    // the shoulder, which stops it on the first frame (exploration 0015).
-    run(&mut w, 1, E | Input::D, 0);
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     let mut top = 0.0f32;
     for f in 0..80 {
         let bits = if (1..3).contains(&f) { RMB } else { 0 };
@@ -2254,7 +2257,7 @@ fn nothing_that_does_not_declare_a_step_moves_on_its_own() {
     w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
     run(&mut w, 12, 0, 0);
     let from = w.players[0].pos;
-    // Tapped: held, the spear is the Comet, which is a Rush on the spear.
+    // Tapped: held, the spear is the Repel, a different move.
     for f in 0..40 {
         w.advance([
             Input::aimed(if f == 0 { RMB } else { 0 }, LOOK_RIGHT),

@@ -622,12 +622,12 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // The full charges (2026-10-12, exploration 0015), on the clips they
         // are bigger versions of until they have their own: the crescent on
         // the sword's diagonal, the shockwave on the hammer's overhead, the
-        // Comet on the Rush stab's lunge, Thousand Cuts on the Rush slash's
+        // Repel on the Whirl's spin, Thousand Cuts on the Rush slash's
         // run-through, the Meteor on the air hammer's drop, and the javelin
         // on the Skewer's wind-up and throw.
         (Class::Champion, 19) => Clip::ChampionBackcut,
         (Class::Champion, 20) => Clip::ChampionHammer,
-        (Class::Champion, 21) => Clip::ChampionRushStab,
+        (Class::Champion, 21) => Clip::ChampionWhirl,
         (Class::Champion, 22) => Clip::ChampionRushSlash,
         (Class::Champion, 23) => Clip::ChampionAirHammer,
         (Class::Champion, _) => Clip::ChampionSkewer,

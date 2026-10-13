@@ -40,7 +40,7 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
             t::hold_from(),
             moves::champion::full_charge(slot)
                 .map(|k| moves::get(class, k).name)
-                .unwrap_or("none")
+                .unwrap_or("its weapon's, at its place in the string")
         ),
         moves::Charge::Bleed => format!(
             "1% of red every {}f, a pool of her own blood",

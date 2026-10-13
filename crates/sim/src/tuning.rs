@@ -1336,21 +1336,6 @@ pub fn meteor_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MeteorRise))
 }
 
-/// Comet, lunges (m).
-pub fn comet_reach() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CometReach))
-}
-
-/// Comet, lunge speed (m/s).
-pub fn comet_speed() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CometSpeed))
-}
-
-/// Comet, wall-splat stagger.
-pub fn comet_splat() -> u16 {
-    oven::scalar(Scalar::CometSplat).max(0) as u16
-}
-
 /// Thousand Cuts, dashes (m).
 pub fn cuts_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CutsReach))
@@ -3639,4 +3624,16 @@ pub fn momentum_stagger() -> u16 {
 /// staggered by it: their own swing, not a bolt from across the arena.
 pub fn clash_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ClashReach))
+}
+
+/// The hammer's finisher thrown in the air: how fast he is driven back down
+/// to the floor (m/s). See `state::begin_full_charge`.
+pub fn slam_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamDive))
+}
+
+/// The hammer's slam from the air goes down the crosshair's line, held inside
+/// a cone this wide round straight down (turns).
+pub fn slam_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamCone))
 }

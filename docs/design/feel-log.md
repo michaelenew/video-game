@@ -8261,3 +8261,52 @@ Built as the fourth round of [exploration 0015](exploration/0015_champion_moment
   new one.
 **Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again.
 **Verdict** — from play, a second time.
+
+### 2026-10-13 — the Champion from play, second pass: aerials in the string, the Repel, holds that are holds
+**Asked, from play**
+- Holds on the aerials: the sword's Crescent off a jump without losing speed, the hammer held in
+  the air to slam back to the floor.
+- The spear's first finisher was too strong as a dash on every hold ("you can just keep dashing
+  everywhere while dealing damage"): a sweep that repels instead, low damage, utility.
+- Aerials and jumping attacks count in the three-hit string, in rhythm -- ground, jump, third --
+  and a third hit from the air.
+- Clicking fast was read as a hold and spent the meter on a finisher nobody asked for.
+- The Rush and the spear's dash went where the stick was, not where the mouse was.
+- A third hit held at a full meter drained the meter during its own wind-up.
+**Changed**
+- **A hold is one press, held.** Let go of a link's button once and it is a tap
+  (`find_the_beat` clears `may_hold`). The cause was a second click arriving during the
+  wind-up: the hold check only asked whether the button was down at the top, and the hammer's
+  wind-up is as long as a hold, so one frame of the next click was a finisher.
+  `clicking_fast_never_holds` tries every rhythm of 3 to 8 frames on all three weapons and fails
+  without the fix.
+- **The meter waits while a hold winds up** (`winding_a_hold`).
+- **Aerials and takeoffs are in the string** (`champion::in_string`): each is the next place,
+  the chain's clock keeps running in the air, and with two hits behind him an aerial is the
+  third -- it ends the string, refunds the Rush and holds to the grand finisher. The place is remembered on the fighter (`Fury::place`), since an aerial has no
+  place of its own.
+- **Aerials hold** (`champion::holdable`) to their weapon's finisher for that place
+  (`champion::finisher`). A finisher begun in the air keeps the jump's speed and does not hang;
+  the Shockwave and Meteor are driven down the crosshair inside a cone round straight down
+  (`aim::plunge_dir`, `slam_dive` 30 m/s, `slam_cone` 0.1) and wait for the floor
+  (`lands_on_the_floor`).
+- **The Comet is gone; the Repel** is the spear's first finisher: the pole swung flat a full
+  turn round him, 50 damage, 26 knockback, 4/5/20 frames. Its wall-splat and its three knobs went
+  with it. A finisher's own swing now reaches further by what it spent, as its effects do
+  (`hitbox`).
+- **The Rush goes toward the crosshair**: `aim::racing_path` from his feet, flat.
+**Found in the build**
+- **The paired cats could land two hits inside `StaggerGap`**: each cat's live window was
+  forgotten the frame it closed, so the partner could commit a move landing a few frames after a
+  hit that had just landed. A window is remembered now until the gap after it has run
+  (`species::pair::fight`). The Champion's new random walk in `tests/pair.rs` was the first to
+  reach it.
+**Tried and reverted**
+- **The ground's third links thrown from the air** (Upcut, Earthbreaker, Whirl at two hits
+  behind him in the air). The Ridgeback hunts' bots struck its back 187 times and toppled it 7
+  across 24 hunts, against 258 and 12 with the aerial as the third: the third links are swings
+  at somebody in front of him, and the aerials are what reaches a creature from a jump.
+  (`hunt/tests/fight.rs`'s topple test went to none in its six.)
+**Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again. The
+whole kit's widest gap at the lab's lowest lane is 68.1 m without the Comet, from 85.3.
+**Verdict** — from play.

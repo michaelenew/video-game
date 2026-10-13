@@ -247,7 +247,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Keep swinging",
-                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or leave the ground.",
+                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or attack out of a Rush. A jump does not end it: an aerial or a jumping attack is the next hit, and with two hits behind you an aerial is the third -- ground, jump, third -- and held, the grand finisher.",
             ),
             e(
                 "The third hit",
@@ -259,19 +259,19 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Hold a weapon",
-                "Tap to string hits; hold to finish. Any hit you pressed for and keep holding, about as long as its wind-up, becomes that weapon's finisher, at any point in the string, and ends it. A press a little long is still the tap, and Rush takes a hold back.",
+                "Tap to string hits; hold to finish. Any hit you pressed for and keep holding, about as long as its wind-up, becomes that weapon's finisher, at any point in the string, and ends it -- aerials too. A press a little long is still the tap, clicking fast never holds (let go once and that hit is a tap), and Rush takes a hold back.",
             ),
             e(
                 "Finishers",
-                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Comet, a Rush on the spear that goes where you are holding and carries whoever it catches into the nearest wall. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out. A finisher, or Earthbreaker, meets any blow thrown into it and wins: the blow is spent and whoever threw it is knocked out of it.",
+                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Repel, the pole swung all the way round you, which throws everyone near you clear and hurts little. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out. In the air the Crescent keeps your jump's speed, and the hammer's two slam you straight back down and break the ground where you land. A finisher, or Earthbreaker, meets any blow thrown into it and wins: the blow is spent and whoever threw it is knocked out of it.",
             ),
             e(
                 "Momentum",
-                "The bar under your health. Every hit that lands fills it -- on anybody, anything -- and a different weapon from the last, a true link and a finisher fill it more. It holds for two seconds, then drains, and a hit you take costs a share. The fuller it is, the harder every hit you land. Every finisher spends all of it, whatever is in it, and hits harder, bigger and staggers longer for what it spent; a full bar spent knocks them down. The glow on your weapon is the bar.",
+                "The bar under your health. Every hit that lands fills it -- on anybody, anything -- and a different weapon from the last, a true link and a finisher fill it more. It holds for two seconds, then drains -- but not while you are winding up a hold -- and a hit you take costs a share. The fuller it is, the harder every hit you land. Every finisher spends all of it, whatever is in it, and hits harder, bigger and staggers longer for what it spent; a full bar spent knocks them down. The glow on your weapon is the bar.",
             ),
             e(
                 "E",
-                "Rush. A fast dash on one charge, and it cancels any recovery or a hold. It does not end a string. You are braced while you run -- a hit costs you half and does not stop you, one in the last few frames costs nothing, though enough of them will. Run into somebody and the shoulder is the string's first hit: the next click is the second.",
+                "Rush. A fast dash toward the crosshair on one charge, and it cancels any recovery or a hold. It does not end a string. You are braced while you run -- a hit costs you half and does not stop you, one in the last few frames costs nothing, though enough of them will. Run into somebody and the shoulder is the string's first hit: the next click is the second.",
             ),
             e(
                 "While rushing",

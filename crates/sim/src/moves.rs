@@ -603,7 +603,7 @@ const NAMES: [&[&str]; 6] = [
         // two links' and then the third's -- the grand finishers.
         "Crescent",
         "Shockwave",
-        "Comet",
+        "Repel",
         "Thousand Cuts",
         "Meteor",
         "Heaven-piercer",
@@ -831,7 +831,7 @@ pub mod champion {
     pub const GRAND: u8 = 22;
     pub const CRESCENT: u8 = FULL + SWORD;
     pub const SHOCKWAVE: u8 = FULL + HAMMER;
-    pub const COMET: u8 = FULL + SPEAR;
+    pub const REPEL: u8 = FULL + SPEAR;
     pub const THOUSAND_CUTS: u8 = GRAND + SWORD;
     pub const METEOR: u8 = GRAND + HAMMER;
     pub const HEAVEN_PIERCER: u8 = GRAND + SPEAR;
@@ -893,14 +893,46 @@ pub mod champion {
         kind >= TAKEOFF && kind < POLE_VAULT
     }
 
-    /// **The full charge** of a link (exploration 0015, C5): the move a
-    /// link held to full becomes. The first two links of a weapon share one,
-    /// and the third's is the grand finisher. `None` for anything that is not
-    /// a link.
+    /// Is this an aerial -- a weapon clicked in the air, not leaving the
+    /// floor?
+    pub const fn is_aerial(kind: u8) -> bool {
+        kind >= IN_THE_AIR && kind < RUSHING
+    }
+
+    /// **Does this move count in the string?** (2026-10-13, from play) The
+    /// nine links, and the aerials and takeoffs: ground, jump, third is
+    /// three hits, counted in rhythm, wherever the feet are. Where in the
+    /// string an aerial or a takeoff stands is how many hits were behind it,
+    /// so only the links can be asked their place ([`link_of`]); the rest is
+    /// the fighter's to remember.
+    pub const fn in_string(kind: u8) -> bool {
+        kind < RUSHING || is_takeoff(kind)
+    }
+
+    /// **Can this move be held to a finisher?** The links, and the aerials
+    /// (2026-10-13, from play): the sword's Crescent off a jump, the hammer
+    /// slammed back to the floor, the spear's Repel in the air. Not a
+    /// takeoff: it is already going somewhere.
+    pub const fn holdable(kind: u8) -> bool {
+        link_of(kind).is_some() || is_aerial(kind)
+    }
+
+    /// **The finisher** (exploration 0015, C5) a weapon's held move becomes
+    /// at a place in the string: the first two places share one, and the
+    /// third's is the grand finisher.
+    pub const fn finisher(weapon: u8, place: u8) -> u8 {
+        if place + 1 >= DEPTH {
+            GRAND + weapon
+        } else {
+            FULL + weapon
+        }
+    }
+
+    /// The finisher a link held becomes, at its own place. `None` for
+    /// anything that is not a link: an aerial's place is the fighter's.
     pub const fn full_charge(kind: u8) -> Option<u8> {
         match link_of(kind) {
-            Some(2) => Some(GRAND + weapon(kind)),
-            Some(_) => Some(FULL + weapon(kind)),
+            Some(place) => Some(finisher(weapon(kind), place)),
             None => None,
         }
     }
@@ -1743,7 +1775,10 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // line of them, which is a cut across, as the Rush slash is.
             c::CRESCENT => Shape::Swing(Plane::Diagonal(Hand::Right)),
             c::SHOCKWAVE | c::METEOR => Shape::Swing(Plane::Upright),
-            c::COMET => Shape::Thrust,
+            // The spear's first finisher is the pole swung flat all the way
+            // round him, to put room between him and everything near: a
+            // shove, not a kill (2026-10-13, from play).
+            c::REPEL => Shape::Swing(Plane::Flat),
             c::THOUSAND_CUTS => Shape::Swing(Plane::Flat),
             // The spear leaves his hands: the javelin does the hitting.
             c::HEAVEN_PIERCER => Shape::None,
@@ -1912,7 +1947,7 @@ pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
-        Class::Champion if champion::link_of(kind).is_some() => Some(Charge::Heft),
+        Class::Champion if champion::holdable(kind) => Some(Charge::Heft),
         _ => None,
     }
 }

@@ -812,9 +812,6 @@ scalars! {
     MeteorRingDamage,     "Champion", "Meteor, ring damage",                       Int, 0, 600;
     ShockwaveCrush,       "Champion", "Shockwave, guard crushed for (frames)",     Frames, 0, 120;
     MeteorRise,           "Champion", "Meteor, leap rise (m/s)",                   Fixed, 0, fx(30,1);
-    CometReach,           "Champion", "Comet, lunges (m)",                         Fixed, fx(1,1), fx(16,1);
-    CometSpeed,           "Champion", "Comet, lunge speed (m/s)",                  Fixed, fx(5,1), fx(80,1);
-    CometSplat,           "Champion", "Comet, wall-splat stagger",                 Frames, 0, 120;
     CutsReach,            "Champion", "Thousand Cuts, dashes (m)",                 Fixed, fx(1,1), fx(16,1);
     CutsSpeed,            "Champion", "Thousand Cuts, dash speed (m/s)",           Fixed, fx(5,1), fx(90,1);
     CutsDelay,            "Champion", "Thousand Cuts, cuts land after",            Frames, 0, 90;
@@ -855,6 +852,8 @@ scalars! {
     ClashStagger,         "Champion", "Clash, the lighter blow staggers for",              Frames, 0, 120;
     ClashFreeze,          "Champion", "Clash, both freeze for",                            Frames, 0, 60;
     ClashReach,           "Champion", "Clash, staggers a fighter within (m)",               Fixed, 0, fx(20,1);
+    SlamDive,             "Champion", "Hammer slam from the air, dive speed (m/s)",         Fixed, fx(5,1), fx(80,1);
+    SlamCone,             "Champion", "Hammer slam from the air, cone round straight down (turns)", Fixed, 0, fx(1,4);
 }
 
 // ---------------------------------------------------------------------------

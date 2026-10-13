@@ -52,7 +52,7 @@ what was built, in one place:
   | --- | --- | --- |
   | **Sword** | **Crescent** -- a 10 m blade of light down the crosshair's line | **Thousand Cuts** -- a 7 m run through them; six cuts land on the line a beat later, the last throwing up |
   | **Hammer** | **Shockwave** -- a 5 m ring of broken ground that throws up what it passes | **Meteor** -- a leap to where the crosshair is, a 7 m crater, a creature knocked off its feet |
-  | **Spear** | **Comet** -- an 8 m lunge that carries what it catches, and splats it on a wall | **Heaven-piercer** -- the spear thrown; it pins the first body it stops in and he rushes after it and tears it out |
+  | **Spear** | **Repel** -- the pole swung flat all the way round him: little damage, a long shove clear (it replaced the Comet, a lunge, 2026-10-13: a dash on every hold let him go everywhere hitting things) | **Heaven-piercer** -- the spear thrown; it pins the first body it stops in and he rushes after it and tears it out |
 
 - **Momentum** (2026-10-13): a meter on him, fed by every blow that lands --
   on a fighter, a creature or a critter -- and more for a different weapon from
@@ -64,7 +64,22 @@ what was built, in one place:
   meter spent knocks a fighter down and a creature off its feet. It never
   changes where a finisher goes. On the HUD under his health, and as a glow on
   the weapon in his hands -- ember, *Heated*, *Blazing*, white at full.
-- The **Comet** is a Rush on the spear: it goes where the stick is held.
+- **The string in the air** (2026-10-13, from play): the aerials and the
+  takeoffs count in it, so ground, jump, third is three hits, in rhythm, and a
+  jump no longer ends it. With two hits behind him an aerial is the third: it
+  ends the string and refunds the Rush like any third, and held it is the grand
+  finisher (the ground's third links thrown from the air were tried: the hunt
+  bots struck a creature's back a quarter less often). **The aerials hold too**: held, an aerial is
+  its weapon's finisher for its place in the string. In the air the Crescent
+  keeps whatever speed the jump had; the Shockwave and the Meteor slam him
+  back to the floor at 30 m/s, down the crosshair inside a cone round straight
+  down, and break the ground where he lands.
+- **A hold is one press, held** (2026-10-13): let go of a link's button once
+  and that link is a tap, so a click during a wind-up is the next hit and never
+  this one held. And the meter does not drain while a hold winds up.
+- **The Rush goes toward the crosshair** (2026-10-13): flat along the floor
+  toward the spot the crosshair is on (`aim::racing_path` from his feet), not
+  where the stick is held.
 - **Break**: against a creature his hammer blows and third links count double
   into its strain, true links half again, full charges triple -- and a full
   charge's extra goes half into poise. He is the class that puts a creature on
