@@ -712,22 +712,14 @@ impl Hands {
 
     /// The click that keeps her bars level: the low side's, unless that would
     /// burn her, then the other, and neither if both would. With the move it
-    /// throws now -- on the floor the next link of that click's litany, in the
-    /// air the Shadowstep or the Descent.
+    /// throws -- an auto, on the floor or in the air.
     ///
     /// **And the purge** (2026-10-12): with three stacks or more of her curse
     /// on anything near, the light hand goes first, if the bars can take it --
     /// building to the cap and cashing it is the class's big number.
     fn auto_for(&self, w: &World, me: &Player) -> (u16, u8) {
         let low_dark = sim::dual::bars(me).is_none_or(|(d, l)| d.raw() <= l.raw());
-        let (dark, light) = if me.grounded {
-            (
-                moves::dual::NIGHT[sim::dual::litany_link(me, true) as usize],
-                moves::dual::DAWN[sim::dual::litany_link(me, false) as usize],
-            )
-        } else {
-            (moves::dual::SHADOWSTEP, moves::dual::DESCENT)
-        };
+        let (dark, light) = (moves::dual::DARK_AUTO, moves::dual::LIGHT_AUTO);
         let ripe = most_cursed(w) >= sim::tuning::purge_stagger_from();
         let order = if low_dark && !ripe {
             [(Input::LEFT, dark), (Input::RIGHT, light)]
@@ -737,7 +729,7 @@ impl Hands {
         order
             .into_iter()
             .find(|(_, k)| keeps(me, *k))
-            .unwrap_or((0, moves::dual::UMBRAL_LASH))
+            .unwrap_or((0, moves::dual::DARK_AUTO))
     }
 
     // -----------------------------------------------------------------------
@@ -942,7 +934,7 @@ impl Hands {
     /// **The bars goaded up**, a hand at a time, while there is nothing to
     /// hit: half is the blink, three quarters the second jump.
     fn idle_dual(&mut self, w: &World, me: &Player, at: V3, safe: i32) -> Option<Input> {
-        let auto = moves::get(me.class, moves::dual::UMBRAL_LASH);
+        let auto = moves::get(me.class, moves::dual::DARK_AUTO);
         let lower = sim::dual::lower(me).to_int();
         if self.cool > 0
             || lower >= GOAD_TO

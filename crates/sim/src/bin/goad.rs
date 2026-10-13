@@ -82,10 +82,10 @@ fn main() {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Script {
-    /// The litany of night, then the litany of dawn, repeated: three left
-    /// clicks and three right. The climb, and the curse built and purged.
+    /// Three dark autos, then three light, repeated. The climb, and the curse
+    /// built and purged.
     Alternate,
-    /// The litany of night and the Abyss, and nothing light. The runaway.
+    /// Dark autos and the Abyss, and nothing light. The runaway.
     OneSided,
     /// Balanced, then one bar walked to the band's edge, then one Judgement.
     Finisher,
@@ -117,8 +117,6 @@ impl Script {
             jumped: false,
             landed: 0,
             singe: Fx::ZERO,
-            litany: 0,
-            litany_left: 0,
             veil: 0,
             warded: false,
         };
@@ -304,9 +302,8 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
     if let Some(opening) = script.opening() {
         w.players[0].mechanic = opening;
     }
-    // Where the autos land: just inside the shorter one's reach, dead ahead
-    // -- the Radiant palm's, the shortest of the litanies.
-    let reach = sim::moves::get(Class::DualMage, d::RADIANT_PALM).reach;
+    // Where the autos land: just inside their reach, dead ahead.
+    let reach = sim::moves::get(Class::DualMage, d::LIGHT_AUTO).reach;
     let stand = w.players[0]
         .pos
         .add(w.players[0].facing.scale(reach.sub(t::body_radius())));

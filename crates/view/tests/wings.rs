@@ -21,8 +21,6 @@ fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
         jumped: false,
         landed: 0,
         singe: Fx::ZERO,
-        litany: 0,
-        litany_left: 0,
         veil: 0,
         warded: false,
     };

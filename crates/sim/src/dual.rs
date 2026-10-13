@@ -153,8 +153,7 @@ fn top() -> Fx {
 // ---------------------------------------------------------------------------
 
 /// One frame of the two bars: calm, the hill, the burn, and the clock while
-/// she is ascending -- and the spellbook's own clocks, the litany's window and
-/// the Veil. A no-op for anybody else.
+/// she is ascending -- and the Veil's clock. A no-op for anybody else.
 ///
 /// **True on the frame ascension begins**, which is the world's cue for
 /// Apotheosis: the nova that bursts from her as the wings erupt. See
@@ -167,28 +166,15 @@ pub fn step(p: &mut Player) -> bool {
         ascending,
         landed,
         singe,
-        litany,
-        litany_left,
         veil,
         ..
     } = p.mechanic
     else {
         return false;
     };
-    // The spellbook's clocks run whatever the bars are doing.
-    let litany_left = litany_left.saturating_sub(1);
-    let litany = if litany_left == 0 { 0 } else { litany };
-    let veil = veil.saturating_sub(1);
-    if let Mechanic::Meter {
-        litany: l,
-        litany_left: ll,
-        veil: v,
-        ..
-    } = &mut p.mechanic
-    {
-        *l = litany;
-        *ll = litany_left;
-        *v = veil;
+    // The Veil's clock runs whatever the bars are doing.
+    if let Mechanic::Meter { veil: v, .. } = &mut p.mechanic {
+        *v = veil.saturating_sub(1);
     }
 
     if ascending > 0 {
@@ -337,7 +323,7 @@ pub fn steer(p: &mut Player, kind: u8) {
     // commitment. **Every move has a force**: the left column and `Q` are
     // dark, the right column and `E` light, and the middle column twilight --
     // both at once, each bar by an auto's push, so it never widens the gap.
-    // The first two links of a litany are autos; any other spell a cast; a
+    // The two autos are the unit; any other spell a cast; a
     // major the finisher's push. The force thrown is the one she is carrying
     // after; twilight leaves that as it was.
     let push = if crate::moves::dual::is_an_auto(kind) {
@@ -636,54 +622,27 @@ pub fn ticks_on(frame: u32) -> bool {
 /// What a curse's tick is worth: the Dark power of whoever laid it, read live,
 /// so a curse laid from an empty bar grows if she feeds her dark hand.
 pub fn curse_power(p: &Player) -> Fx {
-    depth_at(p, Some(crate::moves::dual::UMBRAL_LASH))
+    depth_at(p, Some(crate::moves::dual::DARK_AUTO))
 }
 
 // ---------------------------------------------------------------------------
-// The litanies
+// The hop after an auto
 // ---------------------------------------------------------------------------
+//
+// Since the second pass of 2026-10-12 her autos carry her: after each one she
+// hops a short way in the direction she is holding -- Kalista's step -- and up
+// a little, more the fuller her lower bar. So a flurry of hits lifts her off
+// the floor as the beings inside her wake, which is the class's fantasy in the
+// owner's words: "a flurry of hits that come from the beings inside them,
+// slowly being lifted off the ground as they dash about". See
+// `docs/design/exploration/0016_dual_mage_controls.md`.
 
-/// Which link of a litany a press of `dark`'s click throws now: the first, or
-/// the one after the last link of the same litany if its window is still
-/// open. See `moves::dual::litany`.
-pub fn litany_link(p: &Player, dark: bool) -> u8 {
-    let Mechanic::Meter {
-        litany,
-        litany_left,
-        ..
-    } = p.mechanic
-    else {
-        return 0;
-    };
-    if litany == 0 || litany_left == 0 {
-        return 0;
-    }
-    let was_dark = litany & 0x80 != 0;
-    let link = (litany & 0x7f).saturating_sub(1);
-    if was_dark != dark || link >= 2 {
-        return 0;
-    }
-    link + 1
-}
-
-/// A litany link was thrown: remember which, and how long the next press
-/// has. The window is counted from the press, so it is the link's own
-/// length and then `litany, window` after it ends.
-pub fn litany_thrown(p: &mut Player, kind: u8) {
-    let Some((dark, link)) = crate::moves::dual::litany(kind) else {
-        return;
-    };
-    let m = crate::moves::get(p.class, kind);
-    let length = m.startup + m.active + m.recovery;
-    if let Mechanic::Meter {
-        litany,
-        litany_left,
-        ..
-    } = &mut p.mechanic
-    {
-        *litany = (link + 1) | if dark { 0x80 } else { 0 };
-        *litany_left = length.saturating_add(t::litany_window());
-    }
+/// How high an auto's hop lifts her, in metres: `auto, hop lifts` at an empty
+/// lower bar, and `auto, hop lifts at full` more at a full one, in proportion
+/// between. The lower bar because it is the frenzy -- what her body can do --
+/// and both beings have to be awake for her to rise.
+pub fn hop_lift(p: &Player) -> Fx {
+    t::auto_hop_lift().add(t::auto_hop_lift_full().mul(balance(p)))
 }
 
 // ---------------------------------------------------------------------------

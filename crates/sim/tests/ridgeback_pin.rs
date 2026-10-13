@@ -87,12 +87,17 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// kind's number, and the Shade bolt that retired sat before her shadow's
 /// blades in the list, so their numbers moved down one. See
 /// `docs/design/exploration/0015_dual_mage_spellbook.md`.
+///
+/// **The Dual mage's again, the same day**: the bare clicks are her wing
+/// autos once more, each hopping her the way she holds, and against a
+/// creature a wing is its tip. See
+/// `docs/design/exploration/0016_dual_mage_controls.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x339bb2066878e1c8),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0xda05d8a8d6903ae9),
     (Class::BloodMage, 0x083464c03c9c85e2),
-    (Class::DualMage, 0x92958f4cd8da3def),
+    (Class::DualMage, 0x9897c0cbbed59efc),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];
 

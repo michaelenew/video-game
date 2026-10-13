@@ -4728,6 +4728,9 @@ fn step_player(
     // See `shadow::swing_out_of_the_carry`.
     shadow::swing_out_of_the_carry(p, input);
     gallows_blinks(p);
+    // The Dual mage's hop out of a finished auto, before the countdown so the
+    // recovery it shortens is the one counted down this frame.
+    hop_after_the_auto(p, who, input, scene);
 
     // A channel resolves **instead of** the countdown, because it is the one
     // action whose next state depends on a button and on the scene rather than
@@ -5726,6 +5729,9 @@ fn keyed_f(p: &Player) -> Option<u8> {
         // it left carries the Cinder spray, whose click the pillar took.
         Class::Elementalist if p.grounded => Some(moves::elementalist::CINDER),
         Class::Elementalist => Some(moves::elementalist::DOWNDRAFT),
+        // The Dual mage's dark spell, on the key the hand that moves can
+        // reach, since her clicks became her autos (2026-10-12).
+        Class::DualMage => Some(moves::dual::DEVOUR),
         _ => None,
     }
 }
@@ -5735,6 +5741,8 @@ fn keyed_f(p: &Player) -> Option<u8> {
 fn keyed_r(p: &Player) -> Option<u8> {
     match p.class {
         Class::Elementalist if p.grounded => Some(moves::elementalist::TREMOR),
+        // And her light one.
+        Class::DualMage => Some(moves::dual::SMITE),
         _ => None,
     }
 }
@@ -5933,39 +5941,61 @@ fn dual_move(p: &Player, input: Input) -> Option<u8> {
     } else {
         return None;
     };
-    // **Her spellbook** (2026-10-12): the click is what a spell is cast on
-    // -- them, herself, the ground -- and the row is the verb. On the floor
-    // she fights, in the air she moves, and leaving the floor she defends, on
-    // the shared takeoff window (`Player::rise`). In the air space is still
-    // her second jump and her wing beat, so her takeoffs are from the floor
-    // only -- the first few frames of a jump count, as everybody's do. See
-    // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    // **The bare clicks are her autos, on the floor and in the air alike**
+    // (2026-10-12, the second pass): a wing off that arm and a hop after it.
+    // A click that meant one thing standing and another a metre up turned
+    // under her every time a flurry lifted her, which is what kept tripping
+    // the owner up -- see `docs/design/exploration/0016_dual_mage_controls.md`.
+    // Space and a click in a jump's first frames is still a takeoff, from the
+    // floor only: in the air space is her second jump and her wing beat.
     let takeoff = match click {
         keys::DARK => d::VEIL,
         keys::TWILIGHT => d::EQUINOX,
         _ => d::SANCTUARY,
     };
-    if p.grounded {
-        if !p.aboard() && p.rise.window > 0 {
-            return Some(takeoff);
-        }
-        // **The bare clicks are litanies**: the next link if the last one of
-        // the same litany ended inside `litany, window`, else the first.
-        return Some(match click {
-            keys::DARK => d::NIGHT[dual::litany_link(p, true) as usize],
-            keys::TWILIGHT => d::BINARY,
-            _ => d::DAWN[dual::litany_link(p, false) as usize],
-        });
-    }
-    if !p.aboard() && p.rise.window > 0 && p.rise.lifted <= t::floor_grace() {
+    let rising =
+        !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
+    if rising {
         return Some(takeoff);
     }
-    match click {
-        keys::DARK => Some(d::SHADOWSTEP),
+    Some(match click {
+        keys::DARK => d::DARK_AUTO,
+        keys::LIGHT => d::LIGHT_AUTO,
+        _ if p.grounded => d::BINARY,
         // Phase spends the airdodge, so once a trip.
-        keys::TWILIGHT => (!p.air_dodged).then_some(d::PHASE),
-        _ => Some(d::DESCENT),
+        _ => return (!p.air_dodged).then_some(d::PHASE),
+    })
+}
+
+/// **The hop after an auto** (2026-10-12, the second pass): on the frame one
+/// of her wings finishes, if she is holding a direction she hops that way --
+/// `auto, hop` along the floor and `dual::hop_lift` up, as far as the arena
+/// lets her (`aim::hop_to`) -- and what is left of the recovery is the hop and
+/// `auto, recovery after a hop`. Holding nothing, she stands and recovers in
+/// full. Kalista's step: a flurry of hits is a flurry of hops, and the hops
+/// are where her mobility lives. A no-op for everybody else.
+fn hop_after_the_auto(p: &mut Player, who: usize, input: Input, scene: &Scene) {
+    let Action::Active { kind, left: 0 } = p.action else {
+        return;
+    };
+    if p.class != Class::DualMage || !moves::dual::is_an_auto(kind) || p.aboard() {
+        return;
     }
+    let (ax, az) = input.move_axis();
+    if ax == 0 && az == 0 {
+        return;
+    }
+    let dir = move_dir(input.aim_turns(), ax, az);
+    let to = aim::hop_to(p.pos, dir, t::auto_hop(), dual::hop_lift(p), scene);
+    let far = to.sub(p.pos).len();
+    let speed = t::auto_hop_speed();
+    let frames = far.div(speed.mul(DT)).to_int().clamp(1, 120) as u16 + 1;
+    let _ = who;
+    begin_haul(p, to, speed, frames + 1);
+    p.action = Action::Recovery {
+        kind,
+        left: frames.saturating_add(t::auto_hop_recovery()),
+    };
 }
 
 /// Which of the two forces she is holding right now.
@@ -6539,6 +6569,15 @@ fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<us
         return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
     }
     const SAMPLES: i32 = 5;
+    // **Against a creature a wing is its tip** (2026-10-12, when the wings
+    // came back as the Dual mage's autos): the blade opening behind the tip
+    // sweeps metres of a body that size and would spend the swing on the
+    // first flank it brushed, so the weak point she put her tip on -- the
+    // Broodmother's fore sac in the slam -- was never the part struck. A
+    // fighter is one body, and the section is its own test there.
+    if box_out.sector.is_some() {
+        return None;
+    }
     let thick = box_out.radius;
     let rig = beast.rig();
     let mut best: Option<usize> = None;
@@ -7136,13 +7175,10 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     // where that is the mechanic. **On the press, including the autos** -- see
     // `steer_meter` for why that stopped being on contact.
     steer_meter(p, kind);
-    // The Dual mage's spellbook keeps two clocks of its own on the throw: which
-    // litany link this was, and the Veil. No-ops for everybody else.
-    if p.class == Class::DualMage {
-        dual::litany_thrown(p, kind);
-        if kind == moves::dual::VEIL {
-            dual::veil(p);
-        }
+    // The Dual mage's Veil starts its clock on the throw. A no-op for
+    // everybody else.
+    if p.class == Class::DualMage && kind == moves::dual::VEIL {
+        dual::veil(p);
     }
     if aerial {
         arm_aerial(p, kind, input);
@@ -8003,8 +8039,6 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             jumped,
             landed,
             singe,
-            litany,
-            litany_left,
             veil,
             warded,
         } => {
@@ -8018,9 +8052,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_i32(singe.raw());
             // The spellbook's, 2026-10-12: only when any is set, so a mage
             // who has thrown nothing hashes as she did.
-            if *litany != 0 || *litany_left != 0 || *veil != 0 || *warded {
-                h.write_u32(*litany as u32);
-                h.write_u32(*litany_left as u32);
+            if *veil != 0 || *warded {
                 h.write_u32(*veil as u32);
                 h.write_u32(*warded as u32);
             }

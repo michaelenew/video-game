@@ -72,11 +72,11 @@ fn onto_them(w: &World) -> i16 {
     )
 }
 
-/// The move a button throws from the floor, as the first link of a litany.
+/// The move a button throws from the floor.
 fn floor_kind(bits: u16) -> u8 {
     match bits {
-        b if b == L => dual::UMBRAL_LASH,
-        b if b == R => dual::RADIANT_PALM,
+        b if b == L => dual::DARK_AUTO,
+        b if b == R => dual::LIGHT_AUTO,
         b if b == M => dual::BINARY,
         b if b == Q => dual::ABYSS,
         b if b == E => dual::JUDGEMENT,
@@ -92,12 +92,7 @@ fn floor_kind(bits: u16) -> u8 {
 /// counting presses that threw nothing.
 fn ready(w: &World, bits: u16) -> bool {
     let p = &w.players[0];
-    // The bare clicks are litanies: the move is whichever link comes next.
-    let kind = match bits {
-        b if b == L => dual::NIGHT[sim::dual::litany_link(p, true) as usize],
-        b if b == R => dual::DAWN[sim::dual::litany_link(p, false) as usize],
-        _ => floor_kind(bits),
-    };
+    let kind = floor_kind(bits);
     p.action.actionable() && p.grounded && !p.locked_out(kind)
 }
 
@@ -125,8 +120,8 @@ fn both_clicks_are_attacks_and_they_are_different_attacks() {
     // The class has no shield, so right click is not guard -- it is the other
     // half of the mechanic. A right click that did nothing would leave the
     // player able to travel in one direction along the meter only.
-    assert_eq!(kind_thrown(L), dual::UMBRAL_LASH);
-    assert_eq!(kind_thrown(R), dual::RADIANT_PALM);
+    assert_eq!(kind_thrown(L), dual::DARK_AUTO);
+    assert_eq!(kind_thrown(R), dual::LIGHT_AUTO);
 }
 
 #[test]
@@ -154,8 +149,8 @@ fn shift_is_only_a_dodge_now() {
     // The grammar change, checked from the class it cost a binding: shift plus
     // a click is not an attack input any more, on any class, so shift plus left
     // click is the bare left click's move. See `docs/design/controls.md`.
-    assert_eq!(kind_thrown(L | Input::SHIFT), dual::UMBRAL_LASH);
-    assert_eq!(kind_thrown(R | Input::SHIFT), dual::RADIANT_PALM);
+    assert_eq!(kind_thrown(L | Input::SHIFT), dual::DARK_AUTO);
+    assert_eq!(kind_thrown(R | Input::SHIFT), dual::LIGHT_AUTO);
 }
 
 #[test]
@@ -182,8 +177,8 @@ fn nothing_in_the_kit_is_locked_at_the_centre() {
     // A major you cannot press is not one.
     let mut w = mage();
     for (bits, name) in [
-        (L, "umbral lash"),
-        (R, "radiant palm"),
+        (L, "dark auto"),
+        (R, "light auto"),
         (E, "judgement"),
         (Q, "abyss"),
         (M, "binary"),
@@ -210,11 +205,11 @@ fn the_two_autos_come_out_of_opposite_hands() {
     // right. (Where a skillshot actually leaves the body is
     // `aim::skillshot_path`'s question, and today that is the chest for both.)
     assert_eq!(
-        sim::moves::get(Class::DualMage, dual::UMBRAL_LASH).hand,
+        sim::moves::get(Class::DualMage, dual::DARK_AUTO).hand,
         Hand::Left
     );
     assert_eq!(
-        sim::moves::get(Class::DualMage, dual::RADIANT_PALM).hand,
+        sim::moves::get(Class::DualMage, dual::LIGHT_AUTO).hand,
         Hand::Right
     );
 }
@@ -230,18 +225,18 @@ fn a_side_is_always_declared_and_the_list_is_short() {
     // Thirteen, and twelve of them are the Dual mage. Since the 2026-10-09
     // rework every move of hers but the twilight column is made of one force,
     // and the hand it leaves from is that force: left dark, right light (the
-    // spellbook of 2026-10-12 kept the rule and added the litanies' links). A spell off
+    // spellbook of 2026-10-12 kept the rule, and so do the wing autos). A spell off
     // the centre line could not say which one it was. The Champion's spear
     // opener is sided because it is the one attack in that class thrown with
     // one arm: a jab off the leading hand with the butt of the shaft still at
     // the hip, which is most of why it reads as a poke rather than as a short
     // lunge.
     let declared: &[(Class, u8)] = &[
-        (Class::DualMage, dual::UMBRAL_LASH),
+        (Class::DualMage, dual::DARK_AUTO),
         (Class::DualMage, dual::SHADOWSTEP),
         (Class::DualMage, dual::VEIL),
         (Class::DualMage, dual::ABYSS),
-        (Class::DualMage, dual::RADIANT_PALM),
+        (Class::DualMage, dual::LIGHT_AUTO),
         (Class::DualMage, dual::DESCENT),
         (Class::DualMage, dual::SANCTUARY),
         (Class::DualMage, dual::JUDGEMENT),
@@ -312,8 +307,6 @@ fn meter_at(dark: i32, light: i32, colour: Force) -> Mechanic {
         jumped: false,
         landed: 0,
         singe: Fx::ZERO,
-        litany: 0,
-        litany_left: 0,
         veil: 0,
         warded: false,
     }
@@ -329,8 +322,6 @@ fn ascended(dark: i32, light: i32, colour: Force) -> Mechanic {
         jumped: false,
         landed: 0,
         singe: Fx::ZERO,
-        litany: 0,
-        litany_left: 0,
         veil: 0,
         warded: false,
     }
@@ -365,8 +356,8 @@ fn every_attack_goads_a_bar_with_nothing_in_range() {
     // press every button on the class and watch the bar sit at zero. A resource
     // you cannot move without a target is one nobody can learn or tune.
     for (bits, name) in [
-        (L, "umbral lash"),
-        (R, "radiant palm"),
+        (L, "dark auto"),
+        (R, "light auto"),
         (M, "binary"),
         (Q, "abyss"),
         (E, "judgement"),
@@ -476,8 +467,8 @@ fn a_cast_goads_its_own_bar_and_further_than_an_auto_does() {
         "a cast moves her no further than an auto"
     );
     for (bits, air, kind, force) in [
-        (L, true, dual::SHADOWSTEP, Force::Dark),
-        (R, true, dual::DESCENT, Force::Light),
+        (dual::keys::DARK_SPELL, false, dual::DEVOUR, Force::Dark),
+        (dual::keys::LIGHT_SPELL, false, dual::SMITE, Force::Light),
         (SPACE | L, false, dual::VEIL, Force::Dark),
         (SPACE | R, false, dual::SANCTUARY, Force::Light),
     ] {
@@ -676,31 +667,27 @@ fn the_drift_alone_can_never_fill_a_bar_or_deliver_the_wings() {
 fn one_cast_from_level_stays_inside_the_band_two_do_not_and_a_finisher_never_does() {
     // The cadence the band's width is chosen against, and the first thing to
     // play. A cast is a lead you can sit on; a second one is the hill. Two
-    // Reels in the air, high enough that both are thrown before she lands.
+    // Devours, the second as soon as the first lets her.
     let band = t::meter_band();
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
     w.players[0].mechanic = meter_at(50, 50, Force::Dark);
-    aloft(&mut w, 20);
-    step(&mut w, 1, L);
-    assert_eq!(w.players[0].action.attack_kind(), Some(dual::SHADOWSTEP));
+    let devour = dual::keys::DARK_SPELL;
+    step(&mut w, 1, devour);
+    assert_eq!(w.players[0].action.attack_kind(), Some(dual::DEVOUR));
     assert!(
         sim::dual::level(&w.players[0]),
         "one cast from level left the band"
     );
     for _ in 0..200 {
         let p = &w.players[0];
-        if p.action.actionable() && !p.locked_out(dual::SHADOWSTEP) {
+        if p.action.actionable() && !p.locked_out(dual::DEVOUR) {
             break;
         }
         step(&mut w, 1, 0);
     }
-    assert!(
-        !w.players[0].grounded,
-        "fixture: she landed between the casts"
-    );
-    step(&mut w, 1, L);
-    assert_eq!(w.players[0].action.attack_kind(), Some(dual::SHADOWSTEP));
+    step(&mut w, 1, devour);
+    assert_eq!(w.players[0].action.attack_kind(), Some(dual::DEVOUR));
     assert!(
         !sim::dual::level(&w.players[0]),
         "two casts from level are still inside the band"
@@ -723,10 +710,8 @@ fn one_cast_from_level_stays_inside_the_band_two_do_not_and_a_finisher_never_doe
 }
 
 /// The rhythm the tiers are climbed with: dark, light, dark, light -- the
-/// first link of each litany in turn, the Umbral lash and the Radiant palm
-/// (2026-10-12; the Shade bolt and the Sunray before). A whole litany of one
-/// hand is two autos and a cast, which steps just outside the band: the hill
-/// asking for the other hand.
+/// two wing autos in turn (since the second pass of 2026-10-12; the lash and
+/// the palm that morning, the Shade bolt and the Sunray before).
 const CLIMB: [u16; 2] = [L, R];
 
 #[test]
@@ -852,13 +837,12 @@ fn neither_the_burn_nor_ascension_can_be_what_kills_her() {
 // `docs/design/dual-mage.md` under "Benchmarks".
 //
 // The scripts were rewritten for the 2026-10-09 spell rework, and again for
-// the spellbook of 2026-10-12: alternating is a litany of each hand -- three
-// left clicks, three right -- one-sided is the litany of night and the Abyss,
-// and the finisher is the carried force's major. The dummy stands in sword
+// the spellbook of 2026-10-12: alternating is the two wing autos in turn,
+// one-sided is the dark wing over and over and the Abyss, and the finisher is the carried force's major. The dummy stands in sword
 // range.
 
 /// How far in front of her the dummy stands: **sword range** since the
-/// spellbook (2026-10-12) -- inside the lash's reach, the Halo's ring and the
+/// spellbook (2026-10-12) -- inside the wings' reach, the Halo's ring and the
 /// orbit of Binary's stars, where every spell of hers is cast.
 fn dummy_gap() -> Fx {
     Fx::from_int(2)
@@ -1035,8 +1019,8 @@ fn b6_a_finisher_from_level_is_caught_by_the_other_hand_inside_an_exchange() {
     );
 
     // Answered with the light hand, from the frame the finisher recovers: a
-    // Radiant palm, a Sanctuary (the light cast off the floor), then the
-    // litany of dawn.
+    // light wing, a Sanctuary (the light cast off the floor), then light
+    // wings.
     let answer = [R, SPACE | R, R, R, R, R];
     let mut presses = 0;
     let mut recovered_at = None;
@@ -1068,10 +1052,9 @@ fn b6_a_finisher_from_level_is_caught_by_the_other_hand_inside_an_exchange() {
         exchange()
     );
 
-    // The far-side click alone -- the litany of dawn, over and over: the dark
-    // lead does not grow. Since the spellbook the litany's third link is a
-    // cast, so it does more than hold: it can carry the light past the dark,
-    // which is the other hand's problem and the next exchange's.
+    // The far-side click alone -- the light wing, over and over: the dark
+    // lead does not grow, and it can carry the light past the dark, which is
+    // the other hand's problem and the next exchange's.
     let mut w = mage();
     w.players[1].pos = V3::new(fx(-12.0), Fx::ZERO, fx(-12.0));
     w.players[0].mechanic = meter_at(50, 50, Force::Dark);
@@ -1626,8 +1609,8 @@ fn a_cast_at_the_centre_is_a_weaker_cast_than_one_at_the_edge() {
     // because the point is that the curve reaches all the way through to the
     // thing that hurts.
     for (bits, name) in [
-        (L, "umbral lash"),
-        (R, "radiant palm"),
+        (L, "dark auto"),
+        (R, "light auto"),
         (M, "binary"),
         (Q, "abyss"),
         (E, "judgement"),
@@ -1699,11 +1682,11 @@ fn a_move_reads_its_own_bar_and_twilight_reads_the_lower() {
     let p = &w.players[0];
     let at = |kind: Option<u8>| sim::dual::depth_at(p, kind).to_f32_for_render();
     for (kind, strong) in [
-        (dual::UMBRAL_LASH, true),
+        (dual::DARK_AUTO, true),
         (dual::SHADOWSTEP, true),
         (dual::VEIL, true),
         (dual::ABYSS, true),
-        (dual::RADIANT_PALM, false),
+        (dual::LIGHT_AUTO, false),
         (dual::DESCENT, false),
         (dual::SANCTUARY, false),
         (dual::JUDGEMENT, false),
@@ -1720,11 +1703,11 @@ fn a_move_reads_its_own_bar_and_twilight_reads_the_lower() {
         );
     }
     assert!(
-        (at(Some(dual::RADIANT_PALM)) - at(Some(dual::JUDGEMENT))).abs() < 0.001,
+        (at(Some(dual::LIGHT_AUTO)) - at(Some(dual::JUDGEMENT))).abs() < 0.001,
         "two light moves read different bars"
     );
     assert!(
-        (at(None) - at(Some(dual::RADIANT_PALM))).abs() < 0.001,
+        (at(None) - at(Some(dual::LIGHT_AUTO))).abs() < 0.001,
         "carrying the light, a question between moves did not read the light bar"
     );
 }

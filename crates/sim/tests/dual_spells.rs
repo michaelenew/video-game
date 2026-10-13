@@ -7,6 +7,11 @@
 //! the row is the verb: on the floor she fights, in the air she moves, leaving
 //! the floor she defends. A dark spell lays curse stacks; a light one purges
 //! them, every stack at once, each worth more than the last.
+//!
+//! **The second pass of the same day** (`exploration/0016`): the bare clicks
+//! are her wing autos again, a great deal bigger, on the floor and in the air,
+//! and each hops her the way she is holding; the Devour and the Smite are on
+//! `F` and `R`.
 
 use sim::class::{Class, Force, Mechanic};
 use sim::effects::EffectKind;
@@ -152,8 +157,6 @@ fn set_bars(w: &mut World, dark: i32, light: i32) {
         jumped: false,
         landed: 0,
         singe: Fx::ZERO,
-        litany: 0,
-        litany_left: 0,
         veil: 0,
         warded: false,
     };
@@ -178,11 +181,11 @@ fn stacks(w: &World) -> u8 {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn on_the_floor_the_clicks_are_the_litanies_and_binary() {
+fn on_the_floor_the_clicks_are_the_autos_and_binary() {
     for (button, wanted) in [
-        (keys::DARK, d::UMBRAL_LASH),
+        (keys::DARK, d::DARK_AUTO),
         (keys::TWILIGHT, d::BINARY),
-        (keys::LIGHT, d::RADIANT_PALM),
+        (keys::LIGHT, d::LIGHT_AUTO),
         (keys::DARK_MAJOR, d::ABYSS),
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
     ] {
@@ -193,11 +196,11 @@ fn on_the_floor_the_clicks_are_the_litanies_and_binary() {
 }
 
 #[test]
-fn in_the_air_the_clicks_move_her() {
+fn in_the_air_the_clicks_are_the_same_autos() {
     for (button, wanted) in [
-        (keys::DARK, d::SHADOWSTEP),
+        (keys::DARK, d::DARK_AUTO),
         (keys::TWILIGHT, d::PHASE),
-        (keys::LIGHT, d::DESCENT),
+        (keys::LIGHT, d::LIGHT_AUTO),
         (keys::DARK_MAJOR, d::ABYSS),
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
     ] {
@@ -205,6 +208,20 @@ fn in_the_air_the_clicks_move_her() {
         aloft(&mut w, 4.0);
         step(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} in the air");
+    }
+}
+
+#[test]
+fn f_and_r_are_her_dark_and_light_spells() {
+    for (button, wanted) in [(keys::DARK_SPELL, d::DEVOUR), (keys::LIGHT_SPELL, d::SMITE)] {
+        for height in [0.0, 4.0] {
+            let mut w = alone();
+            if height > 0.0 {
+                aloft(&mut w, height);
+            }
+            step(&mut w, button);
+            assert_eq!(doing(&w), Some(wanted), "button {button:#x} at {height} m");
+        }
     }
 }
 
@@ -222,44 +239,137 @@ fn space_and_a_click_defends() {
 }
 
 // ---------------------------------------------------------------------------
-// The litanies
+// The autos: big wings, and a hop after each
 // ---------------------------------------------------------------------------
 
+const W: u16 = Input::W;
+const D: u16 = Input::D;
+
+/// Did an auto thrown at somebody `gap` metres ahead land?
+fn auto_lands(button: u16, gap: f32) -> bool {
+    let mut w = facing(gap);
+    let before = w.players[1].health;
+    step(&mut w, button);
+    run(&mut w, 20, 0);
+    w.players[1].health < before
+}
+
 #[test]
-fn a_litany_is_three_spells_in_a_string() {
-    for (button, string) in [(keys::DARK, d::NIGHT), (keys::LIGHT, d::DAWN)] {
-        let mut w = alone();
-        for (n, wanted) in string.iter().enumerate() {
-            step(&mut w, button);
-            assert_eq!(doing(&w), Some(*wanted), "link {n} of {button:#x}");
-            until_free(&mut w, 120);
+fn the_autos_reach_a_body_close_and_a_body_four_and_a_half_metres_off() {
+    for button in [keys::DARK, keys::LIGHT] {
+        for gap in [1.0, 2.5, 3.5, 4.5] {
+            assert!(auto_lands(button, gap), "{button:#x} at {gap} m");
         }
-        // After the third, the string starts again.
-        step(&mut w, button);
-        assert_eq!(doing(&w), Some(string[0]), "and round again");
+        assert!(!auto_lands(button, 6.0), "{button:#x} reaches six metres");
     }
 }
 
 #[test]
-fn a_litany_left_too_long_starts_again() {
+fn the_dark_auto_curses_and_the_light_auto_purges() {
+    let mut w = facing(2.5);
+    step(&mut w, keys::DARK);
+    until_free(&mut w, 60);
+    assert_eq!(stacks(&w), 1, "a stack");
+    run(&mut w, 45, 0);
+    step(&mut w, keys::LIGHT);
+    until_free(&mut w, 60);
+    assert_eq!(stacks(&w), 0, "purged");
+}
+
+/// Where an auto thrown with `held` down leaves her, and how high she got.
+fn after_an_auto(held: u16, lower: i32, height: f32) -> (V3, Fx) {
     let mut w = alone();
-    step(&mut w, keys::DARK);
-    until_free(&mut w, 120);
-    run(&mut w, t::litany_window() as u32 + 2, 0);
-    step(&mut w, keys::DARK);
-    assert_eq!(doing(&w), Some(d::UMBRAL_LASH), "the window closed");
+    level(&mut w, lower);
+    if height > 0.0 {
+        aloft(&mut w, height);
+    }
+    step(&mut w, keys::DARK | held);
+    let mut top = w.players[0].pos.y;
+    for _ in 0..40 {
+        step(&mut w, held);
+        top = top.max(w.players[0].pos.y);
+    }
+    (w.players[0].pos, top)
 }
 
 #[test]
-fn the_other_hand_starts_its_own_litany() {
+fn an_auto_with_a_direction_held_hops_her_that_way() {
+    let from = alone().players[0].pos;
+    let (still, _) = after_an_auto(0, 0, 0.0);
+    let (forward, _) = after_an_auto(W, 0, 0.0);
+    let (aside, _) = after_an_auto(D, 0, 0.0);
+    assert!(
+        still.sub(from).flat_len().raw() < metres(0.5).raw(),
+        "holding nothing, she stays: {} m",
+        as_f(still.sub(from).flat_len())
+    );
+    // Walking alone for the frames of the auto covers a metre or so; the hop
+    // is on top of it.
+    assert!(
+        forward.x.sub(from.x).raw() > t::auto_hop().raw(),
+        "forward: {} m",
+        as_f(forward.x.sub(from.x))
+    );
+    assert!(
+        aside.sub(from).flat_len().raw() > t::auto_hop().raw(),
+        "to the side: {} m",
+        as_f(aside.sub(from).flat_len())
+    );
+}
+
+#[test]
+fn the_hop_lifts_her_higher_the_fuller_her_lower_bar() {
+    let (_, low) = after_an_auto(W, 0, 0.0);
+    let (_, high) = after_an_auto(W, 90, 0.0);
+    assert!(low.raw() > 0, "a hop leaves the floor: {}", as_f(low));
+    assert!(
+        high.raw() > low.add(metres(0.6)).raw(),
+        "from a full lower bar she rises {} m, from empty {} m",
+        as_f(high),
+        as_f(low)
+    );
+}
+
+#[test]
+fn a_hop_cuts_the_recovery_short() {
+    let free_after = |held: u16| {
+        let mut w = alone();
+        step(&mut w, keys::DARK | held);
+        for f in 1..80 {
+            step(&mut w, held);
+            if w.players[0].action.actionable() {
+                return f;
+            }
+        }
+        80
+    };
+    let m = sim::moves::get(Class::DualMage, d::DARK_AUTO);
+    assert!(free_after(0) >= (m.startup + m.active + m.recovery) as u32 - 1);
+    assert!(
+        free_after(W) < free_after(0) + 6,
+        "the hop is the recovery, not on top of it: {} against {}",
+        free_after(W),
+        free_after(0)
+    );
+}
+
+#[test]
+fn a_hop_does_not_go_through_a_wall() {
+    // The proving ground's low wall is eight metres behind her: hop
+    // backwards at it from the floor, with her lower bar empty so the hop
+    // cannot lift her over it, and she stays this side of it.
     let mut w = alone();
-    step(&mut w, keys::DARK);
-    until_free(&mut w, 120);
-    step(&mut w, keys::LIGHT);
-    assert_eq!(doing(&w), Some(d::RADIANT_PALM), "dawn from the top");
-    until_free(&mut w, 120);
-    step(&mut w, keys::DARK);
-    assert_eq!(doing(&w), Some(d::UMBRAL_LASH), "and night from the top");
+    let s = Input::S;
+    for _ in 0..6 {
+        level(&mut w, 0);
+        step(&mut w, keys::DARK | s);
+        run(&mut w, 40, s);
+    }
+    assert!(
+        w.terrain().inside(w.players[0].pos),
+        "she hopped out of the arena to {:?}",
+        w.players[0].pos
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -267,22 +377,17 @@ fn the_other_hand_starts_its_own_litany() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_lash_lays_a_curse_and_the_devour_two() {
+fn the_dark_auto_lays_a_curse_and_the_devour_two() {
     let mut w = facing(2.0);
     step(&mut w, keys::DARK);
     until_free(&mut w, 120);
-    assert_eq!(stacks(&w), 1, "the lash: one stack");
-    // The Grasp and the Devour land on the ground where she points: at
-    // their feet.
+    assert_eq!(stacks(&w), 1, "the auto: one stack");
+    // The Devour lands on the ground where she points: at their feet.
     let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::DARK, feet);
-    run_looking(&mut w, 40, feet);
-    assert_eq!(stacks(&w), 2, "the Grasp: one more");
-    let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::DARK, feet);
+    step_looking(&mut w, keys::DARK_SPELL, feet);
     assert_eq!(doing(&w), Some(d::DEVOUR));
     run_looking(&mut w, 50, feet);
-    assert_eq!(stacks(&w), 4, "the Devour: two more");
+    assert_eq!(stacks(&w), 3, "the Devour: two more");
 }
 
 #[test]
@@ -290,22 +395,8 @@ fn the_devour_drains_back_to_her() {
     let mut w = facing(2.0);
     w.players[0].health -= 300;
     let feet = onto_their_feet(&w);
-    w.players[0].mechanic = {
-        let mut m = w.players[0].mechanic;
-        if let Mechanic::Meter {
-            litany,
-            litany_left,
-            ..
-        } = &mut m
-        {
-            // Two links of night already thrown: the next press is the third.
-            *litany = 2 | 0x80;
-            *litany_left = 20;
-        }
-        m
-    };
     let before = w.players[0].health;
-    step_looking(&mut w, keys::DARK, feet);
+    step_looking(&mut w, keys::DARK_SPELL, feet);
     assert_eq!(doing(&w), Some(d::DEVOUR));
     run_looking(&mut w, 40, feet);
     assert!(
@@ -318,22 +409,10 @@ fn the_devour_drains_back_to_her() {
 
 #[test]
 fn the_grasp_roots_whoever_it_closes_on() {
+    // No button since the wing autos came back: thrown as the move it is.
     let mut w = facing(3.0);
-    w.players[0].mechanic = {
-        let mut m = w.players[0].mechanic;
-        if let Mechanic::Meter {
-            litany,
-            litany_left,
-            ..
-        } = &mut m
-        {
-            *litany = 1 | 0x80;
-            *litany_left = 20;
-        }
-        m
-    };
     let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::DARK, feet);
+    w.press(0, d::GRASPING_SHADE, Input::looking_at(0, LOOK_RIGHT, feet));
     assert_eq!(doing(&w), Some(d::GRASPING_SHADE));
     let mut rooted = false;
     for _ in 0..30 {
@@ -385,31 +464,34 @@ fn the_curse_holds_five_at_most() {
 // The purge
 // ---------------------------------------------------------------------------
 
-/// What the Radiant palm deals a fighter carrying `n` stacks, from level.
-fn palm_on(n: u8) -> i32 {
-    let mut w = facing(1.2);
+/// What the light auto deals a fighter carrying `n` stacks, from level.
+fn light_wing_on(n: u8) -> i32 {
+    let mut w = facing(2.5);
     level(&mut w, 50);
     cursed(&mut w, n);
     let before = w.players[1].health;
     step(&mut w, keys::LIGHT);
-    let m = sim::moves::get(Class::DualMage, d::RADIANT_PALM);
-    run(&mut w, (m.startup + m.active) as u32 + 1, 0);
+    let m = sim::moves::get(Class::DualMage, d::LIGHT_AUTO);
+    run(&mut w, (m.startup + m.active) as u32 + 2, 0);
     before - w.players[1].health
 }
 
 #[test]
 fn light_purges_every_stack_at_once() {
-    let mut w = facing(1.2);
+    let mut w = facing(2.5);
     cursed(&mut w, 3);
     step(&mut w, keys::LIGHT);
     until_free(&mut w, 120);
     assert_eq!(stacks(&w), 0, "the curse is spent");
-    assert!(palm_on(3) > palm_on(0) + 40, "and it was worth something");
+    assert!(
+        light_wing_on(3) > light_wing_on(0) + 40,
+        "and it was worth something"
+    );
 }
 
 #[test]
 fn every_stack_is_worth_more_than_the_last() {
-    let dealt: Vec<i32> = (0..=5).map(palm_on).collect();
+    let dealt: Vec<i32> = (0..=5).map(light_wing_on).collect();
     for n in 2..=5 {
         let step = dealt[n] - dealt[n - 1];
         let before = dealt[n - 1] - dealt[n - 2];
@@ -426,7 +508,7 @@ fn every_stack_is_worth_more_than_the_last() {
 
 #[test]
 fn a_big_purge_staggers() {
-    let mut w = facing(1.2);
+    let mut w = facing(2.5);
     cursed(&mut w, t::purge_stagger_from());
     step(&mut w, keys::LIGHT);
     let mut staggered = false;
@@ -444,7 +526,7 @@ fn a_big_purge_staggers() {
 #[test]
 fn a_purge_is_worth_her_light_bar() {
     let from = |light: i32| {
-        let mut w = facing(1.2);
+        let mut w = facing(2.5);
         set_bars(&mut w, 0, light);
         cursed(&mut w, 5);
         let before = w.players[1].health;
@@ -460,21 +542,8 @@ fn a_purge_is_worth_her_light_bar() {
 // ---------------------------------------------------------------------------
 
 fn smite_at_their_feet(w: &mut World) {
-    w.players[0].mechanic = {
-        let mut m = w.players[0].mechanic;
-        if let Mechanic::Meter {
-            litany,
-            litany_left,
-            ..
-        } = &mut m
-        {
-            *litany = 2;
-            *litany_left = 20;
-        }
-        m
-    };
     let feet = onto_their_feet(w);
-    step_looking(w, keys::LIGHT, feet);
+    step_looking(w, keys::LIGHT_SPELL, feet);
     assert_eq!(doing(w), Some(d::SMITE));
     run_looking(w, 30, feet);
 }
@@ -497,21 +566,8 @@ fn the_smite_lifts_and_purges() {
     level(&mut w, 50);
     cursed(&mut w, 2);
     let mut highest = Fx::ZERO;
-    w.players[0].mechanic = {
-        let mut m = w.players[0].mechanic;
-        if let Mechanic::Meter {
-            litany,
-            litany_left,
-            ..
-        } = &mut m
-        {
-            *litany = 2;
-            *litany_left = 20;
-        }
-        m
-    };
     let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::LIGHT, feet);
+    step_looking(&mut w, keys::LIGHT_SPELL, feet);
     for _ in 0..40 {
         step_looking(&mut w, 0, feet);
         highest = highest.max(w.players[1].pos.y);
@@ -650,7 +706,7 @@ fn shadowstep_at(gap: f32, curse: u8) -> World {
         cursed(&mut w, curse);
     }
     let pitch = onto_them(&w);
-    step_looking(&mut w, keys::DARK, pitch);
+    w.press(0, d::SHADOWSTEP, Input::looking_at(0, LOOK_RIGHT, pitch));
     assert_eq!(doing(&w), Some(d::SHADOWSTEP));
     let m = sim::moves::get(Class::DualMage, d::SHADOWSTEP);
     for _ in 0..m.startup + 2 {
@@ -696,7 +752,7 @@ fn the_shadowstep_with_nobody_still_goes() {
     let mut w = alone();
     aloft(&mut w, 3.0);
     let from = w.players[0].pos;
-    step(&mut w, keys::DARK);
+    w.press(0, d::SHADOWSTEP, Input::looking_at(0, LOOK_RIGHT, 0));
     let m = sim::moves::get(Class::DualMage, d::SHADOWSTEP);
     run(&mut w, m.startup as u32 + 2, 0);
     let went = w.players[0].pos.x.sub(from.x);
@@ -709,7 +765,7 @@ fn descent_dives_where_she_points_and_writes_a_sigil() {
     let mut w = alone();
     aloft(&mut w, 5.0);
     let down = (-70 * 65536 / 360) as i16;
-    step_looking(&mut w, keys::LIGHT, down);
+    w.press(0, d::DESCENT, Input::looking_at(0, LOOK_RIGHT, down));
     assert_eq!(doing(&w), Some(d::DESCENT));
     for _ in 0..60 {
         step_looking(&mut w, 0, down);

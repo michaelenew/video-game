@@ -709,15 +709,17 @@ const NAMES: [&[&str]; 6] = [
     // curses. Right is light, cast on *the ground*: sigils. Middle is
     // twilight, cast on *herself*. On foot she fights, in the air she moves,
     // leaving the floor she defends. In storage order: the eleven slots of
-    // the kit before it, re-cast in place, and the second and third links of
-    // the two litanies appended. See [`dual`] and
-    // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    // the kit before it, re-cast in place, and four spells appended (the
+    // links of the litanies she had for an afternoon: the Grasp and the Halo
+    // are unbound since, the Devour on `F` and the Smite on `R`). See
+    // [`dual`], `docs/design/exploration/0015_dual_mage_spellbook.md` and
+    // `0016_dual_mage_controls.md`.
     &[
-        "Umbral lash",
+        "Dark auto",
         "Binary",
         "Judgement",
         "Abyss",
-        "Radiant palm",
+        "Light auto",
         "Shadowstep",
         "Descent",
         "Phase",
@@ -1022,43 +1024,33 @@ pub mod bulwark {
 // The Dual mage's fifteen
 // ---------------------------------------------------------------------------
 
-/// The Dual mage's spellbook, since 2026-10-12: **the click is what a spell
-/// is cast on, and the row is the verb**.
+/// The Dual mage's move list, since the second pass of 2026-10-12: **the bare
+/// clicks are her autos again, and they carry her.**
 ///
 /// ```text
-///                     left: dark          middle: twilight   right: light
-///                     (on them)           (on herself)       (on the ground)
-///   on foot  -- fight Umbral lash         Binary             Radiant palm
-///                     > Grasping shade                       > Halo
-///                     > Devour                               > Smite
-///   in the air -- move Shadowstep          Phase              Descent
-///   leaving the floor  Veil                Equinox            Sanctuary
-///         -- defend
-///
-///   Q  Abyss -- the dark major        E  Judgement -- the light major
+///   left click    Dark auto      the left arm's being: a wing of dark, a curse
+///   right click   Light auto     the right arm's: a wing of light, a purge
+///                 -- each, on the floor or in the air, then a short hop the
+///                    way she is holding, lifted more the fuller she is
+///   middle click  Binary (floor) / Phase (air)
+///   space+click   Veil / Equinox / Sanctuary (from the floor)
+///   F             Devour         R             Smite
+///   Q             Abyss          E             Judgement
+///   (no button)   Grasping shade, Halo, Shadowstep, Descent
 /// ```
 ///
-/// **Dark curses bodies**: every dark spell that lands lays stacks of a curse
-/// that ticks and drains to her. **Light writes on the ground**: Smite,
-/// Descent, Sanctuary and Judgement leave a sigil that wards her and burns
-/// them, and every light spell that lands on a curse **purges** it -- all of
-/// its stacks at once, each worth more than the last. **Twilight is her own
-/// body**: the twin stars round her, a blink, levelling her bars. See
-/// [`crate::dual`] for the curse and the purge.
+/// **Dark curses bodies** and **light writes on the ground and purges**, as in
+/// the spellbook of earlier that day; see [`crate::dual`] for the curse and the
+/// purge. The autos are the wing-shaped blades of the kit before it, a great
+/// deal bigger, and after each one she hops: Kalista's step, in the direction
+/// held. See `docs/design/exploration/0016_dual_mage_controls.md`.
 ///
-/// **The bare clicks are litanies**: three spells in a string, the next one
-/// thrown by a press inside `litany, window` of the last ending. See
-/// [`litany`].
-///
-/// **Storage order is not button order.** The first eleven rows are the
-/// eleven the class had before (every one re-cast as the new move in its
-/// place, so the slots and their knob indices kept their meaning in the
-/// Oven); the four after them were appended. See
-/// `docs/design/exploration/0015_dual_mage_spellbook.md`.
+/// **Storage order is not button order.** The slots kept their places through
+/// every pass; the four appended last are the spellbook's.
 pub mod dual {
-    /// Left click on the floor, the first of the litany of night: a whip of
-    /// shadow across her front. One curse.
-    pub const UMBRAL_LASH: u8 = 0;
+    /// Left click, on the floor or in the air: a wing of dark off the left
+    /// arm, and a hop the way she is holding. One curse.
+    pub const DARK_AUTO: u8 = 0;
     /// Middle click on the floor: twin stars, one of each force, orbit her.
     pub const BINARY: u8 = 1;
     /// `E`: the light major. Columns of light, more the fuller her Light, and
@@ -1066,12 +1058,14 @@ pub mod dual {
     pub const JUDGEMENT: u8 = 2;
     /// `Q`: the dark major. A black sun that pins, curses, and collapses.
     pub const ABYSS: u8 = 3;
-    /// Right click on the floor, the first of the litany of dawn: a burst of
-    /// light from her palm.
-    pub const RADIANT_PALM: u8 = 4;
-    /// Left click in the air: she is behind the first body on the line.
+    /// Right click, on the floor or in the air: a wing of light off the right
+    /// arm, and a hop. Purges.
+    pub const LIGHT_AUTO: u8 = 4;
+    /// No button since the autos took the air (2026-10-12): she is behind the
+    /// first body on the line.
     pub const SHADOWSTEP: u8 = 5;
-    /// Right click in the air: down onto the ground as a smite, and a sigil.
+    /// No button since the autos took the air: down onto the ground as a
+    /// smite, and a sigil.
     pub const DESCENT: u8 = 6;
     /// Middle click in the air: a short blink along the crosshair.
     pub const PHASE: u8 = 7;
@@ -1082,21 +1076,18 @@ pub mod dual {
     /// Space and middle click: her bars levelled, and a jump as high as the
     /// lower one is full.
     pub const EQUINOX: u8 = 10;
-    /// The litany of night's second: hands out of the floor that root.
+    /// No button since the wing autos came back: hands out of the floor that
+    /// root.
     pub const GRASPING_SHADE: u8 = 11;
-    /// The litany of night's third: a maw that snaps shut. Two curses, and
-    /// half of it drained back to her.
+    /// `F`: a maw that snaps shut where she points. Two curses, and some of it
+    /// drained back to her.
     pub const DEVOUR: u8 = 12;
-    /// The litany of dawn's second: a ring of light all round her.
+    /// No button since the wing autos came back: a ring of light all round her.
     pub const HALO: u8 = 13;
-    /// The litany of dawn's third: a column out of the sky, and a sigil.
+    /// `R`: a column out of the sky where she points, and a sigil.
     pub const SMITE: u8 = 14;
 
     pub const COUNT: usize = 15;
-
-    /// The two litanies, link by link.
-    pub const NIGHT: [u8; 3] = [UMBRAL_LASH, GRASPING_SHADE, DEVOUR];
-    pub const DAWN: [u8; 3] = [RADIANT_PALM, HALO, SMITE];
 
     /// Which button is which force. Every test and bot presses through these.
     pub mod keys {
@@ -1111,6 +1102,10 @@ pub mod dual {
         pub const DARK_MAJOR: u16 = Input::SPECIAL;
         /// `E`: Judgement, the light major.
         pub const LIGHT_MAJOR: u16 = Input::MECHANIC;
+        /// `F`: the Devour.
+        pub const DARK_SPELL: u16 = Input::KEY_F;
+        /// `R`: the Smite.
+        pub const LIGHT_SPELL: u16 = Input::KEY_R;
     }
 
     /// Which force this move is made of: dark for the left column and `Q`,
@@ -1119,8 +1114,8 @@ pub mod dual {
     pub const fn force(kind: u8) -> Option<crate::class::Force> {
         use crate::class::Force;
         match kind {
-            UMBRAL_LASH | GRASPING_SHADE | DEVOUR | SHADOWSTEP | VEIL | ABYSS => Some(Force::Dark),
-            RADIANT_PALM | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT => Some(Force::Light),
+            DARK_AUTO | GRASPING_SHADE | DEVOUR | SHADOWSTEP | VEIL | ABYSS => Some(Force::Dark),
+            LIGHT_AUTO | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT => Some(Force::Light),
             _ => None,
         }
     }
@@ -1130,10 +1125,10 @@ pub mod dual {
         matches!(kind, BINARY | PHASE | EQUINOX)
     }
 
-    /// Is this an auto -- the first two links of a litany, thrown every
-    /// second? They goad a bar by the least.
+    /// Is this one of the two autos -- the wings on the bare clicks, thrown
+    /// every second? They goad a bar by the least, and they hop.
     pub const fn is_an_auto(kind: u8) -> bool {
-        matches!(kind, UMBRAL_LASH | GRASPING_SHADE | RADIANT_PALM | HALO)
+        matches!(kind, DARK_AUTO | LIGHT_AUTO)
     }
 
     /// Is this one of the two majors? They throw the bar furthest -- see
@@ -1154,7 +1149,7 @@ pub mod dual {
     pub const fn curses_laid(kind: u8) -> u8 {
         match kind {
             DEVOUR => 2,
-            UMBRAL_LASH | GRASPING_SHADE | SHADOWSTEP | VEIL => 1,
+            DARK_AUTO | GRASPING_SHADE | SHADOWSTEP | VEIL => 1,
             _ => 0,
         }
     }
@@ -1162,19 +1157,6 @@ pub mod dual {
     /// Does this spell write a sigil where it lands?
     pub const fn writes_a_sigil(kind: u8) -> bool {
         matches!(kind, SMITE | DESCENT | SANCTUARY)
-    }
-
-    /// Which link of a litany this is, and which litany: `Some((dark, link))`.
-    pub const fn litany(kind: u8) -> Option<(bool, u8)> {
-        match kind {
-            UMBRAL_LASH => Some((true, 0)),
-            GRASPING_SHADE => Some((true, 1)),
-            DEVOUR => Some((true, 2)),
-            RADIANT_PALM => Some((false, 0)),
-            HALO => Some((false, 1)),
-            SMITE => Some((false, 2)),
-            _ => None,
-        }
     }
 }
 
@@ -1445,8 +1427,9 @@ pub const fn slots(class: Class) -> usize {
         // Seven: his three, and the air's strike and the three takeoffs. See
         // [`bulwark`].
         Class::Bulwark => bulwark::COUNT,
-        // Fifteen: three clicks on the floor (two of them litanies of three),
-        // in the air and leaving it, and the two majors. See [`dual`].
+        // Fifteen: the wing autos, three takeoffs, Binary and Phase, the two
+        // spells on `F` and `R`, the two majors, and four with no button.
+        // See [`dual`].
         Class::DualMage => dual::COUNT,
     }
 }
@@ -1575,24 +1558,24 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             9 => "Space+RMB",
             _ => "MMB",
         },
-        // The click is what a spell is cast on and the row is the verb, and
-        // the bare left and right clicks are litanies of three. See [`dual`].
+        // The bare clicks are the two autos, on the floor and in the air, and
+        // the dark and light spells are on `F` and `R`. See [`dual`].
         Class::DualMage => match slot {
             0 => "LMB",
             1 => "MMB",
             2 => "E",
             3 => "Q",
             4 => "RMB",
-            5 => "LMB air",
-            6 => "RMB air",
+            5 => "unbound",
+            6 => "unbound",
             7 => "MMB air",
             8 => "Space+LMB",
             9 => "Space+RMB",
             10 => "Space+MMB",
-            11 => "LMB, 2nd",
-            12 => "LMB, 3rd",
-            13 => "RMB, 2nd",
-            _ => "RMB, 3rd",
+            11 => "unbound",
+            12 => "F",
+            13 => "unbound",
+            _ => "R",
         },
         // **The three clicks are the class**, since 2026-10-09: left is earth,
         // middle is fire, right is wind, each a tap and a hold on the floor,
@@ -1772,19 +1755,20 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             }
             _ => Shape::Cylinder,
         },
-        // Her spellbook (2026-10-12). The litanies' blows are her body's own,
-        // so they are blocked, parried and drawn like anybody's: the lash is
-        // a cut across the front; the palm a burst at arm's length; the
-        // Grasp, the Devour, the Smite and Judgement's middle column a disc
+        // Her spellbook (2026-10-12). Her spells' blows are her body's own,
+        // so they are blocked, parried and drawn like anybody's: the autos
+        // are wings; the Grasp, the Devour, the Smite and Judgement's middle
+        // column a disc
         // where she pointed on the floor; the Halo, the Sanctuary's pulse,
         // the Veil's puff and the Descent's landing a disc round her own
         // feet (a reach of nought). The rest put something in the world -- the
         // stars, the black sun, the burst she arrives in from a Shadowstep --
         // or move her and strike nobody.
         Class::DualMage => match kind {
-            dual::UMBRAL_LASH => Shape::Swing(Plane::Flat),
-            dual::RADIANT_PALM
-            | dual::GRASPING_SHADE
+            // The autos are the wings again (2026-10-12, second pass): a thin
+            // curved blade off one arm, a great deal bigger than it was.
+            dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Wing,
+            dual::GRASPING_SHADE
             | dual::DEVOUR
             | dual::SMITE
             | dual::JUDGEMENT
@@ -2148,9 +2132,13 @@ pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, stoop: Fx, m: &Mov
         .sub(crate::aim::across(facing, m.hand).scale(m.reach.mul(t::wing_offside())));
     // Standing, it lies at the shoulder -- unless the swing stooped to meet
     // something short (`aim::stoop`, a drop in metres, zero among fighters),
-    // and then it comes down by that much.
+    // and then it comes down by that much -- and it rises with a look above
+    // the horizon, as a swing does (`aim::swing_path`), so a part higher than
+    // her head is reachable from the floor (2026-10-12: the wings came back
+    // as her autos, and the slam's fore sac is one).
     let at = if grounded {
-        V3::new(middle.x, middle.y.add(stoop), middle.z)
+        let up = aim_dir.y.max(Fx::ZERO).mul(m.reach);
+        V3::new(middle.x, middle.y.add(stoop).add(up), middle.z)
     } else {
         V3::new(middle.x, middle.y.add(aim_dir.y.mul(m.reach)), middle.z)
     };

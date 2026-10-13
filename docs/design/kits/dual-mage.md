@@ -1,5 +1,5 @@
 ---
-status: built — her spellbook since 2026-10-12; unplayed
+status: built — her spellbook since 2026-10-12, the wing autos and the hop the same day; unplayed
 decided: 2026-09-10
 revised: 2026-10-12
 formerly: Statera
@@ -24,6 +24,41 @@ meaningless without it.
 > §"Her spellbook" below is what was built. **Everything after it — the 0010 spells, and the
 > punches, the Lance and the Sweep before them — describes kits it replaced.** The two bars
 > are unchanged.
+
+> **Second pass, the same day — built, unplayed.** The owner kept `Q` and `E`, found the
+> litanies weird, and asked for the old wing autos back, much bigger, with a Kalista hop after
+> each. [../exploration/0016_dual_mage_controls.md](../exploration/0016_dual_mage_controls.md)
+> is the design and the answer to "what is missing from the controls". §"Her hands" below is
+> what was built; where it differs from §"Her spellbook", it wins.
+
+## Her hands — built 2026-10-12 (second pass)
+
+| Input | On the floor and in the air |
+| --- | --- |
+| Left click | **Dark auto**: the dark wing. Lays a curse stack |
+| Right click | **Light auto**: the light wing. Purges |
+| Middle click | **Binary** on the floor, **Phase** in the air |
+| `space` + click | **Veil** / **Equinox** / **Sanctuary**, as in §"Her spellbook" |
+| `F` key | **Devour** |
+| `R` key | **Smite** |
+| `Q` / `E` | **Abyss** / **Judgement** |
+
+The Grasping shade, the Halo, the Shadowstep and the Descent are in the table with no button.
+
+**The wings** (`Shape::Wing`, `moves::wing`). Reach 3.8 m to the ring, blade 0.4, tip bubble
+`wing, tip radius` (1.25 m): a fighter from half a metre to five metres in front is hit, and
+the tip, at full reach, is ×`wing, tip damage` (1.5). Standing, the wing lies at the shoulder
+and now rises with a look above the horizon, as a swing does. Against a creature only the tip
+counts (`state::part_under`), so it lands on the part she put it on rather than the first flank
+the blade brushed. 5/6/10 frames, 14 damage.
+
+**The hop** (`state::hop_after_the_auto`, `aim::hop_to`). On the wing's last frame, with a
+direction held, she is carried `auto, hop` (3 m) that way at `auto, hop speed` (22 m/s), and
+the carry plus `auto, recovery after a hop` (4 frames) *is* the recovery. It stops a body short
+of a wall, of land too steep to stand on, or of ground above her feet, and rises
+`auto, hop lifts` (0.3 m) plus up to `auto, hop lifts at full` (1.2 m) by her lower bar
+(`dual::hop_lift`), less under a ceiling. Holding nothing, there is no hop and the auto keeps its
+whole recovery.
 
 ## Her spellbook — built 2026-10-12
 

@@ -596,10 +596,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // Hook and Harvest. See
             // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
             Class::BloodMage => 11,
-            // Fifteen: three clicks on the floor (two of them litanies of
-            // three), in the air and leaving it, and the two majors -- her
-            // spellbook, 2026-10-12. See
-            // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+            // Fifteen: her spellbook, 2026-10-12, and its second pass the
+            // same day -- the wing autos, the takeoffs, twilight, `F` and
+            // `R`, the majors, and four with no button. See
+            // `docs/design/exploration/0016_dual_mage_controls.md`.
             Class::DualMage => 15,
         };
         assert_eq!(

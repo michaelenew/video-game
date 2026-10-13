@@ -668,18 +668,18 @@ fn the_two_autos_leave_from_the_arm_that_throws_them() {
     use sim::aim::Hand;
     use sim::moves::dual;
     let s = skeleton::skeleton_for(sim::Class::DualMage);
-    // Since 2026-10-12 the arms are the litanies' first links: the Umbral
-    // lash leaves the left hand and the Radiant palm the right, and every
+    // The arms are her autos again since the second pass of 2026-10-12: the
+    // dark wing leaves the left hand and the light wing the right, and every
     // other spell in a column leaves the same hand (`moves::hand`).
     for (slot, clip, button, name) in [
         (
-            dual::RADIANT_PALM,
+            dual::LIGHT_AUTO,
             view::Clip::DualLight,
             dual::keys::LIGHT,
             "light",
         ),
         (
-            dual::UMBRAL_LASH,
+            dual::DARK_AUTO,
             view::Clip::DualDark,
             dual::keys::DARK,
             "dark",

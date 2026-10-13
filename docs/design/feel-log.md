@@ -8217,3 +8217,21 @@ the fore pair stopped being a hop for her (`tests/broodmother.rs`).
 their kind's number and the retired Shade bolt sat before her shadow's blades in the list.
 **Not done** Her fifteen moves play her six old clips (DUAL-12).
 **Verdict** — unplayed.
+
+### 2026-10-12 — the Dual mage, second pass: the wing autos and the hop
+**Changed** The bare left and right clicks are the wing autos again, on the floor and in the
+air, in place of the litanies (Umbral lash › Grasping shade › Devour; Radiant palm › Halo ›
+Smite) and the air row's Shadowstep and Descent. The wings are much bigger than the 2026-09
+ones: reach 3.8 m, inner edge 0.75 → 0.35 of it, tip bubble 0.5 → 1.25 m; 5/6/10
+frames, 14 damage. On the last frame, with a direction held, she hops 3 m that way and the hop
+is the recovery; each hop lifts 0.3 m plus up to 1.2 m more by her lower bar. The Devour is on
+the `F` key and the Smite on the `R` key. Standing, the wing now rises with a look above the
+horizon, and against a creature only its tip counts. The auto's recovery is 10 rather than 12
+so that alternating wings reaches the second tier inside B4's 16–21 s (it came at 21.2 s on
+12). Tried and reverted on the way: shrinking the tip's share of the span to 0.05 so the blade
+covers the front (it did not fix the creature case, which was the blade spending the swing on
+the first flank, and it took the tip's reward away from distance).
+**Why** The owner: "put her old autos back, much larger, so she can actually hit things; tie
+her mobility to the autos, like Kalista, so her game is keeping distance". And a meaning per
+button that does not change as she is lifted off the floor (exploration/0016).
+**Verdict** —

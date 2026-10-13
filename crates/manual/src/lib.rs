@@ -278,19 +278,27 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two forces, one in each hand, and a bar for each -- and a spellbook in sword range. The click is what a spell is cast on: left is dark, on them -- curses that stack, tick and drain; right is light, on the ground -- sigils, columns from the sky, wards; middle is twilight, on yourself -- twin stars, a blink, your bars levelled. The row is the verb: on the floor you fight, in the air you move, leaving the floor you defend. Dark builds a curse and light purges it, so alternating your hands is both the combo and the climb. Rebuilt 2026-10-12 and unplayed; docs/design/exploration/0015_dual_mage_spellbook.md is the design.",
+        blurb: "Two forces, one in each hand, and a bar for each. Your clicks are wings of dark and light, thrown by the beings inside you, and every one of them hops you the way you are holding -- so you fight by darting in, striking and darting out again, lifted a little further off the floor each time as your bars fill. F and R spend that on a spell of each hand; Q and E are the great ones. Dark builds a curse and light purges it, so alternating your hands is both the combo and the climb. Reworked twice on 2026-10-12 and unplayed; docs/design/exploration/0016_dual_mage_controls.md is the latest.",
         entries: &[
             e(
-                "Left click",
-                "Dark, on them. On the floor, the litany of night -- press again inside a moment of the last ending for the next spell: the Umbral lash (a whip of shadow across your front), the Grasping shade (hands out of the floor where you point, rooting whoever stands there), then Devour (a maw that snaps shut: two curses, and half of it drained back to you). In the air, the Shadowstep: you are behind the first body on the crosshair's line, further for a cursed one, and arrive with a lash, and a body found gives you your airdodge back, so you can step from body to body -- with nobody there you still go a few metres, once a jump, as you would with Phase. Space and left click is the Veil: you leave the floor as shadow, untouchable on the way up, cursing whoever was beside you.",
+                "Left and right click",
+                "Your autos, on the floor and in the air: a wide curved wing of dark (left) or light (right) that opens across your front and reaches about four and a half metres. The very end of it -- the tip, out at full reach -- hits half again as hard, so the place to stand is a wing's length away. The dark wing lays a curse; the light wing purges one. If you are holding a direction when the wing finishes, you hop three metres that way and the hop is the rest of the swing: you can act again as you land. Each hop lifts you, more the fuller your lower bar, so a long string carries you off the floor.",
             ),
             e(
-                "Right click",
-                "Light, on the ground. On the floor, the litany of dawn: the Radiant palm (a burst of light point-blank), the Halo (a ring of light all round you), then the Smite (a column out of the sky where you point, lifting whoever it catches and writing a sigil there). In the air, Descent: you come down as a pillar of light onto the ground the crosshair is on, inside a cone round straight down -- a smite where you land, and a sigil under you. Space and right click is Sanctuary: a sigil at your feet, a pulse of light through it, and a hop up out of it.",
+                "F",
+                "Devour, the dark spell: a maw that snaps shut where you point. Two curses, and half of what it does drained back to you.",
+            ),
+            e(
+                "R",
+                "The Smite, the light spell: a column out of the sky where you point, lifting whoever it catches and writing a sigil there.",
             ),
             e(
                 "Middle click",
-                "Twilight, on yourself: it feeds both bars and is worth your lower one. On the floor, Binary: twin stars, one dark and one light, orbit you for four seconds -- the dark one curses what it passes through and the light one purges. In the air, Phase: you blink a few metres along the crosshair, stopped by walls, leaving a flash where you were -- it spends your airdodge. Space and middle click is Equinox: your bars are levelled -- twelve from the higher to the lower -- and you jump as high as the lower is full.",
+                "Twilight, on yourself: it feeds both bars and is worth your lower one. On the floor, Binary: twin stars, one dark and one light, orbit you for four seconds -- the dark one curses what it passes through and the light one purges. In the air, Phase: you blink a few metres along the crosshair, stopped by walls, leaving a flash where you were -- it spends your airdodge.",
+            ),
+            e(
+                "Leaving the floor",
+                "A click in a jump's first moments is a takeoff. Space and left click is the Veil: you leave the floor as shadow, untouchable on the way up, cursing whoever was beside you. Space and right click is Sanctuary: a sigil at your feet, a pulse of light through it, and a hop up out of it. Space and middle click is Equinox: your bars are levelled -- twelve from the higher to the lower -- and you jump as high as the lower is full.",
             ),
             e(
                 "Q",
@@ -306,7 +314,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Sigils",
-                "The Smite, Descent, Sanctuary and Judgement write a sigil -- a turning ring of light on the floor -- for four seconds, two at a time. Stand in your own and you are warded: every wound is cut by a third. Anybody else standing in it burns.",
+                "The Smite, Sanctuary and Judgement write a sigil -- a turning ring of light on the floor -- for four seconds, two at a time. Stand in your own and you are warded: every wound is cut by a third. Anybody else standing in it burns.",
             ),
             e(
                 "Each bar is its spells' power",

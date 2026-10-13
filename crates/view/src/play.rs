@@ -668,8 +668,8 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, _) => Clip::BloodSweep,
         // Her spellbook, since 2026-10-12, on the six clips she has: a dark
         // spell is thrown from the left arm and a light one from the right,
-        // so the litanies' blows are the one-armed casts (the lash and the
-        // Devour the dark thrust, the palm the light one; the Grasp the dark
+        // so the autos are the one-armed casts (the dark wing and the
+        // Devour the dark thrust, the light wing the light one; the Grasp the dark
         // Lance's reach to the floor, the Smite the light Lance's), the Halo,
         // the Sanctuary and the Abyss the sweep's whole-body heave, Binary,
         // Phase and Equinox the raised special, and the two moves of the air

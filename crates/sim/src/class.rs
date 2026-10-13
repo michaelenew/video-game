@@ -161,8 +161,6 @@ impl Class {
                 jumped: false,
                 landed: 0,
                 singe: Fx::ZERO,
-                litany: 0,
-                litany_left: 0,
                 veil: 0,
                 warded: false,
             },
@@ -691,12 +689,6 @@ pub enum Mechanic {
         /// less than one health, and health is a whole number; this carries the
         /// remainder forward so a slow burn is slow rather than nothing.
         singe: Fx,
-        /// The litany she is part-way through, as `crate::dual::Litany` packs
-        /// it: which click and which link was thrown last, or nought for none.
-        litany: u8,
-        /// Frames left in which the next press of the same click throws the
-        /// litany's next link rather than its first.
-        litany_left: u16,
         /// Frames of the Veil left: untouchable while it runs. See
         /// `crate::dual::veiled`.
         veil: u8,

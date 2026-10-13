@@ -776,7 +776,7 @@ scalars! {
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
     // **The Dual mage's spellbook**, 2026-10-12: the curse's cap and the
-    // purge's curve, the root, the sigils, the litanies, the twin stars, the
+    // purge's curve, the root, the sigils, the litanies (since the hop after an auto), the twin stars, the
     // Shadowstep, the Veil, the Equinox's levelling, the majors' steeper
     // growth and Judgement's columns, the Abyss's collapse and Apotheosis.
     // Appended for the reason above. See
@@ -791,7 +791,7 @@ scalars! {
     SigilWards, "Dual mage", "Sigil, wards her by (%)", Percent, 0, 100;
     SigilBurn, "Dual mage", "Sigil, burns", Int, 0, 100;
     SigilsAtOnce, "Dual mage", "Sigils, at once", Int, 1, 4;
-    LitanyWindow, "Dual mage", "Litany, window", Frames, 0, 90;
+    AutoHopRecovery, "Dual mage", "Auto, recovery after a hop", Frames, 0, 30;
     BinaryRadius, "Dual mage", "Binary, orbit radius (m)", Fixed, fx(1,2), fx(4,1);
     BinaryStar, "Dual mage", "Binary, star radius (m)", Fixed, fx(1,10), fx(2,1);
     BinaryEvery, "Dual mage", "Binary, strikes a body every", Frames, 1, 120;
@@ -810,6 +810,13 @@ scalars! {
     ApotheosisDamage, "Dual mage", "Apotheosis, damage", Int, 0, 400;
     CurseDrains, "Dual mage", "Curse, drained to her (%)", Percent, 0, 100;
     ShadowstepProbe, "Dual mage", "Shadowstep, probe for a creature, half-width (m)", Fixed, fx(1,50), fx(1,1);
+    // **Her autos carry her** (2026-10-12, the second pass): a hop after each
+    // one, the way she is holding, lifted by her lower bar. See
+    // `docs/design/exploration/0016_dual_mage_controls.md`.
+    AutoHop, "Dual mage", "Auto, hop (m)", Fixed, 0, fx(8,1);
+    AutoHopSpeed, "Dual mage", "Auto, hop speed (m/s)", Fixed, fx(1,1), fx(60,1);
+    AutoHopLift, "Dual mage", "Auto, hop lifts (m)", Fixed, 0, fx(4,1);
+    AutoHopLiftFull, "Dual mage", "Auto, hop lifts at full, more (m)", Fixed, 0, fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

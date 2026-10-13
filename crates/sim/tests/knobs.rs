@@ -120,6 +120,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Dual mage's light major.",
     ),
     (
+        "pub const DARK_SPELL: u16 = Input::KEY_F",
+        "A binding, not a magnitude: which key is the Dual mage's dark spell.",
+    ),
+    (
+        "pub const LIGHT_SPELL: u16 = Input::KEY_R",
+        "A binding, not a magnitude: which key is the Dual mage's light spell.",
+    ),
+    (
         "pub const FINISHER: u16 = Input::LEFT",
         "A binding, not a magnitude: which button is the Shadow Reaver's finisher click.",
     ),

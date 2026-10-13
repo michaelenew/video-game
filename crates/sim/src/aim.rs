@@ -1201,6 +1201,58 @@ pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
     from.add(flat.scale(short))
 }
 
+/// **Where the hop after one of the Dual mage's autos lands her**
+/// (2026-10-12): `reach` along `dir` level, stopped the way a blink is
+/// ([`blink_to`]), and `lift` up from there -- less if something solid is over
+/// her head, so the hop arrives under a ledge rather than inside it. The
+/// direction is the one she is holding, the height her lower bar's; both are
+/// the caller's. See `docs/design/exploration/0016_dual_mage_controls.md`.
+pub fn hop_to(from: V3, dir: V3, reach: Fx, lift: Fx, scene: &Scene) -> V3 {
+    let level = short_of_the_land(from, blink_to(from, dir, reach, scene), scene);
+    if lift.raw() <= 0 {
+        return level;
+    }
+    let crown = t::body_height();
+    let head = V3::new(level.x, level.y.add(crown), level.z);
+    let top = V3::new(level.x, level.y.add(crown).add(lift), level.z);
+    let rise = match first_solid_between(head, top, scene) {
+        Some(share) => lift.mul(share).sub(arena::SKIN).max(Fx::ZERO),
+        None => lift,
+    };
+    V3::new(level.x, level.y.add(rise), level.z)
+}
+
+/// **The hop stops at land it could not walk onto**: a blink asks only
+/// about boxes, and the land is a height, so a hop at an arena's rim went up
+/// it a hop at a time. Marched in half a body's steps: the first one over
+/// ground too steep to stand on, or above her feet, is where she stops, a
+/// body short of it.
+fn short_of_the_land(from: V3, to: V3, scene: &Scene) -> V3 {
+    let span_v = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
+    let span = span_v.flat_len();
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    if span.raw() <= 0 {
+        return to;
+    }
+    let dir = span_v.scale(Fx::ONE.div(span));
+    let mut along = step.min(span);
+    loop {
+        let at = from.add(dir.scale(along));
+        let ground = scene.arena.relief_at(at.x, at.z);
+        if scene.arena.downhill(at.x, at.z).is_some()
+            || ground.raw() > from.y.add(arena::SKIN).raw()
+        {
+            let back = along.sub(t::body_radius()).max(Fx::ZERO);
+            let flat = from.add(dir.scale(back));
+            return V3::new(flat.x, to.y, flat.z);
+        }
+        if along.raw() >= span.raw() {
+            return to;
+        }
+        along = along.add(step).min(span);
+    }
+}
+
 /// Where along one line, as a share of its length, the first solid is -- or
 /// `None` if nothing solid crosses it before the far end.
 fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {

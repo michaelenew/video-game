@@ -3354,9 +3354,10 @@ pub fn sigils_at_once() -> usize {
     oven::scalar(Scalar::SigilsAtOnce).max(1) as usize
 }
 
-/// How long after a litany link ends a press of the same click throws the next link.
-pub fn litany_window() -> u16 {
-    oven::scalar(Scalar::LitanyWindow).max(0) as u16
+/// What is left of an auto's recovery when she hops out of it: the hop is
+/// the rest of the recovery, so a flurry of autos and hops is a rhythm.
+pub fn auto_hop_recovery() -> u16 {
+    oven::scalar(Scalar::AutoHopRecovery).max(0) as u16
 }
 
 /// How far from her middle Binary's stars orbit.
@@ -3450,4 +3451,26 @@ pub fn curse_drains() -> i32 {
 /// a sac on a spider's back is above her flank by less than a body's width.
 pub fn shadowstep_probe() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowstepProbe)).max(Fx::ratio(1, 100))
+}
+
+/// How far the hop after an auto carries her along the floor, the way she is
+/// holding.
+pub fn auto_hop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHop)).max(Fx::ZERO)
+}
+
+/// How fast the hop after an auto goes.
+pub fn auto_hop_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHopSpeed)).max(Fx::ONE)
+}
+
+/// How high the hop after an auto lifts her from an empty lower bar.
+pub fn auto_hop_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHopLift)).max(Fx::ZERO)
+}
+
+/// How much higher the hop lifts her from a full lower bar, in proportion
+/// between.
+pub fn auto_hop_lift_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHopLiftFull)).max(Fx::ZERO)
 }

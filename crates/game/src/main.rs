@@ -1661,7 +1661,7 @@ struct CurseMesh {
 const MAX_MOTES: u8 = 7;
 
 /// One piece of a Dual mage's spell **off her own body** (2026-10-12): the
-/// litanies' blows, the Halo, the Smite's and Judgement's column, the
+/// Halo, the Smite's and Judgement's column, the
 /// Grasp's hands, the Devour's maw, the Descent, the Veil -- everything she
 /// throws whose volume is her own blow rather than a thing in the world, and
 /// the wind-up that telegraphs it. See [`spell_piece`].
@@ -3267,40 +3267,6 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
                 * through,
             Skin::Dark,
         ),
-        // **The lash**: beads of shadow along the whip as it crosses her
-        // front.
-        d::UMBRAL_LASH if !startup => {
-            let v = volume?;
-            let (from, to) = (fx3(v.from), fx3(v.to));
-            (part < 6).then(|| {
-                let t = (part as f32 + 0.5) / 6.0;
-                floating_in(
-                    Skin::Dark,
-                    from.lerp(to, t),
-                    v.radius.to_f32_for_render() * (0.5 + 0.5 * t),
-                )
-            })
-        }
-        // **The palm**: light gathering at her right hand, then the burst
-        // where it strikes.
-        d::RADIANT_PALM => {
-            let hand = fx3(sim::aim::hand_origin(
-                p.pos,
-                p.facing,
-                sim::aim::Hand::Right,
-            ));
-            if startup {
-                return (part == 0).then(|| floating_in(Skin::Light, hand, 0.1 + 0.25 * through));
-            }
-            let v = volume?;
-            (part == 0).then(|| {
-                floating_in(
-                    Skin::Light,
-                    fx3(v.from) + Vec3::Y * height * 0.5,
-                    v.radius.to_f32_for_render() * (0.6 + 0.4 * through),
-                )
-            })
-        }
         // **Rings round her**: the Halo, the Sanctuary's pulse and the
         // Descent's landing burst out to the radius they strike at.
         d::HALO | d::SANCTUARY | d::DESCENT if !startup => {
