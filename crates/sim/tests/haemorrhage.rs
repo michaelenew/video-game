@@ -309,20 +309,24 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
     };
     let health = w.players[1].health;
     looking(&mut w, 2, keys::YOUR_BLOOD, pitch, Input::A);
-    looking(&mut w, m.startup as u32 + 2, 0, pitch, Input::A);
-    let eruptions = w
-        .effects
-        .iter()
-        .flatten()
-        .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted())
-        .count();
+    // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
+    let mut eruptions = 0;
+    for _ in 0..m.startup as u32 + 4 * t::chain_delay() as u32 + 2 {
+        looking(&mut w, 1, 0, pitch, Input::A);
+        eruptions += w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted() && e.age == 1)
+            .count();
+    }
     assert!(
         eruptions >= 3,
         "a spike on the trail set off only {eruptions} eruptions"
     );
     // The chain reached them: an eruption's blow, not just the bleed's ticks.
     let took = health - w.players[1].health;
-    let ticks = (m.startup as i32 + 4) / t::bleed_tick() as i32 + 1;
+    let ticks = (m.startup as i32 + 4 * t::chain_delay() as i32 + 4) / t::bleed_tick() as i32 + 1;
     assert!(
         took > ticks * t::bleed_damage(),
         "the chain ran but never reached the bleeding fighter: they took {took}"

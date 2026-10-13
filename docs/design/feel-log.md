@@ -213,6 +213,20 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-13 — the Blood mage, revised from play
+**Changed** Grey holds 120 frames then fades at 60/s (was 3/s, no hold). Finishers at any time,
+spending all grey and the Well: row damage + 0.5 per point. Black spike one to seven spikes on a
+ring up to 4 m. Chained eruptions wait 3 frames. Thralls seek 30 m (was 6), Command acts on its
+first frame (startup 1). Teleport to a stain 12 m (was 22); the dodge's blink and thrown glob
+removed. Hemoplague held grows 1.5 to 6 m and slows to 0.6. Carpet on the right click, damage 5 a
+tick, lets go as one stain. Golem: health from what it fused, half of each punch off itself.
+**Why** The owner's notes on the first build: thralls too passive and deaf to her clicks, the
+Carpet's stains scattered, grey that never ran out so never had to be spent, finishers that
+needed a Well that was hard to fill and were weak when they came, a dodge that crossed the map.
+**Tried and reverted** A chain delay of 5 frames: a runner outran the chain along his own
+bleed trail (`tests/haemorrhage.rs`); 3 keeps the catch and still reads as a chain.
+**Verdict** open — unplayed.
+
 ### 2026-10-13 — the Blood mage: thralls and the Well
 **Changed** The blaster's kit (0015) replaced by 0016's: the Transfusion, the sweep, Tides,
 Reaper's chain, Reaper's leap and Frenzy are gone; the Haemorrhage is the left click tapped

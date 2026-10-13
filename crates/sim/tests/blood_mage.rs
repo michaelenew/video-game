@@ -1,14 +1,13 @@
-//! The Blood mage with thralls and the Well: what a player would notice if
-//! any of it broke.
+//! The Blood mage with thralls and grey: what a player would notice if any
+//! of it broke.
 //!
 //! `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md` is the
-//! direction: a tap is the quick thing and a hold is the field -- the
-//! Haemorrhage and the Carpet on the left click, Command and the Summon on
-//! the right, the spike in tiers on the middle; takeoffs with space, on the
-//! floor and once in the air; every stain one kind, collected by walking,
-//! teleporting or hitting through it, and what she cannot hold going to the
-//! Well; a full Well turning the end of a hold into its finisher. Each test
-//! below is one piece.
+//! direction, revised from play the day it was built: the left click is the
+//! area (the Haemorrhage tapped, the Hemoplague growing while held), the
+//! middle the spikes (one to seven), the right the thralls (Command tapped,
+//! the Carpet held, which stands her stains up); a hold kept to its end is a
+//! finisher that spends all her grey; grey holds two seconds, then goes fast.
+//! Each test below is one piece.
 
 use sim::class::Class;
 use sim::effects::{Effect, EffectKind};
@@ -137,21 +136,18 @@ fn at_some_pitch(
 const PITCHES: [i16; 9] = [-6000, -4000, -3000, -2000, -1000, 0, 1000, 2000, 3000];
 
 // ---------------------------------------------------------------------------
-// The map
-// ---------------------------------------------------------------------------
-
 // ---------------------------------------------------------------------------
 // The map
 // ---------------------------------------------------------------------------
 
 #[test]
-fn on_the_floor_a_tap_is_the_quick_thing_and_q_and_e_gather_and_plague() {
+fn on_the_floor_a_tap_is_the_quick_thing_and_q_and_e_gather_and_summon() {
     for (button, wanted) in [
         (keys::MY_BLOOD, b::HAEMORRHAGE),
         (keys::YOUR_BLOOD, b::BLACK_SPIKE),
         (keys::SCYTHE, b::COMMAND),
         (keys::GATHER, b::COAGULATE),
-        (keys::PLAGUE, b::HEMOPLAGUE),
+        (keys::RAISE, b::SUMMON),
     ] {
         let mut w = mage();
         step(&mut w, button);
@@ -159,6 +155,18 @@ fn on_the_floor_a_tap_is_the_quick_thing_and_q_and_e_gather_and_plague() {
     }
 }
 
+#[test]
+fn held_the_left_click_is_the_hemoplague_and_the_right_the_carpet() {
+    for (button, tap, wanted) in [
+        (keys::MY_BLOOD, b::HAEMORRHAGE, b::HEMOPLAGUE),
+        (keys::SCYTHE, b::COMMAND, b::CARPET),
+    ] {
+        let mut w = mage();
+        let start = sim::moves::get(Class::BloodMage, tap).startup as u32;
+        hold(&mut w, button, start + 3);
+        assert_eq!(doing(&w), Some(wanted), "button {button:#x} held");
+    }
+}
 #[test]
 fn in_the_air_the_middle_click_is_the_stake() {
     for (button, wanted) in [
@@ -191,6 +199,12 @@ fn space_and_a_click_is_a_takeoff_on_the_floor_and_once_in_the_air() {
     }
 }
 
+/// Hold `button` for `frames`, looking a little down.
+fn hold(w: &mut World, button: u16, frames: u32) {
+    for _ in 0..frames {
+        step_looking(w, button, -2000);
+    }
+}
 // ---------------------------------------------------------------------------
 // The spike
 // ---------------------------------------------------------------------------
@@ -213,66 +227,78 @@ fn holding_the_spike_buys_a_tier_and_every_tier_costs_more() {
 }
 
 #[test]
-fn the_spike_at_two_is_three_spikes_and_at_three_a_field_in_waves() {
-    let mut w = mage();
-    for _ in 0..(t::tier_two() as u32 + 2) {
-        step_looking(&mut w, keys::YOUR_BLOOD, -3000);
-    }
-    run(&mut w, 40, 0);
-    let spikes = effects_of(&w, EffectKind::BlackSpike);
-    assert_eq!(spikes.len(), 3, "three spikes at the second tier");
-
-    let mut w = mage();
-    for _ in 0..(t::tier_three() as u32 + 2) {
-        step_looking(&mut w, keys::YOUR_BLOOD, -3000);
-    }
-    run(&mut w, 40, 0);
-    let field = effects_of(&w, EffectKind::BlackSpike);
-    assert_eq!(field.len(), 1, "one field at the third");
-    assert_eq!(field[0].reach, t::spike_field_radius());
+fn a_longer_hold_raises_more_spikes_up_to_seven() {
+    let raised = |frames: u32| {
+        let mut w = mage();
+        w.players[1].pos = at(40.0, 0.0, 8.0);
+        hold(&mut w, keys::YOUR_BLOOD, frames.max(1));
+        run(&mut w, 40, 0);
+        effects_of(&w, EffectKind::BlackSpike).len()
+    };
+    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
+    let tap = raised(1);
+    let half = raised(cap / 2);
+    let most = raised(cap - 2);
+    assert_eq!(tap, 1, "a tap is one spike");
+    assert!(half > tap && most > half, "{tap} then {half} then {most}");
     assert!(
-        field[0].life > t::spike_erupt(),
-        "and it stands for its waves"
+        most as i32 <= t::spikes_most(),
+        "never past the most: {most}"
     );
 }
 
 #[test]
-fn a_spike_field_hits_him_once_a_wave() {
+fn a_chain_of_stains_erupts_link_by_link_not_all_at_once() {
     let mut w = mage();
-    w.players[1].pos = at(4.0, 0.0, 8.0);
-    let mut placed = None;
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    let mut spike_at = None;
+    let mut aimed = 0;
     for pitch in PITCHES {
         let mut trial = w.clone();
-        for _ in 0..(t::tier_three() as u32 + 2) {
-            step_looking(&mut trial, keys::YOUR_BLOOD, pitch);
-        }
-        // Let go where she was looking: the aim locks on the release.
-        step_looking(&mut trial, 0, pitch);
+        step_looking(&mut trial, keys::YOUR_BLOOD, pitch);
         run(&mut trial, 40, 0);
-        let field = effects_of(&trial, EffectKind::BlackSpike);
-        if field.first().is_some_and(|f| {
-            V3::new(f.pos.x.sub(trial.players[1].pos.x), Fx::ZERO, Fx::ZERO)
-                .flat_len()
-                .raw()
-                < metres(2.5).raw()
-        }) {
-            placed = Some(trial);
+        if let Some(s) = effects_of(&trial, EffectKind::BlackSpike).first() {
+            spike_at = Some(s.pos);
+            aimed = pitch;
             break;
         }
     }
-    let mut w = placed.expect("a field under him");
-    // Hold him there.
-    let mut hits = 0;
-    let mut last = w.players[1].health;
-    for _ in 0..(t::spike_wave_every() as u32 * t::spike_waves() as u32 + 10) {
-        w.players[1].pos = V3::new(metres(4.0), w.players[1].pos.y, metres(8.0));
-        step(&mut w, 0);
-        if w.players[1].health < last {
-            hits += 1;
-        }
-        last = w.players[1].health;
+    let first = spike_at.expect("a spike came up");
+    let second = first.add(at(0.0, 0.0, 2.0));
+    stain(&mut w, first, 100);
+    stain(&mut w, second, 100);
+    for e in w.effects.iter_mut().flatten() {
+        e.age = t::stain_settles() + 1;
     }
-    assert!(hits >= 2, "more than one wave caught him: {hits}");
+    step_looking(&mut w, keys::YOUR_BLOOD, aimed);
+    let mut gone_first = None;
+    let mut gone_second = None;
+    for f in 0..80 {
+        step(&mut w, 0);
+        // An eruption standing on the spot: the stain there went up. (What
+        // the spike cost lands there too, so the stains themselves are not
+        // the thing to watch.)
+        let erupted = |p: V3| {
+            effects_of(&w, EffectKind::BlackSpike)
+                .iter()
+                .any(|e| e.erupted() && e.pos.sub(p).flat_len().raw() < metres(0.5).raw())
+        };
+        if gone_first.is_none() && erupted(first) {
+            gone_first = Some(f);
+        }
+        if gone_second.is_none() && erupted(second) {
+            gone_second = Some(f);
+        }
+    }
+    let (a, b) = (
+        gone_first.expect("the first erupted"),
+        gone_second.expect("the second erupted"),
+    );
+    assert!(b > a, "the second went after the first: {a} then {b}");
+    assert!(
+        b - a <= 2 * t::chain_delay() as u32 + 2,
+        "and soon after: {a} then {b}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -480,28 +506,80 @@ fn every_hit_on_a_creature_leaves_a_stain_worth_its_blow() {
 }
 
 // ---------------------------------------------------------------------------
-// The Carpet of blood and Coagulate
+// The Hemoplague, held
 // ---------------------------------------------------------------------------
 
-/// Hold the left click for `frames`, looking a little down.
-fn carpet_for(w: &mut World, frames: u32) {
-    for _ in 0..frames {
-        step_looking(w, keys::MY_BLOOD, -2000);
+#[test]
+fn the_hemoplague_grows_while_held_and_hurts_and_slows() {
+    let mut w = mage();
+    let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
+    hold(&mut w, keys::MY_BLOOD, start + 3);
+    let small = effects_of(&w, EffectKind::Plague)
+        .first()
+        .expect("a cloud")
+        .reach;
+    let floor = effects_of(&w, EffectKind::Plague)[0].pos;
+    let his = w.players[1].health;
+    let mut slowed = false;
+    for _ in 0..60 {
+        w.players[1].pos = floor;
+        step_looking(&mut w, keys::MY_BLOOD, -2000);
+        slowed |= w.players[1].slowed > 0;
     }
+    let big = effects_of(&w, EffectKind::Plague)[0].reach;
+    assert!(
+        big.raw() > small.raw(),
+        "it grew: {} to {}",
+        as_f(small),
+        as_f(big)
+    );
+    assert!(w.players[1].health < his, "it hurt him");
+    assert!(slowed, "and slowed him");
+    step(&mut w, 0);
+    run(&mut w, 30, 0);
+    let left = effects_of(&w, EffectKind::Plague);
+    assert_eq!(left.len(), 1, "let go, it stands");
+    assert_eq!(left[0].reach, big, "at the size it reached");
 }
 
 #[test]
-fn holding_the_left_click_lays_a_carpet_that_grows_and_costs_her() {
+fn the_cloud_is_laid_where_she_aims_not_at_her_feet() {
     let mut w = mage();
-    let startup = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
-    carpet_for(&mut w, startup + 3);
+    let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
+    hold(&mut w, keys::MY_BLOOD, start + 3);
+    let cloud = effects_of(&w, EffectKind::Plague)[0].pos;
+    let far = cloud.sub(w.players[0].pos).flat_len();
+    assert!(
+        far.raw() > metres(2.0).raw(),
+        "out where she looked: {}",
+        as_f(far)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The Carpet of blood and Coagulate
+// ---------------------------------------------------------------------------
+
+/// Hold the right click for `frames`, looking a little down.
+fn carpet_for(w: &mut World, frames: u32) {
+    hold(w, keys::SCYTHE, frames);
+}
+
+fn command_startup() -> u32 {
+    sim::moves::get(Class::BloodMage, b::COMMAND).startup as u32
+}
+
+#[test]
+fn holding_the_right_click_lays_a_carpet_that_grows_and_costs_her() {
+    let mut w = mage();
+    carpet_for(&mut w, command_startup() + 3);
     assert_eq!(doing(&w), Some(b::CARPET), "the tap became the field");
     let small = effects_of(&w, EffectKind::Carpet)
         .first()
         .expect("a carpet")
         .reach;
     let red = w.players[0].health;
-    carpet_for(&mut w, 60);
+    carpet_for(&mut w, 40);
     let big = effects_of(&w, EffectKind::Carpet)[0].reach;
     assert!(
         big.raw() > small.raw(),
@@ -513,31 +591,63 @@ fn holding_the_left_click_lays_a_carpet_that_grows_and_costs_her() {
 }
 
 #[test]
-fn the_carpet_hurts_and_slows_and_breaks_into_stains() {
+fn the_carpet_hurts_a_little_and_lets_go_as_one_big_stain() {
     let mut w = mage();
-    let startup = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
-    carpet_for(&mut w, startup + 3);
+    carpet_for(&mut w, command_startup() + 3);
     let floor = effects_of(&w, EffectKind::Carpet)[0].pos;
     let his = w.players[1].health;
-    let mut slowed = false;
     for _ in 0..(t::carpet_tick() as u32 * 2 + 2) {
         w.players[1].pos = floor;
-        step_looking(&mut w, keys::MY_BLOOD, -2000);
-        slowed |= w.players[1].slowed > 0;
+        step_looking(&mut w, keys::SCYTHE, -2000);
     }
-    assert!(w.players[1].health < his, "it hurt him");
-    assert!(slowed, "and slowed him");
+    let took = his - w.players[1].health;
+    assert!(took > 0, "it hurt him");
     let paid = effects_of(&w, EffectKind::Carpet)[0].banked;
     assert!(paid > 0, "what she paid is in it");
     w.players[1].pos = at(30.0, 0.0, 8.0);
     step(&mut w, 0);
     assert!(
         effects_of(&w, EffectKind::Carpet).is_empty(),
-        "let go, it breaks"
+        "let go, it is gone"
     );
-    assert!(pools(&w).len() >= 2, "into stains");
+    let mine: Vec<Effect> = pools(&w)
+        .into_iter()
+        .filter(|p| p.pos.sub(floor).flat_len().raw() < metres(0.5).raw())
+        .collect();
+    assert_eq!(mine.len(), 1, "one stain in its middle");
+    assert!(
+        mine[0].banked >= paid,
+        "holding what it held: {}",
+        mine[0].banked
+    );
 }
 
+#[test]
+fn a_longer_carpet_is_a_bigger_stain() {
+    let stain_of = |frames: u32| {
+        let mut w = mage();
+        w.players[1].pos = at(40.0, 0.0, 8.0);
+        carpet_for(&mut w, command_startup() + frames);
+        step(&mut w, 0);
+        pools(&w).iter().map(|p| p.banked).max().unwrap_or(0)
+    };
+    let short = stain_of(20);
+    let long = stain_of(70);
+    assert!(long > short, "{short} then {long}");
+}
+
+#[test]
+fn the_carpet_stands_up_the_stains_it_covers() {
+    let mut w = mage();
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    carpet_for(&mut w, command_startup() + 3);
+    let floor = effects_of(&w, EffectKind::Carpet)[0].pos;
+    stain(&mut w, floor.add(at(0.8, 0.0, 0.0)), 80);
+    stain(&mut w, floor.add(at(-0.8, 0.0, 0.8)), 80);
+    carpet_for(&mut w, 40);
+    step(&mut w, 0);
+    assert_eq!(thralls(&w).len(), 2, "both stood up");
+}
 #[test]
 fn coagulate_slides_her_stains_together_into_one() {
     let mut w = mage();
@@ -561,7 +671,6 @@ fn coagulate_slides_her_stains_together_into_one() {
 // ---------------------------------------------------------------------------
 // Thralls
 // ---------------------------------------------------------------------------
-
 fn thralls(w: &World) -> Vec<Effect> {
     effects_of(w, EffectKind::Thrall)
 }
@@ -575,16 +684,19 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
 }
 
 #[test]
-fn holding_the_right_click_raises_her_stains_as_thralls() {
+fn e_raises_her_stains_as_thralls() {
     let mut w = mage();
     for k in 0..3 {
         stain(&mut w, at(-6.0 + 2.0 * k as f32, 0.0, 10.0), 80);
     }
-    run(&mut w, t::summon_at() as u32 + 12, keys::SCYTHE);
+    step(&mut w, keys::RAISE);
+    run(&mut w, 30, 0);
     let up = thralls(&w);
     assert_eq!(up.len(), 3, "every stain near her stood up");
-    assert!(pools(&w).is_empty(), "a thrall is the stain");
-    assert!(up.iter().all(|e| e.banked > 60), "of its essence");
+    assert!(
+        pools(&w).iter().all(|p| p.banked < 60),
+        "a thrall is the stain"
+    );
 }
 
 #[test]
@@ -597,10 +709,10 @@ fn no_more_thralls_than_the_cap() {
             80,
         );
     }
-    run(&mut w, t::summon_at() as u32 + 12, keys::SCYTHE);
+    step(&mut w, keys::RAISE);
+    run(&mut w, 30, 0);
     assert_eq!(thralls(&w).len() as i32, t::thrall_cap().min(8));
 }
-
 #[test]
 fn a_bite_deals_what_it_spends_and_spills_it_and_fills_no_well() {
     let mut w = mage();
@@ -668,6 +780,94 @@ fn command_sends_them_where_she_points() {
 }
 
 #[test]
+fn command_comes_before_biting() {
+    let mut w = mage();
+    w.players[1].pos = at(-4.0, 0.0, 8.0);
+    thrall(&mut w, at(-4.5, 0.0, 8.0), 300);
+    let his = w.players[1].health;
+    step_looking(&mut w, keys::SCYTHE, -2000);
+    for _ in 0..30 {
+        w.players[1].pos = at(-4.0, 0.0, 8.0);
+        step(&mut w, 0);
+    }
+    assert_eq!(
+        w.players[1].health, his,
+        "sent away, it bit nothing on the way"
+    );
+    assert!(thralls(&w)[0].pos.x.raw() > metres(-2.0).raw(), "and went");
+}
+
+#[test]
+fn a_thrall_goes_for_the_nearest_enemy_by_itself() {
+    let mut w = mage();
+    w.players[1].pos = at(6.0, 0.0, 8.0);
+    thrall(&mut w, at(-4.0, 0.0, 8.0), 300);
+    let his = w.players[1].health;
+    for _ in 0..150 {
+        w.players[1].pos = at(6.0, 0.0, 8.0);
+        step(&mut w, 0);
+    }
+    assert!(w.players[1].health < his, "it went ten metres to bite him");
+}
+
+#[test]
+fn a_thrall_walks_round_a_block_to_its_prey() {
+    // The proving ground's block from x 5 to 9 m and z -4 to 4 m, a metre
+    // and a half tall: the thrall on one side, him on the other, the
+    // straight line through it.
+    let mut w = mage();
+    w.players[1].pos = at(11.0, 0.0, 0.0);
+    thrall(&mut w, at(3.0, 0.0, 0.0), 400);
+    let his = w.players[1].health;
+    let mut inside = false;
+    for _ in 0..300 {
+        w.players[1].pos = at(11.0, 0.0, 0.0);
+        step(&mut w, 0);
+        if let Some(th) = thralls(&w).first() {
+            let (x, z) = (as_f(th.pos.x), as_f(th.pos.z));
+            inside |= (5.2..8.8).contains(&x) && (-3.8..3.8).contains(&z);
+        }
+        if w.players[1].health < his {
+            break;
+        }
+    }
+    assert!(!inside, "it went through the block");
+    assert!(
+        w.players[1].health < his,
+        "it found its way round to bite him"
+    );
+}
+
+#[test]
+fn a_thrall_bites_critters() {
+    let mut w = World::hunt_of([Class::BloodMage; 2], sim::species::SpeciesId::GNAWERS);
+    let Some(c) = (0..sim::critter::MAX_CRITTERS).find(|&c| w.critters[c].alive()) else {
+        panic!("a pack");
+    };
+    let body = w.critters[c].pos;
+    w.players[0].pos = body.add(at(20.0, 0.0, 0.0));
+    w.players[1].health = 0;
+    let before = w.critters[c].health;
+    let mut th = Effect::pool(
+        0,
+        Class::BloodMage,
+        b::SUMMON,
+        body.add(at(0.5, 0.0, 0.0)),
+        300,
+    );
+    th.kind = EffectKind::Thrall;
+    place(&mut w, th);
+    let mut bit = false;
+    for _ in 0..90 {
+        w.advance([Input::default(); 2]);
+        if !w.critters[c].alive() || w.critters[c].health < before {
+            bit = true;
+            break;
+        }
+    }
+    assert!(bit, "it bit a critter");
+}
+#[test]
 fn the_rising_reap_hurls_thralls_and_drinks_the_stains_in_front() {
     let mut w = mage();
     wounded(&mut w);
@@ -688,67 +888,168 @@ fn the_rising_reap_hurls_thralls_and_drinks_the_stains_in_front() {
 }
 
 // ---------------------------------------------------------------------------
-// The Well and the finishers
+
+// ---------------------------------------------------------------------------
+// Grey, and the finishers
 // ---------------------------------------------------------------------------
 
-fn brimming() -> World {
+#[test]
+fn grey_holds_two_seconds_then_goes_fast() {
     let mut w = mage();
-    w.players[0].well = t::well_full() as u16;
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    w.players[0].wound(300);
+    let grey = w.players[0].grey;
+    run(&mut w, t::grey_grace() as u32 - 2, 0);
+    assert_eq!(w.players[0].grey, grey, "it held");
+    run(&mut w, 60, 0);
+    assert!(
+        grey - w.players[0].grey >= t::grey_fade() - 2,
+        "then a second took {}",
+        grey - w.players[0].grey
+    );
+}
+
+/// Her, with `grey` open.
+fn greyed(grey: i32) -> World {
+    let mut w = mage();
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    w.players[0].wound(grey);
     w
 }
 
 #[test]
-fn a_full_well_turns_the_end_of_the_carpet_into_the_thorn_garden() {
-    let mut w = brimming();
-    let m = sim::moves::get(Class::BloodMage, b::CARPET);
+fn the_hemoplague_held_to_its_end_is_the_vines_and_spends_her_grey() {
+    let mut w = greyed(300);
     let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
-    carpet_for(&mut w, start + m.channel as u32 + 4);
-    assert_eq!(doing(&w), Some(b::THORN_GARDEN));
-    assert_eq!(w.players[0].well, 0, "the Well is spent on it");
-    run(&mut w, 80, 0);
-    assert!(!effects_of(&w, EffectKind::Thorns).is_empty(), "thorns");
+    let cap = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE).channel as u32;
+    hold(&mut w, keys::MY_BLOOD, start + cap + 3);
+    assert_eq!(doing(&w), Some(b::VINES));
+    assert_eq!(w.players[0].grey, 0, "all her grey went into it");
+    run(&mut w, 5, 0);
+    let vines = effects_of(&w, EffectKind::Vines);
+    assert_eq!(vines.len(), 1, "the vines");
+    assert!(
+        effects_of(&w, EffectKind::Plague).is_empty(),
+        "out of the cloud"
+    );
 }
 
 #[test]
-fn without_a_full_well_the_hold_just_ends() {
-    let mut w = mage();
-    let m = sim::moves::get(Class::BloodMage, b::CARPET);
-    let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
-    carpet_for(&mut w, start + m.channel as u32 + 4);
-    assert_ne!(doing(&w), Some(b::THORN_GARDEN));
+fn the_vines_bleed_and_slow_and_more_grey_hits_harder() {
+    let blow = |grey: i32| {
+        let mut w = greyed(grey);
+        let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
+        let cap = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE).channel as u32;
+        hold(&mut w, keys::MY_BLOOD, start + cap + 3);
+        run(&mut w, 2, 0);
+        let v = effects_of(&w, EffectKind::Vines)[0];
+        let his = w.players[1].health;
+        let mut bled = false;
+        let mut slowed = false;
+        for _ in 0..40 {
+            w.players[1].pos = v.pos;
+            step(&mut w, 0);
+            bled |= w.players[1].bleeding > 0;
+            slowed |= w.players[1].slowed > 0;
+        }
+        assert!(bled && slowed, "bled {bled}, slowed {slowed}");
+        his - w.players[1].health
+    };
+    let little = blow(20);
+    let lots = blow(400);
+    let row = sim::moves::get(Class::BloodMage, b::VINES).damage;
+    assert!(little >= row, "always more than its row: {little}");
+    assert!(
+        lots > little + 100,
+        "and more grey, more: {little} then {lots}"
+    );
 }
 
 #[test]
-fn exsanguinate_takes_the_stains_in_front_into_one_blow() {
-    let mut w = brimming();
-    w.players[1].pos = at(0.0, 0.0, 8.0);
-    stain(&mut w, at(-2.0, 0.0, 8.0), 200);
-    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
-    run(&mut w, cap + 4, keys::YOUR_BLOOD);
-    assert_eq!(doing(&w), Some(b::EXSANGUINATE));
-    let his = w.players[1].health;
-    for _ in 0..80 {
-        w.players[1].pos = at(0.0, 0.0, 8.0);
-        step(&mut w, 0);
-    }
-    let took = his - w.players[1].health;
-    let row = sim::moves::get(Class::BloodMage, b::EXSANGUINATE).damage;
-    assert!(took >= row + 150, "the row and the stain: {took}");
-}
-
-#[test]
-fn the_golem_is_the_well_and_what_it_fused() {
-    let mut w = brimming();
-    let cap = sim::moves::get(Class::BloodMage, b::SUMMON).channel as u32;
-    let start = sim::moves::get(Class::BloodMage, b::COMMAND).startup as u32;
-    run(&mut w, start + cap + 4, keys::SCYTHE);
+fn the_carpet_held_to_its_end_is_a_golem_of_her_grey_and_its_stains() {
+    let mut w = greyed(300);
+    carpet_for(&mut w, command_startup() + 3);
+    let floor = effects_of(&w, EffectKind::Carpet)[0].pos;
+    stain(&mut w, floor.add(at(0.5, 0.0, 0.0)), 200);
+    let cap = sim::moves::get(Class::BloodMage, b::CARPET).channel as u32;
+    carpet_for(&mut w, cap + 2);
     assert_eq!(doing(&w), Some(b::GOLEM));
-    run(&mut w, 80, 0);
+    run(&mut w, 2, 0);
     let golem = effects_of(&w, EffectKind::Golem);
     assert_eq!(golem.len(), 1, "a golem");
-    assert!(golem[0].banked > t::well_full() - 3 * t::pool_drain());
+    assert!(
+        golem[0].banked > 300 + 200 - 20,
+        "its health: {}",
+        golem[0].banked
+    );
+    assert!(pools(&w).is_empty(), "the stain went into it");
 }
 
+#[test]
+fn the_golem_hurts_itself_for_half_what_it_deals_and_takes_blows() {
+    let mut w = mage();
+    w.players[1].pos = at(4.0, 0.0, 8.0);
+    let mut g = Effect::pool(0, Class::BloodMage, b::GOLEM, at(3.0, 0.0, 8.0), 1000);
+    g.kind = EffectKind::Golem;
+    place(&mut w, g);
+    let his = w.players[1].health;
+    for _ in 0..(t::golem_punch_every() as u32 + 2) {
+        w.players[1].pos = at(4.0, 0.0, 8.0);
+        step(&mut w, 0);
+    }
+    let dealt = his - w.players[1].health;
+    assert!(dealt > 0, "it punched");
+    let left = effects_of(&w, EffectKind::Golem)[0].banked;
+    let drained = 1000 - left - dealt / 2;
+    assert!(
+        (0..=3 * t::pool_drain()).contains(&drained),
+        "it paid half what it dealt: {dealt} dealt, {left} left"
+    );
+}
+
+#[test]
+fn the_spike_held_to_its_end_is_the_cascade_going_out() {
+    let mut w = greyed(300);
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
+    hold(&mut w, keys::YOUR_BLOOD, cap + 3);
+    assert_eq!(doing(&w), Some(b::CASCADE));
+    run(&mut w, 40, 0);
+    let c = effects_of(&w, EffectKind::Cascade)
+        .into_iter()
+        .find(|e| e.slot == b::CASCADE)
+        .expect("the cascade");
+    // A body on the third ring takes the third wave, not the first.
+    let (inner, outer) = sim::state::World::cascade_ring(&c, 2);
+    let r = inner.add(outer).mul(Fx::ratio(1, 2));
+    let spot = c.pos.add(V3::new(r, Fx::ZERO, Fx::ZERO));
+    let his = w.players[1].health;
+    let mut when = None;
+    for f in 0..(t::cascade_every() as u32 * 4) {
+        w.players[1].pos = spot;
+        w.players[1].vel = V3::ZERO;
+        step(&mut w, 0);
+        if when.is_none() && w.players[1].health < his {
+            when = Some(f);
+        }
+    }
+    let when = when.expect("a wave reached him");
+    assert!(
+        when + 10 >= t::cascade_every() as u32,
+        "not on the first wave: {when}"
+    );
+}
+
+#[test]
+fn a_dodge_with_no_stain_under_the_crosshair_is_only_a_dodge() {
+    let mut w = mage();
+    let from = w.players[0].pos;
+    step_looking(&mut w, Input::SHIFT | Input::W, -2500);
+    run(&mut w, 40, 0);
+    assert!(pools(&w).is_empty(), "no blood thrown");
+    let went = w.players[0].pos.sub(from).flat_len();
+    assert!(went.raw() < metres(6.0).raw(), "no blink: {}", as_f(went));
+}
 #[test]
 fn the_creature_turns_on_the_golem() {
     let mut w = World::hunt([Class::BloodMage; 2]);
@@ -812,21 +1113,3 @@ fn the_plague_hurts_over_time_holds_nobody_and_pools_at_its_centre() {
         "at the cloud's centre"
     );
 }
-
-#[test]
-fn e_casts_the_plague_where_she_aims() {
-    let mut w = mage();
-    step_looking(&mut w, keys::PLAGUE, -2000);
-    let startup = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE).startup;
-    run(&mut w, startup as u32 + 4, 0);
-    let cloud = effects_of(&w, EffectKind::Plague);
-    assert_eq!(cloud.len(), 1, "a cloud");
-    assert!(
-        cloud[0].pos.x.raw() > metres(-4.0).raw(),
-        "out where she aimed"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Frenzy
-// ---------------------------------------------------------------------------

@@ -170,6 +170,21 @@ pub fn setup(mut commands: Commands) {
                 spawn_bar(row, 1);
             });
 
+            // The Blood mage's Well, under whichever fighter has one: a bar,
+            // because a number is not read in a fight.
+            root.spawn(Node {
+                width: Val::Percent(100.0),
+                column_gap: Val::Px(18.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                margin: UiRect::top(Val::Px(4.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                spawn_well(row, 0);
+                spawn_well(row, 1);
+            });
+
             // The creature's bars, under the fighters' own. Hidden entirely in
             // a versus match rather than drawn empty: a bar for something that
             // is not there is a thing to wonder about.
@@ -461,6 +476,66 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
                 ));
             }
         });
+}
+
+/// The Blood mage's Well: what she drank that her health could not hold,
+/// against `sim::tuning::well_full`. Hidden for every other class.
+#[derive(Component)]
+pub struct WellRow(pub usize);
+
+/// The Well's fill.
+#[derive(Component)]
+pub struct WellFill(pub usize);
+
+/// The Well's colour: deep blood, darker than her health.
+const WELL: Color = Color::srgb(0.55, 0.05, 0.12);
+
+fn spawn_well(parent: &mut ChildSpawnerCommands, who: usize) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(34.0),
+                height: Val::Px(8.0),
+                border: UiRect::all(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            WellRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(WELL),
+                WellFill(who),
+            ));
+        });
+}
+
+/// The Well's bar: shown for the class that has one, filled to how full it
+/// is.
+pub fn update_well(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&WellRow, &mut Visibility)>,
+    mut fills: Query<(&WellFill, &mut Node)>,
+) {
+    for (row, mut visible) in rows.iter_mut() {
+        *visible = if sim.cur.players[row.0].class.wounds_go_grey() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    let full = sim::tuning::well_full().max(1) as f32;
+    for (fill, mut node) in fills.iter_mut() {
+        let well = sim.cur.players[fill.0].well as f32;
+        node.width = Val::Percent(100.0 * (well / full).clamp(0.0, 1.0));
+    }
 }
 
 fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
@@ -872,21 +947,13 @@ fn mechanic(p: &sim::state::Player) -> String {
 /// move's startup, active and recovery, so a number can be judged in context.
 fn describe(p: &sim::state::Player) -> String {
     let mut line = describe_action(p);
-    // The Blood mage's blaster (2026-10-12): what her vessel is carrying and
-    // how full her Well is, beside whatever she is doing. Text on the
+    // The Blood mage's blaster (2026-10-12): what her vessel is carrying, beside whatever she is doing. Text on the
     // state line until each has a picture of its own.
     if p.vessel != sim::state::NO_VESSEL {
         let m = sim::moves::get(p.class, p.vessel);
         line.push_str(&format!("   | stored: {} {}", m.name, roman(p.vessel_tier)));
     }
-    if p.class.wounds_go_grey() {
-        let full = sim::tuning::well_full();
-        if p.well_full() {
-            line.push_str("   | WELL FULL: hold a click past its end");
-        } else if full > 0 {
-            line.push_str(&format!("   | Well {}/{}", p.well, full));
-        }
-    }
+
     line
 }
 
@@ -1141,6 +1208,8 @@ mod tests {
         system.initialize(&mut world);
         let mut buttons = IntoSystem::into_system(update_class_buttons);
         buttons.initialize(&mut world);
+        let mut well = IntoSystem::into_system(update_well);
+        well.initialize(&mut world);
     }
 
     #[test]

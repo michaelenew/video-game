@@ -37,67 +37,83 @@ grows with how open she has left herself, and a floor she wants to fight on.
 
 > **Thralls and the Well, 2026-10-13 — built, unplayed.** The owner's verdict on the blaster:
 > the stains and the detonation chain are the class, but the snowball feeds itself, the start
-> costs most of her bar, and the moves are not synergistic. §"Thralls and the Well" below is
+> costs most of her bar, and the moves are not synergistic. §"Thralls and grey" below is
 > what is in the game now; **where anything after it disagrees, it wins.** The direction, the
 > nine combos and the answers are
 > [../exploration/0016_blood_mage_thralls_and_the_well.md](../exploration/0016_blood_mage_thralls_and_the_well.md).
 
-## Thralls and the Well — built 2026-10-13
+## Thralls and grey — built 2026-10-13, revised from play the same day
 
-| | Left: my blood | Middle: your blood | Right: the dead |
+| | Left: the area | Middle: the spikes | Right: the thralls |
 | --- | --- | --- | --- |
-| **Tapped** | **Haemorrhage** (floor and air) | **Black spike**, held in tiers (air: **Stake**) | **Command** |
-| **Held** | **Carpet of blood** | (the tiers) | **Summon** |
-| **Held to the end, Well full** | **Thorn garden** | **Exsanguinate** | **Blood golem** |
+| **Tapped** | **Haemorrhage** (floor and air) | **Black spike**, one | **Command** |
+| **Held** | **Hemoplague**, growing | **Black spike**, one to seven (air: **Stake**) | **Carpet of blood** |
+| **Held to the end** | **Black vines** | **Crimson cascade** | **Blood golem** |
 | **Space + click**, floor or once in the air | **Blood wings** | **Upheaval** | **Rising reap** |
 
 | Key | Move |
 | --- | --- |
 | `Q` | **Coagulate** |
-| `E` | **Hemoplague** |
-| `shift` + direction | The **teleport** to a stain under the crosshair; otherwise the **Sanguine flow**, which sends a glob that lands as a stain |
+| `E` | **Summon** |
+| `shift` + direction | The **teleport** to a stain under the crosshair (12 m); otherwise an ordinary dodge |
 
-**The rows were retuned, not renumbered**, and two were appended: the Transfusion's row is the
-Carpet, the sweep's Command, Tides' the Summon, the chain's Coagulate, the leap's the Rising
-reap, Frenzy's the Thorn garden; Exsanguinate and the golem are new (`sim::moves::blood`).
+**The rows were retuned, not renumbered**: the Transfusion's row is the Carpet, the sweep's
+Command, Tides' the Summon, the chain's Coagulate, the leap's the Rising reap, Frenzy's the
+Black vines; the cascade and the golem were appended (`sim::moves::blood`).
 `tests/blood_mage.rs` holds one test per move and rule.
+
+### Grey, and the finishers
+
+**Grey holds for `grey_grace` (two seconds) after it last opened, then fades at `grey_fade`
+(60 a second).** It is the window to spend it in. **A finisher is a hold kept to its end, at
+any time**, and it spends all her grey and the Well (`Player::fuel`): its blow is the row's
+damage and `finisher_per_grey` for every point spent, so it always beats the row and is bigger
+the more there was.
+
+- **Black vines** (left): barbed vines erupt out of the Hemoplague's middle to `vines_size` of
+  its radius over `vines_grow`, hitting and bleeding everything the front passes, then stand for
+  `vines_lasts` (five seconds), bleeding and slowing whatever is in them.
+- **Crimson cascade** (middle): rings of eruptions go out from the crosshair, one every
+  `cascade_every`, `cascade_step` further each, `cascade_waves` of them, each `cascade_decay` of
+  the last; every stain of hers a ring crosses is lit and goes up in turn.
+- **Blood golem** (right): everything the Carpet covers -- stains, thralls, what the carpet held
+  -- and all her grey, fused into one thrall with that many hit points. It takes blows off its
+  health, loses `golem_self_hurt` of every punch it lands, and drains as a stain does.
 
 ### Every stain is one kind
 
-- **Every cost is a stain.** What a press costs lands where it was aimed -- the crosshair's
-  floor for a grounded or skillshot move, her feet otherwise. Nothing she spends is lost; it is
-  on the floor, hers to take back.
-- **Every hit is a stain**, hers or a thrall's: under what it hit, the size of the blow.
-- **Every stain is collected the same way**: walked into, teleported to, hit through, or drunk
-  by the spike erupting it. A stain settles for `stain_settles` frames before anything drinks
-  it, so a cost does not heal on the frame it is paid. **Eruptions spill nothing**: the spike out
-  of a stain spends it, so the same spot runs out instead of growing.
-- **What her red cannot hold fills the Well** (`Player::absorb`). A thrall's bite fills nothing
-  directly; it leaves a stain, and the stain is what fills the Well when she takes it.
+- **Every cost is a stain**, where it was aimed. **Every hit is a stain**, hers or a thrall's.
+- Collected by walking, teleporting, hitting through it, or the spike erupting it; it settles
+  for `stain_settles` first. **Eruptions spill nothing.** What her red cannot hold fills the
+  **Well**, the bar under her health.
+- **A chain runs link by link**: a stain set off by an eruption beside it waits `chain_delay`
+  (three frames) -- fast enough not to react to, slow enough to see where it started.
+- **The dodge** is an ordinary dodge unless the crosshair is on a stain within 12 m; it throws
+  nothing.
+
+### The fields
+
+- **Hemoplague** (left held): laid at the crosshair's floor when the hold opens, growing from
+  `plague_from` to `plague_to` over the hold, hurting and slowing to `plague_slow`; let go, it
+  stands at that size for `plague_lasts`.
+- **Carpet of blood** (right held): laid the same way, growing from `carpet_from` to
+  `carpet_to`, paying 1% of her red every `carpet_pays_every` into itself and hurting a little;
+  let go, it is **one big stain** of what it held, and every stain of hers it covered stands up
+  as a thrall. A longer hold is a bigger stain and a wider area.
+- **The Black spike** (middle held): one spike for a tap, and up to `spikes_most` (seven) on a
+  ring as wide as `spike_spread_most` at a full hold.
 
 ### Thralls
 
-A thrall is **a stain on legs**: the Summon, held `summon_at` frames, stands every stain of hers
-within `summon_reach` up in its own slot, with its essence, draining as it did, up to
-`thrall_cap`. It goes for the nearest enemy body within `thrall_seek` of where it was sent, and
-**a bite spends what it deals** -- `thrall_bite`% of it, at least `thrall_bite_least` -- and
-spills that as a stain under the prey. **One blow kills it**, and it falls back into a stain of
-what it had less the blow. Command sends them to the crosshair's floor; the Rising reap hurls
-them along its cone. A creature turns on a thrall nearer it than she is, and on the golem
-always.
-
-### The Carpet, and the finishers
-
-The Carpet is laid at the crosshair's floor when the Haemorrhage's startup ends with the click
-held. It grows for as long as she holds it, pays 1% of her red every `carpet_pays_every` into
-itself, hurts and slows what is on it, and **breaks into stains** the moment she lets go, is hit,
-or turns it into the Thorn garden. With a full Well, a hold kept to its end becomes:
-
-- **Thorn garden** (left): every stain near the crosshair becomes a root of thorns, wider the
-  more it held, that holds and hurts whoever is in it.
-- **Exsanguinate** (middle): every stain in the cone in front of her torn into one blow.
-- **Blood golem** (right): her thralls and stains at the crosshair fused with the Well into one
-  great thrall that takes blows off its essence and punches.
+A thrall is **a stain on legs**, up to `thrall_cap`: stood up by the Carpet or by `E`. **Her
+click comes first**: Command sends every thrall and the golem to the crosshair's floor, and
+they bite nothing until they are there. Otherwise a thrall goes for **the nearest enemy** within
+`thrall_seek` -- a fighter, the creature, a pack's critter -- **walking round walls** (it
+follows a wall on the hand it turned to). **A bite spends what it deals** and spills it under
+the prey. One blow kills a thrall back into a stain of what it had less the blow. A creature
+turns on the golem, and on a thrall nearer it than she is. It is drawn as a fighter's body gone
+brutish -- the same rounded torso, head and limbs, crouched, horned, long-armed -- in
+translucent blood.
 
 ## The blaster — built 2026-10-12 (superseded 2026-10-13)
 

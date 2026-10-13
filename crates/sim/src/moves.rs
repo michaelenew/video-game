@@ -695,8 +695,8 @@ const NAMES: [&[&str]; 6] = [
         "Stake",
         "Coagulate",
         "Rising reap",
-        "Thorn garden",
-        "Exsanguinate",
+        "Black vines",
+        "Crimson cascade",
         "Blood golem",
     ],
     // Dual mage -- two forces, one in each hand, and every move a spell
@@ -1119,50 +1119,52 @@ pub mod dual {
 // ---------------------------------------------------------------------------
 
 /// The Blood mage's move list, and **which button throws each**: stains,
-/// thralls and the Well, since 2026-10-13.
+/// thralls and grey, since 2026-10-13 (revised the same day from play).
 ///
 /// ```text
-///                 left: my blood      middle: your blood    right: the thralls
-///   on foot, tap  Haemorrhage         Black spike, tier 1   Command
-///   on foot, hold Carpet of blood     Black spike, tiers    Summon
-///   in the air    Haemorrhage         Stake                 Command / Summon
+///                 left: the area      middle: the spikes    right: the thralls
+///   tap           Haemorrhage         Black spike (1)       Command
+///   hold          Hemoplague, growing Black spike, 1 to 7   Carpet of blood
+///   held to end   Black vines         Crimson cascade       Blood golem
+///   in the air    Haemorrhage         Stake                 Command
 ///   space+click   Blood wings         Upheaval              Rising reap
 ///   (floor, or once a jump in the air)
-///   Well full,    Thorn garden        Exsanguinate          Blood golem
-///   held longest
-///   Q  Coagulate    E  Hemoplague    shift  send and zip
+///   Q  Coagulate    E  Summon    shift + crosshair on a stain  teleport
 /// ```
+///
+/// **A finisher is a hold kept to its end**, at any time, and it spends all
+/// her grey and the Well: the more there was, the bigger it is.
 ///
 /// **Storage order is not button order.** The Oven's move store is packed in
 /// class order, so a slot appended to this class shifts every Dual mage index
 /// in `tuned.rs` and a slot *renumbered* silently rewrites every number on the
 /// class. So rows are **retuned** as new moves rather than renumbered: the
 /// Transfusion's row is the Carpet, the sweep's Command, Tides' the Summon,
-/// the chain's Coagulate, the leap's the Rising reap and Frenzy's the Thorn
-/// garden; Exsanguinate and the golem were appended. See
+/// the chain's Coagulate, the leap's the Rising reap and Frenzy's the Black
+/// vines; the cascade and the golem were appended. See
 /// `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
 pub mod blood {
-    /// Left click held past the Haemorrhage's startup: **the Carpet of
-    /// blood**. A disc of blood spreading from where she aimed for as long as
-    /// she holds, slowing and hurting what is inside, paid in red as it
-    /// spreads; let go, it breaks into stains. Was the Transfusion's row.
+    /// Right click held past Command's startup: **the Carpet of blood**. A
+    /// disc of blood spreading from where she aimed for as long as she holds,
+    /// hurting a little, paid in red as it spreads; let go, it is one big
+    /// stain, and every stain of hers it covered stands up as a thrall.
     pub const CARPET: u8 = 0;
     /// Left click, tapped -- on the floor and in the air: **the Haemorrhage**.
     /// A bolt that opens a bleed, and every tick of the bleed spills a stain.
     pub const HAEMORRHAGE: u8 = 1;
-    /// `E`: **the Hemoplague**. A cloud at the crosshair that hurts everyone
-    /// inside it on a tick and holds nobody.
+    /// Left click held past the Haemorrhage's startup: **the Hemoplague**. A
+    /// cloud on the floor where she aimed, growing for as long as she holds,
+    /// hurting and slowing everyone inside on a tick; let go, it stands at the
+    /// size it reached.
     pub const HEMOPLAGUE: u8 = 2;
-    /// Middle click, held through three tiers: **the Black spike**. One
-    /// spike; three in a triangle; a field in waves. On a stain, the stain
+    /// Middle click, held: **the Black spike**. One spike tapped, and more in
+    /// a wider area the longer the hold, up to seven. On a stain, the stain
     /// erupts.
     pub const BLACK_SPIKE: u8 = 3;
-    /// Right click, tapped: **Command**. The scythe swung across her front,
-    /// drinking every stain it passes, and every thrall of hers sent to the
-    /// crosshair's spot on the floor. Was the sweep, and is still a swing.
+    /// Right click, tapped: **Command**. Every thrall of hers, and the golem,
+    /// sent to the crosshair's spot on the floor, whatever they were doing.
     pub const COMMAND: u8 = 4;
-    /// Right click held past Command's startup: **the Summon**. A slow
-    /// raising; every stain round her rises as a thrall. Was Tides' row.
+    /// `E`: **the Summon**. Every stain round her stands up as a thrall.
     pub const SUMMON: u8 = 5;
     /// Space and left click: **Blood wings**. A burst along her aim.
     pub const WINGS: u8 = 6;
@@ -1174,21 +1176,22 @@ pub mod blood {
     /// `Q`: **Coagulate**. Every stain of hers in reach slides to the
     /// crosshair's spot on the floor and merges. Was the chain's row.
     pub const COAGULATE: u8 = 9;
-    /// Space and right click: **the Rising reap**. The scythe swept up, and a
-    /// cone of it thrown forward that hurls her thralls along and drinks the
-    /// stains it crosses. Was the leap's row.
+    /// Space and right click: **the Rising reap**. A cone thrown forward that
+    /// hurls her thralls along and drinks the stains it crosses. Was the
+    /// leap's row.
     pub const RISING_REAP: u8 = 10;
-    /// The Carpet held on past its widest with a full Well: **the Thorn
-    /// garden**. Black branches out of every stain of hers round the
-    /// crosshair, rooting and hurting. Was Frenzy's row.
-    pub const THORN_GARDEN: u8 = 11;
-    /// The Black spike held on past its third tier with a full Well:
-    /// **Exsanguinate**. A vast cone in front of her, one enormous blow, every
-    /// stain inside it spent into it. Appended.
-    pub const EXSANGUINATE: u8 = 12;
-    /// The Summon held on past its raising with a full Well: **the Blood
-    /// golem**. Every thrall and stain round her fused into one body that
-    /// takes several blows. Appended.
+    /// The Hemoplague held to its end: **the Black vines**. Barbed vines
+    /// erupting outward from the cloud's middle across its area, bleeding
+    /// everything they reach, then standing a while, bleeding and slowing
+    /// whatever enters. Spends her grey. Was Frenzy's row.
+    pub const VINES: u8 = 11;
+    /// The Black spike held to its end: **the Crimson cascade**. A ring of
+    /// eruptions moving outward from the crosshair, wave after wave, setting
+    /// off every stain of hers it crosses. Spends her grey. Appended.
+    pub const CASCADE: u8 = 12;
+    /// The Carpet held to its end: **the Blood golem**. Every stain the
+    /// carpet covers and all her grey, fused into one body with that many
+    /// hit points. Spends her grey. Appended.
     pub const GOLEM: u8 = 13;
 
     pub const COUNT: usize = 14;
@@ -1196,26 +1199,26 @@ pub mod blood {
     /// **Which button is which of her verbs**, in one place.
     pub mod keys {
         use crate::input::Input;
-        /// Left click: the Haemorrhage, the Carpet held, Blood wings with
+        /// Left click: the Haemorrhage, the Hemoplague held, Blood wings with
         /// space.
         pub const MY_BLOOD: u16 = Input::LEFT;
         /// Middle click: the Black spike, the Stake in the air, the Upheaval
         /// with space.
         pub const YOUR_BLOOD: u16 = Input::MIDDLE;
-        /// Right click: Command, the Summon held, the Rising reap with space.
+        /// Right click: Command, the Carpet held, the Rising reap with space.
         pub const SCYTHE: u16 = Input::RIGHT;
         /// `Q`: Coagulate.
         pub const GATHER: u16 = Input::SPECIAL;
-        /// `E`: the Hemoplague.
-        pub const PLAGUE: u16 = Input::MECHANIC;
+        /// `E`: the Summon.
+        pub const RAISE: u16 = Input::MECHANIC;
     }
 
     /// Which click throws this move -- what holds its charge open, and what
     /// lets a stored charge go.
     pub const fn click_of(kind: u8) -> u16 {
         match kind {
-            CARPET | HAEMORRHAGE | WINGS | THORN_GARDEN => keys::MY_BLOOD,
-            BLACK_SPIKE | STAKE | UPHEAVAL | EXSANGUINATE => keys::YOUR_BLOOD,
+            HEMOPLAGUE | HAEMORRHAGE | WINGS | VINES => keys::MY_BLOOD,
+            BLACK_SPIKE | STAKE | UPHEAVAL | CASCADE => keys::YOUR_BLOOD,
             _ => keys::SCYTHE,
         }
     }
@@ -1226,36 +1229,35 @@ pub mod blood {
         matches!(kind, BLACK_SPIKE)
     }
 
-    /// **Is this held as a field** -- the Carpet spreading, the Summon
-    /// raising -- rather than charged in tiers?
+    /// **Is this held as a field** -- the Hemoplague and the Carpet growing
+    /// -- rather than charged in tiers?
     pub const fn fielded(kind: u8) -> bool {
-        matches!(kind, CARPET | SUMMON)
+        matches!(kind, CARPET | HEMOPLAGUE)
     }
 
     /// Which field a tapped move becomes when its click is held past its
-    /// startup: the Haemorrhage the Carpet, Command the Summon.
+    /// startup: the Haemorrhage the Hemoplague, Command the Carpet.
     pub const fn held_into(kind: u8) -> Option<u8> {
         match kind {
-            HAEMORRHAGE => Some(CARPET),
-            COMMAND => Some(SUMMON),
+            HAEMORRHAGE => Some(HEMOPLAGUE),
+            COMMAND => Some(CARPET),
             _ => None,
         }
     }
 
-    /// Which finisher this held move becomes, held on past its end with a
-    /// full Well.
+    /// Which finisher this held move becomes, held to its end.
     pub const fn finisher_of(kind: u8) -> Option<u8> {
         match kind {
-            CARPET => Some(THORN_GARDEN),
-            BLACK_SPIKE => Some(EXSANGUINATE),
-            SUMMON => Some(GOLEM),
+            HEMOPLAGUE => Some(VINES),
+            BLACK_SPIKE => Some(CASCADE),
+            CARPET => Some(GOLEM),
             _ => None,
         }
     }
 
     /// Is this one of the three finishers?
     pub const fn finisher(kind: u8) -> bool {
-        matches!(kind, THORN_GARDEN | EXSANGUINATE | GOLEM)
+        matches!(kind, VINES | CASCADE | GOLEM)
     }
 
     /// Is this the scythe -- the move whose reach, width and damage grow with
@@ -1454,7 +1456,7 @@ pub const fn slots(class: Class) -> usize {
 /// Champion's fourth is the second link of its sword chain.
 pub const fn on_e(class: Class) -> Option<u8> {
     match class {
-        Class::BloodMage => Some(blood::HEMOPLAGUE),
+        Class::BloodMage => Some(blood::SUMMON),
         // The Dual mage for the same reason, arrived at from the other
         // direction: her mechanic is a *meter*, and it is steered by which
         // button attacks rather than by a key. There is nothing for `E` to
@@ -1614,20 +1616,20 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // The blaster, since 2026-10-12: the three clicks held on the floor
         // in tiers, the air row quick, space a takeoff. See [`blood`].
         Class::BloodMage => match slot {
-            0 => "LMB held",
+            0 => "RMB held",
             1 => "LMB",
-            2 => "E",
+            2 => "LMB held",
             3 => "MMB held",
             4 => "RMB",
-            5 => "RMB held",
+            5 => "E",
             6 => "Space+LMB",
             7 => "Space+MMB",
             8 => "MMB air",
             9 => "Q",
             10 => "Space+RMB",
-            11 => "LMB held, Well full",
-            12 => "MMB held, Well full",
-            _ => "RMB held, Well full",
+            11 => "LMB held to the end",
+            12 => "MMB held to the end",
+            _ => "RMB held to the end",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
@@ -1906,9 +1908,6 @@ pub const fn lingers(class: Class, kind: u8) -> bool {
             crate::state::SLOT_MECHANIC | crate::state::SLOT_SPECIAL
         ),
         Class::Elementalist => kind == crate::state::SLOT_SPECIAL,
-        // The Hemoplague, which is the Blood mage's `SLOT_SPECIAL` row: its
-        // lockout waits for the cloud, so there is one of hers at a time.
-        Class::BloodMage => kind == blood::HEMOPLAGUE,
         _ => false,
     }
 }

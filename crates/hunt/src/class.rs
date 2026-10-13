@@ -635,9 +635,8 @@ impl Hands {
         plan
     }
 
-    /// **Summon**, held until her stains stand up, if there are stains of
-    /// hers near her to raise and room for more thralls. What it costs is
-    /// the hold: she stands still for it, so only in a long window.
+    /// **The Summon** on `E`, if there are stains of hers near her to raise
+    /// and room for more thralls.
     fn charge(
         &mut self,
         w: &World,
@@ -647,7 +646,6 @@ impl Hands {
         window: i32,
         red: i32,
     ) -> Option<Input> {
-        let frames = sim::tuning::summon_at() + 2;
         let near = self
             .pools_of(w, 1)
             .filter(|p| flat(p.sub(me.pos)).flat_len().raw() <= sim::tuning::summon_reach().raw())
@@ -658,25 +656,17 @@ impl Hands {
             .flatten()
             .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
             .count() as i32;
+        let m = moves::get(me.class, moves::blood::SUMMON);
         if red < RED_CUT
             || near == 0
             || standing >= sim::tuning::thrall_cap()
-            || window < frames as i32 + LONG_WINDOW
-            || self.cool > 0
+            || window < (m.startup + m.active) as i32 + SPARE
             || !self.ready(w, me, moves::blood::SUMMON)
         {
             return None;
         }
         let b = self.button(me, moves::blood::SUMMON)?;
         self.uses.charges += 1;
-        self.rest();
-        let here = me.pos;
-        self.seq = Some(Seq::Hold {
-            bits: b,
-            at: here,
-            left: frames,
-        });
-        self.fresh = true;
         Some(Input::looking_at(
             plan.bits & !ATTACKS | b,
             plan.aim,

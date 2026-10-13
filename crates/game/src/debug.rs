@@ -278,8 +278,8 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            // The Carpet and the Thorn garden: the discs they hurt in.
-            EffectKind::Carpet | EffectKind::Thorns => {
+            // The Carpet and the Black vines: the discs they hurt in.
+            EffectKind::Carpet | EffectKind::Vines => {
                 cylinder(
                     &mut gizmos,
                     at,
@@ -298,8 +298,8 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            // Exsanguinate's cone: its middle line, as far as it reaches.
-            EffectKind::Exsanguinate => {
+            // The cascade and the reap: a line out along `dir`, as far as `reach`.
+            EffectKind::Cascade => {
                 gizmos.line(
                     at,
                     v3(effect.pos.add(effect.dir.scale(effect.reach))),

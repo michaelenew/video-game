@@ -304,18 +304,24 @@ pub enum EffectKind {
     /// and it falls back into a stain of what it had, less the blow. See
     /// `state::World::step_thralls`.
     Thrall,
-    /// Blood mage, **the Thorn garden** (2026-10-13): black branches out of
-    /// the floor where a stain of hers was, `reach` across, rooting and
-    /// hurting whoever is in them on a tick. A finisher.
-    Thorns,
+    /// Blood mage, **the Black vines** (2026-10-13): barbed vines erupting
+    /// out from where her Hemoplague stood to `reach` over
+    /// `tuning::vines_grow`, the blow in `banked` and a bleed on everything
+    /// the front passes, then standing for `vines_lasts`, bleeding and
+    /// slowing what enters. A finisher. See `state::World::step_the_vines`.
+    Vines,
     /// Blood mage, **the Blood golem** (2026-10-13): a thrall that takes
-    /// several blows. `banked` is its essence and its health at once; `home`
-    /// is where she sent it. A finisher.
+    /// blows off its health instead of dying to one. `banked` is its health;
+    /// `home` is where she sent it. It drains as a stain does, and every
+    /// punch costs it a share of what it dealt. A finisher.
     Golem,
-    /// Blood mage, **Exsanguinate** (2026-10-13): the vast cone in front of
-    /// her, `reach` long along `dir`. The blow lands on the frame it is cast;
-    /// this is the picture of it. A finisher.
-    Exsanguinate,
+    /// Blood mage, **the Crimson cascade** (2026-10-13): rings of eruptions
+    /// going out from `pos`, one every `tuning::cascade_every`, each
+    /// `reach` further out; the first ring's blow is `banked` and each after
+    /// carries `cascade_decay` of the last. Every stain of hers a ring
+    /// crosses is lit. A finisher; also the picture of the Rising reap's
+    /// sweep, for its few frames. See `state::World::step_the_cascade`.
+    Cascade,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -436,9 +442,9 @@ impl EffectKind {
             EffectKind::Plague => "hemoplague",
             EffectKind::Carpet => "carpet of blood",
             EffectKind::Thrall => "thrall",
-            EffectKind::Thorns => "thorn garden",
+            EffectKind::Vines => "black vines",
             EffectKind::Golem => "blood golem",
-            EffectKind::Exsanguinate => "exsanguinate",
+            EffectKind::Cascade => "crimson cascade",
         }
     }
 
@@ -518,9 +524,9 @@ impl EffectKind {
             EffectKind::Plague
             | EffectKind::Carpet
             | EffectKind::Thrall
-            | EffectKind::Thorns
+            | EffectKind::Vines
             | EffectKind::Golem
-            | EffectKind::Exsanguinate => true,
+            | EffectKind::Cascade => true,
         }
     }
 
@@ -658,9 +664,9 @@ impl EffectKind {
             // them; listed so the numbering is complete.
             29 => Some(EffectKind::Carpet),
             30 => Some(EffectKind::Thrall),
-            31 => Some(EffectKind::Thorns),
+            31 => Some(EffectKind::Vines),
             32 => Some(EffectKind::Golem),
-            33 => Some(EffectKind::Exsanguinate),
+            33 => Some(EffectKind::Cascade),
             _ => None,
         }
     }
@@ -741,8 +747,10 @@ impl EffectKind {
             // breaks when she lets go, the other two are gone when they run
             // dry -- see `state::World::step_carpets` and `step_thralls`.
             EffectKind::Carpet | EffectKind::Thrall | EffectKind::Golem => u16::MAX,
-            EffectKind::Thorns => t::garden_lasts(),
-            EffectKind::Exsanguinate => t::spell_flash().saturating_mul(2),
+            EffectKind::Vines => t::vines_lasts(),
+            EffectKind::Cascade => t::cascade_every()
+                .saturating_mul(t::cascade_waves().max(1) as u16)
+                .saturating_add(t::spike_erupt()),
         }
     }
 
@@ -813,10 +821,9 @@ impl EffectKind {
             // The move's own number: the carpet's tick, the thorns' tick, the
             // golem's punch, the cone's blow. A thrall's bite is what it
             // spends, not a number of its own.
-            EffectKind::Carpet
-            | EffectKind::Thorns
-            | EffectKind::Golem
-            | EffectKind::Exsanguinate => m.damage,
+            EffectKind::Carpet | EffectKind::Vines | EffectKind::Golem | EffectKind::Cascade => {
+                m.damage
+            }
             EffectKind::Thrall => 0,
         }
     }
@@ -957,14 +964,13 @@ impl Effect {
             EffectKind::BlackSpike => Control::slowing(t::slow_frames(), t::spike_slow()),
             EffectKind::GuillotineLotus => Control::slowing(t::slow_frames(), t::lotus_slow()),
             EffectKind::Grasp => Control::grabbing(self.source().grabs),
-            // Her carpet slows what is in it; her thorns hold it.
-            EffectKind::Carpet => {
-                Control::slowing(t::carpet_tick().saturating_add(10), t::carpet_slow())
+            // Her cloud and her vines slow what is in them.
+            EffectKind::Plague => {
+                Control::slowing(t::plague_tick().saturating_add(10), t::plague_slow())
             }
-            EffectKind::Thorns => Control {
-                grabs: t::garden_root(),
-                ..Control::slowing(t::garden_root(), t::carpet_slow())
-            },
+            EffectKind::Vines => {
+                Control::slowing(t::vines_tick().saturating_add(10), t::plague_slow())
+            }
             _ => Control::default(),
         }
     }
@@ -1151,7 +1157,7 @@ impl Effect {
             EffectKind::ShadowBurst => self.reach,
             EffectKind::ShadowRing => self.reach,
             EffectKind::Plague => self.reach,
-            EffectKind::Carpet | EffectKind::Thorns | EffectKind::Exsanguinate => self.reach,
+            EffectKind::Carpet | EffectKind::Vines | EffectKind::Cascade => self.reach,
             EffectKind::Thrall | EffectKind::Golem => self.thrall_radius(),
         }
     }

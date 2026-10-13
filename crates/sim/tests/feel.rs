@@ -406,9 +406,9 @@ fn best_case(m: &Move) -> i32 {
             // cone is the picture of a blow already landed.
             | EffectKind::Carpet
             | EffectKind::Thrall
-            | EffectKind::Thorns
+            | EffectKind::Vines
             | EffectKind::Golem
-            | EffectKind::Exsanguinate
+            | EffectKind::Cascade
             // The Dual mage's bolts, burst and ray are each the move's one
             // hit; what a reaction adds is the hex's, not the move's.
             | EffectKind::ShadeBolt

@@ -419,19 +419,23 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Blood mage",
         in_browser: true,
-        blurb: "The summoner who pays in blood. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land, yours or a thrall's, leaves a stain of the other body's blood. Every stain is one kind: walk into it, teleport to it or hit through it and it is yours, and what your health cannot hold fills the Well. A tap is the quick thing and a hold is the field; with a full Well, a hold kept to its end becomes a finisher. Built 2026-10-13 and unplayed; docs/design/exploration/0016_blood_mage_thralls_and_the_well.md is the design.",
+        blurb: "The summoner who pays in blood. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land, yours or a thrall's, leaves a stain of the other body's blood. A stain is yours however you take it -- walk into it, teleport to it, hit through it -- and what your health cannot hold fills the Well, the dark bar under your health. Lost health stays grey for two seconds and then drains fast: spend it. A tap is the quick thing, a hold is the area, and a hold kept to its end is a finisher that spends all your grey and the Well -- the more there was, the harder it lands. Revised 2026-10-13 and unplayed; docs/design/exploration/0016_blood_mage_thralls_and_the_well.md is the design.",
         entries: &[
             e(
                 "Left click",
-                "Tapped, the Haemorrhage: a bolt down the crosshair that opens a bleed, and a bleeding body drips stains as it goes. Held past the bolt's wind-up, the Carpet of blood: a disc of blood on the floor where you aim, growing for as long as you hold it and costing you as it grows, hurting and slowing everybody on it. Let go and it breaks into stains. With a full Well, held to its end, it becomes the Thorn garden: every stain near the crosshair bursts into black thorns that hold and hurt whoever is in them.",
+                "Tapped, the Haemorrhage: a bolt down the crosshair that opens a bleed, and a bleeding body drips stains as it goes. Held, the Hemoplague: a cloud on the floor where you aim that grows for as long as you hold, hurting and slowing everybody in it; let go and it stays at that size for a while. Held to its end, the Black vines: barbed vines erupt out from the cloud's middle, hitting and bleeding everything they reach, and stand for five seconds bleeding and slowing whatever walks in.",
             ),
             e(
                 "Middle click",
-                "Hold for the Black spike: tapped, one spike out of the floor at the crosshair after a delay; at the second tier three in a triangle; at the third a field that comes up in waves. On a stain the stain erupts, and every stain near it with it -- an eruption spends the stain and leaves nothing behind. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. With a full Well, held to its end, it becomes Exsanguinate: every stain in the cone in front of you is torn into one blow on whoever is in it.",
+                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. On a stain the stain erupts, and the stains round it go up one after another, a few frames apart -- an eruption spends its stain and leaves nothing behind. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair one after another, setting off every stain of yours they cross.",
             ),
             e(
                 "Right click",
-                "Tapped, Command: your thralls go to the crosshair's spot on the floor and fight round it. Held, the Summon: stand still a moment and every stain near you stands up as a thrall of exactly its size -- up to six. A thrall goes for the nearest body near where it was sent and bites it; a bite deals what the thrall spends of itself and spills it as a stain under its prey. Any one blow kills a thrall, and it falls back into a stain of what it had left. With a full Well, held to its end, the Summon becomes the Blood golem: your thralls and stains at the crosshair fuse with the Well into one great thrall that takes many blows.",
+                "Tapped, Command: your thralls and the golem drop whatever they are doing and go to the crosshair's spot on the floor; once there they go for the nearest enemy, as they do by themselves. Held, the Carpet of blood: a pool on the floor where you aim that grows as you hold, costs you as it grows and hurts a little; let go and it is one big stain, and every stain of yours it covered stands up as a thrall. Held to its end, the Blood golem: everything the carpet covers and all your grey fused into one great thrall with that many hit points, that takes blows like a creature, hurts itself a little with every punch and wears down over time.",
+            ),
+            e(
+                "Thralls",
+                "A thrall is a stain on legs, up to six. It walks round walls to the nearest enemy -- a fighter, the creature, a pack's critter -- and bites; a bite deals what the thrall spends of itself and spills that as a stain under its prey. Any one blow kills a thrall, and it falls back into a stain of what it had left. A creature turns on the golem, and on a thrall nearer to it than you are.",
             ),
             e(
                 "Space + a click",
@@ -439,7 +443,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Jump or dodge while holding the spike",
-                "Stores it in your vessel at the tier it reached: you jump or dodge as normal, and a fresh press of the middle click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
+                "Stores it in your vessel as far as it had charged: you jump or dodge as normal, and a fresh press of the middle click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
             ),
             e(
                 "Q",
@@ -447,15 +451,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E",
-                "The Hemoplague: a slow cast, then a cloud at the crosshair that hurts everybody inside it on a tick, holds nobody, and gathers all it spills into one stain at its centre. Keeping them in it is your job.",
+                "The Summon: every stain near you stands up as a thrall.",
             ),
             e(
                 "Shift + direction, crosshair on a stain",
-                "The teleport: you are at the stain, you drink it, and you arrive in a burst of blood -- from the air too. A teleport into a fight is the risk you take for the stain. With no stain under the crosshair the dodge is the Sanguine flow, a slide along the floor as blood that drinks every stain you cross, and it sends a glob of your blood to the crosshair's spot on the floor -- a stain like any other, so the next dodge can take you there.",
+                "The teleport, up to twelve metres: you are at the stain, you drink it, and you arrive in a burst of blood -- from the air too. A teleport into a fight is the risk you take for the stain. With no stain under the crosshair the dodge is an ordinary dodge.",
             ),
             e(
                 "Walking into a stain",
-                "Drinks it, whoever's blood it is. What your health cannot hold goes into the Well, and the state line shows how full it is.",
+                "Drinks it, whoever's blood it is. What your health cannot hold goes into the Well.",
             ),
         ],
     },
@@ -932,6 +936,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_MOVE=<move>",
                 "Start a hunt with the creature winding up that move at player one (the Ridgeback's bite, stomp, sweep, charge, slam, kick, spray; the Mireback's spew, flop, tongue, belch, backwash, inflate, wallow, a lob aimed at player one; the Sandmaw's rise, breach, undertow, spit, lash, swallow, sound, from under the sand or standing as the move is thrown; the Pair's pounce, rake, swat, feint, ambush, trip, twin -- both cats, either side of you; the Broodmother's stab, lunge, slam, screech, web shot, web line; the Mantis's scythe, second slash, lunge, guard, leap, dive, flare, pivot, prayer, ready; the Veilstalker's lunge, spear, rake, pounce -- off a trunk top -- quill, smoke, mimic; the Galewing's stoop, talon, downwash, volley -- from its cruising height -- screech, buffet, hop -- on the plateau; the Siegeshell's footfall, stamp and drag on a foot in front of you, shed off its flank, plough down the valley behind you, shrug, shiver, and the beam at the siege line), so a capture can look at its floor marker. A pack puts one body of a kind that throws it there instead, and --hunt gnawers with SHOT_MOVE=pile calls a pile-on on a ring of them; --hunt hornback lays each of the herd's moves out (charge at a boulder, best with SHOT_YAW=1.57; bellow, hook, guard, trample, shoulder, kick, buck). Pair it with SHOT_FRAME and DEMO=0.",
+            ),
+            e(
+                "SHOT_BLOOD=1",
+                "With the Blood mage as player one, start her in front of her own work -- three thralls and a golem out ahead and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

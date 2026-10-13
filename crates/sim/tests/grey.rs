@@ -100,7 +100,7 @@ fn a_cast_at_full_health_opens_grey_by_its_cost() {
         (b::HAEMORRHAGE, keys::MY_BLOOD, false),
         (b::COMMAND, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),
-        (b::HEMOPLAGUE, keys::PLAGUE, false),
+        (b::SUMMON, keys::RAISE, false),
         (b::BLACK_SPIKE, keys::YOUR_BLOOD, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
@@ -217,8 +217,8 @@ fn nobody_else_goes_grey() {
 fn a_tap_is_the_quick_thing_and_a_hold_is_the_field() {
     // The buttons, and what each one throws -- on the map of 0016
     // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md): the
-    // left click tapped is the Haemorrhage, held the Carpet; the right click
-    // tapped is Command, held the Summon. `tests/blood_mage.rs` holds the
+    // left click tapped is the Haemorrhage, held the Hemoplague; the right
+    // click tapped is Command, held the Carpet. `tests/blood_mage.rs` holds the
     // whole map.
     let mut w = mage();
     w.players[0].pos.y = Fx::from_int(3);
@@ -231,7 +231,7 @@ fn a_tap_is_the_quick_thing_and_a_hold_is_the_field() {
     let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
     let mut w = mage();
     run(&mut w, start + 2, keys::MY_BLOOD, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::CARPET));
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::HEMOPLAGUE));
     assert!(matches!(w.players[0].action, Action::Channel { .. }));
 }
 

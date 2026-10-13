@@ -1093,13 +1093,22 @@ fn a_hazard_never_touches_a_hunting_partner() {
     // there rather than a flag -- the same rule direct hits already follow. A
     // drain field was the one thing in the game that could kill a team-mate.
     let mut w = parked();
-    for _ in 0..2 {
-        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    // The Hemoplague: her left click held past the bolt's wind-up, and let
+    // go a little later.
+    let start = sim::moves::get(Class::BloodMage, sim::moves::blood::HAEMORRHAGE).startup;
+    for _ in 0..start + 20 {
+        w.advance([Input::new(Input::LEFT), Input::default()]);
     }
     // Stand the partner in it, wherever it landed, and hold them there.
     let mut stood_in_it = 0;
     for _ in 0..200 {
-        if let Some(field) = w.effects.iter().flatten().next().copied() {
+        if let Some(field) = w
+            .effects
+            .iter()
+            .flatten()
+            .find(|e| e.kind == sim::effects::EffectKind::Plague)
+            .copied()
+        {
             w.players[1].pos = V3::new(field.pos.x, w.players[1].pos.y, field.pos.z);
             stood_in_it += 1;
         }

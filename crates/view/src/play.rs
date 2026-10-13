@@ -661,16 +661,16 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Elementalist, 9) => Clip::ElementalistDowndraft,
         (Class::Elementalist, 10) => Clip::ElementalistQuake,
         (Class::Elementalist, _) => Clip::ElementalistTremor,
-        // Thralls and the Well (2026-10-13), on the five clips she has, each
-        // move on the one it most looks like: the bolt and Exsanguinate are
-        // the thrust, the spike, the Upheaval, the Stake and the Thorn garden
-        // the stab into the floor, the carpet, the cloud, the wings, the
-        // Summon and the golem the arms thrown open, Command and Coagulate the
-        // pointing poke, and the Rising reap the sweep. Her own clips for the
-        // new moves are the next step, logged in `docs/design/feel-log.md`.
-        (Class::BloodMage, 1 | 12) => Clip::BloodCommitted,
+        // Thralls and grey (2026-10-13), on the five clips she has, each
+        // move on the one it most looks like: the bolt is the thrust, the
+        // spike, the Upheaval, the Stake, the vines and the cascade the stab
+        // into the floor, the two fields, the wings, the Summon and the golem
+        // the arms thrown open, Command and Coagulate the pointing poke, and
+        // the Rising reap the sweep. Her own clips for the new moves are the
+        // next step, logged in `docs/design/feel-log.md`.
+        (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 0 | 2 | 5 | 6 | 13) => Clip::BloodSpecial,
-        (Class::BloodMage, 3 | 7 | 8 | 11) => Clip::BloodMechanic,
+        (Class::BloodMage, 3 | 7 | 8 | 11 | 12) => Clip::BloodMechanic,
         (Class::BloodMage, 4 | 9) => Clip::BloodPoke,
         (Class::BloodMage, _) => Clip::BloodSweep,
         // Every move a spell, since 2026-10-09, on the six clips she has: a

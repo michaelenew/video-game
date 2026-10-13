@@ -338,3 +338,39 @@ What the build did not do and should be looked at in play:
 - **The numbers are first guesses**, chosen so the tests pass and the shapes read: the carpet
   (1.5 to 6 m, 12 a tick every half second, 1% every 8 frames), thralls (7 m/s, 30% a bite every
   half second), the Well (400), the finishers' windups (45 to 50 frames).
+
+## 11 · Revised from play, 2026-10-13
+
+The owner's notes on the build, and what changed:
+
+- **Thralls** walk round walls, bite critters, go for the nearest enemy by default, and **obey
+  her clicks first**: Command interrupts whatever they are doing, including a bite, and acts on
+  the frame it is pressed. They are drawn as a fighter's body gone brutish (horns, a big chest,
+  long arms, claws), in translucent blood. The golem obeys Command too.
+- **The Carpet moved to the right click** (held past Command). Let go, it is **one big stain** as
+  big as the hold was long, and the stains it covered stand up as thralls; it still hurts a
+  little. The Summon moved to `E`.
+- **The marker** a held field showed walking forward is gone, and with it a bug it hid: the
+  field had been laid at her feet, not where she aimed. A field's marker is the spot it is laid.
+- **The Well is a bar** under her health.
+- **Grey holds two seconds, then fades at 60 a second** (was 3).
+- **The Hemoplague is the left click held**, growing with the hold, hurting and slowing.
+- **The dodge** no longer blinks or throws blood; the teleport to a stain reaches 12 m (was 22).
+- **Finishers at any time**: a hold kept to its end, spending all her grey and the Well, always
+  stronger than the row and stronger the more was spent. Left: **Black vines**. Middle:
+  **Crimson cascade**. Right: **Blood golem**, whose health is the stains and grey it fused, which
+  takes blows like a creature, hurts itself for half of every punch and drains over time. The
+  Thorn garden and Exsanguinate are gone.
+- **The Black spike** raises one to seven spikes over a wider area the longer the hold, in place
+  of the three tiers' one, three and a field.
+- **Chained eruptions wait three frames** between links.
+
+Two departures from the notes, both forced by the snapshot:
+
+- **The cascade is one effect, not a spreading field of new pools.** The world holds twelve
+  effects between both players, so it cannot hold the dozens of pools a literal cascade would
+  spawn. It is rings of eruptions going out wave by wave, the edge of each ring drawn with the
+  small pools the next comes up from, and it lights every real stain it crosses -- so cast into
+  the middle of her stains, the chain runs through all of them.
+- **The chain delay is three frames, not five**: at five, a bleeding fighter running along his
+  own trail outran the chain (`tests/haemorrhage.rs`), which is the combo the trail exists for.

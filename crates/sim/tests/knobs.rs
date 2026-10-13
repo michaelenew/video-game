@@ -181,14 +181,38 @@ const EXEMPT: &[(&str, &str)] = &[
          out of a stain, which spills nothing).",
     ),
     (
-        "let out = carpet.reach.mul(Fx::ratio(2, 3))",
-        "A shape, not a feel: the ring the Carpet's stains are laid on when it breaks, \
-         two-thirds of the way out so they sit inside what it covered. How many there are \
-         is the knob (`tuning::carpet_stains`).",
+        ".add(Fx::ratio(1, 4))",
+        "A tolerance, not a feel: the lip a thrall may step up on top of the steepest land, \
+         in `World::walk_round`.",
     ),
     (
-        "pub const PLAGUE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Blood mage's Hemoplague.",
+        "Fx::ratio(1, 12),",
+        "A search, not a feel: the headings a thrall tries round a wall, a twelfth of a turn \
+         apart out to a third (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 6),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 4),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 3),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "pub const GROWING: i32 = 1",
+        "A code, not a magnitude: what `Effect::banked` says a Hemoplague still being held is.",
+    ),
+    (
+        "pub const UNLIT: u16 = u16::MAX",
+        "A code, not a magnitude: what `Effect::life` says a stain that is not lit is.",
+    ),
+    (
+        "pub const RAISE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Blood mage's Summon.",
     ),
     (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",

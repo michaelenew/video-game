@@ -1032,6 +1032,14 @@ actually lives.
 
 ### Blood mage
 
+> **Revised 2026-10-13 from play.** Left: the Haemorrhage tapped, the Hemoplague held (growing),
+> the Black vines held to the end. Middle: one to seven Black spikes by the hold (the Stake in the
+> air), the Crimson cascade held to the end. Right: Command tapped, the Carpet of blood held, the
+> Blood golem held to the end. Space and a click is a takeoff (Blood wings, Upheaval, Rising reap);
+> `Q` Coagulate, `E` the Summon; `shift` with a stain under the crosshair teleports, otherwise an
+> ordinary dodge. A finisher spends all her grey. The table is
+> [kits/blood-mage.md](kits/blood-mage.md) §"Thralls and grey".
+>
 > **Superseded 2026-10-13: thralls and the Well.** A tap is the quick thing and a hold is the
 > field: left is the Haemorrhage tapped and the Carpet of blood held, middle the Black spike in
 > tiers (the Stake in the air), right Command tapped and the Summon held. Space and a click is a

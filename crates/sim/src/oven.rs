@@ -501,6 +501,7 @@ scalars! {
     // with it, and the essence pools the other fighter bleeds onto the floor.
     // See `docs/design/blood-mage.md`.
     GreyFade,         "Blood mage", "Grey fades (health per second)",         Int,   0,        600;
+    GreyGrace, "Blood mage", "Grey, holds before it fades", Frames, 0, 600;
     GreyReach,        "Blood mage", "Scythe reach at full grey (x)",          Fixed, fx(1,1),  fx(4,1);
     GreyDamage,       "Blood mage", "Scythe damage at full grey (x)",         Fixed, fx(1,1),  fx(4,1);
     SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
@@ -788,7 +789,6 @@ scalars! {
     TierThreePower, "Blood mage", "Charge, tier three hits (x)", Fixed, fx(1,1), fx(8,1);
     ChargeGreyFaster, "Blood mage", "Charge, faster at full grey (x)", Fixed, fx(1,1), fx(3,1);
     VesselBleedsEvery, "Blood mage", "Vessel, 1% of red every", Frames, 1, 600;
-    SpikeSpread, "Blood mage", "Black spike, tier two spikes apart (m)", Fixed, 0, fx(6,1);
     SpikeTwoPower, "Blood mage", "Black spike, tier two each (x)", Fixed, 0, fx(2,1);
     SpikeFieldRadius, "Blood mage", "Black spike, tier three field radius", Fixed, fx(1,1), fx(8,1);
     SpikeFieldPower, "Blood mage", "Black spike, tier three each wave (x)", Fixed, 0, fx(2,1);
@@ -801,25 +801,20 @@ scalars! {
     PlagueHeight, "Blood mage", "Hemoplague, cloud height", Fixed, fx(1,1), fx(10,1);
     ChargeCrawl, "Blood mage", "Charge, walk while holding (%)", Int, 0, 100;
     EruptChain, "Blood mage", "Black spike, an eruption sets off stains this far past its edge (m)", Fixed, 0, fx(8,1);
-    SendReach, "Blood mage", "Dodge, sends her blood up to (m)", Fixed, fx(1,1), fx(40,1);
     // **The Blood mage: stains, thralls and the Well**, 2026-10-13. See
     // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
     WellFull, "Blood mage", "Well, full at", Int, 1, 2000;
     StainSettles, "Blood mage", "Stain, settles before it can be drunk", Frames, 0, 60;
-    SendCost, "Blood mage", "Dodge, the sent blood costs (% of red)", Int, 0, 20;
     CarpetFrom, "Blood mage", "Carpet, starts at radius", Fixed, fx(1,2), fx(6,1);
     CarpetTo, "Blood mage", "Carpet, grows to radius", Fixed, fx(1,1), fx(12,1);
     CarpetPaysEvery, "Blood mage", "Carpet, 1% of red every", Frames, 1, 60;
     CarpetTick, "Blood mage", "Carpet, hurts every", Frames, 1, 120;
-    CarpetSlow, "Blood mage", "Carpet, slows to (x)", Fixed, 0, fx(1,1);
-    CarpetStains, "Blood mage", "Carpet, breaks into stains", Int, 1, 8;
     CoagulateReach, "Blood mage", "Coagulate, gathers stains within (m)", Fixed, fx(1,1), fx(30,1);
     CoagulateSpeed, "Blood mage", "Coagulate, stains slide at (m/s)", Fixed, fx(1,1), fx(60,1);
     SummonReach, "Blood mage", "Summon, raises stains within (m)", Fixed, fx(1,1), fx(20,1);
-    SummonAt, "Blood mage", "Summon, stains rise after", Frames, 1, 120;
     ThrallCap, "Blood mage", "Thralls at once", Int, 1, 8;
     ThrallSpeed, "Blood mage", "Thrall, runs at (m/s)", Fixed, fx(1,1), fx(20,1);
-    ThrallSeek, "Blood mage", "Thrall, goes for a body within (m)", Fixed, 0, fx(15,1);
+    ThrallSeek, "Blood mage", "Thrall, goes for a body within (m)", Fixed, 0, fx(40,1);
     ThrallReach, "Blood mage", "Thrall, bites within (m)", Fixed, fx(1,4), fx(4,1);
     ThrallBite, "Blood mage", "Thrall, a bite spends (% of it)", Int, 1, 100;
     ThrallBiteLeast, "Blood mage", "Thrall, a bite spends at least", Int, 1, 200;
@@ -827,19 +822,26 @@ scalars! {
     ReapCone, "Blood mage", "Rising reap, cone half-width (cos)", Fixed, 0, fx(1,1);
     ReapHurl, "Blood mage", "Rising reap, hurls thralls at (m/s)", Fixed, 0, fx(40,1);
     ReapHurlFor, "Blood mage", "Rising reap, hurls thralls for", Frames, 1, 90;
-    GardenReach, "Blood mage", "Thorn garden, from stains within (m)", Fixed, fx(1,1), fx(30,1);
-    GardenLasts, "Blood mage", "Thorn garden, stands for", Frames, 1, 600;
-    GardenTick, "Blood mage", "Thorn garden, hurts every", Frames, 1, 120;
-    GardenRoot, "Blood mage", "Thorn garden, roots for", Frames, 1, 120;
-    GardenBase, "Blood mage", "Thorn garden, a root's least radius", Fixed, fx(1,4), fx(6,1);
-    GardenPerRoot, "Blood mage", "Thorn garden, radius per root of essence", Fixed, 0, fx(4,1);
-    ExsCone, "Blood mage", "Exsanguinate, cone half-width (cos)", Fixed, 0, fx(1,1);
-    ExsPerEssence, "Blood mage", "Exsanguinate, adds per essence of a stain (x)", Fixed, 0, fx(4,1);
-    GolemFuse, "Blood mage", "Golem, fuses thralls and stains within (m)", Fixed, fx(1,1), fx(20,1);
     GolemSpeed, "Blood mage", "Golem, walks at (m/s)", Fixed, fx(1,2), fx(15,1);
     GolemPunchEvery, "Blood mage", "Golem, punches every", Frames, 1, 180;
     GolemReach, "Blood mage", "Golem, punches within (m)", Fixed, fx(1,2), fx(8,1);
     GolemSize, "Blood mage", "Golem, stands this many thralls tall (x)", Fixed, fx(1,1), fx(4,1);
+    PlagueFrom, "Blood mage", "Hemoplague, starts at radius", Fixed, fx(1,4), fx(8,1);
+    PlagueTo, "Blood mage", "Hemoplague, grows to radius", Fixed, fx(1,1), fx(16,1);
+    PlagueSlow, "Blood mage", "Hemoplague, slows to (x)", Fixed, 0, fx(1,1);
+    FinisherPerGrey, "Blood mage", "Finisher, damage per grey spent (x)", Fixed, 0, fx(4,1);
+    VinesGrow, "Blood mage", "Black vines, erupt out over", Frames, 1, 120;
+    VinesLasts, "Blood mage", "Black vines, stand for", Frames, 1, 900;
+    VinesTick, "Blood mage", "Black vines, bleed what enters every", Frames, 1, 120;
+    VinesSize, "Blood mage", "Black vines, radius per cloud radius (x)", Fixed, fx(1,2), fx(3,1);
+    CascadeWaves, "Blood mage", "Crimson cascade, waves", Int, 1, 8;
+    CascadeEvery, "Blood mage", "Crimson cascade, a wave every", Frames, 1, 180;
+    CascadeStep, "Blood mage", "Crimson cascade, rings apart (m)", Fixed, fx(1,2), fx(10,1);
+    CascadeDecay, "Blood mage", "Crimson cascade, each wave of the last (x)", Fixed, fx(1,10), fx(1,1);
+    ChainDelay, "Blood mage", "Stain, a chained eruption waits", Frames, 0, 60;
+    SpikeSpreadMost, "Blood mage", "Black spike, widest ring at a full hold (m)", Fixed, 0, fx(10,1);
+    SpikesMost, "Blood mage", "Black spike, spikes at a full hold", Int, 1, 7;
+    GolemSelfHurt, "Blood mage", "Golem, hurts itself per blow dealt (x)", Fixed, 0, fx(2,1);
 }
 
 // ---------------------------------------------------------------------------

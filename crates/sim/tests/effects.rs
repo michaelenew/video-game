@@ -589,7 +589,7 @@ fn casting_costs_the_blood_mage_health() {
     for (slot, button, airborne) in [
         (b::HAEMORRHAGE, keys::MY_BLOOD, false),
         (b::HAEMORRHAGE, keys::MY_BLOOD, true),
-        (b::HEMOPLAGUE, keys::PLAGUE, false),
+        (b::SUMMON, keys::RAISE, false),
         (b::BLACK_SPIKE, keys::YOUR_BLOOD, false),
         (b::COMMAND, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),

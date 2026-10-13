@@ -367,15 +367,21 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     ));
     let before = w.players[0].health;
     looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
-    run(&mut w, spike.startup as u32 + 2, 0, 0);
-    let eruptions = w
-        .effects
-        .iter()
-        .flatten()
-        .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted())
-        .count();
-    assert_eq!(
-        eruptions, 3,
+    // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
+    let mut eruptions = 0;
+    for _ in 0..spike.startup as u32 + 4 * t::chain_delay() as u32 + 4 {
+        run(&mut w, 1, 0, 0);
+        eruptions += w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted() && e.age == 1)
+            .count();
+    }
+    // Three, and what the spike cost her, which lands among them and goes
+    // up with them.
+    assert!(
+        eruptions >= 3,
         "three pools in a chain made {eruptions} eruptions"
     );
     // What is on the floor now is only what the spike itself cost her, which
