@@ -84,8 +84,10 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Champion's was re-pinned 2026-10-12, later** for his rework: the
 /// braced Rush and its shoulder, a held weapon charging, the full charges and
 /// momentum. See `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+/// **And again 2026-10-13**: tap to combo and hold to finish, momentum spent by
+/// every finisher, and the Clash where every blow lands.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x364690eeb5d6f374),
+    (Class::Champion, 0x6a16a2c63281c40f),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0x125b4fc5c2559d9d),
     (Class::BloodMage, 0x083464c03c9c85e2),

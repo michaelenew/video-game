@@ -1,5 +1,5 @@
 ---
-status: decided 2026-10-12 by the owner over three rounds; built the same day, unplayed -- ../kits/champion.md §"The rework"
+status: decided 2026-10-12 by the owner over three rounds and built the same day; a fourth round, from play, built 2026-10-13 -- ../kits/champion.md §"The rework"
 started: 2026-10-12
 depends: ../kits/champion.md, ../champion.md, ../monsters.md, ../creatures/mantis.md, 0014_shadow_reaver_marks_and_throws.md
 ---
@@ -145,6 +145,56 @@ move rather than an old one with a bigger number.
 
 To keep two things called "charge" apart, the dash is called by its in-game name, **Rush**,
 throughout; **charge** means only a held attack.
+
+## The fourth round, 2026-10-13, from play
+
+> When full, the next tap comes out as a full charge and empties the meter -> What does this
+> mean? [...] the momentum consumption feels like it should be more of a [Final Fantasy limit
+> break -style] attack that's intentionally chosen. A bar that buffs you the fuller it is with
+> a big move that drains it. [...] Momentum doesn't build against the hornback. [...] I don't
+> think the clash with a rush is working against the hornback charge [...] build the clash
+> against every attack in the game, and ideally in a way that doesn't require special logic on
+> every new move. [...] threading them into combat right now still feels repetitive because
+> the pattern boils down to "click a lot to get momentum full, then click some more to make the
+> most of momentum". [...] I'm wondering if the control scheme needs to become "tap to combo,
+> hold to finish". The player can choose any moment to hold the mouse button, but the charge
+> duration becomes more like the length of the windup frames of the tap version of the move,
+> and holding is simply the indicator that you'd like to move to the finisher version of the
+> move. [...] It also gives it some ranged poke with a hold on lclick. It also brings rush
+> functionality onto the rclick hold [...] (DON'T remove rush from e for now) [...] the third
+> click hold doesn't need to have extreme frame data. [...] the hold attacks are the [move
+> that spends the meter], dealing more damage and consuming the full meter (I don't want to
+> disincentivize using the charge attacks at partial momentum) and getting some extra cool
+> effect if you get it going. [...] I'd want [them] to not really ever be the optimal choice for
+> agility sections [...] so [...] extra damage, more and more obvious stagger, and bigger /
+> flashier effects but using the same movement and player animations as the ordinary charged
+> attacks [...] These aren't really "limit breaks" btw, so don't call them that anywhere.
+
+What changed, and it supersedes the sections below where they differ:
+
+- **Tap to combo, hold to finish.** A link's button held for `Hold, a finisher after` (12
+  frames from the press -- about a wind-up; a press a little long on the sword's six is still
+  the sword) is that weapon's **finisher**, at any place in the string: the first two links'
+  are the Crescent, the Shockwave and the Comet, the third's the grand three. There is no part
+  charge. A finisher **ends the string**. The finishers' own wind-ups are short (2-4 frames),
+  because holding through the tapped move's wind-up was the commitment; their recoveries are
+  the price.
+- **The Comet is a Rush on the spear**: it goes where the stick is held, along the crosshair
+  with the stick let go. Rush stays on `E`.
+- **Momentum** buffs every hit he lands by its share of 20 % (a full meter), and **every
+  finisher spends all of it**, whatever is in it: it is worth its share of 75 % more damage and
+  size, its share of 40 frames more stagger, and a full meter spent knocks a fighter down and a
+  creature off its feet. Nothing about where it goes or how it moves changes, so it is never the
+  answer to a jump. The tap at a full meter, the faster holds and the tiers' buffs are gone; the
+  tiers are only the colours now.
+- **Momentum builds on everything**: a link landing on a critter -- the Hornback's bull, a
+  gnawer -- confirms the string and feeds the meter, as on a creature or a fighter.
+- **The Clash is where every blow lands** (`state::apply_hit`): a blow meeting his heavy one is
+  spent on it, and whoever threw it is knocked out of it afterwards by where they are
+  (`World::settle_the_clashes`) -- a creature mid-swing that reaches him flinches, a critter
+  mid-attack that reaches him is knocked out of it, a fighter within 6 m is staggered. No attack
+  needs a line of its own; the Hornback's charge, every species' own blows and every critter's
+  are covered by construction.
 
 ## The ideas
 

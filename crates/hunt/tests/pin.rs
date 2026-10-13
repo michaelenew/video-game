@@ -27,10 +27,12 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // The Champion's moved again later that day, for his rework (exploration
 // 0015): the braced Rush, the hold and its full charges, momentum, Break and
 // the Clash -- and his hands press a weapon the plan holds on every other
-// frame, because held it is a charge.
+// frame, because held it is a charge. And again 2026-10-13: tap to combo and
+// hold to finish, momentum spent by every finisher, the Clash where every
+// blow lands.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0xd1dbd395875ecb99),
-    (Class::Champion, 7, 0x6888e046e18a713e),
+    (Class::Champion, 0x2545_F491, 0xb4be2502f42139e4),
+    (Class::Champion, 7, 0x68331cc7087d09f2),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed

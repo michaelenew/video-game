@@ -1963,6 +1963,22 @@ impl Monster {
         self.poise += poise.max(0);
     }
 
+    /// **Damage that weighs nothing** (exploration 0015): health taken with
+    /// no strain and no poise -- the Champion's momentum, which makes his
+    /// blows hurt more without making them stagger more; what staggers is
+    /// Break's to say. Returns what went in.
+    pub fn take_extra(&mut self, damage: i32) -> i32 {
+        if !self.alive() || damage <= 0 {
+            return 0;
+        }
+        let dealt = damage.min(self.health);
+        self.health -= dealt;
+        if self.health <= 0 {
+            self.doing = Doing::Dead;
+        }
+        dealt
+    }
+
     /// Knocked off its feet for `frames`, whatever it was doing -- the
     /// Meteor's crater. Not on something already down, and not on the dead.
     pub fn stumble_for(&mut self, frames: u16) {

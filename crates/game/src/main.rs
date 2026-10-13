@@ -1191,7 +1191,7 @@ fn shot_momentum(w: &mut World) {
     for p in w.players.iter_mut() {
         if let sim::Mechanic::Forms { fury, .. } = &mut p.mechanic {
             fury.momentum = n.clamp(0, u16::MAX as i32) as u16;
-            fury.momentum_left = sim::tuning::momentum_holds();
+            fury.momentum_left = sim::tuning::momentum_holds().min(u8::MAX as u16) as u8;
         }
     }
 }
@@ -2938,21 +2938,39 @@ fn place_champion_glow(
             continue;
         };
         let tier = fury.tier();
-        // The hold, as a share of a full charge.
+        // The hold, as a share of the press that makes it a finisher: it
+        // swells as the press is held and is at its biggest when the link has
+        // become its finisher.
         let held = match p.action {
-            sim::state::Action::Channel { held, .. } => {
-                (held as f32 / sim::tuning::hold_full().max(1) as f32).min(1.0)
+            sim::state::Action::Channel { kind, held } => {
+                let startup = sim::moves::get(p.class, kind).startup as f32;
+                ((startup + held as f32) / sim::tuning::hold_from().max(1) as f32).min(1.0)
+            }
+            sim::state::Action::Startup { kind, .. } | sim::state::Action::Active { kind, .. }
+                if sim::moves::champion::is_full(kind) =>
+            {
+                1.0
             }
             _ => 0.0,
         };
         // Sized to be read from behind him across a fight: the first
-        // capture at a quarter of a metre was a bead on the tip.
-        let size = match tier {
-            0 => 0.0,
-            1 => 0.24,
-            2 => 0.36,
-            _ => 0.5,
-        } + 0.4 * held;
+        // capture at a quarter of a metre was a bead on the tip. A finisher
+        // has spent the meter, and burns by what it spent.
+        let finishing = matches!(
+            p.action.attack_kind(),
+            Some(k) if sim::moves::champion::is_full(k)
+        );
+        let size = if finishing {
+            0.25 + 0.35 * fury.spent as f32 / 100.0
+        } else {
+            let base = match tier {
+                0 => 0.0,
+                1 => 0.24,
+                2 => 0.36,
+                _ => 0.5,
+            };
+            base + 0.4 * held
+        };
         if size <= 0.0 {
             *vis = Visibility::Hidden;
             continue;

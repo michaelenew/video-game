@@ -2254,8 +2254,12 @@ fn nothing_that_does_not_declare_a_step_moves_on_its_own() {
     w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
     run(&mut w, 12, 0, 0);
     let from = w.players[0].pos;
-    for _ in 0..40 {
-        w.advance([Input::aimed(RMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    // Tapped: held, the spear is the Comet, which is a Rush on the spear.
+    for f in 0..40 {
+        w.advance([
+            Input::aimed(if f == 0 { RMB } else { 0 }, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
     }
     let gone = w.players[0].pos.sub(from).flat_len().to_f32_for_render();
     assert!(

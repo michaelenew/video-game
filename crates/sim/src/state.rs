@@ -2421,7 +2421,7 @@ impl World {
             }
             // The Champion's full charges (exploration 0015): the same.
             if p.class == Class::Champion {
-                self.champion_comes_out(i, kind);
+                self.champion_comes_out(i, kind, input);
             }
             // The Bulwark on three clicks (2026-10-10): the same, for his.
             if p.class == Class::Bulwark {
@@ -2824,6 +2824,19 @@ impl World {
                 if !hit.blocked && !hit.parried {
                     let kind = snapshot[attacker].action.attack_kind();
                     feed_the_momentum(&mut self.players[attacker], kind);
+                    // A finisher that spent momentum staggers them by what
+                    // it spent.
+                    if let (Some(k), Mechanic::Forms { fury, .. }) =
+                        (kind, snapshot[attacker].mechanic)
+                    {
+                        if moves::champion::is_full(k) {
+                            stagger_by_the_spend(
+                                &mut self.players[defender],
+                                hit.hitstun,
+                                fury.spent,
+                            );
+                        }
+                    }
                 }
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
@@ -2954,6 +2967,7 @@ impl World {
             self.trade_with_the_creature();
             self.trade_with_the_pack();
         }
+        self.settle_the_clashes();
 
         self.step_shadows();
         self.burst_the_collected();
@@ -4078,7 +4092,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         })
         .mul(grey_power(attacker, &m))
         .mul(true_link_mul(attacker))
-        .mul(heft_mul(attacker, t::hold_damage()))
+        .mul(momentum_mul(attacker, kind))
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
@@ -4138,7 +4152,6 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // `tuning::wing_tip_shove`.
     let shove = m
         .knockback
-        .mul(heft_mul(attacker, t::hold_shove()))
         .mul(power)
         .mul(if tipped { t::wing_tip_shove() } else { Fx::ONE });
     let (push_dir, speed) = if shove.raw() < 0 {
@@ -4350,6 +4363,14 @@ fn thaw(p: &mut Player, input: Input) -> Input {
 }
 
 pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
+    // **The Clash** (exploration 0015, C7): a blow that meets a Champion's
+    // heavy one takes nothing from him. Here, where every blow in the game
+    // lands on a fighter, so every attack there is -- a species' own, a
+    // critter's, a fighter's -- meets it without a line of its own. Who threw
+    // it is knocked out of it after (`World::settle_the_clashes`).
+    if meets_a_clash(defender, &hit) {
+        return;
+    }
     // A Champion mid-Rush is braced: most blows cost him a share and do not
     // stop him, and one in the run's last frames costs nothing at all.
     let Some(hit) = brace_the_rush(defender, hit) else {
@@ -4445,12 +4466,23 @@ impl World {
     /// breaks round the hammer, the dashes start, the cuts are left hanging
     /// along the line he will run, and the javelin is thrown with him after
     /// it. On the first active frame, like everything else a move does.
-    fn champion_comes_out(&mut self, who: usize, kind: u8) {
+    fn champion_comes_out(&mut self, who: usize, kind: u8, input: Input) {
         use moves::champion as c;
         let p = self.players[who];
         let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z).normalized();
+        // **What the finisher spent** (exploration 0015, the fourth round):
+        // what it puts in the world is bigger and hits harder by its share,
+        // and carries the share in `banked` for the stagger it buys.
+        let spent = match p.mechanic {
+            Mechanic::Forms { fury, .. } => fury.spent,
+            _ => 0,
+        };
+        let power = Fx::ONE.add(spend_share(spent));
         let cast = |kind_of: EffectKind, from: V3, dir: V3, reach: Fx| {
-            Effect::cast(kind_of, who as u8, p.class, kind, from, dir, reach)
+            let mut born = Effect::cast(kind_of, who as u8, p.class, kind, from, dir, reach);
+            born.power = power;
+            born.banked = spent as i32;
+            born
         };
         match kind {
             c::CRESCENT => {
@@ -4467,7 +4499,8 @@ impl World {
                     t::meteor_reach()
                 } else {
                     t::shockwave_reach()
-                };
+                }
+                .mul(power);
                 let mut born = cast(EffectKind::Shockwave, p.pos, V3::ZERO, reach);
                 let speed = t::shockwave_speed().max(Fx::ONE);
                 // Out to its reach, and left lying there a while: the broken
@@ -4490,8 +4523,16 @@ impl World {
                 );
                 drive_the_champion(&mut self.players[who], ahead, reach, t::cuts_speed());
             }
+            // **The Comet is a Rush on the spear** (the fourth round): it goes
+            // where he is holding, as a Rush does -- a lunge, a retreat or a
+            // sidestep -- and along the crosshair's line with the stick let go.
             c::COMET => {
-                let ahead = flat(p.aim_path.dir());
+                let (ax, az) = input.move_axis();
+                let ahead = if ax == 0 && az == 0 {
+                    flat(p.aim_path.dir())
+                } else {
+                    move_dir(input.aim_turns(), ax, az)
+                };
                 drive_the_champion(
                     &mut self.players[who],
                     ahead,
@@ -4513,6 +4554,71 @@ impl World {
                 drive_the_champion(&mut self.players[who], flat(dir), reach, t::follow_speed());
             }
             _ => {}
+        }
+    }
+
+    /// **Whoever threw a blow the Champion clashed is knocked out of it**
+    /// (exploration 0015, C7): a creature mid-swing that reaches him flinches;
+    /// a critter mid-attack that reaches him is knocked out of it; a fighter
+    /// within `tuning::clash_reach` is staggered. Read off who is attacking
+    /// and where, so no attack needs a line of its own. A blow from further
+    /// off -- a bolt -- is simply spent.
+    fn settle_the_clashes(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            let Mechanic::Forms { fury, .. } = p.mechanic else {
+                continue;
+            };
+            let by = fury.clash_by;
+            if by == NOBODY {
+                continue;
+            }
+            if let Mechanic::Forms { fury, .. } = &mut self.players[i].mechanic {
+                fury.clash_by = NOBODY;
+            }
+            if (by as usize) < MAX_PLAYERS && by as usize != i {
+                let q = &mut self.players[by as usize];
+                let apart = V3::new(q.pos.x.sub(p.pos.x), Fx::ZERO, q.pos.z.sub(p.pos.z));
+                if apart.flat_len().raw() <= t::clash_reach().raw() {
+                    q.action = Action::Stagger {
+                        left: t::clash_stagger(),
+                    };
+                    q.stun_total = t::clash_stagger();
+                    q.hit_used = true;
+                    freeze(q, t::clash_freeze());
+                }
+                continue;
+            }
+            if by != QUARRY {
+                continue;
+            }
+            for slot in 0..MAX_MONSTERS {
+                let Some(beast) = self.monsters[slot].as_mut() else {
+                    continue;
+                };
+                if beast.alive()
+                    && matches!(beast.doing, Doing::Active { .. })
+                    && beast.reaches(p.pos, p.hurt_height(), t::body_radius())
+                {
+                    beast.doing = Doing::Flinch {
+                        left: t::clash_flinch(),
+                    };
+                    beast.hit_used = true;
+                }
+            }
+            if self.critters.any() {
+                let sp = self.critters.sp();
+                for c in self.critters.iter_mut() {
+                    if c.alive()
+                        && c.state == critter::is::ACTIVE
+                        && c.reaches(sp, p.pos, p.hurt_height(), t::body_radius())
+                    {
+                        c.state = critter::is::FLINCH;
+                        c.timer = t::clash_flinch();
+                        c.set(critter::flag::HIT_USED, true);
+                    }
+                }
+            }
         }
     }
 
@@ -4798,40 +4904,6 @@ impl World {
     }
 }
 
-/// Frames held for a full charge, at this Champion's momentum: *Heated* and
-/// *Blazing* fill a hold faster (exploration 0015, C4).
-fn full_at(p: &Player) -> u16 {
-    let quick = match p.mechanic {
-        Mechanic::Forms { fury, .. } => match fury.tier() {
-            1 => t::momentum_quick1(),
-            2 | 3 => t::momentum_quick2(),
-            _ => 0,
-        },
-        _ => 0,
-    };
-    let full = t::hold_full() as i32;
-    (full - full * quick.clamp(0, 100) / 100).max(1) as u16
-}
-
-/// **Momentum full** (exploration 0015, C4): a link pressed with the meter
-/// full comes out as its full charge, at once, and spends the meter. The
-/// full charge and the place in the string it stands at; `None` for anything
-/// else.
-fn surge(p: &mut Player, kind: u8) -> Option<(u8, u8)> {
-    use moves::champion as c;
-    let place = c::link_of(kind)?;
-    let big = c::full_charge(kind)?;
-    let Mechanic::Forms { fury, .. } = &mut p.mechanic else {
-        return None;
-    };
-    if fury.tier() < 3 {
-        return None;
-    }
-    fury.momentum = 0;
-    fury.momentum_left = 0;
-    Some((big, place))
-}
-
 /// **Break** (exploration 0015, C6): what a Champion's blow that landed
 /// `dealt` on a creature adds to its strain over the damage -- a hammer, a
 /// third link, a true link and a full charge each weigh more than they cut,
@@ -4859,12 +4931,23 @@ pub(crate) fn impact(beast: &mut Monster, p: &Player, kind: u8, dealt: i32) {
         weight = weight.max(t::impact_full());
     }
     let extra = dealt * (weight - 100).max(0) / 100;
+    // A finisher weighs more for the momentum it spent, up to twice as much
+    // again for a full meter -- and a full meter spent knocks it off its feet
+    // (exploration 0015, the fourth round).
+    let spent = match p.mechanic {
+        Mechanic::Forms { fury, .. } if full => fury.spent.min(100) as i32,
+        _ => 0,
+    };
+    let extra = extra * (100 + 2 * spent) / 100;
     let poise = if full {
         extra * t::impact_poise() / 100
     } else {
         0
     };
     beast.take_weight(extra, poise);
+    if spent >= 100 {
+        beast.stumble_for(t::meteor_stumble());
+    }
 }
 
 /// **Is this a blow that clashes** (exploration 0015, C7): a Champion in
@@ -4917,7 +5000,7 @@ fn feed_the_momentum(p: &mut Player, kind: Option<u8>) {
     }
     let max = t::momentum_max().clamp(1, u16::MAX as i32);
     fury.momentum = (fury.momentum as i32 + gain).clamp(0, max) as u16;
-    fury.momentum_left = t::momentum_holds();
+    fury.momentum_left = t::momentum_holds().min(u8::MAX as u16) as u8;
 }
 
 /// A blow taken costs a share of the meter.
@@ -4941,39 +5024,24 @@ fn may_hold(p: &Player) -> bool {
     matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.may_hold)
 }
 
-/// What letting go of a held link throws. See `step_channel`.
-fn release_the_hold(
-    p: &mut Player,
-    who: usize,
-    kind: u8,
-    held: u16,
-    input: Input,
-    scene: &Scene,
-) -> Action {
-    let from = t::hold_from();
-    let full = full_at(p).max(from + 1);
-    if held >= full {
-        if let (Some(big), Some(place)) = (
-            moves::champion::full_charge(kind),
-            moves::champion::link_of(kind),
-        ) {
-            // Aimed now, on the release, as any move is on its first frame.
-            lock_aim(p, who, big, input, scene);
-            begin_full_charge(p, big, place);
-            return Action::Startup {
-                kind: big,
-                left: moves::get(p.class, big).startup,
-            };
-        }
-    }
-    p.channelled = if held < from {
-        Fx::ZERO
-    } else {
-        Fx::ratio(held.min(full) as i32, full as i32)
+/// The link `kind` held to a finish: its weapon's finisher for that place in
+/// the string, aimed now and wound up from its own startup. The link itself if
+/// it has none.
+fn finish_with(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) -> Action {
+    let (Some(big), Some(place)) = (
+        moves::champion::full_charge(kind),
+        moves::champion::link_of(kind),
+    ) else {
+        return Action::Active {
+            kind,
+            left: moves::get(p.class, kind).active,
+        };
     };
-    Action::Active {
-        kind,
-        left: moves::get(p.class, kind).active,
+    lock_aim(p, who, big, input, scene);
+    begin_full_charge(p, big, place);
+    Action::Startup {
+        kind: big,
+        left: moves::get(p.class, big).startup,
     }
 }
 
@@ -4993,11 +5061,19 @@ fn begin_full_charge(p: &mut Player, kind: u8, place: u8) {
     } = &mut p.mechanic
     {
         *form = Form::of_move(kind);
-        *chain = place + 1;
-        *chain_left = t::chain_grace();
+        // A finisher finishes: the string is over, and the next press opens
+        // one. It stands at its link's place for the refund.
+        *chain = 0;
+        *chain_left = 0;
         *chain_hit = false;
         fury.true_link = false;
         fury.place = place;
+        // **It spends the meter**, whatever is in it, and is worth what it
+        // spent (`momentum_mul`, `stagger_by_the_spend`).
+        let max = t::momentum_max().max(1);
+        fury.spent = (fury.momentum as i32 * 100 / max).clamp(0, 100) as u8;
+        fury.momentum = 0;
+        fury.momentum_left = 0;
     }
     p.channelled = Fx::ZERO;
     if kind == c::METEOR {
@@ -5014,13 +5090,53 @@ fn begin_full_charge(p: &mut Player, kind: u8, place: u8) {
     }
 }
 
-/// What a part charge multiplies a number by, given what a part charge adds at
-/// full, as a percentage. One for anything that was not held.
-fn heft_mul(p: &Player, at_full: u16) -> Fx {
-    if p.class != Class::Champion || p.channelled.raw() <= 0 {
-        return Fx::ONE;
+/// **What momentum is worth to a blow** (exploration 0015, the fourth
+/// round): every hit he lands is worth its share of `momentum_buff` for the
+/// meter he carries, and a finisher -- which carries none, having spent it --
+/// its share of `momentum_spend` for what it spent. One for anybody else.
+fn momentum_mul(p: &Player, kind: u8) -> Fx {
+    Fx::ONE.add(carried_share(p)).add(spent_share_of(p, kind))
+}
+
+/// The meter he carries, as a share of a blow: `momentum_buff` at full.
+fn carried_share(p: &Player) -> Fx {
+    let Mechanic::Forms { fury, .. } = p.mechanic else {
+        return Fx::ZERO;
+    };
+    let max = t::momentum_max().max(1);
+    Fx::ratio(fury.momentum as i32 * t::momentum_buff(), max * 100)
+}
+
+/// What a finisher spent, as a share of its blow; nothing for anything else.
+fn spent_share_of(p: &Player, kind: u8) -> Fx {
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if moves::champion::is_full(kind) => spend_share(fury.spent),
+        _ => Fx::ZERO,
     }
-    Fx::ONE.add(Fx::ratio(at_full as i32, 100).mul(p.channelled.min(Fx::ONE)))
+}
+
+/// What a finisher that spent `spent` per cent of a full meter adds, as a
+/// share: `momentum_spend` of it at a full meter.
+fn spend_share(spent: u8) -> Fx {
+    Fx::ratio(spent.min(100) as i32 * t::momentum_spend(), 100 * 100)
+}
+
+/// **The stagger a spent meter buys** (exploration 0015, the fourth round):
+/// a finisher that lands on a fighter leaves them staggered for its own stun
+/// and its share of `momentum_stagger` more -- more and more obvious the more
+/// it spent. A full meter spent knocks them down outright.
+fn stagger_by_the_spend(victim: &mut Player, base: u16, spent: u8) {
+    if spent == 0 || victim.action.invulnerable() {
+        return;
+    }
+    let extra = (t::momentum_stagger() as u32 * spent.min(100) as u32 / 100) as u16;
+    let left = if spent >= 100 {
+        base.max(t::knockdown_frames()).saturating_add(extra)
+    } else {
+        base.saturating_add(extra)
+    };
+    victim.action = Action::Stagger { left };
+    victim.stun_total = left;
 }
 
 /// What a true link multiplies its damage by: one for anything else.
@@ -5115,6 +5231,27 @@ fn drive_the_champion(p: &mut Player, dir: V3, reach: Fx, speed: Fx) {
         fury.eaten = false;
         fury.shouldered = true;
     }
+}
+
+/// Does `hit` meet a Champion's heavy blow? If so the blow is spent on it:
+/// he freezes on the impact, flourishes, is fed for it, and remembers who
+/// threw it for `World::settle_the_clashes`. Blocks, parries, blows that take
+/// no frames and blows thrown by nobody (the world's own) do not clash.
+fn meets_a_clash(defender: &mut Player, hit: &Hit) -> bool {
+    if hit.blocked || hit.parried || !hit.interrupts || hit.by == NOBODY || !clashing(defender) {
+        return false;
+    }
+    if let Mechanic::Forms { fury, rush, .. } = &mut defender.mechanic {
+        fury.clash_by = hit.by;
+        // A Rush's shoulder, once a run, as its eaten blow is.
+        if *rush > 0 {
+            fury.eaten = true;
+        }
+    }
+    freeze(defender, t::clash_freeze());
+    defender.parried = PARRY_FLOURISH;
+    feed_the_momentum(defender, None);
+    true
 }
 
 /// **The Rush, braced** (exploration 0015, C1): what a blow does to a
@@ -5215,19 +5352,17 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
         {
             Action::Channel { kind, held: 0 }
         }
-        // **The Champion's hold** (exploration 0015, C3), the same arm: a
-        // link whose button was pressed for it and is still down at the top of
-        // the wind-up is held there. A true link held is a charge instead --
-        // the beat is a press, the hold is the release.
+        // **Tap to combo, hold to finish** (exploration 0015, the fourth
+        // round), the same arm: a link whose button was pressed for it and is
+        // still down at the top of its wind-up waits there for the press to be
+        // long enough to mean it -- `tuning::hold_from`, counted from the press
+        // -- and then is that weapon's finisher. A wind-up as long as that
+        // decides on the next frame. See `step_channel`.
         Action::Startup { kind, .. }
             if moves::charge(p.class, kind) == Some(moves::Charge::Heft)
-                && moves::get(p.class, kind).channel > 0
                 && may_hold(p)
                 && input.has(channel_button(p.class, kind)) =>
         {
-            if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
-                fury.true_link = false;
-            }
             Action::Channel { kind, held: 0 }
         }
         Action::Startup { kind, .. } => Action::Active {
@@ -5545,18 +5680,7 @@ fn step_player(
                     rise_from_the_floor(p, kind, scene);
                     back_to_the_floor(p, kind, scene);
                     spend_the_rise(p, kind);
-                    // Momentum full: the link comes out as its full charge,
-                    // on a tap (exploration 0015, C4).
-                    let kind = match surge(p, kind) {
-                        Some((big, place)) => {
-                            begin_full_charge(p, big, place);
-                            big
-                        }
-                        None => {
-                            begin_champion(p, kind);
-                            kind
-                        }
-                    };
+                    begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, true)
                 }
                 // The Elementalist's Raise: an instant on the earth click's
@@ -7957,6 +8081,18 @@ fn step_channel(
     let m = moves::get(p.class, kind);
     let cap = m.channel;
     let charge = moves::charge(p.class, kind);
+    // **The Champion's finisher**: held long enough, counted from the press,
+    // and the link is that weapon's finisher, aimed now as any move is on its
+    // first frame.
+    if charge == Some(moves::Charge::Heft) && input.has(channel_button(p.class, kind)) {
+        if m.startup + held + 1 >= t::hold_from() {
+            return finish_with(p, who, kind, input, scene);
+        }
+        return Action::Channel {
+            kind,
+            held: held + 1,
+        };
+    }
     // Held, and there is still room: wind on. At the cap it releases itself,
     // so a player holding the button through a fight is not quietly storing an
     // ability they have already paid for.
@@ -8008,7 +8144,11 @@ fn step_channel(
         // it is a different move -- the weapon's full charge for this place in
         // the string -- wound up from its own startup. Facing locks here, on
         // the release, as it does for every other move on its first frame.
-        Some(moves::Charge::Heft) => release_the_hold(p, who, kind, held, input, scene),
+        // Let go before the press was long enough: the link, as tapped.
+        Some(moves::Charge::Heft) => Action::Active {
+            kind,
+            left: m.active,
+        },
         _ => {
             p.channelled = p.aim_path.length();
             throw_move(p, kind, input, true)
@@ -8763,7 +8903,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                     | (fury.place as u32) << 25,
             );
             h.write_u32(fury.momentum as u32 | (fury.momentum_left as u32) << 16);
-            h.write_u32(fury.last_weapon as u32);
+            h.write_u32(
+                fury.last_weapon as u32 | (fury.spent as u32) << 8 | (fury.clash_by as u32) << 16,
+            );
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -11424,6 +11566,12 @@ impl World {
         );
         if parried {
             self.players[victim].parried = PARRY_FLOURISH;
+        }
+        // A Champion's finisher's effect staggers by the momentum it spent,
+        // which it carries in `banked` (exploration 0015).
+        if dealt > 0 && effect.class == Class::Champion && effect.banked > 0 {
+            let spent = effect.banked.clamp(0, 100) as u8;
+            stagger_by_the_spend(&mut self.players[victim], m.hitstun, spent);
         }
         // The Blood mage's double duty, for a hit her effects deliver: drink
         // from a pool the victim stands in, then spill what was dealt. See the
@@ -14432,6 +14580,13 @@ impl World {
                     hit.state = critter::is::FLINCH;
                     hit.timer = (t::parry_stagger() as i32).max(flinch) as u16;
                 }
+                // Met by a Champion's heavy blow (`meets_a_clash`): to the
+                // pack's mind it was turned, as a guard turns it.
+                let clashed = matches!(
+                    self.players[i].mechanic,
+                    Mechanic::Forms { fury, .. } if fury.clash_by != NOBODY
+                );
+                let guarding = guarding || clashed;
                 if !parried && !guarding {
                     let now = self.monsters;
                     fall_off(&mut self.players[i], &now);
@@ -14562,6 +14717,13 @@ impl World {
                     m.launch.max(Fx::ZERO),
                 );
                 let dealt = before.min(worth).max(0);
+                // A link that lands on a critter -- the Hornback's bull, a
+                // gnawer -- is a landed link like any other: it confirms the
+                // string and feeds his momentum (exploration 0015).
+                confirm_chain(&mut self.players[i], dealt <= 0);
+                if dealt > 0 {
+                    feed_the_momentum(&mut self.players[i], Some(kind));
+                }
                 if dealt > 0 {
                     self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
                     self.spill(
@@ -14736,7 +14898,7 @@ impl World {
                 .mul(cash)
                 .mul(sweet)
                 .mul(true_link_mul(&attacker))
-                .mul(heft_mul(&attacker, t::hold_damage()))
+                .mul(Fx::ONE.add(spent_share_of(&attacker, kind)))
                 .to_int();
             // Asked of its guard first, from where the swing comes from:
             // the same point the fighters' guard is handed.
@@ -14758,6 +14920,10 @@ impl World {
             // blocked link and pays in full. (Until 2026-10-12 nothing here
             // confirmed the chain, so every string against a creature paid
             // every recovery in full.)
+            // The momentum he carries hurts it more and weighs nothing: its
+            // share goes on after the blow, past the strain (`take_extra`).
+            let dealt = dealt
+                + beast.take_extra(Fx::from_int(dealt).mul(carried_share(&attacker)).to_int());
             confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
             if dealt > 0 {
                 feed_the_momentum(&mut self.players[i], Some(kind));
@@ -15254,6 +15420,31 @@ mod fury_tests {
             p.action
         );
         assert!(rushing(&p).is_none(), "and ends the run");
+    }
+
+    #[test]
+    fn a_creatures_blow_meeting_a_heavy_one_is_spent_on_it() {
+        let mut p = Player::new(Class::Champion);
+        p.action = Action::Active {
+            kind: moves::champion::METEOR,
+            left: 2,
+        };
+        let before = p.health;
+        let mut hit = blow(300);
+        hit.by = QUARRY;
+        apply_hit(&mut p, hit);
+        assert_eq!(p.health, before, "the bite took nothing");
+        assert!(
+            matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.clash_by == QUARRY),
+            "and who threw it is remembered for the settling"
+        );
+        let mut q = Player::new(Class::Champion);
+        let mut world = blow(30);
+        world.by = NOBODY;
+        q.action = p.action;
+        let before = q.health;
+        apply_hit(&mut q, world);
+        assert!(q.health < before, "the world's own blows are not clashed");
     }
 
     #[test]

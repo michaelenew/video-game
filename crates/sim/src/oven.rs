@@ -799,10 +799,7 @@ scalars! {
     // The longest hold is each link's own `channel` column; these say when a
     // hold is anything at all, when it is full, what a part charge adds, and
     // how fast he moves while he holds.
-    HoldFrom,             "Champion", "Hold, counts from (frames held)",     Frames, 0, 30;
-    HoldFull,             "Champion", "Hold, full at (frames held)",         Frames, 1, 180;
-    HoldDamage,           "Champion", "Hold, part charge extra damage at full (%)", Percent, 0, 200;
-    HoldShove,            "Champion", "Hold, part charge extra knockback at full (%)", Percent, 0, 200;
+    HoldFrom,             "Champion", "Hold, a finisher after (frames held)", Frames, 1, 60;
     HoldMobility,         "Champion", "Hold, walk speed while holding (%)",  Percent, 0, 100;    // **The full charges** (C5): what each one throws, how far and how fast.
     CrescentReach,        "Champion", "Crescent, flies (m)",                       Fixed, fx(1,1), fx(30,1);
     CrescentSpeed,        "Champion", "Crescent, speed (m/s)",                     Fixed, fx(5,1), fx(80,1);
@@ -840,11 +837,12 @@ scalars! {
     MomentumSwap,         "Champion", "Momentum, more for a different weapon",           Int, 0, 200;
     MomentumBeat,         "Champion", "Momentum, more for a true link",                  Int, 0, 200;
     MomentumFull,         "Champion", "Momentum, more for a full charge",                Int, 0, 200;
-    MomentumHolds,        "Champion", "Momentum, holds after a hit for",                 Frames, 0, 600;
+    MomentumHolds,        "Champion", "Momentum, holds after a hit for",                 Frames, 0, 255;
     MomentumDrain,        "Champion", "Momentum, drains a frame after",                  Int, 0, 100;
     MomentumHurt,         "Champion", "Momentum, a hit taken costs (%)",                 Percent, 0, 100;
-    MomentumQuick1,       "Champion", "Momentum, Heated: a hold fills faster by (%)",    Percent, 0, 90;
-    MomentumQuick2,       "Champion", "Momentum, Blazing: a hold fills faster by (%)",   Percent, 0, 90;
+    MomentumBuff,         "Champion", "Momentum, a full meter adds to every hit (%)",    Percent, 0, 100;
+    MomentumSpend,        "Champion", "Momentum, a full meter spent adds to a finisher (%)", Percent, 0, 300;
+    MomentumStagger,      "Champion", "Momentum, a full meter spent adds stagger",       Frames, 0, 120;
     // **Break and the Clash** (C6, C7): what his blows do to a creature's
     // strain over their damage, and what meeting a swing does.
     ImpactHammer,         "Champion", "Impact, hammer blows into strain (%)",              Percent, 100, 500;
@@ -856,6 +854,7 @@ scalars! {
     ClashFlinch,          "Champion", "Clash, a creature flinches for",                    Frames, 0, 180;
     ClashStagger,         "Champion", "Clash, the lighter blow staggers for",              Frames, 0, 120;
     ClashFreeze,          "Champion", "Clash, both freeze for",                            Frames, 0, 60;
+    ClashReach,           "Champion", "Clash, staggers a fighter within (m)",               Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------

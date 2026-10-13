@@ -125,105 +125,110 @@ fn a_link_pressed_in_the_freeze_is_a_true_link() {
         "a link pressed after the freeze is an ordinary link"
     );
     assert!(beat_true, "a link pressed inside the freeze is a true link");
-    let backcut = sim::moves::get(Class::Champion, c::BACKCUT).damage;
-    assert_eq!(late, backcut, "the ordinary backcut");
-    assert_eq!(
-        beat,
-        backcut * (100 + sim::tuning::true_link_damage() as i32) / 100,
-        "the true one hits harder"
+    // Both landed off the same opener, so the same momentum is in both: the
+    // difference is the beat's alone.
+    let want = late * (100 + sim::tuning::true_link_damage() as i32) / 100;
+    assert!(
+        (beat - want).abs() <= 1,
+        "the true one hits harder: {beat} against {late}, {want} wanted"
     );
 }
 
 /// Press a weapon fresh and keep it down for `frames`, then let go and let
-/// the swing play out. What it dealt, and whether it was ever held.
-fn held_swing(button: u16, frames: u32) -> (i32, bool) {
+/// the swing play out. What it dealt, and the moves it threw.
+fn held_swing(button: u16, frames: u32) -> (i32, Vec<u8>) {
     let mut w = engaged();
     let before = w.players[1].health;
-    let mut held = false;
+    let mut kinds = Vec::new();
     for f in 0..(frames + 60) {
         step(&mut w, if f < frames { button } else { 0 });
-        held |= matches!(w.players[0].action, Action::Channel { .. });
-    }
-    (before - w.players[1].health, held)
-}
-
-#[test]
-fn a_link_pressed_for_and_held_waits_at_the_top_of_its_wind_up() {
-    let mut w = engaged();
-    for _ in 0..40 {
-        step(&mut w, Input::MIDDLE);
-    }
-    assert!(
-        matches!(
-            w.players[0].action,
-            Action::Channel {
-                kind: c::HAMMER_GROUND,
-                ..
-            }
-        ),
-        "the hammer held is held: {:?}",
-        w.players[0].action
-    );
-    assert_eq!(
-        w.players[1].health,
-        sim::state::Player::new(Class::Bulwark).health,
-        "and nothing has landed yet"
-    );
-}
-
-#[test]
-fn a_part_charge_hits_harder_than_a_tap() {
-    let sword = sim::moves::get(Class::Champion, c::SWORD_GROUND);
-    let (tap, tap_held) = held_swing(Input::LEFT, 2);
-    assert!(!tap_held, "a tap is not a hold");
-    assert_eq!(tap, sword.damage);
-    let startup = sword.startup as u32;
-    let full = sim::tuning::hold_full() as u32;
-    let (part, part_held) = held_swing(Input::LEFT, startup + full / 2);
-    assert!(part_held, "held past the wind-up, it is held");
-    assert!(
-        part > tap,
-        "a part charge ({part}) hits harder than a tap ({tap})"
-    );
-}
-
-#[test]
-fn tapping_runs_the_string_and_holding_charges_it() {
-    // Linear play was a button held down. Holding is the charge now, so it
-    // is a button tapped: every link thrown, none of them held.
-    let mut w = engaged();
-    let mut kinds = Vec::new();
-    let mut held = false;
-    for f in 0..90 {
-        step(&mut w, if f % 4 == 0 { Input::LEFT } else { 0 });
-        held |= matches!(w.players[0].action, Action::Channel { .. });
         if let Some(k) = w.players[0].action.attack_kind() {
             if kinds.last() != Some(&k) {
                 kinds.push(k);
             }
         }
     }
-    assert!(!held, "a tapped string held nothing");
+    (before - w.players[1].health, kinds)
+}
+
+#[test]
+fn a_press_a_little_long_is_still_the_tap() {
+    // A click is six to eight frames long. The sword winds up in six, so a
+    // press that outlasts its wind-up by a frame or two is still the sword.
+    let (dealt, kinds) = held_swing(Input::LEFT, sim::tuning::hold_from() as u32 - 2);
+    assert_eq!(kinds, [c::SWORD_GROUND], "{kinds:?}");
+    assert_eq!(
+        dealt,
+        sim::moves::get(Class::Champion, c::SWORD_GROUND).damage
+    );
+}
+
+#[test]
+fn held_any_link_is_its_weapons_finisher() {
+    // Tap to combo, hold to finish: held, the opener is the finisher, at once.
+    for (button, want) in [
+        (Input::LEFT, c::CRESCENT),
+        (Input::MIDDLE, c::SHOCKWAVE),
+        (Input::RIGHT, c::COMET),
+    ] {
+        let (_, kinds) = held_swing(button, 40);
+        assert!(kinds.contains(&want), "{button:#x} held threw {kinds:?}");
+    }
+}
+
+#[test]
+fn a_finisher_ends_the_string() {
+    let mut w = engaged();
+    for _ in 0..40 {
+        step(&mut w, Input::MIDDLE);
+    }
+    let Mechanic::Forms { chain, .. } = w.players[0].mechanic else {
+        unreachable!()
+    };
+    assert_eq!(chain, 0, "the next press opens a new string");
+}
+
+#[test]
+fn tapping_runs_the_string_and_holding_finishes_it() {
+    // Linear play: a button tapped throws every link, none of them a
+    // finisher.
+    let mut w = engaged();
+    let mut kinds = Vec::new();
+    for f in 0..90 {
+        step(&mut w, if f % 4 == 0 { Input::LEFT } else { 0 });
+        if let Some(k) = w.players[0].action.attack_kind() {
+            if kinds.last() != Some(&k) {
+                kinds.push(k);
+            }
+        }
+    }
+    assert!(
+        kinds.iter().all(|k| !c::is_full(*k)),
+        "a tapped string threw {kinds:?}"
+    );
     assert_eq!(
         &kinds[..3],
         &[c::SWORD_GROUND, c::BACKCUT, c::UPCUT],
-        "a tapped sword ran {kinds:?}"
+        "{kinds:?}"
     );
 }
 
 #[test]
 fn a_rush_takes_a_hold_back() {
+    // The sword's wind-up is shorter than a hold, so it waits at the top a
+    // few frames for the press to mean it: a Rush in those takes it back.
     let mut w = engaged();
-    for _ in 0..40 {
-        step(&mut w, Input::MIDDLE);
+    let startup = sim::moves::get(Class::Champion, c::SWORD_GROUND).startup;
+    for _ in 0..=startup + 1 {
+        step(&mut w, Input::LEFT);
     }
-    assert!(matches!(w.players[0].action, Action::Channel { .. }));
-    step(&mut w, Input::MIDDLE | Input::MECHANIC | Input::S);
     assert!(
-        !matches!(w.players[0].action, Action::Channel { .. }),
-        "the Rush took the hold back: {:?}",
+        matches!(w.players[0].action, Action::Channel { .. }),
+        "{:?}",
         w.players[0].action
     );
+    step(&mut w, Input::LEFT | Input::MECHANIC | Input::S);
+    assert!(!matches!(w.players[0].action, Action::Channel { .. }));
     let Mechanic::Forms { rush, .. } = w.players[0].mechanic else {
         unreachable!()
     };
@@ -254,16 +259,13 @@ fn open_floor(place: u8, ahead: i32) -> World {
     w
 }
 
-/// Hold `button` to a full charge and let go. Returns the world on the frame
-/// after the release, and the move it threw.
+/// Hold `button` until the link it opens is its finisher, and let go.
+/// Returns the move it threw.
 fn full_charge(w: &mut World, button: u16) -> Option<u8> {
-    let full = sim::tuning::hold_full() as u32;
-    for _ in 0..(full + 30) {
+    for _ in 0..60 {
         step(w, button);
-        if let Action::Channel { held, .. } = w.players[0].action {
-            if held as u32 > full {
-                break;
-            }
+        if w.players[0].action.attack_kind().is_some_and(c::is_full) {
+            break;
         }
     }
     step(w, 0);
@@ -368,11 +370,10 @@ fn the_meteor_comes_down_where_the_crosshair_was() {
     let mut w = open_floor(2, 6);
     let before = w.players[1].health;
     // Pointed down at the floor in front of him.
-    let full = sim::tuning::hold_full() as u32;
     let look = |bits| Input::looking_at(bits, LOOK_RIGHT, -3000);
-    for _ in 0..(full + 30) {
+    for _ in 0..60 {
         w.advance([look(Input::MIDDLE), Input::aimed(0, LOOK_LEFT)]);
-        if matches!(w.players[0].action, Action::Channel { held, .. } if held as u32 > full) {
+        if w.players[0].action.attack_kind().is_some_and(c::is_full) {
             break;
         }
     }
@@ -498,53 +499,49 @@ fn the_meter_holds_and_then_drains() {
 }
 
 #[test]
-fn a_full_meter_makes_a_tap_a_full_charge_and_spends_it() {
-    let mut w = open_floor(0, 12);
-    set_momentum(&mut w, sim::tuning::momentum_max());
-    assert_eq!(fury(&w).tier(), 3);
-    step(&mut w, Input::LEFT);
-    assert_eq!(
-        w.players[0].action.attack_kind(),
-        Some(c::CRESCENT),
-        "a tap at full momentum is the full charge"
+fn momentum_makes_every_hit_worth_more() {
+    let tap = |m: i32| {
+        let mut w = engaged();
+        set_momentum(&mut w, m);
+        let before = w.players[1].health;
+        for f in 0..30 {
+            step(&mut w, if f == 0 { Input::LEFT } else { 0 });
+        }
+        before - w.players[1].health
+    };
+    let cold = tap(0);
+    let full = tap(sim::tuning::momentum_max());
+    assert!(
+        full > cold,
+        "a sword cut dealt {full} at a full meter and {cold} at none"
     );
-    assert_eq!(fury(&w).momentum, 0, "and spends the meter");
 }
 
 #[test]
-fn heated_and_blazing_fill_a_hold_faster() {
-    let held_for = |m: i32| {
-        let mut w = open_floor(0, 30);
+fn a_finisher_spends_the_meter_and_is_worth_what_it_spent() {
+    let shockwave = |m: i32| {
+        let mut w = open_floor(0, 4);
         set_momentum(&mut w, m);
-        let mut f = 0;
-        loop {
-            step(&mut w, Input::MIDDLE);
-            f += 1;
-            if let Action::Channel { .. } = w.players[0].action {
-                break;
+        let before = w.players[1].health;
+        assert_eq!(full_charge(&mut w, Input::MIDDLE), Some(c::SHOCKWAVE));
+        assert_eq!(fury(&w).momentum, 0, "a finisher spends the meter");
+        let mut staggered = 0;
+        for _ in 0..60 {
+            step(&mut w, 0);
+            if let Action::Stagger { left } = w.players[1].action {
+                staggered = staggered.max(left);
             }
-            assert!(f < 60);
         }
-        // Hold, a frame at a time, until letting go would be the full charge.
-        let mut held = 0;
-        loop {
-            let mut probe = w.clone();
-            step(&mut probe, 0);
-            if probe.players[0].action.attack_kind() == Some(c::SHOCKWAVE) {
-                return held;
-            }
-            step(&mut w, Input::MIDDLE);
-            held += 1;
-            assert!(held < 200);
-        }
+        (before - w.players[1].health, staggered, fury(&w).spent)
     };
-    let cold = held_for(0);
-    let max = sim::tuning::momentum_max();
-    let heated = held_for(max / 3 + 1);
-    let blazing = held_for(max * 2 / 3 + 1);
+    let (cold, cold_stagger, nothing) = shockwave(0);
+    let (half, half_stagger, some) = shockwave(sim::tuning::momentum_max() / 2);
+    let (full, full_stagger, all) = shockwave(sim::tuning::momentum_max());
+    assert_eq!((nothing, some, all), (0, 50, 100), "what each spent");
+    assert!(cold < half && half < full, "dealt {cold}, {half}, {full}");
     assert!(
-        cold > heated && heated > blazing,
-        "full at {cold}, {heated} heated and {blazing} blazing"
+        cold_stagger <= half_stagger && half_stagger < full_stagger,
+        "staggered {cold_stagger}, {half_stagger}, {full_stagger}"
     );
 }
 
@@ -559,7 +556,7 @@ fn a_blow_taken_costs_a_share_of_the_meter() {
     }
     if let Mechanic::Forms { fury, .. } = &mut w.players[1].mechanic {
         fury.momentum = 60;
-        fury.momentum_left = 400;
+        fury.momentum_left = 250;
     }
     for f in 0..40 {
         let b = if f == 0 { Input::LEFT } else { 0 };
@@ -633,6 +630,46 @@ fn a_heavy_blow_meeting_a_lighter_one_wins_it_outright() {
             Action::Stagger { .. } | Action::HitStun { .. }
         ),
         "and the lighter's thrower is in no state to go on: {:?}",
+        w.players[1].action
+    );
+}
+
+#[test]
+fn any_blow_that_meets_his_shoulder_is_spent_and_its_thrower_staggered() {
+    // The generic Clash: a Bulwark's Bash from behind, landing in the last
+    // frames of a Rush running away from him. No line of the Bash's own says
+    // it can be clashed -- the blow meets the shoulder where every blow lands.
+    let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
+    let y = w.players[0].pos.y;
+    w.players[0].pos = sim::V3::new(sim::Fx::ZERO, y, sim::Fx::from_int(8));
+    w.players[1].pos = sim::V3::new(sim::Fx::from_int(-1), y, sim::Fx::from_int(8));
+    if let Mechanic::Forms { rush, rush_vel, .. } = &mut w.players[0].mechanic {
+        // The run's last frames, held where he is so the Bash reaches.
+        *rush = sim::tuning::rush_eat_frames();
+        *rush_vel = sim::V3::ZERO;
+    }
+    let bash = sim::moves::get(Class::Bulwark, 0);
+    w.players[1].facing = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
+    w.players[1].action = Action::Active {
+        kind: 0,
+        left: bash.active,
+    };
+    let health = w.players[0].health;
+    let mut staggered = false;
+    let mut clashed = false;
+    for _ in 0..3 {
+        w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_RIGHT)]);
+        staggered |= matches!(w.players[1].action, Action::Stagger { .. });
+        clashed |= w.players[0].parried > 0;
+    }
+    assert!(clashed, "the Bash never met him");
+    assert_eq!(
+        w.players[0].health, health,
+        "the Bash took nothing from him"
+    );
+    assert!(
+        staggered,
+        "and its thrower was knocked out of it: {:?}",
         w.players[1].action
     );
 }

@@ -196,7 +196,7 @@ pub const SECTIONS: &[Section] = &[
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword: tapped, it walks that weapon's whole three-hit string; held down, it charges.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword: tapped, it walks that weapon's whole three-hit string; held down, it is the sword's finisher.",
             ),
             e(
                 "Q",
@@ -231,7 +231,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Champion",
         in_browser: true,
-        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move. Reworked 2026-10-12 and unplayed: a braced Rush that opens the string, the beat, a hold that charges any hit, six full charges and a momentum meter -- docs/design/exploration/0015_champion_momentum_and_the_charge.md is the design.",
+        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move. Reworked 2026-10-12 and unplayed: a braced Rush that opens the string, the beat, tap to combo and hold to finish, six finishers and a momentum meter they spend -- docs/design/exploration/0015_champion_momentum_and_the_charge.md is the design.",
         entries: &[
             e(
                 "Left click",
@@ -259,27 +259,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Hold a weapon",
-                "Any hit you pressed for, held down, waits at the top of its wind-up and charges -- to keep a swing you started too late, to hold a threat over a gap, or to throw a hit late. Let go part way for a harder hit; hold to full and it becomes that weapon's full charge. You crawl and turn while you hold, and Rush takes a hold back.",
+                "Tap to string hits; hold to finish. Any hit you pressed for and keep holding, about as long as its wind-up, becomes that weapon's finisher, at any point in the string, and ends it. A press a little long is still the tap, and Rush takes a hold back.",
             ),
             e(
-                "Full charges",
-                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Comet, a long lunge that carries whoever it catches into the nearest wall. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out.",
+                "Finishers",
+                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Comet, a Rush on the spear that goes where you are holding and carries whoever it catches into the nearest wall. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out. A finisher, or Earthbreaker, meets any blow thrown into it and wins: the blow is spent and whoever threw it is knocked out of it.",
             ),
             e(
                 "Momentum",
-                "The bar under your health. Every hit that lands fills it; a different weapon from the last, a true link and a full charge fill it more. It holds for two seconds, then drains, and a hit you take costs a share. A third and two thirds full, your holds charge faster -- the glow on your weapon says which. Full, the next hit you press comes out as its full charge, and empties it.",
-            ),
-            e(
-                "Jump during Earthbreaker",
-                "Press space while the hammer's third hit is winding up and you go up with them: the knock-up is bigger and you leave the floor on the frame it lands, which puts the air hammer in reach off the end of an ordinary string. It is paid on contact, so a whiff costs you the recovery and gives you nothing.",
-            ),
-            e(
-                "Space and a weapon",
-                "That weapon's takeoff, thrown as your feet leave the floor. Sword rises into an angled slash and hits hardest; hammer is the uppercut, which launches and holds on, and space again takes you both higher; spear cracks the shaft into the ground for the most height in the class plus a shove the way you are holding. Press jump first and the weapon a few frames later — that order always works.",
-            ),
-            e(
-                "In the air",
-                "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
+                "The bar under your health. Every hit that lands fills it -- on anybody, anything -- and a different weapon from the last, a true link and a finisher fill it more. It holds for two seconds, then drains, and a hit you take costs a share. The fuller it is, the harder every hit you land. Every finisher spends all of it, whatever is in it, and hits harder, bigger and staggers longer for what it spent; a full bar spent knocks them down. The glow on your weapon is the bar.",
             ),
             e(
                 "E",

@@ -1264,27 +1264,12 @@ pub fn true_link_freeze() -> u16 {
     oven::scalar(Scalar::TrueLinkFreeze).max(0) as u16
 }
 
-/// **The Hold** (exploration 0015, C3). Frames held at the top of the wind-up
-/// before a hold counts as one: under this it is a press a little long, and
-/// the move comes out as built.
+/// **Tap to combo, hold to finish** (exploration 0015, the fourth round).
+/// Frames a link's button must be held, counted from the press, for it to be
+/// that weapon's finisher rather than the link: about a wind-up, so a press a
+/// little long on the sword's six frames is still the sword.
 pub fn hold_from() -> u16 {
-    oven::scalar(Scalar::HoldFrom).max(0) as u16
-}
-
-/// Frames held for a **full** charge: the weapon's full-charge move for that
-/// place in the string, rather than the link itself.
-pub fn hold_full() -> u16 {
-    oven::scalar(Scalar::HoldFull).max(1) as u16
-}
-
-/// What a part charge adds at the very edge of full, to the damage and to the
-/// shove, as percentages. In between it is the share of `hold_full` held.
-pub fn hold_damage() -> u16 {
-    oven::scalar(Scalar::HoldDamage).max(0) as u16
-}
-
-pub fn hold_shove() -> u16 {
-    oven::scalar(Scalar::HoldShove).max(0) as u16
+    oven::scalar(Scalar::HoldFrom).max(1) as u16
 }
 
 /// How fast he walks while holding, as a share of his walk: a crawl. He turns
@@ -3582,16 +3567,6 @@ pub fn momentum_hurt() -> i32 {
     oven::scalar(Scalar::MomentumHurt).max(0)
 }
 
-/// Momentum, Heated: a hold fills faster by (%).
-pub fn momentum_quick1() -> i32 {
-    oven::scalar(Scalar::MomentumQuick1).max(0)
-}
-
-/// Momentum, Blazing: a hold fills faster by (%).
-pub fn momentum_quick2() -> i32 {
-    oven::scalar(Scalar::MomentumQuick2).max(0)
-}
-
 // Break and the Clash (exploration 0015, C6 and C7). See `state::impact`
 // and `state::clashing`.
 
@@ -3638,4 +3613,30 @@ pub fn clash_stagger() -> u16 {
 /// Clash, both freeze for.
 pub fn clash_freeze() -> u16 {
     oven::scalar(Scalar::ClashFreeze).max(0) as u16
+}
+
+/// **What momentum is worth** (exploration 0015, the fourth round): what a
+/// full meter adds to every hit he lands, as a percentage -- less, in
+/// proportion, for a meter less full.
+pub fn momentum_buff() -> i32 {
+    oven::scalar(Scalar::MomentumBuff).max(0)
+}
+
+/// What a full meter **spent** adds to a finisher's damage and to the size of
+/// what it puts in the world -- every finisher spends the meter, whatever is
+/// in it, and is worth its share of this.
+pub fn momentum_spend() -> i32 {
+    oven::scalar(Scalar::MomentumSpend).max(0)
+}
+
+/// What a full meter spent adds to the stagger a finisher's victim is in, in
+/// frames; its share for less.
+pub fn momentum_stagger() -> u16 {
+    oven::scalar(Scalar::MomentumStagger).max(0) as u16
+}
+
+/// How far a fighter whose blow the Champion clashed may be and still be
+/// staggered by it: their own swing, not a bolt from across the arena.
+pub fn clash_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClashReach))
 }

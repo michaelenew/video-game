@@ -8229,3 +8229,35 @@ should cross gaps the movement sections were built against, or be held to the gr
 were thrown on.
 **Verdict** — unplayed. Every number is a first guess; the six full charges borrow clips
 (Backcut, Hammer, Rush stab, Rush slash, Air hammer, Skewer) until they have their own.
+
+### 2026-10-13 — the Champion from play: tap to combo, hold to finish; momentum spent; the Clash everywhere
+**Changed** From the owner, having played the rework: the meter-full tap read as "click a lot,
+then click some more"; momentum should be a bar that buffs you the fuller it is and a big move
+that drains it, chosen; it did not build against the Hornback; the Clash with a Rush did not
+work against the Hornback's charge, and should work against every attack without a line per
+move; and the finishers should be reachable from any hit -- "tap to combo, hold to finish".
+Built as the fourth round of [exploration 0015](exploration/0015_champion_momentum_and_the_charge.md):
+- **A link held 12 frames from its press is its weapon's finisher**, at any place in the
+  string, and ends it. The part charge, the tiers' faster holds and the meter-full tap are gone.
+  Finishers' own startups cut to 2-4 frames (Crescent 3, Shockwave 4, Comet 2, Thousand Cuts 3,
+  Meteor 4, Heaven-piercer 4), recoveries kept or lengthened as their price.
+- **The Comet goes where the stick is held**, a Rush on the spear.
+- **Momentum buffs every hit by its share of 20 %, and every finisher spends all of it**: its
+  share of 75 % more damage and size (`Effect::power`), of 40 frames more stagger
+  (`stagger_by_the_spend`), and a full meter knocks a fighter down and a creature off its feet.
+- **Critters feed momentum and confirm the string** (`trade_with_the_pack`); the Hornback's
+  bull is one, and nothing a fighter did to a critter had ever confirmed a Champion's string.
+- **The Clash is decided in `apply_hit`**, where every blow lands on a fighter, and settled after
+  by who threw it (`World::settle_the_clashes`).
+**Found in the build**
+- The snapshot was exactly at its 4 KiB cap; momentum's hold timer went to a byte to make room
+  for what a finisher spent and who was clashed.
+- **Momentum's buff broke the Ridgeback's fight shape** (`hunt/tests/fight.rs`: threatening
+  33-35 % against a floor of 35, 17-20 moves a minute against 20) at every value from 10 to
+  25 %: a creature's strain is damage taken, so more damage was more flinching. Against a
+  creature the buff is now damage that adds no strain (`Monster::take_extra`): it hurts more and
+  staggers no more, and what staggers is Break's. The fight passes at 20 %.
+- The HUD's lockout readout and the glow both read the hold's old length; both follow the
+  new one.
+**Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again.
+**Verdict** — from play, a second time.

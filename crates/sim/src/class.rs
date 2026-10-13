@@ -146,7 +146,10 @@ impl Class {
                 leap_banked: false,
                 rise_used: false,
                 lifted: 0,
-                fury: Fury::default(),
+                fury: Fury {
+                    clash_by: u8::MAX,
+                    ..Fury::default()
+                },
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -339,18 +342,25 @@ pub struct Fury {
     /// did. See `state::find_the_beat`.
     pub fresh: u8,
     /// The link running now was started by a fresh press of its button, and
-    /// so may be held at the top of its wind-up.
+    /// so held, it is that weapon's finisher.
     pub may_hold: bool,
-    /// The place in the string -- 0, 1 or 2 -- the full charge running now
-    /// was held from. A full charge stands where its link would have.
+    /// The place in the string -- 0, 1 or 2 -- the finisher running now was
+    /// held from: the third's are the grand finishers.
     pub place: u8,
+    /// The momentum the last finisher spent, as a percentage of a full
+    /// meter: what it is worth over and above itself.
+    pub spent: u8,
+    /// **The Clash** (C7): who this frame's blow that met his heavy one was
+    /// thrown by -- a fighter's seat, `state::QUARRY` for a creature or a
+    /// critter -- or `state::NOBODY`. Settled and cleared the same frame.
+    pub clash_by: u8,
     /// **Momentum** (C4): charge banked by fighting, from nought to
     /// `tuning::momentum_max`. It is on him, not on whoever he hits, and he
     /// loses it by leaving: every landed hit feeds it and re-arms
     /// `momentum_left`, and once that runs out it drains.
     pub momentum: u16,
     /// Frames the meter holds before it starts to drain.
-    pub momentum_left: u16,
+    pub momentum_left: u8,
     /// The weapon of the last hit that landed, plus one, for the swap's
     /// extra; zero for none yet.
     pub last_weapon: u8,
