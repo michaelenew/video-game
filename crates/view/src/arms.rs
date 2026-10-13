@@ -1,40 +1,48 @@
-//! The Champion's three weapons, as things you can see.
+//! The Champion's weapon, as a thing you can see.
 //!
-//! The class is three weapons on three buttons, and for most of its life the
-//! only one of them on the screen was the hit capsule drawn as a glowing rod:
-//! the sword, the hammer and the spear were the same stick at three lengths,
-//! which is how a player comes to say he cannot feel the difference between
-//! them. A weapon's silhouette is the cheapest tell there is -- it is read from
-//! across the arena before a single frame of the swing has been -- so each one
-//! is drawn as the thing it is, and they are drawn to be **unlike each other at
-//! a glance**:
+//! **She has one weapon, and it is a liquid.** Between moves it is a coil of
+//! golden quicksilver wound round her right forearm, which is none of the
+//! three. In the middle of a move it runs off her hand into the shape of the
+//! weapon that threw it -- the sword, the hammer or the spear -- and keeps that
+//! shape for a few seconds after the move ends, so whoever is watching gets a
+//! good look at what it *is*, before it runs slowly back up her arm. Calling a
+//! different weapon while one is out takes a few frames: the sword's blade
+//! runs into the hammer's head, and the hammer is solid by the first active
+//! frame of the move that called it. [`Liquid`] is that, worked out from the
+//! clocks in `sim::class::Quicksilver`, which are in the snapshot because a
+//! morph that ran off the renderer's clock would replay differently every
+//! time a rollback re-simulated the frame it began on.
+//!
+//! The shapes it takes are drawn to be **unlike each other at a glance**,
+//! because a silhouette is the cheapest tell there is -- it is read from across
+//! the arena before a single frame of the swing has been:
 //!
 //! - the **sword** is a longsword: a pommel, a two-hand grip, a crossguard and
 //!   a straight blade tapering to a point. Middling in every dimension.
-//! - the **hammer** is short and top-heavy: a stout haft with a big square iron
-//!   head set across its end, flared at both faces. The only weapon with mass
-//!   at the end of it.
+//! - the **hammer** is short and top-heavy: a stout haft with a big square head
+//!   set across its end, flared at both faces. The only shape with mass at the
+//!   end of it.
 //! - the **spear** is nearly twice either of them, thin the whole way, with a
-//!   leaf-shaped head and a red tassel under it.
+//!   leaf-shaped head and a collar under it.
 //!
-//! **All three are always on her.** The one in her hands is the running move's
-//! weapon, or the last one she threw when nothing is running -- the same
-//! `Form` the HUD names. The other two are stowed: the spear slung across her
-//! back, the hammer hung at her right hip, the sword in a scabbard at her
-//! left. So a glance at her says which weapon is out, and a glance at the rest
-//! of her says which two are not.
+//! The liquid between them is [`BEADS`] drops, each a weighted blend of where
+//! it sits in the coil and where it sits in each weapon: so the coil unwinds
+//! off the wrist first and the drops nearest the elbow arrive last, and the
+//! solid pieces of the weapon thicken out of the line the drops have drawn.
+//! Melting is the same thing backwards, tip first.
 //!
 //! **The drawn weapon is where the hit test is.** On an active frame the tip is
 //! the far end of `state::hitbox`, exactly, and the weapon runs back from it
 //! through her leading hand -- the rule the Blood mage's scythe keeps, for the
-//! reason `CLAUDE.md` gives the debug overlay. The weapon's own size is fixed,
-//! and what gives when the volume reaches further than the weapon at rest is
-//! the part a hand could slide along: a spear's shaft or a hammer's haft runs
-//! through the leading hand rather than being held at one point, and the
-//! sword's blade -- which a hand cannot slide along -- is drawn to the length
-//! of the cut. Through the wind-up and the recovery the weapon simply lies
-//! along the line of her two hands, head beyond the right one, which is the
-//! convention `anim::clips::champion::weapon` authors every grip in.
+//! reason `CLAUDE.md` gives the debug overlay -- and on an active frame the
+//! weapon is always whole. The weapon's own size is fixed, and what gives when
+//! the volume reaches further than the weapon at rest is the part a hand could
+//! slide along: a spear's shaft or a hammer's haft runs through the leading
+//! hand rather than being held at one point, and the sword's blade -- which a
+//! hand cannot slide along -- is drawn to the length of the cut. Through the
+//! wind-up and the recovery the weapon simply lies along the line of her two
+//! hands, head beyond the right one, which is the convention
+//! `anim::clips::champion::weapon` authors every grip in.
 //!
 //! [`trail`] is the arc of the cut, re-asked of the hit test for each active
 //! frame so far: a band across the outer part of the capsule, per frame, fading
@@ -45,13 +53,30 @@
 //! hit test without a renderer.
 
 use crate::math::{self, Quat, V3};
-use sim::class::{Form, Mechanic};
+use sim::class::{Form, Mechanic, Quicksilver};
 use sim::moves::champion::{self, HAMMER, SPEAR, SWORD};
 use sim::state::{self, Action, Player};
 
 /// Pieces per weapon. Every weapon has this many entities in the renderer;
 /// a piece a weapon does not use is simply never shown.
 pub const PIECES: usize = 7;
+
+/// Drops of liquid the coil is made of, and that run between one shape and
+/// the next. Each is a [`Shape::Knob`] of [`Stuff::Liquid`].
+pub const BEADS: usize = 34;
+
+/// Frames the liquid takes to run into a weapon's shape when a move calls it:
+/// a few, and never more than the move's startup, so the weapon is whole by
+/// its first active frame.
+pub const FORM_IN: u16 = 5;
+
+/// Frames a weapon keeps its shape after the move that called it has ended:
+/// a few seconds, long enough to see what it is.
+pub const HOLD: u16 = 180;
+
+/// Frames it takes to run back up her arm into the coil once it lets go:
+/// slow, so the shape lingers as it goes.
+pub const MELT: u16 = 80;
 
 /// The weapons, in button order: [`SWORD`], [`HAMMER`], [`SPEAR`].
 pub const WEAPONS: usize = 3;
@@ -75,55 +100,54 @@ pub enum Shape {
     Knob,
 }
 
-/// What a piece is made of. The renderer holds one material of each.
+/// What a piece is made of. The renderer holds one material of each. All of
+/// it is the same gold: the weapon is one liquid, and these are only how it
+/// catches the light where it has set into an edge, a body or a grip.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stuff {
-    /// Bright, polished: the sword's blade and the spear's head.
-    Steel,
-    /// Dark, heavy, forged: the hammer's head.
-    Iron,
-    /// The fittings: crossguard, pommel.
-    Brass,
-    /// Hafts and shafts.
-    Wood,
-    /// Grips and the scabbard.
-    Leather,
-    /// The spear's tassel.
-    Cloth,
+    /// Set to an edge: pale, polished, the brightest thing on her. Blades,
+    /// points, a hammer's faces.
+    Edge,
+    /// Set to a body: the hammer's head, a crossguard, a pommel.
+    Gold,
+    /// Set to a haft or a grip: deeper, duller, where hands go.
+    Deep,
+    /// Still running: the coil and the drops between shapes.
+    Liquid,
 }
 
 /// What each piece of each weapon is, fixed so the renderer can make its
 /// meshes once. Indexed `[weapon][piece]`.
 pub const MAKE: [[(Shape, Stuff); PIECES]; WEAPONS] = [
-    // Sword: pommel, grip, crossguard, blade, point, scabbard, scabbard's chape.
+    // Sword: pommel, grip, crossguard, blade, point. Two unused.
     [
-        (Shape::Knob, Stuff::Brass),
-        (Shape::Rod, Stuff::Leather),
-        (Shape::Block, Stuff::Brass),
-        (Shape::Block, Stuff::Steel),
-        (Shape::Point, Stuff::Steel),
-        (Shape::Block, Stuff::Leather),
-        (Shape::Block, Stuff::Brass),
+        (Shape::Knob, Stuff::Gold),
+        (Shape::Rod, Stuff::Deep),
+        (Shape::Block, Stuff::Gold),
+        (Shape::Block, Stuff::Edge),
+        (Shape::Point, Stuff::Edge),
+        (Shape::Knob, Stuff::Gold),
+        (Shape::Knob, Stuff::Gold),
     ],
     // Hammer: haft, grip, butt cap, langets, head, the two faces.
     [
-        (Shape::Rod, Stuff::Wood),
-        (Shape::Rod, Stuff::Leather),
-        (Shape::Rod, Stuff::Iron),
-        (Shape::Block, Stuff::Iron),
-        (Shape::Block, Stuff::Iron),
-        (Shape::Block, Stuff::Steel),
-        (Shape::Block, Stuff::Steel),
+        (Shape::Rod, Stuff::Deep),
+        (Shape::Rod, Stuff::Deep),
+        (Shape::Rod, Stuff::Gold),
+        (Shape::Block, Stuff::Gold),
+        (Shape::Block, Stuff::Gold),
+        (Shape::Block, Stuff::Edge),
+        (Shape::Block, Stuff::Edge),
     ],
-    // Spear: shaft, grip, butt spike, socket, the head's two halves, tassel.
+    // Spear: shaft, grip, butt spike, socket, the head's two halves, collar.
     [
-        (Shape::Rod, Stuff::Wood),
-        (Shape::Rod, Stuff::Leather),
-        (Shape::Point, Stuff::Steel),
-        (Shape::Rod, Stuff::Steel),
-        (Shape::Point, Stuff::Steel),
-        (Shape::Point, Stuff::Steel),
-        (Shape::Block, Stuff::Cloth),
+        (Shape::Rod, Stuff::Deep),
+        (Shape::Rod, Stuff::Deep),
+        (Shape::Point, Stuff::Gold),
+        (Shape::Rod, Stuff::Gold),
+        (Shape::Point, Stuff::Edge),
+        (Shape::Point, Stuff::Edge),
+        (Shape::Knob, Stuff::Gold),
     ],
 ];
 
@@ -158,8 +182,6 @@ pub struct Weapon {
     pub tip: V3,
     /// Unit, square to the axis.
     pub flat: V3,
-    /// In her hands, rather than on her back or at her hip.
-    pub held: bool,
 }
 
 impl Weapon {
@@ -175,25 +197,147 @@ impl Weapon {
 
 /// Where the Champion's upper body is drawn this frame, in the arena: the
 /// chest and the hips, each a point and a rotation from the body's own frame
-/// (`+X` her left, `+Y` up, `+Z` forward) into the arena's. The stowed
-/// weapons ride these, so they lean and turn with her.
+/// (`+X` her left, `+Y` up, `+Z` forward) into the arena's, and the shoulder
+/// and elbow of the arm the liquid coils round -- the one that holds the
+/// weapon.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Torso {
     pub chest: V3,
     pub chest_turn: Quat,
     pub hips: V3,
     pub hips_turn: Quat,
+    /// The weapon arm's shoulder and elbow: the coil runs from the one, by
+    /// the other, to the hand.
+    pub shoulder: V3,
+    pub elbow: V3,
 }
 
-/// Everything the Champion carries: the three weapons, indexed by
-/// [`SWORD`], [`HAMMER`] and [`SPEAR`], and the scabbard at her hip.
+/// How much of the liquid is in each shape, worked out from the clocks.
+///
+/// The liquid is a blend of four shapes -- the coil and the three weapons --
+/// and these are the weapons' shares of it; the coil has what is left.
+/// `weapon` is the one being called, or last called, and `was` the shape it
+/// was called out of, which is still running out of the picture for the
+/// first [`FORM_IN`] frames.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Liquid {
+    pub weapon: u8,
+    /// How much of `weapon` there is: zero is the coil, one is all of it.
+    pub solid: f32,
+    pub was: Option<u8>,
+    /// How much of `was` there was when `weapon` was called.
+    pub was_solid: f32,
+}
+
+impl Liquid {
+    /// Each weapon's share of the liquid, by [`SWORD`], [`HAMMER`], [`SPEAR`].
+    pub fn weights(&self) -> [f32; WEAPONS] {
+        let mut w = [0.0; WEAPONS];
+        w[self.weapon as usize] += self.solid;
+        if let Some(was) = self.was {
+            w[was as usize] += (1.0 - self.solid) * self.was_solid;
+        }
+        w
+    }
+}
+
+/// How far into its shape the liquid has run, `forged` frames after it was
+/// called with `within` frames to get there.
+fn grown(forged: u16, within: u16) -> f32 {
+    (forged as f32 / within.max(1) as f32).min(1.0)
+}
+
+/// How much of a shape is still held, `rest` frames after the move that
+/// called it ended.
+fn kept(rest: u16) -> f32 {
+    if rest <= HOLD {
+        return 1.0;
+    }
+    1.0 - ((rest - HOLD) as f32 / MELT as f32).min(1.0)
+}
+
+fn index(form: Form) -> u8 {
+    match form {
+        Form::Sword => SWORD,
+        Form::Hammer => HAMMER,
+        Form::Spear => SPEAR,
+    }
+}
+
+/// How much of which weapon the Champion's liquid is in, this frame.
+pub fn liquid(p: &Player) -> Option<Liquid> {
+    let weapon = in_hand(p)?;
+    let (formed, q) = match p.mechanic {
+        Mechanic::Forms { form, liquid, .. } => (index(form), liquid),
+        _ => (weapon, Quicksilver::AT_REST),
+    };
+    let within = match p.action.attack_kind() {
+        Some(kind) => FORM_IN.min(sim::moves::get(p.class, kind).startup),
+        None => FORM_IN,
+    };
+    if weapon != formed {
+        // A move that called no weapon: whatever threw it, it is whole.
+        return Some(Liquid {
+            weapon,
+            solid: 1.0,
+            was: None,
+            was_solid: 0.0,
+        });
+    }
+    let t = grown(q.forged(), within);
+    let solid = smooth(t).min(kept(q.rest()));
+    // What it ran out of only matters while it is still running out of it.
+    let was = q.was().map(index).filter(|_| t < 1.0);
+    let was_solid = match was {
+        Some(_) => grown(q.was_forged(), FORM_IN).min(kept(q.was_rest())),
+        None => 0.0,
+    };
+    Some(Liquid {
+        weapon,
+        solid,
+        was,
+        was_solid,
+    })
+}
+
+fn smooth(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Everything the Champion carries: where each of the three shapes would be
+/// in her hands this frame, indexed by [`SWORD`], [`HAMMER`] and [`SPEAR`],
+/// how much of the liquid is in each, and the drops of it that are not.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Arms {
     pub weapons: [Weapon; WEAPONS],
-    /// The scabbard's mouth, its axis toward the chape, and the plane of it.
-    pub scabbard: Weapon,
-    /// Which one is in her hands.
+    /// Each weapon's share of the liquid: one is that weapon, whole.
+    pub weight: [f32; WEAPONS],
+    /// The weapon being called, or last called.
     pub held: u8,
+    /// The drops: the coil round her forearm, or the liquid between shapes.
+    /// None is shown once the weapon is whole.
+    pub beads: [Piece; BEADS],
+    /// The hand the weapon is held in.
+    pub hand: V3,
+}
+
+impl Arms {
+    /// The weapon is whole: no liquid is anywhere but in its shape.
+    pub fn whole(&self) -> bool {
+        self.weight[self.held as usize] >= 0.999
+    }
+
+    /// The far end of whatever she is holding: the weapon's tip, or her
+    /// hand while it is mostly coil.
+    pub fn head(&self) -> V3 {
+        let w = self.weight[self.held as usize];
+        if w >= 0.5 {
+            self.weapons[self.held as usize].tip
+        } else {
+            self.hand
+        }
+    }
 }
 
 // -- The three weapons' dimensions ----------------------------------------
@@ -253,29 +397,183 @@ pub fn in_hand(p: &Player) -> Option<u8> {
     })
 }
 
-/// Where the Champion's three weapons are, if this fighter is a Champion.
+/// Where the Champion's weapon is and what shape it is in, if this fighter
+/// is a Champion.
 ///
 /// `left` and `right` are where the body's drawn hands are, and `torso` where
-/// its chest and hips are: the renderer knows those and the simulation does
-/// not. They decide where each weapon is held or hung, never how far a swing
-/// reaches.
+/// its chest, hips and weapon elbow are: the renderer knows those and the
+/// simulation does not. They decide where the weapon is held and where the
+/// coil winds, never how far a swing reaches.
 pub fn champion_arms(p: &Player, left: V3, right: V3, torso: &Torso) -> Option<Arms> {
-    let held = in_hand(p)?;
+    let liquid = liquid(p)?;
+    let held = liquid.weapon;
+    let weight = liquid.weights();
     let facing = math::normalize_or(
         [crate::fx(p.facing.x), 0.0, crate::fx(p.facing.z)],
         [1.0, 0.0, 0.0],
     );
-    let mut weapons = [
-        stowed_sword(torso),
-        stowed_hammer(torso),
-        stowed_spear(torso),
-    ];
-    weapons[held as usize] = in_the_hands(p, held, left, right, facing);
-    Some(Arms {
+    let mut weapons = [Weapon {
+        butt: right,
+        tip: right,
+        flat: [0.0, 1.0, 0.0],
+    }; WEAPONS];
+    for (which, w) in weapons.iter_mut().enumerate() {
+        if weight[which] > 0.0 || which == held as usize {
+            *w = in_the_hands(p, which as u8, left, right, facing);
+        }
+    }
+    let mut arms = Arms {
         weapons,
-        scabbard: scabbard(torso),
+        weight,
         held,
-    })
+        beads: [HIDDEN; BEADS],
+        hand: right,
+    };
+    if !arms.whole() {
+        arms.beads = beads(&arms, torso, right);
+    }
+    Some(arms)
+}
+
+/// The drops of liquid: each one a blend of where it sits in the coil and
+/// where it sits in each weapon, by the weapons' weights.
+///
+/// Drop `i` runs from the shoulder end of the coil to the butt of the weapon,
+/// and the wrist end to the tip, and the wrist end goes first: the coil
+/// unwinds off the hand and reaches out into the shape, and melts back the
+/// same way, the tip arriving at the wrist last.
+fn beads(arms: &Arms, torso: &Torso, hand: V3) -> [Piece; BEADS] {
+    let total: f32 = arms.weight.iter().sum();
+    let mut out = [HIDDEN; BEADS];
+    for (i, bead) in out.iter_mut().enumerate() {
+        let t = i as f32 / (BEADS - 1) as f32;
+        // How far this drop has run out of the coil: the wrist end leads.
+        let lag = 0.55 * (1.0 - t);
+        let out_of_coil = smooth((total * (1.0 + lag) - lag).clamp(0.0, 1.0));
+        let coil = coiled(torso.shoulder, torso.elbow, hand, t);
+        let mut centre = math::scale(coil.centre, 1.0 - out_of_coil);
+        let mut along = math::scale(coil.along, 1.0 - out_of_coil);
+        let mut across = math::scale(coil.across, 1.0 - out_of_coil);
+        let mut size = math::scale(coil.size, 1.0 - out_of_coil);
+        if total > 0.0 {
+            for which in 0..WEAPONS {
+                let share = out_of_coil * arms.weight[which] / total;
+                if share <= 0.0 {
+                    continue;
+                }
+                let d = in_weapon(&arms.weapons[which], which as u8, t);
+                centre = math::add(centre, math::scale(d.centre, share));
+                along = math::add(along, math::scale(d.along, share));
+                across = math::add(across, math::scale(d.across, share));
+                size = math::add(size, math::scale(d.size, share));
+            }
+        }
+        // In flight a drop rounds off and stretches a little along the way it
+        // is going: the liquid runs, rather than sliding as flat pieces.
+        let running = (out_of_coil * std::f32::consts::PI).sin();
+        let round = (size[0] + size[2]) * 0.5;
+        size[0] += (round - size[0]) * running;
+        size[2] += (round - size[2]) * running;
+        size[1] = size[1].max(round) * (1.0 + 0.5 * running);
+        let along = math::normalize_or(along, [0.0, 1.0, 0.0]);
+        *bead = Piece {
+            shown: true,
+            centre,
+            along,
+            across: square(along, across).unwrap_or([0.0, 0.0, 1.0]),
+            size,
+        };
+    }
+    out
+}
+
+/// Drop `t` of the coil: a helix wound up the arm, from just below the
+/// shoulder by the elbow to the wrist, each drop long enough to overlap the
+/// next so the coil reads as one band of metal. `t` is zero at the shoulder.
+fn coiled(shoulder: V3, elbow: V3, hand: V3, t: f32) -> Piece {
+    let step = 1.0 / (BEADS - 1) as f32;
+    let here = wound(shoulder, elbow, hand, t);
+    let ahead = wound(shoulder, elbow, hand, t + step * 0.5);
+    let behind = wound(shoulder, elbow, hand, t - step * 0.5);
+    let tangent = math::sub(ahead, behind);
+    let length = math::length(tangent) * 1.5;
+    let along = math::normalize_or(tangent, [0.0, -1.0, 0.0]);
+    // The band's breadth lies along the arm, so it wraps flat round it.
+    let (_, axis) = on_the_arm(shoulder, elbow, hand, t);
+    let across = square(along, axis).unwrap_or([0.0, 1.0, 0.0]);
+    Piece {
+        shown: true,
+        centre: here,
+        along,
+        across,
+        size: [0.04, length.max(0.04), 0.052],
+    }
+}
+
+/// How many times the coil goes round the arm, shoulder to wrist.
+const TURNS: f32 = 3.0;
+
+/// A point `t` of the way along the coil's helix.
+fn wound(shoulder: V3, elbow: V3, hand: V3, t: f32) -> V3 {
+    let (at, axis) = on_the_arm(shoulder, elbow, hand, t);
+    // Square to the arm: one direction off the vertical (or off the arena's
+    // side, for an arm that hangs straight), and the other across both.
+    let u = square(axis, [0.0, 1.0, 0.0])
+        .or_else(|| square(axis, [1.0, 0.0, 0.0]))
+        .unwrap_or([0.0, 0.0, 1.0]);
+    let v = math::cross(axis, u);
+    let angle = t * TURNS * std::f32::consts::TAU;
+    // Thicker round the upper arm than round the wrist.
+    let radius = 0.085 - 0.025 * t;
+    math::add(
+        at,
+        math::add(
+            math::scale(u, radius * angle.cos()),
+            math::scale(v, radius * angle.sin()),
+        ),
+    )
+}
+
+/// The point `t` of the way down the arm the coil covers, and the arm's
+/// direction there: from a little below the shoulder, by the elbow, to the
+/// wrist.
+fn on_the_arm(shoulder: V3, elbow: V3, hand: V3, t: f32) -> (V3, V3) {
+    let upper = math::length(math::sub(elbow, shoulder));
+    let lower = math::length(math::sub(hand, elbow));
+    let from = upper * 0.2;
+    let to = upper + lower * 0.85;
+    let d = from + (to - from) * t.clamp(0.0, 1.0);
+    if d <= upper {
+        let axis = math::normalize_or(math::sub(elbow, shoulder), [0.0, -1.0, 0.0]);
+        (math::add(shoulder, math::scale(axis, d)), axis)
+    } else {
+        let axis = math::normalize_or(math::sub(hand, elbow), [0.0, -1.0, 0.0]);
+        (math::add(elbow, math::scale(axis, d - upper)), axis)
+    }
+}
+
+/// Drop `t` of a weapon's shape: spread butt to tip, each as thick as the
+/// weapon is where it sits, so the drops draw the weapon's outline before
+/// its pieces set.
+fn in_weapon(w: &Weapon, which: u8, t: f32) -> Piece {
+    let len = w.length().max(0.05);
+    let axis = w.axis();
+    let at = len * t;
+    let (thick, breadth) = match which {
+        SWORD if at < SWORD_HOLD + 0.04 => (0.06, 0.06),
+        SWORD => (0.035, SWORD_BREADTH),
+        HAMMER if at > len - HAMMER_HEAD[1] * 1.3 => (HAMMER_HEAD[0] * 0.8, HAMMER_HEAD[2] * 0.8),
+        HAMMER => (HAMMER_HAFT, HAMMER_HAFT),
+        _ if at > len - SPEAR_HEAD => (0.04, SPEAR_BREADTH * 0.8),
+        _ => (SPEAR_SHAFT, SPEAR_SHAFT),
+    };
+    Piece {
+        shown: true,
+        centre: math::add(w.butt, math::scale(axis, at)),
+        along: axis,
+        across: w.flat,
+        size: [thick, (len / (BEADS - 1) as f32) * 1.6, breadth],
+    }
 }
 
 /// The weapon in her hands.
@@ -325,19 +623,14 @@ fn in_the_hands(p: &Player, which: u8, left: V3, right: V3, facing: V3) -> Weapo
     };
     let axis = math::normalize_or(math::sub(tip, butt), facing);
     let flat = held_flat(p, which, axis, facing);
-    Weapon {
-        butt,
-        tip,
-        flat,
-        held: true,
-    }
+    Weapon { butt, tip, flat }
 }
 
-/// The weapon in her hand between moves.
+/// The weapon in her hand between moves, for the seconds it keeps its shape.
 ///
 /// The Champion has no idle of her own -- she stands and walks on the clips
-/// every class shares, whose hands are not on anything -- so between moves
-/// the weapon is carried the way that weapon is carried, off her right hand
+/// every class shares, whose hands are not on anything -- so while the shape
+/// holds it is carried the way that weapon is carried, off her right hand
 /// alone, and each carry says what the weapon is from across the arena: the
 /// sword up and forward in a low guard, the hammer's head resting on the
 /// floor at her side with the haft leaning up into her hand, and the spear
@@ -393,7 +686,6 @@ fn carried(p: &Player, which: u8, right: V3, facing: V3) -> Weapon {
         butt,
         tip,
         flat: held_flat(p, which, axis, facing),
-        held: true,
     }
 }
 
@@ -450,88 +742,41 @@ fn held_flat(p: &Player, which: u8, axis: V3, facing: V3) -> V3 {
         .unwrap_or(side)
 }
 
-/// A point `local` in a body frame, into the arena.
-fn on(at: V3, turn: Quat, local: V3) -> V3 {
-    math::add(at, turn.rotate(local))
-}
-
-fn dir(turn: Quat, local: V3) -> V3 {
-    math::normalize_or(turn.rotate(local), [0.0, 1.0, 0.0])
-}
-
-/// The sword at rest: in its scabbard at her left hip, hilt forward and up,
-/// point down and back.
-fn stowed_sword(t: &Torso) -> Weapon {
-    let s = scabbard(t);
-    let axis = s.axis();
-    // The hilt stands out of the scabbard's mouth; the blade is inside it.
-    let butt = math::sub(s.butt, math::scale(axis, SWORD_HOLD + 0.06));
-    Weapon {
-        butt,
-        tip: math::add(butt, math::scale(axis, SWORD_HOLD + SWORD_REACH)),
-        flat: s.flat,
-        held: false,
-    }
-}
-
-/// The scabbard: hung from the left hip, angled down and back.
-fn scabbard(t: &Torso) -> Weapon {
-    let mouth = on(t.hips, t.hips_turn, [0.24, 0.02, 0.10]);
-    let axis = dir(t.hips_turn, [0.12, -0.5, -0.86]);
-    let flat = square(axis, t.hips_turn.rotate([0.0, 0.0, 1.0])).unwrap_or([0.0, 1.0, 0.0]);
-    Weapon {
-        butt: mouth,
-        tip: math::add(mouth, math::scale(axis, SWORD_REACH - 0.02)),
-        flat,
-        held: false,
-    }
-}
-
-/// The hammer at rest: hung at her right hip, head down beside the thigh and
-/// the haft up behind the hip -- low, where a camera behind her looks past it
-/// rather than through it, and where the one heavy thing she owns hangs the
-/// way something heavy hangs.
-fn stowed_hammer(t: &Torso) -> Weapon {
-    let tip = on(t.hips, t.hips_turn, [-0.34, -0.62, -0.10]);
-    let axis = dir(t.hips_turn, [-0.06, -1.0, 0.16]);
-    let butt = math::sub(tip, math::scale(axis, HAMMER_LENGTH));
-    let flat = square(axis, t.hips_turn.rotate([0.0, 0.0, 1.0])).unwrap_or([1.0, 0.0, 0.0]);
-    Weapon {
-        butt,
-        tip,
-        flat,
-        held: false,
-    }
-}
-
-/// The spear at rest: across her back the other way, head high over her left
-/// shoulder.
-fn stowed_spear(t: &Torso) -> Weapon {
-    // Its middle between her shoulder blades and a hand behind them, and
-    // steep enough that the butt clears the floor: the head ends up high and
-    // off to her left, out from under the crosshair.
-    let middle = on(t.chest, t.chest_turn, [0.0, 0.1, -0.3]);
-    let axis = dir(t.chest_turn, [0.75, 1.0, -0.08]);
-    let tip = math::add(middle, math::scale(axis, SPEAR_LENGTH * 0.5));
-    let butt = math::sub(middle, math::scale(axis, SPEAR_LENGTH * 0.5));
-    let flat = square(axis, t.chest_turn.rotate([0.0, 0.0, 1.0])).unwrap_or([1.0, 0.0, 0.0]);
-    Weapon {
-        butt,
-        tip,
-        flat,
-        held: false,
-    }
-}
-
-/// Every piece of one weapon, placed. `which` is [`SWORD`], [`HAMMER`] or
-/// [`SPEAR`]; what shape and stuff each index is is [`MAKE`].
+/// Every piece of one weapon, placed, as far as it has set. `which` is
+/// [`SWORD`], [`HAMMER`] or [`SPEAR`]; what shape and stuff each index is is
+/// [`MAKE`].
+///
+/// A piece sets out of the line the drops have drawn: it thickens from
+/// nothing to its full breadth as the weapon's share of the liquid rises, the
+/// pieces nearest the hand first, and thins away again tip first as it melts.
 pub fn pieces(arms: &Arms, which: u8) -> [Piece; PIECES] {
     let w = arms.weapons[which as usize];
+    let weight = arms.weight[which as usize];
     let mut out = [HIDDEN; PIECES];
+    if weight <= 0.0 {
+        return out;
+    }
     match which {
-        SWORD => sword(&w, &arms.scabbard, &mut out),
+        SWORD => sword(&w, &mut out),
         HAMMER => hammer(&w, &mut out),
         _ => spear(&w, &mut out),
+    }
+    let len = w.length().max(0.05);
+    for (i, piece) in out.iter_mut().enumerate() {
+        if !piece.shown {
+            continue;
+        }
+        let far = (math::dot(math::sub(piece.centre, w.butt), w.axis()) / len).clamp(0.0, 1.0);
+        let set = smooth((weight * 1.5 - 0.3 - 0.2 * far) / 0.8);
+        if set <= 0.01 {
+            *piece = HIDDEN;
+            continue;
+        }
+        piece.size[0] *= set;
+        piece.size[2] *= set;
+        if MAKE[which as usize][i].0 == Shape::Knob {
+            piece.size[1] *= set;
+        }
     }
     out
 }
@@ -561,7 +806,7 @@ fn between(a: V3, b: V3, flat: V3, thick: f32, breadth: f32) -> Piece {
     }
 }
 
-fn sword(w: &Weapon, sheath: &Weapon, out: &mut [Piece; PIECES]) {
+fn sword(w: &Weapon, out: &mut [Piece; PIECES]) {
     let len = w.length();
     let guard = SWORD_HOLD + 0.04;
     // Pommel: a knob at the very end.
@@ -570,21 +815,15 @@ fn sword(w: &Weapon, sheath: &Weapon, out: &mut [Piece; PIECES]) {
     out[1] = span(w, 0.06, guard - 0.02, 0.055, 0.055);
     // Crossguard: a bar across the blade's own plane.
     out[2] = span(w, guard - 0.022, guard + 0.022, 0.05, SWORD_GUARD);
-    if w.held {
-        // Blade, then the point it tapers to.
-        out[3] = span(
-            w,
-            guard + 0.02,
-            len - SWORD_POINT,
-            SWORD_THICK,
-            SWORD_BREADTH,
-        );
-        out[4] = span(w, len - SWORD_POINT, len, SWORD_THICK, SWORD_BREADTH * 1.15);
-    }
-    // The scabbard is always at her hip, empty or not.
-    let sl = sheath.length();
-    out[5] = span(sheath, 0.0, sl - 0.06, 0.05, SWORD_BREADTH + 0.05);
-    out[6] = span(sheath, sl - 0.07, sl, 0.06, SWORD_BREADTH + 0.06);
+    // Blade, then the point it tapers to.
+    out[3] = span(
+        w,
+        guard + 0.02,
+        len - SWORD_POINT,
+        SWORD_THICK,
+        SWORD_BREADTH,
+    );
+    out[4] = span(w, len - SWORD_POINT, len, SWORD_THICK, SWORD_BREADTH * 1.15);
 }
 
 fn hammer(w: &Weapon, out: &mut [Piece; PIECES]) {
@@ -642,14 +881,14 @@ fn spear(w: &Weapon, out: &mut [Piece; PIECES]) {
         SPEAR_BREADTH,
     );
     out[5] = between(at(widest), at(len), w.flat, 0.035, SPEAR_BREADTH);
-    // A red tassel under the socket: colour on the one weapon that is
-    // otherwise a long thin line.
+    // A collar under the socket, where the liquid gathers before it runs
+    // out into the leaf.
     out[6] = span(
         w,
-        len - SPEAR_HEAD - 0.16,
-        len - SPEAR_HEAD - 0.02,
-        0.09,
-        0.09,
+        len - SPEAR_HEAD - 0.1,
+        len - SPEAR_HEAD - 0.01,
+        0.085,
+        0.085,
     );
 }
 

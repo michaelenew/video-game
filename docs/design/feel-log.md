@@ -8358,3 +8358,34 @@ The scripted hunt's Bulwark and Elementalist pins (`hunt/tests/pin.rs`) moved fo
 with `StepOver` at nothing they move all the same, so it is the rim and not the step.
 
 **Verdict** — from play.
+
+### 2026-10-13 — the Champion's weapon is one weapon: a liquid that takes three shapes
+
+**Asked** The class was always meant to have one shape-shifting weapon, not three carried at
+once. Between moves: a golden, mercurial liquid wound round her arm, none of the three. In the
+middle of a move: the shape of the weapon making it, within a few frames. After: that shape for
+a few seconds, then a slow change back, so the player can see what it was. No change to play.
+**Changed** (`view::arms`, `kits/champion.md` "The weapon you can see")
+- **The stowed weapons are gone**: no spear on her back, no hammer at her hip, no scabbard. The
+  three shapes are all one gold and differ by silhouette alone; the spear's red tassel is a
+  collar.
+- **Between moves, a coil**: three turns of gold band, shoulder to wrist, on the drawn arm.
+- **Into a shape in `FORM_IN` (5) frames**, or the move's startup if shorter, so the weapon is
+  whole on every active frame. **Kept `HOLD` (180) frames** after the move ends, **melted over
+  `MELT` (80)**. A change of weapon mid-string runs from the shape that was out.
+- **Five animation clocks in the snapshot** (`sim::class::Quicksilver`, in `Mechanic::Forms`):
+  ticked in `advance_clocks`, stamped where the form is set, and hashed like every other clock.
+  No rule reads them. Packed into four bytes and kept in the Champion's mechanic, because the
+  snapshot was at exactly its 4,096-byte cap and a field on `Player` crossed it; the variant
+  had room inside the enum, so the `World` did not grow at all.
+**Pins** The Champion's Ridgeback and scripted-hunt pins moved, for the checksum only: with the
+clocks left out of `state_checksum`, the whole workspace -- every pin and replay -- passed bit
+for bit.
+**Tried and changed**
+- **Drops as long sticks round the coil** (4.5 turns, 26 drops, each 2.1 times its spacing):
+  from behind the camera they read as gold thorns. Three turns of 34 shorter drops is a band.
+- **In-flight drops keeping their target's flat shape**: a melting spear head threw out
+  star-shaped flakes. In flight a drop rounds off and stretches only half again along its path.
+- **Gold fully metallic**: with nothing to reflect it drew brown. Half metallic with a little
+  light of its own reads as gold on the shadow side as well.
+**Verdict** — from screenshots only (`SHOT_FORM`); wants a look in play.

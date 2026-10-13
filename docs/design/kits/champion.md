@@ -413,32 +413,61 @@ Because a capsule has a top and a bottom, **height is now real** for this class:
 thrown from the air can miss somebody standing under it, and one aimed at the floor can
 reach somebody below you. That is what makes the air game below possible at all.
 
-## The weapons you can see
+## The weapon you can see
+
+> **One weapon, shape-shifting (2026-10-13).** The class was always meant to have *one*
+> weapon that changes shape, not three weapons carried at once. It is drawn that way now: a
+> golden, mercurial liquid that coils up her right arm between moves and, in the middle of a
+> move, runs into the shape of whichever weapon threw it. Nothing about play changed — the
+> buttons, the moves, their frames and their volumes are exactly what they were. What follows
+> is the whole of how it is drawn.
 
 Until 2026-09-26 no weapon was drawn at all. The only thing on the screen during a swing was
 the capsule, as a glowing rod the width of its radius, which made the three weapons the same
 stick at three lengths — and a player who says he cannot feel the difference between the
 hammer, the spear and the sword is reporting exactly that. A silhouette is the cheapest tell
 there is: it is read from across the arena before a single frame of the swing has been. So
-each weapon is now drawn as the thing it is, and drawn to be **unlike the other two at a
-glance** (`crates/view/src/arms.rs`):
+each shape the weapon takes is drawn as the thing it is, and drawn to be **unlike the other
+two at a glance** (`crates/view/src/arms.rs`):
 
-- **The sword** is a longsword: a brass pommel, a leather grip long enough for both hands, a
-  crossguard, and a straight bright blade tapering to a point, about 1.2 m from the hand.
-  Middling in every dimension, because it is the middle weapon.
-- **The hammer** is short and top-heavy: a 1.35 m haft and a big square head of dark forged
-  iron set across the end of it, flared at both faces. It is the only weapon with its mass at
-  the end, and the only dark one.
-- **The spear** is nearly twice either of them — 2.9 m of thin shaft, a leaf-shaped head and a
-  red tassel under it. A line, which is what its volume is.
+- **The sword** is a longsword: a pommel, a grip long enough for both hands, a crossguard,
+  and a straight bright blade tapering to a point, about 1.2 m from the hand. Middling in
+  every dimension, because it is the middle weapon.
+- **The hammer** is short and top-heavy: a 1.35 m haft and a big square head set across the
+  end of it, flared at both faces. It is the only shape with its mass at the end.
+- **The spear** is nearly twice either of them — 2.9 m of thin shaft, a leaf-shaped head and
+  a collar under it. A line, which is what its volume is.
 
-**All three are always on her.** The one in her hands is the running move's weapon, or the
-last one she threw when nothing is running — the same form the HUD names. The spear is slung
-across her back, the hammer hangs head-down at her right hip and the sword sits in a scabbard
-at her left, so a glance at her hands says which weapon is out and a glance at the rest of her
-says which two are not. The hammer hangs low on purpose: the camera sits behind her, and a
-block of iron between her shoulder blades was the thing nearest the crosshair. The empty
-scabbard stays at her hip while the sword is out.
+All three are the same gold: pale and polished where the liquid has set into an edge, deeper
+where it has set into a haft or a grip. They differ by shape alone, which is the point.
+
+**Between moves it is none of them.** The liquid is a coil, three turns of a gold band wound
+up her right arm from below the shoulder, past the elbow, to the wrist, and bending with it.
+
+**In the middle of a move it becomes the weapon, in a few frames.** When a move calls a
+weapon, the liquid runs off her hand into its shape: the wrist end of the coil leaves first
+and reaches out to the tip, the shoulder end arrives last at the butt, and the solid pieces of
+the weapon thicken out of the line the drops have drawn, nearest the hand first. It takes
+`arms::FORM_IN` frames (five) or the move's startup, whichever is shorter, so **the weapon is
+always whole by its first active frame** — the shape you see on the cut is the shape you were
+hit by. Calling a different weapon while one is out is the same thing between two shapes: the
+sword's blade thins and runs into the hammer's head over the same few frames.
+
+**After a move it keeps its shape for three seconds** (`arms::HOLD`, 180 frames), carried
+the way that weapon is carried (below), so whoever is watching gets a good look at what it
+is. **Then it melts back slowly** — `arms::MELT`, 80 frames, about a second and a third — the
+tip thinning first and the drops running back up her arm into the coil. The hold and the slow
+melt are deliberate: the change *into* a weapon is quick because it is in the middle of a
+fight, and the change *out of* one is slow because that is when there is time to read it.
+
+**It is drawn from the snapshot.** How solid the weapon is comes from five animation clocks
+in `sim::class::Quicksilver` (four packed bytes in `Mechanic::Forms`) — frames since the weapon was last called, frames since her
+last move ended, and what those were when it was called, so the renderer knows what it is
+running *from* (a coil, a half-melted sword, a whole spear). No rule of combat reads them.
+They are in the snapshot for the reason every animation clock is: a morph run off the
+renderer's own clock would replay differently each time a rollback re-simulated the frame it
+started on. `SHOT_FORM=hammer,0` starts a capture with a whole hammer out, and
+`SHOT_FORM=spear,130` with `SHOT_FRAME=90` lands halfway through a spear's melt.
 
 **The weapon in her hands is where the hit test is.** On every active frame its tip is the far
 end of `state::hitbox`, exactly, and it runs back from there through her leading hand — the
@@ -449,10 +478,10 @@ one point, and the sword's blade — which nobody slides a hand along — is dra
 of the cut. The hammer is only drawn so much longer than itself; the one frame at the top of
 an overhead whose volume reaches further than that is pointed at and not reached. Through the
 wind-up and the recovery the weapon lies along the line of her two hands, head beyond the
-right one, which is the convention every grip in `anim::clips::champion` is authored in. Between moves
-she has no idle of her own — she stands and walks on the clips every class shares, whose
-hands are not on anything — so the weapon out is carried the way that weapon is carried, off
-her right hand: the sword up and forward in a low guard, the hammer's head resting on the
+right one, which is the convention every grip in `anim::clips::champion` is authored in. While the
+shape holds after a move she has no idle of her own — she stands and walks on the clips every
+class shares, whose hands are not on anything — so the weapon is carried the way that weapon
+is carried, off her right hand: the sword up and forward in a low guard, the hammer's head resting on the
 floor at her side with the haft leaning up into her hand, the spear stood upright with its
 butt on the floor and its head well over hers.
 
@@ -463,10 +492,12 @@ recovery. Each weapon has its own: a broad cold-white crescent for the sword, a 
 the head in a hot ember colour for the hammer, a thin blue streak at the point for the spear.
 The debug overlay (F1) still draws the capsule itself.
 
-`crates/view/tests/arms.rs` holds all of this: the tip on the volume's far end and the leading
-hand on the weapon on every active frame of the chain, the three silhouettes apart (the spear
-far the longest, the hammer's head outweighing everything on the other two), and nothing drawn
-on anybody else.
+`crates/view/tests/arms.rs` holds all of this: the weapon whole, its tip on the volume's far
+end and the leading hand on it on every active frame of the chain; a change of shape inside
+`FORM_IN` frames with no liquid lost between the two; the shape kept for at least two seconds
+and melting over at least three quarters of one without a jump; the coil on the arm, both
+bones of it; the three silhouettes apart (the spear far the longest, the hammer's head
+outweighing everything on the other two); and nothing drawn on anybody else.
 
 ## Rush — `E`
 

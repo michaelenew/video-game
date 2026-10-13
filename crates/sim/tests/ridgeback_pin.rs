@@ -91,8 +91,13 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// slopes, steps and lips: their random walks reach the arena's rim -- alone,
 /// an arena's rim is land -- at frames 2077 and 1292, where the steep-ground
 /// wall is the footing now. The Bulwark's never reaches it. See the feel log.
+///
+/// **The Champion's again the same day, with no change to play**: the clocks
+/// his liquid weapon is drawn from (`class::Quicksilver`) went into
+/// `state_checksum` with the rest of his mechanic. With them left out of it,
+/// every pin held bit for bit.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xdf293df0e68f0bb0),
+    (Class::Champion, 0xad92d8aa094c6517),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0xf02c926cba5a3ae3),
     (Class::BloodMage, 0x083464c03c9c85e2),
