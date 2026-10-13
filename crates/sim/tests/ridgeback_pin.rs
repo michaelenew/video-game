@@ -85,14 +85,21 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// braced Rush and its shoulder, a held weapon charging, the full charges and
 /// momentum. See `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
 /// **And again 2026-10-13**: tap to combo and hold to finish, momentum spent by
-/// every finisher, and the Clash where every blow lands. **And again the same
-/// day, with no change to play**: the clocks his liquid weapon is drawn from
-/// (`class::Quicksilver`) went into `state_checksum` with the rest of his
-/// mechanic. With them left out of it, every pin held bit for bit.
+/// every finisher, and the Clash where every blow lands.
+///
+/// **The Champion's and the Reaver's were re-pinned 2026-10-13, later**, for
+/// slopes, steps and lips: their random walks reach the arena's rim -- alone,
+/// an arena's rim is land -- at frames 2077 and 1292, where the steep-ground
+/// wall is the footing now. The Bulwark's never reaches it. See the feel log.
+///
+/// **The Champion's again the same day, with no change to play**: the clocks
+/// his liquid weapon is drawn from (`class::Quicksilver`) went into
+/// `state_checksum` with the rest of his mechanic. With them left out of it,
+/// every pin held bit for bit.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x27ffe0e363234fb1),
+    (Class::Champion, 0xad92d8aa094c6517),
     (Class::Bulwark, 0x8465a86bccb8ef32),
-    (Class::ShadowReaver, 0x125b4fc5c2559d9d),
+    (Class::ShadowReaver, 0xf02c926cba5a3ae3),
     (Class::BloodMage, 0x083464c03c9c85e2),
     (Class::DualMage, 0xd1dc8709fa4d36db),
     (Class::Elementalist, 0x19fbc249420a6a17),

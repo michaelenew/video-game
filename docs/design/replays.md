@@ -115,6 +115,30 @@ class changed mid-tape (a trip, the class keys) gets its own, because a move is 
 number until its class names it, and a blow is counted to the class that threw it. A versus replay
 gets the rounds and both fighters' tables and no creature.
 
+**How the fighters moved** (`--motion`, since 2026-10-13): every frame a walk
+at speed was **stopped dead** while still steering, a foot **left the floor with
+no jump** and came back within four frames, or a body **rose at over twice a
+jump** — each with where on the map and in which place — and, given a frame or a
+range (`--motion 160850..160950`), a line per frame per fighter of where it was,
+its velocity, floor or air, the buttons and what it was doing. It was written
+for a report of the kind "the slopes and the lip are at the back of this
+replay": the snags say which frames to look at, and the window says what the
+body did there ([`replay::Motion`](../../crates/hunt/src/replay.rs)). A dead stop
+is anything walked into — a wall, a creature climbed on, a lip — so the list is
+where to look, not a list of bugs.
+
+```
+cargo run -p hunt --bin replay -- <file> --motion [<from>[..<to>]]
+```
+
+**A tape only plays back on the build that recorded it.** It is the inputs, and
+any change to the simulation or the Oven is a different fight from the same
+inputs, so a tape from last week's build runs on today's to a world nobody
+played. The judgement says so (`DOES NOT REPRODUCE`), and now also says which
+build the tape names and how to play it there: a worktree of that commit, and
+the same command in it. The first tape this was needed for was recorded on
+`86d35ac`, a day before the Champion's rework moved the Oven.
+
 ```
 cargo run -p game -- --replay <file>
 ```
