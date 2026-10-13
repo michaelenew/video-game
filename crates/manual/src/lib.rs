@@ -196,7 +196,7 @@ pub const SECTIONS: &[Section] = &[
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword, and held down it walks that weapon's whole three-hit string.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword: tapped, it walks that weapon's whole three-hit string; held down, it is the sword's finisher.",
             ),
             e(
                 "Q",
@@ -231,7 +231,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Champion",
         in_browser: true,
-        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move.",
+        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move. Reworked 2026-10-12 and unplayed: a braced Rush that opens the string, the beat, tap to combo and hold to finish, six finishers and a momentum meter they spend -- docs/design/exploration/0015_champion_momentum_and_the_charge.md is the design.",
         entries: &[
             e(
                 "Left click",
@@ -247,31 +247,35 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Keep swinging",
-                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or leave the ground.",
+                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or attack out of a Rush. A jump does not end it: an aerial or a jumping attack is the next hit, and with two hits behind you an aerial is the third -- ground, jump, third -- and held, the grand finisher.",
             ),
             e(
                 "The third hit",
-                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, and is the only attack in the game that threatens behind you. All three commit your feet.",
+                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, is the only attack in the game that threatens behind you, and shoves them furthest. All three commit your feet. One that lands gives you your Rush back.",
             ),
             e(
-                "Jump during Earthbreaker",
-                "Press space while the hammer's third hit is winding up and you go up with them: the knock-up is bigger and you leave the floor on the frame it lands, which puts the air hammer in reach off the end of an ordinary string. It is paid on contact, so a whiff costs you the recovery and gives you nothing.",
+                "On the beat",
+                "Press the next hit while the last one's impact is still holding both of you still and it is a true link: it hits harder and sticks longer. The window is the weapon's weight -- wide on the hammer, three frames on the sword.",
             ),
             e(
-                "Space and a weapon",
-                "That weapon's takeoff, thrown as your feet leave the floor. Sword rises into an angled slash and hits hardest; hammer is the uppercut, which launches and holds on, and space again takes you both higher; spear cracks the shaft into the ground for the most height in the class plus a shove the way you are holding. Press jump first and the weapon a few frames later — that order always works.",
+                "Hold a weapon",
+                "Tap to string hits; hold to finish. Any hit you pressed for and keep holding, about as long as its wind-up, becomes that weapon's finisher, at any point in the string, and ends it -- aerials too. A press a little long is still the tap, clicking fast never holds (let go once and that hit is a tap), and Rush takes a hold back.",
             ),
             e(
-                "In the air",
-                "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
+                "Finishers",
+                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Repel, the pole swung all the way round you, which throws everyone near you clear and hurts little. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out. In the air the Crescent keeps your jump's speed, and the hammer's two slam you straight back down and break the ground where you land. A finisher, or Earthbreaker, meets any blow thrown into it and wins: the blow is spent and whoever threw it is knocked out of it.",
+            ),
+            e(
+                "Momentum",
+                "The bar under your health. Every hit that lands fills it -- on anybody, anything -- and a different weapon from the last, a true link and a finisher fill it more. It holds for two seconds, then drains -- but not while you are winding up a hold -- and a hit you take costs a share. The fuller it is, the harder every hit you land. Every finisher spends all of it, whatever is in it, and hits harder, bigger and staggers longer for what it spent; a full bar spent knocks them down. The glow on your weapon is the bar.",
             ),
             e(
                 "E",
-                "Rush. A dash on one charge, and it cancels any recovery. It does not end a string — one charge buys you a reposition in the middle of one.",
+                "Rush. A fast dash toward the crosshair on one charge, and it cancels any recovery or a hold. It does not end a string. You are braced while you run -- a hit costs you half and does not stop you, one in the last few frames costs nothing, though enough of them will. Run into somebody and the shoulder is the string's first hit: the next click is the second.",
             ),
             e(
                 "While rushing",
-                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs for the biggest single hit in the class, or vaults if you are pointing at the floor.",
+                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs and carries whoever it catches along the rest of the run, or vaults if you are pointing at the floor.",
             ),
         ],
     },
@@ -916,6 +920,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_WEIGHT=<n>",
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
+            ),
+            e(
+                "SHOT_MOMENTUM=<n>",
+                "Start every Champion with n momentum, so a capture can look at the meter and the glow on his weapon without landing his way up to them. It holds two seconds and then drains, so pair it with an early SHOT_FRAME.",
             ),
             e(
                 "SHOT_AT=<x>,<z>",

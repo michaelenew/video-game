@@ -32,11 +32,14 @@ fn engaged() -> World {
     w
 }
 
-/// Hold `button` until the hit lands, and return the world on that frame.
+/// Press `button` and wait until the hit lands, and return the world on that
+/// frame. Pressed once: a Champion's weapon held down is a charge
+/// (exploration 0015, C3), and this is about the swing as built.
 fn until_contact(button: u16) -> World {
     let mut w = engaged();
-    for _ in 0..60 {
-        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    for f in 0..60 {
+        let press = if f == 0 { button } else { 0 };
+        w.advance([Input::aimed(press, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         if w.players[1].frozen > 0 {
             return w;
         }
@@ -111,10 +114,11 @@ fn nothing_moves_during_a_freeze_and_the_knockback_is_spent_after() {
 fn a_blocked_blow_freezes_for_less_than_a_landed_one() {
     let m = moves::get(Class::Champion, c::HAMMER_GROUND);
     let mut w = engaged();
-    for _ in 0..60 {
-        // The Bulwark guards, facing the Champion.
+    for f in 0..60 {
+        // The Bulwark guards, facing the Champion. Pressed once: held, the
+        // hammer is a charge.
         w.advance([
-            Input::aimed(Input::MIDDLE, LOOK_RIGHT),
+            Input::aimed(if f == 0 { Input::MIDDLE } else { 0 }, LOOK_RIGHT),
             Input::aimed(Input::RIGHT, LOOK_LEFT),
         ]);
         if w.players[1].frozen > 0 {
@@ -141,15 +145,12 @@ fn a_press_inside_the_freeze_is_the_same_press_on_the_frame_after_it() {
     // that went down and came back up inside one must do exactly what it would
     // have done pressed on the first frame the fight resumes -- no more, since
     // the fight was not running, and no less, since the player did press it.
-    // Checked for every button that means something on the frame it goes down.
-    for button in [
-        Input::LEFT,
-        Input::MIDDLE,
-        Input::RIGHT,
-        Input::MECHANIC,
-        Input::SPACE,
-        Input::SHIFT,
-    ] {
+    // Checked for every button that means something on the frame it goes down
+    // -- **except the Champion's three weapons after a link that landed**,
+    // which is the one place a press inside a freeze means more than the same
+    // press after it: it is the Beat, and the link it throws is a true link
+    // (exploration 0015, C2; `champion_rework.rs`).
+    for button in [Input::MECHANIC, Input::SPACE, Input::SHIFT] {
         let start = until_contact(Input::MIDDLE);
         let held = start.players[0].frozen as u32;
         assert!(held > 2, "the hammer does not freeze long enough to test");

@@ -774,6 +774,86 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **The Champion's Rush, braced** (2026-10-12, exploration 0015 C1).
+    // Appended, as every scalar is. A hit taken through most of the run costs
+    // a share of its damage and does not stop him; one taken in its last few
+    // frames is eaten whole, once; and damage summed over one Rush past the
+    // break ends it the ordinary way. Nothing outlasts the run.
+    RushDamageTaken,      "Champion", "Rush, damage taken while braced (%)", Percent, 0, 100;
+    RushEatFrames,        "Champion", "Rush, last frames that eat a hit",    Frames, 0, 30;
+    RushBreaks,           "Champion", "Rush, damage that breaks it",         Int,    0, 1000;
+    // **The shoulder.** Running into a body is a hit, and it is the string's
+    // first: the next click is the second link.
+    ShoulderReach,        "Champion", "Shoulder, reach past touching (m)",   Fixed,  0, fx(3,1);
+    ShoulderDamage,       "Champion", "Shoulder, damage",                    Int,    0, 400;
+    ShoulderHitstun,      "Champion", "Shoulder, hitstun",                   Frames, 0, 90;
+    ShoulderBlockstun,    "Champion", "Shoulder, blockstun",                 Frames, 0, 90;
+    ShoulderKnockback,    "Champion", "Shoulder, knockback (m/s)",           Fixed,  0, fx(30,1);
+    ShoulderFreeze,       "Champion", "Shoulder, impact freeze",             Frames, 0, 30;
+    // **The Beat** (C2): the next link pressed inside the freeze of a link
+    // that landed is a true link, and it hits harder and sticks longer.
+    TrueLinkDamage,       "Champion", "True link, extra damage (%)",         Percent, 0, 200;
+    TrueLinkFreeze,       "Champion", "True link, extra freeze",             Frames, 0, 30;
+    // **The Hold** (C3): a link's button still down -- pressed for it, not
+    // held over from the last one -- at the top of its wind-up charges it.
+    // The longest hold is each link's own `channel` column; these say when a
+    // hold is anything at all, when it is full, what a part charge adds, and
+    // how fast he moves while he holds.
+    HoldFrom,             "Champion", "Hold, a finisher after (frames held)", Frames, 1, 60;
+    HoldMobility,         "Champion", "Hold, walk speed while holding (%)",  Percent, 0, 100;    // **The full charges** (C5): what each one throws, how far and how fast.
+    CrescentReach,        "Champion", "Crescent, flies (m)",                       Fixed, fx(1,1), fx(30,1);
+    CrescentSpeed,        "Champion", "Crescent, speed (m/s)",                     Fixed, fx(5,1), fx(80,1);
+    CrescentRadius,       "Champion", "Crescent, half-width (m)",                  Fixed, fx(1,10), fx(3,1);
+    CrescentDamage,       "Champion", "Crescent, damage",                          Int, 0, 600;
+    ShockwaveReach,       "Champion", "Shockwave, ring out to (m)",                Fixed, fx(1,1), fx(15,1);
+    MeteorReach,          "Champion", "Meteor, ring out to (m)",                   Fixed, fx(1,1), fx(15,1);
+    ShockwaveSpeed,       "Champion", "Shockwave, ring speed (m/s)",               Fixed, fx(5,1), fx(80,1);
+    ShockwaveDamage,      "Champion", "Shockwave, ring damage",                    Int, 0, 600;
+    MeteorRingDamage,     "Champion", "Meteor, ring damage",                       Int, 0, 600;
+    ShockwaveCrush,       "Champion", "Shockwave, guard crushed for (frames)",     Frames, 0, 120;
+    MeteorRise,           "Champion", "Meteor, leap rise (m/s)",                   Fixed, 0, fx(30,1);
+    CutsReach,            "Champion", "Thousand Cuts, dashes (m)",                 Fixed, fx(1,1), fx(16,1);
+    CutsSpeed,            "Champion", "Thousand Cuts, dash speed (m/s)",           Fixed, fx(5,1), fx(90,1);
+    CutsDelay,            "Champion", "Thousand Cuts, cuts land after",            Frames, 0, 90;
+    CutsEvery,            "Champion", "Thousand Cuts, a cut every",                Frames, 1, 30;
+    CutsCount,            "Champion", "Thousand Cuts, cuts",                       Int, 1, 10;
+    CutsDamage,           "Champion", "Thousand Cuts, damage a cut",               Int, 0, 400;
+    CutsLastDamage,       "Champion", "Thousand Cuts, the last cut",               Int, 0, 600;
+    CutsLaunch,           "Champion", "Thousand Cuts, the last cut throws up (m/s)", Fixed, 0, fx(30,1);
+    CutsRadius,           "Champion", "Thousand Cuts, cuts reach off the line (m)", Fixed, fx(1,10), fx(3,1);
+    JavelinSpeed,         "Champion", "Heaven-piercer, javelin speed (m/s)",       Fixed, fx(5,1), fx(120,1);
+    JavelinRest,          "Champion", "Heaven-piercer, waits for him",             Frames, 0, 180;
+    FollowSpeed,          "Champion", "Heaven-piercer, he follows at (m/s)",       Fixed, fx(5,1), fx(90,1);
+    TearRadius,           "Champion", "Heaven-piercer, tear-out radius (m)",       Fixed, fx(1,2), fx(6,1);
+    TearDamage,           "Champion", "Heaven-piercer, tear-out damage",           Int, 0, 600;
+    TearLaunch,           "Champion", "Heaven-piercer, tear-out throws up (m/s)",  Fixed, 0, fx(30,1);
+    // **Momentum** (C4): charge banked by fighting. Three tiers -- a third,
+    // two thirds, full -- and full is a full charge on a tap.
+    MomentumMax,          "Champion", "Momentum, the meter holds",                       Int, 1, 1000;
+    MomentumHit,          "Champion", "Momentum, a hit that lands",                      Int, 0, 200;
+    MomentumSwap,         "Champion", "Momentum, more for a different weapon",           Int, 0, 200;
+    MomentumBeat,         "Champion", "Momentum, more for a true link",                  Int, 0, 200;
+    MomentumFull,         "Champion", "Momentum, more for a full charge",                Int, 0, 200;
+    MomentumHolds,        "Champion", "Momentum, holds after a hit for",                 Frames, 0, 255;
+    MomentumDrain,        "Champion", "Momentum, drains a frame after",                  Int, 0, 100;
+    MomentumHurt,         "Champion", "Momentum, a hit taken costs (%)",                 Percent, 0, 100;
+    MomentumBuff,         "Champion", "Momentum, a full meter adds to every hit (%)",    Percent, 0, 100;
+    MomentumSpend,        "Champion", "Momentum, a full meter spent adds to a finisher (%)", Percent, 0, 300;
+    MomentumStagger,      "Champion", "Momentum, a full meter spent adds stagger",       Frames, 0, 120;
+    // **Break and the Clash** (C6, C7): what his blows do to a creature's
+    // strain over their damage, and what meeting a swing does.
+    ImpactHammer,         "Champion", "Impact, hammer blows into strain (%)",              Percent, 100, 500;
+    ImpactThird,          "Champion", "Impact, third links into strain (%)",               Percent, 100, 500;
+    ImpactBeat,           "Champion", "Impact, true links into strain (%)",                Percent, 100, 500;
+    ImpactFull,           "Champion", "Impact, full charges into strain (%)",              Percent, 100, 800;
+    ImpactPoise,          "Champion", "Impact, share of a full charge's extra into poise (%)",  Percent, 0, 100;
+    MeteorStumble,        "Champion", "Meteor, stumbles a creature for",                   Frames, 0, 300;
+    ClashFlinch,          "Champion", "Clash, a creature flinches for",                    Frames, 0, 180;
+    ClashStagger,         "Champion", "Clash, the lighter blow staggers for",              Frames, 0, 120;
+    ClashFreeze,          "Champion", "Clash, both freeze for",                            Frames, 0, 60;
+    ClashReach,           "Champion", "Clash, staggers a fighter within (m)",               Fixed, 0, fx(20,1);
+    SlamDive,             "Champion", "Hammer slam from the air, dive speed (m/s)",         Fixed, fx(5,1), fx(80,1);
+    SlamCone,             "Champion", "Hammer slam from the air, cone round straight down (turns)", Fixed, 0, fx(1,4);
 }
 
 // ---------------------------------------------------------------------------

@@ -599,6 +599,14 @@ const NAMES: [&[&str]; 6] = [
         "Uppercut",
         "Pole drive",
         "Pole vault",
+        // The full charges (exploration 0015): a link held to full, the first
+        // two links' and then the third's -- the grand finishers.
+        "Crescent",
+        "Shockwave",
+        "Repel",
+        "Thousand Cuts",
+        "Meteor",
+        "Heaven-piercer",
     ],
     // Shadow Reaver -- two bodies. Options are a function of the line between
     // them, and the line always exists: the shadow is never nowhere.
@@ -814,13 +822,43 @@ pub mod champion {
     /// The odd one out: right click during a Rush, aimed at the floor.
     pub const POLE_VAULT: u8 = 18;
 
-    pub const COUNT: usize = 19;
+    /// **The full charges** (exploration 0015, C5): what a link held to full
+    /// becomes. Two rows, weapon by weapon like every other row: the first
+    /// two links' full charge, and the third's, which is the strongest -- the
+    /// grand finisher. Nothing throws them but a full hold, or momentum's top
+    /// tier on a tap.
+    pub const FULL: u8 = 19;
+    pub const GRAND: u8 = 22;
+    pub const CRESCENT: u8 = FULL + SWORD;
+    pub const SHOCKWAVE: u8 = FULL + HAMMER;
+    pub const REPEL: u8 = FULL + SPEAR;
+    pub const THOUSAND_CUTS: u8 = GRAND + SWORD;
+    pub const METEOR: u8 = GRAND + HAMMER;
+    pub const HEAVEN_PIERCER: u8 = GRAND + SPEAR;
+
+    pub const COUNT: usize = 25;
 
     /// Which weapon a move is thrown with. The column of the grid, except for
     /// the vault, which is planted with the spear like everything else on
     /// right click.
     pub const fn weapon(kind: u8) -> u8 {
-        if kind == POLE_VAULT { SPEAR } else { kind % 3 }
+        if kind >= FULL {
+            (kind - FULL) % 3
+        } else if kind == POLE_VAULT {
+            SPEAR
+        } else {
+            kind % 3
+        }
+    }
+
+    /// Is this one of the six full charges?
+    pub const fn is_full(kind: u8) -> bool {
+        kind >= FULL && (kind as usize) < COUNT
+    }
+
+    /// Is this a grand finisher -- a third link's full charge?
+    pub const fn is_grand(kind: u8) -> bool {
+        kind >= GRAND && (kind as usize) < COUNT
     }
 
     /// How many hits into the chain this move is, if it is one of the nine.
@@ -853,6 +891,50 @@ pub mod champion {
     /// Is this move thrown as the feet leave the floor?
     pub const fn is_takeoff(kind: u8) -> bool {
         kind >= TAKEOFF && kind < POLE_VAULT
+    }
+
+    /// Is this an aerial -- a weapon clicked in the air, not leaving the
+    /// floor?
+    pub const fn is_aerial(kind: u8) -> bool {
+        kind >= IN_THE_AIR && kind < RUSHING
+    }
+
+    /// **Does this move count in the string?** (2026-10-13, from play) The
+    /// nine links, and the aerials and takeoffs: ground, jump, third is
+    /// three hits, counted in rhythm, wherever the feet are. Where in the
+    /// string an aerial or a takeoff stands is how many hits were behind it,
+    /// so only the links can be asked their place ([`link_of`]); the rest is
+    /// the fighter's to remember.
+    pub const fn in_string(kind: u8) -> bool {
+        kind < RUSHING || is_takeoff(kind)
+    }
+
+    /// **Can this move be held to a finisher?** The links, and the aerials
+    /// (2026-10-13, from play): the sword's Crescent off a jump, the hammer
+    /// slammed back to the floor, the spear's Repel in the air. Not a
+    /// takeoff: it is already going somewhere.
+    pub const fn holdable(kind: u8) -> bool {
+        link_of(kind).is_some() || is_aerial(kind)
+    }
+
+    /// **The finisher** (exploration 0015, C5) a weapon's held move becomes
+    /// at a place in the string: the first two places share one, and the
+    /// third's is the grand finisher.
+    pub const fn finisher(weapon: u8, place: u8) -> u8 {
+        if place + 1 >= DEPTH {
+            GRAND + weapon
+        } else {
+            FULL + weapon
+        }
+    }
+
+    /// The finisher a link held becomes, at its own place. `None` for
+    /// anything that is not a link: an aerial's place is the fighter's.
+    pub const fn full_charge(kind: u8) -> Option<u8> {
+        match link_of(kind) {
+            Some(place) => Some(finisher(weapon(kind), place)),
+            None => None,
+        }
     }
 }
 
@@ -1457,6 +1539,23 @@ pub const MAX_SLOTS: usize = {
     n
 };
 
+/// How many slots a fighter keeps a **lockout** for: every class's every
+/// slot, but for the Champion's six full charges (exploration 0015), which
+/// are past the end and keep none. A full charge is paid for with a hold, or
+/// with momentum, and a repeat lockout on top would be a second price for
+/// the same thing. Kept apart from [`MAX_SLOTS`] because the two lockout
+/// tables are in the snapshot, and the snapshot has a cap.
+pub const LOCKED_SLOTS: usize = champion::FULL as usize;
+
+const _: () = {
+    let mut i = 0;
+    while i < crate::class::ALL_CLASSES.len() {
+        let class = crate::class::ALL_CLASSES[i];
+        assert!(matches!(class, Class::Champion) || slots(class) <= LOCKED_SLOTS);
+        i += 1;
+    }
+};
+
 /// Where a class's slots begin in that store.
 pub const fn base_slot(class: Class) -> usize {
     let mut n = 0;
@@ -1501,7 +1600,13 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             15 => "Space+LMB",
             16 => "Space+MMB",
             17 => "Space+RMB",
-            _ => "RMB rush, low",
+            18 => "RMB rush, low",
+            19 => "LMB held, 1st/2nd",
+            20 => "MMB held, 1st/2nd",
+            21 => "RMB held, 1st/2nd",
+            22 => "LMB held, 3rd",
+            23 => "MMB held, 3rd",
+            _ => "RMB held, 3rd",
         },
         // Finishers, neutral, the shadow: left, middle, right (2026-10-10).
         Class::ShadowReaver => match slot {
@@ -1663,6 +1768,20 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // hammer rise through the arc and the spear drives the other end of
             // itself into the floor.
             c::RISING_CUT | c::UPPERCUT | c::POLE_DRIVE => Shape::Swing(Plane::Upright),
+            // **The full charges**, each its weapon's own plane, because a
+            // full charge is still the weapon: the sword's cut that leaves a
+            // crescent, the hammer's overhead driven into the floor, the
+            // spear levelled. Thousand Cuts is the drawn sword run through a
+            // line of them, which is a cut across, as the Rush slash is.
+            c::CRESCENT => Shape::Swing(Plane::Diagonal(Hand::Right)),
+            c::SHOCKWAVE | c::METEOR => Shape::Swing(Plane::Upright),
+            // The spear's first finisher is the pole swung flat all the way
+            // round him, to put room between him and everything near: a
+            // shove, not a kill (2026-10-13, from play).
+            c::REPEL => Shape::Swing(Plane::Flat),
+            c::THOUSAND_CUTS => Shape::Swing(Plane::Flat),
+            // The spear leaves his hands: the javelin does the hitting.
+            c::HEAVEN_PIERCER => Shape::None,
             // Movement, not an attack. A vault that also hit people would be
             // strictly better than the stab it shares a button with.
             _ => Shape::None,
@@ -1773,13 +1892,14 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
     }
 }
 
-/// What holding a move's button buys, for the three moves that charge.
+/// What holding a move's button buys, for the moves that charge.
 ///
 /// **Declared, not inferred**, like [`shape`] and [`lingers`]: the move
 /// table's `channel` column says *how long* a button may be held, and this
-/// says *what the hold is*. Three answers, and they are three different
-/// shapes of the same rule -- a hold deforms a move along one axis and never
-/// selects a different one. See `docs/design/elementalist-v2.md`.
+/// says *what the hold is*. Every answer but one deforms a move along one axis
+/// and never selects a different one (see `docs/design/elementalist-v2.md`);
+/// the Champion's [`Charge::Heft`] is the exception, and the reason is in its
+/// own note.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Charge {
     /// The Blood mage's Grasp: the hold is **before** the move and buys
@@ -1806,6 +1926,15 @@ pub enum Charge {
     /// goes** -- red health every `tuning::blood_pays_every` frames held --
     /// and it buys size (the nova's burst) or distance (the jet's drive).
     Bleed,
+    /// **The Champion's hold** (exploration 0015, C3), on all nine links of
+    /// the chain: the hold comes **after** the startup, at the top of the
+    /// wind-up, as the Strike's does, and it is a charged attack in the Smash
+    /// sense -- a press regretted and kept, a threat held over a gap, a link
+    /// delayed. A part charge is the move harder and further. **A full one
+    /// selects a different move**: the weapon's full charge for that place in
+    /// the string ([`champion::full_charge`]), and the one rule in this enum
+    /// that is not a deformation. It is the class's one kind of big hit.
+    Heft,
 }
 
 /// Which charge a move has, if any.
@@ -1818,6 +1947,7 @@ pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
+        Class::Champion if champion::holdable(kind) => Some(Charge::Heft),
         _ => None,
     }
 }
@@ -1896,6 +2026,16 @@ pub const fn puts_out(class: Class, kind: u8) -> Option<crate::effects::EffectKi
             reaver::WHIRL | reaver::RISING_WHIRL => Some(E::ShadowWhirl),
             reaver::TUMBLE | reaver::FAN | reaver::SHURIKEN => Some(E::ShadowFan),
             reaver::PLUNGE => Some(E::ShadowRing),
+            _ => None,
+        },
+        // The full charges' second halves: the crescent leaving the blade,
+        // the ground breaking round the hammer, the cuts left hanging along
+        // the line he ran, the javelin. See `state::World::champion_comes_out`.
+        Class::Champion => match kind {
+            champion::CRESCENT => Some(E::Crescent),
+            champion::SHOCKWAVE | champion::METEOR => Some(E::Shockwave),
+            champion::THOUSAND_CUTS => Some(E::Cuts),
+            champion::HEAVEN_PIERCER => Some(E::Javelin),
             _ => None,
         },
         _ => None,

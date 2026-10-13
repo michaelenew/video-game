@@ -142,6 +142,12 @@ fn tap(w: &mut World, button: u16, then: u32) {
     run(w, then, 0, 0);
 }
 
+/// A weapon tapped every few frames: how a string is thrown, now that a
+/// Champion's weapon held down is a charge (exploration 0015, C3).
+fn tapped(f: u32, button: u16) -> u16 {
+    if f % 3 == 0 { button } else { 0 }
+}
+
 fn as_class(one: Class) -> World {
     World::with_classes([one, Class::Bulwark])
 }
@@ -1635,7 +1641,10 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     // pole vault *is* a spear planted in the floor.
     let down = -(1 << 13); // an eighth of a turn below the horizon
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     for _ in 0..2 {
         w.advance([
             Input::looking_at(RMB, LOOK_RIGHT, down),
@@ -1649,7 +1658,10 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     );
 
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     run(&mut w, 2, RMB, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
@@ -1664,7 +1676,10 @@ fn the_vault_trades_the_dash_for_height() {
     // buys is a way into the air that a jump cannot reach.
     let down = -(1 << 13);
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     let mut top = 0.0f32;
     for f in 0..80 {
         let bits = if (1..3).contains(&f) { RMB } else { 0 };
@@ -1956,11 +1971,14 @@ fn the_combo_the_class_is_built_around_is_playable() {
     let mut w = engaged(Class::Champion);
     let start = w.players[1].health;
 
-    // Hammer, and keep the button down: a link that lands cuts its own tail
+    // Hammer, and keep tapping it: a link that lands cuts its own tail
     // short, so the string walks itself into the second hit.
     let mut second = false;
-    for _ in 0..90 {
-        w.advance([Input::aimed(MMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    for f in 0..90 {
+        w.advance([
+            Input::aimed(tapped(f, MMB), LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         second |= w.players[0].action.attack_kind() == Some(moves::champion::UPROOT);
         if second {
             break;
@@ -2049,11 +2067,15 @@ fn the_combo_the_class_is_built_around_is_playable() {
 // which move a press produces, what ends a string, and what a string costs when
 // the defender answers it.
 
-/// Hold one button down and collect every move it throws, in order.
+/// Keep tapping one button and collect every move it throws, in order.
+/// Tapped, since a Champion's weapon held down is a charge (exploration 0015).
 fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
     let mut seen: Vec<u8> = Vec::new();
-    for _ in 0..frames {
-        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    for f in 0..frames {
+        w.advance([
+            Input::aimed(tapped(f, button), LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         if let Some(kind) = w.players[0].action.attack_kind() {
             if seen.last() != Some(&kind) {
                 seen.push(kind);
@@ -2064,17 +2086,17 @@ fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
 }
 
 #[test]
-fn one_weapon_held_down_walks_the_whole_chain_and_then_starts_again() {
-    // Linear play is meant to be strong, so the simplest possible input -- hold
-    // a button -- has to produce the whole string rather than the first hit
-    // three times.
+fn one_weapon_tapped_walks_the_whole_chain_and_then_starts_again() {
+    // Linear play is meant to be strong, so the simplest possible input -- one
+    // button, tapped (held, it is a charge) -- has to produce the whole string
+    // rather than the first hit three times.
     use moves::champion as c;
     let mut w = engaged(Class::Champion);
     let seen = strung(&mut w, LMB, 180);
     assert_eq!(
         &seen[..3],
         &[c::SWORD_GROUND, c::BACKCUT, c::UPCUT],
-        "holding left click did not walk the sword chain: {seen:?}"
+        "tapping left click did not walk the sword chain: {seen:?}"
     );
     assert_eq!(
         seen.get(3),
@@ -2135,8 +2157,11 @@ fn the_two_sword_openers_cut_opposite_diagonals() {
                 *chain_left = 200;
             }
         }
-        for _ in 0..40 {
-            w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        for f in 0..40 {
+            w.advance([
+                Input::aimed(if f == 0 { button } else { 0 }, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
             if let Some(h) = sim::state::hitbox(&w.players[0]) {
                 let up = h.to.y.sub(h.from.y);
                 // The facing is +x, so its own sides are ±z.
@@ -2202,8 +2227,11 @@ fn a_step_is_finished_by_the_time_the_weapon_lands() {
         run(&mut w, 12, 0, 0);
         let from = w.players[0].pos.x;
         let mut at_contact = None;
-        for _ in 0..80 {
-            w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        for f in 0..80 {
+            w.advance([
+                Input::aimed(if f == 0 { button } else { 0 }, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
             let live = matches!(w.players[0].action, sim::state::Action::Active { .. });
             if live && at_contact.is_none() {
                 at_contact = Some(w.players[0].pos.x.sub(from).to_f32_for_render());
@@ -2229,8 +2257,12 @@ fn nothing_that_does_not_declare_a_step_moves_on_its_own() {
     w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
     run(&mut w, 12, 0, 0);
     let from = w.players[0].pos;
-    for _ in 0..40 {
-        w.advance([Input::aimed(RMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    // Tapped: held, the spear is the Repel, a different move.
+    for f in 0..40 {
+        w.advance([
+            Input::aimed(if f == 0 { RMB } else { 0 }, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
     }
     let gone = w.players[0].pos.sub(from).flat_len().to_f32_for_render();
     assert!(
@@ -2271,7 +2303,7 @@ fn jumping_into_the_hammer_finisher_takes_both_of_you_up() {
                 0
             };
             w.advance([
-                Input::aimed(MMB | space, LOOK_RIGHT),
+                Input::aimed(if f == 0 { MMB } else { 0 } | space, LOOK_RIGHT),
                 Input::aimed(0, LOOK_LEFT),
             ]);
             theirs = theirs.max(w.players[1].vel.y.to_f32_for_render());
@@ -2325,7 +2357,7 @@ fn the_leap_is_paid_on_contact_and_not_on_the_press() {
             0
         };
         w.advance([
-            Input::aimed(MMB | space, LOOK_RIGHT),
+            Input::aimed(if f == 0 { MMB } else { 0 } | space, LOOK_RIGHT),
             Input::aimed(0, LOOK_LEFT),
         ]);
         highest = highest.max(w.players[0].vel.y.to_f32_for_render());
@@ -2350,7 +2382,7 @@ fn a_blocked_link_pays_its_whole_recovery() {
         let mut at = 0u32;
         for f in 0..60 {
             w.advance([
-                Input::aimed(LMB, LOOK_RIGHT),
+                Input::aimed(tapped(f, LMB), LOOK_RIGHT),
                 Input::aimed(block, LOOK_LEFT),
             ]);
             if w.players[0].action.attack_kind() == Some(moves::champion::BACKCUT) {

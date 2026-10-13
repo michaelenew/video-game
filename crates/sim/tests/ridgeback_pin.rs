@@ -80,8 +80,14 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// room under the eye, went into `state_checksum` whenever it is not nought,
 /// which is every jump; and the Reaver's kit moved. See
 /// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
+///
+/// **The Champion's was re-pinned 2026-10-12, later** for his rework: the
+/// braced Rush and its shoulder, a held weapon charging, the full charges and
+/// momentum. See `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+/// **And again 2026-10-13**: tap to combo and hold to finish, momentum spent by
+/// every finisher, and the Clash where every blow lands.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x339bb2066878e1c8),
+    (Class::Champion, 0x5d574d1567027b51),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0x125b4fc5c2559d9d),
     (Class::BloodMage, 0x083464c03c9c85e2),

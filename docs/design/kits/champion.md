@@ -5,6 +5,7 @@ rebuilt: 2026-09-12
 chained: 2026-09-14
 shaped: 2026-09-15
 weighted: 2026-09-26
+reworked: 2026-10-12, and from play 2026-10-13 (exploration 0015)
 formerly: Bellator, Shifter
 sources: docs/archive/combat-design/shifter-skills.md
 depends: ../champion.md
@@ -16,6 +17,84 @@ depends: ../champion.md
 buttons, a three-hit string where every hit is a free choice of all three, a dash that
 changes what all three of them do, and an air game that is the point of the class rather
 than a place it visits.
+
+## The rework -- 2026-10-12
+
+From three of the owner's replays: the reward lived at the string's third hit,
+and against a creature that guards the third hit almost never arrived (three
+finishers landed of thirty thrown); Rush was barely faster than a dodge; and
+nothing carried from one exchange to the next, so the right play was to hold
+range and poke. The design and its three rounds of answers are
+[exploration 0015](../exploration/0015_champion_momentum_and_the_charge.md);
+what was built, in one place:
+
+- **Rush** is 32 m/s for 12 frames, **braced**: a blow through most of the run
+  costs half and does not stop him, one in its last four frames costs nothing
+  (once a run), and 150 taken over a run breaks it. Running into a body is
+  **the shoulder**, the string's first hit -- the next click is the second
+  link. A third hit that lands **refunds** the Rush. The Rush stab carries what
+  it catches along the rest of the run. (`state::brace_the_rush`,
+  `World::shoulder`.)
+- **The Beat**: a weapon pressed inside the impact freeze of a link that landed
+  makes the next link a **true link** -- 20% more damage, 4 more frames of
+  freeze. The press is held for him until the link comes out. (`find_the_beat`.)
+- **Tap to combo, hold to finish** (2026-10-13): any link whose button was
+  pressed for it and is held for 12 frames from the press -- about a wind-up --
+  is that weapon's **finisher** (`moves::Charge::Heft`), at any place in the
+  string, and it ends the string. A press a little long is still the tap; a
+  wind-up shorter than the hold waits at the top for it, and Rush takes it back.
+  The finishers' own wind-ups are short; their recoveries are the price.
+  **Linear play is tapping**: a button held down is a finisher.
+- **The finishers**, the first and second links' and then the third's, which
+  are the grand finishers:
+
+  | | Full charge, hit 1 or 2 | Full charge, hit 3 |
+  | --- | --- | --- |
+  | **Sword** | **Crescent** -- a 10 m blade of light down the crosshair's line | **Thousand Cuts** -- a 7 m run through them; six cuts land on the line a beat later, the last throwing up |
+  | **Hammer** | **Shockwave** -- a 5 m ring of broken ground that throws up what it passes | **Meteor** -- a leap to where the crosshair is, a 7 m crater, a creature knocked off its feet |
+  | **Spear** | **Repel** -- the pole swung flat all the way round him: little damage, a long shove clear (it replaced the Comet, a lunge, 2026-10-13: a dash on every hold let him go everywhere hitting things) | **Heaven-piercer** -- the spear thrown; it pins the first body it stops in and he rushes after it and tears it out |
+
+- **Momentum** (2026-10-13): a meter on him, fed by every blow that lands --
+  on a fighter, a creature or a critter -- and more for a different weapon from
+  the last, a true link and a finisher; held two seconds, then drained; a blow
+  taken costs 30 %. It makes every hit he lands worth up to 20 % more (against
+  a creature, damage that adds no strain: what staggers is Break's to say).
+  **Every finisher spends all of it**, whatever is in it, and is worth its share
+  of 75 % more damage and a bigger effect and 40 frames more stagger; a full
+  meter spent knocks a fighter down and a creature off its feet. It never
+  changes where a finisher goes. On the HUD under his health, and as a glow on
+  the weapon in his hands -- ember, *Heated*, *Blazing*, white at full.
+- **The string in the air** (2026-10-13, from play): the aerials and the
+  takeoffs count in it, so ground, jump, third is three hits, in rhythm, and a
+  jump no longer ends it. With two hits behind him an aerial is the third: it
+  ends the string and refunds the Rush like any third, and held it is the grand
+  finisher (the ground's third links thrown from the air were tried: the hunt
+  bots struck a creature's back a quarter less often). **The aerials hold too**: held, an aerial is
+  its weapon's finisher for its place in the string. In the air the Crescent
+  keeps whatever speed the jump had; the Shockwave and the Meteor slam him
+  back to the floor at 30 m/s, down the crosshair inside a cone round straight
+  down, and break the ground where he lands.
+- **A hold is one press, held** (2026-10-13): let go of a link's button once
+  and that link is a tap, so a click during a wind-up is the next hit and never
+  this one held. And the meter does not drain while a hold winds up.
+- **The Rush goes toward the crosshair** (2026-10-13): flat along the floor
+  toward the spot the crosshair is on (`aim::racing_path` from his feet), not
+  where the stick is held.
+- **Break**: against a creature his hammer blows and third links count double
+  into its strain, true links half again, full charges triple -- and a full
+  charge's extra goes half into poise. He is the class that puts a creature on
+  the floor.
+- **The Clash**: a finisher's or Earthbreaker's active frames, or a Rush's last
+  frames, meeting any blow in the game -- decided where every blow lands on a
+  fighter (`state::apply_hit`), so no attack needs a line of its own -- spend
+  it, and he takes nothing. Whoever threw it is knocked out of it: a creature
+  mid-swing that reaches him flinches, a critter mid-attack is knocked out of
+  it, a fighter within 6 m is staggered. Two fighters' blows meeting where one
+  is his: the longer impact freeze wins outright, and equals bounce apart.
+
+Also fixed in the building: **a chain link that landed on a creature never
+confirmed the chain**, so every string against a creature paid every recovery
+in full. It does now.
 
 ## The grid
 

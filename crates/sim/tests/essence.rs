@@ -274,7 +274,9 @@ fn nobody_else_spills_anybody() {
         w.players[1].pos = w.players[0]
             .pos
             .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
-        run(&mut w, 60, Input::LEFT, 0);
+        // Pressed, then let go: a Champion's weapon held down is a charge.
+        run(&mut w, 1, Input::LEFT, 0);
+        run(&mut w, 59, 0, 0);
         assert!(
             w.players[1].health < w.players[1].full_health(),
             "fixture: {} never hit her",

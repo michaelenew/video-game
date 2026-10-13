@@ -23,10 +23,24 @@ use sim::{Class, Input, World};
 
 use crate::{Hunter, Report};
 
-/// What one fighter did, counted off the world rather than off a plan.
+/// What one fighter did, counted off the world rather than off a plan --
+/// **one table per class they played**, because a class changes inside a
+/// fight (a trip, the class keys) and a move is only a slot number until its
+/// class names it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Hands {
+    /// The class on the last frame alive.
     pub class: Option<Class>,
+    /// Frames alive and in the fight, every class together.
+    pub frames: u32,
+    /// Each class played, in the order it was first played.
+    pub stints: Vec<Stint>,
+}
+
+/// One class's share of a fighter's fight.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Stint {
+    pub class: Class,
     /// Moves started, by kind, and the frames one of them was out when a
     /// blow of this fighter's landed on anybody.
     pub thrown: Vec<(u8, u32)>,
@@ -37,12 +51,27 @@ pub struct Hands {
     /// Blows taken: this fighter going into hitstun, a stagger or a hold.
     pub struck: u32,
     pub damage_taken: i32,
-    /// Frames alive and in the fight.
+    /// Frames alive and in the fight as this class.
     pub frames: u32,
     pub airborne: u32,
 }
 
-impl Hands {
+impl Stint {
+    fn new(class: Class) -> Stint {
+        Stint {
+            class,
+            thrown: Vec::new(),
+            landed: Vec::new(),
+            dodges: 0,
+            guards: 0,
+            jumps: 0,
+            struck: 0,
+            damage_taken: 0,
+            frames: 0,
+            airborne: 0,
+        }
+    }
+
     fn bump(list: &mut Vec<(u8, u32)>, kind: u8) {
         match list.iter_mut().find(|(k, _)| *k == kind) {
             Some((_, n)) => *n += 1,
@@ -54,7 +83,56 @@ impl Hands {
         list.iter().find(|(k, _)| *k == kind).map_or(0, |(_, n)| *n)
     }
 
-    /// One frame: what changed for seat `who`.
+    /// The table, move by move.
+    fn render(&self, who: usize) -> String {
+        let mut out = format!(
+            "\nPLAYER {}  {}  --  {} frames, {:.1} s, {:.0}% airborne\n",
+            who + 1,
+            self.class.name(),
+            self.frames,
+            self.frames as f32 / 60.0,
+            if self.frames == 0 {
+                0.0
+            } else {
+                self.airborne as f32 * 100.0 / self.frames as f32
+            }
+        );
+        out.push_str("  WHAT THEY THREW           thrown   landed\n");
+        let mut kinds: Vec<u8> = self.thrown.iter().map(|(k, _)| *k).collect();
+        kinds.sort_unstable();
+        for kind in kinds {
+            let m = sim::moves::get(self.class, kind);
+            out.push_str(&format!(
+                "  {:<24}   {:>4}     {:>4}\n",
+                m.name,
+                Stint::count(&self.thrown, kind),
+                Stint::count(&self.landed, kind)
+            ));
+        }
+        out.push_str(&format!(
+            "  dodges {}   guards raised {}   jumps {}\n  blows taken {}   damage taken {}\n",
+            self.dodges, self.guards, self.jumps, self.struck, self.damage_taken
+        ));
+        out
+    }
+}
+
+impl Hands {
+    /// The stint of the class this fighter is now, started if it is new.
+    fn stint(&mut self, class: Class) -> &mut Stint {
+        let at = match self.stints.iter().position(|s| s.class == class) {
+            Some(at) => at,
+            None => {
+                self.stints.push(Stint::new(class));
+                self.stints.len() - 1
+            }
+        };
+        &mut self.stints[at]
+    }
+
+    /// One frame: what changed for seat `who`. A frame is counted to the
+    /// class the fighter is *after* it, except a blow landed, which is the
+    /// move that was out before it, so the class that threw it.
     fn observe(&mut self, who: usize, before: &World, input: Input, after: &World) {
         let (was, now) = (before.players[who], after.players[who]);
         if was.health <= 0 {
@@ -62,25 +140,30 @@ impl Hands {
         }
         self.class = Some(now.class);
         self.frames += 1;
+        let changed = was.class != now.class;
+        let s = self.stint(now.class);
+        s.frames += 1;
         if !now.grounded {
-            self.airborne += 1;
+            s.airborne += 1;
         }
         let begun = |a: Action| matches!(a, Action::Startup { .. } | Action::Channel { .. });
         if begun(now.action)
-            && (!begun(was.action) || now.action.attack_kind() != was.action.attack_kind())
+            && (changed
+                || !begun(was.action)
+                || now.action.attack_kind() != was.action.attack_kind())
             && let Some(kind) = now.action.attack_kind()
         {
-            Hands::bump(&mut self.thrown, kind);
+            Stint::bump(&mut s.thrown, kind);
         }
         if matches!(now.action, Action::Dodge { .. }) && !matches!(was.action, Action::Dodge { .. })
         {
-            self.dodges += 1;
+            s.dodges += 1;
         }
         if now.action.guarding() && !was.action.guarding() {
-            self.guards += 1;
+            s.guards += 1;
         }
         if was.grounded && !now.grounded && input.bits & Input::SPACE != 0 {
-            self.jumps += 1;
+            s.jumps += 1;
         }
         let struck = |a: Action| {
             matches!(
@@ -91,10 +174,10 @@ impl Hands {
         if struck(now.action)
             && (!struck(was.action) || now.action.frames_left() > was.action.frames_left())
         {
-            self.struck += 1;
+            s.struck += 1;
         }
         if now.health < was.health {
-            self.damage_taken += was.health - now.health;
+            s.damage_taken += was.health - now.health;
         }
         // A blow landing while one of mine is out: the other fighter struck,
         // or a creature or small body losing health.
@@ -122,45 +205,17 @@ impl Hands {
                 .zip(after.critters.all.iter())
                 .any(|(b, a)| a.health < b.health);
             if hit_fighter || hit_creature || hit_critter {
-                Hands::bump(&mut self.landed, kind);
+                Stint::bump(&mut self.stint(was.class).landed, kind);
             }
         }
     }
 
-    /// The table, move by move.
+    /// One table per class played, in the order they were played.
     pub fn render(&self, who: usize) -> String {
-        let Some(class) = self.class else {
+        if self.stints.is_empty() {
             return format!("\nPLAYER {}  sat out\n", who + 1);
-        };
-        let mut out = format!(
-            "\nPLAYER {}  {}  --  {} frames, {:.1} s, {:.0}% airborne\n",
-            who + 1,
-            class.name(),
-            self.frames,
-            self.frames as f32 / 60.0,
-            if self.frames == 0 {
-                0.0
-            } else {
-                self.airborne as f32 * 100.0 / self.frames as f32
-            }
-        );
-        out.push_str("  WHAT THEY THREW           thrown   landed\n");
-        let mut kinds: Vec<u8> = self.thrown.iter().map(|(k, _)| *k).collect();
-        kinds.sort_unstable();
-        for kind in kinds {
-            let m = sim::moves::get(class, kind);
-            out.push_str(&format!(
-                "  {:<24}   {:>4}     {:>4}\n",
-                m.name,
-                Hands::count(&self.thrown, kind),
-                Hands::count(&self.landed, kind)
-            ));
         }
-        out.push_str(&format!(
-            "  dodges {}   guards raised {}   jumps {}\n  blows taken {}   damage taken {}\n",
-            self.dodges, self.guards, self.jumps, self.struck, self.damage_taken
-        ));
-        out
+        self.stints.iter().map(|s| s.render(who)).collect()
     }
 }
 

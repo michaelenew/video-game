@@ -610,12 +610,20 @@ pub fn frame(w: &mut World) {
 
     // What each needs of the other, for the brains next frame.
     lore.set_word(word::NOW, now);
+    let gap = Knob::StaggerGap.raw().max(0) as u32;
     for (s, m) in herd.iter().enumerate() {
         let Some(m) = m.filter(|_| cats[s]) else {
             continue;
         };
         lore.set_word(word::of(s, word::POS), word_of(m.pos));
-        let (from, to) = live_window(&m, now).unwrap_or((0, 0));
+        // **A window is remembered until the gap after it has run**
+        // (2026-10-13): forgotten the frame it closed, the partner could
+        // commit a move landing a few frames after a hit that had just
+        // landed, which is the two hits together the gap exists to prevent.
+        // Found by a Champion's random walk in `tests/pair.rs`.
+        let (from, to) = live_window(&m, now)
+            .or_else(|| live_of(&lore, s).filter(|&(_, to)| now <= to.wrapping_add(gap)))
+            .unwrap_or((0, 0));
         lore.set_word(word::of(s, word::LIVE_FROM), from);
         lore.set_word(word::of(s, word::LIVE_TO), to);
     }

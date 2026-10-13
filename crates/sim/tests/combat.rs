@@ -566,7 +566,11 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     let mut w = World::with_classes([class, class]);
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
+    // Pressed, then let go: a Champion's weapon held down is a charge, and
+    // this is about the swing as built.
     let held = [Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
+    let after = [Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
+    let mut first = true;
 
     // The volume the **next** frame will test with, found by stepping a copy.
     //
@@ -577,13 +581,15 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     // screen a frame earlier.
     let mut found = None;
     for _ in 0..40 {
+        let now = if first { held } else { after };
         let mut peek = w.clone();
-        peek.advance(held);
+        peek.advance(now);
         if let Some(next) = hitbox(&peek.players[0]) {
             found = Some(next);
             break;
         }
-        w.advance(held);
+        w.advance(now);
+        first = false;
     }
     let hb = found.expect("never reached an active frame");
 
@@ -607,7 +613,7 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     // the end of the volume" means the same thing at any height.
     let half = sim::tuning::body_height().div(Fx::from_int(2));
     w.players[1].pos = sim::V3::new(spot.x, spot.y.sub(half).max(Fx::ZERO), spot.z);
-    w.advance(held);
+    w.advance(if first { held } else { after });
     w
 }
 

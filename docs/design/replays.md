@@ -110,7 +110,9 @@ says `a person`.
 Beside the creature's report, **what the person did with their hands**
 ([`replay::Hands`](../../crates/hunt/src/replay.rs)), counted off the world
 rather than off a plan: every move by name, thrown and landed, dodges, guards,
-jumps, blows and damage taken, share of the fight airborne. A versus replay
+jumps, blows and damage taken, share of the fight airborne. **One table per class played**: a
+class changed mid-tape (a trip, the class keys) gets its own, because a move is a slot
+number until its class names it, and a blow is counted to the class that threw it. A versus replay
 gets the rounds and both fighters' tables and no creature.
 
 ```

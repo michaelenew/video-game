@@ -8168,3 +8168,145 @@ them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back t
 has left the hunt, and the creature is gone as before. 30 m was tried first and held the
 Pinewood road inside a hunt.
 **Verdict** — unplayed.
+
+### 2026-10-12 — the Champion reworked: the braced Rush, the Beat, the Hold, six full charges, momentum, Break and the Clash
+**Changed** From the owner, with three replays: the Champion "just has a really linear
+playstyle and not a lot of options for outplay", and "the monster fights especially feel
+really bad because there's no semblance of a stun/combo game". Designed over three rounds in
+[exploration 0015](exploration/0015_champion_momentum_and_the_charge.md); the kit document's
+§"The rework" is what was built. In short: Rush 32 m/s for 12 frames, braced (half damage
+through the run, the last four frames eat one blow, 150 breaks it), and the shoulder into a
+body is the string's first hit; a landed third hit refunds it; the Rush stab carries. A weapon
+pressed inside a landed link's freeze is a true link (+20%, +4 frames of freeze). Any link
+pressed for and held at the top of its wind-up charges; held 40 frames it is its weapon's full
+charge -- Crescent, Shockwave, Comet, and for the third link Thousand Cuts, Meteor and
+Heaven-piercer. Momentum on him, fed by landed blows, filling holds faster at a third and two
+thirds and making a tap a full charge when full. Against a creature his heavy blows add strain
+over their damage (hammer and third links ×2, true links ×1.5, full charges ×3, half of a full
+charge's extra into poise), and the Meteor knocks it off its feet. A full charge's,
+Earthbreaker's or a Rush's last frames meeting a creature's swing cancel it; between fighters,
+the longer freeze wins a meeting of two blows outright.
+**Why** The replays, through `hunt --bin replay`: three finishers landed of thirty thrown; the
+hammer opened nine times; Earthbreaker never thrown; Rush stab 0 of 17 and the Rush slash 10 of
+10; in the air 23 % of the time against the Reaver's 57 % and the Elementalist's 46 %.
+**Found in the build**
+- **A chain link that landed on a creature never confirmed the chain.** `confirm_chain` was
+  called only where a fighter is hit, so every string against a creature paid every recovery
+  in full -- the Champion's whole string was slower against an animal than the frame table
+  says. It is confirmed where a creature is hit now, and the refund rides on it.
+- **The replay's hand tables folded every class into one.** `hunt::replay::Hands` keyed moves by
+  slot and named them by the last class played; a tape with a class change was mislabelled
+  (the owner's "Elementalist" tape was mostly a Dual mage). One table per class now.
+- Holding is a charge, so **linear play is tapping**: a button held down no longer walks the
+  string, it charges the opener. A press is spent on the link it threw, so a button held on
+  into the next link does not charge it. A dozen tests that held a Champion's button to throw
+  a swing press it once or tap it now; the scripted hunter's hands press a held weapon every
+  other frame for the same reason.
+- A press inside the sword's three-frame freeze was over before the chain would take it: the
+  beat's press is held for him until the link comes out.
+- The Crescent aimed at the sword's 1.85 m climbed from the chest to a point an arm's length
+  off the eye and flew over everybody: a thrown move is aimed at the length it is thrown
+  (`state::aimed_reach`).
+- Thousand Cuts stopped against the body it was cutting: bodies are not separated while it
+  runs. The javelin flew on past the body it pierced and he tore it out of the floor 15 m
+  behind them: it stops in the first body it pins.
+- Six more move slots widened each fighter's two lockout tables past the snapshot's 4 KiB cap
+  (4144 bytes). The full charges keep no lockout -- a hold or a full meter is their price --
+  and the tables stop at `moves::LOCKED_SLOTS`.
+- `feel.rs` caught three first guesses: the Crescent's swing shoved 0.6 m for 110 (knockback
+  4 → 12); the Comet was −1 on hit (hitstun 30 → 40); Heaven-piercer killed a Reaver in two
+  (260 → 240). The class has 25 moves.
+- The valley's frame test walked the faster Champion to the Bank's far edge, where a world
+  framed in the den reads the nearer place first; it shifts two seconds in rather than four.
+**Pins** The Champion's Ridgeback pin and both of his scripted-hunt pins; his envelope
+fixtures re-recorded. Nobody else's moved.
+**Movement** His whole-kit reach in the lab search grew sharply, his shared reach not at
+all: lane 0 m 55.8 → 85.3 m, lane +4 m 45.0 → 65.3 m, lane +10 m 28.5 → 44.1 m. A string
+advances on the throw, whiffed or not, so in an empty lab two swings and a held third are
+Thousand Cuts' 7 m dash or Heaven-piercer's 25 m run after its spear, and the first two held
+are the Comet's 8 m. **CHAMP-11 is the owner's**, as REAVER-5 is: whether the full charges
+should cross gaps the movement sections were built against, or be held to the ground they
+were thrown on.
+**Verdict** — unplayed. Every number is a first guess; the six full charges borrow clips
+(Backcut, Hammer, Rush stab, Rush slash, Air hammer, Skewer) until they have their own.
+
+### 2026-10-13 — the Champion from play: tap to combo, hold to finish; momentum spent; the Clash everywhere
+**Changed** From the owner, having played the rework: the meter-full tap read as "click a lot,
+then click some more"; momentum should be a bar that buffs you the fuller it is and a big move
+that drains it, chosen; it did not build against the Hornback; the Clash with a Rush did not
+work against the Hornback's charge, and should work against every attack without a line per
+move; and the finishers should be reachable from any hit -- "tap to combo, hold to finish".
+Built as the fourth round of [exploration 0015](exploration/0015_champion_momentum_and_the_charge.md):
+- **A link held 12 frames from its press is its weapon's finisher**, at any place in the
+  string, and ends it. The part charge, the tiers' faster holds and the meter-full tap are gone.
+  Finishers' own startups cut to 2-4 frames (Crescent 3, Shockwave 4, Comet 2, Thousand Cuts 3,
+  Meteor 4, Heaven-piercer 4), recoveries kept or lengthened as their price.
+- **The Comet goes where the stick is held**, a Rush on the spear.
+- **Momentum buffs every hit by its share of 20 %, and every finisher spends all of it**: its
+  share of 75 % more damage and size (`Effect::power`), of 40 frames more stagger
+  (`stagger_by_the_spend`), and a full meter knocks a fighter down and a creature off its feet.
+- **Critters feed momentum and confirm the string** (`trade_with_the_pack`); the Hornback's
+  bull is one, and nothing a fighter did to a critter had ever confirmed a Champion's string.
+- **The Clash is decided in `apply_hit`**, where every blow lands on a fighter, and settled after
+  by who threw it (`World::settle_the_clashes`).
+**Found in the build**
+- The snapshot was exactly at its 4 KiB cap; momentum's hold timer went to a byte to make room
+  for what a finisher spent and who was clashed.
+- **Momentum's buff broke the Ridgeback's fight shape** (`hunt/tests/fight.rs`: threatening
+  33-35 % against a floor of 35, 17-20 moves a minute against 20) at every value from 10 to
+  25 %: a creature's strain is damage taken, so more damage was more flinching. Against a
+  creature the buff is now damage that adds no strain (`Monster::take_extra`): it hurts more and
+  staggers no more, and what staggers is Break's. The fight passes at 20 %.
+- The HUD's lockout readout and the glow both read the hold's old length; both follow the
+  new one.
+**Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again.
+**Verdict** — from play, a second time.
+
+### 2026-10-13 — the Champion from play, second pass: aerials in the string, the Repel, holds that are holds
+**Asked, from play**
+- Holds on the aerials: the sword's Crescent off a jump without losing speed, the hammer held in
+  the air to slam back to the floor.
+- The spear's first finisher was too strong as a dash on every hold ("you can just keep dashing
+  everywhere while dealing damage"): a sweep that repels instead, low damage, utility.
+- Aerials and jumping attacks count in the three-hit string, in rhythm -- ground, jump, third --
+  and a third hit from the air.
+- Clicking fast was read as a hold and spent the meter on a finisher nobody asked for.
+- The Rush and the spear's dash went where the stick was, not where the mouse was.
+- A third hit held at a full meter drained the meter during its own wind-up.
+**Changed**
+- **A hold is one press, held.** Let go of a link's button once and it is a tap
+  (`find_the_beat` clears `may_hold`). The cause was a second click arriving during the
+  wind-up: the hold check only asked whether the button was down at the top, and the hammer's
+  wind-up is as long as a hold, so one frame of the next click was a finisher.
+  `clicking_fast_never_holds` tries every rhythm of 3 to 8 frames on all three weapons and fails
+  without the fix.
+- **The meter waits while a hold winds up** (`winding_a_hold`).
+- **Aerials and takeoffs are in the string** (`champion::in_string`): each is the next place,
+  the chain's clock keeps running in the air, and with two hits behind him an aerial is the
+  third -- it ends the string, refunds the Rush and holds to the grand finisher. The place is remembered on the fighter (`Fury::place`), since an aerial has no
+  place of its own.
+- **Aerials hold** (`champion::holdable`) to their weapon's finisher for that place
+  (`champion::finisher`). A finisher begun in the air keeps the jump's speed and does not hang;
+  the Shockwave and Meteor are driven down the crosshair inside a cone round straight down
+  (`aim::plunge_dir`, `slam_dive` 30 m/s, `slam_cone` 0.1) and wait for the floor
+  (`lands_on_the_floor`).
+- **The Comet is gone; the Repel** is the spear's first finisher: the pole swung flat a full
+  turn round him, 50 damage, 26 knockback, 4/5/20 frames. Its wall-splat and its three knobs went
+  with it. A finisher's own swing now reaches further by what it spent, as its effects do
+  (`hitbox`).
+- **The Rush goes toward the crosshair**: `aim::racing_path` from his feet, flat.
+**Found in the build**
+- **The paired cats could land two hits inside `StaggerGap`**: each cat's live window was
+  forgotten the frame it closed, so the partner could commit a move landing a few frames after a
+  hit that had just landed. A window is remembered now until the gap after it has run
+  (`species::pair::fight`). The Champion's new random walk in `tests/pair.rs` was the first to
+  reach it.
+**Tried and reverted**
+- **The ground's third links thrown from the air** (Upcut, Earthbreaker, Whirl at two hits
+  behind him in the air). The Ridgeback hunts' bots struck its back 187 times and toppled it 7
+  across 24 hunts, against 258 and 12 with the aerial as the third: the third links are swings
+  at somebody in front of him, and the aerials are what reaches a creature from a jump.
+  (`hunt/tests/fight.rs`'s topple test went to none in its six.)
+**Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again. The
+whole kit's widest gap at the lab's lowest lane is 68.1 m without the Comet, from 85.3.
+**Verdict** — from play.

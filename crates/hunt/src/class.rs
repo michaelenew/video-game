@@ -35,8 +35,10 @@
 //!
 //! **The Champion is the plans' own class**, and every one of these returns
 //! what the plan asked for unchanged when he is the one holding it: the plans
-//! were written for him and the Ridgeback's pin hashes his hunts. The Bulwark
-//! changes only where a plan had no guard of its own.
+//! were written for him and the Ridgeback's pin hashes his hunts -- with one
+//! change since 2026-10-12, in [`Hands::finish`]: a weapon the plan holds is
+//! pressed every other frame, because a weapon held down is a charge now. The
+//! Bulwark changes only where a plan had no guard of its own.
 //!
 //! **It plays no better than the plan does.** Everything it reads about the
 //! creature comes from the plan, which saw it through its fifteen-frame delay
@@ -1156,13 +1158,20 @@ impl Hands {
     /// that lasts longer than a frame, keep the Dual mage's hands on the side
     /// that does not burn her, and give her the second jump when the plan is
     /// holding the button for height. The Champion's input comes out as it
-    /// went in.
+    /// went in, but for a held weapon, which is pressed every other frame.
     pub fn finish(&mut self, w: &World, me: &Player, input: Input) -> Input {
         self.sync(me);
         self.cool = self.cool.saturating_sub(1);
         self.answer_left = self.answer_left.saturating_sub(1);
         let mut out = input;
         if me.class == Class::Champion {
+            // **A weapon held down is a charge since 2026-10-12**
+            // (exploration 0015), and the plans were written when it threw
+            // the string. So a weapon the plan holds is pressed on every other
+            // frame: the string it asked for, and never a hold.
+            let weapons = Input::LEFT | Input::MIDDLE | Input::RIGHT;
+            let again = out.bits & self.last_bits & weapons;
+            out.bits &= !again;
             self.last_bits = out.bits;
             return out;
         }

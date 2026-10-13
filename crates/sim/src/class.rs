@@ -146,6 +146,10 @@ impl Class {
                 leap_banked: false,
                 rise_used: false,
                 lifted: 0,
+                fury: Fury {
+                    clash_by: u8::MAX,
+                    ..Fury::default()
+                },
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -303,6 +307,79 @@ impl Form {
             crate::moves::champion::HAMMER => Form::Hammer,
             crate::moves::champion::SPEAR => Form::Spear,
             _ => Form::Sword,
+        }
+    }
+}
+
+/// **What the 2026-10-12 rework added to the Champion**, kept together so the
+/// rest of [`Mechanic::Forms`] reads as it did. See
+/// `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+///
+/// Every field is a clock or a count the simulation needs to replay a frame,
+/// so it is in the snapshot and the checksum like the rest.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Fury {
+    /// Damage taken during the current Rush, after the bracing. Past
+    /// `tuning::rush_breaks` the Rush ends the ordinary way.
+    pub braced: u16,
+    /// The one blow a Rush's last frames eat whole has been eaten.
+    pub eaten: bool,
+    /// The shoulder has landed, or been blocked, this Rush. Once a run.
+    pub shouldered: bool,
+    /// The three weapon buttons as they were held last frame, as bits in
+    /// button order -- so a press can be told from a hold. See `beat`.
+    pub clicks: u8,
+    /// **The Beat** (C2): the weapon pressed inside the impact freeze of a
+    /// chain link that landed, as `clicks` bits; zero for none. It is held for
+    /// him until the next link comes out, and that link is a true link.
+    pub beat: u8,
+    /// The move running now is a true link: it hits harder and sticks longer.
+    pub true_link: bool,
+    /// Weapon buttons pressed and still down since, as `clicks` bits: a press
+    /// not yet spent on a move. A link whose button is in here when it starts
+    /// may be held; one thrown by a button held over from the link before it
+    /// may not, so holding a button down still runs the string as it always
+    /// did. See `state::find_the_beat`.
+    pub fresh: u8,
+    /// The link running now was started by a fresh press of its button, and
+    /// so held, it is that weapon's finisher.
+    pub may_hold: bool,
+    /// The place in the string -- 0, 1 or 2 -- the finisher running now was
+    /// held from: the third's are the grand finishers.
+    pub place: u8,
+    /// The momentum the last finisher spent, as a percentage of a full
+    /// meter: what it is worth over and above itself.
+    pub spent: u8,
+    /// **The Clash** (C7): who this frame's blow that met his heavy one was
+    /// thrown by -- a fighter's seat, `state::QUARRY` for a creature or a
+    /// critter -- or `state::NOBODY`. Settled and cleared the same frame.
+    pub clash_by: u8,
+    /// **Momentum** (C4): charge banked by fighting, from nought to
+    /// `tuning::momentum_max`. It is on him, not on whoever he hits, and he
+    /// loses it by leaving: every landed hit feeds it and re-arms
+    /// `momentum_left`, and once that runs out it drains.
+    pub momentum: u16,
+    /// Frames the meter holds before it starts to drain.
+    pub momentum_left: u8,
+    /// The weapon of the last hit that landed, plus one, for the swap's
+    /// extra; zero for none yet.
+    pub last_weapon: u8,
+}
+
+impl Fury {
+    /// Which of the three tiers the meter is in: 0 below a third, then
+    /// *Heated*, *Blazing*, and 3 -- *Champion* -- full.
+    pub fn tier(&self) -> u8 {
+        let max = crate::tuning::momentum_max().max(1);
+        let m = self.momentum as i32;
+        if m >= max {
+            3
+        } else if m * 3 >= max * 2 {
+            2
+        } else if m * 3 >= max {
+            1
+        } else {
+            0
         }
     }
 }
@@ -639,6 +716,8 @@ pub enum Mechanic {
         /// wind-up and is spent on contact, so it sits here in between -- see
         /// `state::bank_the_leap`.
         leap_banked: bool,
+        /// The rework's state: the bracing, the shoulder. See [`Fury`].
+        fury: Fury,
     },
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),

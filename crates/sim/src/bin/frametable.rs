@@ -35,6 +35,13 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
             tenths(m.channel_from),
             tenths(m.reach)
         ),
+        moves::Charge::Heft => format!(
+            "held {}f from the press, the finisher: {}",
+            t::hold_from(),
+            moves::champion::full_charge(slot)
+                .map(|k| moves::get(class, k).name)
+                .unwrap_or("its weapon's, at its place in the string")
+        ),
         moves::Charge::Bleed => format!(
             "1% of red every {}f, a pool of her own blood",
             t::blood_pays_every()

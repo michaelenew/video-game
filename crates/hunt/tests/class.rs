@@ -35,6 +35,13 @@ fn the_champion_is_played_exactly_as_the_plan_says() {
     for input in [swing, dodge, Input::default(), Input::new(Input::SPACE)] {
         assert_eq!(hands.finish(&w, &me, input), input);
     }
+    // But a weapon held down is a charge (exploration 0015), so one the plan
+    // holds is pressed every other frame.
+    let first = hands.finish(&w, &me, swing);
+    let second = hands.finish(&w, &me, swing);
+    let third = hands.finish(&w, &me, swing);
+    assert!(first.has(Input::LEFT) && !second.has(Input::LEFT) && third.has(Input::LEFT));
+    assert!(second.has(Input::W), "and only the weapon is let go");
     assert_eq!(hands.uses, Uses::default());
 }
 

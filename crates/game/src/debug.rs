@@ -249,7 +249,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            EffectKind::FireRing | EffectKind::ShadowRing => {
+            EffectKind::FireRing | EffectKind::ShadowRing | EffectKind::Shockwave => {
                 cylinder(
                     &mut gizmos,
                     at,
@@ -315,6 +315,22 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                         PILLAR,
                     );
                 }
+            }
+            // The Champion's thrown ones: the ball they test, at the head.
+            EffectKind::Crescent | EffectKind::Javelin => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(crate::fx3(effect.head())),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The cuts: the line they land along.
+            EffectKind::Cuts => {
+                gizmos.line(
+                    crate::fx3(effect.pos),
+                    crate::fx3(effect.cuts_end()),
+                    PILLAR,
+                );
             }
             // The Dual mage's well, burst and ray: the volumes they test.
             EffectKind::Abyss => {
