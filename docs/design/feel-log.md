@@ -8310,3 +8310,51 @@ Built as the fourth round of [exploration 0015](exploration/0015_champion_moment
 **Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again. The
 whole kit's widest gap at the lab's lowest lane is 68.1 m without the Comet, from 85.3.
 **Verdict** — from play.
+
+### 2026-10-13 — slopes, steps and lips
+**Asked, from play** (with a replay: `versus-bulwark-163400f`, build `86d35ac`)
+- "Any kind of slope or tiny step has crazy and frustrating effects on movement."
+- The Reaver's dash jump on any slope rockets almost straight up.
+- Walking, the Champion's Rush, jumping and jump attacks up a slope feel weird.
+- Walking into a tiny lip stops the character completely.
+
+**Found on the tape**, replayed on the build that recorded it (`hunt --bin replay --motion`,
+new today): at frame 160899 a walk along a rock's top in the Saddle stopped dead against a cap of
+snow 0.4 m high on it; from 162670 a walk up the bank under the Shrine flickered off the floor
+every other frame, stopped dead at a seam 0.22 m high at its top, and then crept up a tenth of a
+metre every fourth frame while sliding sideways.
+
+**Changed** (`arena::resolve_among`, `too_steep_to_climb`; `tests/slopes.rs`)
+- **A step is walked up.** A standing body that is not rising, put into the side of a box whose
+  top is no more than `StepOver` (0.45 m, new) above its feet, with room to stand on it, is put on
+  top. Fighters only: a stone or a critter still stops.
+- **A body the floor lifts while it is rising has not landed.** The rocket: a dash jump across a
+  hill met the ground rising under it on its first frame, was counted as standing, and the jump
+  still held went again on top of it -- 39 m/s up where the flat gives 21. A box's top already had
+  this rule (`tests/corner.rs`); the floor had not.
+- **The steep-ground wall is the footing.** It was the height one frame's step gained against the
+  steepest slope, with 2 cm of slack: noisy, a cliff to any seam, and the slack let a walk up
+  ground too steep to stand on, which then slid her back. Now ground with no footing (too steep
+  across a metre) may be crossed or come down, never gone up; the part of the step up it is taken
+  off and the rest kept, so a walk at a mountainside slants along it. A rise in one step of more
+  than `StepOver` over the steepest slope is a ledge.
+- **`TerrainSteepest` 0.85 → 1.05.** The slack had made the walkable limit about 1.02 at a walk,
+  and the roads were laid against that -- an embankment is a slope of one -- so the old effective
+  number is now the stated one, with a little room. Mountains (1.4) and rims (3) are walls as before.
+- **Feet follow the ground down by `StepDown` plus the steepest slope over the ground the frame
+  covered**: a fixed 8 cm was one frame of a walk down a slope of 0.7, so a Rush, a dodge, or a
+  walk down anything steeper came down in hops.
+- **A body within a skin of a mountainside slides**, rather than standing on it for having come
+  to rest a hair above it.
+
+**Not changed** The land itself still has its seams: a scan finds about 2,400, 1,900 at a room's
+edge and 500 in the land (the noise switching off where a rim or an embankment takes over). They
+are steps or ledges now rather than walls you cannot see; smoothing them is the land's job, and
+would move the ground under every road test.
+
+**Pins** The Champion's and the Reaver's Ridgeback pins, whose random walks reach the arena's rim
+-- an arena's rim is land -- at frames 2077 and 1292. The Bulwark's never does, and is unchanged.
+The scripted hunt's Bulwark and Elementalist pins (`hunt/tests/pin.rs`) moved for the same reason;
+with `StepOver` at nothing they move all the same, so it is the rim and not the step.
+
+**Verdict** — from play.

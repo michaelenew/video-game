@@ -62,6 +62,13 @@ const EXEMPT: &[(&str, &str)] = &[
          is, is the Oven's `Eye bubble, soft edge`.",
     ),
     (
+        "if still.raw() <= up.mul(Fx::ratio(1, 4)).raw() {",
+        "A numerical tolerance, not a feel: a step taken along a too-steep slope is checked again \
+         where it lands, and the slope's turn between two points a few centimetres apart leaves \
+         it climbing a hair. A quarter of what it would have climbed is that hair; how steep is \
+         too steep is the Oven's `Terrain, steepest walkable`.",
+    ),
+    (
         "let third = Fx::ratio(1, 3)",
         "Presentation: where a Fire carpet's drawn flame is widest along its trip. The hit \
          test is the capsule, and no flame is drawn wider than it.",

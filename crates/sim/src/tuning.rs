@@ -226,6 +226,14 @@ pub fn step_down() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepDown)).max(Fx::ZERO)
 }
 
+/// **The step a body walks up**: a box whose top is no further than this
+/// above grounded feet is stood on rather than walked into
+/// (`arena::Terrain::resolve`). Also what a seam in the land may rise by
+/// in a step and still be walked over.
+pub fn step_over() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepOver)).max(Fx::ZERO)
+}
+
 /// The steepest ground a body walks up, as rise over run (`valley::land`).
 pub fn terrain_steepest() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSteepest)).max(Fx::ratio(1, 10))
