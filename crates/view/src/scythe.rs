@@ -168,7 +168,7 @@ pub fn scythe(p: &Player, left: V3, right: V3) -> Option<Scythe> {
         [crate::fx(p.facing.x), 0.0, crate::fx(p.facing.z)],
         [1.0, 0.0, 0.0],
     );
-    let sweep = sim::moves::get(p.class, sim::moves::blood::SWEEP);
+    let sweep = sim::moves::get(p.class, sim::moves::blood::RISING_REAP);
     // The weapon's own length, off the row: it does not grow. What grows is
     // the volume, drawn separately -- see `swing_volume`.
     let reach = crate::fx(sweep.reach);

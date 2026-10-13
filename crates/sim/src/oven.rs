@@ -788,7 +788,6 @@ scalars! {
     TierThreePower, "Blood mage", "Charge, tier three hits (x)", Fixed, fx(1,1), fx(8,1);
     ChargeGreyFaster, "Blood mage", "Charge, faster at full grey (x)", Fixed, fx(1,1), fx(3,1);
     VesselBleedsEvery, "Blood mage", "Vessel, 1% of red every", Frames, 1, 600;
-    LanceKnock, "Blood mage", "Transfusion, tier three throws back (m/s)", Fixed, 0, fx(40,1);
     SpikeSpread, "Blood mage", "Black spike, tier two spikes apart (m)", Fixed, 0, fx(6,1);
     SpikeTwoPower, "Blood mage", "Black spike, tier two each (x)", Fixed, 0, fx(2,1);
     SpikeFieldRadius, "Blood mage", "Black spike, tier three field radius", Fixed, fx(1,1), fx(8,1);
@@ -796,28 +795,51 @@ scalars! {
     SpikeWaves, "Blood mage", "Black spike, tier three waves", Int, 1, 8;
     SpikeWaveEvery, "Blood mage", "Black spike, tier three wave every", Frames, 1, 90;
     WingsFrames, "Blood mage", "Blood wings, frames to cross", Frames, 1, 40;
-    ChainMiss, "Blood mage", "Reaper's chain, pulls her on a miss (m)", Fixed, 0, fx(15,1);
-    ChainYank, "Blood mage", "Reaper's chain, yanks a fighter at (m/s)", Fixed, fx(1,1), fx(80,1);
-    ReaperLeapSpeed, "Blood mage", "Reaper's leap, across (m/s)", Fixed, fx(1,1), fx(40,1);
-    LeapDrinks, "Blood mage", "Reaper's leap, drinks stains within (m)", Fixed, 0, fx(8,1);
     TeleportReach, "Blood mage", "Teleport, to a stain within (m)", Fixed, fx(1,1), fx(40,1);
-    FrenzyLasts, "Blood mage", "Frenzy, lasts", Frames, 1, 900;
-    FrenzyMost, "Blood mage", "Frenzy, lasts at most", Frames, 1, 1800;
-    FrenzyExtend, "Blood mage", "Frenzy, a teleport adds", Frames, 0, 300;
-    FrenzyTickEvery, "Blood mage", "Frenzy, hurts every", Frames, 1, 60;
-    FrenzyPull, "Blood mage", "Frenzy, pulls stains within (m)", Fixed, 0, fx(40,1);
-    FrenzyPullSpeed, "Blood mage", "Frenzy, stains rush in at (m/s)", Fixed, 0, fx(40,1);
-    FrenzyGreyDrain, "Blood mage", "Frenzy, grey drains (per second)", Int, 0, 600;
-    FrenzyEntry, "Blood mage", "Frenzy, needs grey of at least", Int, 0, 1000;
-    StainBlast, "Blood mage", "Stain, explodes for (x its essence)", Fixed, 0, fx(6,1);
-    StainBlastRadius, "Blood mage", "Stain, explosion radius", Fixed, fx(1,2), fx(6,1);
     PlagueLasts, "Blood mage", "Hemoplague, cloud lasts", Frames, 1, 900;
     PlagueTick, "Blood mage", "Hemoplague, hurts every", Frames, 1, 120;
     PlagueHeight, "Blood mage", "Hemoplague, cloud height", Fixed, fx(1,1), fx(10,1);
     ChargeCrawl, "Blood mage", "Charge, walk while holding (%)", Int, 0, 100;
     EruptChain, "Blood mage", "Black spike, an eruption sets off stains this far past its edge (m)", Fixed, 0, fx(8,1);
     SendReach, "Blood mage", "Dodge, sends her blood up to (m)", Fixed, fx(1,1), fx(40,1);
-    SendEssence, "Blood mage", "Dodge, sent blood lands as a stain of", Int, 1, 300;
+    // **The Blood mage: stains, thralls and the Well**, 2026-10-13. See
+    // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+    WellFull, "Blood mage", "Well, full at", Int, 1, 2000;
+    StainSettles, "Blood mage", "Stain, settles before it can be drunk", Frames, 0, 60;
+    SendCost, "Blood mage", "Dodge, the sent blood costs (% of red)", Int, 0, 20;
+    CarpetFrom, "Blood mage", "Carpet, starts at radius", Fixed, fx(1,2), fx(6,1);
+    CarpetTo, "Blood mage", "Carpet, grows to radius", Fixed, fx(1,1), fx(12,1);
+    CarpetPaysEvery, "Blood mage", "Carpet, 1% of red every", Frames, 1, 60;
+    CarpetTick, "Blood mage", "Carpet, hurts every", Frames, 1, 120;
+    CarpetSlow, "Blood mage", "Carpet, slows to (x)", Fixed, 0, fx(1,1);
+    CarpetStains, "Blood mage", "Carpet, breaks into stains", Int, 1, 8;
+    CoagulateReach, "Blood mage", "Coagulate, gathers stains within (m)", Fixed, fx(1,1), fx(30,1);
+    CoagulateSpeed, "Blood mage", "Coagulate, stains slide at (m/s)", Fixed, fx(1,1), fx(60,1);
+    SummonReach, "Blood mage", "Summon, raises stains within (m)", Fixed, fx(1,1), fx(20,1);
+    SummonAt, "Blood mage", "Summon, stains rise after", Frames, 1, 120;
+    ThrallCap, "Blood mage", "Thralls at once", Int, 1, 8;
+    ThrallSpeed, "Blood mage", "Thrall, runs at (m/s)", Fixed, fx(1,1), fx(20,1);
+    ThrallSeek, "Blood mage", "Thrall, goes for a body within (m)", Fixed, 0, fx(15,1);
+    ThrallReach, "Blood mage", "Thrall, bites within (m)", Fixed, fx(1,4), fx(4,1);
+    ThrallBite, "Blood mage", "Thrall, a bite spends (% of it)", Int, 1, 100;
+    ThrallBiteLeast, "Blood mage", "Thrall, a bite spends at least", Int, 1, 200;
+    ThrallBiteEvery, "Blood mage", "Thrall, bites every", Frames, 1, 120;
+    ReapCone, "Blood mage", "Rising reap, cone half-width (cos)", Fixed, 0, fx(1,1);
+    ReapHurl, "Blood mage", "Rising reap, hurls thralls at (m/s)", Fixed, 0, fx(40,1);
+    ReapHurlFor, "Blood mage", "Rising reap, hurls thralls for", Frames, 1, 90;
+    GardenReach, "Blood mage", "Thorn garden, from stains within (m)", Fixed, fx(1,1), fx(30,1);
+    GardenLasts, "Blood mage", "Thorn garden, stands for", Frames, 1, 600;
+    GardenTick, "Blood mage", "Thorn garden, hurts every", Frames, 1, 120;
+    GardenRoot, "Blood mage", "Thorn garden, roots for", Frames, 1, 120;
+    GardenBase, "Blood mage", "Thorn garden, a root's least radius", Fixed, fx(1,4), fx(6,1);
+    GardenPerRoot, "Blood mage", "Thorn garden, radius per root of essence", Fixed, 0, fx(4,1);
+    ExsCone, "Blood mage", "Exsanguinate, cone half-width (cos)", Fixed, 0, fx(1,1);
+    ExsPerEssence, "Blood mage", "Exsanguinate, adds per essence of a stain (x)", Fixed, 0, fx(4,1);
+    GolemFuse, "Blood mage", "Golem, fuses thralls and stains within (m)", Fixed, fx(1,1), fx(20,1);
+    GolemSpeed, "Blood mage", "Golem, walks at (m/s)", Fixed, fx(1,2), fx(15,1);
+    GolemPunchEvery, "Blood mage", "Golem, punches every", Frames, 1, 180;
+    GolemReach, "Blood mage", "Golem, punches within (m)", Fixed, fx(1,2), fx(8,1);
+    GolemSize, "Blood mage", "Golem, stands this many thralls tall (x)", Fixed, fx(1,1), fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

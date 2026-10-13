@@ -543,10 +543,11 @@ fn swings_with(class: sim::class::Class) -> u16 {
     if sim::moves::get(class, sim::state::SLOT_POKE).strikes() {
         return L;
     }
-    // The Blood mage's poke does not: her Transfusion is a bolt, and the bolt
-    // does the hitting. Her swing is the scythe, tapped.
+    // The Blood mage's poke does not: the Carpet is a field, and her
+    // Haemorrhage a bolt that does the hitting. Her volume is the Black spike,
+    // tapped: a disc out of the floor where she aims.
     if class == sim::class::Class::BloodMage {
-        return sim::moves::blood::keys::SCYTHE;
+        return sim::moves::blood::keys::YOUR_BLOOD;
     }
     // Nor the Dual mage's, whose every move is a spell: `E` is Judgement, a
     // real volume where it lands.
@@ -570,8 +571,8 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
     let mut held = [Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
-    // The Blood mage's scythe is a tap: held past its startup it is Tides,
-    // her charge, which has no volume of its own. Let go after the press.
+    // The Blood mage's spike is a tap: held, it climbs its tiers and comes
+    // out where she lets go. Let go after the press.
     let tapped = class == sim::class::Class::BloodMage;
 
     // The volume the **next** frame will test with, found by stepping a copy.
@@ -633,7 +634,7 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
         .pos
         .add(sim::V3::new(Fx::from_int(2), Fx::ZERO, Fx::ZERO));
     let before = w.players[1].health;
-    // The Transfusion, tapped: a bolt from her hand, which does the hitting.
+    // The Haemorrhage, tapped: a bolt from her hand, which does the hitting.
     for i in 0..40 {
         let bits = if i < 2 {
             sim::moves::blood::keys::MY_BLOOD

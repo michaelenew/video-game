@@ -311,7 +311,7 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
     w.effects[0] = Some(sim::effects::Effect::pool(
         1,
         Class::BloodMage,
-        sim::moves::blood::SWEEP,
+        sim::moves::blood::HAEMORRHAGE,
         // Off her feet: she drinks a stain she stands in.
         w.players[1]
             .pos
@@ -538,10 +538,10 @@ fn the_spike_reaches_much_further_than_a_swing() {
     // you can put a wall. Pinned against the class's own melee rather than
     // against a number, so retuning either one keeps the relationship honest.
     let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
-    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::SWEEP);
+    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::RISING_REAP);
     assert!(
         spike.reach.raw() > rend.reach.mul(sim::fixed::Fx::from_int(2)).raw(),
-        "the spike lands barely further than the scythe does: {} against {}",
+        "the spike lands barely further than the reap sweeps: {} against {}",
         spike.reach.to_f32_for_render(),
         rend.reach.to_f32_for_render()
     );
@@ -581,19 +581,18 @@ fn casting_costs_the_blood_mage_health() {
     // on one, because "all of them" is the design and a free ability would be
     // the one everybody pressed.
     //
-    // The buttons are the blaster's map
-    // (docs/design/exploration/0015_blood_mage_blaster.md). The Haemorrhage
-    // is the left click **in the air** -- on the floor the same click is the
-    // Transfusion -- so it is cast from a height. A two-frame press is a tap,
-    // the first tier, which costs only its row.
+    // The buttons are the map of 0016
+    // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md): a
+    // two-frame press is a tap, which costs only its row.
     use sim::moves::blood as b;
     use sim::moves::blood::keys;
     for (slot, button, airborne) in [
-        (b::TRANSFUSION, keys::MY_BLOOD, false),
+        (b::HAEMORRHAGE, keys::MY_BLOOD, false),
         (b::HAEMORRHAGE, keys::MY_BLOOD, true),
         (b::HEMOPLAGUE, keys::PLAGUE, false),
         (b::BLACK_SPIKE, keys::YOUR_BLOOD, false),
-        (b::SWEEP, keys::SCYTHE, false),
+        (b::COMMAND, keys::SCYTHE, false),
+        (b::COAGULATE, keys::GATHER, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert!(m.cost > 0, "{} is free to cast", m.name);
@@ -646,7 +645,7 @@ fn spending_health_cannot_kill_you() {
     assert_eq!(w.players[0].health, 1, "self-damage did not clamp at one");
 }
 
-/// What one Transfusion takes off a fighter who has been put into `setup`.
+/// What one Haemorrhage takes off a fighter who has been put into `setup`.
 ///
 /// The comparison the trait is about: the same move, the same distance, the
 /// same frame, against a victim whose options are gone and against one whose

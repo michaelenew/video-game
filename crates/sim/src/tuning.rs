@@ -3359,11 +3359,6 @@ pub fn vessel_bleeds_every() -> u16 {
     oven::scalar(Scalar::VesselBleedsEvery).max(1) as u16
 }
 
-/// Transfusion, tier three throws back (m/s).
-pub fn lance_knock() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LanceKnock).max(0))
-}
-
 /// Black spike, tier two spikes apart (m).
 pub fn spike_spread() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SpikeSpread).max(0))
@@ -3399,79 +3394,9 @@ pub fn wings_frames() -> u16 {
     oven::scalar(Scalar::WingsFrames).max(1) as u16
 }
 
-/// Reaper's chain, pulls her on a miss (m).
-pub fn chain_miss() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ChainMiss).max(0))
-}
-
-/// Reaper's chain, yanks a fighter at (m/s).
-pub fn chain_yank() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ChainYank).max(0))
-}
-
-/// Reaper's leap, across (m/s).
-pub fn reaper_leap_speed() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ReaperLeapSpeed).max(0))
-}
-
-/// Reaper's leap, drinks stains within (m).
-pub fn leap_drinks() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LeapDrinks).max(0))
-}
-
 /// Teleport, to a stain within (m).
 pub fn teleport_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TeleportReach).max(0))
-}
-
-/// Frenzy, lasts.
-pub fn frenzy_lasts() -> u16 {
-    oven::scalar(Scalar::FrenzyLasts).max(1) as u16
-}
-
-/// Frenzy, lasts at most.
-pub fn frenzy_most() -> u16 {
-    oven::scalar(Scalar::FrenzyMost).max(1) as u16
-}
-
-/// Frenzy, a teleport adds.
-pub fn frenzy_extend() -> u16 {
-    oven::scalar(Scalar::FrenzyExtend).max(1) as u16
-}
-
-/// Frenzy, hurts every.
-pub fn frenzy_tick_every() -> u16 {
-    oven::scalar(Scalar::FrenzyTickEvery).max(1) as u16
-}
-
-/// Frenzy, pulls stains within (m).
-pub fn frenzy_pull() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::FrenzyPull).max(0))
-}
-
-/// Frenzy, stains rush in at (m/s).
-pub fn frenzy_pull_speed() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::FrenzyPullSpeed).max(0))
-}
-
-/// Frenzy, grey drains (per second).
-pub fn frenzy_grey_drain() -> i32 {
-    oven::scalar(Scalar::FrenzyGreyDrain).max(0)
-}
-
-/// Frenzy, needs grey of at least.
-pub fn frenzy_entry() -> i32 {
-    oven::scalar(Scalar::FrenzyEntry).max(0)
-}
-
-/// Stain, explodes for (x its essence).
-pub fn stain_blast() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::StainBlast).max(0))
-}
-
-/// Stain, explosion radius.
-pub fn stain_blast_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::StainBlastRadius).max(0))
 }
 
 /// Hemoplague, cloud lasts.
@@ -3507,7 +3432,186 @@ pub fn send_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SendReach).max(Fx::ONE.raw()))
 }
 
-/// How much of her own blood the sent glob lands as: how long the door lasts.
-pub fn send_essence() -> i32 {
-    oven::scalar(Scalar::SendEssence).max(1)
+// Stains, thralls and the Well (2026-10-13). See
+// `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+
+/// Well, full at.
+pub fn well_full() -> i32 {
+    oven::scalar(Scalar::WellFull).max(0)
+}
+
+/// Stain, settles before it can be drunk.
+pub fn stain_settles() -> u16 {
+    oven::scalar(Scalar::StainSettles).max(0) as u16
+}
+
+/// Dodge, the sent blood costs (% of red).
+pub fn send_cost() -> i32 {
+    oven::scalar(Scalar::SendCost).max(0)
+}
+
+/// Carpet, starts at radius.
+pub fn carpet_from() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetFrom).max(0))
+}
+
+/// Carpet, grows to radius.
+pub fn carpet_to() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetTo).max(0))
+}
+
+/// Carpet, 1% of red every.
+pub fn carpet_pays_every() -> u16 {
+    oven::scalar(Scalar::CarpetPaysEvery).max(0) as u16
+}
+
+/// Carpet, hurts every.
+pub fn carpet_tick() -> u16 {
+    oven::scalar(Scalar::CarpetTick).max(0) as u16
+}
+
+/// Carpet, slows to (x).
+pub fn carpet_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetSlow).max(0))
+}
+
+/// Carpet, breaks into stains.
+pub fn carpet_stains() -> i32 {
+    oven::scalar(Scalar::CarpetStains).max(0)
+}
+
+/// Coagulate, gathers stains within (m).
+pub fn coagulate_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CoagulateReach).max(0))
+}
+
+/// Coagulate, stains slide at (m/s).
+pub fn coagulate_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CoagulateSpeed).max(0))
+}
+
+/// Summon, raises stains within (m).
+pub fn summon_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SummonReach).max(0))
+}
+
+/// Summon, stains rise after.
+pub fn summon_at() -> u16 {
+    oven::scalar(Scalar::SummonAt).max(0) as u16
+}
+
+/// Thralls at once.
+pub fn thrall_cap() -> i32 {
+    oven::scalar(Scalar::ThrallCap).max(0)
+}
+
+/// Thrall, runs at (m/s).
+pub fn thrall_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallSpeed).max(0))
+}
+
+/// Thrall, goes for a body within (m).
+pub fn thrall_seek() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallSeek).max(0))
+}
+
+/// Thrall, bites within (m).
+pub fn thrall_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallReach).max(0))
+}
+
+/// Thrall, a bite spends (% of it).
+pub fn thrall_bite() -> i32 {
+    oven::scalar(Scalar::ThrallBite).max(0)
+}
+
+/// Thrall, a bite spends at least.
+pub fn thrall_bite_least() -> i32 {
+    oven::scalar(Scalar::ThrallBiteLeast).max(0)
+}
+
+/// Thrall, bites every.
+pub fn thrall_bite_every() -> u16 {
+    oven::scalar(Scalar::ThrallBiteEvery).max(0) as u16
+}
+
+/// Rising reap, cone half-width (cos).
+pub fn reap_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapCone).max(0))
+}
+
+/// Rising reap, hurls thralls at (m/s).
+pub fn reap_hurl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapHurl).max(0))
+}
+
+/// Rising reap, hurls thralls for.
+pub fn reap_hurl_for() -> u16 {
+    oven::scalar(Scalar::ReapHurlFor).max(0) as u16
+}
+
+/// Thorn garden, from stains within (m).
+pub fn garden_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GardenReach).max(0))
+}
+
+/// Thorn garden, stands for.
+pub fn garden_lasts() -> u16 {
+    oven::scalar(Scalar::GardenLasts).max(0) as u16
+}
+
+/// Thorn garden, hurts every.
+pub fn garden_tick() -> u16 {
+    oven::scalar(Scalar::GardenTick).max(0) as u16
+}
+
+/// Thorn garden, roots for.
+pub fn garden_root() -> u16 {
+    oven::scalar(Scalar::GardenRoot).max(0) as u16
+}
+
+/// Thorn garden, a root's least radius.
+pub fn garden_base() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GardenBase).max(0))
+}
+
+/// Thorn garden, radius per root of essence.
+pub fn garden_per_root() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GardenPerRoot).max(0))
+}
+
+/// Exsanguinate, cone half-width (cos).
+pub fn exs_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ExsCone).max(0))
+}
+
+/// Exsanguinate, adds per essence of a stain (x).
+pub fn exs_per_essence() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ExsPerEssence).max(0))
+}
+
+/// Golem, fuses thralls and stains within (m).
+pub fn golem_fuse() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemFuse).max(0))
+}
+
+/// Golem, walks at (m/s).
+pub fn golem_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSpeed).max(0))
+}
+
+/// Golem, punches every.
+pub fn golem_punch_every() -> u16 {
+    oven::scalar(Scalar::GolemPunchEvery).max(0) as u16
+}
+
+/// Golem, punches within (m).
+pub fn golem_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemReach).max(0))
+}
+
+/// Golem, stands this many thralls tall (x): how much wider and taller than
+/// a thrall of the same essence the golem is.
+pub fn golem_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSize).max(0))
 }

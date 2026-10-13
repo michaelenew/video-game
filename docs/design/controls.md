@@ -1032,6 +1032,15 @@ actually lives.
 
 ### Blood mage
 
+> **Superseded 2026-10-13: thralls and the Well.** A tap is the quick thing and a hold is the
+> field: left is the Haemorrhage tapped and the Carpet of blood held, middle the Black spike in
+> tiers (the Stake in the air), right Command tapped and the Summon held. Space and a click is a
+> takeoff from the floor and once in the air (Blood wings, the Upheaval, the Rising reap); `Q` is
+> Coagulate and `E` the Hemoplague; with a full Well, a hold kept to its end becomes the Thorn
+> garden, Exsanguinate or the Blood golem. The dodge with a stain under the crosshair is the
+> teleport, otherwise the Sanguine flow. The table is [kits/blood-mage.md](kits/blood-mage.md)
+> §"Thralls and the Well"; what follows it here is older still.
+>
 > **Superseded 2026-10-12: she is the blaster.** The three clicks held on the floor through
 > three tiers (left the Transfusion, middle the Black spike, right the sweep tapped and Tides
 > held), quick in the air (the Haemorrhage, the Stake, Reaper's chain), takeoffs with space

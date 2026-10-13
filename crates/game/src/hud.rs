@@ -873,17 +873,19 @@ fn mechanic(p: &sim::state::Player) -> String {
 fn describe(p: &sim::state::Player) -> String {
     let mut line = describe_action(p);
     // The Blood mage's blaster (2026-10-12): what her vessel is carrying and
-    // how long her Frenzy has left, beside whatever she is doing. Text on the
+    // how full her Well is, beside whatever she is doing. Text on the
     // state line until each has a picture of its own.
     if p.vessel != sim::state::NO_VESSEL {
         let m = sim::moves::get(p.class, p.vessel);
         line.push_str(&format!("   | stored: {} {}", m.name, roman(p.vessel_tier)));
     }
-    if p.frenzy > 0 {
-        line.push_str(&format!(
-            "   | FRENZY {:.1}s",
-            p.frenzy as f32 / sim::TICK_HZ as f32
-        ));
+    if p.class.wounds_go_grey() {
+        let full = sim::tuning::well_full();
+        if p.well_full() {
+            line.push_str("   | WELL FULL: hold a click past its end");
+        } else if full > 0 {
+            line.push_str(&format!("   | Well {}/{}", p.well, full));
+        }
     }
     line
 }

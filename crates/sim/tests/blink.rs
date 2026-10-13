@@ -45,7 +45,7 @@ fn pool_ahead(w: &mut World, far: i32) -> V3 {
     let at = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(far)));
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 200));
     at
 }
 
@@ -186,7 +186,7 @@ fn nobody_else_blinks_to_her_pools() {
     let at = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(8)));
-    w.effects[0] = Some(Effect::pool(1, Class::BloodMage, b::SWEEP, at, 200));
+    w.effects[0] = Some(Effect::pool(1, Class::BloodMage, b::HAEMORRHAGE, at, 200));
     let start = w.players[0].pos;
     dodge_at(&mut w, at);
     assert!(
@@ -221,7 +221,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let mut w = mage();
     w.players[0].health = t::max_health() - 500;
     w.players[0].grey = 500;
-    let pool = Effect::pool(0, Class::BloodMage, b::SWEEP, at, 300);
+    let pool = Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 300);
     w.effects[0] = Some(pool);
     let radius = t::erupt_radius().mul(Fx::from_int(300).sqrt());
     assert!(
@@ -346,18 +346,18 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     // Three pools: one under the spike, one a stride away, one further still
     // -- inside the second's eruption but outside the first's.
     let first = t::erupt_radius().mul(Fx::from_int(300).sqrt());
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 300));
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 300));
     w.effects[1] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::SWEEP,
+        b::HAEMORRHAGE,
         V3::new(at.x, Fx::ZERO, at.z.add(first.sub(Fx::ratio(1, 2)))),
         300,
     ));
     w.effects[2] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::SWEEP,
+        b::HAEMORRHAGE,
         V3::new(
             at.x,
             Fx::ZERO,
@@ -378,35 +378,16 @@ fn an_eruption_sets_off_every_pool_it_covers() {
         eruptions, 3,
         "three pools in a chain made {eruptions} eruptions"
     );
-    assert!(pools(&w).is_empty(), "a pool survived the chain");
+    // What is on the floor now is only what the spike itself cost her, which
+    // lands where she aimed it as a fresh stain (2026-10-13).
+    let cost = spike.cost * t::max_health() / 100;
+    assert!(
+        pools(&w).iter().all(|p| p.banked <= cost),
+        "a pool survived the chain"
+    );
     assert!(
         w.players[0].health - before > 600 - 20,
         "the chain drank only {} of 700 across three pools",
         w.players[0].health - before
-    );
-}
-
-#[test]
-fn the_scythe_collects_a_pool_it_passes_over_with_nobody_in_it() {
-    let mut w = mage();
-    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    w.players[0].health = t::max_health() - 300;
-    w.players[0].grey = 300;
-    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
-    let ahead = w.players[0]
-        .pos
-        .add(w.players[0].facing.scale(sweep.reach.mul(Fx::ratio(1, 2))));
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, ahead, 100));
-    let before = w.players[0].health;
-    let paid = w.players[0].cost_of(sweep.cost);
-    run(&mut w, 2, keys::SCYTHE, 0);
-    run(&mut w, sweep.whiff_cost() as u32, 0, 0);
-    assert!(
-        pools(&w).is_empty(),
-        "the sweep passed over the pool and left it"
-    );
-    assert!(
-        w.players[0].health > before - paid,
-        "the sweep collected the pool and drank nothing"
     );
 }

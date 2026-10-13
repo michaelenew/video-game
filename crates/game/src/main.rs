@@ -3529,6 +3529,66 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 slab.top.to_f32_for_render(),
             ))
         }
+        // The Blood mage's 0016 (2026-10-13). The Carpet: a disc of blood
+        // on the floor at the radius it hurts in, growing while she holds
+        // it.
+        EffectKind::Carpet if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Essence(2),
+            at,
+            effect.reach.to_f32_for_render(),
+            0.0,
+            0.08,
+        )),
+        // A thrall: a figure of blood the size its stain was, shrinking as it
+        // bites and drains; the golem twice that.
+        EffectKind::Thrall | EffectKind::Golem if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Blood,
+            at,
+            effect.thrall_radius().to_f32_for_render(),
+            0.0,
+            effect.thrall_height().to_f32_for_render(),
+        )),
+        // The Thorn garden: a black disc at the radius it holds in and a
+        // ring of black spikes standing out of it.
+        EffectKind::Thorns if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Shade,
+            at,
+            effect.reach.to_f32_for_render(),
+            0.0,
+            0.06,
+        )),
+        EffectKind::Thorns if part <= THORNS => {
+            let r = effect.reach.to_f32_for_render();
+            let k = part as f32;
+            let turn = k / THORNS as f32 * std::f32::consts::TAU + k * 0.37;
+            let out = r * (0.25 + 0.6 * ((k * 1.9).sin() * 0.5 + 0.5));
+            let grow = (effect.age as f32 / 8.0).min(1.0);
+            Some(standing(
+                Shape::Spike,
+                Skin::Shade,
+                at + Vec3::new(turn.cos() * out, 0.0, turn.sin() * out),
+                0.18,
+                0.0,
+                (1.0 + 0.8 * ((k * 2.7).sin() * 0.5 + 0.5)) * grow,
+            ))
+        }
+        // Exsanguinate, and the Rising reap's sweep: balls of blood flung
+        // out along the cone, the far ones the widest.
+        EffectKind::Exsanguinate if part < sim::effects::TETHER_BEADS => {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let life = effect.life.max(1) as f32;
+            let out = (effect.age as f32 / life * 2.0).min(1.0);
+            let reach = effect.reach.to_f32_for_render();
+            let dir = fx3(effect.dir).normalize_or_zero();
+            Some(floating_in(
+                Skin::Blood,
+                at + dir * reach * t * out + Vec3::Y * 1.0,
+                0.2 + reach * 0.12 * t,
+            ))
+        }
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
             Skin::Light,
@@ -3633,6 +3693,9 @@ const FIELD_SPIKES: usize = 7;
 /// How many wisps a Hemoplague is drawn as, drifting inside its column.
 /// Presentation: the hit test is the column.
 const PLAGUE_WISPS: usize = 8;
+
+/// The Thorn garden's spikes round each root.
+const THORNS: usize = 6;
 
 /// Where the class mechanic sits in the world, if anywhere. A shield in hand
 /// rides on the character and draws nothing; a thrown one, a placed shadow or a

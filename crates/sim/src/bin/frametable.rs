@@ -32,6 +32,11 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
             tenths(m.channel_from),
             tenths(m.reach)
         ),
+        moves::Charge::Field => format!(
+            "the field while held; with a full Well ({}), past {}f it is the finisher",
+            t::well_full(),
+            m.channel
+        ),
         moves::Charge::Tier => format!(
             "tier two at {}f (+{}% of red), three at {}f (+{}%); a jump or dodge stores it",
             t::tier_two(),

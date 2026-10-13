@@ -1,7 +1,7 @@
 ---
-status: proposed 2026-10-13, for the owner's review; nothing built
+status: built 2026-10-13, unplayed
 started: 2026-10-13
-supersedes: 0015 where they differ, once decided
+supersedes: 0015 where they differ
 depends: 0015_blood_mage_blaster.md, ../kits/blood-mage.md
 ---
 
@@ -274,3 +274,67 @@ In order, each stage playable on its own:
   elsewhere.
 - **THRALL-6 · The send costs its stain.** Needed so the door is not a free heal under the new
   rules. About 3% of red.
+
+## 10 · As built, 2026-10-13
+
+The owner's answer: "Thralls attack, and I like the idea that the blood they spill is the damage
+they deal. That keeps them from getting too overwhelming. Thrall bites don't fill the well, they
+leave bloodstains that can be collected to fill the well. She gets a teleport to bloodstains, she
+has the tools to retrieve them, but a teleport to melee is a natural risk for the reward. Go build
+all in sequence."
+
+So the questions closed as follows:
+
+- **THRALL-1.** A bite **spends what it deals**: `thrall_bite`% of the thrall's essence (never
+  less than `thrall_bite_least`), dealt as the blow and spilled whole as a stain under the prey.
+  A thrall eats itself into stains on what it bites. Built.
+- **THRALL-2.** Coagulate on `Q`. Built: her stains within `coagulate_reach` of the crosshair's
+  floor slide there at `coagulate_speed` and merge.
+- **THRALL-3.** Bites fill nothing. The Well fills from **overflow only** -- what a drink brings
+  back that her red cannot hold. An eruption is a drink (the spike drinks the stain it lands
+  over), so eruptions fill it that way rather than by a separate half.
+- **THRALL-4.** Hold the click to the end of its hold with a full Well. Built for all three.
+- **THRALL-5.** The Haemorrhage is the left click tapped, floor and air; the Transfusion is gone.
+- **THRALL-6.** The send costs `send_cost`% of red, and that is the stain it lands as.
+
+What was built, in the order of §8:
+
+1. **Uniform stains.** No special stains; every cost lands as a stain where it was aimed (the
+   crosshair's floor for a grounded or a skillshot move, her feet otherwise); walking always
+   drinks, and a stain must have settled (`stain_settles`) before anything drinks it; eruptions
+   spill nothing. The jump row works once in the air.
+2. **The Carpet of blood** (`World::step_carpets`). Laid at the crosshair's floor when the
+   Haemorrhage's startup ends with the click still down; grows from `carpet_from` to `carpet_to`
+   over the move's channel (90 frames), takes 1% of her red every `carpet_pays_every` into
+   itself, hurts and slows on `carpet_tick`, and breaks into `carpet_stains` stains the moment
+   she is not holding it. What it hurts bleeds into stains of its own, as every blow does.
+3. **Thralls** (`World::step_thralls`). The Summon, held `summon_at` frames, stands every stain
+   of hers within `summon_reach` up in its own slot -- a stain on legs, same essence, same
+   drain -- up to `thrall_cap`. A thrall goes for the nearest enemy body within `thrall_seek` of
+   where it was sent, bites every `thrall_bite_every`, and dies to any blow out on it (a
+   fighter's attack volume or the creature's), falling back into a stain of what it had less
+   the blow. **Command** sets where they are sent to the crosshair's floor. The **Rising reap**
+   (space + right) hurls thralls in its cone at `reap_hurl` for `reap_hurl_for` frames, drinks
+   her settled stains in it, and lightly hits and launches whoever is in it.
+4. **The Well and the finishers.** `Player::well`, full at `well_full`. **Thorn garden**: every
+   stain within `garden_reach` of the crosshair becomes a root of thorns, `garden_base` plus
+   `garden_per_root` per `pool_full` of essence wide, rooting and hurting on `garden_tick` for
+   `garden_lasts`. **Exsanguinate**: the cone in front, `exs_cone` wide and the row's reach
+   long, takes every stain of hers in it into one blow of the row's damage plus
+   `exs_per_essence` per essence. **Blood golem**: her thralls and stains within `golem_fuse` of
+   the crosshair fuse with the spent Well into one thrall that loses essence to blows instead of
+   dying, walks at `golem_speed` and punches for its row's damage every `golem_punch_every`.
+5. **Creatures notice thralls** (`state::decoy_for`). What a creature is shown of her is her
+   golem while it stands, else her nearest thrall when one is nearer it than she is. Its blows
+   then land on the thrall.
+
+What the build did not do and should be looked at in play:
+
+- **Thralls walk through nothing**: they are pushed out of boxes (`Terrain::resolve_sized`) but
+  do not path round them.
+- **Thralls do not bite critters**; a pack's gnawers ignore them and they ignore the gnawers.
+- **Her own clips.** Every new move is on the nearest of her five existing clips
+  (`view::play`).
+- **The numbers are first guesses**, chosen so the tests pass and the shapes read: the carpet
+  (1.5 to 6 m, 12 a tick every half second, 1% every 8 frames), thralls (7 m/s, 30% a bite every
+  half second), the Well (400), the finishers' windups (45 to 50 frames).

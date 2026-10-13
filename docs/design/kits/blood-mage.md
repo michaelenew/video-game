@@ -1,9 +1,10 @@
 ---
-status: built — v1, then on three clicks (2026-10-09), then the blaster (2026-10-12); unplayed
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), then thralls and the Well (2026-10-13); unplayed
 decided: 2026-09-09
 revised: 2026-09-23
 revised: 2026-10-12
-sources: ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
+revised: 2026-10-13
+sources: ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
 ---
 
 # Blood mage — kit
@@ -34,7 +35,71 @@ grows with how open she has left herself, and a floor she wants to fight on.
 > and the questions still open are
 > [../exploration/0015_blood_mage_blaster.md](../exploration/0015_blood_mage_blaster.md).
 
-## The blaster — built 2026-10-12
+> **Thralls and the Well, 2026-10-13 — built, unplayed.** The owner's verdict on the blaster:
+> the stains and the detonation chain are the class, but the snowball feeds itself, the start
+> costs most of her bar, and the moves are not synergistic. §"Thralls and the Well" below is
+> what is in the game now; **where anything after it disagrees, it wins.** The direction, the
+> nine combos and the answers are
+> [../exploration/0016_blood_mage_thralls_and_the_well.md](../exploration/0016_blood_mage_thralls_and_the_well.md).
+
+## Thralls and the Well — built 2026-10-13
+
+| | Left: my blood | Middle: your blood | Right: the dead |
+| --- | --- | --- | --- |
+| **Tapped** | **Haemorrhage** (floor and air) | **Black spike**, held in tiers (air: **Stake**) | **Command** |
+| **Held** | **Carpet of blood** | (the tiers) | **Summon** |
+| **Held to the end, Well full** | **Thorn garden** | **Exsanguinate** | **Blood golem** |
+| **Space + click**, floor or once in the air | **Blood wings** | **Upheaval** | **Rising reap** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | **Coagulate** |
+| `E` | **Hemoplague** |
+| `shift` + direction | The **teleport** to a stain under the crosshair; otherwise the **Sanguine flow**, which sends a glob that lands as a stain |
+
+**The rows were retuned, not renumbered**, and two were appended: the Transfusion's row is the
+Carpet, the sweep's Command, Tides' the Summon, the chain's Coagulate, the leap's the Rising
+reap, Frenzy's the Thorn garden; Exsanguinate and the golem are new (`sim::moves::blood`).
+`tests/blood_mage.rs` holds one test per move and rule.
+
+### Every stain is one kind
+
+- **Every cost is a stain.** What a press costs lands where it was aimed -- the crosshair's
+  floor for a grounded or skillshot move, her feet otherwise. Nothing she spends is lost; it is
+  on the floor, hers to take back.
+- **Every hit is a stain**, hers or a thrall's: under what it hit, the size of the blow.
+- **Every stain is collected the same way**: walked into, teleported to, hit through, or drunk
+  by the spike erupting it. A stain settles for `stain_settles` frames before anything drinks
+  it, so a cost does not heal on the frame it is paid. **Eruptions spill nothing**: the spike out
+  of a stain spends it, so the same spot runs out instead of growing.
+- **What her red cannot hold fills the Well** (`Player::absorb`). A thrall's bite fills nothing
+  directly; it leaves a stain, and the stain is what fills the Well when she takes it.
+
+### Thralls
+
+A thrall is **a stain on legs**: the Summon, held `summon_at` frames, stands every stain of hers
+within `summon_reach` up in its own slot, with its essence, draining as it did, up to
+`thrall_cap`. It goes for the nearest enemy body within `thrall_seek` of where it was sent, and
+**a bite spends what it deals** -- `thrall_bite`% of it, at least `thrall_bite_least` -- and
+spills that as a stain under the prey. **One blow kills it**, and it falls back into a stain of
+what it had less the blow. Command sends them to the crosshair's floor; the Rising reap hurls
+them along its cone. A creature turns on a thrall nearer it than she is, and on the golem
+always.
+
+### The Carpet, and the finishers
+
+The Carpet is laid at the crosshair's floor when the Haemorrhage's startup ends with the click
+held. It grows for as long as she holds it, pays 1% of her red every `carpet_pays_every` into
+itself, hurts and slows what is on it, and **breaks into stains** the moment she lets go, is hit,
+or turns it into the Thorn garden. With a full Well, a hold kept to its end becomes:
+
+- **Thorn garden** (left): every stain near the crosshair becomes a root of thorns, wider the
+  more it held, that holds and hurts whoever is in it.
+- **Exsanguinate** (middle): every stain in the cone in front of her torn into one blow.
+- **Blood golem** (right): her thralls and stains at the crosshair fused with the Well into one
+  great thrall that takes blows off its essence and punches.
+
+## The blaster — built 2026-10-12 (superseded 2026-10-13)
 
 | | Left: my blood | Middle: your blood | Right: the scythe |
 | --- | --- | --- | --- |
@@ -52,8 +117,7 @@ grows with how open she has left herself, and a floor she wants to fight on.
 Grasp's the Hemoplague, the nova's Tides, the jet's the wings, Marionette's the Upheaval, the
 Nail's the Stake, the Hook's the chain, Harvest's the leap, and Frenzy was appended
 (`sim::moves::blood`). The Bloodletter and Grasp effects are still in the simulation and
-nothing casts them. `tests/blood_mage_blaster.rs` holds one test per move and rule, and the
-*Meteor storm* combo end to end.
+nothing casts them. Its tests were folded into `tests/blood_mage.rs` in 2026-10-13.
 
 ### The charge
 

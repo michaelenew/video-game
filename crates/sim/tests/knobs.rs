@@ -161,7 +161,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "pub const SCYTHE: u16 = Input::RIGHT",
-        "A binding, not a magnitude: which button is the Blood mage's scythe click.",
+        "A binding, not a magnitude: which button is the Blood mage's right click (Command and the Summon).",
     ),
     (
         "pub const SPIKE_FIELD: i32 = 2",
@@ -172,18 +172,19 @@ const EXEMPT: &[(&str, &str)] = &[
         "A code, not a magnitude: what `Effect::banked` says a Black spike is (an area that only hits).",
     ),
     (
-        "_ if path.length().raw() < m.reach.sub(Fx::ratio(1, 4)).raw() => {",
-        "A tolerance on a comparison: how near the range sphere the end of Reaper's chain's \
-         path counts as having met nothing at all. Not a feel number.",
+        "pub const GATHER: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Blood mage's Coagulate.",
     ),
     (
-        ".max(Fx::ratio(1, 5))",
-        "A floor on the time Reaper's leap takes, so a leap aimed at her own feet is not a \
-         division by nothing. The leap's speed is the knob (`tuning::reaper_leap_speed`).",
+        "pub const SPIKE_ERUPTION: i32 = 1",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (an eruption \
+         out of a stain, which spills nothing).",
     ),
     (
-        "pub const FRENZY: u16 = Input::SPECIAL",
-        "A binding, not a magnitude: which button is the Blood mage's Frenzy.",
+        "let out = carpet.reach.mul(Fx::ratio(2, 3))",
+        "A shape, not a feel: the ring the Carpet's stains are laid on when it breaks, \
+         two-thirds of the way out so they sit inside what it covered. How many there are \
+         is the knob (`tuning::carpet_stains`).",
     ),
     (
         "pub const PLAGUE: u16 = Input::MECHANIC",

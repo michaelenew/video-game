@@ -331,13 +331,6 @@ fn best_case(m: &Move) -> i32 {
         Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
         Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
         // The bolt cuts once, and then the bleed it opened runs its length.
-        // The Transfusion flies the same bolt and opens nothing; its best is
-        // its third tier.
-        Some(EffectKind::Haemorrhage) if m.name == "Transfusion" => {
-            sim::fixed::Fx::from_int(m.damage)
-                .mul(t::tier_three_power())
-                .to_int()
-        }
         Some(EffectKind::Haemorrhage) => {
             EffectKind::Haemorrhage.damage(m)
                 + t::bleed_damage() * (t::bleed_lasts() / t::bleed_tick()) as i32
@@ -407,6 +400,15 @@ fn best_case(m: &Move) -> i32 {
             // move, and are the move's own one hit.
             | EffectKind::Nova
             | EffectKind::Nail
+            // Hers of 2026-10-13 are placed by the world too, never by a
+            // row's code: the carpet and the thorns are fields the world
+            // ticks, a thrall and the golem bite with what they hold, and the
+            // cone is the picture of a blow already landed.
+            | EffectKind::Carpet
+            | EffectKind::Thrall
+            | EffectKind::Thorns
+            | EffectKind::Golem
+            | EffectKind::Exsanguinate
             // The Dual mage's bolts, burst and ray are each the move's one
             // hit; what a reaction adds is the hex's, not the move's.
             | EffectKind::ShadeBolt
@@ -575,11 +577,12 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // the three takeoffs -- 2026-10-10, see
             // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
             Class::Bulwark => 7,
-            // Twelve: the three clicks on the floor (Tides is the scythe
-            // held), in the air and leaving it, Tides itself, the Hemoplague
-            // on `E` and Frenzy on `Q` -- the blaster, 2026-10-12. See
-            // `docs/design/exploration/0015_blood_mage_blaster.md`.
-            Class::BloodMage => 12,
+            // Fourteen: the two taps and their two fields (the Haemorrhage
+            // and the Carpet, Command and the Summon), the spike and the
+            // Stake, the three takeoffs, Coagulate on `Q`, the Hemoplague on
+            // `E`, and the three finishers -- 2026-10-13. See
+            // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+            Class::BloodMage => 14,
             // Eleven: three clicks on the floor, in the air and leaving it,
             // and the two majors -- every move a spell, 2026-10-09. See
             // `docs/design/exploration/0010_dual_mage_spells.md`.
@@ -1353,7 +1356,7 @@ fn every_class_has_a_move_that_carries_the_body() {
                 w.effects[0] = Some(sim::effects::Effect::pool(
                     0,
                     Class::BloodMage,
-                    moves::blood::SWEEP,
+                    moves::blood::HAEMORRHAGE,
                     at,
                     200,
                 ));

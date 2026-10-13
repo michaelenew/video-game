@@ -419,31 +419,31 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Blood mage",
         in_browser: true,
-        blurb: "The blaster. Her blood goes out and theirs comes back: every cast costs health, every hit she lands leaves a stain of the other body's blood, and a stain is health -- walk into it, teleport to it or hit through it. Her three clicks are my blood, your blood and the scythe: held on the floor through three tiers, quick in the air, a takeoff with space. A jump or a dodge out of a hold keeps the charge to let go later. Built 2026-10-12 and unplayed; docs/design/exploration/0015_blood_mage_blaster.md is the design.",
+        blurb: "The summoner who pays in blood. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land, yours or a thrall's, leaves a stain of the other body's blood. Every stain is one kind: walk into it, teleport to it or hit through it and it is yours, and what your health cannot hold fills the Well. A tap is the quick thing and a hold is the field; with a full Well, a hold kept to its end becomes a finisher. Built 2026-10-13 and unplayed; docs/design/exploration/0016_blood_mage_thralls_and_the_well.md is the design.",
         entries: &[
             e(
                 "Left click",
-                "My blood. Hold for the Transfusion: a bolt down the crosshair -- tapped, a quick one; at the second tier a heavy bolt through everybody on the line; at the third a lance that throws its victim back. Each tier costs more of your health as you reach it. In the air it is the Haemorrhage: a bolt that opens a bleed, and a bleeding body drips stains as it goes.",
+                "Tapped, the Haemorrhage: a bolt down the crosshair that opens a bleed, and a bleeding body drips stains as it goes. Held past the bolt's wind-up, the Carpet of blood: a disc of blood on the floor where you aim, growing for as long as you hold it and costing you as it grows, hurting and slowing everybody on it. Let go and it breaks into stains. With a full Well, held to its end, it becomes the Thorn garden: every stain near the crosshair bursts into black thorns that hold and hurt whoever is in them.",
             ),
             e(
                 "Middle click",
-                "Your blood. Hold for the Black spike: tapped, one spike out of the floor at the crosshair after a delay; at the second tier three in a triangle; at the third a field that comes up in waves. On a stain the stain erupts, and every stain near it with it. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor.",
+                "Hold for the Black spike: tapped, one spike out of the floor at the crosshair after a delay; at the second tier three in a triangle; at the third a field that comes up in waves. On a stain the stain erupts, and every stain near it with it -- an eruption spends the stain and leaves nothing behind. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. With a full Well, held to its end, it becomes Exsanguinate: every stain in the cone in front of you is torn into one blow on whoever is in it.",
             ),
             e(
                 "Right click",
-                "The scythe. Tapped, the Reaping sweep, whose reach grows with your grey health. Held past the swing's wind-up, Tides: the scythe whirled overhead and let go as a ring of blood round you, wider and harder by the tier. In the air it is Reaper's chain: thrown at exactly where the crosshair is, it yanks a fighter to you, pulls you to anything else, and with nothing there still pulls you a little way.",
+                "Tapped, Command: your thralls go to the crosshair's spot on the floor and fight round it. Held, the Summon: stand still a moment and every stain near you stands up as a thrall of exactly its size -- up to six. A thrall goes for the nearest body near where it was sent and bites it; a bite deals what the thrall spends of itself and spills it as a stain under its prey. Any one blow kills a thrall, and it falls back into a stain of what it had left. With a full Well, held to its end, the Summon becomes the Blood golem: your thralls and stains at the crosshair fuse with the Well into one great thrall that takes many blows.",
             ),
             e(
                 "Space + a click",
-                "The takeoffs. Space and left is Blood wings: a burst along your aim, any way at all, hurting whoever is beside you and leaving a stain of your own blood to teleport back to. Space and middle is the Upheaval: a geyser at the crosshair that launches, with a hop for you -- Stake them up there. Space and right is Reaper's leap: a jump to the crosshair's spot on the floor, the scythe brought down as you land, drinking every stain round it.",
+                "The takeoffs, from the floor and once in the air. Space and left is Blood wings: a burst along your aim, any way at all, hurting whoever is beside you. Space and middle is the Upheaval: a geyser at the crosshair that launches, with a hop for you -- Stake them up there. Space and right is the Rising reap: a sweep up and out in front of you that hurls your thralls along it, drinks your stains in it and lightly hits whoever is there.",
             ),
             e(
-                "Jump or dodge while holding a charge",
-                "Stores it in your vessel at the tier it reached: you jump or dodge as normal, and a fresh press of the same click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
+                "Jump or dodge while holding the spike",
+                "Stores it in your vessel at the tier it reached: you jump or dodge as normal, and a fresh press of the middle click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
             ),
             e(
                 "Q",
-                "Frenzy. You plant, and everything bends round you: everybody close is hurt and starts to bleed, and your stains rush to you and explode. Nothing heals you while it lasts, your grey drains fast, and when it ends whatever grey is left is gone for good. A teleport to a stain -- a runner's bleed leaves a road of them -- buys more of it.",
+                "Coagulate: every stain of yours near the crosshair slides there and they merge into one.",
             ),
             e(
                 "E",
@@ -451,11 +451,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift + direction, crosshair on a stain",
-                "The teleport: you are at the stain, you drink it, and you arrive in a burst of blood -- from the air too. With no stain under the crosshair the dodge is the Sanguine flow, a slide along the floor as blood that drinks every stain you cross, and it sends a glob of your blood to the crosshair's spot on the floor: a door. Dodge again with the crosshair on it and you are there. Send, zip, send. Your own blood never heals you -- it is only a door.",
+                "The teleport: you are at the stain, you drink it, and you arrive in a burst of blood -- from the air too. A teleport into a fight is the risk you take for the stain. With no stain under the crosshair the dodge is the Sanguine flow, a slide along the floor as blood that drinks every stain you cross, and it sends a glob of your blood to the crosshair's spot on the floor -- a stain like any other, so the next dodge can take you there.",
             ),
             e(
                 "Walking into a stain",
-                "Drinks it. Every stain of another body's blood is health: walk into it, teleport to it, or hit through it -- a blow through a stain is harder for it.",
+                "Drinks it, whoever's blood it is. What your health cannot hold goes into the Well, and the state line shows how full it is.",
             ),
         ],
     },
@@ -810,7 +810,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p sim --bin essence",
-                "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the scythe's reach at each level of grey. The first thing to run after touching the class.",
+                "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the Well. The first thing to run after touching the class.",
             ),
             e(
                 "cargo run -p sim --bin elemental",

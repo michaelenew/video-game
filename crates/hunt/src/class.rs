@@ -256,11 +256,7 @@ impl Uses {
             Class::BloodMage => vec![
                 ("spikes", self.spikes, "Black spikes thrown"),
                 ("on a pool", self.erupted, "of those, at a pool under it"),
-                (
-                    "charges",
-                    self.charges,
-                    "Transfusions held to the third tier",
-                ),
+                ("charges", self.charges, "Summons held to raise her stains"),
                 ("plagues", self.plagues, "Hemoplagues on it"),
                 ("cuts", self.cuts, "Haemorrhages from range"),
                 ("blinks", self.blinks, "to a pool, in or out"),
@@ -434,16 +430,15 @@ impl Hands {
 
     /// **How far from what it is hitting this class hits it from.** The poke's
     /// reach -- the bolt's nine metres, for the Elementalist -- and for the
-    /// Blood mage the scythe's as it is now, grey making it longer: her poke
-    /// slot is the Bloodletter, a thrown blade, and a plan that walked to its
-    /// seven metres swung her scythe at the air. A plan that walks to "in
-    /// reach" walks this far.
+    /// Blood mage half her Haemorrhage's: she has no blade since 2026-10-13,
+    /// and a plan that walks to "in reach" walks this far, near enough for
+    /// her stains to land where she can reach them.
     pub fn reach(&self, me: &Player) -> Fx {
         let poke = moves::get(me.class, SLOT_POKE);
         match me.class {
-            Class::BloodMage => {
-                sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP))
-            }
+            Class::BloodMage => moves::get(me.class, moves::blood::HAEMORRHAGE)
+                .reach
+                .mul(Fx::ratio(1, 2)),
             _ => sim::state::live_reach(me, &poke),
         }
     }
@@ -568,9 +563,9 @@ impl Hands {
 
     /// The Blood mage: **the spike on a pool under it**, which drinks the pool
     /// whole and comes up half again as hard; **the Hemoplague** on it in a
-    /// long window; **the Transfusion held to its third tier** from range in a
-    /// long window; **the cut** from beyond the scythe; and the scythe, which
-    /// drinks what it passes over.
+    /// long window; **the Summon** when her stains are round her; **the cut**
+    /// from range; **Command** onto it when she has thralls standing; and the
+    /// Haemorrhage in reach.
     fn bleed(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let red = me.health * 100 / me.full_health().max(1);
         let far = flat(at.sub(me.pos)).flat_len();
@@ -597,7 +592,7 @@ impl Hands {
             self.uses.plagues += 1;
             return self.look_keeping(me, plan, at, b);
         }
-        let sweep = sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP));
+        let sweep = self.reach(me);
         if let Some(input) = self.charge(w, me, at, plan, window, red) {
             return input;
         }
@@ -612,60 +607,81 @@ impl Hands {
             self.uses.cuts += 1;
             return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
         }
-        // **The scythe, not the plan's heavy**, in its reach: a plan's heavy
-        // is her Haemorrhage, four in a hundred of her red for thirty against
-        // something that does not bleed, where the scythe costs one and
-        // drinks the pools under it.
-        // The scythe is her right click since 2026-10-09; asked of the kit
-        // rather than written down, as every other button here is.
-        let scythe = self.button(me, moves::blood::SWEEP).unwrap_or(Input::LEFT);
-        if plan.bits & ATTACKS != scythe {
-            if far.raw() < sweep.add(Fx::ratio(5, 10)).raw() {
-                return Input::looking_at((plan.bits & !ATTACKS) | scythe, plan.aim, plan.pitch);
-            }
-            if red < RED_CUT {
-                return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
-            }
+        // **Her thralls, sent onto it**, when she has any standing: a tap
+        // of Command on where it is.
+        let thralls = w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
+            .count();
+        if thralls > 0
+            && self.ready(w, me, moves::blood::COMMAND)
+            && let Some(b) = self.button(me, moves::blood::COMMAND)
+            && plan.bits & ATTACKS != b
+        {
+            return self.look_keeping(me, plan, at, b);
+        }
+        // In reach, the Haemorrhage rather than the plan's own press.
+        if far.raw() < sweep.add(Fx::ratio(5, 10)).raw()
+            && red >= RED_CUT
+            && let Some(b) = self.button(me, moves::blood::HAEMORRHAGE)
+        {
+            return self.look_keeping(me, plan, at, b);
+        }
+        if red < RED_CUT {
+            return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
         }
         plan
     }
 
-    /// The Transfusion held to its third tier, if it is worth holding: from
-    /// beyond the scythe and inside the bolt's reach, in a window long enough
-    /// for the hold and the cast, with red to spare. The lance is the biggest
-    /// single blow she has from range.
+    /// **Summon**, held until her stains stand up, if there are stains of
+    /// hers near her to raise and room for more thralls. What it costs is
+    /// the hold: she stands still for it, so only in a long window.
     fn charge(
         &mut self,
         w: &World,
         me: &Player,
-        at: V3,
+        _at: V3,
         plan: Input,
         window: i32,
         red: i32,
     ) -> Option<Input> {
-        let bolt = moves::get(me.class, moves::blood::TRANSFUSION);
-        let far = flat(at.sub(me.pos)).flat_len();
-        let sweep = sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP));
-        let frames = sim::tuning::tier_three() + 2;
-        if red < RED_CHARGE
-            || far.raw() < sweep.add(Fx::ONE).raw()
-            || far.raw() > bolt.reach.sub(Fx::ratio(5, 10)).raw()
-            || window < frames as i32 + (bolt.startup + bolt.active) as i32 + LONG_WINDOW
+        let frames = sim::tuning::summon_at() + 2;
+        let near = self
+            .pools_of(w, 1)
+            .filter(|p| flat(p.sub(me.pos)).flat_len().raw() <= sim::tuning::summon_reach().raw())
+            .count();
+        let standing = w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
+            .count() as i32;
+        if red < RED_CUT
+            || near == 0
+            || standing >= sim::tuning::thrall_cap()
+            || window < frames as i32 + LONG_WINDOW
             || self.cool > 0
-            || !self.ready(w, me, moves::blood::TRANSFUSION)
+            || !self.ready(w, me, moves::blood::SUMMON)
         {
             return None;
         }
-        let b = self.button(me, moves::blood::TRANSFUSION)?;
+        let b = self.button(me, moves::blood::SUMMON)?;
         self.uses.charges += 1;
         self.rest();
+        let here = me.pos;
         self.seq = Some(Seq::Hold {
             bits: b,
-            at,
+            at: here,
             left: frames,
         });
         self.fresh = true;
-        Some(self.look_keeping(me, plan, at, b))
+        Some(Input::looking_at(
+            plan.bits & !ATTACKS | b,
+            plan.aim,
+            plan.pitch,
+        ))
     }
 
     /// The nearest of her pools to `at`, if one lies under it.
@@ -1018,9 +1034,8 @@ impl Hands {
                 Some(self.look(me, chest(shadow.pos), Input::SHIFT | Input::W))
             }
             Class::BloodMage => {
-                // **From range she does not need a way in**: a Transfusion
-                // held to its third tier is the lance, and the stain it
-                // leaves is a spike's worth for the next window.
+                // **From range she does not need a way in**: her stains round
+                // her stood up as thralls go in for her.
                 let red = me.health * 100 / me.full_health().max(1);
                 if let Some(input) = self.charge(w, me, at, self.look(me, at, 0), window, red) {
                     return Some(input);

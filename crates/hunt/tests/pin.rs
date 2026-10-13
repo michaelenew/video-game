@@ -62,7 +62,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Transfusion to its third tier and drops a Hemoplague where it held a
     // Grasp, and every stain she makes is collected; and again for her dodge
     // sending her blood ahead. See feel-log.md.
-    (Class::BloodMage, 83, 0x9181c4ba52fc9a08),
+    (Class::BloodMage, 83, 0xb58a5d97843264d9),
 ];
 
 #[test]

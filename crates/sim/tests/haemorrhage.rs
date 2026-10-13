@@ -386,15 +386,20 @@ fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
     w.players[0].health = t::max_health() - 300;
     w.players[0].grey = 300;
     let at = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
+    let mut pool = Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 200);
+    // Settled: a stain is drunk only once it has (`tuning::stain_settles`).
+    pool.age = t::stain_settles();
+    w.effects[0] = Some(pool);
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(m.cost);
     bolt_the_dummy(&mut w, 4);
     let got = w.players[0].health - (before - paid);
-    let expect = m.drinks(200);
+    // What the cast cost lands where she aimed it -- on this stain, which it
+    // joins -- so the drink is of both (2026-10-13).
+    let expect = m.drinks(200 + paid);
     assert!(
         got >= expect - 4 && got <= expect,
-        "the bolt drank {got} of a pool of 200 at {}%",
+        "the bolt drank {got} of a pool of 200 and its cost at {}%",
         m.drink
     );
     // One and done: only the cut's own fresh pool is left.

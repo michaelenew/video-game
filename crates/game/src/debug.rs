@@ -278,6 +278,34 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
+            // The Carpet and the Thorn garden: the discs they hurt in.
+            EffectKind::Carpet | EffectKind::Thorns => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.reach.to_f32_for_render(),
+                    sim::tuning::body_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // A thrall and the golem: the column a blow has to touch.
+            EffectKind::Thrall | EffectKind::Golem => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.thrall_radius().to_f32_for_render(),
+                    effect.thrall_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // Exsanguinate's cone: its middle line, as far as it reaches.
+            EffectKind::Exsanguinate => {
+                gizmos.line(
+                    at,
+                    v3(effect.pos.add(effect.dir.scale(effect.reach))),
+                    PILLAR,
+                );
+            }
             // The Blood nova and the Nail: the spheres they hit with.
             EffectKind::Nova => {
                 gizmos.sphere(

@@ -213,6 +213,27 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-13 — the Blood mage: thralls and the Well
+**Changed** The blaster's kit (0015) replaced by 0016's: the Transfusion, the sweep, Tides,
+Reaper's chain, Reaper's leap and Frenzy are gone; the Haemorrhage is the left click tapped
+everywhere, the Carpet of blood the left click held, Command and the Summon the right click,
+the Rising reap space + right, Coagulate `Q`; a full Well (400) turns each click's longest hold
+into the Thorn garden, Exsanguinate or the Blood golem. Every cost lands as a stain where it was
+aimed; eruptions spill nothing; overflow from a drink fills the Well. Thralls: 7 m/s, seek 6 m
+round where they were sent, a bite every 30 frames spending 30% of the thrall (at least 10) as
+the blow and the stain, one blow kills. Carpet: 1.5 m growing to 6 m over 90 frames, 12 a tick
+every 30 frames, slow to 0.5, 1% of red every 8 frames, breaks into 5 stains. Thorn garden root
+1.5 m plus 1.5 m per full stain (raised from the first guess of 0.2, which made a root no wider
+than a body).
+**Why** The owner's verdict on the blaster: the stains and the detonation chain are the class,
+but every eruption left a stain so the spot grew stronger the more she hit it, the start cost
+most of her bar, the scythe and the hook were never worth it, Frenzy got her trampled, and the
+moves did not combine. Thralls whose bites spend themselves are a summon that cannot snowball:
+what they deal is exactly the blood they turn into, and it is on the floor for her to fetch.
+**Verdict** open — unplayed. Watch first: whether the thralls' bite (30% every half second)
+makes a summon of six last long enough to matter, and whether the Carpet's 1% every 8 frames
+is a price or a rounding error.
+
 ### 2026-09-10 — opening numbers
 **Changed** everything, from nothing. First playable values.
 **Why** They needed to be *something* to be judged. Chosen so the relationships

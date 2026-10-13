@@ -290,6 +290,32 @@ pub enum EffectKind {
     /// hit: no stun, no shove, so it holds nobody -- and what it spills goes
     /// to one stain at its centre. See `state::World::step_the_plague`.
     Plague,
+    /// Blood mage, **the Carpet of blood** (2026-10-13): a disc of blood on
+    /// the floor where she aimed, `reach` across and growing for as long as
+    /// she holds the click. It slows and hurts what is inside on a tick, and
+    /// `banked` is the blood in it -- what she paid and what it spilled --
+    /// which it breaks into as stains when she lets go. See
+    /// `state::World::step_carpets`.
+    Carpet,
+    /// Blood mage, **a thrall** (2026-10-13): a stain on legs. `banked` is
+    /// its essence, exactly a stain's, draining as a stain's would; `home` is
+    /// where she sent it. It bites what it reaches, and each bite deals what
+    /// it spends and spills that much under its prey. Any one blow kills it,
+    /// and it falls back into a stain of what it had, less the blow. See
+    /// `state::World::step_thralls`.
+    Thrall,
+    /// Blood mage, **the Thorn garden** (2026-10-13): black branches out of
+    /// the floor where a stain of hers was, `reach` across, rooting and
+    /// hurting whoever is in them on a tick. A finisher.
+    Thorns,
+    /// Blood mage, **the Blood golem** (2026-10-13): a thrall that takes
+    /// several blows. `banked` is its essence and its health at once; `home`
+    /// is where she sent it. A finisher.
+    Golem,
+    /// Blood mage, **Exsanguinate** (2026-10-13): the vast cone in front of
+    /// her, `reach` long along `dir`. The blow lands on the frame it is cast;
+    /// this is the picture of it. A finisher.
+    Exsanguinate,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -408,6 +434,11 @@ impl EffectKind {
             EffectKind::ShadowFan => "shadow blades",
             EffectKind::ShadowRing => "shadow ring",
             EffectKind::Plague => "hemoplague",
+            EffectKind::Carpet => "carpet of blood",
+            EffectKind::Thrall => "thrall",
+            EffectKind::Thorns => "thorn garden",
+            EffectKind::Golem => "blood golem",
+            EffectKind::Exsanguinate => "exsanguinate",
         }
     }
 
@@ -482,8 +513,14 @@ impl EffectKind {
             // on the floor where she landed.
             EffectKind::ShadowWhirl | EffectKind::ShadowFan => false,
             EffectKind::ShadowBurst | EffectKind::ShadowRing => true,
-            // A cloud standing on the floor where she aimed it.
-            EffectKind::Plague => true,
+            // A cloud standing on the floor where she aimed it, and the rest
+            // of hers on the floor too -- the cone is drawn from her feet.
+            EffectKind::Plague
+            | EffectKind::Carpet
+            | EffectKind::Thrall
+            | EffectKind::Thorns
+            | EffectKind::Golem
+            | EffectKind::Exsanguinate => true,
         }
     }
 
@@ -617,6 +654,13 @@ impl EffectKind {
             // The Blood mage's cloud, 2026-10-12: cast at the crosshair's
             // spot on the floor like any grounded thing.
             28 => Some(EffectKind::Plague),
+            // The rest of hers are put in the world by the move that makes
+            // them; listed so the numbering is complete.
+            29 => Some(EffectKind::Carpet),
+            30 => Some(EffectKind::Thrall),
+            31 => Some(EffectKind::Thorns),
+            32 => Some(EffectKind::Golem),
+            33 => Some(EffectKind::Exsanguinate),
             _ => None,
         }
     }
@@ -693,6 +737,12 @@ impl EffectKind {
                     .max(1) as u16
             }
             EffectKind::Plague => t::plague_lasts(),
+            // The carpet, a thrall and the golem have no clock: the carpet
+            // breaks when she lets go, the other two are gone when they run
+            // dry -- see `state::World::step_carpets` and `step_thralls`.
+            EffectKind::Carpet | EffectKind::Thrall | EffectKind::Golem => u16::MAX,
+            EffectKind::Thorns => t::garden_lasts(),
+            EffectKind::Exsanguinate => t::spell_flash().saturating_mul(2),
         }
     }
 
@@ -760,6 +810,14 @@ impl EffectKind {
             EffectKind::ShadowRing => t::shadow_ring_damage(),
             // The move's own number, on every tick.
             EffectKind::Plague => m.damage,
+            // The move's own number: the carpet's tick, the thorns' tick, the
+            // golem's punch, the cone's blow. A thrall's bite is what it
+            // spends, not a number of its own.
+            EffectKind::Carpet
+            | EffectKind::Thorns
+            | EffectKind::Golem
+            | EffectKind::Exsanguinate => m.damage,
+            EffectKind::Thrall => 0,
         }
     }
 }
@@ -899,6 +957,14 @@ impl Effect {
             EffectKind::BlackSpike => Control::slowing(t::slow_frames(), t::spike_slow()),
             EffectKind::GuillotineLotus => Control::slowing(t::slow_frames(), t::lotus_slow()),
             EffectKind::Grasp => Control::grabbing(self.source().grabs),
+            // Her carpet slows what is in it; her thorns hold it.
+            EffectKind::Carpet => {
+                Control::slowing(t::carpet_tick().saturating_add(10), t::carpet_slow())
+            }
+            EffectKind::Thorns => Control {
+                grabs: t::garden_root(),
+                ..Control::slowing(t::garden_root(), t::carpet_slow())
+            },
             _ => Control::default(),
         }
     }
@@ -1085,6 +1151,8 @@ impl Effect {
             EffectKind::ShadowBurst => self.reach,
             EffectKind::ShadowRing => self.reach,
             EffectKind::Plague => self.reach,
+            EffectKind::Carpet | EffectKind::Thorns | EffectKind::Exsanguinate => self.reach,
+            EffectKind::Thrall | EffectKind::Golem => self.thrall_radius(),
         }
     }
 
@@ -1570,6 +1638,41 @@ impl Effect {
             banked: volume,
             power: Fx::ONE,
         }
+    }
+
+    /// Is this a thrall or the golem -- blood on legs?
+    pub const fn is_a_thrall(&self) -> bool {
+        matches!(self.kind, EffectKind::Thrall | EffectKind::Golem)
+    }
+
+    /// How wide a thrall stands: its stain's width, and the golem
+    /// `tuning::golem_size` times that.
+    pub fn thrall_radius(&self) -> Fx {
+        let r = t::body_radius().mul(self.pool_share());
+        if matches!(self.kind, EffectKind::Golem) {
+            r.mul(t::golem_size())
+        } else {
+            r
+        }
+    }
+
+    /// How tall it stands: its stain's height, and the golem
+    /// `tuning::golem_size` times that.
+    pub fn thrall_height(&self) -> Fx {
+        let h = t::body_height().mul(self.pool_share());
+        if matches!(self.kind, EffectKind::Golem) {
+            h.mul(t::golem_size())
+        } else {
+            h
+        }
+    }
+
+    /// Does a blow of this spill nothing? **An eruption out of a stain** --
+    /// it spends the blood it came out of -- so the same spot hit again runs
+    /// out rather than growing (2026-10-13). The critters' and the bleed's
+    /// paths ask the same.
+    pub const fn spills_nothing(&self) -> bool {
+        matches!(self.kind, EffectKind::BlackSpike) && self.banked == 1
     }
 
     pub const fn is_a_pool(&self) -> bool {
