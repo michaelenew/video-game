@@ -319,25 +319,24 @@ pub fn steer(p: &mut Player, kind: u8) {
     if ascending > 0 {
         return;
     }
-    // **Autos fill, spells vent** (2026-10-12, the second pass's second
-    // day): the wings and the moves that leave the floor are how she builds,
-    // each goading the bar of its force by `meter, an auto moves` (twilight
-    // both at once, so it never widens the gap); a spell vents its own bar
-    // by `meter, a spell vents`, a long hold by `meter, a long hold vents`
-    // (the twilight one both bars alike); and a major spends `meter, a major
-    // spends` of its own -- worth the bar it was thrown from, since
-    // `Player::thrown_at` was read before this, and the way back into the
-    // band when one bar has run away. The force thrown is the one she is
-    // carrying after; twilight leaves that as it was.
+    // **Everything on the mouse fills, `F` and `R` vent, majors spend**
+    // (2026-10-12; the long holds filled from 2026-10-13, at the owner's
+    // word): the autos, the takeoffs and the middle click's taps goad the
+    // bar of their force by `meter, an auto moves` (twilight both at once, so
+    // it never widens the gap), and a long hold by `meter, a long hold fills`
+    // (the Flurry dash both); the Devour and the Smite vent their own bar by
+    // `meter, a spell vents`; and a major spends `meter, a major spends` of
+    // its own -- worth the bar it was thrown from, since `Player::thrown_at`
+    // was read before this, and the way back into the band when one bar has
+    // run away. The force thrown is the one she is carrying after; twilight
+    // leaves that as it was.
     use crate::moves::dual as d;
-    let builds =
-        d::is_an_auto(kind) || d::is_takeoff(kind) || (d::twilight(kind) && !d::is_a_vent(kind));
-    let by = if builds {
+    let by = if d::is_a_long_hold(kind) {
+        t::hold_fills()
+    } else if d::is_an_auto(kind) || d::is_takeoff(kind) || d::twilight(kind) {
         t::meter_auto_push()
     } else if d::is_the_finisher(kind) {
         -t::meter_finisher_push()
-    } else if d::is_a_vent(kind) {
-        -t::hold_vents()
     } else {
         -t::meter_cast_push()
     };

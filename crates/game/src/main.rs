@@ -267,8 +267,6 @@ fn main() {
                     place_debris,
                     place_gusts,
                     place_discs,
-                    place_wings,
-                    place_wing_tips,
                     place_wingspans,
                     place_marks,
                     place_scythes,
@@ -1461,25 +1459,6 @@ struct GustMesh(usize);
 #[derive(Component)]
 struct DiscMesh(usize);
 
-/// One slice of the Dual mage's wing.
-///
-/// The wing is the one attack volume in the game that is not a line, so the
-/// line-drawer above cannot show it: what it would draw is the blade's leading
-/// edge, which since the band became thin is a stub half a metre long out at
-/// the rim. A pool of radial bars laid along the section draws the band itself
-/// -- read straight off `hitbox.sector`, the same shape the hit test and the
-/// debug overlay use, so the thing you see swept past you is the thing that
-/// decided whether you were hit.
-#[derive(Component)]
-struct WingMesh {
-    owner: usize,
-    index: usize,
-}
-
-/// The last frame of the Dual mage's wing: a ball at the end of the blade.
-#[derive(Component)]
-struct WingTipMesh(usize);
-
 /// One of the six wings on the Dual mage's **back**: her two bars, drawn.
 ///
 /// Not the swept blade above, which is an attack. These are the meter: three
@@ -1543,14 +1522,6 @@ fn wing_mesh() -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
     .with_inserted_indices(Indices::U32(indices))
 }
-
-/// How many bars the wing is drawn with.
-///
-/// Enough that consecutive bars overlap at the arc the autos are tuned for, so
-/// the band reads as one swept ribbon rather than as a comb. Fixed, like every
-/// other mesh pool here: spawning as a move comes and goes would put allocation
-/// on the rollback path.
-const WING_SLICES: usize = 12;
 
 /// The aim marker a channelled move is wound out along.
 ///
@@ -2078,27 +2049,11 @@ fn setup(
             DiscMesh(slot),
         ));
     }
-    // The Dual mage's wing, and the ball it finishes on. Spawned for every
-    // fighter rather than for her alone, because the class is picked at runtime
-    // and can change mid-match with Tab.
+    // The six wings on the Dual mage's back. Spawned for every fighter rather
+    // than for her alone, because the class is picked at runtime and can
+    // change mid-match with Tab.
     for owner in 0..MAX_PLAYERS {
-        for index in 0..WING_SLICES {
-            commands.spawn((
-                Mesh3d(unit.clone()),
-                MeshMaterial3d(look.beam.clone()),
-                Transform::default(),
-                Visibility::Hidden,
-                WingMesh { owner, index },
-            ));
-        }
-        commands.spawn((
-            Mesh3d(pellet.clone()),
-            MeshMaterial3d(look.beam.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            WingTipMesh(owner),
-        ));
-        // And the six on her back, in the colour of the force each one is.
+        // The six on her back, in the colour of the force each one is.
         for (force, material) in [
             (sim::class::Force::Dark, look.wing_dark.clone()),
             (sim::class::Force::Light, look.wing_light.clone()),
@@ -2433,9 +2388,9 @@ fn place_structures(
 /// line, at the angle you aimed it, ending on whatever stopped it.
 fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        // Lines only. A volume that carries a section is a wing, and a straight
-        // line through a curve is exactly the drawing this rule exists to
-        // avoid -- `place_wings` has it.
+        // Not the Dual mage's autos either: the ball and the trail it leaves
+        // are drawn as what they are (`spell_piece`), and the stretch it
+        // covered this frame is not a rod.
         //
         // And not the Champion's: her weapons are drawn now, on the volume,
         // and the arc of the cut is `place_champion_trails`. A glowing rod
@@ -2444,7 +2399,7 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
         // The debug overlay still draws the capsule itself.
         let p = &sim.cur.players[tag.0];
         let shot = sim::state::hitbox(p)
-            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && hb.sector.is_none());
+            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && !orb_out(p));
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -2637,63 +2592,12 @@ fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut
 
 /// Draw the Dual mage's wing as the band the hit test reads.
 ///
-/// One bar per slice, laid from the section's inner arc to its outer one at
-/// evenly spaced bearings, so what is drawn is the section itself rather than a
-/// reconstruction of it. The shape comes out of `state::hitbox` like everything
-/// else here: an attack that looks bigger than it hits is a promise the game
-/// does not keep, and one that looks like a fan when it is a blade is the same
-/// promise in the other direction.
-fn place_wings(sim: Res<Sim>, mut meshes: Query<(&WingMesh, &mut Transform, &mut Visibility)>) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let out = sim::state::hitbox(&sim.cur.players[tag.owner]);
-        let Some((hb, ring)) = out.and_then(|hb| hb.sector.map(|ring| (hb, ring))) else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        let along = tag.index as f32 / (WING_SLICES - 1) as f32;
-        let at = |from_the_inside: f32| {
-            fx3(ring.point(
-                sim::Fx::from_raw((from_the_inside * 65536.0) as i32),
-                sim::Fx::from_raw((along * 65536.0) as i32),
-            ))
-        };
-        let (inner, outer) = (at(0.0), at(1.0));
-        let across = outer - inner;
-        let depth = across.length();
-        if depth < 0.01 {
-            *vis = Visibility::Hidden;
-            continue;
-        }
-        *vis = Visibility::Inherited;
-        tf.translation = inner + across * 0.5;
-        // The unit cylinder stands along Y, so it is turned on to the radius it
-        // is drawing -- which is a straight line even though the band is not:
-        // a radius of an annulus is the whole of the section at that bearing.
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, across / depth);
-        let width = hb.radius.to_f32_for_render();
-        tf.scale = Vec3::new(width, depth, width);
-    }
-}
-
-/// And the ball it finishes on: the tip, out for one frame at the foremost
-/// point of the ring.
-fn place_wing_tips(
-    sim: Res<Sim>,
-    mut meshes: Query<(&WingTipMesh, &mut Transform, &mut Visibility)>,
-) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let tip = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.tipper);
-        let Some(hb) = tip else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        *vis = Visibility::Inherited;
-        tf.translation = fx3(hb.centre());
-        // At the size it hits at, unlike the beam: the whole question the tip
-        // asks is how far out it reaches, and a drawing that shrank it would be
-        // teaching the wrong distance.
-        tf.scale = Vec3::splat(hb.radius.to_f32_for_render() * 2.0);
-    }
+/// Is this fighter throwing one of the Dual mage's autos?
+fn orb_out(p: &sim::state::Player) -> bool {
+    p.class == sim::Class::DualMage
+        && p.action
+            .attack_kind()
+            .is_some_and(sim::moves::dual::is_an_auto)
 }
 
 /// The six wings on the Dual mage's back: three a side, one per third of its
@@ -3136,15 +3040,18 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         return None;
     }
     let (kind, startup, left) = match p.action {
+        // **The auto's ball** (2026-10-13): gathering at her shoulder
+        // through the wind-up, then flying its curve with a trail behind it.
+        Action::Startup { kind, left } if d::is_an_auto(kind) => {
+            let m = sim::moves::get(p.class, kind);
+            let through = 1.0 - left as f32 / m.startup.max(1) as f32;
+            return orb_piece(p, kind, part, None, through);
+        }
+        Action::Active { kind, left } if d::is_an_auto(kind) => {
+            return orb_piece(p, kind, part, Some(left), 1.0);
+        }
         Action::Startup { kind, left } => (kind, true, left),
         Action::Active { kind, left } => (kind, false, left),
-        // **A long hold gathering** (2026-10-12): the storm cloud or the disk
-        // over her head, or the two forces in her hands, growing as the hold
-        // fills -- so the person opposite sees it coming before it comes.
-        Action::Channel { kind, held } if d::is_a_vent(kind) => {
-            let cap = sim::moves::get(p.class, kind).channel.max(1) as f32;
-            return vent_gathering(w, p, kind, held as f32 / cap, part);
-        }
         _ => return None,
     };
     let m = sim::moves::get(p.class, kind);
@@ -3332,11 +3239,11 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         }
         // **The storm cloud**, full over her head through the wind-up and
         // as the bolts leave it. The bolts are the effects'.
-        d::CHAIN_LIGHTNING => vent_gathering(w, p, kind, 1.0, part),
+        d::CHAIN_LIGHTNING => hold_gathering(w, p, kind, if startup { through } else { 1.0 }, part),
         // **The disk**, full over her head through the wind-up; on the active
         // frames the blast runs from it to the point, drawn down the line the
         // hit test uses.
-        d::DISK_RAY if startup => vent_gathering(w, p, kind, 1.0, part),
+        d::DISK_RAY if startup => hold_gathering(w, p, kind, through, part),
         d::DISK_RAY => {
             let v = volume?;
             let (from, to) = (fx3(v.from), fx3(v.to));
@@ -3375,7 +3282,61 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
                 )
             })
         }
-        d::FLURRY_DASH => vent_gathering(w, p, kind, 1.0, part),
+        d::FLURRY_DASH => hold_gathering(w, p, kind, through, part),
+        _ => None,
+    }
+}
+
+/// **The Dual mage's auto, drawn**: the ball, and the trail it leaves along
+/// the curve it flew -- both read off `sim::moves::orb_at`, the path the hit
+/// test uses, so the trail on the screen is where it could hit. `left` is the
+/// active frames remaining (`None` in the wind-up, where the ball gathers at
+/// the start of its flight, `grown` of the way); on the last the ball has
+/// arrived and is drawn at the sweet spot's size.
+fn orb_piece(
+    p: &sim::state::Player,
+    kind: u8,
+    part: usize,
+    left: Option<u16>,
+    grown: f32,
+) -> Option<Piece> {
+    const TRAIL: usize = 12;
+    let m = sim::moves::get(p.class, kind);
+    let skin = if kind == sim::moves::dual::DARK_AUTO {
+        Skin::Dark
+    } else {
+        Skin::Light
+    };
+    let dir = sim::moves::orb_line(p.facing, p.aim_dir(), p.grounded, p.stoop);
+    let at = |t: f32| {
+        fx3(sim::moves::orb_at(
+            p.pos,
+            p.facing,
+            dir,
+            &m,
+            sim::Fx::from_raw((t.clamp(0.0, 1.0) * 65536.0) as i32),
+        ))
+    };
+    let ball = m.radius.to_f32_for_render();
+    let Some(left) = left else {
+        return (part == 0).then(|| floating_in(skin, at(0.0), ball * (0.3 + 0.7 * grown)));
+    };
+    let (now, size) = if left == 0 {
+        (1.0, sim::tuning::orb_sweet_radius().to_f32_for_render())
+    } else {
+        let (_, now) = sim::moves::orb_progress(&m, left);
+        (now.to_f32_for_render(), ball)
+    };
+    match part {
+        0 => Some(floating_in(skin, at(now), size)),
+        k if k <= TRAIL => {
+            let back = k as f32 / TRAIL as f32;
+            Some(floating_in(
+                skin,
+                at(now * (1.0 - back)),
+                ball * (0.75 - 0.6 * back),
+            ))
+        }
         _ => None,
     }
 }
@@ -3383,7 +3344,7 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
 /// **A long hold, `full` of the way to coming out** (2026-10-12): Chain
 /// lightning's storm cloud churning over her head, the Disk ray's disk opening
 /// there, or the Flurry dash's two forces wound round her hands.
-fn vent_gathering(
+fn hold_gathering(
     w: &World,
     p: &sim::state::Player,
     kind: u8,
@@ -3415,6 +3376,10 @@ fn vent_gathering(
                 )
             })
         }
+        // **Upright, facing the way she faces** (2026-10-13): a ring of
+        // light standing across her front, so the blast comes out of its
+        // face toward where she is aiming rather than out of a plate lying
+        // flat over her.
         d::DISK_RAY => {
             if part == 0 {
                 return Some(floating_in(Skin::Light, over, 0.12 + 0.2 * full));
@@ -3423,9 +3388,15 @@ fn vent_gathering(
                 let k = (part - 1) as f32;
                 let turn = k / 12.0 * std::f32::consts::TAU - spin * 0.05;
                 let r = 0.3 + 1.1 * full;
+                let side = Vec3::new(
+                    -p.facing.z.to_f32_for_render(),
+                    0.0,
+                    p.facing.x.to_f32_for_render(),
+                )
+                .normalize_or_zero();
                 floating_in(
                     Skin::Light,
-                    over + Vec3::new(turn.cos() * r, 0.0, turn.sin() * r),
+                    over + side * (turn.cos() * r) + Vec3::Y * (turn.sin() * r),
                     0.07 + 0.08 * full,
                 )
             })

@@ -1363,90 +1363,35 @@ pub fn pole_drive_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PoleDriveBoost))
 }
 
-/// Where the inner edge of a wing sits, as a fraction of the move's reach.
-///
-/// A wing is a **section of a torus** lying flat (see `moves::Shape::Wing`), and
-/// this is how big the hole in it is. Near one, which is the point: the volume
-/// is a **thin curved blade travelling through the air**, not a pie slice. At
-/// 0.16 -- where it sat until 2026-09-13 -- the section reached from the
-/// caster's own elbow out to full range on every frame, which is a filled disc
-/// with a pinhole in it, and a filled disc is what this shape exists not to be.
-///
-/// The band it leaves runs from `wing_inner` of the reach out to the reach, so
-/// this knob and `Move::reach` together say both where the blade is and how
-/// deep it is. `view/tests/kinematics.rs` checks the band against the punch in
-/// the baked clip, because the simulation has no idea where a fist is.
-pub fn wing_inner() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingInner))
+/// How far outside the punching shoulder the Dual mage's auto starts, in
+/// metres past the shoulder's own offset (`hand_offset`). See `moves::orb_at`.
+pub fn orb_out() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbOut)).max(Fx::ZERO)
 }
 
-/// How far the ring's middle sits toward the caster's **other** arm, as a
-/// fraction of the move's reach.
-///
-/// A ring centred on the body is the same distance from it at every bearing, so
-/// however short the section is it reads as a piece of a halo rather than as
-/// something thrown. Pushing the middle off her breaks that: the blade comes in
-/// close beside her on the punching arm's side and swings wide in front, which
-/// is a swipe passing by rather than a circle drawn around her.
-///
-/// Toward the other arm rather than the punching one, because the pivot has to
-/// be on the far side of the body from the fist for the near part of the arc to
-/// be the part beside that fist.
-pub fn wing_offside() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingOffside))
+/// How far behind her the auto starts, in metres. See `moves::orb_at`.
+pub fn orb_back() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbBack)).max(Fx::ZERO)
 }
 
-/// And how far forward of her the ring's middle sits, as a fraction of reach.
-///
-/// The other half of placing the ring. It moves where the blade *finishes*
-/// without changing how curved it is, which is the difference between a punch
-/// that ends at arm's length and one that ends a pace in front of her.
-pub fn wing_ahead() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingAhead))
+/// How much further out than it started the auto bows on its way, in
+/// metres, before it comes back in to her centre line. See `moves::orb_at`.
+pub fn orb_bows_out() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbBowsOut)).max(Fx::ZERO)
 }
 
-/// Where the leading edge stops, in turns off straight ahead, toward the
-/// punching arm's side.
-///
-/// **Not dead centre**, and that is the whole of it: the two autos are told
-/// apart by which arm threw them, so each one has to finish in front of *its
-/// own* hand. A wing that closed on the body's centre line put both of them in
-/// the same place at the moment the player is reading which one landed.
-///
-/// Signed by the arm in `moves::wing`, so one knob mirrors.
-pub fn wing_finish() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingFinish))
+/// What the auto's **sweet spot** multiplies damage by: the last frame of its
+/// flight, at full reach dead in front of her. A ball you can throw all day,
+/// with one place in it worth standing a reach away for.
+pub fn orb_sweet() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbSweet))
 }
 
-/// How much of a wing's span its **tip** is, on the last frame it is out.
-///
-/// The tip is the part that has just arrived, and it is the only part live on
-/// that frame -- everything behind it has already been swept. Small, because
-/// the whole point of it is that landing it is a timing decision rather than
-/// something that happens to you.
-pub fn wing_tip() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTip))
-}
-
-/// What the tip multiplies damage by.
-///
-/// The one piece of execution in an attack that is otherwise thrown constantly:
-/// a punch you can throw all day, with one frame in it that is worth waiting
-/// for.
-pub fn wing_tipper() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTipper))
-}
-
-/// How big the tip is.
-///
-/// **The tip is a bubble, not a slice.** It is the foremost point of the ring
-/// and nothing else -- one frame, at the end of the blade -- so it carries a
-/// radius of its own rather than inheriting `Move::radius`, which is how deep
-/// the band behind it is. Two different questions: one is how forgiving the
-/// wing is about distance, the other is how forgiving the tip is about exactly
-/// where the end of it was.
-pub fn wing_tip_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTipRadius))
+/// How big the auto's sweet spot is: a bubble of its own at the end of the
+/// flight, not the ball's `Move::radius`. How forgiving the sweet spot is
+/// about distance.
+pub fn orb_sweet_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbSweetRadius))
 }
 
 /// How far along its bar throwing an auto fills the Dual mage -- and a
@@ -2689,17 +2634,9 @@ pub fn meter_finisher_push() -> i32 {
     oven::scalar(Scalar::MeterFinisherPush)
 }
 
-/// What landing the wing's **tip** multiplies the shove by.
-///
-/// The tip already hits harder ([`wing_tipper`]); this is the other half of
-/// the same execution, and it is what makes which arm you punch with a
-/// *spacing* decision. The light auto's real knockback lives out at the far
-/// edge of the blade, so a player who wants somebody moved has to stand at the
-/// end of their own range to do it -- and on the dark arm the same frame pulls
-/// them that much further in instead, because the sign of the knockback is what
-/// says which. See `moves::Move::knockback`.
-pub fn wing_tip_shove() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTipShove))
+/// What the sweet spot multiplies the shove by.
+pub fn orb_sweet_shove() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbSweetShove))
 }
 
 /// What Sweep's **dark** form leaves on whoever it caught: their walking speed,
@@ -3487,8 +3424,8 @@ pub fn overhead_height() -> Fx {
 }
 
 /// How much of its bar a long hold spends.
-pub fn hold_vents() -> i32 {
-    oven::scalar(Scalar::HoldVents).max(0)
+pub fn hold_fills() -> i32 {
+    oven::scalar(Scalar::HoldFills).max(0)
 }
 
 /// How near the crosshair's point a body has to be for Chain lightning's
@@ -3526,4 +3463,11 @@ pub fn phase_carry() -> Fx {
 /// How fast Phase and the Equinox send her up as the blink ends.
 pub fn phase_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PhaseRise)).max(Fx::ZERO)
+}
+
+/// How far inside a lone arena's bounds the hop after an auto stops: its
+/// wall stands on them, and a hop stopped on the line landed her on top of
+/// it. See `aim::hop_to`.
+pub fn hop_keeps_inside() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HopKeepsInside)).max(Fx::ZERO)
 }

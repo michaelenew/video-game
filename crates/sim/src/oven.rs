@@ -257,9 +257,9 @@ scalars! {
     PoleDriveBoost,   "Champion", "Pole drive, forward boost",  Fixed,   0,         fx(30,1);
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
-    WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
-    WingTip,           "Dual mage", "Wing, the tip as a share of the span",  Fixed,  0,        fx(1,1);
-    WingTipper,        "Dual mage", "Wing, tip damage (x)",                  Fixed,  fx(1,1),  fx(3,1);
+    OrbOut,            "Dual mage", "Orb, starts out from the shoulder (m)", Fixed,  0,        fx(1,1);
+    OrbBowsOut,        "Dual mage", "Orb, bows out on its way (m)",          Fixed,  0,        fx(1,1);
+    OrbSweet,          "Dual mage", "Orb, sweet spot damage (x)",            Fixed,  fx(1,1),  fx(3,1);
     MeterAutoPush,     "Dual mage", "Meter, an auto moves",                  Int,    0,        100;
     MeterCastPush,     "Dual mage", "Meter, a spell vents",                  Int,    0,        100;
     AscensionFrames,   "Dual mage", "Ascension, how long",                   Frames, 1,        600;
@@ -293,10 +293,8 @@ scalars! {
     // every knob after it somebody else's baked value. The palette groups by
     // family rather than by position, so these still show up next to the three
     // wing knobs above.
-    WingOffside,       "Dual mage", "Wing, ring centre off the punching side (x reach)", Fixed, fx(-1,1), fx(1,1);
-    WingAhead,         "Dual mage", "Wing, ring centre ahead of her (x reach)", Fixed, fx(-1,1), fx(1,1);
-    WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
-    WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
+    OrbBack,           "Dual mage", "Orb, starts behind her (m)",            Fixed,  0,        fx(1,1);
+    OrbSweetRadius,    "Dual mage", "Orb, sweet spot radius (m)",            Fixed,  fx(1,20), fx(2,1);
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
     LotusUncurl,       "Reaver",    "Lotus, turn coming home (turns)",       Fixed,  0,        fx(1,2);
     RepeatLockout,     "Offence",   "Repeat lockout",                        Frames, 0,        90;
@@ -368,7 +366,7 @@ scalars! {
     // What the wing's tip does to the *shove* rather than to the damage. The
     // tip is the far edge of the blade, so it is where the light auto's real
     // knockback lives -- and, on the dark arm, where the pull is worth timing.
-    WingTipShove,     "Dual mage", "Wing, tip knockback (x)",               Fixed, fx(1,1),  fx(4,1);
+    OrbSweetShove,    "Dual mage", "Orb, sweet spot knockback (x)",         Fixed, fx(1,1),  fx(4,1);
     // Sweep's dark form. The light form spends the move's own knockback and
     // launch; the dark one spends these instead, which is what makes one
     // button two answers to the same problem.
@@ -823,7 +821,7 @@ scalars! {
     // reason above. See `docs/design/exploration/0016_dual_mage_controls.md`.
     AutoAirJump, "Dual mage", "Auto, the air hop rises, once a jump (m)", Fixed, 0, fx(6,1);
     OverheadHeight, "Dual mage", "Overhead, hangs above her feet (m)", Fixed, fx(1,1), fx(8,1);
-    HoldVents, "Dual mage", "Meter, a long hold vents", Int, 0, 100;
+    HoldFills, "Dual mage", "Meter, a long hold fills", Int, 0, 100;
     ChainFirst, "Dual mage", "Chain lightning, finds a body this near the crosshair (m)", Fixed, 0, fx(12,1);
     ChainHop, "Dual mage", "Chain lightning, leaps to a body this near (m)", Fixed, 0, fx(16,1);
     ChainLinks, "Dual mage", "Chain lightning, bodies it strikes", Int, 1, 6;
@@ -831,6 +829,9 @@ scalars! {
     FlurryDashSpeed, "Dual mage", "Flurry dash, speed (m/s)", Fixed, fx(1,1), fx(80,1);
     PhaseCarry, "Dual mage", "Phase, keeps this speed along the blink (m/s)", Fixed, 0, fx(30,1);
     PhaseRise, "Dual mage", "Phase, rises (m/s)", Fixed, 0, fx(20,1);
+    // 2026-10-13: how far inside a lone arena's bounds a hop stops, so it
+    // does not land her on the wall that stands on them.
+    HopKeepsInside, "Dual mage", "Auto, hop stops this far inside the bounds (m)", Fixed, 0, fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

@@ -91,14 +91,15 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Dual mage's again, the same day**: the bare clicks are her wing
 /// autos once more, each hopping her the way she holds, and against a
 /// creature a wing is its tip. And again for the owner's second round: the
-/// wings thrown forward, the long holds, venting and the spending majors. See
+/// wings thrown forward, the long holds, venting and the spending majors; and
+/// the third (2026-10-13): the autos a ball, every click a tap or a hold. See
 /// `docs/design/exploration/0016_dual_mage_controls.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x339bb2066878e1c8),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0xda05d8a8d6903ae9),
     (Class::BloodMage, 0x083464c03c9c85e2),
-    (Class::DualMage, 0x69bfb447c10a6bf1),
+    (Class::DualMage, 0x025a6194c7ad03ee),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];
 

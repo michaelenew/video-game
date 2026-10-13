@@ -274,7 +274,12 @@ fn nobody_else_spills_anybody() {
         w.players[1].pos = w.players[0]
             .pos
             .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
-        run(&mut w, 60, Input::LEFT, 0);
+        // Tapped rather than held: the Dual mage's held click is a spell
+        // (2026-10-13), and her tap is the auto every other class's left is.
+        for _ in 0..30 {
+            run(&mut w, 1, Input::LEFT, 0);
+            run(&mut w, 1, 0, 0);
+        }
         assert!(
             w.players[1].health < w.players[1].full_health(),
             "fixture: {} never hit her",

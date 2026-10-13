@@ -57,20 +57,20 @@ Nothing is signed; there is no centre.
   toward empty. This is what makes a tier something she *holds* by fighting rather than a
   level she reached.
 
-**Autos fill, spells vent, majors spend** (2026-10-12, from the owner after playing the wing
+**The mouse fills, `F` and `R` vent, majors spend** (2026-10-12 and 13, from the owner after playing the wing
 autos; [exploration/0016](exploration/0016_dual_mage_controls.md)). The autos are how she
 builds; a spell lets some of it out; a major lets all of one bar out, and is worth what it let
 out. Staying level and just under ascension is the balanced game, and it is a rhythm of the two.
 
 | Input | Which bar | How far |
 | --- | --- | --- |
-| The dark wing (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — **+6** |
-| The light wing (`R`) | Light, and she is now light | +6 |
+| The dark ball (`L`, tapped) | Dark, and she is now dark | `tuning::meter_auto_push` — **+6** |
+| The light ball (`R`, tapped) | Light, and she is now light | +6 |
 | A takeoff — the Veil, Sanctuary (space + click) | Its own force | +6: a jump attack builds, as an auto does |
 | A middle-click move — Binary, Phase, the Equinox | Both | +6 each; the Equinox then moves 12 from the higher to the lower |
 | A spell — the Devour (`F`), the Smite (`R` key), and the unbound four | Its own force | `tuning::meter_cast_push` — **−9** |
-| A long hold — Chain lightning (`L` held), the Disk ray (right click held) | Its own force | `tuning::hold_vents` — **−20** |
-| The Flurry dash (middle click held) | Both | −20 each |
+| A long hold — Chain lightning (`L` held), the Disk ray (right click held) | Its own force | `tuning::hold_fills` — **+10** (−20 on 2026-10-12, before the owner asked for the mouse to fill) |
+| The Flurry dash (middle click held) | Both | +10 each |
 | The Abyss (`Q`) / Judgement (`E`) | Dark / Light | `tuning::meter_finisher_push` — **the whole bar** (100) |
 
 All of it **on the press**, whether or not it connects — see "Autos are the steering wheel"

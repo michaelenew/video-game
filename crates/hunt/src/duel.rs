@@ -754,7 +754,33 @@ impl Duelist {
             self.think_in = self.between(lo, hi) as u16;
         }
         let class = self.class_play(&me, &seen, w);
-        let input = self.steer_plan(&me, &seen, class);
+        let mut input = self.steer_plan(&me, &seen, class);
+        // **The Dual mage's clicks are taps** (2026-10-13): held, a click is
+        // her long hold and the spell comes instead of the auto, so a click
+        // already down last frame is let go this one. Her plans throw autos;
+        // the spells are a person's choice for now.
+        if me.class == Class::DualMage {
+            let clicks = Input::LEFT | Input::MIDDLE | Input::RIGHT;
+            input.bits &= !(self.last_bits & clicks);
+            // And no hop off an auto within a hop of the wall: with her bars
+            // full a hop lifts her clear over the proving ground's, and a bot
+            // backing off is not choosing to leave the fight.
+            let throwing = me
+                .action
+                .attack_kind()
+                .is_some_and(sim::moves::dual::is_an_auto);
+            let margin = sim::tuning::auto_hop().add(Fx::from_int(2));
+            let walled = by_the_wall(me.pos, margin, &self.bounds);
+            if walled && throwing {
+                input.bits &= !(Input::W | Input::A | Input::S | Input::D);
+            }
+            // Nor a Phase within a blink and its carry of the wall: it puts
+            // her six metres along the look and carries her on, rising.
+            let phase = sim::moves::get(Class::DualMage, sim::moves::dual::PHASE).reach;
+            if !me.grounded && by_the_wall(me.pos, phase.add(Fx::from_int(3)), &self.bounds) {
+                input.bits &= !Input::MIDDLE;
+            }
+        }
         self.last_bits = input.bits;
         input
     }

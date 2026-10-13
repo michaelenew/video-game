@@ -46,8 +46,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // when a curse is ripe.
     // Moved again 2026-10-12, deliberately: the bare clicks are her wing
     // autos again, each hopping her the way she holds (0016); and again for
-    // the second round -- forward wings, long holds, spending majors.
-    (Class::DualMage, 2_222, 0xdb863eb4052eda5a),
+    // the second round -- forward wings, long holds, spending majors -- and
+    // the third: the autos a ball, every click a tap or a hold (2026-10-13).
+    (Class::DualMage, 2_222, 0x7e737b2b728f6296),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the

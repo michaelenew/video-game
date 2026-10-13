@@ -547,6 +547,14 @@ impl Duelist {
     /// The bars are kept level by `dual_bias`. This is the body they unlock:
     /// the second jump, and going all in once the wings are out.
     fn dual(&mut self, me: &Player, dist: Fx, toward: V3, out: &mut ClassOut) {
+        // **Off the floor near a wall, back toward the middle** (2026-10-13):
+        // with the second jump and the slow fall most of a fight, her drift
+        // carried her over the proving ground's low wall, and a bot that only
+        // let go of the stick kept the momentum it had.
+        let margin = sim::tuning::auto_hop().add(Fx::from_int(3));
+        if !me.grounded && by_the_wall(me.pos, margin, &self.bounds) {
+            out.want = Some(flat(back(me.pos)).normalized());
+        }
         if sim::dual::ascending(me) {
             self.plan = super::Plan::Press;
             self.plan_left = self.plan_left.max(30);
@@ -620,22 +628,10 @@ pub(crate) fn dual_bias(me: &Player, kind: u8) -> i32 {
     let band = Fx::from_int(sim::tuning::meter_band());
     let gap_now = dark.sub(light).abs();
     let gap = d.sub(l).abs();
-    // **A major from a built bar** (2026-10-12): it spends its whole bar,
-    // so from level it leaves the other ahead -- and the other major is the
-    // answer, which the rule below then prefers. Worth it from the second
-    // tier up, with the other major ready to follow.
-    let built = Fx::from_int(sim::tuning::tier_jump());
-    if moves::dual::is_the_finisher(kind)
-        && gap_now.raw() <= band.raw()
-        && dark.min(light).raw() >= built.raw()
-    {
-        let other = if kind == moves::dual::ABYSS {
-            moves::dual::JUDGEMENT
-        } else {
-            moves::dual::ABYSS
-        };
-        return if me.locked_out(other) { 0 } else { 200 };
-    }
+    // **A major spends its whole bar** (2026-10-12), so from level it leaves
+    // the other ahead: the bot throws one only when that is the bar running
+    // away -- the rule below, which prefers what closes the gap -- and leaves
+    // the Abyss-then-Judgement turn to a person.
     if gap.raw() > band.raw() && gap.raw() > gap_now.raw() {
         // It burns her. Never.
         return 0;

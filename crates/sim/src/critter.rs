@@ -598,15 +598,10 @@ impl Body {
     }
 
     /// **Does a fighter's attack volume touch this body?** The one hit test,
-    /// for every shape `state::hitbox` can describe: a section of a ring, a
-    /// flat disc with no top or bottom, and a capsule. The debug overlay draws
+    /// for every shape `state::hitbox` can describe: a flat disc with no top
+    /// or bottom, and a capsule. The debug overlay draws
     /// `state::hitbox` and [`Critter::body`], so what it shows is this.
     pub fn touched_by(&self, hb: &Hitbox) -> bool {
-        if let Some(ring) = hb.sector {
-            // A ring's own test, about a column standing at the middle of the
-            // body, as wide as the body is across.
-            return ring.touches(self.foot, self.height, hb.radius.add(self.half_wid));
-        }
         if hb.flat {
             let c = self.to_local(hb.centre());
             return crate::math::flat_box_gap(c, self.min(), self.max()).raw() <= hb.radius.raw();

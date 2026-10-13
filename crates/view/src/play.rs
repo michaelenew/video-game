@@ -188,6 +188,12 @@ fn shape_of(input: PoseInput) -> Shape {
     if input.health <= 0 {
         return 1;
     }
+    if undecided(&input) {
+        return shape_of(PoseInput {
+            action: Action::Free,
+            ..input
+        });
+    }
     match input.action {
         // Four phases of one move, not three plus a prelude: a channel is the
         // wind-up held open, and the frame the button comes up is the frame the
@@ -447,6 +453,12 @@ fn chosen(input: PoseInput) -> Pose {
         return Clip::Defeat.at(0);
     }
 
+    // **A Dual mage's click not yet a tap or a hold** (2026-10-13): her body
+    // is free until it is one or the other, so neither the auto's clip nor
+    // the spell's has begun when the other comes out.
+    if undecided(&input) {
+        return free(input);
+    }
     match input.action {
         // A channel sits on the move's first frame for as long as it is held:
         // the body is coiled, and `attack` reads an elapsed of zero for any
@@ -473,6 +485,16 @@ fn chosen(input: PoseInput) -> Pose {
         Action::Dodge { left } => dodge(input, left),
         Action::Free => free(input),
     }
+}
+
+/// Is this the Dual mage's click held but not yet decided -- the hold of one
+/// of her long holds, which is a tap until it fills (`moves::Charge::TapOrHold`)?
+fn undecided(input: &PoseInput) -> bool {
+    matches!(
+        input.action,
+        Action::Channel { kind, .. }
+            if sim::moves::charge(input.class, kind) == Some(sim::moves::Charge::TapOrHold)
+    )
 }
 
 /// An attack, indexed by how far into the move it is.

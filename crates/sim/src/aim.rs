@@ -1302,6 +1302,7 @@ pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
 /// the caller's. See `docs/design/exploration/0016_dual_mage_controls.md`.
 pub fn hop_to(from: V3, dir: V3, reach: Fx, lift: Fx, scene: &Scene) -> V3 {
     let level = short_of_the_land(from, blink_to(from, dir, reach, scene), scene);
+    let level = within_bounds(from, level, scene);
     if lift.raw() <= 0 {
         return level;
     }
@@ -1313,6 +1314,41 @@ pub fn hop_to(from: V3, dir: V3, reach: Fx, lift: Fx, scene: &Scene) -> V3 {
         None => lift,
     };
     V3::new(level.x, level.y.add(rise), level.z)
+}
+
+/// **A hop does not leave the fight** (2026-10-13): stopped where it would
+/// carry her out of the place's bounds -- a lone arena's walls, which a hop
+/// lifted by a full bar sails over; on the valley's map the bounds are the
+/// whole map, so nothing changes there. Walked back along the hop in half a
+/// body's steps from the far end.
+fn within_bounds(from: V3, to: V3, scene: &Scene) -> V3 {
+    let past = to.add(
+        V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z))
+            .normalized()
+            .scale(t::hop_keeps_inside()),
+    );
+    if scene.arena.inside(past) || !scene.arena.inside(from) {
+        return to;
+    }
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    let span_v = to.sub(from);
+    let span = span_v.flat_len();
+    if span.raw() <= 0 {
+        return from;
+    }
+    let dir = span_v.scale(Fx::ONE.div(span));
+    // A body's width short of the edge, not on it: a lone arena's wall stands
+    // on its bounds, and a hop stopped on the line landed her on its top.
+    let clear = dir.scale(t::hop_keeps_inside());
+    let mut along = span;
+    while along.raw() > 0 {
+        along = along.sub(step).max(Fx::ZERO);
+        let at = from.add(dir.scale(along));
+        if scene.arena.inside(at.add(clear)) {
+            return at;
+        }
+    }
+    from
 }
 
 /// **The hop stops at land it could not walk onto**: a blink asks only

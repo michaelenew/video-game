@@ -1,5 +1,5 @@
 ---
-status: built — her spellbook since 2026-10-12, the wing autos and the hop the same day, the long holds and the spending majors after; unplayed
+status: built — her spellbook since 2026-10-12, the hop and the long holds the same day, the ball autos and tap-or-hold 2026-10-13; unplayed
 decided: 2026-09-10
 revised: 2026-10-12
 formerly: Statera
@@ -31,38 +31,55 @@ meaningless without it.
 > is the design and the answer to "what is missing from the controls". §"Her hands" below is
 > what was built; where it differs from §"Her spellbook", it wins.
 
-## Her hands — built 2026-10-12 (second pass, and its second round)
+## Her hands — built 2026-10-12 and 2026-10-13 (second pass, three rounds)
 
-| Input | Tapped | Held |
+| Input | Tapped | Held (a sixth of a second) |
 | --- | --- | --- |
-| Left click | **Dark wing**, and a hop the way she holds. Lays a curse stack | Past the wing: **Chain lightning** |
-| Right click | **Light wing**, and a hop. Purges | Past the wing: **the Disk ray** |
-| Middle click | **Binary** on the floor, **Phase** in the air, on the release | From the press: **the Flurry dash** |
+| Left click | **Dark ball**, and a hop the way she holds. Lays a curse stack | **Chain lightning** |
+| Right click | **Light ball**, and a hop. Purges | **the Disk ray** |
+| Middle click | **Binary** on the floor, **Phase** in the air | **the Flurry dash** |
 | `space` + click | **Veil** / **Equinox** / **Sanctuary**, as in §"Her spellbook" | — |
 | `F` key | **Devour** | — |
 | `R` key | **Smite** | — |
 | `Q` / `E` | **Abyss** / **Judgement** — each spends the whole of its bar | — |
 
 The Grasping shade, the Halo, the Shadowstep and the Descent are in the table with no button.
-**Autos fill, spells vent, majors spend**: see [../dual-mage.md](../dual-mage.md) §"Two bars".
+**Everything on the mouse fills, `F` and `R` vent, majors spend**: see
+[../dual-mage.md](../dual-mage.md) §"Two bars".
 
-**The wings** (`Shape::Wing`, `moves::wing`), since the owner's second round: **thrown forward,
-not swept round her** -- big crescents in front, the battle mage's arcs. The ring's middle is
-`wing, ring centre ahead of her` (−0.1 of the reach: behind her) and on her own line
-(`off the punching side` 0), the reach 6 m and the arc 0.12 of a turn from the punching side to
-dead ahead, with only `the tip as a share of the span` (0.1) of it left to the tip. A fighter is
-hit from a quarter of a metre to seven metres straight ahead, and to five and a half or six
-metres three metres off to the punching side. The tip, at full reach dead ahead, is
-×`wing, tip damage` (1.5), tip bubble `wing, tip radius` 1.25 m. Standing, the wing lies at the
-shoulder and rises with a look above the horizon, as a swing does. Against a creature only the
-tip counts (`state::part_under`), so it lands on the part she put it on rather than the first
-flank the blade brushed. 5/6/10 frames, 14 damage.
+**A click is a tap or a hold, never both** (2026-10-13, from the owner). The press opens a hold
+that is neither move yet (`moves::Charge::TapOrHold`): nothing is drawn, her body is free
+(`view::play::undecided`), and no bar moves. Let go before it is full -- `channel`, 10 frames,
+for all three -- and the tap comes out on that frame; hold it full and the spell does, and the
+tap never began. **A full hold is a commitment, not a charge**: the spell plays through whether
+the button stays down or not, and what it is worth is her bar, never how long it was held --
+the MMO cast, as the owner put it -- and quick, a platform fighter's committed move: from the
+press, the bolt lands in 18 frames, the blast in 20 and the first blow of the flurry in 15
+(they were 29, 35 and 23 until the owner asked for them quicker).
 
-**The hop** (`state::hop_after_the_auto`, `aim::hop_to`). On the wing's last frame, with the
-click let go and a direction held, she is carried `auto, hop` (3 m) that way at `auto, hop
-speed` (22 m/s), and the carry plus `auto, recovery after a hop` (4 frames) *is* the recovery.
-It stops a body short of a wall, of land too steep to stand on, or of ground above her feet, and
-rises `auto, hop lifts` (0.3 m) plus up to `auto, hop lifts at full` (1.2 m) by her lower bar
+**The autos are a ball** (`Shape::Orb`, `moves::orb_at`), since the owner's third round, when
+the wing -- a section of a ring swept round her, however its numbers were set -- was taken out
+whole. The ball starts `orb, starts out from the shoulder` (0.25 m) outside the punching
+shoulder and `orb, starts behind her` (0.45 m) behind her, flies mostly forward -- bowing out
+`orb, bows out on its way` (0.25 m) further about a third of the way along, then coming back in
+-- and finishes dead in front of her chest at the reach, 6 m: the **sweet spot**, the last active
+frame, a bubble of `orb, sweet spot radius` (1 m) worth ×`orb, sweet spot damage` (1.5).
+The offsets and the 0.6 m ball are what let it meet a knee-high gnat straight ahead at one to
+three metres (`tests/critters.rs`): at 0.35 m out, a 0.35 m bow and a 0.4 m ball it passed
+beside one, where a fighter, wider, was caught. Standing, the whole flight drops by the swing's
+stoop for a short body under the crosshair (`moves::orb_line`). Each
+frame before that its volume is the stretch of the flight it covered, 0.6 m thick, and the
+flight before the sweet spot stops two steps short of the end, so full reach is met by the sweet
+spot and nothing else. Forward is the swing's line: level through the dead zone standing,
+rising with a look up, the look exactly in the air. It leaves a trail along the flight, drawn
+from the same function. 5/6/10 frames, 14 damage; a fighter is hit from a metre to seven
+metres dead ahead.
+
+**The hop** (`state::hop_after_the_auto`, `aim::hop_to`). On the ball's last frame, with a
+direction held, she is carried `auto, hop` (3 m) that way at `auto, hop speed` (22 m/s), and
+the carry plus `auto, recovery after a hop` (4 frames) *is* the recovery. It stops a body short
+of a wall, of land too steep to stand on, or of ground above her feet, and rises
+`auto, hop lifts` (0.3 m) plus up to `auto, hop lifts at full` (1.2 m) by her lower bar
 (`dual::hop_lift`), less under a ceiling. **In the air the first hop is a jump**: it rises
 `auto, the air hop rises` (2 m) more, once an airtime (`Mechanic::Meter::hopped`, back on
 landing) and every time while ascending. Holding nothing, there is no hop and the auto keeps
@@ -70,32 +87,29 @@ its whole recovery.
 
 ### The long holds — built 2026-10-12
 
-A click held past its wing does not hop: she goes into the hold of that hand's spell
-(`moves::Charge::Vent`, `state::step_channel`). Held for the spell's whole `channel` (16 frames
-after the wing, 0.27 s) it comes out on its own; let go sooner and nothing comes out -- the
-rest of the wing's recovery, and no bar spent. The middle click holds from its press (24
-frames); let go sooner and it was a tap, Binary or Phase, thrown then. Each vents
-`meter, a long hold vents` (20) of its bar, both bars for the Flurry dash. While a hold fills,
-what is coming is drawn over her: the storm cloud gathering, the disk opening, the two forces
-wound round her hands.
+Each fills `meter, a long hold fills` (10) of its bar -- both bars, for the Flurry dash -- since
+the owner's third round (they vented 20 the day before). What is coming is drawn over her through
+the spell's own wind-up, never before it is decided: the storm cloud gathering, the disk
+opening, the two forces wound round her hands.
 
 - **Chain lightning** (dark). A storm cloud over her head (`aim::overhead`,
-  `overhead height` 4.5 m, high enough to be above the camera's line to the target) through 14 frames; then black lightning onto the body nearest the
+  `overhead height` 4.5 m, high enough to be above the camera's line to the target) through 8 frames; then black lightning onto the body nearest the
   crosshair's point -- within `chain lightning, finds a body this near the crosshair` (4 m) --
   and from it to the nearest body it has not struck within `leaps to a body this near` (6 m),
   `bodies it strikes` (4) at most, with nothing solid between (`aim::chain_next`). Each link is
   a burst where it lands, `strike radius` 0.9 m, 22 damage at power one, and a curse stack.
   Fighters are struck in versus only; in a hunt they are her party. With nobody there it
-  strikes the crosshair's point. 14/2/18.
-- **The Disk ray** (light). A great disk of light opens over her head through 20 frames; then a
+  strikes the crosshair's point. 8/2/16.
+- **The Disk ray** (light). A great disk of light opens over her head through 10 frames,
+  standing upright and facing the way she faces (2026-10-13; it lay flat before); then a
   blast from it to the point the crosshair is on -- a new line of effect,
   `aim::Kind::Overhead`, the skillshot's target from the disk rather than her hand -- for 6
-  frames, 0.6 m wide, 40 damage, purging what it passes through. Reach 16 m. 20/6/18.
+  frames, 0.6 m wide, 40 damage, purging what it passes through. Reach 16 m. 10/6/16.
 - **The Flurry dash** (twilight). A line of blows thrust down her look, 7 m, every 3 frames
   for 15 (five blows of 9), and then she goes down it (`state::dash_down_the_flurry`): along
   the flat of the look to its end, stopped the way a blink is, at `flurry dash, speed` (30 m/s),
   untouchable for the length of it (her Veil's clock, `dual::veil_for`), and through whoever
-  is on the line (`state::separate_bodies` lets her pass). 8/15/8.
+  is on the line (`state::separate_bodies` lets her pass). 5/15/8.
 
 **Phase and the Equinox rise and carry** (from the owner: the middle click's jump attacks are
 her mobility, and the balanced ones). Phase leaves her moving `phase, keeps this speed` (9 m/s)

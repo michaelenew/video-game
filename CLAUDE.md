@@ -108,7 +108,7 @@ line (`column_meets_quarry`), and along it as Phase goes with nobody there
 (2026-10-12). `aim::standable` asks *is that footing* (not a
 course's drop), and `aim::walk_toward` *how far toward it could she walk*: the
 Reaver's send goes no further than that -- up no ledge, over no gap -- and is
-refused if not one step is walkable (2026-10-10). `aim::chain_next` answers *where does a chain of lightning go next* -- the body nearest a point, within a reach, with nothing solid between, not yet struck -- which the Dual mage's Chain lightning asks from the cloud over her head (`aim::overhead`) and then from each body it struck (2026-10-12). `aim::hop_to` answers *where does the hop after one of the Dual mage's autos land her* -- a blink along the held direction, short of a wall or land she could not stand on, lifted by her lower bar (2026-10-12). `aim::hung_ahead` answers
+refused if not one step is walkable (2026-10-10). `aim::chain_next` answers *where does a chain of lightning go next* -- the body nearest a point, within a reach, with nothing solid between, not yet struck -- which the Dual mage's Chain lightning asks from the cloud over her head (`aim::overhead`) and then from each body it struck (2026-10-12). `aim::hop_to` answers *where does the hop after one of the Dual mage's autos land her* -- a blink along the held direction, short of a wall, land she could not stand on or the place's own bounds, lifted by her lower bar (2026-10-12). `aim::hung_ahead` answers
 *where does a thing thrown forward and up go* -- where Gallows sends the shadow,
 a facing and two lengths, `planted_ahead`'s reason -- and `aim::plunge_dir`
 *which way does a dive go*: the look, held inside a cone round straight down

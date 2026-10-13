@@ -8261,3 +8261,27 @@ vent, just not the whole bar"; the jump auto a second jump; middle click's jump 
 with the blink and keeping momentum; and the battle mage's spells on the long holds.
 **Verdict** —
 
+### 2026-10-13 — the Dual mage's autos are a ball; a click is a tap or a hold
+**Changed** The wing (a section of a ring swept round her) is gone, whole -- the shape, its
+geometry, its sector hit test and its renderer -- and the autos are a ball on a curved flight
+(`Shape::Orb`, `moves::orb_at`): from 0.35 m outside and 0.45 m behind the punching shoulder,
+bowing out 0.35 m, back in to finish dead ahead of her chest at 6 m, where the last frame is the
+sweet spot (1 m, ×1.5). The flight before it stops a step short of the end, so a body exactly a
+reach away is met by the sweet spot. A click opens an undecided hold (15 frames): let go and the
+tap comes out then; held full and the spell does; nothing of either before. The long holds fill
+10 (they vented 20). The Disk ray's disk stands upright facing her facing. Then, at the owner's word
+("committed move in a platform fighter frame data, not multiple seconds to charge"), the hold
+15 → 10 frames and the wind-ups shorter: Chain lightning 14/2/18 → 8/2/16, the Disk ray
+20/6/18 → 10/6/16, the Flurry dash 8 → 5 frames of startup -- from the press to the hit 18, 20
+and 15 frames, from 29, 35 and 23.
+**Tried and reverted** The ball's flight reaching its end on its second-last frame: a Champion
+standing exactly a reach away took the plain hit, 8, and never the sweet spot, 12. Then 0.35 m
+out, a 0.35 m bow and a 0.4 m ball: it passed beside a knee-high gnat straight ahead at one to
+three metres (a fighter, wider, was caught), so 0.25, 0.25 and 0.6 -- and the plain flight now
+stops two steps short of the end, since the fatter ball reached a body at full reach early.
+**Why** The owner: "every iteration is building on the same bad implementation. I don't want
+them to be a sweep" -- a ball from behind the shoulder, mostly forward, a sweet spot at the end,
+a trail; the light disk facing the way she faces; "either / or, never both animations even in
+part"; "the mouse spells increase the bar"; and a full hold a commitment, not a charge.
+**Verdict** —
+

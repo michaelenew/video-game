@@ -345,10 +345,9 @@ fn plant() -> Pose {
 ///
 /// The arm is nearly straight here and stays out through most of the active
 /// frames, which matters more on this move than on any other in the file. The
-/// hit volume is a section of a torus sweeping round her from behind
-/// (`moves::Shape::Wing`), and it finishes *in front of the fist* -- so the
-/// fist has to still be out there when it arrives, or the two halves of the
-/// move are pointing at different places.
+/// hit volume is a ball thrown off that shoulder and out to full reach
+/// (`moves::Shape::Orb`) -- so the fist has to still be out there while it
+/// flies, or the two halves of the move are pointing at different places.
 fn strike() -> Pose {
     stance()
         .hips(0.0, -0.10, 0.075)

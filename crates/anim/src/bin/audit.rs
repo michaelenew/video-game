@@ -87,11 +87,11 @@ fn main() {
             path.display()
         );
         // A volume the hands are not meant to be on: something planted where
-        // the crosshair was, a shot that flies from the hand, a wing that
-        // opens off a fist. Drawn on the sheet; not measured against the
+        // the crosshair was, a shot that flies from the hand, a ball
+        // thrown off a fist. Drawn on the sheet; not measured against the
         // hands, because a hand at the far end of those would be wrong.
         let hands_job =
-            matches!(m.aim(), sim::aim::Kind::Swing) && !matches!(m.shape, sim::moves::Shape::Wing);
+            matches!(m.aim(), sim::aim::Kind::Swing) && !matches!(m.shape, sim::moves::Shape::Orb);
         if !hands_job {
             println!("  not a hand's job: {:?}, {:?}", m.aim(), m.shape);
             continue;

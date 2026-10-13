@@ -575,8 +575,17 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     // it has moved by the time the hit is resolved, so the box to park a
     // defender against is the one the hit test is about to use, not the one on
     // screen a frame earlier.
+    //
+    // The Dual mage's click is a tap only once it is let go (2026-10-13), so
+    // hers is pressed for one frame and released.
+    let released = [Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
     let mut found = None;
-    for _ in 0..40 {
+    for f in 0..40 {
+        let held = if class == sim::class::Class::DualMage && f > 0 {
+            released
+        } else {
+            held
+        };
         let mut peek = w.clone();
         peek.advance(held);
         if let Some(next) = hitbox(&peek.players[0]) {

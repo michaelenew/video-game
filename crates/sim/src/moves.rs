@@ -266,48 +266,18 @@ pub enum Shape {
     /// A thrust. The weapon is a line along the aim that extends to `reach`
     /// over the active window and does not travel sideways.
     Thrust,
-    /// A wing: **a thin curved blade, swept on a ring the caster is not in the
-    /// middle of.**
+    /// **A ball on a curved flight** (2026-10-13): the Dual mage's autos. It
+    /// leaves from a little outside and behind the punching shoulder, bows
+    /// out a little, and comes back in to finish dead in front of her chest
+    /// at `reach` -- the sweet spot, the last active frame, a bubble of
+    /// `orb, sweet spot radius` worth `orb, sweet spot damage`. Each frame
+    /// before that its volume is the stretch of the flight it covered, `radius`
+    /// thick. The flight is [`orb_at`].
     ///
-    /// ```text
-    ///        .-  -  -.                 a section of a torus, in the plane of
-    ///     .'          '.               the floor. Inner arc at
-    ///    ;      (x)     :              `tuning::wing_inner` of the reach,
-    ///     '.          .'               outer arc at `Move::reach`, and
-    ///        ' - , - '                 nothing in between
-    ///          start
-    ///                       (x) the ring's middle: `tuning::wing_offside`
-    ///   o                       toward the caster's *other* arm and
-    ///   |   the caster          `tuning::wing_ahead` in front of them
-    /// ```
-    ///
-    /// It starts behind the caster on the punching arm's own side and finishes
-    /// `tuning::wing_finish` off their centre line, in front of that arm's own
-    /// hand -- not dead ahead, because which of two mirrored autos just landed
-    /// is a thing the player reads off where it landed.
-    ///
-    /// The volume out on any one frame is the section's own **radius** -- a
-    /// line from the inner arc to the outer one. That is not an approximation
-    /// of a curved shape: a radius of an annulus is straight, and it is the
-    /// whole of the section at that angle. The ring is what the sweep carves
-    /// over the active window, which is the thing the player sees.
-    ///
-    /// Three things separate it from a [`Shape::Swing`], and they are why it is
-    /// its own shape rather than a swing with unusual numbers. It is hung off a
-    /// **ring** rather than off a shoulder, so it curves rather than reaches. It
-    /// has a **hole**, and a big one: the band is the outer quarter of the ring
-    /// and there is no haft to stand inside. And it **starts behind the caster**
-    /// rather than travelling across the front of her -- the punch throws it and
-    /// it overtakes the punch.
-    ///
-    /// Which way round it sweeps comes from [`Move::hand`], so the two mirrored
-    /// autos share one `arc` -- see [`crate::aim::Hand::outward`]. For this
-    /// shape `arc` is **how far back the section starts**, measured from where
-    /// it finishes, rather than a span centred on the facing.
-    ///
-    /// The geometry is [`crate::moves::wing`], and the last active frame is not
-    /// a section at all: see [`Wing::tip`].
-    Wing,
+    /// It replaced the **wing**, a section of a ring swept round her, which
+    /// read as a sweep however its numbers were set: the owner asked for a
+    /// thing thrown forward rather than a blade brought round.
+    Orb,
 }
 
 impl Shape {
@@ -1031,11 +1001,11 @@ pub mod bulwark {
 /// clicks are her autos again, and they carry her.**
 ///
 /// ```text
-///   left click    Dark auto      the left arm's being: a wing of dark, a curse
-///                 held past it:  Chain lightning
-///   right click   Light auto     the right arm's: a wing of light, a purge
-///                 held past it:  Disk ray
-///                 -- each wing, on the floor or in the air, then a short hop
+///   left click    Dark auto      tapped: a ball of dark off the left arm, a curse
+///                 held:          Chain lightning
+///   right click   Light auto     tapped: a ball of light off the right, a purge
+///                 held:          Disk ray
+///                 -- each ball, on the floor or in the air, then a short hop
 ///                    the way she is holding, lifted more the fuller she is
 ///   middle click  Binary (floor) / Phase (air), tapped
 ///                 held:          Flurry dash
@@ -1045,7 +1015,7 @@ pub mod bulwark {
 ///   (no button)   Grasping shade, Halo, Shadowstep, Descent
 /// ```
 ///
-/// **Autos fill, spells vent, majors spend** (2026-10-12): see
+/// **The clicks fill, `F` and `R` vent, majors spend** (2026-10-13): see
 /// [`crate::dual::steer`].
 ///
 /// **Dark curses bodies** and **light writes on the ground and purges**, as in
@@ -1096,18 +1066,17 @@ pub mod dual {
     pub const HALO: u8 = 13;
     /// `R`: a column out of the sky where she points, and a sigil.
     pub const SMITE: u8 = 14;
-    /// Left click held past the dark wing (2026-10-12, the long hold): black
-    /// lightning out of a cloud over her head, onto the body nearest the
-    /// crosshair's spot and chaining from it to the next nearest, and on.
-    /// Every link curses. **Vents** her Dark bar. See
+    /// Left click held (2026-10-12, the long hold): black lightning out of a
+    /// cloud over her head, onto the body nearest the crosshair's spot and
+    /// chaining from it to the next nearest, and on. Every link curses. See
     /// `docs/design/exploration/0016_dual_mage_controls.md`.
     pub const CHAIN_LIGHTNING: u8 = 15;
-    /// Right click held past the light wing: a great disk of light over her
-    /// head, and a moment later a blast from it to the crosshair's point.
-    /// Purges what it passes through. **Vents** her Light bar.
+    /// Right click held: a great disk of light over her head, facing the way
+    /// she faces, and a moment later a blast from it to the crosshair's
+    /// point. Purges what it passes through.
     pub const DISK_RAY: u8 = 16;
     /// Middle click held: a long line of blows along her look, and then she
-    /// dashes down it, untouchable, to its far end. **Vents** both bars alike.
+    /// dashes down it, untouchable, to its far end.
     /// A middle click let go before the hold is Binary on the floor and Phase
     /// in the air, as it always was.
     pub const FLURRY_DASH: u8 = 17;
@@ -1154,21 +1123,11 @@ pub mod dual {
         matches!(kind, BINARY | PHASE | EQUINOX | FLURRY_DASH)
     }
 
-    /// Is this one of the three long holds -- the spells that **vent**? They
-    /// spend `meter, a long hold vents` of the bar they are made of (both
-    /// bars, for the twilight one) rather than goading it. See
-    /// `crate::dual::steer`.
-    pub const fn is_a_vent(kind: u8) -> bool {
+    /// Is this one of the three long holds? They fill `meter, a long hold
+    /// fills` of the bar they are made of (both bars, for the twilight one).
+    /// See `crate::dual::steer`.
+    pub const fn is_a_long_hold(kind: u8) -> bool {
         matches!(kind, CHAIN_LIGHTNING | DISK_RAY | FLURRY_DASH)
-    }
-
-    /// The long hold that follows an auto whose button stays down, if any.
-    pub const fn vent_after(auto: u8) -> Option<u8> {
-        match auto {
-            DARK_AUTO => Some(CHAIN_LIGHTNING),
-            LIGHT_AUTO => Some(DISK_RAY),
-            _ => None,
-        }
     }
 
     /// Is this one of the two autos -- the wings on the bare clicks, thrown
@@ -1816,7 +1775,7 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         Class::DualMage => match kind {
             // The autos are the wings again (2026-10-12, second pass): a thin
             // curved blade off one arm, a great deal bigger than it was.
-            dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Wing,
+            dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Orb,
             dual::GRASPING_SHADE
             | dual::DEVOUR
             | dual::SMITE
@@ -1918,12 +1877,13 @@ pub enum Charge {
     /// goes** -- red health every `tuning::blood_pays_every` frames held --
     /// and it buys size (the nova's burst) or distance (the jet's drive).
     Bleed,
-    /// The Dual mage's long holds (2026-10-12): the hold is **before** the
-    /// move and buys **the move itself**. Held for the move's whole
-    /// `channel`, it comes out on its own; let go sooner and it does not --
-    /// the click was a tap after all, and for the middle click a tap is
-    /// Binary or Phase. See `state::step_channel`.
-    Vent,
+    /// The Dual mage's clicks (2026-10-13): the press opens a hold that is
+    /// **neither move yet**. Held for the long hold's whole `channel`, the
+    /// spell comes out on its own; let go sooner and the tap does -- the wing,
+    /// or Binary or Phase for the middle click -- on the frame it is let go.
+    /// Never both, and nothing of either before it is decided. See
+    /// `state::step_channel`.
+    TapOrHold,
 }
 
 /// Which charge a move has, if any.
@@ -1936,7 +1896,7 @@ pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
-        Class::DualMage if dual::is_a_vent(kind) => Some(Charge::Vent),
+        Class::DualMage if dual::is_a_long_hold(kind) => Some(Charge::TapOrHold),
         _ => None,
     }
 }
@@ -2141,120 +2101,86 @@ pub fn swing_base(facing: V3, aim_dir: V3, plane: Plane, grounded: bool) -> V3 {
     }
 }
 
-/// The ring a wing carves, placed in the world.
-///
-/// A wing is a section of a torus lying flat (see [`Shape::Wing`]), and this is
-/// the whole torus plus the two bearings the section lives between. Everything
-/// in it is a knob, because where this shape sits relative to the body that
-/// threw it *is* the move -- see `tuning::wing_inner` and the three beside it.
+/// **Where the Dual mage's auto is, `t` of the way along its flight**
+/// (2026-10-13, from the owner: a ball, not a sweep).
 ///
 /// ```text
-///                       .-  -  -  -.
-///                   . '             ' .        outer arc at `Move::reach`
-///     starts -->  ;                     :      inner arc `wing_inner` of it
-///     behind her   \                   /       and nothing in between
-///        o          ' .     (x)   . '
-///        |              ' - , - '     <-- finishes in front of that fist
-///     the mage,                           `wing_finish` off her centre line
-///     punching                        (x) the ring's middle: pushed
-///     left-handed                         `wing_offside` toward the other
-///                                         arm and `wing_ahead` forward
+///                                          * <- the sweet spot: `reach` out,
+///                                         /     dead in front of her chest
+///                                       /
+///                                    .'
+///                                 .'        it bows out a little on its way
+///                              .'           (`orb, bows out`), then comes
+///                            (              back in to her centre line
+///                             '.
+///       o -- shoulder           ' .
+///       |      * <- it starts `orb, starts out` outside that shoulder and
+///     the mage     `orb, starts behind` behind her
 /// ```
 ///
-/// The middle is pushed **off** her rather than sitting on her, which is what
-/// makes the blade pass by rather than wrap round: a ring centred on a fighter
-/// is the same distance from them at every bearing, and a piece of one reads as
-/// a halo however short it is.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Wing {
-    /// The middle of the ring, at the height the hand punches through.
-    pub at: V3,
-    pub inner: Fx,
-    pub outer: Fx,
-    /// The bearing the leading edge stops on, in front of the punching hand.
-    pub finish: Fx,
-    /// How far back from `finish` the section starts, **signed by the arm**:
-    /// positive is the way [`crate::aim::Hand::Left`] sweeps. One tuned `arc`
-    /// serves both autos because the sign lives here and nowhere else.
-    pub span: Fx,
+/// Forward is `dir`, and the whole flight is `drop` below her chest: see
+/// [`orb_line`]. Out is
+/// flat, toward the punching arm (`aim::across`). Forward runs straight from
+/// behind her to `reach`; out is `(1 - t)(L + A t)`, which starts at `L` (the
+/// shoulder's own offset and the start's), returns to nought exactly at the
+/// end, and peaks `orb, bows out` further out than `L`, about a third of the
+/// way along -- `A` is solved for that. The hit test and the drawing both read
+/// this one function, so the trail on the screen is the path that hit.
+pub fn orb_at(pos: V3, facing: V3, (dir, drop): (V3, Fx), m: &Move, t: Fx) -> V3 {
+    use crate::tuning as tu;
+    let t = t.clamp(Fx::ZERO, Fx::ONE);
+    let start = tu::hand_offset().add(tu::orb_out());
+    let bow = tu::orb_bows_out();
+    // max over t of (1 - t)(L + A t) is (A + L)^2 / 4A; setting that to
+    // L + B gives A = L + 2B + 2 sqrt(B (L + B)).
+    let root = bow.mul(start.add(bow)).sqrt();
+    let a = start.add(bow).add(bow).add(root).add(root);
+    let out = Fx::ONE.sub(t).mul(start.add(a.mul(t)));
+    let back = tu::orb_back();
+    let ahead = back.neg().add(m.reach.add(back).mul(t));
+    crate::aim::origin(pos)
+        .add(V3::new(Fx::ZERO, drop, Fx::ZERO))
+        .add(dir.scale(ahead))
+        .add(crate::aim::across(facing, m.hand).scale(out))
 }
 
-/// Where a wing's ring is, given where the fighter stands and what they threw.
-///
-/// The plane of it is the floor's while her feet are on it, which is the one
-/// place this move ignores the camera's pitch. Off the ground there is no shared
-/// floor to lie parallel to, so it rides the aim -- and for a flat ring that
-/// means only its height moves, because a ring lying in the aim's plane is
-/// still a ring. The same split `swing_base` already makes for a cut thrown in
-/// the air.
-pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, stoop: Fx, m: &Move) -> Wing {
-    use crate::tuning as t;
-    let middle = crate::aim::origin(pos)
-        .add(facing.scale(m.reach.mul(t::wing_ahead())))
-        .sub(crate::aim::across(facing, m.hand).scale(m.reach.mul(t::wing_offside())));
-    // Standing, it lies at the shoulder -- unless the swing stooped to meet
-    // something short (`aim::stoop`, a drop in metres, zero among fighters),
-    // and then it comes down by that much -- and it rises with a look above
-    // the horizon, as a swing does (`aim::swing_path`), so a part higher than
-    // her head is reachable from the floor (2026-10-12: the wings came back
-    // as her autos, and the slam's fore sac is one).
-    let at = if grounded {
-        let up = aim_dir.y.max(Fx::ZERO).mul(m.reach);
-        V3::new(middle.x, middle.y.add(stoop).add(up), middle.z)
+/// Which way the auto's ball flies and how far below her chest: the line
+/// [`orb_at`] is laid along. Standing, it is level -- or tilted up by a look
+/// above the horizon -- and the whole flight comes down by the swing's stoop
+/// (`aim::stoop`, a drop in metres, nought among fighters), so a knee-high
+/// body under the crosshair is met at its own height all the way out rather
+/// than by a line that only reaches the floor at full reach. In the air it is
+/// the look exactly. The wing it replaced lay the same way.
+pub fn orb_line(facing: V3, aim_dir: V3, grounded: bool, stoop: Fx) -> (V3, Fx) {
+    if !grounded {
+        return (aim_dir, Fx::ZERO);
+    }
+    if aim_dir.y.raw() > 0 {
+        (aim_dir, Fx::ZERO)
     } else {
-        V3::new(middle.x, middle.y.add(aim_dir.y.mul(m.reach)), middle.z)
-    };
-    let ahead = crate::math::atan2_turns(facing.z, facing.x);
-    let outward = Fx::from_int(m.hand.outward());
-    Wing {
-        at,
-        inner: m.reach.mul(t::wing_inner()),
-        outer: m.reach,
-        finish: ahead.add(t::wing_finish().mul(outward)),
-        span: m.arc.mul(outward),
+        (facing, stoop.min(Fx::ZERO))
     }
 }
 
-impl Wing {
-    /// The section that is actually out, `through` of the way through the
-    /// opening.
-    ///
-    /// **It opens rather than sweeps.** The trailing edge stays where the punch
-    /// threw it and the leading edge comes round toward the front, so the shape
-    /// is a wing spreading rather than a blade travelling -- the beings inside
-    /// her extending the movement past where an arm could take it.
-    ///
-    /// It stops `tuning::wing_tip` of the span short of the finish. That last
-    /// piece belongs to the tip, which is a bubble rather than a section: see
-    /// [`Wing::tip`].
-    pub fn opened(&self, through: Fx) -> crate::math::Sector {
-        let short = self.span.mul(crate::tuning::wing_tip());
-        let leading = short.add(self.span.sub(short).mul(Fx::ONE.sub(through)));
-        crate::math::Sector {
-            at: self.at,
-            inner: self.inner,
-            outer: self.outer,
-            from: self.finish.add(self.span),
-            to: self.finish.add(leading),
-        }
-    }
-
-    /// The foremost point of the ring: the outer arc at the bearing the wing
-    /// finishes on, which is where the tip arrives on the last active frame.
-    ///
-    /// Read off a section with no width rather than worked out again here. A
-    /// second copy of the same arithmetic is how a tip ends up somewhere the
-    /// wing it belongs to never went.
-    pub fn tip(&self) -> V3 {
-        crate::math::Sector {
-            at: self.at,
-            inner: self.inner,
-            outer: self.outer,
-            from: self.finish,
-            to: self.finish,
-        }
-        .point(Fx::ONE, Fx::ONE)
-    }
+/// How far along its flight the auto's ball is on this frame of its active
+/// window, and how far it was the frame before: `(from, to)`, so the frame's
+/// volume is the stretch it covered and a ball that crosses metres a frame
+/// cannot step over a body. `left` is the active frames remaining, counting
+/// down; on the last, `left == 0`, the ball has arrived and the volume is the
+/// sweet spot instead -- see `state::hitbox`.
+///
+/// The flight before the sweet spot stops two steps short of the end, so the
+/// end itself -- full reach, dead ahead -- is met by the sweet spot and by
+/// nothing else: a body standing exactly a reach away was being struck by the
+/// ball's last stretch a frame before the sweet spot arrived. The sweet spot's
+/// own bubble covers the stretch between.
+pub fn orb_progress(m: &Move, left: u16) -> (Fx, Fx) {
+    let n = m.active.max(1) as i32 + 2;
+    let elapsed = m.active.saturating_sub(left) as i32;
+    (
+        Fx::ratio(elapsed.min(n), n),
+        Fx::ratio((elapsed + 1).min(n), n),
+    )
 }
 
 /// Turn a direction by `by` turns, in one of the two planes a weapon swings

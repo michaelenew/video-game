@@ -187,7 +187,7 @@ pub const SECTIONS: &[Section] = &[
             e("W A S D", "Move, relative to the camera."),
             e(
                 "Space",
-                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial. On the Dual mage, a second press in the air jumps again while the lower of her two bars is at three quarters, and every press is a wing beat while she is ascended.",
+                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial. On the Dual mage, a second press in the air jumps again while the lower of her two bars is at two thirds, and every press is a wing beat while she is ascended.",
             ),
             e(
                 "Shift + direction",
@@ -278,15 +278,15 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two forces, one in each hand, and a bar for each. Your clicks are wings of dark and light, thrown by the beings inside you, and every one of them hops you the way you are holding -- so you fight by darting in, striking and darting out again, lifted a little further off the floor each time as your bars fill. Your wings fill the bars; your spells let some of it out; Q and E let a whole bar out at once. Stay level and just under the top. Reworked on 2026-10-12 and unplayed; docs/design/exploration/0016_dual_mage_controls.md is the latest.",
+        blurb: "Two forces, one in each hand, and a bar for each. Your clicks throw balls of dark and light, from the beings inside you, and every one of them hops you the way you are holding -- so you fight by darting in, striking and darting out again, lifted a little further off the floor each time as your bars fill. Everything on the mouse fills the bars; F and R let a little out; Q and E let a whole bar out at once. Stay level and just under the top. Reworked on 2026-10-12 and unplayed; docs/design/exploration/0016_dual_mage_controls.md is the latest.",
         entries: &[
             e(
                 "Left and right click",
-                "Your autos, on the floor and in the air: a great crescent of dark (left) or light (right) thrown out in front of you, reaching seven metres straight ahead. The far end of it, dead ahead at full reach, hits half again as hard. The dark wing lays a curse; the light wing purges one. Each fills its own bar. Let go of the click before the wing finishes, holding a direction, and you hop three metres that way, and the hop is the rest of the swing. Each hop lifts you, more the fuller your lower bar; the first hop of each jump in the air lifts you like a second jump, and while ascending every one does.",
+                "Tapped, your autos, on the floor and in the air: a ball of dark (left) or light (right) thrown from just outside and behind your shoulder, bowing out a little and coming back in to finish straight in front of you six metres out, leaving a trail. Wherever it meets someone on the way it hits; landing it right at the end, on the sweet spot, hits half again as hard -- so the place to stand is six metres away. The dark ball lays a curse; the light ball purges one. Each fills its own bar. Holding a direction as the ball arrives, you hop three metres that way, and the hop is the rest of the swing. Each hop lifts you, more the fuller your lower bar; the first hop of each jump in the air lifts you like a second jump, and while ascending every one does.",
             ),
             e(
                 "Holding a click",
-                "Keep the click held past its wing and it becomes that hand's spell, cast when the hold is full (about a quarter of a second); let go sooner and nothing is cast. Left held is Chain lightning: a storm cloud gathers over your head and black lightning strikes the body nearest your crosshair and leaps to the next, up to four, cursing each. Right held is the Disk ray: a great disk of light opens over your head and blasts the point your crosshair is on, purging what it passes through. Middle click held is the Flurry dash: a line of blows down your look, and then you dash down it, untouchable, through whoever is on it. Each spends a fifth of its bar (the dash, a fifth of both).",
+                "A click is a tap or a hold, never both: while you hold it nothing has started, let go and it is the tap, keep it held a sixth of a second and it is that hand's spell -- and then you are committed: the spell plays out whether you keep holding or not, and holding longer does not make it stronger. Left held is Chain lightning: a storm cloud gathers over your head and black lightning strikes the body nearest your crosshair and leaps to the next, up to four, cursing each. Right held is the Disk ray: a great disk of light opens over your head, facing where you face, and blasts the point your crosshair is on, purging what it passes through. Middle click held is the Flurry dash: a line of blows down your look, and then you dash down it, untouchable, through whoever is on it. Each fills its bar a little (the dash, both).",
             ),
             e(
                 "F",

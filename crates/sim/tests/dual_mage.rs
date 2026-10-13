@@ -108,7 +108,7 @@ fn aloft(w: &mut World, height: i32) {
 
 fn kind_thrown(bits: u16) -> u8 {
     let mut w = mage();
-    step(&mut w, 1, bits);
+    tap(&mut w, bits);
     w.players[0]
         .action
         .attack_kind()
@@ -387,11 +387,12 @@ fn every_move_moves_a_bar_with_nothing_in_range() {
     }
 }
 
-/// Press `bits` for a frame -- and, for the bare middle click, let it go the
-/// next, which is what makes it a tap rather than the Flurry dash's hold.
+/// Press `bits` for a frame -- and, for a bare click, let it go the next,
+/// which is what makes it a tap rather than its long hold (2026-10-13: every
+/// click is undecided until it is let go or held full).
 fn tap(w: &mut World, bits: u16) {
     step(w, 1, bits);
-    if bits == M {
+    if bits & (L | M | R) != 0 && bits & SPACE == 0 {
         step(w, 1, 0);
     }
 }
@@ -406,7 +407,7 @@ fn an_auto_goads_its_own_bar_by_exactly_one_step() {
         for carrying in [Force::Dark, Force::Light] {
             let mut w = mage();
             w.players[0].mechanic = meter_at(0, 0, carrying);
-            step(&mut w, 1, bits);
+            tap(&mut w, bits);
             let (own, other) = match force {
                 Force::Dark => (dark(&w), light(&w)),
                 Force::Light => (light(&w), dark(&w)),
@@ -1410,7 +1411,7 @@ fn goading_both_bars_to_the_top_together_starts_ascension_and_nothing_else_does(
     let wings = t::tier_wings();
     let mut w = mage();
     w.players[0].mechanic = meter_at(wings + 1, wings - 1, Force::Light);
-    step(&mut w, 1, R);
+    tap(&mut w, R);
     step(&mut w, 1, 0);
     assert!(
         ascending(&w) > 0,

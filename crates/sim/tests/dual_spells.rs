@@ -107,11 +107,11 @@ fn run_looking(w: &mut World, frames: u32, pitch: i16) {
     }
 }
 
-/// Press `button` for a frame -- and, for the bare middle click, let it go
-/// the next, which makes it a tap rather than the Flurry dash's hold.
+/// Press `button` for a frame -- and, for a bare click, let it go the next,
+/// which makes it a tap rather than its long hold (2026-10-13).
 fn tap(w: &mut World, button: u16) {
     step(w, button);
-    if button == keys::TWILIGHT {
+    if matches!(button, keys::DARK | keys::TWILIGHT | keys::LIGHT) {
         step(w, 0);
     }
 }
@@ -1142,46 +1142,129 @@ fn holding_a_click_past_its_wing_is_that_hand_s_long_hold() {
 }
 
 #[test]
-fn letting_go_before_the_hold_is_full_throws_no_spell() {
-    let mut w = alone();
-    level(&mut w, 50);
-    // The wing, and a few frames past it.
-    let m = sim::moves::get(Class::DualMage, d::DARK_AUTO);
-    run(&mut w, (m.startup + m.active) as u32 + 4, keys::DARK);
-    assert_eq!(
-        doing(&w),
-        Some(d::CHAIN_LIGHTNING),
-        "fixture: she is holding"
-    );
-    for _ in 0..60 {
+fn a_click_is_a_tap_or_a_hold_and_never_both() {
+    // **Either / or** (2026-10-13, from the owner): while the click is held
+    // and the hold is not full, nothing has begun -- no wing, no cloud. Let
+    // go and it is the wing, from that frame; hold it full and it is the
+    // spell, and the wing never was.
+    let cap = sim::moves::get(Class::DualMage, d::CHAIN_LIGHTNING).channel as u32;
+    for (button, tap, hold) in [
+        (keys::DARK, d::DARK_AUTO, d::CHAIN_LIGHTNING),
+        (keys::LIGHT, d::LIGHT_AUTO, d::DISK_RAY),
+    ] {
+        // Let go part of the way: the tap, and never the spell.
+        let mut w = alone();
+        level(&mut w, 50);
+        for _ in 0..cap / 2 {
+            step(&mut w, button);
+            assert!(
+                matches!(w.players[0].action, Action::Channel { .. }),
+                "{button:#x}: something began before it was decided: {:?}",
+                w.players[0].action
+            );
+            assert!(sim::state::hitbox(&w.players[0]).is_none());
+        }
         step(&mut w, 0);
+        assert_eq!(doing(&w), Some(tap), "{button:#x} let go early");
+        for _ in 0..60 {
+            step(&mut w, 0);
+            assert_ne!(doing(&w), Some(hold), "{button:#x}: the spell came too");
+        }
+        // Held full: the spell, and the wing never.
+        let mut w = alone();
+        level(&mut w, 50);
+        for _ in 0..cap + 40 {
+            step(&mut w, button);
+            assert_ne!(
+                doing(&w),
+                Some(tap),
+                "{button:#x}: the wing came out of a hold"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_long_hold_fills_its_bar() {
+    let mut w = alone();
+    level(&mut w, 40);
+    assert!(hold_into(&mut w, keys::DARK, 0, d::CHAIN_LIGHTNING, 60));
+    let p = &w.players[0];
+    let (dark, light) = sim::dual::bars(p).unwrap();
+    let want = 40 + t::hold_fills();
+    assert!(
+        (dark.to_int() - want).abs() <= 2,
+        "the lightning left the dark bar at {} rather than about {want}",
+        as_f(dark)
+    );
+    assert!(
+        (light.to_int() - 40).abs() <= 2,
+        "the light bar moved: {}",
+        as_f(light)
+    );
+}
+
+#[test]
+fn the_auto_is_a_ball_from_behind_the_shoulder_bowing_out_and_finishing_dead_ahead() {
+    // Facing +X: forward is +x, and the punching side is wherever
+    // `aim::across` says; out is measured along it.
+    let w = alone();
+    let p = &w.players[0];
+    let chest = sim::aim::origin(p.pos);
+    for kind in [d::DARK_AUTO, d::LIGHT_AUTO] {
+        let m = sim::moves::get(Class::DualMage, kind);
+        let side = sim::aim::across(p.facing, m.hand);
+        let at = |t: f32| {
+            let v =
+                sim::moves::orb_at(p.pos, p.facing, (p.facing, Fx::ZERO), &m, metres(t)).sub(chest);
+            (as_f(v.x), as_f(v.dot(side)))
+        };
+        let (back, out0) = at(0.0);
+        assert!(back < -0.2, "it starts behind her: {back}");
         assert!(
-            !matches!(
-                w.players[0].action,
-                Action::Startup { .. } | Action::Active { .. }
-            ),
-            "a spell came out of a hold let go early"
+            out0 > as_f(t::hand_offset()) + 0.2,
+            "outside the shoulder: {out0}"
+        );
+        let widest = (1..10).map(|k| at(k as f32 / 10.0).1).fold(0.0, f32::max);
+        assert!(widest > out0 + 0.2, "it bows out: {widest} from {out0}");
+        assert!(
+            widest < out0 + as_f(t::orb_bows_out()) + 0.05,
+            "by no more than it is tuned to: {widest}"
+        );
+        let (ahead, out1) = at(1.0);
+        assert!(
+            (ahead - as_f(m.reach)).abs() < 0.05,
+            "it finishes at {ahead}"
+        );
+        assert!(out1.abs() < 0.05, "dead ahead, not {out1} to the side");
+        let forward: Vec<f32> = (0..=10).map(|k| at(k as f32 / 10.0).0).collect();
+        assert!(
+            forward.windows(2).all(|w| w[1] > w[0]),
+            "always going forward"
         );
     }
 }
 
 #[test]
-fn a_long_hold_vents_its_bar_and_an_auto_fills_it() {
-    let mut w = alone();
-    level(&mut w, 60);
-    assert!(hold_into(&mut w, keys::DARK, 0, d::CHAIN_LIGHTNING, 60));
-    let p = &w.players[0];
-    let (dark, light) = sim::dual::bars(p).unwrap();
-    let want = 60 + t::meter_auto_push() - t::hold_vents();
+fn the_sweet_spot_is_at_full_reach() {
+    let reach = as_f(sim::moves::get(Class::DualMage, d::DARK_AUTO).reach);
+    // On a Champion, who has no shield up to take it on.
+    let dealt = |gap: f32| {
+        let mut w = World::with_classes([Class::DualMage, Class::Champion]);
+        w.players[0].pos = at(-6.0, 0.0, 8.0);
+        w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+        w.players[1].pos = at(-6.0 + gap, 0.0, 8.0);
+        let before = w.players[1].health;
+        tap(&mut w, keys::DARK);
+        run(&mut w, 20, 0);
+        before - w.players[1].health
+    };
+    let sweet = dealt(reach);
+    let on_the_way = dealt(reach / 2.0);
+    assert!(on_the_way > 0, "the ball hit nothing on its way");
     assert!(
-        (dark.to_int() - want).abs() <= 2,
-        "the wing and the lightning left the dark bar at {} rather than about {want}",
-        as_f(dark)
-    );
-    assert!(
-        (light.to_int() - 60).abs() <= 2,
-        "the light bar moved: {}",
-        as_f(light)
+        sweet > on_the_way + on_the_way / 3,
+        "at full reach {sweet}, half way {on_the_way}"
     );
 }
 
@@ -1361,4 +1444,47 @@ fn the_equinox_blinks_as_she_leaves_the_floor() {
         w.players[0].pos.y.raw() > 0,
         "and she is still on the floor"
     );
+}
+
+#[test]
+fn a_full_hold_is_a_commitment_and_not_a_charge() {
+    // **An MMO spell, not a charge** (the owner, 2026-10-13): held long
+    // enough, she is locked into the spell, it plays through whether the
+    // button stays down or not, and how strong it is has nothing to do with
+    // how long it was held.
+    for (button, spell) in [
+        (keys::DARK, d::CHAIN_LIGHTNING),
+        (keys::LIGHT, d::DISK_RAY),
+        (keys::TWILIGHT, d::FLURRY_DASH),
+    ] {
+        let thrown = |keep: u32| {
+            let mut w = alone();
+            level(&mut w, 50);
+            assert!(hold_into(&mut w, button, 0, spell, 60));
+            let worth = w.players[0].thrown_at;
+            let mut came_out = false;
+            for f in 0..90 {
+                step(&mut w, if f < keep { button } else { 0 });
+                came_out |= matches!(
+                    w.players[0].action,
+                    Action::Active { kind, .. } if kind == spell
+                );
+            }
+            (came_out, worth)
+        };
+        let (let_go, worth_let_go) = thrown(0);
+        let (held_on, worth_held_on) = thrown(8);
+        assert!(
+            let_go,
+            "{button:#x}: let go at once, the spell did not play through"
+        );
+        assert!(
+            held_on,
+            "{button:#x}: held on, the spell did not play through"
+        );
+        assert_eq!(
+            worth_let_go, worth_held_on,
+            "{button:#x}: holding on changed what it was worth"
+        );
+    }
 }

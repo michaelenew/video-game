@@ -349,6 +349,12 @@ const EXEMPT: &[(&str, &str)] = &[
          Numerically motivated, not felt.",
     ),
     (
+        "const ALONG: i32 = 12",
+        "How finely the rest of the Dual mage's ball's flight is sampled when asking a \
+         creature which part it carries through to. A discretisation of a continuous test, \
+         like the weapon line's samples, not a quantity anybody tunes.",
+    ),
+    (
         "const SAMPLES: i32 = 5",
         "How finely a weapon's line is sampled when asking the creature which part it \
          touched. A discretisation of a continuous test, not a quantity: the spacing it \

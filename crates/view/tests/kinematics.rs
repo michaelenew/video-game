@@ -719,7 +719,9 @@ fn the_two_autos_leave_from_the_arm_that_throws_them() {
         // And the simulation really does start the line off the centre line,
         // on that side, when middle click throws this form.
         let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
+        // A tap: pressed and let go, or it is the long hold (2026-10-13).
         w.advance([sim::Input::aimed(button, 0), sim::Input::new(0)]);
+        w.advance([sim::Input::aimed(0, 0), sim::Input::new(0)]);
         assert_eq!(
             w.players[0].action.attack_kind(),
             Some(slot),

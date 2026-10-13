@@ -3612,17 +3612,9 @@ pub struct Hitbox {
     /// The move has already connected this swing and cannot connect again.
     /// Still drawn, because it is still visibly out.
     pub spent: bool,
-    /// Present when the volume is a **section of a ring** rather than a
-    /// capsule, which is one shape in the game: the Dual mage's wing.
-    ///
-    /// When it is here it is what the hit test uses and what the overlay draws;
-    /// `from` and `to` are then the section's **leading edge**, the line its tip
-    /// is on, so that everything which only understands a line still has a true
-    /// one to draw rather than a reconstruction of its own.
-    pub sector: Option<crate::math::Sector>,
-    /// The last frame of a wing: its edge alone, and it hits harder. See
-    /// `tuning::wing_tipper`.
-    pub tipper: bool,
+    /// The Dual mage's auto on its last frame: its **sweet spot**, the ball
+    /// arrived, and it hits harder. See `tuning::orb_sweet`.
+    pub sweet: bool,
 }
 
 impl Hitbox {
@@ -3691,8 +3683,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
-        sector: None,
-        tipper: false,
+        sweet: false,
     };
     let (from, to, flat) = match m.aim() {
         // A line from her hand to the point the crosshair was on, ending
@@ -3792,66 +3783,34 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 };
                 (hub, hub.add(dir.scale(out)), false)
             }
-            // A section of a torus lying flat: a thin curved blade that opens
-            // from nothing to its whole span over the active window, with its
-            // leading edge arriving in front of the punching fist. See
-            // `moves::Shape::Wing`.
-            //
-            // The volume is the section itself rather than a line standing in
-            // for one -- `math::Sector` is the shape, and the hit test and the
-            // overlay both read it. A wing curves around the thing that threw
-            // it, and a straight line through that either misses the inside of
-            // the curve or claims the outside of it.
-            moves::Shape::Wing => {
-                let ring = moves::wing(p.pos, p.facing, p.aim_dir(), p.grounded, p.stoop, &m);
-                // Its own progression rather than `swing_progress`, and for a
-                // reason that matters: that one saturates a frame early, so a
-                // wing would reach the front on the frame *before* its last one
-                // and a body standing there would be caught by the body of the
-                // section rather than by the tip. The tip has to be the first
-                // thing to arrive in front of her or it is not a tip.
-                let elapsed = m.active.saturating_sub(left);
-                let through = Fx::ratio(elapsed as i32, m.active.max(2) as i32 - 1);
-                // **The last frame is the tip**: a bubble at the foremost point
-                // of the ring, and the only thing the whole move ever puts
-                // there. The wing opens behind it and stops short, so a body
-                // standing in front of her is caught by the tip or by nothing
-                // -- which is what makes landing it a decision about distance,
-                // taken a sixth of a second earlier, rather than a damage bonus
-                // attached to a frame number.
-                //
-                // A bubble rather than the last slice of the section, because a
-                // slice of a ring is metres of arc: it caught everything across
-                // the whole front of her and the "tip" was the widest part of
-                // the move. A point at the end of the blade is the thing the
-                // design has always described.
+            // **A ball on a curved flight** (2026-10-13): the stretch of
+            // `moves::orb_at`'s path the ball covered this frame, so a ball
+            // crossing metres a frame cannot step over a body, and on the last
+            // frame the sweet spot -- a bubble of its own at the end of the
+            // flight, dead in front of her chest at full reach. What it meets
+            // on the way it hits, for no bonus: standing a reach away is the
+            // decision the sweet spot rewards.
+            moves::Shape::Orb => {
+                let dir = moves::orb_line(p.facing, p.aim_dir(), p.grounded, p.stoop);
                 if left == 0 {
-                    let tip = ring.tip();
+                    let end = moves::orb_at(p.pos, p.facing, dir, &m, Fx::ONE);
                     return Some(Hitbox {
-                        from: tip,
-                        to: tip,
-                        radius: t::wing_tip_radius(),
+                        from: end,
+                        to: end,
+                        radius: t::orb_sweet_radius(),
                         flat: false,
                         hits_crouching: m.hits_crouching,
                         unblockable: m.unblockable,
                         spent: p.hit_used,
-                        sector: None,
-                        tipper: true,
+                        sweet: true,
                     });
                 }
-                let sector = ring.opened(through);
-                // The leading edge, for everything that can only draw a line.
-                return Some(Hitbox {
-                    from: sector.point(Fx::ZERO, Fx::ONE),
-                    to: sector.point(Fx::ONE, Fx::ONE),
-                    radius: m.radius,
-                    flat: false,
-                    hits_crouching: m.hits_crouching,
-                    unblockable: m.unblockable,
-                    spent: p.hit_used,
-                    sector: Some(sector),
-                    tipper: false,
-                });
+                let (was, now) = moves::orb_progress(&m, left);
+                (
+                    moves::orb_at(p.pos, p.facing, dir, &m, was),
+                    moves::orb_at(p.pos, p.facing, dir, &m, now),
+                    false,
+                )
             }
         },
         // At the mechanic, and *live*: the shadow can be moved while the blades
@@ -3867,8 +3826,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
-        sector: None,
-        tipper: false,
+        sweet: false,
     })
 }
 
@@ -4067,7 +4025,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
 
     // The tip of a wing, on the last frame it is out. Timing it is the one
     // piece of execution in an attack that is otherwise thrown constantly.
-    let tipped = box_out.tipper;
+    let tipped = box_out.sweet;
     // How far out on her own bar the Dual mage is standing, as a multiplier on
     // everything this blow is worth. One for everybody else. See [`depth`].
     let power = depth(attacker);
@@ -4088,7 +4046,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     });
     let damage_mul = preying(attacker.class, defender.disabled())
         .mul(sweet)
-        .mul(if tipped { t::wing_tipper() } else { Fx::ONE })
+        .mul(if tipped { t::orb_sweet() } else { Fx::ONE })
         .mul(if on_the_point {
             t::sweep_tip_damage()
         } else {
@@ -4098,11 +4056,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
-    let hit_at_all = if let Some(ring) = box_out.sector {
-        // A section of a ring. Its own test, because a body inside the curve is
-        // not inside the volume and a straight line cannot say so.
-        ring.touches(defender.pos, defender.hurt_height(), reach)
-    } else if box_out.flat {
+    let hit_at_all = if box_out.flat {
         // The original rule, kept for every move that has not been given a
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
@@ -4142,20 +4096,19 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     //
     // **A negative knockback is a pull**, and it is measured along the line
     // between the two bodies rather than down the attacker's facing: the point
-    // of dragging somebody is that they arrive at *you*, and a wing wraps
-    // around her, so a body caught out at the side would otherwise be sent
-    // backwards past her instead of in. A push is still the facing, because
-    // what a shove does is send them the way the blow was travelling.
+    // of dragging somebody is that they arrive at *you*, and a blow from
+    // the side would otherwise send them backwards past her instead of in. A
+    // push is still the facing, because what a shove does is send them the
+    // way the blow was travelling.
     //
-    // The **tip** multiplies it either way. That is what makes which arm she
-    // punches with a spacing decision as well as a meter one: the light auto's
-    // real knockback lives at the far edge of the blade, and on the dark arm
-    // the same frame hauls them that much further in. See
-    // `tuning::wing_tip_shove`.
-    let shove = m
-        .knockback
-        .mul(power)
-        .mul(if tipped { t::wing_tip_shove() } else { Fx::ONE });
+    // The Dual mage's **sweet spot** multiplies it either way: the light
+    // auto's real knockback lives at full reach, and on the dark arm the same
+    // frame hauls them that much further in. See `tuning::orb_sweet_shove`.
+    let shove = m.knockback.mul(power).mul(if tipped {
+        t::orb_sweet_shove()
+    } else {
+        Fx::ONE
+    });
     let (push_dir, speed) = if shove.raw() < 0 {
         let toward = V3::new(
             attacker.pos.x.sub(defender.pos.x),
@@ -4742,7 +4695,7 @@ fn step_player(
     gallows_blinks(p);
     // The Dual mage's hop out of a finished auto, before the countdown so the
     // recovery it shortens is the one counted down this frame.
-    hop_after_the_auto(p, who, input, scene);
+    hop_after_the_auto(p, input, scene);
     dash_down_the_flurry(p, scene);
 
     // A channel resolves **instead of** the countdown, because it is the one
@@ -5971,16 +5924,29 @@ fn dual_move(p: &Player, input: Input) -> Option<u8> {
     if rising {
         return Some(takeoff);
     }
-    Some(match click {
-        keys::DARK => d::DARK_AUTO,
-        keys::LIGHT => d::LIGHT_AUTO,
-        // **Middle click opens the Flurry dash's hold** (2026-10-12): let go
-        // before it is full and it was a tap -- Binary on the floor, Phase in
-        // the air (`step_channel`). With the flurry locked out the tap is
-        // thrown at once.
-        _ if !p.locked_out(d::FLURRY_DASH) => d::FLURRY_DASH,
-        _ => return twilight_tap(p),
-    })
+    // **Every click opens its long hold, and is a tap until it fills**
+    // (2026-10-13, from the owner: "either / or, never both animations even
+    // in part"). Let go before it is full and the tap comes out then -- the
+    // wing, or Binary or Phase for the middle click (`step_channel`); hold it
+    // full and the spell does, and the tap never began. With the spell
+    // locked out the tap is thrown at once.
+    let (hold, tap) = match click {
+        keys::DARK => (d::CHAIN_LIGHTNING, Some(d::DARK_AUTO)),
+        keys::LIGHT => (d::DISK_RAY, Some(d::LIGHT_AUTO)),
+        _ => (d::FLURRY_DASH, twilight_tap(p)),
+    };
+    if !p.locked_out(hold) { Some(hold) } else { tap }
+}
+
+/// What a tap of a click is, for the hold it opened: the wing for the dark
+/// and light holds, Binary or Phase for the Flurry dash's.
+fn tap_of(p: &Player, hold: u8) -> Option<u8> {
+    use moves::dual as d;
+    match hold {
+        d::CHAIN_LIGHTNING => Some(d::DARK_AUTO),
+        d::DISK_RAY => Some(d::LIGHT_AUTO),
+        _ => twilight_tap(p),
+    }
 }
 
 /// What a tap of the middle click is: Binary on the floor, Phase in the air --
@@ -6030,30 +5996,11 @@ fn dash_down_the_flurry(p: &mut Player, scene: &Scene) {
 /// `auto, recovery after a hop`. Holding nothing, she stands and recovers in
 /// full. Kalista's step: a flurry of hits is a flurry of hops, and the hops
 /// are where her mobility lives. A no-op for everybody else.
-fn hop_after_the_auto(p: &mut Player, who: usize, input: Input, scene: &Scene) {
+fn hop_after_the_auto(p: &mut Player, input: Input, scene: &Scene) {
     let Action::Active { kind, left: 0 } = p.action else {
         return;
     };
     if p.class != Class::DualMage || !moves::dual::is_an_auto(kind) || p.aboard() {
-        return;
-    }
-    // **Still holding the click: the long hold** (2026-10-12). The wing is
-    // out and the button is still down, so this is not a tap: she goes into
-    // the hold of the spell that follows this auto, and there is no hop.
-    let button = if kind == moves::dual::DARK_AUTO {
-        moves::dual::keys::DARK
-    } else {
-        moves::dual::keys::LIGHT
-    };
-    if let Some(vent) = moves::dual::vent_after(kind)
-        && input.has(button)
-        && !p.locked_out(vent)
-    {
-        aim_channel(p, who, vent, 0, input, scene);
-        p.action = Action::Channel {
-            kind: vent,
-            held: 0,
-        };
         return;
     }
     let (ax, az) = input.move_axis();
@@ -6624,8 +6571,7 @@ pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
         hits_crouching: true,
         unblockable: false,
         spent: struck,
-        sector: None,
-        tipper: false,
+        sweet: false,
     })
 }
 
@@ -6651,17 +6597,60 @@ fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<us
         return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
     }
     const SAMPLES: i32 = 5;
-    // **Against a creature a wing is its tip** (2026-10-12, when the wings
-    // came back as the Dual mage's autos): the blade opening behind the tip
-    // sweeps metres of a body that size and would spend the swing on the
-    // first flank it brushed, so the weak point she put her tip on -- the
-    // Broodmother's fore sac in the slam -- was never the part struck. A
-    // fighter is one body, and the section is its own test there.
-    if box_out.sector.is_some() {
-        return None;
-    }
     let thick = box_out.radius;
     let rig = beast.rig();
+    // **The Dual mage's ball carries through to the weak point** (2026-10-13):
+    // its flight crosses metres of a body a creature's size, and struck at the
+    // first flank it brushed it never reached the part she threw it at -- the
+    // Broodmother's sacs in the slam. So on the frame it first touches the
+    // creature it strikes the softest part anywhere on the rest of its
+    // flight, once, as the creature's own rule picks among parts one volume
+    // touches. Where the rest of the flight is, is `moves::orb_at`'s.
+    if let Action::Active { kind, left } = attacker.action
+        && attacker.class == Class::DualMage
+        && moves::dual::is_an_auto(kind)
+        && !box_out.sweet
+    {
+        let mut touched = false;
+        for i in 0..=SAMPLES {
+            let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, SAMPLES));
+            let foot = V3::new(at.x, at.y.sub(thick), at.z);
+            touched |= beast
+                .part_struck_on(&rig, foot, thick, thick.add(thick))
+                .is_some();
+        }
+        if !touched {
+            return None;
+        }
+        let m = moves::get(attacker.class, kind);
+        let line = moves::orb_line(
+            attacker.facing,
+            attacker.aim_dir(),
+            attacker.grounded,
+            attacker.stoop,
+        );
+        let (was, _) = moves::orb_progress(&m, left);
+        const ALONG: i32 = 12;
+        let mut best: Option<usize> = None;
+        for i in 0..=ALONG {
+            let t = was.add(Fx::ONE.sub(was).mul(Fx::ratio(i, ALONG)));
+            let at = moves::orb_at(attacker.pos, attacker.facing, line, &m, t);
+            let foot = V3::new(at.x, at.y.sub(thick), at.z);
+            if let Some(part) = beast.part_struck_on(&rig, foot, thick, thick.add(thick)) {
+                best = Some(match best {
+                    Some(seen)
+                        if beast.sp().vulnerability(seen).raw()
+                            >= beast.sp().vulnerability(part).raw() =>
+                    {
+                        seen
+                    }
+                    _ => part,
+                });
+            }
+        }
+        return best;
+    }
+
     let mut best: Option<usize> = None;
     for i in 0..=SAMPLES {
         let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, SAMPLES));
@@ -7186,7 +7175,7 @@ fn begin_move(
     // after the startup and the press starts the move like any other.
     if matches!(
         moves::charge(p.class, kind),
-        Some(moves::Charge::Reach | moves::Charge::Vent)
+        Some(moves::Charge::Reach | moves::Charge::TapOrHold)
     ) {
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
@@ -7312,27 +7301,14 @@ fn step_channel(
     aim_channel(p, who, kind, held, input, scene);
     match charge {
         // **The Dual mage's long holds** (2026-10-12): held to the end, the
-        // spell comes out on its own; let go sooner and the click was a tap
-        // -- the middle click's is Binary or Phase, thrown now, and a wing's
-        // is the rest of the wing's recovery.
-        Some(moves::Charge::Vent) if held >= cap => throw_move(p, kind, input, true),
-        Some(moves::Charge::Vent) if moves::dual::twilight(kind) => {
-            match twilight_tap(p).filter(|tap| !p.locked_out(*tap)) {
-                Some(tap) => begin_move(p, who, tap, input, scene, true),
-                None => Action::Free,
-            }
-        }
-        Some(moves::Charge::Vent) => {
-            let auto = if moves::dual::force(kind) == Some(Force::Dark) {
-                moves::dual::DARK_AUTO
-            } else {
-                moves::dual::LIGHT_AUTO
-            };
-            Action::Recovery {
-                kind: auto,
-                left: moves::get(p.class, auto).recovery.saturating_sub(held),
-            }
-        }
+        // spell comes out on its own; let go sooner and the click was a tap,
+        // and the tap is thrown now -- the wing, or Binary or Phase. Nothing
+        // of either had begun while it was undecided.
+        Some(moves::Charge::TapOrHold) if held >= cap => throw_move(p, kind, input, true),
+        Some(moves::Charge::TapOrHold) => match tap_of(p, kind).filter(|tap| !p.locked_out(*tap)) {
+            Some(tap) => begin_move(p, who, tap, input, scene, true),
+            None => Action::Free,
+        },
         // The Strike: the startup already ran, and the hold was the pause
         // between it and the active frames. What it bought is how much of
         // the pillar's burn arrives at once, as a share of the longest hold.
@@ -7439,7 +7415,7 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
             moves::Charge::Strike
                 | moves::Charge::Gather
                 | moves::Charge::Bleed
-                | moves::Charge::Vent
+                | moves::Charge::TapOrHold
         )
     ) {
         p.aim_path.to = p.aim_path.at(m.reach_after(held));
@@ -13642,6 +13618,12 @@ impl World {
         let p = &mut self.players[who.min(MAX_PLAYERS - 1)];
         let aerial = !p.grounded;
         p.action = begin_move(p, who, kind, look, &scene, aerial);
+        // A Dual mage's long hold is thrown as the hold come full: the press
+        // asked for the spell, not for a click that might be a tap.
+        if moves::charge(p.class, kind) == Some(moves::Charge::TapOrHold) {
+            lock_aim(p, who, kind, look, &scene);
+            p.action = throw_move(p, kind, look, aerial);
+        }
     }
 
     /// **A thrown or recalled shield strikes the creatures and the critters
@@ -13962,8 +13944,8 @@ impl World {
             .mul(preying(attacker.class, false))
             .mul(grey_power(&attacker, &m))
             .mul(depth(&attacker))
-            .mul(if box_out.tipper {
-                t::wing_tipper()
+            .mul(if box_out.sweet {
+                t::orb_sweet()
             } else {
                 Fx::ONE
             })

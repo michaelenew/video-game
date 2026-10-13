@@ -1,5 +1,5 @@
 ---
-status: built 2026-10-12 in two rounds (the wing autos and the hop; then the forward wings, the long holds, venting and the spending majors); unplayed
+status: built 2026-10-12 and 13 in three rounds (the autos and the hop; the long holds and the spending majors; the ball autos and tap-or-hold); unplayed
 started: 2026-10-12
 supersedes: 0015's litanies, its air row (Shadowstep, Descent) and the bare-click half of its map
 depends: 0015 (the curse, the purge, the sigils, the stars, the majors -- all kept), ../dual-mage.md (the two bars, the tiers, ascension)
@@ -212,6 +212,37 @@ get, and what is the biggest thing I can spend it on before it gets away from me
 **Not built yet**, from the same message: the line of rays stepping out in front of her, and
 the big flurry of wings at a little past auto range. They want a second length of hold (a
 short hold and a long one on each click), which is the next question.
+
+## The owner's third round (2026-10-13)
+
+> I don't know how to communicate how the autos need to work, because every iteration is
+> building on the same bad implementation. I don't want them to be a sweep. I want them to be a
+> ball that starts near the mage's shoulder, but a little (as in a foot or two) outside and a
+> foot or two behind her. Then, as the mage punch animation plays, I want that ball to move
+> MOSTLY forward out to its current forward-max-distance [...] As it moves forward, its path
+> first moves out away from the mage a small bit (again a foot or two at most), then arcs back
+> inward, finishing directly in front of the mage's chest N meters out with a sweet spot. The
+> ball leaves a trail along its path.
+>
+> The light attack needs to be a circle whose face faces the same direction as the dual mage,
+> not down like it is now.
+>
+> The thunder cloud and light attacks can both start their animations even if the press isn't
+> long enough, and the auto animation can start even if you then hold long enough for a spell.
+> It needs to be either / or, never both animations even in part.
+>
+> And I actually want the mouse spells to increase the bar, not decrease it.
+>
+> Middle, left, and right click long hold aren't supposed to be charges either. If you press the
+> key for long enough you're locked into the spell, the animation will go through, and its
+> strength has nothing to do with how long you pressed the button. That's the "MMO spell" part
+> of the kit.
+
+**What was built**: the wing taken out whole and the ball built new (`moves::orb_at`, one
+function the hit test and the trail both read); the disk upright, facing her facing; every click
+an undecided hold until it is let go (the tap) or held full (the spell, a commitment that plays
+through and is worth her bar, not the hold); the long holds filling 10. All in
+`kits/dual-mage.md` §"Her hands".
 
 ## Next
 

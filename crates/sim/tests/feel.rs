@@ -775,6 +775,13 @@ fn a_move_never_snaps_you_to_its_speed() {
         // to is read off whatever actually came out rather than assumed.
         let held = Input::SHIFT | attack_button(class) | Input::W;
         w.advance([Input::aimed(held, LOOKING), Input::default()]);
+        // The Dual mage's click is undecided while it is down (2026-10-13):
+        // let go, and what comes out is the tap.
+        if let sim::state::Action::Channel { kind, .. } = w.players[0].action
+            && moves::charge(class, kind) == Some(moves::Charge::TapOrHold)
+        {
+            w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
+        }
         let kind = w.players[0]
             .action
             .attack_kind()
