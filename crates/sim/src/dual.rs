@@ -292,8 +292,8 @@ fn end_ascension(p: &mut Player, landed: u16) {
     p.action = Action::Stagger { left: stun };
 }
 
-/// Throwing a move goads a bar: an auto its own, by a little; a cast the bar
-/// of the force she is carrying, by more; the finisher by a lot.
+/// Throwing a move moves a bar: an auto or a takeoff fills its own, a spell
+/// or a long hold vents its own, and a major spends a great deal of its own.
 ///
 /// **On the press, every time, including the autos.** They used to steer on
 /// contact -- the design's own rule -- and with nothing in reach no button on
@@ -319,29 +319,33 @@ pub fn steer(p: &mut Player, kind: u8) {
     if ascending > 0 {
         return;
     }
-    // Three tiers of push, and the order of the arms is the order of the
-    // commitment. **Every move has a force**: the left column and `Q` are
-    // dark, the right column and `E` light, and the middle column twilight --
-    // both at once, each bar by an auto's push, so it never widens the gap.
-    // The two autos are the unit; any other spell a cast; a
-    // major the finisher's push. The force thrown is the one she is carrying
-    // after; twilight leaves that as it was.
-    let push = if crate::moves::dual::is_an_auto(kind) {
+    // **Autos fill, spells vent** (2026-10-12, the second pass's second
+    // day): the wings and the moves that leave the floor are how she builds,
+    // each goading the bar of its force by `meter, an auto moves` (twilight
+    // both at once, so it never widens the gap); a spell vents its own bar
+    // by `meter, a spell vents`, a long hold by `meter, a long hold vents`
+    // (the twilight one both bars alike); and a major spends `meter, a major
+    // spends` of its own -- worth the bar it was thrown from, since
+    // `Player::thrown_at` was read before this, and the way back into the
+    // band when one bar has run away. The force thrown is the one she is
+    // carrying after; twilight leaves that as it was.
+    use crate::moves::dual as d;
+    let builds =
+        d::is_an_auto(kind) || d::is_takeoff(kind) || (d::twilight(kind) && !d::is_a_vent(kind));
+    let by = if builds {
         t::meter_auto_push()
-    } else if crate::moves::dual::is_the_finisher(kind) {
-        t::meter_finisher_push()
+    } else if d::is_the_finisher(kind) {
+        -t::meter_finisher_push()
+    } else if d::is_a_vent(kind) {
+        -t::hold_vents()
     } else {
-        t::meter_cast_push()
+        -t::meter_cast_push()
     };
-    let goad = |bar: Fx, by: i32| bar.add(Fx::from_int(by)).min(top());
-    let (mut dark, mut light, colour) = match crate::moves::dual::force(kind) {
-        Some(Force::Dark) => (goad(dark, push), light, Force::Dark),
-        Some(Force::Light) => (dark, goad(light, push), Force::Light),
-        None => (
-            goad(dark, t::meter_auto_push()),
-            goad(light, t::meter_auto_push()),
-            colour,
-        ),
+    let goad = |bar: Fx, by: i32| bar.add(Fx::from_int(by)).clamp(Fx::ZERO, top());
+    let (mut dark, mut light, colour) = match d::force(kind) {
+        Some(Force::Dark) => (goad(dark, by), light, Force::Dark),
+        Some(Force::Light) => (dark, goad(light, by), Force::Light),
+        None => (goad(dark, by), goad(light, by), colour),
     };
     // **Equinox levels her** (2026-10-12): the one spell aimed at her own
     // runaway. What it moves goes from the higher bar to the lower, and never
@@ -469,10 +473,29 @@ pub fn spend_wing_beat(p: &mut Player) {
     }
 }
 
-/// Feet on the floor: the second jump is back.
+/// Feet on the floor: the second jump is back, and so is the air hop.
 pub fn feet_down(p: &mut Player) {
-    if let Mechanic::Meter { jumped, .. } = &mut p.mechanic {
+    if let Mechanic::Meter { jumped, hopped, .. } = &mut p.mechanic {
         *jumped = false;
+        *hopped = false;
+    }
+}
+
+/// Does an auto thrown in the air rise like a jump? Once an airtime, and every
+/// time while ascending. See `state::hop_after_the_auto`.
+pub fn may_air_hop(p: &Player) -> bool {
+    match p.mechanic {
+        Mechanic::Meter {
+            ascending, hopped, ..
+        } => ascending > 0 || !hopped,
+        _ => false,
+    }
+}
+
+/// Spend the air hop.
+pub fn spend_air_hop(p: &mut Player) {
+    if let Mechanic::Meter { hopped, .. } = &mut p.mechanic {
+        *hopped = true;
     }
 }
 
@@ -653,6 +676,14 @@ pub fn hop_lift(p: &Player) -> Fx {
 pub fn veil(p: &mut Player) {
     if let Mechanic::Meter { veil, .. } = &mut p.mechanic {
         *veil = t::veil_for();
+    }
+}
+
+/// Untouchable for `frames`, as a Veil is, or longer if one already runs:
+/// the Flurry dash's run down its own line.
+pub fn veil_for(p: &mut Player, frames: u8) {
+    if let Mechanic::Meter { veil, .. } = &mut p.mechanic {
+        *veil = (*veil).max(frames);
     }
 }
 

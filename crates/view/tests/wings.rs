@@ -19,6 +19,7 @@ fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
         colour: Force::Dark,
         ascending,
         jumped: false,
+        hopped: false,
         landed: 0,
         singe: Fx::ZERO,
         veil: 0,

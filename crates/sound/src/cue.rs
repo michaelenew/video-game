@@ -490,6 +490,9 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                     size: 5.0,
                 }),
                 sim::moves::dual::JUDGEMENT => Patch::Ring(Ring { pitch: 1320.0 }),
+                // A bolt of the chain lightning: fire's crackle, cut short --
+                // dark, and over before you hear it land.
+                sim::moves::dual::CHAIN_LIGHTNING => Patch::Crackle(Crackle { seconds: 0.25 }),
                 sim::moves::dual::SHADOWSTEP => Patch::Whoosh(Whoosh {
                     frames: 10,
                     size: FIGHTER,

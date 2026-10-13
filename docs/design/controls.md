@@ -742,10 +742,12 @@ and in the air alike, and airborne it costs the airdodge the same way.
 ## Dual mage — built 2026-09-13
 
 > **Her hands, since the second pass of 2026-10-12** ([exploration/0016](exploration/0016_dual_mage_controls.md)):
-> left and right click are the dark and light wing autos on the floor and in the air, each
-> hopping her the way she holds; middle click Binary (floor) / Phase (air); `space` + click the
-> takeoffs below; the `F` key the Devour, the `R` key the Smite; `Q` / `E` the Abyss and
-> Judgement. The table below is the morning's spellbook, kept for its history.
+> left and right click tapped are the dark and light wing autos on the floor and in the air,
+> each hopping her the way she holds; **held past the wing** they are Chain lightning and the
+> Disk ray. Middle click tapped is Binary (floor) / Phase (air), **held** the Flurry dash.
+> `space` + click the takeoffs below; the `F` key the Devour, the `R` key the Smite; `Q` / `E`
+> the Abyss and Judgement, each spending the whole of its bar. The table below is the
+> morning's spellbook, kept for its history.
 >
 > **Her spellbook, since 2026-10-12** ([exploration/0015](exploration/0015_dual_mage_spellbook.md)).
 > The click is what a spell is cast on and the row is the verb; what follows the table is the

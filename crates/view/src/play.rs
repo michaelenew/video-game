@@ -689,6 +689,12 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::DualMage, 12) => Clip::DualDark,
         (Class::DualMage, 13) => Clip::DualSweep,
         (Class::DualMage, 14) => Clip::DualLightLance,
+        // The long holds (2026-10-12): the cloud and the disk are raised over
+        // her head, so both are the raised special; the flurry is the whole
+        // body thrown down a line, the sweep's heave.
+        (Class::DualMage, 15) => Clip::DualSpecial,
+        (Class::DualMage, 16) => Clip::DualSpecial,
+        (Class::DualMage, 17) => Clip::DualSweep,
         (Class::DualMage, _) => Clip::DualSpecial,
     }
 }

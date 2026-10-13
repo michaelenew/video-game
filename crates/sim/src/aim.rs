@@ -144,6 +144,11 @@ pub enum Kind {
     /// ball, which rolls the same way from where she raised it, its hold buying
     /// size rather than distance. [`racing_path`].
     Racing,
+    /// **From a point over the caster's head** to the point the crosshair is
+    /// on (2026-10-12): the Dual mage's Disk ray, a blast out of a great disk
+    /// of light hung above her. The target is the skillshot's; only the end it
+    /// leaves from is not her hand. [`overhead_path`].
+    Overhead,
 }
 
 impl Kind {
@@ -153,7 +158,7 @@ impl Kind {
     /// already decided -- which way their body is facing, or where they put the
     /// mechanic -- and consult nothing.
     pub const fn is_a_skillshot(self) -> bool {
-        matches!(self, Kind::Grounded | Kind::Skillshot)
+        matches!(self, Kind::Grounded | Kind::Skillshot | Kind::Overhead)
     }
 
     pub const fn name(self) -> &'static str {
@@ -163,6 +168,7 @@ impl Kind {
             Kind::Swing => "swing",
             Kind::AtTheMechanic => "mechanic",
             Kind::Racing => "racing",
+            Kind::Overhead => "overhead",
         }
     }
 
@@ -175,6 +181,7 @@ impl Kind {
             2 => Kind::Skillshot,
             3 => Kind::AtTheMechanic,
             4 => Kind::Racing,
+            5 => Kind::Overhead,
             _ => Kind::Swing,
         }
     }
@@ -186,6 +193,7 @@ impl Kind {
             Kind::Skillshot => 2,
             Kind::AtTheMechanic => 3,
             Kind::Racing => 4,
+            Kind::Overhead => 5,
         }
     }
 }
@@ -796,6 +804,91 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
         Met::Solid | Met::Reach => seen.at,
     };
     Path { from, to }
+}
+
+/// **Where the thing hung over her head is**: the Dual mage's disk and her
+/// storm cloud, `tuning::overhead_height` above her feet (2026-10-12).
+pub fn overhead(pos: V3) -> V3 {
+    V3::new(pos.x, pos.y.add(t::overhead_height()), pos.z)
+}
+
+/// The line an **overhead** cast travels: from [`overhead`] to the point a
+/// skillshot thrown now would go to. The crosshair picks the target exactly
+/// as it does for a skillshot -- [`skillshot_path`] is asked, and only its far
+/// end is kept -- so the blast lands where the reticle is, from wherever the
+/// disk hangs.
+pub fn overhead_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    let shot = skillshot_path(who, look, reach, scene);
+    Path {
+        from: overhead(scene.players[who].pos),
+        to: shot.to,
+    }
+}
+
+/// **Where a chain of lightning goes next** (2026-10-12): the body nearest
+/// `near`, no further than `reach` from it, with nothing solid between `from`
+/// and it, and not one of `spent`. The answer is that body's bit -- fighters
+/// first, then creatures, then critters, in slot order -- and the point the
+/// bolt meets it at: a fighter's or a critter's middle, a creature's nearest
+/// surface to `from`.
+///
+/// The Dual mage's Chain lightning asks it once from the cloud over her head
+/// with `near` the crosshair's point, then from each body it struck with
+/// `near` that body. It decides where an ability goes, so it lives here.
+/// `fighters` is whether the other fighters are fair game -- in versus, not
+/// in a hunt, where they are her party.
+pub fn chain_next(
+    from: V3,
+    near: V3,
+    reach: Fx,
+    owner: usize,
+    spent: u32,
+    fighters: bool,
+    scene: &Scene,
+) -> Option<(u32, V3)> {
+    let mut best: Option<(u32, V3, Fx)> = None;
+    let mut consider = |bit: u32, at: V3| {
+        if spent & (1 << bit) != 0 {
+            return;
+        }
+        let d = crate::math::wide_len(at.sub(near));
+        if d.raw() > reach.raw() || best.is_some_and(|(_, _, seen)| seen.raw() <= d.raw()) {
+            return;
+        }
+        if !line_clear(from, at, scene) {
+            return;
+        }
+        best = Some((bit, at, d));
+    };
+    for (index, p) in scene.players.iter().enumerate() {
+        if !fighters || index == owner || p.health <= 0 || p.untouchable() {
+            continue;
+        }
+        let middle = V3::new(
+            p.pos.x,
+            p.pos.y.add(t::body_height().mul(Fx::ratio(1, 2))),
+            p.pos.z,
+        );
+        consider(index as u32, middle);
+    }
+    for (slot, beast) in scene.quarry.iter().enumerate() {
+        let Some(beast) = beast else { continue };
+        if !beast.alive() {
+            continue;
+        }
+        consider((MAX_PLAYERS + slot) as u32, beast.nearest_to(from));
+    }
+    if scene.critters.any() {
+        let sp = scene.critters.sp();
+        for (index, c) in scene.critters.iter().enumerate() {
+            if !c.alive() {
+                continue;
+            }
+            let bit = (MAX_PLAYERS + crate::monster::MAX_MONSTERS + index) as u32;
+            consider(bit, c.body(sp).middle());
+        }
+    }
+    best.map(|(bit, at, _)| (bit, at))
 }
 
 /// The line a **swing** comes out along: the body's own direction, tilted by

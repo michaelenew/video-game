@@ -29,9 +29,9 @@ is a separate question, asked along the ability's own path by
 reticle lands on its chest three metres up, and with it on the ray every
 skillshot came out as a metre-long stub pointed at the sky.
 
-Two kinds of skillshot start with that ray. Three more lines of effect do not —
+Three kinds of skillshot start with that ray. Three more lines of effect do not —
 they are pointed by something the player decided earlier (Racing borrows the
-ray for a direction, but its start and its length were decided already). **Five in total, and
+ray for a direction, but its start and its length were decided already). **Six in total, and
 every one of them is a function in `aim.rs`:**
 
 | Kind | Call | Rule |
@@ -39,6 +39,7 @@ every one of them is a function in `aim.rs`:**
 | Grounded | `aim::grounded_path` | Ground: cast exactly there. Max range: max range on the ground in the mouse's direction. If it travels, it travels from the character to that point. **No structure is ground**: the ray goes through the Elementalist's stones to the floor, for every placement including Raise. A stone under the crosshair must never move where something lands. **The Elementalist's own placements use `aim::grounded_kept`**: where she did not point down (max range, a wall), a floor a drop below her is not where the stone goes -- it comes back to her level (`aim::kept_up`). |
 | Skillshot | `aim::skillshot_path` | Ground: that spot raised to the **middle of whatever stands on it** (`aim::standing_middle`, with the height from `aim::stands_at` — a fighter's, unless the crosshair passed through something shorter), because the floor is never the target — bodies are not on the ray, so a ground hit means "there". Anything else — wall, stone (its top too: `aim::sight_for_attack`), body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. Standing, pointed at something **shorter than a fighter** (`aim::stands_at`), it dips to meet it at the same share of its height a level swing meets a fighter at (`aim::stoop`); zero where only fighters stand. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
+| Overhead | `aim::overhead_path` | The skillshot's target exactly, but leaving from `aim::overhead` -- a point `overhead_height` over her feet -- rather than her hand: the Dual mage's Disk ray, a blast out of a disk hung above her (2026-10-12). Only the end it leaves from differs; the crosshair picks the point the way it does for a skillshot. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 | Racing | `aim::racing_path` | From the stone the Elementalist is holding churning (her own feet if there is none), **flat toward the crosshair's spot on the ground** (the point `grounded_path` would land on), as far as the hold bought. The ray chooses the direction only: the place was aimed when the stone was raised, and the hold is the distance. Fissure, and the Air ball, which rolls the same way from where she raised it (its hold buys size, so only the direction is read). |
 
@@ -107,7 +108,7 @@ line (`column_meets_quarry`), and along it as Phase goes with nobody there
 (2026-10-12). `aim::standable` asks *is that footing* (not a
 course's drop), and `aim::walk_toward` *how far toward it could she walk*: the
 Reaver's send goes no further than that -- up no ledge, over no gap -- and is
-refused if not one step is walkable (2026-10-10). `aim::hop_to` answers *where does the hop after one of the Dual mage's autos land her* -- a blink along the held direction, short of a wall or land she could not stand on, lifted by her lower bar (2026-10-12). `aim::hung_ahead` answers
+refused if not one step is walkable (2026-10-10). `aim::chain_next` answers *where does a chain of lightning go next* -- the body nearest a point, within a reach, with nothing solid between, not yet struck -- which the Dual mage's Chain lightning asks from the cloud over her head (`aim::overhead`) and then from each body it struck (2026-10-12). `aim::hop_to` answers *where does the hop after one of the Dual mage's autos land her* -- a blink along the held direction, short of a wall or land she could not stand on, lifted by her lower bar (2026-10-12). `aim::hung_ahead` answers
 *where does a thing thrown forward and up go* -- where Gallows sends the shadow,
 a facing and two lengths, `planted_ahead`'s reason -- and `aim::plunge_dir`
 *which way does a dive go*: the look, held inside a cone round straight down
@@ -128,7 +129,7 @@ goes past it — by more the further away it is. If you find yourself writing
 `camera::eye(...)`, `camera::eye_under(...)`, `look_dir()`, or a ray-vs-shape call outside those two
 files, stop: the thing you want already exists.
 
-If none of the five fits a new ability, **change `aim.rs`** rather than working
+If none of the six fits a new ability, **change `aim.rs`** rather than working
 around it. A change there is true of every ability at once, which is the point.
 The full specification is [`docs/design/aiming.md`](docs/design/aiming.md).
 

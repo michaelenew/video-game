@@ -308,7 +308,7 @@ pub(crate) fn reach(m: &sim::Move, who: Option<&Player>) -> Fx {
         // The crack runs from a stone the bot raised rather than from the
         // body, and the bot does not track where that is: its own length is
         // the honest guess.
-        Kind::Grounded | Kind::Skillshot | Kind::Racing => own,
+        Kind::Grounded | Kind::Skillshot | Kind::Racing | Kind::Overhead => own,
         // Pointed by where the mechanic stands, which the bot does not track.
         Kind::AtTheMechanic => Fx::ZERO,
     }
@@ -549,6 +549,8 @@ pub struct Duelist {
     stuck: u16,
     /// The Dual mage's gap between her bars last frame, to count a mend.
     gap_was: Fx,
+    /// Her lower bar last frame: a sudden fall in it is a bar spent.
+    lower_was: Fx,
     /// The playable rectangle of the arena it is fighting in, read off the
     /// world each frame: where its walls are. It used to be the proving
     /// ground's, written in, which put the walls in the wrong place in any
@@ -627,6 +629,7 @@ impl Duelist {
             last_bits: 0,
             stuck: 0,
             gap_was: Fx::ZERO,
+            lower_was: Fx::ZERO,
             bounds: sim::arena::proving_ground::ARENA.bounds,
         }
     }

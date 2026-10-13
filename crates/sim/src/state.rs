@@ -2552,12 +2552,20 @@ impl World {
                 match kind {
                     moves::dual::BINARY => self.raise_the_stars(i),
                     moves::dual::SHADOWSTEP => self.shadowstep(i),
-                    moves::dual::PHASE => self.phase(i),
+                    moves::dual::PHASE => self.phase(i, true),
+                    // **The Equinox blinks as she leaves the floor** (2026-10-12):
+                    // Phase's blink along the crosshair, rising out of it and
+                    // carrying on, and on top of that the jump as high as her
+                    // lower bar is full. The middle click's jump attack is the
+                    // mobility one, and it is the balanced one, so it can be
+                    // thrown through a jump section without burning her.
                     moves::dual::EQUINOX => {
+                        self.phase(i, false);
                         let lift = t::equinox_lift().mul(dual::balance(&p));
                         self.players[i].vel.y = self.players[i].vel.y.add(lift);
                         self.players[i].grounded = false;
                     }
+                    moves::dual::CHAIN_LIGHTNING => self.chain_lightning(i),
                     moves::dual::SMITE => {
                         self.write_sigil(i, p.aim_at(), t::sigil_radius(), p.thrown_at)
                     }
@@ -3708,6 +3716,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             };
             (beam.from, stop, false)
         }
+        // From the disk over her head to the point the crosshair was on: the
+        // whole line, every active frame. The disk follows her; the point
+        // was locked when the blast began.
+        aim::Kind::Overhead => (aim::overhead(p.pos), p.aim_path.to, false),
         // Where the thing was planted. The burst that comes with it has to be
         // there too, or the ability is two abilities pointing different ways.
         aim::Kind::Grounded => return Some(disc(p.aim_at())),
@@ -4731,6 +4743,7 @@ fn step_player(
     // The Dual mage's hop out of a finished auto, before the countdown so the
     // recovery it shortens is the one counted down this frame.
     hop_after_the_auto(p, who, input, scene);
+    dash_down_the_flurry(p, scene);
 
     // A channel resolves **instead of** the countdown, because it is the one
     // action whose next state depends on a button and on the scene rather than
@@ -5961,10 +5974,53 @@ fn dual_move(p: &Player, input: Input) -> Option<u8> {
     Some(match click {
         keys::DARK => d::DARK_AUTO,
         keys::LIGHT => d::LIGHT_AUTO,
-        _ if p.grounded => d::BINARY,
-        // Phase spends the airdodge, so once a trip.
-        _ => return (!p.air_dodged).then_some(d::PHASE),
+        // **Middle click opens the Flurry dash's hold** (2026-10-12): let go
+        // before it is full and it was a tap -- Binary on the floor, Phase in
+        // the air (`step_channel`). With the flurry locked out the tap is
+        // thrown at once.
+        _ if !p.locked_out(d::FLURRY_DASH) => d::FLURRY_DASH,
+        _ => return twilight_tap(p),
     })
+}
+
+/// What a tap of the middle click is: Binary on the floor, Phase in the air --
+/// which spends the airdodge, so once a trip.
+fn twilight_tap(p: &Player) -> Option<u8> {
+    use moves::dual as d;
+    if p.grounded {
+        Some(d::BINARY)
+    } else {
+        (!p.air_dodged).then_some(d::PHASE)
+    }
+}
+
+/// **The Flurry dash's dash** (2026-10-12): on the frame its line of blows
+/// ends she goes down it -- along the flat of the look the flurry was thrown
+/// on, its whole reach, stopped the way a blink is (`aim::blink_to`) -- at
+/// `flurry dash, speed`, untouchable for the length of it, and what is left of
+/// the recovery is the dash and the move's own. A no-op for everybody else.
+fn dash_down_the_flurry(p: &mut Player, scene: &Scene) {
+    let Action::Active {
+        kind: moves::dual::FLURRY_DASH,
+        left: 0,
+    } = p.action
+    else {
+        return;
+    };
+    if p.class != Class::DualMage || p.aboard() {
+        return;
+    }
+    let m = moves::get(p.class, moves::dual::FLURRY_DASH);
+    let to = aim::blink_to(p.pos, p.aim_dir(), m.reach, scene);
+    let far = to.sub(p.pos).len();
+    let speed = t::flurry_dash_speed();
+    let frames = far.div(speed.mul(DT)).to_int().clamp(1, 120) as u16 + 1;
+    begin_haul(p, to, speed, frames + 1);
+    dual::veil_for(p, frames.saturating_add(1).min(u8::MAX as u16) as u8);
+    p.action = Action::Recovery {
+        kind: moves::dual::FLURRY_DASH,
+        left: frames.saturating_add(m.recovery),
+    };
 }
 
 /// **The hop after an auto** (2026-10-12, the second pass): on the frame one
@@ -5981,16 +6037,42 @@ fn hop_after_the_auto(p: &mut Player, who: usize, input: Input, scene: &Scene) {
     if p.class != Class::DualMage || !moves::dual::is_an_auto(kind) || p.aboard() {
         return;
     }
+    // **Still holding the click: the long hold** (2026-10-12). The wing is
+    // out and the button is still down, so this is not a tap: she goes into
+    // the hold of the spell that follows this auto, and there is no hop.
+    let button = if kind == moves::dual::DARK_AUTO {
+        moves::dual::keys::DARK
+    } else {
+        moves::dual::keys::LIGHT
+    };
+    if let Some(vent) = moves::dual::vent_after(kind)
+        && input.has(button)
+        && !p.locked_out(vent)
+    {
+        aim_channel(p, who, vent, 0, input, scene);
+        p.action = Action::Channel {
+            kind: vent,
+            held: 0,
+        };
+        return;
+    }
     let (ax, az) = input.move_axis();
     if ax == 0 && az == 0 {
         return;
     }
     let dir = move_dir(input.aim_turns(), ax, az);
-    let to = aim::hop_to(p.pos, dir, t::auto_hop(), dual::hop_lift(p), scene);
+    // **In the air the hop is a jump**, once an airtime, and every time while
+    // ascending: it rises `auto, the air hop rises` higher than a hop on the
+    // floor would. After that an auto in the air only carries her.
+    let mut lift = dual::hop_lift(p);
+    if !p.grounded && dual::may_air_hop(p) {
+        lift = lift.add(t::auto_air_jump());
+        dual::spend_air_hop(p);
+    }
+    let to = aim::hop_to(p.pos, dir, t::auto_hop(), lift, scene);
     let far = to.sub(p.pos).len();
     let speed = t::auto_hop_speed();
     let frames = far.div(speed.mul(DT)).to_int().clamp(1, 120) as u16 + 1;
-    let _ = who;
     begin_haul(p, to, speed, frames + 1);
     p.action = Action::Recovery {
         kind,
@@ -7102,7 +7184,10 @@ fn begin_move(
     // the button opens the wind-up instead, and the move begins when the
     // button comes back up -- see `step_channel`. The other two charges come
     // after the startup and the press starts the move like any other.
-    if moves::charge(p.class, kind) == Some(moves::Charge::Reach) {
+    if matches!(
+        moves::charge(p.class, kind),
+        Some(moves::Charge::Reach | moves::Charge::Vent)
+    ) {
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
@@ -7226,6 +7311,28 @@ fn step_channel(
     // which is where every other move locks it too.
     aim_channel(p, who, kind, held, input, scene);
     match charge {
+        // **The Dual mage's long holds** (2026-10-12): held to the end, the
+        // spell comes out on its own; let go sooner and the click was a tap
+        // -- the middle click's is Binary or Phase, thrown now, and a wing's
+        // is the rest of the wing's recovery.
+        Some(moves::Charge::Vent) if held >= cap => throw_move(p, kind, input, true),
+        Some(moves::Charge::Vent) if moves::dual::twilight(kind) => {
+            match twilight_tap(p).filter(|tap| !p.locked_out(*tap)) {
+                Some(tap) => begin_move(p, who, tap, input, scene, true),
+                None => Action::Free,
+            }
+        }
+        Some(moves::Charge::Vent) => {
+            let auto = if moves::dual::force(kind) == Some(Force::Dark) {
+                moves::dual::DARK_AUTO
+            } else {
+                moves::dual::LIGHT_AUTO
+            };
+            Action::Recovery {
+                kind: auto,
+                left: moves::get(p.class, auto).recovery.saturating_sub(held),
+            }
+        }
         // The Strike: the startup already ran, and the hold was the pause
         // between it and the active frames. What it bought is how much of
         // the pillar's burn arrives at once, as a share of the longest hold.
@@ -7263,6 +7370,16 @@ fn step_channel(
 /// Which button holds a channel open. The slot's own, since a channel is the
 /// front of a move rather than a thing of its own.
 const fn channel_button(class: Class, kind: u8) -> u16 {
+    // The Dual mage's long holds are the click each follows: the dark wing's
+    // held on, the light wing's, and the middle click from its press.
+    if matches!(class, Class::DualMage) {
+        match kind {
+            moves::dual::CHAIN_LIGHTNING => return moves::dual::keys::DARK,
+            moves::dual::DISK_RAY => return moves::dual::keys::LIGHT,
+            moves::dual::FLURRY_DASH => return moves::dual::keys::TWILIGHT,
+            _ => {}
+        }
+    }
     match kind {
         // The Elementalist's three holds are her three clicks: Fissure is the
         // earth click held (the stone was raised on the press and the crack
@@ -7318,7 +7435,12 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
     // read for the way it rolls.
     if !matches!(
         moves::charge(p.class, kind),
-        Some(moves::Charge::Strike | moves::Charge::Gather | moves::Charge::Bleed)
+        Some(
+            moves::Charge::Strike
+                | moves::Charge::Gather
+                | moves::Charge::Bleed
+                | moves::Charge::Vent
+        )
     ) {
         p.aim_path.to = p.aim_path.at(m.reach_after(held));
     }
@@ -7352,6 +7474,7 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
         }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, reach, scene),
+        aim::Kind::Overhead => aim::overhead_path(who, input, reach, scene),
         // Not aimed at anything -- a body moving. What it commits to is the
         // **plane** it swings in: the yaw is the facing, which is locked
         // already, and the pitch is the rest of the same look, dead-zoned so
@@ -8037,6 +8160,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             colour,
             ascending,
             jumped,
+            hopped,
             landed,
             singe,
             veil,
@@ -8055,6 +8179,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             if *veil != 0 || *warded {
                 h.write_u32(*veil as u32);
                 h.write_u32(*warded as u32);
+            }
+            if *hopped {
+                h.write_u32(1);
             }
         }
     }
@@ -8189,6 +8316,16 @@ fn settle(p: &mut Player, arena: &Terrain) {
 
 /// Bodies are solid. Push them apart symmetrically so neither index wins.
 fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
+    // **Except a body passing through untouchable**: the Dual mage's Flurry
+    // dash goes down its own line through whoever is on it (2026-10-12), and
+    // stopping at the first body is the dash ending at the thing it was cut
+    // through. They are set apart when the dash ends.
+    if players
+        .iter()
+        .any(|p| p.haul > 0 && p.class == Class::DualMage && dual::veiled(p))
+    {
+        return;
+    }
     let delta = players[1].pos.sub(players[0].pos);
     let dist = delta.flat_len();
     let min = t::body_radius().add(t::body_radius());
@@ -12687,8 +12824,14 @@ impl World {
     /// **Phase**: she is through -- along the crosshair for the move's reach,
     /// stopped a body short of the first wall, platform or stone
     /// (`aim::phase_to`) -- and a flash of light is left where she was. It
-    /// spends the airdodge.
-    fn phase(&mut self, i: usize) {
+    /// spends the airdodge, unless it is the Equinox's blink (`airdodge`
+    /// false).
+    ///
+    /// **She comes out of it moving** (2026-10-12): `phase, keeps this speed`
+    /// along the blink, flat, and rising at `phase, rises` at the least. The
+    /// blink is where the jump attack goes, and what it leaves her with is how
+    /// far the jump goes after it.
+    fn phase(&mut self, i: usize, airdodge: bool) {
         let p = self.players[i];
         let m = moves::get(p.class, moves::dual::PHASE);
         let stones = stones::gather(&self.players);
@@ -12719,10 +12862,74 @@ impl World {
         );
         flash.power = p.thrown_at;
         spawn_effect(&mut self.effects, flash);
+        let along = {
+            let d = p.aim_path.dir();
+            V3::new(d.x, Fx::ZERO, d.z).normalized()
+        };
         let q = &mut self.players[i];
         q.pos = to;
-        q.vel.y = q.vel.y.max(Fx::ZERO);
-        q.air_dodged = true;
+        let carry = along.scale(t::phase_carry());
+        q.vel = V3::new(carry.x, q.vel.y.max(Fx::ZERO).max(t::phase_rise()), carry.z);
+        q.grounded = false;
+        if airdodge {
+            q.air_dodged = true;
+        }
+    }
+
+    /// **Chain lightning** (2026-10-12): black lightning out of a cloud over
+    /// her head, onto the body nearest the crosshair's point and from it to
+    /// the nearest body it has not struck yet, and on, `chain lightning,
+    /// bodies it strikes` at most -- each one a burst where it lands, which
+    /// hurts and curses (`EffectKind::Burst`, slot [`moves::dual::CHAIN_LIGHTNING`]),
+    /// with `home` the point its bolt came from so the picture runs from link
+    /// to link. Where it goes is `aim::chain_next`'s. With nobody there it
+    /// strikes the crosshair's point.
+    fn chain_lightning(&mut self, i: usize) {
+        let p = self.players[i];
+        let versus = self.pvp();
+        let mut links = [None::<(V3, V3)>; 6];
+        {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &self.terrain(),
+            };
+            let cloud = aim::overhead(p.pos);
+            let (mut from, mut near, mut reach) = (cloud, p.aim_at(), t::chain_first());
+            let mut spent = 0u32;
+            for link in links.iter_mut().take(t::chain_links()) {
+                let Some((bit, at)) = aim::chain_next(from, near, reach, i, spent, versus, &scene)
+                else {
+                    break;
+                };
+                spent |= 1 << bit;
+                *link = Some((from, at));
+                (from, near, reach) = (at, at, t::chain_hop());
+            }
+            if links[0].is_none() {
+                links[0] = Some((cloud, p.aim_at()));
+            }
+        }
+        for (from, at) in links.into_iter().flatten() {
+            let mut bolt = Effect::cast(
+                EffectKind::Burst,
+                i as u8,
+                p.class,
+                moves::dual::CHAIN_LIGHTNING,
+                at,
+                V3::ZERO,
+                t::chain_radius(),
+            );
+            bolt.home = from;
+            bolt.power = p.thrown_at;
+            spawn_effect(&mut self.effects, bolt);
+        }
     }
 
     /// How far along `path` the first thing is -- a body (fighters in versus,

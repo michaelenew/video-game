@@ -730,6 +730,9 @@ const NAMES: [&[&str]; 6] = [
         "Devour",
         "Halo",
         "Smite",
+        "Chain lightning",
+        "Disk ray",
+        "Flurry dash",
     ],
 ];
 
@@ -1021,7 +1024,7 @@ pub mod bulwark {
 }
 
 // ---------------------------------------------------------------------------
-// The Dual mage's fifteen
+// The Dual mage's eighteen
 // ---------------------------------------------------------------------------
 
 /// The Dual mage's move list, since the second pass of 2026-10-12: **the bare
@@ -1029,15 +1032,21 @@ pub mod bulwark {
 ///
 /// ```text
 ///   left click    Dark auto      the left arm's being: a wing of dark, a curse
+///                 held past it:  Chain lightning
 ///   right click   Light auto     the right arm's: a wing of light, a purge
-///                 -- each, on the floor or in the air, then a short hop the
-///                    way she is holding, lifted more the fuller she is
-///   middle click  Binary (floor) / Phase (air)
+///                 held past it:  Disk ray
+///                 -- each wing, on the floor or in the air, then a short hop
+///                    the way she is holding, lifted more the fuller she is
+///   middle click  Binary (floor) / Phase (air), tapped
+///                 held:          Flurry dash
 ///   space+click   Veil / Equinox / Sanctuary (from the floor)
 ///   F             Devour         R             Smite
 ///   Q             Abyss          E             Judgement
 ///   (no button)   Grasping shade, Halo, Shadowstep, Descent
 /// ```
+///
+/// **Autos fill, spells vent, majors spend** (2026-10-12): see
+/// [`crate::dual::steer`].
 ///
 /// **Dark curses bodies** and **light writes on the ground and purges**, as in
 /// the spellbook of earlier that day; see [`crate::dual`] for the curse and the
@@ -1046,7 +1055,8 @@ pub mod bulwark {
 /// held. See `docs/design/exploration/0016_dual_mage_controls.md`.
 ///
 /// **Storage order is not button order.** The slots kept their places through
-/// every pass; the four appended last are the spellbook's.
+/// every pass; the four after the eleven are the spellbook's, and the three
+/// after those the long holds.
 pub mod dual {
     /// Left click, on the floor or in the air: a wing of dark off the left
     /// arm, and a hop the way she is holding. One curse.
@@ -1086,8 +1096,23 @@ pub mod dual {
     pub const HALO: u8 = 13;
     /// `R`: a column out of the sky where she points, and a sigil.
     pub const SMITE: u8 = 14;
+    /// Left click held past the dark wing (2026-10-12, the long hold): black
+    /// lightning out of a cloud over her head, onto the body nearest the
+    /// crosshair's spot and chaining from it to the next nearest, and on.
+    /// Every link curses. **Vents** her Dark bar. See
+    /// `docs/design/exploration/0016_dual_mage_controls.md`.
+    pub const CHAIN_LIGHTNING: u8 = 15;
+    /// Right click held past the light wing: a great disk of light over her
+    /// head, and a moment later a blast from it to the crosshair's point.
+    /// Purges what it passes through. **Vents** her Light bar.
+    pub const DISK_RAY: u8 = 16;
+    /// Middle click held: a long line of blows along her look, and then she
+    /// dashes down it, untouchable, to its far end. **Vents** both bars alike.
+    /// A middle click let go before the hold is Binary on the floor and Phase
+    /// in the air, as it always was.
+    pub const FLURRY_DASH: u8 = 17;
 
-    pub const COUNT: usize = 15;
+    pub const COUNT: usize = 18;
 
     /// Which button is which force. Every test and bot presses through these.
     pub mod keys {
@@ -1114,15 +1139,36 @@ pub mod dual {
     pub const fn force(kind: u8) -> Option<crate::class::Force> {
         use crate::class::Force;
         match kind {
-            DARK_AUTO | GRASPING_SHADE | DEVOUR | SHADOWSTEP | VEIL | ABYSS => Some(Force::Dark),
-            LIGHT_AUTO | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT => Some(Force::Light),
+            DARK_AUTO | GRASPING_SHADE | DEVOUR | SHADOWSTEP | VEIL | ABYSS | CHAIN_LIGHTNING => {
+                Some(Force::Dark)
+            }
+            LIGHT_AUTO | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT | DISK_RAY => {
+                Some(Force::Light)
+            }
             _ => None,
         }
     }
 
     /// Is this a twilight move -- the middle column, both forces at once?
     pub const fn twilight(kind: u8) -> bool {
-        matches!(kind, BINARY | PHASE | EQUINOX)
+        matches!(kind, BINARY | PHASE | EQUINOX | FLURRY_DASH)
+    }
+
+    /// Is this one of the three long holds -- the spells that **vent**? They
+    /// spend `meter, a long hold vents` of the bar they are made of (both
+    /// bars, for the twilight one) rather than goading it. See
+    /// `crate::dual::steer`.
+    pub const fn is_a_vent(kind: u8) -> bool {
+        matches!(kind, CHAIN_LIGHTNING | DISK_RAY | FLURRY_DASH)
+    }
+
+    /// The long hold that follows an auto whose button stays down, if any.
+    pub const fn vent_after(auto: u8) -> Option<u8> {
+        match auto {
+            DARK_AUTO => Some(CHAIN_LIGHTNING),
+            LIGHT_AUTO => Some(DISK_RAY),
+            _ => None,
+        }
     }
 
     /// Is this one of the two autos -- the wings on the bare clicks, thrown
@@ -1131,7 +1177,7 @@ pub mod dual {
         matches!(kind, DARK_AUTO | LIGHT_AUTO)
     }
 
-    /// Is this one of the two majors? They throw the bar furthest -- see
+    /// Is this one of the two majors? They spend the whole of their bar --
     /// `tuning::meter_finisher_push` -- and grow along a steeper curve than
     /// anything else (`crate::dual::major_size`).
     pub const fn is_the_finisher(kind: u8) -> bool {
@@ -1149,7 +1195,7 @@ pub mod dual {
     pub const fn curses_laid(kind: u8) -> u8 {
         match kind {
             DEVOUR => 2,
-            DARK_AUTO | GRASPING_SHADE | SHADOWSTEP | VEIL => 1,
+            DARK_AUTO | GRASPING_SHADE | SHADOWSTEP | VEIL | CHAIN_LIGHTNING => 1,
             _ => 0,
         }
     }
@@ -1575,7 +1621,10 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             11 => "unbound",
             12 => "F",
             13 => "unbound",
-            _ => "R",
+            14 => "R",
+            15 => "LMB long hold",
+            16 => "RMB long hold",
+            _ => "MMB long hold",
         },
         // **The three clicks are the class**, since 2026-10-09: left is earth,
         // middle is fire, right is wind, each a tap and a hold on the floor,
@@ -1776,6 +1825,12 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             | dual::SANCTUARY
             | dual::VEIL
             | dual::DESCENT => Shape::Cylinder,
+            // The disk's blast is a line from the disk to the crosshair's
+            // point (`aim::Kind::Overhead`), whatever this says; a cylinder
+            // only so that it strikes. The flurry is a line of blows thrust
+            // along her look, again and again.
+            dual::DISK_RAY => Shape::Cylinder,
+            dual::FLURRY_DASH => Shape::Thrust,
             _ => Shape::None,
         },
         // The scythe. The sweep is a cut across the front, and the one swing
@@ -1863,6 +1918,12 @@ pub enum Charge {
     /// goes** -- red health every `tuning::blood_pays_every` frames held --
     /// and it buys size (the nova's burst) or distance (the jet's drive).
     Bleed,
+    /// The Dual mage's long holds (2026-10-12): the hold is **before** the
+    /// move and buys **the move itself**. Held for the move's whole
+    /// `channel`, it comes out on its own; let go sooner and it does not --
+    /// the click was a tap after all, and for the middle click a tap is
+    /// Binary or Phase. See `state::step_channel`.
+    Vent,
 }
 
 /// Which charge a move has, if any.
@@ -1875,6 +1936,7 @@ pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
+        Class::DualMage if dual::is_a_vent(kind) => Some(Charge::Vent),
         _ => None,
     }
 }

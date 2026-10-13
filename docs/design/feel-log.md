@@ -8235,3 +8235,29 @@ the first flank, and it took the tip's reward away from distance).
 her mobility to the autos, like Kalista, so her game is keeping distance". And a meaning per
 button that does not change as she is lifted off the floor (exploration/0016).
 **Verdict** —
+
+### 2026-10-12 — the Dual mage, second pass, second round: forward wings, spending, long holds
+**Changed** The wings are thrown forward: the ring's middle 0.1 of the reach behind her and on
+her own line (was 0.1 ahead and 0.3 off the punching side), reach 3.8 → 6 m, arc 0.3 → 0.12
+turns, inner edge 0.35 → 0.3, the tip's share of the span 0.25 → 0.1, finishing dead ahead
+(was 0.073 turns off). An auto fills 5 → 6. The tiers 50/75 → 33/67; the wings stayed at 95.
+The majors spend the whole of their bar (were +20); a spell vents 9 (was +9); a takeoff fills
+6 (was +9). Three long holds: Chain lightning, the Disk ray, the Flurry dash, venting 20 each.
+The first air hop of an airtime rises 2 m more. Phase and the Equinox leave her moving 9 m/s
+along the blink and rising at 6 m/s; the Equinox blinks. Benchmarks restated: B2, B4, B6, B7
+and B9 (see `dual-mage.md`).
+**Tried and reverted** The wings at 100 on both bars, to make the thirds even to the top:
+alternating never ascended, because the calm always has one bar just under while the other
+tops out -- `dual-mage.md`'s own reason for 95, met again. An auto filling 7: the climb's
+blink came at 5.4 s, which is much more than "a little faster" once the tiers came down too.
+The wing's ring 0.25 of the reach behind her with the arc at 0.2: the front had a hole between
+one and a half and two and a half metres, where only the tip could reach. The arc at 0.25 with
+the ring 0.1 behind: it covered the front, but in a screenshot the blade opened from beside her
+and swept round to the front -- the sideways sweep the owner asked to lose -- so the arc came
+down to 0.12, which keeps the same reach and opens in front of her.
+**Why** The owner, after playing the wing autos: "autos more forward than a sideways sweep";
+"bars grow a little faster, thresholds even thirds"; "Q and E spending the bar"; "the spells
+vent, just not the whole bar"; the jump auto a second jump; middle click's jump attacks rising
+with the blink and keeping momentum; and the battle mage's spells on the long holds.
+**Verdict** —
+

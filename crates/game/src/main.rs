@@ -3138,6 +3138,13 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
     let (kind, startup, left) = match p.action {
         Action::Startup { kind, left } => (kind, true, left),
         Action::Active { kind, left } => (kind, false, left),
+        // **A long hold gathering** (2026-10-12): the storm cloud or the disk
+        // over her head, or the two forces in her hands, growing as the hold
+        // fills -- so the person opposite sees it coming before it comes.
+        Action::Channel { kind, held } if d::is_a_vent(kind) => {
+            let cap = sim::moves::get(p.class, kind).channel.max(1) as f32;
+            return vent_gathering(w, p, kind, held as f32 / cap, part);
+        }
         _ => return None,
     };
     let m = sim::moves::get(p.class, kind);
@@ -3323,6 +3330,125 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         d::SHADOWSTEP if startup => {
             (part == 0).then(|| floating_in(Skin::Dark, waist, 0.7 * (1.0 - 0.6 * through)))
         }
+        // **The storm cloud**, full over her head through the wind-up and
+        // as the bolts leave it. The bolts are the effects'.
+        d::CHAIN_LIGHTNING => vent_gathering(w, p, kind, 1.0, part),
+        // **The disk**, full over her head through the wind-up; on the active
+        // frames the blast runs from it to the point, drawn down the line the
+        // hit test uses.
+        d::DISK_RAY if startup => vent_gathering(w, p, kind, 1.0, part),
+        d::DISK_RAY => {
+            let v = volume?;
+            let (from, to) = (fx3(v.from), fx3(v.to));
+            match part {
+                0 => Some(floating_in(Skin::Light, from, 0.35)),
+                k if k < 13 => {
+                    let t = (k - 1) as f32 / 11.0;
+                    let swell = 1.0 + 0.4 * (w.frame as f32 * 0.9 + k as f32).sin();
+                    Some(floating_in(
+                        Skin::Light,
+                        from.lerp(to, t),
+                        v.radius.to_f32_for_render() * swell,
+                    ))
+                }
+                _ => None,
+            }
+        }
+        // **The line of blows**: dark and light fists thrown down the line
+        // the flurry strikes along, flickering as each blow lands.
+        d::FLURRY_DASH if !startup => {
+            let v = volume?;
+            let (from, to) = (fx3(v.from), fx3(v.to));
+            (part < 12).then(|| {
+                let t = (part as f32 + 0.5) / 12.0;
+                let flick = ((w.frame as f32 * 1.7 + part as f32 * 2.3).sin() * 0.5 + 0.5) * 0.35;
+                let side = Vec3::new(-(to - from).z, 0.0, (to - from).x).normalize_or_zero();
+                let skin = if part % 2 == 0 {
+                    Skin::Dark
+                } else {
+                    Skin::Light
+                };
+                floating_in(
+                    skin,
+                    from.lerp(to, t) + side * (flick - 0.17),
+                    0.22 + flick * 0.4,
+                )
+            })
+        }
+        d::FLURRY_DASH => vent_gathering(w, p, kind, 1.0, part),
+        _ => None,
+    }
+}
+
+/// **A long hold, `full` of the way to coming out** (2026-10-12): Chain
+/// lightning's storm cloud churning over her head, the Disk ray's disk opening
+/// there, or the Flurry dash's two forces wound round her hands.
+fn vent_gathering(
+    w: &World,
+    p: &sim::state::Player,
+    kind: u8,
+    full: f32,
+    part: usize,
+) -> Option<Piece> {
+    use sim::moves::dual as d;
+    let over = fx3(sim::aim::overhead(p.pos));
+    let height = sim::tuning::body_height().to_f32_for_render();
+    let waist = fx3(p.pos) + Vec3::Y * height * 0.55;
+    let spin = w.frame as f32;
+    match kind {
+        // Small, and a rim rather than a sheet: what hangs over her head is
+        // on the camera's line to whatever she is aiming at, and a big cloud
+        // or a filled disk there hid the very thing about to be struck.
+        d::CHAIN_LIGHTNING => {
+            if part == 0 {
+                return Some(floating_in(Skin::Dark, over, 0.15 + 0.25 * full));
+            }
+            (part < 11).then(|| {
+                let k = (part - 1) as f32;
+                let turn = k / 10.0 * std::f32::consts::TAU + spin * 0.06;
+                let r = 0.3 + 0.7 * full;
+                let bob = (spin * 0.2 + k * 1.3).sin() * 0.12;
+                floating_in(
+                    Skin::Dark,
+                    over + Vec3::new(turn.cos() * r, bob, turn.sin() * r),
+                    0.08 + 0.12 * full,
+                )
+            })
+        }
+        d::DISK_RAY => {
+            if part == 0 {
+                return Some(floating_in(Skin::Light, over, 0.12 + 0.2 * full));
+            }
+            (part < 13).then(|| {
+                let k = (part - 1) as f32;
+                let turn = k / 12.0 * std::f32::consts::TAU - spin * 0.05;
+                let r = 0.3 + 1.1 * full;
+                floating_in(
+                    Skin::Light,
+                    over + Vec3::new(turn.cos() * r, 0.0, turn.sin() * r),
+                    0.07 + 0.08 * full,
+                )
+            })
+        }
+        d::FLURRY_DASH => (part < 6).then(|| {
+            let k = part as f32;
+            let turn = k / 6.0 * std::f32::consts::TAU + spin * 0.35;
+            let skin = if part % 2 == 0 {
+                Skin::Dark
+            } else {
+                Skin::Light
+            };
+            floating_in(
+                skin,
+                waist
+                    + Vec3::new(
+                        turn.cos() * 0.55,
+                        (spin * 0.3 + k).sin() * 0.2,
+                        turn.sin() * 0.55,
+                    ),
+                0.08 + 0.12 * full,
+            )
+        }),
         _ => None,
     }
 }
@@ -3811,6 +3937,29 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                             skin,
                             at + Vec3::new(turn.cos(), 0.0, turn.sin()) * r * out,
                             0.35,
+                        ))
+                    }
+                    _ => None,
+                };
+            }
+            // **A bolt of Chain lightning** (2026-10-12): black lightning
+            // from where it leapt -- the cloud, or the last body -- to where
+            // it struck, jagged and re-jagged every frame, and a flash where
+            // it landed.
+            if effect.slot == sim::moves::dual::CHAIN_LIGHTNING {
+                let from = fx3(effect.home);
+                return match part {
+                    11 => Some(floating_in(Skin::Dark, at, r * (0.3 + 0.7 * left))),
+                    k if k < 11 => {
+                        let t = k as f32 / 10.0;
+                        let hash = |n: f32| ((n * 12.9898).sin() * 43758.547).fract() - 0.5;
+                        let seed = k as f32 + effect.age as f32 * 7.0;
+                        let jag = if k == 0 || k == 10 { 0.0 } else { 0.7 };
+                        let off = Vec3::new(hash(seed), hash(seed + 3.1), hash(seed + 5.7)) * jag;
+                        Some(floating_in(
+                            Skin::Dark,
+                            from.lerp(at, t) + off,
+                            0.1 + 0.12 * left,
                         ))
                     }
                     _ => None,

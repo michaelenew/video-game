@@ -115,6 +115,7 @@ impl Script {
             colour,
             ascending: 0,
             jumped: false,
+            hopped: false,
             landed: 0,
             singe: Fx::ZERO,
             veil: 0,

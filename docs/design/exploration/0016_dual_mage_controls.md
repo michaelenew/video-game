@@ -1,5 +1,5 @@
 ---
-status: first half built 2026-10-12 (the wing autos and the hop); the rest proposed, waiting on the owner
+status: built 2026-10-12 in two rounds (the wing autos and the hop; then the forward wings, the long holds, venting and the spending majors); unplayed
 started: 2026-10-12
 supersedes: 0015's litanies, its air row (Shadowstep, Descent) and the bare-click half of its map
 depends: 0015 (the curse, the purge, the sigils, the stars, the majors -- all kept), ../dual-mage.md (the two bars, the tiers, ascension)
@@ -144,7 +144,77 @@ get, and what is the biggest thing I can spend it on before it gets away from me
 5. **Does `F`/`R` stay?** If the holds land, `F` and `R` go back to being free, which the
    Elementalist and the Reaver will want.
 
+## The owner's second round (2026-10-12)
+
+> First, the autos need to be more forward than a sideways sweep. Think big
+> maplestory-battle-mage-esque arcs reaching far forward more than a sweep.
+>
+> Second, the dash on auto feels quite good. I do want you to make the bars grow a little
+> faster with autos, and I need the bar thresholds to be even thirds, not half then 3/4.
+>
+> Third, q and e are not currently spending the bar, they still grow it. I like the idea of
+> them spending the bar. They're both a reward for building and an oh shit button for getting
+> out of balance.
+>
+> We need to make sure the jump-auto gives them a second jump in the air for extra height as
+> well (still one per airborne period, but ascension lets you have as many jump-autos as you
+> want).
+>
+> I like the hold-to-spell control scheme, we just need to make sure the spells feel good. The
+> spells do need to vent as well, just not the whole bar. The reason we need more build on the
+> autos is that they're becoming the way to build the bar. The spells become venting the
+> energy, so the intended balanced playstyle between autos and spells becomes optimal to stay
+> in balance and just sub-ascension.
+>
+> I like the extra mobility of middle click. I need its jump attack (both aerial and grounded)
+> to rise with its blink and keep more momentum. [...] middle click makes sense for the main
+> mobility jump-spell because it's balanced so it's not going to affect the dual mage's health
+> as they do jump sections.
+>
+> For the spells I'm thinking more along the lines of Maplestory battle mage again. A big line
+> of a flurry of blows, then the dual mage dashes invuln along it. A line of rays coming down
+> from above, the first hitting the ground in front of her, then the next further, then again
+> and again. A big light disk appears above her, then a moment later a blast of light comes from
+> it to where she's aiming. Black light lightning from a cloud above her that chains to nearby
+> creatures. A big flurry of blows (basically her autos but many more of them all at once) in
+> front of her at slightly longer than auto range.
+>
+> For now write the disk ray (light long hold), chain lightning (dark long hold) and flurry
+> dash (middle long hold) as new moves on the long holds.
+
+**What was built**, all in `kits/dual-mage.md` §"Her hands" and `dual-mage.md` §"Two bars":
+
+- **The wings thrown forward**: the ring's middle moved behind her and onto her own line, the
+  reach to 6 m and the span narrowed, so each wing is a crescent out in front reaching seven
+  metres dead ahead and five and a half to the punching side -- a slash thrown out, not a
+  sweep round her.
+- **Autos fill a little faster** (5 → 6 a wing) and **the tiers are at thirds**: the blink at
+  33, the second jump at 67. The wings stay at 95 on both bars, for the reason `dual-mage.md`
+  gives (at 100 the calm keeps one bar always just under while the other tops out: tried, and
+  alternating never ascended). Clean alternating now climbs to the blink in 6.3 s, the second
+  jump in 12.9 and the wings in 17.9, from 12.1, 18.8 and 23.8.
+- **The majors spend the whole of their bar**, read for power before they spend it. The
+  runaway is the high bar climbing while the low drains, so spending the high one lands her
+  near level: the oh-no button. From level, the other major is the answer, so the Abyss and
+  Judgement in turn are the spectacle and the reset.
+- **Spells vent**: the Devour and the Smite spend 9 of their bar, the long holds 20, the
+  Flurry dash 20 of each. The takeoffs and the middle click's taps fill like an auto -- they
+  are jump attacks.
+- **The air hop is a jump**: the first auto-hop of an airtime rises 2 m more; while ascending,
+  every one does.
+- **The middle click's jump attacks rise and carry**: Phase leaves her moving 9 m/s along the
+  blink and rising at 6 m/s at least; the Equinox now blinks too, as she leaves the floor.
+- **The three long holds**, as new moves: Chain lightning (dark), the Disk ray (light), the
+  Flurry dash (middle). A click held past its wing is the hold, the middle click from its press;
+  a hold let go early is nothing (the middle click's is its tap). The Disk ray needed a sixth
+  line of effect, `aim::Kind::Overhead`: the skillshot's target, from the disk over her head.
+
+**Not built yet**, from the same message: the line of rays stepping out in front of her, and
+the big flurry of wings at a little past auto range. They want a second length of hold (a
+short hold and a long one on each click), which is the next question.
+
 ## Next
 
-Built so far: the wings, the hop, the lift, `F`/`R`. The holds, the spending, and overflow as
-ascension are the next pass, **waiting on the owner's answer** to question 1.
+The short holds -- the stepping rays and the big flurry of wings -- and whether every click
+gets a short and a long, or only the two that have a spell for each. And play: none of this
+has been in a person's hands.

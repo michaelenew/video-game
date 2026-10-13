@@ -1449,17 +1449,18 @@ pub fn wing_tip_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WingTipRadius))
 }
 
-/// How far along the bar landing an auto moves the Dual mage.
+/// How far along its bar throwing an auto fills the Dual mage -- and a
+/// takeoff, and each bar for a tap of the middle click.
 ///
-/// The small unit. Everything else on the class is measured against it: an auto
-/// is the thing you throw constantly, so it is the thing the bar is calibrated
-/// in.
+/// The small unit, and since 2026-10-12 the way she builds: an auto is the
+/// thing you throw constantly, so it is the thing the bar is calibrated in.
 pub fn meter_auto_push() -> i32 {
     oven::scalar(Scalar::MeterAutoPush)
 }
 
-/// And how far a cast moves her. More than an auto, because committing to a
-/// move is committing harder to a side than poking is.
+/// How much of its own bar a spell vents -- the Devour, the Smite and the
+/// unbound four (2026-10-12: they filled it, before the autos became the
+/// builders and the spells the release).
 pub fn meter_cast_push() -> i32 {
     oven::scalar(Scalar::MeterCastPush)
 }
@@ -2679,13 +2680,11 @@ pub fn depth_size() -> Fx {
     Fx::ratio(oven::scalar(Scalar::DepthSize), 100)
 }
 
-/// How far along the bar throwing the finisher moves her.
-///
-/// The third tier, and the one `docs/design/dual-mage.md` has been asking for
-/// since the bar was built: "a deep finisher nearly throws you over the edge".
-/// An auto is the small unit, a cast is more, and this is the one that makes
-/// casting Judgement from depth a question about whether you survive it rather
-/// than a free payoff.
+/// How much of its own bar a major spends: the whole of it, as tuned
+/// (2026-10-12). The reward for having built -- a major is worth the bar it was
+/// thrown from, read before this -- and the way out of a runaway, which is the
+/// high bar climbing. It pushed the bar further than anything else until the
+/// owner asked for the majors to spend it.
 pub fn meter_finisher_push() -> i32 {
     oven::scalar(Scalar::MeterFinisherPush)
 }
@@ -3473,4 +3472,58 @@ pub fn auto_hop_lift() -> Fx {
 /// between.
 pub fn auto_hop_lift_full() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AutoHopLiftFull)).max(Fx::ZERO)
+}
+
+/// How much higher the hop after an auto thrown **in the air** goes, once a
+/// jump -- a second jump made of the auto. Every one of them while ascending.
+pub fn auto_air_jump() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoAirJump)).max(Fx::ZERO)
+}
+
+/// How high over her feet her disk and her storm cloud hang. See
+/// `aim::overhead`.
+pub fn overhead_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OverheadHeight)).max(Fx::ONE)
+}
+
+/// How much of its bar a long hold spends.
+pub fn hold_vents() -> i32 {
+    oven::scalar(Scalar::HoldVents).max(0)
+}
+
+/// How near the crosshair's point a body has to be for Chain lightning's
+/// first bolt to find it.
+pub fn chain_first() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainFirst)).max(Fx::ZERO)
+}
+
+/// How near the last body the next has to be for the lightning to leap.
+pub fn chain_hop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainHop)).max(Fx::ZERO)
+}
+
+/// How many bodies one Chain lightning strikes at most.
+pub fn chain_links() -> usize {
+    oven::scalar(Scalar::ChainLinks).clamp(1, 6) as usize
+}
+
+/// How wide each bolt strikes where it lands.
+pub fn chain_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainRadius)).max(Fx::ratio(1, 10))
+}
+
+/// How fast she dashes down the line of a Flurry dash.
+pub fn flurry_dash_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FlurryDashSpeed)).max(Fx::ONE)
+}
+
+/// The speed Phase -- and the Equinox, which blinks as it leaves the floor --
+/// leaves her carrying along the blink.
+pub fn phase_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PhaseCarry)).max(Fx::ZERO)
+}
+
+/// How fast Phase and the Equinox send her up as the blink ends.
+pub fn phase_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PhaseRise)).max(Fx::ZERO)
 }

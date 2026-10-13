@@ -30,6 +30,7 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
                 .mul(t::strike_worth())
                 .to_int()
         ),
+        moves::Charge::Vent => "the move itself, held to the end".to_string(),
         moves::Charge::Crack => format!(
             "a crack of {}-{} m",
             tenths(m.channel_from),

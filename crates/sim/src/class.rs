@@ -159,6 +159,7 @@ impl Class {
                 colour: Force::Dark,
                 ascending: 0,
                 jumped: false,
+                hopped: false,
                 landed: 0,
                 singe: Fx::ZERO,
                 veil: 0,
@@ -680,6 +681,11 @@ pub enum Mechanic {
         /// The second jump has been spent this airtime. Reset on landing, and
         /// never consulted while ascending, when every press is a wing beat.
         jumped: bool,
+        /// The air hop has been spent this airtime: an auto thrown off the
+        /// floor rises like a second jump once, and after that only carries
+        /// her (2026-10-12). Reset on landing, and never consulted while
+        /// ascending, when every one of them rises.
+        hopped: bool,
         /// Hits landed during this ascension. What the stagger on the way out
         /// is graduated by -- see `crate::dual::end_ascension`.
         landed: u16,

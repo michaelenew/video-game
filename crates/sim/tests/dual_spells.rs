@@ -107,6 +107,15 @@ fn run_looking(w: &mut World, frames: u32, pitch: i16) {
     }
 }
 
+/// Press `button` for a frame -- and, for the bare middle click, let it go
+/// the next, which makes it a tap rather than the Flurry dash's hold.
+fn tap(w: &mut World, button: u16) {
+    step(w, button);
+    if button == keys::TWILIGHT {
+        step(w, 0);
+    }
+}
+
 /// Run until she can act again, or `most` frames.
 fn until_free(w: &mut World, most: u32) {
     for _ in 0..most {
@@ -155,6 +164,7 @@ fn set_bars(w: &mut World, dark: i32, light: i32) {
         colour: Force::Dark,
         ascending: 0,
         jumped: false,
+        hopped: false,
         landed: 0,
         singe: Fx::ZERO,
         veil: 0,
@@ -190,7 +200,7 @@ fn on_the_floor_the_clicks_are_the_autos_and_binary() {
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
     ] {
         let mut w = alone();
-        step(&mut w, button);
+        tap(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} on the floor");
     }
 }
@@ -206,7 +216,7 @@ fn in_the_air_the_clicks_are_the_same_autos() {
     ] {
         let mut w = alone();
         aloft(&mut w, 4.0);
-        step(&mut w, button);
+        tap(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} in the air");
     }
 }
@@ -255,12 +265,12 @@ fn auto_lands(button: u16, gap: f32) -> bool {
 }
 
 #[test]
-fn the_autos_reach_a_body_close_and_a_body_four_and_a_half_metres_off() {
+fn the_autos_reach_a_body_close_and_a_body_six_and_a_half_metres_off() {
     for button in [keys::DARK, keys::LIGHT] {
-        for gap in [1.0, 2.5, 3.5, 4.5] {
+        for gap in [1.0, 2.5, 4.0, 5.5, 6.5] {
             assert!(auto_lands(button, gap), "{button:#x} at {gap} m");
         }
-        assert!(!auto_lands(button, 6.0), "{button:#x} reaches six metres");
+        assert!(!auto_lands(button, 8.0), "{button:#x} reaches eight metres");
     }
 }
 
@@ -788,7 +798,7 @@ fn phase_puts_her_along_the_crosshair_once_a_trip() {
     let mut w = alone();
     aloft(&mut w, 3.0);
     let from = w.players[0].pos;
-    step(&mut w, keys::TWILIGHT);
+    tap(&mut w, keys::TWILIGHT);
     let m = sim::moves::get(Class::DualMage, d::PHASE);
     run(&mut w, m.startup as u32 + 1, 0);
     let went = w.players[0].pos.x.sub(from.x);
@@ -1092,4 +1102,263 @@ fn a_creatures_curse_ticks() {
     let after = w.monsters[0].map_or(0, |b| b.health);
     assert!(after < before, "it ticked on the animal");
     assert!(w.players[0].health > mine, "and she drank it");
+}
+
+// ---------------------------------------------------------------------------
+// The long holds, and the second pass's second day (2026-10-12)
+// ---------------------------------------------------------------------------
+
+/// Hold `button` with the crosshair at `pitch` until `wanted` is out of its
+/// hold -- in its startup or past it -- or `most` frames go by. True if it
+/// came.
+fn hold_into(w: &mut World, button: u16, pitch: i16, wanted: u8, most: u32) -> bool {
+    for _ in 0..most {
+        step_looking(w, button, pitch);
+        let out = matches!(
+            w.players[0].action,
+            Action::Startup { kind, .. } | Action::Active { kind, .. } if kind == wanted
+        );
+        if out {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn holding_a_click_past_its_wing_is_that_hand_s_long_hold() {
+    for (button, wanted) in [(keys::DARK, d::CHAIN_LIGHTNING), (keys::LIGHT, d::DISK_RAY)] {
+        let mut w = alone();
+        assert!(
+            hold_into(&mut w, button, 0, wanted, 60),
+            "holding {button:#x} never threw it"
+        );
+    }
+    let mut w = alone();
+    assert!(
+        hold_into(&mut w, keys::TWILIGHT, 0, d::FLURRY_DASH, 60),
+        "holding the middle click never threw the Flurry dash"
+    );
+}
+
+#[test]
+fn letting_go_before_the_hold_is_full_throws_no_spell() {
+    let mut w = alone();
+    level(&mut w, 50);
+    // The wing, and a few frames past it.
+    let m = sim::moves::get(Class::DualMage, d::DARK_AUTO);
+    run(&mut w, (m.startup + m.active) as u32 + 4, keys::DARK);
+    assert_eq!(
+        doing(&w),
+        Some(d::CHAIN_LIGHTNING),
+        "fixture: she is holding"
+    );
+    for _ in 0..60 {
+        step(&mut w, 0);
+        assert!(
+            !matches!(
+                w.players[0].action,
+                Action::Startup { .. } | Action::Active { .. }
+            ),
+            "a spell came out of a hold let go early"
+        );
+    }
+}
+
+#[test]
+fn a_long_hold_vents_its_bar_and_an_auto_fills_it() {
+    let mut w = alone();
+    level(&mut w, 60);
+    assert!(hold_into(&mut w, keys::DARK, 0, d::CHAIN_LIGHTNING, 60));
+    let p = &w.players[0];
+    let (dark, light) = sim::dual::bars(p).unwrap();
+    let want = 60 + t::meter_auto_push() - t::hold_vents();
+    assert!(
+        (dark.to_int() - want).abs() <= 2,
+        "the wing and the lightning left the dark bar at {} rather than about {want}",
+        as_f(dark)
+    );
+    assert!(
+        (light.to_int() - 60).abs() <= 2,
+        "the light bar moved: {}",
+        as_f(light)
+    );
+}
+
+#[test]
+fn chain_lightning_strikes_the_body_under_the_crosshair_and_curses_it() {
+    let mut w = facing(9.0);
+    let pitch = onto_them(&w);
+    let before = w.players[1].health;
+    assert!(hold_into(&mut w, keys::DARK, pitch, d::CHAIN_LIGHTNING, 60));
+    run_looking(&mut w, 30, pitch);
+    assert!(w.players[1].health < before, "nine metres off, untouched");
+    assert!(stacks(&w) >= 1, "and not cursed");
+}
+
+#[test]
+fn chain_lightning_leaps_from_body_to_body() {
+    // Three gnats in a line, three metres apart, the crosshair on the first.
+    use sim::critter::{Critter, is};
+    use sim::species::{SpeciesId, gnats};
+    let mut w = World::hunt_of([Class::DualMage, Class::DualMage], SpeciesId::GNATS);
+    let sp = w.critters.sp();
+    for c in w.critters.iter_mut() {
+        *c = Critter::EMPTY;
+    }
+    let lane = sim::critcheck::lane();
+    for (k, x) in [6, 9, 12].into_iter().enumerate() {
+        let mut c = Critter::new(
+            sp,
+            gnats::GNAT,
+            lane.add(V3::new(Fx::from_int(x), Fx::ZERO, Fx::ZERO)),
+            1 << 15,
+        );
+        c.state = is::FLINCH;
+        c.timer = u16::MAX;
+        c.health = i16::MAX;
+        w.critters[k] = c;
+    }
+    w.pack.as_mut().unwrap().grace = u16::MAX;
+    w.players[0].pos = lane;
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(12));
+    let middle = w.critters[0].body(sp).middle();
+    let pitch = sim::aim::look_onto_closely(lane, 0, Fx::ZERO, Fx::ZERO, middle);
+    let mut struck = [false; 3];
+    for _ in 0..60 {
+        let before: Vec<i16> = (0..3).map(|k| w.critters[k].health).collect();
+        w.advance([
+            Input::looking_at(keys::DARK, 0, pitch),
+            Input::looking_at(0, 0, 0),
+        ]);
+        for k in 0..3 {
+            struck[k] |= w.critters[k].health < before[k];
+        }
+        if matches!(
+            w.players[0].action,
+            Action::Recovery {
+                kind: d::CHAIN_LIGHTNING,
+                ..
+            }
+        ) {
+            break;
+        }
+    }
+    assert_eq!(struck, [true; 3], "the lightning did not reach all three");
+}
+
+#[test]
+fn the_disk_ray_strikes_from_above_and_purges() {
+    let mut w = facing(10.0);
+    cursed(&mut w, 3);
+    let pitch = onto_them(&w);
+    let before = w.players[1].health;
+    assert!(hold_into(&mut w, keys::LIGHT, pitch, d::DISK_RAY, 60));
+    let m = sim::moves::get(Class::DualMage, d::DISK_RAY);
+    // Its line leaves the disk over her head.
+    run_looking(&mut w, m.startup as u32, pitch);
+    if let Some(b) = sim::state::hitbox(&w.players[0]) {
+        assert!(
+            b.from.y.raw() > metres(2.0).raw(),
+            "the blast leaves from {} m up",
+            as_f(b.from.y)
+        );
+    }
+    run_looking(&mut w, 30, pitch);
+    assert!(w.players[1].health < before, "ten metres off, untouched");
+    assert_eq!(stacks(&w), 0, "the curse was not purged");
+}
+
+#[test]
+fn the_flurry_dash_strikes_down_its_line_and_then_she_goes_down_it_untouchable() {
+    let mut w = facing(4.0);
+    let from = w.players[0].pos;
+    let before = w.players[1].health;
+    assert!(hold_into(&mut w, keys::TWILIGHT, 0, d::FLURRY_DASH, 60));
+    let m = sim::moves::get(Class::DualMage, d::FLURRY_DASH);
+    let mut untouchable = false;
+    for _ in 0..(m.startup + m.active + m.recovery) as u32 + 30 {
+        step(&mut w, 0);
+        untouchable |= w.players[0].untouchable();
+        // Keep them where they stood: what is asked is how often they were hit.
+        w.players[1].pos = at(-2.0, 0.0, 8.0);
+        if w.players[0].action.actionable() {
+            break;
+        }
+    }
+    assert!(
+        before - w.players[1].health > m.damage * 2,
+        "the flurry struck once at most: {}",
+        before - w.players[1].health
+    );
+    assert!(
+        w.players[0].pos.x.sub(from.x).raw() > metres(5.0).raw(),
+        "she went {} m down the line",
+        as_f(w.players[0].pos.x.sub(from.x))
+    );
+    assert!(untouchable, "the dash was not untouchable");
+}
+
+#[test]
+fn an_auto_in_the_air_rises_like_a_jump_once_an_airtime() {
+    // Up, and an auto with a direction held: the first rises by the air hop;
+    // the second in the same airtime only carries her.
+    let rise = |w: &mut World| {
+        let from = w.players[0].pos.y;
+        step(w, keys::DARK | W);
+        let mut top = from;
+        for _ in 0..30 {
+            step(w, W);
+            top = top.max(w.players[0].pos.y);
+        }
+        top.sub(from)
+    };
+    let mut w = alone();
+    aloft(&mut w, 8.0);
+    let first = rise(&mut w);
+    let second = rise(&mut w);
+    assert!(
+        first.raw() > t::auto_air_jump().raw(),
+        "the first air hop rose {} m",
+        as_f(first)
+    );
+    assert!(
+        second.raw() < first.sub(metres(1.0)).raw(),
+        "the second rose {} m against the first's {}",
+        as_f(second),
+        as_f(first)
+    );
+}
+
+#[test]
+fn phase_leaves_her_moving_along_it_and_rising() {
+    let mut w = alone();
+    aloft(&mut w, 3.0);
+    tap(&mut w, keys::TWILIGHT);
+    let m = sim::moves::get(Class::DualMage, d::PHASE);
+    run(&mut w, m.startup as u32 + 1, 0);
+    let v = w.players[0].vel;
+    assert!(
+        v.x.raw() > metres(3.0).raw(),
+        "carrying {} m/s along",
+        as_f(v.x)
+    );
+    assert!(v.y.raw() > 0, "and not rising: {} m/s", as_f(v.y));
+}
+
+#[test]
+fn the_equinox_blinks_as_she_leaves_the_floor() {
+    let mut w = alone();
+    let from = w.players[0].pos;
+    step(&mut w, SPACE | keys::TWILIGHT);
+    assert_eq!(doing(&w), Some(d::EQUINOX));
+    let m = sim::moves::get(Class::DualMage, d::EQUINOX);
+    run(&mut w, m.startup as u32 + 2, 0);
+    let went = w.players[0].pos.x.sub(from.x);
+    assert!(went.raw() > metres(2.5).raw(), "she went {} m", as_f(went));
+    assert!(
+        w.players[0].pos.y.raw() > 0,
+        "and she is still on the floor"
+    );
 }

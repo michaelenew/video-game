@@ -558,10 +558,15 @@ impl Duelist {
         // A push on the low side -- the mend, which is the whole of how she
         // uses the mechanic -- shows as the gap closing by a push at once.
         let push = Fx::from_int(sim::tuning::meter_auto_push());
-        if self.gap_was.sub(gap).raw() >= push.raw() {
+        // And since 2026-10-12 a bar spent -- a major, or a vent -- shows as
+        // the lower bar or the gap dropping by more than a push at once.
+        let lower = sim::dual::lower(me);
+        if self.gap_was.sub(gap).raw() >= push.raw() || self.lower_was.sub(lower).raw() > push.raw()
+        {
             self.mechanic_uses += 1;
         }
         self.gap_was = gap;
+        self.lower_was = lower;
         let near_the_line = Fx::from_int(sim::tuning::meter_band() * 3 / 4);
         if gap.raw() > near_the_line.raw() && dist.raw() > Fx::ratio(25, 10).raw() {
             out.want = Some(toward);
@@ -592,34 +597,16 @@ impl Duelist {
     }
 }
 
-/// The Dual mage's two bars as they would be after `kind` is thrown, by
-/// `dual::steer`'s rule since 2026-10-09: every move has its own force and
-/// pushes its own bar -- an auto a little, a cast more, a major most -- and a
-/// twilight move pushes both by an auto's step. With the force she is left
-/// carrying.
+/// The Dual mage's two bars as they would be after `kind` is thrown, and the
+/// force she is left carrying: `dual::steer` itself, on a copy of her, so the
+/// bot cannot disagree with the rule (2026-10-12: it kept its own copy, which
+/// went on filling the bar with a major after the majors began to spend it).
 pub(crate) fn dual_after(me: &Player, kind: u8) -> Option<(Fx, Fx, Force)> {
-    let (dark, light) = sim::dual::bars(me)?;
-    let push = if moves::dual::is_an_auto(kind) {
-        sim::tuning::meter_auto_push()
-    } else if moves::dual::is_the_finisher(kind) {
-        sim::tuning::meter_finisher_push()
-    } else {
-        sim::tuning::meter_cast_push()
-    };
-    let top = Fx::from_int(sim::tuning::meter_max());
-    let push = Fx::from_int(push);
-    Some(match moves::dual::force(kind) {
-        Some(Force::Dark) => (dark.add(push).min(top), light, Force::Dark),
-        Some(Force::Light) => (dark, light.add(push).min(top), Force::Light),
-        None => {
-            let step = Fx::from_int(sim::tuning::meter_auto_push());
-            (
-                dark.add(step).min(top),
-                light.add(step).min(top),
-                state::carrying(me),
-            )
-        }
-    })
+    sim::dual::bars(me)?;
+    let mut after = *me;
+    sim::dual::steer(&mut after, kind);
+    let (dark, light) = sim::dual::bars(&after)?;
+    Some((dark, light, state::carrying(&after)))
 }
 
 /// The Dual mage's two bars, weighed for one move: never widen the gap past
@@ -633,6 +620,22 @@ pub(crate) fn dual_bias(me: &Player, kind: u8) -> i32 {
     let band = Fx::from_int(sim::tuning::meter_band());
     let gap_now = dark.sub(light).abs();
     let gap = d.sub(l).abs();
+    // **A major from a built bar** (2026-10-12): it spends its whole bar,
+    // so from level it leaves the other ahead -- and the other major is the
+    // answer, which the rule below then prefers. Worth it from the second
+    // tier up, with the other major ready to follow.
+    let built = Fx::from_int(sim::tuning::tier_jump());
+    if moves::dual::is_the_finisher(kind)
+        && gap_now.raw() <= band.raw()
+        && dark.min(light).raw() >= built.raw()
+    {
+        let other = if kind == moves::dual::ABYSS {
+            moves::dual::JUDGEMENT
+        } else {
+            moves::dual::ABYSS
+        };
+        return if me.locked_out(other) { 0 } else { 200 };
+    }
     if gap.raw() > band.raw() && gap.raw() > gap_now.raw() {
         // It burns her. Never.
         return 0;

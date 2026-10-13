@@ -261,7 +261,7 @@ scalars! {
     WingTip,           "Dual mage", "Wing, the tip as a share of the span",  Fixed,  0,        fx(1,1);
     WingTipper,        "Dual mage", "Wing, tip damage (x)",                  Fixed,  fx(1,1),  fx(3,1);
     MeterAutoPush,     "Dual mage", "Meter, an auto moves",                  Int,    0,        100;
-    MeterCastPush,     "Dual mage", "Meter, a cast moves",                   Int,    0,        100;
+    MeterCastPush,     "Dual mage", "Meter, a spell vents",                  Int,    0,        100;
     AscensionFrames,   "Dual mage", "Ascension, how long",                   Frames, 1,        600;
     AscensionDrain,    "Dual mage", "Ascension, health a frame",             Int,    0,        100;
     AscensionStun,     "Dual mage", "Ascension, stun on the way out",        Frames, 0,        120;
@@ -364,7 +364,7 @@ scalars! {
     // The third meter tier, and the one the design has been asking for since
     // the bar was built: an auto moves you a little, a cast moves you more, and
     // the finisher very nearly throws you over the edge.
-    MeterFinisherPush,"Dual mage", "Meter, the finisher moves",             Int,   0,        100;
+    MeterFinisherPush,"Dual mage", "Meter, a major spends",             Int,   0,        100;
     // What the wing's tip does to the *shove* rather than to the damage. The
     // tip is the far edge of the blade, so it is where the light auto's real
     // knockback lives -- and, on the dark arm, where the pull is worth timing.
@@ -817,6 +817,20 @@ scalars! {
     AutoHopSpeed, "Dual mage", "Auto, hop speed (m/s)", Fixed, fx(1,1), fx(60,1);
     AutoHopLift, "Dual mage", "Auto, hop lifts (m)", Fixed, 0, fx(4,1);
     AutoHopLiftFull, "Dual mage", "Auto, hop lifts at full, more (m)", Fixed, 0, fx(4,1);
+    // **The second pass's second day** (2026-10-12): the air hop's rise,
+    // the thing hung over her head, the long holds and what they vent, the
+    // chain's reach, the flurry's dash, and Phase's carry. Appended for the
+    // reason above. See `docs/design/exploration/0016_dual_mage_controls.md`.
+    AutoAirJump, "Dual mage", "Auto, the air hop rises, once a jump (m)", Fixed, 0, fx(6,1);
+    OverheadHeight, "Dual mage", "Overhead, hangs above her feet (m)", Fixed, fx(1,1), fx(8,1);
+    HoldVents, "Dual mage", "Meter, a long hold vents", Int, 0, 100;
+    ChainFirst, "Dual mage", "Chain lightning, finds a body this near the crosshair (m)", Fixed, 0, fx(12,1);
+    ChainHop, "Dual mage", "Chain lightning, leaps to a body this near (m)", Fixed, 0, fx(16,1);
+    ChainLinks, "Dual mage", "Chain lightning, bodies it strikes", Int, 1, 6;
+    ChainRadius, "Dual mage", "Chain lightning, strike radius (m)", Fixed, fx(1,10), fx(3,1);
+    FlurryDashSpeed, "Dual mage", "Flurry dash, speed (m/s)", Fixed, fx(1,1), fx(80,1);
+    PhaseCarry, "Dual mage", "Phase, keeps this speed along the blink (m/s)", Fixed, 0, fx(30,1);
+    PhaseRise, "Dual mage", "Phase, rises (m/s)", Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1109,7 +1123,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Aim => "Line of effect (0-4)",
+            MoveField::Aim => "Line of effect (0-5)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
             MoveField::Channel => "Channel, longest hold",
@@ -1152,7 +1166,7 @@ impl MoveField {
             // Four lines of effect, and the numbering is `aim::Kind`'s. A
             // slider that ran to six hundred would let somebody pick a fifth.
             // Five since v2: the crack racing from a held stone. See `aim::Kind`.
-            MoveField::Aim => (0, 4),
+            MoveField::Aim => (0, 5),
             // Signed, because a spike is a launch pointed the other way: the
             // Champion's aerial hammer drives an airborne target into the
             // floor with the same number that an uppercut lifts them with.
