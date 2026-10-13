@@ -3471,3 +3471,21 @@ pub fn phase_rise() -> Fx {
 pub fn hop_keeps_inside() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HopKeepsInside)).max(Fx::ZERO)
 }
+
+/// How long the Flurry dash's disk stands, struck, at the end of its active
+/// window before she dashes to it: the last frames of the window, after the
+/// blows (`moves::flurry_blow`).
+pub fn flurry_pause() -> u16 {
+    oven::scalar(Scalar::FlurryPause).max(0) as u16
+}
+
+/// How many frames before she reaches the disk a jump is kept for the
+/// arrival, and thrown carrying the run (the Reaver's dash jump, on hers).
+pub fn flurry_jump_buffer() -> u16 {
+    oven::scalar(Scalar::FlurryJumpBuffer).max(0) as u16
+}
+
+/// How much of the run's speed the jump out of it carries.
+pub fn flurry_jump_keep() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FlurryJumpKeep)).max(Fx::ZERO)
+}

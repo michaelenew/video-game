@@ -8285,3 +8285,17 @@ a trail; the light disk facing the way she faces; "either / or, never both anima
 part"; "the mouse spells increase the bar"; and a full hold a commitment, not a charge.
 **Verdict** —
 
+### 2026-10-13 — the Dual mage's big holds: a cascade to a disk, and longer, higher spells
+
+From the owner, in two messages. **The Flurry dash** was too narrow and short and read as a
+line of beads; it is now her autos cascading forward one into the next -- twice as wide (1.4
+m), half again as long (10.5 m), each blow its own stretch and its own hit -- into a disk as
+tall across as she is, which stands a moment before she runs to it, faster (50 m/s, from 30),
+and breaks it. A jump timed into the run's last frames keeps 0.8 of its speed, after the
+Reaver's dash jump, so the flurry is a way across the valley. **Chain lightning and the Disk
+ray** start when they did but wind up twice as long (16, 20) and are out three times as long
+(6, 18): these are the big spells and the owner wants time to watch them land. The cloud and
+the disk hang 6 m up rather than 4.5 -- at 4.5 they sat near the crosshair and hid the bolts
+and the beam. Drawn: the cloud is dark smoke some 8 m across with wisps, the bolts black
+with a white edge (they read as purple bubbles before), and the sun-disk a flat plate twice
+as broad with two rings inside its beads.

@@ -832,6 +832,10 @@ scalars! {
     // 2026-10-13: how far inside a lone arena's bounds a hop stops, so it
     // does not land her on the wall that stands on them.
     HopKeepsInside, "Dual mage", "Auto, hop stops this far inside the bounds (m)", Fixed, 0, fx(4,1);
+    // 2026-10-13: the Flurry dash's disk, and the jump out of its run.
+    FlurryPause, "Dual mage", "Flurry dash, the disk stands before she goes", Frames, 0, 60;
+    FlurryJumpBuffer, "Dual mage", "Flurry dash, a jump this near the end keeps the run", Frames, 0, 30;
+    FlurryJumpKeep, "Dual mage", "Flurry dash, the jump keeps this much of the run (x)", Fixed, 0, fx(3,2);
 }
 
 // ---------------------------------------------------------------------------

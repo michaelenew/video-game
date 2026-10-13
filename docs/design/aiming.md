@@ -480,6 +480,11 @@ its first frame. Stricter than `clear_between` on purpose: the dash to a shadow
 goes wherever the shadow is, up included, so one clear corner line is a way
 through; a blink goes along the floor to a spot at her own height, so she stops
 where the **first** of the four lines meets something, less her own radius.
+`aim::flurry_dash_to` is the same four lines not flattened: the Flurry dash's
+run goes straight to the disk her blows struck, up or down as the spot is, and
+stops short of the first thing on the way, kept inside the place's bounds
+(2026-10-13). The spot was aimed when the flurry was thrown -- a grounded line
+of effect -- so this decides only how much of the way is clear.
 **What does this point stand on?** `aim::settle` drops it onto whatever is under
 it — a stone's top, a ledge, the floor — for anything that lands a thing
 somewhere it was not aimed (a thrown body, a mark on the ground).

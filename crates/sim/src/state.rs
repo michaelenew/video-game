@@ -2379,6 +2379,37 @@ impl World {
                 self.apotheosis(i);
             }
         }
+        // **The Flurry dash's disk breaks** (2026-10-13) the frame her run
+        // reaches it: a burst where it stood, the size of the disk.
+        for (i, was) in seen.iter().enumerate() {
+            let now = &self.players[i];
+            let running = |q: &Player| {
+                q.class == Class::DualMage
+                    && q.haul > 0
+                    && matches!(
+                        q.action,
+                        Action::Recovery {
+                            kind: moves::dual::FLURRY_DASH,
+                            ..
+                        }
+                    )
+            };
+            if running(was) && !running(now) {
+                let (_, disk) = moves::flurry_line(was.launched_from, was.aim_path.to);
+                let mut burst = Effect::cast(
+                    EffectKind::Burst,
+                    i as u8,
+                    was.class,
+                    moves::dual::FLURRY_DASH,
+                    disk,
+                    V3::ZERO,
+                    t::body_height().mul(Fx::ratio(1, 2)),
+                );
+                burst.home = was.pos;
+                burst.power = was.thrown_at;
+                spawn_effect(&mut self.effects, burst);
+            }
+        }
         // A blink spends its pool. Done here rather than in the dodge branch
         // because the branch only has her body, and the pool is an effect.
         for i in 0..MAX_PLAYERS {
@@ -3685,6 +3716,25 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         spent: p.hit_used,
         sweet: false,
     };
+    // **The Flurry dash's cascade** (2026-10-13): the blow that is out, as its
+    // stretch of the line from where she stood to the disk; nothing once they
+    // are all out and the disk stands. See `moves::Shape::Cascade`.
+    if m.shape == moves::Shape::Cascade {
+        let (blows, blow) = moves::flurry_blow(&m, left);
+        let blow = blow?;
+        let (a, d) = moves::flurry_line(p.launched_from, p.aim_path.to);
+        let n = blows.max(1) as i32;
+        return Some(Hitbox {
+            from: crate::math::lerp3(a, d, Fx::ratio(blow as i32, n)),
+            to: crate::math::lerp3(a, d, Fx::ratio(blow as i32 + 1, n)),
+            radius: m.radius,
+            flat: false,
+            hits_crouching: m.hits_crouching,
+            unblockable: m.unblockable,
+            spent: p.hit_used,
+            sweet: false,
+        });
+    }
     let (from, to, flat) = match m.aim() {
         // A line from her hand to the point the crosshair was on, ending
         // wherever the shot actually stopped.
@@ -3790,6 +3840,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             // flight, dead in front of her chest at full reach. What it meets
             // on the way it hits, for no bonus: standing a reach away is the
             // decision the sweet spot rewards.
+            moves::Shape::Cascade => return None,
             moves::Shape::Orb => {
                 let dir = moves::orb_line(p.facing, p.aim_dir(), p.grounded, p.stoop);
                 if left == 0 {
@@ -4648,6 +4699,7 @@ fn step_player(
     let mob = p.class.mobility();
     if pressed_space {
         shadow::bank_dash_jump(p);
+        bank_the_flurry_jump(p);
     }
     step_mechanic(p, scene.arena);
     hold_the_churn(p, input);
@@ -4993,7 +5045,25 @@ fn step_player(
     // **A Grasp reeling her in**, or a blink, which is the same machinery
     // pointed along the stick. Stepped rather than read, because arriving is
     // something it *does*: she lands on the point rather than near it.
+    // The Flurry dash's run, as it stood before this frame's step: the flat
+    // of it, at its speed, which a jump banked for the arrival carries.
+    let flurry_run = (p.class == Class::DualMage
+        && p.haul > 0
+        && matches!(
+            p.action,
+            Action::Recovery {
+                kind: moves::dual::FLURRY_DASH,
+                ..
+            }
+        ))
+    .then(|| {
+        let gap = p.haul_to.sub(p.pos);
+        V3::new(gap.x, Fx::ZERO, gap.z)
+            .normalized()
+            .scale(p.haul_speed)
+    });
     let hauling = step_haul(p);
+    let flurry_arrived = flurry_run.filter(|_| !hauling && p.haul == 0);
 
     let dashing = shadow::dash_drive(p);
     // **The Blood jet**, while it is held: her blood out under her drives her
@@ -5185,6 +5255,21 @@ fn step_player(
         p.jump_hold = t::jump_hold_frames();
         p.action = Action::Free;
         shadow::spend_carry(p);
+    }
+
+    // **The jump out of the Flurry dash** (2026-10-13): the Reaver's dash jump
+    // on hers. Pressed in the run's last `flurry dash, a jump this near the
+    // end` frames (`bank_the_flurry_jump`) and thrown the frame she breaks the
+    // disk, carrying `flurry dash, the jump keeps` of the run's speed -- the
+    // flurry as a way across the valley, not only a way into a fight.
+    if let Some(run) = flurry_arrived {
+        if dual::take_dash_jump(p) {
+            let keep = run.scale(t::flurry_jump_keep());
+            p.vel = V3::new(keep.x, t::jump_speed().mul(mob.jump), keep.z);
+            p.grounded = false;
+            p.jump_hold = t::jump_hold_frames();
+            p.action = Action::Free;
+        }
     }
 
     // The second half of the uppercut. You are both off the ground and you
@@ -5960,11 +6045,13 @@ fn twilight_tap(p: &Player) -> Option<u8> {
     }
 }
 
-/// **The Flurry dash's dash** (2026-10-12): on the frame its line of blows
-/// ends she goes down it -- along the flat of the look the flurry was thrown
-/// on, its whole reach, stopped the way a blink is (`aim::blink_to`) -- at
-/// `flurry dash, speed`, untouchable for the length of it, and what is left of
-/// the recovery is the dash and the move's own. A no-op for everybody else.
+/// **The Flurry dash's dash** (2026-10-12; 2026-10-13, to the disk): on the
+/// frame the disk has stood its moment she runs to it -- the spot the flurry
+/// was thrown at, stopped short of anything solid on the way
+/// (`aim::flurry_dash_to`) -- at `flurry dash, speed`, untouchable for the
+/// length of it, and breaks it on arrival (the burst `World` throws). What is
+/// left of the recovery is the run and the move's own. A jump timed for the
+/// arrival keeps the run (`bank_the_flurry_jump`). A no-op for everybody else.
 fn dash_down_the_flurry(p: &mut Player, scene: &Scene) {
     let Action::Active {
         kind: moves::dual::FLURRY_DASH,
@@ -5977,7 +6064,7 @@ fn dash_down_the_flurry(p: &mut Player, scene: &Scene) {
         return;
     }
     let m = moves::get(p.class, moves::dual::FLURRY_DASH);
-    let to = aim::blink_to(p.pos, p.aim_dir(), m.reach, scene);
+    let to = aim::flurry_dash_to(p.pos, p.aim_path.to, scene);
     let far = to.sub(p.pos).len();
     let speed = t::flurry_dash_speed();
     let frames = far.div(speed.mul(DT)).to_int().clamp(1, 120) as u16 + 1;
@@ -5987,6 +6074,32 @@ fn dash_down_the_flurry(p: &mut Player, scene: &Scene) {
         kind: moves::dual::FLURRY_DASH,
         left: frames.saturating_add(m.recovery),
     };
+}
+
+/// A jump pressed while the Flurry dash is still running: kept for the
+/// arrival if she is within `flurry dash, a jump this near the end` frames of
+/// the disk, and thrown the frame she breaks it. Earlier than that it is
+/// dropped -- the Reaver's dash jump, word for word. A no-op for everybody else.
+fn bank_the_flurry_jump(p: &mut Player) {
+    let running = p.class == Class::DualMage
+        && p.haul > 0
+        && matches!(
+            p.action,
+            Action::Recovery {
+                kind: moves::dual::FLURRY_DASH,
+                ..
+            }
+        );
+    if !running {
+        return;
+    }
+    let reach = p
+        .haul_speed
+        .mul(DT)
+        .mul(Fx::from_int(t::flurry_jump_buffer() as i32));
+    if p.haul_to.sub(p.pos).len().raw() <= reach.raw() {
+        dual::bank_dash_jump(p);
+    }
 }
 
 /// **The hop after an auto** (2026-10-12, the second pass): on the frame one
@@ -7254,6 +7367,10 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     if p.class == Class::DualMage && kind == moves::dual::VEIL {
         dual::veil(p);
     }
+    // The Flurry dash's line starts where she stood when it was thrown.
+    if p.class == Class::DualMage && kind == moves::dual::FLURRY_DASH {
+        p.launched_from = p.pos;
+    }
     if aerial {
         arm_aerial(p, kind, input);
     }
@@ -8137,6 +8254,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             ascending,
             jumped,
             hopped,
+            dash_jump,
             landed,
             singe,
             veil,
@@ -8158,6 +8276,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             }
             if *hopped {
                 h.write_u32(1);
+            }
+            if *dash_jump {
+                h.write_u32(2);
             }
         }
     }
@@ -12904,6 +13025,10 @@ impl World {
             );
             bolt.home = from;
             bolt.power = p.thrown_at;
+            // It strikes on its first frame and stands for the rest of the
+            // move's active window, so the hit has time to be seen.
+            let m = moves::get(p.class, moves::dual::CHAIN_LIGHTNING);
+            bolt.life = bolt.life.saturating_add(m.active);
             spawn_effect(&mut self.effects, bolt);
         }
     }

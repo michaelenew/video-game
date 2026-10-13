@@ -54,8 +54,11 @@ for all three -- and the tap comes out on that frame; hold it full and the spell
 tap never began. **A full hold is a commitment, not a charge**: the spell plays through whether
 the button stays down or not, and what it is worth is her bar, never how long it was held --
 the MMO cast, as the owner put it -- and quick, a platform fighter's committed move: from the
-press, the bolt lands in 18 frames, the blast in 20 and the first blow of the flurry in 15
-(they were 29, 35 and 23 until the owner asked for them quicker).
+press, the first blow of the flurry lands in 15 frames (it was 23 until the owner asked for
+the holds quicker). The bolt lands in 26 and the blast in 30: the owner's next round
+(2026-10-13) kept where they *start* -- the cloud and the disk appear at the same moment --
+and doubled their wind-ups and tripled their active windows, because these are the big
+spells and the hit is something to watch.
 
 **The autos are a ball** (`Shape::Orb`, `moves::orb_at`), since the owner's third round, when
 the wing -- a section of a ring swept round her, however its numbers were set -- was taken out
@@ -93,23 +96,35 @@ the spell's own wind-up, never before it is decided: the storm cloud gathering, 
 opening, the two forces wound round her hands.
 
 - **Chain lightning** (dark). A storm cloud over her head (`aim::overhead`,
-  `overhead height` 4.5 m, high enough to be above the camera's line to the target) through 8 frames; then black lightning onto the body nearest the
+  `overhead height` 6 m -- 4.5 until the owner found it sitting near the crosshair, hiding
+  the bolts -- and some 8 m across, dark wispy smoke rather than a ring of beads) through
+  16 frames; then black lightning onto the body nearest the
   crosshair's point -- within `chain lightning, finds a body this near the crosshair` (4 m) --
   and from it to the nearest body it has not struck within `leaps to a body this near` (6 m),
   `bodies it strikes` (4) at most, with nothing solid between (`aim::chain_next`). Each link is
   a burst where it lands, `strike radius` 0.9 m, 22 damage at power one, and a curse stack.
   Fighters are struck in versus only; in a hunt they are her party. With nobody there it
-  strikes the crosshair's point. 8/2/16.
-- **The Disk ray** (light). A great disk of light opens over her head through 10 frames,
-  standing upright and facing the way she faces (2026-10-13; it lay flat before); then a
+  strikes the crosshair's point. The bolts are black with a white edge, re-struck every
+  other frame, and stand for the 6 active frames past the strike. 16/6/16.
+- **The Disk ray** (light). A sun-disk opens over her head through 20 frames -- a flat
+  plate of light 3.4 m across, two rings round it and beads turning round the rim (twice
+  the breadth it was, 2026-10-13) -- standing upright and facing the way she faces; then a
   blast from it to the point the crosshair is on -- a new line of effect,
-  `aim::Kind::Overhead`, the skillshot's target from the disk rather than her hand -- for 6
-  frames, 0.6 m wide, 40 damage, purging what it passes through. Reach 16 m. 10/6/16.
-- **The Flurry dash** (twilight). A line of blows thrust down her look, 7 m, every 3 frames
-  for 15 (five blows of 9), and then she goes down it (`state::dash_down_the_flurry`): along
-  the flat of the look to its end, stopped the way a blink is, at `flurry dash, speed` (30 m/s),
-  untouchable for the length of it (her Veil's clock, `dual::veil_for`), and through whoever
-  is on the line (`state::separate_bodies` lets her pass). 5/15/8.
+  `aim::Kind::Overhead`, the skillshot's target from the disk rather than her hand -- for 18
+  frames, 0.6 m wide, 40 damage once and 34 frames of hitstun (26 before the longer beam left her minus on hit), purging what it passes through. Reach 16 m. 20/18/16.
+- **The Flurry dash** (twilight; rebuilt 2026-10-13). Her autos cascading forward one into
+  the next (`Shape::Cascade`): five blows, one every 3 frames, each a 1.4 m-wide stretch of
+  the line from where she stood to the spot the crosshair put it on (`aim::Kind::Grounded`,
+  10.5 m), so a body is hit by the blows that pass over it (`moves::flurry_blow`,
+  `moves::flurry_line`). The last strikes a disk as tall across as she is, which stands for
+  `flurry dash, the disk stands` (8 frames); then she runs to it (`state::dash_down_the_flurry`,
+  `aim::flurry_dash_to`: straight there, up or down, stopped short of anything solid) at
+  `flurry dash, speed` (50 m/s, from 30), untouchable for the length of it and through whoever
+  is on the line, and breaks it -- a burst the size of the disk, which hurts what is in it.
+  **A jump in the run's last `flurry dash, a jump this near the end` (6) frames keeps the run**
+  (`bank_the_flurry_jump`, the Reaver's dash jump): thrown on arrival with `the jump keeps`
+  (0.8) of its speed, for crossing the valley. Drawn, she runs through the blows' trails and
+  they scatter off her. 5/23/8.
 
 **Phase and the Equinox rise and carry** (from the owner: the middle click's jump attacks are
 her mobility, and the balanced ones). Phase leaves her moving `phase, keeps this speed` (9 m/s)

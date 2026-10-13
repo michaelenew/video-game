@@ -99,7 +99,7 @@ const PINNED: [(Class, u64); 6] = [
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0xda05d8a8d6903ae9),
     (Class::BloodMage, 0x083464c03c9c85e2),
-    (Class::DualMage, 0x025a6194c7ad03ee),
+    (Class::DualMage, 0x9dad7243b7d39dad),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];
 

@@ -116,6 +116,7 @@ impl Script {
             ascending: 0,
             jumped: false,
             hopped: false,
+            dash_jump: false,
             landed: 0,
             singe: Fx::ZERO,
             veil: 0,

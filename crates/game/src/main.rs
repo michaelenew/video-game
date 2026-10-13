@@ -1397,6 +1397,11 @@ struct EffectMesh {
 
 /// How many pieces one effect can be drawn as.
 ///
+/// A bolt of Chain lightning: a black stroke and its white rim for each kink,
+/// and the flash where it lands, black in white.
+const BOLT_STROKES: usize = 8;
+const BOLT_PARTS: usize = 2 * BOLT_STROKES + 2;
+
 /// **Counted from the widest effect rather than written down.** It was a
 /// literal six, correct on the day the Guillotine lotus had six blades -- and
 /// when the lotus grew to twelve the pool did not, so the first six blades had
@@ -1411,6 +1416,7 @@ const EFFECT_PARTS: usize = {
     let rough = sim::effects::ROUGH_BEADS;
     let ring = sim::effects::RING_PIECES;
     let flames = sim::effects::CARPET_FLAMES;
+    let ring = if BOLT_PARTS > ring { BOLT_PARTS } else { ring };
     let most = if blades > arms { blades } else { arms };
     let most = if flames > most { flames } else { most };
     let most = if beads > most { beads } else { most };
@@ -1643,7 +1649,7 @@ struct SpellMesh {
 }
 
 /// How many pieces one of her spells is drawn as, at most.
-const SPELL_PARTS: usize = 16;
+const SPELL_PARTS: usize = 40;
 
 /// Enough pips for the largest cap the Oven allows.
 const MAX_PIPS: u8 = 12;
@@ -1684,6 +1690,18 @@ struct EffectLook {
     column: Handle<Mesh>,
     spike: Handle<Mesh>,
     ball: Handle<Mesh>,
+    hoop: Handle<Mesh>,
+    /// The Dual mage's sun-disk: a flat plate of warm light.
+    sun: Handle<StandardMaterial>,
+    /// Chain lightning: black at the core, and a white rim drawn as the
+    /// inside of a slightly fatter shell (only its far faces are drawn), so
+    /// the black reads with a white outline against anything behind it.
+    bolt: Handle<StandardMaterial>,
+    bolt_rim: Handle<StandardMaterial>,
+    /// The storm cloud: smoke rather than matter, dark and see-through, and
+    /// fainter still at its wisps.
+    storm: Handle<StandardMaterial>,
+    wisp: Handle<StandardMaterial>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1962,6 +1980,41 @@ fn setup(
         column: unit.clone(),
         spike,
         ball,
+        hoop: meshes.add(Torus::new(0.94, 1.0)),
+        sun: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
+            emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        bolt: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.0, 0.0, 0.0),
+            unlit: true,
+            ..default()
+        }),
+        bolt_rim: materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 1.0, 1.0),
+            emissive: LinearRgba::rgb(3.0, 3.0, 3.4),
+            unlit: true,
+            cull_mode: Some(bevy::render::render_resource::Face::Front),
+            ..default()
+        }),
+        storm: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.07, 0.06, 0.09, 0.5),
+            emissive: LinearRgba::rgb(0.02, 0.015, 0.04),
+            perceptual_roughness: 1.0,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
+        wisp: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.12, 0.11, 0.15, 0.22),
+            perceptual_roughness: 1.0,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
     };
     for slot in 0..sim::effects::MAX_EFFECTS {
         for part in 0..EFFECT_PARTS {
@@ -1971,6 +2024,9 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 EffectMesh { slot, part },
+                // Light and smoke and magic: a bolt's or a cloud's shadow on
+                // the floor reads as a solid thing standing in the air.
+                bevy::pbr::NotShadowCaster,
             ));
         }
     }
@@ -2107,6 +2163,7 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 SpellMesh { owner, part },
+                bevy::pbr::NotShadowCaster,
             ));
         }
     }
@@ -2675,6 +2732,7 @@ fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut
         *vis = Visibility::Inherited;
         tf.translation = piece.at;
         tf.scale = piece.scale;
+        tf.rotation = piece.turn;
     }
 }
 
@@ -2993,6 +3051,7 @@ fn place_spells(
         }
         tf.translation = piece.at;
         tf.scale = piece.scale;
+        tf.rotation = piece.turn;
     }
 }
 
@@ -3052,6 +3111,11 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         }
         Action::Startup { kind, left } => (kind, true, left),
         Action::Active { kind, left } => (kind, false, left),
+        // **The run to the disk**: the trails scattering as she goes through.
+        Action::Recovery {
+            kind: d::FLURRY_DASH,
+            ..
+        } if p.haul > 0 => return flurry_piece(w, p, part, None),
         _ => return None,
     };
     let m = sim::moves::get(p.class, kind);
@@ -3247,41 +3311,19 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         d::DISK_RAY => {
             let v = volume?;
             let (from, to) = (fx3(v.from), fx3(v.to));
+            let swell = 1.0 + 0.25 * (w.frame as f32 * 0.9).sin();
+            let r = v.radius.to_f32_for_render();
             match part {
-                0 => Some(floating_in(Skin::Light, from, 0.35)),
-                k if k < 13 => {
-                    let t = (k - 1) as f32 / 11.0;
-                    let swell = 1.0 + 0.4 * (w.frame as f32 * 0.9 + k as f32).sin();
-                    Some(floating_in(
-                        Skin::Light,
-                        from.lerp(to, t),
-                        v.radius.to_f32_for_render() * swell,
-                    ))
-                }
+                k if k < 15 => hold_gathering(w, p, kind, 1.0, k),
+                15 => Some(rod(Skin::Light, from, to, r * 0.6)),
+                16 => Some(rod(Skin::Sun, from, to, r * swell)),
+                17 => Some(floating_in(Skin::Light, to, r * 1.8 * swell)),
                 _ => None,
             }
         }
-        // **The line of blows**: dark and light fists thrown down the line
-        // the flurry strikes along, flickering as each blow lands.
-        d::FLURRY_DASH if !startup => {
-            let v = volume?;
-            let (from, to) = (fx3(v.from), fx3(v.to));
-            (part < 12).then(|| {
-                let t = (part as f32 + 0.5) / 12.0;
-                let flick = ((w.frame as f32 * 1.7 + part as f32 * 2.3).sin() * 0.5 + 0.5) * 0.35;
-                let side = Vec3::new(-(to - from).z, 0.0, (to - from).x).normalize_or_zero();
-                let skin = if part % 2 == 0 {
-                    Skin::Dark
-                } else {
-                    Skin::Light
-                };
-                floating_in(
-                    skin,
-                    from.lerp(to, t) + side * (flick - 0.17),
-                    0.22 + flick * 0.4,
-                )
-            })
-        }
+        // **The cascade** (2026-10-13): her autos thrown one into the next
+        // down the line the hit test strikes along, to the disk at its end.
+        d::FLURRY_DASH if !startup => flurry_piece(w, p, part, Some(left)),
         d::FLURRY_DASH => hold_gathering(w, p, kind, through, part),
         _ => None,
     }
@@ -3341,6 +3383,108 @@ fn orb_piece(
     }
 }
 
+/// **The Flurry dash, drawn** (2026-10-13): her autos cascading down the line
+/// `sim::moves::flurry_line` draws -- each blow a ball flying its stretch with
+/// a trail, bowing to alternate sides, leaving its trail standing -- and the
+/// disk they strike at the end, as tall across as she is. `left` is the active
+/// frames remaining; `None` is the run, when the trails behind her scatter
+/// outward and fade as she goes through them. The blow in flight is the one
+/// `sim::moves::flurry_blow` says is out, so what flies is what hits.
+fn flurry_piece(
+    w: &World,
+    p: &sim::state::Player,
+    part: usize,
+    left: Option<u16>,
+) -> Option<Piece> {
+    const PER: usize = 6;
+    const SHOWN: usize = 5;
+    let m = sim::moves::get(p.class, sim::moves::dual::FLURRY_DASH);
+    let (a, d) = sim::moves::flurry_line(p.launched_from, p.aim_path.to);
+    let (a, d) = (fx3(a), fx3(d));
+    let (blows, out) = sim::moves::flurry_blow(&m, left.unwrap_or(0));
+    let n = (blows as usize).clamp(1, SHOWN);
+    let every = m.rehit.max(1) as f32;
+    // Which blow is in flight, and how far along its stretch; past the last,
+    // they have all landed.
+    let (current, frac) = match (left, out) {
+        (Some(l), Some(b)) => {
+            let elapsed = m.active.saturating_sub(l) as f32;
+            (
+                b as usize,
+                ((elapsed - b as f32 * every + 1.0) / every).clamp(0.0, 1.0),
+            )
+        }
+        _ => (n, 1.0),
+    };
+    let way = d - a;
+    let length = way.length().max(0.01);
+    let flat = Vec3::new(way.x, 0.0, way.z).normalize_or(Vec3::Z);
+    let side = Vec3::new(-flat.z, 0.0, flat.x);
+    let path = |b: usize, u: f32| {
+        let bow = (std::f32::consts::PI * u).sin();
+        let sign = if b % 2 == 0 { 1.0 } else { -1.0 };
+        a.lerp(d, (b as f32 + u) / n as f32) + side * (sign * bow * 0.9) + Vec3::Y * (bow * 0.35)
+    };
+    let skin_of = |b: usize| if b % 2 == 0 { Skin::Dark } else { Skin::Light };
+    let ball = 0.6;
+    // How far through the line her run has carried her: what is behind it
+    // scatters.
+    let run = left
+        .is_none()
+        .then(|| ((fx3(p.pos) + Vec3::Y * 0.9 - a).dot(way) / (length * length)).clamp(0.0, 1.0));
+    if part < SHOWN * PER {
+        let (b, k) = (part / PER, part % PER);
+        if b >= n || b > current {
+            return None;
+        }
+        if b == current {
+            return Some(if k == 0 {
+                floating_in(skin_of(b), path(b, frac), ball)
+            } else {
+                let back = k as f32 / PER as f32;
+                floating_in(
+                    skin_of(b),
+                    path(b, frac * (1.0 - back)),
+                    ball * (0.75 - 0.6 * back),
+                )
+            });
+        }
+        // A landed blow's trail, standing where it flew.
+        let u = (k as f32 + 0.5) / PER as f32;
+        let mut at = path(b, u);
+        let mut size = ball * 0.45;
+        if let Some(run) = run {
+            let behind = ((run - (b as f32 + u) / n as f32) * length / 1.5).clamp(0.0, 1.0);
+            let hash = ((part as f32 * 12.9898).sin() * 43758.547).fract() - 0.5;
+            let sign = if b % 2 == 0 { 1.0 } else { -1.0 };
+            let outward = (side * (sign + hash) + Vec3::Y * (0.6 + hash)).normalize_or(Vec3::Y);
+            at += outward * behind * 2.5;
+            size *= 1.0 - behind;
+            if size <= 0.01 {
+                return None;
+            }
+        }
+        return Some(floating_in(skin_of(b), at, size));
+    }
+    // The disk, swelling into being as the last blow flies at it.
+    let grown = if current + 1 >= n {
+        if current >= n { 1.0 } else { frac }
+    } else {
+        0.0
+    };
+    if grown <= 0.0 {
+        return None;
+    }
+    let r = sim::tuning::body_height().to_f32_for_render() * 0.5 * grown;
+    let shiver = 1.0 + 0.04 * (w.frame as f32 * 1.3).sin();
+    match part - SHOWN * PER {
+        0 => Some(plate(Skin::Dark, d, flat, r * shiver, 0.08)),
+        1 => Some(hoop(Skin::Light, d, flat, r * 1.02)),
+        2 => Some(hoop(Skin::Light, d, flat, r * 0.6 * shiver)),
+        _ => None,
+    }
+}
+
 /// **A long hold, `full` of the way to coming out** (2026-10-12): Chain
 /// lightning's storm cloud churning over her head, the Disk ray's disk opening
 /// there, or the Flurry dash's two forces wound round her hands.
@@ -3357,49 +3501,72 @@ fn hold_gathering(
     let waist = fx3(p.pos) + Vec3::Y * height * 0.55;
     let spin = w.frame as f32;
     match kind {
-        // Small, and a rim rather than a sheet: what hangs over her head is
-        // on the camera's line to whatever she is aiming at, and a big cloud
-        // or a filled disk there hid the very thing about to be struck.
+        // **A storm cloud** (2026-10-13): a mass of dark smoke the width of a
+        // room, flat underneath and heaped on top, wisps trailing off its
+        // rim -- hung high enough (`overhead, hangs above her feet`) that the
+        // bolts under it are what the camera sees, not the cloud.
         d::CHAIN_LIGHTNING => {
-            if part == 0 {
-                return Some(floating_in(Skin::Dark, over, 0.15 + 0.25 * full));
+            const PUFFS: usize = 18;
+            const WISPS: usize = 10;
+            let reach = 1.2 + 2.6 * full;
+            let drift = spin * 0.004;
+            if part < PUFFS {
+                let k = part as f32;
+                let a = k * 2.399_963 + drift;
+                let out = ((k + 0.5) / PUFFS as f32).sqrt();
+                let breathe = 1.0 + 0.08 * (spin * 0.05 + k * 1.7).sin();
+                let size = reach * (0.55 - 0.25 * out) * breathe;
+                let heap = (1.0 - out) * reach * 0.25 + (k * 3.1).sin() * 0.15;
+                return Some(Piece {
+                    shape: Shape::Ball,
+                    skin: Skin::Storm,
+                    at: over + Vec3::new(a.cos() * out * reach, heap, a.sin() * out * reach * 0.85),
+                    scale: Vec3::new(size * 2.0, size * 1.1, size * 1.7),
+                    turn: Quat::IDENTITY,
+                });
             }
-            (part < 11).then(|| {
-                let k = (part - 1) as f32;
-                let turn = k / 10.0 * std::f32::consts::TAU + spin * 0.06;
-                let r = 0.3 + 0.7 * full;
-                let bob = (spin * 0.2 + k * 1.3).sin() * 0.12;
-                floating_in(
-                    Skin::Dark,
-                    over + Vec3::new(turn.cos() * r, bob, turn.sin() * r),
-                    0.08 + 0.12 * full,
-                )
-            })
+            if part < PUFFS + WISPS {
+                let k = (part - PUFFS) as f32;
+                let a = k / WISPS as f32 * std::f32::consts::TAU + spin * 0.01 + (k * 1.3).sin();
+                let sway = (spin * 0.03 + k * 2.1).sin();
+                let r = reach * (1.05 + 0.2 * sway);
+                return Some(Piece {
+                    shape: Shape::Ball,
+                    skin: Skin::Wisp,
+                    at: over + Vec3::new(a.cos() * r, 0.1 * sway, a.sin() * r),
+                    scale: Vec3::new(reach * 0.5, reach * 0.06, reach * 0.16),
+                    turn: Quat::from_rotation_y(-a + std::f32::consts::FRAC_PI_2),
+                });
+            }
+            None
         }
-        // **Upright, facing the way she faces** (2026-10-13): a ring of
-        // light standing across her front, so the blast comes out of its
-        // face toward where she is aiming rather than out of a plate lying
-        // flat over her.
+        // **The sun-disk** (2026-10-13): a flat plate of light upright across
+        // her front, facing the way she faces, two rings round it and the
+        // beads turning round the rim -- opening to full over the wind-up.
         d::DISK_RAY => {
-            if part == 0 {
-                return Some(floating_in(Skin::Light, over, 0.12 + 0.2 * full));
+            let face = Vec3::new(
+                p.facing.x.to_f32_for_render(),
+                0.0,
+                p.facing.z.to_f32_for_render(),
+            )
+            .normalize_or(Vec3::Z);
+            let side = Vec3::new(-face.z, 0.0, face.x);
+            let open = 0.25 + 0.75 * full;
+            match part {
+                0 => Some(plate(Skin::Sun, over, face, 1.7 * open, 0.06)),
+                1 => Some(hoop(Skin::Light, over, face, 2.1 * open)),
+                2 => Some(hoop(Skin::Light, over, face, 2.45 * open)),
+                k if k < 15 => {
+                    let turn = (k - 3) as f32 / 12.0 * std::f32::consts::TAU - spin * 0.05;
+                    let r = 2.8 * open;
+                    Some(floating_in(
+                        Skin::Light,
+                        over + side * (turn.cos() * r) + Vec3::Y * (turn.sin() * r),
+                        0.14 + 0.12 * full,
+                    ))
+                }
+                _ => None,
             }
-            (part < 13).then(|| {
-                let k = (part - 1) as f32;
-                let turn = k / 12.0 * std::f32::consts::TAU - spin * 0.05;
-                let r = 0.3 + 1.1 * full;
-                let side = Vec3::new(
-                    -p.facing.z.to_f32_for_render(),
-                    0.0,
-                    p.facing.x.to_f32_for_render(),
-                )
-                .normalize_or_zero();
-                floating_in(
-                    Skin::Light,
-                    over + side * (turn.cos() * r) + Vec3::Y * (turn.sin() * r),
-                    0.07 + 0.08 * full,
-                )
-            })
         }
         d::FLURRY_DASH => (part < 6).then(|| {
             let k = part as f32;
@@ -3494,6 +3661,7 @@ fn place_effects(
         }
         tf.translation = piece.at;
         tf.scale = piece.scale;
+        tf.rotation = piece.turn;
     }
 }
 
@@ -3511,6 +3679,10 @@ struct Piece {
     skin: Skin,
     at: Vec3,
     scale: Vec3,
+    /// How the unit shape is turned before it is scaled into place: the
+    /// identity for everything that stands upright, and the way a disk faces
+    /// or a bolt runs for the few that do not.
+    turn: Quat,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -3521,6 +3693,9 @@ enum Shape {
     Spike,
     /// A sphere, which is exactly what the hit test for a travelling effect is.
     Ball,
+    /// A thin hoop, lying flat until it is turned: the rings round the Dual
+    /// mage's sun-disk.
+    Hoop,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -3541,6 +3716,13 @@ enum Skin {
     /// standing in the arena says it where they are.
     Light,
     Dark,
+    /// The sun-disk's plate, and the bolt's black core and white rim, and the
+    /// storm cloud's smoke and wisps: see the fields of `EffectLook`.
+    Sun,
+    Bolt,
+    BoltRim,
+    Storm,
+    Wisp,
     /// Broken ground: the stones' own material, so rough terrain reads as
     /// earth rather than as an effect.
     Stone,
@@ -3555,6 +3737,7 @@ impl EffectLook {
             Shape::Column => self.column.clone(),
             Shape::Spike => self.spike.clone(),
             Shape::Ball => self.ball.clone(),
+            Shape::Hoop => self.hoop.clone(),
         }
     }
 
@@ -3566,6 +3749,11 @@ impl EffectLook {
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
+            Skin::Sun => self.sun.clone(),
+            Skin::Bolt => self.bolt.clone(),
+            Skin::BoltRim => self.bolt_rim.clone(),
+            Skin::Storm => self.storm.clone(),
+            Skin::Wisp => self.wisp.clone(),
             Skin::Stone => self.stone.clone(),
             Skin::Air => self.beam.clone(),
         }
@@ -3576,10 +3764,46 @@ impl EffectLook {
 fn standing(shape: Shape, skin: Skin, at: Vec3, radius: f32, bottom: f32, top: f32) -> Piece {
     let height = (top - bottom).max(0.01);
     Piece {
+        turn: Quat::IDENTITY,
         shape,
         skin,
         at: at + Vec3::Y * (bottom + height * 0.5),
         scale: Vec3::new(radius * 2.0, height, radius * 2.0),
+    }
+}
+
+/// A flat disk of `radius` and `thick`ness whose face looks along `facing`.
+fn plate(skin: Skin, at: Vec3, facing: Vec3, radius: f32, thick: f32) -> Piece {
+    Piece {
+        shape: Shape::Column,
+        skin,
+        at,
+        scale: Vec3::new(radius * 2.0, thick, radius * 2.0),
+        turn: Quat::from_rotation_arc(Vec3::Y, facing.normalize_or(Vec3::Y)),
+    }
+}
+
+/// A hoop of `radius` round `at`, its face looking along `facing`.
+fn hoop(skin: Skin, at: Vec3, facing: Vec3, radius: f32) -> Piece {
+    Piece {
+        shape: Shape::Hoop,
+        skin,
+        at,
+        scale: Vec3::splat(radius),
+        turn: Quat::from_rotation_arc(Vec3::Y, facing.normalize_or(Vec3::Y)),
+    }
+}
+
+/// A rod of `radius` from `a` to `b`.
+fn rod(skin: Skin, a: Vec3, b: Vec3, radius: f32) -> Piece {
+    let along = b - a;
+    let length = along.length().max(0.01);
+    Piece {
+        shape: Shape::Column,
+        skin,
+        at: (a + b) * 0.5,
+        scale: Vec3::new(radius * 2.0, length, radius * 2.0),
+        turn: Quat::from_rotation_arc(Vec3::Y, along / length),
     }
 }
 
@@ -3592,6 +3816,7 @@ fn floating(at: Vec3, radius: f32) -> Piece {
 /// The same, in a skin of your choosing.
 fn floating_in(skin: Skin, at: Vec3, radius: f32) -> Piece {
     Piece {
+        turn: Quat::IDENTITY,
         shape: Shape::Ball,
         skin,
         at,
@@ -3917,24 +4142,76 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             // from where it leapt -- the cloud, or the last body -- to where
             // it struck, jagged and re-jagged every frame, and a flash where
             // it landed.
+            // **A bolt of Chain lightning** (2026-10-13): black lightning with
+            // a white edge, from where it leapt -- the cloud, or the last body
+            // -- to where it struck, in jagged strokes re-struck every other
+            // frame, and a black flash ringed in white where it landed. Each
+            // stroke is a black rod inside a fatter white one of which only
+            // the far side is drawn, so the white shows round the black.
             if effect.slot == sim::moves::dual::CHAIN_LIGHTNING {
+                const STROKES: usize = BOLT_STROKES;
                 let from = fx3(effect.home);
-                return match part {
-                    11 => Some(floating_in(Skin::Dark, at, r * (0.3 + 0.7 * left))),
-                    k if k < 11 => {
-                        let t = k as f32 / 10.0;
-                        let hash = |n: f32| ((n * 12.9898).sin() * 43758.547).fract() - 0.5;
-                        let seed = k as f32 + effect.age as f32 * 7.0;
-                        let jag = if k == 0 || k == 10 { 0.0 } else { 0.7 };
-                        let off = Vec3::new(hash(seed), hash(seed + 3.1), hash(seed + 5.7)) * jag;
-                        Some(floating_in(
-                            Skin::Dark,
-                            from.lerp(at, t) + off,
-                            0.1 + 0.12 * left,
-                        ))
+                let hash = |n: f32| ((n * 12.9898).sin() * 43758.547).fract() - 0.5;
+                let strike = (effect.age / 2) as f32 * 7.0;
+                let span = (at - from).length();
+                let kink = |i: usize| {
+                    if i == 0 || i == STROKES {
+                        return Vec3::ZERO;
                     }
+                    let seed = i as f32 + strike;
+                    Vec3::new(hash(seed), hash(seed + 3.1), hash(seed + 5.7))
+                        * (span * 0.08).min(0.9)
+                };
+                let point = |i: usize| from.lerp(at, i as f32 / STROKES as f32) + kink(i);
+                let core = 0.03 + 0.025 * left;
+                return match part {
+                    k if k < STROKES => Some(rod(Skin::Bolt, point(k), point(k + 1), core)),
+                    k if k < 2 * STROKES => {
+                        let k = k - STROKES;
+                        Some(rod(Skin::BoltRim, point(k), point(k + 1), core + 0.025))
+                    }
+                    k if k == 2 * STROKES => {
+                        Some(floating_in(Skin::Bolt, at, r * 0.45 * (0.3 + 0.7 * left)))
+                    }
+                    k if k == 2 * STROKES + 1 => Some(Piece {
+                        shape: Shape::Ball,
+                        skin: Skin::BoltRim,
+                        at,
+                        scale: Vec3::splat(r * 1.1 * (0.3 + 0.7 * left)),
+                        turn: Quat::IDENTITY,
+                    }),
                     _ => None,
                 };
+            }
+            // **The Flurry dash's disk breaking** (2026-10-13): shards of
+            // both forces flung out across the disk's face as she runs
+            // through it, carried on the way she was going.
+            if effect.slot == sim::moves::dual::FLURRY_DASH {
+                let out = 1.0 - left;
+                let flat = Vec3::new(
+                    at.x - effect.home.x.to_f32_for_render(),
+                    0.0,
+                    at.z - effect.home.z.to_f32_for_render(),
+                )
+                .normalize_or(Vec3::X);
+                let side = Vec3::new(-flat.z, 0.0, flat.x);
+                return (part < 12).then(|| {
+                    let th = part as f32 / 12.0 * std::f32::consts::TAU + 0.3;
+                    let outward = (side * th.cos() + Vec3::Y * th.sin()).normalize_or(Vec3::Y);
+                    let skin = if part % 2 == 0 {
+                        Skin::Dark
+                    } else {
+                        Skin::Light
+                    };
+                    Piece {
+                        shape: Shape::Spike,
+                        skin,
+                        at: at + outward * r * (0.6 + 1.8 * out) + flat * out * 1.6
+                            - Vec3::Y * out * out,
+                        scale: Vec3::new(0.3, 0.7, 0.3) * (0.25 + 0.75 * left),
+                        turn: Quat::from_rotation_arc(Vec3::Y, outward),
+                    }
+                });
             }
             let skin = if effect.slot == sim::moves::dual::SHADOWSTEP {
                 Skin::Dark
@@ -4000,6 +4277,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 effect.age as f32 * fast + part as f32 * std::f32::consts::TAU / SPUN_BLADES as f32;
             let mid = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
             Some(Piece {
+                turn: Quat::IDENTITY,
                 shape: Shape::Column,
                 skin: Skin::Shade,
                 at: mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
@@ -4009,6 +4287,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         EffectKind::ShadowFan if part < sim::moves::reaver::blades(effect.slot) => {
             let r = effect.field_radius().to_f32_for_render();
             Some(Piece {
+                turn: Quat::IDENTITY,
                 shape: Shape::Column,
                 skin: Skin::Shade,
                 at: fx3(effect.fan_blade_at(part)),
@@ -4022,6 +4301,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             sim::tuning::shadow_ring_width().to_f32_for_render(),
         )),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
+            turn: Quat::IDENTITY,
             shape: Shape::Column,
             skin: Skin::Shade,
             at: fx3(effect.lotus_at(part, effect.pos)),

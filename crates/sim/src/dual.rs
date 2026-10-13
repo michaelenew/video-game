@@ -491,6 +491,21 @@ pub fn may_air_hop(p: &Player) -> bool {
     }
 }
 
+/// Bank a jump for the end of the Flurry dash's run.
+pub fn bank_dash_jump(p: &mut Player) {
+    if let Mechanic::Meter { dash_jump, .. } = &mut p.mechanic {
+        *dash_jump = true;
+    }
+}
+
+/// Take the banked dash jump, if there is one.
+pub fn take_dash_jump(p: &mut Player) -> bool {
+    match &mut p.mechanic {
+        Mechanic::Meter { dash_jump, .. } => core::mem::replace(dash_jump, false),
+        _ => false,
+    }
+}
+
 /// Spend the air hop.
 pub fn spend_air_hop(p: &mut Player) {
     if let Mechanic::Meter { hopped, .. } = &mut p.mechanic {

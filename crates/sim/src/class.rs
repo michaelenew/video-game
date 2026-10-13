@@ -160,6 +160,7 @@ impl Class {
                 ascending: 0,
                 jumped: false,
                 hopped: false,
+                dash_jump: false,
                 landed: 0,
                 singe: Fx::ZERO,
                 veil: 0,
@@ -686,6 +687,9 @@ pub enum Mechanic {
         /// her (2026-10-12). Reset on landing, and never consulted while
         /// ascending, when every one of them rises.
         hopped: bool,
+        /// A jump pressed in the last frames of the Flurry dash's run to the
+        /// disk: thrown on arrival, carrying the run's speed (2026-10-13).
+        dash_jump: bool,
         /// Hits landed during this ascension. What the stagger on the way out
         /// is graduated by -- see `crate::dual::end_ascension`.
         landed: u16,

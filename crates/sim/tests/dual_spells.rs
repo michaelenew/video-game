@@ -165,6 +165,7 @@ fn set_bars(w: &mut World, dark: i32, light: i32) {
         ascending: 0,
         jumped: false,
         hopped: false,
+        dash_jump: false,
         landed: 0,
         singe: Fx::ZERO,
         veil: 0,
@@ -1353,34 +1354,124 @@ fn the_disk_ray_strikes_from_above_and_purges() {
     assert_eq!(stacks(&w), 0, "the curse was not purged");
 }
 
-#[test]
-fn the_flurry_dash_strikes_down_its_line_and_then_she_goes_down_it_untouchable() {
-    let mut w = facing(4.0);
-    let from = w.players[0].pos;
-    let before = w.players[1].health;
+/// Throw the Flurry dash from `facing(gap)`, keeping the other where it
+/// stood, and step until she is free or `most` frames have gone, pressing
+/// `space` on the frames it answers yes to. What the world was each frame
+/// is the caller's to watch through `each`.
+fn flurry(
+    gap: f32,
+    most: u32,
+    mut space: impl FnMut(&World) -> bool,
+    mut each: impl FnMut(&World),
+) -> World {
+    let mut w = facing(gap);
+    let stood = w.players[1].pos;
     assert!(hold_into(&mut w, keys::TWILIGHT, 0, d::FLURRY_DASH, 60));
-    let m = sim::moves::get(Class::DualMage, d::FLURRY_DASH);
-    let mut untouchable = false;
-    for _ in 0..(m.startup + m.active + m.recovery) as u32 + 30 {
-        step(&mut w, 0);
-        untouchable |= w.players[0].untouchable();
+    for _ in 0..most {
+        let press = if space(&w) { SPACE } else { 0 };
+        step(&mut w, press);
         // Keep them where they stood: what is asked is how often they were hit.
-        w.players[1].pos = at(-2.0, 0.0, 8.0);
+        w.players[1].pos = stood;
+        each(&w);
         if w.players[0].action.actionable() {
             break;
         }
     }
-    assert!(
-        before - w.players[1].health > m.damage * 2,
-        "the flurry struck once at most: {}",
-        before - w.players[1].health
+    w
+}
+
+#[test]
+fn the_flurry_dash_cascades_down_its_line_and_then_she_runs_to_the_disk_untouchable() {
+    let from = at(-6.0, 0.0, 8.0);
+    let m = sim::moves::get(Class::DualMage, d::FLURRY_DASH);
+    let (mut hits, mut was, mut untouchable) = (0, 1250, false);
+    let w = flurry(
+        4.0,
+        120,
+        |_| false,
+        |w| {
+            if w.players[1].health < was {
+                hits += 1;
+            }
+            was = w.players[1].health;
+            untouchable |= w.players[0].untouchable();
+        },
     );
+    // The blows cascade: a body four metres out is under two of them, each
+    // its own hit, rather than under the whole line every frame.
+    assert!(hits >= 2, "the flurry struck {hits} times");
+    // And she runs the whole line, to the disk at its end.
+    let went = w.players[0].pos.x.sub(from.x);
     assert!(
-        w.players[0].pos.x.sub(from.x).raw() > metres(5.0).raw(),
-        "she went {} m down the line",
-        as_f(w.players[0].pos.x.sub(from.x))
+        went.raw() > m.reach.sub(metres(1.5)).raw(),
+        "she went {} m down the line of {}",
+        as_f(went),
+        as_f(m.reach)
     );
-    assert!(untouchable, "the dash was not untouchable");
+    assert!(untouchable, "the run was not untouchable");
+}
+
+#[test]
+fn the_flurry_dash_breaks_its_disk_where_she_arrives() {
+    let mut broke = None;
+    flurry(
+        30.0,
+        120,
+        |_| false,
+        |w| {
+            for e in w.effects.iter().flatten() {
+                if e.kind == sim::effects::EffectKind::Burst && e.slot == d::FLURRY_DASH {
+                    broke.get_or_insert((e.pos, w.players[0].pos));
+                }
+            }
+        },
+    );
+    let (disk, her) = broke.expect("the disk never broke");
+    let flat = V3::new(disk.x.sub(her.x), Fx::ZERO, disk.z.sub(her.z)).len();
+    assert!(
+        flat.raw() < metres(1.0).raw(),
+        "it broke {} m from where she arrived",
+        as_f(flat)
+    );
+}
+
+#[test]
+fn a_jump_timed_for_the_end_of_the_flurry_run_keeps_the_run() {
+    // Pressed through the run's last frames: banked, and thrown on arrival
+    // carrying the run's speed. Pressed only once she has stopped, it is an
+    // ordinary jump from standing.
+    let running = |w: &World| {
+        matches!(
+            w.players[0].action,
+            Action::Recovery { kind, .. } if kind == d::FLURRY_DASH
+        ) && w.players[0].haul > 0
+    };
+    let mut kept = Fx::ZERO;
+    let mut w = flurry(
+        30.0,
+        120,
+        |w| running(w) && w.players[0].haul <= 2,
+        |w| {
+            if !w.players[0].grounded && !running(w) {
+                kept = kept.max(w.players[0].vel.x);
+            }
+        },
+    );
+    let speed = t::flurry_dash_speed().mul(t::flurry_jump_keep());
+    assert!(
+        kept.raw() > speed.mul(Fx::ratio(9, 10)).raw(),
+        "the jump out of the run carried {} m/s, the run keeps {}",
+        as_f(kept),
+        as_f(speed)
+    );
+    assert!(w.players[0].vel.y.raw() != 0 || !w.players[0].grounded);
+    // Without the press she stops on the disk.
+    w = flurry(30.0, 120, |_| false, |_| {});
+    assert!(
+        w.players[0].vel.x.raw() < metres(1.0).raw(),
+        "she ran on at {} m/s with no jump",
+        as_f(w.players[0].vel.x)
+    );
 }
 
 #[test]

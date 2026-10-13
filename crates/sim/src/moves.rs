@@ -278,6 +278,15 @@ pub enum Shape {
     /// read as a sweep however its numbers were set: the owner asked for a
     /// thing thrown forward rather than a blade brought round.
     Orb,
+    /// **A cascade of blows** (2026-10-13): the Dual mage's Flurry dash. Her
+    /// autos thrown down one line, one after the next, each reaching on from
+    /// where the last one struck -- a fifth of the way each, for five -- from
+    /// her chest where she stood to a disk where the line ends (see
+    /// [`flurry_line`]). Every `rehit` frames the next blow is out; its volume
+    /// is its stretch of the line, `radius` thick. The last `flurry dash,
+    /// pauses` frames of the active window are the disk standing there, struck,
+    /// before she goes to it.
+    Cascade,
 }
 
 impl Shape {
@@ -1789,7 +1798,7 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // only so that it strikes. The flurry is a line of blows thrust
             // along her look, again and again.
             dual::DISK_RAY => Shape::Cylinder,
-            dual::FLURRY_DASH => Shape::Thrust,
+            dual::FLURRY_DASH => Shape::Cascade,
             _ => Shape::None,
         },
         // The scythe. The sweep is a cut across the front, and the one swing
@@ -2160,6 +2169,31 @@ pub fn orb_line(facing: V3, aim_dir: V3, grounded: bool, stoop: Fx) -> (V3, Fx) 
     } else {
         (facing, stoop.min(Fx::ZERO))
     }
+}
+
+/// **The Flurry dash's line**: from her chest where she stood when it was
+/// thrown (`start`, her feet then) to the middle of the disk -- half a body
+/// over the point on the ground the crosshair picked (`end`, a grounded aim,
+/// so a wall or the range brings it down to the floor there). The blows
+/// cascade along it and she dashes to the disk at its end.
+pub fn flurry_line(start: V3, end: V3) -> (V3, V3) {
+    let half = crate::tuning::body_height().mul(Fx::ratio(1, 2));
+    (
+        crate::aim::origin(start),
+        V3::new(end.x, end.y.add(half), end.z),
+    )
+}
+
+/// How many blows a Flurry dash throws, and which one is out `left` frames
+/// before the end of its active window: `None` once they are all out and the
+/// disk stands. Each takes `rehit` frames; the window is the blows and then
+/// `flurry dash, pauses`.
+pub fn flurry_blow(m: &Move, left: u16) -> (u16, Option<u16>) {
+    let every = m.rehit.max(1);
+    let blows = (m.active.saturating_sub(crate::tuning::flurry_pause()) / every).max(1);
+    let elapsed = m.active.saturating_sub(left);
+    let blow = elapsed / every;
+    (blows, (blow < blows).then_some(blow))
 }
 
 /// How far along its flight the auto's ball is on this frame of its active

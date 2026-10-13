@@ -1294,6 +1294,40 @@ pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
     from.add(flat.scale(short))
 }
 
+/// **Where the Flurry dash's run stops her** (2026-10-13): at the disk her
+/// blows struck -- `to`, the spot the crosshair put the flurry on -- along the
+/// straight line there, up or down as it goes, stopped short of the first
+/// solid thing her body's sole or crown would meet ([`blink_to`]'s four lines,
+/// not flattened), and kept inside the place's bounds. The disk was aimed when
+/// the flurry was thrown; this is only how much of the way to it is clear.
+pub fn flurry_dash_to(from: V3, to: V3, scene: &Scene) -> V3 {
+    let way = to.sub(from);
+    let far = way.len();
+    if far.raw() <= 0 {
+        return from;
+    }
+    let sole = arena::SKIN;
+    let crown = t::body_height().sub(arena::SKIN);
+    let mut share = Fx::ONE;
+    for (lift_a, lift_b) in [(sole, sole), (sole, crown), (crown, sole), (crown, crown)] {
+        let a = V3::new(from.x, from.y.add(lift_a), from.z);
+        let b = V3::new(to.x, to.y.add(lift_b), to.z);
+        if let Some(along) = first_solid_between(a, b, scene) {
+            share = share.min(along);
+        }
+    }
+    let end = if share.raw() >= Fx::ONE.raw() {
+        to
+    } else {
+        let short = far
+            .mul(share)
+            .sub(t::body_radius().add(arena::SKIN))
+            .max(Fx::ZERO);
+        from.add(way.normalized().scale(short))
+    };
+    within_bounds(from, end, scene)
+}
+
 /// **Where the hop after one of the Dual mage's autos lands her**
 /// (2026-10-12): `reach` along `dir` level, stopped the way a blink is
 /// ([`blink_to`]), and `lift` up from there -- less if something solid is over
