@@ -554,6 +554,7 @@ impl Default for Sim {
         shot_weight(&mut w);
         shot_at(&mut w);
         shot_move(&mut w);
+        shot_blood(&mut w);
         // `--replay <file>`: the fight is the tape's, from its own start.
         let playing = platform::value("--replay").and_then(|path| {
             let text = platform::load_replay(path)?;
@@ -709,6 +710,67 @@ fn pose_balls(
 /// two players trade names it (`online::terms`).
 pub fn build() -> &'static str {
     env!("ARENA_BUILD")
+}
+
+/// `SHOT_BLOOD=1` starts a Blood mage in front of her own work, so a capture
+/// can look at what 0016 draws without playing up to it: a Carpet she is
+/// holding, three thralls and a golem out in front, and a root of thorns to
+/// the side. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
+/// class, and read once at start.
+fn shot_blood(w: &mut World) {
+    use sim::effects::{Effect, EffectKind};
+    use sim::moves::blood as b;
+    if platform::env("SHOT_BLOOD").is_none() || w.players[0].class != sim::Class::BloodMage {
+        return;
+    }
+    let p = w.players[0];
+    let ahead = |forward: i32, side: i32| {
+        let f = p.facing;
+        sim::V3::new(
+            p.pos
+                .x
+                .add(f.x.mul(sim::Fx::from_int(forward)))
+                .sub(f.z.mul(sim::Fx::from_int(side))),
+            p.pos.y,
+            p.pos
+                .z
+                .add(f.z.mul(sim::Fx::from_int(forward)))
+                .add(f.x.mul(sim::Fx::from_int(side))),
+        )
+    };
+    let mut put = |e: Effect| {
+        if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(e);
+        }
+    };
+    let at =
+        |kind, slot, pos, reach| Effect::cast(kind, 0, p.class, slot, pos, sim::V3::ZERO, reach);
+    put(at(
+        EffectKind::Carpet,
+        b::CARPET,
+        ahead(5, 0),
+        sim::Fx::from_int(4),
+    ));
+    for (k, side) in [-2, 0, 2].into_iter().enumerate() {
+        let mut thrall = Effect::pool(0, p.class, b::SUMMON, ahead(9, side), 60 + 30 * k as i32);
+        thrall.kind = EffectKind::Thrall;
+        thrall.life = u16::MAX;
+        put(thrall);
+    }
+    let mut golem = Effect::pool(0, p.class, b::GOLEM, ahead(13, 0), 600);
+    golem.kind = EffectKind::Golem;
+    golem.life = u16::MAX;
+    put(golem);
+    put(at(
+        EffectKind::Thorns,
+        b::THORN_GARDEN,
+        ahead(7, -6),
+        sim::Fx::from_int(3),
+    ));
+    w.players[0].action = sim::state::Action::Channel {
+        kind: b::CARPET,
+        held: 40,
+    };
 }
 
 /// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
