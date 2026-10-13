@@ -29,10 +29,12 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // the Clash -- and his hands press a weapon the plan holds on every other
 // frame, because held it is a charge. And again 2026-10-13: tap to combo and
 // hold to finish, momentum spent by every finisher, the Clash where every
-// blow lands.
+// blow lands. And again the same day with no change to play: the clocks his
+// liquid weapon is drawn from (`class::Quicksilver`) are in `state_checksum`,
+// and with them left out every pin held bit for bit.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0xe9ca1f6562765a63),
-    (Class::Champion, 7, 0x49ce7f2989520e77),
+    (Class::Champion, 0x2545_F491, 0x50d9f3b1f0196f6f),
+    (Class::Champion, 7, 0x8c86fbbbd68ba709),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed

@@ -926,6 +926,10 @@ pub const SECTIONS: &[Section] = &[
                 "Start every Champion with n momentum, so a capture can look at the meter and the glow on his weapon without landing his way up to them. It holds two seconds and then drains, so pair it with an early SHOT_FRAME.",
             ),
             e(
+                "SHOT_FORM=<weapon>,<n>",
+                "Start every Champion with her liquid weapon in that shape (sword, hammer or spear), as it is n frames after the move that called it ended: SHOT_FORM=hammer,0 is a whole hammer, and SHOT_FORM=spear,130 with SHOT_FRAME=90 is a spear halfway through melting back into the coil round her arm. The clock runs on, so pair it with SHOT_FRAME and DEMO=0.",
+            ),
+            e(
                 "SHOT_AT=<x>,<z>",
                 "Stand player one at that point of the place the world is in (metres), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
             ),

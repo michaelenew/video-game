@@ -5029,10 +5029,13 @@ fn begin_full_charge(p: &mut Player, kind: u8, place: u8) {
         chain_left,
         chain_hit,
         fury,
+        liquid,
         ..
     } = &mut p.mechanic
     {
+        let from = *form;
         *form = Form::of_move(kind);
+        liquid.call(from);
         // A finisher finishes: the string is over, and the next press opens
         // one. It stands at its link's place for the refund.
         *chain = 0;
@@ -7337,12 +7340,15 @@ fn begin_champion(p: &mut Player, kind: u8) {
         rush: r,
         rush_vel: v,
         takeoff,
+        liquid,
         ..
     } = &mut p.mechanic
     {
         // The weapon is whichever button was pressed. Nothing else sets it:
         // there is no mode to be in any more.
+        let from = *form;
         *form = Form::of_move(kind);
+        liquid.call(from);
         *r = rush;
         *v = rush_vel;
         // A takeoff spends the window it came out of, so one jump buys one of
@@ -8895,6 +8901,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             rise_used,
             lifted,
             fury,
+            liquid,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
@@ -8923,6 +8930,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(
                 fury.last_weapon as u32 | (fury.spent as u32) << 8 | (fury.clash_by as u32) << 16,
             );
+            h.write_u32(liquid.raw());
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -9035,7 +9043,7 @@ fn step_aloft(p: &mut Player, field: &Field, arena: &Terrain) {
     p.clear = camera::clear_step(p.clear, height);
 }
 
-/// Advance the four clocks the renderer needs and combat does not.
+/// Advance the clocks the renderer needs and combat does not.
 ///
 /// Every one of them is a fact about what just happened -- how far you have
 /// walked, how long you have been in the air -- rather than a decision, which
@@ -9057,6 +9065,10 @@ fn advance_clocks(p: &mut Player) {
         p.air_frames = p.air_frames.saturating_add(1);
     }
     p.parried = p.parried.saturating_sub(1);
+    let moving = p.action.attack_kind().is_some();
+    if let Mechanic::Forms { liquid, .. } = &mut p.mechanic {
+        liquid.tick(moving);
+    }
     p.crouched_for = if p.crouching {
         p.crouched_for.saturating_add(1)
     } else {

@@ -529,6 +529,8 @@ fn drawn_weapon(clip: view::Clip, frame: u16, p: &sim::state::Player) -> [f32; 3
         chest_turn: still,
         hips: pos,
         hips_turn: still,
+        shoulder: pos,
+        elbow: pos,
     };
     let arms = view::arms::champion_arms(p, hand(true), hand(false), &torso)
         .expect("a Champion holds a weapon");
