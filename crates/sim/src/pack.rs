@@ -48,7 +48,8 @@
 use crate::DT;
 use crate::arena::Terrain;
 use crate::critter::{
-    Critter, CritterField, CritterMove, Critters, MAX_CRITTERS, NO_SLOT, flag, is, stat, stat_fx,
+    Critter, CritterField, CritterMove, CritterSet, Critters, MAX_CRITTERS, NO_SLOT, flag, is,
+    stat, stat_fx,
 };
 use crate::fixed::{Fx, cos_turns};
 use crate::math::V3;
@@ -188,8 +189,8 @@ pub struct Pack {
     /// each fighter, the bodies whose windup began off that fighter's screen;
     /// and how many frames running each fighter has stood under a marker
     /// drawn for something coming.
-    pub winding: u16,
-    pub unseen: [u16; MAX_PLAYERS],
+    pub winding: CritterSet,
+    pub unseen: [CritterSet; MAX_PLAYERS],
     pub marked: [u8; MAX_PLAYERS],
 }
 
@@ -220,8 +221,8 @@ impl Pack {
             seen: [Seen::default(); MAX_PLAYERS],
             memo: [0; MEMO],
             per: [0; MAX_PLAYERS],
-            winding: 0,
-            unseen: [0; MAX_PLAYERS],
+            winding: CritterSet::EMPTY,
+            unseen: [CritterSet::EMPTY; MAX_PLAYERS],
             marked: [0; MAX_PLAYERS],
         }
     }
@@ -1080,20 +1081,19 @@ pub fn watch(
     signs: &crate::sign::Signs,
 ) {
     let sp = critters.sp();
-    let mut winding = 0u16;
+    let mut winding = CritterSet::EMPTY;
     for (i, c) in critters.iter().enumerate() {
-        let bit = 1u16 << i;
         if !(c.alive() && matches!(c.state, is::STARTUP | is::ACTIVE)) {
             for u in pack.unseen.iter_mut() {
-                *u &= !bit;
+                u.unset(i);
             }
             continue;
         }
         if c.state != is::STARTUP {
             continue;
         }
-        winding |= bit;
-        if pack.winding & bit != 0 {
+        winding.set(i);
+        if pack.winding.has(i) {
             continue;
         }
         // Begun this frame: on whose screen?
@@ -1102,9 +1102,9 @@ pub fn watch(
             let seen = scene.players[who].health <= 0
                 || crate::aim::in_view(who, looks[who], at, t::SCREEN_HALF_VIEW, scene);
             if seen {
-                *u &= !bit;
+                u.unset(i);
             } else {
-                *u |= bit;
+                u.set(i);
             }
         }
     }
@@ -1139,7 +1139,7 @@ pub fn watch(
 /// for a reaction. See [`watch`].
 pub fn unanswered(pack: &Pack, i: usize, who: usize) -> bool {
     let who = who.min(MAX_PLAYERS - 1);
-    pack.unseen[who] & (1u16 << i) != 0 && (pack.marked[who] as u16) < t::HUMAN_REACTION_FRAMES
+    pack.unseen[who].has(i) && (pack.marked[who] as u16) < t::HUMAN_REACTION_FRAMES
 }
 
 /// Where the pack thinks fighter `who` will be: the glance, projected by

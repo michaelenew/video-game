@@ -19,7 +19,7 @@ use crate::bolt::{self, Flight, MAX_BOLTS};
 use crate::bulwark;
 use crate::camera;
 pub use crate::class::Shield;
-use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
+use crate::class::{self, Class, Force, Form, Ghost, Mechanic, Met};
 use crate::critter::{self, Critters};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::dual;
@@ -42,6 +42,14 @@ use crate::stones::{self, Field};
 use crate::tuning as t;
 
 pub const MAX_PLAYERS: usize = 4;
+
+// A fighter's index travels as a byte in a hundred places -- who threw this,
+// who is held by whom -- beside sentinels that are not anybody: the creature
+// ([`QUARRY`]), nailed, nobody. Every seat has to stay clear of them.
+const _: () = assert!(
+    MAX_PLAYERS < QUARRY as usize,
+    "a seat's byte would be the creature's"
+);
 pub type PlayerId = usize;
 
 /// **A set of fighters**: one bit per seat, as wide as the seats need. What
@@ -61,8 +69,10 @@ pub const NOBODY: u8 = u8::MAX;
 /// and all. See `moves::blood::NAIL`.
 pub const NAILED: u8 = u8::MAX - 1;
 
-/// `Player::blinked` when she did not blink this frame.
-pub const NO_POOL: u8 = u8::MAX;
+/// `Player::blinked` when she did not blink this frame. Past every effect
+/// slot there can be: a slot is sixteen bits since the pool is sized by the
+/// seats.
+pub const NO_POOL: u16 = u16::MAX;
 /// `Player::vessel` when the Blood mage has no charge stored.
 pub const NO_VESSEL: u8 = u8::MAX;
 /// `Player::charging_stone` when the Elementalist is holding no stone.
@@ -439,7 +449,7 @@ pub struct Player {
     /// only has her body -- so it leaves the slot here for `advance` to spend
     /// on the same frame. In the snapshot for the same reason every edge is:
     /// a frame re-simulated must consume the same pool.
-    pub blinked: u8,
+    pub blinked: u16,
     /// Frames of **bleed** left, from a Blood mage's Haemorrhage. Every
     /// `tuning::bleed_tick` frames it takes `tuning::bleed_damage` and spills
     /// that under you wherever you are standing, so a bleeding fighter walks
@@ -3650,7 +3660,13 @@ impl World {
             }
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
-            h.write_u32(p.blinked as u32);
+            // As the byte it was, for every slot a byte could name: a fight
+            // of four hashes as it did.
+            h.write_u32(if p.blinked == NO_POOL {
+                u8::MAX as u32
+            } else {
+                p.blinked as u32
+            });
             h.write_u32(p.bleeding as u32);
             h.write_u32(p.bled_by as u32);
             h.write_u32(p.hauled_in as u32);
@@ -3899,7 +3915,7 @@ impl World {
                     h.write_u32(monster::mount_hash(c.mount));
                 }
                 h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
-                h.write_u32(c.perch[2] as u16 as u32);
+                h.write_u32(c.perch[2] as u16 as u32 | (c.struck_objectives as u32) << 16);
                 for seared in c.seared.chunks(4) {
                     let mut b = [0; 4];
                     b[..seared.len()].copy_from_slice(seared);
@@ -6174,7 +6190,7 @@ fn step_player(
                         }
                         p.pos = scene.effects[pool].map_or(p.pos, |e| e.pos);
                         p.vel = V3::ZERO;
-                        p.blinked = pool as u8;
+                        p.blinked = pool as u16;
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
@@ -9309,7 +9325,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                     travelled: Fx::ZERO,
                     weight,
                     struck: false,
-                    met: 0,
+                    met: Met::NONE,
                 },
                 Shield::Planted { pos, weight } => {
                     let to_owner = from.sub(pos);
@@ -9320,7 +9336,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                         travelled: Fx::ZERO,
                         weight,
                         struck: false,
-                        met: 0,
+                        met: Met::NONE,
                     }
                 }
                 // **The leap and the shield meet in the middle**, since
@@ -9356,7 +9372,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                         travelled,
                         weight,
                         struck: false,
-                        met: 0,
+                        met: Met::NONE,
                     }
                 }
             });
@@ -9689,8 +9705,14 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_i32(travelled.raw());
             h.write_i32(weight.raw());
             // One word for both: a flight that has met no creature hashes as
-            // it did before there was anything to remember.
-            h.write_u32(*struck as u32 | (*met as u32) << 1);
+            // it did before there was anything to remember, and one that
+            // met what sixteen bits could name hashes as it did then.
+            h.write_u32(*struck as u32 | met.compat() << 1);
+            if met.compat() == u32::MAX >> 1 {
+                for &w in met.critters.words().iter().chain(met.creatures.words()) {
+                    h.write_u32(w);
+                }
+            }
         }
         Mechanic::Forms {
             form,
@@ -16745,10 +16767,10 @@ impl World {
                         break;
                     }
                     let body = self.critters[c];
-                    if !body.alive() || met & (1 << c) != 0 || !body.body(sp).touched_by(&volume) {
+                    if !body.alive() || met.critters.has(c) || !body.body(sp).touched_by(&volume) {
                         continue;
                     }
-                    met |= 1 << c;
+                    met.critters.set(c);
                     hit = true;
                     let guarded = match sp.pack {
                         Some(decl) => decl.mind.guarded(
@@ -16801,17 +16823,16 @@ impl World {
                 if hit && outbound {
                     break;
                 }
-                let bit = 1u16 << (Shield::MET_MONSTER as usize + slot);
                 let Some(mut beast) = self.monsters[slot] else {
                     continue;
                 };
-                if !beast.alive() || met & bit != 0 {
+                if !beast.alive() || met.creatures.has(slot) {
                     continue;
                 }
                 let Some(part) = part_under(&beast, &thrower, &volume) else {
                     continue;
                 };
-                met |= bit;
+                met.creatures.set(slot);
                 hit = true;
                 // Its guard is asked as it is of any blow: blocked, parried
                 // or broken is the creature's to say, and a blocked throw has
@@ -17646,24 +17667,22 @@ impl World {
             if o.state.broken {
                 continue;
             }
-            let mut state = o.state;
             let mut damage = 0;
+            let bit = 1u8 << o.index;
             for c in 0..critter::MAX_CRITTERS {
-                let body = self.critters[c];
-                let bit = 1u16 << c;
+                let body = &mut self.critters[c];
                 if !body.alive() || body.state != critter::is::ACTIVE {
-                    state.struck_by_critters &= !bit;
+                    body.struck_objectives &= !bit;
                     continue;
                 }
-                if state.struck_by_critters & bit != 0 {
+                if body.struck_objectives & bit != 0 {
                     continue;
                 }
                 if body.reaches(sp, o.at, o.site.extent().y, o.radius()) {
-                    state.struck_by_critters |= bit;
+                    body.struck_objectives |= bit;
                     damage += sp.attack(body.act).damage;
                 }
             }
-            objective::set(&mut self.lore, o.index, state);
             if damage > 0 {
                 objective::strike(&mut self.lore, o.index, damage);
             }

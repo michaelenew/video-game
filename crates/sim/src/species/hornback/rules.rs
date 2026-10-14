@@ -571,11 +571,9 @@ fn stun(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize, hit: Stopper
         Stopper::Raised(s) => {
             // The cart: the charge's whole blow, once a charge.
             if let Some(o) = the_cart(w).filter(|o| o.solid() == s) {
-                let bit = 1u16 << b;
-                let mut state = o.state;
-                if state.struck_by_critters & bit == 0 {
-                    state.struck_by_critters |= bit;
-                    objective::set(&mut w.lore, o.index, state);
+                let bit = 1u8 << o.index;
+                if w.critters[b].struck_objectives & bit == 0 {
+                    w.critters[b].struck_objectives |= bit;
                     objective::strike(&mut w.lore, o.index, sp.attack(CHARGE).damage);
                 }
             }

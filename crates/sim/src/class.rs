@@ -208,19 +208,48 @@ pub enum Shield {
         /// recall passes through whoever is in the way, once.
         struck: bool,
         /// **Which creatures and critters this flight has already gone
-        /// through**, in a hunt: bit `c` for critter `c`, bit
-        /// [`Shield::MET_MONSTER`]` + slot` for a creature. A thrown one plants
-        /// on the first it meets, so only the recall reads it -- once each,
-        /// and on through them. See `state::World::shields_strike_the_quarry`.
-        met: u16,
+        /// through**, in a hunt. A thrown one plants on the first it meets,
+        /// so only the recall reads it -- once each, and on through them.
+        /// See `state::World::shields_strike_the_quarry`.
+        met: Met,
     },
 }
 
-impl Shield {
-    /// The first of a flight's `met` bits that stands for a creature; the critters'
-    /// are below it.
-    pub const MET_MONSTER: u32 = 12;
+/// **What a flying shield has gone through**: a bit per critter slot and a
+/// bit per creature slot. One `u16` until the slots stopped being capped by
+/// it: critters below bit twelve, creatures above.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
+pub struct Met {
+    pub critters: crate::critter::CritterSet,
+    pub creatures: crate::bits::Bits<{ crate::bits::words_for(crate::monster::MAX_MONSTERS) }>,
+}
 
+impl Met {
+    pub const NONE: Met = Met {
+        critters: crate::critter::CritterSet::EMPTY,
+        creatures: crate::bits::Bits::EMPTY,
+    };
+
+    /// The `u16` it was -- critters in bits nought to eleven, creatures from
+    /// twelve -- when everything it holds fits there, for the checksum; all
+    /// ones below the top bit when it does not, and the whole of it follows.
+    pub fn compat(&self) -> u32 {
+        let fits = (12..crate::critter::CritterSet::CAPACITY).all(|c| !self.critters.has(c))
+            && (0..crate::monster::MAX_MONSTERS).all(|s| s < 4 || !self.creatures.has(s));
+        if !fits {
+            return u32::MAX >> 1;
+        }
+        let mut v = self.critters.words()[0] & 0xFFF;
+        for s in 0..crate::monster::MAX_MONSTERS.min(4) {
+            if self.creatures.has(s) {
+                v |= 1 << (12 + s);
+            }
+        }
+        v
+    }
+}
+
+impl Shield {
     pub const fn in_hand(self) -> bool {
         matches!(self, Shield::Held { .. })
     }

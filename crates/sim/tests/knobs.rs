@@ -235,6 +235,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "A code, not a magnitude: what `Effect::banked` says a Hemoplague still being held is.",
     ),
     (
+        "pub const NO_POOL: u16 = u16::MAX",
+        "A code, not a magnitude: the effect slot `Player::blinked` names when she did not blink.",
+    ),
+    (
         "pub const UNLIT: u16 = u16::MAX",
         "A code, not a magnitude: what `Effect::life` says a stain that is not lit is.",
     ),

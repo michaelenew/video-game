@@ -106,14 +106,14 @@ What catches drift is the pair of checks that give the same answer on every mach
 
 | Piece | Bytes | |
 | --- | --- | --- |
-| Four fighters | 2,096 | 524 each |
-| Effects (128) | 12,288 | 96 each: a hit mask and a drink mask of 128 bits apiece |
-| Debris, bolts, gusts | 1,552 | two of each per fighter |
+| Four fighters | 2,176 | 544 each |
+| Effects (128, thirty-two a seat) | 11,264 | 88 each: a hit mask and a drink mask of 128 bits apiece, now words rather than `u128`s, which took sixteen-byte alignment with them |
+| Debris, bolts, gusts | 1,584 | two of each per fighter |
 | Two creature slots | 408 | 204 each; the second is the Pair's |
-| Ten critters and their species | 524 | 52 a critter: a byte per fighter of what has cut it |
-| The pack brain | 256 | |
-| **The hunt's lore**, and the rest | 732 | 40 cells of 16 bytes ([hazards.md](hazards.md)); frame, phase, arena, the courses' runs |
-| **World** | **17,856** | **2,624 to spare** |
+| Ten critters and their species | 564 | 56 a critter: a byte per fighter of what has cut it, a word of fighters that this swing has struck, a two-byte mount |
+| The pack brain | 280 | a word per fighter for its species since the survey |
+| **The hunt's lore**, and the rest | 724 | 40 cells of 16 bytes ([hazards.md](hazards.md)); frame, phase, arena, the courses' runs, who has left |
+| **World** | **17,000** | **3,480 to spare** (measured again 2026-10-14, after §"Past four") |
 
 Until 2026-10-14 the table was two fighters (952), twelve effects (768), 24 cells of lore
 (388) and 3,912 bytes in all, 184 under a 4 KiB cap.
@@ -270,6 +270,27 @@ lower and its texture reads relatively dearer, so the shadow taps' share is if a
 larger there. The number that matters is `main_opaque_pass_3d/elapsed_gpu` from
 `--profile` on the machine in question.
 
+### The valley's simulation (measured 2026-10-14, callgrind)
+
+The renderer was the valley's cost; the simulation's own budget (`sim/tests/budget.rs`)
+was failing too, by then, and had been for a while: a frame of the Shadow Reaver on the
+cliffs cost **644 µs** against 520. Under callgrind, **83%** of it was `Land::sample` -- the
+height of the ground at a point, which walks every way, pad and rim near it and six
+octaves of noise, about 24,000 instructions a time.
+
+| What | Frame | Why |
+| --- | --- | --- |
+| The cliffs, before | 522 µs | A ground query asked of every box near a point whether it *hangs* -- a land sample under the box -- before the two comparisons that rule most of them out. |
+| ...cheap tests first | **114 µs** | `ground_among`, `floor_below`, `ceiling_near`, `ceiling_over` and `fence` ask whether it hangs last. The same answers, asked of a handful of boxes rather than every one. |
+| Eight Elementalists in the saddle, before | 843 µs | Every body on land samples it eight to twelve times a frame: its feet, its last step, the slope round it twice. |
+| ...a sample remembered | 581 µs | Thread-local, keyed on the land's id and the exact point, as a creature's rig is: a pure function, so the memory changes how long, never what. |
+| ...a rim's noise worked out once | 524 µs | A point far from a room's rim asked its height at two distances, and worked out the same five octaves of noise for each. |
+| ...value noise without a 64-bit division | 520 µs | `(r · ONE) / (cell · ONE)` is `r / cell`. |
+
+Each is exact -- every pinned hunt and every walked road held -- and four fighters are now
+well inside the budget. Eight are at its edge, which is where the next step is: a body on
+land costs what sampling the land costs, so the lever is the sample itself.
+
 ## Four fighters
 
 **`MAX_PLAYERS` is four** (2026-10-14). Every fight seats one to four, and the seats past
@@ -302,6 +323,63 @@ Before any of it was pinned again, two-fighter play was compared frame by frame 
 code before the change -- every class, hunted and in versus, 2,400 frames: positions,
 health, actions, the creature, every effect -- and was identical. The pins moved because
 the snapshot holds four seats now, not because a fight did.
+
+### Past four: everything is sized from the seats (2026-10-14)
+
+Four was reached by widening each mask that had two baked into it, and a survey the same
+day found that several of those had been widened to *four* -- and five more had never been
+widened at all, and were already wrong with four seated. None of them failed; each was two
+seats silently sharing one memory:
+
+- the Dual mage's curse kept its caster's seat in **one bit**: a mage in seat two or three
+  was recorded as seat nought or one, healed the wrong body and never built a stack;
+- a gust's stone mask was **a byte**, with twelve stones: the last four shared the first
+  four's bits;
+- the Siegeshell's ring and legs kept **two bits** of struck fighters, and its cling, roost
+  and straggle counters read "fighter nought low, anybody else high": fighters one to three
+  were one counter;
+- the Gnawers' pile-on bites (`who & 1`), the Hornback's trampled and seen-the-swing flags
+  (`who % 2`) and the Mantis's turned-its-back clocks (the first fighter low, the rest high)
+  paired seats up the same way;
+- the valley's checksum hashed **two** fighters' cairns, so a desync in where seat two or
+  three stood back up was invisible;
+- the sound's cues and the replay report reached for `players[1 - i]`, which panics with a
+  third fighter seated.
+
+So the rule now is **sized from what it counts, never from the day's count**:
+
+| What | How it is sized |
+| --- | --- |
+| A set of fighters | `state::Fighters`, a `bits::Bits` as many words as the seats need |
+| A set of critters, of stones, of effect slots | `critter::CritterSet`, `gust::Pushed`, `effects::Drank` |
+| An effect's hit mask | `effects::Struck`: every part against every fighter and creature slot |
+| A species' per-fighter words | a run of `lore::per_fighter(bits)` words, read with `Lore::field` |
+| A pack's per-fighter memory | `Pack::per`, a word a seat |
+| The lore region | 40 cells, and eight more a seat past four (the Mantis's per-fighter memory) |
+| The effect pool | 32 slots a seat (`MAX_EFFECTS`), a slot named in sixteen bits |
+| A mount | sixteen bits: a byte of creature slot and a byte of part |
+| A class change on the wire | the seat's low two bits where they were, the rest in a second byte |
+| A third seat's mark onward | out along the flanks in ranks (`arena::Mark::seat`) |
+
+Each keeps the bytes it wrote at four -- the pins held bit for bit through all of it -- and
+`crates/sim/tests/seats.rs` writes something different for every seat into each one and
+reads every seat back, which is how the next one is caught. **`MAX_PLAYERS` builds and
+plays at eight**: every test passes there but three, all of which are decisions rather than
+bugs -- the snapshot is 21.5 KiB of a 20 KiB cap, the pins hash every seat, and a test is
+named for four. A small hard limit stays deliberately: a fighter's index is a byte beside
+the creature's sentinel (`QUARRY`, 200), and an assertion keeps every seat under it.
+
+**What still only knows two** is unchanged: the Mantis's mailbox and the sparring bot.
+
+**A player who disconnects leaves the fight.** GGRS gives a seat up on the same frame on
+every peer and then supplies a blank input for it, which the world used to play as a
+fighter standing still, turned to face one way, a target for everybody. The glue now says
+so on the wire (`Travel::LEFT`, written by `net::ggrs_glue` from `InputStatus::
+Disconnected`), and the world parks that seat as it does an empty one (`World::away`, read
+afresh every frame, so a trip or restart built inside the tick keeps them gone). A seat that
+has left is not anybody still standing, so the one who stays in a duel is not handed a round
+every few seconds. `net/tests/meet.rs` drops one of three mid-match and checks the two who
+stay agree on the world without them to the last frame.
 
 ## Why not Unreal or Unity
 
@@ -399,8 +477,20 @@ its far end (`Peer::Line(seat)`), so there is one session type for every way of 
 **Two to four players.** A room is for as many as its link says (`players=`, two by
 default). When everybody is in, the lowest id posts the roster -- longest wait first, so
 player one is whoever sent the link -- and every pair opens its own line, the lower id of
-the two making the offer. A desktop's `--peer` reaches one address and stays two. If one of
-four drops, GGRS plays on with that seat's inputs empty; the page says so.
+the two making the offer. A desktop's `--peer` reaches one address and stays two. If one
+drops, GGRS gives their seat up on the same frame everywhere and the world takes their
+fighter out of the fight (§"Past four"); the page says so.
+
+**How far this goes, honestly.** Every player sends every other player their input every
+frame, and a late input from any one of them rolls everybody back: the traffic grows as
+the square of the players and the rollbacks with their number. That is comfortable for the
+handful this is built for, and the simulation is ready for eight; it is not the shape for
+dozens. Many players would want a relay that every peer talks to instead of everybody to
+everybody, or worlds split by place -- one simulation per part of the valley, with a
+fighter handed from one to the next -- and **a match cannot yet be joined once it has
+started**: the room closes when the roster is posted, and GGRS's player count is fixed for
+the session. Dropping in would mean the players agreeing on a frame, sending the newcomer
+that frame's snapshot, and starting a session one seat larger.
 
 GGRS requires its input type to be `serde`-serialisable, so the wire type `NetInput` lives
 in `net` rather than putting a dependency on `sim` — whose zero-dependency status is a

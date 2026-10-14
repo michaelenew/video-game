@@ -49,7 +49,12 @@ use crate::tuning as t;
 /// sized for spectacle rather than for the worst case anyone had counted.
 /// Every slot costs snapshot bytes (an empty one is its `Option` tag) and the
 /// hash skips the empty ones; the drink mask below is what bounds it at 128.
-pub const MAX_EFFECTS: usize = 128;
+///
+/// **Thirty-two a seat**, so the pool grows with the fighters who fill it:
+/// it was a hundred and twenty-eight for four, and the thirty-two each is
+/// what four fighters' worth of spectacle measured out at. A slot is named in
+/// sixteen bits wherever it is kept (`state::Player::blinked`).
+pub const MAX_EFFECTS: usize = 32 * MAX_PLAYERS;
 
 /// The slot a [`EffectKind::Burst`] carries when it is **Apotheosis** -- the
 /// nova that bursts from the Dual mage the frame she ascends, which no move

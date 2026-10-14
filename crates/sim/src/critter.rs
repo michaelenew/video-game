@@ -51,6 +51,12 @@ use crate::state::{Fighters, Hitbox, MAX_PLAYERS};
 /// eight. A pack brain drives all of them.
 pub const MAX_CRITTERS: usize = 10;
 
+/// **A set of critter slots**: one bit each, as wide as the slots are many.
+/// What a thrown shield has gone through, and which bodies' windups began
+/// off a fighter's screen -- each a `u16` until the cap stopped being a
+/// number that sixteen bits had to hold.
+pub type CritterSet = crate::bits::Bits<{ crate::bits::words_for(MAX_CRITTERS) }>;
+
 /// Every critter slot a world has, and whose they are.
 ///
 /// One species' critters at a time -- one pack per fight -- so the table the
@@ -247,7 +253,18 @@ pub struct Critter {
     /// heap catches every body in it once. Cleared when that fighter's swing
     /// ends or rearms.
     pub swung: Fighters,
+    /// **Which defended things its move under way has struck**, a bit per
+    /// objective (`crate::objective`): once a move, cleared when it is not
+    /// mid-move. Kept on the body, as a fighter's `hit_used` is, rather than
+    /// on the objective a bit per critter slot -- which was sixteen bits in
+    /// a full cell, and so a cap on the slots.
+    pub struck_objectives: u8,
 }
+
+const _: () = assert!(
+    crate::objective::MAX_STANDING <= 8,
+    "a critter keeps a bit per defended thing in a byte"
+);
 
 impl Critter {
     /// Has the thing fighter `owner` threw from move slot `slot` cut it this
@@ -285,6 +302,7 @@ impl Critter {
         perch: [0; 3],
         seared: [0; MAX_PLAYERS],
         swung: Fighters::EMPTY,
+        struck_objectives: 0,
     };
 
     /// A fresh one of `kind`, standing at `at` and facing `yaw`.
