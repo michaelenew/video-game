@@ -106,6 +106,13 @@ pub enum Destination {
     /// **The valley** (`crate::valley`): Hearth's square, with the journey so
     /// far kept. What a run starts in, and what `V` goes back to.
     Valley,
+    /// **This seat's player has left the match**: their connection is gone.
+    /// Not sent by anybody -- the rollback session writes it into a seat's
+    /// input from the frame it gives the seat up as disconnected, which it
+    /// does on the same frame on every machine (`net::ggrs_glue`). The seat's
+    /// fighter is taken out of the world for as long as it is said, exactly
+    /// as an empty seat is ([`crate::state::World::away`]).
+    Left,
     /// **This creature has been beaten**, on the sender's record: what a
     /// player's trophies light the valley's waystones by. Not a trip; it sets
     /// a bit of the journey on the frame it arrives, on both machines, which
@@ -129,6 +136,8 @@ impl Travel {
     pub const STEP: Travel = Travel(4);
     /// See [`Destination::Valley`].
     pub const VALLEY: Travel = Travel(5);
+    /// See [`Destination::Left`].
+    pub const LEFT: Travel = Travel(6);
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
     const CREDIT: u16 = 8;
     const HUNT: u16 = 0x80;
@@ -220,6 +229,7 @@ impl Travel {
             3 => Some(Destination::Pause),
             4 => Some(Destination::Step),
             5 => Some(Destination::Valley),
+            6 => Some(Destination::Left),
             b if b >= Travel::CREDIT && b < Travel::CLASS => {
                 Some(Destination::Credit(SpeciesId((b - Travel::CREDIT) as u8)))
             }

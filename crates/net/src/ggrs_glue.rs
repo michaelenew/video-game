@@ -4,7 +4,7 @@
 //! dependency on `sim` -- whose zero-dependency status is a determinism
 //! guarantee, not an accident -- the serialisable wrapper lives here.
 
-use ggrs::{Config, GgrsRequest};
+use ggrs::{Config, GgrsRequest, InputStatus};
 use serde::{Deserialize, Serialize};
 use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
@@ -88,8 +88,20 @@ pub fn handle_requests_watched(
             }
             GgrsRequest::AdvanceFrame { inputs } => {
                 let mut frame_inputs = [Input::default(); MAX_PLAYERS];
-                for (slot, (input, _status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
-                    *slot = (*input).into();
+                for (slot, (input, status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
+                    // **A seat GGRS has given up on has left the match.** It
+                    // marks the seat disconnected from the same frame on
+                    // every peer, and from then on hands us a blank input
+                    // for it -- which the world used to play as a fighter
+                    // standing still and turning to face one way. Said as a
+                    // trip instead, the world takes the fighter out of it
+                    // (`sim::state::World::away`).
+                    *slot = match status {
+                        InputStatus::Disconnected => {
+                            Input::default().travelling(sim::input::Travel::LEFT)
+                        }
+                        _ => (*input).into(),
+                    };
                 }
                 // A flat copy, like every snapshot the session saves: no heap.
                 let before = world.clone();

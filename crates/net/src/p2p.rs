@@ -58,10 +58,21 @@ pub fn start(seat: Seat) -> Result<P2PSession<SessionConfig>, GgrsError> {
 
 /// [`start`], with `delay` frames of input delay instead of [`INPUT_DELAY`].
 pub fn start_with_delay(seat: Seat, delay: usize) -> Result<P2PSession<SessionConfig>, GgrsError> {
+    start_with(seat, delay, DISCONNECT_AFTER)
+}
+
+/// [`start_with_delay`], giving up on a silent peer after `disconnect_after`
+/// rather than [`DISCONNECT_AFTER`]: what lets a test watch somebody leave
+/// without waiting a quarter of a minute for it.
+pub fn start_with(
+    seat: Seat,
+    delay: usize,
+    disconnect_after: Duration,
+) -> Result<P2PSession<SessionConfig>, GgrsError> {
     let mut builder = SessionBuilder::<SessionConfig>::new()
         .with_num_players(seat.players)
         .with_input_delay(delay)
-        .with_disconnect_timeout(DISCONNECT_AFTER)
+        .with_disconnect_timeout(disconnect_after)
         .with_disconnect_notify_delay(SILENT_AFTER)
         .with_desync_detection_mode(DesyncDetection::On {
             interval: DESYNC_CHECK_INTERVAL,

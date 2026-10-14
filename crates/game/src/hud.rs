@@ -1095,7 +1095,7 @@ type SeatColumnQuery<'w, 's> = Query<
 /// Show the row of seats past the first two only while one of them is seated.
 pub fn update_seats(sim: Res<crate::Sim>, mut rows: SeatRowQuery, mut columns: SeatColumnQuery) {
     for (column, mut seen) in columns.iter_mut() {
-        let want = if column.0 < sim.cur.present() {
+        let want = if sim.cur.is_present(column.0) {
             Visibility::Inherited
         } else {
             Visibility::Hidden

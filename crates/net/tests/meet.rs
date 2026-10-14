@@ -534,3 +534,97 @@ fn four_play_a_match_in_sync_over_the_mesh() {
         );
     }
 }
+
+/// **Somebody leaves, and the rest play on in step without them.** Three on
+/// the mesh; the third stops answering a few seconds in. The two left behind
+/// give the seat up on the same frame -- GGRS sees to that -- and from it the
+/// third fighter is out of the world on both machines (`World::away`),
+/// rather than standing there as a target with its look turned to zero. The
+/// two worlds agree, frame for frame, all the way to the end.
+#[test]
+fn three_play_and_one_leaves_and_the_two_agree() {
+    use std::time::{Duration, Instant};
+    const LEAVES_AT: u32 = 200;
+    const UNTIL: u32 = 700;
+    let seats = mesh(3, &[11, 22, 33]);
+    let mut peers: Vec<_> = seats
+        .into_iter()
+        .map(|s| {
+            let h = s.handle;
+            let start = World::with_classes([sim::Class::Champion; 3]);
+            let session = p2p::start_with(s, 2, Duration::from_millis(500)).expect("session");
+            (session, start, h, 0u32, false, None::<u64>)
+        })
+        .collect();
+    let mut rng = 0x2545_f491_4f6c_dd1d_u64;
+    let began = Instant::now();
+    while began.elapsed() < Duration::from_secs(30) {
+        let mut moved = false;
+        for (session, world, handle, frames, saw_leave, at_end) in peers.iter_mut() {
+            // The third player is gone: never polled again.
+            if *handle == 2 && *frames >= LEAVES_AT {
+                continue;
+            }
+            session.poll_remote_clients();
+            for event in session.events() {
+                match event {
+                    net::ggrs::GgrsEvent::DesyncDetected { frame, .. } => {
+                        panic!("desync at frame {frame}")
+                    }
+                    net::ggrs::GgrsEvent::Disconnected { .. } => *saw_leave = true,
+                    _ => {}
+                }
+            }
+            if session.current_state() != net::ggrs::SessionState::Running || *frames >= UNTIL {
+                continue;
+            }
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            let input = Input::aimed((rng & 0x1ff) as u16, (rng >> 20) as u16);
+            if session
+                .add_local_input(*handle, NetInput::from(input))
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                // A call that was over the prediction window plays nothing:
+                // the world's own frame is what counts.
+                handle_requests(world, requests);
+                moved |= world.frame != *frames;
+                *frames = world.frame;
+                if *frames == UNTIL {
+                    *at_end = Some(world.checksum());
+                }
+            }
+        }
+        let stayed = peers.iter().filter(|p| p.2 != 2);
+        if stayed.clone().all(|p| p.3 >= UNTIL && p.4) {
+            break;
+        }
+        if !moved {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    let stayed: Vec<_> = peers.iter().filter(|p| p.2 != 2).collect();
+    for (_, world, handle, frames, saw_leave, _) in &stayed {
+        assert!(
+            *saw_leave,
+            "player {} never heard the third leave",
+            handle + 1
+        );
+        assert_eq!(*frames, UNTIL, "player {} stalled", handle + 1);
+        assert!(
+            world.away.has(2),
+            "player {} still has the third in the fight",
+            handle + 1
+        );
+        assert!(!world.is_present(2));
+        assert_eq!(world.players[2].health, 0);
+    }
+    assert_eq!(
+        stayed[0].5, stayed[1].5,
+        "the two who stayed disagree about the world without the third"
+    );
+}

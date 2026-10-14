@@ -1435,6 +1435,17 @@ pub struct World {
     /// came in by, each fighter's last cairn. All zero, and not hashed,
     /// outside it.
     pub valley: crate::valley::Journey,
+    /// **The seats whose players have left the match** this frame: the
+    /// rollback session's word for a dropped connection, on the wire
+    /// ([`Destination::Left`]), read afresh every frame. A seat that has left
+    /// is parked out of the world as an empty one is, and is not counted as
+    /// anybody still in the fight -- so the one who stayed in a duel is not
+    /// handed a round every few seconds by a body that is not there.
+    ///
+    /// It used to be nothing: a dropped player's fighter stood where they
+    /// left it, a target for everybody, turned to face one way because their
+    /// look on the wire had become zero.
+    pub away: Fighters,
 }
 
 impl World {
@@ -1479,6 +1490,7 @@ impl World {
             paused: false,
             seats: MAX_PLAYERS as u8,
             valley: crate::valley::Journey::default(),
+            away: Fighters::EMPTY,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1711,9 +1723,10 @@ impl World {
         }
     }
 
-    /// Is fighter `i` in the fight at all?
+    /// Is fighter `i` in the fight at all? Not if their seat is empty, and
+    /// not if their player has left ([`World::away`]).
     pub fn is_present(&self, i: usize) -> bool {
-        i < self.present()
+        i < self.present() && !self.away.has(i)
     }
 
     /// **Put every fighter past [`World::present`] out of the world**: dead,
@@ -1722,7 +1735,7 @@ impl World {
     /// a fighter nobody plays, done for every fight now there are four seats.
     fn park_absent(&mut self) {
         let present = self.present();
-        if present >= MAX_PLAYERS {
+        if present >= MAX_PLAYERS && !self.away.any() {
             return;
         }
         let b = self.arena().bounds;
@@ -1731,10 +1744,15 @@ impl World {
             Fx::from_int(-1000),
             Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
         );
-        for p in self.players.iter_mut().skip(present) {
+        let away = self.away;
+        for (i, p) in self.players.iter_mut().enumerate() {
+            if i < present && !away.has(i) {
+                continue;
+            }
             p.pos = under;
             p.vel = V3::ZERO;
             p.health = 0;
+            p.mount = monster::NO_MOUNT;
         }
     }
 
@@ -1824,6 +1842,7 @@ impl World {
             Destination::Class { .. }
             | Destination::Pause
             | Destination::Step
+            | Destination::Left
             | Destination::Credit(_) => return None,
             Destination::Valley => {
                 World::arrive_all(classes, self.valley, crate::valley::START, None, self.seats)
@@ -2205,13 +2224,27 @@ impl World {
         const { assert!(N >= 1 && N <= MAX_PLAYERS, "one to four inputs") };
         let mut all = [Input::default(); MAX_PLAYERS];
         all[..N].copy_from_slice(&wire);
-        // Nobody in a seat, nothing from it: not a press, not a trip.
+        // Nobody in a seat, nothing from it: not a press, not a trip. A seat
+        // whose player has left is the same, for as long as it is said.
+        self.away = Fighters::EMPTY;
+        for (i, input) in all.iter().enumerate() {
+            if input.travel.destination() == Some(Destination::Left) {
+                self.away.set(i);
+            }
+        }
         let present = self.present();
-        for input in all.iter_mut().skip(present) {
-            *input = Input::default();
+        for (i, input) in all.iter_mut().enumerate() {
+            if i >= present || self.away.has(i) {
+                *input = Input::default();
+            }
         }
         self.park_absent();
+        // A fresh fight built inside the step -- a trip, a restart, waking
+        // outside -- is built knowing nothing of who has gone: they are
+        // still gone in it.
+        let away = self.away;
         self.step(all);
+        self.away = away;
         self.park_absent();
     }
 
@@ -3428,13 +3461,16 @@ impl World {
             // **Last one standing.** Two fighters is the duel it always was;
             // with three or four it is everybody against everybody, and the
             // round ends when one is left -- or none, a double knockout.
+            // A seat whose player has left is not in it: with only one
+            // player still connected there is nobody to win against.
             let present = self.present();
+            let playing = (0..present).filter(|&i| !self.away.has(i)).count();
             let mut standing = self.players[..present]
                 .iter()
                 .enumerate()
-                .filter(|(_, p)| p.health > 0);
+                .filter(|(i, p)| p.health > 0 && !self.away.has(*i));
             let first = standing.next().map(|(i, _)| i);
-            if standing.next().is_none() {
+            if playing >= 2 && standing.next().is_none() {
                 let winner = first.map_or(u8::MAX, |i| i as u8);
                 if winner != u8::MAX {
                     self.players[winner as usize].rounds_won += 1;
@@ -3790,6 +3826,14 @@ impl World {
             // unseen.
             for pair in v.cairn.chunks(2) {
                 h.write_u32(pair[0] as u32 | (*pair.get(1).unwrap_or(&0) as u32) << 16);
+            }
+        }
+        // Who has left, only when somebody has: every match with everybody
+        // still in it hashes exactly as it did before anybody could leave.
+        if self.away.any() {
+            h.write_u32(0xA3A7);
+            for &w in self.away.words() {
+                h.write_u32(w);
             }
         }
         // A course's runs, only in a course: every other fight hashes exactly

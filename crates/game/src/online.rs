@@ -150,7 +150,7 @@ impl Driver {
                 ..
             } => Some("Your friend disconnected."),
             Driver::Online { gone: true, .. } => {
-                Some("A friend disconnected; their fighter stands still from here.")
+                Some("A friend disconnected; their fighter has left the fight.")
             }
             Driver::Online { quiet: true, .. } => {
                 Some("Waiting for your friend's game: it has gone quiet for a moment…")

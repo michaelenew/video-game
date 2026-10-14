@@ -137,3 +137,69 @@ fn a_mount_names_every_creature_slot_and_part() {
     }
     assert_eq!(sim::critter::ridden(NO_MOUNT), None);
 }
+
+// ---------------------------------------------------------------------------
+// A player who leaves
+// ---------------------------------------------------------------------------
+
+use sim::World;
+use sim::input::{Input, Travel};
+use sim::state::Phase;
+
+fn gone() -> Input {
+    Input::default().travelling(Travel::LEFT)
+}
+
+#[test]
+fn a_player_who_leaves_is_taken_out_of_the_fight() {
+    let mut w = World::with_classes([Class::Champion, Class::Bulwark, Class::DualMage]);
+    for _ in 0..30 {
+        w.advance([Input::default(), Input::default(), Input::default()]);
+    }
+    assert!(w.players[2].health > 0);
+    for _ in 0..120 {
+        w.advance([Input::default(), Input::default(), gone()]);
+        assert!(w.away.has(2) && !w.is_present(2));
+        assert_eq!(
+            w.players[2].health, 0,
+            "the one who left is still in the fight"
+        );
+        assert!(
+            w.players[2].pos.y.raw() < 0,
+            "and still standing where they were"
+        );
+    }
+    // The two still connected are still fighting: the one who left is not a
+    // knockout that ends the round.
+    assert!(matches!(w.phase, Phase::Fighting), "{:?}", w.phase);
+}
+
+#[test]
+fn the_one_who_stays_in_a_duel_is_not_handed_rounds() {
+    let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
+    let before = w.players[0].rounds_won;
+    for _ in 0..1200 {
+        w.advance([Input::default(), gone()]);
+        assert!(matches!(w.phase, Phase::Fighting), "{:?}", w.phase);
+    }
+    assert_eq!(w.players[0].rounds_won, before);
+}
+
+#[test]
+fn a_match_with_a_player_gone_replays_exactly() {
+    let run = || {
+        let mut w =
+            World::with_classes([Class::ShadowReaver, Class::BloodMage, Class::Elementalist]);
+        for f in 0..600u32 {
+            let press = |s: u32| Input {
+                bits: ((f * 7 + s * 13) % 0x1ff) as u16,
+                aim: (f * 997 + s * 101) as u16,
+                ..Input::default()
+            };
+            let third = if f >= 200 { gone() } else { press(2) };
+            w.advance([press(0), press(1), third]);
+        }
+        w.checksum()
+    };
+    assert_eq!(run(), run());
+}
