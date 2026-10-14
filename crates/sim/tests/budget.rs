@@ -411,7 +411,6 @@ fn siege_full(mut w: World) -> World {
                 leg: 0,
                 phase: f::leg::STARTUP,
                 left: 60,
-                struck: 0,
             },
         );
     }

@@ -55,21 +55,51 @@ pub const MAX_MONSTERS: usize = 2;
 /// all of them empty.
 pub type Herd = [Option<Monster>; MAX_MONSTERS];
 
-/// Which creature, and which of its parts, a rider is standing on -- packed
-/// into the one byte a fighter keeps for it. The slot in the top two bits,
-/// the part in the low six ([`beast::MAX_PARTS`] fits). [`NO_PART`] is nobody.
-pub const fn mount_of(slot: usize, part: usize) -> u8 {
-    ((slot << 6) | (part & 0x3F)) as u8
+/// Which creature, and which of its parts, a rider is standing on: the slot
+/// in the high byte, the part in the low one. [`NO_MOUNT`] is nothing.
+///
+/// It was one byte, the slot in two bits and the part in six, which made two
+/// creatures the most a hunt could hold: a third slot's value was the one a
+/// ridden critter is marked with, and a fourth was nobody's. Sixteen bits
+/// hold every creature slot and every part there can be.
+pub type Mount = u16;
+
+/// Standing on nothing at all.
+pub const NO_MOUNT: Mount = u16::MAX;
+
+const _: () = assert!(
+    MAX_MONSTERS < 0xFE && beast::MAX_PARTS <= 0x100,
+    "a mount names its slot in a byte and its part in a byte"
+);
+
+pub const fn mount_of(slot: usize, part: usize) -> Mount {
+    ((slot as u16 & 0xFF) << 8) | (part as u16 & 0xFF)
 }
 
 /// The creature slot a packed mount names.
-pub const fn mount_slot(mount: u8) -> usize {
-    (mount >> 6) as usize
+pub const fn mount_slot(mount: Mount) -> usize {
+    (mount >> 8) as usize
 }
 
 /// The part a packed mount names.
-pub const fn mount_part(mount: u8) -> usize {
-    (mount & 0x3F) as usize
+pub const fn mount_part(mount: Mount) -> usize {
+    (mount & 0xFF) as usize
+}
+
+/// **A mount as the checksum writes it**: the one byte it was, for every
+/// value one byte could hold -- so a hunt recorded before it was widened
+/// hashes as it did -- and the whole of it above a marker otherwise.
+pub const fn mount_hash(mount: Mount) -> u32 {
+    let (slot, part) = (mount_slot(mount), mount_part(mount));
+    if mount == NO_MOUNT {
+        NO_PART as u32
+    } else if part < 0x40 && slot < 2 {
+        (slot << 6 | part) as u32
+    } else if part < 0x40 && slot == crate::critter::RIDDEN_SLOT {
+        (2 << 6 | part) as u32
+    } else {
+        0x1_0000 | mount as u32
+    }
 }
 
 // ---------------------------------------------------------------------------

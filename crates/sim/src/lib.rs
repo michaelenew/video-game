@@ -10,6 +10,7 @@ pub mod aim;
 pub mod arena;
 pub mod atlas;
 pub mod beast;
+pub mod bits;
 pub mod bolt;
 pub mod bulwark;
 pub mod camera;

@@ -39,10 +39,10 @@
 
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::V3;
-use crate::monster::{Herd, NO_PART, mount_part, mount_slot};
+use crate::monster::{Herd, Mount, NO_MOUNT, mount_part, mount_slot};
 use crate::oven::{Unit, species_raw};
 use crate::species::{Species, SpeciesId};
-use crate::state::Hitbox;
+use crate::state::{Fighters, Hitbox, MAX_PLAYERS};
 
 /// The most small bodies a world holds at once.
 ///
@@ -181,24 +181,25 @@ pub mod pose {
 /// Not in a ring slot.
 pub const NO_SLOT: u8 = u8::MAX;
 
-/// **A fighter's mount byte for riding critter `i`**: the creature slot
-/// bits read two, past either creature (`monster::mount_of`), so nothing
+/// **A fighter's mount for riding critter `i`**: the creature slot reads
+/// [`RIDDEN_SLOT`], past every creature (`monster::mount_of`), so nothing
 /// that reads a monster's mount mistakes it for one.
-pub const fn mount_of(i: usize) -> u8 {
+pub const fn mount_of(i: usize) -> Mount {
     crate::monster::mount_of(RIDDEN_SLOT, i)
 }
 
 /// The critter a fighter's mount byte names, if it names one.
-pub const fn ridden(mount: u8) -> Option<usize> {
-    if mount != NO_PART && crate::monster::mount_slot(mount) == RIDDEN_SLOT {
+pub const fn ridden(mount: Mount) -> Option<usize> {
+    if mount != NO_MOUNT && crate::monster::mount_slot(mount) == RIDDEN_SLOT {
         Some(crate::monster::mount_part(mount))
     } else {
         None
     }
 }
 
-/// The creature-slot value a mount byte carries for a critter.
-const RIDDEN_SLOT: usize = 2;
+/// The creature-slot value a mount carries for a critter: past every
+/// creature slot there can be.
+pub const RIDDEN_SLOT: usize = 0xFE;
 
 /// One small body. Forty-eight bytes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -231,29 +232,40 @@ pub struct Critter {
     /// The fighter it is after.
     pub target: u8,
     /// The creature and part it stands on, packed as a rider's mount is
-    /// (`monster::mount_of`), or `monster::NO_PART`.
-    pub mount: u8,
+    /// (`monster::mount_of`), or `monster::NO_MOUNT`.
+    pub mount: Mount,
     /// Where on that part, in the part's own frame, in centimetres.
     pub perch: [i16; 3],
-    /// **Which thrown things have already cut it**: one bit per fighter and
-    /// move slot ([`seared_bit`]). A blade or an arm cuts a body once a pass,
-    /// and an effect's own memory has no room for ten more victims; the bit is
-    /// cleared when that fighter's next one of that move is thrown. Four
-    /// bytes, a byte per fighter.
-    pub seared: u32,
-    /// **Already struck by fighter `i`'s current swing**, bit `i`: a sweep
-    /// through a heap catches every body in it once. Cleared when that
-    /// fighter's swing ends or rearms. A byte that was padding.
-    pub swung: u8,
-}
-
-/// The bit of [`Critter::seared`] an effect thrown by `owner` from move slot
-/// `slot` keeps. Four fighters, eight slots each.
-pub const fn seared_bit(owner: u8, slot: u8) -> u32 {
-    1 << ((owner as u32 & 3) * 8 + (slot as u32 & 7))
+    /// **Which thrown things have already cut it**: one bit per move slot,
+    /// a byte per fighter ([`Critter::seared_by`]). A blade or an arm cuts a
+    /// body once a pass, and an effect's own memory has no room for ten more
+    /// victims; the bit is cleared when that fighter's next one of that move
+    /// is thrown. It was one `u32` with the seat read as `owner & 3`, so a
+    /// fifth fighter's blade would have been the first's.
+    pub seared: [u8; MAX_PLAYERS],
+    /// **Already struck by fighter `i`'s current swing**: a sweep through a
+    /// heap catches every body in it once. Cleared when that fighter's swing
+    /// ends or rearms.
+    pub swung: Fighters,
 }
 
 impl Critter {
+    /// Has the thing fighter `owner` threw from move slot `slot` cut it this
+    /// pass?
+    pub fn seared_by(&self, owner: u8, slot: u8) -> bool {
+        self.seared
+            .get(owner as usize)
+            .is_some_and(|b| b & 1 << (slot & 7) != 0)
+    }
+
+    /// Mark it cut, or forgotten, by fighter `owner`'s move slot `slot`.
+    pub fn sear(&mut self, owner: u8, slot: u8, on: bool) {
+        if let Some(b) = self.seared.get_mut(owner as usize) {
+            let bit = 1u8 << (slot & 7);
+            *b = if on { *b | bit } else { *b & !bit };
+        }
+    }
+
     /// An empty slot.
     pub const EMPTY: Critter = Critter {
         pos: V3::ZERO,
@@ -269,10 +281,10 @@ impl Critter {
         role: 0,
         slot: NO_SLOT,
         target: 0,
-        mount: NO_PART,
+        mount: NO_MOUNT,
         perch: [0; 3],
-        seared: 0,
-        swung: 0,
+        seared: [0; MAX_PLAYERS],
+        swung: Fighters::EMPTY,
     };
 
     /// A fresh one of `kind`, standing at `at` and facing `yaw`.
@@ -320,7 +332,7 @@ impl Critter {
     }
 
     pub const fn mounted(&self) -> bool {
-        self.mount != NO_PART
+        self.mount != NO_MOUNT
     }
 
     /// Facing, as turns.

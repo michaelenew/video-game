@@ -297,8 +297,7 @@ pub struct Hazard {
     pub kind: u8,
     /// The kind's to mean: a solid's layers; a species' own phase.
     pub state: u8,
-    /// [`NO_ANCHOR`], or the creature part it lives on, packed as a rider's
-    /// mount is (`monster::mount_of`).
+    /// [`NO_ANCHOR`], or the creature part it lives on ([`anchor_of`]).
     pub anchor: u8,
     /// In twentieths of a metre: up to 12.75 m.
     pub radius: u8,
@@ -337,7 +336,7 @@ impl Hazard {
     /// frame -- carried by the pose.
     pub fn on_part(kind: u8, slot: usize, part: usize, local: V3, radius: Fx) -> Hazard {
         Hazard {
-            anchor: monster::mount_of(slot, part),
+            anchor: anchor_of(slot, part),
             ..Hazard::disc(kind, local, radius)
         }
     }
@@ -380,6 +379,30 @@ impl Hazard {
             to: [lore::lo(c[3]), lore::hi(c[3])],
         }
     }
+}
+
+/// **The creature part a hazard lives on**, in the one byte its cell has
+/// left: the slot in the top two bits, the part in the low six -- what a
+/// rider's mount was before it was widened to name any slot. The anchored
+/// hazards there are (vents on a back, a glob on a leg) are a one-creature
+/// fight's, in slot nought; a hazard asked to live on a slot past the fourth
+/// is laid on the floor instead, where it was cast.
+pub const fn anchor_of(slot: usize, part: usize) -> u8 {
+    if slot > 3 || part >= 0x3F {
+        NO_ANCHOR
+    } else {
+        ((slot << 6) | part) as u8
+    }
+}
+
+/// The creature slot an anchor names.
+pub const fn anchor_slot(anchor: u8) -> usize {
+    (anchor >> 6) as usize
+}
+
+/// The part an anchor names.
+pub const fn anchor_part(anchor: u8) -> usize {
+    (anchor & 0x3F) as usize
 }
 
 /// A radius as the cell keeps it, rounded to the nearest five centimetres.
@@ -613,8 +636,7 @@ impl Floor {
                 };
                 (h.centre(), b)
             } else {
-                let at = monster::mount_slot(h.anchor);
-                let part = monster::mount_part(h.anchor);
+                let (at, part) = (anchor_slot(h.anchor), anchor_part(h.anchor));
                 let Some(beast) = herd.get(at).and_then(|m| m.as_ref()) else {
                     continue;
                 };

@@ -65,33 +65,46 @@ pub const OBJECTIVES: [ObjectiveDecl; 1] = [ObjectiveDecl::wall("the wall", 0)];
 
 /// Its own words in the hunt's lore.
 pub mod word {
+    use crate::lore::per_fighter;
+
     /// Bits: [`super::flag`].
     pub const FLAGS: usize = 0;
-    /// The last footfall: frames since it (low half), which tripod (bit 16),
-    /// and the fighters its ring has already struck (bits 24 up).
+    /// The last footfall: frames since it (low half) and which tripod (bit
+    /// 16). The fighters its ring has struck are [`RING_STRUCK`].
     pub const RING: usize = 1;
     /// The siege: beams fired (low byte).
     pub const SIEGE: usize = 2;
     /// Each leg's stamp lockout, two legs a word (low half, high half).
     pub const STAMP_LOCK0: usize = 3;
     /// Frames each fighter has clung to one ankle (a half each), and which
-    /// ankle each clings to (a nibble each, plus one) in the next word.
+    /// ankle each clings to (a nibble each, plus one) in the words after.
+    ///
+    /// **Every per-fighter field is a run as long as the seats need**
+    /// (`lore::per_fighter`), read with `Lore::field`. They were one word
+    /// each while there were two fighters, read as "fighter nought low,
+    /// anybody else high" -- so with four, fighters one, two and three were
+    /// one counter, and the ring's and the legs' struck bits had room for
+    /// two.
     pub const CLING: usize = 6;
-    pub const CLING_AT: usize = 7;
+    pub const CLING_AT: usize = CLING + per_fighter(16);
     /// Frames each fighter has stood under the belly (a half each).
-    pub const ROOST: usize = 8;
+    pub const ROOST: usize = CLING_AT + per_fighter(4);
     /// Frames each fighter has straggled behind the tail (a half each).
-    pub const STRAGGLE: usize = 9;
+    pub const STRAGGLE: usize = ROOST + per_fighter(16);
     /// The brood's clock: frames since the last parasite crawled out.
-    pub const BROOD: usize = 10;
+    pub const BROOD: usize = STRAGGLE + per_fighter(16);
     /// The legs' channel's pause after a move, and the frame the body's last
     /// active window ended (for the channel gap).
-    pub const LEG_REST: usize = 11;
-    pub const BODY_ENDED: usize = 12;
-    /// The body move under way: the fighters it has struck.
-    pub const BODY_STRUCK: usize = 13;
+    pub const LEG_REST: usize = BROOD + 1;
+    pub const BODY_ENDED: usize = LEG_REST + 1;
+    /// The body move under way: the fighters it has struck (a bit each).
+    pub const BODY_STRUCK: usize = BODY_ENDED + 1;
+    /// The footfall's ring: the fighters it has struck (a bit each).
+    pub const RING_STRUCK: usize = BODY_STRUCK + per_fighter(1);
+    /// The legs' move under way: the fighters it has struck (a bit each).
+    pub const LEG_STRUCK: usize = RING_STRUCK + per_fighter(1);
     /// The vents' clocks: where each grate is in its cycle (a half each).
-    pub const VENT0: usize = 14;
+    pub const VENT0: usize = LEG_STRUCK + per_fighter(1);
 }
 
 /// The bits of [`word::FLAGS`].
@@ -163,14 +176,15 @@ pub mod leg {
     pub const RETURN: u32 = 3;
 
     /// The channel as it stands: which move, which leg, which phase, frames
-    /// left, and the fighters it has struck (a bit each).
+    /// left. The fighters it has struck are in the lore
+    /// (`super::word::LEG_STRUCK`): they need a bit per seat, and the body's
+    /// word had two.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub struct Channel {
         pub kind: u32,
         pub leg: usize,
         pub phase: u32,
         pub left: u16,
-        pub struck: u32,
     }
 
     pub fn get(m: &Monster) -> Channel {
@@ -180,7 +194,6 @@ pub mod leg {
             leg: ((w >> 2) & 0b111) as usize,
             phase: (w >> 5) & 0b11,
             left: ((w >> 7) & 0x7FF) as u16,
-            struck: (w >> 18) & 0b11,
         }
     }
 
@@ -188,8 +201,7 @@ pub mod leg {
         let w = (c.kind & 0b11)
             | ((c.leg as u32 & 0b111) << 2)
             | ((c.phase & 0b11) << 5)
-            | ((c.left as u32 & 0x7FF) << 7)
-            | ((c.struck & 0b11) << 18);
+            | ((c.left as u32 & 0x7FF) << 7);
         m.own[body::LEG] = w as i32;
     }
 
@@ -280,12 +292,19 @@ pub fn buckles(m: &Monster, leg: usize) -> i32 {
 // The table
 // ---------------------------------------------------------------------------
 
+/// Its own cells: every word in [`word`], with the vents' four after them.
+const OWN_CELLS: u8 = 8;
+const _: () = assert!(
+    word::VENT0 + 4 <= OWN_CELLS as usize * 4,
+    "the Siegeshell's own words outgrew its cells: per-fighter runs grow with the seats"
+);
+
 pub static FIGHT: FightDecl = FightDecl {
     layout: Layout {
         hazards: 10,
         noises: 0,
         objectives: 1,
-        own: 8,
+        own: OWN_CELLS,
     },
     hazards: &HAZARDS,
     objectives: &OBJECTIVES,
@@ -509,6 +528,7 @@ fn set_up(w: &mut World, slot: usize) {
     m.health = health_of(m).max(1);
     // No beat yet: the ring is long out.
     w.lore.set_word(word::RING, 0xFFFF);
+    w.lore.set_word(word::RING_STRUCK, 0);
     let f = w.lore.word(word::FLAGS);
     w.lore.set_word(word::FLAGS, f | flag::SET_UP);
 }
@@ -543,6 +563,7 @@ fn walk(w: &mut World, slot: usize) {
     if let Some(t) = gait::landed(before, m.stride) {
         // A beat: the ring starts again from these three feet.
         w.lore.set_word(word::RING, (t as u32) << 16);
+        w.lore.set_word(word::RING_STRUCK, 0);
     } else {
         let r = w.lore.word(word::RING);
         let age = (r & 0xFFFF).saturating_add(1).min(0xFFFF);
@@ -986,23 +1007,8 @@ fn roost(w: &mut World, slot: usize) {
             && local.z.raw() > belly.min.z.raw()
             && local.z.raw() < belly.max.z.raw();
         let behind = local.x.raw() < tail.sub(Knob::Straggler.fx()).raw();
-        let half = |i: usize, w: &World| -> u16 {
-            let word = w.lore.word(i);
-            if who == 0 {
-                (word & 0xFFFF) as u16
-            } else {
-                (word >> 16) as u16
-            }
-        };
-        let set = |i: usize, v: u16, w: &mut World| {
-            let word = w.lore.word(i);
-            let word = if who == 0 {
-                (word & 0xFFFF_0000) | v as u32
-            } else {
-                (word & 0xFFFF) | ((v as u32) << 16)
-            };
-            w.lore.set_word(i, word);
-        };
+        let half = |i: usize, w: &World| -> u16 { w.lore.field(i, 16, who) as u16 };
+        let set = |i: usize, v: u16, w: &mut World| w.lore.set_field(i, 16, who, v as u32);
         let u = if under {
             half(word::ROOST, w).saturating_add(1)
         } else {
@@ -1060,7 +1066,16 @@ fn brood(w: &mut World, slot: usize) {
 /// landed, and the fighters it has struck.
 pub fn ring(w: &World) -> (usize, u16, u32) {
     let r = w.lore.word(word::RING);
-    (((r >> 16) & 1) as usize, (r & 0xFFFF) as u16, r >> 24)
+    (
+        ((r >> 16) & 1) as usize,
+        (r & 0xFFFF) as u16,
+        w.lore.word(word::RING_STRUCK),
+    )
+}
+
+/// The fighters the legs' move under way has struck, a bit each.
+pub fn leg_struck(w: &World) -> u32 {
+    w.lore.word(word::LEG_STRUCK)
 }
 
 /// The ring's radius `age` frames after its feet landed: from the pad's edge
@@ -1134,9 +1149,7 @@ fn footfall(w: &mut World, slot: usize) {
             }
         }
     }
-    let r = w.lore.word(word::RING);
-    w.lore
-        .set_word(word::RING, (r & 0x00FF_FFFF) | (struck << 24));
+    w.lore.set_word(word::RING_STRUCK, struck);
 }
 
 /// **One of its own hits lands on a fighter**: `damage`, away from `from`,

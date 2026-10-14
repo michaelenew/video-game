@@ -1032,8 +1032,8 @@ impl Tally for Lines {
             let leg_hit = lost > 0
                 && cn.kind != fight::leg::NONE
                 && cn.phase == fight::leg::ACTIVE
-                && cn.struck & (1 << i) != 0
-                && cw.struck & (1 << i) == 0;
+                && fight::leg_struck(after) & (1 << i) != 0
+                && fight::leg_struck(before) & (1 << i) == 0;
             let ring_hit = lost > 0 && rang & (1 << i) != 0;
             let body_hit = lost > 0 && !was.hit_used && now.hit_used;
             if leg_hit {

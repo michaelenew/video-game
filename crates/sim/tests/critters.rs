@@ -11,7 +11,7 @@
 use sim::aim::{self, Contact, Scene, Targets};
 use sim::critter::{self, Critter, CritterField, MAX_CRITTERS, flag, is};
 use sim::fixed::Fx;
-use sim::monster::{MAX_MONSTERS, NO_PART};
+use sim::monster::{MAX_MONSTERS, NO_MOUNT};
 use sim::pack::{self, mood};
 use sim::species::{SpeciesId, gnats};
 use sim::state::{Phase, hitbox};
@@ -51,10 +51,13 @@ fn keep_up(w: &mut World) {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_critter_is_fifty_two_bytes_and_a_full_pack_fits_the_snapshot() {
+fn a_critter_is_fifty_six_bytes_and_a_full_pack_fits_the_snapshot() {
     // Forty-eight until four fighters (2026-10-14): what has cut it is a
     // byte per fighter now, and what each fighter's swing has struck a bit.
-    assert_eq!(std::mem::size_of::<Critter>(), 52);
+    // Fifty-six since the seats stopped being capped by the masks that count
+    // them: the swing's mask is a word of fighters rather than a byte, and
+    // the mount names any creature slot in two bytes rather than four in one.
+    assert_eq!(std::mem::size_of::<Critter>(), 56);
     let world = std::mem::size_of::<World>();
     assert!(world <= 20 * 1024, "a World is {world} bytes");
     // Every slot full: the Gnawers' coop pack is ten, the most there is.
@@ -375,21 +378,24 @@ fn critters_stand_on_a_monsters_back_and_go_where_it_goes() {
         w.advance(idle());
     }
     assert_ne!(
-        w.critters[0].mount, NO_PART,
+        w.critters[0].mount, NO_MOUNT,
         "it did not land on the animal"
     );
     // Wherever the animal goes, the critter is where its perch says.
     for _ in 0..240 {
         w.advance(idle());
         let c = w.critters[0];
-        if c.mount == NO_PART {
+        if c.mount == NO_MOUNT {
             break;
         }
         let held = c.perched_at(&w.monsters).unwrap();
         assert!(held.sub(c.pos).len().raw() < Fx::ratio(1, 20).raw());
         assert!(c.pos.y.raw() > Fx::from_int(3).raw(), "not on its back");
     }
-    assert_ne!(w.critters[0].mount, NO_PART, "it fell off a walking animal");
+    assert_ne!(
+        w.critters[0].mount, NO_MOUNT,
+        "it fell off a walking animal"
+    );
     let _ = MAX_MONSTERS;
 }
 
@@ -417,7 +423,7 @@ fn a_critter_perched_on_a_part_is_carried_by_it() {
     let c = w.critters[1];
     // Still on the animal -- on whichever of its treads it now stands on, as
     // a rider would be.
-    assert_ne!(c.mount, NO_PART);
+    assert_ne!(c.mount, NO_MOUNT);
     let held = c.perched_at(&w.monsters).unwrap();
     assert!(held.sub(c.pos).len().raw() < Fx::ratio(1, 20).raw());
     assert!(
@@ -523,7 +529,7 @@ fn the_overlay_draws_the_volume_the_hit_test_uses() {
                     let hurt = w.critters[0].health < before.health;
                     let drawn =
                         hitbox(&w.players[0]).is_some_and(|hb| before.body(sp).touched_by(&hb));
-                    let struck_already = before.swung & 1 != 0;
+                    let struck_already = before.swung.has(0);
                     // Something else of hers out in the world -- a sigil the
                     // Descent wrote where she landed, burning -- may be what
                     // hurt it: this asks about the body's own volume.

@@ -7,6 +7,7 @@
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::oven::{self, AirField};
+use crate::state::Fighters;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Class {
@@ -632,7 +633,7 @@ pub enum Ghost {
     ///
     /// One bit per fighter it has already caught, so a fighter it runs over is
     /// hit once by the return rather than once a frame.
-    Returning { struck: u8 },
+    Returning { struck: Fighters },
 }
 
 impl Shadow {
@@ -709,7 +710,7 @@ pub struct Structure {
     /// A stone erupts once, so it can catch you once -- the same rule as
     /// `Player::hit_used`, kept per victim because a stone is not aimed at
     /// anybody in particular.
-    pub struck: u8,
+    pub struck: Fighters,
     /// Mid-flight from the Elementalist's own auto, aimed through it rather
     /// than at a fighter. See `docs/design/kits/elementalist.md`.
     ///
@@ -725,7 +726,7 @@ pub struct Structure {
     /// Kept apart from `struck`: a stone erupts once ever, but it can be
     /// kicked again and again, and each kick is a fresh event that ought to
     /// be able to hurt someone the last one already caught.
-    pub knock_struck: u8,
+    pub knock_struck: Fighters,
     /// How many frames this one takes to come out of the floor.
     ///
     /// Per stone rather than a single rule, because there are two ways a stone

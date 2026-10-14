@@ -1044,7 +1044,7 @@ fn a_fall_from_the_crown_costs_what_the_table_says() {
     let crown = w.players[0].pos.y;
     // Off the side, from the crown, onto the floor.
     w.players[0].pos = V3::new(w.players[0].pos.x, crown, m(30.0).neg().add(m(7.0)));
-    w.players[0].mount = sim::monster::NO_PART;
+    w.players[0].mount = sim::monster::NO_MOUNT;
     w.players[0].grounded = false;
     let health = w.players[0].health;
     for _ in 0..240 {
@@ -1165,7 +1165,7 @@ fn a_top_face_met_from_above_is_a_place_and_from_below_is_not() {
     let sh = beast.sp().shape(part);
     let rim = beast.world_of(part, sh.min.add(sh.max).scale(Fx::ratio(1, 2)));
     w.players[0].pos = V3::new(rim.x, Fx::ZERO, rim.z);
-    w.players[0].mount = sim::monster::NO_PART;
+    w.players[0].mount = sim::monster::NO_MOUNT;
     let up = Input::looking_at(0, Input::QUARTER_TURN, Fx::ratio(2, 10).raw() as i16);
     let seen = with_scene(&w, |scene| sim::aim::sight(0, up, m(30.0), scene));
     assert!(!seen.aboard, "the rim's underside is a body, off the ray");

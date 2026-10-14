@@ -59,6 +59,10 @@ pub static FIGHT: FightDecl = FightDecl {
 
 /// Its cells of the hunt's lore: see [`word`].
 pub const OWN_CELLS: u8 = 12;
+const _: () = assert!(
+    word::END <= OWN_CELLS as usize * 4,
+    "its own words outgrew its cells"
+);
 
 // ---------------------------------------------------------------------------
 // Its state
@@ -94,9 +98,8 @@ pub mod word {
     /// The volley's lane: where it starts (cm), its heading (raw turns).
     pub const RAKE_AT: usize = 15;
     pub const RAKE_YAW: usize = 16;
-    /// A byte per fighter, four of them: feathers taken this volley (low
-    /// four bits) and frames since the last one (high four, capped).
-    pub const RAKE_HITS: usize = 17;
+    /// Free: the volley's feathers per fighter are [`RAKE_HITS`], a run.
+    pub const _FREE_17: usize = 17;
     /// Who the Screech and the buffet have reached this move: a bit each.
     pub const STRUCK: usize = 18;
     /// **The ride**: the lap (low byte), the phase ([`ride`], byte 1), and
@@ -104,9 +107,8 @@ pub mod word {
     pub const RIDE: usize = 19;
     /// Frames of the clipped glide left.
     pub const GLIDE: usize = 20;
-    /// What the frame hook saw, per hunter, for the brain ([`seen`] bits):
-    /// a byte each.
-    pub const SEEN: usize = 21;
+    /// Free: what the frame hook saw per hunter is [`SEEN`], a run.
+    pub const _FREE_21: usize = 21;
     /// The frame the hook last ran on.
     pub const NOW: usize = 22;
     /// The height it fell from when a crash began (raw fixed point), for
@@ -147,6 +149,17 @@ pub mod word {
     pub const CIRCLE_AT: usize = 36;
     /// The air move this approach is for, plus one (`intend`).
     pub const INTENT: usize = 37;
+    /// A byte per fighter: feathers taken this volley (low four bits) and
+    /// frames since the last one (high four, capped). A run as long as the
+    /// seats need (`lore::per_fighter`), past the bird's other words: it was
+    /// one word, which a fifth fighter would have shifted off the end of.
+    pub const RAKE_HITS: usize = 38;
+    /// What the frame hook saw, per hunter, for the brain ([`seen`] bits):
+    /// a byte each, a run like [`RAKE_HITS`]. It was read as `i.min(3)`, so
+    /// past the fourth every hunter was the fourth.
+    pub const SEEN: usize = RAKE_HITS + crate::lore::per_fighter(8);
+    /// The first word past its own.
+    pub const END: usize = SEEN + crate::lore::per_fighter(8);
 }
 
 /// The phases of the ride ([`word::RIDE`]).
@@ -381,7 +394,7 @@ pub fn wind(lore: &Lore) -> Fx {
 
 /// What the frame hook saw of hunter `i`.
 pub fn seen_of(lore: &Lore, i: usize) -> u32 {
-    (lore.word(word::SEEN) >> (8 * i.min(3))) & 0xFF
+    lore.field(word::SEEN, 8, i)
 }
 
 /// The bird's slot in a world, if it is in one.
@@ -628,7 +641,7 @@ fn committed(w: &mut World, m: &mut Monster) {
             let start = lead.sub(heading.scale(math::half(Knob::VolleyLength.fx())));
             w.lore.set_word(word::RAKE_AT, word_of(start));
             w.lore.set_int(word::RAKE_YAW, m.yaw.raw());
-            w.lore.set_word(word::RAKE_HITS, 0);
+            clear_rake(w);
         }
         _ => {}
     }
@@ -901,10 +914,10 @@ fn sense(w: &mut World, m: &Monster) {
     let tower = perch_top(w);
     let b = base(w);
     let edge = Knob::EdgeNear.fx();
-    let mut bits = 0u32;
-    for (i, p) in fighters.iter().enumerate().take(MAX_PLAYERS.min(4)) {
+    for (i, p) in fighters.iter().enumerate() {
         let p = *p;
         if p.health <= 0 {
+            w.lore.set_field(word::SEEN, 8, i, 0);
             continue;
         }
         let mut s = 0;
@@ -932,9 +945,8 @@ fn sense(w: &mut World, m: &Monster) {
         if near_a_drop(w, p.pos, edge, b) {
             s |= seen::EDGE;
         }
-        bits |= s << (8 * i);
+        w.lore.set_field(word::SEEN, 8, i, s);
     }
-    w.lore.set_word(word::SEEN, bits);
 }
 
 /// Is there a drop past the free fall height within `reach` of `at`, along
@@ -1229,7 +1241,7 @@ fn carry(w: &mut World, m: &mut Monster, _slot: usize) {
     p.pos = at;
     p.vel = V3::ZERO;
     p.grounded = false;
-    p.mount = crate::monster::NO_PART;
+    p.mount = crate::monster::NO_MOUNT;
 }
 
 /// Let go of whoever it holds, wherever it is: it died, or it was knocked
@@ -1357,11 +1369,10 @@ fn volley(w: &mut World, m: &mut Monster) {
     let a = SPECIES.attack(VOLLEY);
     let gone = a.active.saturating_sub(left);
     if gone == 0 {
-        w.lore.set_word(word::RAKE_HITS, 0);
+        clear_rake(w);
     }
     let (at, along, length, width) = rake_lane(&w.lore);
     let (lo, hi) = raked(gone);
-    let mut hits = w.lore.word(word::RAKE_HITS);
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
         if p.health <= 0 || p.aboard() || p.untouchable() {
@@ -1373,8 +1384,8 @@ fn volley(w: &mut World, m: &mut Monster) {
         if s.raw() < lo.raw() || s.raw() > hi.raw() {
             continue;
         }
-        let taken = (hits >> (8 * i)) & 0xF;
-        let since = (hits >> (8 * i + 4)) & 0xF;
+        let hits = w.lore.field(word::RAKE_HITS, 8, i);
+        let (taken, since) = (hits & 0xF, hits >> 4);
         if taken >= Knob::VolleyMost.raw().max(0) as u32 {
             continue;
         }
@@ -1402,18 +1413,21 @@ fn volley(w: &mut World, m: &mut Monster) {
             },
         );
         m.hit_used = true;
-        let mask = 0xFFu32 << (8 * i);
-        hits = (hits & !mask) | ((taken + 1) << (8 * i));
+        w.lore.set_field(word::RAKE_HITS, 8, i, taken + 1);
     }
     // Every hunter's frames since their last feather, capped at fifteen.
     for i in 0..MAX_PLAYERS {
-        let since = (hits >> (8 * i + 4)) & 0xF;
-        let taken = (hits >> (8 * i)) & 0xF;
-        let since = (since + 1).min(15);
-        let mask = 0xFFu32 << (8 * i);
-        hits = (hits & !mask) | ((taken | (since << 4)) << (8 * i));
+        let hits = w.lore.field(word::RAKE_HITS, 8, i);
+        let (taken, since) = (hits & 0xF, ((hits >> 4) + 1).min(15));
+        w.lore.set_field(word::RAKE_HITS, 8, i, taken | since << 4);
     }
-    w.lore.set_word(word::RAKE_HITS, hits);
+}
+
+/// A fresh volley: nobody feathered yet.
+fn clear_rake(w: &mut World) {
+    for i in 0..MAX_PLAYERS {
+        w.lore.set_field(word::RAKE_HITS, 8, i, 0);
+    }
 }
 
 // ---------------------------------------------------------------------------

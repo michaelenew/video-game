@@ -66,17 +66,20 @@ pub struct Input {
     pub travel: Travel,
 }
 
-/// Where a [`Input::travel`] request goes. One byte.
+/// Where a [`Input::travel`] request goes. One byte, and a second for seats.
 ///
 /// `0` is no request and `1` is versus. `2`, `3` and `4` are restart, pause
-/// and step. `001s cccc` is a class change: seat `s` becomes class `c`, in a
-/// restart of the same fight. A hunt sets the top bit, keeps the
+/// and step. `001s sccc` is a class change: seat `s` becomes class `c`, in a
+/// restart of the same fight -- the seat's low two bits there and the rest in
+/// the high byte, which every other request leaves zero. One byte held four
+/// seats, and an assertion stopped the build at a fifth; the high byte holds
+/// every seat there can be, and a byte written before it reads the same. A hunt sets the top bit, keeps the
 /// species in the low five and its **temper** in the two between
 /// (`crate::temper`): `1tt sssss`. So the temper travels with the creature, on
 /// the same frame, and a rollback that crosses the start of a tempered hunt
 /// replays it at the same temper -- there is no second message to agree on.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
-pub struct Travel(pub u8);
+pub struct Travel(pub u16);
 
 // Five bits of species in a hunt's travel byte: every id there is has to fit.
 const _: () = assert!(crate::species::COUNT <= Travel::SPECIES as usize + 1);
@@ -112,8 +115,8 @@ pub enum Destination {
 }
 
 const _: () = assert!(
-    crate::class::ALL_CLASSES.len() <= 8 && crate::state::MAX_PLAYERS <= 4,
-    "a class change is three bits of class and two of seat"
+    crate::class::ALL_CLASSES.len() <= 8 && crate::state::MAX_PLAYERS <= 4 << 8,
+    "a class change is three bits of class and ten of seat"
 );
 
 impl Travel {
@@ -127,20 +130,23 @@ impl Travel {
     /// See [`Destination::Valley`].
     pub const VALLEY: Travel = Travel(5);
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
-    const CREDIT: u8 = 8;
-    const HUNT: u8 = 0x80;
+    const CREDIT: u16 = 8;
+    const HUNT: u16 = 0x80;
     /// `01aa aaaa`: no creature, in arena `a`.
-    const ARENA: u8 = 0x40;
-    /// `001s sccc`: seat `s` (two bits, since four fighters) becomes class
-    /// `c` (three: there are six). It was `001s cccc` while there were two
-    /// seats; [`Travel::from_two_seats`] reads a byte written that way.
-    const CLASS: u8 = 0x20;
-    const SEAT_SHIFT: u8 = 3;
-    const SEATS: u8 = 0x18;
-    const CLASS_INDEX: u8 = 0x07;
-    const SPECIES: u8 = 0x1F;
-    const TEMPER_SHIFT: u8 = 5;
-    const TEMPER: u8 = 0x03;
+    const ARENA: u16 = 0x40;
+    /// `001s sccc`: seat `s` (its low two bits) becomes class `c` (three:
+    /// there are six), the seat's higher bits in the high byte. It was `001s
+    /// cccc` while there were two seats; [`Travel::from_two_seats`] reads a
+    /// byte written that way.
+    const CLASS: u16 = 0x20;
+    const SEAT_SHIFT: u16 = 3;
+    const SEATS: u16 = 0x18;
+    const CLASS_INDEX: u16 = 0x07;
+    const SPECIES: u16 = 0x1F;
+    const TEMPER_SHIFT: u16 = 5;
+    const TEMPER: u16 = 0x03;
+    /// The request itself: everything but a class change's high seat bits.
+    const LOW: u16 = 0xFF;
 
     /// Hunt a creature as tuned.
     pub const fn hunt(species: SpeciesId) -> Travel {
@@ -150,21 +156,21 @@ impl Travel {
     /// Hunt a creature at a temper. A temper past what two bits hold is the
     /// highest they do.
     pub const fn tempered(species: SpeciesId, temper: u8) -> Travel {
-        let t = if temper > Travel::TEMPER {
+        let t = if temper as u16 > Travel::TEMPER {
             Travel::TEMPER
         } else {
-            temper
+            temper as u16
         };
-        Travel(Travel::HUNT | t << Travel::TEMPER_SHIFT | (species.0 & Travel::SPECIES))
+        Travel(Travel::HUNT | t << Travel::TEMPER_SHIFT | (species.0 as u16 & Travel::SPECIES))
     }
 
     /// Go to an arena with nobody in it to hunt: a jump course. An id past
     /// what six bits hold is no request.
     pub const fn arena(id: crate::arena::ArenaId) -> Travel {
-        if id.0 > !Travel::ARENA & !Travel::HUNT {
+        if id.0 as u16 > !Travel::ARENA & !Travel::HUNT & Travel::LOW {
             Travel::NONE
         } else {
-            Travel(Travel::ARENA | id.0)
+            Travel(Travel::ARENA | id.0 as u16)
         }
     }
 
@@ -174,7 +180,7 @@ impl Travel {
         if species.0 as u32 + Travel::CREDIT as u32 >= Travel::CLASS as u32 {
             Travel::NONE
         } else {
-            Travel(Travel::CREDIT + species.0)
+            Travel(Travel::CREDIT + species.0 as u16)
         }
     }
 
@@ -182,8 +188,9 @@ impl Travel {
     pub const fn class(seat: usize, class: crate::Class) -> Travel {
         Travel(
             Travel::CLASS
-                | ((seat as u8) << Travel::SEAT_SHIFT & Travel::SEATS)
-                | (class as u8 & Travel::CLASS_INDEX),
+                | ((seat as u16) << Travel::SEAT_SHIFT & Travel::SEATS)
+                | (class as u16 & Travel::CLASS_INDEX)
+                | ((seat as u16 >> 2) & Travel::LOW) << 8,
         )
     }
 
@@ -191,6 +198,7 @@ impl Travel {
     /// carried one seat bit (`0x10`) and four of class. Anything else reads
     /// the same in both.
     pub const fn from_two_seats(b: u8) -> Travel {
+        let b = b as u16;
         if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS {
             let seat = (b >> 4) & 1;
             Travel(Travel::CLASS | seat << Travel::SEAT_SHIFT | (b & 0x0F & Travel::CLASS_INDEX))
@@ -200,7 +208,12 @@ impl Travel {
     }
 
     pub const fn destination(self) -> Option<Destination> {
-        match self.0 {
+        // A high byte on anything but a class change is no request at all.
+        let high = self.0 >> 8;
+        if high != 0 && self.0 & (Travel::HUNT | Travel::ARENA | Travel::CLASS) != Travel::CLASS {
+            return None;
+        }
+        match self.0 & Travel::LOW {
             0 => None,
             1 => Some(Destination::Versus),
             2 => Some(Destination::Restart),
@@ -208,7 +221,7 @@ impl Travel {
             4 => Some(Destination::Step),
             5 => Some(Destination::Valley),
             b if b >= Travel::CREDIT && b < Travel::CLASS => {
-                Some(Destination::Credit(SpeciesId(b - Travel::CREDIT)))
+                Some(Destination::Credit(SpeciesId((b - Travel::CREDIT) as u8)))
             }
             b if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS => {
                 let index = (b & Travel::CLASS_INDEX) as usize;
@@ -216,16 +229,16 @@ impl Travel {
                     return None;
                 }
                 Some(Destination::Class {
-                    seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT) as usize,
+                    seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize,
                     class: crate::class::ALL_CLASSES[index],
                 })
             }
             b if b & Travel::HUNT == 0 && b & Travel::ARENA != 0 => Some(Destination::Arena(
-                crate::arena::ArenaId(b & !Travel::ARENA),
+                crate::arena::ArenaId((b & !Travel::ARENA) as u8),
             )),
             b if b & Travel::HUNT != 0 => Some(Destination::Hunt(
-                SpeciesId(b & Travel::SPECIES),
-                (b >> Travel::TEMPER_SHIFT) & Travel::TEMPER,
+                SpeciesId((b & Travel::SPECIES) as u8),
+                ((b >> Travel::TEMPER_SHIFT) & Travel::TEMPER) as u8,
             )),
             _ => None,
         }

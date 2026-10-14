@@ -52,7 +52,7 @@ use crate::critter::{
 };
 use crate::fixed::{Fx, cos_turns};
 use crate::math::V3;
-use crate::monster::{Attack, Doing, Herd, NO_PART, mount_of, mount_slot};
+use crate::monster::{Attack, Doing, Herd, NO_MOUNT, mount_of, mount_slot};
 use crate::species::{Species, SpeciesId};
 use crate::state::{MAX_PLAYERS, NOBODY, Player};
 use crate::tuning as t;
@@ -176,6 +176,13 @@ pub struct Pack {
     /// field to the world. Twelve 32-bit words: the Hornback's bull, the
     /// largest ask in the bestiary, is about forty bytes.
     pub memo: [i32; MEMO],
+    /// **The species' own word per fighter**, beside [`Pack::memo`]: what it
+    /// remembers about each of them -- the Gnawers' pile-on bites and how
+    /// long somebody has been up a tree, the Hornback's who-was-trampled. It
+    /// used to be packed into the memo two fighters to a word, read as
+    /// `who & 1`, so with four fighters seats nought and two shared one
+    /// count; here every seat has its own, however many there are.
+    pub per: [u32; MAX_PLAYERS],
     /// **The referee's book** ([`watch`]), which the brain never reads: the
     /// bodies that were winding up when it last looked, one bit a slot; for
     /// each fighter, the bodies whose windup began off that fighter's screen;
@@ -212,6 +219,7 @@ impl Pack {
             home,
             seen: [Seen::default(); MAX_PLAYERS],
             memo: [0; MEMO],
+            per: [0; MAX_PLAYERS],
             winding: 0,
             unseen: [0; MAX_PLAYERS],
             marked: [0; MAX_PLAYERS],
@@ -1557,7 +1565,7 @@ fn move_body(
         let part = crate::monster::mount_part(c.mount);
         let Some(rig) = rigs.get(slot).and_then(|r| r.as_ref()) else {
             // Nothing under it any more.
-            c.mount = NO_PART;
+            c.mount = NO_MOUNT;
             c.set(flag::AIRBORNE, true);
             return;
         };
@@ -1575,7 +1583,7 @@ fn move_body(
             }
             None => {
                 // Walked off the edge, or was thrown: it falls from here.
-                c.mount = NO_PART;
+                c.mount = NO_MOUNT;
                 c.pos = next;
                 c.set(flag::AIRBORNE, true);
             }

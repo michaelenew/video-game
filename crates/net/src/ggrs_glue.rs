@@ -28,7 +28,7 @@ pub struct NetInput(pub u64);
 impl From<NetInput> for Input {
     fn from(n: NetInput) -> Input {
         Input::looking_at((n.0 >> 32) as u16, (n.0 >> 16) as u16, n.0 as u16 as i16)
-            .travelling(sim::input::Travel((n.0 >> 48) as u8))
+            .travelling(sim::input::Travel((n.0 >> 48) as u16))
     }
 }
 

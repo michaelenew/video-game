@@ -31,7 +31,7 @@ use crate::arena::{self, Terrain};
 use crate::class::{MAX_STRUCTURES, Mechanic, Shield, Structure};
 use crate::fixed::Fx;
 use crate::math::V3;
-use crate::state::{Action, MAX_PLAYERS, Player};
+use crate::state::{Action, Fighters, MAX_PLAYERS, Player};
 use crate::tuning as t;
 
 /// Every stone the arena can hold: the per-fighter cap, once per fighter.
@@ -63,10 +63,10 @@ impl Structure {
             at,
             vel: V3::ZERO,
             age: 0,
-            struck: 0,
+            struck: Fighters::EMPTY,
             launched: false,
             launch_from: V3::ZERO,
-            knock_struck: 0,
+            knock_struck: Fighters::EMPTY,
             rise: t::structure_rise(),
             // Straight up, and nobody is thrown by it. Every stone on the
             // field but one.
@@ -190,7 +190,7 @@ impl Structure {
 
     /// Has the eruption already caught this fighter?
     fn already_struck(&self, player: usize) -> bool {
-        self.struck & (1 << player) != 0
+        self.struck.has(player)
     }
 
     /// Would this stone leave the churn on its next frame?
@@ -404,11 +404,7 @@ fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
         }
         let owner = owner_of(index);
         for (i, p) in players.iter_mut().enumerate() {
-            if i as u8 == owner
-                || p.health <= 0
-                || p.untouchable()
-                || stone.knock_struck & (1 << i) != 0
-            {
+            if i as u8 == owner || p.health <= 0 || p.untouchable() || stone.knock_struck.has(i) {
                 continue;
             }
             let apart = V3::new(p.pos.x.sub(stone.at.x), Fx::ZERO, p.pos.z.sub(stone.at.z));
@@ -424,7 +420,7 @@ fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
             if closing.raw() <= t::bolt_knock_min_speed().raw() {
                 continue;
             }
-            stone.knock_struck |= 1 << i;
+            stone.knock_struck.set(i);
             let dmg = closing
                 .mul(Fx::from_int(t::bolt_knock_damage_per_speed()))
                 .to_int()
@@ -606,7 +602,7 @@ pub fn shove(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3, speed: 
     if let Some(stone) = field[index].as_mut() {
         stone.launched = true;
         stone.launch_from = stone.at;
-        stone.knock_struck = 0;
+        stone.knock_struck = Fighters::EMPTY;
         stone.vel.x = dir.x.mul(speed);
         stone.vel.z = dir.z.mul(speed);
         if dir.y.raw() > 0 {
@@ -830,7 +826,7 @@ pub fn relocate_and_erupt(
     if let Some(stone) = field[index].as_mut() {
         stone.at = settled;
         stone.vel = V3::ZERO;
-        stone.struck = 0;
+        stone.struck = Fighters::EMPTY;
         // Off the churn's last frame and into the eruption: the next `step`
         // carries it out of the ground.
         while stone.phase() == Phase::Churning && stone.age < stone.rise {
@@ -1048,7 +1044,7 @@ pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
                     if !caught || stone.already_struck(i) || p.untouchable() {
                         continue;
                     }
-                    stone.struck |= 1 << i;
+                    stone.struck.set(i);
                     p.wound(t::stone_erupt_damage());
                     p.action = Action::Stagger {
                         left: t::stone_erupt_stagger(),

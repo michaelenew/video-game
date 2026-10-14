@@ -44,6 +44,11 @@ use crate::tuning as t;
 pub const MAX_PLAYERS: usize = 4;
 pub type PlayerId = usize;
 
+/// **A set of fighters**: one bit per seat, as wide as the seats need. What
+/// every "already struck by", "already hit" and "seen by" mask is, so none
+/// can be a `u8` that the ninth seat silently shares with the first.
+pub type Fighters = crate::bits::Bits<{ crate::bits::words_for(MAX_PLAYERS) }>;
+
 const GROUND_Y: Fx = Fx::ZERO;
 
 /// Move slots are positional and mean the same thing on every class, which is
@@ -558,14 +563,14 @@ pub struct Player {
     pub clear: Fx,
 
     /// Which part of the creature this fighter is standing on, or
-    /// `monster::NO_PART`.
+    /// `monster::NO_MOUNT`.
     ///
     /// **While this is set, `local` is the authoritative position and `pos` is
     /// derived from it.** Unmounted it is the other way round. That one rule is
     /// the whole of why the creature can spin under a rider without sliding
     /// them off: a world position would have to be corrected for the rotation
     /// every frame, and a body-space one never has to be corrected at all.
-    pub mount: u8,
+    pub mount: monster::Mount,
     /// Position in the mounted part's own rest frame -- before the tail's swing
     /// or the head's reach, so a rider on the tail swings with it.
     pub local: V3,
@@ -1123,7 +1128,7 @@ impl Player {
 
     /// Standing on the creature.
     pub fn aboard(&self) -> bool {
-        self.mount != monster::NO_PART
+        self.mount != monster::NO_MOUNT
     }
 
     /// Where the move currently running is aimed: the end of its path.
@@ -1319,7 +1324,7 @@ impl Default for Player {
             frozen_bits: 0,
             aloft: Fx::ZERO,
             clear: Fx::ZERO,
-            mount: monster::NO_PART,
+            mount: monster::NO_MOUNT,
             local: V3::ZERO,
             carry_yaw: Fx::ZERO,
             grip_vel: V3::ZERO,
@@ -3508,7 +3513,9 @@ impl World {
                     hash_v3(&mut h, &g.dir);
                     h.write_i32(g.travelled.raw());
                     h.write_u32(g.lit as u32);
-                    h.write_u32(g.pushed as u32);
+                    for &w in g.pushed.words() {
+                        h.write_u32(w);
+                    }
                 }
                 None => h.write_u32(0),
             }
@@ -3522,10 +3529,12 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u64(e.struck as u64);
-                    h.write_u64((e.struck >> 64) as u64);
-                    h.write_u64(e.drank as u64);
-                    h.write_u64((e.drank >> 64) as u64);
+                    // Two words to a `u64`, low first: what the halves of
+                    // the `u128`s these were, so a fight of four hashes as
+                    // it did.
+                    for pair in e.struck.words().chunks(2).chain(e.drank.words().chunks(2)) {
+                        h.write_u64(pair[0] as u64 | (*pair.get(1).unwrap_or(&0) as u64) << 32);
+                    }
                     h.write_i32(e.banked);
                     h.write_i32(e.power.raw());
                     h.write_i32(e.reach.raw());
@@ -3645,7 +3654,7 @@ impl World {
             h.write_u32(kind as u32);
             h.write_u32(p.rounds_won as u32);
             h.write_u32(p.class as u32);
-            h.write_u32(p.mount as u32);
+            h.write_u32(monster::mount_hash(p.mount));
             hash_v3(&mut h, &p.local);
             hash_v3(&mut h, &p.grip_vel);
             h.write_i32(p.carry_yaw.raw());
@@ -3776,7 +3785,12 @@ impl World {
             h.write_u32(0x7A11);
             h.write_u32(v.beaten);
             h.write_u32(v.came as u32);
-            h.write_u32(v.cairn[0] as u32 | (v.cairn[1] as u32) << 16);
+            // Every seat's cairn, two to a word: it was the first two only,
+            // so a desync in where seat two or three stands back up went
+            // unseen.
+            for pair in v.cairn.chunks(2) {
+                h.write_u32(pair[0] as u32 | (*pair.get(1).unwrap_or(&0) as u32) << 16);
+            }
         }
         // A course's runs, only in a course: every other fight hashes exactly
         // as it did before there were any.
@@ -3821,6 +3835,9 @@ impl World {
             for m in &p.memo {
                 h.write_i32(*m);
             }
+            for m in &p.per {
+                h.write_u32(*m);
+            }
         }
         if self.pack.is_some() || self.critters.any() {
             h.write_u32(self.critters.species.0 as u32);
@@ -3830,10 +3847,23 @@ impl World {
                 h.write_u32(c.yaw as u32 | (c.health as u16 as u32) << 16);
                 h.write_u32(c.timer as u32 | (c.clock as u32) << 16);
                 h.write_u32(u32::from_le_bytes([c.kind, c.state, c.act, c.flags]));
-                h.write_u32(u32::from_le_bytes([c.role, c.slot, c.target, c.mount]));
+                h.write_u32(
+                    u32::from_le_bytes([c.role, c.slot, c.target, 0])
+                        | (monster::mount_hash(c.mount) & 0xFF) << 24,
+                );
+                if monster::mount_hash(c.mount) > 0xFF {
+                    h.write_u32(monster::mount_hash(c.mount));
+                }
                 h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
-                h.write_u32(c.perch[2] as u16 as u32 | (c.seared & 0xFFFF) << 16);
-                h.write_u32(c.seared >> 16 | (c.swung as u32) << 16);
+                h.write_u32(c.perch[2] as u16 as u32);
+                for seared in c.seared.chunks(4) {
+                    let mut b = [0; 4];
+                    b[..seared.len()].copy_from_slice(seared);
+                    h.write_u32(u32::from_le_bytes(b));
+                }
+                for &w in c.swung.words() {
+                    h.write_u32(w);
+                }
             }
         }
         // The hunt's lore, last, and only when something is in it: a fight
@@ -5803,7 +5833,7 @@ fn step_player(
                 return step_critter_rider(p, who, input, &c, crowd.sp(), scene, &out);
             }
             _ => {
-                p.mount = monster::NO_PART;
+                p.mount = monster::NO_MOUNT;
                 p.grounded = false;
             }
         }
@@ -5812,7 +5842,7 @@ fn step_player(
         if let Some(beast) = ridden(p, herd) {
             p.pos = beast.world_of(mount_part(p.mount), p.local);
         }
-        p.mount = monster::NO_PART;
+        p.mount = monster::NO_MOUNT;
         p.grounded = false;
     }
     if p.aboard() {
@@ -5820,7 +5850,7 @@ fn step_player(
             Some(beast) => return step_rider(p, who, input, beast, scene, &out),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
-            None => p.mount = monster::NO_PART,
+            None => p.mount = monster::NO_MOUNT,
         }
     }
     // Facing comes from the mouse. Where you look is where you are pointed, and
@@ -8845,9 +8875,9 @@ pub const UNLIT: u16 = u16::MAX;
 /// On a thrall's `Effect::struck`: she has sent it somewhere, and it goes
 /// there before it bites anything.
 /// The top of the mask, above every (part, victim) bit an effect uses.
-pub const COMMANDED: u128 = 1 << 127;
+pub const COMMANDED: usize = crate::effects::Struck::CAPACITY - 1;
 /// On a thrall's `Effect::struck`: the hand it keeps to round a wall.
-pub const LEFT_HAND: u128 = 1 << 126;
+pub const LEFT_HAND: usize = crate::effects::Struck::CAPACITY - 2;
 
 /// What a Black spike's hit is worth against its row's damage: an eruption
 /// out of a stain is the bigger hit, a field's wave and the second tier's
@@ -9677,7 +9707,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                 Ghost::Waiting => h.write_u32(2),
                 Ghost::Returning { struck } => {
                     h.write_u32(3);
-                    h.write_u32(struck as u32);
+                    for &w in struck.words() {
+                        h.write_u32(w);
+                    }
                 }
             }
             h.write_u32(shadow.echo as u32);
@@ -9705,10 +9737,14 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                         hash_v3(h, &s.at);
                         hash_v3(h, &s.vel);
                         h.write_u32(s.age as u32);
-                        h.write_u32(s.struck as u32);
+                        for &w in s.struck.words() {
+                            h.write_u32(w);
+                        }
                         h.write_u32(s.launched as u32);
                         hash_v3(h, &s.launch_from);
-                        h.write_u32(s.knock_struck as u32);
+                        for &w in s.knock_struck.words() {
+                            h.write_u32(w);
+                        }
                         h.write_u32(s.rise as u32);
                         hash_v3(h, &s.erupt);
                         h.write_i32(s.scale.raw());
@@ -10589,9 +10625,8 @@ impl World {
             // A thrown thing on its first frame: no critter has been cut by
             // this one yet, whatever the last of its kind did.
             if effect.age == 0 && effect.kind.once_a_pass() {
-                let bit = critter::seared_bit(effect.owner, effect.slot);
                 for c in self.critters.iter_mut() {
-                    c.seared &= !bit;
+                    c.sear(effect.owner, effect.slot, false);
                 }
             }
             effect.age += 1;
@@ -12564,7 +12599,6 @@ impl World {
             return 0;
         }
         let once = effect.kind.once_a_pass();
-        let bit = critter::seared_bit(effect.owner, effect.slot);
         let sp = self.critters.sp();
         let raw = Fx::from_int(effect.damage())
             .mul(share)
@@ -12573,7 +12607,7 @@ impl World {
         let mut total = 0;
         for c in 0..critter::MAX_CRITTERS {
             let body = self.critters[c];
-            if !body.alive() || (once && body.seared & bit != 0) {
+            if !body.alive() || (once && body.seared_by(effect.owner, effect.slot)) {
                 continue;
             }
             let shape = body.body(sp);
@@ -12592,7 +12626,7 @@ impl World {
                 continue;
             }
             if once {
-                self.critters[c].seared |= bit;
+                self.critters[c].sear(effect.owner, effect.slot, true);
             }
             let away = body.pos.sub(from);
             let away = V3::new(away.x, Fx::ZERO, away.z).normalized();
@@ -13423,7 +13457,7 @@ fn step_rider(
     // you out, when it does.
     if input.has(Input::SPACE) && p.action.actionable() && !inside {
         let mob = p.class.mobility();
-        p.mount = monster::NO_PART;
+        p.mount = monster::NO_MOUNT;
         // **What the leap carries is capped.** You take the surface's own
         // velocity with you -- that is what makes stepping off a charging
         // animal work -- but only as much of it as you had time to push off
@@ -13529,7 +13563,7 @@ fn step_rider(
             // Walked off the edge. You leave with whatever the surface was
             // doing, which is why stepping off a turning animal throws you
             // wide -- capped the same way a jump is, and for the same reason.
-            p.mount = monster::NO_PART;
+            p.mount = monster::NO_MOUNT;
             p.pos = moved.pos;
             p.vel = carry_off(surface);
             p.grounded = false;
@@ -13781,7 +13815,7 @@ fn step_critter_rider(
             Fx::ONE
         };
         let out_dir = body.dir_to_world(V3::new(Fx::ZERO, Fx::ZERO, side));
-        p.mount = monster::NO_PART;
+        p.mount = monster::NO_MOUNT;
         p.vel = V3::new(out_dir.x, Fx::ZERO, out_dir.z)
             .normalized()
             .scale(t::throw_kick())
@@ -13801,7 +13835,7 @@ fn step_critter_rider(
     // Jumping is how you leave, with what the back was doing, capped.
     if input.has(Input::SPACE) && p.action.actionable() {
         let mob = p.class.mobility();
-        p.mount = monster::NO_PART;
+        p.mount = monster::NO_MOUNT;
         let carried = carry_off(surface);
         p.vel = carried.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
         p.grounded = false;
@@ -13828,7 +13862,7 @@ fn step_critter_rider(
     if next.x.abs().raw() > body.half_len.add(grace).raw()
         || next.z.abs().raw() > body.half_wid.add(grace).raw()
     {
-        p.mount = monster::NO_PART;
+        p.mount = monster::NO_MOUNT;
         p.pos = c.back_point(sp, next);
         p.vel = carry_off(surface);
         p.grounded = false;
@@ -13863,7 +13897,7 @@ pub fn put_inside(p: &mut Player, slot: usize, beast: &Monster, part: usize) {
 /// **Let a fighter out of wherever they are inside**, at `at`, moving at
 /// `vel`: no longer aboard, in the air.
 pub fn let_out(p: &mut Player, at: V3, vel: V3) {
-    p.mount = monster::NO_PART;
+    p.mount = monster::NO_MOUNT;
     p.pos = at;
     p.vel = vel;
     p.grounded = false;
@@ -13922,7 +13956,7 @@ fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
     let out = rig.dir_to_world(V3::new(Fx::ZERO, Fx::ZERO, side));
     let flat = V3::new(out.x, Fx::ZERO, out.z);
     let _ = (surface, part);
-    p.mount = monster::NO_PART;
+    p.mount = monster::NO_MOUNT;
     p.vel =
         flat.normalized()
             .scale(t::throw_kick())
@@ -13947,7 +13981,7 @@ fn fall_off(p: &mut Player, herd: &Herd) {
     if let Some(beast) = ridden(p, herd) {
         p.pos = beast.world_of(mount_part(p.mount), p.local);
     }
-    p.mount = monster::NO_PART;
+    p.mount = monster::NO_MOUNT;
     p.grounded = false;
 }
 
@@ -14132,7 +14166,7 @@ impl World {
                         // the map -- the tornado never gets to be seen at
                         // all, it just vanishes where the pillar stood.
                         effect.dir = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
-                        effect.struck = 0;
+                        effect.struck.clear();
                         effect.banked = effect.age as i32;
                     }
                 }
@@ -15059,7 +15093,7 @@ impl World {
             e.age = 0;
             e.life = EffectKind::Thrall.life();
             e.power = Fx::ZERO;
-            e.struck = 0;
+            e.struck.clear();
             e.dir = V3::ZERO;
         }
     }
@@ -15125,7 +15159,7 @@ impl World {
         for e in self.effects.iter_mut().flatten() {
             if e.is_a_thrall() && e.owner == i as u8 {
                 e.home = to;
-                e.struck |= COMMANDED;
+                e.struck.set(COMMANDED);
                 e.power = Fx::ZERO;
             }
         }
@@ -15375,7 +15409,7 @@ impl World {
                     continue;
                 }
             }
-            let commanded = th.struck & COMMANDED != 0;
+            let commanded = th.struck.has(COMMANDED);
             let flying = th.power.raw() > 0;
             let prey = if commanded { None } else { self.prey_of(&th) };
             let speed = if golem {
@@ -15403,20 +15437,20 @@ impl World {
                         step,
                         radius,
                         height,
-                        th.struck & LEFT_HAND != 0,
+                        th.struck.has(LEFT_HAND),
                     );
                     th.pos = to;
                     if way != V3::ZERO {
                         th.dir = way;
                     }
                     if left {
-                        th.struck |= LEFT_HAND;
+                        th.struck.set(LEFT_HAND);
                     } else {
-                        th.struck &= !LEFT_HAND;
+                        th.struck.unset(LEFT_HAND);
                     }
                 } else if commanded {
                     // Arrived where she sent it: free again.
-                    th.struck &= !COMMANDED;
+                    th.struck.unset(COMMANDED);
                 } else if prey.is_some() {
                     th.dir = gap.normalized();
                 }
@@ -16418,7 +16452,7 @@ impl World {
                 && p.pos.y.raw() >= effect.pos.y.sub(climbs).raw()
                 && p.pos.y.raw() < effect.pos.y.add(effect.reach).add(effect.reach).raw();
             if !in_it {
-                effect.struck &= !crate::effects::Effect::carried_bit(i);
+                effect.struck.unset(crate::effects::Effect::carried_bit(i));
                 continue;
             }
             // Whoever it has hold of -- her, or anybody it rolled over -- goes
@@ -16903,13 +16937,12 @@ impl World {
         // What the fighters have out.
         for i in 0..MAX_PLAYERS {
             let attacker = self.players[i];
-            let bit = 1u8 << i;
             let swing = hitbox(&attacker).filter(|_| attacker.health > 0);
             // A new swing, or one that has rearmed: nobody has been struck by
             // it yet.
             if swing.is_none() || !attacker.hit_used {
                 for c in self.critters.iter_mut() {
-                    c.swung &= !bit;
+                    c.swung.unset(i);
                 }
             }
             let Some(box_out) = swing else { continue };
@@ -16943,10 +16976,10 @@ impl World {
             let mut any = false;
             for c in 0..critter::MAX_CRITTERS {
                 let body = self.critters[c];
-                if !body.alive() || body.swung & bit != 0 || !body.body(sp).touched_by(&box_out) {
+                if !body.alive() || body.swung.has(i) || !body.body(sp).touched_by(&box_out) {
                     continue;
                 }
-                self.critters[c].swung |= bit;
+                self.critters[c].swung.set(i);
                 // **A guard, if the body has one** (`PackMind::guarded`): a
                 // turned blow does nothing to it, and the swing recoils.
                 let guarded = match sp.pack {

@@ -63,11 +63,12 @@ pub mod word {
     pub const DELAY: usize = 1;
     /// Its eyes' own generator, for the wander.
     pub const RNG: usize = 2;
-    /// The newest deed's slot, per fighter: two bits each.
+    /// The newest deed's slot, per fighter: two bits each, as many words as
+    /// the seats need.
     pub const HEADS: usize = 3;
     /// The samples: per fighter, [`RING`] of three words -- where (x and z
     /// in centimetres), height and flags, and the stamp.
-    pub const SAMPLES: usize = 4;
+    pub const SAMPLES: usize = HEADS + crate::lore::per_fighter(2);
     pub const PER_SAMPLE: usize = 3;
     /// The deeds: per fighter, [`DEEDS`] words, a deed in the top byte and
     /// the stamp it began on below it.
@@ -196,12 +197,11 @@ fn deed_word(who: usize, slot: usize) -> usize {
 }
 
 fn head(lore: &Lore, who: usize) -> usize {
-    ((lore.word(word::HEADS) >> (who * 2)) & 0b11) as usize
+    lore.field(word::HEADS, 2, who) as usize
 }
 
 fn set_head(lore: &mut Lore, who: usize, slot: usize) {
-    let w = lore.word(word::HEADS) & !(0b11 << (who * 2));
-    lore.set_word(word::HEADS, w | ((slot as u32 & 0b11) << (who * 2)));
+    lore.set_field(word::HEADS, 2, who, slot as u32);
 }
 
 /// **Write this frame into the record**, from the snapshot as the frame finds

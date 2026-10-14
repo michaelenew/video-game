@@ -13,8 +13,8 @@ use sim::input::{Destination, Input, Travel};
 use sim::species::SpeciesId;
 
 #[test]
-fn every_class_for_either_seat_survives_the_travel_byte() {
-    for seat in 0..2 {
+fn every_class_for_every_seat_survives_the_travel_byte() {
+    for seat in 0..sim::state::MAX_PLAYERS {
         for class in ALL_CLASSES {
             assert_eq!(
                 Travel::class(seat, class).destination(),
@@ -29,12 +29,35 @@ fn every_class_for_either_seat_survives_the_travel_byte() {
 fn no_two_kinds_of_trip_share_a_byte() {
     // Every byte means at most one thing, and the bytes that already meant
     // something -- a hunt at a temper, an arena -- still mean it.
-    for b in 0..=255u8 {
+    for b in 0..=u16::MAX {
         let Some(Destination::Class { seat, class }) = Travel(b).destination() else {
             continue;
         };
-        assert_eq!(Travel::class(seat, class), Travel(b), "byte {b:#04x}");
+        assert_eq!(Travel::class(seat, class), Travel(b), "word {b:#06x}");
     }
+    // A high byte on anything but a class change asks for nothing: a byte
+    // that meant a trip still means exactly that trip, and nothing else.
+    for b in 0..=255u16 {
+        if Travel(b)
+            .destination()
+            .is_some_and(|d| !matches!(d, Destination::Class { .. }))
+        {
+            assert_eq!(
+                Travel(b | 0x100).destination(),
+                None,
+                "word {:#06x}",
+                b | 0x100
+            );
+        }
+    }
+    // A seat far past four survives it.
+    assert_eq!(
+        Travel::class(1000, Class::Champion).destination(),
+        Some(Destination::Class {
+            seat: 1000,
+            class: Class::Champion
+        })
+    );
     assert!(matches!(
         Travel::hunt(SpeciesId::RIDGEBACK).destination(),
         Some(Destination::Hunt(..))

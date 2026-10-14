@@ -940,7 +940,6 @@ fn shot_siege_move(w: &mut World, kind: u8) {
                         leg: 0,
                         phase: fight::leg::STARTUP,
                         left: a.startup,
-                        struck: 0,
                     },
                 );
                 fight::leg::aim_at(beast, me);
@@ -5332,7 +5331,10 @@ fn tick_sim(
         (KeyCode::Digit6, Dummy::Bot(hunt::Level::Normal)),
         (KeyCode::Digit7, Dummy::Bot(hunt::Level::Hard)),
     ] {
-        if keys.just_pressed(key) {
+        // Training's alone: the dummy is this machine's, and the seats are
+        // the world's -- changed here, on one machine only, they would split
+        // the two worlds apart. Online, every seat is somebody.
+        if training && keys.just_pressed(key) {
             sim.dummy = mode;
             // Whether player two is in the next fresh fight is the
             // simulation's to know, and the tape's: see `World::seats`.
