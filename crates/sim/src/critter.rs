@@ -49,7 +49,7 @@ use crate::state::{Fighters, Hitbox, MAX_PLAYERS};
 /// Ten, from the worst fight in the bestiary (§4): nine gnawers and the Big
 /// One in coop. The herd is nine, a brood eight, the Siegeshell's parasites
 /// eight. A pack brain drives all of them.
-pub const MAX_CRITTERS: usize = 10;
+pub const MAX_CRITTERS: usize = 32;
 
 /// **A set of critter slots**: one bit each, as wide as the slots are many.
 /// What a thrown shield has gone through, and which bodies' windups began

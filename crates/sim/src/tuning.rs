@@ -241,6 +241,38 @@ pub fn step_over() -> Fx {
 }
 
 /// The steepest ground a body walks up, as rise over run (`valley::land`).
+/// The regions' declared reach: the farthest anything acts in one go. Not a
+/// rule any move obeys -- a declaration the dev watchdog holds the game to.
+/// See `crate::region`.
+pub fn region_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionReach))
+}
+
+/// The regions' declared speed of light, in metres a second.
+pub fn region_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionSpeed))
+}
+
+/// How many frames old a neighbouring region's outcome may be.
+pub fn region_delay() -> u32 {
+    oven::scalar(Scalar::RegionDelay).max(1) as u32
+}
+
+/// How far a region's checksum zone reaches past its hexagon.
+pub fn region_overlap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionOverlap))
+}
+
+/// A region hexagon's circumradius: centre to corner.
+pub fn region_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionSize))
+}
+
+/// How many frames behind a simulated neighbour's heartbeat runs.
+pub fn region_neighbour_lag() -> u32 {
+    oven::scalar(Scalar::RegionNeighbourLag).max(0) as u32
+}
+
 pub fn terrain_steepest() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSteepest)).max(Fx::ratio(1, 10))
 }

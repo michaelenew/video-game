@@ -487,6 +487,7 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
         cur,
         prev,
         tape,
+        ledger,
         ..
     } = sim;
     let Driver::Online {
@@ -568,9 +569,18 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
             // other player really pressed.
             net::handle_requests_watched(cur, requests, |before, inputs, after| {
                 tape.record(before.frame, inputs);
+                // And on the region ledger's tape, a re-advance overwriting
+                // its prediction the same way.
+                ledger.record(before, inputs);
                 // And sounded, the first time each frame is simulated.
                 scape.observe(before, after);
             });
+            // The books are kept for confirmed frames only: what both
+            // machines have agreed on, which is what a region's checksum
+            // will one day be sent to a neighbour as.
+            if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
+                ledger.confirm_through(confirmed, cur);
+            }
             meter.now.sim_us = meter.now.sim_us.max(began.elapsed().as_micros() as u32);
             *prev = was;
         }
