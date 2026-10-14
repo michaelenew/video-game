@@ -7,7 +7,7 @@
 use hunt::plans;
 use sim::replay::Tape;
 use sim::species::SpeciesId;
-use sim::state::{MAX_PLAYERS, Phase};
+use sim::state::Phase;
 use sim::{Class, Input, World};
 
 /// Play a scripted hunt, taping it, and return the tape and the report the
@@ -17,7 +17,7 @@ fn taped(species: SpeciesId, class: Class, frames: u32, seed: u32) -> (Tape, hun
     // Not reseeded, unlike `fight`: the game never reseeds a creature, so a
     // game's tape starts from the species' own generator, and the tape's
     // start is checked by hash. The seed goes to the hunter's timing only.
-    let mut w = World::hunt_of([class; MAX_PLAYERS], species).seated(1);
+    let mut w = World::hunt_of([class; 2], species).seated(1);
     let mut tape = Tape::begin(&w, "test");
     let mut bot = hunt::Hunter::of(card, 0, seed, hunt::jump_apex(class));
     let mut report = hunt::Report::new(card);
@@ -99,7 +99,7 @@ fn a_versus_tape_is_judged_without_a_creature() {
     assert_eq!(judged.matched, Some(true));
     assert!(judged.report.is_none());
     assert_eq!(judged.rounds, w.players.map(|p| p.rounds_won));
-    assert!(judged.hands.iter().all(|h| h.frames > 0));
+    assert!(judged.hands[..w.present()].iter().all(|h| h.frames > 0));
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn the_link_is_laid_beside_how_far_apart_the_fighters_were() {
     for f in 0..2_400 {
         // Twenty seconds side by side, then away from each other.
         let inputs = if f < 1_200 {
-            [Input::default(); MAX_PLAYERS]
+            [Input::default(); 2]
         } else {
             [out, back]
         };
@@ -216,7 +216,7 @@ fn a_tape_with_no_link_still_says_what_the_simulation_costs_apart() {
 /// is a slot number, and the same slot is a different move on every class.
 #[test]
 fn a_change_of_class_gets_its_own_table() {
-    let mut w = World::hunt_of([Class::Bulwark; MAX_PLAYERS], SpeciesId::RIDGEBACK).seated(1);
+    let mut w = World::hunt_of([Class::Bulwark; 2], SpeciesId::RIDGEBACK).seated(1);
     let mut tape = Tape::begin(&w, "test");
     let swing = Input {
         bits: Input::LEFT,

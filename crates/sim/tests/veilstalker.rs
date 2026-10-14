@@ -11,12 +11,11 @@ use sim::fixed::Fx;
 use sim::monster::{Doing, Monster};
 use sim::species::SpeciesId;
 use sim::species::veilstalker::{self as vs, Knob, fight};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, V3, World};
 
 /// A hunt against it, the second fighter out of it.
 fn hunt() -> World {
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::VEILSTALKER);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::VEILSTALKER);
     w.players[1].health = 0;
     w
 }
@@ -47,7 +46,7 @@ fn duel(dist: i32) -> World {
     m.brain.think_left = 600;
     m.brain.seen = at(dist, 0);
     for _ in 0..12 {
-        w.advance([look_at_it(&w); MAX_PLAYERS]);
+        w.advance([look_at_it(&w); 2]);
         hold(&mut w);
     }
     w

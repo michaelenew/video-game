@@ -391,3 +391,146 @@ fn play(sa: Seat, sb: Seat, frames: u32) {
     }
     assert!(done.iter().all(|&f| f >= frames), "frames: {done:?}");
 }
+
+/// `n` rooms for `n` players on one hall and one switchboard, the first
+/// opening the link first and each of the rest a little after.
+fn mesh(n: usize, ids: &[u64]) -> Vec<Seat> {
+    use net::loopback::Switchboard;
+    let hall = Hall::default();
+    let switch = Switchboard::default();
+    let mut rooms: Vec<_> = ids
+        .iter()
+        .map(|&id| {
+            let switch = switch.clone();
+            Room::new(hall.board(), move || switch.line(), id, "t").with_players(n)
+        })
+        .collect();
+    let mut seats: Vec<Option<Seat>> = (0..n).map(|_| None).collect();
+    for f in 0..6_000u64 {
+        for (i, room) in rooms.iter_mut().enumerate() {
+            if seats[i].is_some() || f < i as u64 * 150 {
+                continue;
+            }
+            match room.poll(f * 16) {
+                Progress::Ready(s) => seats[i] = Some(s),
+                Progress::Failed(why) => panic!("room {i} failed: {why}"),
+                Progress::Waiting(_) => {}
+            }
+        }
+        if seats.iter().all(Option::is_some) {
+            break;
+        }
+    }
+    seats
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| s.unwrap_or_else(|| panic!("room {i} never seated")))
+        .collect()
+}
+
+#[test]
+fn three_and_four_meet_and_whoever_came_first_sits_first() {
+    for ids in [
+        vec![30, 10, 20],
+        vec![1, 2, 3],
+        vec![40, 30, 20, 10],
+        vec![7, 99, 3, 50],
+    ] {
+        let n = ids.len();
+        let seats = mesh(n, &ids);
+        let handles: Vec<usize> = seats.iter().map(|s| s.handle).collect();
+        assert_eq!(handles, (0..n).collect::<Vec<_>>(), "ids {ids:?}");
+        for s in &seats {
+            assert_eq!(s.players, n);
+            let mut far: Vec<usize> = s.remotes.iter().map(|(h, _)| *h).collect();
+            far.sort();
+            let want: Vec<usize> = (0..n).filter(|&h| h != s.handle).collect();
+            assert_eq!(far, want, "seat {} reaches everybody else", s.handle);
+        }
+    }
+}
+
+#[test]
+fn a_room_for_four_waits_for_the_fourth() {
+    use net::loopback::Switchboard;
+    let hall = Hall::default();
+    let switch = Switchboard::default();
+    let mut rooms: Vec<_> = [1u64, 2, 3]
+        .into_iter()
+        .map(|id| {
+            let switch = switch.clone();
+            Room::new(hall.board(), move || switch.line(), id, "t").with_players(4)
+        })
+        .collect();
+    let mut said = String::new();
+    for f in 0..600u64 {
+        for room in rooms.iter_mut() {
+            match room.poll(f * 16) {
+                Progress::Ready(_) => panic!("three started a match for four"),
+                Progress::Failed(why) => panic!("{why}"),
+                Progress::Waiting(why) => said = why.to_string(),
+            }
+        }
+    }
+    assert!(said.contains("one more"), "said: {said}");
+}
+
+#[test]
+fn four_play_a_match_in_sync_over_the_mesh() {
+    let seats = mesh(4, &[11, 22, 33, 44]);
+    let mut peers: Vec<_> = seats
+        .into_iter()
+        .map(|s| {
+            let h = s.handle;
+            let start = World::with_classes([sim::Class::Bulwark; 4]);
+            (p2p::start(s).expect("session"), start, h, 0u32)
+        })
+        .collect();
+    let mut rng = 0x2545_f491_4f6c_dd1d_u64;
+    for _ in 0..40_000 {
+        for (session, world, handle, frames) in peers.iter_mut() {
+            session.poll_remote_clients();
+            if session.current_state() != net::ggrs::SessionState::Running {
+                continue;
+            }
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            let mut input = Input::aimed((rng & 0x1ff) as u16, (rng >> 20) as u16);
+            // Player four changes class mid-match: it travels on the wire
+            // and must land on the same frame on all four machines.
+            if *handle == 3 && *frames == 100 {
+                input = input.travelling(sim::input::Travel::class(3, sim::Class::Champion));
+            }
+            if session
+                .add_local_input(*handle, NetInput::from(input))
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                handle_requests(world, requests);
+                *frames += 1;
+            }
+            for event in session.events() {
+                if let net::ggrs::GgrsEvent::DesyncDetected { frame, .. } = event {
+                    panic!("desync at frame {frame}");
+                }
+            }
+        }
+        if peers.iter().all(|p| p.3 >= 300) {
+            break;
+        }
+    }
+    let frames: Vec<u32> = peers.iter().map(|p| p.3).collect();
+    assert!(frames.iter().all(|&f| f >= 300), "frames: {frames:?}");
+    for (_, world, handle, _) in &peers {
+        assert_eq!(world.present(), 4);
+        assert_eq!(
+            world.players[3].class,
+            sim::Class::Champion,
+            "player four's class change, as seen by player {}",
+            handle + 1
+        );
+    }
+}

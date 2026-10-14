@@ -2,18 +2,17 @@
 //! largest fight, that each fight lays out differently.
 //!
 //! What is pinned: every registered species' layout fits it; the `World`
-//! with every cell of it full still fits the 4 KiB snapshot, with room left
+//! with every cell of it full still fits the 20 KiB snapshot, with room left
 //! over; a species' own words round-trip and never spill into the generic
 //! lists; and a fight that uses none of it hashes as before there was any.
 
 use sim::hazard;
 use sim::lore::{CELLS, Lore};
 use sim::species::{self, SpeciesId, sentinel};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, World};
 
 /// The snapshot's cap: see `tests/budget.rs`.
-const SNAPSHOT_CAP: usize = 4096;
+const SNAPSHOT_CAP: usize = 20 * 1024;
 
 #[test]
 fn every_species_layout_fits_the_region() {
@@ -62,11 +61,11 @@ fn the_snapshot_fits_with_every_cell_of_the_region_full() {
     assert!(region >= CELLS * 16);
     // Every cell full, in a fight with every list: the size does not move,
     // because it is a fixed array, and it still clones without allocating.
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SENTINEL);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::SENTINEL);
     for i in 0..CELLS * 4 {
         w.lore.set_word(i, 0xA5A5_A5A5);
     }
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let copy = w.clone();
     assert_eq!(copy.state_checksum(), w.state_checksum());
     // A creature document's itemised worst case, after what the world
@@ -91,7 +90,7 @@ fn the_snapshot_fits_with_every_cell_of_the_region_full() {
 
 #[test]
 fn a_species_own_words_round_trip_and_never_spill() {
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SENTINEL);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::SENTINEL);
     let l = sentinel::FIGHT.layout;
     let generic = (l.hazards + l.noises + l.objectives) as usize;
     let own = CELLS - generic;
@@ -112,12 +111,10 @@ fn a_species_own_words_round_trip_and_never_spill() {
 #[test]
 fn a_fight_that_uses_none_of_it_keeps_it_blank() {
     for id in [SpeciesId::RIDGEBACK, SpeciesId::GNATS] {
-        let mut w = World::hunt_of([Class::Elementalist; MAX_PLAYERS], id);
+        let mut w = World::hunt_of([Class::Elementalist; 2], id);
         assert_eq!(w.lore.owner, Some(id));
         for f in 0..300u32 {
-            w.advance(
-                [Input::aimed(Input::W | (f as u16 & Input::SPACE), (f * 211) as u16); MAX_PLAYERS],
-            );
+            w.advance([Input::aimed(Input::W | (f as u16 & Input::SPACE), (f * 211) as u16); 2]);
         }
         assert!(w.lore.is_blank(), "{id:?}");
         assert_eq!(w.lore.layout(), sim::lore::Layout::NONE);

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 554] = [
+pub const SCALARS: [i32; 555] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -562,6 +562,7 @@ pub const SCALARS: [i32; 554] = [
          1966080, // champion.hammer_slam_from_the_air,_dive_speed_(m/s) = 30
             6554, // champion.hammer_slam_from_the_air,_cone_round_straight_down_(turns) = 0.1
            29491, // movement.step,_walked_up_onto_(m) = 0.45
+          131072, // match.third_and_fourth_fighters,_beside_a_mark_(m) = 2
 ];
 
 #[rustfmt::skip]

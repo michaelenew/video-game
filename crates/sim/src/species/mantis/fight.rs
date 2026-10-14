@@ -474,11 +474,17 @@ fn stagger(m: &mut Monster, kind: u8, frames: u16) {
     m.own[body::READY_FOR] = 0;
 }
 
+/// **Whose blows the mailbox holds**: the first two fighters'. It is one
+/// word, a half each, and every word on its body is spoken for; the third
+/// and fourth fighters of a four-hunter hunt are struck back at like anyone,
+/// but what they threw at its guard is not remembered.
+const MAILED: usize = 2;
+
 /// Into the mailbox: what struck its guard, by whom, and what the guard
 /// made of it. The only place the memory is ever written from (§5).
 fn remember(m: &mut Monster, blow: &Blow, result: Guarded) {
     let who = blow.who as usize;
-    if who >= MAX_PLAYERS || blow.kind == Blow::NO_MOVE {
+    if who >= MAILED || blow.kind == Blow::NO_MOVE {
         return;
     }
     let r = match result {
@@ -495,6 +501,9 @@ fn remember(m: &mut Monster, blow: &Blow, result: Guarded) {
 /// What struck its guard this frame from fighter `who`: the move's code and
 /// what the guard made of it (1 blocked, 2 parried, 3 broke).
 pub fn mail(m: &Monster, who: usize) -> Option<(i32, u32)> {
+    if who >= MAILED {
+        return None;
+    }
     let half = (m.own[body::MAILBOX] as u32 >> (who * 16)) & 0xFFFF;
     if half & (1 << 15) == 0 {
         return None;

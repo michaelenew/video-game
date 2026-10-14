@@ -583,7 +583,7 @@ fn a_won_hunt_goes_quiet_and_is_credited() {
     }
     assert_eq!(w.arena, ArenaId::HIGHLANDS);
     assert!(!w.hunting() && w.peaceful() && matches!(w.phase, Phase::Fighting));
-    assert!(w.players.iter().all(|p| p.health > 0));
+    assert!(w.players[..w.present()].iter().all(|p| p.health > 0));
 }
 
 #[test]

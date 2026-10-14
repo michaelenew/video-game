@@ -1,7 +1,7 @@
-//! Meeting the other player.
+//! Meeting the other players.
 //!
-//! How two people who share nothing but a room name end up with a line between
-//! them that GGRS can run a match over. The design is three seams, each a
+//! How two to four people who share nothing but a room name end up with a line
+//! between every pair of them that GGRS can run a match over. The design is three seams, each a
 //! trait, so any one of them can be replaced without touching the other two:
 //!
 //! - A [`Board`] is **where strangers leave notes**: a public message broker,
@@ -10,18 +10,20 @@
 //! - A [`Line`] is **the direct connection itself**, opened by trading two
 //!   descriptions of how to reach each end -- an offer and an answer. A WebRTC
 //!   data channel in a browser; on a desktop, the UDP port the board was
-//!   already using. GGRS runs over it through [`LineSocket`].
+//!   already using. GGRS runs over them through [`Mesh`], one line to each
+//!   other player.
 //! - A [`Rendezvous`] is **the whole meeting**, polled once a frame until it
-//!   hands over a [`Seat`]: a socket, the far end, and which player you are.
+//!   hands over a [`Seat`]: a socket, the far ends, and which player you are.
 //!
 //! [`Room`] is the one rendezvous there is, and it is generic over the other
 //! two. Its protocol is four lines of text, which is why the board can be
 //! anything that carries text:
 //!
 //! ```text
-//! arena1 hello  <from> <waited ms> <terms>          every second, until connected
-//! arena1 offer  <from> <to> <attempt> <offerer p1>  + the offer, until answered
-//! arena1 answer <from> <to> <attempt>               + the answer, once per offer
+//! arena2 hello  <from> <waited ms> <terms>     every second, until connected
+//! arena2 roster <from> <id> <id> ...           the seats, player one first
+//! arena2 offer  <from> <to> <attempt>          + the offer, until answered
+//! arena2 answer <from> <to> <attempt>          + the answer, once per offer
 //! ```
 //!
 //! **Terms** are what two clients must agree on before a frame is played: the
@@ -30,12 +32,15 @@
 //! into `World::checksum`. A hello with different terms is never answered, and
 //! the room says why instead of letting the match desync on its first frame.
 //!
-//! **Who is player one** is decided once, by one side, so it cannot come out
-//! differently on the two machines: the peer with the lower id makes the offer,
-//! and the offer says which of the two is player one -- whoever had been
-//! waiting in the room longer, which is nearly always whoever sent the link.
-//! The old rule ordered the two peers' addresses, and each machine only knew
-//! its own as `127.0.0.1`, so across two machines both claimed the same slot.
+//! **Who sits where** is decided once, by one peer, so it cannot come out
+//! differently on two machines: when the room is full, the lowest id posts the
+//! roster, longest wait first -- player one is whoever had been in the room
+//! longest, which is nearly always whoever sent the link. Then every pair of
+//! players opens a line, the lower id of the two making the offer. (Before
+//! there were four, the one offer of a pair carried who was player one. The
+//! rule before that ordered the two peers' addresses, and each machine only
+//! knew its own as `127.0.0.1`, so across two machines both claimed the same
+//! slot.)
 
 use crate::Peer;
 use ggrs::{Message, NonBlockingSocket};
@@ -62,7 +67,10 @@ pub const STUN: &[&str] = &[
 
 /// The note format's version. A note from another version is recognised as
 /// "a different build" rather than ignored as noise.
-pub const PROTOCOL: u32 = 1;
+///
+/// Two since four players: the roster note, and an offer that no longer says
+/// who is player one.
+pub const PROTOCOL: u32 = 2;
 
 /// How often a hello is repeated while nobody has answered it. Every note can
 /// be lost -- a public broker delivers at most once -- so everything is
@@ -243,26 +251,33 @@ pub trait Line: Send + Sync {
     fn report(&self, _out: &mut Vec<String>) {}
 }
 
-/// GGRS over any [`Line`].
+/// GGRS over any number of [`Line`]s: one to each other player.
 ///
 /// Messages are encoded the way GGRS's own UDP socket encodes them, so the
 /// bytes on a data channel are the bytes that would have been in a datagram.
-pub struct LineSocket<L: Line>(pub L);
+/// Each line is addressed by the seat at its far end, which is what GGRS
+/// calls the remote player's address.
+pub struct Mesh<L: Line>(pub Vec<(Peer, L)>);
 
-impl<L: Line> NonBlockingSocket<Peer> for LineSocket<L> {
-    fn send_to(&mut self, msg: &Message, _to: &Peer) {
+impl<L: Line> NonBlockingSocket<Peer> for Mesh<L> {
+    fn send_to(&mut self, msg: &Message, to: &Peer) {
+        let Some((_, line)) = self.0.iter_mut().find(|(p, _)| p == to) else {
+            return;
+        };
         if let Ok(bytes) = bincode::serialize(msg) {
-            self.0.send(&bytes);
+            line.send(&bytes);
         }
     }
 
     fn receive_all_messages(&mut self) -> Vec<(Peer, Message)> {
         let mut out = Vec::new();
-        while let Some(bytes) = self.0.recv() {
-            // A packet that is not a GGRS message is somebody else's business:
-            // the same rule GGRS's own socket follows.
-            if let Ok(msg) = bincode::deserialize(&bytes) {
-                out.push((Peer::Line, msg));
+        for (peer, line) in &mut self.0 {
+            while let Some(bytes) = line.recv() {
+                // A packet that is not a GGRS message is somebody else's
+                // business: the same rule GGRS's own socket follows.
+                if let Ok(msg) = bincode::deserialize(&bytes) {
+                    out.push((*peer, msg));
+                }
             }
         }
         out
@@ -288,9 +303,12 @@ impl NonBlockingSocket<Peer> for Socket {
 /// What a meeting ends with: everything [`crate::p2p::start`] needs.
 pub struct Seat {
     pub socket: Socket,
-    pub remote: Peer,
+    /// Every other player: their seat, and where GGRS reaches them.
+    pub remotes: Vec<(usize, Peer)>,
     /// 0 for player one.
     pub handle: usize,
+    /// How many play: two to four.
+    pub players: usize,
 }
 
 /// How a meeting is going.
@@ -302,7 +320,7 @@ pub enum Progress {
     Failed(String),
 }
 
-/// Any way of finding the other player. Polled once a frame until it is
+/// Any way of finding the other players. Polled once a frame until it is
 /// `Ready` or `Failed`, and then dropped.
 pub trait Rendezvous: Send + Sync {
     /// `now_ms` is any clock that only goes forward, in milliseconds.
@@ -327,6 +345,10 @@ enum Note<'a> {
         waited: u64,
         terms: &'a str,
     },
+    /// **Who sits where**: every id in the room, player one first. Posted by
+    /// the lowest id once everybody is there, and repeated until its lines
+    /// are open; everybody else takes their seat from it.
+    Roster { from: u64, ids: Vec<u64> },
     /// `attempt` counts the offerer's tries. An offer from a new attempt means
     /// the offerer started over with a fresh line, and an answer to an old one
     /// would describe a connection that no longer exists.
@@ -334,7 +356,6 @@ enum Note<'a> {
         from: u64,
         to: u64,
         attempt: u32,
-        offerer_first: bool,
         sdp: &'a str,
     },
     Answer {
@@ -356,16 +377,16 @@ impl Note<'_> {
                 waited,
                 terms,
             } => format!("{head} hello {from:016x} {waited} {terms}"),
+            Note::Roster { from, ids } => {
+                let ids: Vec<String> = ids.iter().map(|id| format!("{id:016x}")).collect();
+                format!("{head} roster {from:016x} {}", ids.join(" "))
+            }
             Note::Offer {
                 from,
                 to,
                 attempt,
-                offerer_first,
                 sdp,
-            } => format!(
-                "{head} offer {from:016x} {to:016x} {attempt} {}\n{sdp}",
-                u8::from(*offerer_first)
-            ),
+            } => format!("{head} offer {from:016x} {to:016x} {attempt}\n{sdp}"),
             Note::Answer {
                 from,
                 to,
@@ -394,11 +415,17 @@ impl Note<'_> {
                 waited: words.next()?.parse().ok()?,
                 terms: words.next()?,
             }),
+            "roster" => {
+                let from = id(words.next())?;
+                let ids = words
+                    .map(|w| u64::from_str_radix(w, 16).ok())
+                    .collect::<Option<Vec<u64>>>()?;
+                (ids.len() >= 2).then_some(Note::Roster { from, ids })
+            }
             "offer" => Some(Note::Offer {
                 from: id(words.next())?,
                 to: id(words.next())?,
                 attempt: words.next()?.parse().ok()?,
-                offerer_first: words.next()? == "1",
                 sdp: body,
             }),
             "answer" => Some(Note::Answer {
@@ -431,39 +458,48 @@ struct Partner {
 }
 
 enum Stage {
-    /// No partner, or a partner and I am waiting for their offer.
+    /// Waiting for their offer: they have the lower id.
     Looking,
     /// I made the offer and have no answer yet.
-    Offering {
-        first: bool,
-        attempt: u32,
-        posted: Option<u64>,
-    },
+    Offering { attempt: u32, posted: Option<u64> },
     /// I accepted their answer; the line is opening.
-    Calling { first: bool },
+    Calling,
     /// I answered their offer. `answer` is what I posted, kept so a repeated
     /// offer -- my answer was lost -- can be answered again.
     Answering {
-        first: bool,
         attempt: u32,
         answer: Option<String>,
     },
 }
 
+/// One line of the mesh: to one other player.
+struct Link<L> {
+    partner: u64,
+    line: L,
+    stage: Stage,
+}
+
 /// The meeting protocol over any board and any line.
 ///
-/// Two players who open the same room meet; a third waits until one of them
-/// leaves. See the module documentation for the notes it trades.
+/// As many players as the room is for -- two unless [`Room::with_players`]
+/// says otherwise -- who open the same room meet; one more waits until
+/// somebody leaves. See the module documentation for the notes it trades.
 pub struct Room<B: Board, L: Line> {
     board: B,
-    line: Option<L>,
     make_line: Box<dyn Fn() -> L + Send + Sync>,
     me: u64,
     terms: String,
+    /// How many play, me included: two to four.
+    players: usize,
     joined: Option<u64>,
     last_hello: Option<u64>,
-    partner: Option<Partner>,
-    stage: Stage,
+    /// Everybody else I have heard from, up to `players - 1`.
+    partners: Vec<Partner>,
+    /// Who sits where, once it is agreed: every id, player one first.
+    roster: Option<Vec<u64>>,
+    roster_posted: Option<u64>,
+    /// A line to each other player, once the roster is agreed.
+    links: Vec<Link<L>>,
     /// Offers I have made, so each one is told apart from the last.
     attempts: u32,
     since: u64,
@@ -480,9 +516,10 @@ pub struct Room<B: Board, L: Line> {
 }
 
 impl<B: Board, L: Line> Room<B, L> {
-    /// `me` must differ between the two players and should be random:
-    /// [`fresh_id`] is one. `terms` is anything without a space that two
-    /// clients must agree on to play.
+    /// `me` must differ between the players and should be random:
+    /// [`fresh_id`] is one. `terms` is anything without a space that the
+    /// clients must agree on to play. A room for two; see
+    /// [`Room::with_players`].
     pub fn new(
         board: B,
         make_line: impl Fn() -> L + Send + Sync + 'static,
@@ -495,14 +532,16 @@ impl<B: Board, L: Line> Room<B, L> {
             .collect();
         Room {
             board,
-            line: Some(make_line()),
             make_line: Box::new(make_line),
             me,
             terms,
+            players: 2,
             joined: None,
             last_hello: None,
-            partner: None,
-            stage: Stage::Looking,
+            partners: Vec::new(),
+            roster: None,
+            roster_posted: None,
+            links: Vec::new(),
             attempts: 0,
             since: 0,
             mismatch: false,
@@ -514,16 +553,57 @@ impl<B: Board, L: Line> Room<B, L> {
         }
     }
 
+    /// **A room for `n` players**, two to [`sim::state::MAX_PLAYERS`]. Every
+    /// one of them opens the same link, and the match starts when all `n`
+    /// are in and every pair of them has a line.
+    pub fn with_players(mut self, n: usize) -> Self {
+        self.players = n.clamp(2, sim::state::MAX_PLAYERS);
+        self
+    }
+
     fn post(&mut self, note: Note) {
         self.board.post(&note.write());
     }
 
-    /// Forget the partner and start over with a fresh line.
+    /// Forget the seating and every line, and start over. Who is still here
+    /// stays known; the partner who went quiet is already gone.
     fn reset(&mut self) {
         self.left = true;
-        self.partner = None;
-        self.stage = Stage::Looking;
-        self.line = Some((self.make_line)());
+        self.roster = None;
+        self.roster_posted = None;
+        self.links.clear();
+    }
+
+    fn link_mut(&mut self, partner: u64) -> Option<&mut Link<L>> {
+        self.links.iter_mut().find(|l| l.partner == partner)
+    }
+
+    /// Take the seats this roster gives, and a line to each other player in
+    /// it: an offer to everybody with a higher id, and a wait for one from
+    /// everybody lower.
+    fn seat(&mut self, ids: Vec<u64>, now: u64) {
+        self.links.clear();
+        for &partner in ids.iter().filter(|&&id| id != self.me) {
+            let mut line = (self.make_line)();
+            let stage = if self.me < partner {
+                line.offer();
+                self.attempts += 1;
+                Stage::Offering {
+                    attempt: self.attempts,
+                    posted: None,
+                }
+            } else {
+                Stage::Looking
+            };
+            self.links.push(Link {
+                partner,
+                line,
+                stage,
+            });
+        }
+        self.roster = Some(ids);
+        self.roster_posted = None;
+        self.since = now;
     }
 
     fn read_notes(&mut self, now: u64) {
@@ -547,47 +627,62 @@ impl<B: Board, L: Line> Room<B, L> {
                         self.mismatch = true;
                         continue;
                     }
-                    match &mut self.partner {
-                        Some(p) if p.id == from => {
-                            p.last_heard = now;
-                            p.waited = theirs;
-                        }
-                        Some(_) => {}
-                        None => {
-                            self.left = false;
-                            self.partner = Some(Partner {
-                                id: from,
-                                waited: theirs,
-                                last_heard: now,
-                            })
-                        }
+                    if let Some(p) = self.partners.iter_mut().find(|p| p.id == from) {
+                        p.last_heard = now;
+                        p.waited = theirs;
+                    } else if self.partners.len() + 1 < self.players && self.roster.is_none() {
+                        self.left = false;
+                        self.partners.push(Partner {
+                            id: from,
+                            waited: theirs,
+                            last_heard: now,
+                        });
+                    }
+                }
+                Note::Roster { from, ids } => {
+                    // Only the lowest id of a room that is this room -- me,
+                    // and exactly the players I know -- seats anybody.
+                    let lowest = ids.iter().copied().min();
+                    let known =
+                        |id: &u64| *id == self.me || self.partners.iter().any(|p| p.id == *id);
+                    let ours = ids.len() == self.players
+                        && lowest == Some(from)
+                        && from != self.me
+                        && ids.contains(&self.me)
+                        && ids.iter().all(known);
+                    if ours && self.roster.as_ref() != Some(&ids) {
+                        self.seat(ids, now);
                     }
                 }
                 Note::Offer {
                     from,
                     to,
                     attempt,
-                    offerer_first,
                     sdp,
                 } => {
-                    let from_partner = self.partner.as_ref().is_some_and(|p| p.id == from);
-                    if to != self.me || !from_partner {
+                    if to != self.me {
                         continue;
                     }
-                    match &self.stage {
+                    let fresh = self.make_line.as_ref();
+                    let Some(link) = self.links.iter_mut().find(|l| l.partner == from) else {
+                        continue;
+                    };
+                    match &link.stage {
                         // The same offer again: my answer was lost.
                         Stage::Answering {
                             attempt: answered,
                             answer: Some(answer),
-                            ..
                         } if *answered == attempt => {
                             let again = answer.clone();
-                            self.post(Note::Answer {
-                                from: self.me,
-                                to: from,
-                                attempt,
-                                sdp: &again,
-                            });
+                            self.board.post(
+                                &Note::Answer {
+                                    from: self.me,
+                                    to: from,
+                                    attempt,
+                                    sdp: &again,
+                                }
+                                .write(),
+                            );
                         }
                         Stage::Answering {
                             attempt: answered, ..
@@ -596,14 +691,11 @@ impl<B: Board, L: Line> Room<B, L> {
                         // so the line I was answering on is dead. Start over
                         // too, on a fresh one.
                         Stage::Looking | Stage::Answering { .. } => {
-                            if matches!(self.stage, Stage::Answering { .. }) {
-                                self.line = Some((self.make_line)());
+                            if matches!(link.stage, Stage::Answering { .. }) {
+                                link.line = fresh();
                             }
-                            if let Some(line) = &mut self.line {
-                                line.answer(sdp);
-                            }
-                            self.stage = Stage::Answering {
-                                first: !offerer_first,
+                            link.line.answer(sdp);
+                            link.stage = Stage::Answering {
                                 attempt,
                                 answer: None,
                             };
@@ -618,24 +710,32 @@ impl<B: Board, L: Line> Room<B, L> {
                     attempt,
                     sdp,
                 } => {
-                    let from_partner = self.partner.as_ref().is_some_and(|p| p.id == from);
-                    if to != self.me || !from_partner {
+                    if to != self.me {
                         continue;
                     }
+                    let Some(link) = self.link_mut(from) else {
+                        continue;
+                    };
                     if let Stage::Offering {
-                        first,
-                        attempt: offered,
-                        ..
-                    } = self.stage
+                        attempt: offered, ..
+                    } = link.stage
                         && offered == attempt
                     {
-                        if let Some(line) = &mut self.line {
-                            line.accept(sdp);
-                        }
-                        self.stage = Stage::Calling { first };
+                        link.line.accept(sdp);
+                        link.stage = Stage::Calling;
                     }
                 }
             }
+        }
+    }
+
+    /// Waiting for the room to fill: what to say.
+    fn waiting_for(&self) -> &'static str {
+        match (self.players, self.players - 1 - self.partners.len()) {
+            (2, _) => "Waiting for your friend to open the link…",
+            (_, 1) => "Waiting for one more friend to open the link…",
+            (_, 2) => "Waiting for two more friends to open the link…",
+            _ => "Waiting for your friends to open the link…",
         }
     }
 }
@@ -649,8 +749,8 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
 
         self.read_notes(now);
 
-        // Repeat the hello until the line is open: it is also how the partner
-        // knows I am still here.
+        // Repeat the hello until the lines are open: it is also how the
+        // others know I am still here.
         if self
             .last_hello
             .is_none_or(|t| now.saturating_sub(t) >= HELLO_EVERY_MS)
@@ -665,7 +765,32 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
             });
         }
 
-        let Some(partner) = &self.partner else {
+        // Somebody gone quiet before their line opened has left: forget
+        // them, and the seating that counted on them.
+        let open = |links: &mut Vec<Link<L>>, id: u64| {
+            links
+                .iter_mut()
+                .find(|l| l.partner == id)
+                .is_some_and(|l| l.line.state() == LineState::Open)
+        };
+        let mut gone = Vec::new();
+        for p in &self.partners {
+            if now.saturating_sub(p.last_heard) > PARTNER_SILENT_MS {
+                gone.push(p.id);
+            }
+        }
+        gone.retain(|id| !open(&mut self.links, *id));
+        if !gone.is_empty() {
+            self.partners.retain(|p| !gone.contains(&p.id));
+            self.reset();
+            return Progress::Waiting(if self.players == 2 {
+                "Your friend left. Waiting for them to come back…"
+            } else {
+                "A friend left. Waiting for them to come back…"
+            });
+        }
+
+        if self.partners.len() + 1 < self.players {
             return match reach {
                 Reach::Down => Progress::Failed(
                     "Could not reach any meeting point. The public relays this \
@@ -675,170 +800,217 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
                 Reach::Trying => Progress::Waiting("Reaching the meeting point…"),
                 Reach::Up if self.mismatch => Progress::Waiting(
                     "Someone is in this room with a different build or different \
-                     settings. Both of you open the same link, and reload.",
+                     settings. Everybody open the same link, and reload.",
                 ),
-                Reach::Up if self.left => {
+                Reach::Up if self.left && self.partners.is_empty() => {
                     Progress::Waiting("Your friend left. Waiting for them to come back…")
                 }
-                Reach::Up => Progress::Waiting("Waiting for your friend to open the link…"),
+                Reach::Up if self.left => {
+                    Progress::Waiting("A friend left. Waiting for them to come back…")
+                }
+                Reach::Up => Progress::Waiting(self.waiting_for()),
             };
-        };
-        let partner_id = partner.id;
+        }
 
-        let line_state = self
-            .line
-            .as_mut()
-            .map_or(LineState::Failed, |line| line.state());
-        if line_state != LineState::Open
-            && now.saturating_sub(partner.last_heard) > PARTNER_SILENT_MS
+        // Everybody is here. The lowest id decides who sits where -- whoever
+        // had been waiting longest is player one, which is nearly always
+        // whoever sent the link -- and says so until its lines are open.
+        let host = self
+            .partners
+            .iter()
+            .map(|p| p.id)
+            .chain([self.me])
+            .min()
+            .unwrap_or(self.me);
+        if self.roster.is_none() && host == self.me {
+            let mut waits: Vec<(u64, u64)> = self
+                .partners
+                .iter()
+                .map(|p| (p.id, p.waited + now.saturating_sub(p.last_heard)))
+                .chain([(self.me, waited)])
+                .collect();
+            // Longest wait first; a tie goes to the lower id, which is mine.
+            waits.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            self.seat(waits.into_iter().map(|(id, _)| id).collect(), now);
+        }
+        let Some(roster) = self.roster.clone() else {
+            return Progress::Waiting(if self.players == 2 {
+                "Found your friend. Agreeing who goes where…"
+            } else {
+                "Everybody is here. Agreeing who goes where…"
+            });
+        };
+        let all_open = self
+            .links
+            .iter_mut()
+            .all(|l| l.line.state() == LineState::Open);
+        if host == self.me
+            && !all_open
+            && self
+                .roster_posted
+                .is_none_or(|t| now.saturating_sub(t) >= HELLO_EVERY_MS)
         {
-            self.reset();
-            return Progress::Waiting("Your friend left. Waiting for them to come back…");
+            self.roster_posted = Some(now);
+            self.post(Note::Roster {
+                from: self.me,
+                ids: roster.clone(),
+            });
         }
 
-        // The lower id makes the offer, and decides who is player one.
-        if matches!(self.stage, Stage::Looking) && self.me < partner_id {
-            let theirs = partner.waited + now.saturating_sub(partner.last_heard);
-            let first = waited >= theirs;
-            if let Some(line) = &mut self.line {
-                line.offer();
-            }
-            self.attempts += 1;
-            self.stage = Stage::Offering {
-                first,
-                attempt: self.attempts,
-                posted: None,
-            };
-            self.since = now;
-        }
-
-        let description = match &self.stage {
-            Stage::Offering { .. } | Stage::Answering { answer: None, .. } => {
-                self.line.as_mut().and_then(|line| line.description(now))
-            }
-            _ => None,
-        };
-        match &mut self.stage {
-            Stage::Offering {
-                first,
-                attempt,
-                posted,
-            } => {
-                if let Some(sdp) = description
-                    && posted.is_none_or(|t| now.saturating_sub(t) >= OFFER_EVERY_MS)
-                {
-                    *posted = Some(now);
-                    let (first, attempt) = (*first, *attempt);
-                    self.post(Note::Offer {
-                        from: self.me,
-                        to: partner_id,
-                        attempt,
-                        offerer_first: first,
-                        sdp: &sdp,
-                    });
+        // Every line's offer or answer, once it is described.
+        let me = self.me;
+        let mut out = Vec::new();
+        for link in &mut self.links {
+            match &mut link.stage {
+                Stage::Offering { attempt, posted } => {
+                    if posted.is_none_or(|t| now.saturating_sub(t) >= OFFER_EVERY_MS)
+                        && let Some(sdp) = link.line.description(now)
+                    {
+                        *posted = Some(now);
+                        out.push((true, link.partner, *attempt, sdp));
+                    }
                 }
-            }
-            Stage::Answering {
-                attempt, answer, ..
-            } => {
-                if let Some(sdp) = description {
-                    *answer = Some(sdp.clone());
-                    let attempt = *attempt;
-                    self.post(Note::Answer {
-                        from: self.me,
-                        to: partner_id,
-                        attempt,
-                        sdp: &sdp,
-                    });
+                Stage::Answering {
+                    attempt,
+                    answer: answer @ None,
+                } => {
+                    if let Some(sdp) = link.line.description(now) {
+                        *answer = Some(sdp.clone());
+                        out.push((false, link.partner, *attempt, sdp));
+                    }
                 }
+                _ => {}
             }
-            _ => {}
+        }
+        for (offer, to, attempt, sdp) in out {
+            self.post(if offer {
+                Note::Offer {
+                    from: me,
+                    to,
+                    attempt,
+                    sdp: &sdp,
+                }
+            } else {
+                Note::Answer {
+                    from: me,
+                    to,
+                    attempt,
+                    sdp: &sdp,
+                }
+            });
         }
 
-        let first = match self.stage {
-            Stage::Looking => {
-                return Progress::Waiting("Found your friend. Agreeing who goes where…");
-            }
-            Stage::Offering { first, .. }
-            | Stage::Calling { first }
-            | Stage::Answering { first, .. } => first,
-        };
-        match line_state {
-            LineState::Open => {
-                let line = self.line.take().expect("an open line");
-                Progress::Ready(Seat {
-                    socket: Socket(Box::new(LineSocket(line))),
-                    remote: Peer::Line,
-                    handle: if first { 0 } else { 1 },
+        let mut states = Vec::with_capacity(self.links.len());
+        for link in &mut self.links {
+            states.push(link.line.state());
+        }
+        if states.contains(&LineState::Failed) {
+            return Progress::Failed(LINE_FAILED.into());
+        }
+        if states.iter().all(|s| *s == LineState::Open) {
+            let handle = roster.iter().position(|&id| id == self.me).unwrap_or(0);
+            let seat_of = |id: u64| roster.iter().position(|&r| r == id).unwrap_or(0);
+            let lines: Vec<(Peer, L)> = std::mem::take(&mut self.links)
+                .into_iter()
+                .map(|l| (Peer::Line(seat_of(l.partner) as u8), l.line))
+                .collect();
+            let remotes = lines
+                .iter()
+                .map(|(peer, _)| match peer {
+                    Peer::Line(h) => (*h as usize, *peer),
                 })
-            }
-            LineState::Failed => Progress::Failed(LINE_FAILED.into()),
-            LineState::Negotiating if now.saturating_sub(self.since) > NEGOTIATE_MS => {
-                Progress::Failed(LINE_FAILED.into())
-            }
-            LineState::Negotiating => {
-                Progress::Waiting("Found your friend. Opening a direct connection…")
-            }
+                .collect();
+            self.roster = None;
+            return Progress::Ready(Seat {
+                socket: Socket(Box::new(Mesh(lines))),
+                remotes,
+                handle,
+                players: self.players,
+            });
         }
+        if now.saturating_sub(self.since) > NEGOTIATE_MS {
+            return Progress::Failed(LINE_FAILED.into());
+        }
+        let calling = self
+            .links
+            .iter()
+            .any(|l| !matches!(l.stage, Stage::Looking));
+        Progress::Waiting(match (self.players, calling) {
+            (2, false) => "Found your friend. Agreeing who goes where…",
+            (2, true) => "Found your friend. Opening a direct connection…",
+            (_, false) => "Everybody is here. Agreeing who goes where…",
+            (_, true) => "Everybody is here. Opening direct connections…",
+        })
     }
 
     fn report(&self) -> Vec<String> {
         let mut out = Vec::new();
         let waited = self.now.saturating_sub(self.joined.unwrap_or(self.now));
         out.push(format!(
-            "me {:016x}, in the room {}: {} hellos posted, {} notes read, {} unreadable",
+            "me {:016x}, in the room {} for {} players: {} hellos posted, {} notes read, {} unreadable",
             self.me,
             seconds(waited),
+            self.players,
             self.hellos,
             self.notes,
             self.noise,
         ));
-        out.push(match &self.partner {
-            Some(p) => format!(
+        for p in &self.partners {
+            out.push(format!(
                 "friend {:016x}, last heard {} ago",
                 p.id,
                 seconds(self.now.saturating_sub(p.last_heard))
-            ),
-            None if self.left => "friend: went quiet and was forgotten".into(),
-            None => "friend: not heard from".into(),
-        });
+            ));
+        }
+        if self.partners.is_empty() {
+            out.push(if self.left {
+                "friend: went quiet and was forgotten".into()
+            } else {
+                "friend: not heard from".into()
+            });
+        }
         if self.mismatch {
             out.push("someone with a different build or settings is in the room".into());
         }
-        out.push(format!(
-            "stage: {}",
-            match &self.stage {
-                Stage::Looking => "looking".to_string(),
-                Stage::Offering {
-                    attempt, posted, ..
-                } => format!(
-                    "offered (attempt {attempt}, {})",
-                    if posted.is_some() {
-                        "posted"
-                    } else {
-                        "still describing this machine"
-                    }
-                ),
-                Stage::Calling { .. } => "their answer accepted, line opening".into(),
-                Stage::Answering { answer, .. } => format!(
-                    "answering their offer ({})",
-                    if answer.is_some() {
-                        "posted"
-                    } else {
-                        "still describing this machine"
-                    }
-                ),
-            }
-        ));
-        if let Some(line) = &self.line {
-            line.report(&mut out);
+        if let Some(roster) = &self.roster {
+            let ids: Vec<String> = roster.iter().map(|id| format!("{id:016x}")).collect();
+            out.push(format!("seats: {}", ids.join(", ")));
+        }
+        for link in &self.links {
+            out.push(format!(
+                "line to {:016x}: {}",
+                link.partner,
+                match &link.stage {
+                    Stage::Looking => "waiting for their offer".to_string(),
+                    Stage::Offering {
+                        attempt, posted, ..
+                    } => format!(
+                        "offered (attempt {attempt}, {})",
+                        if posted.is_some() {
+                            "posted"
+                        } else {
+                            "still describing this machine"
+                        }
+                    ),
+                    Stage::Calling => "their answer accepted, line opening".into(),
+                    Stage::Answering { answer, .. } => format!(
+                        "answering their offer ({})",
+                        if answer.is_some() {
+                            "posted"
+                        } else {
+                            "still describing this machine"
+                        }
+                    ),
+                }
+            ));
+            link.line.report(&mut out);
         }
         self.board.report(&mut out);
         out
     }
 }
 
-const LINE_FAILED: &str = "Found your friend, but a direct connection between your two \
+const LINE_FAILED: &str = "Found your friends, but a direct connection between your \
      networks would not open. Some networks (often mobile data, or a strict office \
      or school network) refuse them; trying from another network usually works.";
 
@@ -898,7 +1070,6 @@ mod tests {
                 from: 1,
                 to: u64::MAX,
                 attempt: 3,
-                offerer_first: true,
                 sdp: "v=0\r\no=- 1 2 IN IP4 0.0.0.0\r\n",
             },
             Note::Answer {
@@ -906,6 +1077,10 @@ mod tests {
                 to: 9,
                 attempt: 1,
                 sdp: "line one\nline two",
+            },
+            Note::Roster {
+                from: 3,
+                ids: vec![9, 3, 0xffff_0000_0000_0001],
             },
         ];
         for note in notes {
@@ -917,7 +1092,7 @@ mod tests {
     fn other_traffic_is_not_a_note_and_another_version_is_foreign() {
         assert_eq!(Note::read("hello world"), None);
         assert_eq!(Note::read(""), None);
-        assert_eq!(Note::read("arena1 hello zz 1 x"), None);
+        assert_eq!(Note::read(&format!("arena{PROTOCOL} hello zz 1 x")), None);
         assert_eq!(
             Note::read(&format!("arena{} hello 1 1 x", PROTOCOL + 1)),
             Some(Note::Foreign)

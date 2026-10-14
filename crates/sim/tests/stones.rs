@@ -7,7 +7,7 @@
 
 use sim::class::{MAX_STRUCTURES, Mechanic, Structure};
 use sim::moves::elementalist::keys;
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::stones::Phase;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
@@ -686,10 +686,10 @@ fn a_stone_in_flight_is_part_of_the_snapshot() {
 fn stones_are_stepped_for_both_fighters() {
     // Indexing the field by owner is what lets two Elementalists share an
     // arena. Nothing in the loop may assume there is only one of them.
-    let mut w = World::with_classes([sim::Class::Elementalist; MAX_PLAYERS]);
+    let mut w = World::with_classes([sim::Class::Elementalist; 2]);
     run(&mut w, 2, RAISE, RAISE);
     run(&mut w, 60, 0, 0);
-    for player in 0..MAX_PLAYERS {
+    for player in 0..w.present() {
         assert_eq!(
             stones_of(&w, player).len(),
             1,
@@ -709,7 +709,7 @@ fn destroying_a_stone_reports_its_middle_rather_than_its_base() {
     // its cone allows, including down -- see `crate::debris::blast`. A point
     // on the floor, which is what `at` is, puts a piece aimed level or down
     // there already inside the ground on the very first frame it exists.
-    let mut w = World::with_classes([sim::Class::Elementalist; MAX_PLAYERS]);
+    let mut w = World::with_classes([sim::Class::Elementalist; 2]);
     let s = standing_at(4, 0);
     place(&mut w, &[s]);
     let at = sim::stones::destroy(&mut w.players, 0).expect("nothing to destroy");

@@ -9,7 +9,6 @@ use sim::hazard::{self, Hazard, HazardField};
 use sim::monster::{Doing, Monster};
 use sim::species::SpeciesId;
 use sim::species::mireback::{self, Knob, fight};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, V3, World};
 
 fn sp() -> &'static sim::species::Species {
@@ -21,7 +20,7 @@ fn at(x: i32, z: i32) -> V3 {
 }
 
 fn hunt(class: Class) -> World {
-    World::hunt_of([class; MAX_PLAYERS], SpeciesId::MIREBACK)
+    World::hunt_of([class; 2], SpeciesId::MIREBACK)
 }
 
 /// The creature parked where it is and taking no notice.
@@ -77,7 +76,7 @@ fn board(w: &mut World, part: usize) {
     w.players[0].pos = beast.world_of(part, spot);
     w.players[0].vel = V3::new(Fx::ZERO, Fx::ratio(-1, 1), Fx::ZERO);
     w.players[0].grounded = false;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
 }
 
 /// Board a part, play a move, and say whether the rider stayed on.
@@ -363,9 +362,9 @@ fn rim(m: &Monster) -> Fx {
 }
 
 fn apex(class: Class) -> Fx {
-    let mut w = World::with_classes([class; MAX_PLAYERS]);
+    let mut w = World::with_classes([class; 2]);
     for _ in 0..40 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let floor = w.players[0].pos.y;
     let mut best = floor;
@@ -514,7 +513,7 @@ fn a_burst_wart_takes_a_quarter_of_its_tar() {
         let ahead = m.pos.add(V3::from_turns(m.yaw).scale(a.ideal_range));
         m.aim_at(ahead);
         for _ in 0..a.startup + 2 {
-            w.advance([Input::default(); MAX_PLAYERS]);
+            w.advance([Input::default(); 2]);
         }
         let r = hazard::all(&w.lore)
             .find(|(_, h)| h.index() == fight::TAR)
@@ -602,7 +601,7 @@ fn play(w: &mut World, frames: u32) {
                 m.brain.think_left = u16::MAX;
             }
         }
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
 }
 
@@ -913,7 +912,7 @@ fn a_dead_toad_is_a_won_hunt_with_its_trophy_and_its_temper() {
     assert_eq!(w.arena().id, sim::arena::ArenaId::MIREBACK);
     assert_eq!(w.hunt_won(), None);
     w.monster_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let (beaten, at) = w.hunt_won().expect("a dead toad is a won hunt");
     assert_eq!(beaten[0], Some(SpeciesId::MIREBACK));
     assert_eq!(at, 2);

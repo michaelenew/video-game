@@ -11,7 +11,6 @@ use sim::monster::{Doing, Monster};
 use sim::noise::{self, NoiseKind};
 use sim::species::sandmaw::{self, Knob, fight};
 use sim::species::{FightField, SpeciesId};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, V3, World};
 
 fn sp() -> &'static sim::species::Species {
@@ -32,7 +31,7 @@ fn dist(a: V3, b: V3) -> Fx {
 
 /// A hunt with one fighter in it.
 fn hunt(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::SANDMAW);
+    let mut w = World::hunt_of([class; 2], SpeciesId::SANDMAW);
     w.players[1].health = 0;
     w
 }
@@ -181,7 +180,7 @@ fn a_fighter_standing_still_outside_the_feel_radius_is_never_perceived() {
     w.players[0].pos = at(-15, -15);
     let feel = sp().fight_fx(FightField::FeelRadius);
     for _ in 0..1800 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         let m = worm(&w);
         if let Some(a) = fight::attended(&w.lore) {
             if a.frame == w.frame && a.who == 0 {
@@ -515,9 +514,9 @@ fn an_airborne_fighter_is_not_pulled_by_the_undertow() {
 }
 
 fn apex(class: Class) -> Fx {
-    let mut w = World::with_classes([class; MAX_PLAYERS]);
+    let mut w = World::with_classes([class; 2]);
     for _ in 0..40 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let floor = w.players[0].pos.y;
     let mut best = floor;
@@ -956,7 +955,7 @@ fn a_dead_worm_is_a_won_hunt_with_its_trophy_and_its_temper() {
     assert!(worm(&w).glance_frames() < worm(&calm).glance_frames());
     assert_eq!(w.hunt_won(), None);
     w.monsters[0].as_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let (beaten, at) = w.hunt_won().expect("a dead worm is a won hunt");
     assert_eq!(beaten[0], Some(SpeciesId::SANDMAW));
     assert_eq!(at, 2);

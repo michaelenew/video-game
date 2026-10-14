@@ -10,7 +10,7 @@ use sim::fixed::Fx;
 use sim::monster::{Doing, Monster, mount_of};
 use sim::species::SpeciesId;
 use sim::species::galewing::{self as gw, Knob, fight, flight};
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::{Class, Input, V3, World};
 
 /// A hunt against it, the second fighter out of it.
@@ -19,10 +19,10 @@ fn hunt() -> World {
 }
 
 fn hunt_as(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::GALEWING);
+    let mut w = World::hunt_of([class; 2], SpeciesId::GALEWING);
     w.players[1].health = 0;
     // One frame, so its first-frame set-up has run.
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     w
 }
 
@@ -100,9 +100,9 @@ fn advance(w: &mut World, input: Input) {
 fn highest_hop() -> Fx {
     let mut best = Fx::ZERO;
     for class in sim::class::ALL_CLASSES {
-        let mut w = World::with_classes([class; MAX_PLAYERS]);
+        let mut w = World::with_classes([class; 2]);
         for _ in 0..40 {
-            w.advance([Input::default(); MAX_PLAYERS]);
+            w.advance([Input::default(); 2]);
         }
         let floor = w.players[0].pos.y;
         let held = Input::default().with(Input::SPACE);
@@ -537,7 +537,7 @@ fn both_wings_broken_it_never_leaves_the_ground_again() {
     // It comes down...
     let mut landed = false;
     for _ in 0..600 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         if !fight::aloft(&beast(&w)) {
             landed = true;
             break;
@@ -546,7 +546,7 @@ fn both_wings_broken_it_never_leaves_the_ground_again() {
     assert!(landed, "both wings broken and still in the air");
     // ...and never goes up again, through a whole fight's worth of frames.
     for _ in 0..3600 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         if !matches!(w.phase, sim::state::Phase::Fighting) {
             break;
         }
@@ -685,9 +685,9 @@ fn a_hit_on_the_perched_galewing_shortens_its_rest() {
 /// round a side of it between each, for the lowest-jumping class.
 #[test]
 fn the_perch_is_announced_long_enough_to_climb_the_tower() {
-    let mut w = World::with_classes([Class::Bulwark; MAX_PLAYERS]);
+    let mut w = World::with_classes([Class::Bulwark; 2]);
     for _ in 0..40 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let floor = w.players[0].pos.y;
     let mut hop = 0u32;
@@ -945,14 +945,14 @@ fn once_crashed_it_cannot_crash_again_before_it_has_flown() {
 #[test]
 fn a_dead_galewing_is_a_won_hunt_with_its_trophy_and_its_temper() {
     let calm = hunt();
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GALEWING).tempered(2);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::GALEWING).tempered(2);
     w.players[1].health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert_eq!(w.arena().id, sim::arena::ArenaId::GALEWING);
     assert!(beast(&w).glance_frames() < beast(&calm).glance_frames());
     assert_eq!(w.hunt_won(), None);
     w.monsters[0].as_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let (beaten, at) = w.hunt_won().expect("a dead bird is a won hunt");
     assert_eq!(beaten[0], Some(SpeciesId::GALEWING));
     assert_eq!(at, 2);

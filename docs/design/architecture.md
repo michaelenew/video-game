@@ -94,24 +94,29 @@ What catches drift is the pair of checks that give the same answer on every mach
   allocator is shared mutable state with a lock and a tail, and it is the classic source of
   the one frame in a thousand that takes a millisecond. The path from snapshot to screen in
   `view` is held to the same rule.
-- **A `World` stays under 4 KiB.** Rollback copies one every frame and keeps a ring of nine,
+- **A `World` stays under 20 KiB.** Rollback copies one every frame and keeps a ring of nine,
   so the snapshot is the one structure whose *size* is a running cost rather than a one-off.
   The cap keeps the ring inside L2. Raising it means every frame and every rollback got
-  heavier, so it wants a reason the way an Oven exemption does.
+  heavier, so it wants a reason the way an Oven exemption does. It was 4 KiB until four
+  fighters (2026-10-14, §"Four fighters" below): two more fighters and everything they throw,
+  and an effect pool of 128 where there were twelve. Nine copies are about 160 KiB, which is
+  still inside the L2 of anything that runs the game.
 
-### Where the 4 KiB goes (measured 2026-10-01, with `size_of`)
+### Where the 20 KiB goes (measured 2026-10-14, with `size_of`)
 
 | Piece | Bytes | |
 | --- | --- | --- |
-| Two fighters | 952 | 476 each, the fall height included |
-| Effects (12) | 768 | |
-| Debris, bolts, gusts | 776 | |
-| Two creature slots | 360 | 180 each; the second is the Pair's |
-| Ten critters and their species | 484 | bestiary P3 |
-| The pack brain | 164 | |
-| **The hunt's lore** | **388** | 24 cells of 16 bytes and whose layout it is ([hazards.md](hazards.md)) |
-| Frame, phase, arena, padding | 20 | |
-| **World** | **3,912** | **184 to spare** |
+| Four fighters | 2,096 | 524 each |
+| Effects (128) | 12,288 | 96 each: a hit mask and a drink mask of 128 bits apiece |
+| Debris, bolts, gusts | 1,552 | two of each per fighter |
+| Two creature slots | 408 | 204 each; the second is the Pair's |
+| Ten critters and their species | 524 | 52 a critter: a byte per fighter of what has cut it |
+| The pack brain | 256 | |
+| **The hunt's lore**, and the rest | 732 | 40 cells of 16 bytes ([hazards.md](hazards.md)); frame, phase, arena, the courses' runs |
+| **World** | **17,856** | **2,624 to spare** |
+
+Until 2026-10-14 the table was two fighters (952), twelve effects (768), 24 cells of lore
+(388) and 3,912 bytes in all, 184 under a 4 KiB cap.
 
 **The lore is the decision that made the cast fit.** Hazards, the noise ring, defended
 things and every creature's own state (a Veilstalker's footfalls, a Siegeshell's falling
@@ -119,8 +124,9 @@ plates, a Pair's scar) are wanted by one fight each, and only one fight is ever 
 rather than a field per feature summed across the cast, the `World` keeps one fixed region
 sized to the largest fight, and the fight's species lays it out: so many cells of hazards,
 of noises, of objectives, the rest its own. The largest itemised fights need 18 and 19
-cells (the Mireback, the Siegeshell); 24 leaves each creature five or more to grow into, and
-`tests/lore.rs` fails if a layout does not fit. The region is hashed only when a cell is not
+cells (the Mireback, the Siegeshell); 24 left each creature five or more to grow into, and
+`tests/lore.rs` fails if a layout does not fit. **Forty since four fighters**: the Mantis
+keeps a ring of glimpses and a list of deeds for every fighter, which is 33 cells for four. The region is hashed only when a cell is not
 zero, so a fight that uses none of it hashes as it did before it existed.
 
 ### Where a rendered frame goes (measured 2026-10-06, `--profile`)
@@ -264,6 +270,39 @@ lower and its texture reads relatively dearer, so the shadow taps' share is if a
 larger there. The number that matters is `main_opaque_pass_3d/elapsed_gpu` from
 `--profile` on the machine in question.
 
+## Four fighters
+
+**`MAX_PLAYERS` is four** (2026-10-14). Every fight seats one to four, and the seats past
+those are not in it: `World::present` is how many bodies the fight has -- the seats, and in
+versus never fewer than two, since one seat is somebody training against the dummy -- and
+every fighter past it is **parked**: dead, still, under the middle of the floor, its inputs
+discarded at the top of `World::advance`, its step skipped. A fight is built from as many
+classes as it names (`World::with_classes([a, b])` is two, `[a, b, c, d]` four), and so is
+a frame (`advance([input; N])`), so a two-fighter test is still a two-fighter test.
+
+- **Versus with three or four is last one standing.** Every fighter's blow is tried against
+  every other fighter, so a swing through two bodies lands on both; a thrown shield and a
+  shoulder take the first body they reach. The round ends when one is left, or none.
+- **A hunt takes up to four hunters**, and friendly fire is off as it always was.
+- **The third and fourth stand beside the first two marks** (`arena::Mark::seat`), on the
+  side away from the other mark, `SeatFlank` along (an Oven knob, two metres): no arena,
+  seam or hunt table names more than two marks.
+- **Everything packed a bit or a half-word a fighter was widened**, because two was baked
+  into it: an effect's hit mask (a `u128`, twelve blades against five victims and the
+  second creature), a critter's "what has cut it" (a byte a fighter) and "struck by this
+  swing" (`Critter::swung`), the Gnawers' treed clocks, the Galewing's rake, the
+  Veilstalker's glances, a class change on the wire (two bits of seat), a replay's frame
+  line (version 3, four inputs; a version 2 tape still reads).
+- **What still only knows two**: the Mantis's mailbox and its habit memory (a blow from the
+  third or fourth fighter is struck back at but not remembered), and the sparring bot,
+  which is a duel. One keyboard drives two seats; three and four are people on other
+  machines.
+
+Before any of it was pinned again, two-fighter play was compared frame by frame against the
+code before the change -- every class, hunted and in versus, 2,400 frames: positions,
+health, actions, the creature, every effect -- and was identical. The pins moved because
+the snapshot holds four seats now, not because a fight did.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.
@@ -353,8 +392,15 @@ free**. `handle_requests` services its save / load / advance requests against th
 simulation; that function is the entire integration.
 
 GGRS's address type is `net::Peer` rather than a socket address, because a browser's peer
-is at the end of a data channel and has none; every transport is a `meet::Line` behind one
-`LineSocket`, so there is one session type for every way of meeting.
+is at the end of a data channel and has none; every transport is a `meet::Line`, and a
+match is one line to each other player behind one `meet::Mesh`, each named by the seat at
+its far end (`Peer::Line(seat)`), so there is one session type for every way of meeting.
+
+**Two to four players.** A room is for as many as its link says (`players=`, two by
+default). When everybody is in, the lowest id posts the roster -- longest wait first, so
+player one is whoever sent the link -- and every pair opens its own line, the lower id of
+the two making the offer. A desktop's `--peer` reaches one address and stays two. If one of
+four drops, GGRS plays on with that seat's inputs empty; the page says so.
 
 GGRS requires its input type to be `serde`-serialisable, so the wire type `NetInput` lives
 in `net` rather than putting a dependency on `sim` — whose zero-dependency status is a

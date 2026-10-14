@@ -13,12 +13,7 @@ fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
         rng
     };
     (0..frames)
-        .map(|_| {
-            [
-                Input::aimed((next() & 0x1ff) as u16, next() as u16),
-                Input::aimed((next() & 0x1ff) as u16, next() as u16),
-            ]
-        })
+        .map(|_| std::array::from_fn(|_| Input::aimed((next() & 0x1ff) as u16, next() as u16)))
         .collect()
 }
 

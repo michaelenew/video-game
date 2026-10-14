@@ -46,7 +46,12 @@ use sim::bolt::Flight;
 use sim::fixed::Fx;
 use sim::math::{atan2_turns, wrap_turns};
 use sim::moves;
-use sim::state::{self, Action, MAX_PLAYERS, Phase, Player};
+use sim::state::{self, Action, Phase, Player};
+
+/// **A duel is two**: one bot a side, whatever the world can seat. The
+/// sparring harness is a one-on-one read of the kits, and a free-for-all of
+/// four bots would measure something else.
+pub const DUEL: usize = 2;
 use sim::{Class, Input, V3, World};
 
 /// How good its eyes and hands are.
@@ -281,9 +286,9 @@ impl Kit {
 
 /// Press one button on a fresh fighter and see which move starts.
 fn probe(class: Class, bits: u16) -> Option<u8> {
-    let mut w = World::with_classes([class; MAX_PLAYERS]);
+    let mut w = World::with_classes([class; DUEL]);
     for frame in 0..4 {
-        let mut wire = [Input::default(); MAX_PLAYERS];
+        let mut wire = [Input::default(); DUEL];
         if frame == 1 {
             wire[0] = Input::new(bits);
         }
@@ -514,7 +519,7 @@ pub struct Duelist {
     yaw: Fx,
     /// Negative is rattled, positive is confident.
     pub mood: i32,
-    health_was: [i32; MAX_PLAYERS],
+    health_was: [i32; DUEL],
     /// Bolts it has already decided about, by slot.
     bolts_seen: u8,
     rounds_seen: u32,
@@ -607,7 +612,7 @@ impl Duelist {
             dodge_dir: V3::ZERO,
             yaw: Fx::ZERO,
             mood: 0,
-            health_was: [0; MAX_PLAYERS],
+            health_was: [0; DUEL],
             bolts_seen: 0,
             rounds_seen: u32::MAX,
             frame_was: u32::MAX,
@@ -679,7 +684,7 @@ impl Duelist {
         if w.frame <= self.frame_was {
             self.filled = 0;
             self.rounds_seen = u32::MAX;
-            self.health_was = [0; MAX_PLAYERS];
+            self.health_was = [0; DUEL];
         }
         self.frame_was = w.frame;
         let them = w.players[1 - self.who];
@@ -1639,37 +1644,32 @@ fn steer(aim: Fx, want: V3) -> u16 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bout {
     /// Rounds each side won.
-    pub rounds: [u8; MAX_PLAYERS],
+    pub rounds: [u8; DUEL],
     /// Frames played.
     pub frames: u32,
     /// Moves each side threw.
-    pub thrown: [u32; MAX_PLAYERS],
+    pub thrown: [u32; DUEL],
     /// Hits each side landed: the other side going into hitstun, a stagger or
     /// a hold, or having one of those restarted.
-    pub landed: [u32; MAX_PLAYERS],
+    pub landed: [u32; DUEL],
     /// Dodges each side made.
-    pub dodges: [u32; MAX_PLAYERS],
+    pub dodges: [u32; DUEL],
     /// Times each side used its class mechanic on purpose.
-    pub mechanic: [u32; MAX_PLAYERS],
+    pub mechanic: [u32; DUEL],
 }
 
 /// Play two bots against each other for `frames`, and count.
-pub fn spar(
-    classes: [Class; MAX_PLAYERS],
-    levels: [Level; MAX_PLAYERS],
-    frames: u32,
-    seed: u32,
-) -> Bout {
+pub fn spar(classes: [Class; DUEL], levels: [Level; DUEL], frames: u32, seed: u32) -> Bout {
     spar_traced(classes, levels, frames, seed, |_, _| {})
 }
 
 /// [`spar`], calling `trace` with the world and the bots after every frame.
 pub fn spar_traced(
-    classes: [Class; MAX_PLAYERS],
-    levels: [Level; MAX_PLAYERS],
+    classes: [Class; DUEL],
+    levels: [Level; DUEL],
     frames: u32,
     seed: u32,
-    mut trace: impl FnMut(&World, &[Duelist; MAX_PLAYERS]),
+    mut trace: impl FnMut(&World, &[Duelist; DUEL]),
 ) -> Bout {
     let mut w = World::with_classes(classes);
     let mut bots = [
@@ -1677,12 +1677,12 @@ pub fn spar_traced(
         Duelist::new(1, levels[1], seed.wrapping_mul(0x9E37_79B9) ^ 0x5bd1_e995),
     ];
     let mut bout = Bout {
-        rounds: [0; MAX_PLAYERS],
+        rounds: [0; DUEL],
         frames: 0,
-        thrown: [0; MAX_PLAYERS],
-        landed: [0; MAX_PLAYERS],
-        dodges: [0; MAX_PLAYERS],
-        mechanic: [0; MAX_PLAYERS],
+        thrown: [0; DUEL],
+        landed: [0; DUEL],
+        dodges: [0; DUEL],
+        mechanic: [0; DUEL],
     };
     while w.frame < frames {
         for b in bots.iter_mut() {
@@ -1691,7 +1691,7 @@ pub fn spar_traced(
         let wire = [bots[0].act(&w), bots[1].act(&w)];
         let before = w.clone();
         w.advance(wire);
-        for i in 0..MAX_PLAYERS {
+        for i in 0..DUEL {
             let (was, now) = (before.players[i].action, w.players[i].action);
             if matches!(now, Action::Startup { .. } | Action::Channel { .. })
                 && !matches!(was, Action::Startup { .. } | Action::Channel { .. })

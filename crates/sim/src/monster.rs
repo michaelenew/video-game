@@ -1051,7 +1051,40 @@ impl Monster {
     }
 
     /// Every bone, placed in the world.
+    ///
+    /// **Remembered**: the rig is a pure function of this monster and the
+    /// tuning, and a frame asks for it over and over -- every blade of every
+    /// lotus, every bead of every line, against every creature, which with
+    /// four fighters was most of a hunt's frame. The last few asked for are
+    /// kept, keyed on the whole monster and the Oven's edit count, so the
+    /// answer is exactly the one building it would give.
     pub fn rig(&self) -> Rig {
+        use std::cell::RefCell;
+        const KEPT: usize = 4;
+        /// A monster, the Oven's edit count it was posed under, and its rig.
+        type Kept = Option<(Monster, u32, Rig)>;
+        thread_local! {
+            static RIGS: RefCell<([Kept; KEPT], usize)> = const { RefCell::new(([None; KEPT], 0)) };
+        }
+        let edits = crate::oven::edits();
+        if let Some(rig) = RIGS.with_borrow(|(kept, _)| {
+            kept.iter()
+                .flatten()
+                .find(|(m, e, _)| *e == edits && m == self)
+                .map(|(_, _, rig)| *rig)
+        }) {
+            return rig;
+        }
+        let rig = self.build_rig();
+        RIGS.with_borrow_mut(|(kept, next)| {
+            kept[*next] = Some((*self, edits, rig));
+            *next = (*next + 1) % KEPT;
+        });
+        rig
+    }
+
+    /// [`Monster::rig`], built.
+    fn build_rig(&self) -> Rig {
         let mut rig = Rig::build(self.sp(), self.pos, self.yaw, &self.pose());
         // What of it is under the floor this frame, for a species with a
         // body that is not always there (`FightDecl::presence`).

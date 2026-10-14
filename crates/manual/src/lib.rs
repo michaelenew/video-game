@@ -61,6 +61,10 @@ pub const SECTIONS: &[Section] = &[
                 "Pick classes. Matched loosely: bulwark, champion, reaver, elementalist, blood, dual.",
             ),
             e(
+                "cargo run -p game -- --players <n> --p3 <class> --p4 <class>",
+                "Two to four fighters. More than two is for a room of friends (--room, --join, or players= in a page's link): everybody opens the same link, the match starts when all of them are in, and whoever was in the room longest is player one. Versus with three or four is everybody against everybody, last one standing; a hunt takes all of you. One keyboard drives two seats, so on its own a third and fourth fighter stand still. --peer is always two.",
+            ),
+            e(
                 "cargo run -p game -- --bot <level>",
                 "Start against the sparring bot: easy, normal or hard. 5, 6 and 7 switch to it in game.",
             ),

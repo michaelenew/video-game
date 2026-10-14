@@ -1,4 +1,5 @@
-//! Starting a two-player rollback session on a seat a meeting found.
+//! Starting a rollback session -- two to four players -- on a seat a meeting
+//! found.
 //!
 //! How the two players found each other is [`crate::meet`]'s business; this
 //! file only knows that there is a socket, a far end, and a side of the arena.
@@ -48,23 +49,26 @@ const DISCONNECT_AFTER: Duration = Duration::from_secs(15);
 /// When a silence is worth saying something about (`NetworkInterrupted`).
 const SILENT_AFTER: Duration = Duration::from_secs(1);
 
-/// Start a two-player session. `seat.handle` is 0 or 1 and decides which side
-/// of the arena you are; the meeting has already made both peers agree on it.
+/// Start a session for everybody the meeting seated. `seat.handle` is which
+/// player you are, and decides where in the arena you stand; the meeting has
+/// already made every peer agree on it.
 pub fn start(seat: Seat) -> Result<P2PSession<SessionConfig>, GgrsError> {
     start_with_delay(seat, INPUT_DELAY)
 }
 
 /// [`start`], with `delay` frames of input delay instead of [`INPUT_DELAY`].
 pub fn start_with_delay(seat: Seat, delay: usize) -> Result<P2PSession<SessionConfig>, GgrsError> {
-    SessionBuilder::<SessionConfig>::new()
-        .with_num_players(2)
+    let mut builder = SessionBuilder::<SessionConfig>::new()
+        .with_num_players(seat.players)
         .with_input_delay(delay)
         .with_disconnect_timeout(DISCONNECT_AFTER)
         .with_disconnect_notify_delay(SILENT_AFTER)
         .with_desync_detection_mode(DesyncDetection::On {
             interval: DESYNC_CHECK_INTERVAL,
         })
-        .add_player(PlayerType::Local, seat.handle)?
-        .add_player(PlayerType::Remote(seat.remote), 1 - seat.handle)?
-        .start_p2p_session(seat.socket)
+        .add_player(PlayerType::Local, seat.handle)?;
+    for (handle, peer) in seat.remotes {
+        builder = builder.add_player(PlayerType::Remote(peer), handle)?;
+    }
+    builder.start_p2p_session(seat.socket)
 }

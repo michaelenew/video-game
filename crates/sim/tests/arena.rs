@@ -10,7 +10,6 @@
 use sim::arena::{self, Arena, ArenaId, Material, Terrain};
 use sim::input::{Input, Travel};
 use sim::species::{self, SpeciesId};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Fx, V3, World};
 
 fn m(v: i32) -> Fx {
@@ -70,7 +69,7 @@ fn the_proving_ground_is_the_old_constant_arena() {
 
 #[test]
 fn versus_and_the_ridgeback_are_in_the_proving_ground() {
-    let classes = [Class::Bulwark; MAX_PLAYERS];
+    let classes = [Class::Bulwark; 2];
     assert_eq!(World::with_classes(classes).arena, ArenaId::PROVING_GROUND);
     assert_eq!(World::hunt(classes).arena, ArenaId::PROVING_GROUND);
     assert_eq!(World::new().arena().id, ArenaId::PROVING_GROUND);
@@ -173,7 +172,7 @@ fn an_unregistered_arena_is_the_proving_ground() {
     assert!(arena::lookup(ArenaId(200)).is_none());
     assert_eq!(ArenaId(200).get().id, ArenaId::PROVING_GROUND);
     let w = World::hunt_in(
-        [Class::Bulwark; MAX_PLAYERS],
+        [Class::Bulwark; 2],
         [Some(SpeciesId::RIDGEBACK), None],
         ArenaId(200),
     );
@@ -286,7 +285,7 @@ fn the_floor_says_what_it_is_made_of() {
 #[test]
 fn a_hunt_in_the_range_stands_on_its_marks() {
     let w = World::hunt_in(
-        [Class::Bulwark; MAX_PLAYERS],
+        [Class::Bulwark; 2],
         [Some(SpeciesId::RIDGEBACK), None],
         ArenaId::RANGE,
     );
@@ -295,7 +294,7 @@ fn a_hunt_in_the_range_stands_on_its_marks() {
     assert_eq!(w.players[1].pos, marks.hunters[1].at);
     let beast = w.monster().expect("a creature");
     assert_eq!(beast.pos, marks.creatures[0].at);
-    let versus = World::versus_in([Class::Bulwark; MAX_PLAYERS], ArenaId::RANGE);
+    let versus = World::versus_in([Class::Bulwark; 2], ArenaId::RANGE);
     assert_eq!(versus.players[0].pos, range().spawns.versus[0].at);
     assert!(!versus.hunting());
 }
@@ -303,7 +302,7 @@ fn a_hunt_in_the_range_stands_on_its_marks() {
 #[test]
 fn a_creature_is_kept_inside_its_arena() {
     let mut w = World::hunt_in(
-        [Class::Bulwark; MAX_PLAYERS],
+        [Class::Bulwark; 2],
         [Some(SpeciesId::RIDGEBACK), None],
         ArenaId::RANGE,
     );
@@ -311,14 +310,14 @@ fn a_creature_is_kept_inside_its_arena() {
     // ground's fourteen metres are not this arena's walls -- and past the end
     // wall it is put back inside this one's.
     w.monster_mut().unwrap().pos = at(100, 0, 0);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let pos = w.monster().unwrap().pos;
     assert!(
         pos.x.raw() > m(90).raw(),
         "it was clamped to the proving ground: {pos:?}"
     );
     w.monster_mut().unwrap().pos = at(300, 0, 0);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let pos = w.monster().unwrap().pos;
     assert!(range().inside(pos), "it left: {pos:?}");
     assert!(
@@ -329,14 +328,14 @@ fn a_creature_is_kept_inside_its_arena() {
 
 #[test]
 fn the_arena_is_in_the_hash_and_a_restart_keeps_it() {
-    let classes = [Class::Bulwark; MAX_PLAYERS];
+    let classes = [Class::Bulwark; 2];
     let here = World::versus_in(classes, ArenaId::PROVING_GROUND);
     let there = World::versus_in(classes, ArenaId::RANGE);
     assert_eq!(here.checksum(), World::with_classes(classes).checksum());
     assert_ne!(here.checksum(), there.checksum());
     assert_eq!(there.restarted(classes).arena, ArenaId::RANGE);
     let hunt = World::hunt_in(classes, [Some(SpeciesId::RIDGEBACK), None], ArenaId::RANGE);
-    let again = hunt.restarted([Class::Champion; MAX_PLAYERS]);
+    let again = hunt.restarted([Class::Champion; 2]);
     assert_eq!(again.arena, ArenaId::RANGE);
     assert_eq!(
         again.monster().map(|m| m.species),
@@ -354,7 +353,7 @@ fn a_fight_in_the_range_is_deterministic() {
         );
         let mut rng = 0x0bad_5eed_u64;
         for _ in 0..900 {
-            let inputs = std::array::from_fn(|_| {
+            let inputs: [Input; 2] = std::array::from_fn(|_| {
                 rng ^= rng << 13;
                 rng ^= rng >> 7;
                 rng ^= rng << 17;
@@ -379,7 +378,7 @@ fn a_fight_in_the_range_is_deterministic() {
 fn a_trip_is_a_fresh_fight_on_the_same_frame() {
     let mut w = World::with_classes([Class::Champion, Class::BloodMage]);
     for _ in 0..30 {
-        w.advance([Input::new(Input::W); MAX_PLAYERS]);
+        w.advance([Input::new(Input::W); 2]);
     }
     let ask = Input::default().travelling(Travel::hunt(SpeciesId::RIDGEBACK));
     w.advance([Input::default(), ask]);
@@ -387,7 +386,7 @@ fn a_trip_is_a_fresh_fight_on_the_same_frame() {
     assert!(w.hunting());
     assert_eq!(w.arena, ArenaId::PROVING_GROUND);
     assert_eq!(
-        w.players.map(|p| p.class),
+        w.players.map(|p| p.class)[..2],
         [Class::Champion, Class::BloodMage]
     );
     let mut fresh = World::hunt([Class::Champion, Class::BloodMage]);
@@ -404,13 +403,13 @@ fn a_trip_is_a_fresh_fight_on_the_same_frame() {
 
 #[test]
 fn a_trip_to_an_unregistered_creature_goes_nowhere() {
-    let mut w = World::with_classes([Class::Bulwark; MAX_PLAYERS]);
+    let mut w = World::with_classes([Class::Bulwark; 2]);
     let mut same = w.clone();
     // An id the travel byte carries (five bits) that nobody will ever
     // register: past every planned creature.
     let ask = Input::default().travelling(Travel::hunt(SpeciesId(30)));
     w.advance([ask, Input::default()]);
-    same.advance([Input::default(); MAX_PLAYERS]);
+    same.advance([Input::default(); 2]);
     assert_eq!(w.checksum(), same.checksum());
 }
 
@@ -511,7 +510,7 @@ fn the_eye_is_held_under_the_cave_vault_and_nowhere_else() {
     }
     // And the aiming ray out of it starts under the rock: a shot straight up
     // from the cave floor meets the vault's underside, not its top.
-    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], ArenaId::RANGE);
+    let mut w = World::versus_in([Class::Champion; 2], ArenaId::RANGE);
     w.players[0].pos = at(60, 0, 0);
     let ground = w.terrain();
     let fighters = w.players;

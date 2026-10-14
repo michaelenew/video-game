@@ -30,7 +30,7 @@ fn nowhere() -> V3 {
 /// fighter zero at `who` and fighter one far behind it, its next glance due.
 fn watching(place: ArenaId, beast: V3, who: V3) -> World {
     let mut w = World::hunt_in(
-        [Class::Champion; MAX_PLAYERS],
+        [Class::Champion; 2],
         [Some(SpeciesId::SENTINEL), None],
         place,
     );
@@ -49,7 +49,7 @@ fn watching(place: ArenaId, beast: V3, who: V3) -> World {
 
 /// One frame, nobody pressing anything. The glance happens on it.
 fn glance(w: &mut World) -> V3 {
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     w.monsters[0].unwrap().brain.seen
 }
 
@@ -147,7 +147,7 @@ fn a_landing_and_a_dodge_are_heard_and_the_ring_is_bounded() {
     let mut w = watching(ArenaId::PROVING_GROUND, at(10, -10), at(-10, 10));
     w.advance([Input::aimed(Input::SPACE, 0), Input::default()]);
     for _ in 0..60 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     assert!(noise::all(&w.lore).any(|n| n.kind == NoiseKind::Landing));
     w.advance([Input::aimed(Input::SHIFT | Input::W, 0), Input::default()]);
@@ -163,9 +163,9 @@ fn a_landing_and_a_dodge_are_heard_and_the_ring_is_bounded() {
 
 #[test]
 fn a_fight_that_does_not_hear_keeps_no_ring() {
-    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Champion; 2]);
     for _ in 0..120 {
-        w.advance([Input::aimed(Input::W, 0); MAX_PLAYERS]);
+        w.advance([Input::aimed(Input::W, 0); 2]);
     }
     assert_eq!(noise::all(&w.lore).count(), 0);
     assert!(w.lore.is_blank());
@@ -181,7 +181,7 @@ fn the_glance_samples_nobody_it_is_told_it_cannot_perceive() {
         alive: true,
         aboard: false,
         stunned: false,
-    }; MAX_PLAYERS];
+    }; 2];
     let blind = Senses {
         perceived: [false; MAX_PLAYERS],
         heard: None,
@@ -219,7 +219,7 @@ fn scene_of(w: &World, ground: &Terrain, f: impl FnOnce(&Scene)) {
 
 #[test]
 fn in_view_is_on_the_screen_and_not_behind_anything() {
-    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
+    let mut w = World::with_classes([Class::Champion; 2]);
     w.players[0].pos = at(-12, 10);
     let look = Input::aimed(0, 0);
     let cone = Fx::ratio(1, 9);
@@ -251,7 +251,7 @@ fn in_view_is_on_the_screen_and_not_behind_anything() {
         assert!(aim::in_view(0, look, high, cone, &s2));
     });
     // A cloud between hides it as well.
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SENTINEL);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::SENTINEL);
     w.lore.set_word(sentinel::word::LAID, 1);
     w.players[0].pos = at(-12, 10);
     hazard::place(
@@ -285,7 +285,7 @@ fn a_creature_that_collides_walks_into_solids_and_one_that_does_not_walks_throug
             alive: true,
             aboard: false,
             stunned: false,
-        }; MAX_PLAYERS];
+        }; 2];
         let mut furthest = m.pos.x;
         for _ in 0..240 {
             m.brain.think_left = 1;
@@ -324,7 +324,7 @@ fn a_charge_into_a_solid_calls_the_species_hook() {
         left: 20,
     };
     m.brain.grace = 0;
-    let q = [Quarry::default(); MAX_PLAYERS];
+    let q = [Quarry::default(); 2];
     m.step_in(&q, &Senses::ALL, &ground);
     assert!(matches!(m.doing, Doing::Flinch { .. }), "{:?}", m.doing);
 }

@@ -7,16 +7,16 @@
 
 use sim::input::{Destination, Travel};
 use sim::species::{self, SpeciesId};
-use sim::state::{MAX_PLAYERS, Phase, QUARRY};
+use sim::state::{Phase, QUARRY};
 use sim::temper::{self, HIGHEST, TEMPERS};
 use sim::{Class, Input, World};
 
-fn classes() -> [Class; MAX_PLAYERS] {
-    [Class::Bulwark; MAX_PLAYERS]
+fn classes() -> [Class; 2] {
+    [Class::Bulwark; 2]
 }
 
 /// Walk at it and swing: enough to make the creature think.
-fn pressing(frame: usize) -> [Input; MAX_PLAYERS] {
+fn pressing(frame: usize) -> [Input; 2] {
     let mut buttons = Input::W;
     if frame % 40 < 3 {
         buttons |= Input::LEFT;
@@ -150,14 +150,14 @@ fn every_creature_and_every_temper_survives_the_travel_byte() {
 #[test]
 fn a_tempered_trip_starts_the_hunt_at_that_temper_and_a_restart_keeps_it() {
     let mut w = World::with_classes(classes());
-    let mut ask = [Input::default(); MAX_PLAYERS];
+    let mut ask = [Input::default(); 2];
     ask[1] = ask[1].travelling(Travel::tempered(SpeciesId::RIDGEBACK, 2));
     w.advance(ask);
     assert!(w.hunting());
     assert_eq!(w.temper(), 2);
     assert_eq!(w.restarted(classes()).temper(), 2);
     // Stepping to another creature by the plain byte is as tuned.
-    let mut next = [Input::default(); MAX_PLAYERS];
+    let mut next = [Input::default(); 2];
     next[0] = next[0].travelling(Travel::hunt(SpeciesId::GNATS));
     w.advance(next);
     assert_eq!(w.temper(), 0);
@@ -173,7 +173,7 @@ fn tempers_never_reach_versus() {
     assert_eq!(versus.temper(), 0);
 
     let mut w = World::hunt(classes()).tempered(HIGHEST);
-    let mut back = [Input::default(); MAX_PLAYERS];
+    let mut back = [Input::default(); 2];
     back[0] = back[0].travelling(Travel::VERSUS);
     w.advance(back);
     assert!(!w.hunting());
@@ -196,7 +196,7 @@ fn a_won_hunt_says_what_was_beaten_and_at_which_temper() {
     let mut w = World::hunt(classes()).tempered(1);
     assert_eq!(w.hunt_won(), None);
     w.monster_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert!(matches!(w.phase, Phase::RoundOver { winner: 0, .. }));
     let (beaten, at) = w.hunt_won().expect("a dead creature is a won hunt");
     assert_eq!(beaten[0], Some(SpeciesId::RIDGEBACK));
@@ -207,7 +207,7 @@ fn a_won_hunt_says_what_was_beaten_and_at_which_temper() {
     for p in lost.players.iter_mut() {
         p.health = 0;
     }
-    lost.advance([Input::default(); MAX_PLAYERS]);
+    lost.advance([Input::default(); 2]);
     assert!(matches!(lost.phase, Phase::RoundOver { winner, .. } if winner == QUARRY));
     assert_eq!(lost.hunt_won(), None);
 }

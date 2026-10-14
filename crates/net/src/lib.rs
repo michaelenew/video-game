@@ -26,17 +26,17 @@ pub mod seal;
 /// this crate's business.
 pub use ggrs;
 pub use ggrs_glue::{NetInput, SessionConfig, handle_requests, handle_requests_watched};
-pub use meet::{Progress, Rendezvous, Seat};
+pub use meet::{Mesh, Progress, Rendezvous, Seat};
 
 /// The far end of a match, as GGRS addresses it.
 ///
 /// Not a socket address: in a browser the other player is at the end of a
-/// WebRTC data channel, and a page never learns an address for it. One
-/// variant, because a match has one other player and every [`meet::Line`]
-/// reaches exactly one; a third player would make this an index.
+/// WebRTC data channel, and a page never learns an address for it. Every
+/// [`meet::Line`] reaches exactly one other player, so a line is named by the
+/// seat at its far end -- which is an index since there can be four.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Peer {
-    Line,
+    Line(u8),
 }
 
 /// What a rollback session needs from a simulation.

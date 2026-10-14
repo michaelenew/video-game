@@ -150,3 +150,102 @@ impl Line for MemoryLine {
         lock(&self.wire.0).queues[self.at].pop_front()
     }
 }
+
+/// **Lines that pair the way WebRTC's do**: through what they describe. A
+/// line made here offers under a serial of its own, an answer names the offer
+/// it answers, and the two ends join when the offerer accepts that answer --
+/// so any number of rooms can make lines off one switchboard, a fresh one per
+/// partner, without anybody saying in advance who is wired to whom. What a
+/// room of three or four meets over in a test.
+#[derive(Clone, Default)]
+pub struct Switchboard(Arc<Mutex<Exchange>>);
+
+#[derive(Default)]
+struct Exchange {
+    /// Lines made so far; each is named by its number.
+    made: u32,
+    /// Packets waiting at each line, by its number.
+    queues: Vec<VecDeque<Vec<u8>>>,
+    /// The line at the other end of each, once paired.
+    far: Vec<Option<u32>>,
+    /// Lines whose offer has been accepted: open, both ends.
+    open: Vec<bool>,
+}
+
+impl Switchboard {
+    pub fn line(&self) -> SwitchedLine {
+        let mut x = lock(&self.0);
+        let serial = x.made;
+        x.made += 1;
+        x.queues.push(VecDeque::new());
+        x.far.push(None);
+        x.open.push(false);
+        SwitchedLine {
+            board: self.clone(),
+            serial,
+            described: None,
+        }
+    }
+}
+
+pub struct SwitchedLine {
+    board: Switchboard,
+    serial: u32,
+    described: Option<String>,
+}
+
+impl Line for SwitchedLine {
+    fn offer(&mut self) {
+        self.described = Some(format!("offer {}", self.serial));
+    }
+
+    fn answer(&mut self, offer: &str) {
+        let Some(theirs) = offer
+            .strip_prefix("offer ")
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            return;
+        };
+        let mut x = lock(&self.board.0);
+        if (theirs as usize) < x.far.len() {
+            x.far[self.serial as usize] = Some(theirs);
+            x.far[theirs as usize] = Some(self.serial);
+        }
+        drop(x);
+        self.described = Some(format!("answer {} to offer {theirs}", self.serial));
+    }
+
+    fn accept(&mut self, answer: &str) {
+        let mut x = lock(&self.board.0);
+        let far = x.far[self.serial as usize];
+        if let Some(far) = far
+            && answer == format!("answer {far} to offer {}", self.serial)
+        {
+            x.open[self.serial as usize] = true;
+            x.open[far as usize] = true;
+        }
+    }
+
+    fn description(&mut self, _now_ms: u64) -> Option<String> {
+        self.described.clone()
+    }
+
+    fn state(&mut self) -> LineState {
+        if lock(&self.board.0).open[self.serial as usize] {
+            LineState::Open
+        } else {
+            LineState::Negotiating
+        }
+    }
+
+    fn send(&mut self, packet: &[u8]) {
+        let mut x = lock(&self.board.0);
+        if let Some(far) = x.far[self.serial as usize] {
+            x.queues[far as usize].push_back(packet.to_vec());
+        }
+    }
+
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        lock(&self.board.0).queues[self.serial as usize].pop_front()
+    }
+}

@@ -14,15 +14,15 @@ use sim::fixed::Fx;
 use sim::monster::{MAX_MONSTERS, NO_PART};
 use sim::pack::{self, mood};
 use sim::species::{SpeciesId, gnats};
-use sim::state::{MAX_PLAYERS, Phase, hitbox};
+use sim::state::{Phase, hitbox};
 use sim::{Class, Input, V3, World};
 
 fn gnats(class: Class) -> World {
-    World::hunt_of([class; MAX_PLAYERS], SpeciesId::GNATS)
+    World::hunt_of([class; 2], SpeciesId::GNATS)
 }
 
-fn idle() -> [Input; MAX_PLAYERS] {
-    [Input::default(); MAX_PLAYERS]
+fn idle() -> [Input; 2] {
+    [Input::default(); 2]
 }
 
 fn kill(w: &mut World, i: usize) {
@@ -51,10 +51,12 @@ fn keep_up(w: &mut World) {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_critter_is_forty_eight_bytes_and_a_full_pack_fits_the_snapshot() {
-    assert_eq!(std::mem::size_of::<Critter>(), 48);
+fn a_critter_is_fifty_two_bytes_and_a_full_pack_fits_the_snapshot() {
+    // Forty-eight until four fighters (2026-10-14): what has cut it is a
+    // byte per fighter now, and what each fighter's swing has struck a bit.
+    assert_eq!(std::mem::size_of::<Critter>(), 52);
     let world = std::mem::size_of::<World>();
-    assert!(world <= 4096, "a World is {world} bytes");
+    assert!(world <= 20 * 1024, "a World is {world} bytes");
     // Every slot full: the Gnawers' coop pack is ten, the most there is.
     let mut w = gnats(Class::Champion);
     for i in 0..MAX_CRITTERS {
@@ -87,7 +89,7 @@ fn a_pack_hunt_musters_its_pack_and_builds_no_monster() {
     assert!(w.critters[leader].has(flag::LEADER));
     assert_eq!(w.critters[leader].kind, gnats::QUEEN);
     // And a restart is the same fight.
-    let again = w.restarted([Class::Bulwark; MAX_PLAYERS]);
+    let again = w.restarted([Class::Bulwark; 2]);
     assert_eq!(again.pack.map(|p| p.species), Some(SpeciesId::GNATS));
     assert_eq!(again.critters.iter().filter(|c| c.alive()).count(), 7);
 }
@@ -325,7 +327,7 @@ fn a_critter_spawns_into_a_freed_slot_and_never_over_a_fresh_corpse() {
 
 #[test]
 fn a_pack_fight_replays_exactly() {
-    let script: Vec<[Input; MAX_PLAYERS]> = (0..600u32)
+    let script: Vec<[Input; 2]> = (0..600u32)
         .map(|f| {
             let bits = if f % 37 < 6 { 1 } else { 0 };
             [Input::aimed(bits, (f * 97) as u16), Input::default()]
@@ -343,7 +345,7 @@ fn a_pack_fight_replays_exactly() {
     // And it is not the versus world's hash.
     assert_ne!(
         start.checksum(),
-        World::with_classes([Class::Champion; MAX_PLAYERS]).checksum()
+        World::with_classes([Class::Champion; 2]).checksum()
     );
 }
 
@@ -354,7 +356,7 @@ fn a_pack_fight_replays_exactly() {
 #[test]
 fn critters_stand_on_a_monsters_back_and_go_where_it_goes() {
     let mut w = World::hunt_with(
-        [Class::Bulwark; MAX_PLAYERS],
+        [Class::Bulwark; 2],
         [Some(SpeciesId::RIDGEBACK), Some(SpeciesId::GNATS)],
     );
     assert!(w.monsters[0].is_some() && w.pack.is_some());
@@ -397,7 +399,7 @@ fn a_critter_perched_on_a_part_is_carried_by_it() {
     // frame. The perch is authoritative, so the animal turning and walking
     // carries the critter with it.
     let mut w = World::hunt_with(
-        [Class::Bulwark; MAX_PLAYERS],
+        [Class::Bulwark; 2],
         [Some(SpeciesId::RIDGEBACK), Some(SpeciesId::GNATS)],
     );
     let beast = w.monsters[0].unwrap();
@@ -521,7 +523,7 @@ fn the_overlay_draws_the_volume_the_hit_test_uses() {
                     let hurt = w.critters[0].health < before.health;
                     let drawn =
                         hitbox(&w.players[0]).is_some_and(|hb| before.body(sp).touched_by(&hb));
-                    let struck_already = before.has(flag::STRUCK);
+                    let struck_already = before.swung & 1 != 0;
                     if !struck_already {
                         assert_eq!(
                             hurt,
@@ -614,7 +616,7 @@ fn where_only_fighters_stand_every_aim_is_unchanged() {
     // Nothing short anywhere: "there" is a fighter's height and no swing
     // stoops. The pinned hunts (`ridgeback_pin.rs`, `hunt/tests/pin.rs`) hold
     // the rest of it bit for bit.
-    let w = World::with_classes([Class::Elementalist; MAX_PLAYERS]);
+    let w = World::with_classes([Class::Elementalist; 2]);
     let field = sim::stones::gather(&w.players);
     let scene = Scene {
         stones: &field,
