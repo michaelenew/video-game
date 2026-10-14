@@ -239,7 +239,7 @@ fn auto_button(me: &Player) -> u16 {
 
 fn reach_of(me: &Player) -> Fx {
     let slot = match me.class {
-        sim::Class::BloodMage => sim::moves::blood::SWEEP,
+        sim::Class::BloodMage => sim::moves::blood::HAEMORRHAGE,
         _ => 0,
     };
     sim::moves::get(me.class, slot).reach.max(Fx::ONE)

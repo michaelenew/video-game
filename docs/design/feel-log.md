@@ -213,6 +213,41 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-13 — the Blood mage, revised from play
+**Changed** Grey holds 120 frames then fades at 60/s (was 3/s, no hold). Finishers at any time,
+spending all grey and the Well: row damage + 0.5 per point. Black spike one to seven spikes on a
+ring up to 4 m. Chained eruptions wait 3 frames. Thralls seek 30 m (was 6), Command acts on its
+first frame (startup 1). Teleport to a stain 12 m (was 22); the dodge's blink and thrown glob
+removed. Hemoplague held grows 1.5 to 6 m and slows to 0.6. Carpet on the right click, damage 5 a
+tick, lets go as one stain. Golem: health from what it fused, half of each punch off itself.
+**Why** The owner's notes on the first build: thralls too passive and deaf to her clicks, the
+Carpet's stains scattered, grey that never ran out so never had to be spent, finishers that
+needed a Well that was hard to fill and were weak when they came, a dodge that crossed the map.
+**Tried and reverted** A chain delay of 5 frames: a runner outran the chain along his own
+bleed trail (`tests/haemorrhage.rs`); 3 keeps the catch and still reads as a chain.
+**Verdict** open — unplayed.
+
+### 2026-10-13 — the Blood mage: thralls and the Well
+**Changed** The blaster's kit (0015) replaced by 0016's: the Transfusion, the sweep, Tides,
+Reaper's chain, Reaper's leap and Frenzy are gone; the Haemorrhage is the left click tapped
+everywhere, the Carpet of blood the left click held, Command and the Summon the right click,
+the Rising reap space + right, Coagulate `Q`; a full Well (400) turns each click's longest hold
+into the Thorn garden, Exsanguinate or the Blood golem. Every cost lands as a stain where it was
+aimed; eruptions spill nothing; overflow from a drink fills the Well. Thralls: 7 m/s, seek 6 m
+round where they were sent, a bite every 30 frames spending 30% of the thrall (at least 10) as
+the blow and the stain, one blow kills. Carpet: 1.5 m growing to 6 m over 90 frames, 12 a tick
+every 30 frames, slow to 0.5, 1% of red every 8 frames, breaks into 5 stains. Thorn garden root
+1.5 m plus 1.5 m per full stain (raised from the first guess of 0.2, which made a root no wider
+than a body).
+**Why** The owner's verdict on the blaster: the stains and the detonation chain are the class,
+but every eruption left a stain so the spot grew stronger the more she hit it, the start cost
+most of her bar, the scythe and the hook were never worth it, Frenzy got her trampled, and the
+moves did not combine. Thralls whose bites spend themselves are a summon that cannot snowball:
+what they deal is exactly the blood they turn into, and it is on the floor for her to fetch.
+**Verdict** open — unplayed. Watch first: whether the thralls' bite (30% every half second)
+makes a summon of six last long enough to matter, and whether the Carpet's 1% every 8 frames
+is a price or a rounding error.
+
 ### 2026-09-10 — opening numbers
 **Changed** everything, from nothing. First playable values.
 **Why** They needed to be *something* to be judged. Chosen so the relationships
@@ -8169,6 +8204,300 @@ has left the hunt, and the creature is gone as before. 30 m was tried first and 
 Pinewood road inside a hunt.
 **Verdict** — unplayed.
 
+### 2026-10-12 — the Blood mage as the blaster
+**Changed** Her whole kit, along [exploration/0015](exploration/0015_blood_mage_blaster.md).
+The three clicks on the floor are held through **three tiers** (two at 30 frames, three at 60,
+sooner by up to ×1.5 with a full bar of grey), each tier paid in red as it is reached (+3%,
++4%); a jump or a dodge out of a hold **stores** the charge in her vessel, let go later by a
+fresh press of the same click, and the vessel bleeds 1% of red a second. Left is the
+**Transfusion** (a bolt to 20 m: 45, then ×1.7 piercing, then ×2.6 and a 14 m/s throw-back),
+middle the **Black spike** (to 22 m: one; three in a triangle; a 3 m field in three waves),
+right the sweep tapped (22 → 45) and **Tides** held (a ring 4 / 6 / 8 m). In the air: the
+Haemorrhage (18 m), the **Stake** (thrown down; pins anybody in the air, lands in a 2.5 m area)
+and **Reaper's chain** (to the crosshair's point, 18 m; yanks a fighter to her, pulls her to
+anything else, 5 m along the aim at the sky). Takeoffs: **Blood wings** (an 8 m burst along
+the aim, tapped), the **Upheaval** (a geyser at 15 m that launches, and a hop), **Reaper's
+leap** (an arc to the crosshair's floor, 10 m, a 2.5 m slam that drinks the stains round it).
+`Q` is **Frenzy**, `E` the **Hemoplague** (a 5 m cloud at 22 m for five seconds, 30 a half
+second, no stun, all its spill to one stain at its centre). The dodge with a stain under the
+crosshair is a 20 m **teleport** that drinks it and arrives in a burst; with none it is the
+**Sanguine flow** (`Dodge is a blink` on, 6 m). Cut: the Bloodletter, the Grasp, the Blood
+nova (now Tides), the jet, Marionette, the Nail, the Hook and Harvest -- their rows retuned as
+the new moves, so no other class's numbers moved.
+**The economy.** Every stain is collected: **walking** into it (100% of its essence, but only what her grey can hold -- the stain
+keeps the rest, so walking at full health does not throw stains away),
+**teleporting** to it (100%), or **hitting through** it (every move drinks 100%, and the blow
+adds half the stain's essence to itself). Grey fades at 3 a second (was 12), stains drain at
+5 (was 10). Every move deals damage, and every hit on a creature spills by the move's own
+damage rather than what its hide let through. The bleed ticks 25 every half second for four
+seconds (was 8 every fifth for three); an eruption sets off stains up to 2.5 m past its edge,
+so a spike on a trail still runs it.
+**Frenzy.** She is planted for three seconds; within 6 m everyone takes 15 every sixth of a
+second and starts to bleed; her stains within 15 m rush to her at 12 m/s and explode at the
+edge for twice their essence; no stain heals her, grey drains at 60 a second and is gone when
+it ends; a teleport to a stain adds a second, to eight in all.
+**Why** The owner, after playing the three-click kit: the abilities were awkward and short,
+the pools too small to use, the hook did not register, and the best play was "spam Black spike
+and hope". A replay of that fight showed it: six of nine click moves thrown once or never, and
+80 stains whose median essence was 8 -- placed right, but too small to see before they drained.
+The brief: a blaster (Ragnarok Online's mages, Vladimir, the Demon Avenger) with range, charges
+and big areas, and movement that buys time for the charges and goes to collect the blood, but
+not both at once -- and getting health back much easier, "too strong first".
+**Tried** The Stake's area at the move's radius: its in-flight bolt is now the Haemorrhage's
+width and its row's radius is the landing. The Upheaval's recovery cut from 18 to 10 and its
+hop raised so a Stake can follow it (the *Meteor storm* in 0015) -- at 18 he had fallen before
+she could act. A shared "blood burst" row for the teleport's arrival was cut again: as a row it
+read as a move to every whole-kit check, and the wings' row says the same thing.
+**Re-recorded** Her Ridgeback pin, her scripted hunt's pin, and her envelope fixtures (the
+search now finds her crossing 29 m on lane 0, was 23.5) -- the wings and the chain are new
+reach. No other class's pin moved: the checksum keeps their layout.
+**Not done** Her own clips: the new moves borrow the five she has (`view::play`). The Frenzy
+area and the vessel's glow are not drawn yet; the cloud, the spike field and the stains are.
+**Verdict** — unplayed. BLAST-4 to BLAST-8 in 0015.
+
+### 2026-10-12 — Frenzy fed itself; the Blood mage sends her blood and zips to it
+**Changed** Frenzy's own blows -- its area and the stains it explodes -- spill nothing
+(`World::spill` refuses the Frenzy row). **And her traversal**: a dodge with no stain under
+the crosshair still slides 6 m as blood, and now also **sends a glob of her blood** to the
+crosshair's spot on the floor (`Dodge, sends her blood up to` 20 m), which lands as a stain of
+her own blood (`Dodge, sent blood lands as a stain of` 60) -- a door, never a heal, one at a
+time. The next dodge with the crosshair on it teleports her there (`Teleport, to a stain
+within` 20 → 22 m), from the air too, even once the airdodge is spent: the door is on the
+floor and so is she when she arrives.
+**Why** From play: "whatever is on Q does way too much damage. The Mireback dies in about
+half a second." A blow of Frenzy's on the creature spilled a stain inside her own area, which
+exploded for twice itself, spilling twice that -- a loop that took the Mireback's 11 000 in
+about twenty frames. Without it a Frenzy beside a creature with nothing on the floor deals
+about 90 a second (`frenzy_beside_a_creature_burns_and_does_not_feed_itself`). And: "we want
+some kind of core cycle of sending blood -> zipping to the blood so that world traversal
+isn't so slow" -- with Reaper's chain "awkward, I can't tell how far it's going to take me or
+why". The door is where she will go, on the floor in front of her, before she goes.
+**Measured** Send and zip crosses about 55 m in 2.5 s on flat ground against 17.5 m walking
+(`send_and_zip_crosses_the_ground_far_faster_than_walking`).
+**Not done** Reaper's chain is unchanged; whether it stays, now that the zip carries her, is
+the owner's call.
+**Verdict** — unplayed.
+
+### 2026-10-12 — the Champion reworked: the braced Rush, the Beat, the Hold, six full charges, momentum, Break and the Clash
+**Changed** From the owner, with three replays: the Champion "just has a really linear
+playstyle and not a lot of options for outplay", and "the monster fights especially feel
+really bad because there's no semblance of a stun/combo game". Designed over three rounds in
+[exploration 0015](exploration/0015_champion_momentum_and_the_charge.md); the kit document's
+§"The rework" is what was built. In short: Rush 32 m/s for 12 frames, braced (half damage
+through the run, the last four frames eat one blow, 150 breaks it), and the shoulder into a
+body is the string's first hit; a landed third hit refunds it; the Rush stab carries. A weapon
+pressed inside a landed link's freeze is a true link (+20%, +4 frames of freeze). Any link
+pressed for and held at the top of its wind-up charges; held 40 frames it is its weapon's full
+charge -- Crescent, Shockwave, Comet, and for the third link Thousand Cuts, Meteor and
+Heaven-piercer. Momentum on him, fed by landed blows, filling holds faster at a third and two
+thirds and making a tap a full charge when full. Against a creature his heavy blows add strain
+over their damage (hammer and third links ×2, true links ×1.5, full charges ×3, half of a full
+charge's extra into poise), and the Meteor knocks it off its feet. A full charge's,
+Earthbreaker's or a Rush's last frames meeting a creature's swing cancel it; between fighters,
+the longer freeze wins a meeting of two blows outright.
+**Why** The replays, through `hunt --bin replay`: three finishers landed of thirty thrown; the
+hammer opened nine times; Earthbreaker never thrown; Rush stab 0 of 17 and the Rush slash 10 of
+10; in the air 23 % of the time against the Reaver's 57 % and the Elementalist's 46 %.
+**Found in the build**
+- **A chain link that landed on a creature never confirmed the chain.** `confirm_chain` was
+  called only where a fighter is hit, so every string against a creature paid every recovery
+  in full -- the Champion's whole string was slower against an animal than the frame table
+  says. It is confirmed where a creature is hit now, and the refund rides on it.
+- **The replay's hand tables folded every class into one.** `hunt::replay::Hands` keyed moves by
+  slot and named them by the last class played; a tape with a class change was mislabelled
+  (the owner's "Elementalist" tape was mostly a Dual mage). One table per class now.
+- Holding is a charge, so **linear play is tapping**: a button held down no longer walks the
+  string, it charges the opener. A press is spent on the link it threw, so a button held on
+  into the next link does not charge it. A dozen tests that held a Champion's button to throw
+  a swing press it once or tap it now; the scripted hunter's hands press a held weapon every
+  other frame for the same reason.
+- A press inside the sword's three-frame freeze was over before the chain would take it: the
+  beat's press is held for him until the link comes out.
+- The Crescent aimed at the sword's 1.85 m climbed from the chest to a point an arm's length
+  off the eye and flew over everybody: a thrown move is aimed at the length it is thrown
+  (`state::aimed_reach`).
+- Thousand Cuts stopped against the body it was cutting: bodies are not separated while it
+  runs. The javelin flew on past the body it pierced and he tore it out of the floor 15 m
+  behind them: it stops in the first body it pins.
+- Six more move slots widened each fighter's two lockout tables past the snapshot's 4 KiB cap
+  (4144 bytes). The full charges keep no lockout -- a hold or a full meter is their price --
+  and the tables stop at `moves::LOCKED_SLOTS`.
+- `feel.rs` caught three first guesses: the Crescent's swing shoved 0.6 m for 110 (knockback
+  4 → 12); the Comet was −1 on hit (hitstun 30 → 40); Heaven-piercer killed a Reaver in two
+  (260 → 240). The class has 25 moves.
+- The valley's frame test walked the faster Champion to the Bank's far edge, where a world
+  framed in the den reads the nearer place first; it shifts two seconds in rather than four.
+**Pins** The Champion's Ridgeback pin and both of his scripted-hunt pins; his envelope
+fixtures re-recorded. Nobody else's moved.
+**Movement** His whole-kit reach in the lab search grew sharply, his shared reach not at
+all: lane 0 m 55.8 → 85.3 m, lane +4 m 45.0 → 65.3 m, lane +10 m 28.5 → 44.1 m. A string
+advances on the throw, whiffed or not, so in an empty lab two swings and a held third are
+Thousand Cuts' 7 m dash or Heaven-piercer's 25 m run after its spear, and the first two held
+are the Comet's 8 m. **CHAMP-11 is the owner's**, as REAVER-5 is: whether the full charges
+should cross gaps the movement sections were built against, or be held to the ground they
+were thrown on.
+**Verdict** — unplayed. Every number is a first guess; the six full charges borrow clips
+(Backcut, Hammer, Rush stab, Rush slash, Air hammer, Skewer) until they have their own.
+
+### 2026-10-13 — the Champion from play: tap to combo, hold to finish; momentum spent; the Clash everywhere
+**Changed** From the owner, having played the rework: the meter-full tap read as "click a lot,
+then click some more"; momentum should be a bar that buffs you the fuller it is and a big move
+that drains it, chosen; it did not build against the Hornback; the Clash with a Rush did not
+work against the Hornback's charge, and should work against every attack without a line per
+move; and the finishers should be reachable from any hit -- "tap to combo, hold to finish".
+Built as the fourth round of [exploration 0015](exploration/0015_champion_momentum_and_the_charge.md):
+- **A link held 12 frames from its press is its weapon's finisher**, at any place in the
+  string, and ends it. The part charge, the tiers' faster holds and the meter-full tap are gone.
+  Finishers' own startups cut to 2-4 frames (Crescent 3, Shockwave 4, Comet 2, Thousand Cuts 3,
+  Meteor 4, Heaven-piercer 4), recoveries kept or lengthened as their price.
+- **The Comet goes where the stick is held**, a Rush on the spear.
+- **Momentum buffs every hit by its share of 20 %, and every finisher spends all of it**: its
+  share of 75 % more damage and size (`Effect::power`), of 40 frames more stagger
+  (`stagger_by_the_spend`), and a full meter knocks a fighter down and a creature off its feet.
+- **Critters feed momentum and confirm the string** (`trade_with_the_pack`); the Hornback's
+  bull is one, and nothing a fighter did to a critter had ever confirmed a Champion's string.
+- **The Clash is decided in `apply_hit`**, where every blow lands on a fighter, and settled after
+  by who threw it (`World::settle_the_clashes`).
+**Found in the build**
+- The snapshot was exactly at its 4 KiB cap; momentum's hold timer went to a byte to make room
+  for what a finisher spent and who was clashed.
+- **Momentum's buff broke the Ridgeback's fight shape** (`hunt/tests/fight.rs`: threatening
+  33-35 % against a floor of 35, 17-20 moves a minute against 20) at every value from 10 to
+  25 %: a creature's strain is damage taken, so more damage was more flinching. Against a
+  creature the buff is now damage that adds no strain (`Monster::take_extra`): it hurts more and
+  staggers no more, and what staggers is Break's. The fight passes at 20 %.
+- The HUD's lockout readout and the glow both read the hold's old length; both follow the
+  new one.
+**Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again.
+**Verdict** — from play, a second time.
+
+### 2026-10-13 — the Champion from play, second pass: aerials in the string, the Repel, holds that are holds
+**Asked, from play**
+- Holds on the aerials: the sword's Crescent off a jump without losing speed, the hammer held in
+  the air to slam back to the floor.
+- The spear's first finisher was too strong as a dash on every hold ("you can just keep dashing
+  everywhere while dealing damage"): a sweep that repels instead, low damage, utility.
+- Aerials and jumping attacks count in the three-hit string, in rhythm -- ground, jump, third --
+  and a third hit from the air.
+- Clicking fast was read as a hold and spent the meter on a finisher nobody asked for.
+- The Rush and the spear's dash went where the stick was, not where the mouse was.
+- A third hit held at a full meter drained the meter during its own wind-up.
+**Changed**
+- **A hold is one press, held.** Let go of a link's button once and it is a tap
+  (`find_the_beat` clears `may_hold`). The cause was a second click arriving during the
+  wind-up: the hold check only asked whether the button was down at the top, and the hammer's
+  wind-up is as long as a hold, so one frame of the next click was a finisher.
+  `clicking_fast_never_holds` tries every rhythm of 3 to 8 frames on all three weapons and fails
+  without the fix.
+- **The meter waits while a hold winds up** (`winding_a_hold`).
+- **Aerials and takeoffs are in the string** (`champion::in_string`): each is the next place,
+  the chain's clock keeps running in the air, and with two hits behind him an aerial is the
+  third -- it ends the string, refunds the Rush and holds to the grand finisher. The place is remembered on the fighter (`Fury::place`), since an aerial has no
+  place of its own.
+- **Aerials hold** (`champion::holdable`) to their weapon's finisher for that place
+  (`champion::finisher`). A finisher begun in the air keeps the jump's speed and does not hang;
+  the Shockwave and Meteor are driven down the crosshair inside a cone round straight down
+  (`aim::plunge_dir`, `slam_dive` 30 m/s, `slam_cone` 0.1) and wait for the floor
+  (`lands_on_the_floor`).
+- **The Comet is gone; the Repel** is the spear's first finisher: the pole swung flat a full
+  turn round him, 50 damage, 26 knockback, 4/5/20 frames. Its wall-splat and its three knobs went
+  with it. A finisher's own swing now reaches further by what it spent, as its effects do
+  (`hitbox`).
+- **The Rush goes toward the crosshair**: `aim::racing_path` from his feet, flat.
+**Found in the build**
+- **The paired cats could land two hits inside `StaggerGap`**: each cat's live window was
+  forgotten the frame it closed, so the partner could commit a move landing a few frames after a
+  hit that had just landed. A window is remembered now until the gap after it has run
+  (`species::pair::fight`). The Champion's new random walk in `tests/pair.rs` was the first to
+  reach it.
+**Tried and reverted**
+- **The ground's third links thrown from the air** (Upcut, Earthbreaker, Whirl at two hits
+  behind him in the air). The Ridgeback hunts' bots struck its back 187 times and toppled it 7
+  across 24 hunts, against 258 and 12 with the aerial as the third: the third links are swings
+  at somebody in front of him, and the aerials are what reaches a creature from a jump.
+  (`hunt/tests/fight.rs`'s topple test went to none in its six.)
+**Pins** The Champion's Ridgeback and scripted-hunt pins and envelope fixtures, again. The
+whole kit's widest gap at the lab's lowest lane is 68.1 m without the Comet, from 85.3.
+**Verdict** — from play.
+
+### 2026-10-13 — slopes, steps and lips
+**Asked, from play** (with a replay: `versus-bulwark-163400f`, build `86d35ac`)
+- "Any kind of slope or tiny step has crazy and frustrating effects on movement."
+- The Reaver's dash jump on any slope rockets almost straight up.
+- Walking, the Champion's Rush, jumping and jump attacks up a slope feel weird.
+- Walking into a tiny lip stops the character completely.
+
+**Found on the tape**, replayed on the build that recorded it (`hunt --bin replay --motion`,
+new today): at frame 160899 a walk along a rock's top in the Saddle stopped dead against a cap of
+snow 0.4 m high on it; from 162670 a walk up the bank under the Shrine flickered off the floor
+every other frame, stopped dead at a seam 0.22 m high at its top, and then crept up a tenth of a
+metre every fourth frame while sliding sideways.
+
+**Changed** (`arena::resolve_among`, `too_steep_to_climb`; `tests/slopes.rs`)
+- **A step is walked up.** A standing body that is not rising, put into the side of a box whose
+  top is no more than `StepOver` (0.45 m, new) above its feet, with room to stand on it, is put on
+  top. Fighters only: a stone or a critter still stops.
+- **A body the floor lifts while it is rising has not landed.** The rocket: a dash jump across a
+  hill met the ground rising under it on its first frame, was counted as standing, and the jump
+  still held went again on top of it -- 39 m/s up where the flat gives 21. A box's top already had
+  this rule (`tests/corner.rs`); the floor had not.
+- **The steep-ground wall is the footing.** It was the height one frame's step gained against the
+  steepest slope, with 2 cm of slack: noisy, a cliff to any seam, and the slack let a walk up
+  ground too steep to stand on, which then slid her back. Now ground with no footing (too steep
+  across a metre) may be crossed or come down, never gone up; the part of the step up it is taken
+  off and the rest kept, so a walk at a mountainside slants along it. A rise in one step of more
+  than `StepOver` over the steepest slope is a ledge.
+- **`TerrainSteepest` 0.85 → 1.05.** The slack had made the walkable limit about 1.02 at a walk,
+  and the roads were laid against that -- an embankment is a slope of one -- so the old effective
+  number is now the stated one, with a little room. Mountains (1.4) and rims (3) are walls as before.
+- **Feet follow the ground down by `StepDown` plus the steepest slope over the ground the frame
+  covered**: a fixed 8 cm was one frame of a walk down a slope of 0.7, so a Rush, a dodge, or a
+  walk down anything steeper came down in hops.
+- **A body within a skin of a mountainside slides**, rather than standing on it for having come
+  to rest a hair above it.
+
+**Not changed** The land itself still has its seams: a scan finds about 2,400, 1,900 at a room's
+edge and 500 in the land (the noise switching off where a rim or an embankment takes over). They
+are steps or ledges now rather than walls you cannot see; smoothing them is the land's job, and
+would move the ground under every road test.
+
+**Pins** The Champion's and the Reaver's Ridgeback pins, whose random walks reach the arena's rim
+-- an arena's rim is land -- at frames 2077 and 1292. The Bulwark's never does, and is unchanged.
+The scripted hunt's Bulwark and Elementalist pins (`hunt/tests/pin.rs`) moved for the same reason;
+with `StepOver` at nothing they move all the same, so it is the rim and not the step.
+
+**Verdict** — from play.
+
+### 2026-10-13 — the Champion's weapon is one weapon: a liquid that takes three shapes
+
+**Asked** The class was always meant to have one shape-shifting weapon, not three carried at
+once. Between moves: a golden, mercurial liquid wound round her arm, none of the three. In the
+middle of a move: the shape of the weapon making it, within a few frames. After: that shape for
+a few seconds, then a slow change back, so the player can see what it was. No change to play.
+**Changed** (`view::arms`, `kits/champion.md` "The weapon you can see")
+- **The stowed weapons are gone**: no spear on her back, no hammer at her hip, no scabbard. The
+  three shapes are all one gold and differ by silhouette alone; the spear's red tassel is a
+  collar.
+- **Between moves, a coil**: three turns of gold band, shoulder to wrist, on the drawn arm.
+- **Into a shape in `FORM_IN` (5) frames**, or the move's startup if shorter, so the weapon is
+  whole on every active frame. **Kept `HOLD` (180) frames** after the move ends, **melted over
+  `MELT` (80)**. A change of weapon mid-string runs from the shape that was out.
+- **Five animation clocks in the snapshot** (`sim::class::Quicksilver`, in `Mechanic::Forms`):
+  ticked in `advance_clocks`, stamped where the form is set, and hashed like every other clock.
+  No rule reads them. Packed into four bytes and kept in the Champion's mechanic, because the
+  snapshot was at exactly its 4,096-byte cap and a field on `Player` crossed it; the variant
+  had room inside the enum, so the `World` did not grow at all.
+**Pins** The Champion's Ridgeback and scripted-hunt pins moved, for the checksum only: with the
+clocks left out of `state_checksum`, the whole workspace -- every pin and replay -- passed bit
+for bit.
+**Tried and changed**
+- **Drops as long sticks round the coil** (4.5 turns, 26 drops, each 2.1 times its spacing):
+  from behind the camera they read as gold thorns. Three turns of 34 shorter drops is a band.
+- **In-flight drops keeping their target's flat shape**: a melting spear head threw out
+  star-shaped flakes. In flight a drop rounds off and stretches only half again along its path.
+- **Gold fully metallic**: with nothing to reflect it drew brown. Half metallic with a little
+  light of its own reads as gold on the shadow side as well.
+**Verdict** — from screenshots only (`SHOT_FORM`); wants a look in play.
 ### 2026-10-12 — the Dual mage's spellbook
 **Changed** Her whole kit ([exploration/0015](exploration/0015_dual_mage_spellbook.md)). The
 click is what a spell is cast on -- dark on *them* (curses), light on *the ground* (sigils),

@@ -81,24 +81,37 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// which is every jump; and the Reaver's kit moved. See
 /// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
 ///
-/// **The Dual mage's and the Reaver's were re-pinned 2026-10-12** for her
-/// spellbook: the same random presses now throw the litanies, the stars and
-/// the curse. The Reaver's fight did not change -- an effect is hashed by its
-/// kind's number, and the Shade bolt that retired sat before her shadow's
-/// blades in the list, so their numbers moved down one. See
-/// `docs/design/exploration/0015_dual_mage_spellbook.md`.
+/// **The Blood mage's was re-pinned the same day** for the blaster: her
+/// clicks are new moves held in tiers, every stain is collected, and every
+/// hit bleeds. See `docs/design/exploration/0015_blood_mage_blaster.md`.
+/// **And again the same day**: her dodge sends her blood ahead, and Frenzy's
+/// own blows spill nothing. See the feel log.
 ///
-/// **The Dual mage's again, the same day**: the bare clicks are her wing
-/// autos once more, each hopping her the way she holds, and against a
-/// creature a wing is its tip. And again for the owner's second round: the
-/// wings thrown forward, the long holds, venting and the spending majors; and
-/// the third (2026-10-13): the autos a ball, every click a tap or a hold. See
-/// `docs/design/exploration/0016_dual_mage_controls.md`.
+/// **The Champion's was re-pinned 2026-10-12, later** for his rework: the
+/// braced Rush and its shoulder, a held weapon charging, the full charges and
+/// momentum. See `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+/// **And again 2026-10-13**: tap to combo and hold to finish, momentum spent by
+/// every finisher, and the Clash where every blow lands.
+///
+/// **The Champion's and the Reaver's were re-pinned 2026-10-13, later**, for
+/// slopes, steps and lips: their random walks reach the arena's rim -- alone,
+/// an arena's rim is land -- at frames 2077 and 1292, where the steep-ground
+/// wall is the footing now. The Bulwark's never reaches it. See the feel log.
+///
+/// **The Champion's again the same day, with no change to play**: the clocks
+/// his liquid weapon is drawn from (`class::Quicksilver`) went into
+/// `state_checksum` with the rest of his mechanic. With them left out of it,
+/// every pin held bit for bit.
+///
+/// **The Reaver's and the Blood mage's moved again 2026-10-14**, on merging
+/// the Dual mage's rework with the Blood mage's: her five retired effect
+/// kinds became four new ones, so every kind listed after hers is numbered
+/// one lower -- the same cause as the 2026-10-12 note above.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x339bb2066878e1c8),
+    (Class::Champion, 0xad92d8aa094c6517),
     (Class::Bulwark, 0x8465a86bccb8ef32),
-    (Class::ShadowReaver, 0xda05d8a8d6903ae9),
-    (Class::BloodMage, 0x083464c03c9c85e2),
+    (Class::ShadowReaver, 0x3a90bafb5137be9a),
+    (Class::BloodMage, 0xbb4f50c318f8bfaa),
     (Class::DualMage, 0xb73a09bb8ba66296),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];

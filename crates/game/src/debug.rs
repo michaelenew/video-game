@@ -244,7 +244,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            EffectKind::FireRing | EffectKind::ShadowRing => {
+            EffectKind::FireRing | EffectKind::ShadowRing | EffectKind::Shockwave => {
                 cylinder(
                     &mut gizmos,
                     at,
@@ -263,6 +263,44 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             }
             // A cloud of embers: the slab the shot test traces and the body
             // test reads, about its centre -- see `Effect::ember_volume`.
+            // The Hemoplague: the column it hurts in.
+            EffectKind::Plague => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    sim::tuning::plague_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The Carpet and the Black vines: the discs they hurt in.
+            EffectKind::Carpet | EffectKind::Vines => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.reach.to_f32_for_render(),
+                    sim::tuning::body_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // A thrall and the golem: the column a blow has to touch.
+            EffectKind::Thrall | EffectKind::Golem => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.thrall_radius().to_f32_for_render(),
+                    effect.thrall_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The cascade and the reap: a line out along `dir`, as far as `reach`.
+            EffectKind::Cascade => {
+                gizmos.line(
+                    at,
+                    v3(effect.pos.add(effect.dir.scale(effect.reach))),
+                    PILLAR,
+                );
+            }
             // The Blood nova and the Nail: the spheres they hit with.
             EffectKind::Nova => {
                 gizmos.sphere(
@@ -310,6 +348,22 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                         PILLAR,
                     );
                 }
+            }
+            // The Champion's thrown ones: the ball they test, at the head.
+            EffectKind::Crescent | EffectKind::Javelin => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(crate::fx3(effect.head())),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // The cuts: the line they land along.
+            EffectKind::Cuts => {
+                gizmos.line(
+                    crate::fx3(effect.pos),
+                    crate::fx3(effect.cuts_end()),
+                    PILLAR,
+                );
             }
             // The Dual mage's spellbook: the black sun's and a sigil's ground,
             // each star's ball, and every place a burst strikes -- the

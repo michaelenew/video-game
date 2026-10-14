@@ -335,6 +335,11 @@ fn best_case(m: &Move) -> i32 {
             EffectKind::Haemorrhage.damage(m)
                 + t::bleed_damage() * (t::bleed_lasts() / t::bleed_tick()) as i32
         }
+        // The Hemoplague ticks for as long as the cloud stands, on whoever
+        // stays in it.
+        Some(EffectKind::Plague) => {
+            m.damage * (t::plague_lasts() / t::plague_tick().max(1)) as i32
+        }
         // A field, for as long as it stands. The move's own hit lands too.
         //
         // `FireTornado` never actually reaches this match: nothing casts one
@@ -372,6 +377,15 @@ fn best_case(m: &Move) -> i32 {
         Some(kind @ (EffectKind::LanceBurst | EffectKind::Quake)) => {
             m.damage * swings + kind.damage(m)
         }
+        // The Champion's full charges leave theirs through `moves::puts_out`
+        // rather than this column, so no row names them here; listed so the
+        // match is complete, at the move's hit and one of the effect's.
+        Some(
+            kind @ (EffectKind::Crescent
+            | EffectKind::Shockwave
+            | EffectKind::Cuts
+            | EffectKind::Javelin),
+        ) => m.damage * swings + kind.damage(m),
         // A pool is what a hit leaves, not what a cast places, and it deals
         // nothing on its own. No move's row says it; listed so the match is
         // complete.
@@ -399,6 +413,15 @@ fn best_case(m: &Move) -> i32 {
             // move, and are the move's own one hit.
             | EffectKind::Nova
             | EffectKind::Nail
+            // Hers of 2026-10-13 are placed by the world too, never by a
+            // row's code: the carpet and the thorns are fields the world
+            // ticks, a thrall and the golem bite with what they hold, and the
+            // cone is the picture of a blow already landed.
+            | EffectKind::Carpet
+            | EffectKind::Thrall
+            | EffectKind::Vines
+            | EffectKind::Golem
+            | EffectKind::Cascade
             // The Dual mage's bursts are placed by the world from the move --
             // a Shadowstep's arrival, Judgement's ring of columns, Apotheosis
             // -- never by a row's code; what a purge adds is the curse's, not
@@ -477,31 +500,6 @@ fn the_blood_mage_does_not_kill_in_two_buttons() {
 }
 
 #[test]
-fn a_grasp_always_finishes_hauling_before_it_lets_go() {
-    // The catch is a bind and then a haul (`state::drag_the_held`), and the
-    // haul covers real ground at a real speed. If the hold runs out first, a
-    // Grasp landed at full range drops its victim halfway home -- standing in
-    // mid-air, mid-drag, suddenly able to walk. The failure is invisible at
-    // short range and total at long range, which is the worst way for a number
-    // to be wrong.
-    use sim::state::SLOT_SPECIAL;
-    let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
-    let arm = t::body_radius().add(t::body_radius());
-    let furthest = grasp.reach.sub(arm);
-    let hauling = grasp.grabs.saturating_sub(t::grasp_bind());
-    let covered = t::reel_speed()
-        .mul(Fx::from_int(hauling as i32))
-        .div(Fx::from_int(60));
-    assert!(
-        covered.raw() >= furthest.raw(),
-        "the hold leaves {hauling} frames to haul, which covers {} m of the {} m \
-         a full-range Grasp has to cross",
-        covered.to_f32_for_render(),
-        furthest.to_f32_for_render()
-    );
-}
-
-#[test]
 fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
     // Both ends. Below about a fifth extra it is a number nobody notices and
     // the Grasp goes back to being a root with no payoff; far above it and
@@ -576,7 +574,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         }
         let n = moves::table(class).len();
         let expected = match class {
-            Class::Champion => 19,
+            // Twenty-five: the nineteen of the grid, and the six full
+            // charges a link held to full becomes -- 2026-10-12, see
+            // `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+            Class::Champion => 25,
             // Sixteen: the twelve of v2 (the seven, the Cinder spray, the two
             // drafts, Quake and Tremor) and the four of 2026-10-09 -- the Air
             // ball, the Fire carpet, the Fire fountain and the earth jump. See
@@ -591,11 +592,12 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             // the three takeoffs -- 2026-10-10, see
             // `docs/design/exploration/0012_bulwark_on_three_clicks.md`.
             Class::Bulwark => 7,
-            // Eleven: the five of the scythe's arrival and the six of
-            // 2026-10-09 -- the Blood nova, the Blood jet, Marionette, Nail,
-            // Hook and Harvest. See
-            // `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
-            Class::BloodMage => 11,
+            // Fourteen: the two taps and their two fields (the Haemorrhage
+            // and the Carpet, Command and the Summon), the spike and the
+            // Stake, the three takeoffs, Coagulate on `Q`, the Hemoplague on
+            // `E`, and the three finishers -- 2026-10-13. See
+            // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+            Class::BloodMage => 14,
             // Eighteen: her spellbook, 2026-10-12, and its second pass the
             // same day -- the wing autos, the takeoffs, twilight, `F` and
             // `R`, the majors, four with no button, and the three long holds.
@@ -1377,7 +1379,7 @@ fn every_class_has_a_move_that_carries_the_body() {
                 w.effects[0] = Some(sim::effects::Effect::pool(
                     0,
                     Class::BloodMage,
-                    moves::blood::SWEEP,
+                    moves::blood::HAEMORRHAGE,
                     at,
                     200,
                 ));

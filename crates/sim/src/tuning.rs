@@ -226,6 +226,14 @@ pub fn step_down() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepDown)).max(Fx::ZERO)
 }
 
+/// **The step a body walks up**: a box whose top is no further than this
+/// above grounded feet is stood on rather than walked into
+/// (`arena::Terrain::resolve`). Also what a seam in the land may rise by
+/// in a step and still be walked over.
+pub fn step_over() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepOver)).max(Fx::ZERO)
+}
+
 /// The steepest ground a body walks up, as rise over run (`valley::land`).
 pub fn terrain_steepest() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSteepest)).max(Fx::ratio(1, 10))
@@ -1204,6 +1212,211 @@ pub fn rush_frames() -> u16 {
 /// recharge is what makes it one.
 pub fn rush_recharge() -> u16 {
     oven::scalar(Scalar::RushRecharge) as u16
+}
+
+/// **Braced, not armoured.** The share of a blow's damage the Champion takes
+/// through most of a Rush; the blow does not stop him. See
+/// `docs/design/exploration/0015_champion_momentum_and_the_charge.md`, C1.
+pub fn rush_damage_taken() -> u16 {
+    oven::scalar(Scalar::RushDamageTaken).clamp(0, 100) as u16
+}
+
+/// The last frames of a Rush, in which one blow is **eaten whole**: the
+/// shoulder down as he arrives. Once a Rush.
+pub fn rush_eat_frames() -> u16 {
+    oven::scalar(Scalar::RushEatFrames).max(0) as u16
+}
+
+/// Damage taken over one Rush, after the bracing, that ends it the ordinary
+/// way: a creature's bite stops him, a poke does not.
+pub fn rush_breaks() -> i32 {
+    oven::scalar(Scalar::RushBreaks).max(0)
+}
+
+/// How far past touching a body the Rush's shoulder reaches.
+pub fn shoulder_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShoulderReach))
+}
+
+/// **The shoulder**, which is the string's first hit when a Rush runs into a
+/// body: its damage, its stuns, its shove and its freeze.
+pub fn shoulder_damage() -> i32 {
+    oven::scalar(Scalar::ShoulderDamage)
+}
+
+pub fn shoulder_hitstun() -> u16 {
+    oven::scalar(Scalar::ShoulderHitstun) as u16
+}
+
+pub fn shoulder_blockstun() -> u16 {
+    oven::scalar(Scalar::ShoulderBlockstun) as u16
+}
+
+pub fn shoulder_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShoulderKnockback))
+}
+
+pub fn shoulder_freeze() -> u16 {
+    oven::scalar(Scalar::ShoulderFreeze) as u16
+}
+
+/// **The Beat** (exploration 0015, C2): what a true link -- the next link
+/// pressed inside the freeze of one that landed -- adds to its damage, as a
+/// percentage, and to its freeze, in frames. The window is the freeze itself,
+/// so it is the weapon's weight: wide on the hammer, tight on the sword.
+pub fn true_link_damage() -> u16 {
+    oven::scalar(Scalar::TrueLinkDamage).max(0) as u16
+}
+
+pub fn true_link_freeze() -> u16 {
+    oven::scalar(Scalar::TrueLinkFreeze).max(0) as u16
+}
+
+/// **Tap to combo, hold to finish** (exploration 0015, the fourth round).
+/// Frames a link's button must be held, counted from the press, for it to be
+/// that weapon's finisher rather than the link: about a wind-up, so a press a
+/// little long on the sword's six frames is still the sword.
+pub fn hold_from() -> u16 {
+    oven::scalar(Scalar::HoldFrom).max(1) as u16
+}
+
+/// How fast he walks while holding, as a share of his walk: a crawl. He turns
+/// freely -- the aim is live through any channel.
+pub fn hold_mobility() -> u8 {
+    oven::scalar(Scalar::HoldMobility).clamp(0, 100) as u8
+}
+
+// The full charges (exploration 0015, C5). Each is read where its move
+// comes out; see `state::World::champion_comes_out`.
+
+/// Crescent, flies (m).
+pub fn crescent_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrescentReach))
+}
+
+/// Crescent, speed (m/s).
+pub fn crescent_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrescentSpeed))
+}
+
+/// Crescent, half-width (m).
+pub fn crescent_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrescentRadius))
+}
+
+/// Crescent, damage.
+pub fn crescent_damage() -> i32 {
+    oven::scalar(Scalar::CrescentDamage)
+}
+
+/// Shockwave, ring out to (m).
+pub fn shockwave_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShockwaveReach))
+}
+
+/// Meteor, ring out to (m).
+pub fn meteor_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MeteorReach))
+}
+
+/// Shockwave, ring speed (m/s).
+pub fn shockwave_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShockwaveSpeed))
+}
+
+/// Shockwave, ring damage.
+pub fn shockwave_damage() -> i32 {
+    oven::scalar(Scalar::ShockwaveDamage)
+}
+
+/// Meteor, ring damage.
+pub fn meteor_ring_damage() -> i32 {
+    oven::scalar(Scalar::MeteorRingDamage)
+}
+
+/// Shockwave, guard crushed for (frames).
+pub fn shockwave_crush() -> u16 {
+    oven::scalar(Scalar::ShockwaveCrush).max(0) as u16
+}
+
+/// Meteor, leap rise (m/s).
+pub fn meteor_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MeteorRise))
+}
+
+/// Thousand Cuts, dashes (m).
+pub fn cuts_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsReach))
+}
+
+/// Thousand Cuts, dash speed (m/s).
+pub fn cuts_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsSpeed))
+}
+
+/// Thousand Cuts, cuts land after.
+pub fn cuts_delay() -> u16 {
+    oven::scalar(Scalar::CutsDelay).max(0) as u16
+}
+
+/// Thousand Cuts, a cut every.
+pub fn cuts_every() -> u16 {
+    oven::scalar(Scalar::CutsEvery).max(0) as u16
+}
+
+/// Thousand Cuts, cuts.
+pub fn cuts_count() -> i32 {
+    oven::scalar(Scalar::CutsCount)
+}
+
+/// Thousand Cuts, damage a cut.
+pub fn cuts_damage() -> i32 {
+    oven::scalar(Scalar::CutsDamage)
+}
+
+/// Thousand Cuts, the last cut.
+pub fn cuts_last_damage() -> i32 {
+    oven::scalar(Scalar::CutsLastDamage)
+}
+
+/// Thousand Cuts, the last cut throws up (m/s).
+pub fn cuts_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsLaunch))
+}
+
+/// Thousand Cuts, cuts reach off the line (m).
+pub fn cuts_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutsRadius))
+}
+
+/// Heaven-piercer, javelin speed (m/s).
+pub fn javelin_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JavelinSpeed))
+}
+
+/// Heaven-piercer, waits for him.
+pub fn javelin_rest() -> u16 {
+    oven::scalar(Scalar::JavelinRest).max(0) as u16
+}
+
+/// Heaven-piercer, he follows at (m/s).
+pub fn follow_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FollowSpeed))
+}
+
+/// Heaven-piercer, tear-out radius (m).
+pub fn tear_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TearRadius))
+}
+
+/// Heaven-piercer, tear-out damage.
+pub fn tear_damage() -> i32 {
+    oven::scalar(Scalar::TearDamage)
+}
+
+/// Heaven-piercer, tear-out throws up (m/s).
+pub fn tear_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TearLaunch))
 }
 
 /// How far below the horizon you have to be pointing for a spear thrown out of
@@ -3488,4 +3701,454 @@ pub fn flurry_jump_buffer() -> u16 {
 /// How much of the run's speed the jump out of it carries.
 pub fn flurry_jump_keep() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FlurryJumpKeep)).max(Fx::ZERO)
+}
+
+/// What a hit through one of her stains adds to itself, as a share of the
+/// stain's essence: the stain is drunk, and the blow is harder for it.
+pub fn stain_hit_bonus(essence: i32) -> i32 {
+    essence.max(0) * oven::scalar(Scalar::StainHitBonus).max(0) / 100
+}
+
+/// What walking into one of her stains drinks of it, as a share of its
+/// essence. All of it, to begin with: getting health back was too hard.
+pub fn stain_walk_drinks() -> i32 {
+    oven::scalar(Scalar::StainWalkDrinks).clamp(0, 100)
+}
+
+// The blaster's knobs (2026-10-12). See
+// `docs/design/exploration/0015_blood_mage_blaster.md`.
+
+/// Charge, tier two at.
+pub fn tier_two() -> u16 {
+    oven::scalar(Scalar::TierTwo).max(1) as u16
+}
+
+/// Charge, tier three at.
+pub fn tier_three() -> u16 {
+    oven::scalar(Scalar::TierThree).max(1) as u16
+}
+
+/// Charge, tier two costs (% of red).
+pub fn tier_two_cost() -> i32 {
+    oven::scalar(Scalar::TierTwoCost).max(0)
+}
+
+/// Charge, tier three costs (% of red).
+pub fn tier_three_cost() -> i32 {
+    oven::scalar(Scalar::TierThreeCost).max(0)
+}
+
+/// Charge, tier two hits (x).
+pub fn tier_two_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TierTwoPower).max(0))
+}
+
+/// Charge, tier three hits (x).
+pub fn tier_three_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TierThreePower).max(0))
+}
+
+/// Charge, faster at full grey (x).
+pub fn charge_grey_faster() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChargeGreyFaster).max(0))
+}
+
+/// Vessel, 1% of red every.
+pub fn vessel_bleeds_every() -> u16 {
+    oven::scalar(Scalar::VesselBleedsEvery).max(1) as u16
+}
+
+/// Black spike, tier two each (x).
+pub fn spike_two_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeTwoPower).max(0))
+}
+
+/// Black spike, tier three field radius.
+pub fn spike_field_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeFieldRadius).max(0))
+}
+
+/// Black spike, tier three each wave (x).
+pub fn spike_field_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeFieldPower).max(0))
+}
+
+/// Black spike, tier three waves.
+pub fn spike_waves() -> i32 {
+    oven::scalar(Scalar::SpikeWaves).max(0)
+}
+
+/// Black spike, tier three wave every.
+pub fn spike_wave_every() -> u16 {
+    oven::scalar(Scalar::SpikeWaveEvery).max(1) as u16
+}
+
+/// Blood wings, frames to cross.
+pub fn wings_frames() -> u16 {
+    oven::scalar(Scalar::WingsFrames).max(1) as u16
+}
+
+/// Teleport, to a stain within (m).
+pub fn teleport_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TeleportReach).max(0))
+}
+
+/// Hemoplague, cloud lasts.
+pub fn plague_lasts() -> u16 {
+    oven::scalar(Scalar::PlagueLasts).max(1) as u16
+}
+
+/// Hemoplague, hurts every.
+pub fn plague_tick() -> u16 {
+    oven::scalar(Scalar::PlagueTick).max(1) as u16
+}
+
+/// Hemoplague, cloud height.
+pub fn plague_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueHeight).max(0))
+}
+
+/// How fast she walks while holding a charge, as a share of a walk: a crawl,
+/// whatever the move's own row says about its cast.
+pub fn charge_crawl() -> i32 {
+    oven::scalar(Scalar::ChargeCrawl).clamp(0, 100)
+}
+
+/// How far past an eruption's edge a stain of hers is still set off by it:
+/// what lets a spike on the start of a bleeding fighter's trail run the trail.
+pub fn erupt_chain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EruptChain).max(0))
+}
+
+// Stains, thralls and the Well (2026-10-13). See
+// `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+
+/// Well, full at.
+pub fn well_full() -> i32 {
+    oven::scalar(Scalar::WellFull).max(0)
+}
+
+/// Stain, settles before it can be drunk.
+pub fn stain_settles() -> u16 {
+    oven::scalar(Scalar::StainSettles).max(0) as u16
+}
+
+/// Carpet, starts at radius.
+pub fn carpet_from() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetFrom).max(0))
+}
+
+/// Carpet, grows to radius.
+pub fn carpet_to() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetTo).max(0))
+}
+
+/// Carpet, 1% of red every.
+pub fn carpet_pays_every() -> u16 {
+    oven::scalar(Scalar::CarpetPaysEvery).max(0) as u16
+}
+
+/// Carpet, hurts every.
+pub fn carpet_tick() -> u16 {
+    oven::scalar(Scalar::CarpetTick).max(0) as u16
+}
+
+/// Coagulate, gathers stains within (m).
+pub fn coagulate_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CoagulateReach).max(0))
+}
+
+/// Coagulate, stains slide at (m/s).
+pub fn coagulate_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CoagulateSpeed).max(0))
+}
+
+/// Summon, raises stains within (m).
+pub fn summon_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SummonReach).max(0))
+}
+
+/// Thralls at once.
+pub fn thrall_cap() -> i32 {
+    oven::scalar(Scalar::ThrallCap).max(0)
+}
+
+/// Thrall, runs at (m/s).
+pub fn thrall_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallSpeed).max(0))
+}
+
+/// Thrall, goes for a body within (m).
+pub fn thrall_seek() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallSeek).max(0))
+}
+
+/// Thrall, bites within (m).
+pub fn thrall_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallReach).max(0))
+}
+
+/// Thrall, a bite spends (% of it).
+pub fn thrall_bite() -> i32 {
+    oven::scalar(Scalar::ThrallBite).max(0)
+}
+
+/// Thrall, a bite spends at least.
+pub fn thrall_bite_least() -> i32 {
+    oven::scalar(Scalar::ThrallBiteLeast).max(0)
+}
+
+/// Thrall, bites every.
+pub fn thrall_bite_every() -> u16 {
+    oven::scalar(Scalar::ThrallBiteEvery).max(0) as u16
+}
+
+/// Rising reap, cone half-width (cos).
+pub fn reap_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapCone).max(0))
+}
+
+/// Rising reap, hurls thralls at (m/s).
+pub fn reap_hurl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapHurl).max(0))
+}
+
+/// Rising reap, hurls thralls for.
+pub fn reap_hurl_for() -> u16 {
+    oven::scalar(Scalar::ReapHurlFor).max(0) as u16
+}
+
+/// Golem, walks at (m/s).
+pub fn golem_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSpeed).max(0))
+}
+
+/// Golem, punches every.
+pub fn golem_punch_every() -> u16 {
+    oven::scalar(Scalar::GolemPunchEvery).max(0) as u16
+}
+
+/// Golem, punches within (m).
+pub fn golem_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemReach).max(0))
+}
+
+/// Golem, stands this many thralls tall (x): how much wider and taller than
+/// a thrall of the same essence the golem is.
+pub fn golem_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSize).max(0))
+}
+
+/// Grey, holds before it fades: the frames after grey last opened before the fade starts.
+pub fn grey_grace() -> u16 {
+    oven::scalar(Scalar::GreyGrace).max(0) as u16
+}
+
+/// Hemoplague, starts at radius: the cloud the moment the hold opens.
+pub fn plague_from() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueFrom).max(0))
+}
+
+/// Hemoplague, grows to radius: the cloud at the end of the hold.
+pub fn plague_to() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueTo).max(0))
+}
+
+/// Hemoplague, slows to (x): what is in the cloud moves at this share of its speed.
+pub fn plague_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueSlow).max(0))
+}
+
+/// Finisher, damage per grey spent (x): what each point of grey and Well a finisher spends adds to its blow.
+pub fn finisher_per_grey() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FinisherPerGrey).max(0))
+}
+
+/// Black vines, erupt out over: the frames the vines take to reach the edge of the cloud.
+pub fn vines_grow() -> u16 {
+    oven::scalar(Scalar::VinesGrow).max(0) as u16
+}
+
+/// Black vines, stand for: how long the vines stay, bleeding and slowing.
+pub fn vines_lasts() -> u16 {
+    oven::scalar(Scalar::VinesLasts).max(0) as u16
+}
+
+/// Black vines, bleed what enters every: how often the standing vines open a bleed and slow.
+pub fn vines_tick() -> u16 {
+    oven::scalar(Scalar::VinesTick).max(0) as u16
+}
+
+/// Black vines, radius per cloud radius (x): how far past the cloud the vines spread.
+pub fn vines_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VinesSize).max(0))
+}
+
+/// Crimson cascade, waves: how many rings of eruptions go out.
+pub fn cascade_waves() -> i32 {
+    oven::scalar(Scalar::CascadeWaves).max(0)
+}
+
+/// Crimson cascade, a wave every: the frames between one ring erupting and the next.
+pub fn cascade_every() -> u16 {
+    oven::scalar(Scalar::CascadeEvery).max(0) as u16
+}
+
+/// Crimson cascade, rings apart (m): how much further out each ring erupts.
+pub fn cascade_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeStep).max(0))
+}
+
+/// Crimson cascade, each wave of the last (x): what share of a wave's blow the next carries.
+pub fn cascade_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeDecay).max(0))
+}
+
+/// Stain, a chained eruption waits: the frames between one stain erupting and the next it sets off.
+pub fn chain_delay() -> u16 {
+    oven::scalar(Scalar::ChainDelay).max(0) as u16
+}
+
+/// Black spike, widest ring at a full hold (m): the spikes beyond the first stand on a ring this wide at the end of the hold.
+pub fn spike_spread_most() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeSpreadMost).max(0))
+}
+
+/// Black spike, spikes at a full hold: how many a hold to the end raises.
+pub fn spikes_most() -> i32 {
+    oven::scalar(Scalar::SpikesMost).max(0)
+}
+
+/// Golem, hurts itself per blow dealt (x): what each punch costs the golem, as a share of what it dealt.
+pub fn golem_self_hurt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSelfHurt).max(0))
+}
+
+// Momentum (exploration 0015, C4): the Champion's meter. See
+// `state::feed_the_momentum`.
+
+/// Momentum, the meter holds.
+pub fn momentum_max() -> i32 {
+    oven::scalar(Scalar::MomentumMax).max(0)
+}
+
+/// Momentum, a hit that lands.
+pub fn momentum_hit() -> i32 {
+    oven::scalar(Scalar::MomentumHit).max(0)
+}
+
+/// Momentum, more for a different weapon.
+pub fn momentum_swap() -> i32 {
+    oven::scalar(Scalar::MomentumSwap).max(0)
+}
+
+/// Momentum, more for a true link.
+pub fn momentum_beat() -> i32 {
+    oven::scalar(Scalar::MomentumBeat).max(0)
+}
+
+/// Momentum, more for a full charge.
+pub fn momentum_full() -> i32 {
+    oven::scalar(Scalar::MomentumFull).max(0)
+}
+
+/// Momentum, holds after a hit for.
+pub fn momentum_holds() -> u16 {
+    oven::scalar(Scalar::MomentumHolds).max(0) as u16
+}
+
+/// Momentum, drains a frame after.
+pub fn momentum_drain() -> i32 {
+    oven::scalar(Scalar::MomentumDrain).max(0)
+}
+
+/// Momentum, a hit taken costs (%).
+pub fn momentum_hurt() -> i32 {
+    oven::scalar(Scalar::MomentumHurt).max(0)
+}
+
+// Break and the Clash (exploration 0015, C6 and C7). See `state::impact`
+// and `state::clashing`.
+
+/// Impact, hammer blows into strain (%).
+pub fn impact_hammer() -> i32 {
+    oven::scalar(Scalar::ImpactHammer).max(0)
+}
+
+/// Impact, third links into strain (%).
+pub fn impact_third() -> i32 {
+    oven::scalar(Scalar::ImpactThird).max(0)
+}
+
+/// Impact, true links into strain (%).
+pub fn impact_beat() -> i32 {
+    oven::scalar(Scalar::ImpactBeat).max(0)
+}
+
+/// Impact, full charges into strain (%).
+pub fn impact_full() -> i32 {
+    oven::scalar(Scalar::ImpactFull).max(0)
+}
+
+/// Impact, of a full charge's extra into poise (%).
+pub fn impact_poise() -> i32 {
+    oven::scalar(Scalar::ImpactPoise).max(0)
+}
+
+/// Meteor, stumbles a creature for.
+pub fn meteor_stumble() -> u16 {
+    oven::scalar(Scalar::MeteorStumble).max(0) as u16
+}
+
+/// Clash, a creature flinches for.
+pub fn clash_flinch() -> u16 {
+    oven::scalar(Scalar::ClashFlinch).max(0) as u16
+}
+
+/// Clash, the lighter blow staggers for.
+pub fn clash_stagger() -> u16 {
+    oven::scalar(Scalar::ClashStagger).max(0) as u16
+}
+
+/// Clash, both freeze for.
+pub fn clash_freeze() -> u16 {
+    oven::scalar(Scalar::ClashFreeze).max(0) as u16
+}
+
+/// **What momentum is worth** (exploration 0015, the fourth round): what a
+/// full meter adds to every hit he lands, as a percentage -- less, in
+/// proportion, for a meter less full.
+pub fn momentum_buff() -> i32 {
+    oven::scalar(Scalar::MomentumBuff).max(0)
+}
+
+/// What a full meter **spent** adds to a finisher's damage and to the size of
+/// what it puts in the world -- every finisher spends the meter, whatever is
+/// in it, and is worth its share of this.
+pub fn momentum_spend() -> i32 {
+    oven::scalar(Scalar::MomentumSpend).max(0)
+}
+
+/// What a full meter spent adds to the stagger a finisher's victim is in, in
+/// frames; its share for less.
+pub fn momentum_stagger() -> u16 {
+    oven::scalar(Scalar::MomentumStagger).max(0) as u16
+}
+
+/// How far a fighter whose blow the Champion clashed may be and still be
+/// staggered by it: their own swing, not a bolt from across the arena.
+pub fn clash_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClashReach))
+}
+
+/// The hammer's finisher thrown in the air: how fast he is driven back down
+/// to the floor (m/s). See `state::begin_full_charge`.
+pub fn slam_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamDive))
+}
+
+/// The hammer's slam from the air goes down the crosshair's line, held inside
+/// a cone this wide round straight down (turns).
+pub fn slam_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamCone))
 }

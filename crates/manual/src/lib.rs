@@ -196,7 +196,7 @@ pub const SECTIONS: &[Section] = &[
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword, and held down it walks that weapon's whole three-hit string.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword: tapped, it walks that weapon's whole three-hit string; held down, it is the sword's finisher.",
             ),
             e(
                 "Q",
@@ -231,7 +231,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Champion",
         in_browser: true,
-        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move.",
+        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move. Reworked 2026-10-12 and unplayed: a braced Rush that opens the string, the beat, tap to combo and hold to finish, six finishers and a momentum meter they spend -- docs/design/exploration/0015_champion_momentum_and_the_charge.md is the design.",
         entries: &[
             e(
                 "Left click",
@@ -247,31 +247,35 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Keep swinging",
-                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or leave the ground.",
+                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or attack out of a Rush. A jump does not end it: an aerial or a jumping attack is the next hit, and with two hits behind you an aerial is the third -- ground, jump, third -- and held, the grand finisher.",
             ),
             e(
                 "The third hit",
-                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, and is the only attack in the game that threatens behind you. All three commit your feet.",
+                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, is the only attack in the game that threatens behind you, and shoves them furthest. All three commit your feet. One that lands gives you your Rush back.",
             ),
             e(
-                "Jump during Earthbreaker",
-                "Press space while the hammer's third hit is winding up and you go up with them: the knock-up is bigger and you leave the floor on the frame it lands, which puts the air hammer in reach off the end of an ordinary string. It is paid on contact, so a whiff costs you the recovery and gives you nothing.",
+                "On the beat",
+                "Press the next hit while the last one's impact is still holding both of you still and it is a true link: it hits harder and sticks longer. The window is the weapon's weight -- wide on the hammer, three frames on the sword.",
             ),
             e(
-                "Space and a weapon",
-                "That weapon's takeoff, thrown as your feet leave the floor. Sword rises into an angled slash and hits hardest; hammer is the uppercut, which launches and holds on, and space again takes you both higher; spear cracks the shaft into the ground for the most height in the class plus a shove the way you are holding. Press jump first and the weapon a few frames later — that order always works.",
+                "Hold a weapon",
+                "Tap to string hits; hold to finish. Any hit you pressed for and keep holding, about as long as its wind-up, becomes that weapon's finisher, at any point in the string, and ends it -- aerials too. A press a little long is still the tap, clicking fast never holds (let go once and that hit is a tap), and Rush takes a hold back.",
             ),
             e(
-                "In the air",
-                "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
+                "Finishers",
+                "First or second hit: the sword's Crescent, a blade of light that flies down the crosshair; the hammer's Shockwave, a ring of broken ground that throws up everyone in it and breaks a guard; the spear's Repel, the pole swung all the way round you, which throws everyone near you clear and hurts little. Third hit, the grand finishers: Thousand Cuts, a run through them whose cuts land a beat later; Meteor, a leap that comes down where you are aiming in a crater; Heaven-piercer, the spear thrown to pin whoever it hits, with you rushing after it to tear it out. In the air the Crescent keeps your jump's speed, and the hammer's two slam you straight back down and break the ground where you land. A finisher, or Earthbreaker, meets any blow thrown into it and wins: the blow is spent and whoever threw it is knocked out of it.",
+            ),
+            e(
+                "Momentum",
+                "The bar under your health. Every hit that lands fills it -- on anybody, anything -- and a different weapon from the last, a true link and a finisher fill it more. It holds for two seconds, then drains -- but not while you are winding up a hold -- and a hit you take costs a share. The fuller it is, the harder every hit you land. Every finisher spends all of it, whatever is in it, and hits harder, bigger and staggers longer for what it spent; a full bar spent knocks them down. The glow on your weapon is the bar.",
             ),
             e(
                 "E",
-                "Rush. A dash on one charge, and it cancels any recovery. It does not end a string — one charge buys you a reposition in the middle of one.",
+                "Rush. A fast dash toward the crosshair on one charge, and it cancels any recovery or a hold. It does not end a string. You are braced while you run -- a hit costs you half and does not stop you, one in the last few frames costs nothing, though enough of them will. Run into somebody and the shoulder is the string's first hit: the next click is the second.",
             ),
             e(
                 "While rushing",
-                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs for the biggest single hit in the class, or vaults if you are pointing at the floor.",
+                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs and carries whoever it catches along the rest of the run, or vaults if you are pointing at the floor.",
             ),
         ],
     },
@@ -435,35 +439,47 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Blood mage",
         in_browser: true,
-        blurb: "Her blood goes out and theirs comes back. Her three clicks are my blood, your blood and the scythe -- each a move on the floor, something else in the air, and a jump attack with space. Her own pools are doors, not heals: only somebody else's blood closes her wounds. Built 2026-10-09 and unplayed; docs/design/exploration/0009_blood_mage_on_three_clicks.md is the direction.",
+        blurb: "The summoner who pays in blood. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land, yours or a thrall's, leaves a stain of the other body's blood. A stain is yours however you take it -- walk into it, teleport to it, hit through it -- and what your health cannot hold fills the Well, the dark bar under your health. Lost health stays grey for two seconds and then drains fast: spend it. A tap is the quick thing, a hold is the area, and a hold kept to its end is a finisher that spends all your grey and the Well -- the more there was, the harder it lands. Revised 2026-10-13 and unplayed; docs/design/exploration/0016_blood_mage_thralls_and_the_well.md is the design.",
         entries: &[
             e(
                 "Left click",
-                "My blood. Hold to charge the Blood nova, paid in your own health as you hold; let go and a sphere of blood bursts round you, hurts and throws back whoever is close, and leaves a pool of your blood where you stood. In the air it is the Haemorrhage: a bolt that opens a bleed, and a bleeding body -- fighter or creature -- drips pools as it goes.",
+                "Tapped, the Haemorrhage: a bolt down the crosshair that opens a bleed, and a bleeding body drips stains as it goes. Held, the Hemoplague: a cloud on the floor where you aim that grows for as long as you hold, hurting and slowing everybody in it; let go and it stays at that size for a while. Held to its end, the Black vines: barbed vines erupt out from the cloud's middle, hitting and bleeding everything they reach, and stand for five seconds bleeding and slowing whatever walks in.",
             ),
             e(
                 "Middle click",
-                "Your blood. Hold for reach and four arms close on the crosshair: all four catch, and the victim is hauled to your feet -- or, if they close on a wall, a stone or the creature, you are hauled to it. In the air it is the Nail: a long black spike thrown down the crosshair. Nail somebody who is already in the air and they are pinned there for a moment, bleeding on to the floor below.",
+                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. On a stain the stain erupts, and the stains round it go up one after another, a few frames apart -- an eruption spends its stain and leaves nothing behind. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair one after another, setting off every stain of yours they cross.",
             ),
             e(
                 "Right click",
-                "The scythe. The Reaping sweep, whose reach grows with your grey health. In the air it is the Hook: thrown along the crosshair, it catches the first fighter, creature, stone or wall and pulls you to it.",
+                "Tapped, Command: your thralls and the golem drop whatever they are doing and go to the crosshair's spot on the floor; once there they go for the nearest enemy, as they do by themselves. Held, the Carpet of blood: a pool on the floor where you aim that grows as you hold, costs you as it grows and hurts a little; let go and it is one big stain, and every stain of yours it covered stands up as a thrall. Held to its end, the Blood golem: everything the carpet covers and all your grey fused into one great thrall with that many hit points, that takes blows like a creature, hurts itself a little with every punch and wears down over time.",
+            ),
+            e(
+                "Thralls",
+                "A thrall is a stain on legs, up to six. It walks round walls to the nearest enemy -- a fighter, the creature, a pack's critter -- and bites; a bite deals what the thrall spends of itself and spills that as a stain under its prey. Any one blow kills a thrall, and it falls back into a stain of what it had left. A creature turns on the golem, and on a thrall nearer to it than you are.",
             ),
             e(
                 "Space + a click",
-                "The jump attacks. Space and left (held) is the Blood jet: you leave the floor on a jet of your own blood, further and harder the longer you hold, paid as you hold; whoever is in its wake is hurt, and a pool of your blood is left where you took off -- blink back to it. Space and middle is Marionette: their blood lifts them into the air (and you after them) -- Nail them up there. Space and right is Harvest: a big jump inside a scythe spin that drinks the pools it passes over.",
+                "The takeoffs, from the floor and once in the air. Space and left is Blood wings: a burst along your aim, any way at all, hurting whoever is beside you. Space and middle is the Upheaval: a geyser at the crosshair that launches, with a hop for you -- Stake them up there. Space and right is the Rising reap: a sweep up and out in front of you that hurls your thralls along it, drinks your stains in it and lightly hits whoever is there.",
+            ),
+            e(
+                "Jump or dodge while holding the spike",
+                "Stores it in your vessel as far as it had charged: you jump or dodge as normal, and a fresh press of the middle click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
             ),
             e(
                 "Q",
-                "The Bloodletter: a blade thrown out a fixed distance and back, cutting on both passes. In no combo yet, and the candidate to cut once she has been played.",
+                "Coagulate: every stain of yours near the crosshair slides there and they merge into one.",
             ),
             e(
                 "E",
-                "The Black spike: a spike out of the floor after a delay. On a pool, the pool erupts, and on a bleed's trail it chains along the pools to the bleeding body.",
+                "The Summon: every stain near you stands up as a thrall.",
             ),
             e(
-                "Shift + direction, crosshair on a pool",
-                "The blink: you are at the pool, and it is spent. Your own pools are for this -- they never heal you.",
+                "Shift + direction, crosshair on a stain",
+                "The teleport, up to twelve metres: you are at the stain, you drink it, and you arrive in a burst of blood -- from the air too. A teleport into a fight is the risk you take for the stain. With no stain under the crosshair the dodge is an ordinary dodge.",
+            ),
+            e(
+                "Walking into a stain",
+                "Drinks it, whoever's blood it is. What your health cannot hold goes into the Well.",
             ),
         ],
     },
@@ -818,7 +834,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p sim --bin essence",
-                "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the scythe's reach at each level of grey. The first thing to run after touching the class.",
+                "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the Well. The first thing to run after touching the class.",
             ),
             e(
                 "cargo run -p sim --bin elemental",
@@ -934,12 +950,24 @@ pub const SECTIONS: &[Section] = &[
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
             ),
             e(
+                "SHOT_MOMENTUM=<n>",
+                "Start every Champion with n momentum, so a capture can look at the meter and the glow on his weapon without landing his way up to them. It holds two seconds and then drains, so pair it with an early SHOT_FRAME.",
+            ),
+            e(
+                "SHOT_FORM=<weapon>,<n>",
+                "Start every Champion with her liquid weapon in that shape (sword, hammer or spear), as it is n frames after the move that called it ended: SHOT_FORM=hammer,0 is a whole hammer, and SHOT_FORM=spear,130 with SHOT_FRAME=90 is a spear halfway through melting back into the coil round her arm. The clock runs on, so pair it with SHOT_FRAME and DEMO=0.",
+            ),
+            e(
                 "SHOT_AT=<x>,<z>",
                 "Stand player one at that point of the place the world is in (metres), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
             ),
             e(
                 "SHOT_MOVE=<move>",
                 "Start a hunt with the creature winding up that move at player one (the Ridgeback's bite, stomp, sweep, charge, slam, kick, spray; the Mireback's spew, flop, tongue, belch, backwash, inflate, wallow, a lob aimed at player one; the Sandmaw's rise, breach, undertow, spit, lash, swallow, sound, from under the sand or standing as the move is thrown; the Pair's pounce, rake, swat, feint, ambush, trip, twin -- both cats, either side of you; the Broodmother's stab, lunge, slam, screech, web shot, web line; the Mantis's scythe, second slash, lunge, guard, leap, dive, flare, pivot, prayer, ready; the Veilstalker's lunge, spear, rake, pounce -- off a trunk top -- quill, smoke, mimic; the Galewing's stoop, talon, downwash, volley -- from its cruising height -- screech, buffet, hop -- on the plateau; the Siegeshell's footfall, stamp and drag on a foot in front of you, shed off its flank, plough down the valley behind you, shrug, shiver, and the beam at the siege line), so a capture can look at its floor marker. A pack puts one body of a kind that throws it there instead, and --hunt gnawers with SHOT_MOVE=pile calls a pile-on on a ring of them; --hunt hornback lays each of the herd's moves out (charge at a boulder, best with SHOT_YAW=1.57; bellow, hook, guard, trample, shoulder, kick, buck). Pair it with SHOT_FRAME and DEMO=0.",
+            ),
+            e(
+                "SHOT_BLOOD=1",
+                "With the Blood mage as player one, start her in front of her own work -- three thralls and a golem out ahead and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

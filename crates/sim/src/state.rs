@@ -58,6 +58,8 @@ pub const NAILED: u8 = u8::MAX - 1;
 
 /// `Player::blinked` when she did not blink this frame.
 pub const NO_POOL: u8 = u8::MAX;
+/// `Player::vessel` when the Blood mage has no charge stored.
+pub const NO_VESSEL: u8 = u8::MAX;
 /// `Player::charging_stone` when the Elementalist is holding no stone.
 pub const NO_STONE: u8 = u8::MAX;
 
@@ -667,13 +669,33 @@ pub struct Player {
     /// from here toward where the crosshair is then. A position, so it is
     /// moved by `World::shift` with everything else a fighter keeps.
     pub ball_at: V3,
-    /// Where the Blood mage's jet left the floor, while it runs: the far end
-    /// of the wake it hurts, and where the pool of her own blood goes. A
-    /// position, so `World::shift` moves it.
-    pub launched_from: V3,
-    /// Red the Blood mage has paid into the hold she is in -- the nova's or the
-    /// jet's -- and so how much of her own blood the pool it leaves holds.
-    pub self_spent: i32,
+    /// **The Blood mage's charge**: the tier the move she has out was let go
+    /// at -- one to three -- or nought for anything untiered. See
+    /// `moves::Charge::Tier`.
+    pub tier: u8,
+    /// **Her vessel**: a charge stored by a jump or a dodge out of its hold,
+    /// to be let go later with the same click -- the move, or [`NO_VESSEL`] --
+    /// and the tier it had reached. It bleeds her while it holds anything.
+    pub vessel: u8,
+    pub vessel_tier: u8,
+    /// Has the click that stored it come up since? A stored charge lets go
+    /// on a fresh press, never on the hold that charged it.
+    pub vessel_ready: bool,
+    /// **The Blood mage's Well** (2026-10-13): what she has drunk that her
+    /// grey could not hold. Full at `tuning::well_full`, it is what a finisher
+    /// spends; nothing else fills it, and it does not drain.
+    pub well: u16,
+    /// What the cast she has out cost her, owed to the floor: it lands as a
+    /// stain where the cast does, on its first active frame. Nought when
+    /// nothing is owed.
+    pub paid: u16,
+    /// Frames before the Blood mage's grey starts to fade: set to
+    /// `tuning::grey_grace` every time grey opens, counted down after.
+    pub grey_rest: u8,
+    /// What a finisher of hers is spending: all the grey and the Well she
+    /// had when it began, held from the frame the hold ran out to the frame
+    /// it lands. Nought otherwise.
+    pub fuel: u16,
     /// **The Dual mage's curse on this body** (2026-10-12): how many stacks
     /// and whose, packed as `dual::stacks` and `dual::cursed_by` read it, and
     /// the clock until the next stack fades. Her light purges it -- see
@@ -723,7 +745,7 @@ pub struct Player {
     /// ten fit and everybody else leaves the tail at zero. In the snapshot
     /// because it decides what a button does: a lockout kept outside it would
     /// let a rollback re-throw a move the original frame refused.
-    pub repeat_lock: [u16; moves::MAX_SLOTS],
+    pub repeat_lock: [u16; moves::LOCKED_SLOTS],
     /// Frames left before an ability that is **still out there** may be used
     /// again -- the recall, not the cast.
     ///
@@ -735,7 +757,7 @@ pub struct Player {
     /// that brings the shadow home is the same button.
     ///
     /// Zero everywhere until somebody plays it -- see `Move::reactivate`.
-    pub reactivate_lock: [u16; moves::MAX_SLOTS],
+    pub reactivate_lock: [u16; moves::LOCKED_SLOTS],
     /// The reach a channelled move wound up to before its button came back up.
     ///
     /// Kept because the move outlives the channel: the arms of a Grasp are
@@ -826,6 +848,8 @@ impl Player {
                 SLOT_SPECIAL => {
                     let kind = match self.class {
                         Class::Elementalist => crate::effects::EffectKind::FirePillar,
+                        // The Hemoplague: one cloud of hers at a time.
+                        Class::BloodMage => crate::effects::EffectKind::Plague,
                         _ => crate::effects::EffectKind::GuillotineLotus,
                     };
                     scene
@@ -1010,6 +1034,7 @@ impl Player {
         self.health -= paid;
         if self.class.wounds_go_grey() {
             self.grey += paid;
+            self.rest_the_grey();
         }
     }
 
@@ -1029,6 +1054,7 @@ impl Player {
         self.health -= dealt;
         if self.class.wounds_go_grey() {
             self.grey += dealt;
+            self.rest_the_grey();
         }
         dealt
     }
@@ -1039,6 +1065,11 @@ impl Player {
     /// half of it.
     pub fn untouchable(&self) -> bool {
         self.action.invulnerable() || dual::veiled(self)
+    }
+
+    /// Grey just opened: it holds for `tuning::grey_grace` before it fades.
+    fn rest_the_grey(&mut self) {
+        self.grey_rest = t::grey_grace().min(u8::MAX as u16) as u8;
     }
 
     pub fn heal(&mut self, amount: i32) {
@@ -1065,6 +1096,23 @@ impl Player {
         self.health += took;
         self.grey -= took;
         took
+    }
+
+    /// **Drink a stain**: up to `amount` of grey turned back into red, and
+    /// whatever her grey could not hold poured into the Well, which is full at
+    /// `tuning::well_full`. What came back as red is given back.
+    pub fn absorb(&mut self, amount: i32) -> i32 {
+        let took = self.drink(amount);
+        let over = amount.max(0) - took;
+        if over > 0 && self.health > 0 && self.class.wounds_go_grey() {
+            self.well = (self.well as i32 + over).min(t::well_full()) as u16;
+        }
+        took
+    }
+
+    /// Is the Well full -- is a finisher hers to throw?
+    pub fn well_full(&self) -> bool {
+        self.well as i32 >= t::well_full()
     }
 
     /// How much of the bar is grey, nought to one. What the scythe reads.
@@ -1236,8 +1284,8 @@ impl Default for Player {
             air_stalls: 0,
             air_dodged: false,
             hit_used: false,
-            repeat_lock: [0; moves::MAX_SLOTS],
-            reactivate_lock: [0; moves::MAX_SLOTS],
+            repeat_lock: [0; moves::LOCKED_SLOTS],
+            reactivate_lock: [0; moves::LOCKED_SLOTS],
             class: Class::Bulwark,
             mechanic: Mechanic::Shield(Shield::Held { weight: Fx::ZERO }),
             rounds_won: 0,
@@ -1288,8 +1336,14 @@ impl Default for Player {
             earth_held: false,
             rise: Rise::default(),
             ball_at: V3::ZERO,
-            launched_from: V3::ZERO,
-            self_spent: 0,
+            tier: 0,
+            vessel: NO_VESSEL,
+            vessel_tier: 0,
+            vessel_ready: false,
+            well: 0,
+            paid: 0,
+            grey_rest: 0,
+            fuel: 0,
             curse: 0,
             curse_clock: 0,
             breaking: NO_STONE,
@@ -2198,13 +2252,16 @@ impl World {
         for (slot, place) in self.monsters.iter_mut().enumerate() {
             let Some(mut beast) = *place else { continue };
             let before = beast.yaw;
-            let seen: [Quarry; MAX_PLAYERS] = std::array::from_fn(|i| Quarry {
-                pos: self.players[i].pos,
-                vel: self.players[i].vel,
-                alive: self.players[i].health > 0,
-                // Somebody it has swallowed is not standing on it.
-                aboard: self.players[i].aboard() && !inside(&self.players[i], &herd_before),
-                stunned: self.players[i].action.stunned(),
+            let seen: [Quarry; MAX_PLAYERS] = std::array::from_fn(|i| {
+                let real = Quarry {
+                    pos: self.players[i].pos,
+                    vel: self.players[i].vel,
+                    alive: self.players[i].health > 0,
+                    // Somebody it has swallowed is not standing on it.
+                    aboard: self.players[i].aboard() && !inside(&self.players[i], &herd_before),
+                    stunned: self.players[i].action.stunned(),
+                };
+                decoy_for(&self.effects, i, &beast, real)
             });
             beast.step_with(&seen, &senses[slot], here, &self.lore);
             // Its *heading*, not its wobble: a shake would otherwise spin the
@@ -2395,7 +2452,7 @@ impl World {
                     )
             };
             if running(was) && !running(now) {
-                let (_, disk) = moves::flurry_line(was.launched_from, was.aim_path.to);
+                let (_, disk) = moves::flurry_line(was.aim_path.from, was.aim_path.to);
                 let mut burst = Effect::cast(
                     EffectKind::Burst,
                     i as u8,
@@ -2410,12 +2467,28 @@ impl World {
                 spawn_effect(&mut self.effects, burst);
             }
         }
-        // A blink spends its pool. Done here rather than in the dodge branch
+        // A blink **drinks** its pool (2026-10-12): the teleport is a heal and
+        // a door at once, as walking into it would be -- her own blood is
+        // still only a door. Done here rather than in the dodge branch
         // because the branch only has her body, and the pool is an effect.
         for i in 0..MAX_PLAYERS {
             let slot = self.players[i].blinked as usize;
-            if slot < MAX_EFFECTS && self.effects[slot].is_some_and(|e| e.is_a_pool()) {
-                self.effects[slot] = None;
+            if slot < MAX_EFFECTS
+                && let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool())
+            {
+                self.players[i].absorb(pool.banked * t::stain_walk_drinks() / 100);
+                // And she arrives in a burst of it: the wings' burst, at the
+                // wings' size.
+                let m = moves::get(Class::BloodMage, moves::blood::WINGS);
+                self.effects[slot] = Some(Effect::cast(
+                    EffectKind::Nova,
+                    i as u8,
+                    Class::BloodMage,
+                    moves::blood::WINGS,
+                    pool.pos,
+                    V3::ZERO,
+                    m.radius,
+                ));
             }
             self.players[i].blinked = NO_POOL;
         }
@@ -2432,6 +2505,14 @@ impl World {
             if let Action::Channel { kind, held: 0 } = p.action {
                 if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
                     self.raise_the_ball(i);
+                }
+                // The Carpet and the Hemoplague begin where she is aiming
+                // when the hold opens.
+                if p.class == Class::BloodMage && kind == moves::blood::CARPET {
+                    self.lay_the_carpet(i);
+                }
+                if p.class == Class::BloodMage && kind == moves::blood::HEMOPLAGUE {
+                    self.lay_the_plague(i);
                 }
             }
             let Action::Active { kind, left } = p.action else {
@@ -2471,6 +2552,10 @@ impl World {
             // the frame it comes out, besides its volume.
             if p.class == Class::ShadowReaver {
                 self.reaver_comes_out(i, kind);
+            }
+            // The Champion's full charges (exploration 0015): the same.
+            if p.class == Class::Champion {
+                self.champion_comes_out(i, kind);
             }
             // The Bulwark on three clicks (2026-10-10): the same, for his.
             if p.class == Class::Bulwark {
@@ -2546,32 +2631,10 @@ impl World {
             if p.class == Class::Elementalist && kind == moves::elementalist::EARTH_JUMP {
                 self.earth_jump(i);
             }
-            // The Blood mage's held bloods, let go: the nova bursts round her,
-            // the jet's wake is hurt; each leaves a pool of her own blood.
-            if p.class == Class::BloodMage && kind == moves::blood::BLOOD_NOVA {
-                self.burst_the_nova(i);
-            }
-            if p.class == Class::BloodMage && kind == moves::blood::BLOOD_JET {
-                self.end_the_jet(i);
-            }
-            // The Nail leaves her hand along the solved line.
-            if p.class == Class::BloodMage && kind == moves::blood::NAIL {
-                spawn_effect(
-                    &mut self.effects,
-                    Effect::cast(
-                        EffectKind::Nail,
-                        i as u8,
-                        p.class,
-                        kind,
-                        p.aim_path.from,
-                        p.aim_path.dir(),
-                        m.reach,
-                    ),
-                );
-            }
-            // The Hook: caught on something, or nothing.
-            if p.class == Class::BloodMage && kind == moves::blood::HOOK {
-                self.throw_the_hook(i);
+            // The Blood mage's moves, as each comes out. See
+            // `blood_comes_out`.
+            if p.class == Class::BloodMage {
+                self.blood_comes_out(i, kind);
             }
             // The Dual mage's spellbook (2026-10-12): what each spell puts in
             // the world on the frame it comes out, besides its own blow. The
@@ -2695,13 +2758,13 @@ impl World {
                 // as its row says it could -- see `step_channel`. Only the
                 // charge that buys reach: the Strike's `channelled` is a share
                 // of a hold, not a distance.
-                let reach = if moves::charge(p.class, kind) == Some(moves::Charge::Reach) {
-                    p.channelled
-                } else {
-                    m.reach
-                };
-                let mut born = Effect::cast(leaves, i as u8, p.class, kind, from, along, reach);
+                let mut born = Effect::cast(leaves, i as u8, p.class, kind, from, along, m.reach);
                 born.power = depth(&p);
+                // The Blood mage's cloud is as wide as its row's radius -- its
+                // reach is how far away it can be put.
+                if p.class == Class::BloodMage && leaves == EffectKind::Plague {
+                    born.reach = m.radius;
+                }
                 // **The Strike spends the pillar.** What the hold concentrated
                 // into the hit is taken off the burn: a full hold leaves
                 // nothing standing, a tap leaves the pillar as built, and in
@@ -2732,7 +2795,19 @@ impl World {
                 // pool in one go -- the payoff placement, and the pool is
                 // spent whether or not she had grey to fill.
                 let mut place = true;
-                if leaves == EffectKind::BlackSpike {
+                // **The Black spike's higher tiers** (2026-10-12): three
+                // spikes in a triangle round the point, or a field there that
+                // comes up in waves. Each is an area that does its own hitting,
+                // so the move's disc lands nothing; a stain under any of them
+                // erupts as well.
+                if leaves == EffectKind::BlackSpike
+                    && p.class == Class::BloodMage
+                    && kind == moves::blood::BLACK_SPIKE
+                {
+                    self.players[i].hit_used = true;
+                    self.raise_the_tier(i, born);
+                    place = false;
+                } else if leaves == EffectKind::BlackSpike {
                     match self.pool_covering(i as u8, born.pos) {
                         Some(slot) => {
                             // The eruption delivers the hit; the disc must
@@ -2762,6 +2837,33 @@ impl World {
             }
         }
 
+        // **What a Blood mage's cast cost lands where the cast does**, on its
+        // first active frame (2026-10-13): at the floor under where it was
+        // aimed, or at her feet for a move about her own body. After
+        // everything the cast put in the world, so a spike's own cost is not
+        // the stain it erupts.
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if p.paid == 0 || !p.class.wounds_go_grey() {
+                continue;
+            }
+            let Action::Active { kind, left } = p.action else {
+                continue;
+            };
+            let m = moves::get(p.class, kind);
+            if left != m.active {
+                continue;
+            }
+            let at = match m.aim() {
+                aim::Kind::Grounded | aim::Kind::Skillshot => p.aim_at(),
+                _ => p.pos,
+            };
+            let lift = V3::new(at.x, at.y.add(Fx::ONE), at.z);
+            let floor = V3::new(at.x, self.terrain().ground_under(lift), at.z);
+            self.players[i].paid = 0;
+            self.spill(i as u8, p.class, kind, floor, p.paid as i32);
+        }
+
         // The Elementalist's auto and her heavy: two different beams, the same
         // instant resolution, and never both at once for one fighter -- reset
         // once, here, rather than in each, so neither can clobber the other's
@@ -2780,9 +2882,21 @@ impl World {
         // creature's presence rather than a separate flag, so there is nothing
         // for the two to get out of step about.
         let snapshot = self.players;
+        // **The Clash, between fighters** (exploration 0015, C7): two live
+        // blows meeting on one frame, at least one of them a Champion's heavy
+        // one. The heavier wins outright and the lighter is cancelled into a
+        // short stagger; two of a weight bounce both apart.
+        let cancelled = if self.pvp() {
+            self.clash(&snapshot)
+        } else {
+            [false; MAX_PLAYERS]
+        };
         for attacker in 0..MAX_PLAYERS {
             if !self.pvp() {
                 break;
+            }
+            if cancelled[attacker] {
+                continue;
             }
             let defender = 1 - attacker;
             if let Some(mut hit) =
@@ -2835,15 +2949,20 @@ impl World {
                         self.players[defender].slow(t::slow_frames(), t::spike_slow());
                     }
                     if dealt > 0 {
+                        // Through a stain, the blow is harder for it, and the
+                        // blood it spills is the whole of what it dealt.
+                        let mut spilt = dealt;
                         if let Some(hb) = hitbox(&snapshot[attacker]) {
-                            self.drink_over(attacker, &m, hb.from, hb.to, Some(defender), 0);
+                            let bonus =
+                                self.stain_bonus(attacker, &m, hb.from, hb.to, Some(defender), 0);
+                            spilt += self.players[defender].wound(bonus);
                         }
                         self.spill_under(
                             attacker as u8,
                             snapshot[attacker].class,
                             kind,
                             &snapshot[defender],
-                            dealt,
+                            spilt,
                         );
                     }
                 }
@@ -2879,6 +2998,23 @@ impl World {
                 // the string ends on a defender who answered it -- see
                 // `chain_cancel`.
                 confirm_chain(&mut self.players[attacker], hit.blocked || hit.parried);
+                if !hit.blocked && !hit.parried {
+                    let kind = snapshot[attacker].action.attack_kind();
+                    feed_the_momentum(&mut self.players[attacker], kind);
+                    // A finisher that spent momentum staggers them by what
+                    // it spent.
+                    if let (Some(k), Mechanic::Forms { fury, .. }) =
+                        (kind, snapshot[attacker].mechanic)
+                    {
+                        if moves::champion::is_full(k) {
+                            stagger_by_the_spend(
+                                &mut self.players[defender],
+                                hit.hitstun,
+                                fury.spent,
+                            );
+                        }
+                    }
+                }
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
@@ -2891,7 +3027,8 @@ impl World {
                 // that arrived and was taken, and freezes for less.
                 if let Some(kind) = snapshot[attacker].action.attack_kind() {
                     let m = moves::get(snapshot[attacker].class, kind);
-                    let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried);
+                    let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried)
+                        + true_link_freeze(&snapshot[attacker]);
                     freeze(&mut self.players[attacker], hold);
                     freeze(&mut self.players[defender], hold);
                 }
@@ -2903,6 +3040,14 @@ impl World {
         // puts through the blood, and it does not need a body in the way.
         for i in 0..MAX_PLAYERS {
             self.collect_with_the_scythe(i);
+        }
+        // And so do her feet: a stain she walks into is drunk.
+        self.drink_underfoot();
+
+        // A Rush that runs into a body hits it with the shoulder, and that is
+        // the string's first hit. See `World::shoulder`.
+        for i in 0..MAX_PLAYERS {
+            self.shoulder(i);
         }
 
         // A thrown shield is its own threat while it travels.
@@ -2999,6 +3144,7 @@ impl World {
             self.trade_with_the_creature();
             self.trade_with_the_pack();
         }
+        self.settle_the_clashes();
 
         self.step_shadows();
         self.burst_the_collected();
@@ -3077,7 +3223,6 @@ impl World {
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
-        self.drink_where_the_haul_ends();
 
         // The hunt's lore, a frame on: fire on the floor, hazards aging, a
         // cart rolling.
@@ -3293,10 +3438,29 @@ impl World {
                 p.rise.lifted as i32,
                 p.rise.used as i32,
                 p.rise.floor.raw(),
-                p.self_spent,
+                // The Blood mage's charge tier, in the place the jet's paid
+                // blood had until the blaster (2026-10-12): nought for every
+                // other class, so their hashes are what they were.
+                p.tier as i32,
             ];
             if late.iter().any(|v| *v != 0) {
                 for v in late {
+                    h.write_i32(v);
+                }
+            }
+            // The vessel, the Well and what a cast owes the floor, only while
+            // any holds something -- an empty vessel is nought like the rest.
+            let blaster = [
+                (p.vessel != NO_VESSEL) as i32 * (p.vessel as i32 + 1),
+                p.vessel_tier as i32,
+                p.vessel_ready as i32,
+                p.well as i32,
+                p.paid as i32,
+                p.grey_rest as i32,
+                p.fuel as i32,
+            ];
+            if blaster.iter().any(|v| *v != 0) {
+                for v in blaster {
                     h.write_i32(v);
                 }
             }
@@ -3306,10 +3470,8 @@ impl World {
                 h.write_u32(p.curse as u32);
                 h.write_u32(p.curse_clock as u32);
             }
-            for at in [p.ball_at, p.launched_from] {
-                if at != V3::ZERO {
-                    hash_v3(&mut h, &at);
-                }
+            if p.ball_at != V3::ZERO {
+                hash_v3(&mut h, &p.ball_at);
             }
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
@@ -3691,6 +3853,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     if moves::charge(p.class, kind) == Some(moves::Charge::Strike) && p.channelled.raw() > 0 {
         m.radius = m.radius.max(t::pillar_base_radius());
     }
+    // **And a Champion's finisher is as big as the meter it spent**, as what
+    // it puts in the world is (`World::champion_comes_out`): its own sweep
+    // reaches its share of `momentum_spend` further. One for everything else.
+    m.reach = m.reach.mul(Fx::ONE.add(spent_share_of(p, kind)));
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -3722,7 +3888,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     if m.shape == moves::Shape::Cascade {
         let (blows, blow) = moves::flurry_blow(&m, left);
         let blow = blow?;
-        let (a, d) = moves::flurry_line(p.launched_from, p.aim_path.to);
+        let (a, d) = moves::flurry_line(p.aim_path.from, p.aim_path.to);
         let n = blows.max(1) as i32;
         return Some(Hitbox {
             from: crate::math::lerp3(a, d, Fx::ratio(blow as i32, n)),
@@ -4002,7 +4168,7 @@ fn grey_power(p: &Player, m: &moves::Move) -> Fx {
 /// reaches right now. The weapon is drawn at the row's reach; this is what
 /// the essence around it is drawn to.
 pub fn scythe_reach(p: &Player) -> Fx {
-    live_reach(p, &moves::get(p.class, moves::blood::SWEEP))
+    live_reach(p, &moves::get(p.class, moves::blood::COMMAND))
 }
 
 /// Grey fades: `tuning::grey_fade` points a second, spread over the frames.
@@ -4014,7 +4180,18 @@ pub fn scythe_reach(p: &Player) -> Fx {
 /// did in between. **The only way grey ever goes.** Nothing else takes it off
 /// the bar -- not a hit, not a cost, not a heal from anywhere but a pool.
 fn fade_grey(p: &mut Player, frame: u32) {
+    // **The vessel bleeds her** while it holds a charge: a stored spell is a
+    // threat both players can see, with a clock on it.
+    if p.vessel != NO_VESSEL && frame % (t::vessel_bleeds_every() as u32) == 0 {
+        p.spend_health(1);
+    }
     if p.grey <= 0 {
+        return;
+    }
+    // **It holds, then it goes** (2026-10-13): the grace after a wound is the
+    // window to spend it in, and past it the fade is quick.
+    if p.grey_rest > 0 {
+        p.grey_rest -= 1;
         return;
     }
     let rate = t::grey_fade().max(0);
@@ -4084,7 +4261,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // hits harder. Decided per defender rather than per frame, because a
     // sweep can catch one body on the haft and another on the point.
     let on_the_point = m.rides_the_grey()
-        && kind == moves::blood::SWEEP
+        && kind == moves::blood::COMMAND
         && defender.pos.sub(attacker.pos).flat_len().raw()
             >= box_out.to.sub(box_out.from).len().mul(t::sweep_tip()).raw();
     // The Reave's sweet spot: the middle of the blade's disc, at the end of
@@ -4104,6 +4281,8 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
             Fx::ONE
         })
         .mul(grey_power(attacker, &m))
+        .mul(true_link_mul(attacker))
+        .mul(momentum_mul(attacker, kind))
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
@@ -4365,6 +4544,7 @@ fn freeze(p: &mut Player, frames: u16) {
 /// skipped. Out of it: whatever was remembered is pressed on this frame, once.
 /// Buttons only; where the stick points is always where it points now.
 fn thaw(p: &mut Player, input: Input) -> Input {
+    find_the_beat(p, input);
     if p.frozen > 0 {
         p.frozen_bits |= input.bits & Input::PRESSES;
         return input;
@@ -4375,6 +4555,19 @@ fn thaw(p: &mut Player, input: Input) -> Input {
 }
 
 pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
+    // **The Clash** (exploration 0015, C7): a blow that meets a Champion's
+    // heavy one takes nothing from him. Here, where every blow in the game
+    // lands on a fighter, so every attack there is -- a species' own, a
+    // critter's, a fighter's -- meets it without a line of its own. Who threw
+    // it is knocked out of it after (`World::settle_the_clashes`).
+    if meets_a_clash(defender, &hit) {
+        return;
+    }
+    // A Champion mid-Rush is braced: most blows cost him a share and do not
+    // stop him, and one in the run's last frames costs nothing at all.
+    let Some(hit) = brace_the_rush(defender, hit) else {
+        return;
+    };
     // Taken on the shield, either way: stored as weight. A parry stores more.
     // See `crate::bulwark` -- this is the one place a blocked blow is
     // resolved, which is why the creature's blows load it without asking.
@@ -4401,6 +4594,9 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.z = hit.dir.z.mul(knockback);
     } else {
         defender.wound(hit.damage);
+        if hit.damage > 0 {
+            hurt_the_momentum(defender);
+        }
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
@@ -4456,6 +4652,840 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     }
 }
 
+impl World {
+    /// **What a full charge does as it comes out** (exploration 0015, C5),
+    /// besides its own volume: the crescent leaves the blade, the ground
+    /// breaks round the hammer, the dashes start, the cuts are left hanging
+    /// along the line he will run, and the javelin is thrown with him after
+    /// it. On the first active frame, like everything else a move does.
+    fn champion_comes_out(&mut self, who: usize, kind: u8) {
+        use moves::champion as c;
+        let p = self.players[who];
+        let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z).normalized();
+        // **What the finisher spent** (exploration 0015, the fourth round):
+        // what it puts in the world is bigger and hits harder by its share,
+        // and carries the share in `banked` for the stagger it buys.
+        let spent = match p.mechanic {
+            Mechanic::Forms { fury, .. } => fury.spent,
+            _ => 0,
+        };
+        let power = Fx::ONE.add(spend_share(spent));
+        let cast = |kind_of: EffectKind, from: V3, dir: V3, reach: Fx| {
+            let mut born = Effect::cast(kind_of, who as u8, p.class, kind, from, dir, reach);
+            born.power = power;
+            born.banked = spent as i32;
+            born
+        };
+        match kind {
+            c::CRESCENT => {
+                let born = cast(
+                    EffectKind::Crescent,
+                    p.aim_path.from,
+                    p.aim_path.dir(),
+                    t::crescent_reach(),
+                );
+                spawn_effect(&mut self.effects, born);
+            }
+            c::SHOCKWAVE | c::METEOR => {
+                let reach = if kind == c::METEOR {
+                    t::meteor_reach()
+                } else {
+                    t::shockwave_reach()
+                }
+                .mul(power);
+                let mut born = cast(EffectKind::Shockwave, p.pos, V3::ZERO, reach);
+                let speed = t::shockwave_speed().max(Fx::ONE);
+                // Out to its reach, and left lying there a while: the broken
+                // ground stays after the ring has run.
+                born.life = (reach.div(speed).div(DT).to_int().max(1) as u16)
+                    .saturating_add(t::shockwave_crush());
+                spawn_effect(&mut self.effects, born);
+            }
+            c::THOUSAND_CUTS => {
+                let ahead = flat(p.facing);
+                let reach = t::cuts_reach();
+                let chest = p.pos.add(V3::new(
+                    Fx::ZERO,
+                    t::body_height().mul(Fx::ratio(1, 2)),
+                    Fx::ZERO,
+                ));
+                spawn_effect(
+                    &mut self.effects,
+                    cast(EffectKind::Cuts, chest, ahead, reach),
+                );
+                drive_the_champion(&mut self.players[who], ahead, reach, t::cuts_speed());
+            }
+            c::HEAVEN_PIERCER => {
+                let dir = p.aim_path.dir();
+                let reach = p.aim_path.length().max(t::body_radius());
+                let mut born = cast(EffectKind::Javelin, p.aim_path.from, dir, reach);
+                let speed = t::javelin_speed().max(Fx::ONE);
+                born.life = (reach.div(speed).div(DT).to_int().max(1) as u16)
+                    .saturating_add(t::javelin_rest());
+                spawn_effect(&mut self.effects, born);
+                // **He goes after it at once** -- the throw's second half, not
+                // a choice later. One weapon that changes shape: it is never
+                // out of his hands for longer than it takes him to get there.
+                drive_the_champion(&mut self.players[who], flat(dir), reach, t::follow_speed());
+            }
+            _ => {}
+        }
+    }
+
+    /// **Whoever threw a blow the Champion clashed is knocked out of it**
+    /// (exploration 0015, C7): a creature mid-swing that reaches him flinches;
+    /// a critter mid-attack that reaches him is knocked out of it; a fighter
+    /// within `tuning::clash_reach` is staggered. Read off who is attacking
+    /// and where, so no attack needs a line of its own. A blow from further
+    /// off -- a bolt -- is simply spent.
+    fn settle_the_clashes(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            let Mechanic::Forms { fury, .. } = p.mechanic else {
+                continue;
+            };
+            let by = fury.clash_by;
+            if by == NOBODY {
+                continue;
+            }
+            if let Mechanic::Forms { fury, .. } = &mut self.players[i].mechanic {
+                fury.clash_by = NOBODY;
+            }
+            if (by as usize) < MAX_PLAYERS && by as usize != i {
+                let q = &mut self.players[by as usize];
+                let apart = V3::new(q.pos.x.sub(p.pos.x), Fx::ZERO, q.pos.z.sub(p.pos.z));
+                if apart.flat_len().raw() <= t::clash_reach().raw() {
+                    q.action = Action::Stagger {
+                        left: t::clash_stagger(),
+                    };
+                    q.stun_total = t::clash_stagger();
+                    q.hit_used = true;
+                    freeze(q, t::clash_freeze());
+                }
+                continue;
+            }
+            if by != QUARRY {
+                continue;
+            }
+            for slot in 0..MAX_MONSTERS {
+                let Some(beast) = self.monsters[slot].as_mut() else {
+                    continue;
+                };
+                if beast.alive()
+                    && matches!(beast.doing, Doing::Active { .. })
+                    && beast.reaches(p.pos, p.hurt_height(), t::body_radius())
+                {
+                    beast.doing = Doing::Flinch {
+                        left: t::clash_flinch(),
+                    };
+                    beast.hit_used = true;
+                }
+            }
+            if self.critters.any() {
+                let sp = self.critters.sp();
+                for c in self.critters.iter_mut() {
+                    if c.alive()
+                        && c.state == critter::is::ACTIVE
+                        && c.reaches(sp, p.pos, p.hurt_height(), t::body_radius())
+                    {
+                        c.state = critter::is::FLINCH;
+                        c.timer = t::clash_flinch();
+                        c.set(critter::flag::HIT_USED, true);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Settle a Clash between the two fighters, if their blows meet this
+    /// frame: who is cancelled. See the call in `advance`.
+    fn clash(&mut self, snapshot: &[Player; MAX_PLAYERS]) -> [bool; MAX_PLAYERS] {
+        let mut cancelled = [false; MAX_PLAYERS];
+        let hits = [
+            resolve_hit(&snapshot[0], &snapshot[1], 0),
+            resolve_hit(&snapshot[1], &snapshot[0], 1),
+        ];
+        if hits.iter().any(|h| h.is_none()) || !(clashing(&snapshot[0]) || clashing(&snapshot[1])) {
+            return cancelled;
+        }
+        let weight = |p: &Player| {
+            p.action
+                .attack_kind()
+                .map_or(0, |kind| moves::get(p.class, kind).hitstop)
+        };
+        let (w0, w1) = (weight(&snapshot[0]), weight(&snapshot[1]));
+        let losers: &[usize] = if w0 > w1 {
+            &[1]
+        } else if w1 > w0 {
+            &[0]
+        } else {
+            &[0, 1]
+        };
+        for &i in losers {
+            cancelled[i] = true;
+            let q = &mut self.players[i];
+            q.action = Action::Stagger {
+                left: t::clash_stagger(),
+            };
+            q.stun_total = t::clash_stagger();
+            q.hit_used = true;
+        }
+        for i in 0..MAX_PLAYERS {
+            freeze(&mut self.players[i], t::clash_freeze());
+            if clashing(&snapshot[i]) && !cancelled[i] {
+                self.players[i].parried = PARRY_FLOURISH;
+            }
+        }
+        cancelled
+    }
+
+    /// A full charge's effect landed `dealt` on somebody: its thrower's
+    /// momentum is fed as if his own blow had.
+    fn feed_the_thrower(&mut self, effect: &Effect, dealt: i32) {
+        let owner = effect.owner as usize;
+        if dealt > 0 && owner < MAX_PLAYERS && effect.class == Class::Champion {
+            feed_the_momentum(&mut self.players[owner], Some(effect.slot));
+        }
+    }
+
+    /// **The Heaven-piercer torn out** (exploration 0015, C5): a javelin at
+    /// rest, and its thrower arrived at it. Everybody round it is hit and
+    /// thrown up, and the spear is back in his hands -- it was only ever one
+    /// weapon. Nothing happens until he gets there; a javelin he never reaches
+    /// fades where it stopped.
+    fn tear_out(&mut self, effect: &mut Effect, at: V3) {
+        let owner = effect.owner as usize;
+        if owner >= MAX_PLAYERS || effect.already_hit(1, owner) {
+            return;
+        }
+        let p = self.players[owner];
+        let near = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z)).flat_len();
+        if near.raw() > t::tear_radius().mul(Fx::ratio(1, 2)).raw() {
+            return;
+        }
+        effect.take_hit(1, owner);
+        let radius = t::tear_radius();
+        for i in 0..MAX_PLAYERS {
+            if !self.effects_reach(i, effect.owner) || !self.inside(i, at, radius) {
+                continue;
+            }
+            let q = self.players[i];
+            let away = V3::new(q.pos.x.sub(at.x), Fx::ZERO, q.pos.z.sub(at.z)).normalized();
+            let (guarding, parried) = guard_against(&q, at, false);
+            apply_hit(
+                &mut self.players[i],
+                Hit {
+                    damage: t::tear_damage(),
+                    hitstun: effect.source().hitstun,
+                    blockstun: effect.source().blockstun,
+                    knockback: effect.source().knockback,
+                    launch: t::tear_launch(),
+                    grabs: 0,
+                    by: effect.owner,
+                    dir: away,
+                    blocked: guarding,
+                    parried,
+                    interrupts: true,
+                },
+            );
+            let hold = impact_freeze(effect.source().hitstop, guarding && !parried);
+            freeze(&mut self.players[i], hold);
+            freeze(&mut self.players[owner], hold);
+        }
+        let share = Fx::ratio(t::tear_damage(), effect.damage().max(1));
+        for slot in 0..MAX_MONSTERS {
+            self.gore_for_a_share(slot, effect, 1, at, radius, share);
+        }
+        self.gore_critters(effect, at, radius, share);
+        // Torn out: gone, in his hands, and the run after it is over.
+        effect.life = effect.age;
+        if let Mechanic::Forms { rush, .. } = &mut self.players[owner].mechanic {
+            *rush = 0;
+        }
+        let me = &mut self.players[owner];
+        me.vel.x = Fx::ZERO;
+        me.vel.z = Fx::ZERO;
+    }
+
+    /// **The shoulder** (exploration 0015, C1): a Champion's Rush that runs
+    /// into a body -- a fighter, or a creature -- hits it, once a run, and the
+    /// hit is **the string's first**. The next click throws the second link,
+    /// so the core combo starts from the move that crossed the gap rather than
+    /// after it.
+    ///
+    /// Only a bare Rush shoulders: a Rush move thrown out of it is its own
+    /// blow. On contact the run stops where it struck. Blocked, it is a
+    /// blocked hit and opens nothing; parried, he is staggered like any
+    /// parried swing.
+    fn shoulder(&mut self, i: usize) {
+        let p = self.players[i];
+        let Mechanic::Forms {
+            rush,
+            rush_vel,
+            fury,
+            ..
+        } = p.mechanic
+        else {
+            return;
+        };
+        if rush == 0 || fury.shouldered || !p.action.actionable() || p.health <= 0 {
+            return;
+        }
+        let ahead = V3::new(rush_vel.x, Fx::ZERO, rush_vel.z).normalized();
+        let reach = t::body_radius()
+            .add(t::body_radius())
+            .add(t::shoulder_reach());
+        let mut struck = false;
+        let mut blocked = false;
+        if self.pvp() {
+            let other = 1 - i;
+            let q = self.players[other];
+            let d = q.pos.sub(p.pos);
+            let level = d.y.abs().raw() < t::body_height().raw();
+            if q.health > 0
+                && level
+                && d.flat_len().raw() <= reach.raw()
+                && ahead.dot(V3::new(d.x, Fx::ZERO, d.z)).raw() > 0
+                && !q.action.invulnerable()
+            {
+                let (guarding, parried) = guard_against(&q, p.pos, false);
+                apply_hit(
+                    &mut self.players[other],
+                    Hit {
+                        damage: t::shoulder_damage(),
+                        hitstun: t::shoulder_hitstun(),
+                        blockstun: t::shoulder_blockstun(),
+                        knockback: t::shoulder_knockback(),
+                        launch: Fx::ZERO,
+                        grabs: 0,
+                        by: i as u8,
+                        dir: ahead,
+                        blocked: guarding,
+                        parried,
+                        interrupts: true,
+                    },
+                );
+                if parried {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[other].parried = PARRY_FLOURISH;
+                }
+                let hold = impact_freeze(t::shoulder_freeze(), guarding && !parried);
+                freeze(&mut self.players[other], hold);
+                freeze(&mut self.players[i], hold);
+                struck = true;
+                blocked = guarding || parried;
+            }
+        }
+        if !struck {
+            let at = p.pos.add(ahead.scale(t::body_radius()));
+            for slot in 0..MAX_MONSTERS {
+                let Some(mut beast) = self.monsters[slot] else {
+                    continue;
+                };
+                if !beast.alive() {
+                    continue;
+                }
+                let Some(part) =
+                    beast.part_struck(at, reach.sub(t::body_radius()), p.hurt_height())
+                else {
+                    continue;
+                };
+                let (_, guarded) = beast.take_blow(
+                    part,
+                    t::shoulder_damage(),
+                    &monster::Blow {
+                        from: p.pos,
+                        unblockable: false,
+                        who: i as u8,
+                        class: p.class,
+                        kind: monster::Blow::NO_MOVE,
+                    },
+                );
+                self.monsters[slot] = Some(beast);
+                // The animal does not stop for one fighter; he does, a beat,
+                // which is the shoulder landing.
+                freeze(&mut self.players[i], t::shoulder_freeze());
+                struck = true;
+                blocked = guarded.turned();
+                break;
+            }
+        }
+        if !struck {
+            return;
+        }
+        let me = &mut self.players[i];
+        me.vel.x = Fx::ZERO;
+        me.vel.z = Fx::ZERO;
+        if let Mechanic::Forms {
+            rush,
+            fury,
+            chain,
+            chain_left,
+            chain_hit,
+            ..
+        } = &mut me.mechanic
+        {
+            *rush = 0;
+            fury.shouldered = true;
+            if !blocked {
+                *chain = 1;
+                *chain_left = t::chain_grace();
+                *chain_hit = true;
+            }
+        }
+        if !blocked {
+            feed_the_momentum(me, None);
+        }
+    }
+}
+
+/// **Break** (exploration 0015, C6): what a Champion's blow that landed
+/// `dealt` on a creature adds to its strain over the damage -- a hammer, a
+/// third link, a true link and a full charge each weigh more than they cut,
+/// the heaviest of them counting -- and a full charge's extra goes some way
+/// to its poise as well. The Meteor's crater knocks it off its feet outright.
+/// He is the class that puts a creature on the floor.
+pub(crate) fn impact(beast: &mut Monster, p: &Player, kind: u8, dealt: i32) {
+    use moves::champion as c;
+    if p.class != Class::Champion || dealt <= 0 {
+        return;
+    }
+    let true_link = matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.true_link);
+    let full = c::is_full(kind);
+    let mut weight = 100;
+    if c::weapon(kind) == c::HAMMER {
+        weight = weight.max(t::impact_hammer());
+    }
+    if c::in_string(kind) && place_in_string(p, kind) == Some(c::DEPTH - 1) {
+        weight = weight.max(t::impact_third());
+    }
+    if true_link {
+        weight = weight.max(t::impact_beat());
+    }
+    if full {
+        weight = weight.max(t::impact_full());
+    }
+    let extra = dealt * (weight - 100).max(0) / 100;
+    // A finisher weighs more for the momentum it spent, up to twice as much
+    // again for a full meter -- and a full meter spent knocks it off its feet
+    // (exploration 0015, the fourth round).
+    let spent = match p.mechanic {
+        Mechanic::Forms { fury, .. } if full => fury.spent.min(100) as i32,
+        _ => 0,
+    };
+    let extra = extra * (100 + 2 * spent) / 100;
+    let poise = if full {
+        extra * t::impact_poise() / 100
+    } else {
+        0
+    };
+    beast.take_weight(extra, poise);
+    if spent >= 100 {
+        beast.stumble_for(t::meteor_stumble());
+    }
+}
+
+/// **Is this a blow that clashes** (exploration 0015, C7): a Champion in
+/// the active frames of a full charge or of the hammer's third link, or in a
+/// Rush's last frames with the shoulder down. Meeting a swing with one of
+/// these cancels the swing rather than taking it.
+fn clashing(p: &Player) -> bool {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return false;
+    }
+    let heavy = matches!(
+        p.action,
+        Action::Active { kind, .. } if c::is_full(kind) || kind == c::EARTHBREAKER
+    );
+    let shoulder_down = match p.mechanic {
+        Mechanic::Forms { rush, fury, .. } => {
+            rush > 0 && rush <= t::rush_eat_frames() && !fury.eaten && p.action.actionable()
+        }
+        _ => false,
+    };
+    heavy || shoulder_down
+}
+
+/// **Feed the meter** (exploration 0015, C4): a blow of his landed. Every
+/// one is worth `momentum_hit`; one of a different weapon from the last more,
+/// a true link more, a full charge more. `kind` is the move that landed, or
+/// `None` for the shoulder, which is no weapon.
+fn feed_the_momentum(p: &mut Player, kind: Option<u8>) {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return;
+    }
+    let Mechanic::Forms { fury, .. } = &mut p.mechanic else {
+        return;
+    };
+    let mut gain = t::momentum_hit();
+    if let Some(kind) = kind {
+        let weapon = c::weapon(kind);
+        if fury.last_weapon != 0 && fury.last_weapon - 1 != weapon {
+            gain += t::momentum_swap();
+        }
+        if fury.true_link {
+            gain += t::momentum_beat();
+        }
+        if c::is_full(kind) {
+            gain += t::momentum_full();
+        }
+        fury.last_weapon = weapon + 1;
+    }
+    let max = t::momentum_max().clamp(1, u16::MAX as i32);
+    fury.momentum = (fury.momentum as i32 + gain).clamp(0, max) as u16;
+    fury.momentum_left = t::momentum_holds().min(u8::MAX as u16) as u8;
+}
+
+/// A blow taken costs a share of the meter.
+fn hurt_the_momentum(p: &mut Player) {
+    if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
+        let lost = fury.momentum as i32 * t::momentum_hurt().clamp(0, 100) / 100;
+        fury.momentum = (fury.momentum as i32 - lost).max(0) as u16;
+    }
+}
+
+/// Where in the string a move of his stands: a link's own place, and for an
+/// aerial, a takeoff or a finisher the place he remembered when it began.
+/// `None` for anything outside the string.
+fn place_in_string(p: &Player, kind: u8) -> Option<u8> {
+    use moves::champion as c;
+    if let Some(link) = c::link_of(kind) {
+        return Some(link);
+    }
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if c::in_string(kind) || c::is_full(kind) => Some(fury.place),
+        _ => None,
+    }
+}
+
+/// Is this Champion holding a link at the top of its wind-up?
+fn holding(p: &Player) -> bool {
+    p.class == Class::Champion
+        && p.action
+            .channelling()
+            .is_some_and(|(kind, _)| moves::charge(p.class, kind) == Some(moves::Charge::Heft))
+}
+
+/// Is this Champion winding up a move he may still hold to a finisher --
+/// its button down since the press, in its startup or past it?
+fn winding_a_hold(p: &Player) -> bool {
+    may_hold(p)
+        && match p.action {
+            Action::Startup { kind, .. } => moves::charge(p.class, kind).is_some(),
+            _ => holding(p),
+        }
+}
+
+/// Was the link running now started by a fresh press of its button?
+fn may_hold(p: &Player) -> bool {
+    matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.may_hold)
+}
+
+/// The link `kind` held to a finish: its weapon's finisher for that place in
+/// the string, aimed now and wound up from its own startup. The link itself if
+/// it has none.
+fn finish_with(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) -> Action {
+    use moves::champion as c;
+    let Some(place) = place_in_string(p, kind).filter(|_| c::holdable(kind)) else {
+        return Action::Active {
+            kind,
+            left: moves::get(p.class, kind).active,
+        };
+    };
+    let big = c::finisher(c::weapon(kind), place);
+    lock_aim(p, who, big, input, scene);
+    begin_full_charge(p, big, place);
+    Action::Startup {
+        kind: big,
+        left: moves::get(p.class, big).startup,
+    }
+}
+
+/// A full charge has begun, from the link at `place` in the string. Its own
+/// move from here: the weapon is its weapon, the string stands where the link
+/// it came from would have left it, and the Meteor leaps for where the
+/// crosshair was.
+fn begin_full_charge(p: &mut Player, kind: u8, place: u8) {
+    use moves::champion as c;
+    if let Mechanic::Forms {
+        form,
+        chain,
+        chain_left,
+        chain_hit,
+        fury,
+        liquid,
+        ..
+    } = &mut p.mechanic
+    {
+        let from = *form;
+        *form = Form::of_move(kind);
+        liquid.call(from);
+        // A finisher finishes: the string is over, and the next press opens
+        // one. It stands at its link's place for the refund.
+        *chain = 0;
+        *chain_left = 0;
+        *chain_hit = false;
+        fury.true_link = false;
+        fury.place = place;
+        // **It spends the meter**, whatever is in it, and is worth what it
+        // spent (`momentum_mul`, `stagger_by_the_spend`).
+        let max = t::momentum_max().max(1);
+        fury.spent = (fury.momentum as i32 * 100 / max).clamp(0, 100) as u8;
+        fury.momentum = 0;
+        fury.momentum_left = 0;
+    }
+    p.channelled = Fx::ZERO;
+    // **From the air** (2026-10-13, from play) a finisher keeps whatever the
+    // jump was carrying -- the Crescent off a leap goes on with him -- and
+    // hangs on nothing. The hammer's two are slammed straight back to the
+    // floor instead, down the crosshair's line held inside a cone round
+    // straight down, and break it where he lands (`lands_on_the_floor`).
+    if !p.grounded {
+        p.air_stall = 0;
+        if kind == c::SHOCKWAVE || kind == c::METEOR {
+            p.vel = aim::plunge_dir(p.aim_dir(), t::slam_cone()).scale(t::slam_dive());
+        }
+        return;
+    }
+    if kind == c::METEOR {
+        // Up at the knob's rise and down under gravity: the time in the air
+        // is what the rise buys, and the run across is spread over it so he
+        // comes down where the crosshair was.
+        let to = p.aim_at();
+        let air = t::meteor_rise()
+            .add(t::meteor_rise())
+            .div(t::gravity().abs().max(Fx::ONE));
+        let across = V3::new(to.x.sub(p.pos.x), Fx::ZERO, to.z.sub(p.pos.z));
+        p.vel = V3::new(across.x.div(air), t::meteor_rise(), across.z.div(air));
+        p.grounded = false;
+    }
+}
+
+/// **What momentum is worth to a blow** (exploration 0015, the fourth
+/// round): every hit he lands is worth its share of `momentum_buff` for the
+/// meter he carries, and a finisher -- which carries none, having spent it --
+/// its share of `momentum_spend` for what it spent. One for anybody else.
+fn momentum_mul(p: &Player, kind: u8) -> Fx {
+    Fx::ONE.add(carried_share(p)).add(spent_share_of(p, kind))
+}
+
+/// The meter he carries, as a share of a blow: `momentum_buff` at full.
+fn carried_share(p: &Player) -> Fx {
+    let Mechanic::Forms { fury, .. } = p.mechanic else {
+        return Fx::ZERO;
+    };
+    let max = t::momentum_max().max(1);
+    Fx::ratio(fury.momentum as i32 * t::momentum_buff(), max * 100)
+}
+
+/// What a finisher spent, as a share of its blow; nothing for anything else.
+fn spent_share_of(p: &Player, kind: u8) -> Fx {
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if moves::champion::is_full(kind) => spend_share(fury.spent),
+        _ => Fx::ZERO,
+    }
+}
+
+/// What a finisher that spent `spent` per cent of a full meter adds, as a
+/// share: `momentum_spend` of it at a full meter.
+fn spend_share(spent: u8) -> Fx {
+    Fx::ratio(spent.min(100) as i32 * t::momentum_spend(), 100 * 100)
+}
+
+/// **The stagger a spent meter buys** (exploration 0015, the fourth round):
+/// a finisher that lands on a fighter leaves them staggered for its own stun
+/// and its share of `momentum_stagger` more -- more and more obvious the more
+/// it spent. A full meter spent knocks them down outright.
+fn stagger_by_the_spend(victim: &mut Player, base: u16, spent: u8) {
+    if spent == 0 || victim.action.invulnerable() {
+        return;
+    }
+    let extra = (t::momentum_stagger() as u32 * spent.min(100) as u32 / 100) as u16;
+    let left = if spent >= 100 {
+        base.max(t::knockdown_frames()).saturating_add(extra)
+    } else {
+        base.saturating_add(extra)
+    };
+    victim.action = Action::Stagger { left };
+    victim.stun_total = left;
+}
+
+/// What a true link multiplies its damage by: one for anything else.
+fn true_link_mul(p: &Player) -> Fx {
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if fury.true_link => {
+            Fx::ONE.add(Fx::ratio(t::true_link_damage() as i32, 100))
+        }
+        _ => Fx::ONE,
+    }
+}
+
+/// The frames a true link adds to its freeze: none for anything else.
+fn true_link_freeze(p: &Player) -> u16 {
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if fury.true_link => t::true_link_freeze(),
+        _ => 0,
+    }
+}
+
+/// The Champion's three weapon buttons, as bits in button order.
+fn weapon_bits(input: Input) -> u8 {
+    (input.has(Input::LEFT) as u8)
+        | (input.has(Input::MIDDLE) as u8) << 1
+        | (input.has(Input::RIGHT) as u8) << 2
+}
+
+/// **The Beat** (exploration 0015, C2): a weapon pressed -- not held over --
+/// inside the impact freeze of a chain link that landed makes the next link a
+/// true link. Read off the raw input, before the freeze swallows it.
+///
+/// The window is the freeze itself, so it is the weapon's mass: the hammer's
+/// is wide and forgiving, the sword's three frames are precise. Nothing about
+/// how many buttons are pressed changes; when they are pressed does.
+fn find_the_beat(p: &mut Player, input: Input) {
+    let frozen = p.frozen > 0;
+    let in_a_link = p
+        .action
+        .attack_kind()
+        .is_some_and(moves::champion::in_string);
+    let winding = match p.action {
+        Action::Startup { kind, .. } | Action::Channel { kind, .. } => Some(kind),
+        _ => None,
+    };
+    let Mechanic::Forms {
+        chain_hit, fury, ..
+    } = &mut p.mechanic
+    else {
+        return;
+    };
+    let now = weapon_bits(input);
+    let fresh = now & !fury.clicks;
+    fury.clicks = now;
+    fury.fresh = (fury.fresh | fresh) & now;
+    // **A hold is one press, held** (2026-10-13, from play): let go of the
+    // button a link was pressed for and that link can no longer be held, so
+    // the next click of a string -- pressed during this one's wind-up -- is
+    // never read as this one held long. It used to be: clicking fast, a
+    // second press down at the top of a hammer's wind-up was a finisher.
+    if let Some(kind) = winding {
+        if now & 1 << moves::champion::weapon(kind) == 0 {
+            fury.may_hold = false;
+        }
+    }
+    if frozen && fresh != 0 && *chain_hit && in_a_link {
+        fury.beat = fresh;
+    }
+}
+
+/// The weapon pressed on the beat, held down for him until the link it asked
+/// for comes out: a press inside a three-frame freeze is over before the
+/// chain will take it, and the beat is the whole of the skill -- it should
+/// not also have to be held. Any other input is passed through.
+fn hold_the_beat(p: &Player, input: Input) -> Input {
+    let Mechanic::Forms { fury, .. } = p.mechanic else {
+        return input;
+    };
+    let mut bits = input.bits;
+    if fury.beat & 1 != 0 {
+        bits |= Input::LEFT;
+    }
+    if fury.beat & 2 != 0 {
+        bits |= Input::MIDDLE;
+    }
+    if fury.beat & 4 != 0 {
+        bits |= Input::RIGHT;
+    }
+    Input { bits, ..input }
+}
+
+/// Drive a Champion `reach` along `dir` at `speed`, on the Rush's own
+/// machinery: the run holds its line, is braced, and ends on a hit like a
+/// Rush. It spends no charge -- the full charge already paid for it.
+fn drive_the_champion(p: &mut Player, dir: V3, reach: Fx, speed: Fx) {
+    let frames = reach.div(speed.max(Fx::ONE)).div(DT).to_int().clamp(1, 240) as u16;
+    if let Mechanic::Forms {
+        rush,
+        rush_vel,
+        fury,
+        ..
+    } = &mut p.mechanic
+    {
+        *rush = frames;
+        *rush_vel = V3::new(dir.x.mul(speed), Fx::ZERO, dir.z.mul(speed));
+        fury.braced = 0;
+        fury.eaten = false;
+        fury.shouldered = true;
+    }
+}
+
+/// Does `hit` meet a Champion's heavy blow? If so the blow is spent on it:
+/// he freezes on the impact, flourishes, is fed for it, and remembers who
+/// threw it for `World::settle_the_clashes`. Blocks, parries, blows that take
+/// no frames and blows thrown by nobody (the world's own) do not clash.
+fn meets_a_clash(defender: &mut Player, hit: &Hit) -> bool {
+    if hit.blocked || hit.parried || !hit.interrupts || hit.by == NOBODY || !clashing(defender) {
+        return false;
+    }
+    if let Mechanic::Forms { fury, rush, .. } = &mut defender.mechanic {
+        fury.clash_by = hit.by;
+        // A Rush's shoulder, once a run, as its eaten blow is.
+        if *rush > 0 {
+            fury.eaten = true;
+        }
+    }
+    freeze(defender, t::clash_freeze());
+    defender.parried = PARRY_FLOURISH;
+    feed_the_momentum(defender, None);
+    true
+}
+
+/// **The Rush, braced** (exploration 0015, C1): what a blow does to a
+/// Champion who is running.
+///
+/// Three bands, and nothing outlasts the run, so there is no soak to sit in:
+///
+/// * **the last frames** (`tuning::rush_eat_frames`) eat one blow whole, once
+///   a Rush -- the shoulder down as he arrives, a timing rather than a buff;
+/// * **the rest of the run** takes a share of the damage
+///   (`tuning::rush_damage_taken`) and keeps going -- no stun, no shove;
+/// * **too much**: the shares are summed over the run, and the blow that
+///   takes the sum past `tuning::rush_breaks` lands the ordinary way, at its
+///   braced share, and ends the Rush as any hit does.
+///
+/// `None` when the blow is spent here; the hit to apply otherwise. Blocks,
+/// parries and blows that take no frames are not his to brace against.
+fn brace_the_rush(defender: &mut Player, hit: Hit) -> Option<Hit> {
+    if hit.blocked || hit.parried || !hit.interrupts {
+        return Some(hit);
+    }
+    let Mechanic::Forms { rush, fury, .. } = &mut defender.mechanic else {
+        return Some(hit);
+    };
+    if *rush == 0 {
+        return Some(hit);
+    }
+    if *rush <= t::rush_eat_frames() && !fury.eaten {
+        fury.eaten = true;
+        return None;
+    }
+    let taken = (hit.damage.max(0) as i64 * t::rush_damage_taken() as i64 / 100) as i32;
+    let braced = fury.braced as i32 + taken;
+    fury.braced = braced.min(u16::MAX as i32) as u16;
+    if braced > t::rush_breaks() {
+        return Some(Hit {
+            damage: taken,
+            ..hit
+        });
+    }
+    defender.wound(taken);
+    None
+}
+
 /// Turn a stick reading into a world direction, given where the player looks.
 ///
 /// `W` is away from the camera, `D` is to its right. This is the whole of
@@ -4505,9 +5535,38 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
         // is now gathering, at the crawl, with the aim live. Released inside
         // the startup, this arm is never reached and the pillar is the pillar
         // as built. See `moves::Charge::Strike` and `step_channel`.
+        // **A held click past its tap's startup is the field** (2026-10-13):
+        // right click's Command becomes the Summon, left click's Haemorrhage
+        // the Carpet. Not a charge -- the tap is the tap, and holding past it
+        // is a different move, whose cost is paid where it begins.
+        Action::Startup { kind, left: 0 }
+            if p.class == Class::BloodMage
+                && moves::blood::held_into(kind).is_some()
+                && input.has(moves::blood::click_of(kind)) =>
+        {
+            let field = moves::blood::held_into(kind).unwrap_or(kind);
+            pay(p, moves::get(p.class, field).cost);
+            Action::Channel {
+                kind: field,
+                held: 0,
+            }
+        }
         Action::Startup { kind, .. }
             if moves::charge(p.class, kind) == Some(moves::Charge::Strike)
                 && moves::get(p.class, kind).channel > 0
+                && input.has(channel_button(p.class, kind)) =>
+        {
+            Action::Channel { kind, held: 0 }
+        }
+        // **Tap to combo, hold to finish** (exploration 0015, the fourth
+        // round), the same arm: a link whose button was pressed for it and is
+        // still down at the top of its wind-up waits there for the press to be
+        // long enough to mean it -- `tuning::hold_from`, counted from the press
+        // -- and then is that weapon's finisher. A wind-up as long as that
+        // decides on the next frame. See `step_channel`.
+        Action::Startup { kind, .. }
+            if moves::charge(p.class, kind) == Some(moves::Charge::Heft)
+                && may_hold(p)
                 && input.has(channel_button(p.class, kind)) =>
         {
             Action::Channel { kind, held: 0 }
@@ -4568,6 +5627,7 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
+    let input = hold_the_beat(p, input);
     // The repeat lockouts run down first, and above the rider branch so they
     // run exactly once a frame on either tick. Before the input is read rather
     // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
@@ -4714,7 +5774,12 @@ fn step_player(
     // recovery, which is the Champion's whole answer to having committed to the
     // wrong move -- and, more often, what turns two moves into a combo. One
     // charge means that is always a decision. See `docs/design/champion.md`.
-    if pressed_mechanic && matches!(p.action, Action::Recovery { .. }) && start_rush(p, input) {
+    if pressed_mechanic
+        && (matches!(p.action, Action::Recovery { .. }) || holding(p))
+        && start_rush(p, who, input, scene)
+    {
+        // A Rush also takes back a hold (exploration 0015, C3): a held swing
+        // is a threat, and a threat you can walk away from is a feint.
         p.action = Action::Free;
     }
 
@@ -4725,6 +5790,11 @@ fn step_player(
     // reach the input below on the frame it was cut, not the frame after.
     arm_takeoff(p, input);
     rise_window(p, input);
+    // A stored charge is let go by a fresh press of its click, so the click
+    // that charged it has to come up first.
+    if p.vessel != NO_VESSEL && !input.has(moves::blood::click_of(p.vessel)) {
+        p.vessel_ready = true;
+    }
     rise_out_of_a_swing(p, who, pressed_space, input, scene);
     refresh_the_rise(p);
     bank_the_leap(p, pressed_space);
@@ -4878,7 +5948,7 @@ fn step_player(
                         // instead, and loss of control is loss of the option
                         // to decline. See `docs/design/dual-mage.md`.
                         Action::Free
-                    } else if let Some(pool) = may_commit
+                    } else if let Some(pool) = (may_commit || p.class == Class::BloodMage)
                         .then(|| pool_under_the_crosshair(p, who, input, scene))
                         .flatten()
                     {
@@ -4887,7 +5957,10 @@ fn step_player(
                         // pool is spent. The Reaver's dash pointed at the
                         // class's object instead of at a body -- and with
                         // nothing to cross, the crossing is instant. The
-                        // airborne one spends the airdodge, like hers.
+                        // airborne one spends the airdodge, like hers -- and is
+                        // there even once it is spent, since a stain is on the
+                        // floor and so is she when she arrives: the zip to the
+                        // blood she sent from a jump (2026-10-12).
                         if !p.grounded {
                             p.air_dodged = true;
                         }
@@ -5037,7 +6110,18 @@ fn step_player(
     let attack_speed = p
         .action
         .attack_kind()
-        .map(|kind| moves::get(p.class, kind).mobility)
+        .map(|kind| match p.action {
+            // The Blood mage holding a charge crawls, whatever the row says
+            // about the cast it is the front of.
+            Action::Channel { .. }
+                if p.class == Class::BloodMage
+                    && moves::charge(p.class, kind) == Some(moves::Charge::Tier) =>
+            {
+                t::charge_crawl() as u8
+            }
+            _ if holding(p) => t::hold_mobility(),
+            _ => moves::get(p.class, kind).mobility,
+        })
         .filter(|m| *m > 0)
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
@@ -5066,14 +6150,7 @@ fn step_player(
     let flurry_arrived = flurry_run.filter(|_| !hauling && p.haul == 0);
 
     let dashing = shadow::dash_drive(p);
-    // **The Blood jet**, while it is held: her blood out under her drives her
-    // along the line she is aiming, never less than a little up. Gravity is
-    // off while it drives, as it is for a haul. See `moves::blood::BLOOD_JET`.
-    let jetting = blood_jet_drive(p);
-    if let Some(drive) = jetting {
-        p.vel = drive;
-        p.grounded = false;
-    } else if hauling {
+    if hauling {
         // Ahead of the dash and of everything below it, and it ignores the
         // stick outright: the arms have hold of a wall and she is on the end of
         // them. Like the dash it drives all three axes, so a Grasp thrown up on
@@ -5286,7 +6363,7 @@ fn step_player(
     if nailed {
         p.vel = V3::ZERO;
     }
-    if !p.grounded && dashing.is_none() && !hauling && jetting.is_none() && !nailed {
+    if !p.grounded && dashing.is_none() && !hauling && !nailed {
         if plunging(p) {
             // **The descent.** Driven rather than fallen: gravity would make
             // the plunge take longer the lower she started, which is backwards
@@ -5447,8 +6524,10 @@ fn step_player(
                 p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS && left > 0;
             if lands_on_the_floor(p.class, kind)
                 && !gallows_early
-                && (matches!(p.class, Class::Elementalist | Class::ShadowReaver)
-                    || slam_from_the_air)
+                && (matches!(
+                    p.class,
+                    Class::Elementalist | Class::ShadowReaver | Class::Champion
+                ) || slam_from_the_air)
             {
                 p.action = Action::Active {
                     kind,
@@ -5553,12 +6632,9 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 /// displaces something rather than adding to it — on the floor that key is the
 /// mechanic and has no frames at all — so it is answered by
 /// [`keyed_move`] beside the rest of the mechanic grammar.
-/// Which move the Blood mage's three clicks throw.
-///
-/// Left is the auto, right is the committed heavy and middle is the throw --
-/// the same reading as the Elementalist's clicks, with the third button taking
-/// the ranged move because the mouse means where. See `moves::blood` for why
-/// the auto is the fifth row of the table rather than the first.
+/// Which move the Blood mage's three clicks throw: left is *my blood*,
+/// middle *your blood*, right the scythe -- the row is where her feet are,
+/// and a charge in her vessel takes its own click back. See `moves::blood`.
 fn blood_move(p: &Player, input: Input) -> Option<u8> {
     use moves::blood as b;
     use moves::blood::keys;
@@ -5572,31 +6648,45 @@ fn blood_move(p: &Player, input: Input) -> Option<u8> {
     } else {
         return None;
     };
+    // **A stored charge answers its own click first**, wherever her feet
+    // are: the vessel is what a jump or a dodge out of a hold kept, and the
+    // click that charged it is the click that lets it go.
+    if p.vessel != NO_VESSEL && b::click_of(p.vessel) == click {
+        return p.vessel_ready.then_some(p.vessel);
+    }
     let takeoff = match click {
-        keys::MY_BLOOD => b::BLOOD_JET,
-        keys::YOUR_BLOOD => b::MARIONETTE,
-        _ => b::HARVEST,
+        keys::MY_BLOOD => b::WINGS,
+        keys::YOUR_BLOOD => b::UPHEAVAL,
+        _ => b::RISING_REAP,
     };
-    // **My blood, your blood, the scythe** (2026-10-09): each on the floor,
-    // in the air, and off the floor with space, on the window the
-    // Elementalist's takeoffs use. See `rise_window`.
+    // **A tap is the quick thing and a hold is the field** (2026-10-13): on
+    // the floor and in the air the left click is the Haemorrhage and the
+    // right click Command, each turning into its field -- the Carpet, the
+    // Summon -- when held past its startup (`countdown`); the middle click is
+    // the spike, charged in tiers on the floor and the Stake in the air. Space
+    // with a click is a takeoff from the floor, on the window the
+    // Elementalist's use (`rise_window`), and **once a jump in the air** as
+    // well, as the Reaver's are.
     if p.grounded {
         if !p.aboard() && p.rise.window > 0 {
             return Some(takeoff);
         }
         return Some(match click {
-            keys::MY_BLOOD => b::BLOOD_NOVA,
-            keys::YOUR_BLOOD => b::GRASP,
-            _ => b::SWEEP,
+            keys::MY_BLOOD => b::HAEMORRHAGE,
+            keys::YOUR_BLOOD => b::BLACK_SPIKE,
+            _ => b::COMMAND,
         });
     }
     if !p.aboard() && p.rise.window > 0 && p.rise.lifted <= t::floor_grace() {
         return Some(takeoff);
     }
+    if !p.aboard() && input.has(Input::SPACE) && !p.rise.used {
+        return Some(takeoff);
+    }
     Some(match click {
         keys::MY_BLOOD => b::HAEMORRHAGE,
-        keys::YOUR_BLOOD => b::NAIL,
-        _ => b::HOOK,
+        keys::YOUR_BLOOD => b::STAKE,
+        _ => b::COMMAND,
     })
 }
 
@@ -5663,7 +6753,7 @@ fn elementalist_takeoff(class: Class, kind: u8) -> bool {
     use moves::elementalist as e;
     match class {
         Class::Elementalist => matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT),
-        Class::BloodMage => matches!(kind, b::BLOOD_JET | b::MARIONETTE | b::HARVEST),
+        Class::BloodMage => matches!(kind, b::WINGS | b::UPHEAVAL | b::RISING_REAP),
         Class::DualMage => moves::dual::is_takeoff(kind),
         Class::ShadowReaver => moves::reaver::is_takeoff(kind),
         Class::Bulwark => moves::bulwark::is_takeoff(kind),
@@ -5682,9 +6772,8 @@ fn keyed_q(p: &Player) -> Option<u8> {
         // Air bolt it threw in the air read as something else at the moment a
         // push was wanted (2026-10-09, from play), and is unbound for now.
         Class::Elementalist => Some(SLOT_POKE),
-        // Hers is the Bloodletter, since 2026-10-09: the Grasp went to middle
-        // click.
-        Class::BloodMage => Some(moves::blood::BLOODLETTER),
+        // Hers is Coagulate, since 2026-10-13.
+        Class::BloodMage => Some(moves::blood::COAGULATE),
         // Hers is the dark major, the Abyss; the light one is on `E`.
         Class::DualMage => Some(moves::dual::ABYSS),
         _ => Some(SLOT_SPECIAL),
@@ -5870,7 +6959,9 @@ fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
 
 /// The moves whose active frames begin on the frame the feet arrive.
 fn lands_on_the_floor(class: Class, kind: u8) -> bool {
-    (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
+    (class == Class::Champion
+        && matches!(kind, moves::champion::METEOR | moves::champion::SHOCKWAVE))
+        || (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
         || (class == Class::Bulwark && kind == SLOT_COMMITTED)
         || (class == Class::ShadowReaver
             && matches!(kind, moves::reaver::GALLOWS | moves::reaver::PLUNGE))
@@ -6240,6 +7331,14 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
         if !p.aboard() && !rise_spent(p) && (just_left || input.has(Input::SPACE)) {
             return Some(c::TAKEOFF + weapon);
         }
+        // **The third hit from the air** (2026-10-13, from play) is the
+        // aerial: with two hits behind him it is the string's third --
+        // it ends it, gives the Rush back when it lands, and held it is the
+        // grand finisher (`begin_champion` gives it its place). The button
+        // is the weapon and the feet pick the move, so the move stays the
+        // air's own. Throwing the ground's third links from the air instead
+        // was tried: the hunt bots struck a creature's back a quarter less
+        // often, 187 times against 258 across 24 hunts.
         return Some(c::IN_THE_AIR + weapon);
     }
     Some(c::link(champion_chain(p).0, weapon))
@@ -6418,7 +7517,7 @@ fn chain_cancel(p: &mut Player, input: Input) {
     let Action::Recovery { kind, left } = p.action else {
         return;
     };
-    if c::link_of(kind).is_none() {
+    if !c::in_string(kind) {
         return;
     }
     let Mechanic::Forms {
@@ -6521,24 +7620,38 @@ fn confirm_chain(p: &mut Player, blocked: bool) {
     let Some(kind) = p.action.attack_kind() else {
         return;
     };
-    if moves::champion::link_of(kind).is_none() {
+    let Some(link) = place_in_string(p, kind) else {
         return;
-    }
-    if let Mechanic::Forms { chain_hit, .. } = &mut p.mechanic {
+    };
+    if let Mechanic::Forms {
+        chain_hit,
+        recharge,
+        rush,
+        ..
+    } = &mut p.mechanic
+    {
         *chain_hit = true;
+        // **The refund** (exploration 0015, C1): a third hit that lands gives
+        // the Rush back, so the way out -- or back in -- is already there when
+        // the string is over. Not mid-dash: a Rush cannot refill itself.
+        if link + 1 == moves::champion::DEPTH && *rush == 0 {
+            *recharge = 0;
+        }
     }
 }
 
 /// Where the chain is after this move: one hit deeper, or back to nothing.
 ///
-/// **Only the nine ground moves are in it.** An aerial, a Rush move or a
-/// takeoff ends the chain outright rather than being ignored by it, and that is
-/// the design rather than an implementation shortcut: leaving the floor is a
-/// different situation, and a string you could park in the air and come back to
-/// would make the grace window meaningless.
+/// **The nine links, the aerials and the takeoffs are in it** (2026-10-13,
+/// from play: "I find myself counting to three"). A link is its own place; an
+/// aerial or a takeoff is the next one, however many hits were behind it, so
+/// ground, jump, third is three. A Rush move ends the chain outright: the Rush
+/// is its own way in.
 fn advance_chain(p: &mut Player, kind: u8) {
-    let stage = match moves::champion::link_of(kind) {
+    use moves::champion as c;
+    let stage = match c::link_of(kind) {
         Some(link) => link + 1,
+        None if c::in_string(kind) => (champion_chain(p).0 + 1).min(c::DEPTH),
         None => 0,
     };
     if let Mechanic::Forms {
@@ -6573,15 +7686,41 @@ fn begin_champion(p: &mut Player, kind: u8) {
             let m = moves::get(p.class, kind);
             (m.startup + m.active, rush_vel.scale(t::vault_carry()))
         }
-        // The stab is the one Rush move that *stops*. All of the speed goes
-        // into the point, which is what buys it the damage.
-        c::RUSH_STAB => (0, V3::ZERO),
+        // The stab **carries** (exploration 0015, C1): it used to be the one
+        // Rush move that stopped dead, and it landed none of seventeen in the
+        // owner's tape. It rides the run out now, and what it catches it
+        // holds on the point and takes along (its `grabs`): the run is kept
+        // alive through the thrust and for as long as the hold, so there is a
+        // run left to carry them on.
+        c::RUSH_STAB => {
+            let m = moves::get(p.class, kind);
+            (rush.max(m.startup + m.active + m.grabs), rush_vel)
+        }
         // Everything else rides the dash out.
         _ => (rush, rush_vel),
     };
     if kind == c::UPPERCUT {
         p.leap_used = false;
     }
+    // A link thrown on the beat is a true link; anything else spends the
+    // beat on nothing. See `find_the_beat`.
+    // Where in the string this move stands: a link's own place, or for an
+    // aerial or a takeoff the hits already behind it.
+    let place = c::link_of(kind).unwrap_or(champion_chain(p).0.min(c::DEPTH - 1));
+    if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
+        fury.true_link = fury.beat != 0 && c::in_string(kind) && place > 0;
+        fury.beat = 0;
+        if c::in_string(kind) {
+            fury.place = place;
+        }
+        // A move may be held only if its button was pressed for it. The press
+        // is spent here, so a button held on into the next link runs the
+        // string as it always did rather than charging it.
+        let bit = 1u8 << c::weapon(kind);
+        fury.may_hold = c::holdable(kind) && fury.fresh & bit != 0;
+        fury.fresh &= !bit;
+    }
+    p.channelled = Fx::ZERO;
     // The chain moves on, or ends, depending on what this move was.
     advance_chain(p, kind);
     if let Mechanic::Forms {
@@ -6589,12 +7728,15 @@ fn begin_champion(p: &mut Player, kind: u8) {
         rush: r,
         rush_vel: v,
         takeoff,
+        liquid,
         ..
     } = &mut p.mechanic
     {
         // The weapon is whichever button was pressed. Nothing else sets it:
         // there is no mode to be in any more.
+        let from = *form;
         *form = Form::of_move(kind);
+        liquid.call(from);
         *r = rush;
         *v = rush_vel;
         // A takeoff spends the window it came out of, so one jump buys one of
@@ -6863,11 +8005,13 @@ fn begin_blink(p: &mut Player, who: usize, dir: V3, scene: &aim::Scene) {
     // corner a shorter move than a blink across the arena -- and how long she
     // is a smear for is the one thing the person opposite has to read it by.
     let speed = t::blink_range().div(Fx::from_int(frames as i32).mul(DT));
+    // A frame in hand, so the last step lands her on the point rather than
+    // leaving her a step short of it when the count runs out.
     begin_haul(
         p,
         aim::settle(land, scene.stones, scene.arena),
         speed,
-        frames,
+        frames + 1,
     );
 }
 
@@ -6928,22 +8072,6 @@ fn begin_haul(p: &mut Player, to: V3, speed: Fx, frames: u16) {
     p.haul_speed = speed;
     p.haul = frames;
     p.vel = V3::ZERO;
-}
-
-/// The drive the Blood jet puts under her this frame, while it is held: along
-/// the line `crate::aim` solved for the hold -- the crosshair's, not the
-/// chest's -- at `tuning::jet_speed`, and never less than
-/// `tuning::jet_least_rise` upward.
-fn blood_jet_drive(p: &Player) -> Option<V3> {
-    let Action::Channel { kind, .. } = p.action else {
-        return None;
-    };
-    if p.class != Class::BloodMage || kind != moves::blood::BLOOD_JET {
-        return None;
-    }
-    let mut drive = p.aim_path.dir().scale(t::jet_speed());
-    drive.y = drive.y.max(t::jet_least_rise());
-    Some(drive)
 }
 
 /// The drive a **stepping** move is putting under the body this frame.
@@ -7143,27 +8271,34 @@ pub(crate) fn rushing(p: &Player) -> Option<V3> {
 
 /// Spend the charge and start the dash. False if there was no charge to spend.
 ///
-/// The dash goes where you are **holding**, not where you are looking, so that
-/// Rush is a retreat and a sidestep as well as an approach -- and so that the
-/// run-through can be aimed across an opponent rather than only at one.
-fn start_rush(p: &mut Player, input: Input) -> bool {
+/// **The dash goes where the crosshair is** (2026-10-13, from play): flat
+/// along the floor toward the spot the crosshair is on, from his feet --
+/// `aim::racing_path`, the line a crack races along, run by a body. It used
+/// to go where the stick was held, so that it could be a retreat or a
+/// sidestep, and it looked and felt like it was going somewhere he was not
+/// pointing; turn the camera to retreat.
+fn start_rush(p: &mut Player, who: usize, input: Input, scene: &Scene) -> bool {
     let Mechanic::Forms { recharge: 0, .. } = p.mechanic else {
         return false;
     };
-    let (ax, az) = input.move_axis();
-    let dir = if ax == 0 && az == 0 {
-        p.facing
-    } else {
-        move_dir(input.aim_turns(), ax, az)
-    };
+    let dir = aim::racing_path(p.pos, who, input, t::rush_speed(), scene).dir();
     if let Mechanic::Forms {
         rush,
         recharge,
         rush_vel,
+        fury,
         ..
     } = &mut p.mechanic
     {
         *rush = t::rush_frames();
+        // A fresh run is braced afresh: nothing taken, the last frames' one
+        // free blow unspent, the shoulder still to throw.
+        *fury = class::Fury {
+            braced: 0,
+            eaten: false,
+            shouldered: false,
+            ..*fury
+        };
         // The charge is gone until the dash has finished *and* the recharge has
         // run, so the two never overlap and "rush ready" on the HUD means it.
         *recharge = t::rush_frames() + t::rush_recharge();
@@ -7276,20 +8411,31 @@ fn begin_move(
     // this cast is worth is where she is standing right now, on the bar of the
     // force this move is made of. See [`Player::thrown_at`].
     p.thrown_at = dual::depth_at(p, Some(kind));
+    // **The Blood mage's vessel lets go.** A charge stored by a jump or a
+    // dodge out of its hold comes out now, at the tier it reached, from
+    // wherever she is: it was paid for when it was charged, so nothing is paid
+    // again and there is no hold.
+    if p.class == Class::BloodMage {
+        p.tier = 0;
+        if p.vessel == kind {
+            p.tier = p.vessel_tier.max(1);
+            p.vessel = NO_VESSEL;
+            p.vessel_tier = 0;
+            lock_aim(p, who, kind, input, scene);
+            return throw_move(p, kind, input, aerial);
+        }
+    }
     // Health is spent on the press, never on the hit. Missing is the
     // punishment, which is the whole of the Blood mage's economy -- see
     // `docs/design/kits/blood-mage.md`. Paid here even for a channelled move,
     // because the press is still the press: there is no way to cancel out of a
     // wind-up, so an ability you started is an ability you bought.
-    p.spend_health(moves::get(p.class, kind).cost);
+    pay(p, moves::get(p.class, kind).cost);
     // A move that charges **before** it starts does not start here. Pressing
     // the button opens the wind-up instead, and the move begins when the
     // button comes back up -- see `step_channel`. The other two charges come
     // after the startup and the press starts the move like any other.
-    if matches!(
-        moves::charge(p.class, kind),
-        Some(moves::Charge::Reach | moves::Charge::TapOrHold)
-    ) {
+    if moves::charge(p.class, kind) == Some(moves::Charge::TapOrHold) {
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
@@ -7297,12 +8443,10 @@ fn begin_move(
     // ball goes: on the floor under the crosshair, asked of `crate::aim` the
     // way Raise asks it. The world raises the ball there on this frame, and
     // the release sends it from there. See `World::roll_the_ball`.
-    // The held blood, the nova's and the jet's: the hold is before the move,
-    // paid as it goes. Where the jet leaves the floor is where its wake ends
-    // and its pool goes.
-    if moves::charge(p.class, kind) == Some(moves::Charge::Bleed) {
-        p.self_spent = 0;
-        p.launched_from = p.pos;
+    // The Blood mage's three charges: the hold is before the move, and each
+    // tier is paid as it is reached. A tap is the first tier.
+    if moves::charge(p.class, kind) == Some(moves::Charge::Tier) {
+        p.tier = 1;
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
@@ -7367,10 +8511,6 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     if p.class == Class::DualMage && kind == moves::dual::VEIL {
         dual::veil(p);
     }
-    // The Flurry dash's line starts where she stood when it was thrown.
-    if p.class == Class::DualMage && kind == moves::dual::FLURRY_DASH {
-        p.launched_from = p.pos;
-    }
     if aerial {
         arm_aerial(p, kind, input);
     }
@@ -7398,17 +8538,64 @@ fn step_channel(
     let m = moves::get(p.class, kind);
     let cap = m.channel;
     let charge = moves::charge(p.class, kind);
+    // **The Champion's finisher**: held long enough, counted from the press,
+    // and the link is that weapon's finisher, aimed now as any move is on its
+    // first frame.
+    if charge == Some(moves::Charge::Heft) && input.has(channel_button(p.class, kind)) {
+        if m.startup + held + 1 >= t::hold_from() {
+            return finish_with(p, who, kind, input, scene);
+        }
+        return Action::Channel {
+            kind,
+            held: held + 1,
+        };
+    }
     // Held, and there is still room: wind on. At the cap it releases itself,
     // so a player holding the button through a fight is not quietly storing an
     // ability they have already paid for.
+    // **A finisher** (2026-10-13): held to the end of the hold, at any
+    // time, the Hemoplague, the spike and the Carpet each become their
+    // finisher, and it spends all her grey and the Well on the frame it
+    // begins (`Player::fuel`): the more there was, the bigger it is.
+    if held >= cap && input.has(channel_button(p.class, kind)) {
+        if let Some(big) = moves::blood::finisher_of(kind).filter(|_| p.class == Class::BloodMage) {
+            p.fuel = (p.grey + p.well as i32).clamp(0, u16::MAX as i32) as u16;
+            p.grey = 0;
+            p.grey_rest = 0;
+            p.well = 0;
+            p.tier = 0;
+            lock_aim(p, who, big, input, scene);
+            return throw_move(p, big, input, true);
+        }
+    }
     if input.has(channel_button(p.class, kind)) && held < cap {
         let held = held + 1;
-        // Held blood is paid as it goes: one percent of her red every few
-        // frames, into grey like any cost, and remembered for the pool.
-        if charge == Some(moves::Charge::Bleed) && held % t::blood_pays_every() == 0 {
-            let before = p.health;
-            p.spend_health(1);
-            p.self_spent += before - p.health;
+        if charge == Some(moves::Charge::Tier) {
+            // **A jump or a dodge out of the hold stores it** in her vessel,
+            // at the tier it had reached, and she is free on this frame: the
+            // jump below takes off from it. The charge and the movement take
+            // turns rather than excluding each other.
+            let (ax, az) = input.move_axis();
+            if input.has(Input::SPACE) || (input.has(Input::SHIFT) && (ax != 0 || az != 0)) {
+                p.vessel = kind;
+                p.vessel_tier = p.tier.max(1);
+                p.channelled = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
+                p.vessel_ready = false;
+                p.tier = 0;
+                return Action::Free;
+            }
+            // Each tier paid as it is reached, faster the more grey she has.
+            let tier = tier_held(p, held);
+            if tier > p.tier {
+                pay(
+                    p,
+                    match tier {
+                        2 => t::tier_two_cost(),
+                        _ => t::tier_three_cost(),
+                    },
+                );
+                p.tier = tier;
+            }
         }
         aim_channel(p, who, kind, held, input, scene);
         return Action::Channel { kind, held };
@@ -7447,16 +8634,110 @@ fn step_channel(
         // `aerial` is always true here and always harmless: `arm_aerial`
         // returns on the spot for anybody whose feet are on something, and
         // aboard the creature they always are.
-        // The held blood: what was bought is a share of the longest hold --
-        // the nova's size, the jet's wake.
-        Some(moves::Charge::Bleed) => {
+        // The tier is already on her (`Player::tier`), paid as it came; how
+        // far into the hold she let go is how many spikes come up.
+        Some(moves::Charge::Tier) => {
             p.channelled = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
             throw_move(p, kind, input, true)
         }
+        // The field was the move: let go, and she recovers. The carpet
+        // breaks on its own when she stops holding it (`step_carpets`).
+        Some(moves::Charge::Field) => {
+            p.lock_repeat(kind);
+            Action::Recovery {
+                kind,
+                left: m.recovery,
+            }
+        }
+        // The Champion's hold: under `hold_from` it was a press a little
+        // long; up to `hold_full` it is a part charge, worth its share; full,
+        // it is a different move -- the weapon's full charge for this place in
+        // the string -- wound up from its own startup. Facing locks here, on
+        // the release, as it does for every other move on its first frame.
+        // Let go before the press was long enough: the link, as tapped.
+        Some(moves::Charge::Heft) => Action::Active {
+            kind,
+            left: m.active,
+        },
         _ => {
             p.channelled = p.aim_path.length();
             throw_move(p, kind, input, true)
         }
+    }
+}
+
+/// **Pay for a cast, and owe it to the floor** (2026-10-13): `percent` of her
+/// red spent, as every cost is, and what was actually paid remembered in
+/// `Player::paid`, to land as a stain where the cast does. A miss is a setup.
+fn pay(p: &mut Player, percent: i32) {
+    let before = p.health;
+    p.spend_health(percent);
+    if p.class.wounds_go_grey() {
+        p.paid = p.paid.saturating_add((before - p.health).max(0) as u16);
+    }
+}
+
+/// Which tier a hold of `held` frames has reached: two at
+/// `tuning::tier_two`, three at `tuning::tier_three`, sooner by up to
+/// `tuning::charge_grey_faster` at a full bar of grey -- a wounded Blood mage
+/// casts faster.
+fn tier_held(p: &Player, held: u16) -> u8 {
+    let faster = Fx::ONE.add(t::charge_grey_faster().sub(Fx::ONE).mul(p.grey_share()));
+    let worth = Fx::from_int(held as i32).mul(faster).to_int();
+    if worth >= t::tier_three() as i32 {
+        3
+    } else if worth >= t::tier_two() as i32 {
+        2
+    } else {
+        1
+    }
+}
+
+/// `Effect::banked` on a Black spike that is **a field of waves** -- the
+/// spike's third tier. One is an eruption out of a stain; three is an area
+/// that only hits (the Stake landing, the second tier's spikes).
+pub const SPIKE_FIELD: i32 = 2;
+/// `Effect::banked` on a Black spike that is **an eruption out of a stain**.
+/// An eruption spends the stain it came out of and spills nothing: the same
+/// spot hit again runs out rather than growing (2026-10-13).
+pub const SPIKE_ERUPTION: i32 = 1;
+pub const SPIKE_AREA: i32 = 3;
+
+/// `Effect::banked` on a Hemoplague she is still holding, growing.
+pub const GROWING: i32 = 1;
+/// `Effect::life` on a stain that is not lit: a lit stain's `life` counts the
+/// frames until it erupts (`World::light_the_fuses`).
+pub const UNLIT: u16 = u16::MAX;
+/// On a thrall's `Effect::struck`: she has sent it somewhere, and it goes
+/// there before it bites anything.
+pub const COMMANDED: u64 = 1 << 63;
+/// On a thrall's `Effect::struck`: the hand it keeps to round a wall.
+pub const LEFT_HAND: u64 = 1 << 62;
+
+/// What a Black spike's hit is worth against its row's damage: an eruption
+/// out of a stain is the bigger hit, a field's wave and the second tier's
+/// spikes their own share, and the Stake's landing its row's number.
+fn spike_share(effect: &Effect) -> Fx {
+    match effect.banked {
+        SPIKE_FIELD => t::spike_field_power(),
+        SPIKE_AREA if effect.slot == moves::blood::BLACK_SPIKE => t::spike_two_power(),
+        SPIKE_AREA => Fx::ONE,
+        _ => t::erupt_damage(),
+    }
+}
+
+/// What a burst of her blood is worth: the Tides' tier, the number an
+/// exploding stain carries, or the row's own.
+fn nova_blow(effect: &Effect) -> i32 {
+    effect.damage()
+}
+
+/// What a tier is worth over the first, on the blow.
+pub fn tier_power(tier: u8) -> Fx {
+    match tier {
+        3 => t::tier_three_power(),
+        2 => t::tier_two_power(),
+        _ => Fx::ONE,
     }
 }
 
@@ -7473,6 +8754,13 @@ const fn channel_button(class: Class, kind: u8) -> u16 {
             _ => {}
         }
     }
+    if matches!(class, Class::Champion) {
+        return match moves::champion::weapon(kind) {
+            moves::champion::SWORD => Input::LEFT,
+            moves::champion::HAMMER => Input::MIDDLE,
+            _ => Input::RIGHT,
+        };
+    }
     match kind {
         // The Elementalist's three holds are her three clicks: Fissure is the
         // earth click held (the stone was raised on the press and the crack
@@ -7480,12 +8768,8 @@ const fn channel_button(class: Class, kind: u8) -> u16 {
         // the Air ball is the wind click held.
         SLOT_COMMITTED if matches!(class, Class::Elementalist) => moves::elementalist::keys::EARTH,
         SLOT_SPECIAL if matches!(class, Class::Elementalist) => moves::elementalist::keys::FIRE,
-        // The Blood mage's Grasp is middle click held; her two held bloods,
-        // the nova and the jet, are left click.
-        SLOT_SPECIAL if matches!(class, Class::BloodMage) => moves::blood::keys::YOUR_BLOOD,
-        moves::blood::BLOOD_NOVA | moves::blood::BLOOD_JET if matches!(class, Class::BloodMage) => {
-            moves::blood::keys::MY_BLOOD
-        }
+        // The Blood mage's three charges are her three clicks held.
+        _ if matches!(class, Class::BloodMage) => moves::blood::click_of(kind),
         moves::elementalist::AIR_BALL if matches!(class, Class::Elementalist) => {
             moves::elementalist::keys::WIND
         }
@@ -7526,12 +8810,15 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
     // about *where*. The other two buy a distance along the solved line.
     // The Air ball's hold buys size, not distance: its line is only ever
     // read for the way it rolls.
+    // A field is laid where the crosshair is when the hold opens, and grows
+    // there: its marker is that spot, not a point walking out with the hold.
     if !matches!(
         moves::charge(p.class, kind),
         Some(
             moves::Charge::Strike
                 | moves::Charge::Gather
-                | moves::Charge::Bleed
+                | moves::Charge::Tier
+                | moves::Charge::Field
                 | moves::Charge::TapOrHold
         )
     ) {
@@ -7550,7 +8837,20 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
 /// needs `crate::aim` to grow it, not a branch here -- deciding locally is how
 /// the crosshair and the ability came to disagree, three times.
 fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
-    aim_at(p, who, kind, moves::get(p.class, kind).reach, input, scene);
+    aim_at(p, who, kind, aimed_reach(p.class, kind), input, scene);
+}
+
+/// How far along the crosshair's line a move is aimed: its own reach, but for
+/// the one whose reach and line are two things -- the Crescent, a sword cut
+/// whose blade of light flies `tuning::crescent_reach`. Aimed at the cut's
+/// arm's length, its line would climb from the chest to a point an arm's
+/// length off the eye and fly over everybody's head.
+fn aimed_reach(class: Class, kind: u8) -> Fx {
+    if class == Class::Champion && kind == moves::champion::CRESCENT {
+        t::crescent_reach()
+    } else {
+        moves::get(class, kind).reach
+    }
 }
 
 /// The three lines themselves, at whatever reach the caller has decided on.
@@ -7857,7 +9157,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
         // rebuild deleted -- the weapon is a mouse button now, so the mechanic
         // key is free for the mechanic the class is actually built around.
         Mechanic::Forms { .. } => {
-            start_rush(p, input);
+            start_rush(p, who, input, scene);
         }
 
         // `E` on the Reaver is an ability rather than an instant -- see
@@ -7971,11 +9271,14 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
         //     committing to one a decision: three hits is a plan, and the
         //     opponent gets to have an opinion about it.
         Mechanic::Forms { .. } => {
-            let live = p
-                .action
-                .attack_kind()
-                .is_some_and(|kind| moves::champion::link_of(kind).is_some());
-            let standing = p.action.actionable() && p.grounded;
+            let live = p.action.attack_kind().is_some_and(|kind| {
+                moves::champion::in_string(kind) || moves::champion::is_full(kind)
+            });
+            // Free, on the floor or off it: a jump no longer ends a string
+            // (2026-10-13), since a jump is how the next hit of one arrives.
+            let standing = p.action.actionable();
+            let stunned = p.action.stunned();
+            let charging = winding_a_hold(p);
             if let Mechanic::Forms {
                 rush,
                 recharge,
@@ -7983,10 +9286,11 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 chain_left,
                 chain_hit,
                 takeoff,
+                fury,
                 ..
             } = &mut p.mechanic
             {
-                *rush = rush.saturating_sub(1);
+                *rush = if stunned { 0 } else { rush.saturating_sub(1) };
                 *recharge = recharge.saturating_sub(1);
                 *takeoff = takeoff.saturating_sub(1);
                 if live {
@@ -8004,6 +9308,21 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 if *chain_left == 0 {
                     *chain = 0;
                     *chain_hit = false;
+                    fury.beat = 0;
+                }
+                if !live {
+                    fury.true_link = false;
+                }
+                // The meter holds after a landed hit, then drains -- and
+                // holds still while he winds up a hold (2026-10-13, from
+                // play): a finisher started on a full meter is a finisher on
+                // a full meter, not one that watched it run down.
+                if charging {
+                    // Held where it is.
+                } else if fury.momentum_left > 0 {
+                    fury.momentum_left -= 1;
+                } else {
+                    fury.momentum = (fury.momentum as i32 - t::momentum_drain()).max(0) as u16;
                 }
             }
         }
@@ -8176,6 +9495,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             leap_banked,
             rise_used,
             lifted,
+            fury,
+            liquid,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
@@ -8189,6 +9510,22 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*leap_banked as u32);
             h.write_u32(*rise_used as u32);
             h.write_u32(*lifted as u32);
+            h.write_u32(fury.braced as u32);
+            h.write_u32(
+                fury.eaten as u32
+                    | (fury.shouldered as u32) << 1
+                    | (fury.true_link as u32) << 3
+                    | (fury.clicks as u32) << 8
+                    | (fury.beat as u32) << 16
+                    | (fury.fresh as u32) << 20
+                    | (fury.may_hold as u32) << 24
+                    | (fury.place as u32) << 25,
+            );
+            h.write_u32(fury.momentum as u32 | (fury.momentum_left as u32) << 16);
+            h.write_u32(
+                fury.last_weapon as u32 | (fury.spent as u32) << 8 | (fury.clash_by as u32) << 16,
+            );
+            h.write_u32(liquid.raw());
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -8317,7 +9654,7 @@ fn step_aloft(p: &mut Player, field: &Field, arena: &Terrain) {
     p.clear = camera::clear_step(p.clear, height);
 }
 
-/// Advance the four clocks the renderer needs and combat does not.
+/// Advance the clocks the renderer needs and combat does not.
 ///
 /// Every one of them is a fact about what just happened -- how far you have
 /// walked, how long you have been in the air -- rather than a decision, which
@@ -8339,6 +9676,10 @@ fn advance_clocks(p: &mut Player) {
         p.air_frames = p.air_frames.saturating_add(1);
     }
     p.parried = p.parried.saturating_sub(1);
+    let moving = p.action.attack_kind().is_some();
+    if let Mechanic::Forms { liquid, .. } = &mut p.mechanic {
+        liquid.tick(moving);
+    }
     p.crouched_for = if p.crouching {
         p.crouched_for.saturating_add(1)
     } else {
@@ -8412,15 +9753,22 @@ fn settle(p: &mut Player, arena: &Terrain) {
 }
 
 /// Bodies are solid. Push them apart symmetrically so neither index wins.
+///
+/// **Except to Thousand Cuts**, which is a run *through* them (exploration
+/// 0015, C5): a drawn sword that stopped against the body it was cutting
+/// would be the Rush stab again.
 fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
     // **Except a body passing through untouchable**: the Dual mage's Flurry
     // dash goes down its own line through whoever is on it (2026-10-12), and
     // stopping at the first body is the dash ending at the thing it was cut
     // through. They are set apart when the dash ends.
-    if players
-        .iter()
-        .any(|p| p.haul > 0 && p.class == Class::DualMage && dual::veiled(p))
-    {
+    let through = |p: &Player| {
+        (p.class == Class::Champion
+            && p.action.attack_kind() == Some(moves::champion::THOUSAND_CUTS)
+            && rushing(p).is_some())
+            || (p.haul > 0 && p.class == Class::DualMage && dual::veiled(p))
+    };
+    if players.iter().any(through) {
         return;
     }
     let delta = players[1].pos.sub(players[0].pos);
@@ -9074,6 +10422,11 @@ fn stagger_the_cashed(p: &mut Player) {
 /// hazard that only exists in versus is not a hazard.
 impl World {
     fn step_effects(&mut self) {
+        self.step_carpets();
+        self.step_plagues();
+        self.light_the_fuses();
+        self.step_thralls();
+        self.slide_the_stains();
         for i in 0..MAX_EFFECTS {
             let Some(mut effect) = self.effects[i] else {
                 continue;
@@ -9183,14 +10536,16 @@ impl World {
             // dry. The drain is taken here, before the frame's drinks, so a
             // pool that is about to vanish cannot be drunk from on the frame
             // it does.
-            if effect.is_a_pool() {
+            if effect.is_a_pool() || effect.is_a_thrall() {
                 effect.banked -= effect.pool_drained_this_frame();
             }
             let expired = if effect.kind == EffectKind::FireTornado {
                 let flying = effect.age.saturating_sub(effect.banked as u16);
                 flying >= t::tornado_travel_life() || !self.terrain().inside(effect.tornado_pos())
-            } else if effect.is_a_pool() {
+            } else if effect.is_a_pool() || effect.is_a_thrall() {
                 effect.banked <= 0
+            } else if effect.kind == EffectKind::Carpet {
+                false
             } else {
                 effect.age >= effect.life
             };
@@ -9287,6 +10642,13 @@ impl World {
         }
         if effect.kind == EffectKind::Quake {
             self.erupt_the_quake(effect);
+            return;
+        }
+        if effect.kind == EffectKind::Nail
+            && effect.class == Class::BloodMage
+            && effect.slot == moves::blood::STAKE
+        {
+            self.land_the_stake(effect);
             return;
         }
         if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
@@ -9401,6 +10763,125 @@ impl World {
         // cast, so that the hit test and the overlay are the same size without
         // the overlay having to find her. See [`depth`] and `Effect::power`.
         match effect.kind {
+            // **The Champion's full charges** (exploration 0015, C5).
+            //
+            // The crescent: one wide blade on its line, each body once.
+            EffectKind::Crescent => {
+                let at = effect.head();
+                let radius = effect.field_radius();
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, at, effect.damage());
+                    self.feed_the_thrower(effect, dealt);
+                }
+                let dealt = self.gore_the_creature(effect, 0, at, radius);
+                self.feed_the_thrower(effect, dealt);
+            }
+            // The ring: the front of it, on the floor, each body once, and
+            // the move's own launch throws them up.
+            EffectKind::Shockwave => {
+                let r = effect.ring_radius();
+                let band = t::body_radius().add(t::disc_thickness());
+                for i in 0..MAX_PLAYERS {
+                    let q = self.players[i];
+                    let across = V3::new(
+                        q.pos.x.sub(effect.pos.x),
+                        Fx::ZERO,
+                        q.pos.z.sub(effect.pos.z),
+                    )
+                    .flat_len();
+                    let low = q.pos.y.sub(effect.pos.y).raw() < t::body_height().raw();
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !low
+                        || across.sub(r).abs().raw() > band.raw()
+                        || q.action.invulnerable()
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, effect.pos, effect.damage());
+                    self.feed_the_thrower(effect, dealt);
+                }
+                // The creature and the small bodies inside its live radius,
+                // once each: the Plunge's ring's rule.
+                let reach = r.add(band);
+                for slot in 0..MAX_MONSTERS {
+                    self.gore_for_a_share(slot, effect, 0, effect.pos, reach, Fx::ONE);
+                }
+                self.gore_critters_by(effect, EffectReach::Column(effect.pos, reach), Fx::ONE);
+            }
+            // The cuts: nothing for the beat, then each lands along the whole
+            // line in turn, and the last throws up whoever is still in it.
+            EffectKind::Cuts => {
+                if let Some(n) = effect.cut_now() {
+                    let (from, to) = (effect.pos, effect.cuts_end());
+                    let radius = effect.field_radius();
+                    let damage = effect.cut_damage(n);
+                    let last = Effect::last_cut(n);
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(n, i)
+                            || !self.on_the_line(i, from, to, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(n, i);
+                        let dealt = self.cut(i, effect, from, damage);
+                        self.feed_the_thrower(effect, dealt);
+                        if last && dealt > 0 {
+                            let q = &mut self.players[i];
+                            q.vel.y = t::cuts_launch();
+                            q.grounded = false;
+                        }
+                    }
+                    let share = Fx::ratio(damage, effect.damage().max(1));
+                    for k in 0..=4 {
+                        let at = crate::math::lerp3(from, to, Fx::ratio(k, 4));
+                        for slot in 0..MAX_MONSTERS {
+                            self.gore_for_a_share(slot, effect, n, at, radius, share);
+                        }
+                        self.gore_critters(effect, at, radius, share);
+                    }
+                }
+            }
+            // The javelin: in flight it pierces and pins, each body once;
+            // at rest it waits for him, and he tears it out.
+            EffectKind::Javelin => {
+                let at = effect.head();
+                let radius = effect.field_radius();
+                if !effect.at_rest() {
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(0, i)
+                            || !self.inside(i, at, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(0, i);
+                        let dealt = self.cut(i, effect, at, effect.damage());
+                        self.feed_the_thrower(effect, dealt);
+                        if dealt > 0 {
+                            // It stops in them: pinned where it struck, and
+                            // that is where he is coming to.
+                            self.players[i].seized(NOBODY, effect.source().grabs, 0);
+                            effect.reach = effect.flown();
+                        }
+                    }
+                    if !effect.at_rest() && self.gore_the_creature(effect, 0, at, radius) > 0 {
+                        // Stuck in the animal.
+                        effect.reach = effect.flown();
+                    }
+                } else {
+                    self.tear_out(effect, at);
+                }
+            }
             EffectKind::FirePillar => {
                 if effect.ticks_now() {
                     self.burn_the_pillar(effect, effect.pos);
@@ -9516,7 +10997,16 @@ impl World {
             // the spike either seeds a pool or cashes one in, and both are
             // one event the other player can watch happen.
             EffectKind::BlackSpike => {
-                if effect.erupted() && effect.age == 1 {
+                // A field of spikes (the third tier) comes up again every
+                // `tuning::spike_wave_every`, and each wave can catch anybody
+                // the last one did.
+                let every = t::spike_wave_every().max(1);
+                let wave =
+                    effect.banked == SPIKE_FIELD && effect.age > 1 && (effect.age - 1) % every == 0;
+                if wave {
+                    effect.forget_hits();
+                }
+                if effect.erupted() && (effect.age == 1 || wave) {
                     let volume = effect.spike_volume();
                     let m = effect.source();
                     for i in 0..MAX_PLAYERS {
@@ -9533,13 +11023,34 @@ impl World {
                             continue;
                         }
                         effect.take_hit(0, i);
-                        let blow = Fx::from_int(m.damage).mul(t::erupt_damage()).to_int();
+                        let blow = Fx::from_int(m.damage).mul(spike_share(effect)).to_int();
                         self.cut(i, effect, effect.pos, blow);
                         self.players[i].slow(t::slow_frames(), t::spike_slow());
                     }
-                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
+                    let share = spike_share(effect);
+                    self.gore_each(effect, 0, effect.pos, volume.radius, share);
+                    self.gore_critters(effect, effect.pos, volume.radius, share);
                 }
             }
+
+            // **The Hemoplague**: on its tick, everyone in the cloud is hurt
+            // -- not hit: no stun and no shove, so it holds nobody -- and
+            // what it spills goes to one stain at its centre.
+            EffectKind::Plague => {
+                if effect.age % t::plague_tick().max(1) != 0 {
+                    return;
+                }
+                self.step_the_plague(effect);
+            }
+
+            // **The Black vines** and **the Crimson cascade**: each frame
+            // decides for itself what lands on it.
+            EffectKind::Vines => self.step_the_vines(effect),
+            EffectKind::Cascade => self.step_the_cascade(effect),
+
+            // The carpet, a thrall and the golem are stepped in passes of
+            // their own (`step_carpets`, `step_thralls`).
+            EffectKind::Carpet | EffectKind::Thrall | EffectKind::Golem => {}
 
             // The blade. One pass out, one back, and it cuts each victim once
             // per pass. What it takes is banked rather than paid, and arrives
@@ -10273,6 +11784,9 @@ impl World {
             // body it reaches: the cut lands and the bleed opens, and from
             // then on the victim's own feet make the pools. A guarded bolt is
             // still spent -- it hit something -- and opens nothing.
+            // The blood she sent ahead hurts nobody: it is a door in flight.
+            EffectKind::Haemorrhage
+                if effect.class == Class::BloodMage && effect.slot == moves::blood::WINGS => {}
             EffectKind::Haemorrhage => {
                 let at = effect.bolt_at();
                 let radius = effect.field_radius();
@@ -10564,14 +12078,17 @@ impl World {
                     effect.pos.y.add(t::body_height().mul(Fx::ratio(1, 2))),
                     effect.pos.z,
                 );
+                // What it is worth: the Tides' tier, a burst's own number
+                // when it carries one (an exploding stain), or the row's.
+                let blow = nova_blow(effect);
                 for i in 0..MAX_PLAYERS {
                     if self.effects_reach(i, effect.owner) && self.inside(i, centre, radius) {
-                        let dealt = self.cut(i, effect, effect.pos, effect.damage());
-                        let victim = self.players[i];
-                        self.spill_under(effect.owner, effect.class, effect.slot, &victim, dealt);
+                        self.cut(i, effect, effect.pos, blow);
                     }
                 }
-                self.gore_the_creature(effect, 0, effect.pos, radius);
+                let share = Fx::ratio(blow, effect.damage().max(1));
+                self.gore_each(effect, 0, effect.pos, radius, share);
+                self.gore_critters(effect, effect.pos, radius, share);
             }
 
             // The Nail: the Haemorrhage's flight, spent on the first body it
@@ -10590,8 +12107,6 @@ impl World {
                     effect.take_hit(0, i);
                     let aloft = !self.players[i].grounded;
                     let dealt = self.cut(i, effect, at, effect.source().damage);
-                    let victim = self.players[i];
-                    self.spill_under(effect.owner, effect.class, effect.slot, &victim, dealt);
                     if dealt > 0 && aloft && t::nail_pin() > 0 {
                         let q = &mut self.players[i];
                         q.seized(NAILED, t::nail_pin(), 0);
@@ -10603,7 +12118,9 @@ impl World {
                 if self.gore_the_creature(effect, 0, at, radius) > 0 {
                     spent = true;
                 }
-                if spent {
+                // **The Stake goes through** whoever it pins, on to the floor
+                // at the end of its flight, where it lands (`pay_out`).
+                if spent && effect.slot != moves::blood::STAKE {
                     effect.age = effect.life;
                 }
             }
@@ -10818,14 +12335,21 @@ impl World {
         if parried {
             self.players[victim].parried = PARRY_FLOURISH;
         }
+        // A Champion's finisher's effect staggers by the momentum it spent,
+        // which it carries in `banked` (exploration 0015).
+        if dealt > 0 && effect.class == Class::Champion && effect.banked > 0 {
+            let spent = effect.banked.clamp(0, 100) as u8;
+            stagger_by_the_spend(&mut self.players[victim], m.hitstun, spent);
+        }
         // The Blood mage's double duty, for a hit her effects deliver: drink
         // from a pool the victim stands in, then spill what was dealt. See the
         // melee loop in `advance` for the order. **Not for the blade**: it
         // drinks on its way home, from each pool it crosses, once -- a cut
         // that also drank would take three shares of one pool in one throw.
+        let mut dealt = dealt;
         if dealt > 0 {
             if !effect.kind.comes_home() {
-                self.drink_over(
+                let bonus = self.stain_bonus(
                     effect.owner as usize,
                     &m,
                     from,
@@ -10833,8 +12357,11 @@ impl World {
                     Some(victim),
                     effect.age,
                 );
+                dealt += self.players[victim].wound(bonus);
             }
-            self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
+            if !effect.spills_nothing() {
+                self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
+            }
         }
         dealt
     }
@@ -10925,15 +12452,17 @@ impl World {
                 Fx::ZERO,
                 Fx::ZERO,
             );
-            if dealt > 0 {
+            if dealt > 0 && !effect.spills_nothing() {
                 let m = effect.source();
                 self.drink_over(effect.owner as usize, &m, from, from, None, effect.age);
+                // A small body bleeds what the blow was worth, not the little
+                // it had left to lose.
                 self.spill(
                     effect.owner,
                     effect.class,
                     effect.slot,
                     floor_under(self.arena(), body.pos),
-                    dealt,
+                    dealt.max(raw),
                 );
             }
             total += dealt;
@@ -10982,6 +12511,14 @@ impl World {
             .mul(share)
             .mul(preying(effect.class, beast.disabled()))
             .to_int();
+        // A stain under the struck part is drunk, and the blow is harder for
+        // it -- asked before the blow, so the creature takes the whole.
+        let raw = if raw > 0 {
+            let m = effect.source();
+            raw + self.stain_bonus(effect.owner as usize, &m, at, at, None, effect.age)
+        } else {
+            raw
+        };
         // Asked of its guard from where the effect is: a burst behind a
         // guard, or a pillar under it, comes from outside it.
         let (dealt, guarded) = beast.take_blow(
@@ -11000,6 +12537,19 @@ impl World {
         // state to feel. See `monster::Monster::take_control`.
         if guarded == monster::Guarded::Lands {
             beast.take_control(effect.control());
+            // The Champion's full charges weigh on it like his blows do, and
+            // the Meteor's crater knocks it off its feet (exploration 0015).
+            if effect.class == Class::Champion && (effect.owner as usize) < MAX_PLAYERS {
+                impact(
+                    &mut beast,
+                    &self.players[effect.owner as usize],
+                    effect.slot,
+                    dealt,
+                );
+                if effect.slot == moves::champion::METEOR && dealt > 0 {
+                    beast.stumble_for(t::meteor_stumble());
+                }
+            }
         }
         self.monsters[slot] = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
@@ -11010,15 +12560,16 @@ impl World {
         // The creature bleeds too: under the struck part, projected to the
         // floor, which is what makes the pool under a toppled Ridgeback a
         // door onto its back.
-        if dealt > 0 {
-            let m = effect.source();
-            self.drink_over(effect.owner as usize, &m, at, at, None, effect.age);
+        // **Every hit on a creature leaves a stain** (2026-10-12), sized by
+        // what the blow was worth rather than by what its hide let through:
+        // a hit on a plate still opens it.
+        if (dealt > 0 || (raw > 0 && !guarded.turned())) && !effect.spills_nothing() {
             self.spill(
                 effect.owner,
                 effect.class,
                 effect.slot,
                 floor_under(self.arena(), at),
-                dealt,
+                dealt.max(raw),
             );
         }
         dealt
@@ -11075,6 +12626,9 @@ fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene)
             continue;
         }
         let far = e.pos.sub(p.pos).len();
+        if far.raw() > t::teleport_reach().raw() {
+            continue;
+        }
         if best.is_none_or(|(_, seen)| far.raw() < seen.raw()) {
             best = Some((slot, far));
         }
@@ -11243,6 +12797,10 @@ impl World {
     /// What comes back is the move's own share of the pool, converted out of
     /// grey and never past it, and the pool loses exactly what she got.
     ///
+    /// Gives back the **essence** of the stain it drank -- what was in it, not
+    /// what came back -- or nothing; what a hit through it adds is read off
+    /// that (`stain_bonus`).
+    ///
     /// `older_than` is the age of the thing delivering the hit, and only pools
     /// older than it count. Nought for a swing, whose one hit has nothing of
     /// its own to find; for an effect it is the effect's own age, so four arms
@@ -11266,8 +12824,7 @@ impl World {
             let Some(e) = e else { continue };
             if !e.is_a_pool()
                 || e.owner != owner as u8
-                || e.age <= older_than
-                || moves::blood::own_blood(e.slot)
+                || e.age <= older_than.max(t::stain_settles())
             {
                 continue;
             }
@@ -11280,80 +12837,58 @@ impl World {
             }
         }
         match best {
-            Some((slot, _)) => self.drink_from(slot, owner, m),
+            Some((slot, essence)) => {
+                self.drink_from(slot, owner, m);
+                essence
+            }
             None => 0,
         }
     }
 
-    /// The Grasp's second drink: the pool the victim has just been hauled
-    /// onto, at her feet.
-    ///
-    /// The kit's own sentence is "Grasp them onto the pool you are standing
-    /// in", and a drink only where the arms closed never paid that: the arms
-    /// close out where the victim was, and the pool is here. Only pools older
-    /// than the hold count, so what the arms spilled at the catch -- which at
-    /// melee range is within a body of her feet -- is not drunk back.
-    fn drink_where_the_haul_ends(&mut self) {
-        for i in 0..MAX_PLAYERS {
-            if !self.players[i].hauled_in {
-                continue;
-            }
-            self.players[i].hauled_in = false;
-            let by = self.players[i].held_by as usize;
-            if by >= MAX_PLAYERS || !self.players[by].class.wounds_go_grey() {
-                continue;
-            }
-            let m = moves::get(self.players[by].class, moves::blood::GRASP);
-            let held_for = match self.players[i].action {
-                Action::Held { left } => self.players[i].stun_total.saturating_sub(left),
-                _ => 0,
-            };
-            let feet = self.players[i].pos;
-            self.drink_over(by, &m, feet, feet, Some(i), held_for.saturating_add(1));
-        }
+    /// [`Self::drink_over`], and what the stain it drank adds to the blow
+    /// that went through it (`tuning::stain_hit_bonus`): every attack of hers
+    /// that lands over a stain heals her **and** hits harder for it.
+    fn stain_bonus(
+        &mut self,
+        owner: usize,
+        m: &moves::Move,
+        from: V3,
+        to: V3,
+        victim: Option<usize>,
+        older_than: u16,
+    ) -> i32 {
+        let essence = self.drink_over(owner, m, from, to, victim, older_than);
+        t::stain_hit_bonus(essence)
     }
 
-    /// A spike came up on the pool in `slot`: the pool erupts, and so does
-    /// every pool of hers the eruption covers, each at its own size.
+    /// **Walking into a stain drinks it** (2026-10-12): every stain of hers --
+    /// not her own blood -- that her feet are against is drunk, at
+    /// `tuning::stain_walk_drinks` of its essence. The Demon Avenger's orbs:
+    /// the heal is a place, and going there is enough.
     ///
-    /// **The chain is the skill curve.** A spike on one pool is a bigger spike;
-    /// a spike on a pool standing among others is the floor coming up across
-    /// the whole fight, and arranging that is a thing a player learns. Each
-    /// eruption drinks its own pool first, so the chain cannot run twice over
-    /// the same blood, and it is bounded by the pools there are.
-    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
-        let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
-            return;
-        };
-        let m = moves::get(self.players[owner].class, kind);
-        // Sized by the pool's essence, before it is drunk: the eruption is the
-        // whole pool coming up at once.
-        let radius = t::erupt_radius()
-            .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
-            .max(m.radius);
-        self.drink_from(slot, owner, &m);
-        let mut born = Effect::cast(
-            EffectKind::BlackSpike,
-            owner as u8,
-            self.players[owner].class,
-            kind,
-            pool.pos,
-            V3::ZERO,
-            radius,
-        );
-        born.banked = 1;
-        spawn_effect(&mut self.effects, born);
-        for next in 0..MAX_EFFECTS {
-            let covered = self.effects[next].is_some_and(|e| {
-                e.is_a_pool()
-                    && e.owner == owner as u8
-                    && V3::new(e.pos.x.sub(pool.pos.x), Fx::ZERO, e.pos.z.sub(pool.pos.z))
-                        .flat_len()
-                        .raw()
-                        <= radius.add(e.pool_radius()).raw()
-            });
-            if covered {
-                self.erupt_from(owner, kind, next);
+    /// **Only what she can use.** Walking is not a choice the way a blow is,
+    /// so it takes no more than her grey can hold and the stain keeps the
+    /// rest: at full health she can walk through her stains and leave them
+    /// standing for the spike.
+    fn drink_underfoot(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if p.health <= 0 || !p.class.wounds_go_grey() {
+                continue;
+            }
+            for slot in 0..MAX_EFFECTS {
+                let Some(e) = self.effects[slot] else {
+                    continue;
+                };
+                if !e.is_a_pool()
+                    || e.owner != i as u8
+                    || e.age <= t::stain_settles()
+                    || !e.covers(p.pos)
+                {
+                    continue;
+                }
+                self.players[i].absorb(e.banked * t::stain_walk_drinks() / 100);
+                self.effects[slot] = None;
             }
         }
     }
@@ -11381,13 +12916,11 @@ impl World {
             return;
         };
         let m = moves::get(p.class, kind);
-        let swing_so_far = m.startup + m.active;
         for slot in 0..MAX_EFFECTS {
             let over = self.effects[slot].is_some_and(|e| {
                 e.is_a_pool()
                     && e.owner == who as u8
-                    && !moves::blood::own_blood(e.slot)
-                    && e.age > swing_so_far
+                    && e.age > t::stain_settles()
                     && crate::math::segment_gap(
                         V3::new(hb.from.x, e.pos.y, hb.from.z),
                         V3::new(hb.to.x, e.pos.y, hb.to.z),
@@ -11415,14 +12948,8 @@ impl World {
         if !pool.is_a_pool() {
             return 0;
         }
-        // Her own blood is a door, not a heal: what uses it -- a spike's
-        // eruption -- spends it, and nothing comes back.
-        if moves::blood::own_blood(pool.slot) {
-            self.effects[slot] = None;
-            return 0;
-        }
         let take = m.drinks(pool.banked);
-        let got = self.players[owner].drink(take);
+        let got = self.players[owner].absorb(take);
         self.effects[slot] = None;
         got
     }
@@ -11509,6 +13036,56 @@ fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
 
 /// Put an effect into the world in place of any of the same kind its owner
 /// already has: one Air ball, one carpet, one wash of fire at a time.
+/// **The creature notices her thralls** (2026-10-13): what it is shown of
+/// the Blood mage is her golem while it stands, and otherwise her nearest
+/// thrall when one is nearer it than she is -- so the creature turns on the
+/// body in its way, and its blows land on that (`blow_on_a_thrall`). Not
+/// while she is aboard it.
+fn decoy_for(
+    effects: &[Option<Effect>; MAX_EFFECTS],
+    i: usize,
+    beast: &Monster,
+    real: Quarry,
+) -> Quarry {
+    if !real.alive || real.aboard {
+        return real;
+    }
+    let near = |at: V3| {
+        let c = beast.nearest_to(at);
+        V3::new(at.x.sub(c.x), Fx::ZERO, at.z.sub(c.z)).flat_len()
+    };
+    let mine = near(real.pos);
+    let mut best: Option<(V3, Fx, bool)> = None;
+    for e in effects.iter().flatten() {
+        if !e.is_a_thrall() || e.owner as usize != i {
+            continue;
+        }
+        let golem = e.kind == EffectKind::Golem;
+        let far = near(e.pos);
+        if !golem && far.raw() >= mine.raw() {
+            continue;
+        }
+        let better = match best {
+            None => true,
+            Some((_, b, was_golem)) => {
+                (golem && !was_golem) || (golem == was_golem && far.raw() < b.raw())
+            }
+        };
+        if better {
+            best = Some((e.pos, far, golem));
+        }
+    }
+    match best {
+        Some((pos, _, _)) => Quarry {
+            pos,
+            vel: V3::ZERO,
+            stunned: false,
+            ..real
+        },
+        None => real,
+    }
+}
+
 fn spawn_the_only_one(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
     for slot in effects.iter_mut() {
         if slot.is_some_and(|e| e.kind == effect.kind && e.owner == effect.owner) {
@@ -12766,81 +14343,46 @@ impl World {
         );
     }
 
-    /// **The Blood nova bursts**: a sphere of her blood round where she
-    /// stands, from the move's near size to its full one by how long she held
-    /// it, and a pool of her own blood at her feet holding what she paid.
-    fn burst_the_nova(&mut self, i: usize) {
+    /// **The Blood mage's moves, on the frame each comes out** (2026-10-12):
+    /// what each puts in the world besides its row's own volume or effect.
+    /// The Transfusion, the Haemorrhage, the spike, the Upheaval and the
+    /// Hemoplague are their rows' effects, thrown in `advance` with the rest.
+    fn blood_comes_out(&mut self, i: usize, kind: u8) {
+        use moves::blood as b;
+        match kind {
+            b::WINGS => self.spread_the_wings(i),
+            b::STAKE => self.throw_the_stake(i),
+            b::COAGULATE => self.coagulate(i),
+            b::COMMAND => self.command_the_thralls(i),
+            b::RISING_REAP => self.rising_reap(i),
+            b::SUMMON => self.raise_the_thralls(i),
+            // The vines and the golem were made from the field the moment the
+            // hold ran out (`step_plagues`, `step_carpets`); the cascade goes
+            // out on its active frame.
+            b::CASCADE => self.start_the_cascade(i),
+            _ => {}
+        }
+    }
+
+    /// **Blood wings**: a burst along her aim, any way at all, stopped at the
+    /// first wall or stone; a burst of blood where she left, hurting whoever
+    /// is beside her; and a stain of her own blood there -- a door back, never
+    /// a heal.
+    fn spread_the_wings(&mut self, i: usize) {
         let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::BLOOD_NOVA);
-        let radius = m
-            .channel_from
-            .add(m.reach.sub(m.channel_from).mul(p.channelled));
+        let m = moves::get(p.class, moves::blood::WINGS);
         spawn_effect(
             &mut self.effects,
             Effect::cast(
                 EffectKind::Nova,
                 i as u8,
                 p.class,
-                moves::blood::BLOOD_NOVA,
+                moves::blood::WINGS,
                 p.pos,
                 V3::ZERO,
-                radius,
+                m.radius,
             ),
         );
-        let paid = p.self_spent.max(1);
-        self.spill(i as u8, p.class, moves::blood::BLOOD_NOVA, p.pos, paid);
-        self.players[i].self_spent = 0;
-    }
-
-    /// **The Blood jet is let go**: whoever is in its wake -- the line from
-    /// where it left the floor to where she is -- is hurt, more the longer it
-    /// ran, and a pool of her own blood is left where she took off.
-    fn end_the_jet(&mut self, i: usize) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::BLOOD_JET);
-        let (from, to) = (p.launched_from, p.pos);
-        let held = Fx::from_int(m.channel as i32).mul(p.channelled).to_int();
-        let damage = m.damage + t::jet_damage_per_frame() * held;
-        let mut wake = Effect {
-            power: Fx::from_int(damage).div(Fx::from_int(m.damage.max(1))),
-            ..Effect::cast(
-                EffectKind::Nail,
-                i as u8,
-                p.class,
-                moves::blood::BLOOD_JET,
-                from,
-                V3::ZERO,
-                m.reach,
-            )
-        };
-        for v in 0..MAX_PLAYERS {
-            if self.effects_reach(v, i as u8) && self.on_the_line(v, from, to, m.radius) {
-                let dealt = self.cut(v, &wake, from, damage);
-                let victim = self.players[v];
-                self.spill_under(i as u8, p.class, moves::blood::BLOOD_JET, &victim, dealt);
-            }
-        }
-        // Creatures and critters in the wake too: a column at each end of
-        // the line for a creature's parts, once at most (one part of the
-        // wake), and the line itself for the small bodies.
-        for at in [from, to] {
-            let _ = self.gore_each(&mut wake, 0, at, m.radius, Fx::ONE);
-        }
-        self.gore_critters_by(&mut wake, EffectReach::Line(from, to, m.radius), Fx::ONE);
-        let floor = V3::new(from.x, self.terrain().ground_under(from), from.z);
-        let paid = p.self_spent.max(1);
-        self.spill(i as u8, p.class, moves::blood::BLOOD_JET, floor, paid);
-        self.players[i].self_spent = 0;
-    }
-
-    /// **The Hook**: thrown along the line `crate::aim` solved, it catches the
-    /// first fighter, creature, stone or wall, and pulls her to it -- beside a
-    /// body, against a surface. Nothing caught, nothing happens; the throw
-    /// was the cost.
-    fn throw_the_hook(&mut self, i: usize) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::HOOK);
-        let path = p.aim_path;
         let stones = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
@@ -12852,29 +14394,1186 @@ impl World {
             critters: &self.critters,
             arena: &self.terrain(),
         };
-        let found = aim::first_along(
+        let dir = p.aim_path.dir();
+        let from = aim::origin(p.pos);
+        let path = aim::Path {
+            from,
+            to: from.add(dir.scale(m.reach)),
+        };
+        let reach = match aim::first_along(
             path,
-            m.radius,
+            t::body_radius(),
             i as u8,
             &scene,
-            aim::Targets::none()
-                .fighters(true)
-                .terrain()
-                .stones()
-                .quarry(true),
+            aim::Targets::none().terrain().stones(),
+        ) {
+            Some(c) => c.dist().sub(t::body_radius()),
+            None => m.reach,
+        };
+        if reach.raw() <= 0 {
+            return;
+        }
+        let frames = t::wings_frames();
+        let speed = reach.div(Fx::from_int(frames as i32).mul(DT));
+        begin_haul(
+            &mut self.players[i],
+            p.pos.add(dir.scale(reach)),
+            speed,
+            frames + 1,
         );
-        let Some(caught) = found else {
+        self.players[i].grounded = false;
+    }
+
+    /// Is fighter `j` standing in a floor field -- inside its reach, its feet
+    /// under `height` above it and not below it -- and open to its owner?
+    fn in_the_field(&self, j: usize, field: &Effect, height: Fx) -> bool {
+        let q = self.players[j];
+        if !self.effects_reach(j, field.owner) || q.action.invulnerable() {
+            return false;
+        }
+        let flat = V3::new(q.pos.x.sub(field.pos.x), Fx::ZERO, q.pos.z.sub(field.pos.z));
+        flat.flat_len().raw() <= field.reach.add(t::body_radius()).raw()
+            && q.pos.y.raw() <= field.pos.y.add(height).raw()
+            && q.pos.y.add(q.hurt_height()).raw() >= field.pos.y.raw()
+    }
+
+    /// **Coagulate**: every stain of hers within `tuning::coagulate_reach` of
+    /// the crosshair's spot on the floor slides there (`slide_the_stains`)
+    /// and they merge into one.
+    fn coagulate(&mut self, i: usize) {
+        let p = self.players[i];
+        let at = p.aim_at();
+        let lift = V3::new(at.x, at.y.add(Fx::ONE), at.z);
+        let to = V3::new(at.x, self.terrain().ground_under(lift), at.z);
+        for e in self.effects.iter_mut().flatten() {
+            if e.is_a_pool()
+                && e.owner == i as u8
+                && V3::new(e.pos.x.sub(to.x), Fx::ZERO, e.pos.z.sub(to.z))
+                    .flat_len()
+                    .raw()
+                    <= t::coagulate_reach().raw()
+            {
+                e.home = to;
+            }
+        }
+    }
+
+    /// **Stains being gathered slide**, at `tuning::coagulate_speed`, to where
+    /// they were sent, and two of one owner's that meet merge into one. A
+    /// stain's `home` is where it was spilled until Coagulate moves it.
+    fn slide_the_stains(&mut self) {
+        let step = t::coagulate_speed().mul(DT);
+        for slot in 0..MAX_EFFECTS {
+            let Some(mut e) = self.effects[slot].filter(|e| e.is_a_pool()) else {
+                continue;
+            };
+            let gap = V3::new(e.home.x.sub(e.pos.x), Fx::ZERO, e.home.z.sub(e.pos.z));
+            let far = gap.flat_len();
+            if far.raw() == 0 {
+                continue;
+            }
+            if far.raw() <= step.raw() {
+                e.pos = e.home;
+            } else {
+                let moved = e.pos.add(gap.normalized().scale(step));
+                let lift = V3::new(moved.x, moved.y.add(Fx::ONE), moved.z);
+                e.pos = V3::new(moved.x, self.terrain().ground_under(lift), moved.z);
+            }
+            self.effects[slot] = Some(e);
+            // Merged into any of hers it has reached.
+            for other in 0..MAX_EFFECTS {
+                if other == slot {
+                    continue;
+                }
+                let Some(o) = self.effects[other].filter(|o| o.is_a_pool() && o.owner == e.owner)
+                else {
+                    continue;
+                };
+                let apart =
+                    V3::new(o.pos.x.sub(e.pos.x), Fx::ZERO, o.pos.z.sub(e.pos.z)).flat_len();
+                if apart.raw() <= e.pool_radius().add(o.pool_radius()).raw() {
+                    if let Some(keep) = self.effects[slot].as_mut() {
+                        keep.banked += o.banked;
+                    }
+                    self.effects[other] = None;
+                }
+            }
+        }
+    }
+
+    /// **Rising reap**: a sweep up and out in the cone she faces,
+    /// `move.reach` long. It hurls her thralls in it along it, drinks her
+    /// stains in it, and is a light hit on whoever is in it -- which bleeds,
+    /// as every blow does.
+    fn rising_reap(&mut self, i: usize) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::blood::RISING_REAP);
+        let look = p.aim_path.dir();
+        let dir = V3::new(look.x, Fx::ZERO, look.z).normalized();
+        let in_cone = |at: V3| {
+            let off = V3::new(at.x.sub(p.pos.x), Fx::ZERO, at.z.sub(p.pos.z));
+            let far = off.flat_len();
+            far.raw() <= m.reach.raw()
+                && (far.raw() <= t::body_radius().raw()
+                    || off.dot(dir).raw() >= far.mul(t::reap_cone()).raw())
+        };
+        let mut drunk = 0;
+        for slot in 0..MAX_EFFECTS {
+            let Some(mut e) = self.effects[slot] else {
+                continue;
+            };
+            if e.owner != i as u8 || !in_cone(e.pos) {
+                continue;
+            }
+            if e.is_a_thrall() {
+                e.dir = dir;
+                e.power = Fx::from_int(t::reap_hurl_for() as i32);
+                self.effects[slot] = Some(e);
+            } else if e.is_a_pool() && e.age >= t::stain_settles() {
+                drunk += e.banked;
+                self.effects[slot] = None;
+            }
+        }
+        if drunk > 0 {
+            self.players[i].absorb(drunk);
+        }
+        for j in 0..MAX_PLAYERS {
+            let q = self.players[j];
+            if !self.effects_reach(j, i as u8) || q.action.invulnerable() || !in_cone(q.pos) {
+                continue;
+            }
+            // Up the cone as far as it reaches out.
+            if q.pos.y.raw() > p.pos.y.add(m.reach).raw() {
+                continue;
+            }
+            let dealt = self.players[j].wound(m.damage);
+            self.players[j].vel.y = self.players[j].vel.y.max(m.launch);
+            self.players[j].grounded = false;
+            self.spill(i as u8, p.class, moves::blood::RISING_REAP, q.pos, dealt);
+        }
+        let half = Fx::from_raw(m.reach.raw() / 2);
+        let mid = p.pos.add(dir.scale(half));
+        let mut sweep = Effect::cast(
+            EffectKind::Cascade,
+            i as u8,
+            p.class,
+            moves::blood::RISING_REAP,
+            p.pos,
+            dir,
+            m.reach,
+        );
+        sweep.life = t::spell_flash();
+        self.gore_each(&mut sweep, 0, mid, half, Fx::ONE);
+        self.gore_critters(&mut sweep, mid, half, Fx::ONE);
+        spawn_effect(&mut self.effects, sweep);
+    }
+
+    /// The blow out on a thrall this frame, if any: the most of any enemy
+    /// fighter's attack volume touching it, or the creature's. Nought if
+    /// none.
+    fn blow_on_a_thrall(&self, th: &Effect, radius: Fx, height: Fx) -> i32 {
+        let mut most = 0;
+        for j in 0..MAX_PLAYERS {
+            let q = &self.players[j];
+            if j as u8 == th.owner || q.health <= 0 || !self.pvp() {
+                continue;
+            }
+            let Some(hb) = hitbox(q) else { continue };
+            let reach = hb.radius.add(radius);
+            let top = V3::new(th.pos.x, th.pos.y.add(height), th.pos.z);
+            let touched = if hb.flat {
+                th.pos.sub(hb.centre()).flat_len().raw() <= reach.raw()
+            } else {
+                crate::math::segment_gap(hb.from, hb.to, th.pos, top).raw() <= reach.raw()
+            };
+            if touched {
+                if let Action::Active { kind, .. } = q.action {
+                    most = most.max(moves::get(q.class, kind).damage.max(1));
+                }
+            }
+        }
+        for beast in self.monsters.iter().flatten() {
+            if beast.alive() && beast.reaches(th.pos, height, radius) {
+                if let monster::Doing::Active { kind, .. } = beast.doing {
+                    most = most.max(beast.sp().attack(kind).damage.max(1));
+                }
+            }
+        }
+        most
+    }
+
+    /// The floor under the crosshair, where a grounded move of hers lands.
+    fn floor_at_aim(&self, i: usize) -> V3 {
+        let at = self.players[i].aim_at();
+        let lift = V3::new(at.x, at.y.add(Fx::ONE), at.z);
+        V3::new(at.x, self.terrain().ground_under(lift), at.z)
+    }
+
+    /// **A finisher's blow**: the row's own damage, and
+    /// `tuning::finisher_per_grey` for every point of grey and Well she spent
+    /// on it (`Player::fuel`). Always more than the row; more the more she had.
+    fn finisher_blow(&self, i: usize, kind: u8) -> i32 {
+        let p = self.players[i];
+        let m = moves::get(p.class, kind);
+        m.damage
+            + Fx::from_int(p.fuel as i32)
+                .mul(t::finisher_per_grey())
+                .to_int()
+    }
+
+    /// **The Carpet is laid**: a disc of blood at the floor where she is
+    /// aiming, the knob's near size, holding nothing yet. One of hers at a
+    /// time.
+    fn lay_the_carpet(&mut self, i: usize) {
+        let p = self.players[i];
+        let floor = self.floor_at_aim(i);
+        let mut carpet = Effect::cast(
+            EffectKind::Carpet,
+            i as u8,
+            p.class,
+            moves::blood::CARPET,
+            floor,
+            V3::ZERO,
+            t::carpet_from(),
+        );
+        carpet.banked = 0;
+        spawn_the_only_one(&mut self.effects, carpet);
+    }
+
+    /// **The Hemoplague is laid**: a cloud on the floor where she is aiming,
+    /// growing while she holds (`step_plagues`). One of hers at a time.
+    fn lay_the_plague(&mut self, i: usize) {
+        let p = self.players[i];
+        let floor = self.floor_at_aim(i);
+        let mut cloud = Effect::cast(
+            EffectKind::Plague,
+            i as u8,
+            p.class,
+            moves::blood::HEMOPLAGUE,
+            floor,
+            V3::ZERO,
+            t::plague_from(),
+        );
+        cloud.banked = GROWING;
+        spawn_the_only_one(&mut self.effects, cloud);
+    }
+
+    /// How far into her hold of `kind` she is, nought to one, while she is
+    /// holding it; `None` once she is not.
+    fn hold_of(&self, owner: usize, kind: u8) -> Option<Fx> {
+        match self.players.get(owner).map(|p| p.action) {
+            Some(Action::Channel { kind: k, held }) if k == kind => {
+                let cap = moves::get(self.players[owner].class, kind).channel.max(1);
+                Some(Fx::ratio(held.min(cap) as i32, cap as i32))
+            }
+            _ => None,
+        }
+    }
+
+    /// Is she in the finisher `kind` -- winding it up or throwing it?
+    fn finishing(&self, owner: usize, kind: u8) -> bool {
+        self.players
+            .get(owner)
+            .and_then(|p| p.action.attack_kind())
+            .is_some_and(|k| k == kind)
+    }
+
+    /// **Every growing Hemoplague, one frame.** While she holds it, it grows
+    /// from `tuning::plague_from` to `plague_to` and its life does not run.
+    /// Let go, it stands at the size it reached for `plague_lasts`. Held to
+    /// its end, it becomes the Black vines.
+    fn step_plagues(&mut self) {
+        for slot in 0..MAX_EFFECTS {
+            let Some(mut cloud) =
+                self.effects[slot].filter(|e| e.kind == EffectKind::Plague && e.banked == GROWING)
+            else {
+                continue;
+            };
+            let owner = cloud.owner as usize;
+            if let Some(share) = self.hold_of(owner, moves::blood::HEMOPLAGUE) {
+                cloud.reach = t::plague_from().add(t::plague_to().sub(t::plague_from()).mul(share));
+                // Its life does not run while she holds it.
+                cloud.life = cloud.life.saturating_add(1);
+            } else if self.finishing(owner, moves::blood::VINES) {
+                self.effects[slot] = None;
+                self.grow_the_vines(owner, &cloud);
+                continue;
+            } else {
+                cloud.banked = 0;
+            }
+            self.effects[slot] = Some(cloud);
+        }
+    }
+
+    /// **The Black vines**: out of the cloud's middle to `tuning::vines_size`
+    /// of its radius, carrying the finisher's blow.
+    fn grow_the_vines(&mut self, owner: usize, cloud: &Effect) {
+        let blow = self.finisher_blow(owner, moves::blood::VINES);
+        self.players[owner].fuel = 0;
+        let mut vines = Effect::cast(
+            EffectKind::Vines,
+            owner as u8,
+            cloud.class,
+            moves::blood::VINES,
+            cloud.pos,
+            V3::ZERO,
+            cloud.reach.mul(t::vines_size()),
+        );
+        vines.banked = blow;
+        spawn_the_only_one(&mut self.effects, vines);
+    }
+
+    /// How far out the vines have got: the whole reach after
+    /// `tuning::vines_grow` frames.
+    fn vines_front(vines: &Effect) -> Fx {
+        let grow = t::vines_grow().max(1);
+        vines
+            .reach
+            .mul(Fx::ratio(vines.age.min(grow) as i32, grow as i32))
+    }
+
+    /// **The Black vines, one frame.** As the front passes a body it takes
+    /// the blow and a bleed, once; while they stand, everything in them is
+    /// bled and slowed every `tuning::vines_tick`.
+    fn step_the_vines(&mut self, vines: &mut Effect) {
+        let front = Self::vines_front(vines);
+        let growing = vines.age <= t::vines_grow();
+        let tick = vines.age % t::vines_tick().max(1) == 0;
+        for j in 0..MAX_PLAYERS {
+            let q = self.players[j];
+            if !self.effects_reach(j, vines.owner) || q.action.invulnerable() {
+                continue;
+            }
+            let flat = V3::new(q.pos.x.sub(vines.pos.x), Fx::ZERO, q.pos.z.sub(vines.pos.z));
+            if flat.flat_len().raw() > front.add(t::body_radius()).raw()
+                || q.pos.y.raw() > vines.pos.y.add(t::body_height()).raw()
+            {
+                continue;
+            }
+            if !vines.already_hit(0, j) {
+                vines.take_hit(0, j);
+                let dealt = self.players[j].wound(vines.banked);
+                self.spill(vines.owner, vines.class, vines.slot, q.pos, dealt);
+                self.players[j].bleed(vines.owner, t::bleed_lasts());
+            }
+            if tick {
+                self.players[j].bleed(vines.owner, t::bleed_lasts());
+                self.players[j].slow(t::vines_tick().saturating_add(10), t::plague_slow());
+            }
+        }
+        // The creature: the blow once, as the front reaches the middle of
+        // the vines' reach, and the bleed and the slow on every tick after.
+        let m = vines.source();
+        if growing && vines.age == t::vines_grow().max(2) / 2 {
+            let share = Fx::ratio(vines.banked, m.damage.max(1));
+            self.gore_each(vines, 0, vines.pos, vines.reach, share);
+            vines.forget_hits();
+            self.gore_critters(vines, vines.pos, vines.reach, share);
+        }
+        if tick {
+            for slot in 0..crate::monster::MAX_MONSTERS {
+                let Some(mut beast) = self.monsters[slot] else {
+                    continue;
+                };
+                if !beast.alive()
+                    || beast
+                        .part_struck(vines.pos, front, t::body_height())
+                        .is_none()
+                {
+                    continue;
+                }
+                beast.bleeding = beast.bleeding.max(t::bleed_lasts());
+                beast.bled_by = vines.owner;
+                beast.take_control(vines.control());
+                self.monsters[slot] = Some(beast);
+            }
+        }
+    }
+
+    /// **Every Carpet, one frame.** While its owner holds it, it grows from
+    /// `tuning::carpet_from` to `carpet_to` across the hold, takes 1% of her
+    /// red every `carpet_pays_every` into itself, and every `carpet_tick`
+    /// hurts what is in it a little. The moment she is not holding it, it is
+    /// **one big stain** of what it held, and every stain of hers it covered
+    /// stands up as a thrall -- or, held to its end, the Blood golem.
+    fn step_carpets(&mut self) {
+        for slot in 0..MAX_EFFECTS {
+            let Some(mut carpet) = self.effects[slot].filter(|e| e.kind == EffectKind::Carpet)
+            else {
+                continue;
+            };
+            let owner = carpet.owner as usize;
+            let Some(share) = self.hold_of(owner, moves::blood::CARPET) else {
+                self.effects[slot] = None;
+                if self.finishing(owner, moves::blood::GOLEM) {
+                    self.raise_the_golem(owner, &carpet);
+                } else {
+                    self.release_the_carpet(&carpet);
+                }
+                continue;
+            };
+            carpet.reach = t::carpet_from().add(t::carpet_to().sub(t::carpet_from()).mul(share));
+            let held = match self.players[owner].action {
+                Action::Channel { held, .. } => held,
+                _ => 0,
+            };
+            if held > 0 && held % t::carpet_pays_every().max(1) == 0 {
+                let before = self.players[owner].health;
+                self.players[owner].spend_health(1);
+                carpet.banked += before - self.players[owner].health;
+            }
+            if held > 0 && held % t::carpet_tick().max(1) == 0 {
+                let m = carpet.source();
+                for j in 0..MAX_PLAYERS {
+                    if self.in_the_field(j, &carpet, t::body_height()) {
+                        let dealt = self.players[j].wound(m.damage);
+                        let at = self.players[j].pos;
+                        self.spill(carpet.owner, carpet.class, carpet.slot, at, dealt);
+                    }
+                }
+                let (at, reach) = (carpet.pos, carpet.reach);
+                carpet.forget_hits();
+                self.gore_each(&mut carpet, 0, at, reach, Fx::ONE);
+                carpet.forget_hits();
+                self.gore_critters(&mut carpet, at, reach, Fx::ONE);
+            }
+            self.effects[slot] = Some(carpet);
+        }
+    }
+
+    /// **The Carpet let go**: every stain of hers it covers stands up as a
+    /// thrall, up to `tuning::thrall_cap`, and what it held is one big stain
+    /// at its middle -- both as big as the hold was long.
+    fn release_the_carpet(&mut self, carpet: &Effect) {
+        let owner = carpet.owner as usize;
+        for slot in self.stains_within(owner, carpet.pos, carpet.reach) {
+            if self.thralls_of(owner) >= t::thrall_cap() {
+                break;
+            }
+            self.stand_up(slot);
+        }
+        self.spill(
+            carpet.owner,
+            carpet.class,
+            moves::blood::CARPET,
+            carpet.pos,
+            carpet.banked,
+        );
+    }
+
+    /// Her stains with their middles within `reach` of `at`, nearest first,
+    /// as slots.
+    fn stains_within(
+        &self,
+        owner: usize,
+        at: V3,
+        reach: Fx,
+    ) -> impl Iterator<Item = usize> + use<> {
+        let mut found = [(usize::MAX, i32::MAX); MAX_EFFECTS];
+        for (slot, e) in self.effects.iter().enumerate() {
+            let Some(e) = e else { continue };
+            if !e.is_a_pool() || e.owner as usize != owner {
+                continue;
+            }
+            let far = V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z)).flat_len();
+            if far.raw() <= reach.raw() {
+                found[slot] = (slot, far.raw());
+            }
+        }
+        found.sort_unstable_by_key(|(_, d)| *d);
+        found
+            .into_iter()
+            .filter(|(s, _)| *s != usize::MAX)
+            .map(|(s, _)| s)
+    }
+
+    /// How many thralls she has standing.
+    fn thralls_of(&self, owner: usize) -> i32 {
+        self.effects
+            .iter()
+            .flatten()
+            .filter(|e| e.kind == EffectKind::Thrall && e.owner as usize == owner)
+            .count() as i32
+    }
+
+    /// The stain in `slot` stands up: a thrall of exactly its essence, in its
+    /// own slot.
+    fn stand_up(&mut self, slot: usize) {
+        if let Some(e) = self.effects[slot].as_mut() {
+            e.kind = EffectKind::Thrall;
+            e.slot = moves::blood::SUMMON;
+            e.home = e.pos;
+            e.age = 0;
+            e.life = EffectKind::Thrall.life();
+            e.power = Fx::ZERO;
+            e.struck = 0;
+            e.dir = V3::ZERO;
+        }
+    }
+
+    /// **The Summon** (`E`): every stain of hers within
+    /// `tuning::summon_reach` of her stands up as a thrall, nearest first,
+    /// until she has `tuning::thrall_cap`.
+    fn raise_the_thralls(&mut self, i: usize) {
+        let me = self.players[i].pos;
+        for slot in self.stains_within(i, me, t::summon_reach()) {
+            if self.thralls_of(i) >= t::thrall_cap() {
+                break;
+            }
+            self.stand_up(slot);
+        }
+    }
+
+    /// **The Blood golem**: every stain and thrall of hers the carpet covers,
+    /// what the carpet held, and all the grey and Well she spent, fused into
+    /// one body at its middle with that many hit points. One at a time.
+    fn raise_the_golem(&mut self, owner: usize, carpet: &Effect) {
+        let mut health = carpet.banked + self.players[owner].fuel as i32;
+        self.players[owner].fuel = 0;
+        for slot in 0..MAX_EFFECTS {
+            let Some(e) = self.effects[slot] else {
+                continue;
+            };
+            let far = V3::new(
+                e.pos.x.sub(carpet.pos.x),
+                Fx::ZERO,
+                e.pos.z.sub(carpet.pos.z),
+            )
+            .flat_len();
+            if e.owner as usize == owner
+                && (e.is_a_pool() || e.kind == EffectKind::Thrall)
+                && far.raw() <= carpet.reach.raw()
+            {
+                health += e.banked;
+                self.effects[slot] = None;
+            }
+        }
+        let mut golem = Effect::cast(
+            EffectKind::Golem,
+            owner as u8,
+            carpet.class,
+            moves::blood::GOLEM,
+            carpet.pos,
+            V3::ZERO,
+            Fx::ZERO,
+        );
+        golem.banked = health.max(1);
+        golem.home = carpet.pos;
+        golem.life = u16::MAX;
+        golem.power = Fx::ZERO;
+        spawn_the_only_one(&mut self.effects, golem);
+    }
+
+    /// **Command**: her thralls, and the golem, drop whatever they are doing
+    /// and go to the crosshair's spot on the floor; only once there do they
+    /// look for something to bite.
+    fn command_the_thralls(&mut self, i: usize) {
+        let to = self.floor_at_aim(i);
+        for e in self.effects.iter_mut().flatten() {
+            if e.is_a_thrall() && e.owner == i as u8 {
+                e.home = to;
+                e.struck |= COMMANDED;
+                e.power = Fx::ZERO;
+            }
+        }
+    }
+
+    /// **The Crimson cascade** begins at the floor under the crosshair, with
+    /// the finisher's blow on its first ring.
+    fn start_the_cascade(&mut self, i: usize) {
+        let p = self.players[i];
+        let to = self.floor_at_aim(i);
+        let mut cascade = Effect::cast(
+            EffectKind::Cascade,
+            i as u8,
+            p.class,
+            moves::blood::CASCADE,
+            to,
+            V3::ZERO,
+            t::cascade_step(),
+        );
+        cascade.banked = self.finisher_blow(i, moves::blood::CASCADE);
+        self.players[i].fuel = 0;
+        spawn_the_only_one(&mut self.effects, cascade);
+    }
+
+    /// The ring wave `k` of a cascade erupts on: inner and outer radius.
+    pub fn cascade_ring(cascade: &Effect, k: i32) -> (Fx, Fx) {
+        let step = cascade.reach;
+        let outer = step.mul(Fx::from_int(k + 1));
+        let inner = if k == 0 {
+            Fx::ZERO
+        } else {
+            step.mul(Fx::from_int(k))
+        };
+        (inner, outer)
+    }
+
+    /// **The Crimson cascade, one frame.** Every `tuning::cascade_every` the
+    /// next ring erupts: everyone in it takes the wave's blow and is thrown
+    /// up, the creature too, and every stain of hers in it is lit to erupt
+    /// in turn (`light_the_fuses`). Each wave carries `cascade_decay` of the
+    /// last.
+    fn step_the_cascade(&mut self, cascade: &mut Effect) {
+        if cascade.slot != moves::blood::CASCADE {
+            return;
+        }
+        let every = t::cascade_every().max(1);
+        if cascade.age == 0 || (cascade.age - 1) % every != 0 {
+            return;
+        }
+        let k = ((cascade.age - 1) / every) as i32;
+        if k >= t::cascade_waves() {
+            return;
+        }
+        let mut blow = Fx::from_int(cascade.banked);
+        for _ in 0..k {
+            blow = blow.mul(t::cascade_decay());
+        }
+        let blow = blow.to_int();
+        let (inner, outer) = Self::cascade_ring(cascade, k);
+        let owner = cascade.owner;
+        let m = cascade.source();
+        for j in 0..MAX_PLAYERS {
+            let q = self.players[j];
+            if !self.effects_reach(j, owner) || q.action.invulnerable() {
+                continue;
+            }
+            let far = V3::new(
+                q.pos.x.sub(cascade.pos.x),
+                Fx::ZERO,
+                q.pos.z.sub(cascade.pos.z),
+            )
+            .flat_len();
+            if far.raw() > outer.add(t::body_radius()).raw()
+                || far.raw() < inner.sub(t::body_radius()).raw()
+                || q.pos.y.raw() > cascade.pos.y.add(t::body_height()).raw()
+            {
+                continue;
+            }
+            let dealt = self.players[j].wound(blow);
+            self.players[j].vel.y = self.players[j].vel.y.max(m.launch);
+            self.players[j].grounded = false;
+            self.players[j].slow(t::slow_frames(), t::spike_slow());
+            let _ = dealt;
+        }
+        let share = Fx::ratio(blow, m.damage.max(1));
+        let (at, reach) = (cascade.pos, outer);
+        cascade.forget_hits();
+        self.gore_each(cascade, 0, at, reach, share);
+        cascade.forget_hits();
+        self.gore_critters(cascade, at, reach, share);
+        for slot in 0..MAX_EFFECTS {
+            let Some(e) = self.effects[slot].as_mut() else {
+                continue;
+            };
+            let far = V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z)).flat_len();
+            if e.is_a_pool()
+                && e.owner == owner
+                && e.life == UNLIT
+                && far.raw() <= outer.add(e.pool_radius()).raw()
+            {
+                e.life = t::chain_delay().max(1);
+            }
+        }
+    }
+
+    /// **Lit stains erupt** when their fuse runs out: a stain set off by an
+    /// eruption beside it waits `tuning::chain_delay` frames first, so a
+    /// chain is seen to run from one place to the next.
+    fn light_the_fuses(&mut self) {
+        for slot in 0..MAX_EFFECTS {
+            let Some(e) = self.effects[slot].filter(|e| e.is_a_pool() && e.life != UNLIT) else {
+                continue;
+            };
+            if e.life > 1 {
+                if let Some(pool) = self.effects[slot].as_mut() {
+                    pool.life -= 1;
+                }
+                continue;
+            }
+            let owner = e.owner as usize;
+            if owner < MAX_PLAYERS {
+                self.erupt_from(owner, moves::blood::BLACK_SPIKE, slot);
+            } else {
+                self.effects[slot] = None;
+            }
+        }
+    }
+
+    /// A spike came up on the pool in `slot`: the pool erupts, at its own
+    /// size, and every pool of hers the eruption covers is lit to erupt
+    /// `tuning::chain_delay` frames later (`light_the_fuses`).
+    ///
+    /// **The chain is the skill curve.** A spike on one pool is a bigger spike;
+    /// a spike on a pool standing among others is the floor coming up across
+    /// the whole fight, running outward link by link. Each eruption drinks its
+    /// own pool, so the chain cannot run twice over the same blood.
+    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
+        let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
             return;
         };
-        // Short of what it caught by a body, so she arrives beside it rather
-        // than inside it -- in the air, if that is where it is.
-        let stop = path.at(caught
-            .dist()
-            .sub(t::body_radius().add(t::body_radius()))
-            .max(Fx::ZERO));
-        let speed = t::hook_speed();
-        let frames = caught.dist().div(speed.mul(DT)).to_int().clamp(1, 240) as u16 + 1;
-        begin_haul(&mut self.players[i], stop, speed, frames);
+        let m = moves::get(self.players[owner].class, kind);
+        let radius = t::erupt_radius()
+            .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
+            .max(m.radius);
+        self.drink_from(slot, owner, &m);
+        self.effects[slot] = None;
+        let mut born = Effect::cast(
+            EffectKind::BlackSpike,
+            owner as u8,
+            self.players[owner].class,
+            kind,
+            pool.pos,
+            V3::ZERO,
+            radius,
+        );
+        born.banked = SPIKE_ERUPTION;
+        spawn_effect(&mut self.effects, born);
+        for next in 0..MAX_EFFECTS {
+            let Some(e) = self.effects[next].as_mut() else {
+                continue;
+            };
+            if e.is_a_pool()
+                && e.owner == owner as u8
+                && e.life == UNLIT
+                && V3::new(e.pos.x.sub(pool.pos.x), Fx::ZERO, e.pos.z.sub(pool.pos.z))
+                    .flat_len()
+                    .raw()
+                    <= radius.add(e.pool_radius()).add(t::erupt_chain()).raw()
+            {
+                e.life = t::chain_delay().max(1);
+            }
+        }
+    }
+
+    /// **The Black spike, let go** (2026-10-13): one spike for a tap, and
+    /// more the longer the hold -- up to `tuning::spikes_most` -- the first at
+    /// the aimed point and the rest on a ring round it, as wide as
+    /// `spike_spread_most` at a full hold. A spike on a stain erupts it.
+    fn raise_the_tier(&mut self, i: usize, born: Effect) {
+        let p = self.players[i];
+        let share = p.channelled.max(Fx::ZERO).min(Fx::ONE);
+        let more = Fx::from_int((t::spikes_most() - 1).max(0))
+            .mul(share)
+            .add(Fx::ratio(1, 2))
+            .to_int()
+            .max(0);
+        let ring = t::spike_spread_most().mul(share);
+        let f = p.facing;
+        let ahead = V3::new(f.x, Fx::ZERO, f.z).normalized();
+        let side = V3::new(Fx::ZERO.sub(ahead.z), Fx::ZERO, ahead.x);
+        let centre = born.pos;
+        for k in 0..=more {
+            let at = if k == 0 {
+                centre
+            } else {
+                let turn = Fx::ratio(k - 1, more.max(1));
+                let (c, s) = (crate::fixed::cos_turns(turn), crate::fixed::sin_turns(turn));
+                let off = ahead.scale(c).add(side.scale(s)).scale(ring);
+                let flat = V3::new(
+                    centre.x.add(off.x),
+                    centre.y.add(Fx::ONE),
+                    centre.z.add(off.z),
+                );
+                V3::new(flat.x, self.terrain().ground_under(flat), flat.z)
+            };
+            if let Some(slot) = self.pool_covering(i as u8, at) {
+                self.erupt_from(i, moves::blood::BLACK_SPIKE, slot);
+                continue;
+            }
+            let mut spike = born;
+            spike.pos = at;
+            spike.reach = moves::get(p.class, moves::blood::BLACK_SPIKE).radius;
+            spike.banked = SPIKE_AREA;
+            spawn_effect(&mut self.effects, spike);
+        }
+    }
+
+    /// **Every thrall, and the golem, one frame** (2026-10-13).
+    ///
+    /// **Her click comes first.** Commanded (`COMMANDED`), it goes to where
+    /// it was sent and bites nothing on the way; once there it is free.
+    /// Hurled by a Rising reap, it flies. Otherwise it goes for **the nearest
+    /// enemy body** within `tuning::thrall_seek` -- a fighter, the creature or
+    /// one of a pack -- and in reach it bites every `thrall_bite_every`:
+    /// **a bite spends what it deals**, and spills exactly that under its
+    /// prey. It walks round walls (`walk_round`). Any blow out on a thrall
+    /// kills it, back into a stain of what it had less the blow; the golem
+    /// takes blows off its health instead.
+    fn step_thralls(&mut self) {
+        for slot in 0..MAX_EFFECTS {
+            let Some(mut th) = self.effects[slot].filter(|e| e.is_a_thrall()) else {
+                continue;
+            };
+            let owner = th.owner as usize;
+            let golem = th.kind == EffectKind::Golem;
+            let (radius, height) = (th.thrall_radius(), th.thrall_height());
+            // Struck?
+            let blow = self.blow_on_a_thrall(&th, radius, height);
+            if blow > 0 {
+                th.banked -= blow;
+                if !golem || th.banked <= 0 {
+                    self.effects[slot] = None;
+                    let left = th.banked;
+                    if left > 0 && !golem {
+                        self.spill(th.owner, th.class, th.slot, th.pos, left);
+                    }
+                    continue;
+                }
+            }
+            let commanded = th.struck & COMMANDED != 0;
+            let flying = th.power.raw() > 0;
+            let prey = if commanded { None } else { self.prey_of(&th) };
+            let speed = if golem {
+                t::golem_speed()
+            } else {
+                t::thrall_speed()
+            };
+            if flying {
+                th.power = th.power.sub(Fx::ONE);
+                let to = th.pos.add(th.dir.scale(t::reap_hurl().mul(DT)));
+                th.pos = self.walk_to(th.pos, to, radius, height);
+            } else {
+                let (goal, near) = match prey {
+                    Some((_, at)) => (at, t::thrall_reach().mul(Fx::ratio(1, 2))),
+                    None => (th.home, Fx::ZERO),
+                };
+                let gap = V3::new(goal.x.sub(th.pos.x), Fx::ZERO, goal.z.sub(th.pos.z));
+                let far = gap.flat_len();
+                if far.raw() > near.add(radius).raw() {
+                    let dir = gap.normalized();
+                    let step = speed.mul(DT).min(far.sub(near).max(Fx::ZERO));
+                    let (to, way, left) = self.walk_round(
+                        th.pos,
+                        dir,
+                        step,
+                        radius,
+                        height,
+                        th.struck & LEFT_HAND != 0,
+                    );
+                    th.pos = to;
+                    if way != V3::ZERO {
+                        th.dir = way;
+                    }
+                    if left {
+                        th.struck |= LEFT_HAND;
+                    } else {
+                        th.struck &= !LEFT_HAND;
+                    }
+                } else if commanded {
+                    // Arrived where she sent it: free again.
+                    th.struck &= !COMMANDED;
+                } else if prey.is_some() {
+                    th.dir = gap.normalized();
+                }
+                if prey.is_none() && !commanded {
+                    th.home = th.pos;
+                }
+            }
+            // Bite.
+            let every = if golem {
+                t::golem_punch_every()
+            } else {
+                t::thrall_bite_every()
+            };
+            if let Some((who, at)) = prey {
+                let reach = if golem {
+                    t::golem_reach()
+                } else {
+                    t::thrall_reach()
+                };
+                let gap = V3::new(at.x.sub(th.pos.x), Fx::ZERO, at.z.sub(th.pos.z)).flat_len();
+                if gap.raw() <= reach.add(radius).raw() && (th.age + 1) % every.max(1) == 0 {
+                    self.bite(&mut th, who, at, owner);
+                }
+            }
+            if th.banked <= 0 {
+                self.effects[slot] = None;
+            } else {
+                self.effects[slot] = Some(th);
+            }
+        }
+    }
+
+    /// One step of a thrall's walk from `from` to `to`, pushed out of what it
+    /// would walk into. Where it ends up.
+    fn walk_to(&self, from: V3, to: V3, radius: Fx, height: Fx) -> V3 {
+        let lift = V3::new(to.x, from.y.add(Fx::ratio(1, 2)), to.z);
+        let moved = self
+            .terrain()
+            .resolve_sized(lift, V3::ZERO, true, radius, height)
+            .pos;
+        V3::new(moved.x, self.terrain().ground_under(moved), moved.z)
+    }
+
+    /// **A thrall's way round a wall**: straight at what it wants if it can;
+    /// if a step that way is blocked -- pushed back, or up more than it can
+    /// climb -- the nearest heading that is not, turning first to the hand it
+    /// turned to last (so it follows a wall rather than dithering at it), out
+    /// to a third of a turn either side. Where it ends up, which way it went,
+    /// and which hand it is keeping to.
+    fn walk_round(
+        &self,
+        from: V3,
+        dir: V3,
+        step: Fx,
+        radius: Fx,
+        height: Fx,
+        left: bool,
+    ) -> (V3, V3, bool) {
+        let climb = t::terrain_steepest()
+            .mul(step)
+            .max(crate::arena::SKIN)
+            .add(Fx::ratio(1, 4));
+        let try_way = |way: V3| {
+            let to = self.walk_to(from, from.add(way.scale(step)), radius, height);
+            let went = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z)).flat_len();
+            (went.raw() * 10 >= step.raw() * 6 && to.y.sub(from.y).raw() <= climb.raw())
+                .then_some(to)
+        };
+        if let Some(to) = try_way(dir) {
+            return (to, dir, left);
+        }
+        let turns = [
+            Fx::ratio(1, 12),
+            Fx::ratio(1, 6),
+            Fx::ratio(1, 4),
+            Fx::ratio(1, 3),
+        ];
+        for hand in [left, !left] {
+            for turn in turns {
+                let a = if hand { turn } else { Fx::ZERO.sub(turn) };
+                let (c, s) = (crate::fixed::cos_turns(a), crate::fixed::sin_turns(a));
+                let way = V3::new(
+                    dir.x.mul(c).sub(dir.z.mul(s)),
+                    Fx::ZERO,
+                    dir.x.mul(s).add(dir.z.mul(c)),
+                );
+                if let Some(to) = try_way(way) {
+                    return (to, way, hand);
+                }
+            }
+        }
+        (from, dir, !left)
+    }
+
+    /// **One bite.** A thrall spends `tuning::thrall_bite`% of its essence
+    /// (never less than `thrall_bite_least`) and that is the blow and the
+    /// stain; the golem punches for its row's damage and loses
+    /// `golem_self_hurt` of what it dealt. `who` is a fighter's index,
+    /// `MAX_PLAYERS + slot` for a creature, and past those a pack's critter.
+    fn bite(&mut self, th: &mut Effect, who: usize, at: V3, owner: usize) {
+        let golem = th.kind == EffectKind::Golem;
+        let x = if golem {
+            moves::get(th.class, moves::blood::GOLEM).damage
+        } else {
+            (th.banked * t::thrall_bite() / 100)
+                .max(t::thrall_bite_least())
+                .min(th.banked)
+        };
+        if x <= 0 {
+            return;
+        }
+        let dealt = self.bite_for(th, who, at, owner, x);
+        if golem {
+            th.banked -= Fx::from_int(dealt).mul(t::golem_self_hurt()).to_int();
+        } else if dealt > 0 {
+            th.banked -= x;
+        }
+    }
+
+    /// The blow of a bite, `x`, on `who`: what it dealt.
+    fn bite_for(&mut self, th: &Effect, who: usize, at: V3, owner: usize, x: i32) -> i32 {
+        if who < MAX_PLAYERS {
+            if self.players[who].action.invulnerable() {
+                return 0;
+            }
+            let dealt = self.players[who].wound(x);
+            let floor = self.players[who].pos;
+            self.spill(owner as u8, th.class, th.slot, floor, dealt);
+            return dealt;
+        }
+        if who < MAX_PLAYERS + crate::monster::MAX_MONSTERS {
+            let slot = who - MAX_PLAYERS;
+            let Some(mut beast) = self.monsters[slot] else {
+                return 0;
+            };
+            if !beast.alive() {
+                return 0;
+            }
+            let Some(struck) = beast.part_struck(
+                th.pos,
+                t::thrall_reach().add(th.thrall_radius()),
+                th.thrall_height().max(t::body_height()),
+            ) else {
+                return 0;
+            };
+            let (dealt, guarded) = beast.take_blow(
+                struck,
+                x,
+                &monster::Blow {
+                    from: th.pos,
+                    unblockable: false,
+                    who: th.owner,
+                    class: th.class,
+                    kind: th.slot,
+                },
+            );
+            self.monsters[slot] = Some(beast);
+            if dealt > 0 || !guarded.turned() {
+                self.spill(
+                    th.owner,
+                    th.class,
+                    th.slot,
+                    floor_under(self.arena(), at),
+                    dealt.max(x),
+                );
+            }
+            return dealt.max(x);
+        }
+        let c = who - MAX_PLAYERS - crate::monster::MAX_MONSTERS;
+        if !self.critters[c].alive() {
+            return 0;
+        }
+        let body = self.critters[c];
+        let away =
+            V3::new(body.pos.x.sub(th.pos.x), Fx::ZERO, body.pos.z.sub(th.pos.z)).normalized();
+        let dealt = pack::hurt(
+            &mut self.pack,
+            &mut self.critters,
+            c,
+            x,
+            away,
+            Fx::ZERO,
+            Fx::ZERO,
+        );
+        if dealt > 0 {
+            self.spill(
+                th.owner,
+                th.class,
+                th.slot,
+                floor_under(self.arena(), body.pos),
+                dealt.max(x),
+            );
+        }
+        dealt
+    }
+
+    /// The body a thrall goes for: **the nearest enemy** within
+    /// `tuning::thrall_seek` of it -- a fighter open to its owner, the
+    /// creature's nearest part, or a pack's critter. With where it is.
+    fn prey_of(&self, th: &Effect) -> Option<(usize, V3)> {
+        let seek = t::thrall_seek();
+        let mut best: Option<(usize, V3, Fx)> = None;
+        let mut offer = |who: usize, at: V3| {
+            let far = V3::new(at.x.sub(th.pos.x), Fx::ZERO, at.z.sub(th.pos.z)).flat_len();
+            if far.raw() <= seek.raw() && best.is_none_or(|(_, _, b)| far.raw() < b.raw()) {
+                best = Some((who, at, far));
+            }
+        };
+        for j in 0..MAX_PLAYERS {
+            if self.effects_reach(j, th.owner) {
+                offer(j, self.players[j].pos);
+            }
+        }
+        for (slot, beast) in self.monsters.iter().enumerate() {
+            if let Some(beast) = beast.filter(|b| b.alive()) {
+                offer(MAX_PLAYERS + slot, beast.nearest_to(th.pos));
+            }
+        }
+        if self.critters.any() {
+            for c in 0..critter::MAX_CRITTERS {
+                let body = self.critters[c];
+                if body.alive() {
+                    offer(MAX_PLAYERS + crate::monster::MAX_MONSTERS + c, body.pos);
+                }
+            }
+        }
+        best.map(|(who, at, _)| (who, at))
+    }
+
+    /// **The Stake** leaves her hand along the solved line, to the point the
+    /// crosshair was on: through anybody in the air on the way, pinning them,
+    /// and into the floor at the end, where it lands in an area
+    /// (`pay_out`).
+    fn throw_the_stake(&mut self, i: usize) {
+        let p = self.players[i];
+        let path = p.aim_path;
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                EffectKind::Nail,
+                i as u8,
+                p.class,
+                moves::blood::STAKE,
+                path.from,
+                path.dir(),
+                path.length().max(Fx::ONE),
+            ),
+        );
+    }
+
+    /// **The Stake lands**: at the end of its flight, in the floor under the
+    /// point the crosshair was on -- an area that hurts and slows, as a spike
+    /// does. On a stain of hers, the stain erupts instead.
+    fn land_the_stake(&mut self, effect: &Effect) {
+        let owner = effect.owner as usize;
+        if owner >= MAX_PLAYERS {
+            return;
+        }
+        let end = effect.pos.add(effect.dir.scale(effect.reach));
+        let lift = V3::new(end.x, end.y.add(Fx::ONE), end.z);
+        let at = V3::new(end.x, self.terrain().ground_under(lift), end.z);
+        if let Some(slot) = self.pool_covering(effect.owner, at) {
+            self.erupt_from(owner, moves::blood::STAKE, slot);
+            return;
+        }
+        let m = effect.source();
+        let mut area = Effect::cast(
+            EffectKind::BlackSpike,
+            effect.owner,
+            effect.class,
+            moves::blood::STAKE,
+            at,
+            V3::ZERO,
+            m.radius,
+        );
+        area.banked = SPIKE_AREA;
+        spawn_effect(&mut self.effects, area);
+    }
+
+    /// **The Hemoplague's tick**: everyone inside the cloud is hurt by the
+    /// row's number, and it spills into one stain at the centre; the creature
+    /// is gored where the cloud reaches it.
+    fn step_the_plague(&mut self, effect: &mut Effect) {
+        let m = effect.source();
+        let owner = effect.owner;
+        let top = effect.pos.y.add(t::plague_height());
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if !self.effects_reach(i, owner) || p.action.invulnerable() {
+                continue;
+            }
+            let flat = V3::new(
+                p.pos.x.sub(effect.pos.x),
+                Fx::ZERO,
+                p.pos.z.sub(effect.pos.z),
+            );
+            if flat.flat_len().raw() > effect.reach.add(t::body_radius()).raw()
+                || p.pos.y.raw() > top.raw()
+                || p.pos.y.add(p.hurt_height()).raw() < effect.pos.y.raw()
+            {
+                continue;
+            }
+            let dealt = self.players[i].wound(m.damage);
+            self.players[i].slow(t::plague_tick().saturating_add(10), t::plague_slow());
+            self.spill(owner, effect.class, effect.slot, effect.pos, dealt);
+        }
+        effect.forget_hits();
+        self.gore_each(effect, 0, effect.pos, effect.reach, Fx::ONE);
+        effect.forget_hits();
+        self.gore_critters(effect, effect.pos, effect.reach, Fx::ONE);
     }
 
     /// **Rebound**: the Bash in the air, and if the shield's face met
@@ -14012,6 +16711,13 @@ impl World {
                     hit.state = critter::is::FLINCH;
                     hit.timer = (t::parry_stagger() as i32).max(flinch) as u16;
                 }
+                // Met by a Champion's heavy blow (`meets_a_clash`): to the
+                // pack's mind it was turned, as a guard turns it.
+                let clashed = matches!(
+                    self.players[i].mechanic,
+                    Mechanic::Forms { fury, .. } if fury.clash_by != NOBODY
+                );
+                let guarding = guarding || clashed;
                 if !parried && !guarding {
                     let now = self.monsters;
                     fall_off(&mut self.players[i], &now);
@@ -14142,6 +16848,13 @@ impl World {
                     m.launch.max(Fx::ZERO),
                 );
                 let dealt = before.min(worth).max(0);
+                // A link that lands on a critter -- the Hornback's bull, a
+                // gnawer -- is a landed link like any other: it confirms the
+                // string and feeds his momentum (exploration 0015).
+                confirm_chain(&mut self.players[i], dealt <= 0);
+                if dealt > 0 {
+                    feed_the_momentum(&mut self.players[i], Some(kind));
+                }
                 if dealt > 0 {
                     self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
                     self.spill(
@@ -14149,7 +16862,7 @@ impl World {
                         attacker.class,
                         kind,
                         floor_under(self.arena(), body.pos),
-                        dealt,
+                        dealt.max(worth),
                     );
                     self.players[i].heal(m.leeched(dealt));
                     dual::landed_a_hit(&mut self.players[i]);
@@ -14213,6 +16926,23 @@ impl World {
                 let parried = !m.unblockable
                     && matches!(victim.action, Action::Guard { held } if held < t::parry_window())
                     && facing_it;
+                // **The Clash** (exploration 0015, C7): its swing met a
+                // Champion's heavy blow in the middle of being thrown. The
+                // swing is cancelled -- the creature is knocked out of it --
+                // and he takes nothing. Hitting the scythe, rather than
+                // getting out of its way.
+                if clashing(&victim) {
+                    beast.doing = Doing::Flinch {
+                        left: t::clash_flinch(),
+                    };
+                    let q = &mut self.players[i];
+                    freeze(q, t::clash_freeze());
+                    q.parried = PARRY_FLOURISH;
+                    feed_the_momentum(q, None);
+                    landed = true;
+                    *struck_one = Some((kind, true));
+                    continue;
+                }
                 apply_hit(
                     &mut self.players[i],
                     Hit {
@@ -14298,7 +17028,13 @@ impl World {
                 .mul(preying(attacker.class, beast.disabled()))
                 .mul(cash)
                 .mul(sweet)
+                .mul(true_link_mul(&attacker))
+                .mul(Fx::ONE.add(spent_share_of(&attacker, kind)))
                 .to_int();
+            // Her double duty, against the creature: drink the stain the
+            // blade passes through, and the blow is harder for it. Before
+            // the blow, so the creature takes the whole.
+            let raw = raw + self.stain_bonus(i, &m, box_out.from, box_out.to, None, 0);
             // Asked of its guard first, from where the swing comes from:
             // the same point the fighters' guard is handed.
             let (dealt, guarded) = beast.take_blow(
@@ -14313,6 +17049,21 @@ impl World {
                 },
             );
             rebound_off_a_body(&mut self.players[i]);
+            // A chain link that lands on the animal is a hit confirm like one
+            // that lands on a fighter: its recovery may be cut short for the
+            // next, and a third gives the Rush back. One its guard turned is a
+            // blocked link and pays in full. (Until 2026-10-12 nothing here
+            // confirmed the chain, so every string against a creature paid
+            // every recovery in full.)
+            // The momentum he carries hurts it more and weighs nothing: its
+            // share goes on after the blow, past the strain (`take_extra`).
+            let dealt = dealt
+                + beast.take_extra(Fx::from_int(dealt).mul(carried_share(&attacker)).to_int());
+            confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
+            if dealt > 0 {
+                feed_the_momentum(&mut self.players[i], Some(kind));
+                impact(&mut beast, &attacker, kind, dealt);
+            }
             // The marks are spent by a blow that landed; one its guard
             // turned spends nothing.
             if finisher && !guarded.turned() {
@@ -14320,14 +17071,13 @@ impl World {
             }
             // Her double duty, against the creature: drink over the pool the
             // blade passes through, then spill under the part it struck.
-            if dealt > 0 {
-                self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
+            if dealt > 0 || (raw > 0 && !guarded.turned()) {
                 self.spill(
                     i as u8,
                     attacker.class,
                     kind,
                     floor_under(self.arena(), box_out.centre()),
-                    dealt,
+                    dealt.max(raw),
                 );
             }
             // An uppercut does not put thirteen metres of animal in the air and
@@ -14731,5 +17481,162 @@ impl World {
             Some(f) => f(self, slot, part).clamp(Fx::ZERO, Fx::ONE),
             None => Fx::ONE,
         }
+    }
+}
+
+#[cfg(test)]
+mod fury_tests {
+    //! The Champion's rework (exploration 0015) at the level of one blow: the
+    //! things a fight is too noisy to pin.
+    use super::*;
+
+    fn rushing_champion(left: u16) -> Player {
+        let mut p = Player::new(Class::Champion);
+        if let Mechanic::Forms { rush, rush_vel, .. } = &mut p.mechanic {
+            *rush = left;
+            *rush_vel = V3::new(t::rush_speed(), Fx::ZERO, Fx::ZERO);
+        }
+        p
+    }
+
+    fn blow(damage: i32) -> Hit {
+        Hit {
+            damage,
+            hitstun: 20,
+            blockstun: 10,
+            knockback: Fx::ONE,
+            launch: Fx::ZERO,
+            grabs: 0,
+            by: 1,
+            dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            blocked: false,
+            parried: false,
+            interrupts: true,
+        }
+    }
+
+    #[test]
+    fn a_rush_takes_a_share_and_keeps_going() {
+        let mut p = rushing_champion(t::rush_eat_frames() + 5);
+        let before = p.health;
+        apply_hit(&mut p, blow(60));
+        assert_eq!(
+            before - p.health,
+            60 * t::rush_damage_taken() as i32 / 100,
+            "a braced blow costs its share"
+        );
+        assert!(
+            p.action.actionable(),
+            "and does not stop him: {:?}",
+            p.action
+        );
+        assert!(rushing(&p).is_some(), "the run goes on");
+    }
+
+    #[test]
+    fn the_last_frames_eat_one_blow_whole_and_only_one() {
+        let mut p = rushing_champion(t::rush_eat_frames());
+        let before = p.health;
+        apply_hit(&mut p, blow(80));
+        assert_eq!(p.health, before, "the shoulder down eats it whole");
+        apply_hit(&mut p, blow(80));
+        assert!(p.health < before, "but only once a Rush");
+    }
+
+    #[test]
+    fn enough_damage_breaks_the_rush() {
+        let mut p = rushing_champion(t::rush_eat_frames() + 5);
+        let big = (t::rush_breaks() + 1) * 100 / t::rush_damage_taken().max(1) as i32 + 1;
+        apply_hit(&mut p, blow(big));
+        assert!(
+            matches!(p.action, Action::HitStun { .. }),
+            "a bite past the break stops him the ordinary way: {:?}",
+            p.action
+        );
+        assert!(rushing(&p).is_none(), "and ends the run");
+    }
+
+    #[test]
+    fn a_creatures_blow_meeting_a_heavy_one_is_spent_on_it() {
+        let mut p = Player::new(Class::Champion);
+        p.action = Action::Active {
+            kind: moves::champion::METEOR,
+            left: 2,
+        };
+        let before = p.health;
+        let mut hit = blow(300);
+        hit.by = QUARRY;
+        apply_hit(&mut p, hit);
+        assert_eq!(p.health, before, "the bite took nothing");
+        assert!(
+            matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.clash_by == QUARRY),
+            "and who threw it is remembered for the settling"
+        );
+        let mut q = Player::new(Class::Champion);
+        let mut world = blow(30);
+        world.by = NOBODY;
+        q.action = p.action;
+        let before = q.health;
+        apply_hit(&mut q, world);
+        assert!(q.health < before, "the world's own blows are not clashed");
+    }
+
+    #[test]
+    fn only_heavy_blows_and_a_shoulder_down_clash() {
+        let mut p = Player::new(Class::Champion);
+        p.action = Action::Active {
+            kind: moves::champion::SHOCKWAVE,
+            left: 2,
+        };
+        assert!(clashing(&p), "a full charge's active frames clash");
+        p.action = Action::Active {
+            kind: moves::champion::EARTHBREAKER,
+            left: 2,
+        };
+        assert!(clashing(&p), "so does the hammer's third link");
+        p.action = Action::Active {
+            kind: moves::champion::SWORD_GROUND,
+            left: 2,
+        };
+        assert!(!clashing(&p), "a sword cut does not");
+        let mut q = rushing_champion(t::rush_eat_frames());
+        assert!(clashing(&q), "a Rush with the shoulder down does");
+        if let Mechanic::Forms { fury, .. } = &mut q.mechanic {
+            fury.eaten = true;
+        }
+        assert!(!clashing(&q), "once a run");
+        let mut r = Player::new(Class::Bulwark);
+        r.action = Action::Active { kind: 1, left: 2 };
+        assert!(!clashing(&r), "and nobody else's does");
+    }
+
+    #[test]
+    fn a_landed_third_hit_gives_the_rush_back() {
+        let mut p = Player::new(Class::Champion);
+        if let Mechanic::Forms { recharge, .. } = &mut p.mechanic {
+            *recharge = 50;
+        }
+        p.action = Action::Active {
+            kind: moves::champion::UPCUT,
+            left: 2,
+        };
+        confirm_chain(&mut p, false);
+        assert!(
+            matches!(p.mechanic, Mechanic::Forms { recharge: 0, .. }),
+            "the third hit refunds the Rush"
+        );
+        let mut q = Player::new(Class::Champion);
+        if let Mechanic::Forms { recharge, .. } = &mut q.mechanic {
+            *recharge = 50;
+        }
+        q.action = Action::Active {
+            kind: moves::champion::BACKCUT,
+            left: 2,
+        };
+        confirm_chain(&mut q, false);
+        assert!(
+            matches!(q.mechanic, Mechanic::Forms { recharge: 50, .. }),
+            "a second hit does not"
+        );
     }
 }

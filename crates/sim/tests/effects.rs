@@ -17,15 +17,12 @@ use sim::{Fx, Input, World};
 const Q: u16 = Input::SPECIAL;
 const E: u16 = Input::MECHANIC;
 
-// The Blood mage's buttons, by what they do. Her clicks are *my blood*, *your
-// blood* and the scythe since the three-clicks remap
-// (docs/design/exploration/0009_blood_mage_on_three_clicks.md): the
-// Bloodletter moved from the middle click to `Q`, and the Grasp from `Q` to the
-// middle click, held.
-/// The Bloodletter, the blade thrown out and back: `Q`.
-const BLOODLETTER: u16 = sim::moves::blood::keys::BLOODLETTER;
-/// The Grasp, held: the middle click on the floor.
-const GRASP: u16 = sim::moves::blood::keys::YOUR_BLOOD;
+// The Blood mage's buttons, by what they do: her clicks are *my blood*, *your
+// blood* and the scythe, and the Black spike is the middle click on the floor
+// since the blaster (docs/design/exploration/0015_blood_mage_blaster.md) -- a
+// tap is its first tier.
+/// The Black spike: a tap of the middle click on the floor.
+const SPIKE: u16 = sim::moves::blood::keys::YOUR_BLOOD;
 
 // The Elementalist's buttons, by what they do. Her three clicks are earth,
 // fire and wind since 2026-10-09 (docs/design/kits/elementalist.md, "On three
@@ -56,90 +53,18 @@ fn looking(w: &mut World, frames: u32, a: u16, pitch: i16, b: u16) {
     }
 }
 
-/// The pitch a player would be holding to put the crosshair on a fighter
-/// standing at `target`.
-///
-/// **Searched rather than computed, and that is the point.** Where the
-/// crosshair lands is the aim resolver's business: it depends on the ability's
-/// reach, on the camera's zones and on how high the eye sits, and every one of
-/// those is a knob. A hard-coded angle is a fixture that silently stops
-/// pointing at anything the next time one of them moves.
-fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
-    let m = sim::moves::get(w.players[0].class, slot);
-    let reach = m.reach;
-    let stones = sim::stones::gather(&w.players);
-    let players = w.players;
-    let effects = w.effects;
-    let scene = sim::aim::Scene {
-        stones: &stones,
-        players: &players,
-        effects: &effects,
-        quarry: &w.monsters,
-        critters: &sim::critter::Critters::NONE,
-        arena: &w.terrain(),
-    };
-    // Their middle, measured from *their* feet. Not from the world's floor: a
-    // fighter standing on a platform is a metre and a half up, and aiming at
-    // half a body height above the arena floor is aiming into the platform
-    // they are standing on.
-    let middle = sim::V3::new(
-        target.x,
-        target
-            .y
-            .add(sim::tuning::body_height().div(sim::fixed::Fx::from_int(2))),
-        target.z,
-    );
-    // How close the *line* passes to them, rather than how close its far end
-    // lands. Bodies came off the aiming ray on 2026-09-13 -- a creature up
-    // close fills the screen and the reticle ends up on its chest, metres above
-    // the thing you meant to hit -- so a shot aimed at somebody now ends on the
-    // floor behind them and passes through them on the way. Nearest approach is
-    // what "the reticle is on them" has always meant to the player; it used to
-    // be possible to spell it as "the ray stopped there".
-    // Measured along the move's *own* flight, which is the crosshair's direction
-    // for the move's full reach -- "a blade thrown at something four metres away
-    // still flies its full distance; the crosshair picked the line." So a wall
-    // cutting the aiming ray short does not move the line the blade takes.
-    // Through the move's **own** kind of aiming, which is declared in the
-    // table. A fixture that always asked `skillshot_path` would be a second
-    // aiming model living in the tests, and the first move to change its
-    // column would start missing for reasons nothing in the game shares.
-    let miss = |pitch: i16| {
-        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
-        let one = &players[0];
-        let path = match m.aim() {
-            sim::aim::Kind::Swing => sim::aim::swing_path(
-                one.pos,
-                one.facing,
-                look,
-                one.grounded,
-                reach,
-                m.hand,
-                sim::aim::Stand::fighter(),
-                sim::V3::Y,
-            ),
-            _ => sim::aim::skillshot_path(0, look, reach, &scene),
-        };
-        let dir = path.dir();
-        let toward = middle.sub(path.from);
-        let down = toward.dot(dir).max(sim::fixed::Fx::ZERO).min(reach);
-        path.from.add(dir.scale(down)).sub(middle).len().raw()
-    };
-    // Both ways from level. A swing pitched by the dead zone is flat through
-    // the whole of the first sweep, so a target standing above the caster can
-    // only be found by looking up at it.
-    (-40..=80)
-        .map(|step| -(step * 200) as i16)
-        .min_by_key(|pitch| miss(*pitch))
-        .expect("the scan is not empty")
-}
-
 /// Press a button, let go, and let the move play out. Holding a button down
 /// re-throws the move the frame you become free again, which is fine in a match
 /// and useless in a test: two pillars is not the thing being asserted.
 fn tap(w: &mut World, button: u16, then: u32) {
     run(w, 2, button, 0);
     run(w, then, 0, 0);
+}
+
+/// A weapon tapped every few frames: how a string is thrown, now that a
+/// Champion's weapon held down is a charge (exploration 0015, C3).
+fn tapped(f: u32, button: u16) -> u16 {
+    if f % 3 == 0 { button } else { 0 }
 }
 
 fn as_class(one: Class) -> World {
@@ -392,8 +317,11 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
     w.effects[0] = Some(sim::effects::Effect::pool(
         1,
         Class::BloodMage,
-        sim::moves::blood::SWEEP,
-        w.players[1].pos,
+        sim::moves::blood::HAEMORRHAGE,
+        // Off her feet: she drinks a stain she stands in.
+        w.players[1]
+            .pos
+            .add(sim::V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO)),
         4000,
     ));
     run(&mut w, 60, 0, 0);
@@ -553,7 +481,7 @@ fn a_structure_climbs_out_of_the_ground_and_then_stops_counting() {
 /// *before* it comes up.
 fn spiked(w: &mut World) {
     let mut probe = w.clone();
-    run(&mut probe, 2, E, 0);
+    run(&mut probe, 2, SPIKE, 0);
     let mut at = None;
     for _ in 0..120 {
         run(&mut probe, 1, 0, 0);
@@ -565,47 +493,15 @@ fn spiked(w: &mut World) {
     let at = at.expect("the spike never went into the ground");
     w.players[1].pos = sim::V3::new(at.x, w.players[1].pos.y, at.z);
     let startup = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC).startup;
-    run(w, 2, E, 0);
+    run(w, 2, SPIKE, 0);
     run(w, startup as u32, 0, 0);
 }
 
-/// Stand the other fighter at the far end of a Grasp, where its four arms
-/// converge, and give back the pitch that points at them.
-fn in_the_grasp(w: &mut World) -> i16 {
-    let reach = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).reach;
-    w.players[1].pos = sim::V3::new(
-        w.players[0].pos.x.add(reach),
-        w.players[1].pos.y,
-        w.players[0].pos.z,
-    );
-    // Let the world catch up before aiming. A full grasp's reach from the spawn
-    // mark lands on top of one of the raised platforms, so a fighter put there
-    // is standing a metre and a half up by the next frame -- and aiming at
-    // where they were placed rather than where they end up is aiming at the
-    // platform's flank.
-    looking(w, 2, 0, 0, 0);
-    aiming_at(w, sim::state::SLOT_SPECIAL, w.players[1].pos)
-}
-
-/// Wind the Grasp all the way out and let go.
-///
-/// A channelled move is thrown by the **release**, and how long the button was
-/// held is its range -- see `state::step_channel`. Every fixture here wants the
-/// far end of that slider, because that is where `in_the_grasp` stands the
-/// other fighter. Pressing and letting go, which is how every other move in
-/// these tests is thrown, would send the arms out three metres.
-fn grasp(w: &mut World, pitch: i16) {
-    let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
-    looking(w, hold as u32 + 1, GRASP, pitch, 0);
-    looking(w, 1, 0, pitch, 0);
-}
-
 #[test]
-fn the_black_spike_is_on_the_mechanic_key() {
-    // It used to be shift + click, which is the committed-attack slot on every
-    // class. `E` is where the thing only this class does belongs, and the Blood
-    // mage has nothing else to spend the key on -- her mechanic is health, and
-    // health is not a thing you toggle.
+fn the_black_spike_is_the_middle_click() {
+    // It used to be shift + click, then `E`; since the blaster it is the middle
+    // click on the floor, held through three tiers, and a tap is the spike as
+    // it always was. `E` is the Hemoplague.
     let mut w = engaged(Class::BloodMage);
     tap(&mut w, Input::SHIFT | Input::LEFT, 60);
     assert!(
@@ -615,11 +511,11 @@ fn the_black_spike_is_on_the_mechanic_key() {
 
     let mut w = engaged(Class::BloodMage);
     let startup = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC).startup;
-    tap(&mut w, E, startup as u32 + 2);
+    tap(&mut w, SPIKE, startup as u32 + 2);
     assert_eq!(
         effects_of(&w, EffectKind::BlackSpike).len(),
         1,
-        "E did not cast the spike"
+        "the middle click did not cast the spike"
     );
 }
 
@@ -634,7 +530,7 @@ fn the_spike_takes_long_enough_to_be_seen_coming() {
         startup > sim::tuning::HUMAN_REACTION_FRAMES,
         "the spike comes out inside reaction time, so nobody can answer it"
     );
-    run(&mut w, 2, E, 0);
+    run(&mut w, 2, SPIKE, 0);
     run(&mut w, (startup - 1) as u32, 0, 0);
     assert!(
         effects_of(&w, EffectKind::BlackSpike).is_empty(),
@@ -648,10 +544,10 @@ fn the_spike_reaches_much_further_than_a_swing() {
     // you can put a wall. Pinned against the class's own melee rather than
     // against a number, so retuning either one keeps the relationship honest.
     let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
-    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::SWEEP);
+    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::RISING_REAP);
     assert!(
         spike.reach.raw() > rend.reach.mul(sim::fixed::Fx::from_int(2)).raw(),
-        "the spike lands barely further than the scythe does: {} against {}",
+        "the spike lands barely further than the reap sweeps: {} against {}",
         spike.reach.to_f32_for_render(),
         rend.reach.to_f32_for_render()
     );
@@ -691,18 +587,18 @@ fn casting_costs_the_blood_mage_health() {
     // on one, because "all of them" is the design and a free ability would be
     // the one everybody pressed.
     //
-    // The buttons are the three-clicks map
-    // (docs/design/exploration/0009_blood_mage_on_three_clicks.md).
-    // Haemorrhage is the left click **in the air** -- on the floor the same
-    // click is the Blood nova -- so it is cast from a height.
+    // The buttons are the map of 0016
+    // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md): a
+    // two-frame press is a tap, which costs only its row.
     use sim::moves::blood as b;
     use sim::moves::blood::keys;
     for (slot, button, airborne) in [
-        (b::BLOODLETTER, keys::BLOODLETTER, false),
+        (b::HAEMORRHAGE, keys::MY_BLOOD, false),
         (b::HAEMORRHAGE, keys::MY_BLOOD, true),
-        (b::GRASP, keys::YOUR_BLOOD, false),
-        (b::BLACK_SPIKE, keys::SPIKE, false),
-        (b::SWEEP, keys::SCYTHE, false),
+        (b::SUMMON, keys::RAISE, false),
+        (b::BLACK_SPIKE, keys::YOUR_BLOOD, false),
+        (b::COMMAND, keys::SCYTHE, false),
+        (b::COAGULATE, keys::GATHER, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert!(m.cost > 0, "{} is free to cast", m.name);
@@ -746,7 +642,7 @@ fn spending_health_cannot_kill_you() {
     );
     w.players[0].health = 1;
     for _ in 0..20 {
-        tap(&mut w, E, 60);
+        tap(&mut w, SPIKE, 60);
         assert!(
             w.players[0].health > 0,
             "the Blood mage cast herself to death"
@@ -755,627 +651,7 @@ fn spending_health_cannot_kill_you() {
     assert_eq!(w.players[0].health, 1, "self-damage did not clamp at one");
 }
 
-#[test]
-fn the_bloodletter_cuts_on_the_way_out_and_on_the_way_back() {
-    // The auto, and the simplest statement of what the class is: a blade goes
-    // out, comes back, and the blood comes home with it.
-    let mut w = as_class(Class::BloodMage);
-    let reach = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE).reach;
-    // Parked halfway along the throw, so the blade passes through them twice.
-    w.players[1].pos = sim::V3::new(
-        w.players[0]
-            .pos
-            .x
-            .add(reach.div(sim::fixed::Fx::from_int(2))),
-        w.players[1].pos.y,
-        w.players[0].pos.z,
-    );
-
-    let full = w.players[1].health;
-    let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, BLOODLETTER, pitch, 0);
-    let mut cuts = 0;
-    let mut last = full;
-    for _ in 0..120 {
-        run(&mut w, 1, 0, 0);
-        if w.players[1].health < last {
-            cuts += 1;
-            last = w.players[1].health;
-        }
-    }
-    assert_eq!(
-        cuts, 2,
-        "the blade landed {cuts} hits, not one out and one back"
-    );
-}
-
-#[test]
-fn the_blade_comes_back_to_the_mage_and_not_to_the_spot_she_threw_it_from() {
-    // A catch happens between two objects. A blade returning to a patch of air
-    // its caster walked out of three quarters of a second ago has not been
-    // caught by anybody, and paying for one that was not caught makes the
-    // flight home a formality rather than the risk it is meant to be.
-    //
-    // Measured as *where the blade ends up*, against where it would have ended
-    // up under the old rule: the throw point is still there to compare with.
-    let mut w = as_class(Class::BloodMage);
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, BLOODLETTER, 0, 0);
-    run(&mut w, (m.startup + m.active) as u32, 0, 0);
-    let thrown_from = effects_of(&w, EffectKind::Bloodletter)
-        .first()
-        .expect("the blade never left")
-        .pos;
-
-    // Walk sideways for the whole of the flight, so the mage is nowhere near
-    // where the blade left her hand by the time it arrives.
-    let flight = sim::tuning::bloodletter_flight();
-    let mut last = None;
-    for _ in 0..flight * 2 {
-        run(&mut w, 1, 0, 0);
-        looking(&mut w, 1, Input::D, 0, 0);
-        if let Some(blade) = effects_of(&w, EffectKind::Bloodletter).first() {
-            last = Some((blade.blade_at(), w.players[0].pos));
-        }
-    }
-    let (blade, mage) = last.expect("the blade was never in the air");
-    let walked = mage.sub(thrown_from).flat_len();
-    assert!(
-        walked.raw() > sim::fixed::Fx::from_int(2).raw(),
-        "fixture: the mage only moved {} m, which is not far enough to tell the \
-         two answers apart",
-        walked.to_f32_for_render()
-    );
-    let to_mage = blade.sub(mage).flat_len();
-    let to_throw = blade.sub(thrown_from).flat_len();
-    assert!(
-        to_mage.raw() < to_throw.raw(),
-        "the blade finished {} m from the mage and {} m from where she threw \
-         it, so it came home to the spot rather than to her",
-        to_mage.to_f32_for_render(),
-        to_throw.to_f32_for_render()
-    );
-}
-
-#[test]
-fn the_blade_tracks_the_mage_the_whole_way_home_rather_than_snapping_to_her() {
-    // "Continually tracks" rather than "ends up in the right place". A return
-    // that flew to the old spot and then jumped the last few metres would pass
-    // the test above and read, in the hand, as a bug.
-    let mut w = as_class(Class::BloodMage);
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, BLOODLETTER, 0, 0);
-    run(&mut w, (m.startup + m.active) as u32, 0, 0);
-
-    let flight = sim::tuning::bloodletter_flight();
-    let mut gaps = Vec::new();
-    let mut steps = Vec::new();
-    let mut was: Option<sim::V3> = None;
-    for _ in 0..flight * 2 {
-        looking(&mut w, 1, Input::D, 0, 0);
-        let out = effects_of(&w, EffectKind::Bloodletter);
-        let Some(blade) = out.first() else {
-            continue;
-        };
-        let at = blade.blade_at();
-        if blade.returning() {
-            gaps.push(at.sub(w.players[0].pos).flat_len());
-        }
-        if let Some(was) = was {
-            steps.push(at.sub(was).len());
-        }
-        was = Some(at);
-    }
-    assert!(gaps.len() > 4, "fixture: the blade never came back");
-
-    // Closing on her every frame of the way in, never opening up.
-    for pair in gaps.windows(2) {
-        assert!(
-            pair[1].raw() <= pair[0].raw(),
-            "the gap went from {} m to {} m on the way home",
-            pair[0].to_f32_for_render(),
-            pair[1].to_f32_for_render()
-        );
-    }
-
-    // And no frame that is a teleport. The blade covers its reach in half its
-    // life, so a step worth more than three of those is not a blade flying.
-    let even = m.reach.div(sim::fixed::Fx::from_int(flight as i32 / 2));
-    for step in &steps {
-        assert!(
-            step.raw() < even.raw() * 3,
-            "one frame moved the blade {} m against an even {} m",
-            step.to_f32_for_render(),
-            even.to_f32_for_render()
-        );
-    }
-}
-
-#[test]
-fn the_bloodletter_brings_back_a_cut_and_not_health() {
-    // It used to pay out on the catch: the cut landed at once and the health
-    // had to survive the flight home. It brings back nothing now. The health
-    // is on the floor where the cut happened -- the pool the hit spilled --
-    // and only a move put through that pool returns it. See
-    // `docs/design/blood-mage.md` and `tests/essence.rs`.
-    let mut w = as_class(Class::BloodMage);
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    w.players[1].pos = sim::V3::new(
-        w.players[0]
-            .pos
-            .x
-            .add(m.reach.div(sim::fixed::Fx::from_int(2))),
-        w.players[1].pos.y,
-        w.players[0].pos.z,
-    );
-    let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, BLOODLETTER, pitch, 0);
-    let flight = sim::tuning::bloodletter_flight();
-    run(&mut w, (m.startup + m.active) as u32, 0, 0);
-    let paid = w.players[0].health;
-    run(&mut w, flight as u32 * 2, 0, 0);
-    assert!(
-        w.players[1].health < w.players[1].full_health(),
-        "fixture: the blade never cut anybody"
-    );
-    // What it can bring back is the pool the cut spilled, drunk once on the
-    // way home like any pool the blade crosses -- never more than the pool's
-    // share, and the pool is gone for it.
-    let dealt = w.players[1].full_health() - w.players[1].health;
-    assert!(
-        w.players[0].health <= paid + m.drinks(dealt),
-        "the blade came home and brought health with it: {} up from {paid}, more than \
-         its share of a pool of {dealt}",
-        w.players[0].health
-    );
-}
-
-#[test]
-fn holding_the_grasp_longer_sends_it_further() {
-    // The channel **is** the aiming, and it is the only place in the game where
-    // the cast button chooses a range. So the property is the plain one: the
-    // arms converge further out the longer the wind-up, from the move's near
-    // knob at no hold to its own reach at the cap.
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    assert!(m.channel > 0, "the Grasp does not channel");
-
-    let thrown = |hold: u16| {
-        let mut w = as_class(Class::BloodMage);
-        let pitch = in_the_grasp(&mut w);
-        looking(&mut w, hold as u32 + 1, GRASP, pitch, 0);
-        looking(&mut w, 1, 0, pitch, 0);
-        for _ in 0..90 {
-            run(&mut w, 1, 0, 0);
-            if let Some(arms) = effects_of(&w, EffectKind::Grasp).first() {
-                return arms.reach;
-            }
-        }
-        panic!("the arms never came out");
-    };
-
-    let (near, half, far) = (thrown(0), thrown(m.channel / 2), thrown(m.channel));
-    assert!(
-        near.raw() < half.raw() && half.raw() < far.raw(),
-        "no hold reaches {} m, half {} m, full {} m -- the slider is not a slider",
-        near.to_f32_for_render(),
-        half.to_f32_for_render(),
-        far.to_f32_for_render()
-    );
-    assert!(
-        (far.sub(m.reach)).abs().raw() < sim::fixed::Fx::ratio(1, 4).raw(),
-        "a full hold reaches {} m against a move that says {} m",
-        far.to_f32_for_render(),
-        m.reach.to_f32_for_render()
-    );
-    assert!(
-        (near.sub(m.channel_from)).abs().raw() < sim::fixed::Fx::ratio(1, 4).raw(),
-        "no hold at all reaches {} m against a near end of {} m",
-        near.to_f32_for_render(),
-        m.channel_from.to_f32_for_render()
-    );
-}
-
-#[test]
-fn a_still_mouse_holds_the_line_and_only_the_marker_moves() {
-    // What the channel is *for*, and the one thing it has to do to be readable.
-    //
-    // The aim is solved at the move's **full** reach every frame and the hold
-    // picks a point along the line that comes back. Solving at the wound-up
-    // range instead -- which is what it did first -- means the raycast's own
-    // answer changes as the range grows: the far end walks off the floor and
-    // onto a wall and back, so a player holding the mouse perfectly still
-    // watched the marker jump about while choosing a depth. With the line held
-    // still, the only thing moving is the thing the player is moving.
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    for pitch in [4096i16, 0, -4096, -8192, -12000] {
-        let mut w = as_class(Class::BloodMage);
-        let mut line: Option<sim::V3> = None;
-        let mut was = sim::fixed::Fx::ZERO;
-        for held in 0..=m.channel {
-            looking(&mut w, 1, GRASP, pitch, 0);
-            if w.players[0].action.channelling().is_none() {
-                continue;
-            }
-            let path = w.players[0].aim_path;
-            let (dir, far) = (path.dir(), path.length());
-            if let Some(line) = line {
-                // The same line, frame after frame. A hair of rounding is fine;
-                // a surface change is not, and shows up here as a direction
-                // that swings.
-                let swing = dir.sub(line).len();
-                assert!(
-                    swing.raw() < sim::fixed::Fx::ratio(1, 100).raw(),
-                    "held {held} at pitch {pitch}: the line moved by {} while \
-                     the mouse was still",
-                    swing.to_f32_for_render()
-                );
-                // And the marker walks out, never back, never in a jump.
-                assert!(
-                    far.raw() >= was.raw(),
-                    "held {held} at pitch {pitch}: the marker went from {} m \
-                     back to {} m",
-                    was.to_f32_for_render(),
-                    far.to_f32_for_render()
-                );
-                let step = far.sub(was);
-                assert!(
-                    step.raw() < sim::fixed::Fx::ratio(1, 2).raw(),
-                    "held {held} at pitch {pitch}: one frame moved the marker \
-                     {} m, which is a jump rather than a walk",
-                    step.to_f32_for_render()
-                );
-            }
-            line = Some(dir);
-            was = far;
-        }
-        assert!(line.is_some(), "the channel never opened at pitch {pitch}");
-    }
-}
-
-#[test]
-fn the_marker_is_as_far_out_as_the_hold_and_nothing_else() {
-    // The other half of the split. The crosshair answers *which way*; the hold
-    // answers *how far*, on its own, and it does not ask what the ray stopped
-    // on. Aim at a wall two metres away and wind to full range and it is still
-    // a ten-metre Grasp -- it goes through the wall. A wall is a thing to punch
-    // an ability through, not a shorter version of the ability.
-    //
-    // Swept across pitches that put wildly different things under the reticle:
-    // open air at the top, the floor a few metres out at the bottom. The
-    // answer has to be the same number every time.
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    for pitch in [4096i16, 0, -4096, -8192, -12000, -16384] {
-        let mut w = as_class(Class::BloodMage);
-        for held in 0..=m.channel {
-            looking(&mut w, 1, GRASP, pitch, 0);
-            let Some((_, wound)) = w.players[0].action.channelling() else {
-                continue;
-            };
-            let want = m.reach_after(wound);
-            let got = w.players[0].aim_path.length();
-            assert!(
-                got.sub(want).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
-                "held {held} at pitch {pitch}: the marker is {} m out where the \
-                 hold says {} m",
-                got.to_f32_for_render(),
-                want.to_f32_for_render()
-            );
-        }
-    }
-}
-
-#[test]
-fn a_grasp_wound_to_full_range_reaches_full_range_through_a_wall() {
-    // The same rule, stated where it actually bites: pointed straight down at
-    // the floor a metre and a half in front of her, where the crosshair's ray
-    // stops almost immediately. The arms still go out ten metres along that
-    // line, which is under the arena rather than along it -- and that is
-    // correct. What the player asked for was a depth, and the depth is the
-    // hold.
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    let mut w = as_class(Class::BloodMage);
-    // Straight down: whatever the ray meets, it meets it at once.
-    let pitch = -16384;
-    looking(&mut w, m.channel as u32 + 1, GRASP, pitch, 0);
-    let wound = w.players[0].aim_path.length();
-    assert!(
-        wound.sub(m.reach).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
-        "aimed at the floor underfoot, a full hold reached {} m of {}",
-        wound.to_f32_for_render(),
-        m.reach.to_f32_for_render()
-    );
-    // And the arms that come out of it carry the same number.
-    for _ in 0..90 {
-        run(&mut w, 1, 0, 0);
-        if let Some(arms) = effects_of(&w, EffectKind::Grasp).first() {
-            assert!(
-                arms.reach.sub(m.reach).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
-                "the marker wound to {} m and the arms came out at {} m",
-                wound.to_f32_for_render(),
-                arms.reach.to_f32_for_render()
-            );
-            return;
-        }
-    }
-    panic!("the arms never came out");
-}
-
-#[test]
-fn the_marker_starts_inside_melee_range() {
-    // "Start at the character and move outward." A slider whose near end is
-    // already mid-range gives the player no sense that holding is doing
-    // anything -- the marker appears out in the arena and creeps, rather than
-    // leaving the body and travelling. Inside the reach of her own melee is the
-    // test of that, because the sweep is what "right in front of me" means for
-    // this class.
-    let grasp = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::SWEEP);
-    assert!(
-        grasp.reach_after(0).raw() < rend.reach.raw(),
-        "a tapped Grasp reaches {} m against {} m of Rend, so it does not start \
-         at the caster",
-        grasp.reach_after(0).to_f32_for_render(),
-        rend.reach.to_f32_for_render()
-    );
-    // And the far end is still a long way past it, or the slider has no travel.
-    assert!(
-        grasp.reach.raw() > rend.reach.raw() * 3,
-        "the slider runs {} m to {} m, which is not a range worth choosing",
-        grasp.reach_after(0).to_f32_for_render(),
-        grasp.reach.to_f32_for_render()
-    );
-}
-
-#[test]
-fn a_channel_that_is_never_released_throws_itself() {
-    // Holding the button is buying reach, and the reach runs out. Past the cap
-    // the move comes out on its own rather than sitting there paid for: an
-    // ability you can hold indefinitely is a threat with no clock on it, and
-    // the other player has no way to wait one out.
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    let mut w = as_class(Class::BloodMage);
-    let pitch = in_the_grasp(&mut w);
-    let mut out = None;
-    for f in 0..(m.channel as u32 * 3) {
-        looking(&mut w, 1, GRASP, pitch, 0);
-        if out.is_none() && !effects_of(&w, EffectKind::Grasp).is_empty() {
-            out = Some(f);
-        }
-    }
-    let f = out.expect("the button was held for three channels and the arms never came out");
-    assert!(
-        f <= (m.channel + m.startup + m.active) as u32,
-        "the arms came out on frame {f}, which is later than the cap plus the          move's own wind-up -- the hold is being stored somewhere"
-    );
-}
-
-#[test]
-fn a_grasp_binds_before_it_hauls_and_the_haul_covers_ground() {
-    // The shape of the catch, which is the whole of how the move reads: the
-    // arms close and for a moment **nothing happens** -- you are held where
-    // they caught you -- and only then are you dragged back, across real
-    // distance, at a speed you can watch. It used to be a teleport, and a
-    // teleport reads as the game moving somebody rather than as an ability
-    // landing on them.
-    //
-    // Gated on catching somebody with **every** arm, for a mechanical reason as
-    // much as a design one: the haul would otherwise pull its victim out from
-    // under the other three arms -- the bottom pair connect a frame before the
-    // top pair -- and the catch would cancel itself.
-    let mut w = as_class(Class::BloodMage);
-    let pitch = in_the_grasp(&mut w);
-    let grabs = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).grabs;
-    assert!(grabs > 0, "the table says this move does not grab");
-
-    let apart = |w: &World| w.players[1].pos.sub(w.players[0].pos).flat_len();
-    let before = apart(&w);
-    grasp(&mut w, pitch);
-
-    // Every frame of the hold, in order, so the two phases can be told apart.
-    let mut gaps = Vec::new();
-    let mut disabled = false;
-    for _ in 0..120 {
-        run(&mut w, 1, 0, 0);
-        if matches!(w.players[1].action, Action::Held { .. }) {
-            gaps.push(apart(&w));
-            disabled |= w.players[1].disabled();
-        }
-    }
-    assert!(!gaps.is_empty(), "every arm landed and nobody was caught");
-    assert!(disabled, "the payoff window is not a payoff");
-
-    // The bind. Caught where they stood, not snapped to the caster.
-    let bind = sim::tuning::grasp_bind() as usize;
-    assert!(
-        bind > 0,
-        "there is no bind, so the haul is a teleport again"
-    );
-    for (f, gap) in gaps.iter().take(bind).enumerate() {
-        assert!(
-            gap.raw() * 4 > before.raw() * 3,
-            "frame {f} of the bind and they have already travelled {} m of {}",
-            before.sub(*gap).to_f32_for_render(),
-            before.to_f32_for_render()
-        );
-    }
-
-    // The haul. Never a single step, and it finishes.
-    let biggest = gaps
-        .windows(2)
-        .map(|w| w[0].sub(w[1]).raw())
-        .max()
-        .expect("the hold lasted a frame");
-    assert!(
-        biggest * 3 < before.raw(),
-        "one frame of the haul covered {} m of the {} m trip, which is a blink",
-        sim::fixed::Fx::from_raw(biggest).to_f32_for_render(),
-        before.to_f32_for_render()
-    );
-    let arrived = *gaps.last().expect("the hold lasted a frame");
-    assert!(
-        arrived.raw() * 4 < before.raw(),
-        "caught from {} m away and left standing {} m away",
-        before.to_f32_for_render(),
-        arrived.to_f32_for_render()
-    );
-}
-
-#[test]
-fn the_grasp_gives_the_feet_back_the_frame_it_ends() {
-    // The other half of the trade. The catch is expensive and short, and what
-    // makes it fair is that it is *over* when it is over: no root left on the
-    // end of it, no recovery to sit through. A victim who is still stuck after
-    // the hands let go cannot tell where the ability stopped, which is how a
-    // brief hard stop turns into one that feels like a stunlock.
-    let mut w = as_class(Class::BloodMage);
-    let pitch = in_the_grasp(&mut w);
-    grasp(&mut w, pitch);
-    for _ in 0..120 {
-        run(&mut w, 1, 0, 0);
-        if matches!(w.players[1].action, Action::Held { .. }) {
-            break;
-        }
-    }
-    let Action::Held { left } = w.players[1].action else {
-        panic!("every arm landed and nobody was caught");
-    };
-    run(&mut w, left as u32 + 1, 0, 0);
-    assert!(
-        w.players[1].action.actionable(),
-        "the hold ran out and they are still in {:?}",
-        w.players[1].action
-    );
-    let start = w.players[1].pos;
-    run(&mut w, 6, 0, Input::W);
-    assert!(
-        w.players[1].pos.sub(start).flat_len().raw() > 0,
-        "the feet never came back"
-    );
-}
-
-#[test]
-fn only_a_full_grasp_catches_anybody() {
-    // The rule, swept rather than staged. One or two arms is damage and nothing
-    // else: if a single arm could grab, the ability would be a ten-metre pull on
-    // any contact at all, which is not a read but a tax on being in front of a
-    // Blood mage.
-    //
-    // A sweep because the interesting positions are a hand's width apart -- the
-    // arms converge, so the difference between four and two is about a metre --
-    // and a fixture that picked one of them would be pinned to today's cone
-    // width rather than to the rule.
-    let mut seen_full = false;
-    let mut seen_glancing = false;
-    for tenth in 0..30 {
-        let mut w = as_class(Class::BloodMage);
-        let pitch = in_the_grasp(&mut w);
-        let off = sim::fixed::Fx::ratio(tenth, 10);
-        w.players[1].pos = sim::V3::new(
-            w.players[1].pos.x,
-            w.players[1].pos.y,
-            w.players[1].pos.z.add(off),
-        );
-        let full = w.players[1].health;
-        grasp(&mut w, pitch);
-
-        let mut held = false;
-        for _ in 0..120 {
-            run(&mut w, 1, 0, 0);
-            held |= matches!(w.players[1].action, Action::Held { .. });
-        }
-        let arms = w.players[1].health.abs_diff(full) as i32
-            / sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL)
-                .damage
-                .max(1);
-        let all_four = arms >= sim::effects::GRASP_ARMS as i32;
-        let at = off.to_f32_for_render();
-
-        assert_eq!(
-            held, all_four,
-            "{at} m off centre: {arms} arms landed, held = {held}"
-        );
-        seen_full |= all_four;
-        seen_glancing |= arms > 0 && !all_four;
-    }
-    assert!(seen_full, "the sweep never caught anybody with all four");
-    assert!(
-        seen_glancing,
-        "the sweep never found a glancing hit, so it proves only one half"
-    );
-}
-
-#[test]
-fn a_grasp_catches_only_when_every_arm_lands() {
-    // Four arms, and the catch is the price of all four. One or two of them is
-    // a glancing blow; standing where the cone closes is a read, and a read is
-    // what the design lets a hard stop be bought with.
-    let mut w = as_class(Class::BloodMage);
-    let pitch = in_the_grasp(&mut w);
-    grasp(&mut w, pitch);
-    let mut caught = false;
-    for _ in 0..90 {
-        run(&mut w, 1, 0, 0);
-        caught |= matches!(w.players[1].action, Action::Held { .. });
-    }
-    assert!(caught, "caught by every arm and still walking");
-
-    // Far off to one side: the cone never reaches, so nothing lands.
-    let mut w = as_class(Class::BloodMage);
-    w.players[1].pos = sim::V3::new(
-        w.players[0].pos.x,
-        w.players[1].pos.y,
-        w.players[0].pos.z.add(sim::fixed::Fx::from_int(9)),
-    );
-    let full = w.players[1].health;
-    grasp(&mut w, 0);
-    run(&mut w, 60, 0, 0);
-    assert_eq!(
-        w.players[1].health, full,
-        "the arms reached across the arena"
-    );
-    assert!(
-        !matches!(w.players[1].action, Action::Held { .. }),
-        "caught by a Grasp that missed"
-    );
-}
-
-#[test]
-fn a_caught_fighter_cannot_walk_dodge_or_jump_out_of_it() {
-    // The hold is a hard stop, and the design allows one only behind a hard
-    // condition (`ability-spec.md`) -- here, landing every arm of a Grasp.
-    // Having paid for it, it has to actually hold: a catch you can dodge or
-    // jump out of is a very expensive way to deal one hit of damage.
-    let mut w = as_class(Class::BloodMage);
-    let pitch = in_the_grasp(&mut w);
-    grasp(&mut w, pitch);
-    for _ in 0..120 {
-        run(&mut w, 1, 0, 0);
-        if matches!(w.players[1].action, Action::Held { .. }) {
-            break;
-        }
-    }
-    assert!(
-        matches!(w.players[1].action, Action::Held { .. }),
-        "fixture caught nobody"
-    );
-
-    // Held still for the bind, whatever they press.
-    let start = w.players[1].pos;
-    run(&mut w, 2, 0, Input::SHIFT | Input::W);
-    assert!(
-        !matches!(w.players[1].action, Action::Dodge { .. }),
-        "a caught fighter dodged out of it"
-    );
-    run(&mut w, 2, 0, Input::SPACE);
-    assert!(w.players[1].grounded, "a caught fighter jumped out of it");
-    assert_eq!(
-        w.players[1].pos.sub(start).flat_len().raw(),
-        0,
-        "a caught fighter walked out of the bind"
-    );
-}
-
-/// What one swing of `slot` takes off a fighter who has been put into `setup`.
+/// What one Haemorrhage takes off a fighter who has been put into `setup`.
 ///
 /// The comparison the trait is about: the same move, the same distance, the
 /// same frame, against a victim whose options are gone and against one whose
@@ -1385,9 +661,8 @@ fn one_hit(setup: impl Fn(&mut World)) -> i32 {
     run(&mut w, 20, 0, 0);
     setup(&mut w);
     let before = w.players[1].health;
-    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
-    run(&mut w, 2, Input::SHIFT | Input::LEFT, 0);
-    run(&mut w, (m.startup + m.active + 2) as u32, 0, 0);
+    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, 40, 0, 0);
     before - w.players[1].health
 }
 
@@ -1445,25 +720,6 @@ fn nobody_else_preys_on_the_disabled() {
             class.name()
         );
     }
-}
-
-#[test]
-fn the_grasp_sets_up_its_own_payoff() {
-    // The two halves together, which is the point of implementing either.
-    // Catch them with every arm, and the window that opens is the one the
-    // class's damage bonus is waiting on.
-    let mut w = as_class(Class::BloodMage);
-    let pitch = in_the_grasp(&mut w);
-    grasp(&mut w, pitch);
-    let mut disabled = false;
-    for _ in 0..90 {
-        run(&mut w, 1, 0, 0);
-        disabled |= w.players[1].disabled();
-    }
-    assert!(
-        disabled,
-        "the catch does not count as a disable, so the payoff never fires"
-    );
 }
 
 #[test]
@@ -1635,7 +891,10 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     // pole vault *is* a spear planted in the floor.
     let down = -(1 << 13); // an eighth of a turn below the horizon
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     for _ in 0..2 {
         w.advance([
             Input::looking_at(RMB, LOOK_RIGHT, down),
@@ -1649,7 +908,10 @@ fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
     );
 
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     run(&mut w, 2, RMB, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
@@ -1664,7 +926,10 @@ fn the_vault_trades_the_dash_for_height() {
     // buys is a way into the air that a jump cannot reach.
     let down = -(1 << 13);
     let mut w = engaged(Class::Champion);
-    run(&mut w, 1, E, 0);
+    // Sideways, past them: a Rush run *into* somebody this close is
+    // the shoulder, which stops it on the first frame (exploration 0015),
+    // and the Rush goes where the crosshair is, so he looks aside for it.
+    w.advance([Input::aimed(E, 1 << 14), Input::aimed(0, LOOK_LEFT)]);
     let mut top = 0.0f32;
     for f in 0..80 {
         let bits = if (1..3).contains(&f) { RMB } else { 0 };
@@ -1956,11 +1221,14 @@ fn the_combo_the_class_is_built_around_is_playable() {
     let mut w = engaged(Class::Champion);
     let start = w.players[1].health;
 
-    // Hammer, and keep the button down: a link that lands cuts its own tail
+    // Hammer, and keep tapping it: a link that lands cuts its own tail
     // short, so the string walks itself into the second hit.
     let mut second = false;
-    for _ in 0..90 {
-        w.advance([Input::aimed(MMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    for f in 0..90 {
+        w.advance([
+            Input::aimed(tapped(f, MMB), LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         second |= w.players[0].action.attack_kind() == Some(moves::champion::UPROOT);
         if second {
             break;
@@ -2049,11 +1317,15 @@ fn the_combo_the_class_is_built_around_is_playable() {
 // which move a press produces, what ends a string, and what a string costs when
 // the defender answers it.
 
-/// Hold one button down and collect every move it throws, in order.
+/// Keep tapping one button and collect every move it throws, in order.
+/// Tapped, since a Champion's weapon held down is a charge (exploration 0015).
 fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
     let mut seen: Vec<u8> = Vec::new();
-    for _ in 0..frames {
-        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    for f in 0..frames {
+        w.advance([
+            Input::aimed(tapped(f, button), LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         if let Some(kind) = w.players[0].action.attack_kind() {
             if seen.last() != Some(&kind) {
                 seen.push(kind);
@@ -2064,17 +1336,17 @@ fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
 }
 
 #[test]
-fn one_weapon_held_down_walks_the_whole_chain_and_then_starts_again() {
-    // Linear play is meant to be strong, so the simplest possible input -- hold
-    // a button -- has to produce the whole string rather than the first hit
-    // three times.
+fn one_weapon_tapped_walks_the_whole_chain_and_then_starts_again() {
+    // Linear play is meant to be strong, so the simplest possible input -- one
+    // button, tapped (held, it is a charge) -- has to produce the whole string
+    // rather than the first hit three times.
     use moves::champion as c;
     let mut w = engaged(Class::Champion);
     let seen = strung(&mut w, LMB, 180);
     assert_eq!(
         &seen[..3],
         &[c::SWORD_GROUND, c::BACKCUT, c::UPCUT],
-        "holding left click did not walk the sword chain: {seen:?}"
+        "tapping left click did not walk the sword chain: {seen:?}"
     );
     assert_eq!(
         seen.get(3),
@@ -2135,8 +1407,11 @@ fn the_two_sword_openers_cut_opposite_diagonals() {
                 *chain_left = 200;
             }
         }
-        for _ in 0..40 {
-            w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        for f in 0..40 {
+            w.advance([
+                Input::aimed(if f == 0 { button } else { 0 }, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
             if let Some(h) = sim::state::hitbox(&w.players[0]) {
                 let up = h.to.y.sub(h.from.y);
                 // The facing is +x, so its own sides are ±z.
@@ -2202,8 +1477,11 @@ fn a_step_is_finished_by_the_time_the_weapon_lands() {
         run(&mut w, 12, 0, 0);
         let from = w.players[0].pos.x;
         let mut at_contact = None;
-        for _ in 0..80 {
-            w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        for f in 0..80 {
+            w.advance([
+                Input::aimed(if f == 0 { button } else { 0 }, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
             let live = matches!(w.players[0].action, sim::state::Action::Active { .. });
             if live && at_contact.is_none() {
                 at_contact = Some(w.players[0].pos.x.sub(from).to_f32_for_render());
@@ -2229,8 +1507,12 @@ fn nothing_that_does_not_declare_a_step_moves_on_its_own() {
     w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
     run(&mut w, 12, 0, 0);
     let from = w.players[0].pos;
-    for _ in 0..40 {
-        w.advance([Input::aimed(RMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    // Tapped: held, the spear is the Repel, a different move.
+    for f in 0..40 {
+        w.advance([
+            Input::aimed(if f == 0 { RMB } else { 0 }, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
     }
     let gone = w.players[0].pos.sub(from).flat_len().to_f32_for_render();
     assert!(
@@ -2271,7 +1553,7 @@ fn jumping_into_the_hammer_finisher_takes_both_of_you_up() {
                 0
             };
             w.advance([
-                Input::aimed(MMB | space, LOOK_RIGHT),
+                Input::aimed(if f == 0 { MMB } else { 0 } | space, LOOK_RIGHT),
                 Input::aimed(0, LOOK_LEFT),
             ]);
             theirs = theirs.max(w.players[1].vel.y.to_f32_for_render());
@@ -2325,7 +1607,7 @@ fn the_leap_is_paid_on_contact_and_not_on_the_press() {
             0
         };
         w.advance([
-            Input::aimed(MMB | space, LOOK_RIGHT),
+            Input::aimed(if f == 0 { MMB } else { 0 } | space, LOOK_RIGHT),
             Input::aimed(0, LOOK_LEFT),
         ]);
         highest = highest.max(w.players[0].vel.y.to_f32_for_render());
@@ -2350,7 +1632,7 @@ fn a_blocked_link_pays_its_whole_recovery() {
         let mut at = 0u32;
         for f in 0..60 {
             w.advance([
-                Input::aimed(LMB, LOOK_RIGHT),
+                Input::aimed(tapped(f, LMB), LOOK_RIGHT),
                 Input::aimed(block, LOOK_LEFT),
             ]);
             if w.players[0].action.attack_kind() == Some(moves::champion::BACKCUT) {

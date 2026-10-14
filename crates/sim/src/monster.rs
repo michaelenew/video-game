@@ -1950,6 +1950,49 @@ impl Monster {
         dealt
     }
 
+    /// **Weight the damage did not carry** (exploration 0015, C6): strain,
+    /// and some of it poise, added over and above what a blow dealt. The
+    /// Champion's heavy blows land here -- he is the class that puts a
+    /// creature on the floor -- and the ladder reads it on the next blow, as
+    /// it reads any other strain.
+    pub fn take_weight(&mut self, strain: i32, poise: i32) {
+        if !self.alive() {
+            return;
+        }
+        self.strain += strain.max(0);
+        self.poise += poise.max(0);
+    }
+
+    /// **Damage that weighs nothing** (exploration 0015): health taken with
+    /// no strain and no poise -- the Champion's momentum, which makes his
+    /// blows hurt more without making them stagger more; what staggers is
+    /// Break's to say. Returns what went in.
+    pub fn take_extra(&mut self, damage: i32) -> i32 {
+        if !self.alive() || damage <= 0 {
+            return 0;
+        }
+        let dealt = damage.min(self.health);
+        self.health -= dealt;
+        if self.health <= 0 {
+            self.doing = Doing::Dead;
+        }
+        dealt
+    }
+
+    /// Knocked off its feet for `frames`, whatever it was doing -- the
+    /// Meteor's crater. Not on something already down, and not on the dead.
+    pub fn stumble_for(&mut self, frames: u16) {
+        if !self.alive() || self.doing.grounded_route() || frames == 0 {
+            return;
+        }
+        self.doing = Doing::Stumble {
+            left: frames,
+            front: true,
+        };
+        self.speed = Fx::ZERO;
+        self.yaw_rate = Fx::ZERO;
+    }
+
     /// A foot has gone. Down it comes.
     ///
     /// The stumble is the moment; `lame_layer` is the rest of the fight. Both

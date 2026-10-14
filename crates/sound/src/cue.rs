@@ -545,6 +545,32 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                 frames: 12,
                 size: 2.0,
             }),
+            // The Champion's full charges (2026-10-12): the crescent and the
+            // javelin are blades through the air, big and fast; the ground
+            // breaking is the biggest rumble a fighter makes; the cuts are a
+            // long whoosh, the line of them landing.
+            EffectKind::Crescent => Patch::Whoosh(Whoosh {
+                frames: 14,
+                size: 2.0,
+                rising: false,
+                weight: 0.9,
+            }),
+            EffectKind::Javelin => Patch::Whoosh(Whoosh {
+                frames: 10,
+                size: 2.5,
+                rising: false,
+                weight: 1.0,
+            }),
+            EffectKind::Shockwave => Patch::Rumble(Rumble {
+                frames: 24,
+                size: 3.5,
+            }),
+            EffectKind::Cuts => Patch::Whoosh(Whoosh {
+                frames: 36,
+                size: FIGHTER,
+                rising: true,
+                weight: 0.8,
+            }),
             // Anything a later build adds speaks until it is given a voice.
             #[allow(unreachable_patterns)]
             _ => Patch::Gust(Gust {

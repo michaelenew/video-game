@@ -31,6 +31,20 @@ const LIGHT: Color = Color::srgb(1.0, 0.89, 0.52);
 const DEEP: Color = Color::srgb(0.95, 0.35, 0.35);
 /// Driven off the end. Nothing else in the HUD is this colour.
 const ASCENDED: Color = Color::srgb(1.0, 1.0, 1.0);
+/// The Champion's momentum, tier by tier: an ember, *Heated*, *Blazing*, and
+/// white when it is full -- the same climb the glow on his weapon makes.
+const EMBER: Color = Color::srgb(0.62, 0.24, 0.12);
+const HEATED: Color = Color::srgb(0.95, 0.45, 0.15);
+const BLAZING: Color = Color::srgb(1.0, 0.78, 0.3);
+
+/// **The Champion's momentum** (exploration 0015): one bar under his health,
+/// with the two tier marks on it. Hidden for every other class.
+#[derive(Component)]
+pub struct MomentumRow(pub usize);
+
+/// Its fill, from the left.
+#[derive(Component)]
+pub struct MomentumFill(pub usize);
 
 #[derive(Component)]
 pub struct HealthBar {
@@ -168,6 +182,36 @@ pub fn setup(mut commands: Commands) {
             .with_children(|row| {
                 spawn_bar(row, 0);
                 spawn_bar(row, 1);
+            });
+
+            // The Champion's momentum, under whichever fighter has it, the
+            // same row shape again.
+            root.spawn(Node {
+                width: Val::Percent(100.0),
+                column_gap: Val::Px(18.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                margin: UiRect::top(Val::Px(4.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                spawn_momentum(row, 0);
+                spawn_momentum(row, 1);
+            });
+
+            // The Blood mage's Well, under whichever fighter has one: a bar,
+            // because a number is not read in a fight.
+            root.spawn(Node {
+                width: Val::Percent(100.0),
+                column_gap: Val::Px(18.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                margin: UiRect::top(Val::Px(4.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                spawn_well(row, 0);
+                spawn_well(row, 1);
             });
 
             // The creature's bars, under the fighters' own. Hidden entirely in
@@ -461,6 +505,158 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
                 ));
             }
         });
+}
+
+/// The momentum bar: a track, its fill, and a tick at each third.
+fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(34.0),
+                height: Val::Px(9.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            MomentumRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(0.0),
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(EMBER),
+                MomentumFill(who),
+            ));
+            for at in [100.0 / 3.0, 200.0 / 3.0] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(at),
+                        width: Val::Px(2.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(DIM),
+                ));
+            }
+        });
+}
+
+/// The Champion's momentum and its tier, if this fighter has any: the share
+/// of a full meter, and 0 to 3. `None` for every other class.
+fn momentum_of(p: &sim::state::Player) -> Option<(f32, u8)> {
+    match p.mechanic {
+        sim::class::Mechanic::Forms { fury, .. } => {
+            let max = sim::tuning::momentum_max().max(1) as f32;
+            Some(((fury.momentum as f32 / max).clamp(0.0, 1.0), fury.tier()))
+        }
+        _ => None,
+    }
+}
+
+/// The colour a tier of momentum is drawn in.
+pub fn momentum_colour(tier: u8) -> Color {
+    match tier {
+        0 => EMBER,
+        1 => HEATED,
+        2 => BLAZING,
+        _ => ASCENDED,
+    }
+}
+
+/// The momentum bars: shown for a Champion, filled to the meter, coloured by
+/// its tier, and the track lit white when it is full.
+pub fn update_momentum(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&MomentumRow, &mut Visibility, &mut BorderColor)>,
+    mut fills: Query<(&MomentumFill, &mut Node, &mut BackgroundColor)>,
+) {
+    for (row, mut visible, mut border) in rows.iter_mut() {
+        let has = momentum_of(&sim.cur.players[row.0]);
+        *visible = if has.is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        border.0 = match has {
+            Some((_, 3)) => ASCENDED,
+            _ => DIM,
+        };
+    }
+    for (fill, mut node, mut colour) in fills.iter_mut() {
+        let Some((share, tier)) = momentum_of(&sim.cur.players[fill.0]) else {
+            continue;
+        };
+        node.width = Val::Percent(100.0 * share);
+        colour.0 = momentum_colour(tier);
+    }
+}
+
+/// The Blood mage's Well: what she drank that her health could not hold,
+/// against `sim::tuning::well_full`. Hidden for every other class.
+#[derive(Component)]
+pub struct WellRow(pub usize);
+
+/// The Well's fill.
+#[derive(Component)]
+pub struct WellFill(pub usize);
+
+/// The Well's colour: deep blood, darker than her health.
+const WELL: Color = Color::srgb(0.55, 0.05, 0.12);
+
+fn spawn_well(parent: &mut ChildSpawnerCommands, who: usize) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(34.0),
+                height: Val::Px(8.0),
+                border: UiRect::all(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            WellRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(WELL),
+                WellFill(who),
+            ));
+        });
+}
+
+/// The Well's bar: shown for the class that has one, filled to how full it
+/// is.
+pub fn update_well(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&WellRow, &mut Visibility)>,
+    mut fills: Query<(&WellFill, &mut Node)>,
+) {
+    for (row, mut visible) in rows.iter_mut() {
+        *visible = if sim.cur.players[row.0].class.wounds_go_grey() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    let full = sim::tuning::well_full().max(1) as f32;
+    for (fill, mut node) in fills.iter_mut() {
+        let well = sim.cur.players[fill.0].well as f32;
+        node.width = Val::Percent(100.0 * (well / full).clamp(0.0, 1.0));
+    }
 }
 
 fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
@@ -871,6 +1067,27 @@ fn mechanic(p: &sim::state::Player) -> String {
 /// The action, and how many frames of it remain. `4/3/10` alongside it is the
 /// move's startup, active and recovery, so a number can be judged in context.
 fn describe(p: &sim::state::Player) -> String {
+    let mut line = describe_action(p);
+    // The Blood mage's blaster (2026-10-12): what her vessel is carrying, beside whatever she is doing. Text on the
+    // state line until each has a picture of its own.
+    if p.vessel != sim::state::NO_VESSEL {
+        let m = sim::moves::get(p.class, p.vessel);
+        line.push_str(&format!("   | stored: {} {}", m.name, roman(p.vessel_tier)));
+    }
+
+    line
+}
+
+/// One to three, the way a tier is written.
+fn roman(tier: u8) -> &'static str {
+    match tier {
+        3 => "III",
+        2 => "II",
+        _ => "I",
+    }
+}
+
+fn describe_action(p: &sim::state::Player) -> String {
     let phase_of = |kind: u8, name: &str, left: u16| {
         let m = sim::moves::get(p.class, kind);
         format!(
@@ -923,6 +1140,10 @@ fn describe(p: &sim::state::Player) -> String {
                 Some(sim::moves::Charge::Strike) => {
                     format!("{} gathering {held}/{}f", m.name, m.channel)
                 }
+                // The Blood mage's charges buy a tier.
+                Some(sim::moves::Charge::Tier) => {
+                    format!("{} charging {}  {held}f", m.name, roman(p.tier))
+                }
                 _ => format!(
                     "{} channel {held}/{}f   {} m",
                     m.name,
@@ -945,7 +1166,9 @@ fn describe(p: &sim::state::Player) -> String {
 fn locked(p: &sim::state::Player) -> Option<String> {
     (0..sim::moves::table(p.class).len())
         .filter_map(|slot| {
-            let left = p.repeat_lock[slot];
+            // Past the end for the Champion's full charges, which keep none
+            // (`sim::moves::LOCKED_SLOTS`).
+            let left = p.repeat_lock.get(slot).copied().unwrap_or(0);
             (left > 0).then_some((left, slot))
         })
         .min()
@@ -1108,6 +1331,8 @@ mod tests {
         system.initialize(&mut world);
         let mut buttons = IntoSystem::into_system(update_class_buttons);
         buttons.initialize(&mut world);
+        let mut well = IntoSystem::into_system(update_well);
+        well.initialize(&mut world);
     }
 
     #[test]
@@ -1172,6 +1397,30 @@ mod tests {
         for force in [Force::Dark, Force::Light] {
             let (left, width) = fill_of(force, 500.0, 100.0);
             assert!(left >= 0.0 && left + width <= 100.0);
+        }
+    }
+
+    #[test]
+    fn the_lockout_readout_reads_every_slot_a_class_has() {
+        // The Champion's six full charges are past the end of the lockout
+        // tables (`sim::moves::LOCKED_SLOTS`): asking about them must not
+        // index off the end. It did, the first time the HUD drew a Champion.
+        for class in sim::class::ALL_CLASSES {
+            let p = sim::state::Player::new(class);
+            assert_eq!(locked(&p), None, "{} starts locked", class.name());
+        }
+    }
+
+    #[test]
+    fn only_the_champion_has_momentum() {
+        for class in sim::class::ALL_CLASSES {
+            let p = sim::state::Player::new(class);
+            assert_eq!(
+                momentum_of(&p).is_some(),
+                class == sim::Class::Champion,
+                "{} disagrees about having momentum",
+                class.name()
+            );
         }
     }
 

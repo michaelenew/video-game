@@ -202,11 +202,11 @@ fn auto_button(me: &sim::state::Player) -> u16 {
 }
 
 /// The move a left click throws on the floor: the class's auto. Slot zero
-/// everywhere but the Blood mage, whose auto is the fifth row of her table
+/// everywhere but the Blood mage, whose auto is the Haemorrhage, her left click
 /// (`sim::moves::blood`).
 fn auto_slot(class: sim::Class) -> u8 {
     match class {
-        sim::Class::BloodMage => sim::moves::blood::SWEEP,
+        sim::Class::BloodMage => sim::moves::blood::HAEMORRHAGE,
         _ => 0,
     }
 }

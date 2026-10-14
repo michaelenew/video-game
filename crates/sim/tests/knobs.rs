@@ -56,10 +56,30 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1",
+        "Presentation, and a bit width: where the Champion's liquid weapon's \
+         `Quicksilver::forged` clock stops counting in its packed four bytes. No rule reads \
+         it; how fast the weapon forms is `view::arms::FORM_IN`, which must sit under it.",
+    ),
+    (
+        "pub const REST_MAX: u16 = (1 << REST_BITS) - 1",
+        "Presentation, and a bit width: where the Champion's liquid weapon's \
+         `Quicksilver::rest` clock stops counting in its packed four bytes. No rule reads it; \
+         how long a shape is kept and melts is `view::arms::HOLD` and `MELT`, which must sit \
+         under it.",
+    ),
+    (
         "u.mul(u).mul(Fx::from_int(3).sub(u.mul(Fx::from_int(2))))",
         "The smoothstep polynomial 3u^2 - 2u^3 in the camera's eye bubble: the coefficients are \
          what make the ease flat at both ends, a shape rather than a magnitude. How wide the ease \
          is, is the Oven's `Eye bubble, soft edge`.",
+    ),
+    (
+        "if still.raw() <= up.mul(Fx::ratio(1, 4)).raw() {",
+        "A numerical tolerance, not a feel: a step taken along a too-steep slope is checked again \
+         where it lands, and the slope's turn between two points a few centimetres apart leaves \
+         it climbing a hair. A quarter of what it would have climbed is that hair; how steep is \
+         too steep is the Oven's `Terrain, steepest walkable`.",
     ),
     (
         "let third = Fx::ratio(1, 3)",
@@ -169,15 +189,58 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "pub const SCYTHE: u16 = Input::RIGHT",
-        "A binding, not a magnitude: which button is the Blood mage's scythe click.",
+        "A binding, not a magnitude: which button is the Blood mage's right click (Command and the Summon).",
     ),
     (
-        "pub const BLOODLETTER: u16 = Input::SPECIAL",
-        "A binding, not a magnitude: which button is the Blood mage's Bloodletter.",
+        "pub const SPIKE_FIELD: i32 = 2",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (a field of waves).",
     ),
     (
-        "pub const SPIKE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Blood mage's Black spike.",
+        "pub const SPIKE_AREA: i32 = 3",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (an area that only hits).",
+    ),
+    (
+        "pub const GATHER: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Blood mage's Coagulate.",
+    ),
+    (
+        "pub const SPIKE_ERUPTION: i32 = 1",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (an eruption \
+         out of a stain, which spills nothing).",
+    ),
+    (
+        ".add(Fx::ratio(1, 4))",
+        "A tolerance, not a feel: the lip a thrall may step up on top of the steepest land, \
+         in `World::walk_round`.",
+    ),
+    (
+        "Fx::ratio(1, 12),",
+        "A search, not a feel: the headings a thrall tries round a wall, a twelfth of a turn \
+         apart out to a third (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 6),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 4),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 3),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "pub const GROWING: i32 = 1",
+        "A code, not a magnitude: what `Effect::banked` says a Hemoplague still being held is.",
+    ),
+    (
+        "pub const UNLIT: u16 = u16::MAX",
+        "A code, not a magnitude: what `Effect::life` says a stain that is not lit is.",
+    ),
+    (
+        "pub const RAISE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Blood mage's Summon.",
     ),
     (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",

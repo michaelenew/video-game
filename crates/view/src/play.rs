@@ -640,7 +640,19 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Champion, 15) => Clip::ChampionRisingCut,
         (Class::Champion, 16) => Clip::ChampionUppercut,
         (Class::Champion, 17) => Clip::ChampionPoleDrive,
-        (Class::Champion, _) => Clip::ChampionVault,
+        (Class::Champion, 18) => Clip::ChampionVault,
+        // The full charges (2026-10-12, exploration 0015), on the clips they
+        // are bigger versions of until they have their own: the crescent on
+        // the sword's diagonal, the shockwave on the hammer's overhead, the
+        // Repel on the Whirl's spin, Thousand Cuts on the Rush slash's
+        // run-through, the Meteor on the air hammer's drop, and the javelin
+        // on the Skewer's wind-up and throw.
+        (Class::Champion, 19) => Clip::ChampionBackcut,
+        (Class::Champion, 20) => Clip::ChampionHammer,
+        (Class::Champion, 21) => Clip::ChampionWhirl,
+        (Class::Champion, 22) => Clip::ChampionRushSlash,
+        (Class::Champion, 23) => Clip::ChampionAirHammer,
+        (Class::Champion, _) => Clip::ChampionSkewer,
         (Class::ShadowReaver, 0) => Clip::ReaverPoke,
         (Class::ShadowReaver, 1) => Clip::ReaverCommitted,
         (Class::ShadowReaver, 2) => Clip::ReaverSpecial,
@@ -683,10 +695,17 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Elementalist, 9) => Clip::ElementalistDowndraft,
         (Class::Elementalist, 10) => Clip::ElementalistQuake,
         (Class::Elementalist, _) => Clip::ElementalistTremor,
-        (Class::BloodMage, 0) => Clip::BloodPoke,
+        // Thralls and grey (2026-10-13), on the five clips she has, each
+        // move on the one it most looks like: the bolt is the thrust, the
+        // spike, the Upheaval, the Stake, the vines and the cascade the stab
+        // into the floor, the two fields, the wings, the Summon and the golem
+        // the arms thrown open, Command and Coagulate the pointing poke, and
+        // the Rising reap the sweep. Her own clips for the new moves are the
+        // next step, logged in `docs/design/feel-log.md`.
         (Class::BloodMage, 1) => Clip::BloodCommitted,
-        (Class::BloodMage, 2) => Clip::BloodSpecial,
-        (Class::BloodMage, 3) => Clip::BloodMechanic,
+        (Class::BloodMage, 0 | 2 | 5 | 6 | 13) => Clip::BloodSpecial,
+        (Class::BloodMage, 3 | 7 | 8 | 11 | 12) => Clip::BloodMechanic,
+        (Class::BloodMage, 4 | 9) => Clip::BloodPoke,
         (Class::BloodMage, _) => Clip::BloodSweep,
         // Her spellbook, since 2026-10-12, on the six clips she has: a dark
         // spell is thrown from the left arm and a light one from the right,

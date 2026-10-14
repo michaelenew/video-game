@@ -273,6 +273,7 @@ fn main() {
                     place_essence_swings,
                     place_champion_arms,
                     place_champion_trails,
+                    place_champion_glow,
                     place_pips,
                     place_curses,
                     place_spells,
@@ -282,7 +283,7 @@ fn main() {
                 fade_own_body,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
-                hud::update,
+                (hud::update, hud::update_well),
                 hud::update_class_buttons,
                 crosshair::update,
                 debug::draw,
@@ -305,6 +306,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                hud::update_momentum,
                 valley::update_text,
                 glint::update,
                 veil::place,
@@ -484,11 +486,12 @@ struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
 struct Hands([[Vec3; 2]; MAX_PLAYERS]);
 
 /// Where each fighter's chest and hips are drawn, in the arena: a point and a
-/// rotation each. Written by the posing pass and read by the one that hangs the
-/// Champion's stowed weapons on her back and at her hip, so they lean and turn
-/// with the body rather than floating at a fixed height.
+/// rotation each; and the shoulder and elbow of the arm that holds a weapon.
+/// Written by the posing pass and read by the one that winds the Champion's
+/// liquid weapon up her arm, so it bends and turns with the arm rather than
+/// floating.
 #[derive(Resource, Default)]
-struct Torsos([[(Vec3, Quat); 2]; MAX_PLAYERS]);
+struct Torsos([[(Vec3, Quat); 2]; MAX_PLAYERS], [[Vec3; 2]; MAX_PLAYERS]);
 
 /// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
 /// whatever it was, which is wrong by a few frames of blend weight and
@@ -551,8 +554,11 @@ impl Default for Sim {
         let mut w = start_world(opts, dummy);
         shot_bars(&mut w);
         shot_weight(&mut w);
+        shot_momentum(&mut w);
+        shot_form(&mut w);
         shot_at(&mut w);
         shot_move(&mut w);
+        shot_blood(&mut w);
         // `--replay <file>`: the fight is the tape's, from its own start.
         let playing = platform::value("--replay").and_then(|path| {
             let text = platform::load_replay(path)?;
@@ -708,6 +714,74 @@ fn pose_balls(
 /// two players trade names it (`online::terms`).
 pub fn build() -> &'static str {
     env!("ARENA_BUILD")
+}
+
+/// `SHOT_BLOOD=1` starts a Blood mage in front of her own work, so a capture
+/// can look at what 0016 draws without playing up to it: three thralls and a
+/// golem out in front, the Black vines to the side, and the Well half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
+/// class, and read once at start.
+fn shot_blood(w: &mut World) {
+    use sim::effects::{Effect, EffectKind};
+    use sim::moves::blood as b;
+    if platform::env("SHOT_BLOOD").is_none() || w.players[0].class != sim::Class::BloodMage {
+        return;
+    }
+    let p = w.players[0];
+    let ahead = |forward: i32, side: i32| {
+        let f = p.facing;
+        sim::V3::new(
+            p.pos
+                .x
+                .add(f.x.mul(sim::Fx::from_int(forward)))
+                .sub(f.z.mul(sim::Fx::from_int(side))),
+            p.pos.y,
+            p.pos
+                .z
+                .add(f.z.mul(sim::Fx::from_int(forward)))
+                .add(f.x.mul(sim::Fx::from_int(side))),
+        )
+    };
+    let mut put = |e: Effect| {
+        if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(e);
+        }
+    };
+    let at =
+        |kind, slot, pos, reach| Effect::cast(kind, 0, p.class, slot, pos, sim::V3::ZERO, reach);
+    put(at(
+        EffectKind::Carpet,
+        b::CARPET,
+        ahead(5, 0),
+        sim::Fx::from_int(4),
+    ));
+    for (k, side) in [-2, 0, 2].into_iter().enumerate() {
+        let mut thrall = Effect::pool(0, p.class, b::SUMMON, ahead(9, side), 60 + 30 * k as i32);
+        thrall.kind = EffectKind::Thrall;
+        thrall.life = u16::MAX;
+        // Turned to her, so the capture sees their faces.
+        thrall.dir = sim::V3::ZERO.sub(p.facing);
+        put(thrall);
+    }
+    let mut golem = Effect::pool(0, p.class, b::GOLEM, ahead(13, 0), 600);
+    golem.kind = EffectKind::Golem;
+    golem.life = u16::MAX;
+    golem.dir =
+        sim::V3::ZERO
+            .sub(p.facing)
+            .add(sim::V3::new(sim::Fx::ZERO, sim::Fx::ZERO, sim::Fx::ONE));
+    put(golem);
+    put(at(
+        EffectKind::Vines,
+        b::VINES,
+        ahead(7, -6),
+        sim::Fx::from_int(3),
+    ));
+    w.players[0].action = sim::state::Action::Channel {
+        kind: b::CARPET,
+        held: 40,
+    };
+    // And the Well half full, so its bar shows.
+    w.players[0].well = (sim::tuning::well_full() / 2).max(0) as u16;
 }
 
 /// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
@@ -1176,6 +1250,59 @@ fn shot_weight(w: &mut World) {
     }
 }
 
+/// `SHOT_MOMENTUM=n` starts every Champion with `n` momentum (exploration
+/// 0015), so a capture can look at the meter and the glow on his weapon
+/// without landing his way up to them. The same kind of hook as
+/// `SHOT_WEIGHT`; it holds for two seconds and then drains.
+fn shot_momentum(w: &mut World) {
+    let Some(n) = platform::env("SHOT_MOMENTUM").and_then(|s| s.trim().parse::<i32>().ok()) else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Forms { fury, .. } = &mut p.mechanic {
+            fury.momentum = n.clamp(0, u16::MAX as i32) as u16;
+            fury.momentum_left = sim::tuning::momentum_holds().min(u8::MAX as u16) as u8;
+        }
+    }
+}
+
+/// `SHOT_FORM=<weapon>,<n>` starts every Champion with her liquid in that
+/// weapon's shape (`sword`, `hammer`, `spear`), as it is `n` frames after the
+/// move that called it ended: so `SHOT_FORM=hammer,0` is a whole hammer and
+/// one past `view::arms::HOLD` is a hammer starting to melt back into the
+/// coil (`docs/design/kits/champion.md`, "The weapon you can see"). The clock
+/// runs on from there, so pair it with `SHOT_FRAME` and count. The same kind
+/// of hook as `SHOT_MOMENTUM`.
+fn shot_form(w: &mut World) {
+    let Some(spec) = platform::env("SHOT_FORM") else {
+        return;
+    };
+    let mut it = spec.split(',');
+    let name = it.next().unwrap_or("").trim().to_lowercase();
+    let Some(form) = sim::class::FORMS.into_iter().find(|f| f.name() == name) else {
+        return;
+    };
+    let rest = it
+        .next()
+        .and_then(|n| n.trim().parse::<u16>().ok())
+        .unwrap_or(0);
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Forms {
+            form: f, liquid, ..
+        } = &mut p.mechanic
+        {
+            *f = form;
+            *liquid = sim::class::Quicksilver::new(
+                rest.saturating_add(60),
+                rest,
+                None,
+                u16::MAX,
+                u16::MAX,
+            );
+        }
+    }
+}
+
 /// `SHOT_AT=x,z` stands player one at that point of the place the world is
 /// in (metres), on whatever is under it, facing `+x`: a capture of somewhere
 /// that is not a start, such as the Waterfall at the head of the Pinewood
@@ -1421,6 +1548,11 @@ const EFFECT_PARTS: usize = {
     let most = if flames > most { flames } else { most };
     let most = if beads > most { beads } else { most };
     let most = if rough > most { rough } else { most };
+    let most = if GREMLIN_PARTS > most {
+        GREMLIN_PARTS
+    } else {
+        most
+    };
     if ring > most { ring } else { most }
 };
 
@@ -1556,19 +1688,24 @@ struct ScytheMesh {
 /// A weapon is a haft and a blade in two lengths, so its curve can be seen.
 const SCYTHE_PIECES: usize = 3;
 
-/// One piece of one of the Champion's three weapons.
+/// One piece of one of the shapes the Champion's weapon takes, or one drop
+/// of the liquid it is between them.
 ///
-/// A fixed pool -- every fighter gets all three weapons' worth, hidden unless
-/// they are a Champion -- because the class is picked at runtime and spawning
-/// meshes on Tab would put allocation on the frame. What shape and stuff each
-/// piece is comes from `view::arms::MAKE`, and where it is from
-/// `view::arms::pieces`.
+/// A fixed pool -- every fighter gets all three shapes' worth and the drops,
+/// hidden unless they are a Champion -- because the class is picked at runtime
+/// and spawning meshes on Tab would put allocation on the frame. What shape
+/// and stuff each piece is comes from `view::arms::MAKE`, and where it is from
+/// `view::arms::pieces`; a drop is `view::arms::Arms::beads`.
 #[derive(Component)]
 struct ArmsMesh {
     owner: usize,
+    /// A weapon, or [`BEAD`] for a drop of the liquid.
     weapon: u8,
     piece: usize,
 }
+
+/// The [`ArmsMesh::weapon`] of a drop of the Champion's liquid.
+const BEAD: u8 = u8::MAX;
 
 /// One segment of the arc a Champion's cut leaves: the band between two
 /// remembered frames of the hit volume. See `view::arms::trail`.
@@ -1586,6 +1723,15 @@ const TRAIL_STEPS: usize = 6;
 #[derive(Resource)]
 struct ArmsLook {
     trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 3],
+    /// **The glow at the head of the weapon in his hands** (exploration
+    /// 0015): one per momentum tier, ember to white, the HUD bar's colours.
+    glow: [Handle<StandardMaterial>; 4],
+}
+
+/// The glow itself, one per fighter. See `place_champion_glow`.
+#[derive(Component)]
+struct GlowMesh {
+    owner: usize,
 }
 
 /// The essence around the Blood mage's swing: the hit volume itself, drawn
@@ -1660,6 +1806,10 @@ const MAX_PIPS: u8 = 12;
 struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
+    /// The Blood mage's thralls and golem: blood you can see through.
+    thrall: Handle<StandardMaterial>,
+    /// Her Black vines: barbed black you can see through.
+    vines: Handle<StandardMaterial>,
     shade: Handle<StandardMaterial>,
     /// A pool of essence, from faint to nearly solid: the more essence is
     /// left in it, the more solid the figure.
@@ -1702,6 +1852,11 @@ struct EffectLook {
     /// fainter still at its wisps.
     storm: Handle<StandardMaterial>,
     wisp: Handle<StandardMaterial>,
+    /// The fighters' own forms, for the thralls: a limb, a torso and a head
+    /// (`limb_form`).
+    limb: Handle<Mesh>,
+    block: Handle<Mesh>,
+    head: Handle<Mesh>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1898,6 +2053,20 @@ fn setup(
             perceptual_roughness: 0.95,
             ..default()
         }),
+        thrall: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.42, 0.0, 0.02, 0.78),
+            emissive: LinearRgba::rgb(0.22, 0.0, 0.01),
+            perceptual_roughness: 0.8,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
+        vines: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.03, 0.02, 0.03, 0.55),
+            emissive: LinearRgba::rgb(0.06, 0.0, 0.02),
+            perceptual_roughness: 0.6,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
         // A blade of shadow. Dark and translucent so six of them opening at
         // once do not black out whatever they are opening around -- the thing
         // the player has to read is where the victim is, not the flower.
@@ -2015,6 +2184,9 @@ fn setup(
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
+        limb: meshes.add(limb_form(view::skeleton::Joint::ArmL)),
+        block: meshes.add(limb_form(view::skeleton::Joint::Chest)),
+        head: meshes.add(limb_form(view::skeleton::Joint::Head)),
     };
     for slot in 0..sim::effects::MAX_EFFECTS {
         for part in 0..EFFECT_PARTS {
@@ -2209,57 +2381,53 @@ fn setup(
     // The Champion's three weapons. Each piece is a unit mesh of its shape,
     // scaled per frame; see `view::arms`.
     let block = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    // All of it one gold: the weapon is a liquid, and these are only how it
+    // catches the light where it has set into an edge, a body or a grip.
     let stuff = |stuff: view::arms::Stuff| -> StandardMaterial {
         use view::arms::Stuff;
         match stuff {
-            // Polished: light, and shiny enough to catch the key light.
-            Stuff::Steel => StandardMaterial {
-                base_color: Color::srgb(0.82, 0.85, 0.90),
-                metallic: 0.9,
+            // Set to an edge: pale and polished, the brightest thing on her.
+            //
+            // Half metallic, not all: a fully metallic surface takes its
+            // colour from what it reflects, and with nothing round it to
+            // reflect it draws brown. A little light of its own keeps it gold
+            // on the shadow side too.
+            Stuff::Edge => StandardMaterial {
+                base_color: Color::srgb(1.0, 0.9, 0.6),
+                emissive: LinearRgba::rgb(0.30, 0.22, 0.08),
+                metallic: 0.55,
+                perceptual_roughness: 0.2,
+                ..default()
+            },
+            Stuff::Gold => StandardMaterial {
+                base_color: Color::srgb(1.0, 0.74, 0.25),
+                emissive: LinearRgba::rgb(0.22, 0.14, 0.03),
+                metallic: 0.55,
                 perceptual_roughness: 0.28,
                 ..default()
             },
-            // Forged and heavy: dark, dull, and the one thing on her that
-            // looks like it weighs something.
-            Stuff::Iron => StandardMaterial {
-                base_color: Color::srgb(0.26, 0.27, 0.30),
-                metallic: 0.8,
-                perceptual_roughness: 0.6,
-                ..default()
-            },
-            Stuff::Brass => StandardMaterial {
-                base_color: Color::srgb(0.80, 0.62, 0.28),
-                metallic: 0.85,
+            // Where hands go: deeper and duller.
+            Stuff::Deep => StandardMaterial {
+                base_color: Color::srgb(0.78, 0.5, 0.14),
+                emissive: LinearRgba::rgb(0.10, 0.06, 0.01),
+                metallic: 0.5,
                 perceptual_roughness: 0.4,
                 ..default()
             },
-            Stuff::Wood => StandardMaterial {
-                base_color: Color::srgb(0.40, 0.25, 0.13),
-                perceptual_roughness: 0.85,
-                ..default()
-            },
-            Stuff::Leather => StandardMaterial {
-                base_color: Color::srgb(0.20, 0.12, 0.08),
-                perceptual_roughness: 0.9,
-                ..default()
-            },
-            Stuff::Cloth => StandardMaterial {
-                base_color: Color::srgb(0.75, 0.10, 0.10),
-                perceptual_roughness: 0.95,
+            // Still running: glossy, and lit a little more from inside, so
+            // the coil reads against her sleeve in any light.
+            Stuff::Liquid => StandardMaterial {
+                base_color: Color::srgb(1.0, 0.8, 0.32),
+                emissive: LinearRgba::rgb(0.45, 0.30, 0.06),
+                metallic: 0.55,
+                perceptual_roughness: 0.12,
                 ..default()
             },
         }
     };
     use view::arms::Stuff;
-    let stuffs = [
-        Stuff::Steel,
-        Stuff::Iron,
-        Stuff::Brass,
-        Stuff::Wood,
-        Stuff::Leather,
-        Stuff::Cloth,
-    ];
-    let stuff_handles: [Handle<StandardMaterial>; 6] =
+    let stuffs = [Stuff::Edge, Stuff::Gold, Stuff::Deep, Stuff::Liquid];
+    let stuff_handles: [Handle<StandardMaterial>; 4] =
         std::array::from_fn(|i| materials.add(stuff(stuffs[i])));
     for owner in 0..MAX_PLAYERS {
         for weapon in 0..view::arms::WEAPONS {
@@ -2285,6 +2453,19 @@ fn setup(
                 ));
             }
         }
+        for bead in 0..view::arms::BEADS {
+            commands.spawn((
+                Mesh3d(look.ball.clone()),
+                MeshMaterial3d(stuff_handles[3].clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                ArmsMesh {
+                    owner,
+                    weapon: BEAD,
+                    piece: bead,
+                },
+            ));
+        }
         for segment in 0..view::arms::TRAIL - 1 {
             commands.spawn((
                 Mesh3d(block.clone()),
@@ -2294,7 +2475,24 @@ fn setup(
                 TrailMesh { owner, segment },
             ));
         }
+        commands.spawn((
+            Mesh3d(look.ball.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            GlowMesh { owner },
+        ));
     }
+    let glow = std::array::from_fn(|tier| {
+        let c = hud::momentum_colour(tier as u8).to_linear();
+        materials.add(StandardMaterial {
+            base_color: Color::LinearRgba(LinearRgba::new(c.red, c.green, c.blue, 0.7)),
+            emissive: LinearRgba::rgb(c.red * 3.0, c.green * 3.0, c.blue * 3.0),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        })
+    });
     // The trail, one colour per weapon so the three arcs are told apart as
     // well as the three silhouettes: the sword's cold and white, the hammer's
     // a hot ember, the spear's a thin blue streak. Unlit, so it reads the same
@@ -2315,7 +2513,7 @@ fn setup(
             })
         })
     });
-    commands.insert_resource(ArmsLook { trail });
+    commands.insert_resource(ArmsLook { trail, glow });
     commands.insert_resource(look);
 }
 
@@ -2792,8 +2990,9 @@ fn place_scythes(
     }
 }
 
-/// Put the Champion's three weapons where `view::arms` says they are: the one
-/// in her hands on the hit volume, the other two stowed on her body.
+/// Put the Champion's weapon where `view::arms` says it is, in whatever shape
+/// the liquid is in: the coil round her forearm, a weapon in her hands on the
+/// hit volume, or the drops running between the two.
 ///
 /// Like the scythe, **the renderer decides nothing about the reach**: the tip
 /// of the weapon out comes from the same `state::hitbox` the hit test reads,
@@ -2802,36 +3001,37 @@ fn place_champion_arms(
     sim: Res<Sim>,
     hands: Res<Hands>,
     torsos: Res<Torsos>,
-    inside: Res<InsideOwnHead>,
     mut meshes: Query<(&ArmsMesh, &mut Transform, &mut Visibility)>,
 ) {
     let mut placed: [Option<view::arms::Arms>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    let mut pieces = [[None; view::arms::WEAPONS]; MAX_PLAYERS];
     for (owner, slot) in placed.iter_mut().enumerate() {
         let [left, right] = hands.0[owner];
-        let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[owner];
-        let torso = view::arms::Torso {
-            chest: chest.into(),
-            chest_turn: quat(chest_turn),
-            hips: hips.into(),
-            hips_turn: quat(hips_turn),
-        };
+        let torso = torso_of(&torsos, owner);
         *slot =
             view::arms::champion_arms(&sim.cur.players[owner], left.into(), right.into(), &torso);
+        if let Some(arms) = slot.as_ref() {
+            for (which, out) in pieces[owner].iter_mut().enumerate() {
+                *out = Some(view::arms::pieces(arms, which as u8));
+            }
+        }
     }
-    let me = sim.local_player();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Some(arms) = placed[tag.owner].as_ref() else {
             *vis = Visibility::Hidden;
             continue;
         };
-        // What is on her back is in the way of a camera that has climbed into
-        // her head, and it says nothing to the player who is her.
-        let stowed = !arms.weapons[tag.weapon as usize].held;
-        if stowed && tag.owner == me && inside.0 > 0.3 {
-            *vis = Visibility::Hidden;
-            continue;
-        }
-        let piece = view::arms::pieces(arms, tag.weapon)[tag.piece];
+        let piece = if tag.weapon == BEAD {
+            arms.beads[tag.piece]
+        } else {
+            match pieces[tag.owner][tag.weapon as usize] {
+                Some(all) => all[tag.piece],
+                None => {
+                    *vis = Visibility::Hidden;
+                    continue;
+                }
+            }
+        };
         if !piece.shown {
             *vis = Visibility::Hidden;
             continue;
@@ -2844,6 +3044,100 @@ fn place_champion_arms(
         tf.translation = Vec3::from(piece.centre);
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
         tf.scale = Vec3::from(piece.size);
+    }
+}
+
+/// Where a fighter's chest, hips and weapon elbow are drawn, as `view::arms`
+/// reads them.
+fn torso_of(torsos: &Torsos, owner: usize) -> view::arms::Torso {
+    let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[owner];
+    view::arms::Torso {
+        chest: chest.into(),
+        chest_turn: quat(chest_turn),
+        hips: hips.into(),
+        hips_turn: quat(hips_turn),
+        shoulder: torsos.1[owner][0].into(),
+        elbow: torsos.1[owner][1].into(),
+    }
+}
+
+/// **The glow on the Champion's weapon** (exploration 0015): a ball of light
+/// at the head of whichever weapon is in his hands. It is his momentum -- none
+/// below a third, then ember, *Heated*, *Blazing* and white at full, the HUD
+/// bar's own colours -- and it swells while he holds a charge, to its full
+/// size at a full charge, so the hold is read off the weapon as it winds.
+fn place_champion_glow(
+    sim: Res<Sim>,
+    look: Res<ArmsLook>,
+    hands: Res<Hands>,
+    torsos: Res<Torsos>,
+    mut meshes: Query<(
+        &GlowMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let sim::class::Mechanic::Forms { fury, .. } = p.mechanic else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let [left, right] = hands.0[tag.owner];
+        let torso = torso_of(&torsos, tag.owner);
+        let Some(arms) = view::arms::champion_arms(p, left.into(), right.into(), &torso) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let tier = fury.tier();
+        // The hold, as a share of the press that makes it a finisher: it
+        // swells as the press is held and is at its biggest when the link has
+        // become its finisher.
+        let held = match p.action {
+            sim::state::Action::Channel { kind, held } => {
+                let startup = sim::moves::get(p.class, kind).startup as f32;
+                ((startup + held as f32) / sim::tuning::hold_from().max(1) as f32).min(1.0)
+            }
+            sim::state::Action::Startup { kind, .. } | sim::state::Action::Active { kind, .. }
+                if sim::moves::champion::is_full(kind) =>
+            {
+                1.0
+            }
+            _ => 0.0,
+        };
+        // Sized to be read from behind him across a fight: the first
+        // capture at a quarter of a metre was a bead on the tip. A finisher
+        // has spent the meter, and burns by what it spent.
+        let finishing = matches!(
+            p.action.attack_kind(),
+            Some(k) if sim::moves::champion::is_full(k)
+        );
+        let size = if finishing {
+            0.25 + 0.35 * fury.spent as f32 / 100.0
+        } else {
+            let base = match tier {
+                0 => 0.0,
+                1 => 0.24,
+                2 => 0.36,
+                _ => 0.5,
+            };
+            base + 0.4 * held
+        };
+        if size <= 0.0 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        tf.translation = Vec3::from(arms.head());
+        tf.scale = Vec3::splat(size);
+        // At full charge it is white whatever the meter says: the charge is
+        // the one big hit, and it looks like one.
+        let shade = if held >= 1.0 { 3 } else { tier as usize };
+        let want = &look.glow[shade.min(3)];
+        if mat.0 != *want {
+            mat.0 = want.clone();
+        }
     }
 }
 
@@ -3399,7 +3693,7 @@ fn flurry_piece(
     const PER: usize = 6;
     const SHOWN: usize = 5;
     let m = sim::moves::get(p.class, sim::moves::dual::FLURRY_DASH);
-    let (a, d) = sim::moves::flurry_line(p.launched_from, p.aim_path.to);
+    let (a, d) = sim::moves::flurry_line(p.aim_path.from, p.aim_path.to);
     let (a, d) = (fx3(a), fx3(d));
     let (blows, out) = sim::moves::flurry_blow(&m, left.unwrap_or(0));
     let n = (blows as usize).clamp(1, SHOWN);
@@ -3680,8 +3974,8 @@ struct Piece {
     at: Vec3,
     scale: Vec3,
     /// How the unit shape is turned before it is scaled into place: the
-    /// identity for everything that stands upright, and the way a disk faces
-    /// or a bolt runs for the few that do not.
+    /// identity for everything that stands upright, a limb's direction for a
+    /// thrall's arms and legs, and the way a disk faces or a bolt runs.
     turn: Quat,
 }
 
@@ -3696,12 +3990,21 @@ enum Shape {
     /// A thin hoop, lying flat until it is turned: the rings round the Dual
     /// mage's sun-disk.
     Hoop,
+    /// A fighter's limb, a torso and a head: what a thrall is built of, so it
+    /// is made the way the fighters are.
+    Limb,
+    Block,
+    Head,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Skin {
     Fire,
     Blood,
+    /// A thrall: translucent blood.
+    Thrall,
+    /// The Black vines: translucent black.
+    Vines,
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
@@ -3738,6 +4041,9 @@ impl EffectLook {
             Shape::Spike => self.spike.clone(),
             Shape::Ball => self.ball.clone(),
             Shape::Hoop => self.hoop.clone(),
+            Shape::Limb => self.limb.clone(),
+            Shape::Block => self.block.clone(),
+            Shape::Head => self.head.clone(),
         }
     }
 
@@ -3745,6 +4051,8 @@ impl EffectLook {
         match skin {
             Skin::Fire => self.fire.clone(),
             Skin::Blood => self.blood.clone(),
+            Skin::Thrall => self.thrall.clone(),
+            Skin::Vines => self.vines.clone(),
             Skin::Shade => self.shade.clone(),
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
@@ -3867,6 +4175,31 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // out of a pool -- has the skirt: the disc of floor it came up
         // through, which is the disc it hit across.
         EffectKind::BlackSpike if part == 0 && !effect.erupted() => None,
+        // The third tier's field (2026-10-12): the disc it hits across, and a
+        // ring of spikes inside it that come up with each wave and sink back
+        // between them -- a field of them, not one fat spike.
+        EffectKind::BlackSpike
+            if effect.banked == sim::state::SPIKE_FIELD && part <= FIELD_SPIKES =>
+        {
+            let volume = effect.spike_volume();
+            let radius = volume.radius.to_f32_for_render();
+            if part == 0 {
+                return Some(standing(Shape::Column, Skin::Blood, at, radius, 0.0, 0.12));
+            }
+            let every = sim::tuning::spike_wave_every().max(1) as f32;
+            let into = ((effect.age.max(1) - 1) as f32 % every) / every;
+            let up = (1.0 - into).powi(2);
+            let turn = part as f32 / FIELD_SPIKES as f32 * std::f32::consts::TAU;
+            let spot = at + Vec3::new(turn.cos(), 0.0, turn.sin()) * radius * 0.6;
+            Some(standing(
+                Shape::Spike,
+                Skin::Blood,
+                spot,
+                radius * 0.12,
+                0.0,
+                volume.top.to_f32_for_render() * up.max(0.05),
+            ))
+        }
         EffectKind::BlackSpike if part < 2 => {
             let volume = effect.spike_volume();
             let radius = volume.radius.to_f32_for_render();
@@ -4043,6 +4376,32 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 skin,
                 fx3(then.star_at(star)),
                 r * (1.0 - 0.22 * back as f32),
+            ))
+        }
+        // The Hemoplague (2026-10-12): a faint disc of blood on the floor at
+        // exactly the radius it hurts in, and wisps of it drifting round
+        // inside the column, rising and falling -- a cloud, and the edge of
+        // it is the decision it offers.
+        EffectKind::Plague if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Essence(1),
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            0.1,
+        )),
+        EffectKind::Plague if part <= PLAGUE_WISPS => {
+            let radius = effect.field_radius().to_f32_for_render();
+            let height = sim::tuning::plague_height().to_f32_for_render();
+            let t = effect.age as f32 / 60.0;
+            let k = part as f32;
+            let turn = k / PLAGUE_WISPS as f32 * std::f32::consts::TAU + t * 0.4;
+            let out = radius * (0.35 + 0.45 * ((k * 1.7 + t * 0.6).sin() * 0.5 + 0.5));
+            let rise = height * (0.25 + 0.6 * ((k * 2.3 + t * 0.9).sin() * 0.5 + 0.5));
+            Some(floating_in(
+                Skin::Essence(2),
+                at + Vec3::new(turn.cos() * out, rise, turn.sin() * out),
+                radius * 0.18,
             ))
         }
         // **The black sun**: its ground, the sun itself hanging over the
@@ -4245,6 +4604,102 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 slab.top.to_f32_for_render(),
             ))
         }
+        // The Blood mage's 0016 (2026-10-13). The Carpet: a disc of blood
+        // on the floor at the radius it hurts in, growing while she holds
+        // it.
+        EffectKind::Carpet if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Essence(2),
+            at,
+            effect.reach.to_f32_for_render(),
+            0.0,
+            0.08,
+        )),
+        // A thrall: a little hulking gremlin of translucent blood -- a
+        // hunched barrel of a body, a low head pushed forward with two horns
+        // swept back, heavy shoulders, long bent arms ending in claws near
+        // the floor, short bent legs -- as tall as its stain is worth,
+        // shrinking as it bites and drains; the golem the same, bigger. It
+        // faces the way it last went (`Effect::dir`), and its arms and legs
+        // swing as it goes.
+        EffectKind::Thrall | EffectKind::Golem if part < GREMLIN_PARTS => {
+            Some(gremlin_piece(effect, at, part))
+        }
+        // The Black vines: a translucent black disc out to the front as it
+        // erupts, and barbed spikes standing out of it, growing with it.
+        EffectKind::Vines if part == 0 => {
+            let grow = (effect.age as f32 / sim::tuning::vines_grow().max(1) as f32).min(1.0);
+            Some(standing(
+                Shape::Column,
+                Skin::Vines,
+                at,
+                effect.reach.to_f32_for_render() * grow,
+                0.0,
+                0.06,
+            ))
+        }
+        EffectKind::Vines if part <= THORNS => {
+            let grow = (effect.age as f32 / sim::tuning::vines_grow().max(1) as f32).min(1.0);
+            let r = effect.reach.to_f32_for_render() * grow;
+            let k = part as f32;
+            let turn = k / THORNS as f32 * std::f32::consts::TAU + k * 0.37;
+            let out = r * (0.2 + 0.75 * ((k * 1.9).sin() * 0.5 + 0.5));
+            Some(standing(
+                Shape::Spike,
+                Skin::Vines,
+                at + Vec3::new(turn.cos() * out, 0.0, turn.sin() * out),
+                0.16,
+                0.0,
+                0.6 + 0.9 * ((k * 2.7).sin() * 0.5 + 0.5) * grow,
+            ))
+        }
+        // The Rising reap's sweep: balls of blood flung out along the cone,
+        // the far ones the widest.
+        EffectKind::Cascade
+            if effect.slot != sim::moves::blood::CASCADE && part < sim::effects::TETHER_BEADS =>
+        {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let life = effect.life.max(1) as f32;
+            let out = (effect.age as f32 / life * 2.0).min(1.0);
+            let reach = effect.reach.to_f32_for_render();
+            let dir = fx3(effect.dir).normalize_or_zero();
+            Some(floating_in(
+                Skin::Blood,
+                at + dir * reach * t * out + Vec3::Y * 1.0,
+                0.2 + reach * 0.12 * t,
+            ))
+        }
+        // The Crimson cascade: the ring erupting now, as spikes of blood
+        // round it that shoot up and sink back, and between them the small
+        // stains its edge leaves for the next ring.
+        EffectKind::Cascade if part < sim::effects::RING_PIECES => {
+            let every = sim::tuning::cascade_every().max(1) as u32;
+            let since = (effect.age as u32).saturating_sub(1);
+            let k = (since / every) as i32;
+            if k >= sim::tuning::cascade_waves() {
+                return None;
+            }
+            let into = (since % every) as f32 / every as f32;
+            let (_, outer) = sim::state::World::cascade_ring(effect, k);
+            let r = outer.to_f32_for_render();
+            let turn = part as f32 / sim::effects::RING_PIECES as f32 * std::f32::consts::TAU
+                + k as f32 * 0.4;
+            let spot = at + Vec3::new(turn.cos(), 0.0, turn.sin()) * r;
+            if part % 2 == 0 {
+                let rise = (1.0 - into * 3.0).max(0.0);
+                (rise > 0.0)
+                    .then(|| standing(Shape::Spike, Skin::Blood, spot, 0.35, 0.0, 2.0 * rise))
+            } else {
+                Some(standing(
+                    Shape::Column,
+                    Skin::Essence(3),
+                    spot,
+                    0.45,
+                    0.0,
+                    0.05,
+                ))
+            }
+        }
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
             Skin::Light,
@@ -4300,6 +4755,55 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 + Vec3::Y * sim::tuning::shadow_ring_width().to_f32_for_render(),
             sim::tuning::shadow_ring_width().to_f32_for_render(),
         )),
+        // **The Champion's full charges** (exploration 0015). The crescent:
+        // a wide flat blade of light where the hit test is, and two fading
+        // after-images behind it on its line.
+        EffectKind::Crescent if part < 3 => {
+            let r = effect.field_radius().to_f32_for_render();
+            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
+            let shrink = 1.0 - part as f32 * 0.3;
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Light,
+                at: fx3(effect.head()) - back,
+                scale: Vec3::new(r * 2.0 * shrink, 0.12, r * 2.0 * shrink),
+                turn: Quat::IDENTITY,
+            })
+        }
+        // The shockwave: broken ground on its live radius, standing where
+        // it stopped for as long as it lies there.
+        EffectKind::Shockwave if part < sim::effects::RING_PIECES => {
+            let height = sim::tuning::body_height().to_f32_for_render() * 0.35;
+            Some(standing(
+                Shape::Column,
+                Skin::Stone,
+                fx3(effect.ring_piece(part)),
+                0.45,
+                0.0,
+                height,
+            ))
+        }
+        // The cuts: small and faint along the line he ran while they hang,
+        // large on the frames they land.
+        EffectKind::Cuts if part < sim::effects::TETHER_BEADS => {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let end = fx3(effect.cuts_end());
+            let r = effect.field_radius().to_f32_for_render();
+            let landing = effect.age >= sim::tuning::cuts_delay();
+            let size = if landing { r * 0.8 } else { r * 0.2 };
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Light,
+                at: at.lerp(end, t),
+                scale: Vec3::new(size * 2.0, 0.08, size * 2.0),
+                turn: Quat::IDENTITY,
+            })
+        }
+        // The javelin: a line of light behind its head, a spear's length.
+        EffectKind::Javelin if part < 4 => {
+            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
+            Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
+        }
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             turn: Quat::IDENTITY,
             shape: Shape::Column,
@@ -4344,6 +4848,188 @@ const TETHER_BEAD: f32 = 0.3;
 /// a cone that wide would be a tent rather than a spike. The disc underneath is
 /// what tells you where the edge is.
 const SPIKE_WAIST: f32 = 0.35;
+
+/// How many spikes a third-tier Black spike's field is drawn as, round its
+/// disc. Presentation: the hit test is the disc.
+const FIELD_SPIKES: usize = 7;
+
+/// How many wisps a Hemoplague is drawn as, drifting inside its column.
+/// Presentation: the hit test is the column.
+const PLAGUE_WISPS: usize = 8;
+
+/// The Black vines' barbs.
+const THORNS: usize = 10;
+
+/// How many pieces a thrall's gremlin is drawn in.
+const GREMLIN_PARTS: usize = 24;
+
+/// A piece of a thrall, `size` across (width, along `up`, depth), its own up
+/// along `up` and its front toward `ahead`.
+fn framed(shape: Shape, centre: Vec3, up: Vec3, ahead: Vec3, size: Vec3) -> Piece {
+    let y = up.normalize_or(Vec3::Y);
+    let z = (ahead - y * ahead.dot(y)).normalize_or(Vec3::Z);
+    let x = y.cross(z);
+    Piece {
+        shape,
+        skin: Skin::Thrall,
+        at: centre,
+        scale: size,
+        turn: Quat::from_mat3(&Mat3::from_cols(x, y, z)),
+    }
+}
+
+/// A limb from `from` to `to`, `thick` across, facing `ahead`.
+fn limb(shape: Shape, from: Vec3, to: Vec3, thick: f32, ahead: Vec3) -> Piece {
+    let along = to - from;
+    framed(
+        shape,
+        from + along * 0.5,
+        along,
+        ahead,
+        Vec3::new(thick, along.length().max(0.01), thick),
+    )
+}
+
+/// One piece of a thrall: **a fighter's body, crouched and gone brutish** --
+/// the same rounded torso, head, limbs, hands and feet the fighters are drawn
+/// with (`limb_form`), with a chest too big for it, a low head pushed forward
+/// under two swept horns, long arms that end in claws near the floor, and
+/// short bent legs. Every point is in the thrall's own frame -- ahead, out to
+/// its side, up -- as a share of its height, so the golem is the same body,
+/// bigger. It faces the way it last went (`Effect::dir`), and its arms and
+/// legs swing as it goes.
+fn gremlin_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
+    let h = effect.thrall_height().to_f32_for_render().max(0.25);
+    let ahead = {
+        let d = fx3(effect.dir);
+        let flat = Vec3::new(d.x, 0.0, d.z);
+        if flat.length_squared() > 1e-6 {
+            flat.normalize()
+        } else {
+            Vec3::X
+        }
+    };
+    let side = Vec3::Y.cross(ahead).normalize_or(Vec3::Z);
+    let stride = (effect.age as f32 * 0.45).sin();
+    let bob = stride.abs() * 0.03;
+    let p = |f: f32, s: f32, u: f32| at + (ahead * f + side * s + Vec3::Y * u) * h;
+    // Left for the even part of a pair, right for the odd; each side swings
+    // opposite its arm.
+    let k = if part % 2 == 0 { 1.0 } else { -1.0 };
+    let arm = stride * 0.12 * k;
+    let leg = -stride * 0.10 * k;
+    let lean = (ahead * 0.6 + Vec3::Y).normalize();
+    match part {
+        // The pelvis, low.
+        0 => framed(
+            Shape::Block,
+            p(-0.04, 0.0, 0.30 + bob),
+            Vec3::Y,
+            ahead,
+            Vec3::new(0.34, 0.14, 0.22) * h,
+        ),
+        // The chest: wide, deep, and leaning hard forward.
+        1 => framed(
+            Shape::Block,
+            p(0.10, 0.0, 0.52 + bob),
+            lean,
+            ahead,
+            Vec3::new(0.54, 0.34, 0.32) * h,
+        ),
+        // The head, low and pushed out in front of the shoulders.
+        2 => framed(
+            Shape::Head,
+            p(0.34, 0.0, 0.66 + bob),
+            Vec3::Y,
+            ahead,
+            Vec3::new(0.20, 0.18, 0.22) * h,
+        ),
+        // Two horns, swept back and up off the brow.
+        3 | 4 => limb(
+            Shape::Spike,
+            p(0.36, 0.07 * k, 0.74 + bob),
+            p(0.22, 0.15 * k, 0.94 + bob),
+            0.07 * h,
+            ahead,
+        ),
+        // Upper arms, from the shoulder down and out to the elbow.
+        5 | 6 => limb(
+            Shape::Limb,
+            p(0.14, 0.30 * k, 0.64 + bob),
+            p(0.22 + arm, 0.38 * k, 0.40),
+            0.13 * h,
+            ahead,
+        ),
+        // The elbows, a ball the arm's width so the bend shows.
+        7 | 8 => {
+            let mut b = floating_in(Skin::Thrall, p(0.22 + arm, 0.38 * k, 0.40), 0.07 * h);
+            b.scale = Vec3::splat(0.13 * h);
+            b
+        }
+        // Forearms, thicker than the arm above them, to the wrists.
+        9 | 10 => limb(
+            Shape::Limb,
+            p(0.22 + arm, 0.38 * k, 0.40),
+            p(0.34 + arm * 1.6, 0.36 * k, 0.15),
+            0.15 * h,
+            ahead,
+        ),
+        // Hands, big, knuckles nearly on the floor.
+        11 | 12 => framed(
+            Shape::Block,
+            p(0.38 + arm * 1.6, 0.36 * k, 0.08),
+            Vec3::Y,
+            ahead,
+            Vec3::new(0.15, 0.12, 0.18) * h,
+        ),
+        // Claws, out of the hands along the floor.
+        13 | 14 => limb(
+            Shape::Spike,
+            p(0.44 + arm * 1.6, 0.36 * k, 0.06),
+            p(0.62 + arm * 1.6, 0.37 * k, 0.01),
+            0.08 * h,
+            ahead,
+        ),
+        // Thighs, from the hip forward to bent knees.
+        15 | 16 => limb(
+            Shape::Limb,
+            p(-0.04, 0.12 * k, 0.28 + bob),
+            p(0.08 + leg, 0.15 * k, 0.15),
+            0.12 * h,
+            ahead,
+        ),
+        // Shins, back down to the ankles.
+        17 | 18 => limb(
+            Shape::Limb,
+            p(0.08 + leg, 0.15 * k, 0.15),
+            p(-0.02 + leg * 1.4, 0.15 * k, 0.04),
+            0.10 * h,
+            ahead,
+        ),
+        // Feet.
+        19 | 20 => framed(
+            Shape::Block,
+            p(0.04 + leg * 1.4, 0.15 * k, 0.025),
+            Vec3::Y,
+            ahead,
+            Vec3::new(0.11, 0.05, 0.20) * h,
+        ),
+        // Shoulders: a ball where each arm leaves the chest.
+        21 | 22 => {
+            let mut b = floating_in(Skin::Thrall, p(0.14, 0.29 * k, 0.64 + bob), 0.08 * h);
+            b.scale = Vec3::splat(0.17 * h);
+            b
+        }
+        // A ridge of spines down its back.
+        _ => limb(
+            Shape::Spike,
+            p(0.0, 0.0, 0.66 + bob),
+            p(-0.14, 0.0, 0.84 + bob),
+            0.10 * h,
+            ahead,
+        ),
+    }
+}
 
 /// Where the class mechanic sits in the world, if anywhere. A shield in hand
 /// rides on the character and draws nothing; a thrown one, a placed shadow or a
@@ -5186,6 +5872,12 @@ fn apply_poses(
                 origin + turn * Vec3::new(at[0], at[1], at[2]),
                 turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
             );
+        }
+        // And the weapon arm's shoulder and elbow -- the right, which like the
+        // hand is not the slot of that name in a drawn pose.
+        for (slot, joint) in [(0, view::Joint::ArmR), (1, view::Joint::ForearmR)] {
+            let at = skins[owner].origin[view::drawn_joint(joint).index()];
+            torsos.1[owner][slot] = origin + turn * Vec3::new(at[0], at[1], at[2]);
         }
     }
 

@@ -305,6 +305,11 @@ the Air ball (the wind click), which is raised where the crosshair meets the
 floor and sent from there along this line on the release -- its hold buys size,
 so only the line's direction is read. `aim::racing_path`.
 
+The Champion's **Rush** asks it too (2026-10-13, from play), from his own feet:
+the dash goes flat toward the crosshair's spot rather than where the stick is
+held, which looked and felt like it was going somewhere he was not pointing.
+It is a body moving, not an ability, so it is not a sixth line of effect.
+
 The place it starts was aimed already, with the crosshair, when the stone was
 raised; what is chosen now is a direction and a distance, and the distance is
 the hold's. The direction is the line from the stone through the spot a
