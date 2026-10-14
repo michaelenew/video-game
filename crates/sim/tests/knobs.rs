@@ -231,6 +231,20 @@ const EXEMPT: &[(&str, &str)] = &[
         "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
     ),
     (
+        "pub const SPIKE_SCALED: i32 = 1000",
+        "A code, not a magnitude: from here up, `Effect::banked` on a Black spike is an eruption \
+         of its own size, its share of the row in percent above it.",
+    ),
+    (
+        "const PERCENT: i32 = 100",
+        "A unit, not a magnitude: a whole in percent.",
+    ),
+    (
+        "spread.mul(Fx::ratio(2 * k + 1 - n_f, 2 * n_f))",
+        "A shape, not a feel: `n` pools fanned evenly across the spread. How wide the spread is \
+         and how many are the knobs.",
+    ),
+    (
         "pub const GROWING: i32 = 1",
         "A code, not a magnitude: what `Effect::banked` says a Hemoplague still being held is.",
     ),

@@ -812,9 +812,7 @@ impl EffectKind {
             // dry -- see `state::World::step_carpets` and `step_thralls`.
             EffectKind::Carpet | EffectKind::Thrall | EffectKind::Golem => u16::MAX,
             EffectKind::Vines => t::vines_lasts(),
-            EffectKind::Cascade => t::cascade_every()
-                .saturating_mul(t::cascade_waves().max(1) as u16)
-                .saturating_add(t::spike_erupt()),
+            EffectKind::Cascade => t::spell_flash().saturating_mul(2),
         }
     }
 
@@ -1875,7 +1873,8 @@ impl Effect {
     /// out rather than growing (2026-10-13). The critters' and the bleed's
     /// paths ask the same.
     pub const fn spills_nothing(&self) -> bool {
-        matches!(self.kind, EffectKind::BlackSpike) && self.banked == 1
+        matches!(self.kind, EffectKind::BlackSpike)
+            && (self.banked == 1 || self.banked >= crate::state::SPIKE_SCALED)
     }
 
     pub const fn is_a_pool(&self) -> bool {

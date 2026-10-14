@@ -8839,6 +8839,12 @@ pub const SPIKE_AREA: i32 = 3;
 
 /// `Effect::banked` on a Hemoplague she is still holding, growing.
 pub const GROWING: i32 = 1;
+/// `Effect::banked` on a Black spike at or past this is an eruption **of
+/// its own size** -- a Crimson cascade pool's, or the impact that starts one
+/// -- whose blow is `banked - SPIKE_SCALED` percent of the spike's row.
+pub const SPIKE_SCALED: i32 = 1000;
+/// A whole, in percent: what `SPIKE_SCALED`'s share is counted in.
+const PERCENT: i32 = 100;
 /// `Effect::life` on a stain that is not lit: a lit stain's `life` counts the
 /// frames until it erupts (`World::light_the_fuses`).
 pub const UNLIT: u16 = u16::MAX;
@@ -8853,6 +8859,9 @@ pub const LEFT_HAND: u128 = 1 << 126;
 /// out of a stain is the bigger hit, a field's wave and the second tier's
 /// spikes their own share, and the Stake's landing its row's number.
 fn spike_share(effect: &Effect) -> Fx {
+    if effect.banked >= SPIKE_SCALED {
+        return Fx::ratio(effect.banked - SPIKE_SCALED, PERCENT);
+    }
     match effect.banked {
         SPIKE_FIELD => t::spike_field_power(),
         SPIKE_AREA if effect.slot == moves::blood::BLACK_SPIKE => t::spike_two_power(),
@@ -11199,7 +11208,8 @@ impl World {
             // **The Black vines** and **the Crimson cascade**: each frame
             // decides for itself what lands on it.
             EffectKind::Vines => self.step_the_vines(effect),
-            EffectKind::Cascade => self.step_the_cascade(effect),
+            // The Rising reap's sweep, which is only to look at.
+            EffectKind::Cascade => {}
 
             // The carpet, a thrall and the golem are stepped in passes of
             // their own (`step_carpets`, `step_thralls`).
@@ -13033,9 +13043,11 @@ impl World {
                 let Some(e) = self.effects[slot] else {
                     continue;
                 };
+                // A lit stain is going up, not to be drunk.
                 if !e.is_a_pool()
                     || e.owner != i as u8
                     || e.age <= t::stain_settles()
+                    || e.life != UNLIT
                     || !e.covers(p.pos)
                 {
                     continue;
@@ -15131,102 +15143,201 @@ impl World {
         }
     }
 
-    /// **The Crimson cascade** begins at the floor under the crosshair, with
-    /// the finisher's blow on its first ring.
+    /// **The Crimson cascade** (2026-10-14): the impact at the floor under
+    /// the crosshair erupts for the finisher's blow, and spills
+    /// `tuning::cascade_first` pools round its edge holding all the grey and
+    /// Well she spent between them (`Player::fuel`). Each erupts
+    /// `cascade_fuse` frames later and spills `cascade_branch` smaller pools
+    /// further out (`erupt_from`), for `cascade_generations`. Every pool it
+    /// spills **reaches for her nearest stain** within `cascade_track`,
+    /// however small, so a bleed's trail is followed to its end.
     fn start_the_cascade(&mut self, i: usize) {
         let p = self.players[i];
         let to = self.floor_at_aim(i);
-        let mut cascade = Effect::cast(
-            EffectKind::Cascade,
+        let m = moves::get(p.class, moves::blood::CASCADE);
+        let blow = self.finisher_blow(i, moves::blood::CASCADE);
+        let fuel = (p.fuel as i32).max(0);
+        self.players[i].fuel = 0;
+        let mut impact = Effect::cast(
+            EffectKind::BlackSpike,
             i as u8,
             p.class,
-            moves::blood::CASCADE,
+            moves::blood::BLACK_SPIKE,
             to,
             V3::ZERO,
             t::cascade_step(),
         );
-        cascade.banked = self.finisher_blow(i, moves::blood::CASCADE);
-        self.players[i].fuel = 0;
-        spawn_the_only_one(&mut self.effects, cascade);
+        let row = moves::get(p.class, moves::blood::BLACK_SPIKE).damage.max(1);
+        impact.banked = SPIKE_SCALED + blow * PERCENT / row;
+        spawn_effect(&mut self.effects, impact);
+        self.light_round(i, to, t::cascade_step());
+        let n = t::cascade_first().max(1);
+        let each = (fuel / n).max(t::cascade_least()).max(m.damage / n);
+        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
+        self.spill_the_cascade(i, to, ahead, n, each, 1, Fx::ONE);
     }
 
-    /// The ring wave `k` of a cascade erupts on: inner and outer radius.
-    pub fn cascade_ring(cascade: &Effect, k: i32) -> (Fx, Fx) {
-        let step = cascade.reach;
-        let outer = step.mul(Fx::from_int(k + 1));
-        let inner = if k == 0 {
-            Fx::ZERO
-        } else {
-            step.mul(Fx::from_int(k))
-        };
-        (inner, outer)
-    }
-
-    /// **The Crimson cascade, one frame.** Every `tuning::cascade_every` the
-    /// next ring erupts: everyone in it takes the wave's blow and is thrown
-    /// up, the creature too, and every stain of hers in it is lit to erupt
-    /// in turn (`light_the_fuses`). Each wave carries `cascade_decay` of the
-    /// last.
-    fn step_the_cascade(&mut self, cascade: &mut Effect) {
-        if cascade.slot != moves::blood::CASCADE {
-            return;
-        }
-        let every = t::cascade_every().max(1);
-        if cascade.age == 0 || (cascade.age - 1) % every != 0 {
-            return;
-        }
-        let k = ((cascade.age - 1) / every) as i32;
-        if k >= t::cascade_waves() {
-            return;
-        }
-        let mut blow = Fx::from_int(cascade.banked);
-        for _ in 0..k {
-            blow = blow.mul(t::cascade_decay());
-        }
-        let blow = blow.to_int();
-        let (inner, outer) = Self::cascade_ring(cascade, k);
-        let owner = cascade.owner;
-        let m = cascade.source();
-        for j in 0..MAX_PLAYERS {
-            let q = self.players[j];
-            if !self.effects_reach(j, owner) || q.action.invulnerable() {
-                continue;
-            }
-            let far = V3::new(
-                q.pos.x.sub(cascade.pos.x),
-                Fx::ZERO,
-                q.pos.z.sub(cascade.pos.z),
-            )
-            .flat_len();
-            if far.raw() > outer.add(t::body_radius()).raw()
-                || far.raw() < inner.sub(t::body_radius()).raw()
-                || q.pos.y.raw() > cascade.pos.y.add(t::body_height()).raw()
-            {
-                continue;
-            }
-            let dealt = self.players[j].wound(blow);
-            self.players[j].vel.y = self.players[j].vel.y.max(m.launch);
-            self.players[j].grounded = false;
-            self.players[j].slow(t::slow_frames(), t::spike_slow());
-            let _ = dealt;
-        }
-        let share = Fx::ratio(blow, m.damage.max(1));
-        let (at, reach) = (cascade.pos, outer);
-        cascade.forget_hits();
-        self.gore_each(cascade, 0, at, reach, share);
-        cascade.forget_hits();
-        self.gore_critters(cascade, at, reach, share);
-        for slot in 0..MAX_EFFECTS {
-            let Some(e) = self.effects[slot].as_mut() else {
-                continue;
-            };
-            let far = V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z)).flat_len();
+    /// Light every unlit stain of hers within `reach` of `at` (and its own
+    /// edge) to go up `tuning::chain_delay` frames from now.
+    fn light_round(&mut self, owner: usize, at: V3, reach: Fx) {
+        for e in self.effects.iter_mut().flatten() {
             if e.is_a_pool()
-                && e.owner == owner
+                && e.owner == owner as u8
                 && e.life == UNLIT
-                && far.raw() <= outer.add(e.pool_radius()).raw()
+                && V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z))
+                    .flat_len()
+                    .raw()
+                    <= reach.add(e.pool_radius()).add(t::erupt_chain()).raw()
             {
                 e.life = t::chain_delay().max(1);
+            }
+        }
+    }
+
+    /// **A cascade spills `n` pools of `each` from `from`**, generation
+    /// `generation`. Each goes **toward her nearest unlit stain** within
+    /// `tuning::cascade_track` that no other of these is going for -- a step
+    /// of `cascade_step` along the way, or lighting it outright if it is
+    /// that close -- and the rest fan out round `ahead` across `spread` of
+    /// a turn, a little off even, so it grows like roots rather than rings.
+    #[allow(clippy::too_many_arguments)]
+    fn spill_the_cascade(
+        &mut self,
+        owner: usize,
+        from: V3,
+        ahead: V3,
+        n: i32,
+        each: i32,
+        generation: i32,
+        spread: Fx,
+    ) {
+        let step = t::cascade_step();
+        let mut taken = [false; MAX_EFFECTS];
+        for k in 0..n {
+            // Her nearest stain in reach not already being gone for.
+            let mut target: Option<(usize, V3, Fx)> = None;
+            for (slot, e) in self.effects.iter().enumerate() {
+                let Some(e) = e else { continue };
+                if !e.is_a_pool()
+                    || e.owner != owner as u8
+                    || e.life != UNLIT
+                    || e.slot == moves::blood::CASCADE
+                    || taken[slot]
+                {
+                    continue;
+                }
+                let far = V3::new(e.pos.x.sub(from.x), Fx::ZERO, e.pos.z.sub(from.z)).flat_len();
+                if far.raw() <= t::cascade_track().raw()
+                    && target.is_none_or(|(_, _, b)| far.raw() < b.raw())
+                {
+                    target = Some((slot, e.pos, far));
+                }
+            }
+            let way = match target {
+                Some((slot, at, far)) => {
+                    taken[slot] = true;
+                    if far.raw() <= step.add(t::body_radius()).raw() {
+                        if let Some(e) = self.effects[slot].as_mut() {
+                            e.life = t::cascade_fuse().max(1);
+                        }
+                        continue;
+                    }
+                    V3::new(at.x.sub(from.x), Fx::ZERO, at.z.sub(from.z)).normalized()
+                }
+                None => {
+                    // Fanned round `ahead`, and a little crooked: the turn is
+                    // nudged by a few hundredths that depend on where it is.
+                    let n_f = n.max(1);
+                    let base = if spread.raw() >= Fx::ONE.raw() {
+                        Fx::ratio(k, n_f)
+                    } else {
+                        spread.mul(Fx::ratio(2 * k + 1 - n_f, 2 * n_f))
+                    };
+                    let wobble = ((from.x.raw() ^ from.z.raw().rotate_left(7)) as u32 >> 8) % 9;
+                    let turn = base.add(Fx::ratio(wobble as i32 - 4, 100));
+                    let (c, s) = (crate::fixed::cos_turns(turn), crate::fixed::sin_turns(turn));
+                    V3::new(
+                        ahead.x.mul(c).sub(ahead.z.mul(s)),
+                        Fx::ZERO,
+                        ahead.x.mul(s).add(ahead.z.mul(c)),
+                    )
+                }
+            };
+            let flat = from.add(way.scale(step));
+            let lift = V3::new(flat.x, from.y.add(Fx::ONE), flat.z);
+            let at = V3::new(flat.x, self.terrain().ground_under(lift), flat.z);
+            let class = self.players[owner].class;
+            let mut pool = Effect::pool(owner as u8, class, moves::blood::CASCADE, at, each);
+            pool.life = t::cascade_fuse().max(1);
+            pool.power = Fx::from_int(generation);
+            pool.dir = way;
+            pool.age = t::stain_settles().saturating_add(1);
+            spawn_effect(&mut self.effects, pool);
+        }
+    }
+
+    /// A spike came up on the pool in `slot`: the pool erupts, at its own
+    /// size, and every pool of hers the eruption covers is lit to erupt
+    /// `tuning::chain_delay` frames later (`light_the_fuses`).
+    ///
+    /// **The chain is the skill curve.** A spike on one pool is a bigger spike;
+    /// a spike on a pool standing among others is the floor coming up across
+    /// the whole fight, running outward link by link. Each eruption drinks its
+    /// own pool, so the chain cannot run twice over the same blood.
+    ///
+    /// **A Crimson cascade's pool** is her spent grey, not blood she won: it
+    /// is not drunk, it hits for what it held (`tuning::cascade_power`), and
+    /// it spills the next generation (`spill_the_cascade`).
+    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
+        let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
+            return;
+        };
+        let class = self.players[owner].class;
+        let m = moves::get(class, kind);
+        let radius = t::erupt_radius()
+            .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
+            .max(m.radius);
+        let cascade = pool.slot == moves::blood::CASCADE;
+        if !cascade {
+            self.drink_from(slot, owner, &m);
+        }
+        self.effects[slot] = None;
+        let mut born = Effect::cast(
+            EffectKind::BlackSpike,
+            owner as u8,
+            class,
+            kind,
+            pool.pos,
+            V3::ZERO,
+            radius,
+        );
+        born.banked = if cascade {
+            let share =
+                Fx::ratio(pool.banked.max(0), t::pool_full().max(1)).mul(t::cascade_power());
+            SPIKE_SCALED + share.mul(Fx::from_int(PERCENT)).to_int()
+        } else {
+            SPIKE_ERUPTION
+        };
+        spawn_effect(&mut self.effects, born);
+        self.light_round(owner, pool.pos, radius);
+        if cascade {
+            let generation = pool.power.to_int();
+            let next = Fx::from_int(pool.banked).mul(t::cascade_share()).to_int();
+            if generation < t::cascade_generations() && next >= t::cascade_least() {
+                let ahead = if pool.dir == V3::ZERO {
+                    V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
+                } else {
+                    pool.dir
+                };
+                self.spill_the_cascade(
+                    owner,
+                    pool.pos,
+                    ahead,
+                    t::cascade_branch(),
+                    next,
+                    generation + 1,
+                    Fx::ratio(1, 4),
+                );
             }
         }
     }
@@ -15254,52 +15365,6 @@ impl World {
         }
     }
 
-    /// A spike came up on the pool in `slot`: the pool erupts, at its own
-    /// size, and every pool of hers the eruption covers is lit to erupt
-    /// `tuning::chain_delay` frames later (`light_the_fuses`).
-    ///
-    /// **The chain is the skill curve.** A spike on one pool is a bigger spike;
-    /// a spike on a pool standing among others is the floor coming up across
-    /// the whole fight, running outward link by link. Each eruption drinks its
-    /// own pool, so the chain cannot run twice over the same blood.
-    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
-        let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
-            return;
-        };
-        let m = moves::get(self.players[owner].class, kind);
-        let radius = t::erupt_radius()
-            .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
-            .max(m.radius);
-        self.drink_from(slot, owner, &m);
-        self.effects[slot] = None;
-        let mut born = Effect::cast(
-            EffectKind::BlackSpike,
-            owner as u8,
-            self.players[owner].class,
-            kind,
-            pool.pos,
-            V3::ZERO,
-            radius,
-        );
-        born.banked = SPIKE_ERUPTION;
-        spawn_effect(&mut self.effects, born);
-        for next in 0..MAX_EFFECTS {
-            let Some(e) = self.effects[next].as_mut() else {
-                continue;
-            };
-            if e.is_a_pool()
-                && e.owner == owner as u8
-                && e.life == UNLIT
-                && V3::new(e.pos.x.sub(pool.pos.x), Fx::ZERO, e.pos.z.sub(pool.pos.z))
-                    .flat_len()
-                    .raw()
-                    <= radius.add(e.pool_radius()).add(t::erupt_chain()).raw()
-            {
-                e.life = t::chain_delay().max(1);
-            }
-        }
-    }
-
     /// **The Black spike, let go** (2026-10-13): one spike for a tap, and
     /// more the longer the hold -- up to `tuning::spikes_most` -- the first at
     /// the aimed point and the rest on a ring round it, as wide as
@@ -15317,11 +15382,27 @@ impl World {
         let ahead = V3::new(f.x, Fx::ZERO, f.z).normalized();
         let side = V3::new(Fx::ZERO.sub(ahead.z), Fx::ZERO, ahead.x);
         let centre = born.pos;
-        for k in 0..=more {
+        // **The swarm goes for her stains first** (2026-10-14): the spikes
+        // past the first land on stains of hers inside the ring, nearest
+        // first, however small; only what is left stands on the ring.
+        let mut on_stains = 0;
+        if more > 0 {
+            let reach = ring.add(t::body_radius());
+            for slot in self.stains_within(i, centre, reach) {
+                if on_stains >= more {
+                    break;
+                }
+                if self.effects[slot].is_some_and(|e| e.is_a_pool() && e.life == UNLIT) {
+                    self.erupt_from(i, moves::blood::BLACK_SPIKE, slot);
+                    on_stains += 1;
+                }
+            }
+        }
+        for k in 0..=(more - on_stains) {
             let at = if k == 0 {
                 centre
             } else {
-                let turn = Fx::ratio(k - 1, more.max(1));
+                let turn = Fx::ratio(k - 1, (more - on_stains).max(1));
                 let (c, s) = (crate::fixed::cos_turns(turn), crate::fixed::sin_turns(turn));
                 let off = ahead.scale(c).add(side.scale(s)).scale(ring);
                 let flat = V3::new(

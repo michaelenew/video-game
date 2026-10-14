@@ -745,7 +745,8 @@ pub fn build() -> &'static str {
 
 /// `SHOT_BLOOD=1` starts a Blood mage in front of her own work, so a capture
 /// can look at what 0016 draws without playing up to it: three thralls and a
-/// golem out in front, the Black vines to the side, and the Well half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
+/// golem out in front, the Black vines to the side, stains of a few sizes
+/// (one lit), and the Well half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
 /// class, and read once at start.
 fn shot_blood(w: &mut World) {
     use sim::effects::{Effect, EffectKind};
@@ -775,12 +776,6 @@ fn shot_blood(w: &mut World) {
     };
     let at =
         |kind, slot, pos, reach| Effect::cast(kind, 0, p.class, slot, pos, sim::V3::ZERO, reach);
-    put(at(
-        EffectKind::Carpet,
-        b::CARPET,
-        ahead(5, 0),
-        sim::Fx::from_int(4),
-    ));
     for (k, side) in [-2, 0, 2].into_iter().enumerate() {
         let mut thrall = Effect::pool(0, p.class, b::SUMMON, ahead(9, side), 60 + 30 * k as i32);
         thrall.kind = EffectKind::Thrall;
@@ -803,10 +798,18 @@ fn shot_blood(w: &mut World) {
         ahead(7, -6),
         sim::Fx::from_int(3),
     ));
-    w.players[0].action = sim::state::Action::Channel {
-        kind: b::CARPET,
-        held: 40,
-    };
+    // Stains of a few sizes, one of them lit and about to go up, so their
+    // shapes show.
+    for (k, (forward, side, volume)) in [(4, 3, 120), (6, 4, 60), (3, -3, 90)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut stain = Effect::pool(0, p.class, b::HAEMORRHAGE, ahead(forward, side), volume);
+        if k == 2 {
+            stain.life = 30;
+        }
+        put(stain);
+    }
     // And the Well half full, so its bar shows.
     w.players[0].well = (sim::tuning::well_full() / 2).max(0) as u16;
 }
@@ -1577,6 +1580,12 @@ const EFFECT_PARTS: usize = {
     let most = if rough > most { rough } else { most };
     let most = if GREMLIN_PARTS > most {
         GREMLIN_PARTS
+    } else {
+        most
+    };
+    let most = if VINE_PARTS > most { VINE_PARTS } else { most };
+    let most = if STAIN_PARTS > most {
+        STAIN_PARTS
     } else {
         most
     };
@@ -4617,19 +4626,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // the blood was spilled, shrinking as it drains and drawn more solid
         // the more essence is left in it -- so the figure on the floor is
         // the heal it is worth.
-        EffectKind::Pool if part == 0 => {
-            let slab = effect.pool_slab();
-            let step = (effect.pool_share().to_f32_for_render() * (ESSENCE_STEPS - 1) as f32)
-                .round() as u8;
-            Some(standing(
-                Shape::Column,
-                Skin::Essence(step),
-                at,
-                slab.radius.to_f32_for_render(),
-                slab.bottom.to_f32_for_render(),
-                slab.top.to_f32_for_render(),
-            ))
-        }
+        EffectKind::Pool if part < STAIN_PARTS => Some(stain_piece(effect, at, part)),
         // The Blood mage's 0016 (2026-10-13). The Carpet: a disc of blood
         // on the floor at the radius it hurts in, growing while she holds
         // it.
@@ -4651,34 +4648,10 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         EffectKind::Thrall | EffectKind::Golem if part < GREMLIN_PARTS => {
             Some(gremlin_piece(effect, at, part))
         }
-        // The Black vines: a translucent black disc out to the front as it
-        // erupts, and barbed spikes standing out of it, growing with it.
-        EffectKind::Vines if part == 0 => {
-            let grow = (effect.age as f32 / sim::tuning::vines_grow().max(1) as f32).min(1.0);
-            Some(standing(
-                Shape::Column,
-                Skin::Vines,
-                at,
-                effect.reach.to_f32_for_render() * grow,
-                0.0,
-                0.06,
-            ))
-        }
-        EffectKind::Vines if part <= THORNS => {
-            let grow = (effect.age as f32 / sim::tuning::vines_grow().max(1) as f32).min(1.0);
-            let r = effect.reach.to_f32_for_render() * grow;
-            let k = part as f32;
-            let turn = k / THORNS as f32 * std::f32::consts::TAU + k * 0.37;
-            let out = r * (0.2 + 0.75 * ((k * 1.9).sin() * 0.5 + 0.5));
-            Some(standing(
-                Shape::Spike,
-                Skin::Vines,
-                at + Vec3::new(turn.cos() * out, 0.0, turn.sin() * out),
-                0.16,
-                0.0,
-                0.6 + 0.9 * ((k * 2.7).sin() * 0.5 + 0.5) * grow,
-            ))
-        }
+        // The Black vines: a tangle of twisting vines arching out of the
+        // floor from the middle to the front, barbs standing off them, over
+        // a faint dark wash -- see `vine_piece`.
+        EffectKind::Vines if part < VINE_PARTS => Some(vine_piece(effect, at, part)),
         // The Rising reap's sweep: balls of blood flung out along the cone,
         // the far ones the widest.
         EffectKind::Cascade
@@ -4694,37 +4667,6 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 at + dir * reach * t * out + Vec3::Y * 1.0,
                 0.2 + reach * 0.12 * t,
             ))
-        }
-        // The Crimson cascade: the ring erupting now, as spikes of blood
-        // round it that shoot up and sink back, and between them the small
-        // stains its edge leaves for the next ring.
-        EffectKind::Cascade if part < sim::effects::RING_PIECES => {
-            let every = sim::tuning::cascade_every().max(1) as u32;
-            let since = (effect.age as u32).saturating_sub(1);
-            let k = (since / every) as i32;
-            if k >= sim::tuning::cascade_waves() {
-                return None;
-            }
-            let into = (since % every) as f32 / every as f32;
-            let (_, outer) = sim::state::World::cascade_ring(effect, k);
-            let r = outer.to_f32_for_render();
-            let turn = part as f32 / sim::effects::RING_PIECES as f32 * std::f32::consts::TAU
-                + k as f32 * 0.4;
-            let spot = at + Vec3::new(turn.cos(), 0.0, turn.sin()) * r;
-            if part % 2 == 0 {
-                let rise = (1.0 - into * 3.0).max(0.0);
-                (rise > 0.0)
-                    .then(|| standing(Shape::Spike, Skin::Blood, spot, 0.35, 0.0, 2.0 * rise))
-            } else {
-                Some(standing(
-                    Shape::Column,
-                    Skin::Essence(3),
-                    spot,
-                    0.45,
-                    0.0,
-                    0.05,
-                ))
-            }
         }
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
@@ -4883,8 +4825,158 @@ const FIELD_SPIKES: usize = 7;
 /// Presentation: the hit test is the column.
 const PLAGUE_WISPS: usize = 8;
 
-/// The Black vines' barbs.
-const THORNS: usize = 10;
+/// A stain's pieces: a few flat blobs for its body and three roots of three
+/// segments each. See `stain_piece`.
+const STAIN_PARTS: usize = 12;
+
+/// The Black vines' pieces: a dark wash, six vines of three segments and a
+/// dozen barbs. See `vine_piece`.
+const VINE_PARTS: usize = 31;
+
+/// A number in `0..1` from a seed, the same every frame: what makes each
+/// stain and each tangle of vines its own shape without anything random.
+fn wobble(seed: u32) -> f32 {
+    let mut x = seed.wrapping_mul(0x9E37_79B9) ^ 0x85EB_CA6B;
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x2C1B_3C6D);
+    x ^= x >> 12;
+    (x & 0xFFFF) as f32 / 65536.0
+}
+
+/// A seed from where a thing was put down, so its shape stays put.
+fn seed_of(at: sim::V3) -> u32 {
+    (at.x.raw() as u32).wrapping_mul(73_856_093) ^ (at.z.raw() as u32).wrapping_mul(19_349_663)
+}
+
+/// Where a root or a vine has got to: from `from`, `segment` steps of
+/// `length` along a heading that started at `turn` (radians) and bent a
+/// little each step by its own wobble.
+fn wander(from: Vec3, turn: f32, segment: usize, length: f32, seed: u32) -> (Vec3, f32) {
+    let mut at = from;
+    let mut heading = turn;
+    for k in 0..segment {
+        at += Vec3::new(heading.cos(), 0.0, heading.sin()) * length;
+        heading += (wobble(seed.wrapping_add(k as u32 * 31)) - 0.5) * 1.6;
+    }
+    (at, heading)
+}
+
+/// One piece of a stain: **not a disc but a spill** -- two or three flat
+/// lobes of blood off-centre from each other, and three roots creeping out
+/// of it in crooked steps, as blood runs along the cracks of a floor. Its
+/// size is the hit test's (`Effect::pool_radius`), the lobes inside it and
+/// the roots reaching past; drawn more solid the more essence is left. A lit
+/// stain -- going up in a moment -- swells and throbs.
+fn stain_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
+    let r = effect.pool_radius().to_f32_for_render().max(0.12) * 1.3;
+    let step = (effect.pool_share().to_f32_for_render() * (ESSENCE_STEPS - 1) as f32).round() as u8;
+    let skin = Skin::Essence(step);
+    let seed = seed_of(effect.home);
+    let lit = effect.life != sim::state::UNLIT;
+    let throb = if lit {
+        1.15 + 0.15 * (effect.age as f32 * 0.9).sin()
+    } else {
+        1.0
+    };
+    let r = r * throb;
+    let flat = |centre: Vec3, w: f32, d: f32, yaw: f32| Piece {
+        shape: Shape::Ball,
+        skin,
+        at: centre + Vec3::Y * 0.02,
+        scale: Vec3::new(w, 0.04, d),
+        turn: Quat::from_rotation_y(yaw),
+    };
+    if part < 3 {
+        let k = part as u32;
+        let a = wobble(seed.wrapping_add(k * 7)) * std::f32::consts::TAU;
+        let off = if part == 0 {
+            0.0
+        } else {
+            r * 0.45 * wobble(seed.wrapping_add(k * 13))
+        };
+        let size = if part == 0 {
+            1.5
+        } else {
+            0.9 + 0.5 * wobble(seed.wrapping_add(k * 17))
+        };
+        return flat(
+            at + Vec3::new(a.cos(), 0.0, a.sin()) * off,
+            r * size,
+            r * size * (0.55 + 0.35 * wobble(seed.wrapping_add(k * 19))),
+            a,
+        );
+    }
+    let root = (part - 3) / 3;
+    let segment = (part - 3) % 3;
+    let rseed = seed.wrapping_add(root as u32 * 101);
+    let turn = (root as f32 / 3.0 + wobble(rseed) * 0.3) * std::f32::consts::TAU;
+    let length = r * (0.55 - 0.1 * segment as f32);
+    let start = at + Vec3::new(turn.cos(), 0.0, turn.sin()) * r * 0.5;
+    let (from, heading) = wander(start, turn, segment, r * 0.55, rseed);
+    let to = from + Vec3::new(heading.cos(), 0.0, heading.sin()) * length;
+    let thick = r * (0.22 - 0.06 * segment as f32);
+    let mut piece = limb(Shape::Limb, from, to, thick, Vec3::Y);
+    piece.skin = skin;
+    piece.at += Vec3::Y * 0.02;
+    piece.scale.x = thick;
+    piece.scale.z = thick * 0.35;
+    piece
+}
+
+/// One piece of the Black vines: **a mass of vines with barbs off them** --
+/// a faint dark wash out to where the vines have reached, six vines snaking
+/// out of the middle in crooked arching segments, and barbs standing off
+/// the vines. Each tangle is its own (`seed_of`), and it grows out to the
+/// front over `tuning::vines_grow`.
+fn vine_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
+    const VINES: usize = 6;
+    const SEGMENTS: usize = 3;
+    let grow = (effect.age as f32 / sim::tuning::vines_grow().max(1) as f32).min(1.0);
+    let reach = effect.reach.to_f32_for_render().max(0.5) * grow.max(0.05);
+    let seed = seed_of(effect.pos);
+    if part == 0 {
+        return standing(Shape::Column, Skin::Vines, at, reach, 0.0, 0.03);
+    }
+    let length = reach / SEGMENTS as f32;
+    let vine_at = |vine: usize, segment: usize| {
+        let vseed = seed.wrapping_add(vine as u32 * 977);
+        let turn = (vine as f32 / VINES as f32 + wobble(vseed) * 0.12) * std::f32::consts::TAU;
+        let (from, heading) = wander(at, turn, segment, length, vseed);
+        let to = from + Vec3::new(heading.cos(), 0.0, heading.sin()) * length;
+        // Arching out of the floor and back into it.
+        let rise = |k: usize| match k {
+            0 => 0.05,
+            k if k == SEGMENTS => 0.08,
+            _ => 0.25 + 0.25 * wobble(vseed.wrapping_add(k as u32 * 5)),
+        };
+        (
+            from + Vec3::Y * rise(segment) * grow,
+            to + Vec3::Y * rise(segment + 1) * grow,
+        )
+    };
+    let index = part - 1;
+    if index < VINES * SEGMENTS {
+        let (vine, segment) = (index / SEGMENTS, index % SEGMENTS);
+        let (from, to) = vine_at(vine, segment);
+        let thick = (0.24 - 0.05 * segment as f32) * grow.max(0.3);
+        let mut piece = limb(Shape::Limb, from, to, thick, Vec3::Y);
+        piece.skin = Skin::Vines;
+        return piece;
+    }
+    // A barb: off a point along a segment, out to the side and up.
+    let barb = index - VINES * SEGMENTS;
+    let vine = barb % VINES;
+    let segment = barb / VINES % SEGMENTS;
+    let (from, to) = vine_at(vine, segment);
+    let bseed = seed.wrapping_add(barb as u32 * 211);
+    let along = from.lerp(to, 0.35 + 0.4 * wobble(bseed));
+    let dir = (to - from).normalize_or(Vec3::X);
+    let side = Vec3::Y.cross(dir).normalize_or(Vec3::Z) * if barb % 2 == 0 { 1.0 } else { -1.0 };
+    let tip = along + (side * 0.7 + Vec3::Y * 0.6 + dir * 0.2).normalize() * 0.45 * grow;
+    let mut piece = limb(Shape::Spike, along, tip, 0.13, dir);
+    piece.skin = Skin::Vines;
+    piece
+}
 
 /// How many pieces a thrall's gremlin is drawn in.
 const GREMLIN_PARTS: usize = 24;
@@ -6422,10 +6514,12 @@ mod tests {
     }
 
     #[test]
-    fn a_pool_is_drawn_at_the_disc_it_is_tested_at() {
-        // A pool is a place she wants the fight to be, and both players have
-        // to be able to read it at a glance. Drawn as the slab the hit test
-        // and the blink read, and nothing else: one piece, on the floor.
+    fn a_pool_is_drawn_as_a_spill_round_the_disc_it_is_tested_at() {
+        // A stain is a place she wants the fight to be, and both players have
+        // to be able to read it at a glance -- as blood spilled on the floor,
+        // not a disc (2026-10-14). Its body sits on the disc the hit test and
+        // the blink read, its roots creep out past it, every piece lies on the
+        // floor, and a fuller one is bigger and more solid.
         let effect = Effect::pool(
             0,
             sim::Class::BloodMage,
@@ -6433,28 +6527,37 @@ mod tests {
             sim::V3::new(sim::Fx::from_int(2), sim::Fx::ZERO, sim::Fx::from_int(-1)),
             100,
         );
-        let slab = effect.pool_slab();
-        let drawn = effect_piece(&effect, 0).expect("the pool is drawn");
-        assert_eq!(drawn.shape, Shape::Column);
-        let Skin::Essence(step) = drawn.skin else {
+        let centre = fx3(effect.pos);
+        let radius = effect.pool_radius().to_f32_for_render();
+        let pieces: Vec<Piece> = (0..STAIN_PARTS)
+            .map(|k| effect_piece(&effect, k).expect("every piece of a stain is drawn"))
+            .collect();
+        assert!(effect_piece(&effect, STAIN_PARTS).is_none());
+        let Skin::Essence(step) = pieces[0].skin else {
             panic!("a pool is not drawn as essence");
         };
         assert!(
-            (drawn.scale.x * 0.5 - slab.radius.to_f32_for_render()).abs() < 0.001,
-            "drawn {} wide, tested at {}",
-            drawn.scale.x * 0.5,
-            slab.radius.to_f32_for_render()
+            pieces[0].at.xz().distance(centre.xz()) < 0.001,
+            "its body is on its disc"
         );
-        assert!((drawn.scale.y - slab.top.to_f32_for_render()).abs() < 0.001);
-        assert!(effect_piece(&effect, 1).is_none(), "a pool is one figure");
-        // A pool never stands taller or wider than a body, and a fuller one
-        // is bigger and more solid than an emptier one.
-        assert!(drawn.scale.y <= sim::tuning::body_height().to_f32_for_render() + 0.001);
-        assert!(drawn.scale.x * 0.5 <= sim::tuning::body_radius().to_f32_for_render() + 0.001);
+        for (k, piece) in pieces.iter().enumerate() {
+            assert!(piece.at.y < 0.1, "piece {k} is off the floor");
+            assert!(
+                piece.at.xz().distance(centre.xz()) < radius * 4.0,
+                "piece {k} is {} m from a stain {radius} m across",
+                piece.at.xz().distance(centre.xz())
+            );
+        }
+        // Not a ring: the roots are not the same piece turned round.
+        let reach = |k: usize| pieces[k].at.xz().distance(centre.xz());
+        assert!(
+            (reach(3) - reach(6)).abs() > 0.001 || (reach(4) - reach(7)).abs() > 0.001,
+            "two roots are drawn the same"
+        );
         let mut less = effect;
         less.banked = 20;
         let smaller = effect_piece(&less, 0).expect("drawn");
-        assert!(smaller.scale.x < drawn.scale.x && smaller.scale.y < drawn.scale.y);
+        assert!(smaller.scale.x < pieces[0].scale.x);
         let Skin::Essence(faint) = smaller.skin else {
             panic!("a pool is not drawn as essence");
         };
@@ -6463,7 +6566,6 @@ mod tests {
             "an emptier pool is drawn as solid as a fuller one"
         );
     }
-
     /// The same, for a class other than the Blood mage.
     fn cast_as(kind: EffectKind, class: sim::Class, slot: u8) -> Effect {
         Effect::cast(

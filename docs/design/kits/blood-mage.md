@@ -73,9 +73,15 @@ the more there was.
 - **Black vines** (left): barbed vines erupt out of the Hemoplague's middle to `vines_size` of
   its radius over `vines_grow`, hitting and bleeding everything the front passes, then stand for
   `vines_lasts` (five seconds), bleeding and slowing whatever is in them.
-- **Crimson cascade** (middle): rings of eruptions go out from the crosshair, one every
-  `cascade_every`, `cascade_step` further each, `cascade_waves` of them, each `cascade_decay` of
-  the last; every stain of hers a ring crosses is lit and goes up in turn.
+- **Crimson cascade** (middle, since 2026-10-14): the impact erupts for the finisher's blow
+  and spills `cascade_first` pools round it, holding all the grey she spent between them. Each
+  goes up `cascade_fuse` frames later and spills `cascade_branch` smaller ones
+  (`cascade_share` of it) `cascade_step` further out, for `cascade_generations`, while a pool
+  holds at least `cascade_least`; each eruption hits for `cascade_power` of the spike's row per
+  full stain it held. **Every pool it spills reaches for her nearest stain** within
+  `cascade_track`, however small, stepping toward it and lighting it when it gets there -- so a
+  bleed's thin trail is followed to its end. Cascade pools are her spent grey: not drunk, not
+  walked up.
 - **Blood golem** (right): everything the Carpet covers -- stains, thralls, what the carpet held
   -- and all her grey, fused into one thrall with that many hit points. It takes blows off its
   health, loses `golem_self_hurt` of every punch it lands, and drains as a stain does.
@@ -101,7 +107,9 @@ the more there was.
   let go, it is **one big stain** of what it held, and every stain of hers it covered stands up
   as a thrall. A longer hold is a bigger stain and a wider area.
 - **The Black spike** (middle held): one spike for a tap, and up to `spikes_most` (seven) on a
-  ring as wide as `spike_spread_most` at a full hold.
+  ring as wide as `spike_spread_most` at a full hold. **The swarm goes for her stains first**
+  (2026-10-14): the spikes past the first land on stains of hers inside the ring, nearest first,
+  however small; only what is left stands on the ring.
 
 ### Thralls
 
