@@ -1,4 +1,4 @@
-//! The Champion: three weapons on three buttons, ten clips.
+//! The Champion: three weapons on three buttons, twenty-five clips.
 //!
 //! GENERATED-FRIENDLY: the animation hub (F9) rewrites this file when it saves,
 //! in the same shape you would write by hand. Editing it by hand is fine and
@@ -16,7 +16,8 @@
 //! shapes that cannot be mistaken for each other across the arena, thrown by
 //! one body.
 //!
-//! The nineteen read as a grid, and the grid is the thing to keep true:
+//! The nineteen read as a grid, and the grid is the thing to keep true -- and
+//! the six full charges are two more rows of it:
 //!
 //! ```text
 //!               sword               hammer              spear
@@ -26,6 +27,10 @@
 //!   airborne    down across body    wind up and smash   fan around the aim
 //!   rushing     cutting past        dragged along floor dash into the point
 //!   taking off  up and away         launch, and hold    the floor throws you
+//!   held        Crescent: the cut   Shockwave: off a    Repel: a whole turn,
+//!               off a lunge, held   hop, square, into   upright, hands wide
+//!   held, 3rd   Thousand Cuts: one  Meteor: the dive    Heaven-piercer: the
+//!               draw, then still    into a crater       spear thrown
 //! ```
 //!
 //! Read down a column and it is one weapon in six situations, so the *grip*
@@ -82,6 +87,39 @@
 //! near the sternum and the head of the weapon travels a long one, so a
 //! wind-up is mostly *the weapon pointing somewhere else*, plus a torso that
 //! has gone with it.
+//!
+//! ## The full charges
+//!
+//! A link held for twelve frames is its weapon's finisher, and the six clips
+//! for them are each **the bigger version of their weapon**: the plane the hit
+//! test sweeps is the weapon's own (the Crescent is the opener's diagonal, the
+//! Shockwave and the Meteor the hammer's upright arc, the Repel and Thousand
+//! Cuts flat), so the shape the player learned is the shape they read, and
+//! what is bigger is the body around it -- more wind-up, more commitment, a
+//! bigger finish. Each is also made to read apart from the move it borrowed
+//! before it had a clip of its own: Backcut, Hammer, Whirl, Rush slash, Air
+//! hammer and Skewer.
+//!
+//! Three rules hold across all six:
+//!
+//! * **They open wound.** The hold has already spent twelve frames winding the
+//!   link up, so frame zero is the charged shape -- deeper than the link ever
+//!   gets -- and the short startup (three or four frames) is the last inch of
+//!   it and the release. They come off the guard only when momentum's top tier
+//!   throws one on a tap, and the crossfade covers that.
+//! * **The finish is held.** A full charge's recovery is its price, and the
+//!   body says so: the Crescent stays down in its lunge, Thousand Cuts stands
+//!   still while the cuts it left land, the Shockwave and the Meteor stay in
+//!   their squat while the ground breaks, the Repel holds the shove in its
+//!   shoulders.
+//! * **The hammer's two land square.** Feet wide and level under the body
+//!   (`wide`), because what they break goes out in a ring round him rather
+//!   than down a line -- the one stance in the file that is not bladed.
+//!
+//! The Meteor is posed for a body in the air (nothing planted until the
+//! crater), like the other aerials; Heaven-piercer is `Shape::None`, so it is
+//! the one full charge whose hands are authored all the way rather than put
+//! on a hit line by `anim::track`.
 //!
 //! ## Frames
 //!
@@ -159,6 +197,12 @@ pub fn clips() -> Vec<Recipe> {
         uppercut(),
         pole_drive(),
         vault(),
+        crescent_charge(),
+        shockwave(),
+        repel(),
+        thousand_cuts(),
+        meteor(),
+        heaven_piercer(),
     ]
 }
 
@@ -3569,6 +3613,1382 @@ fn pole_drive() -> Recipe {
                 costs a Rush charge and the other costs a jump. It ends \
                 sailing, with the boost carrying whatever direction was held \
                 when the shaft hit the ground."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The full charges -- every link held, made bigger
+// ---------------------------------------------------------------------------
+
+/// Half the distance between the hands on a spear held **wide**: the pole
+/// across the body with the hands most of a shoulder-width apart, which is how
+/// a staff is swung to push rather than to cut. The Repel is the only thing
+/// that holds it so, and that is what tells it from the Whirl at a glance.
+const WIDE: f32 = 0.19;
+
+/// The front foot out a long way ahead of the guard's footprint and the rear
+/// one left behind on its toe: the stance a finisher arrives in. `reach` is
+/// how far past `LEAD` the front foot goes and `hold` how far behind `REAR`
+/// the rear one stays.
+fn lunge(pose: Pose, reach: f32, hold: f32) -> Pose {
+    pose.plant_l([LEAD[0], GROUND, LEAD[2] + reach])
+        .toe_l(0.0)
+        .plant_r([REAR[0], REAR[1] + 0.06, REAR[2] - hold])
+        .toe_floor_r()
+}
+
+/// Both feet square under the body and wide, flat on the floor: the stance the
+/// hammer's two full charges hit the ground from. Square because what they
+/// break goes out in a ring rather than down a line, and a body bladed toward
+/// one opponent would say the opposite.
+fn wide(pose: Pose, out: f32) -> Pose {
+    pose.plant_l([-out, GROUND, 0.10])
+        .toe_l(0.0)
+        .plant_r([out, GROUND, -0.04])
+        .toe_r(0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Crescent -- the sword's full charge
+// ---------------------------------------------------------------------------
+
+/// The opener's diagonal, from the same shoulder, thrown with the whole body.
+///
+/// `Plane::Diagonal(Hand::Right)` like the opener, and that is deliberate: a
+/// full charge is still its weapon, and the shape the player learned for the
+/// sword is the shape they read here. What changes is everything around it.
+/// The blade is wound back **behind the head** rather than over the shoulder,
+/// the body is sunk onto the rear leg and turned as far as it turns, the cut
+/// is thrown off a lunge rather than a step, and it does not stop at the hip:
+/// it carries round and behind, and the body stays down in the lunge for a
+/// beat after, arm and blade out, while the blade of light it threw flies on
+/// down the line without it.
+fn crescent_charge() -> Recipe {
+    let clip = Clip::ChampionCrescent;
+    let (windup, contact, through) = clip.phases().expect("the crescent animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Charged: the blade laid back behind the head, the hips turned and sunk
+    // onto the rear leg, the front toe up off the floor. Taller and further
+    // round than the opener ever winds.
+    let charged = {
+        let body = Pose::rest()
+            .hips(0.07, -0.17, -0.08)
+            .root(-2.0, -6.0, 32.0)
+            .spine(-6.0, -8.0, 24.0)
+            .chest(-3.0, -6.0, 24.0)
+            .head(-4.0, 4.0, -44.0)
+            .wrists(4.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.30, 1.54, -0.06], [0.42, 0.34, -0.84]),
+            -16.0,
+            0.04,
+        )
+    };
+
+    // The last inch: deeper into the rear leg, the blade further back.
+    let coil = {
+        let body = Pose::rest()
+            .hips(0.08, -0.21, -0.10)
+            .root(-4.0, -7.0, 33.0)
+            .spine(-8.0, -9.0, 25.0)
+            .chest(-4.0, -7.0, 24.0)
+            .head(-6.0, 4.0, -46.0)
+            .wrists(6.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.32, 1.54, -0.12], [0.54, 0.74, 0.40]),
+            -18.0,
+            0.06,
+        )
+    };
+
+    // The release: the rear leg fires and the front foot is off the floor on
+    // its way out to a lunge. The trunk has started round; the blade is
+    // still up over the shoulder.
+    let push = {
+        let body = Pose::rest()
+            .hips(0.06, -0.17, 0.04)
+            .root(4.0, -5.0, 30.0)
+            .spine(6.0, -7.0, 20.0)
+            .chest(2.0, -5.0, 19.0)
+            .head(0.0, 4.0, -42.0)
+            .wrists(-4.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.36, 1.50, 0.04], [0.56, 0.72, 0.40]),
+            0.28,
+            0.12,
+        )
+    };
+
+    // **The start of the arc**: high and out to the right, coming down, the
+    // front foot reaching for the floor a long way ahead.
+    let high = {
+        let body = Pose::rest()
+            .hips(0.03, -0.16, 0.10)
+            .root(8.0, -3.0, 22.0)
+            .spine(11.0, -5.0, 14.0)
+            .chest(5.0, -4.0, 12.0)
+            .head(2.0, 2.0, -32.0)
+            .wrists(-4.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.40, 1.38, 0.38], [0.57, 0.57, 0.59]),
+            0.32,
+            0.05,
+        )
+    };
+
+    // Level and dead ahead, the front foot down and the hips dropping into
+    // the lunge -- lower and further forward than the opener's middle.
+    let level = {
+        let body = Pose::rest()
+            .hips(-0.03, -0.24, 0.18)
+            .root(14.0, 1.0, -8.0)
+            .spine(16.0, 2.0, -12.0)
+            .chest(7.0, 1.0, -12.0)
+            .head(2.0, 0.0, 22.0)
+            .wrists(-3.0, 0.0, 0.0);
+        lunge(
+            weapon(body, [0.04, 1.16, 0.52], [0.02, 0.02, 1.0]),
+            0.20,
+            0.30,
+        )
+    };
+
+    // **The end of the arc**: low past the left hip, the body at the bottom
+    // of the lunge.
+    let low = {
+        let body = Pose::rest()
+            .hips(-0.07, -0.31, 0.21)
+            .root(20.0, 2.0, -24.0)
+            .spine(22.0, 3.0, -17.0)
+            .chest(9.0, 2.0, -17.0)
+            .head(3.0, -2.0, 50.0)
+            .wrists(-5.0, 0.0, 0.0);
+        lunge(
+            weapon(body, [-0.36, 0.86, 0.38], [-0.60, -0.55, 0.58]),
+            0.22,
+            0.32,
+        )
+    };
+
+    // Carried round and behind: the blade has gone past the hip and on toward
+    // the back, the shoulders turned as far as they turn. The opener stops at
+    // the hip; this does not.
+    let round = {
+        let body = Pose::rest()
+            .hips(-0.08, -0.34, 0.22)
+            .root(23.0, 2.0, -44.0)
+            .spine(24.0, 3.0, -30.0)
+            .chest(10.0, 2.0, -30.0)
+            .head(4.0, -2.0, 62.0)
+            .wrists(-6.0, 0.0, 0.0);
+        lunge(
+            weapon(body, [-0.38, 0.84, 0.18], [-0.74, -0.46, -0.30]),
+            0.22,
+            0.32,
+        )
+    };
+
+    // Held there, a breath risen out of the bottom: the stillness after a big
+    // cut, while what it threw is still travelling.
+    let held = {
+        let body = Pose::rest()
+            .hips(-0.07, -0.31, 0.20)
+            .root(21.0, 2.0, -42.0)
+            .spine(22.0, 3.0, -28.0)
+            .chest(9.0, 2.0, -28.0)
+            .head(2.0, -2.0, 58.0)
+            .wrists(-8.0, 0.0, 0.0);
+        lunge(
+            weapon(body, [-0.36, 0.86, 0.20], [-0.70, -0.52, -0.24]),
+            0.22,
+            0.32,
+        )
+    };
+
+    // Standing up out of the lunge, the rear foot gathered in from where it
+    // was left, the point coming back on line.
+    let settle = {
+        let body = Pose::rest()
+            .hips(-0.05, -0.13, 0.04)
+            .root(7.0, 2.0, -12.0)
+            .spine(10.0, 3.0, -6.0)
+            .chest(3.0, 2.0, -4.0)
+            .head(-1.0, 0.0, 16.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [-0.12, 1.10, 0.26], [-0.32, 0.50, 0.80])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.10])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.05, REAR[2] - 0.08])
+            .toe_floor_r()
+    };
+
+    let mut score = Score::new();
+    score.key(0, charged, Ease::IN);
+    score.key(part(0, windup, 0.5), coil, Ease::LINEAR);
+    score.key(windup, push, Ease::LINEAR);
+    score.key(contact, high, Ease::LINEAR);
+    score.key(part(contact, through, 0.5), level, Ease::LINEAR);
+    score.key(through, low, Ease::LINEAR);
+    score.key(through + 2, round, Ease::OUT);
+    score.key(part(through, last, 0.45), held, Ease::SMOOTH);
+    score.key(part(through, last, 0.75), settle, Ease::OUT);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: SWORD,
+        notes: "The sword held to full: the opener's diagonal, from the same \
+                shoulder, because a full charge is still its weapon and the \
+                shape the player learned is the shape they read. Everything \
+                around the cut is bigger. It opens wound -- the hold has \
+                already been spent winding up -- with the blade laid back \
+                *behind the head* rather than over the shoulder and the body \
+                sunk and turned onto the rear leg, and its three frames of \
+                startup are one last inch of that and the release. The cut is \
+                thrown off a lunge rather than a step: the front foot goes out \
+                and down a long way ahead and the hips drop into it through the \
+                arc. And it does not stop at the hip -- the blade carries round \
+                and behind and the body stays down in the lunge, arm out, for a \
+                breath, because the cut has left the sword and is still flying \
+                down the line. The stillness is the finish."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shockwave -- the hammer's full charge
+// ---------------------------------------------------------------------------
+
+/// The overhead, off a hop, into the floor between the feet.
+///
+/// `Plane::Upright` like the opener, so the arc is the same arc: over the
+/// head, level in front, the floor. What makes it the bigger thing is the body
+/// under it. It opens at the top of the slam's wind-up and goes further --
+/// up onto the toes -- and then **leaves the floor**: a little hop as the
+/// trunk snaps forward, so the body comes down with the hammer and both feet
+/// land **square and wide** on the frame it starts down. The opener is bladed
+/// and folds forward over a line; this one squats straight down over a point,
+/// because what it breaks goes out in a ring all round him.
+fn shockwave() -> Recipe {
+    let clip = Clip::ChampionShockwave;
+    let (windup, contact, through) = clip.phases().expect("the shockwave animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Charged: the slam's top and further -- arms straight up and back, the
+    // head of the weapon hanging down the back, the spine arched, the rear
+    // heel up.
+    let hoisted = {
+        let body = Pose::rest()
+            .hips(0.01, -0.04, -0.12)
+            .root(-15.0, -1.0, 3.0)
+            .spine(-21.0, -1.0, 1.0)
+            .chest(-14.0, -1.0, 1.0)
+            .head(-30.0, 0.0, -2.0)
+            .wrists(12.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l(LEAD)
+                .toe_l(-18.0)
+                .plant_r([REAR[0], REAR[1] + 0.07, REAR[2]])
+                .toe_floor_r(),
+            120.0,
+            0.46,
+            238.0,
+            CHOKE,
+        )
+    };
+
+    // Up on both toes: the whole body stretched as tall as it goes under the
+    // weight, which is the frame that says this is not the ordinary slam.
+    let tall = {
+        let body = Pose::rest()
+            .hips(0.0, 0.0, -0.10)
+            .root(-17.0, 0.0, 1.0)
+            .spine(-23.0, 0.0, 0.0)
+            .chest(-16.0, 0.0, 0.0)
+            .head(-32.0, 0.0, 0.0)
+            .wrists(14.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([LEAD[0], GROUND + 0.06, LEAD[2] - 0.02])
+                .toe_floor_l()
+                .plant_r([REAR[0], GROUND + 0.09, REAR[2] + 0.02])
+                .toe_floor_r(),
+            124.0,
+            0.46,
+            232.0,
+            CHOKE,
+        )
+    };
+
+    // The hop: the trunk snaps forward and drags the weapon over the top, and
+    // both feet are off the floor, gathering to come down apart.
+    let hop = {
+        let body = Pose::rest()
+            .hips(0.0, 0.02, -0.03)
+            .root(-4.0, 0.0, 0.0)
+            .spine(-8.0, 0.0, 0.0)
+            .chest(-6.0, 0.0, 0.0)
+            .head(-22.0, 0.0, 0.0)
+            .wrists(8.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.20, GROUND + 0.14, 0.10])
+                .toe_l(-8.0)
+                .plant_r([0.20, GROUND + 0.16, -0.06])
+                .toe_r(-8.0),
+            102.0,
+            0.42,
+            156.0,
+            0.09,
+        )
+    };
+
+    // **Contact: the start of the arc**, landing. Both feet down square and
+    // wide, the weapon standing up over the head and tipping forward.
+    let high = {
+        let body = Pose::rest()
+            .hips(0.0, -0.16, 0.03)
+            .root(6.0, 0.0, 0.0)
+            .spine(4.0, 0.0, -1.0)
+            .chest(2.0, 0.0, -1.0)
+            .head(-12.0, 0.0, 2.0)
+            .wrists(2.0, 0.0, 0.0);
+        Beat::new(wide(body, 0.27), 70.0, 0.44, 58.0, GRIP)
+    };
+
+    // Halfway down, and the body dropping straight down after it -- not
+    // forward over a lead leg, down between two.
+    let level = {
+        let body = Pose::rest()
+            .hips(0.0, -0.30, 0.05)
+            .root(22.0, 0.0, 0.0)
+            .spine(20.0, 0.0, -1.0)
+            .chest(8.0, 0.0, -2.0)
+            .head(-4.0, 0.0, 4.0)
+            .wrists(-6.0, 0.0, 0.0);
+        Beat::new(wide(body, 0.27), 8.0, 0.46, -6.0, GRIP)
+    };
+
+    // **The end of the arc: into the floor.** A full squat, square, the arms
+    // driven straight down and the head of the weapon into the ground close
+    // in front -- steeper and nearer than the opener's, which reaches out
+    // along a line.
+    let floor = {
+        let body = Pose::rest()
+            .hips(0.0, -0.43, 0.07)
+            .root(36.0, 0.0, 0.0)
+            .spine(36.0, 0.0, -2.0)
+            .chest(16.0, 0.0, -2.0)
+            .head(10.0, 0.0, 4.0)
+            .wrists(-14.0, 0.0, 0.0);
+        Beat::new(wide(body, 0.27), -50.0, 0.46, -66.0, GRIP)
+    };
+
+    // The ground goes: the body sinks a little further onto it and stays.
+    let sunk = {
+        let body = Pose::rest()
+            .hips(0.0, -0.46, 0.05)
+            .root(40.0, 0.0, 0.0)
+            .spine(38.0, 0.0, -1.0)
+            .chest(15.0, 0.0, -1.0)
+            .head(14.0, 0.0, 2.0)
+            .wrists(-12.0, 0.0, 0.0);
+        wide(weapon(body, [0.0, 0.42, 0.56], [0.0, -0.55, 0.84]), 0.27)
+    };
+
+    // Still down while the ring runs out, the head lifting to watch it go.
+    let watch = {
+        let body = Pose::rest()
+            .hips(0.0, -0.44, 0.04)
+            .root(36.0, 0.0, 2.0)
+            .spine(32.0, 0.0, 1.0)
+            .chest(10.0, 0.0, 1.0)
+            .head(-14.0, 0.0, -4.0)
+            .wrists(-12.0, 0.0, 0.0);
+        wide(weapon(body, [0.02, 0.46, 0.54], [0.02, -0.50, 0.87]), 0.27)
+    };
+
+    // Hauling it back up, legs first, the feet drawing in toward the guard.
+    let haul = {
+        let body = Pose::rest()
+            .hips(0.0, -0.22, 0.03)
+            .root(20.0, -1.0, 10.0)
+            .spine(20.0, -2.0, 8.0)
+            .chest(8.0, -1.0, 10.0)
+            .head(2.0, 0.0, -16.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.06, 0.86, 0.46], [0.04, 0.36, 0.93])
+            .plant_l([-0.21, GROUND, 0.14])
+            .toe_l(-2.0)
+            .plant_r([0.21, GROUND + 0.03, -0.10])
+            .toe_floor_r()
+    };
+
+    // Up onto the guard and a little past it.
+    let shoulder = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, 0.0)
+            .root(5.0, 0.0, 12.0)
+            .spine(8.0, 0.0, 10.0)
+            .chest(4.0, 0.0, 13.0)
+            .head(-3.0, 0.0, -24.0)
+            .wrists(-8.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.02, 1.22, 0.24], [-0.18, 0.95, 0.26]),
+            0.0,
+            0.03,
+        )
+    };
+
+    // Keyed a frame ahead of the volume, as the slam is: the trunk's springs
+    // run behind their keys and the weapon has to be on the line, not chasing.
+    let lead = |f: u16| f.saturating_sub(1);
+    let at_tall = tell(windup).min(lead(contact).saturating_sub(2)).max(1);
+    let at_hop = lead(contact).saturating_sub(1).max(at_tall + 1);
+    let mid = part(contact, through, 0.5);
+
+    let mut score = Score::new();
+    score.swing((0, &hoisted), (at_tall, &tall), Ease::SMOOTH);
+    score.swing((at_tall, &tall), (at_hop, &hop), Ease::IN);
+    score.swing((at_hop, &hop), (lead(contact), &high), Ease::LINEAR);
+    score.swing((lead(contact), &high), (lead(mid), &level), Ease::LINEAR);
+    score.swing((lead(mid), &level), (lead(through), &floor), Ease::LINEAR);
+    score.key(lead(through), floor.pose(), Ease::OUT);
+    score.key(part(through, last, 0.18), sunk, Ease::SMOOTH);
+    score.key(part(through, last, 0.42), watch, Ease::SMOOTH);
+    score.key(part(through, last, 0.66), haul, CARRY);
+    score.key(part(through, last, 0.86), shoulder, Ease::SMOOTH);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: HAMMER,
+        notes: "The hammer held to full. The same upright arc as the opener -- \
+                over the head, level, the floor -- because a full charge is \
+                still its weapon; the body under it is what is bigger. It opens \
+                at the top of the slam's wind-up, the hold having bought that \
+                already, and goes further: up onto both toes, stretched as tall \
+                as a body goes under a weight. Then it leaves the floor, a \
+                small hop as the trunk snaps forward, so the body comes down \
+                *with* the hammer and both feet land square and wide on the \
+                frame the arc starts. The opener is bladed and folds forward \
+                over a line; this squats straight down over a point, the arms \
+                driven down and the head of the weapon into the floor close in \
+                front, because what breaks goes out in a ring all round him. \
+                It stays down while the ring runs out, head lifting to watch \
+                it, and twenty-odd frames of hauling up after are legs first."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Repel -- the spear's full charge
+// ---------------------------------------------------------------------------
+
+/// The pole swung flat a whole turn round him, held wide, to throw everyone
+/// near him away.
+///
+/// `Plane::Flat`, like the Whirl it used to borrow, and it is the Whirl's
+/// opposite in every way that can be seen. The Whirl drops to the knees and
+/// sweeps a leg-height circle with the hands together near the sternum; this
+/// one stays **up** -- a little sunk, chest proud -- with the hands **wide** on
+/// the haft and the arms long, pushing the pole round rather than cutting
+/// with its head. And it turns *more*: a body cannot turn a whole circle on
+/// the spot, so the rear foot steps round behind the front one through the
+/// sweep and the turn finishes on the far side of square, which is what a
+/// full turn looks like on a rig whose facing does not move.
+fn repel() -> Recipe {
+    let clip = Clip::ChampionRepel;
+    let (windup, contact, through) = clip.phases().expect("the repel animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    let wound_feet = |pose: Pose, heels: f32| {
+        let pose = pose
+            .plant_l([LEAD[0] + 0.02, GROUND + heels * 0.6, LEAD[2]])
+            .plant_r([REAR[0], REAR[1] + heels, REAR[2]]);
+        if heels > 0.02 {
+            pose.toe_floor_l().toe_floor_r()
+        } else {
+            pose.toe_l(-6.0).toe_floor_r()
+        }
+    };
+
+    // Charged: wound hard to the right with the pole held wide across the
+    // body and laid back behind the right shoulder.
+    let braced = {
+        let body = Pose::rest()
+            .hips(0.06, -0.16, -0.04)
+            .root(2.0, -5.0, 44.0)
+            .spine(2.0, -7.0, 28.0)
+            .chest(0.0, -5.0, 28.0)
+            .head(-2.0, 3.0, -56.0)
+            .wrists(-4.0, 0.0, 0.0);
+        wound_feet(
+            grip(body, [0.20, 1.16, -0.06], [0.82, -0.04, -0.57], WIDE),
+            0.03,
+        )
+    };
+
+    // Further round, and sunk: the last of the wind-up.
+    let deeper = {
+        let body = Pose::rest()
+            .hips(0.07, -0.21, -0.06)
+            .root(4.0, -6.0, 52.0)
+            .spine(4.0, -8.0, 32.0)
+            .chest(2.0, -6.0, 32.0)
+            .head(-2.0, 4.0, -64.0)
+            .wrists(-4.0, 0.0, 0.0);
+        wound_feet(
+            grip(body, [0.18, 1.12, -0.10], [0.66, -0.06, -0.75], WIDE),
+            0.05,
+        )
+    };
+
+    // Unwinding: the hips have gone, the hands have not, both heels up for
+    // the turn.
+    let pivot = {
+        let body = Pose::rest()
+            .hips(0.05, -0.20, -0.03)
+            .root(4.0, -5.0, 38.0)
+            .spine(4.0, -7.0, 28.0)
+            .chest(2.0, -5.0, 30.0)
+            .head(-2.0, 3.0, -56.0)
+            .wrists(-4.0, 0.0, 0.0);
+        wound_feet(
+            grip(body, [0.20, 1.12, -0.04], [0.86, -0.06, -0.50], WIDE),
+            0.07,
+        )
+    };
+
+    // Round the right side, the pole out at full length.
+    let right = {
+        let body = Pose::rest()
+            .hips(0.02, -0.20, 0.0)
+            .root(4.0, -3.0, 22.0)
+            .spine(4.0, -4.0, 16.0)
+            .chest(2.0, -3.0, 16.0)
+            .head(-2.0, 2.0, -30.0)
+            .wrists(-4.0, 0.0, 0.0);
+        wound_feet(
+            grip(body, [0.18, 1.10, 0.10], [0.98, -0.08, 0.16], WIDE),
+            0.07,
+        )
+    };
+
+    // Across the front, chest-proud, arms long.
+    let front = {
+        let body = Pose::rest()
+            .hips(0.0, -0.20, 0.02)
+            .root(4.0, 0.0, -6.0)
+            .spine(3.0, 0.0, -8.0)
+            .chest(1.0, 0.0, -8.0)
+            .head(-2.0, 0.0, 14.0)
+            .wrists(-4.0, 0.0, 0.0);
+        wound_feet(
+            grip(body, [-0.02, 1.10, 0.24], [-0.30, -0.08, 0.95], WIDE),
+            0.07,
+        )
+    };
+
+    // Round the left side, and the rear foot coming off the floor to step
+    // round behind: the turn is now more than the hips can give.
+    let left = {
+        let body = Pose::rest()
+            .hips(0.03, -0.20, -0.02)
+            .root(4.0, 3.0, -36.0)
+            .spine(3.0, 4.0, -24.0)
+            .chest(1.0, 3.0, -24.0)
+            .head(-2.0, -2.0, 46.0)
+            .wrists(-4.0, 0.0, 0.0);
+        grip(body, [-0.18, 1.10, 0.06], [-0.96, -0.08, -0.26], WIDE)
+            .plant_l([LEAD[0] + 0.02, GROUND + 0.04, LEAD[2]])
+            .toe_floor_l()
+            .plant_r([0.06, GROUND + 0.10, -0.20])
+            .toe_r(-10.0)
+    };
+
+    // Between the front and the left, the hips carried a few centimetres
+    // after the pole: the weight of three metres of shaft going round pulls
+    // the body with it, and it is what keeps the hands -- which the hit line
+    // puts a quarter turn apart on each of these frames -- from outrunning
+    // the body they are on.
+    let swung = {
+        let body = front.blend(&left, 0.5).hips(-0.03, -0.20, 0.06);
+        body.plant_l([LEAD[0] + 0.02, GROUND + 0.05, LEAD[2]])
+            .toe_floor_l()
+            .plant_r([0.10, GROUND + 0.09, -0.18])
+            .toe_floor_r()
+    };
+
+    // **The end of it**: behind on the left, wound as far the other way as it
+    // started, the rear foot put down crossed behind the front one.
+    let behind = {
+        let body = Pose::rest()
+            .hips(0.02, -0.19, -0.03)
+            .root(4.0, 5.0, -50.0)
+            .spine(3.0, 7.0, -30.0)
+            .chest(1.0, 5.0, -32.0)
+            .head(-2.0, -4.0, 60.0)
+            .wrists(-4.0, 0.0, 0.0);
+        grip(body, [-0.18, 1.12, -0.04], [-0.70, -0.06, -0.71], WIDE)
+            .plant_l([LEAD[0] + 0.02, GROUND + 0.04, LEAD[2]])
+            .toe_floor_l()
+            .plant_r([-0.02, GROUND + 0.04, -0.24])
+            .toe_floor_r()
+    };
+
+    // Carried on past it by the weight of the pole, and held: arms still
+    // wide, the shove still in the shoulders.
+    let carried = {
+        let body = Pose::rest()
+            .hips(0.0, -0.16, -0.02)
+            .root(3.0, 5.0, -56.0)
+            .spine(2.0, 7.0, -33.0)
+            .chest(0.0, 5.0, -36.0)
+            .head(-2.0, -4.0, 64.0)
+            .wrists(-6.0, 0.0, 0.0);
+        grip(body, [-0.16, 1.14, -0.08], [-0.58, -0.04, -0.81], WIDE)
+            .plant_l([LEAD[0] + 0.02, GROUND, LEAD[2]])
+            .toe_l(0.0)
+            .plant_r([-0.02, GROUND + 0.03, -0.24])
+            .toe_floor_r()
+    };
+
+    // Unwinding back toward the guard, the rear foot stepping back out to
+    // its own spot.
+    let unwind = {
+        let body = Pose::rest()
+            .hips(-0.03, -0.11, 0.0)
+            .root(4.0, 2.0, -18.0)
+            .spine(6.0, 3.0, -10.0)
+            .chest(3.0, 2.0, -8.0)
+            .head(-2.0, 0.0, 20.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [-0.06, 1.14, 0.20], [-0.40, 0.40, 0.82])
+            .plant_l(LEAD)
+            .toe_l(0.0)
+            .plant_r([REAR[0] - 0.04, GROUND + 0.06, REAR[2] + 0.02])
+            .toe_r(-8.0)
+    };
+
+    let mut score = Score::new();
+    score.key(0, braced, Ease::IN);
+    score.key(
+        tell(windup).min(windup.saturating_sub(1)).max(1),
+        deeper,
+        Ease::SNAP,
+    );
+    score.key(windup, pivot, Ease::LINEAR);
+    score.key(contact, right, Ease::LINEAR);
+    score.key(part(contact, through, 0.4), front, Ease::LINEAR);
+    score.key(part(contact, through, 0.6), swung, Ease::LINEAR);
+    score.key(part(contact, through, 0.8), left, Ease::LINEAR);
+    score.key(through, behind, Ease::LINEAR);
+    score.key(through + 3, carried, Ease::OUT);
+    score.key(part(through, last, 0.6), unwind, Ease::SMOOTH);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            root: Feel::new(0.5, 1.0),
+            ..SPEAR
+        },
+        notes: "The spear held to full: the pole swung flat a whole turn round \
+                him to throw everybody near him clear. It shares a plane with \
+                the Whirl it used to borrow and is made to be its opposite on \
+                sight. The Whirl drops to the knees and sweeps a leg-height \
+                circle with the hands together at the sternum; this stays up, \
+                a little sunk and chest proud, with the hands wide on the haft \
+                and the arms long -- a staff pushed round, not a blade cut \
+                round, which is the shove it is. And it turns further than a \
+                body can turn on the spot: wound hard right on the charge, then \
+                round, and the rear foot comes off the floor and steps behind \
+                the front one so the turn ends past square on the left, which \
+                is what a whole circle looks like on a rig whose facing does \
+                not move. It holds there a beat, the shove still in the \
+                shoulders, and steps back out to the guard. On the live frames \
+                the hands are where the hit line puts them (`anim::track`), and \
+                that line turns a quarter of a circle a frame -- so the wide \
+                grip is what the wind-up and the finish show, the hips are \
+                carried a few centimetres after the pole as it goes round, and \
+                the root is crisper than the spear's own so that drift arrives \
+                on the frames the hands need it rather than one late."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Thousand Cuts -- the sword's grand finisher
+// ---------------------------------------------------------------------------
+
+/// The drawn sword run straight through a line of them, seven metres in a
+/// flash, and the cuts land after he has gone.
+///
+/// The Rush slash is a run that keeps cutting; this is **one** draw, and then
+/// stillness. It opens crouched with the blade held back low at the left hip
+/// like a sword in its scabbard, sinks, and goes: the body thrown forward low
+/// and flat while the simulation carries it seven metres, the blade drawn
+/// across and out to the right as it goes. Then he has arrived, past them,
+/// down in a lunge with the blade out at his side and **nothing moving** for a
+/// long beat -- that is when the cuts left hanging behind him land -- before
+/// the blade is flicked down and brought home.
+fn thousand_cuts() -> Recipe {
+    let clip = Clip::ChampionThousandCuts;
+    let (windup, contact, through) = clip.phases().expect("thousand cuts animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Charged: low and forward, the hands at the left hip with the blade
+    // pointing back and down behind it, the head up and level along the line
+    // he is about to run.
+    let sheathed = {
+        let body = Pose::rest()
+            .hips(-0.02, -0.25, 0.0)
+            .root(16.0, 4.0, -30.0)
+            .spine(12.0, 6.0, -18.0)
+            .chest(4.0, 4.0, -20.0)
+            .head(-12.0, -2.0, 46.0)
+            .wrists(-6.0, 0.0, 0.0);
+        weapon(body, [-0.20, 0.98, 0.10], [-0.36, -0.30, -0.88])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.12])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.05, REAR[2] - 0.10])
+            .toe_floor_r()
+    };
+
+    // Sinking the last inch, the weight going onto the front foot.
+    let sink = {
+        let body = Pose::rest()
+            .hips(-0.02, -0.30, 0.04)
+            .root(22.0, 4.0, -32.0)
+            .spine(15.0, 6.0, -20.0)
+            .chest(5.0, 4.0, -22.0)
+            .head(-18.0, -2.0, 50.0)
+            .wrists(-6.0, 0.0, 0.0);
+        weapon(body, [-0.22, 0.94, 0.10], [-0.38, -0.32, -0.87])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.12])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.07, REAR[2] - 0.12])
+            .toe_floor_r()
+    };
+
+    // Gone: the rear leg fires and the body is thrown forward, the front foot
+    // already off the floor, the blade starting out of the hip.
+    let gone = {
+        let body = Pose::rest()
+            .hips(-0.01, -0.24, 0.12)
+            .root(28.0, 3.0, -24.0)
+            .spine(18.0, 5.0, -16.0)
+            .chest(6.0, 3.0, -16.0)
+            .head(-24.0, -2.0, 40.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [-0.16, 1.00, 0.24], [-0.70, -0.20, -0.68])
+            .plant_l([LEAD[0], GROUND + 0.14, LEAD[2] + 0.16])
+            .toe_l(-10.0)
+            .plant_r([REAR[0], REAR[1] + 0.14, REAR[2] - 0.26])
+            .toe_r(-30.0)
+    };
+
+    // The flash: flat out, low, the legs split in one long stride with
+    // neither on the floor, the blade drawn across the front.
+    let flash = {
+        let body = Pose::rest()
+            .hips(0.0, -0.20, 0.14)
+            .root(30.0, 0.0, -2.0)
+            .spine(16.0, 0.0, 0.0)
+            .chest(6.0, 0.0, 2.0)
+            .head(-26.0, 0.0, 0.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [0.04, 1.06, 0.42], [0.20, -0.08, 0.98])
+            .plant_l([-0.15, 0.34, 0.34])
+            .toe_l(10.0)
+            .plant_r([0.15, 0.30, -0.44])
+            .toe_r(34.0)
+    };
+
+    // Still going, the cut finished: the blade out to the right and trailing.
+    let drawn = {
+        let body = Pose::rest()
+            .hips(0.03, -0.22, 0.14)
+            .root(28.0, -3.0, 18.0)
+            .spine(16.0, -5.0, 14.0)
+            .chest(6.0, -3.0, 16.0)
+            .head(-24.0, 2.0, -30.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [0.30, 1.00, 0.28], [0.84, -0.20, -0.50])
+            .plant_l([-0.15, 0.24, 0.12])
+            .toe_l(20.0)
+            .plant_r([0.15, 0.36, -0.30])
+            .toe_r(30.0)
+    };
+
+    // **Arrived.** Past them, down in a long lunge, the blade out low at his
+    // right side and pointing back down the line he came along.
+    let past = {
+        let body = Pose::rest()
+            .hips(0.05, -0.34, 0.16)
+            .root(20.0, -4.0, 28.0)
+            .spine(14.0, -6.0, 20.0)
+            .chest(5.0, -4.0, 20.0)
+            .head(-14.0, 4.0, -46.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [0.34, 0.90, 0.26], [0.78, -0.42, -0.46])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.24])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.08, REAR[2] - 0.30])
+            .toe_floor_r()
+    };
+
+    // Nothing moves. A breath lower, and held -- this is when the cuts land.
+    let still = {
+        let body = Pose::rest()
+            .hips(0.05, -0.36, 0.16)
+            .root(21.0, -4.0, 28.0)
+            .spine(14.0, -6.0, 20.0)
+            .chest(5.0, -4.0, 20.0)
+            .head(-15.0, 4.0, -46.0)
+            .wrists(-5.0, 0.0, 0.0);
+        weapon(body, [0.34, 0.88, 0.26], [0.78, -0.44, -0.44])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.24])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.08, REAR[2] - 0.30])
+            .toe_floor_r()
+    };
+
+    // The flick: the blade snapped down at the side, the body rising out of
+    // the lunge.
+    let flick = {
+        let body = Pose::rest()
+            .hips(0.04, -0.24, 0.10)
+            .root(12.0, -3.0, 22.0)
+            .spine(10.0, -5.0, 16.0)
+            .chest(4.0, -3.0, 16.0)
+            .head(-6.0, 3.0, -36.0)
+            .wrists(-10.0, 0.0, 0.0);
+        weapon(body, [0.32, 0.92, 0.30], [0.46, -0.86, 0.22])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.20])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.06, REAR[2] - 0.20])
+            .toe_floor_r()
+    };
+
+    // Standing up and bringing the point back on line, the rear foot coming
+    // in under the body.
+    let home = {
+        let body = Pose::rest()
+            .hips(0.02, -0.12, 0.04)
+            .root(5.0, -1.0, 14.0)
+            .spine(7.0, -2.0, 10.0)
+            .chest(3.0, -1.0, 12.0)
+            .head(-2.0, 1.0, -22.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.08, 1.12, 0.26], [0.10, 0.50, 0.86])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.08])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.05, REAR[2] - 0.06])
+            .toe_floor_r()
+    };
+
+    let mut score = Score::new();
+    score.key(0, sheathed, Ease::IN);
+    score.key(part(0, windup, 0.5), sink, Ease::SNAP);
+    score.key(windup, gone, Ease::LINEAR);
+    score.key(part(contact, through, 0.3), flash, Ease::LINEAR);
+    score.key(through, drawn, Ease::OUT);
+    score.key(part(through, last, 0.12), past, Ease::OUT);
+    score.key(part(through, last, 0.45), still, Ease::HOLD);
+    score.key(part(through, last, 0.58), flick, Ease::OUT);
+    score.key(part(through, last, 0.82), home, Ease::SMOOTH);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: SWORD,
+        notes: "The sword's grand finisher: one draw, and then stillness. The \
+                Rush slash it used to borrow is a run that keeps cutting, a \
+                figure-of-eight with the legs going; this is the opposite \
+                rhythm and has to read so. It opens crouched with the blade \
+                held back low at the left hip, pointing behind, like a sword \
+                still in its scabbard, the head up and level along the line, \
+                and sinks the last inch onto the front foot. Then the rear leg \
+                fires and the body is thrown forward low and flat, legs split \
+                in one long stride with neither down, while the simulation \
+                carries it seven metres and the blade is drawn across and out \
+                to the right. He arrives past them in a long lunge with the \
+                blade out low at his side pointing back down the line -- and \
+                then nothing moves, for a long beat, because that is when the \
+                cuts he left hanging behind him land. Only then the flick, and \
+                the blade brought home."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Meteor -- the hammer's grand finisher
+// ---------------------------------------------------------------------------
+
+/// From the air, the whole body driven down behind the hammer and into the
+/// floor.
+///
+/// The air hammer's shape, made into a dive. Thrown from a jump the
+/// simulation slams him back down the crosshair at thirty metres a second;
+/// thrown from the floor it throws him up first and brings him down where the
+/// crosshair was. Either way the clip is a body in the air that turns into a
+/// falling star: wound up overhead with the knees drawn up, then the arc --
+/// and the arc does not stop at the waist as the air hammer's does. The
+/// hammer goes down under him and the **whole body follows it**, trunk folded
+/// over and legs streaming up behind, head-first behind the head of the
+/// weapon. Then the crater: a landing so deep it is a squat, square and wide,
+/// the hammer in the floor between the feet, and a long haul up.
+fn meteor() -> Recipe {
+    let clip = Clip::ChampionMeteor;
+    let (windup, contact, through) = clip.phases().expect("the meteor animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // No floor yet: `tuck` draws the knees up under the body, as the air
+    // hammer's does.
+    let air = |body: Pose, tuck: f32| {
+        body.plant_l([-0.15, 0.24 + tuck, 0.08 - tuck * 0.5])
+            .toe_l(12.0)
+            .plant_r([0.15, 0.18 + tuck, -0.14 - tuck * 0.5])
+            .toe_r(12.0)
+    };
+    // The dive: the legs streaming up and back behind a body pointed at the
+    // floor.
+    let streaming = |body: Pose, up: f32| {
+        body.plant_l([-0.12, 0.56 + up, -0.40 - up])
+            .toe_l(40.0)
+            .plant_r([0.12, 0.64 + up, -0.50 - up])
+            .toe_r(40.0)
+    };
+
+    // Charged: the air hammer drawn and more -- arms straight up and back,
+    // the head of the weapon down the back, the knees right up.
+    let hoisted = {
+        let body = Pose::rest()
+            .hips(0.0, 0.03, -0.08)
+            .root(-20.0, 0.0, 2.0)
+            .spine(-23.0, 0.0, 1.0)
+            .chest(-15.0, 0.0, 1.0)
+            .head(-30.0, 0.0, -2.0)
+            .wrists(12.0, 0.0, 0.0);
+        Beat::new(air(body, 0.30), 122.0, 0.46, 234.0, CHOKE)
+    };
+
+    // The bow drawn as far as it goes: the back arched over, knees to the
+    // chest.
+    let coiled = {
+        let body = Pose::rest()
+            .hips(0.0, 0.04, -0.10)
+            .root(-24.0, 0.0, 1.0)
+            .spine(-25.0, 0.0, 0.0)
+            .chest(-18.0, 0.0, 0.0)
+            .head(-32.0, 0.0, 0.0)
+            .wrists(14.0, 0.0, 0.0);
+        Beat::new(air(body, 0.36), 126.0, 0.46, 228.0, CHOKE)
+    };
+
+    // The trunk snaps forward first and drags the weapon over the top.
+    let whip = {
+        let body = Pose::rest()
+            .hips(0.0, -0.01, 0.0)
+            .root(6.0, 0.0, 0.0)
+            .spine(4.0, 0.0, -1.0)
+            .chest(0.0, 0.0, -1.0)
+            .head(-18.0, 0.0, 2.0)
+            .wrists(6.0, 0.0, 0.0);
+        Beat::new(air(body, 0.14), 90.0, 0.42, 140.0, 0.09)
+    };
+
+    // **Contact: the start of the arc**, the weapon up over the head and
+    // tipping forward, the legs starting to kick out behind.
+    let high = {
+        let body = Pose::rest()
+            .hips(0.0, -0.05, 0.04)
+            .root(12.0, 0.0, -1.0)
+            .spine(10.0, 0.0, -2.0)
+            .chest(4.0, 0.0, -2.0)
+            .head(-12.0, 0.0, 4.0)
+            .wrists(2.0, 0.0, 0.0);
+        Beat::new(air(body, 0.02), 68.0, 0.44, 60.0, GRIP)
+    };
+
+    // Level in front, the trunk folding after it and the legs going up behind.
+    let level = {
+        let body = Pose::rest()
+            .hips(0.0, -0.08, 0.08)
+            .root(28.0, 0.0, -2.0)
+            .spine(26.0, 0.0, -3.0)
+            .chest(12.0, 0.0, -3.0)
+            .head(4.0, 0.0, 6.0)
+            .wrists(-6.0, 0.0, 0.0);
+        Beat::new(streaming(body, 0.0), 6.0, 0.46, -10.0, GRIP)
+    };
+
+    // **The dive.** The hammer straight down under him and the whole body
+    // behind it: folded over as far as a trunk folds, head down, legs
+    // streaming up behind. A falling star, not a swing.
+    let dive = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, 0.12)
+            .root(46.0, 0.0, -2.0)
+            .spine(40.0, 0.0, -3.0)
+            .chest(18.0, 0.0, -3.0)
+            .head(20.0, 0.0, 6.0)
+            .wrists(-16.0, 0.0, 0.0);
+        Beat::new(streaming(body, 0.08), -60.0, 0.46, -82.0, GRIP)
+    };
+
+    // Still falling, held in the dive, legs up.
+    let plummet = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, 0.12)
+            .root(47.0, 0.0, -1.0)
+            .spine(41.0, 0.0, -2.0)
+            .chest(18.0, 0.0, -2.0)
+            .head(22.0, 0.0, 4.0)
+            .wrists(-16.0, 0.0, 0.0);
+        streaming(weapon(body, [0.0, 0.48, 0.52], [0.0, -0.80, 0.60]), 0.10)
+    };
+
+    // **The crater.** Landed on it: a squat so deep the knees are past the
+    // hips, square and wide, the hammer in the floor between the feet.
+    let crater = {
+        let body = Pose::rest()
+            .hips(0.0, -0.47, 0.08)
+            .root(40.0, 0.0, 0.0)
+            .spine(38.0, 0.0, -1.0)
+            .chest(16.0, 0.0, -1.0)
+            .head(14.0, 0.0, 2.0)
+            .wrists(-14.0, 0.0, 0.0);
+        wide(weapon(body, [0.0, 0.40, 0.56], [0.0, -0.58, 0.81]), 0.29)
+    };
+
+    // Kept down there while the ground is still breaking, the head coming up.
+    let crushed = {
+        let body = Pose::rest()
+            .hips(0.0, -0.45, 0.06)
+            .root(36.0, 0.0, 2.0)
+            .spine(32.0, 0.0, 1.0)
+            .chest(10.0, 0.0, 1.0)
+            .head(-12.0, 0.0, -4.0)
+            .wrists(-12.0, 0.0, 0.0);
+        wide(weapon(body, [0.02, 0.44, 0.54], [0.02, -0.52, 0.85]), 0.29)
+    };
+
+    // Hauling it up out of the hole.
+    let haul = {
+        let body = Pose::rest()
+            .hips(0.0, -0.22, 0.03)
+            .root(20.0, -1.0, 10.0)
+            .spine(20.0, -2.0, 8.0)
+            .chest(8.0, -1.0, 10.0)
+            .head(2.0, 0.0, -16.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.06, 0.86, 0.46], [0.04, 0.36, 0.93])
+            .plant_l([-0.22, GROUND, 0.14])
+            .toe_l(-2.0)
+            .plant_r([0.22, GROUND + 0.03, -0.10])
+            .toe_floor_r()
+    };
+
+    let shoulder = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, 0.0)
+            .root(5.0, 0.0, 12.0)
+            .spine(8.0, 0.0, 10.0)
+            .chest(4.0, 0.0, 13.0)
+            .head(-3.0, 0.0, -24.0)
+            .wrists(-8.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.02, 1.22, 0.24], [-0.18, 0.95, 0.26]),
+            0.0,
+            0.03,
+        )
+    };
+
+    let lead = |f: u16| f.saturating_sub(1);
+    let at_coil = part(0, windup, 0.34).max(1);
+    let at_whip = lead(contact).saturating_sub(1).max(at_coil + 1);
+    let mid = part(contact, through, 0.5);
+
+    let mut score = Score::new();
+    score.swing((0, &hoisted), (at_coil, &coiled), Ease::SMOOTH);
+    score.swing((at_coil, &coiled), (at_whip, &whip), Ease::IN);
+    score.swing((at_whip, &whip), (lead(contact), &high), Ease::LINEAR);
+    score.swing((lead(contact), &high), (lead(mid), &level), Ease::LINEAR);
+    score.swing((lead(mid), &level), (lead(through), &dive), Ease::LINEAR);
+    score.key(lead(through), dive.pose(), Ease::OUT);
+    score.key(part(through, last, 0.14), plummet, Ease::SMOOTH);
+    score.key(part(through, last, 0.32), crater, Ease::OUT);
+    score.key(part(through, last, 0.5), crushed, Ease::SMOOTH);
+    score.key(part(through, last, 0.72), haul, CARRY);
+    score.key(part(through, last, 0.88), shoulder, Ease::SMOOTH);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: HAMMER,
+        notes: "The hammer's grand finisher, and the air hammer made into a \
+                dive. From a jump the simulation slams him down the crosshair at \
+                thirty metres a second; from the floor it throws him up and \
+                brings him down where the crosshair was -- either way the body \
+                is in the air, so nothing is planted until it lands. It opens \
+                with the air hammer's wind-up and more: arms straight up and \
+                back, the back arched over, the knees drawn right up to the \
+                chest. Then the arc, and where the air hammer's stops at the \
+                waist with the legs kicked back to pay for it, this one does \
+                not stop -- the hammer goes straight down under him and the \
+                whole body follows it, trunk folded as far as it folds, head \
+                down, legs streaming up behind: a falling star rather than a \
+                swing. It holds the dive while it falls and then lands in a \
+                crater: a squat so deep the knees are past the hips, square \
+                and wide like the Shockwave because the ground breaks all round, \
+                the hammer in the floor between the feet, and a long haul up \
+                out of the hole."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Heaven-piercer -- the spear's grand finisher
+// ---------------------------------------------------------------------------
+
+/// How the throw carries: the spear's arms, and a trunk that keeps up.
+///
+/// The arms are posed against the chest, so a chest that lags its key by a
+/// frame takes the hands with it -- and this chest unwinds most of a right
+/// angle in the three frames of the throw. At the spear's own trunk lag the
+/// throwing hand was nowhere near where it was sent on the frame the javelin
+/// leaves. A throw is a whip from the hips out, so the trunk is close behind
+/// its keys and only the head trails.
+const THROW: Looseness = Looseness {
+    root: Feel::new(0.4, 1.0),
+    spine: Feel::new(0.4, 1.0),
+    chest: Feel::new(0.4, 1.0),
+    head: Feel::new(1.0, 0.9),
+    arms: Feel::new(0.8, 0.8),
+    legs: Feel::new(1.0, 0.95),
+};
+
+/// The spear drawn all the way back and thrown, and the body after it.
+///
+/// `Shape::None`: the javelin does the hitting, so nothing puts the hands on
+/// a line and every hand here is authored. The Skewer it used to borrow keeps
+/// the point level and drives the body in behind it; this one **lets go**.
+/// Both hands draw the haft back past the right hip with the point tipped up
+/// at the sky along the aim, while the body leans away from the target and
+/// the front knee comes up -- the thrower's crossover. Then the front foot
+/// plants a long way ahead, the hips unwind, the hands drive up through the
+/// front of the body and the right arm is thrown out high at the aim while
+/// the left comes off the haft: the throw. The body follows it over the front
+/// leg with the rear leg kicked up behind, and then goes after it -- the
+/// simulation runs him down the javelin's line at once -- pitched forward and
+/// streaking, rear leg trailing, the right hand reaching ahead for a weapon
+/// that is no longer in it, until both close on the haft and tear it out.
+///
+/// The renderer draws the spear pointing from the left hand through the
+/// right, so the left is kept *behind* the right along the haft for the whole
+/// of the draw: the point is where the throw is going.
+///
+/// **Why the draw is low.** It was first written as a javelin should be, the
+/// haft back over the shoulder with the rear hand behind the head -- and the
+/// left arm, reaching behind the head to sit behind the right along a haft
+/// pointed forward, put the shoulder on its limits in every key and on a
+/// different one of its two readings in each. Interpolated, the hands came
+/// out half a metre from where they were sent. Past the hip the arms work in
+/// front of the body, where the readings agree, and the lean, the knee and
+/// the point tipped at the sky carry the draw.
+fn heaven_piercer() -> Recipe {
+    let clip = Clip::ChampionHeavenPiercer;
+    let (windup, contact, through) = clip.phases().expect("heaven-piercer animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Charged: both hands back on the haft past the right hip, the point
+    // tipped up toward the sky along the aim; the body leaning away from the
+    // target and turned onto the rear leg.
+    let drawn = {
+        let body = Pose::rest()
+            .hips(0.07, -0.16, -0.12)
+            .root(-8.0, -5.0, 34.0)
+            .spine(-10.0, -8.0, 22.0)
+            .chest(-6.0, -6.0, 22.0)
+            .head(-12.0, 3.0, -50.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.24, 1.16, -0.30], [-0.06, 0.40, 0.91])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.04])
+            .toe_l(-14.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.04])
+            .toe_r(0.0)
+    };
+
+    // Drawn further and the front knee up: the crossover before a throw.
+    let reared = {
+        let body = Pose::rest()
+            .hips(0.08, -0.14, -0.13)
+            .root(-9.0, -6.0, 30.0)
+            .spine(-9.0, -8.0, 20.0)
+            .chest(-6.0, -6.0, 20.0)
+            .head(-14.0, 3.0, -54.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.26, 1.14, -0.36], [-0.06, 0.40, 0.91])
+            .plant_l([LEAD[0], GROUND + 0.16, LEAD[2] + 0.12])
+            .toe_l(-10.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.04])
+            .toe_r(0.0)
+    };
+
+    // The front foot plants a long way ahead and the hips go: the hands are
+    // still back, which is the stretch the throw comes out of.
+    let heave = {
+        let body = Pose::rest()
+            .hips(0.06, -0.16, -0.06)
+            .root(-6.0, -4.0, 22.0)
+            .spine(-6.0, -6.0, 14.0)
+            .chest(-4.0, -5.0, 14.0)
+            .head(-12.0, 3.0, -40.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.22, 1.16, -0.20], [-0.06, 0.42, 0.90])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.24])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.05, REAR[2]])
+            .toe_floor_r()
+    };
+
+    // The whip: the trunk round to square and the hands driving up through
+    // the front of the body, the point still on its line.
+    let whip = {
+        let body = Pose::rest()
+            .hips(0.03, -0.18, 0.04)
+            .root(0.0, -2.0, 12.0)
+            .spine(-2.0, -3.0, 6.0)
+            .chest(-2.0, -2.0, 6.0)
+            .head(-12.0, 1.0, -6.0)
+            .wrists(-6.0, 0.0, 0.0);
+        weapon(body, [0.12, 1.28, 0.10], [-0.04, 0.45, 0.89])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.24])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.08, REAR[2] - 0.04])
+            .toe_floor_r()
+    };
+
+    // **The throw.** The trunk has whipped round and the right arm is out
+    // long and high at the aim; the left has come off the haft.
+    let release = {
+        let body = Pose::rest()
+            .hips(0.0, -0.18, 0.10)
+            .root(6.0, 0.0, 2.0)
+            .spine(3.0, 1.0, -2.0)
+            .chest(0.0, 0.0, -2.0)
+            .head(-10.0, 0.0, 6.0)
+            .wrists(-4.0, 0.0, 0.0);
+        body.reach_r([0.06, 1.46, 0.46])
+            .reach_l([-0.10, 1.18, 0.16])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.24])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.10, REAR[2] - 0.08])
+            .toe_floor_r()
+    };
+
+    // Following it: pitched over the front leg, the rear leg kicked up behind,
+    // the throwing arm come down and the other dropped away.
+    let follow = {
+        let body = Pose::rest()
+            .hips(-0.04, -0.24, 0.20)
+            .root(30.0, 2.0, -14.0)
+            .spine(22.0, 3.0, -10.0)
+            .chest(10.0, 2.0, -10.0)
+            .head(-18.0, 0.0, 24.0)
+            .wrists(-6.0, 0.0, 0.0);
+        body.reach_r([-0.02, 1.10, 0.50])
+            .reach_l([-0.26, 0.98, 0.0])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.24])
+            .toe_l(0.0)
+            .plant_r([REAR[0], 0.42, REAR[2] - 0.30])
+            .toe_r(30.0)
+    };
+
+    // After it. The simulation runs him down the javelin's line, so the body
+    // is pitched forward and streaking, both feet off the floor, the right
+    // hand reaching ahead.
+    let streak = |stride: f32| {
+        let body = Pose::rest()
+            .hips(0.0, -0.18, 0.12)
+            .root(28.0, 0.0, -6.0)
+            .spine(14.0, 0.0, -4.0)
+            .chest(6.0, 0.0, -4.0)
+            .head(-26.0, 0.0, 8.0)
+            .wrists(-4.0, 0.0, 0.0);
+        body.reach_r([0.10, 1.20, 0.52 + 0.03 * stride])
+            .reach_l([-0.22, 0.98, -0.06])
+            .plant_l([-0.15, 0.26 + 0.04 * stride, 0.22 + 0.06 * stride])
+            .toe_l(14.0)
+            .plant_r([0.15, 0.42 - 0.04 * stride, -0.52 - 0.06 * stride])
+            .toe_r(36.0)
+    };
+
+    // Arriving, and the hands close on the haft and tear it out: both on it
+    // again, braking on the front foot.
+    let tear = {
+        let body = Pose::rest()
+            .hips(0.02, -0.20, 0.06)
+            .root(6.0, -2.0, 18.0)
+            .spine(4.0, -3.0, 14.0)
+            .chest(0.0, -2.0, 14.0)
+            .head(-4.0, 0.0, -28.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.16, 1.12, 0.10], [-0.04, 0.20, 0.98])
+            .plant_l([LEAD[0], GROUND, LEAD[2] + 0.16])
+            .toe_l(-6.0)
+            .plant_r([REAR[0], REAR[1] + 0.05, REAR[2] - 0.06])
+            .toe_floor_r()
+    };
+
+    let mut score = Score::new();
+    score.key(0, drawn, Ease::IN);
+    score.key(part(0, windup, 0.34).max(1), reared, Ease::SNAP);
+    score.key(part(0, windup, 0.67), heave, Ease::LINEAR);
+    score.key(windup, whip, Ease::LINEAR);
+    score.key(contact, release, Ease::SMOOTH);
+    score.key(through, follow, Ease::OUT);
+    score.key(part(through, last, 0.14), streak(1.0), Ease::SMOOTH);
+    score.key(part(through, last, 0.38), streak(-1.0), Ease::SMOOTH);
+    score.key(part(through, last, 0.62), streak(1.0), Ease::SMOOTH);
+    score.key(part(through, last, 0.82), tear, Ease::OUT);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: THROW,
+        notes: "The spear's grand finisher, and the one move in the class where \
+                the weapon leaves the hands. The Skewer it used to borrow keeps \
+                the point level and drives the body in behind it; this one lets \
+                go. It opens drawn: both hands on the haft, back past the right \
+                hip with the point tipped up at the sky along the aim, the body \
+                leaning away from the target and turned onto the rear leg -- \
+                and its startup is the front knee coming up and the haft going \
+                further back, the thrower's crossover. Then the front foot \
+                plants a long way ahead, the hips unwind, the hands drive up \
+                through the front of the body, and the right arm is thrown out \
+                high at the aim as the left comes off. The body follows over \
+                the front leg with the rear leg kicked up, and then goes after \
+                it, because the simulation runs him straight down the javelin's \
+                line: pitched forward and streaking with the rear leg trailing, \
+                the right hand reaching ahead for a weapon that is no longer in \
+                it, until both hands close on the haft again and tear it out. \
+                No volume puts the hands anywhere -- `Shape::None` -- so every \
+                hand is authored: the left is kept behind the right along the \
+                haft through the draw because the renderer points the spear \
+                from the one through the other, and the draw is past the hip \
+                rather than over the shoulder because a rear hand reaching \
+                behind the head put the shoulder on its limits and the hands \
+                half a metre from where they were sent."
             .into(),
         keys: score.0,
     }

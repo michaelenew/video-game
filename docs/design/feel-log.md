@@ -213,6 +213,20 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-14 — a clip per move, across the roster
+**Changed** Thirty-eight new clips, so no move borrows another's animation: the Blood mage's
+nine (and her five old ones refitted to the moves now on their rows), the Shadow Reaver's
+seven, the Elementalist's seven (her air row, the Air ball, Fire carpet, Fire fountain and
+Earth jump), the Champion's six full charges, the Dual mage's five and the Bulwark's four
+(`view::play::move_clip`, the contract in `view::clips`).
+**Why** The owner asked for new animations across the board; every class had moves played on
+the nearest clip it had, logged here as the next step.
+**Known** A held field (the Hemoplague, the Carpet, the Air ball) shows its clip's first frame
+for the whole hold and cuts to the recovery on release; the Black spike's tier hold shows
+`ready`. The Bulwark's shield is not drawn on the preview sheets, so which way it faces in his
+new clips is judged in the game, not on paper.
+**Verdict** open — unplayed.
+
 ### 2026-10-13 — the Blood mage, revised from play
 **Changed** Grey holds 120 frames then fades at 60/s (was 3/s, no hold). Finishers at any time,
 spending all grey and the Well: row damage + 0.5 per point. Black spike one to seven spikes on a

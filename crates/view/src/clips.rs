@@ -203,6 +203,14 @@ clips! {
         "Slam: the overhead. Heavy, telegraphed on purpose, and the telegraph has to be legible from frame two.";
     BulwarkSpecial,  "bulwark_special",   Moves, "bulwark", Length::Move(Class::Bulwark, 2), false,
         "Grapple: beats guard outright, loses to dodge. A committed forward reach that ends holding someone.";
+    BulwarkRebound, "bulwark_rebound", Moves, "bulwark", Length::Move(Class::Bulwark, 3), false,
+        "Rebound: the Bash in the air, and the body thrown back off whatever the shield's face meets.";
+    BulwarkRam, "bulwark_ram", Moves, "bulwark", Length::Move(Class::Bulwark, 4), false,
+        "Battering ram: a low leap forward, shield first, carrying whoever it meets.";
+    BulwarkUnload, "bulwark_unload", Moves, "bulwark", Length::Move(Class::Bulwark, 5), false,
+        "Unload: the stored weight driven out of the shield in one heave, from the air.";
+    BulwarkShieldStep, "bulwark_shield_step", Moves, "bulwark", Length::Move(Class::Bulwark, 6), false,
+        "Shield step: the shield planted in the floor as a wall, and the body pushing off it.";
 
     // -- The Champion: three weapons on three buttons -----------------------
     //
@@ -259,6 +267,18 @@ clips! {
         "Pole drive: the butt of the spear cracked into the floor at your own feet, and the ground throws you off it. A launch, not a swing.";
     ChampionVault,    "champion_vault",     Moves, "champion", Length::Move(Class::Champion, 18), false,
         "Pole vault: the spear planted in the floor and the body swung up over it. No strike in it at all.";
+    ChampionCrescent, "champion_crescent", Moves, "champion", Length::Move(Class::Champion, 19), false,
+        "Crescent: the sword's full charge -- a huge diagonal cut whose blade of light leaves it and flies.";
+    ChampionShockwave, "champion_shockwave", Moves, "champion", Length::Move(Class::Champion, 20), false,
+        "Shockwave: the hammer's full charge -- brought down from overhead into the floor so hard the ground breaks in a ring.";
+    ChampionRepel, "champion_repel", Moves, "champion", Length::Move(Class::Champion, 21), false,
+        "Repel: a full spin with the weapon held wide, throwing everything round him away.";
+    ChampionThousandCuts, "champion_thousand_cuts", Moves, "champion", Length::Move(Class::Champion, 22), false,
+        "Thousand Cuts: a run straight through, the blade left hanging behind him in cuts that land after.";
+    ChampionMeteor, "champion_meteor", Moves, "champion", Length::Move(Class::Champion, 23), false,
+        "Meteor: from the air, the whole body driven down behind the hammer into a crater.";
+    ChampionHeavenPiercer, "champion_heaven_piercer", Moves, "champion", Length::Move(Class::Champion, 24), false,
+        "Heaven-piercer: the spear drawn all the way back and thrown, the body following through after it.";
 
     // -- The Shadow Reaver: Slash, Executioner, Guillotine ------------------
     ReaverPoke,      "reaver_poke",       Moves, "reaver", Length::Move(Class::ShadowReaver, 0), false,
@@ -269,6 +289,20 @@ clips! {
         "Guillotine: blades erupt from the placed shadow. The caster points and commits; the violence is elsewhere.";
     ReaverMechanic,  "reaver_mechanic",   Moves, "reaver", Length::Move(Class::ShadowReaver, 3), false,
         "Send shadow: an open-handed throw that puts the second body somewhere else. Nothing leaves her hand -- what leaves is her.";
+    ReaverPlunge, "reaver_plunge", Moves, "reaver", Length::Move(Class::ShadowReaver, 4), false,
+        "Plunge: from the air, both blades down, the body diving after them into the floor.";
+    ReaverFan, "reaver_fan", Moves, "reaver", Length::Move(Class::ShadowReaver, 5), false,
+        "Fan: blades thrown out in a spread from the hand, a flick across the front.";
+    ReaverWhirl, "reaver_whirl", Moves, "reaver", Length::Move(Class::ShadowReaver, 6), false,
+        "Whirl: a flat spin on the spot, both blades held out, cutting all round her.";
+    ReaverGallows, "reaver_gallows", Moves, "reaver", Length::Move(Class::ShadowReaver, 7), false,
+        "Gallows: the shadow hurled forward and up, and the body coming down on whatever it hangs over.";
+    ReaverTumble, "reaver_tumble", Moves, "reaver", Length::Move(Class::ShadowReaver, 8), false,
+        "Tumble: a forward roll through the air, the blades thrown out of it as she turns over.";
+    ReaverRisingWhirl, "reaver_rising_whirl", Moves, "reaver", Length::Move(Class::ShadowReaver, 9), false,
+        "Rising whirl: the spin carried upward, a corkscrew off the floor.";
+    ReaverShuriken, "reaver_shuriken", Moves, "reaver", Length::Move(Class::ShadowReaver, 10), false,
+        "Shuriken: a blade thrown flat and hard from behind the ear, straight down the line.";
 
     // -- The Reaver's shadow, which is a body of its own --------------------
     //
@@ -302,25 +336,57 @@ clips! {
         "Quake: the left foot lifted and stamped down, and both hands pushed out low toward the patch, palms down, as if pressing the shake into the floor over there. The stamp is the tell.";
     ElementalistTremor,   "elementalist_tremor",    Moves, "elementalist", Length::Move(Class::Elementalist, 11), false,
         "Tremor: the same stamp, and both arms driven straight down at her sides as the body drops into a deep crouch -- the shake pressed into the floor under her own feet. Down and narrow, where Quake is forward.";
+    ElementalistAirBolt, "elementalist_air_bolt", Moves, "elementalist", Length::Move(Class::Elementalist, 4), false,
+        "Air bolt: the Bolt's flick thrown from the air, the body hanging behind it.";
+    ElementalistGale, "elementalist_gale", Moves, "elementalist", Length::Move(Class::Elementalist, 5), false,
+        "Gale: from the air, both hands thrown out together, a gust pushed out ahead of her.";
+    ElementalistLandfall, "elementalist_landfall", Moves, "elementalist", Length::Move(Class::Elementalist, 6), false,
+        "Landfall: coming down out of the air with both hands driven into the floor as she lands, the slab rising ahead.";
+    ElementalistAirBall, "elementalist_air_ball", Moves, "elementalist", Length::Move(Class::Elementalist, 12), false,
+        "Air ball: both hands cupped round a ball of air that grows while she holds it, then rolled away.";
+    ElementalistFireCarpet, "elementalist_fire_carpet", Moves, "elementalist", Length::Move(Class::Elementalist, 13), false,
+        "Fire carpet: one arm swept low and out along the floor, laying a strip of fire ahead.";
+    ElementalistFireFountain, "elementalist_fire_fountain", Moves, "elementalist", Length::Move(Class::Elementalist, 14), false,
+        "Fire fountain: both arms flung up as fire bursts from the floor under her and throws her up.";
+    ElementalistEarthJump, "elementalist_earth_jump", Moves, "elementalist", Length::Move(Class::Elementalist, 15), false,
+        "Earth jump: a crouch and a spring as a stone comes up under her feet and launches her.";
 
-    // -- The Blood mage: Bloodletter, Reap, Grasp, Black spike, Reaping sweep
+    // -- The Blood mage: thralls, stains and grey (2026-10-13) ---------------
     //
-    // Five rather than three: `E` is an ability on this class, because its
-    // mechanic is health and there is no state to toggle, and the auto is the
-    // fifth row because it was appended when the scythe arrived. See
-    // `moves::blood`. The scythe itself is not in any clip -- the two-handed
-    // moves put the hands on a haft, and `crate::scythe` hangs the blade off
-    // the grip at the reach the hit test uses.
-    BloodPoke,      "blood_poke",       Moves, "blood", Length::Move(Class::BloodMage, 0), false,
-        "Bloodletter: a blade thrown out underarm and caught again on the way back.";
-    BloodCommitted, "blood_committed",  Moves, "blood", Length::Move(Class::BloodMage, 1), false,
+    // A clip per move. The five that were here before keep their names and
+    // play the moves now on their rows: the poke is Command, the committed
+    // the Haemorrhage, the special the Hemoplague, the mechanic the Black
+    // spike and the sweep the Rising reap. See `moves::blood`. The scythe
+    // itself is not in any clip -- `crate::scythe` hangs the blade off the
+    // grip when the Rising reap has the hands on a haft.
+    BloodPoke, "blood_poke", Moves, "blood", Length::Move(Class::BloodMage, 4), false,
+        "Command: one arm thrown out to point at the floor where her thralls are to go, the other hand to the ribs.";
+    BloodCommitted, "blood_committed", Moves, "blood", Length::Move(Class::BloodMage, 1), false,
         "Haemorrhage: one hand drawn in to the chest and thrust out flat, palm forward. The bolt leaves on the thrust.";
-    BloodSpecial,   "blood_special",    Moves, "blood", Length::Move(Class::BloodMage, 2), false,
-        "Grasp: both arms thrown open and snapped shut. Four arms leave wide and arrive together.";
-    BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,
+    BloodSpecial, "blood_special", Moves, "blood", Length::Move(Class::BloodMage, 2), false,
+        "Hemoplague: both hands lifted and spread palm-down over the floor ahead, the cloud welling up under them as she holds.";
+    BloodMechanic, "blood_mechanic", Moves, "blood", Length::Move(Class::BloodMage, 3), false,
         "Black spike: a downward stabbing gesture that plants something in the ground.";
-    BloodSweep,     "blood_sweep",      Moves, "blood", Length::Move(Class::BloodMage, 10), false,
-        "Rising reap (was the Reaping sweep): both hands on the haft, gathered off the left hip and swept across the front, low to high.";
+    BloodSweep, "blood_sweep", Moves, "blood", Length::Move(Class::BloodMage, 10), false,
+        "Rising reap: both hands on the haft, swept up and out from low across the front.";
+    BloodCarpet, "blood_carpet", Moves, "blood", Length::Move(Class::BloodMage, 0), false,
+        "Carpet of blood: crouched, both palms pressed down and spreading outward along the floor as the pool grows.";
+    BloodSummon, "blood_summon", Moves, "blood", Length::Move(Class::BloodMage, 5), false,
+        "Summon: both arms swept up from low, palms up, calling what lies on the floor to stand.";
+    BloodWings, "blood_wings", Moves, "blood", Length::Move(Class::BloodMage, 6), false,
+        "Blood wings: the arms flung back like wings as the body bursts away along her aim.";
+    BloodUpheaval, "blood_upheaval", Moves, "blood", Length::Move(Class::BloodMage, 7), false,
+        "Upheaval: one hand ripped upward from the floor, and the hop that comes with it.";
+    BloodStake, "blood_stake", Moves, "blood", Length::Move(Class::BloodMage, 8), false,
+        "Stake: from the air, a spear of blood hurled down with both hands from overhead.";
+    BloodCoagulate, "blood_coagulate", Moves, "blood", Length::Move(Class::BloodMage, 9), false,
+        "Coagulate: both hands reaching out and drawing in, gathering the stains to one point.";
+    BloodVines, "blood_vines", Moves, "blood", Length::Move(Class::BloodMage, 11), false,
+        "Black vines: both fists driven down into the floor and wrenched apart, the vines tearing outward.";
+    BloodCascade, "blood_cascade", Moves, "blood", Length::Move(Class::BloodMage, 12), false,
+        "Crimson cascade: a heavy two-handed stab into the floor and the body thrown back as the eruptions roll out.";
+    BloodGolem, "blood_golem", Moves, "blood", Length::Move(Class::BloodMage, 13), false,
+        "Blood golem: both arms raised high and dragged down, the body bowed, hauling the mass up out of the carpet.";
 
     // -- The Dual mage: two autos, two Lances, Judgement, Sweep -------------
     //
@@ -347,6 +413,10 @@ clips! {
         "Light auto, right arm: the dark punch mirrored, and it has to read as the other side.";
     DualDarkLance, "dual_dark_lance", Moves, "dual", Length::Move(Class::DualMage, 5), false,
         "Dark lance: the left arm hauled low and back, a slow reach that ends holding on rather than letting go.";
+    DualPhase, "dual_phase", Moves, "dual", Length::Move(Class::DualMage, 7), false,
+        "Phase: both hands pushed out together, the light thrust that carries her through.";
+    DualEquinox, "dual_equinox", Moves, "dual", Length::Move(Class::DualMage, 10), false,
+        "Equinox: both forces at once from the air, arms crossed and thrown apart.";
 
     // -- The Dual mage, off the floor ---------------------------------------
     //

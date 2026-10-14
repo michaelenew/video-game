@@ -602,7 +602,8 @@ pub fn aims_along_the_crosshair(class: Class, kind: u8) -> bool {
     )
 }
 
-/// Which clip animates one class's move slot.
+/// Which clip animates one class's move slot: every move its own, since
+/// 2026-10-14.
 ///
 /// Clamped to the last slot the class actually binds, so a class whose mechanic
 /// is a state change rather than an ability never asks for a clip that does not
@@ -617,11 +618,10 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
         (Class::Bulwark, 1) => Clip::BulwarkCommitted,
         (Class::Bulwark, 2) => Clip::BulwarkSpecial,
-        // The three clicks (2026-10-10), on the clips they are versions of:
-        // Rebound and the ram are the Bash's shield-first shove, Unload and
-        // the Shield step drive the shield down as the Slam does.
-        (Class::Bulwark, 3) | (Class::Bulwark, 4) => Clip::BulwarkPoke,
-        (Class::Bulwark, _) => Clip::BulwarkCommitted,
+        (Class::Bulwark, 3) => Clip::BulwarkRebound,
+        (Class::Bulwark, 4) => Clip::BulwarkRam,
+        (Class::Bulwark, 5) => Clip::BulwarkUnload,
+        (Class::Bulwark, _) => Clip::BulwarkShieldStep,
         (Class::Champion, 0) => Clip::ChampionSword,
         (Class::Champion, 1) => Clip::ChampionHammer,
         (Class::Champion, 2) => Clip::ChampionSpear,
@@ -641,81 +641,56 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Champion, 16) => Clip::ChampionUppercut,
         (Class::Champion, 17) => Clip::ChampionPoleDrive,
         (Class::Champion, 18) => Clip::ChampionVault,
-        // The full charges (2026-10-12, exploration 0015), on the clips they
-        // are bigger versions of until they have their own: the crescent on
-        // the sword's diagonal, the shockwave on the hammer's overhead, the
-        // Repel on the Whirl's spin, Thousand Cuts on the Rush slash's
-        // run-through, the Meteor on the air hammer's drop, and the javelin
-        // on the Skewer's wind-up and throw.
-        (Class::Champion, 19) => Clip::ChampionBackcut,
-        (Class::Champion, 20) => Clip::ChampionHammer,
-        (Class::Champion, 21) => Clip::ChampionWhirl,
-        (Class::Champion, 22) => Clip::ChampionRushSlash,
-        (Class::Champion, 23) => Clip::ChampionAirHammer,
-        (Class::Champion, _) => Clip::ChampionSkewer,
+        (Class::Champion, 19) => Clip::ChampionCrescent,
+        (Class::Champion, 20) => Clip::ChampionShockwave,
+        (Class::Champion, 21) => Clip::ChampionRepel,
+        (Class::Champion, 22) => Clip::ChampionThousandCuts,
+        (Class::Champion, 23) => Clip::ChampionMeteor,
+        (Class::Champion, _) => Clip::ChampionHeavenPiercer,
         (Class::ShadowReaver, 0) => Clip::ReaverPoke,
         (Class::ShadowReaver, 1) => Clip::ReaverCommitted,
         (Class::ShadowReaver, 2) => Clip::ReaverSpecial,
         (Class::ShadowReaver, 3) => Clip::ReaverMechanic,
-        // The second pass (2026-10-10), on the clips they are versions of:
-        // the two that come down out of the sky on the Executioner's
-        // overhead; the two spins on the Slash's cut, turned round by the
-        // whole-body roll (`interp::roll_of`); the Tumble's throw on the
-        // lotus's arm driven out and down, flipped by the same roll; and the
-        // shadow's two on the send.
-        (Class::ShadowReaver, 4) => Clip::ReaverCommitted,
-        (Class::ShadowReaver, 5) => Clip::ReaverPoke,
-        (Class::ShadowReaver, 6) => Clip::ReaverMechanic,
-        (Class::ShadowReaver, 7) => Clip::ReaverCommitted,
-        (Class::ShadowReaver, 8) => Clip::ReaverSpecial,
-        (Class::ShadowReaver, 9) => Clip::ReaverMechanic,
-        (Class::ShadowReaver, _) => Clip::ReaverPoke,
+        (Class::ShadowReaver, 4) => Clip::ReaverPlunge,
+        (Class::ShadowReaver, 5) => Clip::ReaverFan,
+        (Class::ShadowReaver, 6) => Clip::ReaverWhirl,
+        (Class::ShadowReaver, 7) => Clip::ReaverGallows,
+        (Class::ShadowReaver, 8) => Clip::ReaverTumble,
+        (Class::ShadowReaver, 9) => Clip::ReaverRisingWhirl,
+        (Class::ShadowReaver, _) => Clip::ReaverShuriken,
         (Class::Elementalist, 0) => Clip::ElementalistPoke,
         (Class::Elementalist, 1) => Clip::ElementalistCommitted,
         (Class::Elementalist, 2) => Clip::ElementalistSpecial,
         (Class::Elementalist, 3) => Clip::ElementalistHeavy,
-        // Her air row, on the grounded clips it is the air version *of*.
-        // Deliberately not four new clips: the class has four authored
-        // animations and each of these is recognisably one of them thrown off
-        // the floor -- the Air bolt is the same flicked jab, the Gale is
-        // Cataclysm's two-handed throw, and Landfall is Fissure exactly, both
-        // hands driven into the ground with the power going down rather than
-        // out. Clips are a contract (`view::clips`) and the bake refuses to
-        // run with one missing, so an air row that wanted its own would be
-        // four recipes' worth of work before any of this could be played at
-        // all. Reaching for them is the right next step and is logged as such
-        // in `docs/design/feel-log.md`.
-        (Class::Elementalist, 4) => Clip::ElementalistPoke,
-        (Class::Elementalist, 5) => Clip::ElementalistHeavy,
-        (Class::Elementalist, 6) => Clip::ElementalistCommitted,
-        // v2: a one-armed scatter, and the two drafts, none of them like
-        // anything above.
+        (Class::Elementalist, 4) => Clip::ElementalistAirBolt,
+        (Class::Elementalist, 5) => Clip::ElementalistGale,
+        (Class::Elementalist, 6) => Clip::ElementalistLandfall,
         (Class::Elementalist, 7) => Clip::ElementalistCinder,
         (Class::Elementalist, 8) => Clip::ElementalistUpdraft,
         (Class::Elementalist, 9) => Clip::ElementalistDowndraft,
         (Class::Elementalist, 10) => Clip::ElementalistQuake,
-        (Class::Elementalist, _) => Clip::ElementalistTremor,
-        // Thralls and grey (2026-10-13), on the five clips she has, each
-        // move on the one it most looks like: the bolt is the thrust, the
-        // spike, the Upheaval, the Stake, the vines and the cascade the stab
-        // into the floor, the two fields, the wings, the Summon and the golem
-        // the arms thrown open, Command and Coagulate the pointing poke, and
-        // the Rising reap the sweep. Her own clips for the new moves are the
-        // next step, logged in `docs/design/feel-log.md`.
+        (Class::Elementalist, 11) => Clip::ElementalistTremor,
+        (Class::Elementalist, 12) => Clip::ElementalistAirBall,
+        (Class::Elementalist, 13) => Clip::ElementalistFireCarpet,
+        (Class::Elementalist, 14) => Clip::ElementalistFireFountain,
+        (Class::Elementalist, _) => Clip::ElementalistEarthJump,
+        (Class::BloodMage, 0) => Clip::BloodCarpet,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
-        (Class::BloodMage, 0 | 2 | 5 | 6 | 13) => Clip::BloodSpecial,
-        (Class::BloodMage, 3 | 7 | 8 | 11 | 12) => Clip::BloodMechanic,
-        (Class::BloodMage, 4 | 9) => Clip::BloodPoke,
-        (Class::BloodMage, _) => Clip::BloodSweep,
-        // Her spellbook, since 2026-10-12, on the six clips she has: a dark
-        // spell is thrown from the left arm and a light one from the right,
-        // so the autos are the one-armed casts (the dark wing and the
-        // Devour the dark thrust, the light wing the light one; the Grasp the dark
-        // Lance's reach to the floor, the Smite the light Lance's), the Halo,
-        // the Sanctuary and the Abyss the sweep's whole-body heave, Binary,
-        // Phase and Equinox the raised special, and the two moves of the air
-        // the one-armed casts of their column. Clips of her own for the
-        // spellbook are the next step, logged in `docs/design/feel-log.md`.
+        (Class::BloodMage, 2) => Clip::BloodSpecial,
+        (Class::BloodMage, 3) => Clip::BloodMechanic,
+        (Class::BloodMage, 4) => Clip::BloodPoke,
+        (Class::BloodMage, 5) => Clip::BloodSummon,
+        (Class::BloodMage, 6) => Clip::BloodWings,
+        (Class::BloodMage, 7) => Clip::BloodUpheaval,
+        (Class::BloodMage, 8) => Clip::BloodStake,
+        (Class::BloodMage, 9) => Clip::BloodCoagulate,
+        (Class::BloodMage, 10) => Clip::BloodSweep,
+        (Class::BloodMage, 11) => Clip::BloodVines,
+        (Class::BloodMage, 12) => Clip::BloodCascade,
+        (Class::BloodMage, _) => Clip::BloodGolem,
+        // A clip per move since 2026-10-14. The Dual mage's spellbook
+        // (2026-10-12) came after the clips drawn for her old kit, so hers
+        // are the clips she has, by what each move does with her arms.
         (Class::DualMage, 0) => Clip::DualDark,
         (Class::DualMage, 1) => Clip::DualSpecial,
         (Class::DualMage, 2) => Clip::DualSpecial,
@@ -723,9 +698,12 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::DualMage, 4) => Clip::DualLight,
         (Class::DualMage, 5) => Clip::DualDark,
         (Class::DualMage, 6) => Clip::DualLight,
-        (Class::DualMage, 7) => Clip::DualSpecial,
+        // Phase and the Equinox kept their numbers through her spellbook, so
+        // the clips drawn for them on 2026-10-14 are theirs still.
+        (Class::DualMage, 7) => Clip::DualPhase,
         (Class::DualMage, 8) => Clip::DualDarkLance,
         (Class::DualMage, 9) => Clip::DualSweep,
+        (Class::DualMage, 10) => Clip::DualEquinox,
         (Class::DualMage, 11) => Clip::DualDarkLance,
         (Class::DualMage, 12) => Clip::DualDark,
         (Class::DualMage, 13) => Clip::DualSweep,
