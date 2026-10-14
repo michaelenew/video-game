@@ -8697,3 +8697,13 @@ point is the floor behind a body (bodies are not on its ray), metres past a crea
 and the first bolt looked for a body within 4 m of that point. It now looks along the bolt's
 whole line from the cloud to the point (`aim::chain_next`), which is where the bolt visibly goes.
 
+### 2026-10-14 — the Blood mage's Command is a tap you can make
+
+From the owner: Command was very hard to get on right click. Its wind-up is one frame, and
+the click was read as held -- the Carpet -- if it was still down at the end of that frame, so
+a tap had to come up within a frame or two. Tap or hold is now decided on the Champion's
+window (`Hold, a finisher after`, 12 frames from the press): Command waits at the top of its
+one-frame wind-up until the press either comes up (Command) or reaches twelve frames (the
+Carpet). The Carpet opens eleven frames later than it did. The Haemorrhage's twelve-frame
+startup already covered the window, so the left click is unchanged.
+

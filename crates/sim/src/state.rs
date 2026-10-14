@@ -5320,6 +5320,17 @@ fn may_hold(p: &Player) -> bool {
     matches!(p.mechanic, Mechanic::Forms { fury, .. } if fury.may_hold)
 }
 
+/// The Blood mage's tap `kind` held into its field: the field's cost paid,
+/// and its hold begun.
+fn into_the_field(p: &mut Player, kind: u8) -> Action {
+    let field = moves::blood::held_into(kind).unwrap_or(kind);
+    pay(p, moves::get(p.class, field).cost);
+    Action::Channel {
+        kind: field,
+        held: 0,
+    }
+}
+
 /// The link `kind` held to a finish: its weapon's finisher for that place in
 /// the string, aimed now and wound up from its own startup. The link itself if
 /// it has none.
@@ -5669,20 +5680,23 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
         // is now gathering, at the crawl, with the aim live. Released inside
         // the startup, this arm is never reached and the pillar is the pillar
         // as built. See `moves::Charge::Strike` and `step_channel`.
-        // **A held click past its tap's startup is the field** (2026-10-13):
-        // right click's Command becomes the Summon, left click's Haemorrhage
-        // the Carpet. Not a charge -- the tap is the tap, and holding past it
-        // is a different move, whose cost is paid where it begins.
+        // **A held click is the field** (2026-10-13): right click's Command
+        // becomes the Carpet, left click's Haemorrhage the Hemoplague. Not a
+        // charge -- the tap is the tap, and holding past it is a different
+        // move, whose cost is paid where it begins. **Held is the Champion's
+        // window** (2026-10-14), `tuning::hold_from` counted from the press:
+        // Command winds up in a frame, and a tap that had to come up inside
+        // it was hardly a tap. A wind-up shorter than the window waits at
+        // its top for the press to decide (`step_channel`).
         Action::Startup { kind, left: 0 }
             if p.class == Class::BloodMage
                 && moves::blood::held_into(kind).is_some()
                 && input.has(moves::blood::click_of(kind)) =>
         {
-            let field = moves::blood::held_into(kind).unwrap_or(kind);
-            pay(p, moves::get(p.class, field).cost);
-            Action::Channel {
-                kind: field,
-                held: 0,
+            if moves::get(p.class, kind).startup + 1 < t::hold_from() {
+                Action::Channel { kind, held: 0 }
+            } else {
+                into_the_field(p, kind)
             }
         }
         Action::Startup { kind, .. }
@@ -8672,6 +8686,23 @@ fn step_channel(
     let m = moves::get(p.class, kind);
     let cap = m.channel;
     let charge = moves::charge(p.class, kind);
+    // **The Blood mage's tap, waiting to be told**: let go inside the
+    // Champion's window and it is the tap; held to its end, the field.
+    if p.class == Class::BloodMage && moves::blood::held_into(kind).is_some() {
+        if !input.has(moves::blood::click_of(kind)) {
+            return Action::Active {
+                kind,
+                left: m.active,
+            };
+        }
+        if m.startup + held + 1 >= t::hold_from() {
+            return into_the_field(p, kind);
+        }
+        return Action::Channel {
+            kind,
+            held: held + 1,
+        };
+    }
     // **The Champion's finisher**: held long enough, counted from the press,
     // and the link is that weapon's finisher, aimed now as any move is on its
     // first frame.

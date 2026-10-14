@@ -1280,7 +1280,8 @@ pub mod dual {
 /// vines; the cascade and the golem were appended. See
 /// `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
 pub mod blood {
-    /// Right click held past Command's startup: **the Carpet of blood**. A
+    /// Right click held past the Champion's window (`tuning::hold_from`,
+    /// counted from the press): **the Carpet of blood**. A
     /// disc of blood spreading from where she aimed for as long as she holds,
     /// hurting a little, paid in red as it spreads; let go, it is one big
     /// stain, and every stain of hers it covered stands up as a thrall.
@@ -1372,7 +1373,8 @@ pub mod blood {
     }
 
     /// Which field a tapped move becomes when its click is held past its
-    /// startup: the Haemorrhage the Hemoplague, Command the Carpet.
+    /// startup or the Champion's window (`tuning::hold_from`), whichever is
+    /// longer: the Haemorrhage the Hemoplague, Command the Carpet.
     pub const fn held_into(kind: u8) -> Option<u8> {
         match kind {
             HAEMORRHAGE => Some(HEMOPLAGUE),

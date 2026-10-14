@@ -57,6 +57,12 @@ grows with how open she has left herself, and a floor she wants to fight on.
 | `E` | **Summon** |
 | `shift` + direction | The **teleport** to a stain under the crosshair (12 m); otherwise an ordinary dodge |
 
+**Tapped or held is the Champion's window** (2026-10-14): a click is held once it has been
+down `Hold, a finisher after` (12 frames) from the press, or for the tap's own startup if that
+is longer. Command winds up in one frame, and with the tap decided there a right click had to
+come up inside a frame or two to be Command at all; it now waits at the top of its wind-up for
+the press to decide. The Haemorrhage's startup is already twelve, so the left click is as it was.
+
 **The rows were retuned, not renumbered**: the Transfusion's row is the Carpet, the sweep's
 Command, Tides' the Summon, the chain's Coagulate, the leap's the Rising reap, Frenzy's the
 Black vines; the cascade and the golem were appended (`sim::moves::blood`).

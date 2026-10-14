@@ -162,8 +162,7 @@ fn held_the_left_click_is_the_hemoplague_and_the_right_the_carpet() {
         (keys::SCYTHE, b::COMMAND, b::CARPET),
     ] {
         let mut w = mage();
-        let start = sim::moves::get(Class::BloodMage, tap).startup as u32;
-        hold(&mut w, button, start + 3);
+        hold(&mut w, button, field_opens(tap) + 3);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} held");
     }
 }
@@ -565,8 +564,28 @@ fn carpet_for(w: &mut World, frames: u32) {
     hold(w, keys::SCYTHE, frames);
 }
 
+/// Frames from the press to the field opening: the tap's startup, or the
+/// Champion's window (`tuning::hold_from`) if that is longer.
+fn field_opens(tap: u8) -> u32 {
+    (sim::moves::get(Class::BloodMage, tap).startup as u32).max(sim::tuning::hold_from() as u32)
+}
+
 fn command_startup() -> u32 {
-    sim::moves::get(Class::BloodMage, b::COMMAND).startup as u32
+    field_opens(b::COMMAND)
+}
+
+#[test]
+fn a_right_click_let_go_inside_the_champions_window_is_command() {
+    // Pressed for most of the window -- far longer than Command's own
+    // wind-up -- and still a tap.
+    let mut w = mage();
+    hold(&mut w, keys::SCYTHE, sim::tuning::hold_from() as u32 - 2);
+    step(&mut w, 0);
+    assert_eq!(doing(&w), Some(b::COMMAND), "a long tap is still the tap");
+    assert!(
+        effects_of(&w, EffectKind::Carpet).is_empty(),
+        "and no carpet"
+    );
 }
 
 #[test]
