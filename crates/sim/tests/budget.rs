@@ -52,16 +52,21 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
 ///
 /// Rollback copies one every single frame and keeps a ring of nine, so the
 /// snapshot is the one structure in the game whose *size* is a running cost
-/// rather than a one-off. Four kilobytes keeps the whole ring inside a core's
+/// rather than a one-off. Four kilobytes kept the whole ring inside a core's
 /// L2 cache, which is what makes a save a memcpy nobody notices.
 ///
 /// About 2.8 KiB since the world gained a second creature slot for the Pair
 /// (2026-10-01: 2,856 bytes, from 2,680), and 3,520 bytes since it gained ten
 /// critter slots and a pack brain (bestiary P3, 2026-10-01; see
-/// `docs/design/critters.md`). Raising this is a real decision -- it means
-/// every frame and every rollback got heavier -- so change it deliberately, the
-/// way `knobs.rs` wants a reason, rather than to make a red test green.
-const SNAPSHOT_CAP: usize = 4096;
+/// `docs/design/critters.md`). **Twenty kilobytes since four fighters**
+/// (2026-10-14: 17,808 bytes): two more fighters and everything they throw,
+/// and an effect pool of 128 slots where there were twelve -- 12 KiB of it,
+/// most of it empty `Option` tags on any given frame. A ring of nine is about
+/// 160 KiB, which still sits in the L2 of anything that runs the game.
+/// Raising this is a real decision -- it means every frame and every rollback
+/// got heavier -- so change it deliberately, the way `knobs.rs` wants a
+/// reason, rather than to make a red test green.
+const SNAPSHOT_CAP: usize = 20 * 1024;
 
 /// Frames per timed run. Ten seconds of play, so a move's whole lifecycle --
 /// startup, active, recovery, and whatever it leaves on the field -- is inside
@@ -207,7 +212,7 @@ fn a_frame_of_simulation_allocates_nothing() {
 fn the_broodmother_fight_fits_the_snapshot_and_does_not_allocate() {
     let script = input_script(FRAMES);
     for class in ALL_CLASSES {
-        let mut world = full_hollows(World::hunt_of([class; MAX_PLAYERS], SpeciesId::BROODMOTHER));
+        let mut world = full_hollows(World::hunt_of([class; 2], SpeciesId::BROODMOTHER));
         assert!(std::mem::size_of_val(&world) <= SNAPSHOT_CAP);
         let allocations = allocations_during(|| {
             for inputs in &script {
@@ -241,7 +246,7 @@ fn a_snapshot_is_a_small_flat_copy() {
     );
 
     let script = input_script(120);
-    let mut world = World::hunt([Class::ShadowReaver; MAX_PLAYERS]);
+    let mut world = World::hunt([Class::ShadowReaver; 2]);
     for inputs in &script {
         world.advance(*inputs);
     }
@@ -275,7 +280,7 @@ fn scenarios() -> [Scenario; 17] {
         // other place's boxes in tiles around it, and a creature's room in it.
         ("the valley's saddle", |c| {
             World::arrive(
-                [c; MAX_PLAYERS],
+                [c; 2],
                 sim::valley::Journey::default(),
                 sim::arena::ArenaId::SADDLE,
                 Some(0),
@@ -284,21 +289,21 @@ fn scenarios() -> [Scenario; 17] {
         }),
         ("the valley's cliffs", |c| {
             World::arrive(
-                [c; MAX_PLAYERS],
+                [c; 2],
                 sim::valley::Journey::default(),
                 sim::arena::ArenaId::GALEWING,
                 Some(0),
                 MAX_PLAYERS as u8,
             )
         }),
-        ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
-        ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
+        ("versus", |c| World::with_classes([c; 2])),
+        ("hunt", |c| World::hunt([c; 2])),
         ("two creatures", |c| {
-            World::hunt_with([c; MAX_PLAYERS], [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS])
+            World::hunt_with([c; 2], [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS])
         }),
         ("two creatures in the range", |c| {
             World::hunt_in(
-                [c; MAX_PLAYERS],
+                [c; 2],
                 [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS],
                 sim::arena::ArenaId::RANGE,
             )
@@ -307,19 +312,19 @@ fn scenarios() -> [Scenario; 17] {
         // slot filled, so the ring, the tokens, the separation pairs and every
         // swing tested against ten boxes are all at their most.
         ("full pack", |c| {
-            full_pack(World::hunt_of([c; MAX_PLAYERS], SpeciesId::GNATS))
+            full_pack(World::hunt_of([c; 2], SpeciesId::GNATS))
         }),
         // The Gnawers in the Commons, every slot filled (their coop pack is
         // ten): the dart's hand-out, the pile-on's call, the latch, the gnaw
         // and the scramble all run on top of the generic pack.
         ("the gnawers' full pack", |c| {
-            full_pack(World::hunt_of([c; MAX_PLAYERS], SpeciesId::GNAWERS))
+            full_pack(World::hunt_of([c; 2], SpeciesId::GNAWERS))
         }),
         // And a pack with a creature in the fight as well -- the Broodmother's
         // and the Siegeshell's shape -- in the range.
         ("pack and creature in the range", |c| {
             full_pack(World::hunt_in(
-                [c; MAX_PLAYERS],
+                [c; 2],
                 [Some(SpeciesId::RIDGEBACK), Some(SpeciesId::GNATS)],
                 sim::arena::ArenaId::RANGE,
             ))
@@ -329,7 +334,7 @@ fn scenarios() -> [Scenario; 17] {
         // swept stop asked of the boulders, the cart standing as a solid.
         ("the herd's stampede on the crossing", |c| {
             herd_running(World::hunt_in(
-                [c; MAX_PLAYERS],
+                [c; 2],
                 [Some(SpeciesId::HORNBACK), None],
                 sim::arena::ArenaId::HORNBACK_CROSSING,
             ))
@@ -341,7 +346,7 @@ fn scenarios() -> [Scenario; 17] {
         // its senses asked of both fighters every frame.
         ("full floor in the range", |c| {
             full_floor(World::hunt_in(
-                [c; MAX_PLAYERS],
+                [c; 2],
                 [Some(SpeciesId::SENTINEL), None],
                 sim::arena::ArenaId::RANGE,
             ))
@@ -350,38 +355,38 @@ fn scenarios() -> [Scenario; 17] {
         // hazard slots full round the hunters -- tar, fire spreading along
         // it, slag standing, coals -- every brazier and swallow word read.
         ("full mire", |c| {
-            full_mire(World::hunt_of([c; MAX_PLAYERS], SpeciesId::MIREBACK))
+            full_mire(World::hunt_of([c; 2], SpeciesId::MIREBACK))
         }),
         // The Sandmaw in the Pan, loud: both sinkholes open, every cell of
         // the noise ring full, and its spine, its attention and its fences
         // against the islands walked every frame.
         ("the pan, loud", |c| {
-            loud_pan(World::hunt_of([c; MAX_PLAYERS], SpeciesId::SANDMAW))
+            loud_pan(World::hunt_of([c; 2], SpeciesId::SANDMAW))
         }),
         // The Pair in the Den, both cats coiled for the twin pounce: two rigs
         // posed, and each posed again for its telegraph, every frame.
         ("the den, both coiled", |c| {
-            both_coiled(World::hunt_of([c; MAX_PLAYERS], SpeciesId::PAIR))
+            both_coiled(World::hunt_of([c; 2], SpeciesId::PAIR))
         }),
         // The Broodmother at her worst: the brood at its cap round the
         // hunters, every sac held, every hazard slot full -- web patches,
         // strands across the floor, a glob -- and her clocks, guard and legs
         // read every frame.
         ("the hollows, full", |c| {
-            full_hollows(World::hunt_of([c; MAX_PLAYERS], SpeciesId::BROODMOTHER))
+            full_hollows(World::hunt_of([c; 2], SpeciesId::BROODMOTHER))
         }),
         // The Mantis with its guard up between two hunters: its eyes written
         // and read for both every frame, every blow asked of its guard, its
         // memory and its arc drawn.
         ("the shrine, guarded", |c| {
-            guarded_shrine(World::hunt_of([c; MAX_PLAYERS], SpeciesId::MANTIS))
+            guarded_shrine(World::hunt_of([c; 2], SpeciesId::MANTIS))
         }),
         // The Siegeshell at the siege line: forty-four parts, six legs posed
         // procedurally, its parasites all down, its vents on the plates, a
         // stamp on the legs' channel while the beam winds up, and a hunter
         // on the crown -- every floor and wall query walks its shell.
         ("the valley, at the wall", |c| {
-            siege_full(World::hunt_of([c; MAX_PLAYERS], SpeciesId::SIEGESHELL))
+            siege_full(World::hunt_of([c; 2], SpeciesId::SIEGESHELL))
         }),
     ]
 }
@@ -389,7 +394,7 @@ fn scenarios() -> [Scenario; 17] {
 /// The Siegeshell at the siege line with everything in it: [`scenarios`]'.
 fn siege_full(mut w: World) -> World {
     use sim::species::siegeshell::{self as ss, fight as f};
-    let idle = [Input::default(); MAX_PLAYERS];
+    let idle = [Input::default(); 2];
     w.advance(idle);
     if let Some(m) = w.monsters[0].as_mut() {
         // Its head twenty metres short of the wall.
@@ -439,7 +444,7 @@ fn siege_full(mut w: World) -> World {
 fn the_siegeshell_fight_fits_the_snapshot_and_does_not_allocate() {
     let script = input_script(FRAMES);
     for class in ALL_CLASSES {
-        let mut world = siege_full(World::hunt_of([class; MAX_PLAYERS], SpeciesId::SIEGESHELL));
+        let mut world = siege_full(World::hunt_of([class; 2], SpeciesId::SIEGESHELL));
         assert!(std::mem::size_of_val(&world) <= SNAPSHOT_CAP);
         let allocations = allocations_during(|| {
             for inputs in &script {
@@ -478,7 +483,7 @@ fn guarded_shrine(mut w: World) -> World {
 fn the_mantis_fight_fits_the_snapshot_and_does_not_allocate() {
     let script = input_script(FRAMES);
     for class in ALL_CLASSES {
-        let mut world = guarded_shrine(World::hunt_of([class; MAX_PLAYERS], SpeciesId::MANTIS));
+        let mut world = guarded_shrine(World::hunt_of([class; 2], SpeciesId::MANTIS));
         assert!(std::mem::size_of_val(&world) <= SNAPSHOT_CAP);
         let allocations = allocations_during(|| {
             for inputs in &script {
@@ -518,7 +523,7 @@ fn full_hollows(mut w: World) -> World {
     use sim::species::broodmother::{Knob, fight as f};
     let at =
         |x: i32, z: i32| sim::V3::new(sim::Fx::from_int(x), sim::Fx::ZERO, sim::Fx::from_int(z));
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     if let Some(pack) = w.pack.as_mut() {
         let cap = Knob::BroodCap.raw().max(0);
         for k in 0..cap {
@@ -547,7 +552,7 @@ fn full_hollows(mut w: World) -> World {
 /// The Hornback's bull bellowing now, so the whole herd is about to run.
 fn herd_running(mut w: World) -> World {
     use sim::species::hornback as h;
-    let idle = [Input::default(); MAX_PLAYERS];
+    let idle = [Input::default(); 2];
     for _ in 0..2 {
         w.advance(idle);
     }
@@ -682,7 +687,7 @@ fn full_pack(mut w: World) -> World {
 /// timing is the *worst* thing the simulation can be made to do, and a fight
 /// where every ability is thrown constantly and interrupted halfway is a
 /// heavier load than one a person would actually play.
-fn input_script(frames: u32) -> Vec<[Input; MAX_PLAYERS]> {
+fn input_script(frames: u32) -> Vec<[Input; 2]> {
     let mut rng = 0x2545_f491_4f6c_dd1d_u64;
     let mut next = move || {
         rng ^= rng << 13;

@@ -13,7 +13,8 @@
 //!
 //! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
 //!
-//! Pick classes with `--p1 <class> --p2 <class>`, or cycle player one's class
+//! Pick classes with `--p1 <class> --p2 <class>` (and `--p3`, `--p4` with
+//! `--players`), or cycle player one's class
 //! in-game with Tab. Names are matched loosely: bulwark, champion, reaver,
 //! elementalist, blood, dual.
 
@@ -135,15 +136,23 @@ fn seats_of(dummy: Dummy) -> u8 {
     if dummy == Dummy::Human { 2 } else { 1 }
 }
 
-fn chosen_classes(opts: &platform::Options) -> [sim::Class; 2] {
-    [
-        opts.value("--p1")
+/// Every seat's class: `--p1` to `--p4`, a Bulwark where none is named.
+fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
+    std::array::from_fn(|i| {
+        opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
-            .unwrap_or(sim::Class::Bulwark),
-        opts.value("--p2")
-            .and_then(parse_class)
-            .unwrap_or(sim::Class::Bulwark),
-    ]
+            .unwrap_or(sim::Class::Bulwark)
+    })
+}
+
+/// **How many play** (`--players`, `?players=` in a link): two to four. More
+/// than two is a room of friends on other machines -- one keyboard drives two
+/// seats -- and every one of them is seated from the first frame.
+pub fn chosen_players(opts: &platform::Options) -> u8 {
+    opts.value("--players")
+        .and_then(|n| n.parse::<u8>().ok())
+        .unwrap_or(2)
+        .clamp(2, MAX_PLAYERS as u8)
 }
 
 /// The world a set of settings starts in: the run's own at startup, or a
@@ -151,10 +160,11 @@ fn chosen_classes(opts: &platform::Options) -> [sim::Class; 2] {
 /// both, which is what makes the world two clients build from one link the
 /// same world.
 fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
-    seated(
-        picker::world(chosen_start(opts), chosen_classes(opts)),
-        dummy,
-    )
+    let w = picker::world(chosen_start(opts), chosen_classes(opts));
+    match chosen_players(opts) {
+        n if n > 2 => w.seated(n),
+        _ => seated(w, dummy),
+    }
 }
 
 fn main() {
@@ -313,6 +323,8 @@ fn main() {
                 veil::place,
                 online::announce,
                 hud::update_online,
+                hud::update_seats,
+                hide_empty_seats,
                 menu::show_progress,
                 menu::draw,
             )
@@ -681,6 +693,23 @@ struct ShadowBall {
     joint: view::skeleton::Joint,
 }
 
+/// **A seat nobody is in draws nothing**: its fighter is parked out of the
+/// world (`World::present`), and a body hanging under the floor is a thing the
+/// camera can find. Only the root is switched; its parts inherit.
+fn hide_empty_seats(sim: Res<Sim>, mut roots: Query<(&Fighter, &mut Visibility)>) {
+    let present = sim.cur.present();
+    for (fighter, mut seen) in roots.iter_mut() {
+        let want = if fighter.0 < present {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *seen != want {
+            *seen = want;
+        }
+    }
+}
+
 /// Put the joint balls where the posing pass left the joints.
 fn pose_balls(
     sim: Res<Sim>,
@@ -688,10 +717,8 @@ fn pose_balls(
     mut balls: Query<(&BodyBall, &mut Transform), Without<ShadowBall>>,
     mut shadow_balls: Query<(&ShadowBall, &mut Transform), Without<BodyBall>>,
 ) {
-    let skeletons = [
-        skeleton_for(sim.cur.players[0].class),
-        skeleton_for(sim.cur.players[1].class),
-    ];
+    let skeletons: [Skeleton; MAX_PLAYERS] =
+        std::array::from_fn(|i| skeleton_for(sim.cur.players[i].class));
     for (ball, mut tf) in balls.iter_mut() {
         let Some(skin) = joints.body[ball.owner] else {
             continue;
@@ -1852,8 +1879,7 @@ fn setup(
     // whichever arena the simulation is in.
 
     // Fighters: a root per player, six primitive parts parented to it.
-    let colors = [Color::srgb(0.29, 0.66, 1.0), Color::srgb(1.0, 0.54, 0.30)];
-    for (owner, colour) in colors.iter().enumerate().take(MAX_PLAYERS) {
+    for (owner, colour) in hud::SEAT_COLOURS.iter().enumerate() {
         let skin = materials.add(StandardMaterial {
             base_color: *colour,
             perceptual_roughness: 0.65,
@@ -4182,12 +4208,14 @@ fn tick_sim(
             // A trip rides on the first tick after it was asked for, and
             // only that one.
             let travel = std::mem::take(&mut sim.travel);
-            let mut pair = [
-                rehearsed
-                    .unwrap_or_else(|| scripted_or(scripted, held))
-                    .travelling(travel),
-                two,
-            ];
+            // Two seats at one keyboard: you, and player two or the dummy.
+            // The third and fourth are people on other machines (`online`),
+            // and send nothing here.
+            let mut pair = [SimInput::default(); MAX_PLAYERS];
+            pair[0] = rehearsed
+                .unwrap_or_else(|| scripted_or(scripted, held))
+                .travelling(travel);
+            pair[1] = two;
             // A replay playing back outranks everything: both seats are
             // the tape's, and the camera turns with the look it recorded.
             // It runs out by handing the controls back.
@@ -4608,10 +4636,8 @@ fn apply_poses(
 
     // One solve per fighter rather than one per bone: forward kinematics is a
     // single pass down the skeleton and there are sixteen bones hanging off it.
-    let mut skeletons: [Skeleton; MAX_PLAYERS] = [
-        skeleton_for(sim.cur.players[0].class),
-        skeleton_for(sim.cur.players[1].class),
-    ];
+    let mut skeletons: [Skeleton; MAX_PLAYERS] =
+        std::array::from_fn(|i| skeleton_for(sim.cur.players[i].class));
     let mut skins = Vec::with_capacity(MAX_PLAYERS);
     for (owner, skeleton) in skeletons.iter_mut().enumerate() {
         let p = frame.players[owner];

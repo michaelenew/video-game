@@ -265,7 +265,7 @@ pub fn heavy_commitment(class: sim::Class) -> usize {
 /// sustain window makes the closed form wrong -- and the number is what
 /// decides which of the creature's surfaces the hunter treats as a route.
 pub fn jump_apex(class: sim::Class) -> Fx {
-    let mut w = World::with_classes([class; MAX_PLAYERS]);
+    let mut w = World::with_classes([class; 2]);
     for _ in 0..40 {
         w.advance([Input::default(); MAX_PLAYERS]);
     }
@@ -390,14 +390,17 @@ pub fn play_card_in(
         Some(place) => World::hunt_in(classes, [Some(species), None], place),
         None => World::hunt_of(classes, species),
     };
-    let mut w = w.tempered(temper);
+    let count = partners.clamp(1, MAX_PLAYERS);
+    // Seated for the bots there are -- and never fewer than two, which is
+    // the world this harness was measured in: one bot hunts beside a second
+    // fighter lying out of it (below), as it always has.
+    let mut w = w.tempered(temper).seated(count.max(2) as u8);
     for beast in w.monsters.iter_mut().flatten() {
         beast.brain.rng = seed | 1;
     }
     if let Some(pack) = w.pack.as_mut() {
         pack.rng = seed | 1;
     }
-    let count = partners.clamp(1, MAX_PLAYERS);
     let mut bots: Vec<Hunter> = (0..count)
         .map(|who| Hunter::of(card, who, seed, jump_apex(classes[who])))
         .collect();

@@ -477,7 +477,7 @@ fn a_pool_is_an_effect_and_the_world_still_fits_its_budget() {
     // The plan's measured criterion: nothing allocates and the snapshot is
     // under its cap. `budget.rs` holds both; this only says which change is
     // being asked about.
-    assert!(std::mem::size_of::<World>() <= 4096);
+    assert!(std::mem::size_of::<World>() <= 20 * 1024);
     assert_eq!(EffectKind::Pool.name(), "essence pool");
 }
 

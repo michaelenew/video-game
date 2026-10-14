@@ -10,7 +10,7 @@ use sim::fixed::Fx;
 use sim::monster::{Blow, Doing, Guarded, Monster};
 use sim::species::SpeciesId;
 use sim::species::mantis::{self, Knob, fight, habit, sight};
-use sim::state::{MAX_PLAYERS, Player};
+use sim::state::Player;
 use sim::{Class, Input, V3, World};
 
 /// Knobs are process-wide, and two of these tests set its eyes: every test
@@ -23,7 +23,7 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
 
 /// A hunt against the Mantis, the second fighter out of it.
 fn hunt(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::MANTIS);
+    let mut w = World::hunt_of([class; 2], SpeciesId::MANTIS);
     w.players[1].health = 0;
     w
 }
@@ -57,7 +57,7 @@ fn hold_still(w: &mut World) {
 /// prayer over and its eyes full.
 fn duel(class: Class, dist: i32) -> World {
     let mut w = hunt(class);
-    w.advance([idle(); MAX_PLAYERS]);
+    w.advance([idle(); 2]);
     {
         let m = w.monsters[0].as_mut().unwrap();
         m.doing = Doing::Prowl;
@@ -66,7 +66,7 @@ fn duel(class: Class, dist: i32) -> World {
     }
     place(&mut w, dist);
     for _ in 0..40 {
-        w.advance([idle(); MAX_PLAYERS]);
+        w.advance([idle(); 2]);
         place(&mut w, dist);
         hold_still(&mut w);
     }
@@ -505,7 +505,7 @@ fn a_lunge_into_a_solid_stops_at_it() {
     // Facing a column three metres off: the lane stops at it, the body stops
     // short of it, and it staggers.
     let mut w = hunt(Class::Champion);
-    w.advance([idle(); MAX_PLAYERS]);
+    w.advance([idle(); 2]);
     let (cx, cz) = sim::arena::mantis::COLUMNS[0];
     let column = V3::new(
         sim::lore::from_cm(cx as i16),
@@ -1028,7 +1028,7 @@ fn a_dead_mantis_is_a_won_hunt_with_its_trophy_and_its_temper() {
     assert_eq!(w.arena().id, sim::arena::ArenaId::MANTIS);
     assert_eq!(w.hunt_won(), None);
     w.monster_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let (beaten, at) = w.hunt_won().expect("a dead Mantis is a won hunt");
     assert_eq!(beaten[0], Some(SpeciesId::MANTIS));
     assert_eq!(at, 2);
@@ -1040,7 +1040,7 @@ fn the_hunt_opens_with_it_at_prayer() {
     // whether to break it.
     let _knobs = lock();
     let mut w = hunt(Class::Champion);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert!(matches!(
         it(&w).doing,
         Doing::Active {
@@ -1049,8 +1049,8 @@ fn the_hunt_opens_with_it_at_prayer() {
         }
     ));
     // Two hunters: its two-hunter health.
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::MANTIS);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::MANTIS);
+    w.advance([Input::default(); 2]);
     assert_eq!(it(&w).health, Knob::CoopHealth.raw());
     assert!(fight::coop(&it(&w)));
 }

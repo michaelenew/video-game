@@ -10,6 +10,19 @@ use sim::state::{Action, Phase};
 
 const P1: Color = Color::srgb(0.29, 0.66, 1.0);
 const P2: Color = Color::srgb(1.0, 0.54, 0.30);
+/// The third and fourth seats (2026-10-14): a green and a violet, far from
+/// the first two and from the creature's red.
+const P3: Color = Color::srgb(0.40, 0.86, 0.46);
+const P4: Color = Color::srgb(0.78, 0.50, 1.0);
+
+/// **Each seat's colour**, player one first: its fighter's body, and its line
+/// in the HUD.
+pub const SEAT_COLOURS: [Color; sim::state::MAX_PLAYERS] = [P1, P2, P3, P4];
+
+/// The row of the third and fourth fighters' health, under the first two;
+/// hidden while those seats are empty.
+#[derive(Component)]
+pub struct SeatRow;
 const INK: Color = Color::srgb(0.86, 0.90, 0.96);
 /// The frame readout. Dimmer than the fighters' own lines, because it is a
 /// developer's instrument rather than part of the fight.
@@ -166,6 +179,25 @@ pub fn setup(mut commands: Commands) {
                 ));
                 spawn_health(top, 1, P2);
                 spawn_class_button(top, 1, P2);
+            });
+
+            // The third and fourth fighters, when there are any: the same
+            // bars, a row down.
+            root.spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    column_gap: Val::Px(18.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    margin: UiRect::top(Val::Px(4.0)),
+                    ..default()
+                },
+                Visibility::Hidden,
+                SeatRow,
+            ))
+            .with_children(|row| {
+                spawn_health(row, 2, P3);
+                spawn_health(row, 3, P4);
             });
 
             // The Dual mage's meter, under whichever fighter has one. Same
@@ -895,11 +927,15 @@ pub fn update(
         // (`SHOT_FRAME`, or `]` and `[`): a readout that changes sixty times
         // a second re-shapes its text and lays the whole HUD out again sixty
         // times a second, for a number nobody can read at that speed.
-        let (p1, p2) = (sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won);
+        let wins: Vec<String> = sim.cur.players[..sim.cur.present()]
+            .iter()
+            .map(|p| p.rounds_won.to_string())
+            .collect();
+        let score = wins.join(" - ");
         let line = if sim.stepping() {
-            format!("{p1} - {p2}   f{}", sim.cur.frame)
+            format!("{score}   f{}", sim.cur.frame)
         } else {
-            format!("{p1} - {p2}")
+            score
         };
         set_text(&mut t, line);
     }
@@ -918,6 +954,23 @@ pub fn update(
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         };
         set_text(&mut t, line);
+    }
+}
+
+type SeatRowQuery<'w, 's> =
+    Query<'w, 's, &'static mut Visibility, (With<SeatRow>, Without<QuarryRow>, Without<MeterRow>)>;
+
+/// Show the third and fourth fighters' row only while one of them is seated.
+pub fn update_seats(sim: Res<crate::Sim>, mut rows: SeatRowQuery) {
+    let want = if sim.cur.present() > 2 {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut seen in rows.iter_mut() {
+        if *seen != want {
+            *seen = want;
+        }
     }
 }
 

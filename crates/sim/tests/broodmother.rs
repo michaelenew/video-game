@@ -11,11 +11,10 @@ use sim::monster::{Doing, Monster};
 use sim::reachcheck::{self, Reach};
 use sim::species::SpeciesId;
 use sim::species::broodmother::{self as bm, Knob, fight};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, V3, World};
 
 fn hunt(class: Class) -> World {
-    World::hunt_of([class; MAX_PLAYERS], SpeciesId::BROODMOTHER)
+    World::hunt_of([class; 2], SpeciesId::BROODMOTHER)
 }
 
 fn at(x: i32, z: i32) -> V3 {
@@ -186,7 +185,7 @@ fn untouched(frames: u32) -> World {
 fn idle(w: &mut World) {
     w.players[0].pos = at(-13, -10);
     w.players[1].pos = at(-13, 10);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     for p in w.players.iter_mut() {
         p.health = p.full_health();
     }
@@ -706,7 +705,7 @@ fn a_struck_sac_turns_the_brood_near_her_on_the_one_who_struck_it() {
         .expect("her")
         .take_hit(bm::sac_part(0), 1);
     for _ in 0..3 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let m = w.monsters[0].expect("her");
     assert_eq!(
@@ -745,7 +744,7 @@ fn a_dead_broodmother_is_a_won_hunt_with_its_trophy_and_its_temper() {
     assert!(her(&w).glance_frames() < her(&calm).glance_frames());
     assert_eq!(w.hunt_won(), None);
     w.monsters[0].as_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let (beaten, at) = w.hunt_won().expect("a dead mother is a won hunt");
     assert_eq!(beaten[0], Some(SpeciesId::BROODMOTHER));
     assert_eq!(at, 2);

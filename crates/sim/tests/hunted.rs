@@ -10,7 +10,7 @@
 use sim::fixed::Fx;
 use sim::monster::{Doing, Monster, Quarry};
 use sim::species::ridgeback;
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::{Class, Input, V3, World};
 
 const PLUS_X: u16 = 0;
@@ -29,7 +29,7 @@ fn quarry(pos: V3, vel: V3) -> Quarry {
 /// A hunt with one fighter, the creature at `at` facing +x and holding still,
 /// and the fighter standing at `me`.
 fn standoff(at: V3, me: V3) -> World {
-    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Champion; 2]);
     w.players[1].health = 0;
     let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
     beast.pos = at;
@@ -301,7 +301,7 @@ fn the_dead_are_not_carried() {
     // dies on its back comes off it. The creature gallops and charges now, and
     // it scooped up bodies often enough that the fight report counted them as
     // rides.
-    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Champion; 2]);
     let mut beast = w.monster().copied().unwrap();
     beast.doing = Doing::Prowl;
     beast.brain.think_left = u16::MAX;
@@ -318,7 +318,7 @@ fn the_dead_are_not_carried() {
     w.players[1].grounded = false;
     for _ in 0..30 {
         w.monster_mut().unwrap().brain.think_left = u16::MAX;
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         assert!(
             !w.players[1].aboard(),
             "a dead fighter landed on the creature and stayed"
@@ -332,13 +332,13 @@ fn the_dead_are_not_carried() {
     );
     w.players[0].vel = V3::new(Fx::ZERO, Fx::ratio(-1, 1), Fx::ZERO);
     w.players[0].grounded = false;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert!(
         w.players[0].aboard(),
         "fixture: the living rider did not land on it"
     );
     w.players[0].health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert!(
         !w.players[0].aboard(),
         "a rider killed on its back stayed on it"
@@ -351,11 +351,11 @@ fn a_hunt_gives_you_a_moment_before_it_attacks() {
     // player had moved the camera. It takes a moment to notice you now: it
     // stands its ground and turns to face you, throws nothing, and then gets
     // on with it.
-    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Champion; 2]);
     let grace = ridgeback::SPECIES.hunt_grace() as u32;
     let start = w.monster().copied().unwrap().pos;
     for f in 0..grace {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         let beast = w.monster().copied().unwrap();
         assert!(
             beast.doing.attacking().is_none(),
@@ -370,7 +370,7 @@ fn a_hunt_gives_you_a_moment_before_it_attacks() {
     );
     let mut attacked = false;
     for _ in 0..180 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         attacked |= w.monster().copied().unwrap().doing.attacking().is_some();
     }
     assert!(

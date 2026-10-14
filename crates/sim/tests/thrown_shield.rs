@@ -15,7 +15,7 @@ use sim::monster::Doing;
 use sim::species::mantis::{self, Knob as MantisKnob};
 use sim::species::sandmaw::fight as maw;
 use sim::species::{SpeciesId, gnats};
-use sim::state::{MAX_PLAYERS, shield_hitbox};
+use sim::state::shield_hitbox;
 use sim::tuning as t;
 use sim::{Input, V3, World};
 
@@ -39,7 +39,7 @@ fn set_weight(w: &mut World, weight: Fx) {
 /// A gnat hunt with the gnats cleared, a Bulwark at the critcheck lane
 /// looking down +x, and a gnat held still at each of `at` metres down it.
 fn gnats_at(at: &[i32]) -> World {
-    let mut w = World::hunt_of([Class::Bulwark; MAX_PLAYERS], SpeciesId::GNATS);
+    let mut w = World::hunt_of([Class::Bulwark; 2], SpeciesId::GNATS);
     let sp = w.critters.sp();
     for c in w.critters.iter_mut() {
         *c = Critter::EMPTY;
@@ -188,7 +188,7 @@ fn a_loaded_throw_spends_its_weight_on_a_critter_and_knocks_it_down() {
 #[test]
 fn the_thrown_shield_hits_a_creature_it_meets() {
     use sim::species::ridgeback;
-    let mut w = World::hunt([Class::Bulwark; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Bulwark; 2]);
     w.players[1].health = 0;
     let hold = |w: &mut World| {
         let m = w.monster_mut().unwrap();
@@ -199,7 +199,7 @@ fn the_thrown_shield_hits_a_creature_it_meets() {
         m.yaw_rate = Fx::ZERO;
     };
     hold(&mut w);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     // Six metres out from a foreleg, along the line from the middle of the
     // animal through it, looking straight at it.
     let m = w.monsters[0].unwrap();
@@ -313,10 +313,10 @@ fn the_overlay_draws_the_volume_the_shield_is_tested_with() {
 #[test]
 fn a_buried_sandmaw_is_not_struck_by_the_shield_and_a_standing_one_is() {
     let recall_over = |buried: bool| {
-        let mut w = World::hunt_of([Class::Bulwark; MAX_PLAYERS], SpeciesId::SANDMAW);
+        let mut w = World::hunt_of([Class::Bulwark; 2], SpeciesId::SANDMAW);
         w.players[1].health = 0;
         for _ in 0..60 {
-            w.advance([Input::default(); MAX_PLAYERS]);
+            w.advance([Input::default(); 2]);
         }
         let spot = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
         let place = |w: &mut World| {
@@ -372,9 +372,9 @@ fn a_buried_sandmaw_is_not_struck_by_the_shield_and_a_standing_one_is() {
 fn the_mantis_guard_turns_a_thrown_shield_and_an_open_one_takes_it() {
     let thrown_at = |guard: bool| {
         let base = V3::new(Fx::from_int(-4), Fx::ZERO, Fx::ZERO);
-        let mut w = World::hunt_of([Class::Bulwark; MAX_PLAYERS], SpeciesId::MANTIS);
+        let mut w = World::hunt_of([Class::Bulwark; 2], SpeciesId::MANTIS);
         w.players[1].health = 0;
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         let place = |w: &mut World| {
             let m = w.monsters[0].as_mut().unwrap();
             m.pos = base;

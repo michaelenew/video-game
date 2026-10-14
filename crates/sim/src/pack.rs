@@ -109,7 +109,7 @@ pub const MAX_RING: usize = 12;
 pub const MAX_TOKENS: usize = 6;
 
 /// Words of the pack's memory kept for its species: see [`Pack::memo`].
-pub const MEMO: usize = 12;
+pub const MEMO: usize = 13;
 
 /// No leader, no owner.
 pub const NONE: u8 = NOBODY;

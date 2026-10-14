@@ -8,12 +8,12 @@ use sim::fixed::Fx;
 use sim::monster::{Doing, Monster};
 use sim::species::SpeciesId;
 use sim::species::pair::{self, Knob, fight};
-use sim::state::{MAX_PLAYERS, Player};
+use sim::state::Player;
 use sim::{Class, Input, V3, World};
 
 /// A hunt against the Pair, the second fighter out of it.
 fn hunt() -> World {
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::PAIR);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::PAIR);
     w.players[1].health = 0;
     w
 }
@@ -45,7 +45,7 @@ fn duel(dist: i32) -> World {
     // Settle: a few frames of nothing so the pair brain has written its
     // first lore and the cat has glanced.
     for _ in 0..10 {
-        w.advance([idle(); MAX_PLAYERS]);
+        w.advance([idle(); 2]);
         hold_still(&mut w);
     }
     w
@@ -119,7 +119,7 @@ fn play(w: &mut World, kind: u8, at: u32, press: Input, hold: u32) -> i32 {
 
 #[test]
 fn two_cats_are_hunted_together() {
-    let w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::PAIR);
+    let w = World::hunt_of([Class::Champion; 2], SpeciesId::PAIR);
     assert!(w.monsters[0].is_some_and(|m| m.species == SpeciesId::PAIR));
     assert!(w.monsters[1].is_some_and(|m| m.species == SpeciesId::PAIR));
 }
@@ -383,7 +383,7 @@ fn three_hundred_and_fifty_into_a_head_scars_the_eye_on_that_side() {
 
 /// A fixed stream of buttons and looks for both fighters, as the Ridgeback's
 /// pin drives its hunt.
-fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
+fn script(frames: u32, seed: u64) -> Vec<[Input; 2]> {
     let mut rng = seed | 1;
     let mut next = move || {
         rng ^= rng << 13;
@@ -701,7 +701,7 @@ fn the_ridgeback_is_bit_identical_with_two_slots() {
     // The second slot is there in every hunt and empty in the Ridgeback's:
     // nothing in the pair brain runs, and nothing fills it. The hash itself
     // is pinned by `ridgeback_pin.rs`.
-    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Champion; 2]);
     for input in script(1200, 0x1d) {
         w.advance(input);
         assert!(w.monsters[1].is_none());

@@ -43,7 +43,10 @@ use crate::{Class, World};
 
 /// The format's version, the first line of every tape. Two added the link's
 /// `online` and `net` lines; a version one tape still reads, with no link.
-pub const VERSION: u32 = 2;
+/// Three is four fighters: four inputs a frame, and `p3`/`p4` on the start
+/// line. A frame line from an older tape holds two, and reads with the other
+/// seats sending nothing.
+pub const VERSION: u32 = 3;
 
 /// A fight as the settings that start it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,8 +58,7 @@ pub struct Start {
     /// proving ground for versus.
     pub arena: Option<ArenaId>,
     pub temper: u8,
-    /// How many fighters are played: two, or one with the second seat out of
-    /// any hunt ([`World::seated`]).
+    /// How many fighters are played: one to four ([`World::seated`]).
     pub seats: u8,
 }
 
@@ -90,17 +92,38 @@ impl Start {
             temper: w.temper(),
             seats: w.seats,
         }
+        .tidied()
+    }
+
+    /// **The classes of seats nobody plays are the first seat's**, the way
+    /// [`World::seats_of`] fills them -- so a start read off a world, and
+    /// one read off a line that never names them, are the same start. The
+    /// first two are always kept: versus stands two bodies up whatever the
+    /// seats ([`World::present`]).
+    pub fn tidied(mut self) -> Start {
+        let named = (self.seats as usize).clamp(2, MAX_PLAYERS);
+        let first = self.classes[0];
+        for c in self.classes.iter_mut().skip(named) {
+            *c = first;
+        }
+        self
     }
 
     /// `p1=champion p2=bulwark hunt=ridgeback temper=0 seats=1`, with
-    /// `arena=<slug>` when the place is not the fight's own. The names are
-    /// the ones the game's flags take, so the line reads like a command.
+    /// `arena=<slug>` when the place is not the fight's own, and `p3`/`p4`
+    /// when those seats are played. The names are the ones the game's flags
+    /// take, so the line reads like a command.
     pub fn to_line(&self) -> String {
         let mut out = format!(
             "p1={} p2={}",
             class_slug(self.classes[0]),
             class_slug(self.classes[1])
         );
+        for (i, class) in self.classes.iter().enumerate().skip(2) {
+            if i < self.seats as usize {
+                out.push_str(&format!(" p{}={}", i + 1, class_slug(*class)));
+            }
+        }
         if let Some(s) = self.hunt {
             out.push_str(&format!(" hunt={}", s.get().slug()));
         }
@@ -119,17 +142,18 @@ impl Start {
             hunt: None,
             arena: None,
             temper: 0,
-            seats: MAX_PLAYERS as u8,
+            seats: 2,
         };
         for word in line.split_whitespace() {
             let Some((key, value)) = word.split_once('=') else {
                 continue;
             };
             match key {
-                "p1" | "p2" => {
+                "p1" | "p2" | "p3" | "p4" => {
                     let class = class_named(value)
                         .ok_or_else(|| format!("no class is called {value:?}"))?;
-                    start.classes[usize::from(key == "p2")] = class;
+                    let seat = usize::from(key.as_bytes()[1] - b'1');
+                    start.classes[seat.min(MAX_PLAYERS - 1)] = class;
                 }
                 "hunt" => {
                     start.hunt = Some(
@@ -150,7 +174,7 @@ impl Start {
                 _ => {}
             }
         }
-        Ok(start)
+        Ok(start.tidied())
     }
 }
 
@@ -335,7 +359,12 @@ impl Tape {
     /// Record the inputs that advance the world from `frame`. By frame rather
     /// than appended, so a rollback that re-advances a frame overwrites what
     /// it predicted with what was confirmed.
-    pub fn record(&mut self, frame: u32, inputs: [Input; MAX_PLAYERS]) {
+    ///
+    /// As many inputs as the caller has seats for; the rest send nothing.
+    pub fn record<const N: usize>(&mut self, frame: u32, wire: [Input; N]) {
+        const { assert!(N >= 1 && N <= MAX_PLAYERS, "one to four inputs") };
+        let mut inputs = [Input::default(); MAX_PLAYERS];
+        inputs[..N].copy_from_slice(&wire);
         let Some(i) = frame.checked_sub(self.first_frame) else {
             return;
         };
@@ -527,6 +556,7 @@ impl Tape {
         };
         let mut lines = text.lines().enumerate();
         let mut versioned = false;
+        let mut version = 1;
         for (n, line) in &mut lines {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -561,6 +591,7 @@ impl Tape {
                         ));
                     }
                     versioned = true;
+                    version = v;
                 }
                 "build" => tape.build = rest.trim().to_string(),
                 "online" => {
@@ -610,7 +641,7 @@ impl Tape {
                         return Err("not a replay: no `replay <version>` line first".to_string());
                     }
                     let (inputs, repeat) =
-                        read_frame(line).ok_or_else(|| format!("{}: bad frame", at()))?;
+                        read_frame(line, version).ok_or_else(|| format!("{}: bad frame", at()))?;
                     for _ in 0..repeat {
                         tape.frames.push(inputs);
                     }
@@ -637,19 +668,38 @@ fn write_frame(out: &mut String, inputs: &[Input; MAX_PLAYERS]) {
     }
 }
 
-fn read_frame(line: &str) -> Option<([Input; MAX_PLAYERS], u32)> {
-    let mut words = line.split_whitespace();
+/// A frame line: one input per seat, as many seats as the tape's version
+/// wrote (two before version three, whose class changes are read the way
+/// they were written), and an optional `xN` repeat.
+fn read_frame(line: &str, version: u32) -> Option<([Input; MAX_PLAYERS], u32)> {
+    let mut words = line.split_whitespace().peekable();
     let mut inputs = [Input::default(); MAX_PLAYERS];
+    let mut read = 0;
     for input in inputs.iter_mut() {
+        if words.peek().is_none_or(|w| w.starts_with('x')) {
+            break;
+        }
         input.bits = u16::from_str_radix(words.next()?, 16).ok()?;
         input.aim = u16::from_str_radix(words.next()?, 16).ok()?;
         input.pitch = u16::from_str_radix(words.next()?, 16).ok()? as i16;
-        input.travel = crate::input::Travel(u8::from_str_radix(words.next()?, 16).ok()?);
+        let travel = u8::from_str_radix(words.next()?, 16).ok()?;
+        input.travel = if version < 3 {
+            crate::input::Travel::from_two_seats(travel)
+        } else {
+            crate::input::Travel(travel)
+        };
+        read += 1;
+    }
+    if read == 0 {
+        return None;
     }
     let repeat = match words.next() {
         None => 1,
         Some(w) => w.strip_prefix('x')?.parse().ok()?,
     };
+    if words.next().is_some() {
+        return None;
+    }
     Some((inputs, repeat))
 }
 
@@ -670,12 +720,7 @@ mod tests {
             rng
         };
         (0..frames)
-            .map(|_| {
-                [
-                    Input::aimed((next() & 0x1ff) as u16, next() as u16),
-                    Input::aimed((next() & 0x1ff) as u16, next() as u16),
-                ]
-            })
+            .map(|_| std::array::from_fn(|_| Input::aimed((next() & 0x1ff) as u16, next() as u16)))
             .collect()
     }
 
@@ -798,7 +843,8 @@ mod tests {
         for f in 0..10 {
             tape.record(f, [Input::default(); MAX_PLAYERS]);
         }
-        let corrected = [Input::aimed(Input::LEFT, 5), Input::default()];
+        let mut corrected = [Input::default(); MAX_PLAYERS];
+        corrected[0] = Input::aimed(Input::LEFT, 5);
         tape.record(6, corrected);
         assert_eq!(tape.len(), 10);
         assert_eq!(tape.frames[6], corrected);
@@ -809,7 +855,7 @@ mod tests {
         for sp in species::all() {
             for seats in 1..=2u8 {
                 let start = Start {
-                    classes: [Class::DualMage, Class::ShadowReaver],
+                    classes: World::seats_of([Class::DualMage, Class::ShadowReaver]),
                     hunt: Some(sp.id),
                     arena: None,
                     temper: 1,
@@ -822,7 +868,7 @@ mod tests {
         }
         for a in arena::all() {
             let start = Start {
-                classes: [Class::Bulwark, Class::Elementalist],
+                classes: World::seats_of([Class::Bulwark, Class::Elementalist]),
                 hunt: None,
                 arena: (a.id != ArenaId::PROVING_GROUND).then_some(a.id),
                 temper: 0,

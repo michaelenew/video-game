@@ -5,7 +5,7 @@
 //! Mireback sixteen tar pools, the Sandmaw a ring of noises and a spine, the
 //! Veilstalker a trail of footfalls, the Siegeshell its vents, the things it
 //! sheds and the wall it is walking to. **Only one fight is ever loaded**, so
-//! summing every creature's worst case into the `World` would spend the 4 KiB
+//! summing every creature's worst case into the `World` would spend the
 //! snapshot on bytes no fight uses at once. Instead the `World` keeps one
 //! region, [`Lore`], sized to the largest fight, and the fight's species says
 //! how it is laid out ([`Layout`], in its [`crate::species::FightDecl`]):
@@ -39,9 +39,11 @@ use crate::species::SpeciesId;
 /// siege state, and the wall (19), the Veilstalker's 32 footfalls, paint,
 /// veil and four hazards (15), the Sandmaw's noise ring, spine, sinkhole and
 /// swallow (14), the Broodmother's six patches, four strands, six sacs and
-/// her list (13). Twenty-four leaves every one of them five cells or more to
-/// grow into; `tests/lore.rs` checks every registered species' layout fits.
-pub const CELLS: usize = 24;
+/// her list (13). Twenty-four left every one of them five cells or more to
+/// grow into. **Forty since four fighters** (2026-10-14): the Mantis keeps a
+/// ring of glimpses and a list of deeds per fighter, which is 33 cells for
+/// four; `tests/lore.rs` checks every registered species' layout fits.
+pub const CELLS: usize = 40;
 
 /// One cell: sixteen bytes, as four words.
 pub type Cell = [u32; 4];

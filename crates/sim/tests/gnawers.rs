@@ -14,18 +14,18 @@ use sim::fixed::Fx;
 use sim::pack::{self, PackKnob, mood};
 use sim::species::SpeciesId;
 use sim::species::gnawers::{self as g, Knob};
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::{Class, Input, V3, World};
 
 fn hunt(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::GNAWERS);
+    let mut w = World::hunt_of([class; 2], SpeciesId::GNAWERS);
     // One hunter: the second fighter is out of it, as the harness has it.
     w.players[1].health = 0;
     w
 }
 
-fn idle() -> [Input; MAX_PLAYERS] {
-    [Input::default(); MAX_PLAYERS]
+fn idle() -> [Input; 2] {
+    [Input::default(); 2]
 }
 
 fn keep_up(w: &mut World) {
@@ -95,7 +95,7 @@ fn connected(before: &World, after: &World, act: u8) -> usize {
 #[test]
 fn a_full_pack_fits_the_snapshot() {
     let world = std::mem::size_of::<World>();
-    assert!(world <= 4096, "a World is {world} bytes");
+    assert!(world <= 20 * 1024, "a World is {world} bytes");
     // Six and the Big One, in the Commons, from the den.
     let w = hunt(Class::Champion);
     let p = w.pack.expect("a pack");
@@ -107,7 +107,7 @@ fn a_full_pack_fits_the_snapshot() {
     assert!(w.critters[leader(&w)].has(flag::LEADER));
     // Two hunters: three more from the den, the Gnawers' coop pack -- ten,
     // the most there is.
-    let mut two = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS);
+    let mut two = World::hunt_of([Class::Champion; 2], SpeciesId::GNAWERS);
     for _ in 0..3 {
         two.advance(idle());
     }
@@ -1218,7 +1218,7 @@ fn a_gnawer_pack_runs_without_a_leader_and_spawns_into_a_freed_slot() {
 fn a_won_hunt_is_the_gnawers_trophy_at_its_temper() {
     // Every body down: the hunt is won, and what was beaten is the Gnawers,
     // at the temper it was fought at -- what the trophy case writes.
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS).tempered(2);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::GNAWERS).tempered(2);
     w.players[1].health = 0;
     assert_eq!(w.pack.unwrap().temper, 2);
     for i in 0..MAX_CRITTERS {
@@ -1238,8 +1238,8 @@ fn a_won_hunt_is_the_gnawers_trophy_at_its_temper() {
 fn a_harder_temper_glances_sooner() {
     // Tempers come free (species.md §5, 11): the pack's glance and lead are
     // read through it.
-    let plain = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS);
-    let hard = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::GNAWERS)
-        .tempered(sim::temper::HIGHEST);
+    let plain = World::hunt_of([Class::Champion; 2], SpeciesId::GNAWERS);
+    let hard =
+        World::hunt_of([Class::Champion; 2], SpeciesId::GNAWERS).tempered(sim::temper::HIGHEST);
     assert!(hard.pack.unwrap().glance_frames() < plain.pack.unwrap().glance_frames());
 }

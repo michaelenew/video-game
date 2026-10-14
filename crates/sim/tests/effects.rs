@@ -11,7 +11,7 @@ use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
 use sim::moves;
 use sim::moves::elementalist::keys;
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::{Fx, Input, World};
 
 const Q: u16 = Input::SPECIAL;
@@ -1551,7 +1551,7 @@ fn the_uppercut_takes_both_fighters_off_the_ground() {
     // jump -- which puts the launcher on a button the class always has rather
     // than behind a charge it may have spent. See `docs/design/champion.md`.
     let mut w = engaged(Class::Champion);
-    let mut lifted = [false; MAX_PLAYERS];
+    let mut lifted = [false; 2];
     run(&mut w, 2, MMB | Input::SPACE, 0);
     for _ in 0..60 {
         w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);

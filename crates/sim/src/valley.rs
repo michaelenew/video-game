@@ -162,7 +162,7 @@ pub struct Seam {
     pub at: u8,
     /// Where the two of you stand when you come *in* through this seam,
     /// facing into the place.
-    pub marks: [Mark; MAX_PLAYERS],
+    pub marks: [Mark; 2],
     pub gate: Gate,
     /// The solid that is its waystone, if it has one: drawn lit or dark.
     pub waystone: Option<u8>,

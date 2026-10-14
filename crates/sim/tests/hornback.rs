@@ -14,18 +14,18 @@ use sim::hazard;
 use sim::pack::{self, mood};
 use sim::species::SpeciesId;
 use sim::species::hornback::{self as h, Knob};
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::{Class, Input, V3, World};
 
 fn hunt(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::HORNBACK);
+    let mut w = World::hunt_of([class; 2], SpeciesId::HORNBACK);
     // One hunter: the second fighter is out of it, as the harness has it.
     w.players[1].health = 0;
     w
 }
 
-fn idle() -> [Input; MAX_PLAYERS] {
-    [Input::default(); MAX_PLAYERS]
+fn idle() -> [Input; 2] {
+    [Input::default(); 2]
 }
 
 fn keep_up(w: &mut World) {
@@ -1125,7 +1125,7 @@ fn a_rider_on_a_cow_is_out_of_its_stampede() {
 
 fn crossing(class: Class) -> World {
     let mut w = World::hunt_in(
-        [class; MAX_PLAYERS],
+        [class; 2],
         [Some(SpeciesId::HORNBACK), None],
         sim::arena::ArenaId::HORNBACK_CROSSING,
     );
@@ -1325,7 +1325,7 @@ fn a_hit_on_the_bull_or_a_hunter_nearer_the_herd_holds_it_off_the_cart() {
 fn a_won_hunt_is_the_hornback_trophy_at_its_temper() {
     // The bull down and the herd gone by the ford: the hunt is won, and what
     // was beaten is the Hornback, at the temper it was fought at.
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::HORNBACK).tempered(2);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::HORNBACK).tempered(2);
     w.players[1].health = 0;
     assert_eq!(w.pack.unwrap().temper, 2);
     alarmed(&mut w);
@@ -1389,8 +1389,8 @@ fn the_crossing_is_won_when_the_cart_arrives_and_lost_when_it_breaks() {
 
 #[test]
 fn a_harder_herd_glances_sooner() {
-    let plain = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::HORNBACK);
-    let hard = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::HORNBACK)
-        .tempered(sim::temper::HIGHEST);
+    let plain = World::hunt_of([Class::Champion; 2], SpeciesId::HORNBACK);
+    let hard =
+        World::hunt_of([Class::Champion; 2], SpeciesId::HORNBACK).tempered(sim::temper::HIGHEST);
     assert!(hard.pack.unwrap().glance_frames() < plain.pack.unwrap().glance_frames());
 }

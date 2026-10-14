@@ -67,6 +67,8 @@ pub mod word {
     pub const GNAW_Z: usize = 10;
     /// Bits: [`super::COOP_DONE`], [`super::WAS_ROUTED`].
     pub const BITS: usize = 11;
+    /// [`TREED`] for the third and fourth fighters.
+    pub const TREED_MORE: usize = 12;
 }
 
 /// The pack's four clocks, two to a memo word.
@@ -132,6 +134,15 @@ pub mod role {
 pub struct Mind;
 
 /// A sixteen-bit half of a memo word, per fighter.
+/// The memo word that holds fighter `who`'s treed count: two to a word.
+fn treed_word(who: usize) -> usize {
+    if who < 2 {
+        word::TREED
+    } else {
+        word::TREED_MORE
+    }
+}
+
 fn half(word: i32, who: usize) -> i32 {
     (word as u32 >> (16 * (who & 1)) & 0xFFFF) as i32
 }
@@ -145,7 +156,7 @@ fn set_half(word: &mut i32, who: usize, value: i32) {
 /// Is fighter `who` out of the pack's reach -- feet above `LeapReach` for
 /// longer than `TreedAfter`?
 pub fn treed(pack: &Pack, who: usize) -> bool {
-    half(pack.memo[word::TREED], who) > knob(Knob::TreedAfter)
+    half(pack.memo[treed_word(who)], who) > knob(Knob::TreedAfter)
 }
 
 /// Is the Big One (or any critter) howling: winding the howl up or out?
@@ -319,9 +330,9 @@ impl PackMind for Mind {
         for who in 0..MAX_PLAYERS {
             let s = pack.seen[who];
             let up = s.alive && s.pos.y.raw() > reach.raw();
-            let was = half(pack.memo[word::TREED], who);
+            let was = half(pack.memo[treed_word(who)], who);
             set_half(
-                &mut pack.memo[word::TREED],
+                &mut pack.memo[treed_word(who)],
                 who,
                 if up { was + 1 } else { 0 },
             );

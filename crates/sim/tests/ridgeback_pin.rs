@@ -13,10 +13,9 @@
 //! `docs/design/feel-log.md` what moved and why. If it fails after a change
 //! that was not meant to touch the Ridgeback, the change is wrong.
 
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, World};
 
-fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
+fn script(frames: u32, seed: u64) -> Vec<[Input; 2]> {
     let mut rng = seed;
     let mut next = move || {
         rng ^= rng << 13;
@@ -37,7 +36,7 @@ fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
 /// A running hash of every frame of a hunt, so a difference anywhere in it
 /// shows rather than only one at the end.
 fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
-    let mut w = World::hunt([class; MAX_PLAYERS]);
+    let mut w = World::hunt([class; 2]);
     let mut acc: u64 = 0xcbf2_9ce4_8422_2325;
     for input in script(frames, seed) {
         w.advance(input);
@@ -96,13 +95,20 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// his liquid weapon is drawn from (`class::Quicksilver`) went into
 /// `state_checksum` with the rest of his mechanic. With them left out of it,
 /// every pin held bit for bit.
+/// **Every class was re-pinned 2026-10-14, with no change to play**, for four
+/// fighters: the snapshot holds four seats (two of them parked out of the
+/// world here) and a hit mask twice as wide, and `state_checksum` hashes all
+/// of it. Before re-pinning, both fighters' positions, velocities, health and
+/// actions, the creature, the phase and every effect were compared frame by
+/// frame against the code before the change, for all six classes over these
+/// 2,400 frames, hunted and in versus: identical.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xad92d8aa094c6517),
-    (Class::Bulwark, 0x8465a86bccb8ef32),
-    (Class::ShadowReaver, 0xf02c926cba5a3ae3),
-    (Class::BloodMage, 0x083464c03c9c85e2),
-    (Class::DualMage, 0xd1dc8709fa4d36db),
-    (Class::Elementalist, 0x19fbc249420a6a17),
+    (Class::Champion, 0xde36cc574ef51ff7),
+    (Class::Bulwark, 0x11c745d19fbec112),
+    (Class::ShadowReaver, 0xd175b8cf993b6d00),
+    (Class::BloodMage, 0xb2bbc7b7602757bb),
+    (Class::DualMage, 0x683f1236c1e3c383),
+    (Class::Elementalist, 0x31a1cb586ada4b67),
 ];
 
 #[test]

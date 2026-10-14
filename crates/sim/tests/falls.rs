@@ -12,7 +12,7 @@ use sim::arena::{ArenaId, proving_ground};
 use sim::beast::{Rig, sample};
 use sim::fixed::Fx;
 use sim::species::ridgeback;
-use sim::state::{MAX_PLAYERS, Player, fall_rule};
+use sim::state::{Player, fall_rule};
 use sim::tuning as t;
 use sim::{Class, Input, V3, World};
 
@@ -153,7 +153,7 @@ fn a_slow_landing_is_halved() {
 
 #[test]
 fn walking_off_the_range_tower_costs_what_the_rule_says() {
-    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], ArenaId::RANGE);
+    let mut w = World::versus_in([Class::Champion; 2], ArenaId::RANGE);
     // On the tower's top (12 m, x 17 to 23, z within 3), at the corner whose
     // two neighbours are open floor, walking out over it.
     w.players[0].pos = V3::new(Fx::ratio(228, 10), Fx::from_int(12), Fx::ratio(28, 10));
@@ -179,10 +179,10 @@ fn a_fall_in_the_proving_ground_hashes_as_it_always_did() {
     // The excess is zero for every fall that cannot hurt, and the hash writes
     // it only when it is not: a hunt with jumps in it hashes the same with or
     // without the field.
-    let mut w = World::hunt([Class::DualMage; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::DualMage; 2]);
     for f in 0..600u32 {
         let bits = if f % 40 < 3 { Input::SPACE } else { Input::W };
-        w.advance([Input::aimed(bits, (f * 97) as u16); MAX_PLAYERS]);
+        w.advance([Input::aimed(bits, (f * 97) as u16); 2]);
         for p in &w.players {
             assert_eq!(p.fall_over, Fx::ZERO);
         }
