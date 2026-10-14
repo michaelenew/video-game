@@ -43,7 +43,14 @@ use crate::species::SpeciesId;
 /// grow into. **Forty since four fighters** (2026-10-14): the Mantis keeps a
 /// ring of glimpses and a list of deeds per fighter, which is 33 cells for
 /// four; `tests/lore.rs` checks every registered species' layout fits.
-pub const CELLS: usize = 40;
+///
+/// **Grown with the seats past four**: the Mantis's glimpses and deeds, and
+/// every species' per-fighter runs, are a fighter's worth each, so eight cells
+/// more for every seat -- what the Mantis, the largest, asks for a fighter.
+pub const CELLS: usize = {
+    let more = crate::state::MAX_PLAYERS.saturating_sub(4);
+    40 + 8 * more
+};
 
 /// One cell: sixteen bytes, as four words.
 pub type Cell = [u32; 4];

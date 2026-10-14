@@ -440,6 +440,12 @@ impl Mark {
     /// so two hunters side by side widen into a line of four rather than
     /// doubling up; facing each other (versus), the sides are each fighter's
     /// left, which puts the four on the corners of a square.
+    ///
+    /// Past the first two, each side's seats stand out along its flank in
+    /// ranks: the first a flank to one side, the next a flank to the other,
+    /// then two flanks out, and so on -- so no two seats are ever the same
+    /// mark, however many there are. (Seats two and three are where they
+    /// always were.)
     pub fn seat(marks: &[Mark; 2], i: usize) -> Mark {
         let own = marks[i % 2];
         if i < 2 {
@@ -454,8 +460,15 @@ impl Mark {
         } else {
             left
         };
+        let rank = i / 2;
+        let side = if rank % 2 == 1 {
+            side
+        } else {
+            V3::ZERO.sub(side)
+        };
+        let out = crate::tuning::seat_flank().mul(Fx::from_int(rank.div_ceil(2) as i32));
         Mark {
-            at: own.at.add(side.scale(crate::tuning::seat_flank())),
+            at: own.at.add(side.scale(out)),
             facing: own.facing,
         }
     }
