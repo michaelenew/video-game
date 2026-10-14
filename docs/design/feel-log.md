@@ -8299,3 +8299,14 @@ the disk hang 6 m up rather than 4.5 -- at 4.5 they sat near the crosshair and h
 and the beam. Drawn: the cloud is dark smoke some 8 m across with wisps, the bolts black
 with a white edge (they read as purple bubbles before), and the sun-disk a flat plate twice
 as broad with two rings inside its beads.
+
+### 2026-10-14 — the Dual mage: no calm, a smaller cloud, lightning on creatures
+
+From the owner. **The calm is off**: the bars no longer fall on their own, so the only way down
+short of overflowing is to cash out with `Q` or `E`. The hill (the drift apart outside the band,
+and the burn) is unchanged. **The cloud and the sun-disk** are a fifth smaller -- the day before
+they were a little too big. **Chain lightning never struck the Ridgeback**: the crosshair's
+point is the floor behind a body (bodies are not on its ray), metres past a creature that big,
+and the first bolt looked for a body within 4 m of that point. It now looks along the bolt's
+whole line from the cloud to the point (`aim::chain_next`), which is where the bolt visibly goes.
+

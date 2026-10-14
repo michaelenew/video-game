@@ -3508,7 +3508,7 @@ fn hold_gathering(
         d::CHAIN_LIGHTNING => {
             const PUFFS: usize = 18;
             const WISPS: usize = 10;
-            let reach = 1.2 + 2.6 * full;
+            let reach = 1.0 + 2.0 * full;
             let drift = spin * 0.004;
             if part < PUFFS {
                 let k = part as f32;
@@ -3553,12 +3553,12 @@ fn hold_gathering(
             let side = Vec3::new(-face.z, 0.0, face.x);
             let open = 0.25 + 0.75 * full;
             match part {
-                0 => Some(plate(Skin::Sun, over, face, 1.7 * open, 0.06)),
-                1 => Some(hoop(Skin::Light, over, face, 2.1 * open)),
-                2 => Some(hoop(Skin::Light, over, face, 2.45 * open)),
+                0 => Some(plate(Skin::Sun, over, face, 1.35 * open, 0.06)),
+                1 => Some(hoop(Skin::Light, over, face, 1.7 * open)),
+                2 => Some(hoop(Skin::Light, over, face, 1.95 * open)),
                 k if k < 15 => {
                     let turn = (k - 3) as f32 / 12.0 * std::f32::consts::TAU - spin * 0.05;
-                    let r = 2.8 * open;
+                    let r = 2.25 * open;
                     Some(floating_in(
                         Skin::Light,
                         over + side * (turn.cos() * r) + Vec3::Y * (turn.sin() * r),

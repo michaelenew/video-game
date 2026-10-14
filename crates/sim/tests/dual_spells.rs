@@ -1579,3 +1579,36 @@ fn a_full_hold_is_a_commitment_and_not_a_charge() {
         );
     }
 }
+
+#[test]
+fn chain_lightning_strikes_a_creature_the_crosshair_is_on() {
+    // From play (2026-10-14): it never struck the Ridgeback. Bodies are not on
+    // the crosshair's ray, so the point under the crosshair is the floor
+    // behind a creature that size, metres past its nearest part; the bolt is
+    // drawn to the body nearest its whole line, not the line's end.
+    use sim::monster::{Doing, Monster};
+    let mut w = World::hunt([Class::DualMage; sim::state::MAX_PLAYERS]);
+    w.players[1].health = 0;
+    let me = at(-6.0, 0.0, 8.0);
+    w.players[0].pos = me;
+    w.players[0].grounded = true;
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    let stands = at(2.0, 0.0, 8.0);
+    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
+    beast.pos = stands;
+    beast.doing = Doing::Prowl;
+    beast.brain.think_left = u16::MAX;
+    beast.brain.seen = me;
+    w.monsters[0] = Some(beast);
+    let before = w.monsters[0].unwrap().health;
+    let pitch = onto(&w, at(2.0, 1.2, 8.0));
+    for f in 0..60 {
+        step_looking(&mut w, if f < 30 { keys::DARK } else { 0 }, pitch);
+        w.monsters[0].as_mut().unwrap().pos = stands;
+    }
+    let after = w.monsters[0].unwrap().health;
+    assert!(
+        after < before,
+        "the Ridgeback was not struck: {before} -> {after}"
+    );
+}

@@ -53,9 +53,10 @@ Nothing is signed; there is no centre.
   it — with no input the two together can only fall.
 - **The burn.** Health drains at a rate that grows with the same excess, capped, and never
   past one health. There is no burn inside the band, however high both bars are.
-- **Calm.** Both bars fall slowly on their own, always. A mage who stops goading settles
-  toward empty. This is what makes a tier something she *holds* by fighting rather than a
-  level she reached.
+- **Calm -- off since 2026-10-14.** Both bars used to fall slowly on their own, always, so a
+  tier was something she held by fighting. The owner took it out: the bars stay where she put
+  them, and the only way down before overflowing is to cash out with `Q` or `E` (the majors).
+  `meter_calm` is still the knob, at 0.
 
 **The mouse fills, `F` and `R` vent, majors spend** (2026-10-12 and 13, from the owner after playing the wing
 autos; [exploration/0016](exploration/0016_dual_mage_controls.md)). The autos are how she
@@ -90,7 +91,7 @@ and 38 against a band of 30, and it read as spells that fed the bars too much.
 | Band | `meter_band` | 16 | Benchmark B8: one cast from level stays inside, two leave, the finisher always leaves, and the alternating rhythm — auto and cast on one side, then the other — never leaves. So at least an auto plus a cast and less than two casts: 14 to 18 |
 | Drift | `drift_gain` / `drift_cap` | 1 per second per unit outside the band, at most 3 per second | B6: uncorrected, a Judgement from level empties the lower bar in eight to twelve seconds; answered by the far-side hand, it is back inside within an exchange; far-side autos alone hold or claw back. Was 2 and 10, which read as bars draining too fast |
 | Burn | `burn_gain` / `burn_cap` | 4 health per second per unit, at most 25 per second | B7: ignoring a runaway for ten seconds costs about a Judgement's worth; fully one-sided for half a round costs half to four fifths of a bar. Was 1.5 and 15, which read as a footnote |
-| Calm | `meter_calm` | 2 per second | B4 and B5: the climb and the idle fall below. Was 6 |
+| Calm | `meter_calm` | 0 per second | Off from 2026-10-14 (the owner: no passive drain). Was 2, and 6 before that |
 
 Three quantities fall out, and each is read by something different:
 
@@ -116,10 +117,10 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 | **B1** | Alternates wings for half a round with everything landing on a target that never moves, the dummy in sword range | One to two and a quarter health bars, the last of it the ascension the climb reaches near the end | 1.43 bars (1.85 with the spellbook's litanies) |
 | **B2** | The dark wing only, on a target standing in all of it (since the majors spend, 2026-10-12) | The most the wings make: one and a quarter to two bars, and the dark runs away and burns her for two fifths to four fifths of her own. The same hand with the Abyss every fourth throw costs her nothing: the major is the valve | 1.59 bars dealt, 0.59 lost; with the Abyss, nothing |
 | **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | passes |
-| **B4** | Alternates wings cleanly from empty, venting nothing | The blink in five to eight seconds, the second jump in eleven to fifteen, the wings in sixteen to twenty-one. Faster than it was (ten to fourteen, sixteen to twenty-one, twenty to twenty-six) since the autos are the builders and the tiers at thirds; in play every spell she vents slows it | 6.3 s, 12.9 s, 17.9 s |
-| **B5** | Stops at two thirds | The second jump is gone within an exchange; the blink is kept for at least two and gone inside seven | passes |
+| **B4** | Alternates wings cleanly from empty, venting nothing | The blink in four to six seconds, the second jump in eight to twelve, the wings in eleven to sixteen, since the calm went (2026-10-14; it was five to eight, eleven to fifteen, sixteen to twenty-one, and ten to fourteen, sixteen to twenty-one, twenty to twenty-six before the thirds); in play every spell she vents slows it | 4.8 s, 10.0 s, 13.5 s |
+| **B5** | Stops at two thirds | Keeps the second jump through seven exchanges of stillness (since 2026-10-14, no calm; it used to be gone within an exchange and the blink inside seven) | passes |
 | **B6** | Throws a major from level | Its bar is empty and the other is half a bar ahead. Answered with the other major, she is level again before it recovers; answered with the spent hand's wings, back inside the band within two exchanges | passes |
-| **B7** | Throws a major from level and ignores the runaway for ten seconds | Ten to twenty-five per cent of a health bar. Fully one-sided for half a round: half to four fifths, and never all of it | passes |
+| **B7** | Throws a major from level and ignores the runaway for ten seconds | Ten to twenty-five per cent of a health bar. Fully one-sided for half a round: half to four fifths, and never all of it. With no calm the burn runs until she cashes out (2026-10-14) | passes |
 | **B8** | One spell from level; two; a major; alternating | Inside the band; outside; outside; never outside | passes |
 | **B9** | Throws the Abyss and Judgement in turn, over and over, with nothing built between | Since they spend, every one after the first is thrown from an empty bar: three quarters of a bar to a bar and a half in half a round, costing her nothing. The majors are what the building is for | 1.17 bars |
 

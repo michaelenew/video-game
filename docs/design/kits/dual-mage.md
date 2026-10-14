@@ -97,9 +97,10 @@ opening, the two forces wound round her hands.
 
 - **Chain lightning** (dark). A storm cloud over her head (`aim::overhead`,
   `overhead height` 6 m -- 4.5 until the owner found it sitting near the crosshair, hiding
-  the bolts -- and some 8 m across, dark wispy smoke rather than a ring of beads) through
+  the bolts -- and some 6 m across, dark wispy smoke rather than a ring of beads; 8 m for a
+  day, until the owner asked for it a little smaller) through
   16 frames; then black lightning onto the body nearest the
-  crosshair's point -- within `chain lightning, finds a body this near the crosshair` (4 m) --
+  crosshair's line -- the line from the cloud to the crosshair's point, since a body is not on the crosshair's ray and the point is the floor behind it (2026-10-14: measured from the point alone, it never reached the Ridgeback) -- within `chain lightning, finds a body this near the crosshair` (4 m) --
   and from it to the nearest body it has not struck within `leaps to a body this near` (6 m),
   `bodies it strikes` (4) at most, with nothing solid between (`aim::chain_next`). Each link is
   a burst where it lands, `strike radius` 0.9 m, 22 damage at power one, and a curse stack.
@@ -107,8 +108,8 @@ opening, the two forces wound round her hands.
   strikes the crosshair's point. The bolts are black with a white edge, re-struck every
   other frame, and stand for the 6 active frames past the strike. 16/6/16.
 - **The Disk ray** (light). A sun-disk opens over her head through 20 frames -- a flat
-  plate of light 3.4 m across, two rings round it and beads turning round the rim (twice
-  the breadth it was, 2026-10-13) -- standing upright and facing the way she faces; then a
+  plate of light 2.7 m across, two rings round it and beads turning round the rim (twice
+  the breadth it was on 2026-10-13, then a fifth smaller the day after) -- standing upright and facing the way she faces; then a
   blast from it to the point the crosshair is on -- a new line of effect,
   `aim::Kind::Overhead`, the skillshot's target from the disk rather than her hand -- for 18
   frames, 0.6 m wide, 40 damage once and 34 frames of hitstun (26 before the longer beam left her minus on hit), purging what it passes through. Reach 16 m. 20/18/16.
@@ -294,7 +295,8 @@ step. `tests/dual_spells.rs` holds one test per move and per reaction.
 - **Three tiers of push:** an auto goads a bar 5, a cast 9, and the finisher 20. The last is
   what makes casting Judgement from high a question about what the other bar does next.
 - **The hill.** Inside a band of 16 nothing moves on its own. Outside it the higher bar rises,
-  the lower falls and she burns, faster the wider the gap. Both bars calm toward empty, always.
+  the lower falls and she burns, faster the wider the gap. Nothing else moves them on their own
+  (the calm, which let both fall toward empty, was taken out on 2026-10-14).
 - **Power is the bar she is carrying**, continuously: a cast reads the carried bar, an auto its
   own. Empty is thin and full is the most she can hold.
 - **The tiers read the lower bar.** At half the dodge is a blink; at three quarters she has a

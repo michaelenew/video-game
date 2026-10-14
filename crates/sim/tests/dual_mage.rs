@@ -650,8 +650,11 @@ fn outside_the_band_the_higher_bar_rises_and_the_lower_falls_until_it_is_empty()
                 emptied_at.get_or_insert(frame);
                 break;
             }
+            // Full is as high as it goes: with no calm under it, the higher
+            // bar reaches the top and holds there (2026-10-14).
+            let full = hi.raw() >= Fx::from_int(t::meter_max()).raw();
             assert!(
-                hi.raw() > last_hi.raw(),
+                hi.raw() > last_hi.raw() || full,
                 "{name}, frame {frame}: the higher bar went {last_hi:?} to {hi:?} -- it did not rise"
             );
             assert!(
@@ -782,31 +785,20 @@ fn alternating_hands_climbs_without_ever_leaving_the_band() {
 }
 
 #[test]
-fn stopping_loses_the_second_tier_and_keeps_the_first_for_a_while() {
-    // Benchmark B5. The calm: a tier is something she holds by fighting. Stop
-    // goading at three quarters and the second tier is gone almost at once,
-    // and the first follows -- but slowly enough that two exchanges of not
-    // pressing buttons do not take the blink away, and surely inside seven.
+fn stopping_keeps_the_tiers_she_built() {
+    // Benchmark B5, reversed on 2026-10-14 (the owner: no passive drain). It
+    // was the calm -- stop goading and the second tier went almost at once,
+    // the first inside seven exchanges. Now the bars stay where she put them:
+    // seven exchanges of stillness at two thirds and she still has the
+    // second jump. The way down short of overflowing is to cash out (`Q`, `E`).
     let mut w = mage();
     w.players[0].mechanic = meter_at(t::tier_jump(), t::tier_jump(), Force::Dark);
     assert_eq!(tier(&w), Tier::Jump);
-    step(&mut w, exchange(), 0);
+    step(&mut w, 7 * exchange(), 0);
     assert_eq!(
         tier(&w),
-        Tier::Blink,
-        "one exchange of stillness and the second jump survived, or the blink went too"
-    );
-    step(&mut w, exchange(), 0);
-    assert_eq!(
-        tier(&w),
-        Tier::Blink,
-        "two exchanges of stillness and the blink is gone"
-    );
-    step(&mut w, 5 * exchange(), 0);
-    assert_eq!(
-        tier(&w),
-        Tier::None,
-        "seven exchanges of stillness and she still holds the blink"
+        Tier::Jump,
+        "seven exchanges of stillness and the second jump went"
     );
 }
 
@@ -815,8 +807,9 @@ fn a_bar_left_fully_one_sided_burns_most_of_a_health_bar_in_half_a_round_and_nev
     // Benchmark B7. The burn is the price of ignoring the hill, and it has to
     // be one a player feels: fully one-sided and uncorrected for thirty
     // seconds costs between half and four fifths of a health bar. Over a whole
-    // round it still cannot be all of it, and it stops the moment the calm
-    // brings the gap back inside the band.
+    // round it still cannot be all of it. Until 2026-10-14 the calm brought
+    // the gap back inside the band on its own and the burn stopped there; with
+    // the calm off nothing does, and it runs until she cashes out.
     let mut w = mage();
     w.players[0].mechanic = meter_at(t::meter_max(), 0, Force::Dark);
     let before = w.players[0].health;
@@ -836,13 +829,6 @@ fn a_bar_left_fully_one_sided_burns_most_of_a_health_bar_in_half_a_round_and_nev
     step(&mut w, 1800, 0);
     let lost = before - w.players[0].health;
     assert!(lost < bar, "the burn alone took a health bar ({lost})");
-    assert!(sim::dual::level(&w.players[0]));
-    let settled = w.players[0].health;
-    step(&mut w, 60, 0);
-    assert_eq!(
-        settled, w.players[0].health,
-        "the burn followed her inside the band"
-    );
 }
 
 #[test]
@@ -994,11 +980,14 @@ fn b3_a_judgement_from_a_full_bar_is_at_most_a_quarter_of_a_health_bar() {
 #[test]
 fn b4_the_climb_takes_a_third_of_a_round_to_the_wings() {
     // Clean alternating autos from empty, in an empty arena, and nothing
-    // vented: the blink in five to eight seconds, the second jump in eleven
-    // to fifteen, the wings in sixteen to twenty-one. Since 2026-10-12 the
-    // autos are what builds and the tiers are at thirds, so the climb is
-    // faster than it was (ten to fourteen, sixteen to twenty-one, twenty to
-    // twenty-six) -- and in play it is slowed by every spell she vents.
+    // vented: the blink in four to six seconds, the second jump in eight to
+    // twelve, the wings in eleven to sixteen. Since 2026-10-12 the autos are
+    // what builds and the tiers are at thirds, and since 2026-10-14 nothing
+    // drains the bars on their own (the calm is off), so the climb is faster
+    // than it was (five to eight, eleven to fifteen, sixteen to twenty-one
+    // with the calm; ten to fourteen, sixteen to twenty-one, twenty to
+    // twenty-six before the thirds) -- and in play it is slowed by every
+    // spell she vents.
     let mut w = mage();
     w.players[1].pos = V3::new(fx(-12.0), Fx::ZERO, fx(-12.0));
     let mut presses = 0;
@@ -1027,15 +1016,15 @@ fn b4_the_climb_takes_a_third_of_a_round_to_the_wings() {
     let seconds = |f: Option<u32>| f.map(|f| f as f32 / 60.0);
     let (blink, jump, wings) = (seconds(blink), seconds(jump), seconds(wings));
     assert!(
-        blink.is_some_and(|s| (5.0..=8.0).contains(&s)),
+        blink.is_some_and(|s| (4.0..=6.0).contains(&s)),
         "the blink came at {blink:?} s"
     );
     assert!(
-        jump.is_some_and(|s| (11.0..=15.0).contains(&s)),
+        jump.is_some_and(|s| (8.0..=12.0).contains(&s)),
         "the second jump came at {jump:?} s"
     );
     assert!(
-        wings.is_some_and(|s| (16.0..=21.0).contains(&s)),
+        wings.is_some_and(|s| (11.0..=16.0).contains(&s)),
         "the wings came at {wings:?} s"
     );
 }

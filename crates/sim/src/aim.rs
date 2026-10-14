@@ -826,11 +826,19 @@ pub fn overhead_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
 }
 
 /// **Where a chain of lightning goes next** (2026-10-12): the body nearest
-/// `near`, no further than `reach` from it, with nothing solid between `from`
-/// and it, and not one of `spent`. The answer is that body's bit -- fighters
-/// first, then creatures, then critters, in slot order -- and the point the
-/// bolt meets it at: a fighter's or a critter's middle, a creature's nearest
-/// surface to `from`.
+/// the bolt's line -- from `from` to `near` -- no further than `reach` from
+/// it, with nothing solid between `from` and it, and not one of `spent`. The
+/// answer is that body's bit -- fighters first, then creatures, then
+/// critters, in slot order -- and the point the bolt meets it at: a fighter's
+/// or a critter's middle, a creature's surface nearest the line.
+///
+/// **The line, not its end** (2026-10-14, from play: it never struck the
+/// Ridgeback). Bodies are not on the crosshair's ray, so the point the
+/// crosshair puts the first bolt on is the ground *behind* whatever it was
+/// laid on; for a creature the size of a Ridgeback that is metres past its
+/// nearest part, and the bolt struck the empty floor. Measured from the
+/// whole line, the body the bolt passes is the body it strikes. A later link
+/// asks with `from` and `near` the same point, so for it the line is a point.
 ///
 /// The Dual mage's Chain lightning asks it once from the cloud over her head
 /// with `near` the crosshair's point, then from each body it struck with
@@ -851,7 +859,7 @@ pub fn chain_next(
         if spent & (1 << bit) != 0 {
             return;
         }
-        let d = crate::math::wide_len(at.sub(near));
+        let d = crate::math::segment_gap(from, near, at, at);
         if d.raw() > reach.raw() || best.is_some_and(|(_, _, seen)| seen.raw() <= d.raw()) {
             return;
         }
@@ -876,7 +884,9 @@ pub fn chain_next(
         if !beast.alive() {
             continue;
         }
-        consider((MAX_PLAYERS + slot) as u32, beast.nearest_to(from));
+        let (along, _, _) = crate::math::segment_closest(from, near, beast.pos, beast.pos);
+        let on_line = from.add(near.sub(from).scale(along));
+        consider((MAX_PLAYERS + slot) as u32, beast.nearest_to(on_line));
     }
     if scene.critters.any() {
         let sp = scene.critters.sp();
