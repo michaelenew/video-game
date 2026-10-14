@@ -155,8 +155,55 @@ fn four_peers_running_only_their_regions_agree_with_the_truth_through_loss() {
             p.my_regions()
         );
         checked += agrees(p, &regions, &sums);
+        // And the books it heard from the others, held against its own
+        // where it is exact, all agreed.
+        assert!(p.agreed > 20, "peer {} held only {} books", p.me, p.agreed);
+        assert_eq!(
+            p.disagreed, 0,
+            "peer {} found a desync: {:?}",
+            p.me, p.first_disagreement
+        );
     }
     assert!(checked > 60, "only {checked} zone-frames checked");
+}
+
+#[test]
+fn a_peer_whose_world_goes_wrong_is_found_by_its_neighbours_books() {
+    small_grid();
+    let grid = Grid::tuned();
+    let truth0 = start();
+    let mut lines = mesh(4, 0);
+    let mut peers: Vec<Session<_>> = (0..4)
+        .map(|me| Session::new(me, grid, truth0.clone(), std::mem::take(&mut lines[me])))
+        .collect();
+    let mut found_at = None;
+    for f in 1..=FRAMES {
+        for p in peers.iter_mut() {
+            let next = p.world.as_ref().unwrap().frame + 1;
+            p.tick(input_of(p.me, next));
+        }
+        if f == 150 {
+            // A bit flips in one game: its own fighter is a little hurt.
+            let w = peers[1].world.as_mut().unwrap();
+            w.players[1].health = w.players[1].health.saturating_sub(1);
+        }
+        if found_at.is_none() && peers.iter().any(|p| p.disagreed > 0) {
+            found_at = Some(f);
+        }
+    }
+    oven::reset_to_baked();
+    let at = found_at.expect("nobody noticed");
+    assert!(at < 150 + 60, "noticed only at frame {at}");
+    let who: Vec<usize> = peers
+        .iter()
+        .filter(|p| p.disagreed > 0)
+        .map(|p| p.me)
+        .collect();
+    eprintln!("desync at frame 150 noticed at {at} by {who:?}");
+    assert!(
+        who.len() >= 2,
+        "only {who:?} noticed: the wrong one and a neighbour both should"
+    );
 }
 
 /// The frames the tape still holds, up to where the neighbours' outcomes

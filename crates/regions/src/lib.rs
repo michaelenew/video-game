@@ -8,7 +8,8 @@
 //! - **The tape** keeps the last few frames, each the world before it and the
 //!   inputs that advanced it, so a frame can be run again.
 //! - **The books** say, for each confirmed frame, which regions are live (a
-//!   fighter is a member) and what each live region's checksum is.
+//!   fighter is a member) and, for this peer's own regions and their
+//!   neighbours only, what each one's checksum is.
 //! - **Heartbeats**: every region next to a live one has to have said what
 //!   happened in it, recently enough. A region with a fighter in it is heard
 //!   through the frame just confirmed, because its inputs are in hand. Every
@@ -133,12 +134,20 @@ pub struct Heard {
     pub simulated: bool,
 }
 
-/// A live region and its checksum at the last confirmed frame.
+/// A region in this peer's books -- one its own fighter is a member of, or
+/// a neighbour of one -- and its checksum at the last confirmed frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Live {
     pub region: RegionId,
     pub checksum: u64,
+    /// Whether this peer's own fighter is a member: the region is its own,
+    /// rather than next door.
+    pub mine: bool,
 }
+
+/// The most regions a peer's books hold: at most three of its own, each
+/// with six neighbours, fewer shared.
+pub const MAX_BOOKS: usize = 16;
 
 /// A stream the field follows, and the newest epoch an aggregate has been
 /// offered for.
@@ -168,8 +177,15 @@ pub struct Ledger {
     summed_len: usize,
     /// The newest frame the books have been kept for.
     confirmed: Option<u32>,
-    live: [Live; MAX_LIVE],
+    /// This peer's seat: whose feet decide which regions are its own.
+    me: usize,
+    /// Every region anybody is a member of, at the last confirmed frame.
+    live: [RegionId; MAX_LIVE],
     live_len: usize,
+    /// The books: this peer's own regions and their neighbours, with their
+    /// checksums. Nothing further away is ever summed up.
+    books: [Live; MAX_BOOKS],
+    books_len: usize,
     heard: [Heard; MAX_TRACKED],
     heard_len: usize,
     /// The simulated neighbours' clock: one tick per wall tick.
@@ -181,17 +197,22 @@ pub struct Ledger {
 }
 
 impl Ledger {
-    /// Books starting at `world`. `watch` turns the watchdog on: dev mode.
-    pub fn new(world: &World, watch: bool) -> Ledger {
+    /// Books starting at `world`, kept for the fighter in seat `me`.
+    /// `watch` turns the watchdog on: dev mode.
+    pub fn new(world: &World, me: usize, watch: bool) -> Ledger {
         Ledger {
             grid: Grid::tuned(),
             tape: Box::new(Tape::new()),
             confirmed: None,
-            live: [Live {
+            me: me.min(MAX_PLAYERS - 1),
+            live: [RegionId::default(); MAX_LIVE],
+            live_len: 0,
+            books: [Live {
                 region: RegionId::default(),
                 checksum: 0,
-            }; MAX_LIVE],
-            live_len: 0,
+                mine: false,
+            }; MAX_BOOKS],
+            books_len: 0,
             heard: [Heard {
                 region: RegionId::default(),
                 through: 0,
@@ -318,9 +339,26 @@ impl Ledger {
         self.confirmed
     }
 
-    /// The live regions at the last confirmed frame, with their checksums.
-    pub fn live(&self) -> &[Live] {
+    /// Every region anybody is a member of, at the last confirmed frame.
+    pub fn live(&self) -> &[RegionId] {
         &self.live[..self.live_len]
+    }
+
+    /// **The books**: this peer's own regions and their neighbours, with
+    /// their checksums at the last confirmed frame. The only regions it
+    /// ever sums up.
+    pub fn books(&self) -> &[Live] {
+        &self.books[..self.books_len]
+    }
+
+    /// Whose fighter the books are kept for.
+    pub fn seat(&self) -> usize {
+        self.me
+    }
+
+    /// The books change seats: a match seats this machine.
+    pub fn sit(&mut self, me: usize) {
+        self.me = me.min(MAX_PLAYERS - 1);
     }
 
     /// Every region the books follow, and how recently each was heard from.
@@ -453,6 +491,7 @@ impl Ledger {
         self.followed_len = 0;
         self.confirmed = None;
         self.live_len = 0;
+        self.books_len = 0;
         self.heard_len = 0;
         self.clock = now.frame;
         self.held_since = None;
@@ -474,23 +513,50 @@ impl Ledger {
         }
         self.confirmed = Some(world.frame);
 
-        // Live: every region a fighter is a member of.
+        // Live: every region a fighter is a member of. No checksum: these
+        // are for the aggregates, which every peer of a match feeds alike.
         self.live_len = 0;
         let origin = world.map_origin();
         for p in &world.players {
             for &r in grid.regions_of(p.pos.add(origin)).as_slice() {
-                if self.live_len < MAX_LIVE && !self.live().iter().any(|l| l.region == r) {
-                    self.live[self.live_len] = Live {
-                        region: r,
-                        checksum: world.region_checksum(&grid, r),
-                    };
+                if self.live_len < MAX_LIVE && !self.live().contains(&r) {
+                    self.live[self.live_len] = r;
                     self.live_len += 1;
                 }
             }
         }
 
-        // Followed: the live regions, heard through this frame, and every
-        // region next to one, heard from by heartbeat.
+        // The books: my own regions, then their neighbours, each summed up.
+        // A region further off is somebody else's to sum: the cost of the
+        // books is the cost of one neighbourhood, however many are playing.
+        self.books_len = 0;
+        let mine = grid.regions_of(world.players[self.me].pos.add(origin));
+        let mut book = |region: RegionId, mine: bool| {
+            if self.books_len < MAX_BOOKS
+                && !self.books[..self.books_len]
+                    .iter()
+                    .any(|b| b.region == region)
+            {
+                self.books[self.books_len] = Live {
+                    region,
+                    checksum: world.region_checksum(&grid, region),
+                    mine,
+                };
+                self.books_len += 1;
+            }
+        };
+        for &r in mine.as_slice() {
+            book(r, true);
+        }
+        for &r in mine.as_slice() {
+            for n in r.neighbours() {
+                book(n, false);
+            }
+        }
+
+        // Followed: my own regions, heard through this frame, and every
+        // region next to one -- heard through this frame too if somebody
+        // stands in it (a match has its inputs), else by heartbeat.
         let mut next = [Heard {
             region: RegionId::default(),
             through: 0,
@@ -513,17 +579,16 @@ impl Ledger {
             }
         };
         let simulated = self.simulated_through();
-        for l in &self.live[..self.live_len] {
-            follow(l.region, true, world.frame);
-        }
-        for l in &self.live[..self.live_len] {
-            for n in l.region.neighbours() {
+        for b in &self.books[..self.books_len] {
+            if b.mine || self.live[..self.live_len].contains(&b.region) {
+                follow(b.region, true, world.frame);
+            } else {
                 // A neighbour already followed keeps how recently it was heard.
                 let kept = self.heard[..self.heard_len]
                     .iter()
-                    .find(|h| h.region == n && h.simulated)
+                    .find(|h| h.region == b.region && h.simulated)
                     .map_or(simulated, |h| h.through);
-                follow(n, false, kept);
+                follow(b.region, false, kept);
             }
         }
         self.heard = next;
@@ -544,9 +609,7 @@ impl Ledger {
                 .iter()
                 .find(|f| f.region == s.region)
                 .copied();
-            let live = self.live[..self.live_len]
-                .iter()
-                .any(|l| l.region == s.region);
+            let live = self.live[..self.live_len].contains(&s.region);
             // Spoken for unless somebody is behind it: a live region (this
             // peer is), or a peer the session layer said has a line open.
             let real = live || kept.is_some_and(|k| !k.simulated);
@@ -564,7 +627,7 @@ impl Ledger {
             let epoch = (world.frame / e) as u16;
             self.summed_len = 0;
             for k in 0..self.live_len {
-                let region = self.live[k].region;
+                let region = self.live[k];
                 let a = world.aggregate(&grid, region, epoch);
                 self.offer(a);
                 if self.summed_len < MAX_LIVE {
@@ -575,7 +638,7 @@ impl Ledger {
         }
 
         if let Some(mut w) = self.watch.take() {
-            w.confirm(&grid, world, &self.tape, self.live());
+            w.confirm(&grid, world, &self.tape, self.books());
             self.watch = Some(w);
         }
     }

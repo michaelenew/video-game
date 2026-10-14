@@ -647,7 +647,7 @@ fn leaders_post_their_aggregates_over_the_mesh_and_the_rest_collect_them_in_agre
             let roster = s.roster.clone();
             let post = s.post.clone();
             let start = World::with_classes([sim::Class::Bulwark; 4]);
-            let ledger = regions::Ledger::new(&start, false);
+            let ledger = regions::Ledger::new(&start, h, false);
             (
                 p2p::start(s).expect("session"),
                 start,

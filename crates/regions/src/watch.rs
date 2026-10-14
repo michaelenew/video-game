@@ -6,7 +6,7 @@
 //! 1. **Sound**: the grid keeps every body in at most three regions.
 //! 2. **Crowded**: a body is in one to three regions and one to three zones.
 //! 3. **Too fast**: no body moved further in one frame than the declared speed.
-//! 4. **Outran**: one live region a frame, in turn, run again from the tape
+//! 4. **Outran**: one region of the books a frame, in turn, run again from the tape
 //!    with every fighter who was not a member pressing nothing. If its
 //!    checksum differs from the real one, something outside reached in faster
 //!    than the declared reach and speed allow.
@@ -137,7 +137,7 @@ pub struct Watch {
     before_phase: Option<Phase>,
     /// The grid last judged, so an unsound grid is one issue, not one a frame.
     judged: Option<Grid>,
-    /// Which live region the locality check runs next.
+    /// Which region of the books the locality check runs next.
     turn: usize,
     /// How many locality checks have run, for the HUD: a test that never runs
     /// passes very convincingly.
@@ -214,7 +214,7 @@ impl Watch {
     }
 
     /// Every check, for one confirmed frame.
-    pub fn confirm(&mut self, grid: &Grid, world: &World, tape: &Tape, live: &[Live]) {
+    pub fn confirm(&mut self, grid: &Grid, world: &World, tape: &Tape, books: &[Live]) {
         let frame = world.frame;
         if self.judged != Some(*grid) {
             self.judged = Some(*grid);
@@ -279,10 +279,10 @@ impl Watch {
         self.before_frame = Some(frame);
         self.before_phase = Some(world.phase);
 
-        // Locality: one live region this frame.
-        if !live.is_empty() {
-            self.turn = (self.turn + 1) % live.len();
-            let region = live[self.turn].region;
+        // Locality: one region of the books this frame.
+        if !books.is_empty() {
+            self.turn = (self.turn + 1) % books.len();
+            let region = books[self.turn].region;
             if let Some(outcome) = rerun(grid, world, tape, region) {
                 self.reruns += 1;
                 if let Some(finding) = outcome {

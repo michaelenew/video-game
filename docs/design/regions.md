@@ -94,19 +94,26 @@ canvas alike, and allocates nothing after it is made. It holds:
   advance. Online, `net::handle_requests` writes every advance, a re-simulated
   frame overwriting its prediction, and a frame counts once GGRS confirms it.
 - **The books.** For each confirmed frame: which regions each body is in,
-  which regions are *live* (someone is in them), and every live region's
-  checksum.
-- **Heartbeats.** Every live region and every neighbour of one has a
-  *heard-through* frame: the newest frame it has said "this is what happened"
-  about.
-  - A live region a fighter stands in is heard through the frame just
-    confirmed: its inputs are in hand.
+  which regions are *live* (someone is in them), and -- for **this peer's
+  own regions and their neighbours only** (`Ledger::books`, since
+  2026-10-14) -- each one's checksum. A region further off is somebody
+  else's to sum up, so the cost of the books is the cost of one
+  neighbourhood however many are playing: at most three regions of one's
+  own and the ring round them, sixteen at the outside. The ledger is kept
+  for a seat (`Ledger::new(world, me, watch)`, `Ledger::sit` when a match
+  seats the machine), and *live* is still every region anybody is in,
+  because the aggregates summed from it are fed to the world, and every
+  peer of a match has to feed the same.
+- **Heartbeats.** Every region in the books has a *heard-through* frame:
+  the newest frame it has said "this is what happened" about.
+  - One of my own, or a neighbour somebody stands in, is heard through the
+    frame just confirmed: its inputs are in hand.
   - **Any other neighbour is simulated.** It has no peer behind it in a
     one-arena game, so the ledger plays one: a clock that ticks once per wall
     tick, heard through *clock minus neighbour lag*. It ticks whether or not
     the world advanced, the way a real peer keeps going while you wait.
-- **The gate.** `Ledger::may_advance(next)` is true when every neighbour of
-  every live region is heard through at least `next − D`. Both drivers ask it
+- **The gate.** `Ledger::may_advance(next)` is true when every region in
+  the books is heard through at least `next − D`. Both drivers ask it
   before a frame. With the neighbour lag under `D` it is always true. Raise the
   lag past `D` in the Oven and the game holds, then runs `D` frames behind the
   slowest neighbour, paced by its heartbeats. That is what it will do in the
@@ -125,7 +132,7 @@ either way. Each confirmed frame it checks:
    is not: a body crossing many metres in one frame is exactly the kind of
    thing the speed knob has to know about, and the report names the body and
    the distance.
-4. **Locality**, the real test. One live region per frame, in turn: take the
+4. **Locality**, the real test. One region of the books per frame, in turn: take the
    tape's world from `D` frames ago, re-run the `D` frames with the inputs of
    every fighter who was *not* in the region replaced by nothing pressed, and
    compare the region's checksum with the real one. If they differ, something
@@ -135,7 +142,7 @@ either way. Each confirmed frame it checks:
 5. **Stalls**: a frame the gate held, with the region that held it.
 
 Every finding is a line in a fixed ring of the latest sixteen, with a running
-count per kind. The HUD shows the grid, the live regions and their checksums,
+count per kind. The HUD shows the grid, the books (own regions starred) and their checksums,
 the heartbeats, the counts and the latest findings, along the bottom of the
 screen. Each finding is printed the frame it is found: to the terminal on the
 desktop, to the browser console as a warning (`platform::say`).
@@ -277,6 +284,18 @@ fixed for the match does not:
   outcomes, up to three frames stale; without a few more outcomes *after*
   it declared, the old members' word never reaches it again and the whole
   chain it then shoves is a frame behind forever.
+- **The books go with the outcomes** (`Packet::Books`). At the same
+  confirmed frames, a peer sends the checksums of the regions it is an old
+  member of -- the only ones it sums up -- to every peer that declared one
+  of them or a neighbour of one. A receiver holds them against its own
+  only where its own are exact: a frame it has *confirmed* (a frame still
+  predicted is nobody's books; the first run compared one and cried desync
+  at the frame everybody let go of the stick), and in it a region it is an
+  old member of, or a neighbour's whose outcome for that very frame it
+  took. Anything else is not its to judge and is dropped. So a peer sums
+  up its own regions and its neighbours', and nothing further, in this
+  layer and the ledger alike; and a bit flipped in one game is found by
+  its neighbours and itself within a few frames (`net/tests/region.rs`).
 - **A newcomer asks for the world** (`Packet::Want`) and is sent it at the
   asked peer's confirmed frame, in 1 KB chunks (`Packet::Snapshot`; a world
   is 19,000 bytes); it keeps asking a different peer every ten frames for
@@ -296,11 +315,15 @@ lines losing one packet in ten, four fighters walking the line through
 three 8 m hexagons from both ends, pairing up on both boundaries and
 shoving into one chain in the middle. Every peer's regions' zones equal
 the global truth's at every frame the tape holds, with no stalls and a
-handful of rollbacks each; and a fifth peer that joins at frame 40 from a
-snapshot, through the same loss, is exact from then on, and the old hands
-are exact with it among them.
+handful of rollbacks each, and every book held against a neighbour's
+agrees; a fifth peer that joins at frame 40 from a snapshot, through the
+same loss, is exact from then on, and the old hands are exact with it
+among them; and one fighter a point of health short in one game only is
+a disagreement on all four within three frames.
 
-**What is not yet true.** Every peer still *advances* the whole world --
+**What is not yet true.** A disagreement is counted and the first kept,
+not yet acted on (which side is right is the owner's question, exploration
+0018 §7b). Every peer still *advances* the whole world --
 the regions it is not in with nobody pressing anything -- so the saving is
 in what crosses the wire and in what is exact, not yet in the frame's cost;
 an outcome carries fighters only (effects, bolts and creatures are the next
@@ -340,5 +363,5 @@ real UDP keep the books and find nothing.
 - `net/tests/ggrs_synctest.rs` and `p2p_localhost`: the books kept through
   rollbacks, and over real UDP, with nothing but *too fast* allowed.
 - `net/tests/region.rs`: the session on the wire, above -- four peers
-  through loss against the truth, a late joiner, and the size of an input
-  packet.
+  through loss against the truth with their books agreeing, a late joiner,
+  a desync found by the books, and the size of an input packet.

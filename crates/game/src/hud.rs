@@ -524,17 +524,18 @@ fn region_readout(ledger: &regions::Ledger) -> String {
         m(g.overlap),
         if g.sound() { "" } else { " | UNSOUND" }
     );
-    let _ = write!(out, "live");
-    for l in ledger.live() {
+    let _ = write!(out, "books");
+    for l in ledger.books() {
         let _ = write!(
             out,
-            "  ({},{}) {:04x}",
+            "  {}({},{}) {:04x}",
+            if l.mine { "*" } else { "" },
             l.region.q,
             l.region.r,
             l.checksum & 0xffff
         );
     }
-    let _ = writeln!(out);
+    let _ = writeln!(out, " | {} live", ledger.live().len());
     let confirmed = ledger.confirmed().unwrap_or(0);
     let heard = ledger.heard();
     let simulated = heard.iter().filter(|h| h.simulated).count();

@@ -17,6 +17,10 @@ fn a_neighbour_slower_than_the_delay_holds_the_game_then_paces_it() {
         assert!(run.tick(), "held at frame {}", run.world.frame);
     }
     assert!(run.ledger.live().len() == 3, "{:?}", run.ledger.live());
+    // The books: those three are its own, and the neighbours round them.
+    let books = run.ledger.books();
+    assert_eq!(books.iter().filter(|b| b.mine).count(), 3, "{books:?}");
+    assert!(books.iter().any(|b| !b.mine));
     assert!(run.ledger.heard().iter().any(|h| h.simulated));
     assert!(run.ledger.heard().iter().any(|h| !h.simulated));
 

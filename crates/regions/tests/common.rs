@@ -23,7 +23,7 @@ impl Run {
         let bots = (0..2)
             .map(|who| Hunter::for_species(SpeciesId::RIDGEBACK, who).expect("a plan"))
             .collect();
-        let ledger = Ledger::new(&world, true);
+        let ledger = Ledger::new(&world, 0, true);
         Run {
             world,
             ledger,

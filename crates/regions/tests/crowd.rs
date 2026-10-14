@@ -103,8 +103,8 @@ fn crowd_of(region: RegionId, epoch: u16, fighters: u16) -> Aggregate {
 fn two_peers_fed_the_same_aggregates_at_different_times_agree_and_hear_the_same_crowd() {
     let (e, l) = (t::crowd_epoch(), t::crowd_lookahead());
     let start = calm_herd();
-    let mut early = (start.clone(), Ledger::new(&start, false));
-    let mut late = (start.clone(), Ledger::new(&start, false));
+    let mut early = (start.clone(), Ledger::new(&start, 0, false));
+    let mut late = (start.clone(), Ledger::new(&start, 0, false));
     let mut alone = start;
     let region = warm_up(&mut early.0, &mut early.1, e);
     assert_eq!(region, warm_up(&mut late.0, &mut late.1, e));
@@ -187,7 +187,7 @@ fn a_stream_with_a_peer_behind_it_holds_the_gate_until_its_aggregate_comes() {
     let (e, l) = (t::crowd_epoch(), t::crowd_lookahead());
     let start = calm_herd();
     let mut w = start.clone();
-    let mut ledger = Ledger::new(&start, false);
+    let mut ledger = Ledger::new(&start, 0, false);
     let region = warm_up(&mut w, &mut ledger, l + 2 * e);
     // A peer behind it now, silent: the frame that reads the next epoch's
     // aggregate is held, and only that frame -- until the aggregate comes.

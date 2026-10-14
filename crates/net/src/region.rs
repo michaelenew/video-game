@@ -90,12 +90,20 @@ pub enum Packet {
         total: u16,
         bytes: Vec<u8>,
     },
+    /// My books at a confirmed frame: the checksum of every region I am an
+    /// old member of, for the neighbours to hold against their own.
+    Books {
+        seat: u8,
+        frame: u32,
+        books: Vec<(RegionId, u64)>,
+    },
 }
 
 const K_INPUTS: u8 = 1;
 const K_OUTCOME: u8 = 2;
 const K_WANT: u8 = 3;
 const K_SNAPSHOT: u8 = 4;
+const K_BOOKS: u8 = 5;
 
 impl Packet {
     pub fn encode(&self) -> Vec<u8> {
@@ -162,6 +170,17 @@ impl Packet {
                 b.extend_from_slice(&index.to_le_bytes());
                 b.extend_from_slice(&total.to_le_bytes());
                 b.extend_from_slice(bytes);
+            }
+            Packet::Books { seat, frame, books } => {
+                b.push(K_BOOKS);
+                b.push(*seat);
+                b.extend_from_slice(&frame.to_le_bytes());
+                b.push(books.len() as u8);
+                for (r, sum) in books {
+                    b.extend_from_slice(&r.q.to_le_bytes());
+                    b.extend_from_slice(&r.r.to_le_bytes());
+                    b.extend_from_slice(&sum.to_le_bytes());
+                }
             }
         }
         b
@@ -247,6 +266,20 @@ impl Packet {
                     bytes: b[at..].to_vec(),
                 })
             }
+            K_BOOKS => {
+                let seat = u8_(take(1)?);
+                let frame = u32_(take(4)?);
+                let n = u8_(take(1)?) as usize;
+                let mut books = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let q = i16_(take(2)?);
+                    let r = i16_(take(2)?);
+                    let s = take(8)?;
+                    let sum = u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]);
+                    books.push((RegionId::new(q, r), sum));
+                }
+                Some(Packet::Books { seat, frame, books })
+            }
             _ => None,
         }
     }
@@ -331,6 +364,9 @@ impl Known {
 /// zone then.
 type Heard = (RegionId, u32, Vec<(u8, Player)>);
 
+/// Books as heard: whose, at which frame, and each region's checksum.
+type Books = (u8, u32, Vec<(RegionId, u64)>);
+
 /// **A peer of the open world** on real lines.
 pub struct Session<L: Line> {
     pub me: usize,
@@ -365,6 +401,16 @@ pub struct Session<L: Line> {
     pub outcomes_sent: u32,
     pub outcomes_taken: u32,
     last_outcome_at: u32,
+    /// Outcomes taken, by region and frame: where a neighbour's zone is
+    /// exact here, so its books can be held against mine.
+    settled: Vec<(RegionId, u32)>,
+    /// Books heard and not yet held against mine.
+    books: Vec<Books>,
+    /// Region checksums held against a peer's and found the same, and
+    /// found different: a difference is a desync, and the first is kept.
+    pub agreed: u32,
+    pub disagreed: u32,
+    pub first_disagreement: Option<(u8, RegionId, u32)>,
 }
 
 impl<L: Line> Session<L> {
@@ -399,6 +445,11 @@ impl<L: Line> Session<L> {
             outcomes_sent: 0,
             outcomes_taken: 0,
             last_outcome_at: 0,
+            settled: Vec::new(),
+            books: Vec::new(),
+            agreed: 0,
+            disagreed: 0,
+            first_disagreement: None,
         }
     }
 
@@ -567,6 +618,9 @@ impl<L: Line> Session<L> {
                         let _ = from;
                     }
                 }
+                Packet::Books { seat, frame, books } => {
+                    self.books.push((seat, frame, books));
+                }
                 Packet::Snapshot {
                     frame,
                     index,
@@ -670,6 +724,7 @@ impl<L: Line> Session<L> {
         if let Some(from) = self.dirty.take() {
             self.replay_from(from);
         }
+        self.hold_books();
 
         // Advance, inside the window.
         if next.saturating_sub(self.confirmed) > WINDOW {
@@ -742,11 +797,15 @@ impl<L: Line> Session<L> {
         let Some(w) = &self.world else { return };
         let now = w.frame;
         let outcomes = std::mem::take(&mut self.outcomes);
-        for (_, frame, fighters) in outcomes {
+        for (region, frame, fighters) in outcomes {
             if frame > now || frame + (TAPE as u32) <= now + 1 {
                 continue;
             }
             self.outcomes_taken += 1;
+            self.settled.push((region, frame));
+            if self.settled.len() > 4 * TAPE {
+                self.settled.remove(0);
+            }
             // The world at `frame` is the tape's "before" of `frame + 1`, or
             // the world itself.
             let mut changed = false;
@@ -798,6 +857,7 @@ impl<L: Line> Session<L> {
         self.last_outcome_at = f;
         let origin = w.map_origin();
         let mine: Vec<RegionId> = declared_at(&self.declared, f).to_vec();
+        self.send_books(&w, &mine);
         for region in mine {
             if !self.old_member(&self.declared, region, f) {
                 continue;
@@ -833,6 +893,77 @@ impl<L: Line> Session<L> {
                 }
             }
             self.outcomes_sent += sent;
+        }
+    }
+
+    /// My books at a confirmed frame -- the checksums of the regions I am
+    /// an old member of, exact here -- to every peer that declared one of
+    /// them or a neighbour of one. Nothing further off is ever summed up.
+    fn send_books(&mut self, w: &World, mine: &[RegionId]) {
+        let f = w.frame;
+        let books: Vec<(RegionId, u64)> = mine
+            .iter()
+            .filter(|r| self.old_member(&self.declared, **r, f))
+            .map(|r| (*r, w.region_checksum(&self.grid, *r)))
+            .collect();
+        if books.is_empty() {
+            return;
+        }
+        let packet = Packet::Books {
+            seat: self.me as u8,
+            frame: f,
+            books,
+        }
+        .encode();
+        let near: Vec<RegionId> = mine
+            .iter()
+            .flat_map(|r| std::iter::once(*r).chain(r.neighbours()))
+            .collect();
+        for (seat, line) in self.lines.iter_mut() {
+            let theirs = self.known[*seat]
+                .declared
+                .last()
+                .map_or(&[][..], |(_, r)| r.as_slice());
+            if theirs.iter().any(|r| near.contains(r)) {
+                line.send(&packet);
+            }
+        }
+    }
+
+    /// Hold the books heard against my own, where mine are exact: a frame
+    /// I have confirmed (a frame still predicted is nobody's books), and in
+    /// it a region I am an old member of, or a neighbour's whose outcome
+    /// for that frame I took. Anything else is not mine to judge, and is
+    /// dropped; a frame not yet confirmed waits.
+    fn hold_books(&mut self) {
+        let Some(w) = &self.world else { return };
+        let now = w.frame;
+        let books = std::mem::take(&mut self.books);
+        for (seat, frame, theirs) in books {
+            if frame > self.confirmed {
+                if frame + (TAPE as u32) > now + 2 {
+                    self.books.push((seat, frame, theirs));
+                }
+                continue;
+            }
+            let Some(world) = self.world_at(frame) else {
+                continue;
+            };
+            for (region, sum) in theirs {
+                let exact = self.old_member(&self.declared, region, frame)
+                    || self.settled.contains(&(region, frame));
+                if !exact {
+                    continue;
+                }
+                if world.region_checksum(&self.grid, region) == sum {
+                    self.agreed += 1;
+                } else {
+                    self.disagreed += 1;
+                    if self.first_disagreement.is_none() {
+                        self.first_disagreement = Some((seat, region, frame));
+                    }
+                }
+            }
         }
     }
 
@@ -888,5 +1019,11 @@ mod tests {
             missing: vec![0, 5, 18],
         };
         assert_eq!(Packet::decode(&want.encode()), Some(want));
+        let books = Packet::Books {
+            seat: 1,
+            frame: 500,
+            books: vec![(RegionId::new(2, -3), 0xdead_beef_0bad_f00d)],
+        };
+        assert_eq!(Packet::decode(&books.encode()), Some(books));
     }
 }

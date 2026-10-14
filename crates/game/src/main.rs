@@ -614,7 +614,7 @@ impl Default for Sim {
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
-            ledger: regions::Ledger::new(&seed, dev_mode()),
+            ledger: regions::Ledger::new(&seed, 0, dev_mode()),
             regions_said: 0,
             rehearsing: None,
             travel: sim::input::Travel::NONE,
