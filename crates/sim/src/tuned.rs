@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 611] = [
+pub const SCALARS: [i32; 616] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -547,11 +547,16 @@ pub const SCALARS: [i32; 611] = [
              300, // blood_mage.black_vines,_stand_for = 300
               20, // blood_mage.black_vines,_bleed_what_enters_every = 20
            81920, // blood_mage.black_vines,_radius_per_cloud_radius_(x) = 1.25
-               4, // blood_mage.crimson_cascade,_waves = 4
-              45, // blood_mage.crimson_cascade,_a_wave_every = 45
-          196608, // blood_mage.crimson_cascade,_rings_apart_(m) = 3
-           49152, // blood_mage.crimson_cascade,_each_wave_of_the_last_(x) = 0.75
                3, // blood_mage.stain,_a_chained_eruption_waits = 3
+               6, // blood_mage.crimson_cascade,_pools_round_the_first_eruption = 6
+               2, // blood_mage.crimson_cascade,_pools_each_eruption_spills = 2
+               4, // blood_mage.crimson_cascade,_generations = 4
+              50, // blood_mage.crimson_cascade,_a_pool_erupts_after = 50
+          180224, // blood_mage.crimson_cascade,_pools_land_this_far_out_(m) = 2.75
+           39322, // blood_mage.crimson_cascade,_each_pool_of_its_parent_(x) = 0.6
+              12, // blood_mage.crimson_cascade,_smallest_pool_it_spills = 12
+          655360, // blood_mage.crimson_cascade,_reaches_for_stains_within_(m) = 10
+           81920, // blood_mage.crimson_cascade,_an_eruption_per_full_stain_(x) = 1.25
           262144, // blood_mage.black_spike,_widest_ring_at_a_full_hold_(m) = 4
                7, // blood_mage.black_spike,_spikes_at_a_full_hold = 7
            32768, // blood_mage.golem,_hurts_itself_per_blow_dealt_(x) = 0.5

@@ -213,6 +213,18 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-14 — the cascade spills pools, and stains and vines grow like roots
+**Changed** The Crimson cascade is pools, not rings: the impact spills 6 pools of her spent
+grey, each erupts 50 frames later and spills 2 more at 0.6 of it, 2.75 m further, for 4
+generations while a pool holds 12; every pool it spills goes for her nearest stain within 10 m.
+The held spike's spikes land on her stains in its ring first. A lit stain cannot be walked up.
+Stains are drawn as a spill with crooked roots, the Black vines as a barbed tangle.
+**Why** The owner's notes: the full charge should spill pools from grey and detonate them, the
+chain on a bleeding foe failed because a bleed's stains are too small to reach one another, and
+pools read as geometric. The effect pool is 128 now, so a cascade can be real pools.
+**Verdict** open — unplayed. Watch the bleed trail: a stain of the bleed's size drains in about
+a second, so the cascade reaches only what is still on the floor.
+
 ### 2026-10-14 — a clip per move, across the roster
 **Changed** Thirty-eight new clips, so no move borrows another's animation: the Blood mage's
 nine (and her five old ones refitted to the moves now on their rows), the Shadow Reaver's
