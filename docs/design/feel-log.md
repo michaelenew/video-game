@@ -213,6 +213,41 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-13 — the Blood mage, revised from play
+**Changed** Grey holds 120 frames then fades at 60/s (was 3/s, no hold). Finishers at any time,
+spending all grey and the Well: row damage + 0.5 per point. Black spike one to seven spikes on a
+ring up to 4 m. Chained eruptions wait 3 frames. Thralls seek 30 m (was 6), Command acts on its
+first frame (startup 1). Teleport to a stain 12 m (was 22); the dodge's blink and thrown glob
+removed. Hemoplague held grows 1.5 to 6 m and slows to 0.6. Carpet on the right click, damage 5 a
+tick, lets go as one stain. Golem: health from what it fused, half of each punch off itself.
+**Why** The owner's notes on the first build: thralls too passive and deaf to her clicks, the
+Carpet's stains scattered, grey that never ran out so never had to be spent, finishers that
+needed a Well that was hard to fill and were weak when they came, a dodge that crossed the map.
+**Tried and reverted** A chain delay of 5 frames: a runner outran the chain along his own
+bleed trail (`tests/haemorrhage.rs`); 3 keeps the catch and still reads as a chain.
+**Verdict** open — unplayed.
+
+### 2026-10-13 — the Blood mage: thralls and the Well
+**Changed** The blaster's kit (0015) replaced by 0016's: the Transfusion, the sweep, Tides,
+Reaper's chain, Reaper's leap and Frenzy are gone; the Haemorrhage is the left click tapped
+everywhere, the Carpet of blood the left click held, Command and the Summon the right click,
+the Rising reap space + right, Coagulate `Q`; a full Well (400) turns each click's longest hold
+into the Thorn garden, Exsanguinate or the Blood golem. Every cost lands as a stain where it was
+aimed; eruptions spill nothing; overflow from a drink fills the Well. Thralls: 7 m/s, seek 6 m
+round where they were sent, a bite every 30 frames spending 30% of the thrall (at least 10) as
+the blow and the stain, one blow kills. Carpet: 1.5 m growing to 6 m over 90 frames, 12 a tick
+every 30 frames, slow to 0.5, 1% of red every 8 frames, breaks into 5 stains. Thorn garden root
+1.5 m plus 1.5 m per full stain (raised from the first guess of 0.2, which made a root no wider
+than a body).
+**Why** The owner's verdict on the blaster: the stains and the detonation chain are the class,
+but every eruption left a stain so the spot grew stronger the more she hit it, the start cost
+most of her bar, the scythe and the hook were never worth it, Frenzy got her trampled, and the
+moves did not combine. Thralls whose bites spend themselves are a summon that cannot snowball:
+what they deal is exactly the blood they turn into, and it is on the floor for her to fetch.
+**Verdict** open — unplayed. Watch first: whether the thralls' bite (30% every half second)
+makes a summon of six last long enough to matter, and whether the Carpet's 1% every 8 frames
+is a price or a rounding error.
+
 ### 2026-09-10 — opening numbers
 **Changed** everything, from nothing. First playable values.
 **Why** They needed to be *something* to be judged. Chosen so the relationships
@@ -8167,6 +8202,80 @@ full heal for the creature and none for the hunter.
 them (`no_road_junction_is_inside_a_hunts_margin`), so somebody who walks back to the road
 has left the hunt, and the creature is gone as before. 30 m was tried first and held the
 Pinewood road inside a hunt.
+**Verdict** — unplayed.
+
+### 2026-10-12 — the Blood mage as the blaster
+**Changed** Her whole kit, along [exploration/0015](exploration/0015_blood_mage_blaster.md).
+The three clicks on the floor are held through **three tiers** (two at 30 frames, three at 60,
+sooner by up to ×1.5 with a full bar of grey), each tier paid in red as it is reached (+3%,
++4%); a jump or a dodge out of a hold **stores** the charge in her vessel, let go later by a
+fresh press of the same click, and the vessel bleeds 1% of red a second. Left is the
+**Transfusion** (a bolt to 20 m: 45, then ×1.7 piercing, then ×2.6 and a 14 m/s throw-back),
+middle the **Black spike** (to 22 m: one; three in a triangle; a 3 m field in three waves),
+right the sweep tapped (22 → 45) and **Tides** held (a ring 4 / 6 / 8 m). In the air: the
+Haemorrhage (18 m), the **Stake** (thrown down; pins anybody in the air, lands in a 2.5 m area)
+and **Reaper's chain** (to the crosshair's point, 18 m; yanks a fighter to her, pulls her to
+anything else, 5 m along the aim at the sky). Takeoffs: **Blood wings** (an 8 m burst along
+the aim, tapped), the **Upheaval** (a geyser at 15 m that launches, and a hop), **Reaper's
+leap** (an arc to the crosshair's floor, 10 m, a 2.5 m slam that drinks the stains round it).
+`Q` is **Frenzy**, `E` the **Hemoplague** (a 5 m cloud at 22 m for five seconds, 30 a half
+second, no stun, all its spill to one stain at its centre). The dodge with a stain under the
+crosshair is a 20 m **teleport** that drinks it and arrives in a burst; with none it is the
+**Sanguine flow** (`Dodge is a blink` on, 6 m). Cut: the Bloodletter, the Grasp, the Blood
+nova (now Tides), the jet, Marionette, the Nail, the Hook and Harvest -- their rows retuned as
+the new moves, so no other class's numbers moved.
+**The economy.** Every stain is collected: **walking** into it (100% of its essence, but only what her grey can hold -- the stain
+keeps the rest, so walking at full health does not throw stains away),
+**teleporting** to it (100%), or **hitting through** it (every move drinks 100%, and the blow
+adds half the stain's essence to itself). Grey fades at 3 a second (was 12), stains drain at
+5 (was 10). Every move deals damage, and every hit on a creature spills by the move's own
+damage rather than what its hide let through. The bleed ticks 25 every half second for four
+seconds (was 8 every fifth for three); an eruption sets off stains up to 2.5 m past its edge,
+so a spike on a trail still runs it.
+**Frenzy.** She is planted for three seconds; within 6 m everyone takes 15 every sixth of a
+second and starts to bleed; her stains within 15 m rush to her at 12 m/s and explode at the
+edge for twice their essence; no stain heals her, grey drains at 60 a second and is gone when
+it ends; a teleport to a stain adds a second, to eight in all.
+**Why** The owner, after playing the three-click kit: the abilities were awkward and short,
+the pools too small to use, the hook did not register, and the best play was "spam Black spike
+and hope". A replay of that fight showed it: six of nine click moves thrown once or never, and
+80 stains whose median essence was 8 -- placed right, but too small to see before they drained.
+The brief: a blaster (Ragnarok Online's mages, Vladimir, the Demon Avenger) with range, charges
+and big areas, and movement that buys time for the charges and goes to collect the blood, but
+not both at once -- and getting health back much easier, "too strong first".
+**Tried** The Stake's area at the move's radius: its in-flight bolt is now the Haemorrhage's
+width and its row's radius is the landing. The Upheaval's recovery cut from 18 to 10 and its
+hop raised so a Stake can follow it (the *Meteor storm* in 0015) -- at 18 he had fallen before
+she could act. A shared "blood burst" row for the teleport's arrival was cut again: as a row it
+read as a move to every whole-kit check, and the wings' row says the same thing.
+**Re-recorded** Her Ridgeback pin, her scripted hunt's pin, and her envelope fixtures (the
+search now finds her crossing 29 m on lane 0, was 23.5) -- the wings and the chain are new
+reach. No other class's pin moved: the checksum keeps their layout.
+**Not done** Her own clips: the new moves borrow the five she has (`view::play`). The Frenzy
+area and the vessel's glow are not drawn yet; the cloud, the spike field and the stains are.
+**Verdict** — unplayed. BLAST-4 to BLAST-8 in 0015.
+
+### 2026-10-12 — Frenzy fed itself; the Blood mage sends her blood and zips to it
+**Changed** Frenzy's own blows -- its area and the stains it explodes -- spill nothing
+(`World::spill` refuses the Frenzy row). **And her traversal**: a dodge with no stain under
+the crosshair still slides 6 m as blood, and now also **sends a glob of her blood** to the
+crosshair's spot on the floor (`Dodge, sends her blood up to` 20 m), which lands as a stain of
+her own blood (`Dodge, sent blood lands as a stain of` 60) -- a door, never a heal, one at a
+time. The next dodge with the crosshair on it teleports her there (`Teleport, to a stain
+within` 20 → 22 m), from the air too, even once the airdodge is spent: the door is on the
+floor and so is she when she arrives.
+**Why** From play: "whatever is on Q does way too much damage. The Mireback dies in about
+half a second." A blow of Frenzy's on the creature spilled a stain inside her own area, which
+exploded for twice itself, spilling twice that -- a loop that took the Mireback's 11 000 in
+about twenty frames. Without it a Frenzy beside a creature with nothing on the floor deals
+about 90 a second (`frenzy_beside_a_creature_burns_and_does_not_feed_itself`). And: "we want
+some kind of core cycle of sending blood -> zipping to the blood so that world traversal
+isn't so slow" -- with Reaper's chain "awkward, I can't tell how far it's going to take me or
+why". The door is where she will go, on the floor in front of her, before she goes.
+**Measured** Send and zip crosses about 55 m in 2.5 s on flat ground against 17.5 m walking
+(`send_and_zip_crosses_the_ground_far_faster_than_walking`).
+**Not done** Reaper's chain is unchanged; whether it stays, now that the zip carries her, is
+the owner's call.
 **Verdict** — unplayed.
 
 ### 2026-10-12 — the Champion reworked: the braced Rush, the Beat, the Hold, six full charges, momentum, Break and the Clash

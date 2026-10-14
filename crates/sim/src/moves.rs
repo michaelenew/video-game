@@ -685,33 +685,27 @@ const NAMES: [&[&str]; 6] = [
         "Fire fountain",
         "Earth jump",
     ],
-    // Blood mage -- her blood goes out, and theirs comes back. Everything
-    // costs health, every hit she lands spills the target onto the floor, and
-    // the only heal she has is putting an ability through that blood. Five, in
-    // storage order rather than button order: see [`blood`] for why the auto
-    // is the last row.
-    //   Bloodletter: a blade out to a fixed distance and back, cutting on both
-    //     passes. Middle click, the ranged way to make a pool.
-    //   Haemorrhage: a bolt that opens a bleed, and every tick of the bleed
-    //     spills a pool under the victim. Right click, the easier thing to
-    //     land, and the thing that marks somebody as the target.
-    //   Grasp: four arms out in a cone that arc back inward to meet. Caught by
-    //     all four and you are hauled to her feet.
-    //   Black spike: on `E`, because the class has no other use for the key.
-    //   Reaping sweep: the auto. The scythe drawn across the front, low to
-    //     high, and its reach grows with her grey.
+    // Blood mage -- the blaster (2026-10-12). Her blood goes out, and theirs
+    // comes back: everything costs health, every hit she lands spills a stain,
+    // and stains are collected -- walked into, teleported to, hit through. In
+    // storage order rather than button order: the rows were retuned as the new
+    // moves rather than renumbered, and the last two were appended. See
+    // [`blood`] and `docs/design/exploration/0015_blood_mage_blaster.md`.
     &[
-        "Bloodletter",
+        "Carpet of blood",
         "Haemorrhage",
-        "Grasp",
+        "Hemoplague",
         "Black spike",
-        "Reaping sweep",
-        "Blood nova",
-        "Blood jet",
-        "Marionette",
-        "Nail",
-        "Hook",
-        "Harvest",
+        "Command",
+        "Summon",
+        "Blood wings",
+        "Upheaval",
+        "Stake",
+        "Coagulate",
+        "Rising reap",
+        "Black vines",
+        "Crimson cascade",
+        "Blood golem",
     ],
     // Dual mage -- two forces, one in each hand, and every move a spell
     // (2026-10-09). Left is dark, the hex: things that travel and linger.
@@ -1206,94 +1200,146 @@ pub mod dual {
 // The Blood mage's five
 // ---------------------------------------------------------------------------
 
-/// The Blood mage's move list, and **which button throws each**.
+/// The Blood mage's move list, and **which button throws each**: stains,
+/// thralls and grey, since 2026-10-13 (revised the same day from play).
 ///
 /// ```text
-///   left click     Reaping sweep   the auto; a war scythe across the front
-///   right click    Haemorrhage     a bolt that opens a bleed; a trail of pools
-///   middle click   Bloodletter     a blade out and back
-///   Q              Grasp           hold to choose a depth; four arms
-///   E              Black spike     a spike out of the floor, after a delay
+///                 left: the area      middle: the spikes    right: the thralls
+///   tap           Haemorrhage         Black spike (1)       Command
+///   hold          Hemoplague, growing Black spike, 1 to 7   Carpet of blood
+///   held to end   Black vines         Crimson cascade       Blood golem
+///   in the air    Haemorrhage         Stake                 Command
+///   space+click   Blood wings         Upheaval              Rising reap
+///   (floor, or once a jump in the air)
+///   Q  Coagulate    E  Summon    shift + crosshair on a stain  teleport
 /// ```
+///
+/// **A finisher is a hold kept to its end**, at any time, and it spends all
+/// her grey and the Well: the more there was, the bigger it is.
 ///
 /// **Storage order is not button order.** The Oven's move store is packed in
 /// class order, so a slot appended to this class shifts every Dual mage index
 /// in `tuned.rs` and a slot *renumbered* silently rewrites every number on the
-/// class. The auto is therefore the fifth row rather than the first: the four
-/// rows that existed before the scythe keep the meaning they were baked with,
-/// and the sweep was appended. `SLOT_POKE` on this class is the Bloodletter,
-/// which is still the fast, cheap thing she throws -- it simply moved off
-/// the left button.
+/// class. So rows are **retuned** as new moves rather than renumbered: the
+/// Transfusion's row is the Carpet, the sweep's Command, Tides' the Summon,
+/// the chain's Coagulate, the leap's the Rising reap and Frenzy's the Black
+/// vines; the cascade and the golem were appended. See
+/// `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
 pub mod blood {
-    /// Middle click. The blade thrown out and back.
-    pub const BLOODLETTER: u8 = 0;
-    /// Right click. Was Rend, the claw with no button, then the Reap, the
-    /// heavier swing; the row was retuned each time rather than replaced, so
-    /// its knobs kept their index.
+    /// Right click held past Command's startup: **the Carpet of blood**. A
+    /// disc of blood spreading from where she aimed for as long as she holds,
+    /// hurting a little, paid in red as it spreads; let go, it is one big
+    /// stain, and every stain of hers it covered stands up as a thrall.
+    pub const CARPET: u8 = 0;
+    /// Left click, tapped -- on the floor and in the air: **the Haemorrhage**.
+    /// A bolt that opens a bleed, and every tick of the bleed spills a stain.
     pub const HAEMORRHAGE: u8 = 1;
-    /// `Q`, held.
-    pub const GRASP: u8 = 2;
-    /// `E`.
+    /// Left click held past the Haemorrhage's startup: **the Hemoplague**. A
+    /// cloud on the floor where she aimed, growing for as long as she holds,
+    /// hurting and slowing everyone inside on a tick; let go, it stands at the
+    /// size it reached.
+    pub const HEMOPLAGUE: u8 = 2;
+    /// Middle click, held: **the Black spike**. One spike tapped, and more in
+    /// a wider area the longer the hold, up to seven. On a stain, the stain
+    /// erupts.
     pub const BLACK_SPIKE: u8 = 3;
-    /// Left click. Appended last: see the module note.
-    pub const SWEEP: u8 = 4;
-    /// Left click, standing, held: **the Blood nova**. She bleeds into a sphere
-    /// round herself for as long as the click is down -- red health every few
-    /// frames -- and lets it burst: whoever is close is hurt and thrown off,
-    /// her grey has climbed, and a pool of her own blood is left where she
-    /// stood. The first of the *my blood* moves, which need no enemy at all.
-    /// See `docs/design/exploration/0009_blood_mage_on_three_clicks.md`.
-    pub const BLOOD_NOVA: u8 = 5;
-    /// Space and left click, held: **the Blood jet**. Her blood out under her
-    /// drives her along her aim for as long as it is held, paid in red as it
-    /// goes; let go and whoever was in the jet's wake is hurt, more the longer
-    /// it ran. A pool of her own blood is left where she took off.
-    pub const BLOOD_JET: u8 = 6;
-    /// Space and middle click: **Marionette**. The victim's own blood hauls
-    /// them up off the floor -- a launcher, and she goes up with them. It lifts
-    /// and nothing more: the pin is the Nail's.
-    pub const MARIONETTE: u8 = 7;
-    /// Middle click, airborne: **the Nail**. A long black spike driven along
-    /// her aim. On somebody in the air it **pins them there** for a moment; on
-    /// somebody on the floor it is a heavy hit and nothing else. Marionette
-    /// and then the Nail is the Hanging.
-    pub const NAIL: u8 = 8;
-    /// Right click, airborne: **the Hook**. The scythe thrown along her aim on a
-    /// thread of blood: it catches the first fighter, creature, stone or wall
-    /// and **pulls her to it**. A grappling hook, and it hurts nobody.
-    pub const HOOK: u8 = 9;
-    /// Space and right click: **Harvest**. A high jump inside a full circle of
-    /// the scythe, which drinks every pool it passes over on the way -- the
-    /// heal as a line to take across the fight.
-    pub const HARVEST: u8 = 10;
+    /// Right click, tapped: **Command**. Every thrall of hers, and the golem,
+    /// sent to the crosshair's spot on the floor, whatever they were doing.
+    pub const COMMAND: u8 = 4;
+    /// `E`: **the Summon**. Every stain round her stands up as a thrall.
+    pub const SUMMON: u8 = 5;
+    /// Space and left click: **Blood wings**. A burst along her aim.
+    pub const WINGS: u8 = 6;
+    /// Space and middle click: **the Upheaval**. A geyser that launches.
+    pub const UPHEAVAL: u8 = 7;
+    /// Middle click, airborne: **the Stake**. Pins anybody in the air and
+    /// lands in an area.
+    pub const STAKE: u8 = 8;
+    /// `Q`: **Coagulate**. Every stain of hers in reach slides to the
+    /// crosshair's spot on the floor and merges. Was the chain's row.
+    pub const COAGULATE: u8 = 9;
+    /// Space and right click: **the Rising reap**. A cone thrown forward that
+    /// hurls her thralls along and drinks the stains it crosses. Was the
+    /// leap's row.
+    pub const RISING_REAP: u8 = 10;
+    /// The Hemoplague held to its end: **the Black vines**. Barbed vines
+    /// erupting outward from the cloud's middle across its area, bleeding
+    /// everything they reach, then standing a while, bleeding and slowing
+    /// whatever enters. Spends her grey. Was Frenzy's row.
+    pub const VINES: u8 = 11;
+    /// The Black spike held to its end: **the Crimson cascade**. A ring of
+    /// eruptions moving outward from the crosshair, wave after wave, setting
+    /// off every stain of hers it crosses. Spends her grey. Appended.
+    pub const CASCADE: u8 = 12;
+    /// The Carpet held to its end: **the Blood golem**. Every stain the
+    /// carpet covers and all her grey, fused into one body with that many
+    /// hit points. Spends her grey. Appended.
+    pub const GOLEM: u8 = 13;
 
-    pub const COUNT: usize = 11;
+    pub const COUNT: usize = 14;
 
-    /// **Which button is which of her verbs**, in one place, as the
-    /// Elementalist's are: left is *my blood*, middle is *your blood*, right
-    /// is the scythe and how she moves.
+    /// **Which button is which of her verbs**, in one place.
     pub mod keys {
         use crate::input::Input;
-        /// Left click: the Blood nova, Haemorrhage in the air, the Blood jet
-        /// with space.
-        pub const MY_BLOOD: u16 = Input::LEFT;
-        /// Middle click: the Grasp, the Nail in the air, Marionette with space.
-        pub const YOUR_BLOOD: u16 = Input::MIDDLE;
-        /// Right click: the Reaping sweep, the Hook in the air, Harvest with
+        /// Left click: the Haemorrhage, the Hemoplague held, Blood wings with
         /// space.
+        pub const MY_BLOOD: u16 = Input::LEFT;
+        /// Middle click: the Black spike, the Stake in the air, the Upheaval
+        /// with space.
+        pub const YOUR_BLOOD: u16 = Input::MIDDLE;
+        /// Right click: Command, the Carpet held, the Rising reap with space.
         pub const SCYTHE: u16 = Input::RIGHT;
-        /// `Q`: the Bloodletter.
-        pub const BLOODLETTER: u16 = Input::SPECIAL;
-        /// `E`: the Black spike.
-        pub const SPIKE: u16 = Input::MECHANIC;
+        /// `Q`: Coagulate.
+        pub const GATHER: u16 = Input::SPECIAL;
+        /// `E`: the Summon.
+        pub const RAISE: u16 = Input::MECHANIC;
     }
 
-    /// **Is a pool spilled by this move her own blood?** The *my blood* moves
-    /// spill her, not a victim; a pool of hers is a door -- the blink, the
-    /// spike's eruption -- and never a heal, or spending health would be a way
-    /// to drink it straight back.
-    pub const fn own_blood(slot: u8) -> bool {
-        matches!(slot, BLOOD_NOVA | BLOOD_JET)
+    /// Which click throws this move -- what holds its charge open, and what
+    /// lets a stored charge go.
+    pub const fn click_of(kind: u8) -> u16 {
+        match kind {
+            HEMOPLAGUE | HAEMORRHAGE | WINGS | VINES => keys::MY_BLOOD,
+            BLACK_SPIKE | STAKE | UPHEAVAL | CASCADE => keys::YOUR_BLOOD,
+            _ => keys::SCYTHE,
+        }
+    }
+
+    /// **Is this the one charged in tiers?** Held on the floor; let go, or
+    /// stored by a jump or a dodge out of the hold.
+    pub const fn tiered(kind: u8) -> bool {
+        matches!(kind, BLACK_SPIKE)
+    }
+
+    /// **Is this held as a field** -- the Hemoplague and the Carpet growing
+    /// -- rather than charged in tiers?
+    pub const fn fielded(kind: u8) -> bool {
+        matches!(kind, CARPET | HEMOPLAGUE)
+    }
+
+    /// Which field a tapped move becomes when its click is held past its
+    /// startup: the Haemorrhage the Hemoplague, Command the Carpet.
+    pub const fn held_into(kind: u8) -> Option<u8> {
+        match kind {
+            HAEMORRHAGE => Some(HEMOPLAGUE),
+            COMMAND => Some(CARPET),
+            _ => None,
+        }
+    }
+
+    /// Which finisher this held move becomes, held to its end.
+    pub const fn finisher_of(kind: u8) -> Option<u8> {
+        match kind {
+            HEMOPLAGUE => Some(VINES),
+            BLACK_SPIKE => Some(CASCADE),
+            CARPET => Some(GOLEM),
+            _ => None,
+        }
+    }
+
+    /// Is this one of the three finishers?
+    pub const fn finisher(kind: u8) -> bool {
+        matches!(kind, VINES | CASCADE | GOLEM)
     }
 
     /// Is this the scythe -- the move whose reach, width and damage grow with
@@ -1304,7 +1350,7 @@ pub mod blood {
     /// size and the growth is drawn as essence around it; `view::scythe`
     /// reads this to know which move to draw the volume for.
     pub const fn scythe(kind: u8) -> bool {
-        matches!(kind, SWEEP | HARVEST)
+        matches!(kind, RISING_REAP)
     }
 }
 
@@ -1492,7 +1538,7 @@ pub const fn slots(class: Class) -> usize {
 /// Champion's fourth is the second link of its sword chain.
 pub const fn on_e(class: Class) -> Option<u8> {
     match class {
-        Class::BloodMage => Some(SLOTS as u8),
+        Class::BloodMage => Some(blood::SUMMON),
         // The Dual mage for the same reason, arrived at from the other
         // direction: her mechanic is a *meter*, and it is steered by which
         // button attacks rather than by a key. There is nothing for `E` to
@@ -1672,18 +1718,23 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // **My blood, your blood, the scythe**, since 2026-10-09: left,
         // middle and right, each on the floor, in the air and with space. See
         // `blood::keys`.
+        // The blaster, since 2026-10-12: the three clicks held on the floor
+        // in tiers, the air row quick, space a takeoff. See [`blood`].
         Class::BloodMage => match slot {
-            0 => "Q",
-            1 => "LMB air",
-            2 => "MMB held",
-            3 => "E",
+            0 => "RMB held",
+            1 => "LMB",
+            2 => "LMB held",
+            3 => "MMB held",
             4 => "RMB",
-            5 => "LMB held",
-            6 => "Space+LMB held",
+            5 => "E",
+            6 => "Space+LMB",
             7 => "Space+MMB",
             8 => "MMB air",
-            9 => "RMB air",
-            _ => "Space+RMB",
+            9 => "Q",
+            10 => "Space+RMB",
+            11 => "LMB held to the end",
+            12 => "MMB held to the end",
+            _ => "RMB held to the end",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
@@ -1843,12 +1894,13 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // The scythe. The sweep is a cut across the front, and the one swing
         // in the kit. Everything else she has puts something in the world and
         // lets it do the hitting, or lands on the floor where it was aimed.
+        // The blaster (2026-10-12): the scythe's two swings, the spike's and
+        // the Upheaval's disc where they were aimed, and everything else puts
+        // a thing in the world -- a bolt, a cloud, a ring, a burst, a stake, a
+        // chain -- and lets it do the hitting.
         Class::BloodMage => match kind {
-            blood::SWEEP | blood::HARVEST => Shape::Swing(Plane::Flat),
-            // Each puts something in the world and lets it do the hitting --
-            // a burst, a jet's wake, a nail, a hook -- or hits nobody.
-            blood::BLOOD_NOVA | blood::BLOOD_JET | blood::NAIL | blood::HOOK => Shape::None,
-            _ => Shape::Cylinder,
+            blood::BLACK_SPIKE | blood::UPHEAVAL => Shape::Cylinder,
+            _ => Shape::None,
         },
         // The Shield step puts the shield in the world as a wall and nothing
         // of his body's; the rest come off the shield's face.
@@ -1902,10 +1954,6 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
 /// own note.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Charge {
-    /// The Blood mage's Grasp: the hold is **before** the move and buys
-    /// reach, from [`Move::channel_from`] out to [`Move::reach`]. The press
-    /// opens the wind-up and the release throws the move.
-    Reach,
     /// The Elementalist's fire pillar, held: the hold comes **after** the
     /// startup and buys **concentration**. A tap is the pillar as built; a
     /// full hold is the pillar's whole burn arriving as one Strike and
@@ -1922,10 +1970,18 @@ pub enum Charge {
     /// for as long as the button is down, and a bigger ball goes faster and
     /// lasts longer. The press raises it; the release sends it.
     Gather,
-    /// The Blood mage's nova and jet: the hold is her own blood, **paid as it
-    /// goes** -- red health every `tuning::blood_pays_every` frames held --
-    /// and it buys size (the nova's burst) or distance (the jet's drive).
-    Bleed,
+    /// The Blood mage's three charges (2026-10-12): the hold is **before** the
+    /// move and buys a **tier** -- one on a tap, two and three at
+    /// `tuning::tier_two` and `tuning::tier_three` -- each tier paid in her
+    /// red as it is reached. A jump or a dodge out of the hold stores it in
+    /// her vessel, to be let go later with the same click. See
+    /// `docs/design/exploration/0015_blood_mage_blaster.md`.
+    Tier,
+    /// The Blood mage's Carpet and Summon (2026-10-13): the hold is before
+    /// the move, opened by holding the click past the tap's startup, and is
+    /// the move happening -- the carpet spreading, the stains rising. Held on
+    /// past its end with a full Well it becomes the click's finisher.
+    Field,
     /// **The Champion's hold** (exploration 0015, C3), on all nine links of
     /// the chain: the hold comes **after** the startup, at the top of the
     /// wind-up, as the Strike's does, and it is a charged attack in the Smash
@@ -1940,10 +1996,8 @@ pub enum Charge {
 /// Which charge a move has, if any.
 pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
     match class {
-        Class::BloodMage if kind == crate::state::SLOT_SPECIAL => Some(Charge::Reach),
-        Class::BloodMage if kind == blood::BLOOD_NOVA || kind == blood::BLOOD_JET => {
-            Some(Charge::Bleed)
-        }
+        Class::BloodMage if blood::tiered(kind) => Some(Charge::Tier),
+        Class::BloodMage if blood::fielded(kind) => Some(Charge::Field),
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),

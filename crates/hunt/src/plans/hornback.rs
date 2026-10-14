@@ -227,7 +227,7 @@ fn flat(v: V3) -> V3 {
 /// The move a left click throws on the floor: the class's auto.
 fn auto_slot(class: Class) -> u8 {
     match class {
-        Class::BloodMage => sim::moves::blood::SWEEP,
+        Class::BloodMage => sim::moves::blood::HAEMORRHAGE,
         _ => 0,
     }
 }

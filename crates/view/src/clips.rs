@@ -319,8 +319,8 @@ clips! {
         "Grasp: both arms thrown open and snapped shut. Four arms leave wide and arrive together.";
     BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,
         "Black spike: a downward stabbing gesture that plants something in the ground.";
-    BloodSweep,     "blood_sweep",      Moves, "blood", Length::Move(Class::BloodMage, 4), false,
-        "Reaping sweep: both hands on the haft, gathered off the left hip and swept across the front, low to high.";
+    BloodSweep,     "blood_sweep",      Moves, "blood", Length::Move(Class::BloodMage, 10), false,
+        "Rising reap (was the Reaping sweep): both hands on the haft, gathered off the left hip and swept across the front, low to high.";
 
     // -- The Dual mage: two autos, two Lances, Judgement, Sweep -------------
     //

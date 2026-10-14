@@ -558,10 +558,10 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         // knee-high body, by its own design -- the shadow is thrown forward
         // and up (2026-10-10).
         ("Shadow Reaver", "Shadow arc"),
-        // A jump inside a scythe spin: she is off the floor before the blade
-        // comes round, and the spin is flat at her waist. For the pools under
-        // it, not for knee-high bodies; `docs/design/critters.md` §7.
-        ("Blood mage", "Harvest"),
+        // The golem goes for bodies -- a fighter, the creature -- and not a
+        // pack's critters, as her thralls do not: written down as the first
+        // thing to look at in play, 0016 §10 (2026-10-13).
+        ("Blood mage", "Blood golem"),
     ];
     let rows = sim::critcheck::table(SpeciesId::GNATS, gnats::GNAT);
     let mut over = Vec::new();
@@ -586,9 +586,16 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         if class == sim::class::Class::Elementalist {
             continue;
         }
+        // The Blood mage's slot zero is the Carpet, a hold; her tapped left
+        // click is the Haemorrhage (2026-10-13).
+        let kind = if class == sim::class::Class::BloodMage {
+            sim::moves::blood::HAEMORRHAGE
+        } else {
+            0
+        };
         let auto = rows
             .iter()
-            .find(|r| r.class == class && r.kind == 0)
+            .find(|r| r.class == class && r.kind == kind)
             .unwrap();
         assert!(
             auto.touches(),

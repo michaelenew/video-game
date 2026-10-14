@@ -81,6 +81,12 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// which is every jump; and the Reaver's kit moved. See
 /// `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
 ///
+/// **The Blood mage's was re-pinned the same day** for the blaster: her
+/// clicks are new moves held in tiers, every stain is collected, and every
+/// hit bleeds. See `docs/design/exploration/0015_blood_mage_blaster.md`.
+/// **And again the same day**: her dodge sends her blood ahead, and Frenzy's
+/// own blows spill nothing. See the feel log.
+///
 /// **The Champion's was re-pinned 2026-10-12, later** for his rework: the
 /// braced Rush and its shoulder, a held weapon charging, the full charges and
 /// momentum. See `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
@@ -100,7 +106,7 @@ const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xad92d8aa094c6517),
     (Class::Bulwark, 0x8465a86bccb8ef32),
     (Class::ShadowReaver, 0xf02c926cba5a3ae3),
-    (Class::BloodMage, 0x083464c03c9c85e2),
+    (Class::BloodMage, 0x1c650076c6254dcf),
     (Class::DualMage, 0xd1dc8709fa4d36db),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];

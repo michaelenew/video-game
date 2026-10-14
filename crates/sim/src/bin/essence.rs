@@ -85,7 +85,7 @@ fn pools(w: &World) -> Vec<Effect> {
 
 /// The dummy inside the scythe's reach, standing still.
 fn in_reach(w: &mut World) {
-    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let sweep = sim::moves::get(Class::BloodMage, b::COMMAND);
     w.players[1].pos = w.players[0].pos.add(V3::new(
         sweep.reach.mul(Fx::ratio(1, 2)),
         Fx::ZERO,
@@ -143,13 +143,12 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
 }
 
 /// Which button throws each of her moves, in the order the kit reads.
-fn kit() -> [(u8, u16); 5] {
+fn kit() -> [(u8, u16); 4] {
     [
-        (b::SWEEP, Input::LEFT),
-        (b::HAEMORRHAGE, Input::RIGHT),
-        (b::BLOODLETTER, Input::MIDDLE),
-        (b::GRASP, Input::SPECIAL),
-        (b::BLACK_SPIKE, Input::MECHANIC),
+        (b::COMMAND, Input::RIGHT),
+        (b::HAEMORRHAGE, Input::LEFT),
+        (b::BLACK_SPIKE, Input::MIDDLE),
+        (b::HEMOPLAGUE, Input::MECHANIC),
     ]
 }
 
@@ -159,20 +158,10 @@ fn kit() -> [(u8, u16); 5] {
 fn cast(w: &mut World, slot: u8, button: u16) -> Option<Effect> {
     let m = sim::moves::get(Class::BloodMage, slot);
     let pitch = pitch_at(w, slot, w.players[1].pos);
-    // The Grasp is thrown by the release, wound to a depth; hold it long enough
-    // to reach the dummy.
-    let hold = if m.channels() {
-        let want = w.players[1].pos.sub(w.players[0].pos).flat_len();
-        let mut held = 0;
-        while held < m.channel && m.reach_after(held).raw() < want.raw() {
-            held += 1;
-        }
-        held as u32 + 1
-    } else {
-        2
-    };
+    // A tap: the first tier of a charged move, and every other move as it is.
+    let hold = 2;
     looking(w, hold, button, pitch, 0);
-    let flight = t::bloodletter_flight().max(t::grasp_flight()) as u32;
+    let flight = t::haemorrhage_flight().max(t::plague_lasts()) as u32;
     let mut biggest: Option<Effect> = None;
     for _ in 0..m.whiff_cost() as u32 + flight {
         looking(w, 1, 0, pitch, 0);
@@ -195,7 +184,7 @@ fn reach_table() {
         "  {:>6}{:>10}{:>10}{:>10}",
         "grey", "reach m", "radius m", "damage x"
     );
-    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let sweep = sim::moves::get(Class::BloodMage, b::COMMAND);
     for grey in [0, 250, 500, 750, t::max_health() - 1] {
         let mut p = sim::state::Player::new(Class::BloodMage);
         p.health = t::max_health() - grey;
@@ -272,7 +261,7 @@ fn drink_table() {
         in_reach(&mut w);
         wounded(&mut w, 500);
         let at = w.players[1].pos;
-        w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, volume));
+        w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::COMMAND, at, volume));
         let before = w.players[0].health;
         let paid = w.players[0].cost_of(m.cost);
         cast(&mut w, slot, button);
@@ -296,7 +285,7 @@ fn grey_over_time() {
     );
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let sweep = sim::moves::get(Class::BloodMage, b::COMMAND);
     let bash = sim::moves::get(Class::Bulwark, sim::state::SLOT_POKE);
     let log = |w: &World, event: &str| {
         let p = w.players[0];
@@ -343,7 +332,7 @@ fn grey_over_time() {
     w.effects[0] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::SWEEP,
+        b::COMMAND,
         at,
         t::pool_full(),
     ));
@@ -439,8 +428,8 @@ fn against_the_creature() {
         "state", "dealt", "volume", "radius m"
     );
     for (name, toppled, slot, button) in [
-        ("swept, standing", false, b::SWEEP, Input::LEFT),
-        ("swept, toppled", true, b::SWEEP, Input::LEFT),
+        ("swept, standing", false, b::COMMAND, Input::LEFT),
+        ("swept, toppled", true, b::COMMAND, Input::LEFT),
     ] {
         let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
         let mut beast = w.monster().copied().expect("a hunt has a creature");

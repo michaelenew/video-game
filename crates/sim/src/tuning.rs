@@ -3517,6 +3517,327 @@ pub fn step_forward() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepForward)).max(Fx::ZERO)
 }
 
+/// What a hit through one of her stains adds to itself, as a share of the
+/// stain's essence: the stain is drunk, and the blow is harder for it.
+pub fn stain_hit_bonus(essence: i32) -> i32 {
+    essence.max(0) * oven::scalar(Scalar::StainHitBonus).max(0) / 100
+}
+
+/// What walking into one of her stains drinks of it, as a share of its
+/// essence. All of it, to begin with: getting health back was too hard.
+pub fn stain_walk_drinks() -> i32 {
+    oven::scalar(Scalar::StainWalkDrinks).clamp(0, 100)
+}
+
+// The blaster's knobs (2026-10-12). See
+// `docs/design/exploration/0015_blood_mage_blaster.md`.
+
+/// Charge, tier two at.
+pub fn tier_two() -> u16 {
+    oven::scalar(Scalar::TierTwo).max(1) as u16
+}
+
+/// Charge, tier three at.
+pub fn tier_three() -> u16 {
+    oven::scalar(Scalar::TierThree).max(1) as u16
+}
+
+/// Charge, tier two costs (% of red).
+pub fn tier_two_cost() -> i32 {
+    oven::scalar(Scalar::TierTwoCost).max(0)
+}
+
+/// Charge, tier three costs (% of red).
+pub fn tier_three_cost() -> i32 {
+    oven::scalar(Scalar::TierThreeCost).max(0)
+}
+
+/// Charge, tier two hits (x).
+pub fn tier_two_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TierTwoPower).max(0))
+}
+
+/// Charge, tier three hits (x).
+pub fn tier_three_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TierThreePower).max(0))
+}
+
+/// Charge, faster at full grey (x).
+pub fn charge_grey_faster() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChargeGreyFaster).max(0))
+}
+
+/// Vessel, 1% of red every.
+pub fn vessel_bleeds_every() -> u16 {
+    oven::scalar(Scalar::VesselBleedsEvery).max(1) as u16
+}
+
+/// Black spike, tier two each (x).
+pub fn spike_two_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeTwoPower).max(0))
+}
+
+/// Black spike, tier three field radius.
+pub fn spike_field_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeFieldRadius).max(0))
+}
+
+/// Black spike, tier three each wave (x).
+pub fn spike_field_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeFieldPower).max(0))
+}
+
+/// Black spike, tier three waves.
+pub fn spike_waves() -> i32 {
+    oven::scalar(Scalar::SpikeWaves).max(0)
+}
+
+/// Black spike, tier three wave every.
+pub fn spike_wave_every() -> u16 {
+    oven::scalar(Scalar::SpikeWaveEvery).max(1) as u16
+}
+
+/// Blood wings, frames to cross.
+pub fn wings_frames() -> u16 {
+    oven::scalar(Scalar::WingsFrames).max(1) as u16
+}
+
+/// Teleport, to a stain within (m).
+pub fn teleport_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TeleportReach).max(0))
+}
+
+/// Hemoplague, cloud lasts.
+pub fn plague_lasts() -> u16 {
+    oven::scalar(Scalar::PlagueLasts).max(1) as u16
+}
+
+/// Hemoplague, hurts every.
+pub fn plague_tick() -> u16 {
+    oven::scalar(Scalar::PlagueTick).max(1) as u16
+}
+
+/// Hemoplague, cloud height.
+pub fn plague_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueHeight).max(0))
+}
+
+/// How fast she walks while holding a charge, as a share of a walk: a crawl,
+/// whatever the move's own row says about its cast.
+pub fn charge_crawl() -> i32 {
+    oven::scalar(Scalar::ChargeCrawl).clamp(0, 100)
+}
+
+/// How far past an eruption's edge a stain of hers is still set off by it:
+/// what lets a spike on the start of a bleeding fighter's trail run the trail.
+pub fn erupt_chain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EruptChain).max(0))
+}
+
+// Stains, thralls and the Well (2026-10-13). See
+// `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+
+/// Well, full at.
+pub fn well_full() -> i32 {
+    oven::scalar(Scalar::WellFull).max(0)
+}
+
+/// Stain, settles before it can be drunk.
+pub fn stain_settles() -> u16 {
+    oven::scalar(Scalar::StainSettles).max(0) as u16
+}
+
+/// Carpet, starts at radius.
+pub fn carpet_from() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetFrom).max(0))
+}
+
+/// Carpet, grows to radius.
+pub fn carpet_to() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetTo).max(0))
+}
+
+/// Carpet, 1% of red every.
+pub fn carpet_pays_every() -> u16 {
+    oven::scalar(Scalar::CarpetPaysEvery).max(0) as u16
+}
+
+/// Carpet, hurts every.
+pub fn carpet_tick() -> u16 {
+    oven::scalar(Scalar::CarpetTick).max(0) as u16
+}
+
+/// Coagulate, gathers stains within (m).
+pub fn coagulate_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CoagulateReach).max(0))
+}
+
+/// Coagulate, stains slide at (m/s).
+pub fn coagulate_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CoagulateSpeed).max(0))
+}
+
+/// Summon, raises stains within (m).
+pub fn summon_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SummonReach).max(0))
+}
+
+/// Thralls at once.
+pub fn thrall_cap() -> i32 {
+    oven::scalar(Scalar::ThrallCap).max(0)
+}
+
+/// Thrall, runs at (m/s).
+pub fn thrall_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallSpeed).max(0))
+}
+
+/// Thrall, goes for a body within (m).
+pub fn thrall_seek() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallSeek).max(0))
+}
+
+/// Thrall, bites within (m).
+pub fn thrall_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallReach).max(0))
+}
+
+/// Thrall, a bite spends (% of it).
+pub fn thrall_bite() -> i32 {
+    oven::scalar(Scalar::ThrallBite).max(0)
+}
+
+/// Thrall, a bite spends at least.
+pub fn thrall_bite_least() -> i32 {
+    oven::scalar(Scalar::ThrallBiteLeast).max(0)
+}
+
+/// Thrall, bites every.
+pub fn thrall_bite_every() -> u16 {
+    oven::scalar(Scalar::ThrallBiteEvery).max(0) as u16
+}
+
+/// Rising reap, cone half-width (cos).
+pub fn reap_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapCone).max(0))
+}
+
+/// Rising reap, hurls thralls at (m/s).
+pub fn reap_hurl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapHurl).max(0))
+}
+
+/// Rising reap, hurls thralls for.
+pub fn reap_hurl_for() -> u16 {
+    oven::scalar(Scalar::ReapHurlFor).max(0) as u16
+}
+
+/// Golem, walks at (m/s).
+pub fn golem_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSpeed).max(0))
+}
+
+/// Golem, punches every.
+pub fn golem_punch_every() -> u16 {
+    oven::scalar(Scalar::GolemPunchEvery).max(0) as u16
+}
+
+/// Golem, punches within (m).
+pub fn golem_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemReach).max(0))
+}
+
+/// Golem, stands this many thralls tall (x): how much wider and taller than
+/// a thrall of the same essence the golem is.
+pub fn golem_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSize).max(0))
+}
+
+/// Grey, holds before it fades: the frames after grey last opened before the fade starts.
+pub fn grey_grace() -> u16 {
+    oven::scalar(Scalar::GreyGrace).max(0) as u16
+}
+
+/// Hemoplague, starts at radius: the cloud the moment the hold opens.
+pub fn plague_from() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueFrom).max(0))
+}
+
+/// Hemoplague, grows to radius: the cloud at the end of the hold.
+pub fn plague_to() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueTo).max(0))
+}
+
+/// Hemoplague, slows to (x): what is in the cloud moves at this share of its speed.
+pub fn plague_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlagueSlow).max(0))
+}
+
+/// Finisher, damage per grey spent (x): what each point of grey and Well a finisher spends adds to its blow.
+pub fn finisher_per_grey() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FinisherPerGrey).max(0))
+}
+
+/// Black vines, erupt out over: the frames the vines take to reach the edge of the cloud.
+pub fn vines_grow() -> u16 {
+    oven::scalar(Scalar::VinesGrow).max(0) as u16
+}
+
+/// Black vines, stand for: how long the vines stay, bleeding and slowing.
+pub fn vines_lasts() -> u16 {
+    oven::scalar(Scalar::VinesLasts).max(0) as u16
+}
+
+/// Black vines, bleed what enters every: how often the standing vines open a bleed and slow.
+pub fn vines_tick() -> u16 {
+    oven::scalar(Scalar::VinesTick).max(0) as u16
+}
+
+/// Black vines, radius per cloud radius (x): how far past the cloud the vines spread.
+pub fn vines_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VinesSize).max(0))
+}
+
+/// Crimson cascade, waves: how many rings of eruptions go out.
+pub fn cascade_waves() -> i32 {
+    oven::scalar(Scalar::CascadeWaves).max(0)
+}
+
+/// Crimson cascade, a wave every: the frames between one ring erupting and the next.
+pub fn cascade_every() -> u16 {
+    oven::scalar(Scalar::CascadeEvery).max(0) as u16
+}
+
+/// Crimson cascade, rings apart (m): how much further out each ring erupts.
+pub fn cascade_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeStep).max(0))
+}
+
+/// Crimson cascade, each wave of the last (x): what share of a wave's blow the next carries.
+pub fn cascade_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeDecay).max(0))
+}
+
+/// Stain, a chained eruption waits: the frames between one stain erupting and the next it sets off.
+pub fn chain_delay() -> u16 {
+    oven::scalar(Scalar::ChainDelay).max(0) as u16
+}
+
+/// Black spike, widest ring at a full hold (m): the spikes beyond the first stand on a ring this wide at the end of the hold.
+pub fn spike_spread_most() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeSpreadMost).max(0))
+}
+
+/// Black spike, spikes at a full hold: how many a hold to the end raises.
+pub fn spikes_most() -> i32 {
+    oven::scalar(Scalar::SpikesMost).max(0)
+}
+
+/// Golem, hurts itself per blow dealt (x): what each punch costs the golem, as a share of what it dealt.
+pub fn golem_self_hurt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GolemSelfHurt).max(0))
+}
+
 // Momentum (exploration 0015, C4): the Champion's meter. See
 // `state::feed_the_momentum`.
 
