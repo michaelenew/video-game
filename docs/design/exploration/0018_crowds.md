@@ -1,5 +1,5 @@
 ---
-status: exploration — the two-layer model decided and the sim half built (crowd field, region experiment); the cell protocol designed, its first slice built
+status: built 2026-10-14 as far as one session reaches — the crowd field in the snapshot with its lookahead gate and first reader, cells and leaders read off the world, aggregates on the match's lines by agreement; what remains is a peer running only its regions (regions.md §"The session layer")
 started: 2026-10-14
 ---
 

@@ -147,6 +147,13 @@ impl Grid {
         self.membership().raw() < math::half(self.size).raw()
     }
 
+    /// A region's centre on the floor, in the coordinates positions are
+    /// asked in (the map's).
+    pub fn centre(&self, region: RegionId) -> (Fx, Fx) {
+        let (x, z) = math::hex_centre(region.q as i32, region.r as i32, self.size);
+        (x, z.sub(self.size))
+    }
+
     /// The hexagon a point is in.
     pub fn home(&self, p: V3) -> RegionId {
         let (x, z) = self.local(p);

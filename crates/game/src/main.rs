@@ -5497,8 +5497,10 @@ fn tick_sim(
             history.push(cur);
             tape.record(cur.frame, pair);
             ledger.record(cur, pair);
+            // The crowd field's aggregates due this frame, off the ledger.
+            let (fed, n) = ledger.due(cur.frame.wrapping_add(1));
             sim.prev = sim.cur.clone();
-            sim.cur.advance(pair);
+            sim.cur.advance_with(pair, &fed[..n]);
             {
                 let Sim { cur, ledger, .. } = &mut *sim;
                 ledger.confirm_through(cur.frame, cur);

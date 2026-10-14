@@ -485,12 +485,15 @@ fighter out of the fight (§"Past four"); the page says so.
 frame, and a late input from any one of them rolls everybody back: the traffic grows as
 the square of the players and the rollbacks with their number. That is comfortable for the
 handful this is built for, and the simulation is ready for eight; it is not the shape for
-dozens. Many players would want a relay that every peer talks to instead of everybody to
-everybody, or worlds split by place -- one simulation per part of the valley, with a
-fighter handed from one to the next -- and **a match cannot yet be joined once it has
-started**: the room closes when the roster is posted, and GGRS's player count is fixed for
-the session. Dropping in would mean the players agreeing on a frame, sending the newcomer
-that frame's snapshot, and starting a session one seat larger.
+dozens. The shape for dozens, and for any number, is [regions.md](regions.md) and
+[exploration/0018](exploration/0018_crowds.md): one region's inputs and rollback for the
+players near you, and a slow aggregate of everybody else, carried by the cells' own
+leaders with no server -- built as far as one session reaches (2026-10-14), with the piece
+that makes it matter, a peer running only its regions, next. **A match cannot yet be
+joined once it has started**: the room closes when the roster is posted, and GGRS's player
+count is fixed for the session. Dropping in would mean the players agreeing on a frame,
+sending the newcomer that frame's snapshot, and starting a session one seat larger -- the
+same fetch a region's newcomer needs, so the two are one job.
 
 GGRS requires its input type to be `serde`-serialisable, so the wire type `NetInput` lives
 in `net` rather than putting a dependency on `sim` — whose zero-dependency status is a

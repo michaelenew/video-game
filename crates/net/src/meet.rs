@@ -257,11 +257,30 @@ pub trait Line: Send + Sync {
 /// bytes on a data channel are the bytes that would have been in a datagram.
 /// Each line is addressed by the seat at its far end, which is what GGRS
 /// calls the remote player's address.
-pub struct Mesh<L: Line>(pub Vec<(Peer, L)>);
+///
+/// **Crowd packets ride the same lines** (`crate::crowd`): a cell leader's
+/// aggregate, tagged so GGRS's own socket would drop it, goes into the post
+/// box instead, and the box's outgoing packets go out whenever GGRS polls.
+pub struct Mesh<L: Line> {
+    pub lines: Vec<(Peer, L)>,
+    pub post: crate::crowd::Post,
+    /// How many times GGRS has polled: the post box's clock.
+    polls: u32,
+}
+
+impl<L: Line> Mesh<L> {
+    pub fn new(lines: Vec<(Peer, L)>, post: crate::crowd::Post) -> Mesh<L> {
+        Mesh {
+            lines,
+            post,
+            polls: 0,
+        }
+    }
+}
 
 impl<L: Line> NonBlockingSocket<Peer> for Mesh<L> {
     fn send_to(&mut self, msg: &Message, to: &Peer) {
-        let Some((_, line)) = self.0.iter_mut().find(|(p, _)| p == to) else {
+        let Some((_, line)) = self.lines.iter_mut().find(|(p, _)| p == to) else {
             return;
         };
         if let Ok(bytes) = bincode::serialize(msg) {
@@ -270,9 +289,19 @@ impl<L: Line> NonBlockingSocket<Peer> for Mesh<L> {
     }
 
     fn receive_all_messages(&mut self) -> Vec<(Peer, Message)> {
+        self.polls = self.polls.wrapping_add(1);
+        for (to, packet) in self.post.take_outgoing() {
+            if let Some((_, line)) = self.lines.iter_mut().find(|(p, _)| *p == to) {
+                line.send(&packet);
+            }
+        }
         let mut out = Vec::new();
-        for (peer, line) in &mut self.0 {
+        for (peer, line) in &mut self.lines {
             while let Some(bytes) = line.recv() {
+                if crate::crowd::decode(&bytes).is_some() {
+                    self.post.heard(*peer, &bytes, self.polls);
+                    continue;
+                }
                 // A packet that is not a GGRS message is somebody else's
                 // business: the same rule GGRS's own socket follows.
                 if let Ok(msg) = bincode::deserialize(&bytes) {
@@ -309,6 +338,11 @@ pub struct Seat {
     pub handle: usize,
     /// How many play: two to four.
     pub players: usize,
+    /// Everybody's id, in seat order: what a cell's leaders are ranked by
+    /// (`crate::cells`).
+    pub roster: Vec<u64>,
+    /// The crowd post box the mesh carries for (`crate::crowd`).
+    pub post: crate::crowd::Post,
 }
 
 /// How a meeting is going.
@@ -920,12 +954,16 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
                     Peer::Line(h) => (*h as usize, *peer),
                 })
                 .collect();
+            let ids = roster.clone();
             self.roster = None;
+            let post = crate::crowd::PostBox::new();
             return Progress::Ready(Seat {
-                socket: Socket(Box::new(Mesh(lines))),
+                socket: Socket(Box::new(Mesh::new(lines, post.clone()))),
                 remotes,
                 handle,
                 players: self.players,
+                roster: ids,
+                post,
             });
         }
         if now.saturating_sub(self.since) > NEGOTIATE_MS {

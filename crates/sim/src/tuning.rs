@@ -273,6 +273,34 @@ pub fn region_neighbour_lag() -> u32 {
     oven::scalar(Scalar::RegionNeighbourLag).max(0) as u32
 }
 
+/// Frames between one region aggregate and the next (`crate::crowd`).
+pub fn crowd_epoch() -> u32 {
+    oven::scalar(Scalar::CrowdEpoch).max(1) as u32
+}
+
+/// How many frames after its epoch an aggregate is fed to the world: the
+/// lookahead that makes every hop free (0018, S1).
+pub fn crowd_lookahead() -> u32 {
+    oven::scalar(Scalar::CrowdLookahead).max(0) as u32
+}
+
+/// The crowd's and the flow's time constant, in frames: at least the
+/// lookahead, so a value read late reads as nearly current (0018, S3).
+pub fn crowd_tau() -> u32 {
+    oven::scalar(Scalar::CrowdTau).max(1) as u32
+}
+
+/// The heat's time constant, in frames.
+pub fn crowd_heat_tau() -> u32 {
+    oven::scalar(Scalar::CrowdHeatTau).max(1) as u32
+}
+
+/// How many fighters, by the field, next door before a calm pack takes it as
+/// an alarm. Zero: never.
+pub fn crowd_hears() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrowdHears))
+}
+
 pub fn terrain_steepest() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSteepest)).max(Fx::ratio(1, 10))
 }

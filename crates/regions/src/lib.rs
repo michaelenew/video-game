@@ -28,9 +28,16 @@ mod watch;
 pub use watch::{Finding, Issue, Watch};
 
 use sim::World;
+use sim::crowd::{Aggregate, MAX_STREAMS};
 use sim::input::{Input, Travel};
 use sim::region::{Grid, RegionId};
 use sim::state::MAX_PLAYERS;
+use sim::tuning as t;
+
+/// How many aggregates the ledger keeps in hand, by the frame they are due:
+/// every followed stream's, for as many epochs as the lookahead spans, with
+/// room for a rollback's worth of re-feeding behind.
+pub const CROWD_TAPE: usize = 256;
 
 /// The most frames the tape holds, and so the longest delay the Oven's
 /// *delay* knob may ask for (its bound is one less).
@@ -133,10 +140,32 @@ pub struct Live {
     pub checksum: u64,
 }
 
+/// A stream the field follows, and the newest epoch an aggregate has been
+/// offered for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HeardCrowd {
+    pub region: RegionId,
+    pub epoch: Option<u16>,
+    /// No peer behind it: the ledger says what it would say -- nobody there.
+    pub simulated: bool,
+}
+
 /// The books.
 pub struct Ledger {
     grid: Grid,
     tape: Box<Tape>,
+    /// **The crowd tape**: every aggregate offered and not yet past its
+    /// due frame by more than a rollback, kept to be fed at that frame
+    /// (`World::advance_with`) and fed again if the frame is run again.
+    crowd: Box<[Option<Aggregate>; CROWD_TAPE]>,
+    /// The streams the last confirmed world follows, and what has been
+    /// heard on each: what the gate holds for.
+    followed: [HeardCrowd; MAX_STREAMS],
+    followed_len: usize,
+    /// The live regions' aggregates summed at the last epoch's frame: what
+    /// a leader of each posts to the leaders next door (`net::crowd`).
+    summed: [Aggregate; MAX_LIVE],
+    summed_len: usize,
     /// The newest frame the books have been kept for.
     confirmed: Option<u32>,
     live: [Live; MAX_LIVE],
@@ -172,7 +201,113 @@ impl Ledger {
             clock: world.frame,
             held_since: None,
             watch: watch.then(|| Box::new(Watch::new())),
+            crowd: Box::new([None; CROWD_TAPE]),
+            followed: [HeardCrowd {
+                region: RegionId::default(),
+                epoch: None,
+                simulated: true,
+            }; MAX_STREAMS],
+            followed_len: 0,
+            summed: [Aggregate::NONE; MAX_LIVE],
+            summed_len: 0,
         }
+    }
+
+    /// The live regions' aggregates as summed at the last epoch's frame.
+    pub fn summed(&self) -> &[Aggregate] {
+        &self.summed[..self.summed_len]
+    }
+
+    /// **An aggregate arrived**, from a leader or from this ledger's own
+    /// reckoning: kept until the frame it is due, replacing an earlier copy
+    /// of the same region and epoch (a repeat on the wire is nothing). One
+    /// already past its due frame by more than the tape holds is dropped:
+    /// the gate would have held for it, so it is not missed, only late.
+    pub fn offer(&mut self, a: Aggregate) {
+        let due = a.due();
+        if let Some(c) = self.confirmed
+            && due.wrapping_add(TAPE as u32) < c
+        {
+            return;
+        }
+        let slot = &mut self.crowd[due as usize % CROWD_TAPE];
+        match slot {
+            Some(have) if have.due() == due && have.region != a.region => {
+                // Two regions due the same frame share a slot only by
+                // collision of the ring; keep the newer offer in the first
+                // free slot after it.
+                let mut k = (due as usize + 1) % CROWD_TAPE;
+                while k != due as usize % CROWD_TAPE {
+                    match &self.crowd[k] {
+                        Some(o) if o.due() == due && o.region != a.region => {}
+                        Some(o) if o.due() == due => break,
+                        Some(o)
+                            if o.due().wrapping_add(TAPE as u32) < self.confirmed.unwrap_or(0) =>
+                        {
+                            break;
+                        }
+                        None => break,
+                        _ => {}
+                    }
+                    k = (k + 1) % CROWD_TAPE;
+                }
+                self.crowd[k] = Some(a);
+            }
+            _ => *slot = Some(a),
+        }
+        for f in self.followed[..self.followed_len].iter_mut() {
+            if f.region == a.region {
+                f.epoch = Some(f.epoch.map_or(a.epoch, |e| e.max(a.epoch)));
+            }
+        }
+    }
+
+    /// **What is due at `frame`**: every aggregate kept whose due frame is
+    /// it, in region order, for `World::advance_with`. A fixed array and a
+    /// count, so a frame allocates nothing.
+    pub fn due(&self, frame: u32) -> ([Aggregate; MAX_STREAMS], usize) {
+        let mut out = [Aggregate::NONE; MAX_STREAMS];
+        let mut n = 0;
+        for a in self.crowd.iter().flatten() {
+            if a.due() == frame && n < MAX_STREAMS {
+                out[n] = *a;
+                n += 1;
+            }
+        }
+        out[..n].sort_by_key(|a| (a.region.q, a.region.r));
+        (out, n)
+    }
+
+    /// The streams followed, and what has been heard on each.
+    pub fn followed(&self) -> &[HeardCrowd] {
+        &self.followed[..self.followed_len]
+    }
+
+    /// **A peer is behind this region** (or no longer is): a cell leader's
+    /// line opened (or closed), so the ledger stops (or starts) speaking for
+    /// it, and the gate holds for its aggregates. What the session layer
+    /// says as lines come and go. Remembered for a region not yet followed.
+    pub fn peer_behind(&mut self, region: RegionId, real: bool) {
+        if let Some(f) = self.followed[..self.followed_len]
+            .iter_mut()
+            .find(|f| f.region == region)
+        {
+            f.simulated = !real;
+        } else if self.followed_len < MAX_STREAMS {
+            self.followed[self.followed_len] = HeardCrowd {
+                region,
+                epoch: None,
+                simulated: !real,
+            };
+            self.followed_len += 1;
+        }
+    }
+
+    /// The epoch whose aggregate frame `next` needs, if it needs one: the
+    /// one due at or before it, once the lookahead has passed.
+    fn epoch_needed(next: u32) -> Option<u16> {
+        let (e, l) = (t::crowd_epoch(), t::crowd_lookahead());
+        next.checked_sub(l).map(|f| (f / e) as u16)
     }
 
     pub fn grid(&self) -> &Grid {
@@ -219,6 +354,27 @@ impl Ledger {
                 h.through = through;
             }
         }
+        // A followed stream with no peer behind it says, on the same clock,
+        // that nobody is there: an aggregate of nothing for every epoch its
+        // clock has reached.
+        let e = t::crowd_epoch();
+        let reached = (through / e) as u16;
+        for k in 0..self.followed_len {
+            let f = self.followed[k];
+            if !f.simulated {
+                continue;
+            }
+            let from = f.epoch.map_or(reached.saturating_sub(1), |have| have + 1);
+            let mut epoch = from;
+            while epoch <= reached {
+                self.offer(Aggregate {
+                    region: f.region,
+                    epoch,
+                    ..Aggregate::NONE
+                });
+                epoch += 1;
+            }
+        }
     }
 
     /// Whether frame `next` may be simulated: every region next to a live one
@@ -231,6 +387,20 @@ impl Ledger {
             .filter(|h| h.through < need)
             .min_by_key(|h| h.through)
             .copied();
+        // The crowd's gate: every stream the world follows has to have said
+        // its aggregate for the epoch frame `next` reads (0018, S1). A
+        // simulated stream has, by its own clock.
+        let crowd_lagging = Self::epoch_needed(next).and_then(|e| {
+            self.followed[..self.followed_len]
+                .iter()
+                .find(|f| f.epoch.is_none_or(|have| have < e))
+                .copied()
+        });
+        let lagging = lagging.or(crowd_lagging.map(|f| Heard {
+            region: f.region,
+            through: 0,
+            simulated: f.simulated,
+        }));
         match (lagging, self.held_since) {
             (Some(_), None) => {
                 self.held_since = Some(self.clock);
@@ -279,6 +449,8 @@ impl Ledger {
 
     fn restart(&mut self, now: &World) {
         self.tape.clear();
+        *self.crowd = [None; CROWD_TAPE];
+        self.followed_len = 0;
         self.confirmed = None;
         self.live_len = 0;
         self.heard_len = 0;
@@ -356,6 +528,51 @@ impl Ledger {
         }
         self.heard = next;
         self.heard_len = len;
+
+        // The crowd: what the world follows, and which of those this ledger
+        // speaks for (no live region, so no peer). And at an epoch's frame,
+        // every live region's aggregate, summed from this confirmed world --
+        // what a leader would send, offered here to the world's own field.
+        let mut followed = [HeardCrowd {
+            region: RegionId::default(),
+            epoch: None,
+            simulated: true,
+        }; MAX_STREAMS];
+        let mut followed_len = 0;
+        for s in world.crowd.streams.iter().filter(|s| s.on) {
+            let kept = self.followed[..self.followed_len]
+                .iter()
+                .find(|f| f.region == s.region)
+                .copied();
+            let live = self.live[..self.live_len]
+                .iter()
+                .any(|l| l.region == s.region);
+            // Spoken for unless somebody is behind it: a live region (this
+            // peer is), or a peer the session layer said has a line open.
+            let real = live || kept.is_some_and(|k| !k.simulated);
+            followed[followed_len] = HeardCrowd {
+                region: s.region,
+                epoch: kept.and_then(|k| k.epoch),
+                simulated: !real,
+            };
+            followed_len += 1;
+        }
+        self.followed = followed;
+        self.followed_len = followed_len;
+        let e = t::crowd_epoch();
+        if world.frame % e == 0 {
+            let epoch = (world.frame / e) as u16;
+            self.summed_len = 0;
+            for k in 0..self.live_len {
+                let region = self.live[k].region;
+                let a = world.aggregate(&grid, region, epoch);
+                self.offer(a);
+                if self.summed_len < MAX_LIVE {
+                    self.summed[self.summed_len] = a;
+                    self.summed_len += 1;
+                }
+            }
+        }
 
         if let Some(mut w) = self.watch.take() {
             w.confirm(&grid, world, &self.tape, self.live());

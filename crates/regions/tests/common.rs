@@ -45,7 +45,8 @@ impl Run {
             inputs[who] = bot.act(&self.world);
         }
         self.ledger.record(&self.world, inputs);
-        self.world.advance(inputs);
+        let (fed, n) = self.ledger.due(self.world.frame + 1);
+        self.world.advance_with(inputs, &fed[..n]);
         self.ledger.confirm_through(self.world.frame, &self.world);
         true
     }

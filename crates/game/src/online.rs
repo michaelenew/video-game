@@ -75,6 +75,11 @@ pub enum Driver {
         meter: Meter,
         /// How many play: two to four.
         players: usize,
+        /// Everybody's id in seat order, and the crowd post box: what a cell
+        /// leader's aggregates go out by and come in by (`net::cells`,
+        /// `net::crowd`).
+        roster: Vec<u64>,
+        post: net::crowd::Post,
     },
 }
 
@@ -374,6 +379,8 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
         net::Progress::Ready(seat) => {
             let handle = seat.handle;
             let players = seat.players;
+            let roster = seat.roster.clone();
+            let post = seat.post.clone();
             let Driver::Meeting { start, room, .. } =
                 std::mem::replace(&mut sim.driver, Driver::Local)
             else {
@@ -413,6 +420,8 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                             ..Meter::default()
                         },
                         players,
+                        roster,
+                        post,
                     }
                 }
                 Err(e) => Driver::Alone {
@@ -494,6 +503,8 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
         session,
         handle,
         desynced,
+        roster,
+        post,
         gone,
         quiet,
         meter,
@@ -535,6 +546,16 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
         return;
     }
 
+    // **The region gate**, online as locally: the next frame goes ahead only
+    // once every stream the world follows has said what it reads
+    // (`docs/design/regions.md`; the crowd field's lookahead, 0018 S1).
+    // GGRS is not asked for a frame the ledger would hold.
+    ledger.tick();
+    if !ledger.may_advance(cur.frame + 1) {
+        meter.now.stalls += 1;
+        return;
+    }
+
     if session
         .add_local_input(*handle, net::NetInput::from(local))
         .is_err()
@@ -567,11 +588,11 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
             // Every frame advanced goes on the tape by its frame number, so
             // a rollback's re-advance overwrites the prediction with what the
             // other player really pressed.
-            net::handle_requests_watched(cur, requests, |before, inputs, after| {
+            // Kept on the region ledger -- its tape, and the crowd field's
+            // due aggregates fed off it -- a re-advance overwriting its
+            // prediction the same way the replay's does.
+            net::handle_requests_kept(cur, requests, ledger, |before, inputs, after| {
                 tape.record(before.frame, inputs);
-                // And on the region ledger's tape, a re-advance overwriting
-                // its prediction the same way.
-                ledger.record(before, inputs);
                 // And sounded, the first time each frame is simulated.
                 scape.observe(before, after);
             });
@@ -581,6 +602,14 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
             if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
                 ledger.confirm_through(confirmed, cur);
             }
+            relay_the_crowd(
+                cur,
+                ledger,
+                post,
+                roster,
+                *handle,
+                &meter_peers(*players, *handle),
+            );
             meter.now.sim_us = meter.now.sim_us.max(began.elapsed().as_micros() as u32);
             *prev = was;
         }
@@ -609,5 +638,55 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
 pub fn drawn(sim: &mut crate::Sim, wall: std::time::Duration) {
     if let Driver::Online { meter, .. } = &mut sim.driver {
         meter.drawn(wall);
+    }
+}
+
+/// Every other seat: whom a leader may post to.
+fn meter_peers(players: usize, me: usize) -> Vec<usize> {
+    (0..players).filter(|h| *h != me).collect()
+}
+
+/// **A cell leader's duty, and a listener's** (`docs/design/exploration/0018`
+/// §5). At an epoch's frame the ledger summed every live region's aggregate;
+/// for each one this peer leads this epoch, post it to every other peer that
+/// leads a region next to it. And collect what the others posted -- two
+/// leaders agreeing, or one unchallenged for an epoch -- and offer it to the
+/// ledger, which feeds the field at the lookahead.
+///
+/// Whom to post to is read off the predicted world rather than a confirmed
+/// one: a wrong guess is a packet to the wrong peer, never a different
+/// simulation, and the gate holds for a stream that goes unheard.
+fn relay_the_crowd(
+    cur: &sim::World,
+    ledger: &mut regions::Ledger,
+    post: &net::crowd::Post,
+    roster: &[u64],
+    me: usize,
+    others: &[usize],
+) {
+    let grid = sim::region::Grid::tuned();
+    let epoch = (cur.frame / sim::tuning::crowd_epoch()) as u16;
+    let members: Vec<net::cells::Member> = roster
+        .iter()
+        .enumerate()
+        .map(|(seat, id)| net::cells::Member { seat, id: *id })
+        .collect();
+    for a in ledger.summed() {
+        if !net::cells::leads(cur, &grid, &members, a.region, epoch, me) {
+            continue;
+        }
+        for &other in others {
+            let leads_a_neighbour = a
+                .region
+                .neighbours()
+                .iter()
+                .any(|n| net::cells::leads(cur, &grid, &members, *n, epoch, other));
+            if leads_a_neighbour {
+                post.post(net::Peer::Line(other as u8), a);
+            }
+        }
+    }
+    for a in post.collect(cur.frame, sim::tuning::crowd_epoch()) {
+        ledger.offer(a);
     }
 }

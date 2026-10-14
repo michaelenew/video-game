@@ -787,6 +787,14 @@ scalars! {
     RegionOverlap,      "Regions",  "Checksum zone, reaches past its hexagon (m)", Fixed, 0,        fx(50,1);
     RegionSize,         "Regions",  "Hexagon size, centre to corner (m)",         Fixed,  fx(4,1),  fx(2000,1);
     RegionNeighbourLag, "Regions",  "Simulated neighbour, heartbeat lag",         Frames, 0,        120;
+    // **The crowd field** (`crate::crowd`, exploration 0018): how often a
+    // region's aggregate is summed, how late the world reads it, and how
+    // slowly what it reads moves. `tests/crowd.rs` holds `tau >= lookahead`.
+    CrowdEpoch,         "Crowds",   "Epoch, frames between aggregates",           Frames, 1,        600;
+    CrowdLookahead,     "Crowds",   "Lookahead, an aggregate read this late",     Frames, 0,        3600;
+    CrowdTau,           "Crowds",   "Crowd and flow, time constant (frames)",     Frames, 1,        3600;
+    CrowdHeatTau,       "Crowds",   "Heat, time constant (frames)",               Frames, 1,        3600;
+    CrowdHears,         "Crowds",   "A pack hears the valley fill at (fighters)", Fixed,  0,        fx(64,1);
     // **The Dual mage's spellbook**, 2026-10-12: the curse's cap and the
     // purge's curve, the root, the sigils, the litanies (since the hop after an auto), the twin stars, the
     // Shadowstep, the Veil, the Equinox's levelling, the majors' steeper

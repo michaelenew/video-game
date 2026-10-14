@@ -19,6 +19,7 @@ pub mod course;
 pub mod coursecheck;
 pub mod critcheck;
 pub mod critter;
+pub mod crowd;
 pub mod curve;
 pub mod debris;
 pub mod dual;

@@ -1457,6 +1457,14 @@ pub struct World {
     /// left it, a target for everybody, turned to face one way because their
     /// look on the wire had become zero.
     pub away: Fighters,
+    /// **The crowd field** (`crate::crowd`, exploration 0018): what the
+    /// world knows of the regions round the fighters' own, fed once an
+    /// epoch and read slowly. Which regions it follows is decided here, in
+    /// the step, from where the fighters stand -- so every peer follows the
+    /// same ones on the same frame. Hashed only when it has heard
+    /// something: a fight that has not hashes as it did before there was a
+    /// field.
+    pub crowd: crate::crowd::Field,
 }
 
 impl World {
@@ -1502,6 +1510,7 @@ impl World {
             seats: MAX_PLAYERS as u8,
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
+            crowd: crate::crowd::Field::NONE,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -2232,9 +2241,23 @@ impl World {
     /// after, so nothing in the frame -- a push, a fall, a respawn -- can
     /// bring it in.
     pub fn advance<const N: usize>(&mut self, wire: [Input; N]) {
+        self.advance_with(wire, &[]);
+    }
+
+    /// [`World::advance`], **fed this frame's due aggregates** of the crowd
+    /// field (`crate::crowd`): exactly those whose `Aggregate::due` is the
+    /// frame being made, in region order, from the session layer's tape of
+    /// them. A rollback re-feeds them the way it re-feeds inputs.
+    pub fn advance_with<const N: usize>(
+        &mut self,
+        wire: [Input; N],
+        due: &[crate::crowd::Aggregate],
+    ) {
         const { assert!(N >= 1 && N <= MAX_PLAYERS, "one to four inputs") };
         let mut all = [Input::default(); MAX_PLAYERS];
         all[..N].copy_from_slice(&wire);
+        self.follow_the_crowd();
+        self.crowd.feed(due);
         // Nobody in a seat, nothing from it: not a press, not a trip. A seat
         // whose player has left is the same, for as long as it is said.
         self.away = Fighters::EMPTY;
@@ -2257,6 +2280,37 @@ impl World {
         self.step(all);
         self.away = away;
         self.park_absent();
+    }
+
+    /// **Which regions the field follows**: the neighbours of every region
+    /// a present fighter stands in, as of this frame -- a function of the
+    /// world, so every peer follows the same streams. A region followed
+    /// last frame and not this one is forgotten.
+    fn follow_the_crowd(&mut self) {
+        let grid = crate::region::Grid::tuned();
+        let origin = self.map_origin();
+        let mut want = [None; crate::crowd::MAX_STREAMS];
+        let mut n = 0;
+        for i in 0..self.present() {
+            if !self.is_present(i) {
+                continue;
+            }
+            let home = grid.home(self.players[i].pos.add(origin));
+            for r in home.neighbours() {
+                if !want[..n].contains(&Some(r)) && n < want.len() {
+                    want[n] = Some(r);
+                    n += 1;
+                }
+            }
+        }
+        for s in self.crowd.streams.iter_mut() {
+            if s.on && !want[..n].contains(&Some(s.region)) {
+                *s = crate::crowd::Stream::NONE;
+            }
+        }
+        for r in want[..n].iter().flatten() {
+            self.crowd.follow(*r);
+        }
     }
 
     fn step(&mut self, wire: [Input; MAX_PLAYERS]) {
@@ -2429,6 +2483,10 @@ impl World {
                 critters: &nobody,
                 arena: here,
             };
+            // The crowd next door, by the field: what a calm pack hears.
+            let heard = self
+                .crowd
+                .crowd_around(crate::region::Grid::tuned().home(brain.home.add(self.map_origin())));
             pack::step(
                 &mut brain,
                 &mut self.critters,
@@ -2437,6 +2495,7 @@ impl World {
                     herd: &beasts,
                     scene: &scene,
                     frame: self.frame,
+                    heard,
                 },
             );
             self.pack = Some(brain);
@@ -3713,6 +3772,32 @@ impl World {
             for &w in self.away.words() {
                 h.write_u32(w);
             }
+        }
+        // The crowd field, only the streams that have heard something: a
+        // fight next to nobody hashes as it did before there was a field.
+        for s in self
+            .crowd
+            .streams
+            .iter()
+            .filter(|s| s.on && s.last != crate::crowd::Aggregate::NONE)
+        {
+            h.write_u32(0xC20D);
+            h.write_u32(s.region.word());
+            let a = &s.last;
+            h.write_u32(a.epoch as u32 | (a.fighters as u32) << 16);
+            h.write_u32(a.middle[0] as u16 as u32 | (a.middle[1] as u16 as u32) << 16);
+            h.write_u32(u32::from_le_bytes([
+                a.drift[0] as u8,
+                a.drift[1] as u8,
+                a.creatures,
+                0,
+            ]));
+            h.write_u32(a.hurt as u32);
+            h.write_u32(a.doors);
+            h.write_i32(s.crowd.raw());
+            h.write_i32(s.heat.raw());
+            h.write_i32(s.flow[0].raw());
+            h.write_i32(s.flow[1].raw());
         }
         // A course's runs, only in a course: every other fight hashes exactly
         // as it did before there were any.

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 606] = [
+pub const SCALARS: [i32; 611] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -442,6 +442,11 @@ pub const SCALARS: [i32; 606] = [
           262144, // regions.checksum_zone,_reaches_past_its_hexagon_(m) = 4
          6291456, // regions.hexagon_size,_centre_to_corner_(m) = 96
                2, // regions.simulated_neighbour,_heartbeat_lag = 2
+              60, // crowds.epoch,_frames_between_aggregates = 60
+             210, // crowds.lookahead,_an_aggregate_read_this_late = 210
+             240, // crowds.crowd_and_flow,_time_constant_(frames) = 240
+             600, // crowds.heat,_time_constant_(frames) = 600
+          196608, // crowds.a_pack_hears_the_valley_fill_at_(fighters) = 3
            19661, // dual_mage.purge,_extra_per_stack_(x) = 0.3
                3, // dual_mage.purge,_staggers_from_(stacks) = 3
                5, // dual_mage.curse,_most_stacks = 5

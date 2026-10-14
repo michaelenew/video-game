@@ -908,6 +908,10 @@ pub struct World<'a> {
     pub herd: &'a Herd,
     pub scene: &'a crate::aim::Scene<'a>,
     pub frame: u32,
+    /// **The crowd next door**, by the crowd field (`crate::crowd`): how
+    /// many fighters the regions round the pack's home are said to hold,
+    /// read slowly and late. Zero in any fight with nobody next door.
+    pub heard: Fx,
 }
 
 /// One frame of the pack: glance, mood, decisions, steering, physics.
@@ -958,7 +962,13 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
                     .iter()
                     .any(|s| s.alive && s.pos.sub(c.pos).flat_len().raw() <= alarm.raw())
             });
-            if near || alarm.raw() == 0 {
+            // **It hears the valley fill** (0018 §4): a crowd gathering in
+            // the regions next door, by the field, is an alarm too -- the
+            // slow kind, seconds late by construction, which is what makes
+            // it free of every hop it came over.
+            let hears = t::crowd_hears();
+            let heard = hears.raw() > 0 && w.heard.raw() >= hears.raw();
+            if near || alarm.raw() == 0 || heard {
                 pack.mood = mood::HUNTING;
             }
         }

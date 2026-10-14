@@ -180,6 +180,62 @@ the one body whose future depends on an input the peer lacks; the rest are
 functions of fighters and frames, and carrying them is the next step, with
 the stable ids 0005's list asks for.
 
+## The crowd field, and the cells that carry it (2026-10-14)
+
+Layer two, as [exploration/0018](exploration/0018_crowds.md) argues it, and
+as built the same day:
+
+- **`sim::crowd`.** Once an epoch (`Crowds, epoch`: 60 frames) a region's
+  confirmed state is summed into a 22-byte `Aggregate` (fighters, their
+  middle and drift, how hurt, creatures, doors), associative under
+  `Aggregate::sum`. The world keeps a `Field` of the streams it follows --
+  the neighbours of every present fighter's region, decided in the step so
+  every peer follows the same -- each a last accepted aggregate and the slow
+  quantities filtered from it (`crowd`, `heat`, `flow`, time constants
+  `Crowds, crowd and flow` 240 frames and `heat` 600). **Aggregates are fed,
+  not kept**: `World::advance_with(inputs, due)` takes the frame's due
+  aggregates beside its inputs, from the ledger's tape of them, and an
+  aggregate of epoch `e` is due at frame `e·E + L` (`Crowds, lookahead`: 210
+  frames) and never earlier. The field is in the checksum once it has heard
+  anything, and a world that has heard nothing hashes as it did.
+- **The ledger** keeps the aggregates offered to it until they are due,
+  feeds them, speaks for a followed stream nobody is behind (an aggregate of
+  nothing, on its simulated clock), sums every live region's aggregate at
+  each epoch's frame (what a leader posts), and **holds the gate** for a
+  stream with a peer behind it (`Ledger::peer_behind`) until the aggregate
+  the next frame reads has come.
+- **The first reader**: a calm pack **hears the valley fill next door**
+  (`Crowds, a pack hears`: three fighters by the field, in the regions round
+  its home, never its own) and takes it as an alarm. Inert in every pinned
+  fight, which has nobody next door.
+- **`net::cells`**: a cell is a region's membership, read off the world; its
+  three leaders this epoch are the lowest `hash(id, region, epoch)`, so no
+  election and no message decides it, and a member gone is gone from the
+  list on the same frame everywhere. Super-regions are hexagons of seven on
+  the lattice `(2, 1), (-1, 3)`, every region within a step of exactly one
+  centre; their aggregate is the sum of their children's.
+- **`net::crowd`**: a leader's aggregate rides the match's own lines, tagged
+  so GGRS would drop it, into a post box the mesh shares with the game; a
+  receiver believes it when two leaders agree or one stands unchallenged for
+  an epoch, and believes neither of two at odds. The game's online driver
+  posts what it leads to the leaders next door and offers what it collects.
+
+**The experiments** (`crates/regions/tests/crowd.rs`, `net/tests/meet.rs`):
+two peers handed the same aggregates at different times -- one at the
+epoch, one after a random trip up to the whole lookahead -- agree bit for
+bit at every frame, and the herd on both hears the crowd on the same frame;
+a stream with a silent peer behind it holds the gate at exactly the frame
+that would read it, and the aggregate releases it; `τ ≥ L` holds at the
+Oven and a value read `L` late is within `L/τ` of range; four on the mesh
+post as leaders and collect in agreement with no disputes, following the
+same streams.
+
+**What is not yet true**: every peer in a session still simulates the whole
+world, so a region with anybody in it is live on every ledger and the wire's
+aggregates duplicate the ledger's own. The transport, the agreement and the
+gate are exercised; they *matter* once a peer runs only its regions, which
+is `regions::session` on the wire -- the next step, and the big one.
+
 ## Wire
 
 Nothing changes on the wire in this step. GGRS already compares whole-world

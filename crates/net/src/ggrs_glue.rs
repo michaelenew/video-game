@@ -76,6 +76,42 @@ pub fn handle_requests_watched(
     requests: Vec<GgrsRequest<SessionConfig>>,
     mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
 ) {
+    advance_each(world, requests, |world, inputs| {
+        // A flat copy, like every snapshot the session saves: no heap.
+        let before = world.clone();
+        world.advance(inputs);
+        watch(&before, inputs, world);
+    });
+}
+
+/// [`handle_requests_watched`], **kept on the region ledger**: every frame
+/// made goes on its tape, and is fed the crowd field's aggregates due at it
+/// (`sim::crowd`, `regions::Ledger::due`) -- re-recorded and re-fed on a
+/// rollback's re-advance the way inputs are. What the game's online driver
+/// calls.
+pub fn handle_requests_kept(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    ledger: &mut regions::Ledger,
+    mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
+) {
+    advance_each(world, requests, |world, inputs| {
+        let before = world.clone();
+        ledger.record(&before, inputs);
+        let (fed, n) = ledger.due(world.frame.wrapping_add(1));
+        world.advance_with(inputs, &fed[..n]);
+        watch(&before, inputs, world);
+    });
+}
+
+/// The one loop under both: GGRS's saves and loads, and `advance(world,
+/// inputs)` for every frame it asks made, with the inputs as the simulation
+/// reads them (a disconnected seat's as a departure).
+fn advance_each(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    mut advance: impl FnMut(&mut World, [Input; MAX_PLAYERS]),
+) {
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
@@ -103,10 +139,7 @@ pub fn handle_requests_watched(
                         _ => (*input).into(),
                     };
                 }
-                // A flat copy, like every snapshot the session saves: no heap.
-                let before = world.clone();
-                world.advance(frame_inputs);
-                watch(&before, frame_inputs, world);
+                advance(world, frame_inputs);
             }
         }
     }

@@ -11,6 +11,8 @@ use sim::{Input, World};
 
 #[cfg(target_arch = "wasm32")]
 pub mod browser;
+pub mod cells;
+pub mod crowd;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod direct;
 pub mod ggrs_glue;
@@ -25,7 +27,9 @@ pub mod seal;
 /// Re-exported so the front end never depends on GGRS directly. Networking is
 /// this crate's business.
 pub use ggrs;
-pub use ggrs_glue::{NetInput, SessionConfig, handle_requests, handle_requests_watched};
+pub use ggrs_glue::{
+    NetInput, SessionConfig, handle_requests, handle_requests_kept, handle_requests_watched,
+};
 pub use meet::{Mesh, Progress, Rendezvous, Seat};
 
 /// The far end of a match, as GGRS addresses it.
