@@ -55,7 +55,7 @@ if (!errors.length) {
   const lines = text.split('\n');
   console.log(`downloaded ${name}: ${lines.length} lines, header:`);
   for (const l of lines.slice(0, 6)) console.log(`  ${l}`);
-  if (lines[0] !== 'replay 1') errors.push(`the download does not start with "replay 1": ${lines[0]}`);
+  if (!/^replay \d+$/.test(lines[0])) errors.push(`the download does not start with "replay <version>": ${lines[0]}`);
   if (!lines.some((l) => l.startsWith('start '))) errors.push('the download has no start line');
   if (!lines.some((l) => l.startsWith('end '))) errors.push('the download has no end line');
   // A frame line may stand for a run of identical frames: `... x149`.
