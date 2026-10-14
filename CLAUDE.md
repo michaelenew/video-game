@@ -53,6 +53,9 @@ the look direction, so it belongs with the rest of them — the alternative is a
 angle worked out beside the ability, which is the mistake below wearing a hat.
 `aim::pointing_at_disc` asks the same of a disc on the floor, which is the Blood mage's blink
 asking about one of her pools; a puddle is not a body's column, so it gets its own shape.
+`aim::column_on_sight` asks which of several standing columns the crosshair's ray passes
+through first, in front of what it meets: her spikes asking which stain they were aimed
+through, so a stain is aimed at by its height rather than its disc (2026-10-14).
 `aim::clear_between` answers *is there any straight line from this body to that
 one*, which the same dodge asks second: the dash crosses to wherever the shadow
 is unless nothing reaches it. It is ray-against-shape work in service of a

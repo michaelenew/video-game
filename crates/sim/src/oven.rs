@@ -906,6 +906,7 @@ scalars! {
     CascadeLeast, "Blood mage", "Crimson cascade, smallest pool it spills", Int, 1, 200;
     CascadeTrack, "Blood mage", "Crimson cascade, reaches for stains within (m)", Fixed, 0, fx(30,1);
     CascadePower, "Blood mage", "Crimson cascade, an eruption per full stain (x)", Fixed, fx(1,10), fx(4,1);
+    FinisherRepays, "Blood mage", "Finisher, pays back her spent grey per point dealt (%)", Int, 0, 400;
     SpikeSpreadMost, "Blood mage", "Black spike, widest ring at a full hold (m)", Fixed, 0, fx(10,1);
     SpikesMost, "Blood mage", "Black spike, spikes at a full hold", Int, 1, 7;
     GolemSelfHurt, "Blood mage", "Golem, hurts itself per blow dealt (x)", Fixed, 0, fx(2,1);

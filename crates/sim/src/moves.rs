@@ -1383,6 +1383,12 @@ pub mod blood {
         }
     }
 
+    /// Does this move's crosshair find her pools by their standing column
+    /// (`aim::column_on_sight`)? The spikes: everything that erupts a pool.
+    pub const fn seeks_pools(kind: u8) -> bool {
+        matches!(kind, BLACK_SPIKE | STAKE | UPHEAVAL | CASCADE)
+    }
+
     /// Which finisher this held move becomes, held to its end.
     pub const fn finisher_of(kind: u8) -> Option<u8> {
         match kind {

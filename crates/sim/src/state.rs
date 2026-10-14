@@ -696,6 +696,11 @@ pub struct Player {
     /// had when it began, held from the frame the hold ran out to the frame
     /// it lands. Nought otherwise.
     pub fuel: u16,
+    /// **What a finisher owes her** (2026-10-14): the grey it burned when it
+    /// began, paid back into red as the finisher lands
+    /// (`tuning::finisher_repays`, by way of `Player::heal`). Nought once it
+    /// is repaid; replaced by the next finisher's.
+    pub owed: u16,
     /// **The Dual mage's curse on this body** (2026-10-12): how many stacks
     /// and whose, packed as `dual::stacks` and `dual::cursed_by` read it, and
     /// the clock until the next stack fades. Her light purges it -- see
@@ -1073,10 +1078,18 @@ impl Player {
     }
 
     pub fn heal(&mut self, amount: i32) {
+        // **The Blood mage is healed only out of what a finisher owes her**
+        // (`Player::owed`): her finishers' hits are the one leech she has,
+        // and they can give back what the finisher burned and no more.
+        let amount = if self.class.wounds_go_grey() {
+            let took = amount.min(self.owed as i32).max(0);
+            self.owed -= took as u16;
+            took
+        } else {
+            amount
+        };
         // Never above the bar, and never into the grey: a heal from anywhere
-        // but a pool cannot close a wound this class has open. Nothing heals
-        // her that way any more, and this is what keeps that true if something
-        // shared tries.
+        // but a pool cannot close a wound this class has open.
         if amount > 0 && self.health > 0 {
             self.health = (self.health + amount).min(self.full_health() - self.grey);
         }
@@ -1344,6 +1357,7 @@ impl Default for Player {
             paid: 0,
             grey_rest: 0,
             fuel: 0,
+            owed: 0,
             curse: 0,
             curse_clock: 0,
             breaking: NO_STONE,
@@ -3588,6 +3602,7 @@ impl World {
                 p.paid as i32,
                 p.grey_rest as i32,
                 p.fuel as i32,
+                p.owed as i32,
             ];
             if blaster.iter().any(|v| *v != 0) {
                 for v in blaster {
@@ -8725,6 +8740,7 @@ fn step_channel(
     if held >= cap && input.has(channel_button(p.class, kind)) {
         if let Some(big) = moves::blood::finisher_of(kind).filter(|_| p.class == Class::BloodMage) {
             p.fuel = (p.grey + p.well as i32).clamp(0, u16::MAX as i32) as u16;
+            p.owed = p.grey.clamp(0, u16::MAX as i32) as u16;
             p.grey = 0;
             p.grey_rest = 0;
             p.well = 0;
@@ -9081,6 +9097,27 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
             aim::racing_path(from, who, input, reach, scene)
         }
     };
+    // **A spike aimed through one of her pools goes to the pool**
+    // (2026-10-14): it stands a body's height at most, and the crosshair on
+    // that column is the crosshair on it (`aim::column_on_sight`), with the
+    // blink's slack (`tuning::pool_lock`) above it.
+    if p.class == Class::BloodMage && moves::blood::seeks_pools(kind) {
+        let columns = scene
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.is_a_pool() && e.owner == who as u8)
+            .map(|e| {
+                (
+                    e.pos,
+                    e.pool_radius().add(t::body_radius()),
+                    e.pool_height().add(t::pool_lock()),
+                )
+            });
+        if let Some(to) = aim::column_on_sight(who, input, reach, columns, scene) {
+            p.aim_path.to = to;
+        }
+    }
 }
 
 /// Where the stone the Elementalist is holding churning stands, if she is.
@@ -11217,12 +11254,17 @@ impl World {
                         }
                         effect.take_hit(0, i);
                         let blow = Fx::from_int(m.damage).mul(spike_share(effect)).to_int();
-                        self.cut(i, effect, effect.pos, blow);
+                        let dealt = self.cut(i, effect, effect.pos, blow);
                         self.players[i].slow(t::slow_frames(), t::spike_slow());
+                        let owed = effect.leeched(dealt);
+                        self.players[effect.owner as usize].heal(owed);
                     }
                     let share = spike_share(effect);
-                    self.gore_each(effect, 0, effect.pos, volume.radius, share);
-                    self.gore_critters(effect, effect.pos, volume.radius, share);
+                    let each = self.gore_each(effect, 0, effect.pos, volume.radius, share);
+                    let dealt = each.iter().sum::<i32>()
+                        + self.gore_critters(effect, effect.pos, volume.radius, share);
+                    let owed = effect.leeched(dealt);
+                    self.players[effect.owner as usize].heal(owed);
                 }
             }
 
@@ -14950,6 +14992,7 @@ impl World {
                 vines.take_hit(0, j);
                 let dealt = self.players[j].wound(vines.banked);
                 self.spill(vines.owner, vines.class, vines.slot, q.pos, dealt);
+                self.players[vines.owner as usize].heal(vines.leeched(dealt));
                 self.players[j].bleed(vines.owner, t::bleed_lasts());
             }
             if tick {
@@ -14962,9 +15005,11 @@ impl World {
         let m = vines.source();
         if growing && vines.age == t::vines_grow().max(2) / 2 {
             let share = Fx::ratio(vines.banked, m.damage.max(1));
-            self.gore_each(vines, 0, vines.pos, vines.reach, share);
+            let each = self.gore_each(vines, 0, vines.pos, vines.reach, share);
             vines.forget_hits();
-            self.gore_critters(vines, vines.pos, vines.reach, share);
+            let dealt =
+                each.iter().sum::<i32>() + self.gore_critters(vines, vines.pos, vines.reach, share);
+            self.players[vines.owner as usize].heal(vines.leeched(dealt));
         }
         if tick {
             for slot in 0..crate::monster::MAX_MONSTERS {
@@ -15641,6 +15686,9 @@ impl World {
             return;
         }
         let dealt = self.bite_for(th, who, at, owner, x);
+        if owner < MAX_PLAYERS {
+            self.players[owner].heal(th.leeched(dealt));
+        }
         if golem {
             th.banked -= Fx::from_int(dealt).mul(t::golem_self_hurt()).to_int();
         } else if dealt > 0 {

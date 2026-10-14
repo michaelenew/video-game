@@ -231,7 +231,7 @@ fn a_longer_hold_raises_more_spikes_up_to_seven() {
         let mut w = mage();
         w.players[1].pos = at(40.0, 0.0, 8.0);
         hold(&mut w, keys::YOUR_BLOOD, frames.max(1));
-        run(&mut w, 40, 0);
+        run(&mut w, 22, 0);
         effects_of(&w, EffectKind::BlackSpike).len()
     };
     let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
@@ -247,6 +247,47 @@ fn a_longer_hold_raises_more_spikes_up_to_seven() {
 }
 
 #[test]
+fn a_spike_aimed_through_a_stain_standing_goes_to_it() {
+    // Where a tapped spike lands on bare floor, looking a little down.
+    let pitch = -1000;
+    let mut probe = mage();
+    probe.players[1].pos = at(40.0, 0.0, 8.0);
+    step_looking(&mut probe, keys::YOUR_BLOOD, pitch);
+    run(&mut probe, 22, 0);
+    let floor = effects_of(&probe, EffectKind::BlackSpike)[0].pos;
+    // A stain well short of it on the same line: the crosshair is on the
+    // floor behind it and passes over its disc, through its column.
+    let mut w = mage();
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    let me = w.players[0].pos;
+    let short = V3::new(
+        me.x.add(floor.x.sub(me.x).mul(Fx::ratio(3, 5))),
+        floor.y,
+        me.z.add(floor.z.sub(me.z).mul(Fx::ratio(3, 5))),
+    );
+    assert!(
+        short.sub(floor).flat_len().raw() > metres(2.5).raw(),
+        "the stain is not on the floor the crosshair is on"
+    );
+    stain(&mut w, short, 80);
+    for e in w.effects.iter_mut().flatten() {
+        e.age = t::stain_settles() + 1;
+    }
+    step_looking(&mut w, keys::YOUR_BLOOD, pitch);
+    let mut erupted = false;
+    for _ in 0..22 {
+        step(&mut w, 0);
+        erupted |= effects_of(&w, EffectKind::BlackSpike)
+            .iter()
+            .any(|e| e.erupted() && e.pos.sub(short).flat_len().raw() < metres(0.5).raw());
+    }
+    assert!(
+        erupted,
+        "the spike went to the stain the crosshair passed through"
+    );
+}
+
+#[test]
 fn a_chain_of_stains_erupts_link_by_link_not_all_at_once() {
     let mut w = mage();
     w.players[1].pos = at(40.0, 0.0, 8.0);
@@ -255,7 +296,7 @@ fn a_chain_of_stains_erupts_link_by_link_not_all_at_once() {
     for pitch in PITCHES {
         let mut trial = w.clone();
         step_looking(&mut trial, keys::YOUR_BLOOD, pitch);
-        run(&mut trial, 40, 0);
+        run(&mut trial, 22, 0);
         if let Some(s) = effects_of(&trial, EffectKind::BlackSpike).first() {
             spike_at = Some(s.pos);
             aimed = pitch;
@@ -984,6 +1025,43 @@ fn the_vines_bleed_and_slow_and_more_grey_hits_harder() {
     );
 }
 
+/// Her red as the vines, grown from 300 grey, began, what they owed her,
+/// and her red after they have stood 40 frames -- with him standing in
+/// them, or not.
+fn red_after_the_vines(on_him: bool) -> (i32, i32, i32) {
+    let mut w = greyed(300);
+    let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
+    let cap = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE).channel as u32;
+    hold(&mut w, keys::MY_BLOOD, start + cap + 3);
+    run(&mut w, 2, 0);
+    let began = w.players[0].health;
+    let owed = w.players[0].owed as i32;
+    let v = effects_of(&w, EffectKind::Vines)[0];
+    for _ in 0..40 {
+        if on_him {
+            w.players[1].pos = v.pos;
+        }
+        step(&mut w, 0);
+    }
+    (began, owed, w.players[0].health)
+}
+
+#[test]
+fn a_finisher_that_lands_pays_back_the_grey_it_burned() {
+    let (began, owed, landed) = red_after_the_vines(true);
+    assert!(owed >= 300, "they owe her all the grey they burned: {owed}");
+    assert!(
+        landed > began,
+        "the vines landed and paid her: {began} to {landed}"
+    );
+    assert!(
+        landed <= began + owed,
+        "never more than they burned: {landed}"
+    );
+    let (began, _, whiffed) = red_after_the_vines(false);
+    assert_eq!(whiffed, began, "a finisher that misses pays nothing back");
+}
+
 #[test]
 fn the_carpet_held_to_its_end_is_a_golem_of_her_grey_and_its_stains() {
     let mut w = greyed(300);
@@ -1099,6 +1177,35 @@ fn cascade_blood(grey: i32) -> i32 {
 }
 
 #[test]
+fn the_cascade_pays_back_what_it_burned_as_it_lands() {
+    let mut w = greyed(300);
+    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
+    hold(&mut w, keys::YOUR_BLOOD, cap + 3);
+    let began = w.players[0].health;
+    let owed = w.players[0].owed as i32;
+    assert!(owed >= 300, "owed: {owed}");
+    // Where the impact comes up, he stands, and stays.
+    let mut him = None;
+    for _ in 0..120 {
+        if him.is_none() {
+            him = effects_of(&w, EffectKind::BlackSpike)
+                .first()
+                .map(|e| e.pos);
+        }
+        if let Some(spot) = him {
+            w.players[1].pos = spot;
+        }
+        step(&mut w, 0);
+    }
+    let red = w.players[0].health;
+    assert!(
+        red > began,
+        "the cascade landed and paid her: {began} to {red}"
+    );
+    assert!(red <= began + owed, "never more than it burned: {red}");
+}
+
+#[test]
 fn more_grey_is_a_bigger_cascade() {
     let little = cascade_blood(60);
     let lots = cascade_blood(500);
@@ -1115,7 +1222,7 @@ fn the_cascade_reaches_for_her_stains_however_small() {
     // Where the impact will land: aim as the hold will.
     let mut probe = w.clone();
     hold(&mut probe, keys::YOUR_BLOOD, cap + 3);
-    run(&mut probe, 40, 0);
+    run(&mut probe, 22, 0);
     let centre = pools(&probe)
         .iter()
         .filter(|p| p.slot == b::CASCADE)
@@ -1154,7 +1261,7 @@ fn a_held_spike_lands_on_her_stains_first() {
     let mut probe = w.clone();
     let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
     hold(&mut probe, keys::YOUR_BLOOD, cap - 2);
-    run(&mut probe, 40, 0);
+    run(&mut probe, 22, 0);
     let spikes = effects_of(&probe, EffectKind::BlackSpike);
     let mean = spikes
         .iter()
@@ -1194,7 +1301,7 @@ fn a_dodge_with_no_stain_under_the_crosshair_is_only_a_dodge() {
     let mut w = mage();
     let from = w.players[0].pos;
     step_looking(&mut w, Input::SHIFT | Input::W, -2500);
-    run(&mut w, 40, 0);
+    run(&mut w, 22, 0);
     assert!(pools(&w).is_empty(), "no blood thrown");
     let went = w.players[0].pos.sub(from).flat_len();
     assert!(went.raw() < metres(6.0).raw(), "no blink: {}", as_f(went));
