@@ -644,7 +644,7 @@ fn hits(w: &mut World, m: &Monster, c: &mut leg::Channel) {
             continue;
         }
         let p = w.players[who];
-        if p.health <= 0 || p.aboard() || p.action.invulnerable() || p.action.stunned() {
+        if p.health <= 0 || p.aboard() || p.untouchable() || p.action.stunned() {
             continue;
         }
         if p.pos.y.raw() > a.hit_high.raw() {

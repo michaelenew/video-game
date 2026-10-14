@@ -666,24 +666,24 @@ fn the_two_autos_leave_from_the_arm_that_throws_them() {
     // where a hitbox is; this is the only place the two meet.
     //
     // It is the arm that *reaches* rather than where the hand ends up, and the
-    // difference matters: both of these are thrusts, and a thrust at full
-    // extension puts the hand near the body's own centre line whichever
-    // shoulder it left. What says which arm threw it is which one is out.
+    // difference matters: a thrust at full extension puts the hand near the
+    // body's own centre line whichever shoulder it left, and a whip puts it
+    // out to the side. What says which arm threw it is which one is out.
     use sim::aim::Hand;
     use sim::moves::dual;
     let s = skeleton::skeleton_for(sim::Class::DualMage);
-    // Since 2026-10-09 the arms are the autos': the Shade bolt leaves the
-    // left hand and the Sunray the right, and every other spell in a column
-    // leaves the same hand as its auto (`moves::hand`).
+    // The arms are her autos again since the second pass of 2026-10-12: the
+    // dark wing leaves the left hand and the light wing the right, and every
+    // other spell in a column leaves the same hand (`moves::hand`).
     for (slot, clip, button, name) in [
         (
-            dual::SUNRAY,
+            dual::LIGHT_AUTO,
             view::Clip::DualLight,
             dual::keys::LIGHT,
             "light",
         ),
         (
-            dual::SHADE_BOLT,
+            dual::DARK_AUTO,
             view::Clip::DualDark,
             dual::keys::DARK,
             "dark",
@@ -692,8 +692,13 @@ fn the_two_autos_leave_from_the_arm_that_throws_them() {
         // Which arm the clip puts out in front on the frame the volume appears.
         let (_, contact, _) = clip.phases().expect("an attack clip");
         let skin = skeleton::solve(&s, &clip.at(contact as u32));
+        // How far the hand is out from her middle, level -- forward for a
+        // thrust, to the side for the lash, which since 2026-10-12 is a whip
+        // across her front rather than a punch.
+        let root = view::into_world(skin.origin[0], [0.0, 0.0, 0.0], [1.0, 0.0]);
         let forward = |joint: Joint| {
-            view::into_world(skin.origin[joint.index()], [0.0, 0.0, 0.0], [1.0, 0.0])[0]
+            let at = view::into_world(skin.origin[joint.index()], [0.0, 0.0, 0.0], [1.0, 0.0]);
+            ((at[0] - root[0]).powi(2) + (at[2] - root[2]).powi(2)).sqrt()
         };
         let (out_l, out_r) = (
             forward(view::hand_joint(true)),
@@ -718,7 +723,9 @@ fn the_two_autos_leave_from_the_arm_that_throws_them() {
         // And the simulation really does start the line off the centre line,
         // on that side, when middle click throws this form.
         let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
+        // A tap: pressed and let go, or it is the long hold (2026-10-13).
         w.advance([sim::Input::aimed(button, 0), sim::Input::new(0)]);
+        w.advance([sim::Input::aimed(0, 0), sim::Input::new(0)]);
         assert_eq!(
             w.players[0].action.attack_kind(),
             Some(slot),

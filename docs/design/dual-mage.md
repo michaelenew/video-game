@@ -41,7 +41,10 @@ Nothing is signed; there is no centre.
   spell by more, a major by a lot — and the middle-click spells raise **both** by an auto's
   step, so they never widen the gap. The force she carries is the last one-sided spell she
   threw. (Before that, only the autos had a side and every cast took the carried force; the
-  table below is the new rule.)
+  table below is the new rule.) *Her spellbook of 2026-10-12*
+  ([exploration/0015](exploration/0015_dual_mage_spellbook.md)) kept the rule and named new
+  spells: the first two links of each litany are the autos, the third and the air and takeoff
+  spells the casts, and Equinox also levels her by 12.
 - **The struggle.** Every frame the two bars are compared. Inside a **band** around equal,
   nothing moves on its own. Outside it, **the higher bar rises and the lower falls**, at a
   rate that grows with how far outside the band they are, up to a cap. That is the hill: a
@@ -50,29 +53,45 @@ Nothing is signed; there is no centre.
   it — with no input the two together can only fall.
 - **The burn.** Health drains at a rate that grows with the same excess, capped, and never
   past one health. There is no burn inside the band, however high both bars are.
-- **Calm.** Both bars fall slowly on their own, always. A mage who stops goading settles
-  toward empty. This is what makes a tier something she *holds* by fighting rather than a
-  level she reached.
+- **Calm -- off since 2026-10-14.** Both bars used to fall slowly on their own, always, so a
+  tier was something she held by fighting. The owner took it out: the bars stay where she put
+  them, and the only way down before overflowing is to cash out with `Q` or `E` (the majors).
+  `meter_calm` is still the knob, at 0.
+
+**The mouse fills, `F` and `R` vent, majors spend** (2026-10-12 and 13, from the owner after playing the wing
+autos; [exploration/0016](exploration/0016_dual_mage_controls.md)). The autos are how she
+builds; a spell lets some of it out; a major lets all of one bar out, and is worth what it let
+out. Staying level and just under ascension is the balanced game, and it is a rhythm of the two.
 
 | Input | Which bar | How far |
 | --- | --- | --- |
-| Shade bolt (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
-| Sunray (`R`) | Light, and she is now light | 5 |
-| Any other left- or right-click spell | Its own force | `tuning::meter_cast_push` — 9 |
-| Abyss (`Q`) / Judgement (`E`) | Dark / Light | `tuning::meter_finisher_push` — 20 |
-| A middle-click spell | Both | 5 each |
+| The dark ball (`L`, tapped) | Dark, and she is now dark | `tuning::meter_auto_push` — **+6** |
+| The light ball (`R`, tapped) | Light, and she is now light | +6 |
+| A takeoff — the Veil, Sanctuary (space + click) | Its own force | +6: a jump attack builds, as an auto does |
+| A middle-click move — Binary, Phase, the Equinox | Both | +6 each; the Equinox then moves 12 from the higher to the lower |
+| A spell — the Devour (`F`), the Smite (`R` key), and the unbound four | Its own force | `tuning::meter_cast_push` — **−9** |
+| A long hold — Chain lightning (`L` held), the Disk ray (right click held) | Its own force | `tuning::hold_fills` — **+10** (−20 on 2026-10-12, before the owner asked for the mouse to fill) |
+| The Flurry dash (middle click held) | Both | +10 each |
+| The Abyss (`Q`) / Judgement (`E`) | Dark / Light | `tuning::meter_finisher_push` — **the whole bar** (100) |
 
 All of it **on the press**, whether or not it connects — see "Autos are the steering wheel"
-below. The band is measured against the pushes and the climb against the calm, so the four move
-together: the first pass was 8, 18 and 38 against a band of 30, and it read as spells that fed
-the bars too much.
+below — and what a cast is worth is read *before* it moves anything (`Player::thrown_at`), so a
+major thrown from a full bar is a full bar's major even though it leaves the bar empty.
+
+**A major is the way out of a runaway.** The runaway is the high bar climbing while the low one
+drains, so spending the high one brings her back down near level. Thrown from level it is the
+opposite: the other bar is now ahead, and the answer is the other major — the Abyss and
+Judgement in turn are the spectacle *and* the reset — or the spent hand's wings, more slowly.
+
+Before 2026-10-12 everything filled: 5 an auto, 9 a cast, 20 a major. The first pass was 8, 18
+and 38 against a band of 30, and it read as spells that fed the bars too much.
 
 | The hill | Knob | First value | Chosen against |
 | --- | --- | --- | --- |
 | Band | `meter_band` | 16 | Benchmark B8: one cast from level stays inside, two leave, the finisher always leaves, and the alternating rhythm — auto and cast on one side, then the other — never leaves. So at least an auto plus a cast and less than two casts: 14 to 18 |
 | Drift | `drift_gain` / `drift_cap` | 1 per second per unit outside the band, at most 3 per second | B6: uncorrected, a Judgement from level empties the lower bar in eight to twelve seconds; answered by the far-side hand, it is back inside within an exchange; far-side autos alone hold or claw back. Was 2 and 10, which read as bars draining too fast |
 | Burn | `burn_gain` / `burn_cap` | 4 health per second per unit, at most 25 per second | B7: ignoring a runaway for ten seconds costs about a Judgement's worth; fully one-sided for half a round costs half to four fifths of a bar. Was 1.5 and 15, which read as a footnote |
-| Calm | `meter_calm` | 2 per second | B4 and B5: the climb and the idle fall below. Was 6 |
+| Calm | `meter_calm` | 0 per second | Off from 2026-10-14 (the owner: no passive drain). Was 2, and 6 before that |
 
 Three quantities fall out, and each is read by something different:
 
@@ -95,15 +114,15 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 
 | | The player does | What happens | Measured |
 | --- | --- | --- | --- |
-| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two and a quarter health bars, the last quarter being the six seconds of ascension the climb reaches near the end. Against a person a third lands, which is one kill a round from the sustained game | 2.20 bars |
-| **B2** | One dark auto, then dark casts only, a Judgement every time it is up, on a target standing in all of it | The biggest number the class makes: two to three and a half bars, and it costs her at least half of her own | 2.24 bars dealt, 0.64 lost |
-| **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | 25%; 9% |
-| **B4** | Alternates cleanly from empty | The blink in ten to fourteen seconds, the second jump in sixteen to twenty-one, the wings in twenty to twenty-six — once a round, with commitment | 10.9 s, 16.8 s, 21.2 s |
-| **B5** | Stops at three quarters | The second jump is gone within an exchange; the blink is kept for at least two and gone inside seven | 6.8 exchanges |
-| **B6** | Throws a Judgement from level and does nothing | The lower bar is empty in eight to twelve seconds | 10 s |
-| | …and answers it with the other hand: the far-side auto, the far-side cast, an auto or two | Back inside the band within one exchange of the finisher recovering; far-side autos alone hold it or claw it back | passes |
-| **B7** | Ignores the runaway for ten seconds | Fifteen to twenty-five per cent of a health bar, about what the Judgement did to them. Fully one-sided for half a round: half to four fifths, and never all of it | 20%; 75% |
-| **B8** | One cast from level; two; the finisher; alternating | Inside the band; outside; outside; never outside | passes |
+| **B1** | Alternates wings for half a round with everything landing on a target that never moves, the dummy in sword range | One to two and a quarter health bars, the last of it the ascension the climb reaches near the end | 1.43 bars (1.85 with the spellbook's litanies) |
+| **B2** | The dark wing only, on a target standing in all of it (since the majors spend, 2026-10-12) | The most the wings make: one and a quarter to two bars, and the dark runs away and burns her for two fifths to four fifths of her own. The same hand with the Abyss every fourth throw costs her nothing: the major is the valve | 1.59 bars dealt, 0.59 lost; with the Abyss, nothing |
+| **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | passes |
+| **B4** | Alternates wings cleanly from empty, venting nothing | The blink in four to six seconds, the second jump in eight to twelve, the wings in eleven to sixteen, since the calm went (2026-10-14; it was five to eight, eleven to fifteen, sixteen to twenty-one, and ten to fourteen, sixteen to twenty-one, twenty to twenty-six before the thirds); in play every spell she vents slows it | 4.8 s, 10.0 s, 13.5 s |
+| **B5** | Stops at two thirds | Keeps the second jump through seven exchanges of stillness (since 2026-10-14, no calm; it used to be gone within an exchange and the blink inside seven) | passes |
+| **B6** | Throws a major from level | Its bar is empty and the other is half a bar ahead. Answered with the other major, she is level again before it recovers; answered with the spent hand's wings, back inside the band within two exchanges | passes |
+| **B7** | Throws a major from level and ignores the runaway for ten seconds | Ten to twenty-five per cent of a health bar. Fully one-sided for half a round: half to four fifths, and never all of it. With no calm the burn runs until she cashes out (2026-10-14) | passes |
+| **B8** | One spell from level; two; a major; alternating | Inside the band; outside; outside; never outside | passes |
+| **B9** | Throws the Abyss and Judgement in turn, over and over, with nothing built between | Since they spend, every one after the first is thrown from an empty bar: three quarters of a bar to a bar and a half in half a round, costing her nothing. The majors are what the building is for | 1.17 bars |
 
 What moved to get there, from the first pass: the pushes 8/18/38 → 5/9/20 and the band 30 →
 16; the calm 6 → 2 a second; the drift 2 per unit and 10 at most → 1 and 3; the burn 1.5 per
@@ -147,8 +166,8 @@ including mid-air.
 
 | Lower bar at | She gains | Knobs |
 | --- | --- | --- |
-| **half** (`tier_blink`, 50) | **The dodge is a blink.** Shift plus a direction puts her where the dodge would have ended, on its first frame, and she is invulnerable for the dodge's own window and then stands through its tail. In the air it is the airdodge, and it is spent the same way. A blink stops against the first terrain or stone in its way — `aim::blink_to` decides, and it is stricter than the Reaver's dash: a low platform her head would clear is still a wall to her feet | — |
-| **three quarters** (`tier_jump`, 75) | **A second jump**, once per airtime, and a **slower fall**. The first class to answer the README's open double-jump row. Space in the air has one other exception, the Champion's uppercut; this is the second, and it is per class | `second_jump` 0.8 of the first · `slow_fall` 0.6 of the fall cap |
+| **a third** (`tier_blink`, 33; half until 2026-10-12) | **The dodge is a blink.** Shift plus a direction puts her where the dodge would have ended, on its first frame, and she is invulnerable for the dodge's own window and then stands through its tail. In the air it is the airdodge, and it is spent the same way. A blink stops against the first terrain or stone in its way — `aim::blink_to` decides, and it is stricter than the Reaver's dash: a low platform her head would clear is still a wall to her feet | — |
+| **two thirds** (`tier_jump`, 67; three quarters until 2026-10-12) | **A second jump**, once per airtime, and a **slower fall**. The first class to answer the README's open double-jump row. Space in the air has one other exception, the Champion's uppercut; this is the second, and it is per class | `second_jump` 0.8 of the first · `slow_fall` 0.6 of the fall cap |
 | **both full** (`tier_wings`, 95) | **Ascension.** Wings erupt, and she may jump as often as she likes | below |
 
 The tiers are on the *lower* bar and not on the sum for one reason: a sum can be reached
@@ -177,6 +196,13 @@ the hardest thing the class can do and is meant to be.
   design asked for — and **landing hits pulls some back**: `ascension_refund` (40) per hit, the
   refund the old design wrote and never built. It was three seconds, and at three a player had
   time for two or three abilities and it was over before they had noticed it had begun.
+- **It arrives as Apotheosis** (2026-10-12, [exploration/0015](exploration/0015_dual_mage_spellbook.md)):
+  the frame the wings erupt, a nova of both forces bursts round her — `apotheosis, damage` (60)
+  to everybody within `apotheosis, reaches` (5 m), and every curse in it purged at the top of
+  the curve. Every spell she casts goads a bar, so near the top she *will* ascend if she keeps
+  casting: the arrival is what makes the moment a decision. Hold at the brink, let the calm take
+  a little off, step in beside a body carrying five stacks, and cast the spell that tips her
+  over — or ascend alone in a corner and get wings and nothing else.
 - **It ends with both bars empty** and a stagger graduated by how much she landed: the share of
   the drain her hits refunded, read against a ceiling (`ascension_stun`, 40 frames, for landing
   nothing) and a floor (`ascension_stun_floor`, 10, for paying it all back). The vent. Then she

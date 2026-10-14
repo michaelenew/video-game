@@ -144,6 +144,11 @@ pub enum Kind {
     /// ball, which rolls the same way from where she raised it, its hold buying
     /// size rather than distance. [`racing_path`].
     Racing,
+    /// **From a point over the caster's head** to the point the crosshair is
+    /// on (2026-10-12): the Dual mage's Disk ray, a blast out of a great disk
+    /// of light hung above her. The target is the skillshot's; only the end it
+    /// leaves from is not her hand. [`overhead_path`].
+    Overhead,
 }
 
 impl Kind {
@@ -153,7 +158,7 @@ impl Kind {
     /// already decided -- which way their body is facing, or where they put the
     /// mechanic -- and consult nothing.
     pub const fn is_a_skillshot(self) -> bool {
-        matches!(self, Kind::Grounded | Kind::Skillshot)
+        matches!(self, Kind::Grounded | Kind::Skillshot | Kind::Overhead)
     }
 
     pub const fn name(self) -> &'static str {
@@ -163,6 +168,7 @@ impl Kind {
             Kind::Swing => "swing",
             Kind::AtTheMechanic => "mechanic",
             Kind::Racing => "racing",
+            Kind::Overhead => "overhead",
         }
     }
 
@@ -175,6 +181,7 @@ impl Kind {
             2 => Kind::Skillshot,
             3 => Kind::AtTheMechanic,
             4 => Kind::Racing,
+            5 => Kind::Overhead,
             _ => Kind::Swing,
         }
     }
@@ -186,6 +193,7 @@ impl Kind {
             Kind::Skillshot => 2,
             Kind::AtTheMechanic => 3,
             Kind::Racing => 4,
+            Kind::Overhead => 5,
         }
     }
 }
@@ -798,6 +806,101 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
     Path { from, to }
 }
 
+/// **Where the thing hung over her head is**: the Dual mage's disk and her
+/// storm cloud, `tuning::overhead_height` above her feet (2026-10-12).
+pub fn overhead(pos: V3) -> V3 {
+    V3::new(pos.x, pos.y.add(t::overhead_height()), pos.z)
+}
+
+/// The line an **overhead** cast travels: from [`overhead`] to the point a
+/// skillshot thrown now would go to. The crosshair picks the target exactly
+/// as it does for a skillshot -- [`skillshot_path`] is asked, and only its far
+/// end is kept -- so the blast lands where the reticle is, from wherever the
+/// disk hangs.
+pub fn overhead_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    let shot = skillshot_path(who, look, reach, scene);
+    Path {
+        from: overhead(scene.players[who].pos),
+        to: shot.to,
+    }
+}
+
+/// **Where a chain of lightning goes next** (2026-10-12): the body nearest
+/// the bolt's line -- from `from` to `near` -- no further than `reach` from
+/// it, with nothing solid between `from` and it, and not one of `spent`. The
+/// answer is that body's bit -- fighters first, then creatures, then
+/// critters, in slot order -- and the point the bolt meets it at: a fighter's
+/// or a critter's middle, a creature's surface nearest the line.
+///
+/// **The line, not its end** (2026-10-14, from play: it never struck the
+/// Ridgeback). Bodies are not on the crosshair's ray, so the point the
+/// crosshair puts the first bolt on is the ground *behind* whatever it was
+/// laid on; for a creature the size of a Ridgeback that is metres past its
+/// nearest part, and the bolt struck the empty floor. Measured from the
+/// whole line, the body the bolt passes is the body it strikes. A later link
+/// asks with `from` and `near` the same point, so for it the line is a point.
+///
+/// The Dual mage's Chain lightning asks it once from the cloud over her head
+/// with `near` the crosshair's point, then from each body it struck with
+/// `near` that body. It decides where an ability goes, so it lives here.
+/// `fighters` is whether the other fighters are fair game -- in versus, not
+/// in a hunt, where they are her party.
+pub fn chain_next(
+    from: V3,
+    near: V3,
+    reach: Fx,
+    owner: usize,
+    spent: u32,
+    fighters: bool,
+    scene: &Scene,
+) -> Option<(u32, V3)> {
+    let mut best: Option<(u32, V3, Fx)> = None;
+    let mut consider = |bit: u32, at: V3| {
+        if spent & (1 << bit) != 0 {
+            return;
+        }
+        let d = crate::math::segment_gap(from, near, at, at);
+        if d.raw() > reach.raw() || best.is_some_and(|(_, _, seen)| seen.raw() <= d.raw()) {
+            return;
+        }
+        if !line_clear(from, at, scene) {
+            return;
+        }
+        best = Some((bit, at, d));
+    };
+    for (index, p) in scene.players.iter().enumerate() {
+        if !fighters || index == owner || p.health <= 0 || p.untouchable() {
+            continue;
+        }
+        let middle = V3::new(
+            p.pos.x,
+            p.pos.y.add(t::body_height().mul(Fx::ratio(1, 2))),
+            p.pos.z,
+        );
+        consider(index as u32, middle);
+    }
+    for (slot, beast) in scene.quarry.iter().enumerate() {
+        let Some(beast) = beast else { continue };
+        if !beast.alive() {
+            continue;
+        }
+        let (along, _, _) = crate::math::segment_closest(from, near, beast.pos, beast.pos);
+        let on_line = from.add(near.sub(from).scale(along));
+        consider((MAX_PLAYERS + slot) as u32, beast.nearest_to(on_line));
+    }
+    if scene.critters.any() {
+        let sp = scene.critters.sp();
+        for (index, c) in scene.critters.iter().enumerate() {
+            if !c.alive() {
+                continue;
+            }
+            let bit = (MAX_PLAYERS + crate::monster::MAX_MONSTERS + index) as u32;
+            consider(bit, c.body(sp).middle());
+        }
+    }
+    best.map(|(bit, at, _)| (bit, at))
+}
+
 /// The line a **swing** comes out along: the body's own direction, tilted by
 /// how far the camera is looking up or down.
 ///
@@ -1201,6 +1304,128 @@ pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
     from.add(flat.scale(short))
 }
 
+/// **Where the Flurry dash's run stops her** (2026-10-13): at the disk her
+/// blows struck -- `to`, the spot the crosshair put the flurry on -- along the
+/// straight line there, up or down as it goes, stopped short of the first
+/// solid thing her body's sole or crown would meet ([`blink_to`]'s four lines,
+/// not flattened), and kept inside the place's bounds. The disk was aimed when
+/// the flurry was thrown; this is only how much of the way to it is clear.
+pub fn flurry_dash_to(from: V3, to: V3, scene: &Scene) -> V3 {
+    let way = to.sub(from);
+    let far = way.len();
+    if far.raw() <= 0 {
+        return from;
+    }
+    let sole = arena::SKIN;
+    let crown = t::body_height().sub(arena::SKIN);
+    let mut share = Fx::ONE;
+    for (lift_a, lift_b) in [(sole, sole), (sole, crown), (crown, sole), (crown, crown)] {
+        let a = V3::new(from.x, from.y.add(lift_a), from.z);
+        let b = V3::new(to.x, to.y.add(lift_b), to.z);
+        if let Some(along) = first_solid_between(a, b, scene) {
+            share = share.min(along);
+        }
+    }
+    let end = if share.raw() >= Fx::ONE.raw() {
+        to
+    } else {
+        let short = far
+            .mul(share)
+            .sub(t::body_radius().add(arena::SKIN))
+            .max(Fx::ZERO);
+        from.add(way.normalized().scale(short))
+    };
+    within_bounds(from, end, scene)
+}
+
+/// **Where the hop after one of the Dual mage's autos lands her**
+/// (2026-10-12): `reach` along `dir` level, stopped the way a blink is
+/// ([`blink_to`]), and `lift` up from there -- less if something solid is over
+/// her head, so the hop arrives under a ledge rather than inside it. The
+/// direction is the one she is holding, the height her lower bar's; both are
+/// the caller's. See `docs/design/exploration/0016_dual_mage_controls.md`.
+pub fn hop_to(from: V3, dir: V3, reach: Fx, lift: Fx, scene: &Scene) -> V3 {
+    let level = short_of_the_land(from, blink_to(from, dir, reach, scene), scene);
+    let level = within_bounds(from, level, scene);
+    if lift.raw() <= 0 {
+        return level;
+    }
+    let crown = t::body_height();
+    let head = V3::new(level.x, level.y.add(crown), level.z);
+    let top = V3::new(level.x, level.y.add(crown).add(lift), level.z);
+    let rise = match first_solid_between(head, top, scene) {
+        Some(share) => lift.mul(share).sub(arena::SKIN).max(Fx::ZERO),
+        None => lift,
+    };
+    V3::new(level.x, level.y.add(rise), level.z)
+}
+
+/// **A hop does not leave the fight** (2026-10-13): stopped where it would
+/// carry her out of the place's bounds -- a lone arena's walls, which a hop
+/// lifted by a full bar sails over; on the valley's map the bounds are the
+/// whole map, so nothing changes there. Walked back along the hop in half a
+/// body's steps from the far end.
+fn within_bounds(from: V3, to: V3, scene: &Scene) -> V3 {
+    let past = to.add(
+        V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z))
+            .normalized()
+            .scale(t::hop_keeps_inside()),
+    );
+    if scene.arena.inside(past) || !scene.arena.inside(from) {
+        return to;
+    }
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    let span_v = to.sub(from);
+    let span = span_v.flat_len();
+    if span.raw() <= 0 {
+        return from;
+    }
+    let dir = span_v.scale(Fx::ONE.div(span));
+    // A body's width short of the edge, not on it: a lone arena's wall stands
+    // on its bounds, and a hop stopped on the line landed her on its top.
+    let clear = dir.scale(t::hop_keeps_inside());
+    let mut along = span;
+    while along.raw() > 0 {
+        along = along.sub(step).max(Fx::ZERO);
+        let at = from.add(dir.scale(along));
+        if scene.arena.inside(at.add(clear)) {
+            return at;
+        }
+    }
+    from
+}
+
+/// **The hop stops at land it could not walk onto**: a blink asks only
+/// about boxes, and the land is a height, so a hop at an arena's rim went up
+/// it a hop at a time. Marched in half a body's steps: the first one over
+/// ground too steep to stand on, or above her feet, is where she stops, a
+/// body short of it.
+fn short_of_the_land(from: V3, to: V3, scene: &Scene) -> V3 {
+    let span_v = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
+    let span = span_v.flat_len();
+    let step = Fx::from_raw(t::body_radius().raw() / 2);
+    if span.raw() <= 0 {
+        return to;
+    }
+    let dir = span_v.scale(Fx::ONE.div(span));
+    let mut along = step.min(span);
+    loop {
+        let at = from.add(dir.scale(along));
+        let ground = scene.arena.relief_at(at.x, at.z);
+        if scene.arena.downhill(at.x, at.z).is_some()
+            || ground.raw() > from.y.add(arena::SKIN).raw()
+        {
+            let back = along.sub(t::body_radius()).max(Fx::ZERO);
+            let flat = from.add(dir.scale(back));
+            return V3::new(flat.x, to.y, flat.z);
+        }
+        if along.raw() >= span.raw() {
+            return to;
+        }
+        along = along.add(step).min(span);
+    }
+}
+
 /// Where along one line, as a share of its length, the first solid is -- or
 /// `None` if nothing solid crosses it before the far end.
 fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
@@ -1528,6 +1753,150 @@ pub fn phase_to(who: usize, dir: V3, travel: Fx, scene: &Scene) -> V3 {
     let at = mid.add(dir.scale(go));
     let floor = settle(at, scene.stones, scene.arena).y;
     V3::new(at.x, at.y.sub(half).max(floor), at.z)
+}
+
+/// Where a Shadowstep takes her, and the body it took her to.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Shadowstep {
+    /// Her feet, where she arrives.
+    pub to: V3,
+    /// The middle of the body she arrived behind -- where the lash she
+    /// arrives in lands -- or `None` if the line had nobody on it.
+    pub struck: Option<V3>,
+}
+
+/// **Where the Dual mage's Shadowstep puts her** (2026-10-12): along `dir` --
+/// the crosshair's line, as this module solved it -- from the middle of her
+/// body, to the **first body on it**, and `behind` past it -- or, a creature
+/// being as big as it is, up against the part the line met. A body is found as
+/// far as `reach`, or as far as `cursed_reach` if it carries a curse: a cursed
+/// body is a door. Behind it, she travels as Phase does, stopped a body short
+/// of the first wall. With nobody on the line, or a wall before anybody, she
+/// still goes, `bare` along it, as Phase would. Bodies are fighters when
+/// `pvp`, and the creatures and the critters. See
+/// `docs/design/exploration/0015_dual_mage_spellbook.md`.
+#[allow(clippy::too_many_arguments)]
+pub fn shadowstep_to(
+    who: usize,
+    dir: V3,
+    reach: Fx,
+    cursed_reach: Fx,
+    bare: Fx,
+    behind: Fx,
+    pvp: bool,
+    scene: &Scene,
+) -> Shadowstep {
+    let feet = scene.players[who].pos;
+    let half = t::body_height().mul(Fx::ratio(1, 2));
+    let mid = V3::new(feet.x, feet.y.add(half), feet.z);
+    let far = reach.max(cursed_reach);
+    let path = Path {
+        from: mid,
+        to: mid.add(dir.scale(far)),
+    };
+    let met = first_along(
+        path,
+        t::body_radius(),
+        who as u8,
+        scene,
+        Targets::none()
+            .fighters(pvp)
+            .quarry(true)
+            .terrain()
+            .stones(),
+    );
+    // **A creature is found the way a thrown thing finds it**: a probe carried
+    // along the line, asking the animal which part it is in
+    // (`Monster::part_struck`) -- the test every bolt and blade is put to.
+    // The line's own first box, grown by a body, can be a flank under the
+    // line while the crosshair is on the sac above it; the probe is what
+    // reaches the part she pointed at.
+    let met = match (met, column_meets_quarry(path, far, scene)) {
+        (Some(c), Some((slot, part, dist)))
+            if dist.raw() <= c.dist().raw() || matches!(c, Contact::Quarry { .. }) =>
+        {
+            Some(Contact::Quarry { slot, part, dist })
+        }
+        (None, Some((slot, part, dist))) => Some(Contact::Quarry { slot, part, dist }),
+        (Some(Contact::Quarry { .. }), None) => None,
+        (c, _) => c,
+    };
+    let cursed = |c: Contact| match c {
+        Contact::Fighter { index, .. } => {
+            crate::dual::stacks(scene.players[index.min(MAX_PLAYERS - 1)].curse) > 0
+        }
+        Contact::Quarry { slot, .. } => scene
+            .quarry
+            .get(slot)
+            .copied()
+            .flatten()
+            .is_some_and(|m| crate::dual::stacks(m.curse) > 0),
+        _ => false,
+    };
+    let body = met.filter(|c| {
+        matches!(
+            c,
+            Contact::Fighter { .. } | Contact::Quarry { .. } | Contact::Critter { .. }
+        ) && (c.dist().raw() <= reach.raw() || (cursed(*c) && c.dist().raw() <= cursed_reach.raw()))
+    });
+    // Behind a fighter or a critter; against a creature, whose far side may
+    // be ten metres off, right up to the part the line met.
+    let past = |c: Contact| match c {
+        Contact::Quarry { .. } => c
+            .dist()
+            .sub(t::body_radius().add(t::body_radius()))
+            .max(Fx::ZERO),
+        _ => c.dist().add(behind),
+    };
+    // Where the lash she arrives in lands: the body's middle on the line --
+    // and for a creature the foot of the column that found it, since that is
+    // the volume a burst is tested with against a creature's parts.
+    let struck = |c: Contact| {
+        let on = mid.add(dir.scale(c.dist()));
+        match c {
+            Contact::Quarry { .. } => V3::new(on.x, on.y.sub(half), on.z),
+            _ => on,
+        }
+    };
+    match body {
+        Some(c) => Shadowstep {
+            to: phase_to(who, dir, past(c), scene),
+            struck: Some(struck(c)),
+        },
+        None => Shadowstep {
+            to: phase_to(who, dir, bare, scene),
+            struck: None,
+        },
+    }
+}
+
+/// The first creature part a thin probe carried along `path` is in, out to
+/// `far`: which creature, which part, and how far along. The probe is centred
+/// on the line.
+fn column_meets_quarry(path: Path, far: Fx, scene: &Scene) -> Option<(usize, usize, Fx)> {
+    let dir = path.dir();
+    // Thin, and short: a probe of the line itself rather than of a whole body
+    // carried along it, because the crosshair is a point -- a sac on a
+    // spider's back is behind her flank from below by less than a body's
+    // width.
+    let width = t::shadowstep_probe();
+    let step = width;
+    let half = width.add(width);
+    let mut along = Fx::ZERO;
+    while along.raw() <= far.raw() {
+        let at = path.from.add(dir.scale(along));
+        let foot = V3::new(at.x, at.y.sub(half), at.z);
+        for (slot, beast) in scene.quarry.iter().enumerate() {
+            let Some(beast) = beast.filter(|b| b.alive()) else {
+                continue;
+            };
+            if let Some(part) = beast.part_struck(foot, width, half.add(half)) {
+                return Some((slot, part, along));
+            }
+        }
+        along = along.add(step);
+    }
+    None
 }
 
 /// **Where a thing that nobody pointed down at lands**: `to`, a point already
@@ -1876,7 +2245,7 @@ pub fn first_along(
 
     if targets.fighters {
         for (index, p) in scene.players.iter().enumerate() {
-            if index as u8 == owner || p.health <= 0 || p.action.invulnerable() {
+            if index as u8 == owner || p.health <= 0 || p.untouchable() {
                 continue;
             }
             if let Some(dist) = body_hit(from, dir, p, girth) {

@@ -472,25 +472,38 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
             // The Blood mage's burst is wet and heavy; the nail a short ring.
             EffectKind::Nova => Patch::Wet(Wet { weight: 0.8 }),
             EffectKind::Nail => Patch::Ring(Ring { pitch: 440.0 }),
-            // The Dual mage's two forces, by ear as by eye: dark is a low
-            // whoosh you can hear coming and a heavy rumble where it stays;
-            // light is a high ring that has already arrived.
-            EffectKind::ShadeBolt => Patch::Whoosh(Whoosh {
-                frames: 10,
-                size: FIGHTER,
-                rising: false,
-                weight: 0.35,
-            }),
-            EffectKind::Binary => Patch::Ring(Ring { pitch: 660.0 }),
+            // The Dual mage's spellbook (2026-10-12), by ear as by eye: dark
+            // is low -- the black sun a rumble as wide as it is, the
+            // Shadowstep's arrival a whoosh -- light is high and has already
+            // arrived -- a sigil's chime, Judgement's columns a ring -- and
+            // twilight, the stars, sits between them. Apotheosis is the
+            // deepest thing she makes: wings and both forces at once.
+            EffectKind::Stars => Patch::Ring(Ring { pitch: 660.0 }),
             EffectKind::Abyss => Patch::Rumble(Rumble {
-                frames: 30,
-                size: 2.5,
+                frames: 40,
+                size: e.field_radius().to_f32_for_render().max(1.0),
             }),
-            EffectKind::Flare => Patch::Gust(Gust {
-                frames: 10,
-                weight: 0.5,
-            }),
-            EffectKind::Sunray => Patch::Ring(Ring { pitch: 1320.0 }),
+            EffectKind::Sigil => Patch::Ring(Ring { pitch: 990.0 }),
+            EffectKind::Burst => match e.slot {
+                sim::effects::APOTHEOSIS => Patch::Rumble(Rumble {
+                    frames: 50,
+                    size: 5.0,
+                }),
+                sim::moves::dual::JUDGEMENT => Patch::Ring(Ring { pitch: 1320.0 }),
+                // A bolt of the chain lightning: fire's crackle, cut short --
+                // dark, and over before you hear it land.
+                sim::moves::dual::CHAIN_LIGHTNING => Patch::Crackle(Crackle { seconds: 0.25 }),
+                sim::moves::dual::SHADOWSTEP => Patch::Whoosh(Whoosh {
+                    frames: 10,
+                    size: FIGHTER,
+                    rising: false,
+                    weight: 0.5,
+                }),
+                _ => Patch::Gust(Gust {
+                    frames: 10,
+                    weight: 0.5,
+                }),
+            },
             // The Air ball is a held gust, the heaviest of her air.
             EffectKind::AirBall => Patch::Gust(Gust {
                 frames: 30,

@@ -1635,7 +1635,7 @@ fn quills(w: &mut World, m: &mut Monster, slot: usize) {
             continue;
         }
         for (i, p) in fighters.iter().enumerate() {
-            if p.health <= 0 || p.action.invulnerable() {
+            if p.health <= 0 || p.untouchable() {
                 continue;
             }
             let feet = p.pos;

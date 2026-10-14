@@ -153,20 +153,29 @@ fn top() -> Fx {
 // ---------------------------------------------------------------------------
 
 /// One frame of the two bars: calm, the hill, the burn, and the clock while
-/// she is ascending. A no-op for anybody else.
-pub fn step(p: &mut Player) {
+/// she is ascending -- and the Veil's clock. A no-op for anybody else.
+///
+/// **True on the frame ascension begins**, which is the world's cue for
+/// Apotheosis: the nova that bursts from her as the wings erupt. See
+/// `docs/design/exploration/0015_dual_mage_spellbook.md` §"Ascending at the
+/// right moment".
+pub fn step(p: &mut Player) -> bool {
     let Mechanic::Meter {
         dark,
         light,
-        colour,
         ascending,
-        jumped,
         landed,
         singe,
+        veil,
+        ..
     } = p.mechanic
     else {
-        return;
+        return false;
     };
+    // The Veil's clock runs whatever the bars are doing.
+    if let Mechanic::Meter { veil: v, .. } = &mut p.mechanic {
+        *v = veil.saturating_sub(1);
+    }
 
     if ascending > 0 {
         // The clock. Health is the cost and nothing steers the bars: they are
@@ -174,19 +183,13 @@ pub fn step(p: &mut Player) {
         // empty -- when it ends.
         singe_health(p, t::ascension_drain().max(1));
         let left = ascending - 1;
-        p.mechanic = Mechanic::Meter {
-            dark,
-            light,
-            colour,
-            ascending: left,
-            jumped,
-            landed,
-            singe,
-        };
+        if let Mechanic::Meter { ascending, .. } = &mut p.mechanic {
+            *ascending = left;
+        }
         if left == 0 {
             end_ascension(p, landed);
         }
-        return;
+        return false;
     }
 
     // Calm: both fall, always, floored at zero.
@@ -226,20 +229,23 @@ pub fn step(p: &mut Player) {
     // Both goaded to the top together, and it takes her. There is no input for
     // it and there never was; the drift cannot deliver it, because the drift
     // only ever pulls the two apart.
-    let ascending = if tier_of_bar(dark.min(light)) == Tier::Wings {
-        t::ascension_frames()
-    } else {
-        0
-    };
-    p.mechanic = Mechanic::Meter {
-        dark,
-        light,
-        colour,
+    let ascends = tier_of_bar(dark.min(light)) == Tier::Wings;
+    if let Mechanic::Meter {
+        dark: d,
+        light: l,
         ascending,
-        jumped,
-        landed: 0,
-        singe,
-    };
+        landed,
+        singe: s,
+        ..
+    } = &mut p.mechanic
+    {
+        *d = dark;
+        *l = light;
+        *ascending = if ascends { t::ascension_frames() } else { 0 };
+        *landed = 0;
+        *s = singe;
+    }
+    ascends
 }
 
 /// Health comes off, and never past one. Dying to your own bar is not a
@@ -259,30 +265,35 @@ fn singe_health(p: &mut Player, amount: i32) {
 /// ceiling; paying it all back is the floor; a near miss is a short stagger,
 /// which is what lets the timing be learnt rather than feared.
 fn end_ascension(p: &mut Player, landed: u16) {
-    let Mechanic::Meter { colour, .. } = p.mechanic else {
-        return;
-    };
     let drained = (t::ascension_drain().max(1) * t::ascension_frames() as i32).max(1);
     let refunded = (landed as i32 * t::ascension_refund()).min(drained);
     let share = Fx::ratio(refunded, drained);
     let ceiling = Fx::from_int(t::ascension_stun() as i32);
     let floor = Fx::from_int(t::ascension_stun_floor() as i32).min(ceiling);
     let stun = ceiling.sub(ceiling.sub(floor).mul(share)).to_int().max(0) as u16;
-    p.mechanic = Mechanic::Meter {
-        dark: Fx::ZERO,
-        light: Fx::ZERO,
-        colour,
-        ascending: 0,
-        jumped: false,
-        landed: 0,
-        singe: Fx::ZERO,
-    };
+    if let Mechanic::Meter {
+        dark,
+        light,
+        ascending,
+        jumped,
+        landed,
+        singe,
+        ..
+    } = &mut p.mechanic
+    {
+        *dark = Fx::ZERO;
+        *light = Fx::ZERO;
+        *ascending = 0;
+        *jumped = false;
+        *landed = 0;
+        *singe = Fx::ZERO;
+    }
     p.stun_total = stun;
     p.action = Action::Stagger { left: stun };
 }
 
-/// Throwing a move goads a bar: an auto its own, by a little; a cast the bar
-/// of the force she is carrying, by more; the finisher by a lot.
+/// Throwing a move moves a bar: an auto or a takeoff fills its own, a spell
+/// or a long hold vents its own, and a major spends a great deal of its own.
 ///
 /// **On the press, every time, including the autos.** They used to steer on
 /// contact -- the design's own rule -- and with nothing in reach no button on
@@ -298,9 +309,7 @@ pub fn steer(p: &mut Player, kind: u8) {
         light,
         colour,
         ascending,
-        jumped,
-        landed,
-        singe,
+        ..
     } = p.mechanic
     else {
         return;
@@ -310,41 +319,58 @@ pub fn steer(p: &mut Player, kind: u8) {
     if ascending > 0 {
         return;
     }
-    // Three tiers of push, and the order of the arms is the order of the
-    // commitment. An auto is the unit the bars are measured in, and it also
-    // *sets* which force she is carrying.
-    // **Every move has a force now** (2026-10-09): the left column and `Q`
-    // are dark, the right column and `E` light, and the middle column is
-    // twilight -- both at once, each bar by an auto's push, so it never
-    // widens the gap. An auto is the unit; any other spell a cast; a major
-    // the finisher's push. The force thrown is the one she is carrying after;
-    // twilight leaves that as it was.
-    let push = if crate::moves::dual::is_an_auto(kind) {
+    // **Everything on the mouse fills, `F` and `R` vent, majors spend**
+    // (2026-10-12; the long holds filled from 2026-10-13, at the owner's
+    // word): the autos, the takeoffs and the middle click's taps goad the
+    // bar of their force by `meter, an auto moves` (twilight both at once, so
+    // it never widens the gap), and a long hold by `meter, a long hold fills`
+    // (the Flurry dash both); the Devour and the Smite vent their own bar by
+    // `meter, a spell vents`; and a major spends `meter, a major spends` of
+    // its own -- worth the bar it was thrown from, since `Player::thrown_at`
+    // was read before this, and the way back into the band when one bar has
+    // run away. The force thrown is the one she is carrying after; twilight
+    // leaves that as it was.
+    use crate::moves::dual as d;
+    let by = if d::is_a_long_hold(kind) {
+        t::hold_fills()
+    } else if d::is_an_auto(kind) || d::is_takeoff(kind) || d::twilight(kind) {
         t::meter_auto_push()
-    } else if crate::moves::dual::is_the_finisher(kind) {
-        t::meter_finisher_push()
+    } else if d::is_the_finisher(kind) {
+        -t::meter_finisher_push()
     } else {
-        t::meter_cast_push()
+        -t::meter_cast_push()
     };
-    let goad = |bar: Fx, by: i32| bar.add(Fx::from_int(by)).min(top());
-    let (dark, light, colour) = match crate::moves::dual::force(kind) {
-        Some(Force::Dark) => (goad(dark, push), light, Force::Dark),
-        Some(Force::Light) => (dark, goad(light, push), Force::Light),
-        None => (
-            goad(dark, t::meter_auto_push()),
-            goad(light, t::meter_auto_push()),
-            colour,
-        ),
+    let goad = |bar: Fx, by: i32| bar.add(Fx::from_int(by)).clamp(Fx::ZERO, top());
+    let (mut dark, mut light, colour) = match d::force(kind) {
+        Some(Force::Dark) => (goad(dark, by), light, Force::Dark),
+        Some(Force::Light) => (dark, goad(light, by), Force::Light),
+        None => (goad(dark, by), goad(light, by), colour),
     };
-    p.mechanic = Mechanic::Meter {
-        dark,
-        light,
-        colour,
-        ascending,
-        jumped,
-        landed,
-        singe,
-    };
+    // **Equinox levels her** (2026-10-12): the one spell aimed at her own
+    // runaway. What it moves goes from the higher bar to the lower, and never
+    // more than half the gap, so it can close the gap and cannot cross it.
+    if kind == crate::moves::dual::EQUINOX {
+        let half = dark.sub(light).abs().mul(Fx::ratio(1, 2));
+        let by = Fx::from_int(t::equinox_levels()).min(half);
+        if dark.raw() >= light.raw() {
+            dark = dark.sub(by);
+            light = light.add(by);
+        } else {
+            light = light.sub(by);
+            dark = dark.add(by);
+        }
+    }
+    if let Mechanic::Meter {
+        dark: d,
+        light: l,
+        colour: c,
+        ..
+    } = &mut p.mechanic
+    {
+        *d = dark;
+        *l = light;
+        *c = colour;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -446,10 +472,44 @@ pub fn spend_wing_beat(p: &mut Player) {
     }
 }
 
-/// Feet on the floor: the second jump is back.
+/// Feet on the floor: the second jump is back, and so is the air hop.
 pub fn feet_down(p: &mut Player) {
-    if let Mechanic::Meter { jumped, .. } = &mut p.mechanic {
+    if let Mechanic::Meter { jumped, hopped, .. } = &mut p.mechanic {
         *jumped = false;
+        *hopped = false;
+    }
+}
+
+/// Does an auto thrown in the air rise like a jump? Once an airtime, and every
+/// time while ascending. See `state::hop_after_the_auto`.
+pub fn may_air_hop(p: &Player) -> bool {
+    match p.mechanic {
+        Mechanic::Meter {
+            ascending, hopped, ..
+        } => ascending > 0 || !hopped,
+        _ => false,
+    }
+}
+
+/// Bank a jump for the end of the Flurry dash's run.
+pub fn bank_dash_jump(p: &mut Player) {
+    if let Mechanic::Meter { dash_jump, .. } = &mut p.mechanic {
+        *dash_jump = true;
+    }
+}
+
+/// Take the banked dash jump, if there is one.
+pub fn take_dash_jump(p: &mut Player) -> bool {
+    match &mut p.mechanic {
+        Mechanic::Meter { dash_jump, .. } => core::mem::replace(dash_jump, false),
+        _ => false,
+    }
+}
+
+/// Spend the air hop.
+pub fn spend_air_hop(p: &mut Player) {
+    if let Mechanic::Meter { hopped, .. } = &mut p.mechanic {
+        *hopped = true;
     }
 }
 
@@ -485,70 +545,226 @@ pub fn dodge_travel(grounded: bool) -> Fx {
 }
 
 // ---------------------------------------------------------------------------
-// The hex, and its two reactions
+// The curse, and the purge
 // ---------------------------------------------------------------------------
 //
-// Every move a spell (2026-10-09): a dark spell hexes what it hits with
-// Umbra, a light one with Radiance, and the other force on a hexed body sets
-// it off. So the two hands alternating are the combo and the climb at once.
-// See `docs/design/exploration/0010_dual_mage_spells.md`.
+// Her spellbook (2026-10-12): every dark spell that lands lays stacks of a
+// curse on the body, up to `curse, most stacks`; they tick, drain to her, and
+// fade one at a time on one clock. A light spell that lands on a curse
+// **purges** it -- every stack at once, each worth more than the last. So the
+// curse is built by one hand and cashed by the other, and both bars rise. See
+// `docs/design/exploration/0015_dual_mage_spellbook.md` §"The two things she
+// leaves in the world".
+//
+// A curse is one byte on the body: the stacks in the low three bits, and
+// whose curse it is -- the seat of the mage who laid it -- in the top one.
+// The same byte the hex was, because the snapshot is at its cap.
 
-/// No hex on a body.
-pub const NO_HEX: u8 = 0;
-/// Umbra: what a dark spell leaves.
-pub const UMBRA: u8 = 1;
-/// Radiance: what a light spell leaves.
-pub const RADIANCE: u8 = 2;
+/// No curse on a body.
+pub const NO_CURSE: u8 = 0;
 
-/// What the other force does to a hex.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Reaction {
-    /// Nothing went off: the hex was set, or refreshed.
-    None,
-    /// Light on Umbra: a burst of damage now, and a stagger.
-    Shatter,
-    /// Dark on Radiance: damage drained back to her, and a slow.
-    Wither,
-    /// A twilight spell on a clean body: both, each at half.
-    Both,
+/// How many stacks a curse byte holds.
+pub const fn stacks(curse: u8) -> u8 {
+    curse & 0x07
 }
 
-/// What a spell of hers does to a body carrying `hex`: the reaction it sets
-/// off, and the hex it leaves there.
-///
-/// The same force again refreshes the hex; the other force sets it off and
-/// it is spent; twilight sets off whichever hex is there, or both at half on
-/// a clean body, and leaves none.
-pub const fn hexed(hex: u8, kind: u8) -> (Reaction, u8) {
-    use crate::class::Force;
-    if crate::moves::dual::twilight(kind) {
-        return match hex {
-            UMBRA => (Reaction::Shatter, NO_HEX),
-            RADIANCE => (Reaction::Wither, NO_HEX),
-            _ => (Reaction::Both, NO_HEX),
-        };
-    }
-    match crate::moves::dual::force(kind) {
-        Some(Force::Dark) if hex == RADIANCE => (Reaction::Wither, NO_HEX),
-        Some(Force::Dark) => (Reaction::None, UMBRA),
-        Some(Force::Light) if hex == UMBRA => (Reaction::Shatter, NO_HEX),
-        Some(Force::Light) => (Reaction::None, RADIANCE),
-        None => (Reaction::None, hex),
+/// Whose curse it is: the seat of the mage who laid the last stack.
+pub const fn cursed_by(curse: u8) -> usize {
+    (curse >> 7) as usize
+}
+
+/// A curse byte of `n` stacks, laid by seat `by`.
+pub const fn curse_of(n: u8, by: usize) -> u8 {
+    if n == 0 {
+        NO_CURSE
+    } else {
+        (n & 0x07) | (((by & 1) as u8) << 7)
     }
 }
 
-/// How much of each reaction a reaction is: a Shatter's share and a
-/// Wither's. `Both` is half of each.
-pub const fn shares(r: Reaction) -> (Fx, Fx) {
-    match r {
-        Reaction::None => (Fx::ZERO, Fx::ZERO),
-        Reaction::Shatter => (Fx::ONE, Fx::ZERO),
-        Reaction::Wither => (Fx::ZERO, Fx::ONE),
-        Reaction::Both => (
-            Fx::from_raw(Fx::ONE.raw() / 2),
-            Fx::from_raw(Fx::ONE.raw() / 2),
-        ),
+/// Lay `n` more stacks of `by`'s curse on a body, capped, and start its clock
+/// again. A curse is one mage's: another's stacks replace it. Returns the
+/// stacks it holds now.
+pub fn lay_curse(curse: &mut u8, clock: &mut u16, by: usize, n: u8) -> u8 {
+    if n == 0 {
+        return stacks(*curse);
     }
+    let had = if stacks(*curse) > 0 && cursed_by(*curse) == by {
+        stacks(*curse)
+    } else {
+        0
+    };
+    let now = had.saturating_add(n).min(t::curse_most().clamp(1, 7));
+    *curse = curse_of(now, by);
+    *clock = t::curse_fades();
+    now
+}
+
+/// One frame of a curse's clock: when it runs out one stack goes, and the
+/// clock starts again for the rest.
+pub fn fade_curse(curse: &mut u8, clock: &mut u16) {
+    if stacks(*curse) == 0 {
+        *clock = 0;
+        return;
+    }
+    *clock = clock.saturating_sub(1);
+    if *clock == 0 {
+        let left = stacks(*curse) - 1;
+        *curse = curse_of(left, cursed_by(*curse));
+        if left > 0 {
+            *clock = t::curse_fades();
+        }
+    }
+}
+
+/// What purging `n` stacks is worth, as a multiple of `purge, damage per
+/// stack`: `n(1 + c·n)`, so the fifth is worth the most. Convex for the
+/// Reaver's reason: building to the cap and then cashing has to be the
+/// biggest thing the class does, and "one more, or now" has to be a real
+/// question.
+pub fn purge_multiple(n: u8) -> Fx {
+    let n = Fx::from_int(n as i32);
+    n.mul(Fx::ONE.add(t::purge_curve().mul(n)))
+}
+
+/// What a purge of `n` stacks deals, thrown at `power`.
+pub fn purge_damage(n: u8, power: Fx) -> i32 {
+    Fx::from_int(t::purge_damage())
+        .mul(purge_multiple(n))
+        .mul(power)
+        .to_int()
+        .max(0)
+}
+
+/// Does a purge of `n` stacks stagger a fighter?
+pub fn purge_staggers(n: u8) -> bool {
+    n > 0 && n >= t::purge_stagger_from().max(1)
+}
+
+/// What one tick of `n` stacks deals, at the power of whoever laid them.
+pub fn curse_tick_damage(n: u8, power: Fx) -> i32 {
+    Fx::from_int(t::curse_tick() * n as i32)
+        .mul(power)
+        .to_int()
+        .max(0)
+}
+
+/// Is this the frame a curse ticks, and a sigil burns? One clock for the whole
+/// world, on the frame counter, so every curse ticks together and rollback
+/// reproduces it exactly.
+pub fn ticks_on(frame: u32) -> bool {
+    frame % (t::curse_every().max(1) as u32) == 0
+}
+
+/// What a curse's tick is worth: the Dark power of whoever laid it, read live,
+/// so a curse laid from an empty bar grows if she feeds her dark hand.
+pub fn curse_power(p: &Player) -> Fx {
+    depth_at(p, Some(crate::moves::dual::DARK_AUTO))
+}
+
+// ---------------------------------------------------------------------------
+// The hop after an auto
+// ---------------------------------------------------------------------------
+//
+// Since the second pass of 2026-10-12 her autos carry her: after each one she
+// hops a short way in the direction she is holding -- Kalista's step -- and up
+// a little, more the fuller her lower bar. So a flurry of hits lifts her off
+// the floor as the beings inside her wake, which is the class's fantasy in the
+// owner's words: "a flurry of hits that come from the beings inside them,
+// slowly being lifted off the ground as they dash about". See
+// `docs/design/exploration/0016_dual_mage_controls.md`.
+
+/// How high an auto's hop lifts her, in metres: `auto, hop lifts` at an empty
+/// lower bar, and `auto, hop lifts at full` more at a full one, in proportion
+/// between. The lower bar because it is the frenzy -- what her body can do --
+/// and both beings have to be awake for her to rise.
+pub fn hop_lift(p: &Player) -> Fx {
+    t::auto_hop_lift().add(t::auto_hop_lift_full().mul(balance(p)))
+}
+
+// ---------------------------------------------------------------------------
+// The Veil and the sigil's ward
+// ---------------------------------------------------------------------------
+
+/// She rises as shadow: untouchable for `veil, untouchable for`.
+pub fn veil(p: &mut Player) {
+    if let Mechanic::Meter { veil, .. } = &mut p.mechanic {
+        *veil = t::veil_for();
+    }
+}
+
+/// Untouchable for `frames`, as a Veil is, or longer if one already runs:
+/// the Flurry dash's run down its own line.
+pub fn veil_for(p: &mut Player, frames: u8) {
+    if let Mechanic::Meter { veil, .. } = &mut p.mechanic {
+        *veil = (*veil).max(frames);
+    }
+}
+
+/// Is she inside a Veil right now? Read by `state::Player::untouchable`.
+pub fn veiled(p: &Player) -> bool {
+    matches!(p.mechanic, Mechanic::Meter { veil, .. } if veil > 0)
+}
+
+/// Is she standing in her own sigil this frame?
+pub fn warded(p: &Player) -> bool {
+    matches!(p.mechanic, Mechanic::Meter { warded: true, .. })
+}
+
+/// The world says, once a frame, whether she stands in one of her sigils.
+pub fn set_warded(p: &mut Player, now: bool) {
+    if let Mechanic::Meter { warded, .. } = &mut p.mechanic {
+        *warded = now;
+    }
+}
+
+/// A wound, as her ward lets it through: cut by `sigil, wards her by` while
+/// she stands in her own sigil, whole otherwise and for anybody else.
+pub fn through_the_ward(p: &Player, damage: i32) -> i32 {
+    if damage <= 0 || !warded(p) {
+        return damage;
+    }
+    let kept = 100 - t::sigil_wards().clamp(0, 100);
+    damage * kept / 100
+}
+
+// ---------------------------------------------------------------------------
+// The majors grow along their bar
+// ---------------------------------------------------------------------------
+
+/// How far up its curve a power is, nought at `depth_floor` to one at
+/// `depth_ceiling`: the share of the bar a move was thrown from, read back
+/// off the power it carries.
+pub fn share_of(power: Fx) -> Fx {
+    let span = t::depth_ceiling().sub(t::depth_floor());
+    if span.raw() <= 0 {
+        return Fx::ONE;
+    }
+    power
+        .sub(t::depth_floor())
+        .div(span)
+        .clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// How big a major arrives, as a multiple of its row, from the power it was
+/// thrown with: `majors, size at empty` to `majors, size at full`, a steeper
+/// line than the depth curve, so a major from an empty bar is a modest spell
+/// and one from a full bar the biggest thing on the screen.
+pub fn major_size(power: Fx) -> Fx {
+    crate::math::lerp(t::major_size_empty(), t::major_size_full(), share_of(power))
+}
+
+/// How many columns Judgement brings down at this power: one from empty, up
+/// to `judgement, columns at full`.
+pub fn judgement_columns(power: Fx) -> u8 {
+    let most = t::judgement_columns().max(1);
+    let extra = Fx::from_int((most - 1) as i32).mul(share_of(power));
+    // Rounded, so the second column arrives a quarter of the way up rather
+    // than only at full.
+    1 + extra
+        .add(Fx::ratio(1, 2))
+        .to_int()
+        .clamp(0, (most - 1) as i32) as u8
 }
 
 /// How level she is: her lower bar as a share of full, nought to one. What

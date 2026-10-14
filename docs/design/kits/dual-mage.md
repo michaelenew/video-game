@@ -1,7 +1,7 @@
 ---
-status: built — every move a spell since 2026-10-09; unplayed
+status: built — her spellbook since 2026-10-12, the hop and the long holds the same day, the ball autos and tap-or-hold 2026-10-13; unplayed
 decided: 2026-09-10
-revised: 2026-09-23
+revised: 2026-10-12
 formerly: Statera
 sources: docs/archive/combat-design/statera-skills.md, docs/archive/combat-design/class-builds.md
 depends: ../dual-mage.md
@@ -16,15 +16,216 @@ it is the gap between them.
 Read [../dual-mage.md](../dual-mage.md) first — this kit implements that mechanic and is
 meaningless without it.
 
-> **Every move a spell, 2026-10-09 — built, unplayed.** The person's brief: a complete rework,
-> left dark and right light, every move a spell (the autos short-range spells), `Q` and `E`
-> the dark and light majors, a middle click worth having, and the autos' pull and push gone.
-> The design is [../exploration/0010_dual_mage_spells.md](../exploration/0010_dual_mage_spells.md);
-> §"Every move a spell" below is what was built. **Everything after it — the punches, the
-> wing, the Lance, the Sweep, the pull and the shove — describes the kit it replaced.** The
-> two bars are unchanged.
+> **Her spellbook, 2026-10-12 — built, unplayed.** The owner's brief after playing the
+> 0010 kit: every ability an MMO spell, recast into melee range — cast to fight, cast to move,
+> cast to defend — with dark and light told apart from each other and from the middle click,
+> no push and pull, and the majors spectacle that grows along each bar. The design is
+> [../exploration/0015_dual_mage_spellbook.md](../exploration/0015_dual_mage_spellbook.md);
+> §"Her spellbook" below is what was built. **Everything after it — the 0010 spells, and the
+> punches, the Lance and the Sweep before them — describes kits it replaced.** The two bars
+> are unchanged.
 
-## Every move a spell — built 2026-10-09
+> **Second pass, the same day — built, unplayed.** The owner kept `Q` and `E`, found the
+> litanies weird, and asked for the old wing autos back, much bigger, with a Kalista hop after
+> each. [../exploration/0016_dual_mage_controls.md](../exploration/0016_dual_mage_controls.md)
+> is the design and the answer to "what is missing from the controls". §"Her hands" below is
+> what was built; where it differs from §"Her spellbook", it wins.
+
+## Her hands — built 2026-10-12 and 2026-10-13 (second pass, three rounds)
+
+| Input | Tapped | Held (a sixth of a second) |
+| --- | --- | --- |
+| Left click | **Dark ball**, and a hop the way she holds. Lays a curse stack | **Chain lightning** |
+| Right click | **Light ball**, and a hop. Purges | **the Disk ray** |
+| Middle click | **Binary** on the floor, **Phase** in the air | **the Flurry dash** |
+| `space` + click | **Veil** / **Equinox** / **Sanctuary**, as in §"Her spellbook" | — |
+| `F` key | **Devour** | — |
+| `R` key | **Smite** | — |
+| `Q` / `E` | **Abyss** / **Judgement** — each spends the whole of its bar | — |
+
+The Grasping shade, the Halo, the Shadowstep and the Descent are in the table with no button.
+**Everything on the mouse fills, `F` and `R` vent, majors spend**: see
+[../dual-mage.md](../dual-mage.md) §"Two bars".
+
+**A click is a tap or a hold, never both** (2026-10-13, from the owner). The press opens a hold
+that is neither move yet (`moves::Charge::TapOrHold`): nothing is drawn, her body is free
+(`view::play::undecided`), and no bar moves. Let go before it is full -- `channel`, 10 frames,
+for all three -- and the tap comes out on that frame; hold it full and the spell does, and the
+tap never began. **A full hold is a commitment, not a charge**: the spell plays through whether
+the button stays down or not, and what it is worth is her bar, never how long it was held --
+the MMO cast, as the owner put it -- and quick, a platform fighter's committed move: from the
+press, the first blow of the flurry lands in 15 frames (it was 23 until the owner asked for
+the holds quicker). The bolt lands in 26 and the blast in 30: the owner's next round
+(2026-10-13) kept where they *start* -- the cloud and the disk appear at the same moment --
+and doubled their wind-ups and tripled their active windows, because these are the big
+spells and the hit is something to watch.
+
+**The autos are a ball** (`Shape::Orb`, `moves::orb_at`), since the owner's third round, when
+the wing -- a section of a ring swept round her, however its numbers were set -- was taken out
+whole. The ball starts `orb, starts out from the shoulder` (0.25 m) outside the punching
+shoulder and `orb, starts behind her` (0.45 m) behind her, flies mostly forward -- bowing out
+`orb, bows out on its way` (0.25 m) further about a third of the way along, then coming back in
+-- and finishes dead in front of her chest at the reach, 6 m: the **sweet spot**, the last active
+frame, a bubble of `orb, sweet spot radius` (1 m) worth ×`orb, sweet spot damage` (1.5).
+The offsets and the 0.6 m ball are what let it meet a knee-high gnat straight ahead at one to
+three metres (`tests/critters.rs`): at 0.35 m out, a 0.35 m bow and a 0.4 m ball it passed
+beside one, where a fighter, wider, was caught. Standing, the whole flight drops by the swing's
+stoop for a short body under the crosshair (`moves::orb_line`). Each
+frame before that its volume is the stretch of the flight it covered, 0.6 m thick, and the
+flight before the sweet spot stops two steps short of the end, so full reach is met by the sweet
+spot and nothing else. Forward is the swing's line: level through the dead zone standing,
+rising with a look up, the look exactly in the air. It leaves a trail along the flight, drawn
+from the same function. 5/6/10 frames, 14 damage; a fighter is hit from a metre to seven
+metres dead ahead.
+
+**The hop** (`state::hop_after_the_auto`, `aim::hop_to`). On the ball's last frame, with a
+direction held, she is carried `auto, hop` (3 m) that way at `auto, hop speed` (22 m/s), and
+the carry plus `auto, recovery after a hop` (4 frames) *is* the recovery. It stops a body short
+of a wall, of land too steep to stand on, or of ground above her feet, and rises
+`auto, hop lifts` (0.3 m) plus up to `auto, hop lifts at full` (1.2 m) by her lower bar
+(`dual::hop_lift`), less under a ceiling. **In the air the first hop is a jump**: it rises
+`auto, the air hop rises` (2 m) more, once an airtime (`Mechanic::Meter::hopped`, back on
+landing) and every time while ascending. Holding nothing, there is no hop and the auto keeps
+its whole recovery.
+
+### The long holds — built 2026-10-12
+
+Each fills `meter, a long hold fills` (10) of its bar -- both bars, for the Flurry dash -- since
+the owner's third round (they vented 20 the day before). What is coming is drawn over her through
+the spell's own wind-up, never before it is decided: the storm cloud gathering, the disk
+opening, the two forces wound round her hands.
+
+- **Chain lightning** (dark). A storm cloud over her head (`aim::overhead`,
+  `overhead height` 6 m -- 4.5 until the owner found it sitting near the crosshair, hiding
+  the bolts -- and some 6 m across, dark wispy smoke rather than a ring of beads; 8 m for a
+  day, until the owner asked for it a little smaller) through
+  16 frames; then black lightning onto the body nearest the
+  crosshair's line -- the line from the cloud to the crosshair's point, since a body is not on the crosshair's ray and the point is the floor behind it (2026-10-14: measured from the point alone, it never reached the Ridgeback) -- within `chain lightning, finds a body this near the crosshair` (4 m) --
+  and from it to the nearest body it has not struck within `leaps to a body this near` (6 m),
+  `bodies it strikes` (4) at most, with nothing solid between (`aim::chain_next`). Each link is
+  a burst where it lands, `strike radius` 0.9 m, 22 damage at power one, and a curse stack.
+  Fighters are struck in versus only; in a hunt they are her party. With nobody there it
+  strikes the crosshair's point. The bolts are black with a white edge, re-struck every
+  other frame, and stand for the 6 active frames past the strike. 16/6/16.
+- **The Disk ray** (light). A sun-disk opens over her head through 20 frames -- a flat
+  plate of light 2.7 m across, two rings round it and beads turning round the rim (twice
+  the breadth it was on 2026-10-13, then a fifth smaller the day after) -- standing upright and facing the way she faces; then a
+  blast from it to the point the crosshair is on -- a new line of effect,
+  `aim::Kind::Overhead`, the skillshot's target from the disk rather than her hand -- for 18
+  frames, 0.6 m wide, 40 damage once and 34 frames of hitstun (26 before the longer beam left her minus on hit), purging what it passes through. Reach 16 m. 20/18/16.
+- **The Flurry dash** (twilight; rebuilt 2026-10-13). Her autos cascading forward one into
+  the next (`Shape::Cascade`): five blows, one every 3 frames, each a 1.4 m-wide stretch of
+  the line from where she stood to the spot the crosshair put it on (`aim::Kind::Grounded`,
+  10.5 m), so a body is hit by the blows that pass over it (`moves::flurry_blow`,
+  `moves::flurry_line`). The last strikes a disk as tall across as she is, which stands for
+  `flurry dash, the disk stands` (8 frames); then she runs to it (`state::dash_down_the_flurry`,
+  `aim::flurry_dash_to`: straight there, up or down, stopped short of anything solid) at
+  `flurry dash, speed` (50 m/s, from 30), untouchable for the length of it and through whoever
+  is on the line, and breaks it -- a burst the size of the disk, which hurts what is in it.
+  **A jump in the run's last `flurry dash, a jump this near the end` (6) frames keeps the run**
+  (`bank_the_flurry_jump`, the Reaver's dash jump): thrown on arrival with `the jump keeps`
+  (0.8) of its speed, for crossing the valley. Drawn, she runs through the blows' trails and
+  they scatter off her. 5/23/8.
+
+**Phase and the Equinox rise and carry** (from the owner: the middle click's jump attacks are
+her mobility, and the balanced ones). Phase leaves her moving `phase, keeps this speed` (9 m/s)
+along the blink, rising at `phase, rises` (6 m/s) at the least; the Equinox now blinks along the
+crosshair as she leaves the floor (its reach is Phase's, 6 m) and carries the same way, on top
+of its jump as high as her lower bar is full.
+
+## Her spellbook — built 2026-10-12
+
+**The click is what a spell is cast on, and the row is the verb.**
+
+| | Left: dark — on them | Middle: twilight — on herself | Right: light — on the ground |
+| --- | --- | --- | --- |
+| **On foot — fight** | Litany of night: **Umbral lash › Grasping shade › Devour** | **Binary** | Litany of dawn: **Radiant palm › Halo › Smite** |
+| **In the air — move** | **Shadowstep** | **Phase** | **Descent** |
+| **Leaving the floor — defend** (space + click) | **Veil** | **Equinox** | **Sanctuary** |
+
+`Q` is the **Abyss** and `E` is **Judgement**, on the floor and in the air. The buttons are
+named once in `sim::moves::dual::keys`; the dispatch is `state::dual_move`, on the shared
+takeoff window (`Player::rise`). In the air space is still her second jump and her wing beat,
+so her takeoffs are from the floor only.
+
+**The litanies** (`moves::dual::NIGHT`, `DAWN`; `dual::litany_link`). The bare left and right
+clicks are strings of three spells: a press inside `litany, window` (24 frames) of the last
+link ending throws the next link, and otherwise the first. It advances on the press, landed or
+not, so the third link is a commitment you can whiff.
+
+**The curse** (`Player::curse`/`curse_clock`, `Monster::curse`/`curse_clock`; `dual::lay_curse`).
+Every dark spell that lands lays stacks of her curse — the lash, the Grasp, the Shadowstep's
+arrival and the Veil's puff one, the Devour two, the Abyss one every half second — up to
+`curse, most stacks` (5). One clock: a stack resets it to `curse, one fades every` (1.5 s), and
+when it runs out one stack goes. Every half second each stack ticks for `curse, tick per stack`
+(2) times her Dark power, a tenth of it drained to her. Drawn as dark motes circling the body,
+one per stack.
+
+**The purge** (`dual::purge_damage`). A light spell that lands on a curse sets every stack off
+at once: `purge, damage per stack` (9) × *n*(1 + `purge, extra per stack` (0.3) × *n*), times
+the light spell's power — 11, 28, 51, 79 and 112 at power one, 157 for five from a full Light
+bar. Three stacks or more (`purge, staggers from`) stagger a fighter for `purge, staggers for`.
+A creature takes the damage and no stagger.
+
+**Sigils** (`EffectKind::Sigil`; `World::write_sigil`). The Smite, the Descent, Sanctuary and
+Judgement's field write consecrated ground for `sigil, lasts` (4 s), `sigils, at once` (two)
+of hers at a time. Standing in her own she is **warded**: every wound is cut by `sigil, wards
+her by` (33%; `dual::through_the_ward`, in `Player::wound`). Anybody else standing in one burns
+for `sigil, burns` on the tick.
+
+The moves, each in a line:
+
+- **Umbral lash**: a flat swing of shadow off the left hand, 3.5 m. One stack.
+- **Grasping shade**: hands out of the floor at the crosshair's point, 5 m; a **root**
+  (`root, lasts` 30 frames at `root, speed while rooted` 0.1) and one stack.
+- **Devour**: a maw where she points, 5 m, snapping shut on the active frames. Two stacks, 15%
+  drained.
+- **Radiant palm**: a burst of light at arm's length. Purges.
+- **Halo**: a ring all round her, 3.4 m. Purges.
+- **Smite**: a column from the sky where she points, 6 m, telegraphed by a ring on the floor
+  over its 16-frame startup; lifts (launch 12), purges, writes a sigil.
+- **Binary** (`EffectKind::Stars`): twin stars round her at `binary, orbit radius` for
+  `binary, orbits for` (4 s); each strikes a body once every `binary, strikes a body every`
+  for `binary, damage a strike` — the dark curses, the light purges. One pair; a second
+  renews it.
+- **Shadowstep** (`aim::shadowstep_to`): behind the first body on the line, 8 m, or 14 m
+  (`shadowstep, reaches a cursed body`) for a cursed one, arriving in a burst that curses; a
+  body refunds the airdodge and catches her fall. With nobody, `shadowstep, without a body`
+  (5 m), once a trip.
+- **Phase**: as built, a 6 m blink with a flash where she left; spends the airdodge.
+- **Descent**: the Plunge's dive (`aim::plunge_dir`, its cone) at `descent, dives at`; the
+  landing is a ring of light round her that purges, and a sigil under her.
+- **Veil**: a jump (`self_lift` 13) untouchable for `veil, untouchable for` (18 frames,
+  `Player::untouchable`), cursing whoever was beside her.
+- **Equinox**: both bars by an auto's push, then `equinox, levels by` (12, never more than
+  half the gap) from the higher to the lower, and the level jump as before.
+- **Sanctuary**: a sigil at her feet (`sanctuary, sigil radius`), a pulse through it that
+  purges, and a hop.
+- **Abyss** (`EffectKind::Abyss`): a black sun at the crosshair's floor for `abyss, lasts`
+  (1.5 s): pins, ticks (10% drained), curses every `abyss, curses every`, and collapses in
+  `abyss, collapse damage`. 24 frames of startup, telegraphed.
+- **Judgement**: the middle column is the move's own blow; `dual::judgement_columns` more
+  come down round it (one from empty Light, five from full, `judgement, columns stand apart`
+  2.5 m, grown on the majors' curve so they stay five pillars), every one purging; its field
+  is the great sigil. 32 frames of startup, telegraphed.
+
+**The majors grow along a steeper curve** (`dual::major_size`: `majors, size at empty` 0.4 to
+`majors, size at full` 1.6, against the depth curve's 0.6 to 1.4), and Judgement's columns
+count up with Light. Range and frames never scale.
+
+**Apotheosis.** The frame she ascends (`World::apotheosis`), a nova of both forces
+(`EffectKind::Burst`, slot `effects::APOTHEOSIS`) bursts round her: `apotheosis, damage` to
+everybody in `apotheosis, reaches` (5 m), and every curse in it purged at the top of the curve.
+
+**Drawn**: the curse's motes (`game::curse_spot`), the stars with tails, the black sun hanging
+over its ground with motes spiralling in, sigils as turning rings of light, Judgement's columns,
+Apotheosis bursting out, and her own spells off her body with their telegraphs
+(`game::spell_piece`). **Not done yet:** her fifteen moves play her six old clips (DUAL-12).
+
+`tests/dual_spells.rs` holds one test per move, the litanies, the curse, the purge, the sigils,
+the stars, the majors' growth and Apotheosis; `tests/dual_mage.rs` the benchmarks, B9 new.
+
+## Every move a spell — built 2026-10-09, replaced 2026-10-12
 
 | | Left: dark (the hex) | Middle: twilight | Right: light (the strike) |
 | --- | --- | --- | --- |
@@ -94,7 +295,8 @@ step. `tests/dual_spells.rs` holds one test per move and per reaction.
 - **Three tiers of push:** an auto goads a bar 5, a cast 9, and the finisher 20. The last is
   what makes casting Judgement from high a question about what the other bar does next.
 - **The hill.** Inside a band of 16 nothing moves on its own. Outside it the higher bar rises,
-  the lower falls and she burns, faster the wider the gap. Both bars calm toward empty, always.
+  the lower falls and she burns, faster the wider the gap. Nothing else moves them on their own
+  (the calm, which let both fall toward empty, was taken out on 2026-10-14).
 - **Power is the bar she is carrying**, continuously: a cast reads the carried bar, an auto its
   own. Empty is thin and full is the most she can hold.
 - **The tiers read the lower bar.** At half the dodge is a blink; at three quarters she has a

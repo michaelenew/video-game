@@ -1582,103 +1582,49 @@ pub fn pole_drive_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PoleDriveBoost))
 }
 
-/// Where the inner edge of a wing sits, as a fraction of the move's reach.
-///
-/// A wing is a **section of a torus** lying flat (see `moves::Shape::Wing`), and
-/// this is how big the hole in it is. Near one, which is the point: the volume
-/// is a **thin curved blade travelling through the air**, not a pie slice. At
-/// 0.16 -- where it sat until 2026-09-13 -- the section reached from the
-/// caster's own elbow out to full range on every frame, which is a filled disc
-/// with a pinhole in it, and a filled disc is what this shape exists not to be.
-///
-/// The band it leaves runs from `wing_inner` of the reach out to the reach, so
-/// this knob and `Move::reach` together say both where the blade is and how
-/// deep it is. `view/tests/kinematics.rs` checks the band against the punch in
-/// the baked clip, because the simulation has no idea where a fist is.
-pub fn wing_inner() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingInner))
+/// How far outside the punching shoulder the Dual mage's auto starts, in
+/// metres past the shoulder's own offset (`hand_offset`). See `moves::orb_at`.
+pub fn orb_out() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbOut)).max(Fx::ZERO)
 }
 
-/// How far the ring's middle sits toward the caster's **other** arm, as a
-/// fraction of the move's reach.
-///
-/// A ring centred on the body is the same distance from it at every bearing, so
-/// however short the section is it reads as a piece of a halo rather than as
-/// something thrown. Pushing the middle off her breaks that: the blade comes in
-/// close beside her on the punching arm's side and swings wide in front, which
-/// is a swipe passing by rather than a circle drawn around her.
-///
-/// Toward the other arm rather than the punching one, because the pivot has to
-/// be on the far side of the body from the fist for the near part of the arc to
-/// be the part beside that fist.
-pub fn wing_offside() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingOffside))
+/// How far behind her the auto starts, in metres. See `moves::orb_at`.
+pub fn orb_back() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbBack)).max(Fx::ZERO)
 }
 
-/// And how far forward of her the ring's middle sits, as a fraction of reach.
-///
-/// The other half of placing the ring. It moves where the blade *finishes*
-/// without changing how curved it is, which is the difference between a punch
-/// that ends at arm's length and one that ends a pace in front of her.
-pub fn wing_ahead() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingAhead))
+/// How much further out than it started the auto bows on its way, in
+/// metres, before it comes back in to her centre line. See `moves::orb_at`.
+pub fn orb_bows_out() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbBowsOut)).max(Fx::ZERO)
 }
 
-/// Where the leading edge stops, in turns off straight ahead, toward the
-/// punching arm's side.
-///
-/// **Not dead centre**, and that is the whole of it: the two autos are told
-/// apart by which arm threw them, so each one has to finish in front of *its
-/// own* hand. A wing that closed on the body's centre line put both of them in
-/// the same place at the moment the player is reading which one landed.
-///
-/// Signed by the arm in `moves::wing`, so one knob mirrors.
-pub fn wing_finish() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingFinish))
+/// What the auto's **sweet spot** multiplies damage by: the last frame of its
+/// flight, at full reach dead in front of her. A ball you can throw all day,
+/// with one place in it worth standing a reach away for.
+pub fn orb_sweet() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbSweet))
 }
 
-/// How much of a wing's span its **tip** is, on the last frame it is out.
-///
-/// The tip is the part that has just arrived, and it is the only part live on
-/// that frame -- everything behind it has already been swept. Small, because
-/// the whole point of it is that landing it is a timing decision rather than
-/// something that happens to you.
-pub fn wing_tip() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTip))
+/// How big the auto's sweet spot is: a bubble of its own at the end of the
+/// flight, not the ball's `Move::radius`. How forgiving the sweet spot is
+/// about distance.
+pub fn orb_sweet_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbSweetRadius))
 }
 
-/// What the tip multiplies damage by.
+/// How far along its bar throwing an auto fills the Dual mage -- and a
+/// takeoff, and each bar for a tap of the middle click.
 ///
-/// The one piece of execution in an attack that is otherwise thrown constantly:
-/// a punch you can throw all day, with one frame in it that is worth waiting
-/// for.
-pub fn wing_tipper() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTipper))
-}
-
-/// How big the tip is.
-///
-/// **The tip is a bubble, not a slice.** It is the foremost point of the ring
-/// and nothing else -- one frame, at the end of the blade -- so it carries a
-/// radius of its own rather than inheriting `Move::radius`, which is how deep
-/// the band behind it is. Two different questions: one is how forgiving the
-/// wing is about distance, the other is how forgiving the tip is about exactly
-/// where the end of it was.
-pub fn wing_tip_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTipRadius))
-}
-
-/// How far along the bar landing an auto moves the Dual mage.
-///
-/// The small unit. Everything else on the class is measured against it: an auto
-/// is the thing you throw constantly, so it is the thing the bar is calibrated
-/// in.
+/// The small unit, and since 2026-10-12 the way she builds: an auto is the
+/// thing you throw constantly, so it is the thing the bar is calibrated in.
 pub fn meter_auto_push() -> i32 {
     oven::scalar(Scalar::MeterAutoPush)
 }
 
-/// And how far a cast moves her. More than an auto, because committing to a
-/// move is committing harder to a side than poking is.
+/// How much of its own bar a spell vents -- the Devour, the Smite and the
+/// unbound four (2026-10-12: they filled it, before the autos became the
+/// builders and the spells the release).
 pub fn meter_cast_push() -> i32 {
     oven::scalar(Scalar::MeterCastPush)
 }
@@ -2898,28 +2844,18 @@ pub fn depth_size() -> Fx {
     Fx::ratio(oven::scalar(Scalar::DepthSize), 100)
 }
 
-/// How far along the bar throwing the finisher moves her.
-///
-/// The third tier, and the one `docs/design/dual-mage.md` has been asking for
-/// since the bar was built: "a deep finisher nearly throws you over the edge".
-/// An auto is the small unit, a cast is more, and this is the one that makes
-/// casting Judgement from depth a question about whether you survive it rather
-/// than a free payoff.
+/// How much of its own bar a major spends: the whole of it, as tuned
+/// (2026-10-12). The reward for having built -- a major is worth the bar it was
+/// thrown from, read before this -- and the way out of a runaway, which is the
+/// high bar climbing. It pushed the bar further than anything else until the
+/// owner asked for the majors to spend it.
 pub fn meter_finisher_push() -> i32 {
     oven::scalar(Scalar::MeterFinisherPush)
 }
 
-/// What landing the wing's **tip** multiplies the shove by.
-///
-/// The tip already hits harder ([`wing_tipper`]); this is the other half of
-/// the same execution, and it is what makes which arm you punch with a
-/// *spacing* decision. The light auto's real knockback lives out at the far
-/// edge of the blade, so a player who wants somebody moved has to stand at the
-/// end of their own range to do it -- and on the dark arm the same frame pulls
-/// them that much further in instead, because the sign of the knockback is what
-/// says which. See `moves::Move::knockback`.
-pub fn wing_tip_shove() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTipShove))
+/// What the sweet spot multiplies the shove by.
+pub fn orb_sweet_shove() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OrbSweetShove))
 }
 
 /// What Sweep's **dark** form leaves on whoever it caught: their walking speed,
@@ -3264,64 +3200,64 @@ pub fn air_ball_knock() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallKnock)).clamp(Fx::ZERO, Fx::ONE)
 }
 
-/// How long a Shade bolt (and Reel's) is in flight across its reach: the dark is the force you can see coming.
-pub fn shade_bolt_flight() -> u16 {
-    oven::scalar(Scalar::ShadeBoltFlight).max(1) as u16
+/// How often a curse ticks: every stack on a body deals `curse_tick` and drains it to whoever laid it.
+pub fn curse_every() -> u16 {
+    oven::scalar(Scalar::CurseEvery).max(0) as u16
 }
 
-/// How long Binary's two orbs are in flight across their reach.
-pub fn binary_flight() -> u16 {
-    oven::scalar(Scalar::BinaryFlight).max(1) as u16
+/// How long Binary's twin stars orbit her.
+pub fn binary_orbits() -> u16 {
+    oven::scalar(Scalar::BinaryOrbits).max(0) as u16
 }
 
-/// How long the Abyss well (and Nightfall's) drags, drains and hexes.
+/// How long the Abyss's black sun pins, ticks and curses before it collapses.
 pub fn abyss_life() -> u16 {
-    oven::scalar(Scalar::AbyssLife).max(1) as u16
+    oven::scalar(Scalar::AbyssLife).max(0) as u16
 }
 
-/// Presentation: how many frames a Sunray's line and a Flare's burst stay in the world after their one frame of hitting.
+/// Presentation: how many frames a burst -- Judgement's outer columns, Apotheosis -- stays in the world after its one frame of hitting.
 pub fn spell_flash() -> u16 {
-    oven::scalar(Scalar::SpellFlash).max(1) as u16
+    oven::scalar(Scalar::SpellFlash).max(0) as u16
 }
 
-/// How long a hex stays on a body before it fades on its own.
-pub fn hex_lasts() -> u16 {
-    oven::scalar(Scalar::HexLasts).max(1) as u16
+/// The curse's one clock: a new stack resets it; when it runs out one stack goes and it starts again.
+pub fn curse_fades() -> u16 {
+    oven::scalar(Scalar::CurseFades).max(0) as u16
 }
 
-/// What a Shatter -- light on an Umbra hex -- deals on top of the hit that set it off, before her power.
-pub fn shatter_damage() -> i32 {
-    oven::scalar(Scalar::ShatterDamage).max(0)
+/// What one stack of a curse is worth when light purges it, before the curve and her power.
+pub fn purge_damage() -> i32 {
+    oven::scalar(Scalar::PurgeDamage).max(0)
 }
 
-/// How long a Shatter staggers a fighter.
-pub fn shatter_stagger() -> u16 {
-    oven::scalar(Scalar::ShatterStagger).max(0) as u16
+/// How long a big enough purge staggers a fighter.
+pub fn purge_stagger() -> u16 {
+    oven::scalar(Scalar::PurgeStagger).max(0) as u16
 }
 
-/// What a Wither -- dark on a Radiance hex -- deals on top of the hit, all of it drained back to her, before her power.
-pub fn wither_damage() -> i32 {
-    oven::scalar(Scalar::WitherDamage).max(0)
+/// What each stack of a curse deals on its tick, before her Dark power, all of it drained to her.
+pub fn curse_tick() -> i32 {
+    oven::scalar(Scalar::CurseTick).max(0)
 }
 
-/// What a Wither leaves the victim's walking speed at, for the slow's usual length.
-pub fn wither_slow() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WitherSlow)).max(Fx::ZERO)
+/// What the Grasping shade and the Abyss leave a body's walking speed at while they hold it.
+pub fn root_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RootSlow)).max(Fx::ZERO)
 }
 
-/// How fast the Abyss drags a body toward its middle.
-pub fn abyss_pull() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::AbyssPull)).max(Fx::ZERO)
+/// How often the Abyss lays a curse stack on everything under it.
+pub fn abyss_curse_every() -> u16 {
+    oven::scalar(Scalar::AbyssCurseEvery).max(0) as u16
 }
 
-/// How hard a Flare that met something kicks her back the other way.
-pub fn flare_kick() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::FlareKick)).max(Fx::ZERO)
+/// How fast Descent drives her down its line.
+pub fn descent_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DescentDive)).max(Fx::ZERO)
 }
 
-/// How fast Reel pulls her to the body it caught.
-pub fn reel_pull() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ReelPull)).max(Fx::ZERO)
+/// How far along the line Shadowstep finds a cursed body; a clean one only as far as the row's reach.
+pub fn shadowstep_cursed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepCursed)).max(Fx::ZERO)
 }
 
 /// What Equinox adds to its own lift at a full lower bar, in proportion below it: the most level mage jumps highest.
@@ -3521,6 +3457,256 @@ pub fn step_lift_full() -> Fx {
 /// How fast the Shield step carries him forward over the shield.
 pub fn step_forward() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepForward)).max(Fx::ZERO)
+}
+
+/// The purge's convexity: n stacks are worth n(1 + this x n) of `purge_damage`, so each is worth more than the last.
+pub fn purge_curve() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PurgeCurve)).max(Fx::ZERO)
+}
+
+/// The fewest stacks whose purge staggers a fighter.
+pub fn purge_stagger_from() -> u8 {
+    oven::scalar(Scalar::PurgeStaggerFrom).clamp(0, 255) as u8
+}
+
+/// The most stacks a curse holds.
+pub fn curse_most() -> u8 {
+    oven::scalar(Scalar::CurseMost).clamp(0, 255) as u8
+}
+
+/// How long the Grasping shade roots a body.
+pub fn root_for() -> u16 {
+    oven::scalar(Scalar::RootFor).max(0) as u16
+}
+
+/// How long a sigil stays written on the ground.
+pub fn sigil_lasts() -> u16 {
+    oven::scalar(Scalar::SigilLasts).max(0) as u16
+}
+
+/// How wide a sigil is before her power: Smite's and Descent's.
+pub fn sigil_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SigilRadius)).max(Fx::ZERO)
+}
+
+/// How wide the sigil Sanctuary writes at her feet is, before her power.
+pub fn sanctuary_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SanctuaryRadius)).max(Fx::ZERO)
+}
+
+/// How much of every wound her own sigil takes off while she stands in it.
+pub fn sigil_wards() -> i32 {
+    oven::scalar(Scalar::SigilWards).max(0)
+}
+
+/// What her sigil deals anybody else standing in it, on the curse's tick.
+pub fn sigil_burn() -> i32 {
+    oven::scalar(Scalar::SigilBurn).max(0)
+}
+
+/// How many sigils of hers may be written at once; another replaces the oldest.
+pub fn sigils_at_once() -> usize {
+    oven::scalar(Scalar::SigilsAtOnce).max(1) as usize
+}
+
+/// What is left of an auto's recovery when she hops out of it: the hop is
+/// the rest of the recovery, so a flurry of autos and hops is a rhythm.
+pub fn auto_hop_recovery() -> u16 {
+    oven::scalar(Scalar::AutoHopRecovery).max(0) as u16
+}
+
+/// How far from her middle Binary's stars orbit.
+pub fn binary_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BinaryRadius)).max(Fx::ZERO)
+}
+
+/// How big each of Binary's stars is, as a hit, before her power.
+pub fn binary_star() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BinaryStar)).max(Fx::ZERO)
+}
+
+/// The shortest gap between one star striking the same body twice.
+pub fn binary_every() -> u16 {
+    oven::scalar(Scalar::BinaryEvery).max(0) as u16
+}
+
+/// What one of Binary's stars deals when it strikes, before her power.
+pub fn binary_damage() -> i32 {
+    oven::scalar(Scalar::BinaryDamage).max(0)
+}
+
+/// How fast Binary's stars go round her, in whole turns a second.
+pub fn binary_spin() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BinarySpin)).max(Fx::ZERO)
+}
+
+/// How far Shadowstep takes her along the line when there is no body on it.
+pub fn shadowstep_bare() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepBare)).max(Fx::ZERO)
+}
+
+/// How far past the body she arrives behind.
+pub fn shadowstep_behind() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepBehind)).max(Fx::ZERO)
+}
+
+/// How long the Veil keeps her untouchable as she rises.
+pub fn veil_for() -> u8 {
+    oven::scalar(Scalar::VeilFor).clamp(0, 255) as u8
+}
+
+/// How much Equinox moves from her higher bar to her lower one, at most half the gap.
+pub fn equinox_levels() -> i32 {
+    oven::scalar(Scalar::EquinoxLevels).max(0)
+}
+
+/// How big the Abyss and Judgement arrive from an empty bar, as a multiple of their row.
+pub fn major_size_empty() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorSizeEmpty)).max(Fx::ZERO)
+}
+
+/// How big the Abyss and Judgement arrive from a full bar, as a multiple of their row.
+pub fn major_size_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorSizeFull)).max(Fx::ZERO)
+}
+
+/// How many columns of light Judgement brings down from a full Light bar: one from empty, in proportion between.
+pub fn judgement_columns() -> u8 {
+    oven::scalar(Scalar::JudgementColumns).clamp(0, 255) as u8
+}
+
+/// How far Judgement's outer columns stand from its middle one.
+pub fn judgement_apart() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JudgementApart)).max(Fx::ZERO)
+}
+
+/// The last blow the Abyss deals everything under it as it collapses, before her power.
+pub fn abyss_collapse() -> i32 {
+    oven::scalar(Scalar::AbyssCollapse).max(0)
+}
+
+/// How far the nova that bursts from her as she ascends reaches.
+pub fn apotheosis_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ApotheosisReach)).max(Fx::ZERO)
+}
+
+/// What the nova deals, at the top of her power.
+pub fn apotheosis_damage() -> i32 {
+    oven::scalar(Scalar::ApotheosisDamage).max(0)
+}
+
+/// How much of a curse's tick comes back to whoever laid it: less than all of
+/// it, or one hand's curse pays for the burn of a runaway on its own.
+pub fn curse_drains() -> i32 {
+    oven::scalar(Scalar::CurseDrains).clamp(0, 100)
+}
+
+/// How thick the probe is that the Shadowstep carries along the crosshair's
+/// line to find a creature's part: thin, because the crosshair is a point and
+/// a sac on a spider's back is above her flank by less than a body's width.
+pub fn shadowstep_probe() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowstepProbe)).max(Fx::ratio(1, 100))
+}
+
+/// How far the hop after an auto carries her along the floor, the way she is
+/// holding.
+pub fn auto_hop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHop)).max(Fx::ZERO)
+}
+
+/// How fast the hop after an auto goes.
+pub fn auto_hop_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHopSpeed)).max(Fx::ONE)
+}
+
+/// How high the hop after an auto lifts her from an empty lower bar.
+pub fn auto_hop_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHopLift)).max(Fx::ZERO)
+}
+
+/// How much higher the hop lifts her from a full lower bar, in proportion
+/// between.
+pub fn auto_hop_lift_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoHopLiftFull)).max(Fx::ZERO)
+}
+
+/// How much higher the hop after an auto thrown **in the air** goes, once a
+/// jump -- a second jump made of the auto. Every one of them while ascending.
+pub fn auto_air_jump() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AutoAirJump)).max(Fx::ZERO)
+}
+
+/// How high over her feet her disk and her storm cloud hang. See
+/// `aim::overhead`.
+pub fn overhead_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::OverheadHeight)).max(Fx::ONE)
+}
+
+/// How much of its bar a long hold spends.
+pub fn hold_fills() -> i32 {
+    oven::scalar(Scalar::HoldFills).max(0)
+}
+
+/// How near the crosshair's point a body has to be for Chain lightning's
+/// first bolt to find it.
+pub fn chain_first() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainFirst)).max(Fx::ZERO)
+}
+
+/// How near the last body the next has to be for the lightning to leap.
+pub fn chain_hop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainHop)).max(Fx::ZERO)
+}
+
+/// How many bodies one Chain lightning strikes at most.
+pub fn chain_links() -> usize {
+    oven::scalar(Scalar::ChainLinks).clamp(1, 6) as usize
+}
+
+/// How wide each bolt strikes where it lands.
+pub fn chain_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainRadius)).max(Fx::ratio(1, 10))
+}
+
+/// How fast she dashes down the line of a Flurry dash.
+pub fn flurry_dash_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FlurryDashSpeed)).max(Fx::ONE)
+}
+
+/// The speed Phase -- and the Equinox, which blinks as it leaves the floor --
+/// leaves her carrying along the blink.
+pub fn phase_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PhaseCarry)).max(Fx::ZERO)
+}
+
+/// How fast Phase and the Equinox send her up as the blink ends.
+pub fn phase_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PhaseRise)).max(Fx::ZERO)
+}
+
+/// How far inside a lone arena's bounds the hop after an auto stops: its
+/// wall stands on them, and a hop stopped on the line landed her on top of
+/// it. See `aim::hop_to`.
+pub fn hop_keeps_inside() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HopKeepsInside)).max(Fx::ZERO)
+}
+
+/// How long the Flurry dash's disk stands, struck, at the end of its active
+/// window before she dashes to it: the last frames of the window, after the
+/// blows (`moves::flurry_blow`).
+pub fn flurry_pause() -> u16 {
+    oven::scalar(Scalar::FlurryPause).max(0) as u16
+}
+
+/// How many frames before she reaches the disk a jump is kept for the
+/// arrival, and thrown carrying the run (the Reaver's dash jump, on hers).
+pub fn flurry_jump_buffer() -> u16 {
+    oven::scalar(Scalar::FlurryJumpBuffer).max(0) as u16
+}
+
+/// How much of the run's speed the jump out of it carries.
+pub fn flurry_jump_keep() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FlurryJumpKeep)).max(Fx::ZERO)
 }
 
 /// What a hit through one of her stains adds to itself, as a share of the

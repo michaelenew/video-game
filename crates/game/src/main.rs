@@ -277,8 +277,6 @@ fn main() {
                     place_debris,
                     place_gusts,
                     place_discs,
-                    place_wings,
-                    place_wing_tips,
                     place_wingspans,
                     place_marks,
                     place_scythes,
@@ -287,7 +285,8 @@ fn main() {
                     place_champion_trails,
                     place_champion_glow,
                     place_pips,
-                    place_hexes,
+                    place_curses,
+                    place_spells,
                 ),
                 beast::place,
                 drive_camera,
@@ -1552,6 +1551,11 @@ struct EffectMesh {
 
 /// How many pieces one effect can be drawn as.
 ///
+/// A bolt of Chain lightning: a black stroke and its white rim for each kink,
+/// and the flash where it lands, black in white.
+const BOLT_STROKES: usize = 8;
+const BOLT_PARTS: usize = 2 * BOLT_STROKES + 2;
+
 /// **Counted from the widest effect rather than written down.** It was a
 /// literal six, correct on the day the Guillotine lotus had six blades -- and
 /// when the lotus grew to twelve the pool did not, so the first six blades had
@@ -1566,6 +1570,7 @@ const EFFECT_PARTS: usize = {
     let rough = sim::effects::ROUGH_BEADS;
     let ring = sim::effects::RING_PIECES;
     let flames = sim::effects::CARPET_FLAMES;
+    let ring = if BOLT_PARTS > ring { BOLT_PARTS } else { ring };
     let most = if blades > arms { blades } else { arms };
     let most = if flames > most { flames } else { most };
     let most = if beads > most { beads } else { most };
@@ -1618,25 +1623,6 @@ struct GustMesh(usize);
 /// on the rollback path.
 #[derive(Component)]
 struct DiscMesh(usize);
-
-/// One slice of the Dual mage's wing.
-///
-/// The wing is the one attack volume in the game that is not a line, so the
-/// line-drawer above cannot show it: what it would draw is the blade's leading
-/// edge, which since the band became thin is a stub half a metre long out at
-/// the rim. A pool of radial bars laid along the section draws the band itself
-/// -- read straight off `hitbox.sector`, the same shape the hit test and the
-/// debug overlay use, so the thing you see swept past you is the thing that
-/// decided whether you were hit.
-#[derive(Component)]
-struct WingMesh {
-    owner: usize,
-    index: usize,
-}
-
-/// The last frame of the Dual mage's wing: a ball at the end of the blade.
-#[derive(Component)]
-struct WingTipMesh(usize);
 
 /// One of the six wings on the Dual mage's **back**: her two bars, drawn.
 ///
@@ -1701,14 +1687,6 @@ fn wing_mesh() -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
     .with_inserted_indices(Indices::U32(indices))
 }
-
-/// How many bars the wing is drawn with.
-///
-/// Enough that consecutive bars overlap at the arc the autos are tuned for, so
-/// the band reads as one swept ribbon rather than as a comb. Fixed, like every
-/// other mesh pool here: spawning as a move comes and goes would put allocation
-/// on the rollback path.
-const WING_SLICES: usize = 12;
 
 /// The aim marker a channelled move is wound out along.
 ///
@@ -1818,16 +1796,34 @@ struct PipMesh {
 /// [`PipMesh::body`] for the creature.
 const PIP_QUARRY: usize = MAX_PLAYERS;
 
-/// The Dual mage's hex on a body, drawn as an orb over its head in the
-/// force's colour (2026-10-09): Umbra dark, Radiance light. Two per body, one
-/// of each, and the one that matches the body's hex is shown -- so the person
-/// carrying it and the mage about to set it off both see which it is. `body`
-/// is a fighter's index, or [`PIP_QUARRY`] for the creature.
+/// One stack of the Dual mage's curse on a body (2026-10-12), drawn as a dark
+/// mote circling it at the chest -- one per stack, so the person carrying it
+/// and the mage about to purge it both count the same thing. Read straight off
+/// `dual::stacks`, which is what the purge spends. `body` is a fighter's
+/// index, or [`PIP_QUARRY`] for the creature.
 #[derive(Component)]
-struct HexMesh {
+struct CurseMesh {
     body: usize,
-    hex: u8,
+    index: u8,
 }
+
+/// Enough motes for the largest curse a byte can hold.
+const MAX_MOTES: u8 = 7;
+
+/// One piece of a Dual mage's spell **off her own body** (2026-10-12): the
+/// Halo, the Smite's and Judgement's column, the
+/// Grasp's hands, the Devour's maw, the Descent, the Veil -- everything she
+/// throws whose volume is her own blow rather than a thing in the world, and
+/// the wind-up that telegraphs it. See [`spell_piece`].
+#[derive(Component)]
+struct SpellMesh {
+    owner: usize,
+    part: usize,
+}
+
+/// How many pieces one of her spells is drawn as, at most.
+const SPELL_PARTS: usize = 40;
+
 /// Enough pips for the largest cap the Oven allows.
 const MAX_PIPS: u8 = 12;
 
@@ -1871,6 +1867,18 @@ struct EffectLook {
     column: Handle<Mesh>,
     spike: Handle<Mesh>,
     ball: Handle<Mesh>,
+    hoop: Handle<Mesh>,
+    /// The Dual mage's sun-disk: a flat plate of warm light.
+    sun: Handle<StandardMaterial>,
+    /// Chain lightning: black at the core, and a white rim drawn as the
+    /// inside of a slightly fatter shell (only its far faces are drawn), so
+    /// the black reads with a white outline against anything behind it.
+    bolt: Handle<StandardMaterial>,
+    bolt_rim: Handle<StandardMaterial>,
+    /// The storm cloud: smoke rather than matter, dark and see-through, and
+    /// fainter still at its wisps.
+    storm: Handle<StandardMaterial>,
+    wisp: Handle<StandardMaterial>,
     /// The fighters' own forms, for the thralls: a limb, a torso and a head
     /// (`limb_form`).
     limb: Handle<Mesh>,
@@ -2167,6 +2175,41 @@ fn setup(
         column: unit.clone(),
         spike,
         ball,
+        hoop: meshes.add(Torus::new(0.94, 1.0)),
+        sun: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
+            emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        bolt: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.0, 0.0, 0.0),
+            unlit: true,
+            ..default()
+        }),
+        bolt_rim: materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 1.0, 1.0),
+            emissive: LinearRgba::rgb(3.0, 3.0, 3.4),
+            unlit: true,
+            cull_mode: Some(bevy::render::render_resource::Face::Front),
+            ..default()
+        }),
+        storm: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.07, 0.06, 0.09, 0.5),
+            emissive: LinearRgba::rgb(0.02, 0.015, 0.04),
+            perceptual_roughness: 1.0,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
+        wisp: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.12, 0.11, 0.15, 0.22),
+            perceptual_roughness: 1.0,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
         limb: meshes.add(limb_form(view::skeleton::Joint::ArmL)),
         block: meshes.add(limb_form(view::skeleton::Joint::Chest)),
         head: meshes.add(limb_form(view::skeleton::Joint::Head)),
@@ -2179,6 +2222,9 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 EffectMesh { slot, part },
+                // Light and smoke and magic: a bolt's or a cloud's shadow on
+                // the floor reads as a solid thing standing in the air.
+                bevy::pbr::NotShadowCaster,
             ));
         }
     }
@@ -2257,27 +2303,11 @@ fn setup(
             DiscMesh(slot),
         ));
     }
-    // The Dual mage's wing, and the ball it finishes on. Spawned for every
-    // fighter rather than for her alone, because the class is picked at runtime
-    // and can change mid-match with Tab.
+    // The six wings on the Dual mage's back. Spawned for every fighter rather
+    // than for her alone, because the class is picked at runtime and can
+    // change mid-match with Tab.
     for owner in 0..MAX_PLAYERS {
-        for index in 0..WING_SLICES {
-            commands.spawn((
-                Mesh3d(unit.clone()),
-                MeshMaterial3d(look.beam.clone()),
-                Transform::default(),
-                Visibility::Hidden,
-                WingMesh { owner, index },
-            ));
-        }
-        commands.spawn((
-            Mesh3d(pellet.clone()),
-            MeshMaterial3d(look.beam.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            WingTipMesh(owner),
-        ));
-        // And the six on her back, in the colour of the force each one is.
+        // The six on her back, in the colour of the force each one is.
         for (force, material) in [
             (sim::class::Force::Dark, look.wing_dark.clone()),
             (sim::class::Force::Light, look.wing_light.clone()),
@@ -2310,18 +2340,28 @@ fn setup(
             ));
         }
     }
-    // The Dual mage's hexes, one orb of each force over every body.
+    // The Dual mage's curse, a mote per stack round every body.
     for body in 0..=PIP_QUARRY {
-        for (hex, material) in [
-            (sim::dual::UMBRA, look.dark.clone()),
-            (sim::dual::RADIANCE, look.light.clone()),
-        ] {
+        for index in 0..MAX_MOTES {
             commands.spawn((
                 Mesh3d(pellet.clone()),
-                MeshMaterial3d(material),
+                MeshMaterial3d(look.dark.clone()),
                 Transform::default(),
                 Visibility::Hidden,
-                HexMesh { body, hex },
+                CurseMesh { body, index },
+            ));
+        }
+    }
+    // And her spells off her own body, a pool per fighter.
+    for owner in 0..MAX_PLAYERS {
+        for part in 0..SPELL_PARTS {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.light.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                SpellMesh { owner, part },
+                bevy::pbr::NotShadowCaster,
             ));
         }
     }
@@ -2629,9 +2669,9 @@ fn place_structures(
 /// line, at the angle you aimed it, ending on whatever stopped it.
 fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        // Lines only. A volume that carries a section is a wing, and a straight
-        // line through a curve is exactly the drawing this rule exists to
-        // avoid -- `place_wings` has it.
+        // Not the Dual mage's autos either: the ball and the trail it leaves
+        // are drawn as what they are (`spell_piece`), and the stretch it
+        // covered this frame is not a rod.
         //
         // And not the Champion's: her weapons are drawn now, on the volume,
         // and the arc of the cut is `place_champion_trails`. A glowing rod
@@ -2640,7 +2680,7 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
         // The debug overlay still draws the capsule itself.
         let p = &sim.cur.players[tag.0];
         let shot = sim::state::hitbox(p)
-            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && hb.sector.is_none());
+            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && !orb_out(p));
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -2833,63 +2873,12 @@ fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut
 
 /// Draw the Dual mage's wing as the band the hit test reads.
 ///
-/// One bar per slice, laid from the section's inner arc to its outer one at
-/// evenly spaced bearings, so what is drawn is the section itself rather than a
-/// reconstruction of it. The shape comes out of `state::hitbox` like everything
-/// else here: an attack that looks bigger than it hits is a promise the game
-/// does not keep, and one that looks like a fan when it is a blade is the same
-/// promise in the other direction.
-fn place_wings(sim: Res<Sim>, mut meshes: Query<(&WingMesh, &mut Transform, &mut Visibility)>) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let out = sim::state::hitbox(&sim.cur.players[tag.owner]);
-        let Some((hb, ring)) = out.and_then(|hb| hb.sector.map(|ring| (hb, ring))) else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        let along = tag.index as f32 / (WING_SLICES - 1) as f32;
-        let at = |from_the_inside: f32| {
-            fx3(ring.point(
-                sim::Fx::from_raw((from_the_inside * 65536.0) as i32),
-                sim::Fx::from_raw((along * 65536.0) as i32),
-            ))
-        };
-        let (inner, outer) = (at(0.0), at(1.0));
-        let across = outer - inner;
-        let depth = across.length();
-        if depth < 0.01 {
-            *vis = Visibility::Hidden;
-            continue;
-        }
-        *vis = Visibility::Inherited;
-        tf.translation = inner + across * 0.5;
-        // The unit cylinder stands along Y, so it is turned on to the radius it
-        // is drawing -- which is a straight line even though the band is not:
-        // a radius of an annulus is the whole of the section at that bearing.
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, across / depth);
-        let width = hb.radius.to_f32_for_render();
-        tf.scale = Vec3::new(width, depth, width);
-    }
-}
-
-/// And the ball it finishes on: the tip, out for one frame at the foremost
-/// point of the ring.
-fn place_wing_tips(
-    sim: Res<Sim>,
-    mut meshes: Query<(&WingTipMesh, &mut Transform, &mut Visibility)>,
-) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let tip = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.tipper);
-        let Some(hb) = tip else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        *vis = Visibility::Inherited;
-        tf.translation = fx3(hb.centre());
-        // At the size it hits at, unlike the beam: the whole question the tip
-        // asks is how far out it reaches, and a drawing that shrank it would be
-        // teaching the wrong distance.
-        tf.scale = Vec3::splat(hb.radius.to_f32_for_render() * 2.0);
-    }
+/// Is this fighter throwing one of the Dual mage's autos?
+fn orb_out(p: &sim::state::Player) -> bool {
+    p.class == sim::Class::DualMage
+        && p.action
+            .attack_kind()
+            .is_some_and(sim::moves::dual::is_an_auto)
 }
 
 /// The six wings on the Dual mage's back: three a side, one per third of its
@@ -2967,6 +2956,7 @@ fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut
         *vis = Visibility::Inherited;
         tf.translation = piece.at;
         tf.scale = piece.scale;
+        tf.rotation = piece.turn;
     }
 }
 
@@ -3313,10 +3303,10 @@ fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut V
     }
 }
 
-/// Put the hex orbs over whoever carries a hex, in its force's colour.
-fn place_hexes(sim: Res<Sim>, mut meshes: Query<(&HexMesh, &mut Transform, &mut Visibility)>) {
-    for (mesh, mut tf, mut vis) in meshes.iter_mut() {
-        let Some((at, size)) = hex_spot(&sim.cur, mesh.body, mesh.hex) else {
+/// Put the curse's motes round whoever carries one.
+fn place_curses(sim: Res<Sim>, mut meshes: Query<(&CurseMesh, &mut Transform, &mut Visibility)>) {
+    for (mote, mut tf, mut vis) in meshes.iter_mut() {
+        let Some((at, size)) = curse_spot(&sim.cur, mote.body, mote.index) else {
             *vis = Visibility::Hidden;
             continue;
         };
@@ -3326,24 +3316,599 @@ fn place_hexes(sim: Res<Sim>, mut meshes: Query<(&HexMesh, &mut Transform, &mut 
     }
 }
 
-/// Where the hex orb of kind `hex` over `body` goes and how big, or `None`
-/// if that body is not carrying that hex. It shrinks as the hex fades, so
-/// how long is left is readable at a glance.
-fn hex_spot(w: &World, body: usize, hex: u8) -> Option<(Vec3, f32)> {
-    let (carried, left, top) = if body == PIP_QUARRY {
+/// Where mote `index` of the curse on `body` goes and how big, or `None` if
+/// that body carries fewer stacks than that. A ring round the chest that
+/// turns on the frame counter, so it is the same picture after a rollback;
+/// the fuller the curse the faster it turns and the bigger every mote, so
+/// four stacks against five reads across the arena.
+fn curse_spot(w: &World, body: usize, index: u8) -> Option<(Vec3, f32)> {
+    let (curse, middle, round) = if body == PIP_QUARRY {
         let beast = w.monster()?;
         let head = beast.world_of(species::look(beast.species).head, sim::V3::ZERO);
-        (beast.hex, beast.hex_left, fx3(head) + Vec3::Y * 2.1)
+        (beast.curse, fx3(head), 1.3)
     } else {
         let p = &w.players[body];
         let height = sim::tuning::body_height().to_f32_for_render();
-        (p.hex, p.hex_left, fx3(p.pos) + Vec3::Y * (height + 0.75))
+        (p.curse, fx3(p.pos) + Vec3::Y * height * 0.6, 0.65)
     };
-    if left == 0 || carried != hex {
+    let n = sim::dual::stacks(curse);
+    if index >= n {
         return None;
     }
-    let share = left as f32 / sim::tuning::hex_lasts().max(1) as f32;
-    Some((top, 0.18 + 0.22 * share.clamp(0.0, 1.0)))
+    let spin = w.frame as f32 * (0.03 + 0.012 * n as f32);
+    let turn = index as f32 / n as f32 * std::f32::consts::TAU + spin;
+    let bob = (spin * 2.0 + index as f32).sin() * 0.12;
+    Some((
+        middle + Vec3::new(turn.cos() * round, bob, turn.sin() * round),
+        0.14 + 0.025 * n as f32,
+    ))
+}
+
+/// Put the pieces of every Dual mage's spell where [`spell_piece`] says.
+fn place_spells(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &SpellMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut Mesh3d,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
+        let Some(piece) = spell_piece(&sim.cur, tag.owner, tag.part) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+        *vis = Visibility::Inherited;
+        if mesh.0 != want_mesh {
+            mesh.0 = want_mesh;
+        }
+        if mat.0 != want_skin {
+            mat.0 = want_skin;
+        }
+        tf.translation = piece.at;
+        tf.scale = piece.scale;
+        tf.rotation = piece.turn;
+    }
+}
+
+/// **A Dual mage's spell, off her own body**, piece by piece: what is drawn
+/// for the move she is throwing, on the frame the world is in. A pure function
+/// of the snapshot, like [`effect_piece`].
+///
+/// Two halves. **The wind-up is a telegraph** -- the Smite's and Judgement's
+/// ring of light on the floor where the column will come down, the Grasp's
+/// and the Abyss's dark one, the Devour's maw opening, the palm gathering --
+/// growing over the startup, so the person opposite can read where it lands
+/// and when. **The active frames are the spell** -- drawn at the volume the hit
+/// test uses (`sim::state::hitbox`), so what is seen striking is what strikes.
+fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
+    use sim::moves::dual as d;
+    use sim::state::Action;
+    let p = &w.players[owner];
+    if p.class != sim::Class::DualMage || p.health <= 0 {
+        return None;
+    }
+    let height = sim::tuning::body_height().to_f32_for_render();
+    let feet = fx3(p.pos);
+    let waist = feet + Vec3::Y * height * 0.5;
+    let pulse = (w.frame as f32 * 0.25).sin() * 0.5 + 0.5;
+    // The Veil and her ward are states, not moves: drawn whatever she is
+    // throwing, in the last pieces of the pool.
+    if part >= SPELL_PARTS - 3 {
+        let k = (part - (SPELL_PARTS - 3)) as f32;
+        if sim::dual::veiled(p) {
+            let turn = w.frame as f32 * 0.4 + k * std::f32::consts::TAU / 3.0;
+            return Some(floating_in(
+                Skin::Dark,
+                waist + Vec3::new(turn.cos() * 0.35, (k - 1.0) * 0.5, turn.sin() * 0.35),
+                0.55,
+            ));
+        }
+        if sim::dual::warded(p) {
+            let turn = w.frame as f32 * 0.05 + k * std::f32::consts::TAU / 3.0;
+            return Some(floating_in(
+                Skin::Light,
+                feet + Vec3::new(turn.cos() * 0.7, 0.15 + 0.6 * k, turn.sin() * 0.7),
+                0.1,
+            ));
+        }
+        return None;
+    }
+    let (kind, startup, left) = match p.action {
+        // **The auto's ball** (2026-10-13): gathering at her shoulder
+        // through the wind-up, then flying its curve with a trail behind it.
+        Action::Startup { kind, left } if d::is_an_auto(kind) => {
+            let m = sim::moves::get(p.class, kind);
+            let through = 1.0 - left as f32 / m.startup.max(1) as f32;
+            return orb_piece(p, kind, part, None, through);
+        }
+        Action::Active { kind, left } if d::is_an_auto(kind) => {
+            return orb_piece(p, kind, part, Some(left), 1.0);
+        }
+        Action::Startup { kind, left } => (kind, true, left),
+        Action::Active { kind, left } => (kind, false, left),
+        // **The run to the disk**: the trails scattering as she goes through.
+        Action::Recovery {
+            kind: d::FLURRY_DASH,
+            ..
+        } if p.haul > 0 => return flurry_piece(w, p, part, None),
+        _ => return None,
+    };
+    let m = sim::moves::get(p.class, kind);
+    // How far through the wind-up, or through the active frames.
+    let through = if startup {
+        1.0 - left as f32 / m.startup.max(1) as f32
+    } else {
+        1.0 - left as f32 / m.active.max(1) as f32
+    };
+    let aimed = fx3(p.aim_at());
+    let volume = sim::state::hitbox(p);
+    let ring = |centre: Vec3, radius: f32, count: usize, skin: Skin, size: f32| -> Option<Piece> {
+        (part < count).then(|| {
+            let turn = part as f32 / count as f32 * std::f32::consts::TAU + w.frame as f32 * 0.04;
+            floating_in(
+                skin,
+                centre + Vec3::new(turn.cos() * radius, 0.0, turn.sin() * radius),
+                size,
+            )
+        })
+    };
+    let disc = |centre: Vec3, radius: f32, skin: Skin| -> Option<Piece> {
+        (part == 0).then(|| standing(Shape::Column, skin, centre, radius, 0.0, 0.05))
+    };
+    match kind {
+        // **Columns out of the sky**: a ring on the floor through the
+        // wind-up, the column itself on the active frames.
+        d::SMITE | d::JUDGEMENT => {
+            let radius = if startup {
+                let mut probe = m;
+                probe.radius = m.radius.mul(sim::state::depth_of_size(p, kind));
+                probe.radius.to_f32_for_render()
+            } else {
+                volume?.radius.to_f32_for_render()
+            };
+            if startup {
+                if part == 0 {
+                    return Some(standing(
+                        Shape::Column,
+                        Skin::Light,
+                        aimed,
+                        radius * through,
+                        0.0,
+                        0.05,
+                    ));
+                }
+                if part == 1 {
+                    return Some(standing(
+                        Shape::Column,
+                        Skin::Light,
+                        aimed,
+                        0.08 + 0.12 * through,
+                        0.0,
+                        16.0,
+                    ));
+                }
+                return ring(aimed + Vec3::Y * 0.1, radius, 10, Skin::Light, 0.12)
+                    .filter(|_| part >= 2);
+            }
+            let at = fx3(volume?.from);
+            match part {
+                0 => Some(standing(
+                    Shape::Column,
+                    Skin::Light,
+                    at,
+                    radius * (1.0 - 0.3 * through),
+                    0.0,
+                    18.0,
+                )),
+                _ => ring(
+                    at + Vec3::Y * 0.2,
+                    radius * (1.0 + through),
+                    12,
+                    Skin::Light,
+                    0.25,
+                ),
+            }
+        }
+        // **Hands out of the floor**: a dark ring gathering where she
+        // pointed, then spikes of shadow closing on it.
+        d::GRASPING_SHADE => {
+            let radius = m.radius.to_f32_for_render();
+            if startup {
+                return disc(aimed, radius * through, Skin::Dark);
+            }
+            let at = fx3(volume?.from);
+            (part < 6).then(|| {
+                let turn = part as f32 / 6.0 * std::f32::consts::TAU;
+                let lean = radius * (1.0 - through) * 0.8;
+                standing(
+                    Shape::Spike,
+                    Skin::Dark,
+                    at + Vec3::new(turn.cos() * lean, 0.0, turn.sin() * lean),
+                    0.18,
+                    0.0,
+                    1.6 * (0.4 + 0.6 * through),
+                )
+            })
+        }
+        // **The maw**: two halves of dark drawing apart through the wind-up
+        // and snapping shut on the active frames.
+        d::DEVOUR => {
+            let radius = m.radius.to_f32_for_render();
+            let at = if startup { aimed } else { fx3(volume?.from) } + Vec3::Y * height * 0.5;
+            let open = if startup { through } else { 1.0 - through };
+            match part {
+                0 => Some(floating_in(
+                    Skin::Dark,
+                    at + Vec3::Y * open * 1.1,
+                    radius * 0.8,
+                )),
+                1 => Some(floating_in(
+                    Skin::Dark,
+                    at - Vec3::Y * open * 1.1,
+                    radius * 0.8,
+                )),
+                _ => None,
+            }
+        }
+        // **The black sun**, telegraphed: its ground darkening where it will
+        // stand. The sun itself is the effect.
+        d::ABYSS if startup => disc(
+            aimed,
+            m.radius
+                .mul(sim::state::depth_of_size(p, kind))
+                .to_f32_for_render()
+                * through,
+            Skin::Dark,
+        ),
+        // **Rings round her**: the Halo, the Sanctuary's pulse and the
+        // Descent's landing burst out to the radius they strike at.
+        d::HALO | d::SANCTUARY | d::DESCENT if !startup => {
+            let v = volume?;
+            let radius = v.radius.to_f32_for_render() * (0.35 + 0.65 * through);
+            let lift = if kind == d::HALO { height * 0.5 } else { 0.2 };
+            ring(feet + Vec3::Y * lift, radius, 12, Skin::Light, 0.22)
+        }
+        // **The Descent's dive**: a pillar of light round her on the way down.
+        d::DESCENT => (part == 0).then(|| {
+            standing(
+                Shape::Column,
+                Skin::Light,
+                feet,
+                0.6 + 0.2 * pulse,
+                0.0,
+                height + 2.5,
+            )
+        }),
+        // **The Veil's puff**: shadow bursting round her as she goes.
+        d::VEIL if !startup => {
+            let v = volume?;
+            ring(
+                waist,
+                v.radius.to_f32_for_render() * through,
+                8,
+                Skin::Dark,
+                0.3,
+            )
+        }
+        // **Binary and Equinox**: one of each force gathering in her hands --
+        // the stars about to be raised, the bars about to be levelled.
+        d::BINARY | d::EQUINOX if startup => {
+            let side = Vec3::new(
+                -p.facing.z.to_f32_for_render(),
+                0.0,
+                p.facing.x.to_f32_for_render(),
+            );
+            match part {
+                0 => Some(floating_in(
+                    Skin::Dark,
+                    waist + side * 0.5,
+                    0.12 + 0.18 * through,
+                )),
+                1 => Some(floating_in(
+                    Skin::Light,
+                    waist - side * 0.5,
+                    0.12 + 0.18 * through,
+                )),
+                _ => None,
+            }
+        }
+        // **The Shadowstep's going**: she thins into shadow on the spot.
+        d::SHADOWSTEP if startup => {
+            (part == 0).then(|| floating_in(Skin::Dark, waist, 0.7 * (1.0 - 0.6 * through)))
+        }
+        // **The storm cloud**, full over her head through the wind-up and
+        // as the bolts leave it. The bolts are the effects'.
+        d::CHAIN_LIGHTNING => hold_gathering(w, p, kind, if startup { through } else { 1.0 }, part),
+        // **The disk**, full over her head through the wind-up; on the active
+        // frames the blast runs from it to the point, drawn down the line the
+        // hit test uses.
+        d::DISK_RAY if startup => hold_gathering(w, p, kind, through, part),
+        d::DISK_RAY => {
+            let v = volume?;
+            let (from, to) = (fx3(v.from), fx3(v.to));
+            let swell = 1.0 + 0.25 * (w.frame as f32 * 0.9).sin();
+            let r = v.radius.to_f32_for_render();
+            match part {
+                k if k < 15 => hold_gathering(w, p, kind, 1.0, k),
+                15 => Some(rod(Skin::Light, from, to, r * 0.6)),
+                16 => Some(rod(Skin::Sun, from, to, r * swell)),
+                17 => Some(floating_in(Skin::Light, to, r * 1.8 * swell)),
+                _ => None,
+            }
+        }
+        // **The cascade** (2026-10-13): her autos thrown one into the next
+        // down the line the hit test strikes along, to the disk at its end.
+        d::FLURRY_DASH if !startup => flurry_piece(w, p, part, Some(left)),
+        d::FLURRY_DASH => hold_gathering(w, p, kind, through, part),
+        _ => None,
+    }
+}
+
+/// **The Dual mage's auto, drawn**: the ball, and the trail it leaves along
+/// the curve it flew -- both read off `sim::moves::orb_at`, the path the hit
+/// test uses, so the trail on the screen is where it could hit. `left` is the
+/// active frames remaining (`None` in the wind-up, where the ball gathers at
+/// the start of its flight, `grown` of the way); on the last the ball has
+/// arrived and is drawn at the sweet spot's size.
+fn orb_piece(
+    p: &sim::state::Player,
+    kind: u8,
+    part: usize,
+    left: Option<u16>,
+    grown: f32,
+) -> Option<Piece> {
+    const TRAIL: usize = 12;
+    let m = sim::moves::get(p.class, kind);
+    let skin = if kind == sim::moves::dual::DARK_AUTO {
+        Skin::Dark
+    } else {
+        Skin::Light
+    };
+    let dir = sim::moves::orb_line(p.facing, p.aim_dir(), p.grounded, p.stoop);
+    let at = |t: f32| {
+        fx3(sim::moves::orb_at(
+            p.pos,
+            p.facing,
+            dir,
+            &m,
+            sim::Fx::from_raw((t.clamp(0.0, 1.0) * 65536.0) as i32),
+        ))
+    };
+    let ball = m.radius.to_f32_for_render();
+    let Some(left) = left else {
+        return (part == 0).then(|| floating_in(skin, at(0.0), ball * (0.3 + 0.7 * grown)));
+    };
+    let (now, size) = if left == 0 {
+        (1.0, sim::tuning::orb_sweet_radius().to_f32_for_render())
+    } else {
+        let (_, now) = sim::moves::orb_progress(&m, left);
+        (now.to_f32_for_render(), ball)
+    };
+    match part {
+        0 => Some(floating_in(skin, at(now), size)),
+        k if k <= TRAIL => {
+            let back = k as f32 / TRAIL as f32;
+            Some(floating_in(
+                skin,
+                at(now * (1.0 - back)),
+                ball * (0.75 - 0.6 * back),
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// **The Flurry dash, drawn** (2026-10-13): her autos cascading down the line
+/// `sim::moves::flurry_line` draws -- each blow a ball flying its stretch with
+/// a trail, bowing to alternate sides, leaving its trail standing -- and the
+/// disk they strike at the end, as tall across as she is. `left` is the active
+/// frames remaining; `None` is the run, when the trails behind her scatter
+/// outward and fade as she goes through them. The blow in flight is the one
+/// `sim::moves::flurry_blow` says is out, so what flies is what hits.
+fn flurry_piece(
+    w: &World,
+    p: &sim::state::Player,
+    part: usize,
+    left: Option<u16>,
+) -> Option<Piece> {
+    const PER: usize = 6;
+    const SHOWN: usize = 5;
+    let m = sim::moves::get(p.class, sim::moves::dual::FLURRY_DASH);
+    let (a, d) = sim::moves::flurry_line(p.aim_path.from, p.aim_path.to);
+    let (a, d) = (fx3(a), fx3(d));
+    let (blows, out) = sim::moves::flurry_blow(&m, left.unwrap_or(0));
+    let n = (blows as usize).clamp(1, SHOWN);
+    let every = m.rehit.max(1) as f32;
+    // Which blow is in flight, and how far along its stretch; past the last,
+    // they have all landed.
+    let (current, frac) = match (left, out) {
+        (Some(l), Some(b)) => {
+            let elapsed = m.active.saturating_sub(l) as f32;
+            (
+                b as usize,
+                ((elapsed - b as f32 * every + 1.0) / every).clamp(0.0, 1.0),
+            )
+        }
+        _ => (n, 1.0),
+    };
+    let way = d - a;
+    let length = way.length().max(0.01);
+    let flat = Vec3::new(way.x, 0.0, way.z).normalize_or(Vec3::Z);
+    let side = Vec3::new(-flat.z, 0.0, flat.x);
+    let path = |b: usize, u: f32| {
+        let bow = (std::f32::consts::PI * u).sin();
+        let sign = if b % 2 == 0 { 1.0 } else { -1.0 };
+        a.lerp(d, (b as f32 + u) / n as f32) + side * (sign * bow * 0.9) + Vec3::Y * (bow * 0.35)
+    };
+    let skin_of = |b: usize| if b % 2 == 0 { Skin::Dark } else { Skin::Light };
+    let ball = 0.6;
+    // How far through the line her run has carried her: what is behind it
+    // scatters.
+    let run = left
+        .is_none()
+        .then(|| ((fx3(p.pos) + Vec3::Y * 0.9 - a).dot(way) / (length * length)).clamp(0.0, 1.0));
+    if part < SHOWN * PER {
+        let (b, k) = (part / PER, part % PER);
+        if b >= n || b > current {
+            return None;
+        }
+        if b == current {
+            return Some(if k == 0 {
+                floating_in(skin_of(b), path(b, frac), ball)
+            } else {
+                let back = k as f32 / PER as f32;
+                floating_in(
+                    skin_of(b),
+                    path(b, frac * (1.0 - back)),
+                    ball * (0.75 - 0.6 * back),
+                )
+            });
+        }
+        // A landed blow's trail, standing where it flew.
+        let u = (k as f32 + 0.5) / PER as f32;
+        let mut at = path(b, u);
+        let mut size = ball * 0.45;
+        if let Some(run) = run {
+            let behind = ((run - (b as f32 + u) / n as f32) * length / 1.5).clamp(0.0, 1.0);
+            let hash = ((part as f32 * 12.9898).sin() * 43758.547).fract() - 0.5;
+            let sign = if b % 2 == 0 { 1.0 } else { -1.0 };
+            let outward = (side * (sign + hash) + Vec3::Y * (0.6 + hash)).normalize_or(Vec3::Y);
+            at += outward * behind * 2.5;
+            size *= 1.0 - behind;
+            if size <= 0.01 {
+                return None;
+            }
+        }
+        return Some(floating_in(skin_of(b), at, size));
+    }
+    // The disk, swelling into being as the last blow flies at it.
+    let grown = if current + 1 >= n {
+        if current >= n { 1.0 } else { frac }
+    } else {
+        0.0
+    };
+    if grown <= 0.0 {
+        return None;
+    }
+    let r = sim::tuning::body_height().to_f32_for_render() * 0.5 * grown;
+    let shiver = 1.0 + 0.04 * (w.frame as f32 * 1.3).sin();
+    match part - SHOWN * PER {
+        0 => Some(plate(Skin::Dark, d, flat, r * shiver, 0.08)),
+        1 => Some(hoop(Skin::Light, d, flat, r * 1.02)),
+        2 => Some(hoop(Skin::Light, d, flat, r * 0.6 * shiver)),
+        _ => None,
+    }
+}
+
+/// **A long hold, `full` of the way to coming out** (2026-10-12): Chain
+/// lightning's storm cloud churning over her head, the Disk ray's disk opening
+/// there, or the Flurry dash's two forces wound round her hands.
+fn hold_gathering(
+    w: &World,
+    p: &sim::state::Player,
+    kind: u8,
+    full: f32,
+    part: usize,
+) -> Option<Piece> {
+    use sim::moves::dual as d;
+    let over = fx3(sim::aim::overhead(p.pos));
+    let height = sim::tuning::body_height().to_f32_for_render();
+    let waist = fx3(p.pos) + Vec3::Y * height * 0.55;
+    let spin = w.frame as f32;
+    match kind {
+        // **A storm cloud** (2026-10-13): a mass of dark smoke the width of a
+        // room, flat underneath and heaped on top, wisps trailing off its
+        // rim -- hung high enough (`overhead, hangs above her feet`) that the
+        // bolts under it are what the camera sees, not the cloud.
+        d::CHAIN_LIGHTNING => {
+            const PUFFS: usize = 18;
+            const WISPS: usize = 10;
+            let reach = 1.0 + 2.0 * full;
+            let drift = spin * 0.004;
+            if part < PUFFS {
+                let k = part as f32;
+                let a = k * 2.399_963 + drift;
+                let out = ((k + 0.5) / PUFFS as f32).sqrt();
+                let breathe = 1.0 + 0.08 * (spin * 0.05 + k * 1.7).sin();
+                let size = reach * (0.55 - 0.25 * out) * breathe;
+                let heap = (1.0 - out) * reach * 0.25 + (k * 3.1).sin() * 0.15;
+                return Some(Piece {
+                    shape: Shape::Ball,
+                    skin: Skin::Storm,
+                    at: over + Vec3::new(a.cos() * out * reach, heap, a.sin() * out * reach * 0.85),
+                    scale: Vec3::new(size * 2.0, size * 1.1, size * 1.7),
+                    turn: Quat::IDENTITY,
+                });
+            }
+            if part < PUFFS + WISPS {
+                let k = (part - PUFFS) as f32;
+                let a = k / WISPS as f32 * std::f32::consts::TAU + spin * 0.01 + (k * 1.3).sin();
+                let sway = (spin * 0.03 + k * 2.1).sin();
+                let r = reach * (1.05 + 0.2 * sway);
+                return Some(Piece {
+                    shape: Shape::Ball,
+                    skin: Skin::Wisp,
+                    at: over + Vec3::new(a.cos() * r, 0.1 * sway, a.sin() * r),
+                    scale: Vec3::new(reach * 0.5, reach * 0.06, reach * 0.16),
+                    turn: Quat::from_rotation_y(-a + std::f32::consts::FRAC_PI_2),
+                });
+            }
+            None
+        }
+        // **The sun-disk** (2026-10-13): a flat plate of light upright across
+        // her front, facing the way she faces, two rings round it and the
+        // beads turning round the rim -- opening to full over the wind-up.
+        d::DISK_RAY => {
+            let face = Vec3::new(
+                p.facing.x.to_f32_for_render(),
+                0.0,
+                p.facing.z.to_f32_for_render(),
+            )
+            .normalize_or(Vec3::Z);
+            let side = Vec3::new(-face.z, 0.0, face.x);
+            let open = 0.25 + 0.75 * full;
+            match part {
+                0 => Some(plate(Skin::Sun, over, face, 1.35 * open, 0.06)),
+                1 => Some(hoop(Skin::Light, over, face, 1.7 * open)),
+                2 => Some(hoop(Skin::Light, over, face, 1.95 * open)),
+                k if k < 15 => {
+                    let turn = (k - 3) as f32 / 12.0 * std::f32::consts::TAU - spin * 0.05;
+                    let r = 2.25 * open;
+                    Some(floating_in(
+                        Skin::Light,
+                        over + side * (turn.cos() * r) + Vec3::Y * (turn.sin() * r),
+                        0.14 + 0.12 * full,
+                    ))
+                }
+                _ => None,
+            }
+        }
+        d::FLURRY_DASH => (part < 6).then(|| {
+            let k = part as f32;
+            let turn = k / 6.0 * std::f32::consts::TAU + spin * 0.35;
+            let skin = if part % 2 == 0 {
+                Skin::Dark
+            } else {
+                Skin::Light
+            };
+            floating_in(
+                skin,
+                waist
+                    + Vec3::new(
+                        turn.cos() * 0.55,
+                        (spin * 0.3 + k).sin() * 0.2,
+                        turn.sin() * 0.55,
+                    ),
+                0.08 + 0.12 * full,
+            )
+        }),
+        _ => None,
+    }
 }
 
 /// Where pip `index` over `body` goes, or `None` if that body carries fewer
@@ -3434,8 +3999,9 @@ struct Piece {
     skin: Skin,
     at: Vec3,
     scale: Vec3,
-    /// Which way the piece's own up points: identity for everything that
-    /// stands upright, and a limb's direction for a thrall's arms and legs.
+    /// How the unit shape is turned before it is scaled into place: the
+    /// identity for everything that stands upright, a limb's direction for a
+    /// thrall's arms and legs, and the way a disk faces or a bolt runs.
     turn: Quat,
 }
 
@@ -3447,6 +4013,9 @@ enum Shape {
     Spike,
     /// A sphere, which is exactly what the hit test for a travelling effect is.
     Ball,
+    /// A thin hoop, lying flat until it is turned: the rings round the Dual
+    /// mage's sun-disk.
+    Hoop,
     /// A fighter's limb, a torso and a head: what a thrall is built of, so it
     /// is made the way the fighters are.
     Limb,
@@ -3476,6 +4045,13 @@ enum Skin {
     /// standing in the arena says it where they are.
     Light,
     Dark,
+    /// The sun-disk's plate, and the bolt's black core and white rim, and the
+    /// storm cloud's smoke and wisps: see the fields of `EffectLook`.
+    Sun,
+    Bolt,
+    BoltRim,
+    Storm,
+    Wisp,
     /// Broken ground: the stones' own material, so rough terrain reads as
     /// earth rather than as an effect.
     Stone,
@@ -3490,6 +4066,7 @@ impl EffectLook {
             Shape::Column => self.column.clone(),
             Shape::Spike => self.spike.clone(),
             Shape::Ball => self.ball.clone(),
+            Shape::Hoop => self.hoop.clone(),
             Shape::Limb => self.limb.clone(),
             Shape::Block => self.block.clone(),
             Shape::Head => self.head.clone(),
@@ -3506,6 +4083,11 @@ impl EffectLook {
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
+            Skin::Sun => self.sun.clone(),
+            Skin::Bolt => self.bolt.clone(),
+            Skin::BoltRim => self.bolt_rim.clone(),
+            Skin::Storm => self.storm.clone(),
+            Skin::Wisp => self.wisp.clone(),
             Skin::Stone => self.stone.clone(),
             Skin::Air => self.beam.clone(),
         }
@@ -3516,11 +4098,46 @@ impl EffectLook {
 fn standing(shape: Shape, skin: Skin, at: Vec3, radius: f32, bottom: f32, top: f32) -> Piece {
     let height = (top - bottom).max(0.01);
     Piece {
+        turn: Quat::IDENTITY,
         shape,
         skin,
         at: at + Vec3::Y * (bottom + height * 0.5),
         scale: Vec3::new(radius * 2.0, height, radius * 2.0),
-        turn: Quat::IDENTITY,
+    }
+}
+
+/// A flat disk of `radius` and `thick`ness whose face looks along `facing`.
+fn plate(skin: Skin, at: Vec3, facing: Vec3, radius: f32, thick: f32) -> Piece {
+    Piece {
+        shape: Shape::Column,
+        skin,
+        at,
+        scale: Vec3::new(radius * 2.0, thick, radius * 2.0),
+        turn: Quat::from_rotation_arc(Vec3::Y, facing.normalize_or(Vec3::Y)),
+    }
+}
+
+/// A hoop of `radius` round `at`, its face looking along `facing`.
+fn hoop(skin: Skin, at: Vec3, facing: Vec3, radius: f32) -> Piece {
+    Piece {
+        shape: Shape::Hoop,
+        skin,
+        at,
+        scale: Vec3::splat(radius),
+        turn: Quat::from_rotation_arc(Vec3::Y, facing.normalize_or(Vec3::Y)),
+    }
+}
+
+/// A rod of `radius` from `a` to `b`.
+fn rod(skin: Skin, a: Vec3, b: Vec3, radius: f32) -> Piece {
+    let along = b - a;
+    let length = along.length().max(0.01);
+    Piece {
+        shape: Shape::Column,
+        skin,
+        at: (a + b) * 0.5,
+        scale: Vec3::new(radius * 2.0, length, radius * 2.0),
+        turn: Quat::from_rotation_arc(Vec3::Y, along / length),
     }
 }
 
@@ -3533,11 +4150,11 @@ fn floating(at: Vec3, radius: f32) -> Piece {
 /// The same, in a skin of your choosing.
 fn floating_in(skin: Skin, at: Vec3, radius: f32) -> Piece {
     Piece {
+        turn: Quat::IDENTITY,
         shape: Shape::Ball,
         skin,
         at,
         scale: Vec3::splat(radius * 2.0),
-        turn: Quat::IDENTITY,
     }
 }
 
@@ -3769,26 +4386,23 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             fx3(effect.bolt_at()),
             effect.field_radius().to_f32_for_render(),
         )),
-        // The Dual mage's spells (2026-10-09). The dark ones in flight are
-        // dark balls the size the hit test reads; Binary is two, one of each
-        // force, wound round the line it flies; the Abyss a dark disc on the
-        // floor at the radius that drags; a Flare a ball of light; a Sunray a
-        // row of light beads along the line it lit, for its few frames.
-        EffectKind::ShadeBolt if part == 0 => Some(floating_in(
-            Skin::Dark,
-            fx3(effect.bolt_at()),
-            effect.field_radius().to_f32_for_render(),
-        )),
-        EffectKind::Binary if part < 2 => {
-            let centre = fx3(effect.bolt_at());
-            let dir = fx3(effect.dir).normalize_or_zero();
-            let side = dir.cross(Vec3::Y).normalize_or(Vec3::X);
-            let up = side.cross(dir);
+        // The Dual mage's spellbook (2026-10-12). Every piece is drawn at the
+        // volume it tests, and the rest is spectacle round it.
+        //
+        // **The twin stars**: one dark and one light at the size they strike,
+        // each with a tail of smaller motes where it has just been.
+        EffectKind::Stars if part < 8 => {
+            let star = part % 2;
+            let back = (part / 2) as u16;
+            let mut then = *effect;
+            then.age = effect.age.saturating_sub(back * 3);
             let r = effect.field_radius().to_f32_for_render();
-            let turn = effect.age as f32 * 0.7 + part as f32 * std::f32::consts::PI;
-            let at = centre + (side * turn.cos() + up * turn.sin()) * r * 0.8;
-            let skin = if part == 0 { Skin::Dark } else { Skin::Light };
-            Some(floating_in(skin, at, r * 0.6))
+            let skin = if star == 0 { Skin::Dark } else { Skin::Light };
+            Some(floating_in(
+                skin,
+                fx3(then.star_at(star)),
+                r * (1.0 - 0.22 * back as f32),
+            ))
         }
         // The Hemoplague (2026-10-12): a faint disc of blood on the floor at
         // exactly the radius it hurts in, and wisps of it drifting round
@@ -3816,33 +4430,180 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 radius * 0.18,
             ))
         }
-        EffectKind::Abyss if part == 0 => Some(standing(
-            Shape::Column,
-            Skin::Dark,
-            at,
-            effect.field_radius().to_f32_for_render(),
-            0.0,
-            0.16,
-        )),
-        EffectKind::Flare if part == 0 => {
-            // Big on its first frame and shrinking after: the burst, then
-            // the picture of it.
+        // **The black sun**: its ground, the sun itself hanging over the
+        // middle, and motes spiralling in from the rim to it. On its last
+        // frames it collapses: the sun swells and the ground goes.
+        EffectKind::Abyss if part < 10 => {
+            let r = effect.field_radius().to_f32_for_render();
             let life = effect.life.max(1) as f32;
-            let left = 1.0 - (effect.age as f32 / life).clamp(0.0, 1.0);
+            let through = (effect.age as f32 / life).clamp(0.0, 1.0);
+            let collapse = ((through - 0.8) / 0.2).clamp(0.0, 1.0);
+            match part {
+                0 => Some(standing(
+                    Shape::Column,
+                    Skin::Dark,
+                    at,
+                    r * (1.0 - collapse),
+                    0.0,
+                    0.12,
+                )),
+                1 => Some(floating_in(
+                    Skin::Dark,
+                    at + Vec3::Y * (1.2 + r * 0.3),
+                    r * (0.22 + 0.25 * collapse),
+                )),
+                _ => {
+                    let k = (part - 2) as f32;
+                    let spiral = (effect.age as f32 * 0.02 + k / 8.0).fract();
+                    let turn = k / 8.0 * std::f32::consts::TAU + effect.age as f32 * 0.09;
+                    let reach = r * (1.0 - spiral);
+                    Some(floating_in(
+                        Skin::Dark,
+                        at + Vec3::new(
+                            turn.cos() * reach,
+                            0.2 + spiral * (1.0 + r * 0.3),
+                            turn.sin() * reach,
+                        ),
+                        0.16,
+                    ))
+                }
+            }
+        }
+        // **A sigil**: a thin disc of light at the radius that wards and
+        // burns, and a ring of light turning slowly round its rim. It thins
+        // over its last second so leaving it is not a surprise.
+        EffectKind::Sigil if part < 9 => {
+            let r = effect.field_radius().to_f32_for_render();
+            let left = effect.life.saturating_sub(effect.age) as f32;
+            let fade = (left / 60.0).clamp(0.25, 1.0);
+            if part == 0 {
+                return Some(standing(Shape::Column, Skin::Light, at, r, 0.0, 0.04));
+            }
+            let k = (part - 1) as f32;
+            let turn = k / 8.0 * std::f32::consts::TAU + effect.age as f32 * 0.02;
             Some(floating_in(
                 Skin::Light,
-                at,
-                effect.field_radius().to_f32_for_render() * (0.4 + 0.6 * left),
+                at + Vec3::new(turn.cos() * r, 0.25, turn.sin() * r),
+                0.16 * fade,
             ))
         }
-        EffectKind::Sunray if part < sim::effects::TETHER_BEADS => {
-            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
-            let end = fx3(effect.pos.add(effect.dir.scale(effect.reach)));
-            Some(floating_in(
-                Skin::Light,
-                at.lerp(end, t),
-                effect.field_radius().to_f32_for_render().max(0.12),
-            ))
+        // **A burst**. Judgement's outer columns stand where they strike,
+        // thinning as they fade; Apotheosis is both forces bursting outward
+        // from her; a Shadowstep's arrival and a Phase's flash are a ball of
+        // their force, big on the frame it hits and shrinking after.
+        EffectKind::Burst => {
+            let life = effect.life.max(1) as f32;
+            let left = 1.0 - (effect.age as f32 / life).clamp(0.0, 1.0);
+            let r = effect.field_radius().to_f32_for_render();
+            if effect.slot == sim::moves::dual::JUDGEMENT {
+                let centre = effect.burst_at(part)?;
+                return Some(standing(
+                    Shape::Column,
+                    Skin::Light,
+                    fx3(centre),
+                    r * (0.4 + 0.6 * left),
+                    0.0,
+                    18.0,
+                ));
+            }
+            if effect.slot == sim::effects::APOTHEOSIS {
+                let out = 1.0 - left;
+                return match part {
+                    0 => Some(floating_in(Skin::Light, at, r * (0.3 + 0.7 * out))),
+                    1 => Some(floating_in(Skin::Dark, at, r * (0.2 + 0.5 * out))),
+                    k if k < 12 => {
+                        let turn = (k - 2) as f32 / 10.0 * std::f32::consts::TAU;
+                        let skin = if k % 2 == 0 { Skin::Dark } else { Skin::Light };
+                        Some(floating_in(
+                            skin,
+                            at + Vec3::new(turn.cos(), 0.0, turn.sin()) * r * out,
+                            0.35,
+                        ))
+                    }
+                    _ => None,
+                };
+            }
+            // **A bolt of Chain lightning** (2026-10-12): black lightning
+            // from where it leapt -- the cloud, or the last body -- to where
+            // it struck, jagged and re-jagged every frame, and a flash where
+            // it landed.
+            // **A bolt of Chain lightning** (2026-10-13): black lightning with
+            // a white edge, from where it leapt -- the cloud, or the last body
+            // -- to where it struck, in jagged strokes re-struck every other
+            // frame, and a black flash ringed in white where it landed. Each
+            // stroke is a black rod inside a fatter white one of which only
+            // the far side is drawn, so the white shows round the black.
+            if effect.slot == sim::moves::dual::CHAIN_LIGHTNING {
+                const STROKES: usize = BOLT_STROKES;
+                let from = fx3(effect.home);
+                let hash = |n: f32| ((n * 12.9898).sin() * 43758.547).fract() - 0.5;
+                let strike = (effect.age / 2) as f32 * 7.0;
+                let span = (at - from).length();
+                let kink = |i: usize| {
+                    if i == 0 || i == STROKES {
+                        return Vec3::ZERO;
+                    }
+                    let seed = i as f32 + strike;
+                    Vec3::new(hash(seed), hash(seed + 3.1), hash(seed + 5.7))
+                        * (span * 0.08).min(0.9)
+                };
+                let point = |i: usize| from.lerp(at, i as f32 / STROKES as f32) + kink(i);
+                let core = 0.03 + 0.025 * left;
+                return match part {
+                    k if k < STROKES => Some(rod(Skin::Bolt, point(k), point(k + 1), core)),
+                    k if k < 2 * STROKES => {
+                        let k = k - STROKES;
+                        Some(rod(Skin::BoltRim, point(k), point(k + 1), core + 0.025))
+                    }
+                    k if k == 2 * STROKES => {
+                        Some(floating_in(Skin::Bolt, at, r * 0.45 * (0.3 + 0.7 * left)))
+                    }
+                    k if k == 2 * STROKES + 1 => Some(Piece {
+                        shape: Shape::Ball,
+                        skin: Skin::BoltRim,
+                        at,
+                        scale: Vec3::splat(r * 1.1 * (0.3 + 0.7 * left)),
+                        turn: Quat::IDENTITY,
+                    }),
+                    _ => None,
+                };
+            }
+            // **The Flurry dash's disk breaking** (2026-10-13): shards of
+            // both forces flung out across the disk's face as she runs
+            // through it, carried on the way she was going.
+            if effect.slot == sim::moves::dual::FLURRY_DASH {
+                let out = 1.0 - left;
+                let flat = Vec3::new(
+                    at.x - effect.home.x.to_f32_for_render(),
+                    0.0,
+                    at.z - effect.home.z.to_f32_for_render(),
+                )
+                .normalize_or(Vec3::X);
+                let side = Vec3::new(-flat.z, 0.0, flat.x);
+                return (part < 12).then(|| {
+                    let th = part as f32 / 12.0 * std::f32::consts::TAU + 0.3;
+                    let outward = (side * th.cos() + Vec3::Y * th.sin()).normalize_or(Vec3::Y);
+                    let skin = if part % 2 == 0 {
+                        Skin::Dark
+                    } else {
+                        Skin::Light
+                    };
+                    Piece {
+                        shape: Shape::Spike,
+                        skin,
+                        at: at + outward * r * (0.6 + 1.8 * out) + flat * out * 1.6
+                            - Vec3::Y * out * out,
+                        scale: Vec3::new(0.3, 0.7, 0.3) * (0.25 + 0.75 * left),
+                        turn: Quat::from_rotation_arc(Vec3::Y, outward),
+                    }
+                });
+            }
+            let skin = if effect.slot == sim::moves::dual::SHADOWSTEP {
+                Skin::Dark
+            } else {
+                Skin::Light
+            };
+            (part == 0).then(|| floating_in(skin, at, r * (0.4 + 0.6 * left)))
         }
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
@@ -3997,21 +4758,21 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 effect.age as f32 * fast + part as f32 * std::f32::consts::TAU / SPUN_BLADES as f32;
             let mid = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
             Some(Piece {
+                turn: Quat::IDENTITY,
                 shape: Shape::Column,
                 skin: Skin::Shade,
                 at: mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
                 scale: Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE),
-                turn: Quat::IDENTITY,
             })
         }
         EffectKind::ShadowFan if part < sim::moves::reaver::blades(effect.slot) => {
             let r = effect.field_radius().to_f32_for_render();
             Some(Piece {
+                turn: Quat::IDENTITY,
                 shape: Shape::Column,
                 skin: Skin::Shade,
                 at: fx3(effect.fan_blade_at(part)),
                 scale: Vec3::new(r * 2.0, r * 0.4, r * 2.0),
-                turn: Quat::IDENTITY,
             })
         }
         EffectKind::ShadowRing if part < sim::effects::RING_PIECES => Some(floating_in(
@@ -4070,6 +4831,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
         }
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
+            turn: Quat::IDENTITY,
             shape: Shape::Column,
             skin: Skin::Shade,
             at: fx3(effect.lotus_at(part, effect.pos)),
@@ -4078,7 +4840,6 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
                 effect.field_radius().to_f32_for_render() * 2.0,
             ),
-            turn: Quat::IDENTITY,
         }),
         _ => None,
     }

@@ -82,9 +82,10 @@ fn main() {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Script {
-    /// Dark auto, dark Lance, light auto, light Sweep, repeated. The climb.
+    /// Three dark autos, then three light, repeated. The climb, and the curse
+    /// built and purged.
     Alternate,
-    /// One dark auto, then dark casts only. The runaway.
+    /// Dark autos and the Abyss, and nothing light. The runaway.
     OneSided,
     /// Balanced, then one bar walked to the band's edge, then one Judgement.
     Finisher,
@@ -114,8 +115,12 @@ impl Script {
             colour,
             ascending: 0,
             jumped: false,
+            hopped: false,
+            dash_jump: false,
             landed: 0,
             singe: Fx::ZERO,
+            veil: 0,
+            warded: false,
         };
         match self {
             // Level at the first tier, with the carried bar at the far edge
@@ -135,16 +140,20 @@ impl Script {
     /// presses have gone before and where the bars stand. `0` presses nothing.
     fn press(self, count: u32, w: &World) -> u16 {
         match self {
-            Script::Alternate => {
-                [Input::LEFT, Input::MIDDLE, Input::RIGHT, Input::MECHANIC][(count % 4) as usize]
-            }
-            Script::OneSided => {
-                if count == 0 {
-                    Input::LEFT
-                } else {
-                    [Input::MIDDLE, Input::MECHANIC, Input::SPECIAL][((count - 1) % 3) as usize]
-                }
-            }
+            Script::Alternate => [
+                d::keys::DARK,
+                d::keys::DARK,
+                d::keys::DARK,
+                d::keys::LIGHT,
+                d::keys::LIGHT,
+                d::keys::LIGHT,
+            ][(count % 6) as usize],
+            Script::OneSided => [
+                d::keys::DARK,
+                d::keys::DARK,
+                d::keys::DARK,
+                d::keys::DARK_MAJOR,
+            ][(count % 4) as usize],
             Script::Finisher => {
                 if count == 0 {
                     Input::SPECIAL
@@ -295,8 +304,8 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
     if let Some(opening) = script.opening() {
         w.players[0].mechanic = opening;
     }
-    // Where the autos land: just inside the shorter one's reach, dead ahead.
-    let reach = sim::moves::get(Class::DualMage, d::SUNRAY).reach;
+    // Where the autos land: just inside their reach, dead ahead.
+    let reach = sim::moves::get(Class::DualMage, d::LIGHT_AUTO).reach;
     let stand = w.players[0]
         .pos
         .add(w.players[0].facing.scale(reach.sub(t::body_radius())));

@@ -8544,3 +8544,144 @@ Each is widened rather than capped. The Mantis's mailbox and habit memory still 
 change on this machine (0.96 ms against 0.52); four hunters there cost 1.35 ms. Every other
 case is inside it.
 **Verdict** — four bodies and four-way rooms want playing; nothing here has been played yet.
+### 2026-10-12 — the Dual mage's spellbook
+**Changed** Her whole kit ([exploration/0015](exploration/0015_dual_mage_spellbook.md)). The
+click is what a spell is cast on -- dark on *them* (curses), light on *the ground* (sigils),
+twilight on *herself* -- and the row is the verb: fight on foot, move in the air, defend off
+the floor. Two litanies of three on the bare clicks, Binary's twin stars, Shadowstep and
+Descent in the air, the Veil and Sanctuary off the floor. The hex and its Shatter and Wither
+are gone; a curse stacks to five, ticks, and light purges it, each stack worth more than the
+last. The Abyss pins and curses rather than drags; Judgement brings down one to five columns;
+the majors grow along a steeper curve (0.4x to 1.6x). Ascending bursts in Apotheosis.
+**Why** The owner, after playing 0010: "Left and right click are extremely basic attacks, it
+doesn't have interesting tools for mobility", read against three replays of one session
+(`cargo run -p hunt --bin replay`, which now splits its table by class). The Dual mage threw
+about 240 spells in the Hollows and landed 10, every hit 3 to 9 but one; 164 of them were her
+air row thrown as movement into nothing (Flare 62/0, Phase 49/0, Reel 53/8), and she burned
+for most of it on a one-sided dark bar. The Reaver's Whirl cut 18 a tick for seconds while she
+did other things and her Plunge cashed 505; the Elementalist's Cataclysm hit 190 to 238.
+**Numbers, first pass and why they moved** On a dummy for half a round, with the benchmarks'
+dummy brought from 5 m into sword range (2 m) -- at 5 m the litanies reached nothing:
+- The litanies alternating were 2.4 bars against B1's 1 to 2¼: the litanies' blows came down
+  (lash and Grasp 16 → 10, Devour 34 → 23, palm and Halo 20 → 12, Smite 42 → 26).
+- **The drink paid for the burn.** The dark hand and the Abyss with no light at all cost her
+  nothing in half a round: five ticking stacks drained to her in full out-healed the burn's
+  cap. The curse now drains a tenth (`curse, drained to her`, appended), the Devour 15%
+  rather than half, the Abyss 10% rather than 15. B2's cost is 0.57 bars.
+- **The majors in turn were 6.7 bars**, free, because alternating them keeps her level. Frames
+  are the price in this game: the Abyss went from 14 frames of startup to 24 and Judgement from
+  22 to 32 (both reactable now, and telegraphed by a ring on the floor), their recoveries to 36
+  and 44, their lockout to 255% (the column's ceiling -- 400 was tried and clamps), the Abyss's
+  curse every half second rather than every third, Judgement 140 → 121. New benchmark B9 holds
+  the pair to 3½ bars: 3.35.
+- Binary's stars struck every half second for 12 each and roughly doubled anything thrown
+  beside them: every three quarters of a second, for 8.
+- The purge was 12 × n(1 + 0.2n) and then 8 × n(1 + 0.2n) on the way down; it ended at
+  9 × n(1 + 0.3n) -- 112 for five at power one, 157 from full Light -- so the fourth and fifth
+  stacks are worth chasing.
+- The Smite's launch was 9, which from an empty bar (×0.6) lifted a body a quarter of a metre:
+  12.
+**Movement** The Shadowstep at nothing first reset her fall and could be thrown every half
+second, and the lab search found her crossing 35 to 41 m (she had crossed 21 to 25). A step at
+nothing now keeps her falling and is once a trip, as Phase and the airdodge are; a step to a
+body refunds it. Her envelope is 21 to 31 m; her fixture lines are re-recorded. Against a
+creature the Shadowstep finds the part on the crosshair's line with a thin probe carried along
+it -- with a body-sized one it met the Broodmother's flank under the sac it was aimed at, and
+the fore pair stopped being a hop for her (`tests/broodmother.rs`).
+**Pins** Hers re-pinned, and the Reaver's: her fight did not change, but effects are hashed by
+their kind's number and the retired Shade bolt sat before her shadow's blades in the list.
+**Not done** Her fifteen moves play her six old clips (DUAL-12).
+**Verdict** — unplayed.
+
+### 2026-10-12 — the Dual mage, second pass: the wing autos and the hop
+**Changed** The bare left and right clicks are the wing autos again, on the floor and in the
+air, in place of the litanies (Umbral lash › Grasping shade › Devour; Radiant palm › Halo ›
+Smite) and the air row's Shadowstep and Descent. The wings are much bigger than the 2026-09
+ones: reach 3.8 m, inner edge 0.75 → 0.35 of it, tip bubble 0.5 → 1.25 m; 5/6/10
+frames, 14 damage. On the last frame, with a direction held, she hops 3 m that way and the hop
+is the recovery; each hop lifts 0.3 m plus up to 1.2 m more by her lower bar. The Devour is on
+the `F` key and the Smite on the `R` key. Standing, the wing now rises with a look above the
+horizon, and against a creature only its tip counts. The auto's recovery is 10 rather than 12
+so that alternating wings reaches the second tier inside B4's 16–21 s (it came at 21.2 s on
+12). Tried and reverted on the way: shrinking the tip's share of the span to 0.05 so the blade
+covers the front (it did not fix the creature case, which was the blade spending the swing on
+the first flank, and it took the tip's reward away from distance).
+**Why** The owner: "put her old autos back, much larger, so she can actually hit things; tie
+her mobility to the autos, like Kalista, so her game is keeping distance". And a meaning per
+button that does not change as she is lifted off the floor (exploration/0016).
+**Verdict** —
+
+### 2026-10-12 — the Dual mage, second pass, second round: forward wings, spending, long holds
+**Changed** The wings are thrown forward: the ring's middle 0.1 of the reach behind her and on
+her own line (was 0.1 ahead and 0.3 off the punching side), reach 3.8 → 6 m, arc 0.3 → 0.12
+turns, inner edge 0.35 → 0.3, the tip's share of the span 0.25 → 0.1, finishing dead ahead
+(was 0.073 turns off). An auto fills 5 → 6. The tiers 50/75 → 33/67; the wings stayed at 95.
+The majors spend the whole of their bar (were +20); a spell vents 9 (was +9); a takeoff fills
+6 (was +9). Three long holds: Chain lightning, the Disk ray, the Flurry dash, venting 20 each.
+The first air hop of an airtime rises 2 m more. Phase and the Equinox leave her moving 9 m/s
+along the blink and rising at 6 m/s; the Equinox blinks. Benchmarks restated: B2, B4, B6, B7
+and B9 (see `dual-mage.md`).
+**Tried and reverted** The wings at 100 on both bars, to make the thirds even to the top:
+alternating never ascended, because the calm always has one bar just under while the other
+tops out -- `dual-mage.md`'s own reason for 95, met again. An auto filling 7: the climb's
+blink came at 5.4 s, which is much more than "a little faster" once the tiers came down too.
+The wing's ring 0.25 of the reach behind her with the arc at 0.2: the front had a hole between
+one and a half and two and a half metres, where only the tip could reach. The arc at 0.25 with
+the ring 0.1 behind: it covered the front, but in a screenshot the blade opened from beside her
+and swept round to the front -- the sideways sweep the owner asked to lose -- so the arc came
+down to 0.12, which keeps the same reach and opens in front of her.
+**Why** The owner, after playing the wing autos: "autos more forward than a sideways sweep";
+"bars grow a little faster, thresholds even thirds"; "Q and E spending the bar"; "the spells
+vent, just not the whole bar"; the jump auto a second jump; middle click's jump attacks rising
+with the blink and keeping momentum; and the battle mage's spells on the long holds.
+**Verdict** —
+
+### 2026-10-13 — the Dual mage's autos are a ball; a click is a tap or a hold
+**Changed** The wing (a section of a ring swept round her) is gone, whole -- the shape, its
+geometry, its sector hit test and its renderer -- and the autos are a ball on a curved flight
+(`Shape::Orb`, `moves::orb_at`): from 0.35 m outside and 0.45 m behind the punching shoulder,
+bowing out 0.35 m, back in to finish dead ahead of her chest at 6 m, where the last frame is the
+sweet spot (1 m, ×1.5). The flight before it stops a step short of the end, so a body exactly a
+reach away is met by the sweet spot. A click opens an undecided hold (15 frames): let go and the
+tap comes out then; held full and the spell does; nothing of either before. The long holds fill
+10 (they vented 20). The Disk ray's disk stands upright facing her facing. Then, at the owner's word
+("committed move in a platform fighter frame data, not multiple seconds to charge"), the hold
+15 → 10 frames and the wind-ups shorter: Chain lightning 14/2/18 → 8/2/16, the Disk ray
+20/6/18 → 10/6/16, the Flurry dash 8 → 5 frames of startup -- from the press to the hit 18, 20
+and 15 frames, from 29, 35 and 23.
+**Tried and reverted** The ball's flight reaching its end on its second-last frame: a Champion
+standing exactly a reach away took the plain hit, 8, and never the sweet spot, 12. Then 0.35 m
+out, a 0.35 m bow and a 0.4 m ball: it passed beside a knee-high gnat straight ahead at one to
+three metres (a fighter, wider, was caught), so 0.25, 0.25 and 0.6 -- and the plain flight now
+stops two steps short of the end, since the fatter ball reached a body at full reach early.
+**Why** The owner: "every iteration is building on the same bad implementation. I don't want
+them to be a sweep" -- a ball from behind the shoulder, mostly forward, a sweet spot at the end,
+a trail; the light disk facing the way she faces; "either / or, never both animations even in
+part"; "the mouse spells increase the bar"; and a full hold a commitment, not a charge.
+**Verdict** —
+
+### 2026-10-13 — the Dual mage's big holds: a cascade to a disk, and longer, higher spells
+
+From the owner, in two messages. **The Flurry dash** was too narrow and short and read as a
+line of beads; it is now her autos cascading forward one into the next -- twice as wide (1.4
+m), half again as long (10.5 m), each blow its own stretch and its own hit -- into a disk as
+tall across as she is, which stands a moment before she runs to it, faster (50 m/s, from 30),
+and breaks it. A jump timed into the run's last frames keeps 0.8 of its speed, after the
+Reaver's dash jump, so the flurry is a way across the valley. **Chain lightning and the Disk
+ray** start when they did but wind up twice as long (16, 20) and are out three times as long
+(6, 18): these are the big spells and the owner wants time to watch them land. The cloud and
+the disk hang 6 m up rather than 4.5 -- at 4.5 they sat near the crosshair and hid the bolts
+and the beam. Drawn: the cloud is dark smoke some 8 m across with wisps, the bolts black
+with a white edge (they read as purple bubbles before), and the sun-disk a flat plate twice
+as broad with two rings inside its beads.
+
+### 2026-10-14 — the Dual mage: no calm, a smaller cloud, lightning on creatures
+
+From the owner. **The calm is off**: the bars no longer fall on their own, so the only way down
+short of overflowing is to cash out with `Q` or `E`. The hill (the drift apart outside the band,
+and the burn) is unchanged. **The cloud and the sun-disk** are a fifth smaller -- the day before
+they were a little too big. **Chain lightning never struck the Ridgeback**: the crosshair's
+point is the floor behind a body (bodies are not on its ray), metres past a creature that big,
+and the first bolt looked for a body within 4 m of that point. It now looks along the bolt's
+whole line from the cloud to the point (`aim::chain_next`), which is where the bolt visibly goes.
+

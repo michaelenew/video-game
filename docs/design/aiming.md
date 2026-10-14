@@ -132,15 +132,23 @@ aimed at the floor under one, the new stone erupts beneath it and lifts it. A
 Bulwark's planted shield is not one of her structures and is still a wall to
 every placement.
 
-## The five lines of effect
+## The six lines of effect
 
-Two are **skillshots**: they start with the raycast above and go where it lands.
+Three are **skillshots**: they start with the raycast above and go where it lands.
 Three are not: they are pointed by something the player already decided — which
 way their body is facing, where they put the mechanic, or where they raised the
 stone a crack races from. The last of those does read the ray, but only for a
 direction: where it starts and how far it goes were decided already.
 
-Every move declares which, in the move table (`aim::Kind`). There is no sixth.
+Every move declares which, in the move table (`aim::Kind`). There is no seventh.
+
+*Was five until the Dual mage's Disk ray (2026-10-12)*: a blast out of a disk
+of light hung over her head, to the point the crosshair is on. Its target is
+the skillshot's -- `aim::overhead_path` asks `aim::skillshot_path` and keeps
+its far end -- and only the end it leaves from is not her hand: `aim::overhead`,
+`tuning::overhead_height` over her feet. A skillshot drawn from her hand would
+have put the disk on the screen and the blast somewhere else, which is the
+mistake this document exists to stop.
 
 *Was four until the Elementalist's v2 (2026-09-30)*: Fissure, a crack racing out
 of a held stone, was given a line of its own, `aim::racing_path`, and this
@@ -477,6 +485,11 @@ its first frame. Stricter than `clear_between` on purpose: the dash to a shadow
 goes wherever the shadow is, up included, so one clear corner line is a way
 through; a blink goes along the floor to a spot at her own height, so she stops
 where the **first** of the four lines meets something, less her own radius.
+`aim::flurry_dash_to` is the same four lines not flattened: the Flurry dash's
+run goes straight to the disk her blows struck, up or down as the spot is, and
+stops short of the first thing on the way, kept inside the place's bounds
+(2026-10-13). The spot was aimed when the flurry was thrown -- a grounded line
+of effect -- so this decides only how much of the way is clear.
 **What does this point stand on?** `aim::settle` drops it onto whatever is under
 it — a stone's top, a ledge, the floor — for anything that lands a thing
 somewhere it was not aimed (a thrown body, a mark on the ground).

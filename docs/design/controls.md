@@ -494,7 +494,7 @@ same job on every class.
 | --- | --- |
 | **Unmodified `L`/`R`** | Autos. The neutral vocabulary, roughly shared across classes. |
 | **`Q` and `E`** | The class special and the class mechanic. This is where identity lives, and it is different on every class. |
-| **Unmodified `M`** | The third click. The Champion's hammer; the Dual mage's twilight — both forces at once, where "no side" is the point (her Lance until 2026-10-09; see [kits/dual-mage.md](kits/dual-mage.md) §"Every move a spell"). |
+| **Unmodified `M`** | The third click. The Champion's hammer; the Dual mage's twilight — spells on herself, both forces at once, where "no side" is the point (her Lance until 2026-10-09; see [kits/dual-mage.md](kits/dual-mage.md) §"Her spellbook"). |
 | **Direction + click** | Basic moves. A shared vocabulary — roughly the same shapes on every class. The two casters are the exception. |
 | ~~**Shift + click**~~ | ~~The six-ability kit.~~ **Retired 2026-09-16.** Shift is one verb — see [Shift is one verb now](#shift-is-one-verb-now-2026-09-16). Where the six-ability kit goes instead is open. |
 | **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
@@ -740,6 +740,28 @@ and in the air alike, and airborne it costs the airdodge the same way.
 > group, and the kit documents in [`kits/`](kits/) for the second.
 
 ## Dual mage — built 2026-09-13
+
+> **Her hands, since the second pass of 2026-10-12** ([exploration/0016](exploration/0016_dual_mage_controls.md)):
+> left and right click tapped are the dark and light wing autos on the floor and in the air,
+> each hopping her the way she holds; **held past the wing** they are Chain lightning and the
+> Disk ray. Middle click tapped is Binary (floor) / Phase (air), **held** the Flurry dash.
+> `space` + click the takeoffs below; the `F` key the Devour, the `R` key the Smite; `Q` / `E`
+> the Abyss and Judgement, each spending the whole of its bar. The table below is the
+> morning's spellbook, kept for its history.
+>
+> **Her spellbook, since 2026-10-12** ([exploration/0015](exploration/0015_dual_mage_spellbook.md)).
+> The click is what a spell is cast on and the row is the verb; what follows the table is the
+> history of how her buttons got here.
+>
+> | Input | On foot — fight | In the air — move | `space` + click — defend |
+> | --- | --- | --- | --- |
+> | `L` — dark, on them | Litany of night: Umbral lash › Grasping shade › Devour | Shadowstep | Veil |
+> | `M` — twilight, on herself | Binary (twin stars) | Phase | Equinox |
+> | `R` — light, on the ground | Litany of dawn: Radiant palm › Halo › Smite | Descent | Sanctuary |
+> | `Q` / `E` | Abyss / Judgement | the same | — |
+>
+> A litany's next link is a press of the same click inside `litany, window` of the last ending.
+> `shift` is the dodge, a blink from the first tier.
 
 The mechanic is on the primary buttons, and it is not optional.
 

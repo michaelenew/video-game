@@ -49,6 +49,15 @@ use crate::tuning as t;
 /// hash skips the empty ones; the drink mask below is what bounds it at 128.
 pub const MAX_EFFECTS: usize = 128;
 
+/// The slot a [`EffectKind::Burst`] carries when it is **Apotheosis** -- the
+/// nova that bursts from the Dual mage the frame she ascends, which no move
+/// throws. Past the end of every class's table, so it can never be a move.
+pub const APOTHEOSIS: u8 = u8::MAX;
+
+/// The most places one [`EffectKind::Burst`] hits at once: Judgement's outer
+/// columns. See [`Effect::burst_at`].
+pub const BURST_CENTRES: usize = 8;
+
 /// Every effect standing in the world. Named so that the one bundle
 /// `crate::aim` traces against can be written down without repeating the
 /// array's shape at every call site.
@@ -238,26 +247,30 @@ pub enum EffectKind {
     /// spent on the first body it reaches. Somebody in the air is **pinned**
     /// there; somebody on the floor is only hit.
     Nail,
-    /// Dual mage, dark. **A Shade bolt**: a small dark dart in flight along
-    /// her aim, spent on the first body it reaches, which it hexes with
-    /// Umbra. Reel's too, and on Reel's a body pulls her to it. See
-    /// `docs/design/exploration/0010_dual_mage_spells.md`.
-    ShadeBolt,
-    /// Dual mage, twilight. **Binary**: two orbs, one of each force, wound
-    /// round each other in flight. On a hexed body it sets off that hex's
-    /// reaction; on a clean one, both at half.
-    Binary,
-    /// Dual mage, dark. **The Abyss**: a well on the floor that drags whoever
-    /// is in it toward its middle, ticks, drains back to her and hexes Umbra.
-    /// Nightfall's is the same well, smaller, where she left the floor.
+    /// Dual mage, twilight. **Binary's twin stars** (2026-10-12): one dark
+    /// and one light, wound round her at arm's length for `binary, orbits
+    /// for`, following her. Each strikes whatever it passes through, a body
+    /// at most once every `binary, strikes a body every` per star: the dark
+    /// star curses, the light star purges. `home` is her middle, refreshed
+    /// every frame. See `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    Stars,
+    /// Dual mage, dark. **The Abyss**: a black sun on the floor. Whoever is
+    /// under it is pinned, ticks, drains back to her, and gains a curse stack
+    /// every `abyss, curses every`; when it ends it collapses in one last blow.
+    /// Its size grows along her Dark bar on the majors' curve.
     Abyss,
-    /// Dual mage, light. **A Flare**: a burst of light a few metres along her
-    /// aim, out on its first frame. The rest of its short life is the picture.
-    Flare,
-    /// Dual mage, light. **A Sunray**: an instant beam from her hand to the
-    /// first body on the crosshair's line, or its reach. It hits on its first
-    /// frame; the few after are the line being seen.
-    Sunray,
+    /// Dual mage. **A burst**: one frame of hitting in a disc, then a short
+    /// life that is only the picture of it. The arrival of a Shadowstep, the
+    /// flash Phase leaves, Judgement's outer columns (`banked` is how many,
+    /// `reach` the radius of each), and Apotheosis. Which one it is is its
+    /// `slot` -- [`APOTHEOSIS`] for the last, which no move throws.
+    Burst,
+    /// Dual mage, light. **A sigil** (2026-10-12): a disc of consecrated
+    /// ground, `reach` across, written by Smite, Descent and Sanctuary. While
+    /// she stands in her own she is **warded**, and anybody else standing in
+    /// it burns on the curse's tick. Judgement's field is the great sigil and
+    /// does the same.
+    Sigil,
     /// Shadow Reaver, the Whirl (2026-10-10). Blades spinning round the
     /// shadow, wherever it is, live -- like the lotus, it **follows the
     /// mechanic**. A ball of `reach` round its middle that cuts every body in
@@ -452,11 +465,10 @@ impl EffectKind {
             EffectKind::Fountain => "fire fountain",
             EffectKind::Nova => "blood nova",
             EffectKind::Nail => "nail",
-            EffectKind::ShadeBolt => "shade bolt",
-            EffectKind::Binary => "binary",
+            EffectKind::Stars => "twin stars",
             EffectKind::Abyss => "abyss",
-            EffectKind::Flare => "flare",
-            EffectKind::Sunray => "sunray",
+            EffectKind::Burst => "burst",
+            EffectKind::Sigil => "sigil",
             EffectKind::ShadowWhirl => "shadow whirl",
             EffectKind::ShadowBurst => "shadow burst",
             EffectKind::ShadowFan => "shadow blades",
@@ -537,10 +549,8 @@ impl EffectKind {
             EffectKind::Nail => false,
             // Her bolts, the burst and the ray are in the air where they were
             // thrown; the well is on the floor.
-            EffectKind::ShadeBolt | EffectKind::Binary | EffectKind::Flare | EffectKind::Sunray => {
-                false
-            }
-            EffectKind::Abyss => true,
+            EffectKind::Stars | EffectKind::Burst => false,
+            EffectKind::Abyss | EffectKind::Sigil => true,
             // On the shadow, wherever it is; thrown along her aim; and a ring
             // on the floor where she landed.
             EffectKind::ShadowWhirl | EffectKind::ShadowFan => false,
@@ -579,8 +589,6 @@ impl EffectKind {
                 | EffectKind::Tether
                 | EffectKind::Haemorrhage
                 | EffectKind::Nail
-                | EffectKind::ShadeBolt
-                | EffectKind::Binary
                 | EffectKind::ShadowFan
                 | EffectKind::Crescent
                 | EffectKind::Javelin
@@ -683,8 +691,9 @@ impl EffectKind {
             20 => Some(EffectKind::Fountain),
             // The Dual mage's, 2026-10-09: the bolts fly from her hand along
             // the aim, and the well lands where the crosshair met the floor.
-            21 => Some(EffectKind::ShadeBolt),
-            22 => Some(EffectKind::Binary),
+            // 21 was the Shade bolt, retired 2026-10-12. The stars are
+            // placed on her by the world when Binary is thrown, not by a row.
+            22 => Some(EffectKind::Stars),
             23 => Some(EffectKind::Abyss),
             // The Reaver's, 2026-10-10: listed so the numbering is complete;
             // each is put in the world by the move that makes it, at the
@@ -767,10 +776,10 @@ impl EffectKind {
             // The burst is its first frame; the rest is the picture of it.
             EffectKind::Nova => t::air_ring_life(),
             EffectKind::Nail => t::nail_flight(),
-            EffectKind::ShadeBolt => t::shade_bolt_flight(),
-            EffectKind::Binary => t::binary_flight(),
+            EffectKind::Stars => t::binary_orbits(),
             EffectKind::Abyss => t::abyss_life(),
-            EffectKind::Flare | EffectKind::Sunray => t::spell_flash(),
+            EffectKind::Burst => t::spell_flash(),
+            EffectKind::Sigil => t::sigil_lasts(),
             // The flight out and the spin, which is when the shadow comes home.
             EffectKind::ShadowWhirl => t::shadow_send_frames().saturating_add(t::whirl_lasts()),
             EffectKind::ShadowBurst => t::burst_life(),
@@ -859,12 +868,12 @@ impl EffectKind {
             // Both are the move's own hit: nothing else hits when they are
             // thrown. The nova's is scaled by the hold where it bursts.
             EffectKind::Nova | EffectKind::Nail => m.damage,
-            // Her spells are each the move's own hit; the well's is per tick.
-            EffectKind::ShadeBolt
-            | EffectKind::Binary
-            | EffectKind::Abyss
-            | EffectKind::Flare
-            | EffectKind::Sunray => m.damage,
+            // A star's strike and a sigil's burn are numbers of their own, for
+            // the pillar's reason; the black sun's tick and a burst are the
+            // move's own.
+            EffectKind::Stars => t::binary_damage(),
+            EffectKind::Sigil => t::sigil_burn(),
+            EffectKind::Abyss | EffectKind::Burst => m.damage,
             // The move's own cut, each time it lands; the ring's is its own,
             // because the blow it follows already hit.
             EffectKind::ShadowWhirl | EffectKind::ShadowFan => m.damage,
@@ -1192,7 +1201,56 @@ impl Effect {
 
     /// Radius of a field effect. Drain fields do not grow; they are a place.
     pub fn field_radius(&self) -> Fx {
-        self.own_radius().mul(self.power)
+        // **The majors grow along a steeper curve** (2026-10-12): the black
+        // sun and Judgement's great sigil are read off `dual::major_size`
+        // rather than the depth curve, so from an empty bar they are modest
+        // and from a full one the biggest thing on the screen.
+        let size = match self.kind {
+            EffectKind::Abyss | EffectKind::JudgementField => crate::dual::major_size(self.power),
+            // A burst is made the size it is: its `power` is what it deals.
+            EffectKind::Burst => Fx::ONE,
+            _ => self.power,
+        };
+        self.own_radius().mul(size)
+    }
+
+    /// Where a [`EffectKind::Burst`] hits, `k` of [`BURST_CENTRES`]: its own
+    /// middle, or -- Judgement's -- a ring of `banked` columns `judgement,
+    /// columns stand apart` round it (grown on the majors' curve), starting
+    /// along the way she faced. The
+    /// renderer draws the columns from this too, so they stand where they
+    /// strike.
+    pub fn burst_at(&self, k: usize) -> Option<V3> {
+        if self.kind != EffectKind::Burst {
+            return None;
+        }
+        if self.slot != crate::moves::dual::JUDGEMENT || self.banked <= 0 {
+            return (k == 0).then_some(self.pos);
+        }
+        let n = self.banked.clamp(1, BURST_CENTRES as i32);
+        if k as i32 >= n {
+            return None;
+        }
+        let start = crate::math::atan2_turns(self.dir.z, self.dir.x);
+        let turns = start.add(Fx::ratio(k as i32, n));
+        let round = V3::from_turns(crate::math::wrap_turns(turns));
+        // How far apart they stand is part of how big the spell is, so it
+        // grows with the columns themselves: five pillars rather than one
+        // blob, from a full bar.
+        let apart = t::judgement_apart().mul(crate::dual::major_size(self.power));
+        Some(self.pos.add(round.scale(apart)))
+    }
+
+    /// Where one of Binary's two stars is this frame: round `home` (her
+    /// middle) at `binary, orbit radius`, the two opposite each other, going
+    /// round at `binary, turns a second`.
+    pub fn star_at(&self, star: usize) -> V3 {
+        let turns = t::binary_spin()
+            .mul(Fx::from_int(self.age as i32))
+            .mul(crate::DT)
+            .add(Fx::ratio(star as i32 & 1, 2));
+        let round = V3::from_turns(crate::math::wrap_turns(turns));
+        self.home.add(round.scale(t::binary_radius()))
     }
 
     /// The radius before the caster's own power is applied. Split out only
@@ -1224,11 +1282,11 @@ impl Effect {
             // The Stake in flight is a bolt's width; its row's radius is the
             // area it lands in.
             EffectKind::Nail => t::haemorrhage_radius(),
-            EffectKind::ShadeBolt
-            | EffectKind::Binary
-            | EffectKind::Abyss
-            | EffectKind::Flare
-            | EffectKind::Sunray => self.source().radius,
+            EffectKind::Stars => t::binary_star(),
+            EffectKind::Abyss => self.source().radius,
+            // Set where it is made: a burst and a sigil are as wide as the
+            // thing that made them says.
+            EffectKind::Burst | EffectKind::Sigil => self.reach,
             EffectKind::ShadowWhirl | EffectKind::ShadowFan => self.source().radius,
             EffectKind::ShadowBurst => self.reach,
             EffectKind::ShadowRing => self.reach,

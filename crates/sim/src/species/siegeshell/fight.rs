@@ -1087,7 +1087,7 @@ pub fn tripod_legs(t: usize) -> impl Iterator<Item = usize> {
 /// not helpless -- a body in a throw's stun is not caught by the beat
 /// (`a_thrown_rider_is_not_caught_by_the_beat`).
 fn reachable(p: &state::Player) -> bool {
-    p.health > 0 && !p.aboard() && !p.action.invulnerable() && !p.action.stunned()
+    p.health > 0 && !p.aboard() && !p.untouchable() && !p.action.stunned()
 }
 
 /// **The footfall** (§2): on the beat, the pads land on whoever is under them;

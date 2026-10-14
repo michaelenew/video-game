@@ -1302,7 +1302,7 @@ fn own_hits(w: &mut World, m: &mut Monster, ground: &Terrain) {
     let mouth = head_flat(m);
     let spray_from = V3::new(mouth.x, Knob::SpitFrom.fx(), mouth.z);
     for (i, p) in fighters.iter().copied().enumerate() {
-        if struck & 1 << i != 0 || p.health <= 0 || p.action.invulnerable() || p.aboard() {
+        if struck & 1 << i != 0 || p.health <= 0 || p.untouchable() || p.aboard() {
             continue;
         }
         let reached = match kind {

@@ -140,6 +140,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Dual mage's light major.",
     ),
     (
+        "pub const DARK_SPELL: u16 = Input::KEY_F",
+        "A binding, not a magnitude: which key is the Dual mage's dark spell.",
+    ),
+    (
+        "pub const LIGHT_SPELL: u16 = Input::KEY_R",
+        "A binding, not a magnitude: which key is the Dual mage's light spell.",
+    ),
+    (
         "pub const FINISHER: u16 = Input::LEFT",
         "A binding, not a magnitude: which button is the Shadow Reaver's finisher click.",
     ),
@@ -402,6 +410,12 @@ const EXEMPT: &[(&str, &str)] = &[
         "const SKIN: Fx = Fx::ratio(1, 32)",
         "Collision epsilon: how far a body is held off a surface so it does not re-collide. \
          Numerically motivated, not felt.",
+    ),
+    (
+        "const ALONG: i32 = 12",
+        "How finely the rest of the Dual mage's ball's flight is sampled when asking a \
+         creature which part it carries through to. A discretisation of a continuous test, \
+         like the weapon line's samples, not a quantity anybody tunes.",
     ),
     (
         "const SAMPLES: i32 = 5",

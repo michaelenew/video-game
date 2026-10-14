@@ -406,7 +406,7 @@ fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
         for (i, p) in players.iter_mut().enumerate() {
             if i as u8 == owner
                 || p.health <= 0
-                || p.action.invulnerable()
+                || p.untouchable()
                 || stone.knock_struck & (1 << i) != 0
             {
                 continue;
@@ -1045,7 +1045,7 @@ pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
                     // already missed.
                     let caught = p.pos.y.raw() <= stone.top().raw()
                         && p.pos.y.add(t::body_height()).raw() > stone.at.y.raw();
-                    if !caught || stone.already_struck(i) || p.action.invulnerable() {
+                    if !caught || stone.already_struck(i) || p.untouchable() {
                         continue;
                     }
                     stone.struck |= 1 << i;

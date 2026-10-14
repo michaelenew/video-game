@@ -266,48 +266,27 @@ pub enum Shape {
     /// A thrust. The weapon is a line along the aim that extends to `reach`
     /// over the active window and does not travel sideways.
     Thrust,
-    /// A wing: **a thin curved blade, swept on a ring the caster is not in the
-    /// middle of.**
+    /// **A ball on a curved flight** (2026-10-13): the Dual mage's autos. It
+    /// leaves from a little outside and behind the punching shoulder, bows
+    /// out a little, and comes back in to finish dead in front of her chest
+    /// at `reach` -- the sweet spot, the last active frame, a bubble of
+    /// `orb, sweet spot radius` worth `orb, sweet spot damage`. Each frame
+    /// before that its volume is the stretch of the flight it covered, `radius`
+    /// thick. The flight is [`orb_at`].
     ///
-    /// ```text
-    ///        .-  -  -.                 a section of a torus, in the plane of
-    ///     .'          '.               the floor. Inner arc at
-    ///    ;      (x)     :              `tuning::wing_inner` of the reach,
-    ///     '.          .'               outer arc at `Move::reach`, and
-    ///        ' - , - '                 nothing in between
-    ///          start
-    ///                       (x) the ring's middle: `tuning::wing_offside`
-    ///   o                       toward the caster's *other* arm and
-    ///   |   the caster          `tuning::wing_ahead` in front of them
-    /// ```
-    ///
-    /// It starts behind the caster on the punching arm's own side and finishes
-    /// `tuning::wing_finish` off their centre line, in front of that arm's own
-    /// hand -- not dead ahead, because which of two mirrored autos just landed
-    /// is a thing the player reads off where it landed.
-    ///
-    /// The volume out on any one frame is the section's own **radius** -- a
-    /// line from the inner arc to the outer one. That is not an approximation
-    /// of a curved shape: a radius of an annulus is straight, and it is the
-    /// whole of the section at that angle. The ring is what the sweep carves
-    /// over the active window, which is the thing the player sees.
-    ///
-    /// Three things separate it from a [`Shape::Swing`], and they are why it is
-    /// its own shape rather than a swing with unusual numbers. It is hung off a
-    /// **ring** rather than off a shoulder, so it curves rather than reaches. It
-    /// has a **hole**, and a big one: the band is the outer quarter of the ring
-    /// and there is no haft to stand inside. And it **starts behind the caster**
-    /// rather than travelling across the front of her -- the punch throws it and
-    /// it overtakes the punch.
-    ///
-    /// Which way round it sweeps comes from [`Move::hand`], so the two mirrored
-    /// autos share one `arc` -- see [`crate::aim::Hand::outward`]. For this
-    /// shape `arc` is **how far back the section starts**, measured from where
-    /// it finishes, rather than a span centred on the facing.
-    ///
-    /// The geometry is [`crate::moves::wing`], and the last active frame is not
-    /// a section at all: see [`Wing::tip`].
-    Wing,
+    /// It replaced the **wing**, a section of a ring swept round her, which
+    /// read as a sweep however its numbers were set: the owner asked for a
+    /// thing thrown forward rather than a blade brought round.
+    Orb,
+    /// **A cascade of blows** (2026-10-13): the Dual mage's Flurry dash. Her
+    /// autos thrown down one line, one after the next, each reaching on from
+    /// where the last one struck -- a fifth of the way each, for five -- from
+    /// her chest where she stood to a disk where the line ends (see
+    /// [`flurry_line`]). Every `rehit` frames the next blow is out; its volume
+    /// is its stretch of the line, `radius` thick. The last `flurry dash,
+    /// pauses` frames of the active window are the disk standing there, struck,
+    /// before she goes to it.
+    Cascade,
 }
 
 impl Shape {
@@ -707,25 +686,34 @@ const NAMES: [&[&str]; 6] = [
         "Crimson cascade",
         "Blood golem",
     ],
-    // Dual mage -- two forces, one in each hand, and every move a spell
-    // (2026-10-09). Left is dark, the hex: things that travel and linger.
-    // Right is light, the strike: things that happen now. Middle is twilight,
-    // both at once. `Q` and `E` are the dark and the light majors. In storage
-    // order: the first six rows are the old six, retuned as the new moves,
-    // and the five after them were appended. See [`dual`] and
-    // `docs/design/exploration/0010_dual_mage_spells.md`.
+    // Dual mage -- her spellbook (2026-10-12). Left is dark, cast on *them*:
+    // curses. Right is light, cast on *the ground*: sigils. Middle is
+    // twilight, cast on *herself*. On foot she fights, in the air she moves,
+    // leaving the floor she defends. In storage order: the eleven slots of
+    // the kit before it, re-cast in place, and four spells appended (the
+    // links of the litanies she had for an afternoon: the Grasp and the Halo
+    // are unbound since, the Devour on `F` and the Smite on `R`). See
+    // [`dual`], `docs/design/exploration/0015_dual_mage_spellbook.md` and
+    // `0016_dual_mage_controls.md`.
     &[
-        "Shade bolt",
+        "Dark auto",
         "Binary",
         "Judgement",
         "Abyss",
-        "Sunray",
-        "Reel",
-        "Flare",
+        "Light auto",
+        "Shadowstep",
+        "Descent",
         "Phase",
-        "Nightfall",
-        "Dawn",
+        "Veil",
+        "Sanctuary",
         "Equinox",
+        "Grasping shade",
+        "Devour",
+        "Halo",
+        "Smite",
+        "Chain lightning",
+        "Disk ray",
+        "Flurry dash",
     ],
 ];
 
@@ -1091,74 +1079,112 @@ pub mod bulwark {
 }
 
 // ---------------------------------------------------------------------------
-// The Dual mage's eleven
+// The Dual mage's eighteen
 // ---------------------------------------------------------------------------
 
-/// The Dual mage's move list, since 2026-10-09: **every move a spell**, and
-/// the three clicks are three genres.
+/// The Dual mage's move list, since the second pass of 2026-10-12: **the bare
+/// clicks are her autos again, and they carry her.**
 ///
 /// ```text
-///                     left: dark       middle: twilight   right: light
-///                     (the hex)        (both at once)     (the strike)
-///   on foot           Shade bolt       Binary             Sunray
-///   in the air        Reel             Phase              Flare
-///   leaving the floor Nightfall        Equinox            Dawn
-///
-///   Q  Abyss -- the dark major        E  Judgement -- the light major
+///   left click    Dark auto      tapped: a ball of dark off the left arm, a curse
+///                 held:          Chain lightning
+///   right click   Light auto     tapped: a ball of light off the right, a purge
+///                 held:          Disk ray
+///                 -- each ball, on the floor or in the air, then a short hop
+///                    the way she is holding, lifted more the fuller she is
+///   middle click  Binary (floor) / Phase (air), tapped
+///                 held:          Flurry dash
+///   space+click   Veil / Equinox / Sanctuary (from the floor)
+///   F             Devour         R             Smite
+///   Q             Abyss          E             Judgement
+///   (no button)   Grasping shade, Halo, Shadowstep, Descent
 /// ```
 ///
-/// **Dark travels and lingers** -- bolts in flight, wells that stay, drains;
-/// **light happens now** -- rays, bursts, columns; **twilight is both at
-/// once**, powered by her lower bar and goading both. Every dark spell hexes
-/// what it hits with Umbra and every light one with Radiance, and the other
-/// force on a hexed body sets it off -- see [`crate::dual::Hex`]. So the two
-/// hands alternating are the combo and the climb at once.
+/// **The clicks fill, `F` and `R` vent, majors spend** (2026-10-13): see
+/// [`crate::dual::steer`].
 ///
-/// **Storage order is not button order.** The first six rows are the six the
-/// class had before (two autos, two Lances, Judgement, Sweep), retuned as the
-/// new moves so their slots and knob indices kept their places; the five after
-/// them were appended. See `docs/design/exploration/0010_dual_mage_spells.md`.
+/// **Dark curses bodies** and **light writes on the ground and purges**, as in
+/// the spellbook of earlier that day; see [`crate::dual`] for the curse and the
+/// purge. The autos are the wing-shaped blades of the kit before it, a great
+/// deal bigger, and after each one she hops: Kalista's step, in the direction
+/// held. See `docs/design/exploration/0016_dual_mage_controls.md`.
+///
+/// **Storage order is not button order.** The slots kept their places through
+/// every pass; the four after the eleven are the spellbook's, and the three
+/// after those the long holds.
 pub mod dual {
-    /// Left click on the floor: a short dark dart in flight. The dark auto.
-    pub const SHADE_BOLT: u8 = 0;
-    /// Middle click on the floor: two orbs, one of each force, wound round
-    /// each other along the crosshair.
+    /// Left click, on the floor or in the air: a wing of dark off the left
+    /// arm, and a hop the way she is holding. One curse.
+    pub const DARK_AUTO: u8 = 0;
+    /// Middle click on the floor: twin stars, one of each force, orbit her.
     pub const BINARY: u8 = 1;
-    /// `E`: the light major. A delayed strike and a burning field.
+    /// `E`: the light major. Columns of light, more the fuller her Light, and
+    /// a great sigil.
     pub const JUDGEMENT: u8 = 2;
-    /// `Q`: the dark major. A well that drags, drains and hexes.
+    /// `Q`: the dark major. A black sun that pins, curses, and collapses.
     pub const ABYSS: u8 = 3;
-    /// Right click on the floor: an instant short beam. The light auto.
-    pub const SUNRAY: u8 = 4;
-    /// Left click in the air: the dart, and on a body it pulls *her* to them.
-    pub const REEL: u8 = 5;
-    /// Right click in the air: a burst along her aim that kicks her back off
-    /// whatever it met.
-    pub const FLARE: u8 = 6;
+    /// Right click, on the floor or in the air: a wing of light off the right
+    /// arm, and a hop. Purges.
+    pub const LIGHT_AUTO: u8 = 4;
+    /// No button since the autos took the air (2026-10-12): she is behind the
+    /// first body on the line.
+    pub const SHADOWSTEP: u8 = 5;
+    /// No button since the autos took the air: down onto the ground as a
+    /// smite, and a sigil.
+    pub const DESCENT: u8 = 6;
     /// Middle click in the air: a short blink along the crosshair.
     pub const PHASE: u8 = 7;
-    /// Space and left click: a jump that leaves a small dark well behind.
-    pub const NIGHTFALL: u8 = 8;
-    /// Space and right click: a column of light that takes them up with her.
-    pub const DAWN: u8 = 9;
-    /// Space and middle click: a jump as high as her lower bar is full.
+    /// Space and left click: she rises as shadow, untouchable.
+    pub const VEIL: u8 = 8;
+    /// Space and right click: a sigil at her feet, a pulse, and a hop.
+    pub const SANCTUARY: u8 = 9;
+    /// Space and middle click: her bars levelled, and a jump as high as the
+    /// lower one is full.
     pub const EQUINOX: u8 = 10;
+    /// No button since the wing autos came back: hands out of the floor that
+    /// root.
+    pub const GRASPING_SHADE: u8 = 11;
+    /// `F`: a maw that snaps shut where she points. Two curses, and some of it
+    /// drained back to her.
+    pub const DEVOUR: u8 = 12;
+    /// No button since the wing autos came back: a ring of light all round her.
+    pub const HALO: u8 = 13;
+    /// `R`: a column out of the sky where she points, and a sigil.
+    pub const SMITE: u8 = 14;
+    /// Left click held (2026-10-12, the long hold): black lightning out of a
+    /// cloud over her head, onto the body nearest the crosshair's spot and
+    /// chaining from it to the next nearest, and on. Every link curses. See
+    /// `docs/design/exploration/0016_dual_mage_controls.md`.
+    pub const CHAIN_LIGHTNING: u8 = 15;
+    /// Right click held: a great disk of light over her head, facing the way
+    /// she faces, and a moment later a blast from it to the crosshair's
+    /// point. Purges what it passes through.
+    pub const DISK_RAY: u8 = 16;
+    /// Middle click held: a long line of blows along her look, and then she
+    /// dashes down it, untouchable, to its far end.
+    /// A middle click let go before the hold is Binary on the floor and Phase
+    /// in the air, as it always was.
+    pub const FLURRY_DASH: u8 = 17;
 
-    pub const COUNT: usize = 11;
+    pub const COUNT: usize = 18;
 
     /// Which button is which force. Every test and bot presses through these.
     pub mod keys {
         use crate::input::Input;
-        /// Left click: dark, the hex.
+        /// Left click: dark, on them.
         pub const DARK: u16 = Input::LEFT;
-        /// Middle click: twilight, both at once.
+        /// Middle click: twilight, on herself.
         pub const TWILIGHT: u16 = Input::MIDDLE;
-        /// Right click: light, the strike.
+        /// Right click: light, on the ground.
         pub const LIGHT: u16 = Input::RIGHT;
         /// `Q`: Abyss, the dark major.
         pub const DARK_MAJOR: u16 = Input::SPECIAL;
         /// `E`: Judgement, the light major.
         pub const LIGHT_MAJOR: u16 = Input::MECHANIC;
+        /// `F`: the Devour.
+        pub const DARK_SPELL: u16 = Input::KEY_F;
+        /// `R`: the Smite.
+        pub const LIGHT_SPELL: u16 = Input::KEY_R;
     }
 
     /// Which force this move is made of: dark for the left column and `Q`,
@@ -1167,32 +1193,60 @@ pub mod dual {
     pub const fn force(kind: u8) -> Option<crate::class::Force> {
         use crate::class::Force;
         match kind {
-            SHADE_BOLT | REEL | NIGHTFALL | ABYSS => Some(Force::Dark),
-            SUNRAY | FLARE | DAWN | JUDGEMENT => Some(Force::Light),
+            DARK_AUTO | GRASPING_SHADE | DEVOUR | SHADOWSTEP | VEIL | ABYSS | CHAIN_LIGHTNING => {
+                Some(Force::Dark)
+            }
+            LIGHT_AUTO | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT | DISK_RAY => {
+                Some(Force::Light)
+            }
             _ => None,
         }
     }
 
     /// Is this a twilight move -- the middle column, both forces at once?
     pub const fn twilight(kind: u8) -> bool {
-        matches!(kind, BINARY | PHASE | EQUINOX)
+        matches!(kind, BINARY | PHASE | EQUINOX | FLURRY_DASH)
     }
 
-    /// Is this one of the two autos -- the short spells on the bare clicks,
-    /// thrown every second?
+    /// Is this one of the three long holds? They fill `meter, a long hold
+    /// fills` of the bar they are made of (both bars, for the twilight one).
+    /// See `crate::dual::steer`.
+    pub const fn is_a_long_hold(kind: u8) -> bool {
+        matches!(kind, CHAIN_LIGHTNING | DISK_RAY | FLURRY_DASH)
+    }
+
+    /// Is this one of the two autos -- the wings on the bare clicks, thrown
+    /// every second? They goad a bar by the least, and they hop.
     pub const fn is_an_auto(kind: u8) -> bool {
-        matches!(kind, SHADE_BOLT | SUNRAY)
+        matches!(kind, DARK_AUTO | LIGHT_AUTO)
     }
 
-    /// Is this one of the two majors? They throw the bar furthest -- see
-    /// `tuning::meter_finisher_push`.
+    /// Is this one of the two majors? They spend the whole of their bar --
+    /// `tuning::meter_finisher_push` -- and grow along a steeper curve than
+    /// anything else (`crate::dual::major_size`).
     pub const fn is_the_finisher(kind: u8) -> bool {
         matches!(kind, JUDGEMENT | ABYSS)
     }
 
     /// Is this move thrown as the feet leave the floor?
     pub const fn is_takeoff(kind: u8) -> bool {
-        matches!(kind, NIGHTFALL | DAWN | EQUINOX)
+        matches!(kind, VEIL | SANCTUARY | EQUINOX)
+    }
+
+    /// How many curse stacks a dark spell lays on a body it lands on. The
+    /// Abyss lays its own, a stack every `abyss, curses every`, and is not
+    /// counted here.
+    pub const fn curses_laid(kind: u8) -> u8 {
+        match kind {
+            DEVOUR => 2,
+            DARK_AUTO | GRASPING_SHADE | SHADOWSTEP | VEIL | CHAIN_LIGHTNING => 1,
+            _ => 0,
+        }
+    }
+
+    /// Does this spell write a sigil where it lands?
+    pub const fn writes_a_sigil(kind: u8) -> bool {
+        matches!(kind, SMITE | DESCENT | SANCTUARY)
     }
 }
 
@@ -1515,8 +1569,9 @@ pub const fn slots(class: Class) -> usize {
         // Seven: his three, and the air's strike and the three takeoffs. See
         // [`bulwark`].
         Class::Bulwark => bulwark::COUNT,
-        // Eleven: three clicks on the floor, in the air and leaving it, and
-        // the two majors. See [`dual`].
+        // Fifteen: the wing autos, three takeoffs, Binary and Phase, the two
+        // spells on `F` and `R`, the two majors, and four with no button.
+        // See [`dual`].
         Class::DualMage => dual::COUNT,
     }
 }
@@ -1668,21 +1723,27 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             9 => "Space+RMB",
             _ => "MMB",
         },
-        // Both clicks are attacks, because the two autos are the mechanic: the
-        // button is which force you throw and therefore which way you drift.
-        // See [`dual`].
+        // The bare clicks are the two autos, on the floor and in the air, and
+        // the dark and light spells are on `F` and `R`. See [`dual`].
         Class::DualMage => match slot {
             0 => "LMB",
             1 => "MMB",
             2 => "E",
             3 => "Q",
             4 => "RMB",
-            5 => "LMB air",
-            6 => "RMB air",
+            5 => "unbound",
+            6 => "unbound",
             7 => "MMB air",
             8 => "Space+LMB",
             9 => "Space+RMB",
-            _ => "Space+MMB",
+            10 => "Space+MMB",
+            11 => "unbound",
+            12 => "F",
+            13 => "unbound",
+            14 => "R",
+            15 => "LMB long hold",
+            16 => "RMB long hold",
+            _ => "MMB long hold",
         },
         // **The three clicks are the class**, since 2026-10-09: left is earth,
         // middle is fire, right is wind, each a tap and a hold on the floor,
@@ -1881,14 +1942,33 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             }
             _ => Shape::Cylinder,
         },
-        // Every move a spell (2026-10-09): what she casts does the hitting --
-        // a bolt, a ray, a well, a burst -- and her body puts out nothing.
-        // Two exceptions. Judgement's strike is still the disc on the floor
-        // where it was aimed, and Dawn is a column of light rising with her,
-        // which is the takeoff's own upright sweep.
+        // Her spellbook (2026-10-12). Her spells' blows are her body's own,
+        // so they are blocked, parried and drawn like anybody's: the autos
+        // are wings; the Grasp, the Devour, the Smite and Judgement's middle
+        // column a disc
+        // where she pointed on the floor; the Halo, the Sanctuary's pulse,
+        // the Veil's puff and the Descent's landing a disc round her own
+        // feet (a reach of nought). The rest put something in the world -- the
+        // stars, the black sun, the burst she arrives in from a Shadowstep --
+        // or move her and strike nobody.
         Class::DualMage => match kind {
-            dual::JUDGEMENT => Shape::Cylinder,
-            dual::DAWN => Shape::Swing(Plane::Upright),
+            // The autos are the wings again (2026-10-12, second pass): a thin
+            // curved blade off one arm, a great deal bigger than it was.
+            dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Orb,
+            dual::GRASPING_SHADE
+            | dual::DEVOUR
+            | dual::SMITE
+            | dual::JUDGEMENT
+            | dual::HALO
+            | dual::SANCTUARY
+            | dual::VEIL
+            | dual::DESCENT => Shape::Cylinder,
+            // The disk's blast is a line from the disk to the crosshair's
+            // point (`aim::Kind::Overhead`), whatever this says; a cylinder
+            // only so that it strikes. The flurry is a line of blows thrust
+            // along her look, again and again.
+            dual::DISK_RAY => Shape::Cylinder,
+            dual::FLURRY_DASH => Shape::Cascade,
             _ => Shape::None,
         },
         // The scythe. The sweep is a cut across the front, and the one swing
@@ -1991,6 +2071,13 @@ pub enum Charge {
     /// the string ([`champion::full_charge`]), and the one rule in this enum
     /// that is not a deformation. It is the class's one kind of big hit.
     Heft,
+    /// The Dual mage's clicks (2026-10-13): the press opens a hold that is
+    /// **neither move yet**. Held for the long hold's whole `channel`, the
+    /// spell comes out on its own; let go sooner and the tap does -- the wing,
+    /// or Binary or Phase for the middle click -- on the frame it is let go.
+    /// Never both, and nothing of either before it is decided. See
+    /// `state::step_channel`.
+    TapOrHold,
 }
 
 /// Which charge a move has, if any.
@@ -2001,6 +2088,7 @@ pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
         Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
         Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
         Class::Elementalist if kind == elementalist::AIR_BALL => Some(Charge::Gather),
+        Class::DualMage if dual::is_a_long_hold(kind) => Some(Charge::TapOrHold),
         Class::Champion if champion::holdable(kind) => Some(Charge::Heft),
         _ => None,
     }
@@ -2216,116 +2304,112 @@ pub fn swing_base(facing: V3, aim_dir: V3, plane: Plane, grounded: bool) -> V3 {
     }
 }
 
-/// The ring a wing carves, placed in the world.
-///
-/// A wing is a section of a torus lying flat (see [`Shape::Wing`]), and this is
-/// the whole torus plus the two bearings the section lives between. Everything
-/// in it is a knob, because where this shape sits relative to the body that
-/// threw it *is* the move -- see `tuning::wing_inner` and the three beside it.
+/// **Where the Dual mage's auto is, `t` of the way along its flight**
+/// (2026-10-13, from the owner: a ball, not a sweep).
 ///
 /// ```text
-///                       .-  -  -  -.
-///                   . '             ' .        outer arc at `Move::reach`
-///     starts -->  ;                     :      inner arc `wing_inner` of it
-///     behind her   \                   /       and nothing in between
-///        o          ' .     (x)   . '
-///        |              ' - , - '     <-- finishes in front of that fist
-///     the mage,                           `wing_finish` off her centre line
-///     punching                        (x) the ring's middle: pushed
-///     left-handed                         `wing_offside` toward the other
-///                                         arm and `wing_ahead` forward
+///                                          * <- the sweet spot: `reach` out,
+///                                         /     dead in front of her chest
+///                                       /
+///                                    .'
+///                                 .'        it bows out a little on its way
+///                              .'           (`orb, bows out`), then comes
+///                            (              back in to her centre line
+///                             '.
+///       o -- shoulder           ' .
+///       |      * <- it starts `orb, starts out` outside that shoulder and
+///     the mage     `orb, starts behind` behind her
 /// ```
 ///
-/// The middle is pushed **off** her rather than sitting on her, which is what
-/// makes the blade pass by rather than wrap round: a ring centred on a fighter
-/// is the same distance from them at every bearing, and a piece of one reads as
-/// a halo however short it is.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Wing {
-    /// The middle of the ring, at the height the hand punches through.
-    pub at: V3,
-    pub inner: Fx,
-    pub outer: Fx,
-    /// The bearing the leading edge stops on, in front of the punching hand.
-    pub finish: Fx,
-    /// How far back from `finish` the section starts, **signed by the arm**:
-    /// positive is the way [`crate::aim::Hand::Left`] sweeps. One tuned `arc`
-    /// serves both autos because the sign lives here and nowhere else.
-    pub span: Fx,
+/// Forward is `dir`, and the whole flight is `drop` below her chest: see
+/// [`orb_line`]. Out is
+/// flat, toward the punching arm (`aim::across`). Forward runs straight from
+/// behind her to `reach`; out is `(1 - t)(L + A t)`, which starts at `L` (the
+/// shoulder's own offset and the start's), returns to nought exactly at the
+/// end, and peaks `orb, bows out` further out than `L`, about a third of the
+/// way along -- `A` is solved for that. The hit test and the drawing both read
+/// this one function, so the trail on the screen is the path that hit.
+pub fn orb_at(pos: V3, facing: V3, (dir, drop): (V3, Fx), m: &Move, t: Fx) -> V3 {
+    use crate::tuning as tu;
+    let t = t.clamp(Fx::ZERO, Fx::ONE);
+    let start = tu::hand_offset().add(tu::orb_out());
+    let bow = tu::orb_bows_out();
+    // max over t of (1 - t)(L + A t) is (A + L)^2 / 4A; setting that to
+    // L + B gives A = L + 2B + 2 sqrt(B (L + B)).
+    let root = bow.mul(start.add(bow)).sqrt();
+    let a = start.add(bow).add(bow).add(root).add(root);
+    let out = Fx::ONE.sub(t).mul(start.add(a.mul(t)));
+    let back = tu::orb_back();
+    let ahead = back.neg().add(m.reach.add(back).mul(t));
+    crate::aim::origin(pos)
+        .add(V3::new(Fx::ZERO, drop, Fx::ZERO))
+        .add(dir.scale(ahead))
+        .add(crate::aim::across(facing, m.hand).scale(out))
 }
 
-/// Where a wing's ring is, given where the fighter stands and what they threw.
-///
-/// The plane of it is the floor's while her feet are on it, which is the one
-/// place this move ignores the camera's pitch. Off the ground there is no shared
-/// floor to lie parallel to, so it rides the aim -- and for a flat ring that
-/// means only its height moves, because a ring lying in the aim's plane is
-/// still a ring. The same split `swing_base` already makes for a cut thrown in
-/// the air.
-pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, stoop: Fx, m: &Move) -> Wing {
-    use crate::tuning as t;
-    let middle = crate::aim::origin(pos)
-        .add(facing.scale(m.reach.mul(t::wing_ahead())))
-        .sub(crate::aim::across(facing, m.hand).scale(m.reach.mul(t::wing_offside())));
-    // Standing, it lies at the shoulder -- unless the swing stooped to meet
-    // something short (`aim::stoop`, a drop in metres, zero among fighters),
-    // and then it comes down by that much.
-    let at = if grounded {
-        V3::new(middle.x, middle.y.add(stoop), middle.z)
+/// Which way the auto's ball flies and how far below her chest: the line
+/// [`orb_at`] is laid along. Standing, it is level -- or tilted up by a look
+/// above the horizon -- and the whole flight comes down by the swing's stoop
+/// (`aim::stoop`, a drop in metres, nought among fighters), so a knee-high
+/// body under the crosshair is met at its own height all the way out rather
+/// than by a line that only reaches the floor at full reach. In the air it is
+/// the look exactly. The wing it replaced lay the same way.
+pub fn orb_line(facing: V3, aim_dir: V3, grounded: bool, stoop: Fx) -> (V3, Fx) {
+    if !grounded {
+        return (aim_dir, Fx::ZERO);
+    }
+    if aim_dir.y.raw() > 0 {
+        (aim_dir, Fx::ZERO)
     } else {
-        V3::new(middle.x, middle.y.add(aim_dir.y.mul(m.reach)), middle.z)
-    };
-    let ahead = crate::math::atan2_turns(facing.z, facing.x);
-    let outward = Fx::from_int(m.hand.outward());
-    Wing {
-        at,
-        inner: m.reach.mul(t::wing_inner()),
-        outer: m.reach,
-        finish: ahead.add(t::wing_finish().mul(outward)),
-        span: m.arc.mul(outward),
+        (facing, stoop.min(Fx::ZERO))
     }
 }
 
-impl Wing {
-    /// The section that is actually out, `through` of the way through the
-    /// opening.
-    ///
-    /// **It opens rather than sweeps.** The trailing edge stays where the punch
-    /// threw it and the leading edge comes round toward the front, so the shape
-    /// is a wing spreading rather than a blade travelling -- the beings inside
-    /// her extending the movement past where an arm could take it.
-    ///
-    /// It stops `tuning::wing_tip` of the span short of the finish. That last
-    /// piece belongs to the tip, which is a bubble rather than a section: see
-    /// [`Wing::tip`].
-    pub fn opened(&self, through: Fx) -> crate::math::Sector {
-        let short = self.span.mul(crate::tuning::wing_tip());
-        let leading = short.add(self.span.sub(short).mul(Fx::ONE.sub(through)));
-        crate::math::Sector {
-            at: self.at,
-            inner: self.inner,
-            outer: self.outer,
-            from: self.finish.add(self.span),
-            to: self.finish.add(leading),
-        }
-    }
+/// **The Flurry dash's line**: from her chest where she stood when it was
+/// thrown (`start`, her feet then -- the grounded aim's own start, locked
+/// with it, so nothing else has to remember it) to the middle of the disk -- half a body
+/// over the point on the ground the crosshair picked (`end`, a grounded aim,
+/// so a wall or the range brings it down to the floor there). The blows
+/// cascade along it and she dashes to the disk at its end.
+pub fn flurry_line(start: V3, end: V3) -> (V3, V3) {
+    let half = crate::tuning::body_height().mul(Fx::ratio(1, 2));
+    (
+        crate::aim::origin(start),
+        V3::new(end.x, end.y.add(half), end.z),
+    )
+}
 
-    /// The foremost point of the ring: the outer arc at the bearing the wing
-    /// finishes on, which is where the tip arrives on the last active frame.
-    ///
-    /// Read off a section with no width rather than worked out again here. A
-    /// second copy of the same arithmetic is how a tip ends up somewhere the
-    /// wing it belongs to never went.
-    pub fn tip(&self) -> V3 {
-        crate::math::Sector {
-            at: self.at,
-            inner: self.inner,
-            outer: self.outer,
-            from: self.finish,
-            to: self.finish,
-        }
-        .point(Fx::ONE, Fx::ONE)
-    }
+/// How many blows a Flurry dash throws, and which one is out `left` frames
+/// before the end of its active window: `None` once they are all out and the
+/// disk stands. Each takes `rehit` frames; the window is the blows and then
+/// `flurry dash, pauses`.
+pub fn flurry_blow(m: &Move, left: u16) -> (u16, Option<u16>) {
+    let every = m.rehit.max(1);
+    let blows = (m.active.saturating_sub(crate::tuning::flurry_pause()) / every).max(1);
+    let elapsed = m.active.saturating_sub(left);
+    let blow = elapsed / every;
+    (blows, (blow < blows).then_some(blow))
+}
+
+/// How far along its flight the auto's ball is on this frame of its active
+/// window, and how far it was the frame before: `(from, to)`, so the frame's
+/// volume is the stretch it covered and a ball that crosses metres a frame
+/// cannot step over a body. `left` is the active frames remaining, counting
+/// down; on the last, `left == 0`, the ball has arrived and the volume is the
+/// sweet spot instead -- see `state::hitbox`.
+///
+/// The flight before the sweet spot stops two steps short of the end, so the
+/// end itself -- full reach, dead ahead -- is met by the sweet spot and by
+/// nothing else: a body standing exactly a reach away was being struck by the
+/// ball's last stretch a frame before the sweet spot arrived. The sweet spot's
+/// own bubble covers the stretch between.
+pub fn orb_progress(m: &Move, left: u16) -> (Fx, Fx) {
+    let n = m.active.max(1) as i32 + 2;
+    let elapsed = m.active.saturating_sub(left) as i32;
+    (
+        Fx::ratio(elapsed.min(n), n),
+        Fx::ratio((elapsed + 1).min(n), n),
+    )
 }
 
 /// Turn a direction by `by` turns, in one of the two planes a weapon swings

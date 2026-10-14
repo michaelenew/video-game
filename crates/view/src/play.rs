@@ -188,6 +188,12 @@ fn shape_of(input: PoseInput) -> Shape {
     if input.health <= 0 {
         return 1;
     }
+    if undecided(&input) {
+        return shape_of(PoseInput {
+            action: Action::Free,
+            ..input
+        });
+    }
     match input.action {
         // Four phases of one move, not three plus a prelude: a channel is the
         // wind-up held open, and the frame the button comes up is the frame the
@@ -447,6 +453,12 @@ fn chosen(input: PoseInput) -> Pose {
         return Clip::Defeat.at(0);
     }
 
+    // **A Dual mage's click not yet a tap or a hold** (2026-10-13): her body
+    // is free until it is one or the other, so neither the auto's clip nor
+    // the spell's has begun when the other comes out.
+    if undecided(&input) {
+        return free(input);
+    }
     match input.action {
         // A channel sits on the move's first frame for as long as it is held:
         // the body is coiled, and `attack` reads an elapsed of zero for any
@@ -473,6 +485,16 @@ fn chosen(input: PoseInput) -> Pose {
         Action::Dodge { left } => dodge(input, left),
         Action::Free => free(input),
     }
+}
+
+/// Is this the Dual mage's click held but not yet decided -- the hold of one
+/// of her long holds, which is a tap until it fills (`moves::Charge::TapOrHold`)?
+fn undecided(input: &PoseInput) -> bool {
+    matches!(
+        input.action,
+        Action::Channel { kind, .. }
+            if sim::moves::charge(input.class, kind) == Some(sim::moves::Charge::TapOrHold)
+    )
 }
 
 /// An attack, indexed by how far into the move it is.
@@ -666,19 +688,33 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, 11) => Clip::BloodVines,
         (Class::BloodMage, 12) => Clip::BloodCascade,
         (Class::BloodMage, _) => Clip::BloodGolem,
-        // A clip per move since 2026-10-14. The Reel is the dark lance's
-        // haul, which is what that clip was made for.
+        // A clip per move since 2026-10-14. The Dual mage's spellbook
+        // (2026-10-12) came after the clips drawn for her old kit, so hers
+        // are the clips she has, by what each move does with her arms.
         (Class::DualMage, 0) => Clip::DualDark,
-        (Class::DualMage, 1) => Clip::DualLightLance,
+        (Class::DualMage, 1) => Clip::DualSpecial,
         (Class::DualMage, 2) => Clip::DualSpecial,
         (Class::DualMage, 3) => Clip::DualSweep,
         (Class::DualMage, 4) => Clip::DualLight,
-        (Class::DualMage, 5) => Clip::DualDarkLance,
-        (Class::DualMage, 6) => Clip::DualFlare,
+        (Class::DualMage, 5) => Clip::DualDark,
+        (Class::DualMage, 6) => Clip::DualLight,
+        // Phase and the Equinox kept their numbers through her spellbook, so
+        // the clips drawn for them on 2026-10-14 are theirs still.
         (Class::DualMage, 7) => Clip::DualPhase,
-        (Class::DualMage, 8) => Clip::DualNightfall,
-        (Class::DualMage, 9) => Clip::DualDawn,
-        (Class::DualMage, _) => Clip::DualEquinox,
+        (Class::DualMage, 8) => Clip::DualDarkLance,
+        (Class::DualMage, 9) => Clip::DualSweep,
+        (Class::DualMage, 10) => Clip::DualEquinox,
+        (Class::DualMage, 11) => Clip::DualDarkLance,
+        (Class::DualMage, 12) => Clip::DualDark,
+        (Class::DualMage, 13) => Clip::DualSweep,
+        (Class::DualMage, 14) => Clip::DualLightLance,
+        // The long holds (2026-10-12): the cloud and the disk are raised over
+        // her head, so both are the raised special; the flurry is the whole
+        // body thrown down a line, the sweep's heave.
+        (Class::DualMage, 15) => Clip::DualSpecial,
+        (Class::DualMage, 16) => Clip::DualSpecial,
+        (Class::DualMage, 17) => Clip::DualSweep,
+        (Class::DualMage, _) => Clip::DualSpecial,
     }
 }
 

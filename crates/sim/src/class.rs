@@ -164,8 +164,12 @@ impl Class {
                 colour: Force::Dark,
                 ascending: 0,
                 jumped: false,
+                hopped: false,
+                dash_jump: false,
                 landed: 0,
                 singe: Fx::ZERO,
+                veil: 0,
+                warded: false,
             },
         }
     }
@@ -893,6 +897,14 @@ pub enum Mechanic {
         /// The second jump has been spent this airtime. Reset on landing, and
         /// never consulted while ascending, when every press is a wing beat.
         jumped: bool,
+        /// The air hop has been spent this airtime: an auto thrown off the
+        /// floor rises like a second jump once, and after that only carries
+        /// her (2026-10-12). Reset on landing, and never consulted while
+        /// ascending, when every one of them rises.
+        hopped: bool,
+        /// A jump pressed in the last frames of the Flurry dash's run to the
+        /// disk: thrown on arrival, carrying the run's speed (2026-10-13).
+        dash_jump: bool,
         /// Hits landed during this ascension. What the stagger on the way out
         /// is graduated by -- see `crate::dual::end_ascension`.
         landed: u16,
@@ -902,6 +914,13 @@ pub enum Mechanic {
         /// less than one health, and health is a whole number; this carries the
         /// remainder forward so a slow burn is slow rather than nothing.
         singe: Fx,
+        /// Frames of the Veil left: untouchable while it runs. See
+        /// `crate::dual::veiled`.
+        veil: u8,
+        /// Standing in one of her own sigils this frame, so a wound is cut by
+        /// `sigil, wards her by`. Set by the world, which knows where the
+        /// sigils are, once a frame; read by `state::Player::wound`.
+        warded: bool,
     },
 }
 

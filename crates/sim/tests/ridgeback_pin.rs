@@ -111,12 +111,17 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// for play as well**: merged with her rework, her hunt fills twelve effect
 /// slots, and where twelve evicted the oldest stain for a new one, 128 keep
 /// both. Every fighter was identical up to that frame.
+///
+/// **Then the Dual mage's rework merged in** (2026-10-14): her own fight
+/// moved, and the Reaver's and the Blood mage's with no change to play,
+/// because her five retired effect kinds became four new ones and every kind
+/// listed after hers is numbered one lower.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
     (Class::Bulwark, 0x11c745d19fbec112),
-    (Class::ShadowReaver, 0xd175b8cf993b6d00),
-    (Class::BloodMage, 0xaa3518cad6bdf283),
-    (Class::DualMage, 0x683f1236c1e3c383),
+    (Class::ShadowReaver, 0xa45935d2dff6f3e9),
+    (Class::BloodMage, 0xf2c8a705100f28ee),
+    (Class::DualMage, 0x24161222c7142c96),
     (Class::Elementalist, 0x31a1cb586ada4b67),
 ];
 

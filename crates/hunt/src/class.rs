@@ -715,7 +715,7 @@ impl Hands {
         if plan.bits & (Input::LEFT | Input::RIGHT) == 0 {
             return plan;
         }
-        let (bits, kind) = self.auto_for(me);
+        let (bits, kind) = self.auto_for(w, me);
         if bits == 0 {
             return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
         }
@@ -732,18 +732,18 @@ impl Hands {
         Input::looking_at(held | bits | rekey(me, plan, wire), wire, plan.pitch)
     }
 
-    /// The auto that keeps her bars level: the low side's, unless that would
-    /// burn her, then the other, and neither if both would. With its move.
-    fn auto_for(&self, me: &Player) -> (u16, u8) {
+    /// The click that keeps her bars level: the low side's, unless that would
+    /// burn her, then the other, and neither if both would. With the move it
+    /// throws -- an auto, on the floor or in the air.
+    ///
+    /// **And the purge** (2026-10-12): with three stacks or more of her curse
+    /// on anything near, the light hand goes first, if the bars can take it --
+    /// building to the cap and cashing it is the class's big number.
+    fn auto_for(&self, w: &World, me: &Player) -> (u16, u8) {
         let low_dark = sim::dual::bars(me).is_none_or(|(d, l)| d.raw() <= l.raw());
-        // Off the floor the same clicks throw Reel and Flare, which goad by a
-        // cast's push rather than an auto's: weighed as what they are.
-        let (dark, light) = if me.grounded {
-            (moves::dual::SHADE_BOLT, moves::dual::SUNRAY)
-        } else {
-            (moves::dual::REEL, moves::dual::FLARE)
-        };
-        let order = if low_dark {
+        let (dark, light) = (moves::dual::DARK_AUTO, moves::dual::LIGHT_AUTO);
+        let ripe = most_cursed(w) >= sim::tuning::purge_stagger_from();
+        let order = if low_dark && !ripe {
             [(Input::LEFT, dark), (Input::RIGHT, light)]
         } else {
             [(Input::RIGHT, light), (Input::LEFT, dark)]
@@ -751,7 +751,7 @@ impl Hands {
         order
             .into_iter()
             .find(|(_, k)| keeps(me, *k))
-            .unwrap_or((0, moves::dual::SHADE_BOLT))
+            .unwrap_or((0, moves::dual::DARK_AUTO))
     }
 
     // -----------------------------------------------------------------------
@@ -956,8 +956,7 @@ impl Hands {
     /// **The bars goaded up**, a hand at a time, while there is nothing to
     /// hit: half is the blink, three quarters the second jump.
     fn idle_dual(&mut self, w: &World, me: &Player, at: V3, safe: i32) -> Option<Input> {
-        let _ = w;
-        let auto = moves::get(me.class, moves::dual::SHADE_BOLT);
+        let auto = moves::get(me.class, moves::dual::DARK_AUTO);
         let lower = sim::dual::lower(me).to_int();
         if self.cool > 0
             || lower >= GOAD_TO
@@ -966,7 +965,7 @@ impl Hands {
         {
             return None;
         }
-        let (bits, _) = self.auto_for(me);
+        let (bits, _) = self.auto_for(w, me);
         if bits == 0 || self.last_bits & bits != 0 {
             return None;
         }
@@ -1200,7 +1199,7 @@ impl Hands {
             out = self.carry(w, me, seq, out);
         }
         if me.class == Class::DualMage {
-            out = self.hands_level(me, out);
+            out = self.hands_level(w, me, out);
             out = self.second_jump(me, out);
         }
         if me.class == Class::Bulwark {
@@ -1339,7 +1338,7 @@ impl Hands {
 
     /// The Dual mage's autos into the hand that keeps her bars level, and any
     /// cast that would burn her into an auto that does not.
-    fn hands_level(&mut self, me: &Player, input: Input) -> Input {
+    fn hands_level(&mut self, w: &World, me: &Player, input: Input) -> Input {
         let autos = Input::LEFT | Input::RIGHT;
         let casts = Input::MIDDLE | Input::SPECIAL | Input::MECHANIC;
         let mut bits = input.bits;
@@ -1365,7 +1364,7 @@ impl Hands {
         if bits & autos == 0 {
             return Input { bits, ..input };
         }
-        let (want, _) = self.auto_for(me);
+        let (want, _) = self.auto_for(w, me);
         if bits & autos != want {
             // Counted once a press, not once a held frame.
             if self.last_bits & autos == 0 {
@@ -1568,6 +1567,18 @@ fn keeps(me: &Player, kind: u8) -> bool {
     }
     let wings = Fx::from_int(sim::tuning::tier_wings());
     dual_after(me, kind).is_none_or(|(d, l, _)| d.min(l).raw() < wings.raw())
+}
+
+/// The most stacks of a Dual mage's curse on any body in the fight: the
+/// creatures and both fighters. What tells her hands the curse is ripe.
+fn most_cursed(w: &World) -> u8 {
+    let beasts = w
+        .monsters
+        .iter()
+        .flatten()
+        .map(|m| sim::dual::stacks(m.curse));
+    let fighters = w.players.iter().map(|p| sim::dual::stacks(p.curse));
+    beasts.chain(fighters).max().unwrap_or(0)
 }
 
 /// Marks the Reaver has on whatever creature stands nearest `at`: drawn over

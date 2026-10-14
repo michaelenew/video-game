@@ -413,14 +413,8 @@ clips! {
         "Light auto, right arm: the dark punch mirrored, and it has to read as the other side.";
     DualDarkLance, "dual_dark_lance", Moves, "dual", Length::Move(Class::DualMage, 5), false,
         "Dark lance: the left arm hauled low and back, a slow reach that ends holding on rather than letting go.";
-    DualFlare, "dual_flare", Moves, "dual", Length::Move(Class::DualMage, 6), false,
-        "Flare: the right hand snapped open in front of her, a burst of light, the body kicked back by it.";
     DualPhase, "dual_phase", Moves, "dual", Length::Move(Class::DualMage, 7), false,
         "Phase: both hands pushed out together, the light thrust that carries her through.";
-    DualNightfall, "dual_nightfall", Moves, "dual", Length::Move(Class::DualMage, 8), false,
-        "Nightfall: a dark takeoff, both arms driven down as she rises, the dark pooled below.";
-    DualDawn, "dual_dawn", Moves, "dual", Length::Move(Class::DualMage, 9), false,
-        "Dawn: the light takeoff, the whole body heaved up and open, arms flung wide.";
     DualEquinox, "dual_equinox", Moves, "dual", Length::Move(Class::DualMage, 10), false,
         "Equinox: both forces at once from the air, arms crossed and thrown apart.";
 

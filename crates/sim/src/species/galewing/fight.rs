@@ -1114,7 +1114,7 @@ fn talons(w: &mut World, m: &mut Monster, slot: usize) {
     let mut best: Option<(usize, Fx)> = None;
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
-        if p.health <= 0 || p.aboard() || p.action.invulnerable() {
+        if p.health <= 0 || p.aboard() || p.untouchable() {
             continue;
         }
         // Somebody already held elsewhere is not caught again.
@@ -1364,7 +1364,7 @@ fn volley(w: &mut World, m: &mut Monster) {
     let mut hits = w.lore.word(word::RAKE_HITS);
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
-        if p.health <= 0 || p.aboard() || p.action.invulnerable() {
+        if p.health <= 0 || p.aboard() || p.untouchable() {
             continue;
         }
         let Some(s) = in_strip(at, along, length, width, p.pos) else {
@@ -1543,7 +1543,7 @@ fn own_area(
     let mut struck = w.lore.word(word::STRUCK);
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
-        if struck & (1 << i) != 0 || p.health <= 0 || p.aboard() || p.action.invulnerable() {
+        if struck & (1 << i) != 0 || p.health <= 0 || p.aboard() || p.untouchable() {
             continue;
         }
         if (0..n).any(|d| {

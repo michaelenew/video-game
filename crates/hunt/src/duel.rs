@@ -313,7 +313,7 @@ pub(crate) fn reach(m: &sim::Move, who: Option<&Player>) -> Fx {
         // The crack runs from a stone the bot raised rather than from the
         // body, and the bot does not track where that is: its own length is
         // the honest guess.
-        Kind::Grounded | Kind::Skillshot | Kind::Racing => own,
+        Kind::Grounded | Kind::Skillshot | Kind::Racing | Kind::Overhead => own,
         // Pointed by where the mechanic stands, which the bot does not track.
         Kind::AtTheMechanic => Fx::ZERO,
     }
@@ -554,6 +554,8 @@ pub struct Duelist {
     stuck: u16,
     /// The Dual mage's gap between her bars last frame, to count a mend.
     gap_was: Fx,
+    /// Her lower bar last frame: a sudden fall in it is a bar spent.
+    lower_was: Fx,
     /// The playable rectangle of the arena it is fighting in, read off the
     /// world each frame: where its walls are. It used to be the proving
     /// ground's, written in, which put the walls in the wrong place in any
@@ -632,6 +634,7 @@ impl Duelist {
             last_bits: 0,
             stuck: 0,
             gap_was: Fx::ZERO,
+            lower_was: Fx::ZERO,
             bounds: sim::arena::proving_ground::ARENA.bounds,
         }
     }
@@ -756,7 +759,33 @@ impl Duelist {
             self.think_in = self.between(lo, hi) as u16;
         }
         let class = self.class_play(&me, &seen, w);
-        let input = self.steer_plan(&me, &seen, class);
+        let mut input = self.steer_plan(&me, &seen, class);
+        // **The Dual mage's clicks are taps** (2026-10-13): held, a click is
+        // her long hold and the spell comes instead of the auto, so a click
+        // already down last frame is let go this one. Her plans throw autos;
+        // the spells are a person's choice for now.
+        if me.class == Class::DualMage {
+            let clicks = Input::LEFT | Input::MIDDLE | Input::RIGHT;
+            input.bits &= !(self.last_bits & clicks);
+            // And no hop off an auto within a hop of the wall: with her bars
+            // full a hop lifts her clear over the proving ground's, and a bot
+            // backing off is not choosing to leave the fight.
+            let throwing = me
+                .action
+                .attack_kind()
+                .is_some_and(sim::moves::dual::is_an_auto);
+            let margin = sim::tuning::auto_hop().add(Fx::from_int(2));
+            let walled = by_the_wall(me.pos, margin, &self.bounds);
+            if walled && throwing {
+                input.bits &= !(Input::W | Input::A | Input::S | Input::D);
+            }
+            // Nor a Phase within a blink and its carry of the wall: it puts
+            // her six metres along the look and carries her on, rising.
+            let phase = sim::moves::get(Class::DualMage, sim::moves::dual::PHASE).reach;
+            if !me.grounded && by_the_wall(me.pos, phase.add(Fx::from_int(3)), &self.bounds) {
+                input.bits &= !Input::MIDDLE;
+            }
+        }
         self.last_bits = input.bits;
         input
     }

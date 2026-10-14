@@ -257,11 +257,11 @@ scalars! {
     PoleDriveBoost,   "Champion", "Pole drive, forward boost",  Fixed,   0,         fx(30,1);
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
-    WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
-    WingTip,           "Dual mage", "Wing, the tip as a share of the span",  Fixed,  0,        fx(1,1);
-    WingTipper,        "Dual mage", "Wing, tip damage (x)",                  Fixed,  fx(1,1),  fx(3,1);
+    OrbOut,            "Dual mage", "Orb, starts out from the shoulder (m)", Fixed,  0,        fx(1,1);
+    OrbBowsOut,        "Dual mage", "Orb, bows out on its way (m)",          Fixed,  0,        fx(1,1);
+    OrbSweet,          "Dual mage", "Orb, sweet spot damage (x)",            Fixed,  fx(1,1),  fx(3,1);
     MeterAutoPush,     "Dual mage", "Meter, an auto moves",                  Int,    0,        100;
-    MeterCastPush,     "Dual mage", "Meter, a cast moves",                   Int,    0,        100;
+    MeterCastPush,     "Dual mage", "Meter, a spell vents",                  Int,    0,        100;
     AscensionFrames,   "Dual mage", "Ascension, how long",                   Frames, 1,        600;
     AscensionDrain,    "Dual mage", "Ascension, health a frame",             Int,    0,        100;
     AscensionStun,     "Dual mage", "Ascension, stun on the way out",        Frames, 0,        120;
@@ -293,10 +293,8 @@ scalars! {
     // every knob after it somebody else's baked value. The palette groups by
     // family rather than by position, so these still show up next to the three
     // wing knobs above.
-    WingOffside,       "Dual mage", "Wing, ring centre off the punching side (x reach)", Fixed, fx(-1,1), fx(1,1);
-    WingAhead,         "Dual mage", "Wing, ring centre ahead of her (x reach)", Fixed, fx(-1,1), fx(1,1);
-    WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
-    WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
+    OrbBack,           "Dual mage", "Orb, starts behind her (m)",            Fixed,  0,        fx(1,1);
+    OrbSweetRadius,    "Dual mage", "Orb, sweet spot radius (m)",            Fixed,  fx(1,20), fx(2,1);
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
     LotusUncurl,       "Reaver",    "Lotus, turn coming home (turns)",       Fixed,  0,        fx(1,2);
     RepeatLockout,     "Offence",   "Repeat lockout",                        Frames, 0,        90;
@@ -364,11 +362,11 @@ scalars! {
     // The third meter tier, and the one the design has been asking for since
     // the bar was built: an auto moves you a little, a cast moves you more, and
     // the finisher very nearly throws you over the edge.
-    MeterFinisherPush,"Dual mage", "Meter, the finisher moves",             Int,   0,        100;
+    MeterFinisherPush,"Dual mage", "Meter, a major spends",             Int,   0,        100;
     // What the wing's tip does to the *shove* rather than to the damage. The
     // tip is the far edge of the blade, so it is where the light auto's real
     // knockback lives -- and, on the dark arm, where the pull is worth timing.
-    WingTipShove,     "Dual mage", "Wing, tip knockback (x)",               Fixed, fx(1,1),  fx(4,1);
+    OrbSweetShove,    "Dual mage", "Orb, sweet spot knockback (x)",         Fixed, fx(1,1),  fx(4,1);
     // Sweep's dark form. The light form spends the move's own knockback and
     // launch; the dark one spends these instead, which is what makes one
     // button two answers to the same problem.
@@ -698,21 +696,22 @@ scalars! {
     AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
     AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
     AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
-    // **The Dual mage, every move a spell**, 2026-10-09: her bolts' flight,
-    // the hex and its two reactions, the well, and the air moves. See
-    // `docs/design/exploration/0010_dual_mage_spells.md`.
-    ShadeBoltFlight,      "Dual mage", "Shade bolt, flies for", Frames, 1, 60;
-    BinaryFlight,         "Dual mage", "Binary, flies for", Frames, 1, 90;
-    AbyssLife,            "Dual mage", "Abyss, lasts", Frames, 1, 300;
-    SpellFlash,           "Dual mage", "Ray and flare, seen for", Frames, 1, 30;
-    HexLasts,             "Dual mage", "Hex, lasts", Frames, 1, 600;
-    ShatterDamage,        "Dual mage", "Shatter, damage", Int, 0, 200;
-    ShatterStagger,       "Dual mage", "Shatter, staggers for", Frames, 0, 60;
-    WitherDamage,         "Dual mage", "Wither, damage", Int, 0, 200;
-    WitherSlow,           "Dual mage", "Wither, slows to (x)", Fixed, 0, fx(1,1);
-    AbyssPull,            "Dual mage", "Abyss, drags at (m/s)", Fixed, 0, fx(20,1);
-    FlareKick,            "Dual mage", "Flare, kicks her (m/s)", Fixed, 0, fx(40,1);
-    ReelPull,             "Dual mage", "Reel, pulls her at (m/s)", Fixed, fx(1,1), fx(60,1);
+    // **The Dual mage, every move a spell**, 2026-10-09, re-cast in place for
+    // her spellbook, 2026-10-12: the curse and its purge, the stars, the black
+    // sun, the Descent and the Shadowstep. See
+    // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    CurseEvery, "Dual mage", "Curse, ticks every", Frames, 1, 120;
+    BinaryOrbits, "Dual mage", "Binary, orbits for", Frames, 1, 600;
+    AbyssLife, "Dual mage", "Abyss, lasts", Frames, 1, 300;
+    SpellFlash, "Dual mage", "Spell, seen for", Frames, 1, 60;
+    CurseFades, "Dual mage", "Curse, one fades every", Frames, 1, 600;
+    PurgeDamage, "Dual mage", "Purge, damage per stack", Int, 0, 200;
+    PurgeStagger, "Dual mage", "Purge, staggers for", Frames, 0, 60;
+    CurseTick, "Dual mage", "Curse, tick per stack", Int, 0, 100;
+    RootSlow, "Dual mage", "Root, speed while rooted (x)", Fixed, 0, fx(1,1);
+    AbyssCurseEvery, "Dual mage", "Abyss, curses every", Frames, 1, 120;
+    DescentDive, "Dual mage", "Descent, dives at (m/s)", Fixed, 0, fx(60,1);
+    ShadowstepCursed, "Dual mage", "Shadowstep, reaches a cursed body (m)", Fixed, fx(1,1), fx(30,1);
     EquinoxLift,          "Dual mage", "Equinox, lift at both full (m/s)", Fixed, 0, fx(40,1);
     // **The Shadow Reaver**, 2026-10-10 and 2026-10-12: the aimed plunge
     // and its ring, Gallows' blink to the shadow, the return clock and the
@@ -775,6 +774,69 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **The Dual mage's spellbook**, 2026-10-12: the curse's cap and the
+    // purge's curve, the root, the sigils, the litanies (since the hop after an auto), the twin stars, the
+    // Shadowstep, the Veil, the Equinox's levelling, the majors' steeper
+    // growth and Judgement's columns, the Abyss's collapse and Apotheosis.
+    // Appended for the reason above. See
+    // `docs/design/exploration/0015_dual_mage_spellbook.md`.
+    PurgeCurve, "Dual mage", "Purge, extra per stack (x)", Fixed, 0, fx(1,1);
+    PurgeStaggerFrom, "Dual mage", "Purge, staggers from (stacks)", Int, 1, 9;
+    CurseMost, "Dual mage", "Curse, most stacks", Int, 1, 7;
+    RootFor, "Dual mage", "Root, lasts", Frames, 0, 120;
+    SigilLasts, "Dual mage", "Sigil, lasts", Frames, 1, 900;
+    SigilRadius, "Dual mage", "Sigil, radius (m)", Fixed, fx(1,2), fx(8,1);
+    SanctuaryRadius, "Dual mage", "Sanctuary, sigil radius (m)", Fixed, fx(1,2), fx(8,1);
+    SigilWards, "Dual mage", "Sigil, wards her by (%)", Percent, 0, 100;
+    SigilBurn, "Dual mage", "Sigil, burns", Int, 0, 100;
+    SigilsAtOnce, "Dual mage", "Sigils, at once", Int, 1, 4;
+    AutoHopRecovery, "Dual mage", "Auto, recovery after a hop", Frames, 0, 30;
+    BinaryRadius, "Dual mage", "Binary, orbit radius (m)", Fixed, fx(1,2), fx(4,1);
+    BinaryStar, "Dual mage", "Binary, star radius (m)", Fixed, fx(1,10), fx(2,1);
+    BinaryEvery, "Dual mage", "Binary, strikes a body every", Frames, 1, 120;
+    BinaryDamage, "Dual mage", "Binary, damage a strike", Int, 0, 200;
+    BinarySpin, "Dual mage", "Binary, turns a second", Fixed, 0, fx(4,1);
+    ShadowstepBare, "Dual mage", "Shadowstep, without a body (m)", Fixed, 0, fx(20,1);
+    ShadowstepBehind, "Dual mage", "Shadowstep, arrives behind them (m)", Fixed, 0, fx(4,1);
+    VeilFor, "Dual mage", "Veil, untouchable for", Frames, 0, 60;
+    EquinoxLevels, "Dual mage", "Equinox, levels by", Int, 0, 100;
+    MajorSizeEmpty, "Dual mage", "Majors, size at empty (x)", Fixed, fx(1,10), fx(2,1);
+    MajorSizeFull, "Dual mage", "Majors, size at full (x)", Fixed, fx(1,1), fx(4,1);
+    JudgementColumns, "Dual mage", "Judgement, columns at full", Int, 1, 9;
+    JudgementApart, "Dual mage", "Judgement, columns stand apart (m)", Fixed, fx(1,2), fx(8,1);
+    AbyssCollapse, "Dual mage", "Abyss, collapse damage", Int, 0, 400;
+    ApotheosisReach, "Dual mage", "Apotheosis, reaches (m)", Fixed, fx(1,1), fx(12,1);
+    ApotheosisDamage, "Dual mage", "Apotheosis, damage", Int, 0, 400;
+    CurseDrains, "Dual mage", "Curse, drained to her (%)", Percent, 0, 100;
+    ShadowstepProbe, "Dual mage", "Shadowstep, probe for a creature, half-width (m)", Fixed, fx(1,50), fx(1,1);
+    // **Her autos carry her** (2026-10-12, the second pass): a hop after each
+    // one, the way she is holding, lifted by her lower bar. See
+    // `docs/design/exploration/0016_dual_mage_controls.md`.
+    AutoHop, "Dual mage", "Auto, hop (m)", Fixed, 0, fx(8,1);
+    AutoHopSpeed, "Dual mage", "Auto, hop speed (m/s)", Fixed, fx(1,1), fx(60,1);
+    AutoHopLift, "Dual mage", "Auto, hop lifts (m)", Fixed, 0, fx(4,1);
+    AutoHopLiftFull, "Dual mage", "Auto, hop lifts at full, more (m)", Fixed, 0, fx(4,1);
+    // **The second pass's second day** (2026-10-12): the air hop's rise,
+    // the thing hung over her head, the long holds and what they vent, the
+    // chain's reach, the flurry's dash, and Phase's carry. Appended for the
+    // reason above. See `docs/design/exploration/0016_dual_mage_controls.md`.
+    AutoAirJump, "Dual mage", "Auto, the air hop rises, once a jump (m)", Fixed, 0, fx(6,1);
+    OverheadHeight, "Dual mage", "Overhead, hangs above her feet (m)", Fixed, fx(1,1), fx(8,1);
+    HoldFills, "Dual mage", "Meter, a long hold fills", Int, 0, 100;
+    ChainFirst, "Dual mage", "Chain lightning, finds a body this near the crosshair (m)", Fixed, 0, fx(12,1);
+    ChainHop, "Dual mage", "Chain lightning, leaps to a body this near (m)", Fixed, 0, fx(16,1);
+    ChainLinks, "Dual mage", "Chain lightning, bodies it strikes", Int, 1, 6;
+    ChainRadius, "Dual mage", "Chain lightning, strike radius (m)", Fixed, fx(1,10), fx(3,1);
+    FlurryDashSpeed, "Dual mage", "Flurry dash, speed (m/s)", Fixed, fx(1,1), fx(80,1);
+    PhaseCarry, "Dual mage", "Phase, keeps this speed along the blink (m/s)", Fixed, 0, fx(30,1);
+    PhaseRise, "Dual mage", "Phase, rises (m/s)", Fixed, 0, fx(20,1);
+    // 2026-10-13: how far inside a lone arena's bounds a hop stops, so it
+    // does not land her on the wall that stands on them.
+    HopKeepsInside, "Dual mage", "Auto, hop stops this far inside the bounds (m)", Fixed, 0, fx(4,1);
+    // 2026-10-13: the Flurry dash's disk, and the jump out of its run.
+    FlurryPause, "Dual mage", "Flurry dash, the disk stands before she goes", Frames, 0, 60;
+    FlurryJumpBuffer, "Dual mage", "Flurry dash, a jump this near the end keeps the run", Frames, 0, 30;
+    FlurryJumpKeep, "Dual mage", "Flurry dash, the jump keeps this much of the run (x)", Fixed, 0, fx(3,2);
     // **The Blood mage as the blaster**, 2026-10-12: every stain is
     // collected -- walked into, teleported to, hit through -- and a hit
     // through one is harder for it. See
@@ -1224,7 +1286,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Aim => "Line of effect (0-4)",
+            MoveField::Aim => "Line of effect (0-5)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
             MoveField::Channel => "Channel, longest hold",
@@ -1267,7 +1329,7 @@ impl MoveField {
             // Four lines of effect, and the numbering is `aim::Kind`'s. A
             // slider that ran to six hundred would let somebody pick a fifth.
             // Five since v2: the crack racing from a held stone. See `aim::Kind`.
-            MoveField::Aim => (0, 4),
+            MoveField::Aim => (0, 5),
             // Signed, because a spike is a launch pointed the other way: the
             // Champion's aerial hammer drives an airborne target into the
             // floor with the same number that an uppercut lifts them with.

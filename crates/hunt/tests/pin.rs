@@ -61,12 +61,22 @@ const PINNED: [(Class, u32, u64); 7] = [
     // hands their plans' input back unchanged here. See feel-log.md.
     // Moved 2026-10-09, deliberately: every move of hers is a spell now, and
     // the class layer weighs the spell a click throws. See feel-log.md.
-    (Class::DualMage, 2_222, 0xd85ce77501bf443b),
+    // Moved 2026-10-12, deliberately: her spellbook (0015) -- the litanies,
+    // the curse and the purge, and the class layer turns to the light hand
+    // when a curse is ripe.
+    // Moved again 2026-10-12, deliberately: the bare clicks are her wing
+    // autos again, each hopping her the way she holds (0016); and again for
+    // the second round -- forward wings, long holds, spending majors -- and
+    // the third: the autos a ball, every click a tap or a hold (2026-10-13).
+    (Class::DualMage, 2_222, 0x8b18e7138ab2a93c),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
     // floor are new moves (0011), and Executioner is on middle click.
-    (Class::ShadowReaver, 31, 0x5d46e3a938508933),
+    // Moved 2026-10-12 with no change to her fight: an effect is hashed by
+    // its kind's number, and the Dual mage's retired Shade bolt sat before
+    // her shadow's blades in the list (0015).
+    (Class::ShadowReaver, 31, 0x97cda2aa1ceeb611),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
