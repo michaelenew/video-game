@@ -774,6 +774,27 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **Regions** (`docs/design/regions.md`): the overlapping hexagons every
+    // build keeps its books in, and the speed of light they are sized by.
+    // `reach` and `speed` are a declaration, not a rule a move obeys: the dev
+    // watchdog reports every effect that outruns them, and `tests/regions.rs`
+    // holds the declaration to the fastest number in this table. `delay` is
+    // how old a neighbour's outcome may be, `net::MAX_ROLLBACK_FRAMES`. See
+    // `crate::region`.
+    RegionReach,        "Regions",  "Reach, farthest anything acts (m)",          Fixed,  fx(1,1),  fx(200,1);
+    RegionSpeed,        "Regions",  "Speed, fastest anything moves (m/s)",        Fixed,  fx(1,1),  fx(500,1);
+    RegionDelay,        "Regions",  "Delay, oldest outcome a region takes",       Frames, 1,        30;
+    RegionOverlap,      "Regions",  "Checksum zone, reaches past its hexagon (m)", Fixed, 0,        fx(50,1);
+    RegionSize,         "Regions",  "Hexagon size, centre to corner (m)",         Fixed,  fx(4,1),  fx(2000,1);
+    RegionNeighbourLag, "Regions",  "Simulated neighbour, heartbeat lag",         Frames, 0,        120;
+    // **The crowd field** (`crate::crowd`, exploration 0018): how often a
+    // region's aggregate is summed, how late the world reads it, and how
+    // slowly what it reads moves. `tests/crowd.rs` holds `tau >= lookahead`.
+    CrowdEpoch,         "Crowds",   "Epoch, frames between aggregates",           Frames, 1,        600;
+    CrowdLookahead,     "Crowds",   "Lookahead, an aggregate read this late",     Frames, 0,        3600;
+    CrowdTau,           "Crowds",   "Crowd and flow, time constant (frames)",     Frames, 1,        3600;
+    CrowdHeatTau,       "Crowds",   "Heat, time constant (frames)",               Frames, 1,        3600;
+    CrowdHears,         "Crowds",   "A pack hears the valley fill at (fighters)", Fixed,  0,        fx(64,1);
     // **The Dual mage's spellbook**, 2026-10-12: the curse's cap and the
     // purge's curve, the root, the sigils, the litanies (since the hop after an auto), the twin stars, the
     // Shadowstep, the Veil, the Equinox's levelling, the majors' steeper

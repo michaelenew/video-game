@@ -165,7 +165,24 @@ impl Rim {
     /// bank, rounding over at its crest, then the land's own rise; with the
     /// noise that grows with distance laid over it.
     pub fn rise(&self, d: Fx, x: Fx, z: Fx) -> Fx {
-        let bank = self.bank_at(x, z);
+        self.rise_with(d, self.grain(x, z))
+    }
+
+    /// **What the rim's noise is at a point**, which [`Rim::rise`] reads at
+    /// whatever distance out it is asked: worked out once for a point that
+    /// is asked about at two distances (`valley::land`, a pad's rim far from
+    /// it), it is five octaves of noise not worked out twice.
+    pub fn grain(&self, x: Fx, z: Fx) -> Grain {
+        Grain {
+            bank: self.bank_at(x, z),
+            noise: land::noise(x, z),
+            lumps: land::value(x, z, 5, 11),
+        }
+    }
+
+    /// [`Rim::rise`], from the point's [`Rim::grain`].
+    pub fn rise_with(&self, d: Fx, grain: Grain) -> Fx {
+        let bank = grain.bank;
         let run = bank.mul(Fx::from_int(2)).div(SLOPE);
         let base = if d.raw() < run.raw() {
             // `bank · t(2 - t)`: as steep as `SLOPE` at the foot, level at
@@ -182,10 +199,15 @@ impl Rim {
         // Lumps a few metres across over the face: rock that juts and
         // falls back. Grown from nothing at the foot too, and small enough
         // that the bank stays too steep to climb below its crest.
-        let lumps = land::value(x, z, 5, 11)
-            .abs()
-            .mul(Fx::ratio(7, 10))
-            .mul(grown);
-        base.add(land::noise(x, z).mul(amp).abs()).add(lumps)
+        let lumps = grain.lumps.abs().mul(Fx::ratio(7, 10)).mul(grown);
+        base.add(grain.noise.mul(amp).abs()).add(lumps)
     }
+}
+
+/// The rim's noise at one point: see [`Rim::grain`].
+#[derive(Clone, Copy, Debug)]
+pub struct Grain {
+    bank: Fx,
+    noise: Fx,
+    lumps: Fx,
 }

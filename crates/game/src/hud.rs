@@ -15,9 +15,27 @@ const P2: Color = Color::srgb(1.0, 0.54, 0.30);
 const P3: Color = Color::srgb(0.40, 0.86, 0.46);
 const P4: Color = Color::srgb(0.78, 0.50, 1.0);
 
+/// Four more, for seats five to eight: a yellow, a cyan, a pink and a pale
+/// grey, each far from the others and from the creature's red. Past eight the
+/// palette goes round again: a seat is told apart by its place in the HUD as
+/// much as by its hue.
+const P5: Color = Color::srgb(0.96, 0.86, 0.30);
+const P6: Color = Color::srgb(0.30, 0.90, 0.92);
+const P7: Color = Color::srgb(1.0, 0.56, 0.80);
+const P8: Color = Color::srgb(0.86, 0.86, 0.90);
+const PALETTE: [Color; 8] = [P1, P2, P3, P4, P5, P6, P7, P8];
+
 /// **Each seat's colour**, player one first: its fighter's body, and its line
-/// in the HUD.
-pub const SEAT_COLOURS: [Color; sim::state::MAX_PLAYERS] = [P1, P2, P3, P4];
+/// in the HUD. As many as there are seats, from [`PALETTE`].
+pub const SEAT_COLOURS: [Color; sim::state::MAX_PLAYERS] = {
+    let mut all = [P1; sim::state::MAX_PLAYERS];
+    let mut i = 0;
+    while i < all.len() {
+        all[i] = PALETTE[i % PALETTE.len()];
+        i += 1;
+    }
+    all
+};
 
 /// The row of the third and fourth fighters' health, under the first two;
 /// hidden while those seats are empty.
@@ -196,8 +214,36 @@ pub fn setup(mut commands: Commands) {
                 SeatRow,
             ))
             .with_children(|row| {
-                spawn_health(row, 2, P3);
-                spawn_health(row, 3, P4);
+                // Every seat past the first two: its health, its class
+                // button, and the class meters the first two have in the
+                // rows below -- which a third or fourth player online could
+                // not see for themselves when this row was health alone.
+                for (seat, &colour) in SEAT_COLOURS.iter().enumerate().skip(2) {
+                    row.spawn((
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            row_gap: Val::Px(2.0),
+                            ..default()
+                        },
+                        SeatColumn(seat),
+                    ))
+                    .with_children(|column| {
+                        column
+                            .spawn(Node {
+                                column_gap: Val::Px(12.0),
+                                align_items: AlignItems::Center,
+                                ..default()
+                            })
+                            .with_children(|line| {
+                                spawn_class_button(line, seat, colour);
+                                spawn_health(line, seat, colour);
+                            });
+                        spawn_bar(column, seat);
+                        spawn_momentum(column, seat);
+                        spawn_well(column, seat);
+                    });
+                }
             });
 
             // The Dual mage's meter, under whichever fighter has one. Same
@@ -418,6 +464,102 @@ pub fn update_picker(
         ));
     }
     *shown = Some(now);
+}
+
+#[derive(Component)]
+pub struct RegionText;
+
+/// Spawned only in dev mode, where there is a watchdog to report.
+pub fn setup_regions(mut commands: Commands) {
+    if !crate::dev_mode() {
+        return;
+    }
+    commands.spawn((
+        Text::new(""),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(DIM),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(14.0),
+            left: Val::Percent(30.0),
+            ..default()
+        },
+        RegionText,
+    ));
+}
+
+/// Rewritten every quarter of a second of frames, not every frame: it is a
+/// readout, and a string a frame is an allocation a frame.
+pub fn update_regions(
+    sim: Res<crate::Sim>,
+    mut text: Query<&mut Text, With<RegionText>>,
+    mut shown: Local<Option<(u32, u32)>>,
+) {
+    let Ok(mut t) = text.single_mut() else {
+        return;
+    };
+    let ledger = &sim.ledger;
+    let seq = ledger.watch().map_or(0, |w| w.seq());
+    let now = (ledger.confirmed().unwrap_or(0) / 15, seq);
+    if shown.as_ref() == Some(&now) {
+        return;
+    }
+    *shown = Some(now);
+    *t = Text::new(region_readout(ledger));
+}
+
+fn region_readout(ledger: &regions::Ledger) -> String {
+    use std::fmt::Write;
+    let g = ledger.grid();
+    let m = |v: sim::Fx| v.raw() as f32 / 65536.0;
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "regions  hexagon {:.0} m | horizon {:.0} m | overlap {:.0} m{}",
+        m(g.size),
+        m(g.horizon()),
+        m(g.overlap),
+        if g.sound() { "" } else { " | UNSOUND" }
+    );
+    let _ = write!(out, "books");
+    for l in ledger.books() {
+        let _ = write!(
+            out,
+            "  {}({},{}) {:04x}",
+            if l.mine { "*" } else { "" },
+            l.region.q,
+            l.region.r,
+            l.checksum & 0xffff
+        );
+    }
+    let _ = writeln!(out, " | {} live", ledger.live().len());
+    let confirmed = ledger.confirmed().unwrap_or(0);
+    let heard = ledger.heard();
+    let simulated = heard.iter().filter(|h| h.simulated).count();
+    let behind = heard
+        .iter()
+        .map(|h| confirmed.saturating_sub(h.through))
+        .max()
+        .unwrap_or(0);
+    let _ = writeln!(
+        out,
+        "heard  {} followed | {simulated} simulated | slowest {behind} frames behind",
+        heard.len()
+    );
+    if let Some(w) = ledger.watch() {
+        let _ = write!(out, "watch  {} re-runs", w.reruns);
+        for (name, n) in regions::Finding::KINDS.iter().zip(w.counts) {
+            let _ = write!(out, " | {name} {n}");
+        }
+        let _ = writeln!(out);
+        for issue in w.issues().take(4) {
+            let _ = writeln!(out, "  {issue}");
+        }
+    }
+    out
 }
 
 fn spawn_class_button(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
@@ -1035,8 +1177,29 @@ pub fn update(
 type SeatRowQuery<'w, 's> =
     Query<'w, 's, &'static mut Visibility, (With<SeatRow>, Without<QuarryRow>, Without<MeterRow>)>;
 
-/// Show the third and fourth fighters' row only while one of them is seated.
-pub fn update_seats(sim: Res<crate::Sim>, mut rows: SeatRowQuery) {
+/// One seat past the first two, in the [`SeatRow`]: shown while it is played.
+#[derive(Component)]
+pub struct SeatColumn(pub usize);
+
+type SeatColumnQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static SeatColumn, &'static mut Visibility),
+    (Without<SeatRow>, Without<QuarryRow>, Without<MeterRow>),
+>;
+
+/// Show the row of seats past the first two only while one of them is seated.
+pub fn update_seats(sim: Res<crate::Sim>, mut rows: SeatRowQuery, mut columns: SeatColumnQuery) {
+    for (column, mut seen) in columns.iter_mut() {
+        let want = if sim.cur.is_present(column.0) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *seen != want {
+            *seen = want;
+        }
+    }
     let want = if sim.cur.present() > 2 {
         Visibility::Inherited
     } else {
@@ -1244,7 +1407,7 @@ fn locked(p: &sim::state::Player) -> Option<String> {
 ///
 /// Separated from the click handling so the rule can be tested without a
 /// window, a cursor, or a rendered frame.
-pub fn cycle_class(mut classes: [sim::Class; 2], who: usize) -> [sim::Class; 2] {
+pub fn cycle_class<const N: usize>(mut classes: [sim::Class; N], who: usize) -> [sim::Class; N] {
     let all = sim::class::ALL_CLASSES;
     let next = (classes[who] as usize + 1) % all.len();
     classes[who] = all[next];
@@ -1295,10 +1458,7 @@ pub fn class_buttons(
         }
         // Asked for on the wire, as Tab is, so a peer restarts on the same
         // frame.
-        let classes = cycle_class(
-            [sim.cur.players[0].class, sim.cur.players[1].class],
-            button.0,
-        );
+        let classes = cycle_class(sim.cur.players.map(|p| p.class), button.0);
         sim.travel = sim::input::Travel::class(button.0, classes[button.0]);
     }
 }

@@ -682,9 +682,9 @@ fn read_frame(line: &str, version: u32) -> Option<([Input; MAX_PLAYERS], u32)> {
         input.bits = u16::from_str_radix(words.next()?, 16).ok()?;
         input.aim = u16::from_str_radix(words.next()?, 16).ok()?;
         input.pitch = u16::from_str_radix(words.next()?, 16).ok()? as i16;
-        let travel = u8::from_str_radix(words.next()?, 16).ok()?;
+        let travel = u16::from_str_radix(words.next()?, 16).ok()?;
         input.travel = if version < 3 {
-            crate::input::Travel::from_two_seats(travel)
+            crate::input::Travel::from_two_seats(travel as u8)
         } else {
             crate::input::Travel(travel)
         };

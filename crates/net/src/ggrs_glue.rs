@@ -4,7 +4,7 @@
 //! dependency on `sim` -- whose zero-dependency status is a determinism
 //! guarantee, not an accident -- the serialisable wrapper lives here.
 
-use ggrs::{Config, GgrsRequest};
+use ggrs::{Config, GgrsRequest, InputStatus};
 use serde::{Deserialize, Serialize};
 use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
@@ -28,7 +28,7 @@ pub struct NetInput(pub u64);
 impl From<NetInput> for Input {
     fn from(n: NetInput) -> Input {
         Input::looking_at((n.0 >> 32) as u16, (n.0 >> 16) as u16, n.0 as u16 as i16)
-            .travelling(sim::input::Travel((n.0 >> 48) as u8))
+            .travelling(sim::input::Travel((n.0 >> 48) as u16))
     }
 }
 
@@ -76,6 +76,42 @@ pub fn handle_requests_watched(
     requests: Vec<GgrsRequest<SessionConfig>>,
     mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
 ) {
+    advance_each(world, requests, |world, inputs| {
+        // A flat copy, like every snapshot the session saves: no heap.
+        let before = world.clone();
+        world.advance(inputs);
+        watch(&before, inputs, world);
+    });
+}
+
+/// [`handle_requests_watched`], **kept on the region ledger**: every frame
+/// made goes on its tape, and is fed the crowd field's aggregates due at it
+/// (`sim::crowd`, `regions::Ledger::due`) -- re-recorded and re-fed on a
+/// rollback's re-advance the way inputs are. What the game's online driver
+/// calls.
+pub fn handle_requests_kept(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    ledger: &mut regions::Ledger,
+    mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
+) {
+    advance_each(world, requests, |world, inputs| {
+        let before = world.clone();
+        ledger.record(&before, inputs);
+        let (fed, n) = ledger.due(world.frame.wrapping_add(1));
+        world.advance_with(inputs, &fed[..n]);
+        watch(&before, inputs, world);
+    });
+}
+
+/// The one loop under both: GGRS's saves and loads, and `advance(world,
+/// inputs)` for every frame it asks made, with the inputs as the simulation
+/// reads them (a disconnected seat's as a departure).
+fn advance_each(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    mut advance: impl FnMut(&mut World, [Input; MAX_PLAYERS]),
+) {
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
@@ -88,13 +124,22 @@ pub fn handle_requests_watched(
             }
             GgrsRequest::AdvanceFrame { inputs } => {
                 let mut frame_inputs = [Input::default(); MAX_PLAYERS];
-                for (slot, (input, _status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
-                    *slot = (*input).into();
+                for (slot, (input, status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
+                    // **A seat GGRS has given up on has left the match.** It
+                    // marks the seat disconnected from the same frame on
+                    // every peer, and from then on hands us a blank input
+                    // for it -- which the world used to play as a fighter
+                    // standing still and turning to face one way. Said as a
+                    // trip instead, the world takes the fighter out of it
+                    // (`sim::state::World::away`).
+                    *slot = match status {
+                        InputStatus::Disconnected => {
+                            Input::default().travelling(sim::input::Travel::LEFT)
+                        }
+                        _ => (*input).into(),
+                    };
                 }
-                // A flat copy, like every snapshot the session saves: no heap.
-                let before = world.clone();
-                world.advance(frame_inputs);
-                watch(&before, frame_inputs, world);
+                advance(world, frame_inputs);
             }
         }
     }

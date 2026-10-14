@@ -55,16 +55,29 @@ pub mod word {
     /// move beginning, or ending, is seen once.
     pub const PREV: usize = 0;
     /// Each critter's ride clock: frames a fighter has been on its back.
-    /// Sixteen bits a body, two to a word, from word 1.
+    /// Sixteen bits a body, two to a word, from word 1 -- **a run as long as
+    /// the critter slots need**. It was five words by the day's count of ten,
+    /// and the migration's words sat at six: with more slots the ride clocks
+    /// wrote over the migration every frame, and no wave was ever drawn.
     pub const RIDE: usize = 1;
+    const RIDE_WORDS: usize = crate::critter::MAX_CRITTERS.div_ceil(2);
     /// The crossing's migration: frames since the last wave ran (low half),
     /// and how many have run (high half).
-    pub const WAVE: usize = 6;
+    pub const WAVE: usize = RIDE + RIDE_WORDS;
     /// The crossing's next wave while it is drawn: where it crosses the road,
     /// in centimetres along x biased by half the sixteen bits (low half), and
     /// [`super::wave`] bits (high half).
-    pub const WAVE_AT: usize = 7;
+    pub const WAVE_AT: usize = WAVE + 1;
+    /// The first word past its own.
+    pub const END: usize = WAVE_AT + 1;
 }
+
+/// Its own cells: every word in [`word`], and never fewer than the three it
+/// was given at ten slots.
+pub const OWN_CELLS: u8 = {
+    let need = word::END.div_ceil(4);
+    if need > 3 { need as u8 } else { 3 }
+};
 
 /// Where the herd leaves by: the ford, in the meadow's east edge -- or, in an
 /// arena without one, the edge nearest home.
@@ -571,11 +584,9 @@ fn stun(w: &mut World, ground: &Terrain, pack: &mut Pack, b: usize, hit: Stopper
         Stopper::Raised(s) => {
             // The cart: the charge's whole blow, once a charge.
             if let Some(o) = the_cart(w).filter(|o| o.solid() == s) {
-                let bit = 1u16 << b;
-                let mut state = o.state;
-                if state.struck_by_critters & bit == 0 {
-                    state.struck_by_critters |= bit;
-                    objective::set(&mut w.lore, o.index, state);
+                let bit = 1u8 << o.index;
+                if w.critters[b].struck_objectives & bit == 0 {
+                    w.critters[b].struck_objectives |= bit;
                     objective::strike(&mut w.lore, o.index, sp.attack(CHARGE).damage);
                 }
             }

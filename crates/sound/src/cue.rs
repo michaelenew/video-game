@@ -137,10 +137,12 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
     // The round itself.
     if matches!(before.phase, Phase::Fighting) && matches!(after.phase, Phase::RoundOver { .. }) {
         // A low gong: the end of it.
-        let at = after.players[0]
-            .pos
-            .add(after.players[1].pos)
-            .scale(sim::Fx::ratio(1, 2));
+        // In the middle of everybody in the fight, however many that is.
+        let present = after.present().max(1);
+        let at = after.players[..present]
+            .iter()
+            .fold(V3::ZERO, |sum, p| sum.add(p.pos))
+            .scale(sim::Fx::ratio(1, present as i32));
         out.push(
             Patch::Strike(Strike {
                 weight: 1.0,
@@ -157,7 +159,20 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
         if was.health <= 0 {
             continue;
         }
-        let other = &after.players[1 - i];
+        // Whoever else has a blow out this frame: with more than two
+        // fighters there is no single "other", so the struck one hears the
+        // first live move among the rest.
+        let other = after
+            .players
+            .iter()
+            .enumerate()
+            .find(|&(j, p)| {
+                j != i
+                    && p.health > 0
+                    && matches!(p.action, Action::Active { .. })
+                    && p.action.attack_kind().is_some()
+            })
+            .map(|(_, p)| p);
 
         // A move begins: its telegraph, exactly as long as its startup.
         if begun(now.action)
@@ -255,10 +270,7 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                 || now.action.frames_left() > was.action.frames_left());
         if hit || blocked {
             let (mut weight, mut sharp) = (0.4, 0.3);
-            if let Some(kind) = other
-                .action
-                .attack_kind()
-                .filter(|_| matches!(other.action, Action::Active { .. }))
+            if let Some((other, kind)) = other.and_then(|o| o.action.attack_kind().map(|k| (o, k)))
             {
                 (weight, sharp) = blow(other.class, kind);
             } else if let Some(m) = after

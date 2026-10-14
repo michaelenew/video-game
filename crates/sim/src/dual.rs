@@ -557,11 +557,20 @@ pub fn dodge_travel(grounded: bool) -> Fx {
 // leaves in the world".
 //
 // A curse is one byte on the body: the stacks in the low three bits, and
-// whose curse it is -- the seat of the mage who laid it -- in the top one.
-// The same byte the hex was, because the snapshot is at its cap.
+// whose curse it is -- the seat of the mage who laid it -- in the five above
+// them. It was one bit of seat, the top one, while there were two; with four,
+// a mage in seat two or three was recorded as seat zero or one, healed the
+// wrong body and never built a stack. The seat's lowest bit is still the top
+// one and the rest go below it, so seats nought and one write the byte they
+// always did; five bits hold every seat there can be.
 
 /// No curse on a body.
 pub const NO_CURSE: u8 = 0;
+
+const _: () = assert!(
+    crate::state::MAX_PLAYERS <= 32,
+    "a curse byte holds the seat that laid it in five bits"
+);
 
 /// How many stacks a curse byte holds.
 pub const fn stacks(curse: u8) -> u8 {
@@ -570,7 +579,7 @@ pub const fn stacks(curse: u8) -> u8 {
 
 /// Whose curse it is: the seat of the mage who laid the last stack.
 pub const fn cursed_by(curse: u8) -> usize {
-    (curse >> 7) as usize
+    ((curse >> 7) as usize) | (((curse >> 3) & 0x0F) as usize) << 1
 }
 
 /// A curse byte of `n` stacks, laid by seat `by`.
@@ -578,7 +587,7 @@ pub const fn curse_of(n: u8, by: usize) -> u8 {
     if n == 0 {
         NO_CURSE
     } else {
-        (n & 0x07) | (((by & 1) as u8) << 7)
+        (n & 0x07) | ((by as u8 & 1) << 7) | ((by as u8 >> 1) & 0x0F) << 3
     }
 }
 

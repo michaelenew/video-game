@@ -249,3 +249,54 @@ impl Line for SwitchedLine {
         lock(&self.board.0).queues[self.serial as usize].pop_front()
     }
 }
+
+/// **A line that loses packets**: one in `n` of what is sent, at random,
+/// the way a data channel with retransmits off does. 0 loses none. For the
+/// tests that have to survive it.
+pub struct Lossy<L: Line> {
+    pub line: L,
+    lose_one_in: u64,
+    rng: u64,
+}
+
+impl<L: Line> Lossy<L> {
+    pub fn new(line: L, lose_one_in: usize, seed: u64) -> Lossy<L> {
+        Lossy {
+            line,
+            lose_one_in: lose_one_in as u64,
+            rng: 0x9e37_79b9_7f4a_7c15 ^ seed,
+        }
+    }
+}
+
+impl<L: Line> Line for Lossy<L> {
+    fn offer(&mut self) {
+        self.line.offer();
+    }
+    fn answer(&mut self, offer: &str) {
+        self.line.answer(offer);
+    }
+    fn accept(&mut self, answer: &str) {
+        self.line.accept(answer);
+    }
+    fn description(&mut self, now_ms: u64) -> Option<String> {
+        self.line.description(now_ms)
+    }
+    fn state(&mut self) -> LineState {
+        self.line.state()
+    }
+    fn send(&mut self, packet: &[u8]) {
+        if self.lose_one_in > 0 {
+            self.rng ^= self.rng << 13;
+            self.rng ^= self.rng >> 7;
+            self.rng ^= self.rng << 17;
+            if self.rng % self.lose_one_in == 0 {
+                return;
+            }
+        }
+        self.line.send(packet);
+    }
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        self.line.recv()
+    }
+}

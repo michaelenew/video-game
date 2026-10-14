@@ -30,9 +30,11 @@
 //! re-integrating it and landing somewhere near.
 
 use crate::DT;
+use crate::bits::{Bits, words_for};
 use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::monster::MAX_MONSTERS;
 use crate::moves::Move;
 use crate::state::MAX_PLAYERS;
 use crate::tuning as t;
@@ -47,7 +49,12 @@ use crate::tuning as t;
 /// sized for spectacle rather than for the worst case anyone had counted.
 /// Every slot costs snapshot bytes (an empty one is its `Option` tag) and the
 /// hash skips the empty ones; the drink mask below is what bounds it at 128.
-pub const MAX_EFFECTS: usize = 128;
+///
+/// **Thirty-two a seat**, so the pool grows with the fighters who fill it:
+/// it was a hundred and twenty-eight for four, and the thirty-two each is
+/// what four fighters' worth of spectacle measured out at. A slot is named in
+/// sixteen bits wherever it is kept (`state::Player::blinked`).
+pub const MAX_EFFECTS: usize = 32 * MAX_PLAYERS;
 
 /// The slot a [`EffectKind::Burst`] carries when it is **Apotheosis** -- the
 /// nova that bursts from the Dual mage the frame she ascends, which no move
@@ -423,21 +430,26 @@ pub const LOTUS_BLADES: usize = 12;
 /// blades to twelve is what made this worth stating: at six the mask needed 18
 /// bits and a `u32` was fine, at twelve it needs 36 and was not.
 ///
-/// A `u128` since four fighters: twelve blades against four fighters and a
-/// creature is sixty bits, and the second creature's twelve above them.
-const _: () = assert!(
-    LOTUS_BLADES * (VICTIMS + 1) <= u128::BITS as usize,
-    "the hit mask cannot address every part against every victim, the second creature's included"
-);
+/// **Sized from what it counts** since four fighters: every part against
+/// every fighter and every creature slot, and the two flags the Reaver's
+/// thrown shadow keeps at the top ([`crate::state::COMMANDED`],
+/// [`crate::state::LEFT_HAND`]). It was a `u128` with an assertion beside
+/// it, which held four fighters and two creatures; this holds however many
+/// there are, and never less than the 128 bits it was, so a fight of four
+/// remembers what it hit bit for bit as it did.
+const STRUCK_BITS: usize = {
+    let need = LOTUS_BLADES * (MAX_PLAYERS + MAX_MONSTERS) + 2;
+    if need > 128 { need } else { 128 }
+};
+
+/// An effect's hit mask: see [`Effect::struck`].
+pub type Struck = Bits<{ words_for(STRUCK_BITS) }>;
 
 /// The **pool** mask has one bit per effect slot, so a blade can remember
 /// which pools it has already drunk from on its way home. It shared the hit
-/// mask's word while there were twelve slots; it has its own since there are
-/// a hundred and twenty-eight.
-const _: () = assert!(
-    MAX_EFFECTS <= u128::BITS as usize,
-    "the drink mask cannot address every effect slot"
-);
+/// mask's word while there were twelve slots, was a `u128` while there were
+/// a hundred and twenty-eight, and is now as wide as the pool is.
+pub type Drank = Bits<{ words_for(MAX_EFFECTS) }>;
 
 impl EffectKind {
     pub const fn name(self) -> &'static str {
@@ -942,10 +954,10 @@ pub struct Effect {
     /// there were four fighters -- see the assertion beside
     /// [`LOTUS_BLADES`], which is there so the next count change fails to
     /// compile rather than failing to cut.
-    pub struck: u128,
+    pub struck: Struck,
     /// Which pools this has drunk from: one bit per effect slot
     /// ([`Effect::drank_from`]). Cleared with the hits.
-    pub drank: u128,
+    pub drank: Drank,
     /// How far this one travels, which is normally the move's own `reach`.
     ///
     /// On the row for every effect rather than read back off the move, because
@@ -1013,8 +1025,8 @@ impl Effect {
             dir,
             age: 0,
             life: kind.life().max(1),
-            struck: 0,
-            drank: 0,
+            struck: Struck::EMPTY,
+            drank: Drank::EMPTY,
             reach,
             home: pos,
             banked: 0,
@@ -1597,24 +1609,25 @@ impl Effect {
 
     // -- Bookkeeping --------------------------------------------------------
 
-    fn bit(part: usize, victim: usize) -> u128 {
+    fn bit(part: usize, victim: usize) -> usize {
         if victim < VICTIMS {
-            1u128 << (part * VICTIMS + victim)
+            part * VICTIMS + victim
         } else {
-            // The second creature: one bit per part, above every
-            // (part, victim) bit the fighters and the first creature can need.
-            1u128 << (LOTUS_BLADES * VICTIMS + part)
+            // A creature past the first: one bit per part each, above every
+            // (part, victim) bit the fighters and the first creature can
+            // need -- where the second's always were.
+            LOTUS_BLADES * VICTIMS + (victim - VICTIMS) * LOTUS_BLADES + part
         }
     }
 
     /// Has this part already caught this victim?
     /// The bit an Air ball keeps for a body it is carrying: its part nought.
-    pub fn carried_bit(victim: usize) -> u128 {
+    pub fn carried_bit(victim: usize) -> usize {
         Effect::bit(0, victim)
     }
 
     pub fn already_hit(&self, part: usize, victim: usize) -> bool {
-        self.struck & Effect::bit(part, victim) != 0
+        self.struck.has(Effect::bit(part, victim))
     }
 
     /// Mark a victim hit by one part, and say whether it was already.
@@ -1622,7 +1635,7 @@ impl Effect {
         if self.already_hit(part, victim) {
             return false;
         }
-        self.struck |= Effect::bit(part, victim);
+        self.struck.set(Effect::bit(part, victim));
         true
     }
 
@@ -1811,8 +1824,8 @@ impl Effect {
 
     /// Forget everyone hit so far, so the next pass starts clean.
     pub fn forget_hits(&mut self) {
-        self.struck = 0;
-        self.drank = 0;
+        self.struck.clear();
+        self.drank.clear();
     }
 
     // -- Essence pools -----------------------------------------------------
@@ -1832,8 +1845,8 @@ impl Effect {
             dir: V3::ZERO,
             age: 0,
             life: u16::MAX,
-            struck: 0,
-            drank: 0,
+            struck: Struck::EMPTY,
+            drank: Drank::EMPTY,
             reach: Fx::ZERO,
             home: at,
             banked: volume,
@@ -1940,11 +1953,11 @@ impl Effect {
     /// Has this effect already drunk from the pool in `slot`? A blade crossing
     /// pools on its way home drinks from each one once.
     pub fn drank_from(&self, slot: usize) -> bool {
-        self.drank & (1u128 << slot.min(MAX_EFFECTS - 1)) != 0
+        self.drank.has(slot)
     }
 
     pub fn mark_drank(&mut self, slot: usize) {
-        self.drank |= 1u128 << slot.min(MAX_EFFECTS - 1);
+        self.drank.set(slot.min(MAX_EFFECTS - 1));
     }
 
     /// Who a tether has hold of, if anything.

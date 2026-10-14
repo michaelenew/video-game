@@ -227,6 +227,7 @@ fn main() {
                 signs::setup,
                 ground::setup,
                 hud::setup,
+                hud::setup_regions,
                 hud::setup_picker,
                 valley::setup_text,
                 crosshair::setup,
@@ -323,6 +324,7 @@ fn main() {
                 online::announce,
                 hud::update_online,
                 hud::update_seats,
+                hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
                 menu::draw,
@@ -428,6 +430,13 @@ pub struct Sim {
     record: bool,
     /// The round whose end was saved, so `--record` saves each once.
     round_saved: bool,
+    /// **The region books** (`docs/design/regions.md`): the tape of recent
+    /// frames, the live regions' checksums, the neighbours' heartbeats and
+    /// the gate, kept on every confirmed frame by both drivers; the watchdog
+    /// with them in dev mode.
+    pub ledger: regions::Ledger,
+    /// How many of the watchdog's findings have been said aloud.
+    regions_said: u32,
 }
 
 /// A tape on its way through the game. See [`Sim::playing`].
@@ -605,6 +614,8 @@ impl Default for Sim {
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
+            ledger: regions::Ledger::new(&seed, 0, dev_mode()),
+            regions_said: 0,
             rehearsing: None,
             travel: sim::input::Travel::NONE,
             tape: sim::replay::Tape::begin(&seed, build()),
@@ -943,7 +954,6 @@ fn shot_siege_move(w: &mut World, kind: u8) {
                         leg: 0,
                         phase: fight::leg::STARTUP,
                         left: a.startup,
-                        struck: 0,
                     },
                 );
                 fight::leg::aim_at(beast, me);
@@ -5424,7 +5434,10 @@ fn tick_sim(
         (KeyCode::Digit6, Dummy::Bot(hunt::Level::Normal)),
         (KeyCode::Digit7, Dummy::Bot(hunt::Level::Hard)),
     ] {
-        if keys.just_pressed(key) {
+        // Training's alone: the dummy is this machine's, and the seats are
+        // the world's -- changed here, on one machine only, they would split
+        // the two worlds apart. Online, every seat is somebody.
+        if training && keys.just_pressed(key) {
             sim.dummy = mode;
             // Whether player two is in the next fresh fight is the
             // simulation's to know, and the tape's: see `World::seats`.
@@ -5483,6 +5496,17 @@ fn tick_sim(
             if sim.stop_at.is_some_and(|n| sim.cur.frame >= n) {
                 sim.paused = true;
                 break;
+            }
+            // **The region gate**: the next frame goes ahead only once every
+            // region next to a live one has been heard from recently enough
+            // (`docs/design/regions.md`). With nobody to hear from, the
+            // ledger plays the neighbours itself and the gate is always
+            // open; it is here so that the day there is somebody, the local
+            // driver already waits the way the online one will.
+            let next = sim.cur.frame + 1;
+            sim.ledger.tick();
+            if !sim.ledger.may_advance(next) {
+                continue;
             }
             // Scripted inputs are resampled per simulation tick, not per
             // rendered frame. One render frame can cover several ticks, and
@@ -5556,12 +5580,23 @@ fn tick_sim(
             // frame you were just looking at. Split out of the field access
             // because the ring and the world live on the same struct.
             let Sim {
-                history, cur, tape, ..
+                history,
+                cur,
+                tape,
+                ledger,
+                ..
             } = &mut *sim;
             history.push(cur);
             tape.record(cur.frame, pair);
+            ledger.record(cur, pair);
+            // The crowd field's aggregates due this frame, off the ledger.
+            let (fed, n) = ledger.due(cur.frame.wrapping_add(1));
             sim.prev = sim.cur.clone();
-            sim.cur.advance(pair);
+            sim.cur.advance_with(pair, &fed[..n]);
+            {
+                let Sim { cur, ledger, .. } = &mut *sim;
+                ledger.confirm_through(cur.frame, cur);
+            }
             scape.observe(&sim.prev, &sim.cur);
             if travel != sim::input::Travel::NONE {
                 // A new fight: nothing to interpolate from. (Player two sits
@@ -5571,6 +5606,7 @@ fn tick_sim(
             }
         }
         record_round_end(&mut sim);
+        say_region_findings(&mut sim);
     } else {
         online::drawn(&mut sim, real.delta());
         let ticks = sim.clock.advance(time.delta_secs());
@@ -5582,7 +5618,26 @@ fn tick_sim(
             online::step(&mut sim, local, &mut scape);
         }
         record_round_end(&mut sim);
+        say_region_findings(&mut sim);
     }
+}
+
+/// Every new finding of the region watchdog, said once, where a developer
+/// will read it: the terminal, or the browser console.
+fn say_region_findings(sim: &mut Sim) {
+    let Some(watch) = sim.ledger.watch() else {
+        return;
+    };
+    let said = sim.regions_said;
+    if watch.seq() == said {
+        return;
+    }
+    let mut fresh: Vec<_> = watch.issues().filter(|i| i.seq > said).collect();
+    fresh.reverse();
+    for issue in fresh {
+        platform::say(&format!("regions: {issue}"));
+    }
+    sim.regions_said = watch.seq();
 }
 
 /// `--record`: the moment a round ends, save it -- once per round, and

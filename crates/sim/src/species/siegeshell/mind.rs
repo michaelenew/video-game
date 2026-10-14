@@ -310,24 +310,13 @@ fn set_lockout(w: &mut World, l: usize, v: u16) {
     w.lore.set_word(i, word);
 }
 
-/// A half of a word, by fighter.
+/// Fighter `who`'s half-word counter in the run from `i`.
 fn half_of(w: &World, i: usize, who: usize) -> u16 {
-    let word = w.lore.word(i);
-    if who == 0 {
-        (word & 0xFFFF) as u16
-    } else {
-        (word >> 16) as u16
-    }
+    w.lore.field(i, 16, who) as u16
 }
 
 fn set_half(w: &mut World, i: usize, who: usize, v: u16) {
-    let word = w.lore.word(i);
-    let word = if who == 0 {
-        (word & 0xFFFF_0000) | v as u32
-    } else {
-        (word & 0xFFFF) | ((v as u32) << 16)
-    };
-    w.lore.set_word(i, word);
+    w.lore.set_field(i, 16, who, v as u32);
 }
 
 /// Frames each phase of a legs' move lasts: windup, out, recovery, home.
@@ -472,8 +461,7 @@ fn cling(w: &mut World, m: &Monster) {
                 .filter(|l| !m.broken(ankle_part(*l)))
                 .find(|l| math::wide_flat_dist(gait::foot(m, *l), p).raw() <= near.raw())
         });
-        let held = w.lore.word(word::CLING_AT);
-        let was = ((held >> (4 * who)) & 0xF) as usize;
+        let was = w.lore.field(word::CLING_AT, 4, who) as usize;
         let now = found.map_or(0, |l| l + 1);
         let frames = if now != 0 && now == was {
             half_of(w, word::CLING, who).saturating_add(1)
@@ -481,8 +469,7 @@ fn cling(w: &mut World, m: &Monster) {
             0
         };
         set_half(w, word::CLING, who, frames);
-        let held = (held & !(0xF << (4 * who))) | ((now as u32) << (4 * who));
-        w.lore.set_word(word::CLING_AT, held);
+        w.lore.set_field(word::CLING_AT, 4, who, now as u32);
     }
 }
 
@@ -494,7 +481,7 @@ fn choose(w: &mut World, m: &mut Monster) {
         if half_of(w, word::CLING, who) < Knob::ClingFrames.raw().max(1) as u16 {
             continue;
         }
-        let l = ((w.lore.word(word::CLING_AT) >> (4 * who)) & 0xF) as usize;
+        let l = w.lore.field(word::CLING_AT, 4, who) as usize;
         if l == 0 || l > LEG_COUNT {
             continue;
         }
@@ -569,9 +556,9 @@ fn begin(w: &mut World, m: &mut Monster, l: usize, kind: u32, aim: V3) {
             leg: l,
             phase: leg::STARTUP,
             left: frames(kind, leg::STARTUP),
-            struck: 0,
         },
     );
+    w.lore.set_word(word::LEG_STRUCK, 0);
     leg::aim_at(m, aim);
     set_lockout(w, l, Knob::StampLockout.raw().clamp(0, 0xFFFF) as u16);
 }
@@ -609,7 +596,7 @@ fn tick(w: &mut World, m: &mut Monster, mut c: leg::Channel) {
         }
     }
     if c.phase == leg::ACTIVE {
-        hits(w, m, &mut c);
+        hits(w, m, &c);
     }
     if c.left > 0 {
         c.left -= 1;
@@ -629,7 +616,7 @@ fn tick(w: &mut World, m: &mut Monster, mut c: leg::Channel) {
 
 /// What the legs' move hits this frame: the stamp's pad on whoever is under
 /// it; the drag's pad on whoever its sweep passes.
-fn hits(w: &mut World, m: &Monster, c: &mut leg::Channel) {
+fn hits(w: &mut World, m: &Monster, c: &leg::Channel) {
     let kind = if c.kind == leg::DRAG { DRAG } else { STAMP };
     let a = m.sp().attack(kind);
     let reach = Knob::PadRadius.fx().add(crate::tuning::body_radius());
@@ -640,7 +627,7 @@ fn hits(w: &mut World, m: &Monster, c: &mut leg::Channel) {
         foot_in_move(m, was).unwrap_or(now)
     };
     for who in 0..MAX_PLAYERS {
-        if c.struck & (1 << who) != 0 {
+        if w.lore.field(word::LEG_STRUCK, 1, who) != 0 {
             continue;
         }
         let p = w.players[who];
@@ -653,7 +640,7 @@ fn hits(w: &mut World, m: &Monster, c: &mut leg::Channel) {
         let gap = math::flat_segment_gap(p.pos, before, now);
         if gap.raw() <= reach.raw() {
             fight::strike(w, who, now, a.damage, kind);
-            c.struck |= 1 << who;
+            w.lore.set_field(word::LEG_STRUCK, 1, who, 1);
         }
     }
 }

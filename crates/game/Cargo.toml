@@ -20,6 +20,7 @@ manual = { path = "../manual" }
 # on a public broker and a WebRTC line in a browser. `net` holds both, behind
 # one `Rendezvous`; `src/online.rs` picks.
 net = { path = "../net" }
+regions = { path = "../regions" }
 sim = { path = "../sim" }
 view = { path = "../view" }
 

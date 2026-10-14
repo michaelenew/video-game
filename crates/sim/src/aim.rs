@@ -715,7 +715,7 @@ fn grounded(who: usize, look: Input, reach: Fx, scene: &Scene, keep: bool) -> Pa
             let dir = look.look_dir();
             let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
             let at = origin(caster.pos).add(flat.scale(reach));
-            if caster.mount != crate::monster::NO_PART {
+            if caster.mount != crate::monster::NO_MOUNT {
                 settle_aboard(at, scene)
             } else {
                 let settled = settle(at, scene.stones, scene.arena);
@@ -1073,7 +1073,7 @@ fn swing_tilt(pos: V3, look: Input, grounded: bool, reach: Fx, stands: Stand) ->
 /// against (bestiary A4).
 pub fn underfoot_up(who: usize, scene: &Scene) -> V3 {
     let p = &scene.players[who];
-    if p.mount == crate::monster::NO_PART {
+    if p.mount == crate::monster::NO_MOUNT {
         return V3::Y;
     }
     let slot = crate::monster::mount_slot(p.mount);

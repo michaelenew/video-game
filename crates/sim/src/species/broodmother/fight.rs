@@ -78,14 +78,24 @@ pub mod word {
     pub const LINE_FROM: usize = 7;
     /// Fighters the line under way has struck, a bit each.
     pub const LINE_STRUCK: usize = 8;
-    /// Each fighter's action last frame, a byte each (`Action::tag`): an
-    /// attack starting is one that was not under way.
-    pub const LAST_ACTION: usize = 9;
     /// Fighters a glob holds, a bit each, and the frames they were webbed
     /// down from the air for, in the high half: the glob is laid where they
     /// land.
-    pub const WEBBED: usize = 10;
+    pub const WEBBED: usize = 9;
+    /// Each fighter's action last frame, a byte each (`Action::tag`): an
+    /// attack starting is one that was not under way. A run as long as the
+    /// seats need (`lore::per_fighter`): it was one word, four bytes, which
+    /// a fifth fighter would have shifted off the end of.
+    pub const LAST_ACTION: usize = 10;
+    /// The first word past her own.
+    pub const END: usize = LAST_ACTION + crate::lore::per_fighter(8);
 }
+
+const _: () = assert!(word::END <= 6 * 4, "her own words outgrew her six cells");
+const _: () = assert!(
+    crate::state::MAX_PLAYERS <= 16,
+    "a glob holds a bit per fighter in the low half of `word::WEBBED`"
+);
 
 /// The bits of [`word::FLAGS`].
 pub mod flag {
@@ -810,14 +820,13 @@ pub fn landed(w: &mut World, _slot: usize, who: usize, kind: u8, guarded: bool) 
 /// `CutFree` frames off it.
 fn webbed(w: &mut World, m: &mut Monster) {
     let mut held = w.lore.word(word::WEBBED);
-    let mut last = w.lore.word(word::LAST_ACTION);
     let mut caught = 0u32;
     for who in 0..MAX_PLAYERS {
         let p = w.players[who];
         let tag = p.action.tag() & 0xFF;
-        let was = (last >> (8 * who)) & 0xFF;
+        let was = w.lore.field(word::LAST_ACTION, 8, who);
         let started = matches!(p.action, state::Action::Startup { .. }) && tag != was;
-        last = (last & !(0xFF << (8 * who))) | tag << (8 * who);
+        w.lore.set_field(word::LAST_ACTION, 8, who, tag);
         let glob = crate::hazard::all(&w.lore)
             .find(|(_, h)| h.index() == GLOB && h.state == who as u8 + 1)
             .map(|(i, _)| i);
@@ -859,7 +868,6 @@ fn webbed(w: &mut World, m: &mut Monster) {
         }
     }
     w.lore.set_word(word::WEBBED, held);
-    w.lore.set_word(word::LAST_ACTION, last);
     m.own[body::WEBBED] = (m.own[body::WEBBED] & !0xFF) | (caught | held) as i32;
 }
 

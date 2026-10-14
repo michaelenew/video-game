@@ -131,7 +131,9 @@ fn put_the_shadow_at(w: &mut World, at: V3) {
 /// way home is still the same cut, and these tests are about the cut.
 fn call_home(w: &mut World) {
     let mut s = shadow(w);
-    s.doing = Ghost::Returning { struck: 0 };
+    s.doing = Ghost::Returning {
+        struck: sim::state::Fighters::EMPTY,
+    };
     w.players[0].mechanic = Mechanic::Shadow(s);
 }
 

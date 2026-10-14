@@ -186,9 +186,11 @@ impl Hands {
             .attack_kind()
             .filter(|_| matches!(was.action, Action::Active { .. }))
         {
-            let other = 1 - who;
-            let (ow, on) = (before.players[other].action, after.players[other].action);
-            let hit_fighter = struck(on) && (!struck(ow) || on.frames_left() > ow.frames_left());
+            // Any other fighter struck: there are up to `MAX_PLAYERS`, not two.
+            let hit_fighter = (0..MAX_PLAYERS).filter(|&o| o != who).any(|o| {
+                let (ow, on) = (before.players[o].action, after.players[o].action);
+                struck(on) && (!struck(ow) || on.frames_left() > ow.frames_left())
+            });
             let hit_creature =
                 before
                     .monsters
