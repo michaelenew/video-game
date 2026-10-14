@@ -1014,30 +1014,160 @@ fn the_spike_held_to_its_end_is_the_cascade_going_out() {
     let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
     hold(&mut w, keys::YOUR_BLOOD, cap + 3);
     assert_eq!(doing(&w), Some(b::CASCADE));
-    run(&mut w, 40, 0);
-    let c = effects_of(&w, EffectKind::Cascade)
-        .into_iter()
-        .find(|e| e.slot == b::CASCADE)
-        .expect("the cascade");
-    // A body on the third ring takes the third wave, not the first.
-    let (inner, outer) = sim::state::World::cascade_ring(&c, 2);
-    let r = inner.add(outer).mul(Fx::ratio(1, 2));
-    let spot = c.pos.add(V3::new(r, Fx::ZERO, Fx::ZERO));
-    let his = w.players[1].health;
-    let mut when = None;
-    for f in 0..(t::cascade_every() as u32 * 4) {
-        w.players[1].pos = spot;
-        w.players[1].vel = V3::ZERO;
+    // The impact spills pools of her spent grey round it...
+    let mut spilled = 0;
+    for _ in 0..60 {
         step(&mut w, 0);
-        if when.is_none() && w.players[1].health < his {
-            when = Some(f);
+        spilled = spilled.max(pools(&w).iter().filter(|p| p.slot == b::CASCADE).count());
+        if spilled > 0 {
+            break;
         }
     }
-    let when = when.expect("a wave reached him");
     assert!(
-        when + 10 >= t::cascade_every() as u32,
-        "not on the first wave: {when}"
+        spilled as i32 >= t::cascade_first(),
+        "the impact spilled {spilled} pools"
     );
+    // ... which go up a moment later and spill more, further out.
+    let mut eruptions = 0;
+    let mut furthest = Fx::ZERO;
+    let start = pools(&w)
+        .iter()
+        .find(|p| p.slot == b::CASCADE)
+        .map(|p| p.pos)
+        .expect("a pool");
+    for _ in 0..(t::cascade_fuse() as u32 * (t::cascade_generations() as u32 + 1)) {
+        step(&mut w, 0);
+        eruptions += effects_of(&w, EffectKind::BlackSpike)
+            .iter()
+            .filter(|e| e.erupted() && e.age == 1)
+            .count();
+        for p in pools(&w).iter().filter(|p| p.slot == b::CASCADE) {
+            let far = p.pos.sub(start).flat_len();
+            if far.raw() > furthest.raw() {
+                furthest = far;
+            }
+        }
+    }
+    assert!(
+        eruptions as i32 > t::cascade_first(),
+        "the pools went up and spilled more: {eruptions} eruptions"
+    );
+    assert!(
+        furthest.raw() > t::cascade_step().raw(),
+        "and spread: {}",
+        as_f(furthest)
+    );
+}
+
+/// The cascade's pools, summed over its whole life, from `grey` spent.
+fn cascade_blood(grey: i32) -> i32 {
+    let mut w = greyed(grey);
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
+    hold(&mut w, keys::YOUR_BLOOD, cap + 3);
+    let mut seen = 0;
+    for _ in 0..120 {
+        step(&mut w, 0);
+        seen = seen.max(
+            pools(&w)
+                .iter()
+                .filter(|p| p.slot == b::CASCADE)
+                .map(|p| p.banked)
+                .sum::<i32>(),
+        );
+    }
+    seen
+}
+
+#[test]
+fn more_grey_is_a_bigger_cascade() {
+    let little = cascade_blood(60);
+    let lots = cascade_blood(500);
+    assert!(lots > little * 2, "{little} then {lots}");
+}
+
+#[test]
+fn the_cascade_reaches_for_her_stains_however_small() {
+    // A bleed's trail: small stains off to one side, well past the first
+    // pools. Small, but not so small they drain before it gets there. The cascade goes for them and sets them off.
+    let mut w = greyed(300);
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
+    // Where the impact will land: aim as the hold will.
+    let mut probe = w.clone();
+    hold(&mut probe, keys::YOUR_BLOOD, cap + 3);
+    run(&mut probe, 40, 0);
+    let centre = pools(&probe)
+        .iter()
+        .filter(|p| p.slot == b::CASCADE)
+        .fold(V3::ZERO, |sum, p| sum.add(p.pos))
+        .scale(Fx::ratio(1, t::cascade_first().max(1)));
+    let trail: Vec<V3> = (0..3)
+        .map(|k| centre.add(at(0.0, 0.0, 6.0 + 1.5 * k as f32)))
+        .collect();
+    for &spot in &trail {
+        stain(&mut w, spot, 25);
+    }
+    for e in w.effects.iter_mut().flatten() {
+        e.age = t::stain_settles() + 1;
+    }
+    hold(&mut w, keys::YOUR_BLOOD, cap + 3);
+    let mut gone = [false; 3];
+    for _ in 0..(t::cascade_fuse() as u32 * (t::cascade_generations() as u32 + 2)) {
+        step(&mut w, 0);
+        for (k, &spot) in trail.iter().enumerate() {
+            if effects_of(&w, EffectKind::BlackSpike)
+                .iter()
+                .any(|e| e.erupted() && e.pos.sub(spot).flat_len().raw() < metres(0.5).raw())
+            {
+                gone[k] = true;
+            }
+        }
+    }
+    assert!(gone.iter().all(|g| *g), "the trail went up: {gone:?}");
+}
+
+#[test]
+fn a_held_spike_lands_on_her_stains_first() {
+    let mut w = mage();
+    w.players[1].pos = at(40.0, 0.0, 8.0);
+    // Where the middle spike lands.
+    let mut probe = w.clone();
+    let cap = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).channel as u32;
+    hold(&mut probe, keys::YOUR_BLOOD, cap - 2);
+    run(&mut probe, 40, 0);
+    let spikes = effects_of(&probe, EffectKind::BlackSpike);
+    let mean = spikes
+        .iter()
+        .fold(V3::ZERO, |sum, e| sum.add(e.pos))
+        .scale(Fx::ratio(1, spikes.len().max(1) as i32));
+    let centre = spikes
+        .iter()
+        .min_by_key(|e| e.pos.sub(mean).flat_len().raw())
+        .expect("spikes")
+        .pos;
+    // Two small stains inside the ring, off its points.
+    let a = centre.add(at(1.3, 0.0, 0.7));
+    let c = centre.add(at(-0.9, 0.0, -1.6));
+    stain(&mut w, a, 25);
+    stain(&mut w, c, 25);
+    for e in w.effects.iter_mut().flatten() {
+        e.age = t::stain_settles() + 1;
+    }
+    hold(&mut w, keys::YOUR_BLOOD, cap - 2);
+    let mut hit = [false; 2];
+    for _ in 0..40 {
+        step(&mut w, 0);
+        for (k, spot) in [a, c].into_iter().enumerate() {
+            if effects_of(&w, EffectKind::BlackSpike)
+                .iter()
+                .any(|e| e.erupted() && e.pos.sub(spot).flat_len().raw() < metres(0.3).raw())
+            {
+                hit[k] = true;
+            }
+        }
+    }
+    assert!(hit.iter().all(|h| *h), "the swarm found both: {hit:?}");
 }
 
 #[test]

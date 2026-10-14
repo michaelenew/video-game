@@ -3990,26 +3990,6 @@ pub fn vines_size() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VinesSize).max(0))
 }
 
-/// Crimson cascade, waves: how many rings of eruptions go out.
-pub fn cascade_waves() -> i32 {
-    oven::scalar(Scalar::CascadeWaves).max(0)
-}
-
-/// Crimson cascade, a wave every: the frames between one ring erupting and the next.
-pub fn cascade_every() -> u16 {
-    oven::scalar(Scalar::CascadeEvery).max(0) as u16
-}
-
-/// Crimson cascade, rings apart (m): how much further out each ring erupts.
-pub fn cascade_step() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CascadeStep).max(0))
-}
-
-/// Crimson cascade, each wave of the last (x): what share of a wave's blow the next carries.
-pub fn cascade_decay() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CascadeDecay).max(0))
-}
-
 /// Stain, a chained eruption waits: the frames between one stain erupting and the next it sets off.
 pub fn chain_delay() -> u16 {
     oven::scalar(Scalar::ChainDelay).max(0) as u16
@@ -4157,4 +4137,49 @@ pub fn slam_dive() -> Fx {
 /// a cone this wide round straight down (turns).
 pub fn slam_cone() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SlamCone))
+}
+
+/// Crimson cascade, pools round the first eruption: how many the impact spills round its edge.
+pub fn cascade_first() -> i32 {
+    oven::scalar(Scalar::CascadeFirst).max(0)
+}
+
+/// Crimson cascade, pools each eruption spills: how many each of its pools spills further out when it goes up.
+pub fn cascade_branch() -> i32 {
+    oven::scalar(Scalar::CascadeBranch).max(0)
+}
+
+/// Crimson cascade, generations: how many times its pools spill pools of their own.
+pub fn cascade_generations() -> i32 {
+    oven::scalar(Scalar::CascadeGenerations).max(0)
+}
+
+/// Crimson cascade, a pool erupts after: the moment between a pool landing and going up.
+pub fn cascade_fuse() -> u16 {
+    oven::scalar(Scalar::CascadeFuse).max(0) as u16
+}
+
+/// Crimson cascade, pools land this far out (m): how far past an eruption its pools land.
+pub fn cascade_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeStep).max(0))
+}
+
+/// Crimson cascade, each pool of its parent (x): what share of a pool's blood each pool it spills holds.
+pub fn cascade_share() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeShare).max(0))
+}
+
+/// Crimson cascade, smallest pool it spills: below this the cascade stops spreading.
+pub fn cascade_least() -> i32 {
+    oven::scalar(Scalar::CascadeLeast).max(0)
+}
+
+/// Crimson cascade, reaches for stains within (m): a pool it spills goes toward the nearest stain of hers this close, however small, rather than straight out.
+pub fn cascade_track() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadeTrack).max(0))
+}
+
+/// Crimson cascade, an eruption per full stain (x): what a cascade pool's eruption hits for, as a share of the spike's row, for each `pool_full` of blood it held.
+pub fn cascade_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CascadePower).max(0))
 }
