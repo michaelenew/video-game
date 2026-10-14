@@ -1,5 +1,5 @@
 ---
-status: built 2026-10-14 as far as one session reaches — the crowd field in the snapshot with its lookahead gate and first reader, cells and leaders read off the world, aggregates on the match's lines by agreement; what remains is a peer running only its regions (regions.md §"The session layer")
+status: built 2026-10-14 as far as one session reaches — the crowd field in the snapshot with its lookahead gate and first reader, cells and leaders read off the world, aggregates on the match's lines by agreement; the region session on the wire over loopback lines (regions.md §"The session layer, on the wire"); what remains is the game playing on it, and outcomes carrying more than fighters
 started: 2026-10-14
 ---
 
@@ -278,6 +278,26 @@ No sockets, in this order, each a test that stays:
 5. **The cell experiment**: the loopback mesh with twelve peers in two cells,
    leaders by hash, one dropped mid-epoch; every survivor's field identical,
    and the gate held for exactly the frames the hop cost.
+
+## 7b · The owner's model (the person's, 2026-10-14)
+
+A different second layer, argued after §2 was built, and the direction from
+here: because membership is agreed, a peer can decide that some of its own
+inputs **do not count** toward a region it is not a member of. Its machine
+still simulates every input and shows the player the result, but what it
+*sends* is a short synopsis of its **effects on the world** -- moved the
+creature this far, dealt this much, died -- and effects, unlike inputs, can
+be aggregated and applied late. Some other peer, by the leadership
+hierarchy, is the **owner** of what is true in that region, and the
+sender's world snaps back to the owner's truth later, with the transition
+smoothed. It is a wider rollback window with one peer treated as the
+server for that region: client prediction against an elected authority
+rather than a rented one. PvP would not feel right over it; a hunt, where
+only the creature loses, should. §2's lookahead field stays as the far
+layer; the owner's model is the middle one, between a region's exact
+inputs and the far crowd's slow aggregate. Not built; the machinery below
+it (regions on the wire, membership agreed, outcomes carried) is what it
+needs either way.
 
 ## 8 · What this does not solve, said plainly
 

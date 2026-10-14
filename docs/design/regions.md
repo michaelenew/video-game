@@ -230,19 +230,94 @@ Oven and a value read `L` late is within `L/τ` of range; four on the mesh
 post as leaders and collect in agreement with no disputes, following the
 same streams.
 
-**What is not yet true**: every peer in a session still simulates the whole
-world, so a region with anybody in it is live on every ledger and the wire's
-aggregates duplicate the ledger's own. The transport, the agreement and the
-gate are exercised; they *matter* once a peer runs only its regions, which
-is `regions::session` on the wire -- the next step, and the big one.
+**What is not yet true**: the *game's* session is still GGRS, so every
+peer in it simulates the whole world, a region with anybody in it is live
+on every ledger, and the wire's aggregates duplicate the ledger's own. The
+transport, the agreement and the gate are exercised; they *matter* once a
+peer runs only its regions, which is the session below -- built on the
+loopback lines, not yet what the game plays on.
+
+## The session layer, on the wire (`net::region`, 2026-10-14)
+
+`regions::session` with lines under it: a [`Session`] is one peer of the
+open world, holding one world, a tape, and a line to every peer it can
+reach. GGRS's rules where they fit, and its own where GGRS's players being
+fixed for the match does not:
+
+- **Inputs go to the members of my regions.** Every frame, one packet to
+  every line: the last eight frames of my inputs (a lost packet costs
+  nothing until eight go in a row) and the regions I am a member of this
+  frame -- my home hexagon and whichever neighbours are within
+  `membership + h` of my feet, which is what the no-sockets experiment
+  found a member has to send from. 84 bytes. A member's missing input is
+  predicted as its last, and corrected by rollback when it comes.
+- **Membership is declared, not inferred, and remembered by frame.** A peer
+  knows exactly where its own fighter stands, so its packet says which
+  regions it is in, and everybody takes its word; frame `f` needs the
+  inputs of every seat whose declaration *as of `f`* shares a region with
+  mine as of `f`. That history is asked again on every replay, because a
+  declaration arrives after its frame was first played -- the first frame
+  of every pairing, every time -- and an answer frozen at first play left
+  that frame without its partner's input for good: a one-frame lag inside a
+  zone where only inputs count, which the first run of the test found.
+- **Confirmed** is the newest frame everybody who has ever spoken has
+  declared for, and every member of it has sent an input for. The peer runs
+  at most eight frames past it (`WINDOW`), as GGRS does.
+- **Outcomes go next door.** Every four confirmed frames, for each region I
+  have been in for a while, the fighters in its checksum zone at that
+  frame, to every peer that declared it or a neighbour of it and has *not*
+  been in it for a while (`SETTLE`, sixteen frames). A receiver rolls back
+  to that frame, puts those fighters where I say, and plays forward again
+  -- `regions::session::Peer::accept`, on real packets. A fighter is 544
+  bytes, so this is the expensive packet, and it goes only across a
+  boundary and only to those who cannot know better.
+
+  The settling window is the second thing the test found. A new member's
+  state at the frame it joined was a neighbour's guess between two
+  outcomes, up to three frames stale; without a few more outcomes *after*
+  it declared, the old members' word never reaches it again and the whole
+  chain it then shoves is a frame behind forever.
+- **A newcomer asks for the world** (`Packet::Want`) and is sent it at the
+  asked peer's confirmed frame, in 1 KB chunks (`Packet::Snapshot`; a world
+  is 19,000 bytes); it keeps asking a different peer every ten frames for
+  the chunks still missing, which the asked peer serves off its tape, and
+  the inputs since are still in everybody's redundancy window. The
+  declarations it heard while waiting are kept, so the frames it then plays
+  know who was in what.
+
+The state crossing in an outcome or a snapshot is the struct's own bytes
+(`net::raw`), sound only between two copies of the same build -- which the
+meeting's terms already demand of two peers before a frame is played. It is
+the one `unsafe` in the networking, in one file, and a stopgap for a `sim`
+that cannot take a serialiser.
+
+**The experiment** (`crates/net/tests/region.rs`): four peers on loopback
+lines losing one packet in ten, four fighters walking the line through
+three 8 m hexagons from both ends, pairing up on both boundaries and
+shoving into one chain in the middle. Every peer's regions' zones equal
+the global truth's at every frame the tape holds, with no stalls and a
+handful of rollbacks each; and a fifth peer that joins at frame 40 from a
+snapshot, through the same loss, is exact from then on, and the old hands
+are exact with it among them.
+
+**What is not yet true.** Every peer still *advances* the whole world --
+the regions it is not in with nobody pressing anything -- so the saving is
+in what crosses the wire and in what is exact, not yet in the frame's cost;
+an outcome carries fighters only (effects, bolts and creatures are the next
+thing to carry, with the stable ids 0005 asks for); a peer that falls
+silent holds confirmation for everybody who ever heard it, with no timeout
+yet; the lines are a full mesh handed in, not found (the meeting still
+makes a GGRS session); and the game does not play on it. The game plays
+four on GGRS with a whole-world checksum, which is right for four, and this
+is the machinery for the day it is more.
 
 ## Wire
 
-Nothing changes on the wire in this step. GGRS already compares whole-world
-checksums between the two peers, and a region checksum is a pure function of
-the world, so two worlds that agree have regions that agree. Exchanging region
-checksums and outcomes between peers needs messages of our own, which is the
-session layer GGRS cannot provide. It is the next step, not this one.
+GGRS compares whole-world checksums between the peers it has, and a region
+checksum is a pure function of the world, so two worlds that agree have
+regions that agree. What the game plays on today changes nothing on the
+wire. The region session above has a wire of its own, exercised on the
+loopback lines; putting it under the game is the step after this one.
 
 ## Tests
 
@@ -264,3 +339,6 @@ real UDP keep the books and find nothing.
   declared smaller than what the fight does.
 - `net/tests/ggrs_synctest.rs` and `p2p_localhost`: the books kept through
   rollbacks, and over real UDP, with nothing but *too fast* allowed.
+- `net/tests/region.rs`: the session on the wire, above -- four peers
+  through loss against the truth, a late joiner, and the size of an input
+  packet.
