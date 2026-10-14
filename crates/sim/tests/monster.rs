@@ -7,7 +7,7 @@ use sim::fixed::Fx;
 use sim::math::{atan2_turns, wrap_turns};
 use sim::monster::{self, Doing, Monster, Quarry};
 use sim::species::ridgeback;
-use sim::state::{MAX_PLAYERS, Phase};
+use sim::state::Phase;
 use sim::{Class, Input, V3, World};
 
 fn hunt() -> World {
@@ -18,7 +18,7 @@ fn hunt() -> World {
 /// not care who is standing on it; the one that asks where a shot went needs a
 /// class that has one.
 fn hunt_as(class: Class) -> World {
-    World::hunt([class; MAX_PLAYERS])
+    World::hunt([class; 2])
 }
 
 fn run(w: &mut World, frames: u32, a: Input) {
@@ -58,7 +58,7 @@ fn walk_only(w: &mut World, frames: u32) {
         beast.brain.think_left = u16::MAX;
         // And past the moment a hunt opens with, in which it stands its ground.
         beast.brain.grace = 0;
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
 }
 
@@ -645,7 +645,7 @@ fn the_creature_can_actually_hurt_a_fighter() {
     let mut w = hunt();
     let before = w.players[0].health;
     for _ in 0..1800 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         if w.players[0].health < before {
             return;
         }
@@ -851,7 +851,7 @@ fn it_can_still_reach_somebody_standing_where_it_is_looking() {
             .expect("a hunt has a creature")
             .brain
             .think_left = u16::MAX;
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     assert!(
         w.players[0].health < before,

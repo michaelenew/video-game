@@ -217,6 +217,12 @@ pub fn crouch_height_scale() -> Fx {
 // Bodies and the arena
 // ---------------------------------------------------------------------------
 
+/// How far beside a start mark the third and fourth fighters stand
+/// (`arena::Mark::seat`).
+pub fn seat_flank() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SeatFlank)).max(Fx::ZERO)
+}
+
 pub fn body_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyRadius))
 }

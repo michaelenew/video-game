@@ -14,12 +14,12 @@ use sim::fixed::Fx;
 use sim::monster::Doing;
 use sim::objective::{self, ObjectiveField};
 use sim::species::{SpeciesId, ridgeback, sentinel};
-use sim::state::{MAX_PLAYERS, Phase, QUARRY};
+use sim::state::{Phase, QUARRY};
 use sim::{Class, Input, V3, World};
 
 fn in_the_range() -> World {
     let mut w = World::hunt_in(
-        [Class::Champion; MAX_PLAYERS],
+        [Class::Champion; 2],
         [Some(SpeciesId::SENTINEL), None],
         ArenaId::RANGE,
     );
@@ -39,7 +39,7 @@ fn park(w: &mut World) {
 fn step(w: &mut World, frames: u32) {
     for _ in 0..frames {
         park(w);
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         for p in w.players.iter_mut() {
             p.health = p.full_health();
         }
@@ -70,7 +70,7 @@ fn they_stand_where_the_arena_says_and_whole() {
         );
     }
     // Where the arena has no site for them, there are none.
-    let home = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SENTINEL);
+    let home = World::hunt_of([Class::Champion; 2], SpeciesId::SENTINEL);
     assert_eq!(objective::standing(&home.lore, home.arena()).count(), 0);
 }
 
@@ -185,7 +185,7 @@ fn a_creature_s_blow_lands_on_it_once_a_move() {
             kind: ridgeback::BITE,
             left: out,
         };
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let after = objective::get(&w.lore, sentinel::GATE);
     assert_eq!(
@@ -203,7 +203,7 @@ fn a_critter_s_blow_lands_on_it_too() {
     // The sentinel's fight, with the dev pack in it as well: the lore is the
     // first creature's, the pack the gnats'.
     let mut w = World::hunt_in(
-        [Class::Champion; MAX_PLAYERS],
+        [Class::Champion; 2],
         [Some(SpeciesId::SENTINEL), Some(SpeciesId::GNATS)],
         ArenaId::RANGE,
     );
@@ -237,7 +237,7 @@ fn a_critter_s_blow_lands_on_it_too() {
             timer: keep.max(gnat.timer),
             ..gnat
         };
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let after = objective::get(&w.lore, sentinel::CART);
     let takes = objective::stat_fx(&sentinel::SPECIES, sentinel::CART, ObjectiveField::Takes);

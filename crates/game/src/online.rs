@@ -1,6 +1,7 @@
 //! Playing against a person.
 //!
-//! In a browser, both players open the same link:
+//! In a browser, every player opens the same link -- two of you, or three or
+//! four with `players=` in it (the Esc menu's room carries it):
 //!
 //!     https://…/?room=k3x9qw              (the page's "Play with a friend")
 //!     https://…/?room=k3x9qw&board=tabs   (two tabs of one browser)
@@ -72,6 +73,8 @@ pub enum Driver {
         quiet: bool,
         /// This second of the link, being counted; see [`Meter`].
         meter: Meter,
+        /// How many play: two to four.
+        players: usize,
     },
 }
 
@@ -101,7 +104,7 @@ impl Driver {
     /// it is always player one, with player two on the second key set.
     pub fn local_player(&self) -> usize {
         match self {
-            Driver::Online { handle, .. } => (*handle).min(1),
+            Driver::Online { handle, .. } => (*handle).min(sim::state::MAX_PLAYERS - 1),
             _ => 0,
         }
     }
@@ -141,12 +144,21 @@ impl Driver {
             Driver::Online { desynced: true, .. } => {
                 Some("DESYNC: the two games disagree about the fight. A bug -- please report it.")
             }
-            Driver::Online { gone: true, .. } => Some("Your friend disconnected."),
+            Driver::Online {
+                gone: true,
+                players: 2,
+                ..
+            } => Some("Your friend disconnected."),
+            Driver::Online { gone: true, .. } => {
+                Some("A friend disconnected; their fighter stands still from here.")
+            }
             Driver::Online { quiet: true, .. } => {
                 Some("Waiting for your friend's game: it has gone quiet for a moment…")
             }
             Driver::Online { handle: 0, .. } => Some("Online: you are player one (blue)."),
-            Driver::Online { .. } => Some("Online: you are player two (orange)."),
+            Driver::Online { handle: 1, .. } => Some("Online: you are player two (orange)."),
+            Driver::Online { handle: 2, .. } => Some("Online: you are player three (green)."),
+            Driver::Online { .. } => Some("Online: you are player four (violet)."),
         }
     }
 }
@@ -195,7 +207,7 @@ pub fn start(opts: &Options, start: &World) -> Driver {
 /// room and its secret, how the two meet, and everything the starting world
 /// is built from -- so whoever opens the link builds the same world.
 const LINKED: &[&str] = &[
-    "room", "p1", "p2", "hunt", "arena", "temper", "board", "broker",
+    "room", "players", "p1", "p2", "p3", "p4", "hunt", "arena", "temper", "board", "broker",
 ];
 
 /// The link that brings a friend into the room these settings describe.
@@ -282,10 +294,11 @@ fn rendezvous(opts: &Options, start: &World) -> Option<Result<Box<dyn net::Rende
     let key = room_key(opts)?;
     let me = net::meet::fresh_id();
     let terms = terms(start);
+    let n = crate::chosen_players(opts) as usize;
     Some(Ok(match (opts.value("--board"), opts.value("--broker")) {
-        (Some("tabs"), _) => Box::new(net::browser::tabs(&key, me, &terms)),
-        (_, Some(url)) => Box::new(net::browser::brokers(&[url], &key, me, &terms)),
-        _ => Box::new(net::browser::public(&key, me, &terms)),
+        (Some("tabs"), _) => Box::new(net::browser::tabs(&key, me, &terms).with_players(n)),
+        (_, Some(url)) => Box::new(net::browser::brokers(&[url], &key, me, &terms).with_players(n)),
+        _ => Box::new(net::browser::public(&key, me, &terms).with_players(n)),
     }))
 }
 
@@ -294,17 +307,29 @@ fn rendezvous(opts: &Options, start: &World) -> Option<Result<Box<dyn net::Rende
     if let Some(key) = room_key(opts) {
         let me = net::meet::fresh_id();
         let terms = terms(start);
+        let n = crate::chosen_players(opts) as usize;
         return Some(match (opts.value("--board"), opts.value("--broker")) {
             (Some("tabs"), _) => Err(
                 "board=tabs is two tabs of one browser, and this is not a browser. \
                      Drop it from the link to meet through the public brokers."
                     .into(),
             ),
-            (_, Some(url)) => Ok(Box::new(net::native::brokers(&[url], &key, me, &terms))),
-            _ => Ok(Box::new(net::native::public(&key, me, &terms))),
+            (_, Some(url)) => Ok(Box::new(
+                net::native::brokers(&[url], &key, me, &terms).with_players(n),
+            )),
+            _ => Ok(Box::new(
+                net::native::public(&key, me, &terms).with_players(n),
+            )),
         });
     }
     let peer = opts.value("--peer")?;
+    // Straight to an address is two machines: a room is how three or four meet.
+    if crate::chosen_players(opts) > 2 {
+        return Some(Err(
+            "--peer reaches one other machine; three or four players meet in a room (--room)."
+                .into(),
+        ));
+    }
     let Ok(peer) = peer.parse::<std::net::SocketAddr>() else {
         return Some(Err(format!(
             "--peer {peer} is not an address; it wants ip:port, like 192.168.1.20:47812"
@@ -348,6 +373,7 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
         }
         net::Progress::Ready(seat) => {
             let handle = seat.handle;
+            let players = seat.players;
             let Driver::Meeting { start, room, .. } =
                 std::mem::replace(&mut sim.driver, Driver::Local)
             else {
@@ -386,6 +412,7 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                             since: sim.cur.frame,
                             ..Meter::default()
                         },
+                        players,
                     }
                 }
                 Err(e) => Driver::Alone {
@@ -469,6 +496,7 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
         gone,
         quiet,
         meter,
+        players,
         ..
     } = driver
     else {
@@ -552,10 +580,13 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
 
     // A second is up: what the line looks like now, and the second's counts.
     if cur.frame >= meter.since + SECOND {
-        if let Ok(stats) = session.network_stats(1 - *handle) {
-            meter.now.ping = stats.ping as u32;
-            meter.now.queue = stats.send_queue_len as u32;
-            meter.now.kbps = stats.kbps_sent as u32;
+        // The worst line of them: what a laggy match is worth knowing.
+        for other in (0..*players).filter(|h| h != handle) {
+            if let Ok(stats) = session.network_stats(other) {
+                meter.now.ping = meter.now.ping.max(stats.ping as u32);
+                meter.now.queue = meter.now.queue.max(stats.send_queue_len as u32);
+                meter.now.kbps = meter.now.kbps.max(stats.kbps_sent as u32);
+            }
         }
         meter.now.ahead = session.frames_ahead();
         meter.now.frame = cur.frame;

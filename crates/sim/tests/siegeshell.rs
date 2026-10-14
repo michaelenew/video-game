@@ -7,7 +7,6 @@ use sim::fixed::Fx;
 use sim::monster::{Doing, Monster};
 use sim::species::SpeciesId;
 use sim::species::siegeshell::{self as ss, fight, gait};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, V3, World};
 
 fn m(v: f32) -> Fx {
@@ -41,7 +40,7 @@ fn bottom(beast: &Monster, part: usize) -> Fx {
 }
 
 fn hunt_as(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::SIEGESHELL);
+    let mut w = World::hunt_of([class; 2], SpeciesId::SIEGESHELL);
     // The second fighter is out of it, as the harness has it alone.
     w.players[1].health = 0;
     w
@@ -49,9 +48,9 @@ fn hunt_as(class: Class) -> World {
 
 /// Apex of a full hop above the feet, measured by running the simulation.
 fn apex(class: Class) -> Fx {
-    let mut w = World::with_classes([class; MAX_PLAYERS]);
+    let mut w = World::with_classes([class; 2]);
     for _ in 0..40 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let floor = w.players[0].pos.y;
     let mut best = floor;
@@ -1179,11 +1178,11 @@ fn a_top_face_met_from_above_is_a_place_and_from_below_is_not() {
 #[test]
 fn alone_its_anchors_are_the_ones_one_hunter_can_break() {
     for (hunters, knob) in [(1, ss::Knob::AnchorAlone), (2, ss::Knob::AnchorHealth)] {
-        let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SIEGESHELL);
+        let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::SIEGESHELL);
         if hunters == 1 {
             w.players[1].health = 0;
         }
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         let slot = fight::slot_of(&w).expect("the shell");
         let beast = w.monsters[slot].unwrap();
         for a in 0..ss::ANCHOR_COUNT {

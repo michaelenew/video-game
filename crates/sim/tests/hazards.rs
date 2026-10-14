@@ -16,7 +16,6 @@ use sim::hazard::{self, Hazard, HazardField, reach};
 use sim::lore::CELLS;
 use sim::monster::MAX_MONSTERS;
 use sim::species::{SpeciesId, ridgeback, sentinel};
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, V3, World};
 
 const RIGHT: u16 = 0;
@@ -28,7 +27,7 @@ fn at(x: i32, z: i32) -> V3 {
 /// A sentinel hunt with nothing on the floor, the creature far off and
 /// taking no notice: a floor to put hazards on and walk across.
 fn floor(class: Class) -> World {
-    let mut w = World::hunt_of([class; MAX_PLAYERS], SpeciesId::SENTINEL);
+    let mut w = World::hunt_of([class; 2], SpeciesId::SENTINEL);
     w.lore.set_word(sentinel::word::LAID, 1);
     quiet(&mut w);
     // Along the open lane at z = 10, clear of the two platforms.
@@ -76,9 +75,9 @@ fn walked(w: &mut World, frames: u32) -> Fx {
 
 #[test]
 fn what_is_drawn_on_the_floor_is_the_hazard_list() {
-    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SENTINEL);
+    let mut w = World::hunt_of([Class::Champion; 2], SpeciesId::SENTINEL);
     // The sentinel lays its demo floor on the first frame of the round.
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let listed: Vec<(usize, Hazard)> = hazard::all(&w.lore).collect();
     assert!(listed.len() >= 5, "the demo floor has one of each kind");
     let placed: Vec<_> = w.terrain().floor.iter().copied().collect();
@@ -256,7 +255,7 @@ fn burning_tar_hurts_whoever_stands_in_it_and_the_creature_too() {
     for _ in 0..30 {
         quiet(&mut w);
         let was = w.players[0].health;
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         hurt += was - w.players[0].health;
     }
     let tick = hazard::stat(sp(), sentinel::BURNING, HazardField::Damage);
@@ -503,15 +502,15 @@ fn a_strand_is_a_line_on_the_floor() {
 #[test]
 fn a_fight_without_hazards_has_no_floor_and_a_blank_lore() {
     for id in [SpeciesId::RIDGEBACK, SpeciesId::GNATS] {
-        let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], id);
+        let mut w = World::hunt_of([Class::Champion; 2], id);
         for _ in 0..60 {
-            w.advance([Input::aimed(Input::W, RIGHT); MAX_PLAYERS]);
+            w.advance([Input::aimed(Input::W, RIGHT); 2]);
         }
         assert!(w.terrain().floor.is_empty());
         assert!(w.terrain().raised().is_empty());
         assert!(w.lore.is_blank());
     }
-    let versus = World::with_classes([Class::Champion; MAX_PLAYERS]);
+    let versus = World::with_classes([Class::Champion; 2]);
     assert!(versus.lore.owner.is_none());
     let bare = Terrain::bare(ArenaId::PROVING_GROUND.get());
     assert!(bare.floor.is_empty());

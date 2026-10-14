@@ -48,7 +48,7 @@ pub static FIGHT: FightDecl = FightDecl {
         hazards: HAZARD_CELLS,
         noises: 0,
         objectives: 0,
-        own: 19,
+        own: 21,
     },
     row: true,
     hazards: &HAZARDS,
@@ -130,7 +130,8 @@ pub mod word {
     pub const QUIET: usize = 43;
     /// **The glance of each hunter's look**: where they stood (centimetres)
     /// and which way they faced, now and a glance before (`lore::halves` of
-    /// the two yaws in 1/65536 of a turn). Two hunters, two words each.
+    /// the two yaws in 1/65536 of a turn). The first two hunters, two words
+    /// each; the third and fourth are [`GLANCED_MORE`].
     pub const GLANCED: usize = 44;
     /// Frames to the next look glance.
     pub const GLANCE_LEFT: usize = 48;
@@ -186,6 +187,34 @@ pub mod word {
     pub const NOW: usize = 74;
     /// Strikes begun since it last cloaked.
     pub const STRIKES: usize = 75;
+    /// [`GLANCED`] for the third and fourth hunters (2026-10-14): where
+    /// they stood, then their two yaws, two words each.
+    pub const GLANCED_MORE: usize = 76;
+    /// [`VIEW`] for the third and fourth hunters.
+    pub const VIEW_MORE: usize = 80;
+
+    /// The word holding where hunter `i` stood at the last glance.
+    pub const fn glanced_at(i: usize) -> usize {
+        if i < 2 {
+            GLANCED + i
+        } else {
+            GLANCED_MORE + i - 2
+        }
+    }
+
+    /// The word holding hunter `i`'s two glanced yaws.
+    pub const fn glanced_yaws(i: usize) -> usize {
+        if i < 2 {
+            GLANCED + 2 + i
+        } else {
+            GLANCED_MORE + i
+        }
+    }
+
+    /// The word holding what the hook saw of hunter `i`.
+    pub const fn view(i: usize) -> usize {
+        if i < 2 { VIEW + i } else { VIEW_MORE + i - 2 }
+    }
 }
 
 /// The bits of a hunter's [`word::VIEW`].
@@ -942,34 +971,34 @@ fn glance_looks(w: &mut World, slot: usize) {
     }
     let every = w.monsters[slot].map_or(1, |m| m.glance_frames().max(1));
     w.lore.set_word(word::GLANCE_LEFT, every as u32 - 1);
-    for i in 0..MAX_PLAYERS.min(2) {
+    for i in 0..MAX_PLAYERS {
         let p = w.players[i];
         if p.health <= 0 {
             continue;
         }
         let yaw = math::atan2_turns(p.facing.z, p.facing.x);
-        let was = w.lore.word(word::GLANCED + 2 + i);
+        let was = w.lore.word(word::glanced_yaws(i));
         let then = lore::lo(was);
         let now = (yaw.raw() & 0xFFFF) as u16 as i16;
         // The first glance has nothing before it: the look then is the look.
-        let then = if w.lore.word(word::GLANCED + i) == 0 && was == 0 {
+        let then = if w.lore.word(word::glanced_at(i)) == 0 && was == 0 {
             now
         } else {
             then
         };
-        w.lore.set_word(word::GLANCED + i, word_of(p.pos));
+        w.lore.set_word(word::glanced_at(i), word_of(p.pos));
         w.lore
-            .set_word(word::GLANCED + 2 + i, lore::halves(now, then));
+            .set_word(word::glanced_yaws(i), lore::halves(now, then));
     }
 }
 
 /// Where hunter `i` stood at the last glance, and which way they looked then
 /// and the glance before (turns).
 pub fn glanced(lore: &Lore, i: usize) -> (V3, Fx, Fx) {
-    let w = lore.word(word::GLANCED + 2 + i.min(1));
+    let w = lore.word(word::glanced_yaws(i.min(MAX_PLAYERS - 1)));
     let turns = |h: i16| Fx::from_raw(h as u16 as i32);
     (
-        point(lore.word(word::GLANCED + i.min(1))),
+        point(lore.word(word::glanced_at(i.min(MAX_PLAYERS - 1)))),
         turns(lore::lo(w)),
         turns(lore::hi(w)),
     )
@@ -2234,10 +2263,10 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
         |p: V3| cloud_now.is_some_and(|(c, r, _)| math::wide_flat_dist(c, p).raw() <= r.raw());
     let young = cloud_now.is_some_and(|(_, _, age)| age < Knob::SmokeQuiet.raw().max(0) as u32);
     let mut ghost_at = V3::ZERO;
-    for i in 0..MAX_PLAYERS.min(2) {
+    for i in 0..MAX_PLAYERS {
         let mut bits = 0u32;
         if fighters[i].health <= 0 {
-            w.lore.set_word(word::VIEW + i, 0);
+            w.lore.set_word(word::view(i), 0);
             continue;
         }
         let (at, yaw) = led_look(&w.lore, i);
@@ -2271,11 +2300,12 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
             }
         }
         // Somebody else looking at where it would decloak.
-        let other = 1 - i;
-        if fighters[other].health > 0 {
-            let (oat, oyaw) = led_look(&w.lore, other);
-            if aim::in_view_from(oat, Fx::ZERO, oyaw, point_of, cone, &scene) {
-                bits |= view::WATCHED;
+        for other in (0..fighters.len()).filter(|&o| o != i) {
+            if fighters[other].health > 0 {
+                let (oat, oyaw) = led_look(&w.lore, other);
+                if aim::in_view_from(oat, Fx::ZERO, oyaw, point_of, cone, &scene) {
+                    bits |= view::WATCHED;
+                }
             }
         }
         // Where a mimic would play, for the target it has: in view, out in
@@ -2289,7 +2319,7 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
         let off = aim::off_look(at, aloft, yaw, point_of, &scene);
         let share = off.div(cone.max(SMALLEST)).min(Fx::ONE);
         bits |= ((share.raw().clamp(0, 0xFFFF)) as u32) << 16;
-        w.lore.set_word(word::VIEW + i, bits);
+        w.lore.set_word(word::view(i), bits);
     }
     w.lore.set_word(word::GHOST_AT, word_of(ghost_at));
     let shy = Knob::FireShy.fx().add(SPECIES.gait_stride());
@@ -2311,7 +2341,7 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
                 w.lore.set_word(word::STRIKES, n + 1);
             }
             let target = (m.brain.target as usize).min(1);
-            let share = w.lore.word(word::VIEW + target) >> 16;
+            let share = w.lore.word(word::view(target)) >> 16;
             let third = (share * 3 / 0x10000).min(2);
             count_byte(&mut w.lore, word::THIRDS, third, 1);
         }
@@ -2376,13 +2406,13 @@ pub fn middle_of(m: &Monster) -> V3 {
 
 /// What the frame hook saw for hunter `i`: [`view`] bits.
 pub fn view_of(lore: &Lore, i: usize) -> u32 {
-    lore.word(word::VIEW + i.min(1)) & 0xFFFF
+    lore.word(word::view(i.min(MAX_PLAYERS - 1))) & 0xFFFF
 }
 
 /// How far toward the edge of hunter `i`'s glanced view it stands, nought
 /// (dead ahead) to one (at the cone's edge or beyond).
 pub fn edge_of(lore: &Lore, i: usize) -> Fx {
-    Fx::from_raw((lore.word(word::VIEW + i.min(1)) >> 16) as i32)
+    Fx::from_raw((lore.word(word::view(i.min(MAX_PLAYERS - 1))) >> 16) as i32)
 }
 
 /// Its decloaks by thirds of the screen: centre, middle, edge.

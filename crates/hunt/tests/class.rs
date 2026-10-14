@@ -12,7 +12,7 @@ use sim::{Class, Input, V3, World};
 fn the_champion_is_played_exactly_as_the_plan_says() {
     // The plans were written for him, and the Ridgeback's pin hashes his
     // hunts: the class layer must hand back whatever the plan built.
-    let w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::RIDGEBACK);
+    let w = World::hunt_of([Class::Champion; 2], SpeciesId::RIDGEBACK);
     let me = w.players[0];
     let mut hands = Hands::new(0, 7);
     let at = me.pos.add(V3::new(Fx::from_int(2), Fx::ONE, Fx::ZERO));

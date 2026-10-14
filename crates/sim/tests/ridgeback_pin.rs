@@ -13,10 +13,9 @@
 //! `docs/design/feel-log.md` what moved and why. If it fails after a change
 //! that was not meant to touch the Ridgeback, the change is wrong.
 
-use sim::state::MAX_PLAYERS;
 use sim::{Class, Input, World};
 
-fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
+fn script(frames: u32, seed: u64) -> Vec<[Input; 2]> {
     let mut rng = seed;
     let mut next = move || {
         rng ^= rng << 13;
@@ -37,7 +36,7 @@ fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
 /// A running hash of every frame of a hunt, so a difference anywhere in it
 /// shows rather than only one at the end.
 fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
-    let mut w = World::hunt([class; MAX_PLAYERS]);
+    let mut w = World::hunt([class; 2]);
     let mut acc: u64 = 0xcbf2_9ce4_8422_2325;
     for input in script(frames, seed) {
         w.advance(input);
@@ -102,18 +101,28 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// his liquid weapon is drawn from (`class::Quicksilver`) went into
 /// `state_checksum` with the rest of his mechanic. With them left out of it,
 /// every pin held bit for bit.
+/// **Every class was re-pinned 2026-10-14, with no change to play**, for four
+/// fighters: the snapshot holds four seats (two of them parked out of the
+/// world here) and a hit mask twice as wide, and `state_checksum` hashes all
+/// of it. Before re-pinning, both fighters' positions, velocities, health and
+/// actions, the creature, the phase and every effect were compared frame by
+/// frame against the code before the change, for all six classes over these
+/// 2,400 frames, hunted and in versus: identical. **The Blood mage's moved
+/// for play as well**: merged with her rework, her hunt fills twelve effect
+/// slots, and where twelve evicted the oldest stain for a new one, 128 keep
+/// both. Every fighter was identical up to that frame.
 ///
-/// **The Reaver's and the Blood mage's moved again 2026-10-14**, on merging
-/// the Dual mage's rework with the Blood mage's: her five retired effect
-/// kinds became four new ones, so every kind listed after hers is numbered
-/// one lower -- the same cause as the 2026-10-12 note above.
+/// **Then the Dual mage's rework merged in** (2026-10-14): her own fight
+/// moved, and the Reaver's and the Blood mage's with no change to play,
+/// because her five retired effect kinds became four new ones and every kind
+/// listed after hers is numbered one lower.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xad92d8aa094c6517),
-    (Class::Bulwark, 0x8465a86bccb8ef32),
-    (Class::ShadowReaver, 0x3a90bafb5137be9a),
-    (Class::BloodMage, 0xbb4f50c318f8bfaa),
-    (Class::DualMage, 0xb73a09bb8ba66296),
-    (Class::Elementalist, 0x19fbc249420a6a17),
+    (Class::Champion, 0xde36cc574ef51ff7),
+    (Class::Bulwark, 0x11c745d19fbec112),
+    (Class::ShadowReaver, 0xa45935d2dff6f3e9),
+    (Class::BloodMage, 0xf2c8a705100f28ee),
+    (Class::DualMage, 0x24161222c7142c96),
+    (Class::Elementalist, 0x31a1cb586ada4b67),
 ];
 
 #[test]

@@ -110,12 +110,12 @@ pub fn mode(name: &str) -> Option<(&'static species::Species, ArenaId)> {
         .map(|a| (sp, a.id))
 }
 
-/// The world a start describes, with both seats played: `sim::replay::Start`
+/// The world a start describes, with two seats played: `sim::replay::Start`
 /// is the one place a world is built from its settings, so a replay of a
 /// fight rebuilds exactly the fight the picker started.
-pub fn world(start: Start, classes: [Class; 2]) -> World {
+pub fn world<const N: usize>(start: Start, classes: [Class; N]) -> World {
     sim::replay::Start {
-        classes,
+        classes: World::seats_of(classes),
         hunt: start.hunt,
         arena: start.arena,
         temper: start.temper,
@@ -139,6 +139,13 @@ pub fn describe(w: &World) -> Vec<(&'static str, String)> {
         ("p1", class(w.players[0].class)),
         ("p2", class(w.players[1].class)),
     ];
+    // A room for more than two: how many, and the classes of the rest.
+    if w.present() > 2 {
+        out.push(("players", w.present().to_string()));
+        for (name, p) in ["p3", "p4"].into_iter().zip(&w.players[2..w.present()]) {
+            out.push((name, class(p.class)));
+        }
+    }
     let here = w.arena.get();
     match w.hunted().into_iter().flatten().next() {
         Some(sp) => {

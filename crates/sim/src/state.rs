@@ -14,7 +14,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
-use crate::arena::{self, Arena, ArenaId, Solid, Terrain};
+use crate::arena::{self, Arena, ArenaId, Mark, Solid, Terrain};
 use crate::bolt::{self, Flight, MAX_BOLTS};
 use crate::bulwark;
 use crate::camera;
@@ -41,7 +41,7 @@ use crate::species::SpeciesId;
 use crate::stones::{self, Field};
 use crate::tuning as t;
 
-pub const MAX_PLAYERS: usize = 2;
+pub const MAX_PLAYERS: usize = 4;
 pub type PlayerId = usize;
 
 const GROUND_Y: Fx = Fx::ZERO;
@@ -1434,11 +1434,29 @@ pub struct World {
 
 impl World {
     pub fn new() -> World {
-        World::with_classes([Class::Bulwark; MAX_PLAYERS])
+        World::with_classes([Class::Bulwark; 2])
     }
 
-    /// Start a match with a chosen class per side.
-    pub fn with_classes(classes: [Class; MAX_PLAYERS]) -> World {
+    /// **Every seat's class, from as many as were named**: a fight names one
+    /// class per fighter it seats -- two for a duel or a pair of hunters, up
+    /// to [`MAX_PLAYERS`] -- and the seats past those are filled with the
+    /// first class named, for the bodies that stand parked out of the world
+    /// ([`World::seated`]). `N` is checked at compile time.
+    pub fn seats_of<const N: usize>(classes: [Class; N]) -> [Class; MAX_PLAYERS] {
+        const { assert!(N >= 1 && N <= MAX_PLAYERS, "one to four fighters") };
+        let mut all = [classes[0]; MAX_PLAYERS];
+        all[..N].copy_from_slice(&classes);
+        all
+    }
+
+    /// Start a match with a chosen class per fighter: as many fighters as
+    /// classes named, one to [`MAX_PLAYERS`].
+    pub fn with_classes<const N: usize>(classes: [Class; N]) -> World {
+        World::with_all(World::seats_of(classes)).seated(N as u8)
+    }
+
+    /// Every seat filled, from a class per seat.
+    fn with_all(classes: [Class; MAX_PLAYERS]) -> World {
         let mut w = World {
             frame: 0,
             players: [Player::default(); MAX_PLAYERS],
@@ -1469,12 +1487,12 @@ impl World {
     /// Friendly fire is off for the duration, and it is off because the monster
     /// is there rather than because a flag says so -- one condition, in one
     /// place, that cannot get out of step with what is on screen.
-    pub fn hunt(classes: [Class; MAX_PLAYERS]) -> World {
+    pub fn hunt<const N: usize>(classes: [Class; N]) -> World {
         World::hunt_of(classes, SpeciesId::RIDGEBACK)
     }
 
     /// A hunt against one creature of any species.
-    pub fn hunt_of(classes: [Class; MAX_PLAYERS], species: SpeciesId) -> World {
+    pub fn hunt_of<const N: usize>(classes: [Class; N], species: SpeciesId) -> World {
         let mut herd = [None; MAX_MONSTERS];
         // As many of it as its species says a hunt holds: two for the Pair,
         // one for everybody else (`FightDecl::bodies`).
@@ -1487,8 +1505,8 @@ impl World {
 
     /// A hunt against whichever creatures are named, one per slot, in the
     /// first one's arena ([`arena::for_species`]).
-    pub fn hunt_with(
-        classes: [Class; MAX_PLAYERS],
+    pub fn hunt_with<const N: usize>(
+        classes: [Class; N],
         herd: [Option<SpeciesId>; MAX_MONSTERS],
     ) -> World {
         let place = herd
@@ -1500,12 +1518,21 @@ impl World {
     }
 
     /// A hunt against whichever creatures are named, in a chosen arena.
-    pub fn hunt_in(
+    pub fn hunt_in<const N: usize>(
+        classes: [Class; N],
+        herd: [Option<SpeciesId>; MAX_MONSTERS],
+        place: ArenaId,
+    ) -> World {
+        World::hunt_all(World::seats_of(classes), herd, place).seated(N as u8)
+    }
+
+    /// [`World::hunt_in`] with every seat's class named.
+    fn hunt_all(
         classes: [Class; MAX_PLAYERS],
         herd: [Option<SpeciesId>; MAX_MONSTERS],
         place: ArenaId,
     ) -> World {
-        let mut w = World::with_classes(classes);
+        let mut w = World::with_all(classes);
         w.arena = arena::lookup(place).map_or(ArenaId::PROVING_GROUND, |a| a.id);
         // The lore is laid out by the first creature named: the fight's.
         if let Some(first) = herd.iter().flatten().next() {
@@ -1560,7 +1587,18 @@ impl World {
     /// stands. `at` is the seam of `to` you come in by, and where you stand;
     /// `None` is the place's own start. The journey comes along -- what has
     /// been beaten -- and everything about the last place does not.
-    pub fn arrive(
+    pub fn arrive<const N: usize>(
+        classes: [Class; N],
+        journey: crate::valley::Journey,
+        to: ArenaId,
+        at: Option<u8>,
+        seats: u8,
+    ) -> World {
+        World::arrive_all(World::seats_of(classes), journey, to, at, seats)
+    }
+
+    /// [`World::arrive`] with every seat's class named.
+    fn arrive_all(
         classes: [Class; MAX_PLAYERS],
         journey: crate::valley::Journey,
         to: ArenaId,
@@ -1570,9 +1608,9 @@ impl World {
         let place = crate::valley::place(to);
         let mut w = match place.map(|p| p.kind) {
             Some(crate::valley::Kind::Room(species)) => {
-                World::hunt_in(classes, crate::replay::herd_of(species), to)
+                World::hunt_all(classes, crate::replay::herd_of(species), to)
             }
-            _ => World::hunt_in(classes, [None; MAX_MONSTERS], to),
+            _ => World::hunt_all(classes, [None; MAX_MONSTERS], to),
         };
         crate::atlas::valley();
         w.valley = crate::valley::Journey {
@@ -1585,7 +1623,7 @@ impl World {
             // On the map, the ground under a mark is the land's.
             let here = w.terrain();
             for (i, p) in w.players.iter_mut().enumerate() {
-                let mark = seam.marks[i.min(1)];
+                let mark = Mark::seat(&seam.marks, i);
                 let up = V3::new(mark.at.x, Fx::from_int(1000), mark.at.z);
                 p.pos = V3::new(mark.at.x, here.floor_below(up), mark.at.z);
                 p.facing = mark.facing;
@@ -1599,17 +1637,19 @@ impl World {
     }
 
     /// A versus match in a chosen arena.
-    pub fn versus_in(classes: [Class; MAX_PLAYERS], place: ArenaId) -> World {
+    pub fn versus_in<const N: usize>(classes: [Class; N], place: ArenaId) -> World {
         World::hunt_in(classes, [None; MAX_MONSTERS], place)
     }
 
     /// The same fight from the top: these classes, the same creatures, the
     /// same arena, the same temper. What a reset or a class change starts.
-    pub fn restarted(&self, classes: [Class; MAX_PLAYERS]) -> World {
+    /// As many classes as are named; a seat past them takes the first.
+    pub fn restarted<const N: usize>(&self, classes: [Class; N]) -> World {
+        let classes = World::seats_of(classes);
         if self.valley.on {
             // In the valley a restart is this place again, from the seam you
             // came in by, with the journey kept.
-            return World::arrive(
+            return World::arrive_all(
                 classes,
                 self.valley,
                 self.arena,
@@ -1617,7 +1657,9 @@ impl World {
                 self.seats,
             );
         }
-        World::hunt_in(classes, self.hunted(), self.arena).tempered(self.temper())
+        World::hunt_all(classes, self.hunted(), self.arena)
+            .tempered(self.temper())
+            .seated(self.seats)
     }
 
     /// The same fight with every creature in it at temper `n` -- its bodies
@@ -1639,20 +1681,56 @@ impl World {
         self
     }
 
-    /// **Seat `seats` fighters**, one or two, and take the rest out of a hunt:
-    /// a fighter nobody drives is a target the creature will happily cross
-    /// the arena for, which is what the first long run of the harness
-    /// measured. Versus seats both whatever is asked, since there is nothing
-    /// in it to take a seat out of. Like [`World::tempered`], part of a
+    /// **Seat `seats` fighters**, one to [`MAX_PLAYERS`], and take the rest
+    /// out of the world: a fighter nobody drives is a target the creature will
+    /// happily cross the arena for, which is what the first long run of the
+    /// harness measured. Versus keeps at least two bodies whatever is asked
+    /// -- one seat is somebody training against the dummy -- so a duel is
+    /// still a duel ([`World::present`]). Like [`World::tempered`], part of a
     /// fight's initial state, applied as the world is built.
     pub fn seated(mut self, seats: u8) -> World {
         self.seats = seats.clamp(1, MAX_PLAYERS as u8);
-        if self.hunting() || self.peaceful() {
-            for p in self.players.iter_mut().skip(self.seats as usize) {
-                p.health = 0;
-            }
-        }
+        self.park_absent();
         self
+    }
+
+    /// **How many bodies are in the fight**: the seats, and in versus never
+    /// fewer than two. Every fighter past these is parked out of the world
+    /// ([`World::park_absent`]) and plays no part in anything.
+    pub fn present(&self) -> usize {
+        let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+        if self.hunting() || self.valley.on && self.peaceful() {
+            seats
+        } else {
+            seats.max(2)
+        }
+    }
+
+    /// Is fighter `i` in the fight at all?
+    pub fn is_present(&self, i: usize) -> bool {
+        i < self.present()
+    }
+
+    /// **Put every fighter past [`World::present`] out of the world**: dead,
+    /// still, and under the middle of the place's floor, where nothing reaches
+    /// it and nothing draws it in view. What the valley has always done with
+    /// a fighter nobody plays, done for every fight now there are four seats.
+    fn park_absent(&mut self) {
+        let present = self.present();
+        if present >= MAX_PLAYERS {
+            return;
+        }
+        let b = self.arena().bounds;
+        let under = V3::new(
+            Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
+            Fx::from_int(-1000),
+            Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
+        );
+        for p in self.players.iter_mut().skip(present) {
+            p.pos = under;
+            p.vel = V3::ZERO;
+            p.health = 0;
+        }
     }
 
     /// The hunt's temper: its first creature's, or its pack's. Zero in versus.
@@ -1743,7 +1821,7 @@ impl World {
             | Destination::Step
             | Destination::Credit(_) => return None,
             Destination::Valley => {
-                World::arrive(classes, self.valley, crate::valley::START, None, self.seats)
+                World::arrive_all(classes, self.valley, crate::valley::START, None, self.seats)
             }
             Destination::Restart => self.restarted(classes),
             Destination::Versus => World::with_classes(classes),
@@ -1834,17 +1912,7 @@ impl World {
             // seam you come through. The Ring keeps both (player two is the
             // dummy or the bot there), and a hunt takes an absent hunter out
             // as it always has.
-            let b = self.arena().bounds;
-            let under = V3::new(
-                Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
-                Fx::from_int(-1000),
-                Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
-            );
-            for p in self.players.iter_mut().skip(seats) {
-                p.pos = under;
-                p.vel = V3::ZERO;
-                p.health = 0;
-            }
+            self.park_absent();
             let atlas = crate::atlas::valley();
             let origin = self.map_origin();
             for i in 0..seats {
@@ -1869,7 +1937,7 @@ impl World {
         World {
             frame: self.frame,
             paused: self.paused,
-            ..World::arrive(classes, self.valley, seam.to, Some(seam.at), self.seats)
+            ..World::arrive_all(classes, self.valley, seam.to, Some(seam.at), self.seats)
         }
     }
 
@@ -1952,8 +2020,8 @@ impl World {
                 p.facing,
             ),
             None => match self.valley.came.checked_sub(1).and_then(|k| place.seam(k)) {
-                Some(seam) => on_mark(&seam.marks[i.min(1)]),
-                None => on_mark(&here.spawns.versus[i.min(1)]),
+                Some(seam) => on_mark(&Mark::seat(&seam.marks, i)),
+                None => on_mark(&Mark::seat(&here.spawns.versus, i)),
             },
         };
         let (wins, class) = (p.rounds_won, p.class);
@@ -2021,7 +2089,7 @@ impl World {
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
-            let mark = here.spawns.versus[i.min(1)];
+            let mark = Mark::seat(&here.spawns.versus, i);
             *p = Player {
                 // **On the ground under the mark**: the floor everywhere a
                 // mark has stood, the plateau's top in the Cliffs.
@@ -2100,13 +2168,17 @@ impl World {
             for (i, p) in self.players.iter_mut().enumerate() {
                 match here.hunt_marks() {
                     Some(marks) => {
-                        let mark = marks.hunters[i.min(1)];
+                        let mark = Mark::seat(&marks.hunters, i);
                         p.pos = V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z);
                         p.facing = mark.facing;
                     }
                     None => {
                         let x = back.neg();
-                        let z = Fx::from_int(if i == 0 { -2 } else { 2 });
+                        // Two either side of the line, and the third and
+                        // fourth a flank further out (`Mark::seat`).
+                        let side = Fx::from_int(if i % 2 == 0 { -1 } else { 1 });
+                        let flank = t::seat_flank().mul(Fx::from_int((i / 2) as i32));
+                        let z = Fx::from_int(if i % 2 == 0 { -2 } else { 2 }).add(side.mul(flank));
                         p.pos = V3::new(x, here.ground_under(V3::new(x, GROUND_Y, z)), z);
                         p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
                     }
@@ -2119,7 +2191,26 @@ impl World {
     ///
     /// Must stay a pure function of `(self, inputs)`: no clocks, no randomness
     /// that is not seeded from state, no iteration over unordered collections.
-    pub fn advance(&mut self, wire: [Input; MAX_PLAYERS]) {
+    /// **One frame**, from an input per seat: as many as the caller has, one
+    /// to [`MAX_PLAYERS`]; the seats past those send nothing. A fighter not
+    /// [present](World::present) is put back out of the world before and
+    /// after, so nothing in the frame -- a push, a fall, a respawn -- can
+    /// bring it in.
+    pub fn advance<const N: usize>(&mut self, wire: [Input; N]) {
+        const { assert!(N >= 1 && N <= MAX_PLAYERS, "one to four inputs") };
+        let mut all = [Input::default(); MAX_PLAYERS];
+        all[..N].copy_from_slice(&wire);
+        // Nobody in a seat, nothing from it: not a press, not a trip.
+        let present = self.present();
+        for input in all.iter_mut().skip(present) {
+            *input = Input::default();
+        }
+        self.park_absent();
+        self.step(all);
+        self.park_absent();
+    }
+
+    fn step(&mut self, wire: [Input; MAX_PLAYERS]) {
         self.frame = self.frame.wrapping_add(1);
 
         // A creature credited to the valley's journey from somebody's
@@ -2182,7 +2273,8 @@ impl World {
                 // of the air would otherwise have the view frozen mid-swing
                 // for the whole round-over pause.
                 let field = stones::gather(&self.players);
-                for p in self.players.iter_mut() {
+                let present = self.present();
+                for p in self.players.iter_mut().take(present) {
                     settle(p, here);
                     advance_clocks(p);
                     step_aloft(p, &field, here);
@@ -2361,7 +2453,11 @@ impl World {
         // the beams. A body that is frozen on the first frame of its hit would
         // otherwise fire its leap or its beam again on every frame of the
         // freeze, since nothing about its action moved.
-        let frozen: [bool; MAX_PLAYERS] = std::array::from_fn(|i| self.players[i].frozen > 0);
+        // A seat nobody is in is held still like a frozen body: it is out of
+        // the world, and stepping it is a body falling under the land.
+        let present = self.present();
+        let frozen: [bool; MAX_PLAYERS] =
+            std::array::from_fn(|i| i >= present || self.players[i].frozen > 0);
 
         // Everything the aiming ray can meet, as it stood at the top of the
         // frame. Copied rather than borrowed because the loop below takes each
@@ -2383,7 +2479,7 @@ impl World {
             // Held still: no step, no clocks, not a centimetre of travel. The
             // knockback waiting in `vel` is spent when it ends.
             if frozen[i] {
-                p.frozen -= 1;
+                p.frozen = p.frozen.saturating_sub(1);
                 continue;
             }
             let scene = Scene {
@@ -2891,146 +2987,162 @@ impl World {
         } else {
             [false; MAX_PLAYERS]
         };
-        for attacker in 0..MAX_PLAYERS {
+        // Every fighter against every other one: with four, a blow that
+        // catches two bodies on one frame lands on both.
+        let present = self.present();
+        for attacker in 0..present {
             if !self.pvp() {
                 break;
             }
-            if cancelled[attacker] {
+            if cancelled[attacker] || snapshot[attacker].health <= 0 {
                 continue;
             }
-            let defender = 1 - attacker;
-            if let Some(mut hit) =
-                resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
-            {
-                // The Reaver's cash-in: any blow of hers spends the marks on
-                // whoever it lands on. A no-op for every other blow in the
-                // game, and for anybody carrying no marks.
-                let staggers = cash_the_tally(&mut self.players, attacker, defender, &mut hit);
-                // What the blow is actually worth, before it lands: a killing
-                // hit on someone with forty health left is worth forty, not its
-                // listed damage, so leeching cannot pay out of an empty bar.
-                let dealt = if hit.blocked || hit.parried {
-                    0
-                } else {
-                    hit.damage.min(snapshot[defender].health)
-                };
-                apply_hit(&mut self.players[defender], hit);
-                // A full shield's Slam staggers what its shake catches
-                // unguarded: the area stagger weight buys. Blocked, it is an
-                // ordinary blocked Slam -- its frames do not change with weight.
-                if !hit.blocked && !hit.parried && bulwark::slam_staggers(&snapshot[attacker]) {
-                    self.players[defender].action = Action::Stagger {
-                        left: t::slam_full_stagger(),
+            for defender in 0..present {
+                if defender == attacker || snapshot[defender].health <= 0 {
+                    continue;
+                }
+                if let Some(mut hit) =
+                    resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
+                {
+                    // The Reaver's cash-in: any blow of hers spends the marks on
+                    // whoever it lands on. A no-op for every other blow in the
+                    // game, and for anybody carrying no marks.
+                    let staggers = cash_the_tally(&mut self.players, attacker, defender, &mut hit);
+                    // What the blow is actually worth, before it lands: a killing
+                    // hit on someone with forty health left is worth forty, not its
+                    // listed damage, so leeching cannot pay out of an empty bar.
+                    let dealt = if hit.blocked || hit.parried {
+                        0
+                    } else {
+                        hit.damage.min(snapshot[defender].health)
                     };
-                    self.players[defender].stun_total = t::slam_full_stagger();
-                }
-                if staggers {
-                    stagger_the_cashed(&mut self.players[defender]);
-                }
-                let owed = snapshot[attacker]
-                    .action
-                    .attack_kind()
-                    .map(|kind| moves::get(snapshot[attacker].class, kind).leeched(dealt))
-                    .unwrap_or(0);
-                self.players[attacker].heal(owed);
-                // The Blood mage's double duty: a hit over one of her pools
-                // drinks from it, and then spills what it dealt onto the
-                // floor. In that order, so a hit on bare floor returns
-                // nothing -- the smear it leaves is for the next one.
-                if let Some(kind) = snapshot[attacker].action.attack_kind() {
-                    let m = moves::get(snapshot[attacker].class, kind);
-                    // A spike on bare floor is a spike: damage, a launch, and
-                    // a short slow. The slow is what makes leaving cost time.
-                    if snapshot[attacker].class == Class::BloodMage
-                        && kind == moves::blood::BLACK_SPIKE
-                        && !hit.blocked
-                        && !hit.parried
-                    {
-                        self.players[defender].slow(t::slow_frames(), t::spike_slow());
+                    apply_hit(&mut self.players[defender], hit);
+                    // A full shield's Slam staggers what its shake catches
+                    // unguarded: the area stagger weight buys. Blocked, it is an
+                    // ordinary blocked Slam -- its frames do not change with weight.
+                    if !hit.blocked && !hit.parried && bulwark::slam_staggers(&snapshot[attacker]) {
+                        self.players[defender].action = Action::Stagger {
+                            left: t::slam_full_stagger(),
+                        };
+                        self.players[defender].stun_total = t::slam_full_stagger();
                     }
-                    if dealt > 0 {
-                        // Through a stain, the blow is harder for it, and the
-                        // blood it spills is the whole of what it dealt.
-                        let mut spilt = dealt;
-                        if let Some(hb) = hitbox(&snapshot[attacker]) {
-                            let bonus =
-                                self.stain_bonus(attacker, &m, hb.from, hb.to, Some(defender), 0);
-                            spilt += self.players[defender].wound(bonus);
+                    if staggers {
+                        stagger_the_cashed(&mut self.players[defender]);
+                    }
+                    let owed = snapshot[attacker]
+                        .action
+                        .attack_kind()
+                        .map(|kind| moves::get(snapshot[attacker].class, kind).leeched(dealt))
+                        .unwrap_or(0);
+                    self.players[attacker].heal(owed);
+                    // The Blood mage's double duty: a hit over one of her pools
+                    // drinks from it, and then spills what it dealt onto the
+                    // floor. In that order, so a hit on bare floor returns
+                    // nothing -- the smear it leaves is for the next one.
+                    if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                        let m = moves::get(snapshot[attacker].class, kind);
+                        // A spike on bare floor is a spike: damage, a launch, and
+                        // a short slow. The slow is what makes leaving cost time.
+                        if snapshot[attacker].class == Class::BloodMage
+                            && kind == moves::blood::BLACK_SPIKE
+                            && !hit.blocked
+                            && !hit.parried
+                        {
+                            self.players[defender].slow(t::slow_frames(), t::spike_slow());
                         }
-                        self.spill_under(
-                            attacker as u8,
-                            snapshot[attacker].class,
-                            kind,
-                            &snapshot[defender],
-                            spilt,
-                        );
-                    }
-                }
-                self.players[attacker].hit_used = true;
-                // Landing anything while ascended pulls some health back. A
-                // no-op for everybody else and for her between ascensions.
-                if dealt > 0 {
-                    dual::landed_a_hit(&mut self.players[attacker]);
-                }
-                // The aerial spear pays its shove out on contact rather than
-                // on the throw: catch somebody with the fan and it kicks you
-                // the way you are holding, so it is a repositioning tool you
-                // have to earn. Read from the live input rather than from a
-                // direction locked at the throw, because the whole point is
-                // that you choose where to go *as* it connects.
-                champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
-                // The Bulwark's Rebound off a body, blocked or not: it is solid.
-                rebound_off_a_body(&mut self.players[attacker]);
-                // The Dual mage's curse and purge: what her blow lays on them,
-                // or sets off. Only a blow that landed. A no-op for everybody
-                // else.
-                if let Some(kind) = snapshot[attacker].action.attack_kind() {
-                    if dealt > 0 && snapshot[attacker].class == Class::DualMage {
-                        spell_lands_on_fighter(&mut self.players, attacker, defender, kind);
-                    }
-                }
-                // And the other half of the hammer finisher: the knock-up went
-                // out in `resolve_hit`, and this is the Champion following it
-                // off the floor on the same frame.
-                champion_leap_with_them(&mut self.players[attacker], hit.blocked || hit.parried);
-                // A chain link that actually landed may cut its recovery short
-                // for the next one. Blocked and parried links pay in full, so
-                // the string ends on a defender who answered it -- see
-                // `chain_cancel`.
-                confirm_chain(&mut self.players[attacker], hit.blocked || hit.parried);
-                if !hit.blocked && !hit.parried {
-                    let kind = snapshot[attacker].action.attack_kind();
-                    feed_the_momentum(&mut self.players[attacker], kind);
-                    // A finisher that spent momentum staggers them by what
-                    // it spent.
-                    if let (Some(k), Mechanic::Forms { fury, .. }) =
-                        (kind, snapshot[attacker].mechanic)
-                    {
-                        if moves::champion::is_full(k) {
-                            stagger_by_the_spend(
-                                &mut self.players[defender],
-                                hit.hitstun,
-                                fury.spent,
+                        if dealt > 0 {
+                            // Through a stain, the blow is harder for it, and the
+                            // blood it spills is the whole of what it dealt.
+                            let mut spilt = dealt;
+                            if let Some(hb) = hitbox(&snapshot[attacker]) {
+                                let bonus = self.stain_bonus(
+                                    attacker,
+                                    &m,
+                                    hb.from,
+                                    hb.to,
+                                    Some(defender),
+                                    0,
+                                );
+                                spilt += self.players[defender].wound(bonus);
+                            }
+                            self.spill_under(
+                                attacker as u8,
+                                snapshot[attacker].class,
+                                kind,
+                                &snapshot[defender],
+                                spilt,
                             );
                         }
                     }
-                }
-                if hit.parried {
-                    self.players[attacker].action = Action::Stagger {
-                        left: t::parry_stagger(),
-                    };
-                    self.players[attacker].stun_total = t::parry_stagger();
-                    self.players[defender].parried = PARRY_FLOURISH;
-                }
-                // Both bodies stop, together. A parry is the cleanest contact
-                // in the game and freezes as long as a hit; a block is a blow
-                // that arrived and was taken, and freezes for less.
-                if let Some(kind) = snapshot[attacker].action.attack_kind() {
-                    let m = moves::get(snapshot[attacker].class, kind);
-                    let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried)
-                        + true_link_freeze(&snapshot[attacker]);
-                    freeze(&mut self.players[attacker], hold);
-                    freeze(&mut self.players[defender], hold);
+                    self.players[attacker].hit_used = true;
+                    // Landing anything while ascended pulls some health back. A
+                    // no-op for everybody else and for her between ascensions.
+                    if dealt > 0 {
+                        dual::landed_a_hit(&mut self.players[attacker]);
+                    }
+                    // The aerial spear pays its shove out on contact rather than
+                    // on the throw: catch somebody with the fan and it kicks you
+                    // the way you are holding, so it is a repositioning tool you
+                    // have to earn. Read from the live input rather than from a
+                    // direction locked at the throw, because the whole point is
+                    // that you choose where to go *as* it connects.
+                    champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
+                    // The Bulwark's Rebound off a body, blocked or not: it is solid.
+                    rebound_off_a_body(&mut self.players[attacker]);
+                    // The Dual mage's curse and purge: what her blow lays on them,
+                    // or sets off. Only a blow that landed. A no-op for everybody
+                    // else.
+                    if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                        if dealt > 0 && snapshot[attacker].class == Class::DualMage {
+                            spell_lands_on_fighter(&mut self.players, attacker, defender, kind);
+                        }
+                    }
+                    // And the other half of the hammer finisher: the knock-up went
+                    // out in `resolve_hit`, and this is the Champion following it
+                    // off the floor on the same frame.
+                    champion_leap_with_them(
+                        &mut self.players[attacker],
+                        hit.blocked || hit.parried,
+                    );
+                    // A chain link that actually landed may cut its recovery short
+                    // for the next one. Blocked and parried links pay in full, so
+                    // the string ends on a defender who answered it -- see
+                    // `chain_cancel`.
+                    confirm_chain(&mut self.players[attacker], hit.blocked || hit.parried);
+                    if !hit.blocked && !hit.parried {
+                        let kind = snapshot[attacker].action.attack_kind();
+                        feed_the_momentum(&mut self.players[attacker], kind);
+                        // A finisher that spent momentum staggers them by what
+                        // it spent.
+                        if let (Some(k), Mechanic::Forms { fury, .. }) =
+                            (kind, snapshot[attacker].mechanic)
+                        {
+                            if moves::champion::is_full(k) {
+                                stagger_by_the_spend(
+                                    &mut self.players[defender],
+                                    hit.hitstun,
+                                    fury.spent,
+                                );
+                            }
+                        }
+                    }
+                    if hit.parried {
+                        self.players[attacker].action = Action::Stagger {
+                            left: t::parry_stagger(),
+                        };
+                        self.players[attacker].stun_total = t::parry_stagger();
+                        self.players[defender].parried = PARRY_FLOURISH;
+                    }
+                    // Both bodies stop, together. A parry is the cleanest contact
+                    // in the game and freezes as long as a hit; a block is a blow
+                    // that arrived and was taken, and freezes for less.
+                    if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                        let m = moves::get(snapshot[attacker].class, kind);
+                        let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried)
+                            + true_link_freeze(&snapshot[attacker]);
+                        freeze(&mut self.players[attacker], hold);
+                        freeze(&mut self.players[defender], hold);
+                    }
                 }
             }
         }
@@ -3051,9 +3163,9 @@ impl World {
         }
 
         // A thrown shield is its own threat while it travels.
-        let shields = [self.players[0].shield(), self.players[1].shield()];
-        for (owner, shield) in shields.iter().enumerate() {
-            let target = 1 - owner;
+        let shields: [Option<Shield>; MAX_PLAYERS] =
+            std::array::from_fn(|i| self.players[i].shield());
+        for (owner, shield) in shields.iter().enumerate().take(present) {
             let Some(Shield::Flying {
                 pos,
                 vel,
@@ -3071,12 +3183,22 @@ impl World {
             if struck || !self.pvp() {
                 continue;
             }
-            {
+            // The first body it reaches, in seat order: once a flight, so a
+            // second body on the same frame is not struck.
+            let hit_range = t::shield_radius().add(t::body_radius());
+            let reached = (0..present).find(|&i| {
+                let victim = &self.players[i];
+                let d = victim.pos.sub(pos);
+                i != owner
+                    && victim.health > 0
+                    && d.y.abs().raw() < t::body_height().raw()
+                    && d.flat_len().raw() < hit_range.raw()
+                    && !victim.untouchable()
+            });
+            if let Some(target) = reached {
                 let victim = self.players[target];
                 let d = victim.pos.sub(pos);
-                let hit_range = t::shield_radius().add(t::body_radius());
-                let vertical = d.y.abs().raw() < t::body_height().raw();
-                if vertical && d.flat_len().raw() < hit_range.raw() && !victim.untouchable() {
+                {
                     let dir = V3::new(d.x, Fx::ZERO, d.z).normalized();
                     let blocked = victim.action.guarding();
                     // The weight is the *throw's*. On the way home it is the
@@ -3221,7 +3343,8 @@ impl World {
             }
         }
         stones::touch(&mut self.players);
-        separate_bodies(&mut self.players);
+        let present = self.present();
+        separate_bodies(&mut self.players, present);
         drag_the_held(&mut self.players);
 
         // The hunt's lore, a frame on: fire on the floor, hazards aging, a
@@ -3297,13 +3420,17 @@ impl World {
             return;
         }
         if matches!(self.phase, Phase::Fighting) && !self.peaceful() {
-            let down = [self.players[0].health <= 0, self.players[1].health <= 0];
-            if down[0] || down[1] {
-                let winner = match down {
-                    [true, true] => u8::MAX,
-                    [true, false] => 1,
-                    _ => 0,
-                };
+            // **Last one standing.** Two fighters is the duel it always was;
+            // with three or four it is everybody against everybody, and the
+            // round ends when one is left -- or none, a double knockout.
+            let present = self.present();
+            let mut standing = self.players[..present]
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| p.health > 0);
+            let first = standing.next().map(|(i, _)| i);
+            if standing.next().is_none() {
+                let winner = first.map_or(u8::MAX, |i| i as u8);
                 if winner != u8::MAX {
                     self.players[winner as usize].rounds_won += 1;
                 }
@@ -3395,7 +3522,10 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u64(e.struck);
+                    h.write_u64(e.struck as u64);
+                    h.write_u64((e.struck >> 64) as u64);
+                    h.write_u64(e.drank as u64);
+                    h.write_u64((e.drank >> 64) as u64);
                     h.write_i32(e.banked);
                     h.write_i32(e.power.raw());
                     h.write_i32(e.reach.raw());
@@ -3702,7 +3832,8 @@ impl World {
                 h.write_u32(u32::from_le_bytes([c.kind, c.state, c.act, c.flags]));
                 h.write_u32(u32::from_le_bytes([c.role, c.slot, c.target, c.mount]));
                 h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
-                h.write_u32(c.perch[2] as u16 as u32 | (c.seared as u32) << 16);
+                h.write_u32(c.perch[2] as u16 as u32 | (c.seared & 0xFFFF) << 16);
+                h.write_u32(c.seared >> 16 | (c.swung as u32) << 16);
             }
         }
         // The hunt's lore, last, and only when something is in it: a fight
@@ -4937,16 +5068,19 @@ impl World {
             .add(t::shoulder_reach());
         let mut struck = false;
         let mut blocked = false;
-        if self.pvp() {
-            let other = 1 - i;
-            let q = self.players[other];
+        // The first body in its way, in seat order: a shoulder hits once.
+        let met = (0..self.present()).find(|&other| {
+            let q = &self.players[other];
             let d = q.pos.sub(p.pos);
-            let level = d.y.abs().raw() < t::body_height().raw();
-            if q.health > 0
-                && level
+            other != i
+                && q.health > 0
+                && d.y.abs().raw() < t::body_height().raw()
                 && d.flat_len().raw() <= reach.raw()
                 && ahead.dot(V3::new(d.x, Fx::ZERO, d.z)).raw() > 0
                 && !q.action.invulnerable()
+        });
+        if let Some(other) = met.filter(|_| self.pvp()) {
+            let q = self.players[other];
             {
                 let (guarding, parried) = guard_against(&q, p.pos, false);
                 apply_hit(
@@ -8710,9 +8844,10 @@ pub const GROWING: i32 = 1;
 pub const UNLIT: u16 = u16::MAX;
 /// On a thrall's `Effect::struck`: she has sent it somewhere, and it goes
 /// there before it bites anything.
-pub const COMMANDED: u64 = 1 << 63;
+/// The top of the mask, above every (part, victim) bit an effect uses.
+pub const COMMANDED: u128 = 1 << 127;
 /// On a thrall's `Effect::struck`: the hand it keeps to round a wall.
-pub const LEFT_HAND: u64 = 1 << 62;
+pub const LEFT_HAND: u128 = 1 << 126;
 
 /// What a Black spike's hit is worth against its row's damage: an eruption
 /// out of a stain is the bigger hit, a field's wave and the second tier's
@@ -9757,7 +9892,11 @@ fn settle(p: &mut Player, arena: &Terrain) {
 /// **Except to Thousand Cuts**, which is a run *through* them (exploration
 /// 0015, C5): a drawn sword that stopped against the body it was cutting
 /// would be the Rush stab again.
-fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
+///
+/// Every pair of the `present` fighters, in seat order; the parked seats are
+/// out of the world and push nobody.
+fn separate_bodies(players: &mut [Player; MAX_PLAYERS], present: usize) {
+    let players = &mut players[..present.min(MAX_PLAYERS)];
     // **Except a body passing through untouchable**: the Dual mage's Flurry
     // dash goes down its own line through whoever is on it (2026-10-12), and
     // stopping at the first body is the dash ending at the thing it was cut
@@ -9771,16 +9910,20 @@ fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
     if players.iter().any(through) {
         return;
     }
-    let delta = players[1].pos.sub(players[0].pos);
-    let dist = delta.flat_len();
     let min = t::body_radius().add(t::body_radius());
-    if dist.raw() == 0 || dist.raw() >= min.raw() {
-        return;
+    for a in 0..players.len() {
+        for b in a + 1..players.len() {
+            let delta = players[b].pos.sub(players[a].pos);
+            let dist = delta.flat_len();
+            if dist.raw() == 0 || dist.raw() >= min.raw() {
+                continue;
+            }
+            let push = min.sub(dist).mul(Fx::ratio(1, 2));
+            let dir = V3::new(delta.x, Fx::ZERO, delta.z).normalized();
+            players[a].pos = players[a].pos.sub(dir.scale(push));
+            players[b].pos = players[b].pos.add(dir.scale(push));
+        }
     }
-    let push = min.sub(dist).mul(Fx::ratio(1, 2));
-    let dir = V3::new(delta.x, Fx::ZERO, delta.z).normalized();
-    players[0].pos = players[0].pos.sub(dir.scale(push));
-    players[1].pos = players[1].pos.add(dir.scale(push));
 }
 
 /// FNV-1a. Chosen because it is trivially portable and has no platform-varying
@@ -10170,23 +10313,28 @@ impl World {
         share: Fx,
         marks: bool,
     ) -> bool {
-        let target = 1 - owner;
-        let defender = self.players[target];
-        if defender.health <= 0 {
-            return false;
+        // Every other fighter its swing reaches, as hers would.
+        let mut landed = false;
+        for target in 0..self.present() {
+            let defender = self.players[target];
+            if target == owner || defender.health <= 0 {
+                continue;
+            }
+            let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
+                continue;
+            };
+            hit.damage = Fx::from_int(hit.damage).mul(share).to_int();
+            hit.parried = false;
+            apply_hit(&mut self.players[target], hit);
+            // A mark for a hit that *landed*. Blocked, the copy did what a
+            // blocked swing does and nothing more; the tally counts what got
+            // through.
+            if marks && !hit.blocked {
+                shadow::mark(&mut self.players[target]);
+            }
+            landed = true;
         }
-        let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
-            return false;
-        };
-        hit.damage = Fx::from_int(hit.damage).mul(share).to_int();
-        hit.parried = false;
-        apply_hit(&mut self.players[target], hit);
-        // A mark for a hit that *landed*. Blocked, the copy did what a blocked
-        // swing does and nothing more; the tally counts what got through.
-        if marks && !hit.blocked {
-            shadow::mark(&mut self.players[target]);
-        }
-        true
+        landed
     }
 
     fn echo_gores_the_creature(
@@ -10293,55 +10441,60 @@ impl World {
             return;
         }
 
-        let target = 1 - owner;
-        if shadow::already_cut(ghost, target) {
-            return;
+        // Every other fighter it passes through, each once.
+        for target in 0..self.present() {
+            if target == owner {
+                continue;
+            }
+            if shadow::already_cut(ghost, target) {
+                continue;
+            }
+            let victim = self.players[target];
+            if victim.health <= 0 || victim.untouchable() {
+                continue;
+            }
+            let apart = V3::new(
+                victim.pos.x.sub(ghost.pos.x),
+                Fx::ZERO,
+                victim.pos.z.sub(ghost.pos.z),
+            );
+            if apart.flat_len().raw() > reach.raw() {
+                continue;
+            }
+            let away = apart.normalized();
+            let (guarding, _) = guard_against(&victim, ghost.pos, m.unblockable);
+            apply_hit(
+                &mut self.players[target],
+                Hit {
+                    damage: m.damage,
+                    hitstun: m.hitstun,
+                    blockstun: m.blockstun,
+                    knockback: m.knockback,
+                    launch: Fx::ZERO,
+                    grabs: 0,
+                    by: owner as u8,
+                    dir: away,
+                    blocked: guarding,
+                    parried: false,
+                    // **The one hit in the game that does not take frames.** The
+                    // shadow can be sent on the frame it is asked for and out of
+                    // any recovery, so if it also interrupted, the Reaver would
+                    // never have to commit to anything: throw the risky move, and
+                    // when it goes wrong, recall through whoever is punishing you
+                    // and take their attack off them. A shine, and a worse one,
+                    // because not even her own animations gate it. It cuts and it
+                    // slows; what it may not do is hand her the exchange back.
+                    interrupts: false,
+                },
+            );
+            self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
+            // One mark for the way home, the way it cuts once. Not if he blocked
+            // it: the tally counts what got through.
+            if !guarding {
+                shadow::mark(&mut self.players[target]);
+            }
+            shadow::mark_cut(&mut self.players[owner], target);
         }
-        let victim = self.players[target];
-        if victim.health <= 0 || victim.untouchable() {
-            return;
-        }
-        let apart = V3::new(
-            victim.pos.x.sub(ghost.pos.x),
-            Fx::ZERO,
-            victim.pos.z.sub(ghost.pos.z),
-        );
-        if apart.flat_len().raw() > reach.raw() {
-            return;
-        }
-        let away = apart.normalized();
-        let (guarding, _) = guard_against(&victim, ghost.pos, m.unblockable);
-        apply_hit(
-            &mut self.players[target],
-            Hit {
-                damage: m.damage,
-                hitstun: m.hitstun,
-                blockstun: m.blockstun,
-                knockback: m.knockback,
-                launch: Fx::ZERO,
-                grabs: 0,
-                by: owner as u8,
-                dir: away,
-                blocked: guarding,
-                parried: false,
-                // **The one hit in the game that does not take frames.** The
-                // shadow can be sent on the frame it is asked for and out of
-                // any recovery, so if it also interrupted, the Reaver would
-                // never have to commit to anything: throw the risky move, and
-                // when it goes wrong, recall through whoever is punishing you
-                // and take their attack off them. A shine, and a worse one,
-                // because not even her own animations gate it. It cuts and it
-                // slows; what it may not do is hand her the exchange back.
-                interrupts: false,
-            },
-        );
-        self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
-        // One mark for the way home, the way it cuts once. Not if he blocked
-        // it: the tally counts what got through.
-        if !guarding {
-            shadow::mark(&mut self.players[target]);
-        }
-        shadow::mark_cut(&mut self.players[owner], target);
     }
 }
 
@@ -16750,13 +16903,13 @@ impl World {
         // What the fighters have out.
         for i in 0..MAX_PLAYERS {
             let attacker = self.players[i];
-            let bit = critter::flag::STRUCK << i;
+            let bit = 1u8 << i;
             let swing = hitbox(&attacker).filter(|_| attacker.health > 0);
             // A new swing, or one that has rearmed: nobody has been struck by
             // it yet.
             if swing.is_none() || !attacker.hit_used {
                 for c in self.critters.iter_mut() {
-                    c.set(bit, false);
+                    c.swung &= !bit;
                 }
             }
             let Some(box_out) = swing else { continue };
@@ -16790,10 +16943,10 @@ impl World {
             let mut any = false;
             for c in 0..critter::MAX_CRITTERS {
                 let body = self.critters[c];
-                if !body.alive() || body.has(bit) || !body.body(sp).touched_by(&box_out) {
+                if !body.alive() || body.swung & bit != 0 || !body.body(sp).touched_by(&box_out) {
                     continue;
                 }
-                self.critters[c].set(bit, true);
+                self.critters[c].swung |= bit;
                 // **A guard, if the body has one** (`PackMind::guarded`): a
                 // turned blow does nothing to it, and the swing recoils.
                 let guarded = match sp.pack {

@@ -104,12 +104,21 @@ impl Lag {
 
     /// One frame of the replay, and what it cost to simulate.
     pub fn observe(&mut self, after: &World, cost_us: u32) {
+        // The widest two of the people playing, alive: with two seats the
+        // distance between them, with four the spread of the party.
         let seats = (after.seats as usize).clamp(1, MAX_PLAYERS);
-        let [a, b] = [after.players[0], after.players[1]];
-        let apart = (seats == MAX_PLAYERS && a.health > 0 && b.health > 0).then(|| {
-            let d = a.pos.sub(b.pos);
-            sim::math::wide_len(V3::new(d.x, Fx::ZERO, d.z)).to_f32_for_render()
-        });
+        let mut apart: Option<f32> = None;
+        for i in 0..seats {
+            for j in i + 1..seats {
+                let (a, b) = (after.players[i], after.players[j]);
+                if a.health <= 0 || b.health <= 0 {
+                    continue;
+                }
+                let d = a.pos.sub(b.pos);
+                let far = sim::math::wide_len(V3::new(d.x, Fx::ZERO, d.z)).to_f32_for_render();
+                apart = Some(apart.map_or(far, |w| w.max(far)));
+            }
+        }
         // The first frame's time is the replay setting up, not a frame.
         let cost_us = if self.frames.is_empty() { 0 } else { cost_us };
         self.frames.push(Frame {

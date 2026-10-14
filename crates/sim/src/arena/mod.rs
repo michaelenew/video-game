@@ -431,6 +431,34 @@ impl Mark {
             facing: to.sub(at).normalized(),
         }
     }
+
+    /// **Where fighter `i` stands, given a place's two marks.** Every table
+    /// names two marks -- an arena's, a seam's, a hunt's -- and a fight seats
+    /// up to [`crate::state::MAX_PLAYERS`]. The first two stand on them; the
+    /// third and fourth stand beside the first and second, `seat_flank` to the
+    /// side, facing the same way. The side is the one away from the other mark,
+    /// so two hunters side by side widen into a line of four rather than
+    /// doubling up; facing each other (versus), the sides are each fighter's
+    /// left, which puts the four on the corners of a square.
+    pub fn seat(marks: &[Mark; 2], i: usize) -> Mark {
+        let own = marks[i % 2];
+        if i < 2 {
+            return own;
+        }
+        let other = marks[1 - i % 2];
+        // The floor-plane left of the facing.
+        let left = V3::new(own.facing.z, Fx::ZERO, own.facing.x.neg());
+        let away = own.at.sub(other.at);
+        let side = if away.dot(left).raw() < 0 {
+            V3::ZERO.sub(left)
+        } else {
+            left
+        };
+        Mark {
+            at: own.at.add(side.scale(crate::tuning::seat_flank())),
+            facing: own.facing,
+        }
+    }
 }
 
 /// Where everybody stands when a round starts.

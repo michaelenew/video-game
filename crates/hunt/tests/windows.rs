@@ -43,7 +43,7 @@ fn a_pairs_windows_are_each_cats_own_and_together_is_kept_beside_them() {
 fn a_bird_gathering_itself_off_the_floor_is_not_a_threat() {
     // The gather and the lift do no damage and move nobody: until it can
     // next hit is the rest of the move, its recovery and its pause.
-    let mut w = sim::World::hunt_of([sim::Class::Champion; MAX_PLAYERS], SpeciesId::GALEWING);
+    let mut w = sim::World::hunt_of([sim::Class::Champion; 2], SpeciesId::GALEWING);
     let slot = gw::fight::slot_of(&w).expect("the bird");
     let a = gw::SPECIES.attack(gw::LIFT);
     let m = w.monsters[slot].as_mut().unwrap();
@@ -86,7 +86,7 @@ fn the_galewings_windows_leave_out_the_frames_it_is_out_of_reach() {
 fn a_bird_on_the_floor_across_the_plateau_is_in_reach_and_one_circling_is_not() {
     // §9's out of reach is the waiting room: nothing this class can do from
     // where it stands, or from the floor under the bird, walked to, touches it.
-    let w0 = sim::World::hunt_of([sim::Class::Champion; MAX_PLAYERS], SpeciesId::GALEWING);
+    let w0 = sim::World::hunt_of([sim::Class::Champion; 2], SpeciesId::GALEWING);
     let slot = gw::fight::slot_of(&w0).expect("the bird");
     let me = w0.players[0].pos;
     let bots = [hunt::Hunter::for_species(SpeciesId::GALEWING, 0).expect("a plan")];

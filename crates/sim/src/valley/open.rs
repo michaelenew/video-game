@@ -215,7 +215,7 @@ impl World {
         let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
         let here = self.arena();
         for i in seats..MAX_PLAYERS {
-            let mark = here.spawns.versus[i.min(1)];
+            let mark = crate::arena::Mark::seat(&here.spawns.versus, i);
             let p = &mut self.players[i];
             let (wins, class) = (p.rounds_won, p.class);
             *p = Player {

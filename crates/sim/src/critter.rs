@@ -130,9 +130,8 @@ pub mod flag {
     pub const LEADER: u8 = 1 << 2;
     /// Off the floor.
     pub const AIRBORNE: u8 = 1 << 3;
-    /// Already struck by fighter 0's current swing; the next bit fighter 1's.
-    /// A sweep through a heap catches every body in it **once**.
-    pub const STRUCK: u8 = 1 << 4;
+    // Bits 4 and 5 were "struck by fighter 0's / 1's current swing": that is
+    // `Critter::swung` now, a bit per fighter, since there are four.
     /// Going round something in its way, and which way: see `pack`'s
     /// physics. Kept so a body sliding along a wall does not change its mind
     /// halfway along it.
@@ -239,15 +238,19 @@ pub struct Critter {
     /// **Which thrown things have already cut it**: one bit per fighter and
     /// move slot ([`seared_bit`]). A blade or an arm cuts a body once a pass,
     /// and an effect's own memory has no room for ten more victims; the bit is
-    /// cleared when that fighter's next one of that move is thrown. Two bytes
-    /// that were padding.
-    pub seared: u16,
+    /// cleared when that fighter's next one of that move is thrown. Four
+    /// bytes, a byte per fighter.
+    pub seared: u32,
+    /// **Already struck by fighter `i`'s current swing**, bit `i`: a sweep
+    /// through a heap catches every body in it once. Cleared when that
+    /// fighter's swing ends or rearms. A byte that was padding.
+    pub swung: u8,
 }
 
 /// The bit of [`Critter::seared`] an effect thrown by `owner` from move slot
-/// `slot` keeps. Two fighters, eight slots each.
-pub const fn seared_bit(owner: u8, slot: u8) -> u16 {
-    1 << ((owner as u16 & 1) * 8 + (slot as u16 & 7))
+/// `slot` keeps. Four fighters, eight slots each.
+pub const fn seared_bit(owner: u8, slot: u8) -> u32 {
+    1 << ((owner as u32 & 3) * 8 + (slot as u32 & 7))
 }
 
 impl Critter {
@@ -269,6 +272,7 @@ impl Critter {
         mount: NO_PART,
         perch: [0; 3],
         seared: 0,
+        swung: 0,
     };
 
     /// A fresh one of `kind`, standing at `at` and facing `yaw`.

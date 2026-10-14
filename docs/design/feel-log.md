@@ -8512,6 +8512,38 @@ for bit.
 - **Gold fully metallic**: with nothing to reflect it drew brown. Half metallic with a little
   light of its own reads as gold on the shadow side as well.
 **Verdict** — from screenshots only (`SHOT_FORM`); wants a look in play.
+
+### 2026-10-14 — four fighters, and an effect pool of 128
+
+**Asked** Make the game four-player, and raise the total effect count far above twelve.
+**Changed** (`sim::state`, `sim::effects`, `net::meet`, `architecture.md` "Four fighters")
+- **`MAX_PLAYERS` 2 to 4.** A fight seats as many as it names; the seats past them are
+  parked out of the world. Versus with three or four is last one standing; a hunt takes up to
+  four hunters. A blow is tried against every other fighter, so one swing through two bodies
+  lands on both.
+- **The third and fourth start beside the first two marks**, `SeatFlank` (2 m, new knob,
+  "Match") to the side away from the other mark.
+- **`MAX_EFFECTS` 12 to 128.** At twelve a full table drops the newest thing cast -- an
+  ability that silently does nothing -- and four fighters is four of everything. The hit
+  mask is a `u128` and pools drunk from have a mask of their own.
+- **The snapshot cap 4 KiB to 20 KiB**: 17,856 bytes, 12 KiB of it the effect pool.
+- **Online rooms for two to four** (`players=` in the link): a roster from the lowest id, and
+  a line between every pair.
+**Pins** Every Ridgeback pin moved, for the snapshot's shape only. Before re-pinning, both
+fighters, the creature, the phase and every effect were compared frame by frame with the
+code before the change -- six classes, hunted and in versus, 2,400 frames -- and were
+identical. The scripted-hunt harness seats as it did (one bot beside a second fighter lying
+out of it).
+**Found on the way** Several things were two-fighter by construction and would have been
+wrong for the third and fourth: a critter's "struck by fighter N's swing" flag was `STRUCK <<
+N`, which for fighters three and four overwrote its detour bits; the Galewing's rake and the
+Veilstalker's watch looked at fighters one and two only; the Gnawers' treed clock shared a
+half-word between fighters one and three; a class change on the wire had one bit of seat.
+Each is widened rather than capped. The Mantis's mailbox and habit memory still hold two.
+**Not measured** The frame budget's valley-cliffs case was already over its budget before this
+change on this machine (0.96 ms against 0.52); four hunters there cost 1.35 ms. Every other
+case is inside it.
+**Verdict** — four bodies and four-way rooms want playing; nothing here has been played yet.
 ### 2026-10-12 — the Dual mage's spellbook
 **Changed** Her whole kit ([exploration/0015](exploration/0015_dual_mage_spellbook.md)). The
 click is what a spell is cast on -- dark on *them* (curses), light on *the ground* (sigils),

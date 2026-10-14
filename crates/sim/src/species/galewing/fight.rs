@@ -94,9 +94,8 @@ pub mod word {
     /// The volley's lane: where it starts (cm), its heading (raw turns).
     pub const RAKE_AT: usize = 15;
     pub const RAKE_YAW: usize = 16;
-    /// Feathers each fighter has taken this volley (a byte each) and the
-    /// frame each last took one (high half: hunter 0's low byte, hunter
-    /// 1's high byte -- frames since, capped).
+    /// A byte per fighter, four of them: feathers taken this volley (low
+    /// four bits) and frames since the last one (high four, capped).
     pub const RAKE_HITS: usize = 17;
     /// Who the Screech and the buffet have reached this move: a bit each.
     pub const STRUCK: usize = 18;
@@ -1363,7 +1362,7 @@ fn volley(w: &mut World, m: &mut Monster) {
     let (at, along, length, width) = rake_lane(&w.lore);
     let (lo, hi) = raked(gone);
     let mut hits = w.lore.word(word::RAKE_HITS);
-    for i in 0..MAX_PLAYERS.min(2) {
+    for i in 0..MAX_PLAYERS {
         let p = w.players[i];
         if p.health <= 0 || p.aboard() || p.untouchable() {
             continue;
@@ -1407,7 +1406,7 @@ fn volley(w: &mut World, m: &mut Monster) {
         hits = (hits & !mask) | ((taken + 1) << (8 * i));
     }
     // Every hunter's frames since their last feather, capped at fifteen.
-    for i in 0..2 {
+    for i in 0..MAX_PLAYERS {
         let since = (hits >> (8 * i + 4)) & 0xF;
         let taken = (hits >> (8 * i)) & 0xF;
         let since = (since + 1).min(15);

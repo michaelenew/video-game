@@ -27,7 +27,7 @@ use crate::class::{ALL_CLASSES, Class};
 use crate::fixed::Fx;
 use crate::species::{self, Species, SpeciesId};
 use std::sync::LazyLock;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 
 use crate::tuned;
 
@@ -990,6 +990,10 @@ scalars! {
     // this is put on top of it rather than stopped by it -- a kerb, a snow
     // cap on a rock, the lip of a seam in the land. Above it, a jump.
     StepOver,             "Movement", "Step, walked up onto (m)",                         Fixed, 0, fx(1,1);
+    // **Four fighters** (2026-10-14). Every arena, seam and hunt names two
+    // marks; the third and fourth fighters stand beside the first and second,
+    // this far to the side away from the other mark (`arena::Mark::seat`).
+    SeatFlank,            "Match",    "Third and fourth fighters, beside a mark (m)",       Fixed, 0, fx(6,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1686,6 +1690,16 @@ fn cells<const N: usize>(seed: &'static [i32; N]) -> [AtomicI32; N] {
     std::array::from_fn(|i| AtomicI32::new(seed[i]))
 }
 
+/// **Every edit the Oven has taken**, counted: anything that memoises a
+/// function of the tuning (`Monster::rig`) keys on it, so a slider moved in
+/// the running game is never answered from before it moved.
+static EDITS: AtomicU32 = AtomicU32::new(0);
+
+/// How many edits the Oven has taken: see [`EDITS`].
+pub fn edits() -> u32 {
+    EDITS.load(Ordering::Relaxed)
+}
+
 static SCALAR_CELLS: LazyLock<[AtomicI32; SCALAR_COUNT]> = LazyLock::new(|| cells(&tuned::SCALARS));
 static AIR_CELLS: LazyLock<[AtomicI32; AIR_COUNT]> = LazyLock::new(|| cells(&tuned::AIR));
 static MOVE_CELLS: LazyLock<[AtomicI32; MOVE_COUNT]> = LazyLock::new(|| cells(&tuned::MOVES));
@@ -1697,6 +1711,7 @@ pub fn view(k: ViewKnob) -> i32 {
 
 pub fn set_view(k: ViewKnob, raw: i32) {
     VIEW_CELLS[k as usize].store(raw, Ordering::Relaxed);
+    EDITS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Every species' knobs, one row per species id, seeded from each registered
@@ -1715,6 +1730,7 @@ pub fn species_raw(id: SpeciesId, index: usize) -> i32 {
 
 pub fn set_species_raw(id: SpeciesId, index: usize, raw: i32) {
     SPECIES_CELLS[id.0 as usize][index].store(raw, Ordering::Relaxed);
+    EDITS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// What a species' baked file holds for one of its knobs.
@@ -1787,6 +1803,7 @@ pub fn scalar(s: Scalar) -> i32 {
 
 pub fn set_scalar(s: Scalar, raw: i32) {
     SCALAR_CELLS[s as usize].store(raw, Ordering::Relaxed);
+    EDITS.fetch_add(1, Ordering::Relaxed);
 }
 
 fn air_index(class: Class, field: AirField) -> usize {
@@ -1799,6 +1816,7 @@ pub fn air(class: Class, field: AirField) -> i32 {
 
 pub fn set_air(class: Class, field: AirField, raw: i32) {
     AIR_CELLS[air_index(class, field)].store(raw, Ordering::Relaxed);
+    EDITS.fetch_add(1, Ordering::Relaxed);
 }
 
 fn move_index(class: Class, slot: usize, field: MoveField) -> usize {
@@ -1811,25 +1829,31 @@ pub fn move_field(class: Class, slot: usize, field: MoveField) -> i32 {
 
 pub fn set_move_field(class: Class, slot: usize, field: MoveField, raw: i32) {
     MOVE_CELLS[move_index(class, slot, field)].store(raw, Ordering::Relaxed);
+    EDITS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Put everything back to what is committed in `tuned.rs`.
 pub fn reset_to_baked() {
     for (i, cell) in SCALAR_CELLS.iter().enumerate() {
         cell.store(tuned::SCALARS[i], Ordering::Relaxed);
+        EDITS.fetch_add(1, Ordering::Relaxed);
     }
     for (i, cell) in AIR_CELLS.iter().enumerate() {
         cell.store(tuned::AIR[i], Ordering::Relaxed);
+        EDITS.fetch_add(1, Ordering::Relaxed);
     }
     for (i, cell) in MOVE_CELLS.iter().enumerate() {
         cell.store(tuned::MOVES[i], Ordering::Relaxed);
+        EDITS.fetch_add(1, Ordering::Relaxed);
     }
     for (i, cell) in VIEW_CELLS.iter().enumerate() {
         cell.store(tuned::VIEW[i], Ordering::Relaxed);
+        EDITS.fetch_add(1, Ordering::Relaxed);
     }
     for (id, row) in SPECIES_CELLS.iter().enumerate() {
         for (i, cell) in row.iter().enumerate() {
             cell.store(species_baked(SpeciesId(id as u8), i), Ordering::Relaxed);
+            EDITS.fetch_add(1, Ordering::Relaxed);
         }
     }
 }

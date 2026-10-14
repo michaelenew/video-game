@@ -663,9 +663,8 @@ fn mechanic(was: &sim::state::Player, now: &sim::state::Player, out: &mut Cues) 
 mod tests {
     use super::*;
     use sim::Input;
-    use sim::state::MAX_PLAYERS;
 
-    fn step(w: &mut World, inputs: [Input; MAX_PLAYERS]) -> Cues {
+    fn step(w: &mut World, inputs: [Input; 2]) -> Cues {
         let before = w.clone();
         w.advance(inputs);
         let mut out = Cues::default();
@@ -679,7 +678,7 @@ mod tests {
 
     #[test]
     fn a_swing_is_a_telegraph_then_a_swing_then_a_blow() {
-        let mut w = World::with_classes([Class::Bulwark; MAX_PLAYERS]);
+        let mut w = World::with_classes([Class::Bulwark; 2]);
         // Stand them close, facing each other, as the arena starts them.
         let press = [Input::aimed(Input::LEFT, 0), Input::default()];
         let first = step(&mut w, press);
@@ -715,7 +714,7 @@ mod tests {
 
     #[test]
     fn a_jump_and_a_landing_sound_like_the_floor() {
-        let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
+        let mut w = World::with_classes([Class::Champion; 2]);
         let jump = [Input::aimed(Input::SPACE, 0), Input::default()];
         let c = step(&mut w, jump);
         assert!(
@@ -730,7 +729,7 @@ mod tests {
         );
         let mut landed = false;
         for _ in 0..120 {
-            let c = step(&mut w, [Input::default(); MAX_PLAYERS]);
+            let c = step(&mut w, [Input::default(); 2]);
             landed |= has(
                 &c,
                 |p| matches!(p, Patch::Step(Step { material: Material::Earth, weight, .. }) if *weight > 0.2),
@@ -741,10 +740,10 @@ mod tests {
 
     #[test]
     fn a_creature_winding_up_growls_for_its_startup() {
-        let mut w = World::hunt([Class::Champion; MAX_PLAYERS]).seated(1);
+        let mut w = World::hunt([Class::Champion; 2]).seated(1);
         let mut growled = None;
         for _ in 0..1200 {
-            let c = step(&mut w, [Input::default(); MAX_PLAYERS]);
+            let c = step(&mut w, [Input::default(); 2]);
             if let Some(cue) = c.iter().find(|c| matches!(c.patch, Patch::Growl(_))) {
                 growled = Some(*cue);
                 break;
@@ -760,12 +759,12 @@ mod tests {
 
     #[test]
     fn a_quiet_frame_is_silent() {
-        let mut w = World::with_classes([Class::Bulwark; MAX_PLAYERS]);
+        let mut w = World::with_classes([Class::Bulwark; 2]);
         // Settle, then stand still.
         for _ in 0..10 {
-            step(&mut w, [Input::default(); MAX_PLAYERS]);
+            step(&mut w, [Input::default(); 2]);
         }
-        let c = step(&mut w, [Input::default(); MAX_PLAYERS]);
+        let c = step(&mut w, [Input::default(); 2]);
         assert!(c.is_empty(), "{c:?}");
     }
 

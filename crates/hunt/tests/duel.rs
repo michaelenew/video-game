@@ -9,7 +9,7 @@
 use hunt::duel::{Plan, spar, spar_traced};
 use hunt::{Duelist, Level};
 use sim::class::ALL_CLASSES;
-use sim::state::{MAX_PLAYERS, Phase};
+use sim::state::Phase;
 use sim::{Class, Input, V3, World};
 
 const MINUTE: u32 = 60 * 60;
@@ -53,10 +53,10 @@ fn it_sees_late() {
 #[test]
 fn one_seed_is_one_fight() {
     let classes = [Class::Champion, Class::Elementalist];
-    let a = spar(classes, [Level::Normal; MAX_PLAYERS], MINUTE, 99);
-    let b = spar(classes, [Level::Normal; MAX_PLAYERS], MINUTE, 99);
+    let a = spar(classes, [Level::Normal; 2], MINUTE, 99);
+    let b = spar(classes, [Level::Normal; 2], MINUTE, 99);
     assert_eq!(a, b);
-    let c = spar(classes, [Level::Normal; MAX_PLAYERS], MINUTE, 100);
+    let c = spar(classes, [Level::Normal; 2], MINUTE, 100);
     assert_ne!(a, c, "a different seed played exactly the same minute");
 }
 
@@ -65,10 +65,10 @@ fn one_seed_is_one_fight() {
 #[test]
 fn it_mixes_it_up() {
     for class in ALL_CLASSES {
-        let mut frames = [[0u32; 9]; MAX_PLAYERS];
+        let mut frames = [[0u32; 9]; 2];
         spar_traced(
             [class, class],
-            [Level::Normal; MAX_PLAYERS],
+            [Level::Normal; 2],
             3 * MINUTE,
             3,
             |_, bots| {
@@ -118,16 +118,19 @@ fn every_class_fights() {
         let mut outside = 0u32;
         let bout = spar_traced(
             [class, class],
-            [Level::Normal; MAX_PLAYERS],
+            [Level::Normal; 2],
             3 * MINUTE,
             11,
             |w, _| {
                 if matches!(w.phase, Phase::Fighting) {
-                    outside += w.players.iter().filter(|p| !inside(p)).count() as u32;
+                    outside += w.players[..w.present()]
+                        .iter()
+                        .filter(|p| !inside(p))
+                        .count() as u32;
                 }
             },
         );
-        for i in 0..MAX_PLAYERS {
+        for i in 0..hunt::duel::DUEL {
             assert!(bout.thrown[i] >= 40, "{}: {bout:?}", class.name());
             assert!(bout.landed[i] >= 10, "{}: {bout:?}", class.name());
         }
@@ -174,8 +177,8 @@ fn harder_is_better() {
 #[test]
 fn every_class_uses_its_mechanic() {
     for class in ALL_CLASSES {
-        let bout = spar([class, class], [Level::Normal; MAX_PLAYERS], 3 * MINUTE, 5);
-        for i in 0..MAX_PLAYERS {
+        let bout = spar([class, class], [Level::Normal; 2], 3 * MINUTE, 5);
+        for i in 0..hunt::duel::DUEL {
             assert!(
                 bout.mechanic[i] >= 10,
                 "{} bot {i} used its mechanic {} times in three minutes: {bout:?}",
@@ -196,7 +199,7 @@ fn the_dual_mage_keeps_her_balance() {
     let (mut inside, mut total, mut best) = (0u32, 0u32, sim::Fx::ZERO);
     spar_traced(
         [Class::DualMage, Class::Champion],
-        [Level::Normal; MAX_PLAYERS],
+        [Level::Normal; 2],
         3 * MINUTE,
         8,
         |w, _| {

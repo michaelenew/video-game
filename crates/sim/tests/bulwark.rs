@@ -11,7 +11,7 @@ use sim::math::atan2_turns;
 use sim::monster::Doing;
 use sim::moves::elementalist::keys;
 use sim::species::ridgeback;
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::Action;
 use sim::tuning as t;
 use sim::{Input, V3, World};
 
@@ -216,7 +216,7 @@ fn the_bulwark_has_the_most_health_on_the_roster() {
 /// A Bulwark with his guard up at the stomp's own range, facing it.
 #[test]
 fn a_blocked_creature_blow_loads_the_shield() {
-    let mut w = World::hunt([Class::Bulwark; MAX_PLAYERS]);
+    let mut w = World::hunt([Class::Bulwark; 2]);
     let beast = w.monster().copied().expect("a hunt has a creature");
     let ideal = ridgeback::SPECIES.attack(ridgeback::STOMP).ideal_range;
     w.players[0].pos = beast.rig().to_world(V3::new(ideal, Fx::ZERO, Fx::ZERO));

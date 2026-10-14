@@ -12,7 +12,7 @@ use sim::beast::{MAX_BONES, MAX_BREAKABLE, MAX_PARTS, NO_PARENT, channels};
 use sim::fixed::Fx;
 use sim::monster::{Doing, MAX_MONSTERS, Monster, mount_part, mount_slot};
 use sim::species::{self, MAX_MOVES, SpeciesId, ridgeback};
-use sim::state::{MAX_PLAYERS, Phase, QUARRY};
+use sim::state::{Phase, QUARRY};
 use sim::{Class, Input, V3, World};
 
 // ---------------------------------------------------------------------------
@@ -232,9 +232,9 @@ fn every_registered_species_stands_and_moves() {
     // The smallest thing a new species has to do: be built, stand up on its
     // own skeleton, take a step and a hit, without a panic.
     for sp in species::all() {
-        let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], sp.id);
+        let mut w = World::hunt_of([Class::Champion; 2], sp.id);
         for _ in 0..240 {
-            w.advance([Input::default(); MAX_PLAYERS]);
+            w.advance([Input::default(); 2]);
         }
         // A pack stands up, moves, and can be hurt -- a kind fresh from its
         // first bake has one health and no size, and says so here.
@@ -304,7 +304,7 @@ fn every_registered_species_stands_and_moves() {
 
 fn pair() -> World {
     World::hunt_with(
-        [Class::Champion; MAX_PLAYERS],
+        [Class::Champion; 2],
         [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS],
     )
 }
@@ -326,7 +326,7 @@ fn two_creatures_stand_apart_and_both_act() {
     assert!(apart.raw() > 0, "two creatures spawned on one spot");
     let mut started = [false; MAX_MONSTERS];
     for _ in 0..1200 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
         for (slot, beast) in w.monsters.iter().enumerate() {
             started[slot] |= beast.is_some_and(|b| matches!(b.doing, Doing::Startup { .. }));
         }
@@ -339,7 +339,7 @@ fn two_creatures_stand_apart_and_both_act() {
 
 #[test]
 fn a_world_with_two_creatures_replays_exactly() {
-    let script: Vec<[Input; MAX_PLAYERS]> = (0..600u32)
+    let script: Vec<[Input; 2]> = (0..600u32)
         .map(|i| {
             let r = i.wrapping_mul(0x9E37_79B9);
             [
@@ -348,7 +348,7 @@ fn a_world_with_two_creatures_replays_exactly() {
             ]
         })
         .collect();
-    let run = |from: World, inputs: &[[Input; MAX_PLAYERS]]| {
+    let run = |from: World, inputs: &[[Input; 2]]| {
         let mut w = from;
         for i in inputs {
             w.advance(*i);
@@ -374,7 +374,7 @@ fn a_rider_on_the_second_creature_rides_the_second_creature() {
     w.players[0].pos = beast.world_of(ridgeback::BARREL, spot);
     w.players[0].vel = V3::new(Fx::ZERO, Fx::ratio(-1, 1), Fx::ZERO);
     w.players[0].grounded = false;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert!(w.players[0].aboard(), "did not land on it");
     assert_eq!(
         mount_slot(w.players[0].mount),
@@ -390,7 +390,7 @@ fn a_rider_on_the_second_creature_rides_the_second_creature() {
         hold(&mut w, 1);
         let b = w.monsters[1].as_mut().unwrap();
         b.speed = b.sp().walk();
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     let beast = w.monsters[1].unwrap();
     let under = beast.world_of(ridgeback::BARREL, w.players[0].local);
@@ -423,14 +423,14 @@ fn the_hunt_is_not_over_until_every_creature_is_down() {
     let mut w = pair();
     w.monsters[0].as_mut().unwrap().health = 0;
     for _ in 0..30 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     assert!(
         matches!(w.phase, Phase::Fighting),
         "the hunt ended with one creature still standing"
     );
     w.monsters[1].as_mut().unwrap().health = 0;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     match w.phase {
         Phase::RoundOver { winner, .. } => assert_ne!(winner, QUARRY),
         Phase::Fighting => panic!("both creatures down and the hunt went on"),

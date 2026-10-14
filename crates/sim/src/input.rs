@@ -111,6 +111,11 @@ pub enum Destination {
     Credit(SpeciesId),
 }
 
+const _: () = assert!(
+    crate::class::ALL_CLASSES.len() <= 8 && crate::state::MAX_PLAYERS <= 4,
+    "a class change is three bits of class and two of seat"
+);
+
 impl Travel {
     pub const NONE: Travel = Travel(0);
     pub const VERSUS: Travel = Travel(1);
@@ -126,9 +131,13 @@ impl Travel {
     const HUNT: u8 = 0x80;
     /// `01aa aaaa`: no creature, in arena `a`.
     const ARENA: u8 = 0x40;
-    /// `001s cccc`: seat `s` becomes class `c`.
+    /// `001s sccc`: seat `s` (two bits, since four fighters) becomes class
+    /// `c` (three: there are six). It was `001s cccc` while there were two
+    /// seats; [`Travel::from_two_seats`] reads a byte written that way.
     const CLASS: u8 = 0x20;
-    const SEAT: u8 = 0x10;
+    const SEAT_SHIFT: u8 = 3;
+    const SEATS: u8 = 0x18;
+    const CLASS_INDEX: u8 = 0x07;
     const SPECIES: u8 = 0x1F;
     const TEMPER_SHIFT: u8 = 5;
     const TEMPER: u8 = 0x03;
@@ -171,7 +180,23 @@ impl Travel {
 
     /// Seat `seat`'s fighter becomes `class`, in a restart of the same fight.
     pub const fn class(seat: usize, class: crate::Class) -> Travel {
-        Travel(Travel::CLASS | if seat == 1 { Travel::SEAT } else { 0 } | class as u8)
+        Travel(
+            Travel::CLASS
+                | ((seat as u8) << Travel::SEAT_SHIFT & Travel::SEATS)
+                | (class as u8 & Travel::CLASS_INDEX),
+        )
+    }
+
+    /// A byte as it was written while there were two seats: a class change
+    /// carried one seat bit (`0x10`) and four of class. Anything else reads
+    /// the same in both.
+    pub const fn from_two_seats(b: u8) -> Travel {
+        if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS {
+            let seat = (b >> 4) & 1;
+            Travel(Travel::CLASS | seat << Travel::SEAT_SHIFT | (b & 0x0F & Travel::CLASS_INDEX))
+        } else {
+            Travel(b)
+        }
     }
 
     pub const fn destination(self) -> Option<Destination> {
@@ -186,12 +211,12 @@ impl Travel {
                 Some(Destination::Credit(SpeciesId(b - Travel::CREDIT)))
             }
             b if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS => {
-                let index = (b & 0x0F) as usize;
+                let index = (b & Travel::CLASS_INDEX) as usize;
                 if index >= crate::class::ALL_CLASSES.len() {
                     return None;
                 }
                 Some(Destination::Class {
-                    seat: if b & Travel::SEAT != 0 { 1 } else { 0 },
+                    seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT) as usize,
                     class: crate::class::ALL_CLASSES[index],
                 })
             }

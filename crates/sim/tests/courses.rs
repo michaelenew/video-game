@@ -7,7 +7,6 @@ use sim::arena::ArenaId;
 use sim::class::Class;
 use sim::course::{self, Run, Tier};
 use sim::input::{Destination, Travel};
-use sim::state::MAX_PLAYERS;
 use sim::{Fx, Input, V3, World};
 
 fn named(name: &str) -> &'static course::Course {
@@ -68,11 +67,11 @@ fn every_course_is_well_formed() {
 #[test]
 fn a_fall_stands_you_on_your_last_checkpoint_and_counts() {
     let c = named("falls");
-    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], c.arena);
+    let mut w = World::versus_in([Class::Champion; 2], c.arena);
     // Reach the first checkpoint: stand on it.
     let check = c.gate(1);
     w.players[0].pos = check.stand();
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert_eq!(
         w.course[0].reached, 1,
         "standing on a checkpoint did not reach it"
@@ -84,7 +83,7 @@ fn a_fall_stands_you_on_your_last_checkpoint_and_counts() {
     // And fall into the pit.
     w.players[0].pos = V3::new(check.stand().x, Fx::ZERO, check.stand().z);
     w.players[0].health -= 100;
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let p = w.players[0];
     assert_eq!(w.course[0].falls, 1);
     assert_eq!(p.pos.x, check.stand().x);
@@ -97,7 +96,7 @@ fn a_fall_stands_you_on_your_last_checkpoint_and_counts() {
     assert_eq!(w.course[0].reached, 1, "the fall cost the checkpoint");
     // A few frames later she is standing there, not falling through it.
     for _ in 0..10 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     assert!(w.players[0].grounded);
     assert_eq!(w.players[0].pos.y, check.stand().y);
@@ -106,20 +105,20 @@ fn a_fall_stands_you_on_your_last_checkpoint_and_counts() {
 #[test]
 fn the_clock_runs_from_the_start_and_stops_at_the_finish() {
     let c = named("stair");
-    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], c.arena);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    let mut w = World::versus_in([Class::Champion; 2], c.arena);
+    w.advance([Input::default(); 2]);
     assert_eq!(w.course[0].clock(w.frame), 0, "the clock ran on the start");
     w.players[0].pos = c.gate(1).stand();
     for _ in 0..30 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     w.players[0].pos = c.gate(c.finish()).stand();
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let run: Run = w.course[0];
     assert!(run.finished());
     let time = run.time;
     for _ in 0..30 {
-        w.advance([Input::default(); MAX_PLAYERS]);
+        w.advance([Input::default(); 2]);
     }
     assert_eq!(w.course[0].time, time, "the clock ran past the finish");
     assert_eq!(w.course[0].clock(w.frame), time);
@@ -130,8 +129,8 @@ fn a_course_is_a_trip_on_the_wire_and_the_key_steps_through_them_all() {
     let first = course::all().next().expect("no courses");
     let byte = Travel::arena(first.arena);
     assert_eq!(byte.destination(), Some(Destination::Arena(first.arena)));
-    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
-    let mut ask = [Input::default(); MAX_PLAYERS];
+    let mut w = World::with_classes([Class::Champion; 2]);
+    let mut ask = [Input::default(); 2];
     ask[0] = ask[0].travelling(byte);
     w.advance(ask);
     assert_eq!(w.arena, first.arena);
@@ -150,8 +149,8 @@ fn a_course_is_a_trip_on_the_wire_and_the_key_steps_through_them_all() {
     // From somewhere that is not a course, the first.
     assert_eq!(course::after(ArenaId::PROVING_GROUND).arena, first.arena);
     // An unregistered arena is no trip.
-    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
-    let mut ask = [Input::default(); MAX_PLAYERS];
+    let mut w = World::with_classes([Class::Champion; 2]);
+    let mut ask = [Input::default(); 2];
     ask[0] = ask[0].travelling(Travel::arena(ArenaId(60)));
     w.advance(ask);
     assert_eq!(w.arena, ArenaId::PROVING_GROUND);
@@ -161,15 +160,15 @@ fn a_course_is_a_trip_on_the_wire_and_the_key_steps_through_them_all() {
 fn on_the_proving_ground_a_fall_always_stands_you_on_the_hub() {
     let c = named("reach");
     assert_eq!(c.tier, Tier::Proving);
-    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], c.arena);
+    let mut w = World::versus_in([Class::Champion; 2], c.arena);
     // Land the far lane: the finish.
     let far = c.gate(c.finish());
     w.players[0].pos = far.stand();
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     assert_eq!(w.course[0].reached as usize, c.finish());
     // Step off it into the pit: back on the hub, not on the lane.
     w.players[0].pos = V3::new(far.stand().x, Fx::ZERO, far.stand().z);
-    w.advance([Input::default(); MAX_PLAYERS]);
+    w.advance([Input::default(); 2]);
     let hub = c.gate(0).stand();
     assert_eq!(w.course[0].falls, 1);
     assert_eq!(w.players[0].pos.x, hub.x);

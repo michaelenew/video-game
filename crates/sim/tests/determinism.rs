@@ -4,10 +4,9 @@
 //! cheap to run and catch the class of bug that is otherwise diagnosed by two
 //! people on different continents noticing their games disagree.
 
-use sim::state::MAX_PLAYERS;
 use sim::{Fx, Input, World};
 
-fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
+fn script(frames: u32, seed: u64) -> Vec<[Input; 2]> {
     let mut rng = seed;
     let mut next = move || {
         rng ^= rng << 13;
@@ -25,7 +24,7 @@ fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
         .collect()
 }
 
-fn run(s: &[[Input; MAX_PLAYERS]]) -> World {
+fn run(s: &[[Input; 2]]) -> World {
     let mut w = World::new();
     for i in s {
         w.advance(*i);
