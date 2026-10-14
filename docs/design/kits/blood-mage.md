@@ -57,6 +57,12 @@ grows with how open she has left herself, and a floor she wants to fight on.
 | `E` | **Summon** |
 | `shift` + direction | The **teleport** to a stain under the crosshair (12 m); otherwise an ordinary dodge |
 
+**Tapped or held is the Champion's window** (2026-10-14): a click is held once it has been
+down `Hold, a finisher after` (12 frames) from the press, or for the tap's own startup if that
+is longer. Command winds up in one frame, and with the tap decided there a right click had to
+come up inside a frame or two to be Command at all; it now waits at the top of its wind-up for
+the press to decide. The Haemorrhage's startup is already twelve, so the left click is as it was.
+
 **The rows were retuned, not renumbered**: the Transfusion's row is the Carpet, the sweep's
 Command, Tides' the Summon, the chain's Coagulate, the leap's the Rising reap, Frenzy's the
 Black vines; the cascade and the golem were appended (`sim::moves::blood`).
@@ -68,7 +74,11 @@ Black vines; the cascade and the golem were appended (`sim::moves::blood`).
 (60 a second).** It is the window to spend it in. **A finisher is a hold kept to its end, at
 any time**, and it spends all her grey and the Well (`Player::fuel`): its blow is the row's
 damage and `finisher_per_grey` for every point spent, so it always beats the row and is bigger
-the more there was.
+the more there was. **What it burns it owes back** (2026-10-14): the grey it spent is held as
+`Player::owed`, and every point of damage the finisher deals turns `finisher_repays` (100%) of
+a point of it back into red -- by way of `Player::heal`, the one leech she has. A finisher that
+lands is no longer health given up for good; one that whiffs still is. The vines, the golem's
+punches and the cascade's eruptions all pay.
 
 - **Black vines** (left): barbed vines erupt out of the Hemoplague's middle to `vines_size` of
   its radius over `vines_grow`, hitting and bleeding everything the front passes, then stand for
@@ -87,6 +97,22 @@ the more there was.
   health, loses `golem_self_hurt` of every punch it lands, and drains as a stain does.
 
 ### Every stain is one kind
+
+**A stain is a pool of essence, and it stands** (2026-10-14): it is tested as a column a body's
+height at most (`Effect::pool_slab`) and is drawn so -- a splash on the floor with a swaying
+flame of essence out of it, crimson gone to violet and lit from inside, so it reads as what she
+draws out of a body rather than what a wound leaves. **A spike aimed through that column goes
+to the stain** (`aim::column_on_sight`, with the blink's `Crosshair lock on a pool` slack above
+it): the Black spike, the Stake, the Upheaval and the cascade (`moves::blood::seeks_pools`).
+Before, the crosshair had to be on the stain's disc on the floor, which past a few metres was a
+pixel-hunt.
+
+**The floor spike and the Stake** (2026-10-14): from play, the best thing she could do was jump
+in circles throwing the Stake -- 10 frames out against the floor spike's 30, a 2.5 m area
+against 1.6, 4% of her health against 6%. The floor spike now winds up in 16 (just past
+reaction time, which `the_spike_takes_long_enough_to_be_seen_coming` holds), stands 2.2 m
+wide and costs 5%; the Stake lands in 1.8 m and costs 5%. The Stake keeps what it is for:
+throwing from the air and pinning a body there.
 
 - **Every cost is a stain**, where it was aimed. **Every hit is a stain**, hers or a thrall's.
 - Collected by walking, teleporting, hitting through it, or the spike erupting it; it settles
@@ -184,7 +210,7 @@ blood -- the wings' takeoff -- is still only a door.
 | Reaping sweep | 2.4 m, grows with grey | 45 | the tap |
 | Tides | a ring 4 / 6 / 8 m | 60 / ×1.7 / ×2.6 | the hold; throws out |
 | Haemorrhage | 18 m bolt | 30, then the bleed | |
-| Stake | to the crosshair, 18 m | 90 | pins anybody in the air (`NAILED`); lands in a 2.5 m area that slows |
+| Stake | to the crosshair, 18 m | 90 | pins anybody in the air (`NAILED`); lands in a 1.8 m area that slows (2.5 until 2026-10-14) |
 | Reaper's chain | to the crosshair, 18 m | 40 | a fighter is yanked to her (30 m/s); a creature, a critter, the floor or a wall pulls her (40 m/s); the sky, 5 m along the aim |
 | Blood wings | 8 m along the aim | 40 in 2 m | tapped; any way, up included; her own stain at the takeoff |
 | Upheaval | 15 m, grounded | 80, launches 18 m/s | a hop for her (12 m/s); on a stain it erupts |

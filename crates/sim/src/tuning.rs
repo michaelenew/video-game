@@ -4243,3 +4243,11 @@ pub fn cascade_track() -> Fx {
 pub fn cascade_power() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CascadePower).max(0))
 }
+
+/// **A finisher pays back what it spent** (2026-10-14): the grey it burned is
+/// owed to her, and every point of damage the finisher deals turns this
+/// share of a point of that back into red. A finisher that lands is not a
+/// permanent loss; one that whiffs still is.
+pub fn finisher_repays() -> i32 {
+    oven::scalar(Scalar::FinisherRepays).max(0)
+}

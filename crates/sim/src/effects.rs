@@ -1084,7 +1084,20 @@ impl Effect {
 
     /// Health owed for `dealt` damage.
     pub fn leeched(&self, dealt: i32) -> i32 {
+        if self.finishes() {
+            return dealt.max(0) * crate::tuning::finisher_repays() / 100;
+        }
         self.source().leeched(dealt)
+    }
+
+    /// Is this one of the Blood mage's finishers in the world -- the Black
+    /// vines, the golem, or the Crimson cascade's eruptions -- whose blows
+    /// pay back the grey the finisher burned (`Player::owed`)?
+    pub const fn finishes(&self) -> bool {
+        matches!(self.class, Class::BloodMage)
+            && (matches!(self.kind, EffectKind::Vines | EffectKind::Golem)
+                || (matches!(self.kind, EffectKind::BlackSpike)
+                    && self.banked >= crate::state::SPIKE_SCALED))
     }
 
     /// How far through its life, as a fraction.

@@ -116,11 +116,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// moved, and the Reaver's and the Blood mage's with no change to play,
 /// because her five retired effect kinds became four new ones and every kind
 /// listed after hers is numbered one lower.
+///
+/// **The Blood mage's moved again the same day, deliberately**: her floor
+/// spike winds up in 16 frames rather than 30 and stands wider, the Stake
+/// narrower, Command waits on the Champion's window, a spike aimed through
+/// a stain's column goes to it, and a finisher pays back the grey it burned.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
     (Class::Bulwark, 0x11c745d19fbec112),
     (Class::ShadowReaver, 0xa45935d2dff6f3e9),
-    (Class::BloodMage, 0xf2c8a705100f28ee),
+    (Class::BloodMage, 0x1c20d06b60541887),
     (Class::DualMage, 0x24161222c7142c96),
     (Class::Elementalist, 0x31a1cb586ada4b67),
 ];
