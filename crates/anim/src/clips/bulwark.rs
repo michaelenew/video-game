@@ -1,4 +1,5 @@
-//! The Bulwark: Bash, Slam, Grapple.
+//! The Bulwark: Bash, Slam, Grapple, and the four moves of his three clicks
+//! off the floor -- Rebound, Battering ram, Unload, Shield step.
 //!
 //! GENERATED-FRIENDLY: the animation hub (F9) rewrites this file when it saves,
 //! in the same shape you would write by hand. Editing it by hand is fine and
@@ -33,10 +34,43 @@
 //! - **Grapple** goes forward and low, with the guard deliberately thrown open,
 //!   and ends holding somebody at arm's length.
 //!
+//! ## Off the floor
+//!
+//! Four more since the three clicks (exploration 0012): an aerial and three
+//! takeoffs, one per click, and each takes the shape of the floor move in its
+//! column and turns it into a way of being thrown. The heaviest class does not
+//! float, so every one of them is about the body being *sent* somewhere, and
+//! each is sent a different way, because that is what reads across an arena:
+//!
+//! - **Rebound** is the Bash in the air, and for its first half it *is* the
+//!   Bash -- drawn in, punched out. Then the sim bounces him off whatever the
+//!   face met and the shape inverts: arched back, shield folded into the
+//!   chest, knees swung up in front. The one pose in the kit going the other
+//!   way from its shield.
+//! - **Battering ram** goes *forward*: a lineman's set, then the longest line
+//!   the class makes, horizontal, rear leg straight out from the push. It is a
+//!   low leap, so the back half is a skid on the feet with the shield still
+//!   out, carrying whoever it met.
+//! - **Unload** goes *up*, and is the Slam inside out: curled down over the
+//!   shield with both hands on it, then the shield driven flat at his feet,
+//!   face to the floor, while the body goes up straight above it with the off
+//!   hand flung the way he is going.
+//! - **Shield step** leaves the shield behind: staked into the floor, a perch
+//!   on its top edge, both arms swung forward off it, and from then on the
+//!   left arm is an arm -- open, wide, and empty until `E` calls it home.
+//!
+//! The three takeoffs spend their startup on the floor and leave on the first
+//! active frame, which is when the sim throws them; the aerial is in the air
+//! throughout. Three of them do not draw a landing: they end on the guard
+//! carried in the air (`hung`), or on an empty-handed one for the Shield step,
+//! because the jump's fall takes over from there. The ram's flight is short
+//! enough that he is back on his feet inside the clip, so it ends braced.
+//!
 //! ## The shield is a real object
 //!
 //! It hangs off the left hand and follows the forearm, the way a strapped
-//! shield does, so the left arm is the shield arm in all three clips and
+//! shield does, so the left arm is the shield arm in every clip but the
+//! Shield step's second half (the shield is the wall he left) and
 //! wherever that hand goes the shield goes with it. Two consequences that are
 //! not obvious until you look at the game rather than at the contact sheet:
 //!
@@ -69,7 +103,15 @@ use view::pose::{ANKLE_ON_GROUND as GROUND, Pose, reference};
 use view::skeleton::{Joint, solve};
 
 pub fn clips() -> Vec<Recipe> {
-    vec![bash(), slam(), grapple()]
+    vec![
+        bash(),
+        slam(),
+        grapple(),
+        rebound(),
+        ram(),
+        unload(),
+        shield_step(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -244,6 +286,48 @@ fn braced() -> Pose {
         0.0,
         0.0,
     )
+}
+
+/// The braced guard carried in the air: the same shield on the same line and
+/// the same off hand at the ribs, with the legs drawn up under it.
+///
+/// What the four moves that leave the floor finish on, or start from, because
+/// the jump's own fall takes over from them and a landing is not theirs to
+/// draw. Squarer than `braced` -- the hips have nothing to blade against up
+/// there -- and a little higher, because a tuck lifts the feet rather than
+/// dropping the hips.
+fn hung(tuck: f32) -> Pose {
+    let body = Pose::rest()
+        .hips(0.0, 0.0, -0.010)
+        .root(4.0, 0.0, 6.0)
+        .spine(8.0, 0.0, 4.0)
+        .chest(4.0, 0.0, 3.0)
+        .head(-6.0, 0.0, -14.0)
+        .wrist_l(0.0, 0.0, 0.0)
+        .shoulder_r(-8.0, 16.0, 0.0)
+        .elbow_r(100.0)
+        .wrist_r(-12.0, 0.0, 0.0);
+    aloft(shield(body, [-0.150, 1.18, 0.30], [0.0, 0.05, 1.0]), tuck)
+}
+
+/// The legs of a body off the floor: `tuck` at 0 hangs them nearly straight
+/// under the hips with the toes pointed, at 1 the knees are drawn up as far as
+/// this build's short thighs go.
+///
+/// Legs only. The hips are the body's to place, and they are placed *before*
+/// the shield is solved, because a hand target is measured from a shoulder the
+/// hips have already moved. No `plant_*` either: a foot in the air has nothing
+/// to be solved against, and levelling one to a floor it is not on is how a
+/// pointed toe ends up pitched flat in mid-air.
+///
+/// The left leg leads by a little, as it does in the stance, so a tucked body
+/// still reads as the same fighter rather than as a ball.
+fn aloft(pose: Pose, tuck: f32) -> Pose {
+    pose.hip_l(10.0 + 62.0 * tuck, 8.0, 0.0)
+        .knee_l(18.0 + 80.0 * tuck)
+        .hip_r(2.0 + 54.0 * tuck, 8.0, 0.0)
+        .knee_r(24.0 + 80.0 * tuck)
+        .ankles(36.0 - 16.0 * tuck, 0.0, 0.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -889,6 +973,644 @@ fn grapple() -> Recipe {
                 the victim is. Nothing here comes back to guard until it lets \
                 go, because a recovery that tidies the arms away is a recovery \
                 that dropped somebody."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rebound -- the Bash in the air
+// ---------------------------------------------------------------------------
+
+/// The Bash thrown in the air, and the body thrown back off whatever the
+/// shield's face meets.
+///
+/// The sim bounces him on the first active frame if the line met anything, so
+/// the clip is the poke's own shape for its first half and a recoil for the
+/// rest: the shield punched out, then the arm driven back into the chest by
+/// what it struck, the torso thrown back and the knees coming up in front.
+fn rebound() -> Recipe {
+    let clip = Clip::BulwarkRebound;
+    let (windup, contact, through) = clip.phases().expect("rebound animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Drawn in: the shield back onto the chest and the body turned away from
+    // it, the knees pulled up under the hips. The Bash's own load, with
+    // nothing to push off.
+    let cocked = {
+        let body = Pose::rest()
+            .hips(0.0, 0.020, -0.050)
+            .root(2.0, 0.0, 10.0)
+            .spine(6.0, 0.0, 6.0)
+            .chest(4.0, 0.0, 4.0)
+            .head(-6.0, 0.0, -30.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-16.0, 16.0, 0.0)
+            .elbow_r(112.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        aloft(shield(body, [-0.150, 1.16, 0.18], [0.0, 0.0, 1.0]), 0.75)
+    };
+
+    // Contact. A flying shoulder charge: the whole body pitched in behind the
+    // shield and the knees swept back under it, so everything is going the
+    // way the shield is. The arm is as short as the Bash's -- it
+    // is the body that has gone forward.
+    let struck = {
+        let body = Pose::rest()
+            .hips(0.0, 0.020, 0.100)
+            .root(10.0, 0.0, -2.0)
+            .spine(9.0, 0.0, -3.0)
+            .chest(6.0, 0.0, -3.0)
+            .head(-18.0, 0.0, 4.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-46.0, 18.0, 0.0)
+            .elbow_r(134.0)
+            .wrist_r(-14.0, 0.0, 0.0);
+        shield(body, [-0.100, 1.20, 0.52], [0.0, 0.0, 1.0])
+            .hip_l(40.0, 8.0, 0.0)
+            .knee_l(76.0)
+            .hip_r(22.0, 8.0, 0.0)
+            .knee_r(94.0)
+            .ankles(36.0, 0.0, 0.0)
+    };
+
+    // Thrown back off it. The shield arm folded back into the chest by what it
+    // met, the face tipped up, the torso arched away and the off arm flung out
+    // behind for balance -- and the knees swung up in front, because a body
+    // pivoting backwards in the air brings its feet forward. The only frame in
+    // the kit where the Bulwark is going the opposite way from his shield.
+    let thrown = {
+        let body = Pose::rest()
+            .hips(0.0, 0.0, -0.080)
+            .root(-20.0, 0.0, 4.0)
+            .spine(-12.0, 0.0, 2.0)
+            .chest(-8.0, 0.0, 2.0)
+            .head(16.0, 0.0, -6.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-62.0, 50.0, 0.0)
+            .elbow_r(30.0)
+            .wrist_r(10.0, 0.0, 0.0);
+        shield(body, [-0.150, 1.20, -0.170], [0.0, 0.45, 0.89])
+            .hip_l(72.0, 8.0, 0.0)
+            .knee_l(84.0)
+            .hip_r(58.0, 8.0, 0.0)
+            .knee_r(96.0)
+            .ankles(22.0, 0.0, 0.0)
+    };
+
+    // Coming round. The arch closes into a tuck and the shield comes back down
+    // onto the line, the off hand back in at the ribs: ready to meet the next
+    // thing, which is the reason anyone rebounds.
+    let gathered = {
+        let body = Pose::rest()
+            .hips(0.0, 0.010, -0.040)
+            .root(-6.0, 0.0, 8.0)
+            .spine(4.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 3.0)
+            .head(2.0, 0.0, -12.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-14.0, 24.0, 0.0)
+            .elbow_r(92.0)
+            .wrist_r(-10.0, 0.0, 0.0);
+        aloft(shield(body, [-0.160, 1.22, 0.27], [0.0, 0.15, 0.99]), 0.9)
+    };
+
+    let mut score = Score::new();
+    score.key(0, hung(0.5), Ease::OUT);
+    score.key(tell(windup), cocked, Ease::LINEAR);
+    score.key(contact, struck, Ease::STRIKE);
+    score.key(part(contact, through, 0.67), thrown, Ease::OUT);
+    score.key(part(through, last, 0.45), gathered, Ease::SMOOTH);
+    score.key(last, hung(0.5), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The Bash in the air, and his wall jump. Its first half is the \
+                poke's own shape, because it is the poke -- four frames, the \
+                shield drawn onto the chest on frame two and punched out on \
+                the first active frame by a body pitched in behind it, legs \
+                tucked up behind it. Then the sim \
+                bounces him, on that same frame, off whatever the face met, and \
+                the second half is the recoil: the shield arm driven back into \
+                the chest with the face tipped up, the torso arched away, the \
+                off arm flung out behind and the knees swung up in front, \
+                because a body pivoting backwards in the air brings its feet \
+                forward. That arch is the silhouette the move is read by -- \
+                the one frame in the kit where he is going the opposite way \
+                from his shield. The recovery closes the arch into a tuck with \
+                the shield back on the line, and ends on the air guard rather \
+                than on the stance, since the jump's fall takes over from here. \
+                Crisp, like the Bash: four frames of startup has no room for a \
+                limb to lag into, and a rebound that rings is one you cannot \
+                chain off a second wall."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Battering ram -- the takeoff on the strike
+// ---------------------------------------------------------------------------
+
+/// A low leap forward, shield first, carrying whoever it meets.
+///
+/// Five frames on the floor, then the sim throws him forward at eleven metres
+/// a second with barely any lift -- he is down again about seven frames later
+/// and still driven along the floor for the rest of the active window. So the
+/// clip is a set, a launch, a short flat flight, and a skid on the feet with
+/// the shield still out in front.
+fn ram() -> Recipe {
+    let clip = Clip::BulwarkRam;
+    let (windup, contact, through) = clip.phases().expect("ram animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // The set, on frame two: down and forward like a lineman, the shield
+    // brought in front of the face, the rear heel already up. Lower than
+    // anything else the class does on its feet except the bottom of a Slam,
+    // and *forward* where that is down.
+    let set = {
+        let body = Pose::rest()
+            .hips(0.0, -0.200, -0.060)
+            .root(24.0, 0.0, 8.0)
+            .spine(14.0, 0.0, 4.0)
+            .chest(6.0, 0.0, 4.0)
+            .head(-26.0, 0.0, -12.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-12.0, 16.0, 0.0)
+            .elbow_r(110.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.130, 1.00, 0.36], [0.0, 0.0, 1.0]),
+            0.0,
+            0.050,
+        )
+    };
+
+    // The last frame on the floor: lower still, the weight right over the
+    // lead foot and the rear one up on its toe, about to push.
+    let coiled = {
+        let body = Pose::rest()
+            .hips(0.0, -0.220, 0.000)
+            .root(32.0, 0.0, 4.0)
+            .spine(15.0, 0.0, 2.0)
+            .chest(6.0, 0.0, 2.0)
+            .head(-34.0, 0.0, -6.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-14.0, 18.0, 0.0)
+            .elbow_r(112.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.120, 0.94, 0.42], [0.0, 0.0, 1.0]),
+            0.0,
+            0.090,
+        )
+    };
+
+    // Launched, on the first active frame. The body pitched forward behind
+    // the shield, the lead knee drawn up and the rear leg left straight out
+    // behind from the push: the longest line the class ever makes, and it is
+    // horizontal.
+    let launch = {
+        let body = Pose::rest()
+            .hips(0.0, -0.060, 0.140)
+            .root(38.0, 0.0, -2.0)
+            .spine(10.0, 0.0, -2.0)
+            .chest(4.0, 0.0, -2.0)
+            .head(-40.0, 0.0, 2.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-24.0, 20.0, 0.0)
+            .elbow_r(118.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        shield(body, [-0.080, 1.06, 0.60], [0.0, 0.0, 1.0])
+            .hip_l(74.0, 8.0, 0.0)
+            .knee_l(90.0)
+            .hip_r(-14.0, 6.0, 0.0)
+            .knee_r(26.0)
+            .ankles(34.0, 0.0, 0.0)
+    };
+
+    // In flight, low and flat: both knees drawn up under the body, the head
+    // down behind the rim of the shield. A ram, not a leap -- nothing here
+    // reaches up.
+    let flying = {
+        let body = Pose::rest()
+            .hips(0.0, -0.020, 0.120)
+            .root(30.0, 0.0, -2.0)
+            .spine(10.0, 0.0, -2.0)
+            .chest(4.0, 0.0, -2.0)
+            .head(-32.0, 0.0, 2.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-20.0, 20.0, 0.0)
+            .elbow_r(114.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        shield(body, [-0.080, 1.10, 0.60], [0.0, 0.0, 1.0])
+            .hip_l(70.0, 8.0, 0.0)
+            .knee_l(100.0)
+            .hip_r(38.0, 8.0, 0.0)
+            .knee_r(104.0)
+            .ankles(28.0, 0.0, 0.0)
+    };
+
+    // Down, and still being driven: the feet on the floor wide and low, the
+    // body still pitched in behind the shield. The sim keeps pushing him at
+    // the ram's speed to the end of the active window, so this is a skid, and
+    // whoever the shield met is on the front of it.
+    let plough = {
+        let body = Pose::rest()
+            .hips(0.0, -0.210, 0.100)
+            .root(30.0, 0.0, 0.0)
+            .spine(12.0, 0.0, -2.0)
+            .chest(5.0, 0.0, -2.0)
+            .head(-32.0, 0.0, 0.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-18.0, 20.0, 0.0)
+            .elbow_r(112.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.080, 1.02, 0.60], [0.0, 0.0, 1.0]),
+            0.0,
+            0.050,
+        )
+    };
+
+    // The end of the drive: the skid has spent itself and the weight starts
+    // back over the feet, but the shield has not come in yet.
+    let skid = {
+        let body = Pose::rest()
+            .hips(0.0, -0.200, 0.080)
+            .root(26.0, 0.0, 0.0)
+            .spine(12.0, 0.0, -1.0)
+            .chest(5.0, 0.0, -1.0)
+            .head(-28.0, 0.0, -2.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-16.0, 18.0, 0.0)
+            .elbow_r(110.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.090, 1.04, 0.56], [0.0, 0.0, 1.0]),
+            0.0,
+            0.040,
+        )
+    };
+
+    // Checked: the body rocks back up off the lead leg, the shield still
+    // forward and low. This is the -13 on block, and it should look stopped.
+    let checked = {
+        let body = Pose::rest()
+            .hips(0.0, -0.165, 0.040)
+            .root(14.0, 0.0, 4.0)
+            .spine(10.0, 0.0, 1.0)
+            .chest(5.0, 0.0, 1.0)
+            .head(-14.0, 0.0, -6.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-12.0, 16.0, 0.0)
+            .elbow_r(104.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.120, 1.08, 0.46], [0.0, 0.0, 1.0]),
+            0.0,
+            0.020,
+        )
+    };
+
+    let mut score = Score::new();
+    score.key(0, braced(), Ease::OUT);
+    score.key(tell(windup), set, Ease::SMOOTH);
+    score.key(windup, coiled, Ease::STRIKE);
+    score.key(contact, launch, Ease::OUT);
+    score.key(part(contact, through, 0.35), flying, Ease::SMOOTH);
+    score.key(part(contact, through, 0.65), plough, Ease::SMOOTH);
+    score.key(through.saturating_sub(1), skid, Ease::OUT);
+    score.key(part(through, last, 0.35), checked, Ease::SMOOTH);
+    score.key(last, braced(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: BRACED_WEIGHT,
+        notes: "The strike column's takeoff: a low leap forward, shield first. \
+                Five frames on the floor, spent going down and forward like a \
+                lineman -- shield in front of the face, rear heel up, the \
+                weight over the lead foot -- which is a silhouette nothing else \
+                in the kit makes: the Slam's telegraph goes up, the Grapple's \
+                opens the guard, this one closes it and leans in. On the first \
+                active frame the sim throws him at eleven metres a second with \
+                three of lift, so the launch pose is the longest line the class \
+                ever makes and it is horizontal: body pitched in behind the \
+                shield, lead knee up, rear leg left straight out behind from \
+                the push. The flight is short and flat, knees drawn up under \
+                him and the head down behind the rim; at that lift he is back \
+                on the floor about seven frames later and still driven at the \
+                ram's speed to the end of the active window, so the back half \
+                of the active frames is a skid on wide low feet with the \
+                shield still out -- whoever it met is on the front of it, \
+                which is the move. The recovery rocks back off the lead leg \
+                with the shield coming in last, the minus on block made \
+                visible. Braced weight, like the Slam: it is the whole body \
+                that travels, and the shield arm is the mounting."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unload -- the takeoff on the weight
+// ---------------------------------------------------------------------------
+
+/// The stored weight driven out of the shield in one heave, and the body
+/// thrown up off it.
+///
+/// Where the Slam goes up and comes down in front, this curls down over the
+/// shield with both hands on it and then drives it straight down at his own
+/// feet, face to the floor, while the legs straighten under him and the off
+/// hand is flung up -- so the body goes up as the shield goes down, and the
+/// pose at contact is the tallest and the straightest the class has.
+fn unload() -> Recipe {
+    let clip = Clip::BulwarkUnload;
+    let (windup, contact, through) = clip.phases().expect("unload animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Curled over it: both hands on the shield, hugged to the chest with the
+    // face tipped down, the body folded over it and the knees loaded. The
+    // most compact shape the class makes -- the weight being gathered in.
+    let curled = {
+        let body = Pose::rest()
+            .hips(0.0, -0.200, -0.020)
+            .root(18.0, 0.0, 4.0)
+            .spine(20.0, 0.0, 2.0)
+            .chest(10.0, 0.0, 2.0)
+            .head(-20.0, 0.0, -4.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .wrist_r(-10.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.080, 1.00, 0.24], [0.0, -0.55, 0.84]).reach_r([0.110, 1.00, 0.27]),
+            0.0,
+            0.0,
+        )
+    };
+
+    // The heave beginning, on the last frame of the floor: the legs have
+    // started to straighten and the shield is already on its way down past
+    // the belt, the face turning to the floor.
+    let heave = {
+        let body = Pose::rest()
+            .hips(0.0, -0.140, -0.010)
+            .root(10.0, 0.0, 2.0)
+            .spine(10.0, 0.0, 1.0)
+            .chest(4.0, 0.0, 1.0)
+            .head(-12.0, 0.0, -2.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .wrist_r(-10.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.060, 0.86, 0.24], [0.0, -0.85, 0.52]).reach_r([0.110, 0.86, 0.26]),
+            0.012,
+            0.030,
+        )
+    };
+
+    // Contact: the shield driven flat under him at the belt, face to the
+    // floor, the shield arm pressing down onto it, and every joint below it
+    // straight -- the legs extended and the toes pointed as the weight throws
+    // him off the ground. The off hand lets go and is flung up the way he is
+    // going. Tall and vertical, where the Slam's contact is folded and low.
+    let driven = {
+        let body = Pose::rest()
+            .hips(0.0, 0.060, 0.0)
+            .root(-2.0, 0.0, 0.0)
+            .spine(-2.0, 0.0, 0.0)
+            .chest(-4.0, 0.0, 0.0)
+            .head(-12.0, 0.0, 0.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(104.0, 22.0, 0.0)
+            .elbow_r(34.0)
+            .wrist_r(-10.0, 0.0, 0.0);
+        shield(body, [-0.020, 0.98, 0.26], [0.0, -1.0, 0.10])
+            .hip_l(4.0, 6.0, 0.0)
+            .knee_l(4.0)
+            .hip_r(-2.0, 6.0, 0.0)
+            .knee_r(6.0)
+            .ankles(42.0, 0.0, 0.0)
+    };
+
+    // Riding it up. The knees come up under the shield and the body gathers
+    // over it, the shield still flat and still under him, the off arm all the
+    // way up: what threw him is what he is crouched on, for as long as the
+    // push lasts.
+    let riding = {
+        let body = Pose::rest()
+            .hips(0.0, 0.020, -0.010)
+            .root(8.0, 0.0, 2.0)
+            .spine(10.0, 0.0, 1.0)
+            .chest(4.0, 0.0, 1.0)
+            .head(-16.0, 0.0, -4.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(140.0, 26.0, 0.0)
+            .elbow_r(20.0)
+            .wrist_r(-6.0, 0.0, 0.0);
+        aloft(shield(body, [-0.030, 0.98, 0.28], [0.0, -0.95, 0.30]), 0.8)
+    };
+
+    // Turning it back: the off hand lets go and goes in to the ribs, the
+    // shield rolls up off the flat to face front again.
+    let turning = {
+        let body = Pose::rest()
+            .hips(0.0, 0.010, -0.010)
+            .root(6.0, 0.0, 4.0)
+            .spine(8.0, 0.0, 3.0)
+            .chest(4.0, 0.0, 2.0)
+            .head(-10.0, 0.0, -8.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .shoulder_r(-10.0, 20.0, 0.0)
+            .elbow_r(96.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        aloft(shield(body, [-0.140, 1.08, 0.30], [0.0, -0.35, 0.94]), 0.65)
+    };
+
+    let mut score = Score::new();
+    score.key(0, braced(), Ease::OUT);
+    score.key(tell(windup), curled, Ease::IN);
+    score.key(windup, heave, Ease::LINEAR);
+    score.key(contact, driven, Ease::STRIKE);
+    score.key(through, riding, Ease::SMOOTH);
+    score.key(part(through, last, 0.5), turning, Ease::SMOOTH);
+    score.key(last, hung(0.5), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: BRACED_WEIGHT,
+        notes: "The weight column's takeoff, and it has to read as the \
+                opposite of the Slam beside it. The Slam goes up and comes \
+                down in front; this goes down and comes up. Six frames on the \
+                floor: by frame two he is curled over the shield with both \
+                hands on it, hugged to the chest with the face tipped down and \
+                the knees loaded -- the most compact shape the class makes, \
+                the weight being gathered in -- and on the last of them the \
+                legs have started to straighten with the shield already past \
+                the belt. On the first active frame the shield is flat under \
+                him at the belt, face to the floor, the shield arm pressing \
+                down onto it, and everything below is straight too, toes \
+                pointed: the tallest, most vertical pose in the kit, at the \
+                instant the sim throws him upward, with the off hand let go \
+                and flung up the way he is going. The face is flat because \
+                the shield is the battery being emptied downward, and a \
+                strapped shield's face is perpendicular to the forearm, so it \
+                takes the forearm lying across the body at the belt rather \
+                than an arm hanging straight. Then he rides it up, knees drawn \
+                in under the shield and the off arm all the way overhead -- \
+                one hand up and the shield down, the line between them the \
+                direction of travel -- and rolls it back to the front with \
+                the off hand coming in to the ribs, ending on the air guard: \
+                from a full shield he is \
+                three jumps up when this clip ends, and the jump's fall takes \
+                over from there. Braced weight: the arms are pushing the \
+                floor, not swinging."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shield step -- the takeoff on the guard
+// ---------------------------------------------------------------------------
+
+/// The shield planted in the floor as a wall, and the body pushing off its
+/// top.
+///
+/// Three frames to stake it, and on the first active frame the sim puts him on
+/// top of the wall it made and throws him up and forward off it. He leaves it
+/// behind, so from that frame on the left hand is empty -- the one clip in
+/// the file where the shield arm is an arm.
+fn shield_step() -> Recipe {
+    let clip = Clip::BulwarkShieldStep;
+    let (windup, contact, through) = clip.phases().expect("shield step animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Staked: the shield driven down edge first into the floor just in front
+    // of the feet, face forward, the off hand on its rim pushing it in, the
+    // body folded over it. A wall going up, and the man behind it.
+    let staked = {
+        let body = Pose::rest()
+            .hips(0.0, -0.180, -0.030)
+            .root(22.0, 0.0, 4.0)
+            .spine(16.0, 0.0, 2.0)
+            .chest(8.0, 0.0, 2.0)
+            .head(-24.0, 0.0, -4.0)
+            .wrist_l(0.0, 0.0, 0.0)
+            .wrist_r(-30.0, 0.0, 0.0);
+        stand(
+            shield(body, [-0.110, 0.80, 0.36], [0.0, 0.0, 1.0]).reach_r([0.100, 0.86, 0.36]),
+            0.012,
+            0.040,
+        )
+    };
+
+    // On top of it. The sim puts his feet on the wall's top edge on this
+    // frame, so they are drawn together under the hips, crouched on a perch
+    // a hand wide, the arms down past the knees about to swing.
+    let perched = {
+        let body = Pose::rest()
+            .hips(0.0, -0.220, 0.020)
+            .root(24.0, 0.0, 0.0)
+            .spine(12.0, 0.0, 0.0)
+            .chest(6.0, 0.0, 0.0)
+            .head(-26.0, 0.0, 0.0)
+            .wrists(-10.0, 0.0, 0.0);
+        body.reach_l([-0.150, 0.66, 0.16])
+            .reach_r([0.150, 0.66, 0.16])
+            .plant_l([-0.075, GROUND, 0.040])
+            .plant_r([0.075, GROUND, -0.020])
+            .toe_l(0.0)
+            .toe_r(0.0)
+    };
+
+    // The spring: both legs straight off the top, toes pointed, both arms
+    // swung forward and up together. Two empty hands in the air, which is
+    // the price of the move said in one pose.
+    let spring = {
+        let body = Pose::rest()
+            .hips(0.0, 0.050, 0.060)
+            .root(10.0, 0.0, 0.0)
+            .spine(2.0, 0.0, 0.0)
+            .chest(-4.0, 0.0, 0.0)
+            .head(-14.0, 0.0, 0.0)
+            .shoulders(118.0, 24.0, 0.0)
+            .elbows(24.0)
+            .wrists(-10.0, 0.0, 0.0);
+        body.hip_l(6.0, 6.0, 0.0)
+            .knee_l(8.0)
+            .hip_r(-4.0, 6.0, 0.0)
+            .knee_r(10.0)
+            .ankles(44.0, 0.0, 0.0)
+    };
+
+    // Sailing up and forward off it: knees drawn up, the arms opened wide for
+    // balance and the left one coming round in front, open, toward where the
+    // shield will come home to.
+    let sailing = {
+        let body = Pose::rest()
+            .hips(0.0, 0.020, 0.0)
+            .root(4.0, 0.0, 4.0)
+            .spine(6.0, 0.0, 2.0)
+            .chest(2.0, 0.0, 2.0)
+            .head(-8.0, 0.0, -6.0)
+            .shoulder_l(40.0, 66.0, 0.0)
+            .elbow_l(30.0)
+            .shoulder_r(14.0, 70.0, 0.0)
+            .elbow_r(40.0)
+            .wrists(0.0, 0.0, 0.0);
+        aloft(body, 0.7)
+    };
+
+    // The end, in the air with nothing in hand: the off hand back at the
+    // ribs, the left out in front and open. A guard with no shield in it --
+    // what he looks like until `E` brings it home.
+    let empty = {
+        let body = Pose::rest()
+            .hips(0.0, 0.0, -0.010)
+            .root(4.0, 0.0, 6.0)
+            .spine(8.0, 0.0, 4.0)
+            .chest(4.0, 0.0, 3.0)
+            .head(-6.0, 0.0, -14.0)
+            .shoulder_l(30.0, 26.0, 0.0)
+            .elbow_l(70.0)
+            .wrist_l(10.0, 0.0, 0.0)
+            .shoulder_r(-8.0, 16.0, 0.0)
+            .elbow_r(100.0)
+            .wrist_r(-12.0, 0.0, 0.0);
+        aloft(body, 0.5)
+    };
+
+    let mut score = Score::new();
+    score.key(0, braced(), Ease::OUT);
+    score.key(windup, staked, Ease::STRIKE);
+    score.key(contact, perched, Ease::LINEAR);
+    score.key(through, spring, Ease::OUT);
+    score.key(part(through, last, 0.5), sailing, Ease::SMOOTH);
+    score.key(last, empty, Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The guard column's takeoff, and the only move in the column \
+                that goes anywhere. Three frames of startup: the body folds \
+                over the shield and drives it edge first into the floor just \
+                in front of the feet, face forward, the off hand on the rim \
+                pushing it in -- a wall going up with the man crouched behind \
+                it. On the first active frame the sim plants it where he stood \
+                and puts him on its top edge, so the contact pose is a perch: \
+                feet together under the hips on a ledge a hand wide, crouched, \
+                the arms down past the knees about to swing. Two frames later \
+                both legs are straight off the top, toes pointed, and both \
+                arms are swung forward and up together -- two empty hands, \
+                because the shield is the wall he just left, and that is the \
+                price of the move said in one pose. From there the left arm \
+                stops being a shield arm for the rest of the clip: it opens \
+                wide for balance and comes round in front, open, toward where \
+                the shield will come home to when he calls it. Ends in the air \
+                on a guard with nothing in it; the jump's fall takes over. \
+                Crisp rather than braced: thirteen frames from planting to \
+                sailing, and the weight that makes the class slow to settle is \
+                standing on the floor behind him."
             .into(),
         keys: score.0,
     }

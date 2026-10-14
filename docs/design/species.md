@@ -294,7 +294,6 @@ same terms -- every one off in `PLAIN`, and no other creature's code moved:
 | `Tally::until_free(w, slot, free)` | a species' own correction to `frames_until_free` for the windows: the Veilstalker adds its decloak floor, so a stalk is free but not threatening until it is in reach and in view; identity for everybody else |
 | `MonsterField::Cooldown` range to 900 | the smoke's fifteen seconds |
 
-<<<<<<< ours
 **The seams a flyer adds** (the Galewing, 2026-10-01). Flight itself is in
 the species' frame hook (it owns its position in its lore and the shared walk's
 drift is discarded while it is aloft), so the shared ones are few, and on the
@@ -309,7 +308,7 @@ floor every one of them is what it was:
 | `Monster::top_under(p, below)` | the camera's floor is the highest creature top *below the fighter's feet*: a bird over the eye is not a floor |
 | `tests/species.rs`, `keeps_height` | a species that keeps its own height may stand above the ground (never under it) |
 | `game::arenas::sun` | the key light's place per arena: overhead on the Cliffs, so the bird's shadow is on the plateau |
-=======
+
 **The seams a creature that guards adds** (the Mantis, 2026-10-01), on the same
 terms -- every other species answers `None`, and the pins held:
 
@@ -326,7 +325,6 @@ terms -- every other species answers `None`, and the pins held:
 a spell on the frame a counter cut her partner was read as hit by it from eight
 metres. The rule now also asks that the hunter who lost health stands within the
 move's volume of the body, so it can only lower a count.
->>>>>>> theirs
 
 ## 6 · Decided while building, for a person to review
 

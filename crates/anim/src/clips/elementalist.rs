@@ -1,4 +1,7 @@
-//! Bolt, Fissure, the fire pillar, and Cataclysm.
+//! Every move she has: Bolt, Fissure, the fire pillar and Cataclysm; the
+//! Cinder spray, the two drafts and the two quakes; her air row (the Air
+//! bolt, the Gale and Landfall); and the four of the three clicks (the Air
+//! ball, the Fire carpet, the Fire fountain and the earth jump).
 //!
 //! The Elementalist does not fight, she *authors terrain*: she raises things
 //! out of the floor and then detonates them. Nothing in her vocabulary is a
@@ -18,10 +21,12 @@
 //!   Pillar    both hands sweep down, the body sinks           -- down, then up
 //! ```
 //!
-//! The Cinder spray, since v2, is the one **one-armed throw** in the file and
-//! the only move whose hand crosses the body: it scoops low across to the
-//! far hip and flings up and out to the near side, scattering coals. Nothing
-//! else here ever puts a hand across the midline, so the scoop is the tell.
+//! The Cinder spray, since v2, is the one **one-armed throw** on the floor and
+//! the only move there whose hand crosses the body: it scoops low across to
+//! the far hip and flings up and out to the near side, scattering coals.
+//! Nothing else she throws standing puts a hand across the midline, so the
+//! scoop is the tell. (The Gale's coil does, at the ribs; it is only ever
+//! thrown in the air, where the spray's scoop is nothing to confuse it with.)
 //!
 //! Cataclysm is not a fourth direction in that read: it is on its own button,
 //! so there is nothing to disambiguate it from. What it needs instead is the
@@ -52,6 +57,42 @@
 //!   are still driving into the floor while the fissure is live, and the column
 //!   is still coming up while she is still pulling on it.
 //!
+//! ## Off the floor
+//!
+//! Her air row was played on the grounded clips it is the air version of
+//! until 2026-10-14, and the four moves of the three clicks on Tremor's. Each
+//! has its own clip now, and the rule for all seven is the same: **a body
+//! with nothing under it has no base, so the legs become the counterweight.**
+//! Every pose of hers in the air goes through `aloft`, which takes a pose's
+//! arms and trunk and hangs its legs -- tucked, scissored, or long -- instead
+//! of planting them. The trunk and the arms keep the class's vocabulary, so
+//! each air move reads as the ground move it is a version of:
+//!
+//! ```text
+//!   Air bolt   the Bolt's flick exactly; legs gather, then kick out behind
+//!   Gale       Cataclysm's coil, laid flat: wound at the ribs, thrown level,
+//!              the hands parting as the disc opens
+//!   Landfall   Fissure's up-then-down: arms overhead over a tuck, then the
+//!              drop, the deepest landing she has, and a lever as the slab
+//!              comes out of the floor
+//!   Carpet     one arm swept down from behind and out along the floor, the
+//!              body tipped forward over it -- her one horizontal shape
+//! ```
+//!
+//! The two **takeoffs** cross the floor in the middle of the clip: the
+//! startup is on it (feet where the idle has them, through `footing`) and the
+//! first active frame is the one the sim lifts her, from which the legs hang.
+//! They are told apart by the arms, and are opposite on purpose -- the Fire
+//! fountain flings them up into a V with the legs long, the earth jump pushes
+//! them down past the hips and then tucks into a ball to meet the stone.
+//!
+//! Three clips are played against the sim in a way their frames have to
+//! answer to, and their recipes say so: **Landfall's contact frame is held
+//! for the whole fall** (the startup waits for the floor, so it is a plunge
+//! rather than an impact), **the Air ball's frame zero is held for the whole
+//! charge** (a channel shows the clip's first frame, so it is the cup, not a
+//! pose passing through), and the takeoffs' first active frame is the leap.
+//!
 //! ## Looseness goes up with commitment
 //!
 //! `CRISP`, then `MARTIAL`, then `HEAVY`, in that order. That is not variety
@@ -60,8 +101,15 @@
 //! buy here is delay -- Fissure has thirteen frames of startup and `HEAVY`
 //! arms are still climbing at frame eight, which is why the slam is `MARTIAL`
 //! and its weight lives in the pose instead.
+//!
+//! Two variations on it, both for a reason the floor gives. The quick air
+//! moves (the Air bolt, the Fire carpet, the Downdraft) are `CRISP`, because
+//! eight or nine frames thrown while falling leave no room for an arm that
+//! trails. And the three that cross between the floor and the air (Landfall
+//! and the two takeoffs) are `SPRUNG` -- `MARTIAL` with the legs held to the
+//! hips -- because a leg that lags a fast-dropping hip is a foot in the floor.
 
-use crate::bake::{Key, Looseness, Recipe};
+use crate::bake::{Feel, Key, Looseness, Recipe};
 use crate::clips::locomotion::stance;
 use crate::ease::Ease;
 use view::clips::Clip;
@@ -90,6 +138,13 @@ pub fn clips() -> Vec<Recipe> {
         downdraft(),
         quake(),
         tremor(),
+        air_bolt(),
+        gale(),
+        landfall(),
+        air_ball(),
+        fire_carpet(),
+        fire_fountain(),
+        earth_jump(),
     ]
 }
 
@@ -1385,6 +1440,1103 @@ fn rising_back() -> Pose {
             .elbows(50.0)
             .wrists(-4.0, 0.0, 0.0),
         0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Off the floor: the shape of a body with nothing under it
+// ---------------------------------------------------------------------------
+
+/// Any pose of hers, taken off the floor: the hips back on the body's own
+/// line and the legs hung rather than planted.
+///
+/// `tuck` draws both knees up toward the chest (`0` hangs, `1` is a ball) and
+/// `split` scissors them, the left forward and the right back (negative the
+/// other way round). One function rather than a set of angles per pose for
+/// the reason `air::rising` gives: every air pose in this file has to read as
+/// the same body in the same element, and a dozen hand-typed pairs of legs
+/// drift apart the first time one is retouched.
+///
+/// The hips go back to zero because a sink is a thing a body does *onto its
+/// legs*, and in the air there is nothing for the legs to push against -- a
+/// ground pose's crouch lifted into the air as it stands is a body that has
+/// shrunk.
+fn aloft(pose: Pose, tuck: f32, split: f32) -> Pose {
+    let (x, z) = (pose.channels[0], pose.channels[2]);
+    pose.hips(x, 0.0, z)
+        .hip_l(10.0 + 58.0 * tuck + 18.0 * split, 5.0, 0.0)
+        .knee_l(20.0 + 76.0 * tuck)
+        .hip_r(-6.0 + 56.0 * tuck - 18.0 * split, 5.0, 0.0)
+        .knee_r(16.0 + 74.0 * tuck)
+        .ankles(18.0 + 6.0 * tuck, 0.0, 0.0)
+}
+
+/// `MARTIAL` with the legs held to the hips: the looseness of the three clips
+/// that cross between the floor and the air.
+///
+/// A leg that runs behind its hips is a foot in the floor whenever the hips
+/// drop fast, and these three drop them fastest -- a takeoff's crouch in two
+/// or three frames, and Landfall's arrival, thirty centimetres in four. On
+/// `MARTIAL`'s legs the earth jump's crouch put a sole eleven centimetres
+/// through the floor and Landfall's sixteen. The trunk and the arms keep
+/// `MARTIAL`'s follow-through; only the legs are tightened.
+const SPRUNG: Looseness = Looseness {
+    legs: Feel::new(0.6, 1.0),
+    ..Looseness::MARTIAL
+};
+
+/// What every air move leaves from and comes back to: the caster's hands on
+/// a body hung in the air. The same base the Downdraft presses from.
+fn air_ready() -> Pose {
+    in_flight()
+}
+
+// ---------------------------------------------------------------------------
+// Air bolt
+// ---------------------------------------------------------------------------
+
+/// Bolt's flick thrown from the air, with the body hanging behind it.
+///
+/// The arm is the Bolt's exactly -- the same cock past the ear, the same
+/// release from the elbow, the same sight line from the off hand -- because
+/// the shot is the same shape of thing and a player who has read one has read
+/// the other. What changes is everything below the waist: on the ground the
+/// legs are a base the renderer walks under it, and off the floor there is no
+/// base, so the legs have to be the counterweight. They gather as the hand
+/// goes back and kick out behind as it comes through.
+fn air_bolt() -> Recipe {
+    let clip = Clip::ElementalistAirBolt;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let cock = (contact / 3).max(2);
+    // Drawn a shade further a beat before the release: nine frames is two
+    // more than the Bolt has, and spent as a longer glide into the same cock
+    // they would only make the release arrive softer.
+    let drawn = contact.saturating_sub(2).max(cock + 1);
+    let drop = recover + (end - recover) / 3;
+    let home = end.saturating_sub(1);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The Bolt's arm on a body with nothing under it. Above the \
+                waist it is the same flick -- cocked past the ear, released \
+                from the elbow, the off hand up as a sight line -- so the two \
+                bolts read as one shot from two rows. Below it the legs do \
+                what the floor did: they gather under her as the hand goes \
+                back, and scissor out behind as it comes through, so the body \
+                hangs back from the arm the way a throw in the air has to. \
+                Two frames longer to wind than the Bolt, spent as a held draw \
+                just before the release rather than as a slower cock, so the \
+                release is as sharp as the grounded one. CRISP, as the Bolt is: \
+                a flick with follow-through is a flick that missed its window. \
+                Ends on the air base so the jump clips take over without a \
+                change of shape."
+            .into(),
+        keys: vec![
+            Key::eased(0, air_ready(), Ease::OUT),
+            Key::eased(cock, aloft(cocked(), 0.6, -0.25), Ease::SMOOTH),
+            Key::eased(drawn, air_drawn(), Ease::SMOOTH),
+            Key::eased(contact, air_released(), Ease::STRIKE),
+            Key::eased(
+                recover,
+                aloft(flicked(), 0.0, 0.6).root(8.0, 0.0, -13.0),
+                Ease::OUT,
+            ),
+            Key::eased(drop, aloft(lowered(), 0.2, 0.3), Ease::SMOOTH),
+            Key::eased(home, air_ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The last frame before the release: the cock held a hair deeper, knees
+/// drawn up under her.
+fn air_drawn() -> Pose {
+    aloft(cocked(), 0.7, -0.3)
+        .chest(-2.0, 0.0, 26.0)
+        .shoulder_r(36.0, 30.0, 22.0)
+        .elbow_r(124.0)
+}
+
+/// The release: the Bolt's, with the hips tipped forward behind the hand and
+/// the legs kicked out behind.
+fn air_released() -> Pose {
+    aloft(released(), 0.05, 0.55).root(8.0, 0.0, -13.0)
+}
+
+// ---------------------------------------------------------------------------
+// Gale
+// ---------------------------------------------------------------------------
+
+/// Cataclysm's two-handed throw, flattened into a frisbee.
+///
+/// Cataclysm winds low behind her and throws forward and down, because what
+/// it throws hits the floor. The Gale is a disc that flies level and opens as
+/// it goes, so the wind-up is at the ribs rather than the hip, the throw
+/// finishes at shoulder height rather than at the knees, and the hands part
+/// after the release -- the disc opening -- where Cataclysm's stay together.
+/// Same coil, same both-hands release; turned on its side.
+///
+/// The coil is made **with the chest**: it turns hard to her right and the
+/// two hands, still in front of it, end up together at her right ribs. The
+/// hips turn the other way in the air, so the coil is a twist of the whole
+/// body rather than a turn of it. The far hand does cross her midline to get
+/// there, which on the floor is the Cinder spray's tell alone; the Gale is
+/// only ever thrown in the air, where the spray's scoop is not on offer to
+/// be confused with it, and the hands are at the ribs rather than the hip.
+fn gale() -> Recipe {
+    let clip = Clip::ElementalistGale;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let coil = (contact / 5).max(2);
+    let wind = (contact * 3 / 4).max(coil + 1);
+    let drift = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A frisbee thrown with both hands: Cataclysm's coil and release \
+                laid flat. The hands gather together at her right ribs while \
+                the chest winds hard to the right and the hips counter-turn \
+                under it with the knees drawn up -- a body twisting on nothing \
+                -- then the chest snaps through and both hands go out level at \
+                shoulder height, and part as the disc opens. Cataclysm winds \
+                low and finishes low, because it hits the floor; this winds \
+                at the ribs and finishes level, because the disc flies flat, \
+                and the hands spreading after the release are the size the \
+                Gale is about to become. The hands are placed with reach_* \
+                rather than angled, because where they are depends on how far \
+                the chest has turned and the read is where they are. MARTIAL \
+                rather than \
+                Cataclysm's HEAVY: eighteen frames of startup is long enough \
+                to read and short enough that HEAVY's arms would still be \
+                climbing into the coil when it is time to throw."
+            .into(),
+        keys: vec![
+            Key::eased(0, air_ready(), Ease::OUT),
+            Key::eased(coil, gale_turning(), Ease::SMOOTH),
+            Key::eased(wind, gale_wound(), Ease::ANTICIPATE),
+            Key::eased(contact, gale_thrown(), Ease::STRIKE),
+            Key::eased(recover, gale_opened(), Ease::OUT),
+            Key::eased(drift, gale_drifting(), Ease::SMOOTH),
+            Key::eased(home, air_ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: the chest starting to turn right, both hands drawn in together
+/// at the ribs, the knees coming up.
+fn gale_turning() -> Pose {
+    aloft(
+        ready()
+            .root(0.0, 0.0, -22.0)
+            .spine(2.0, 0.0, 14.0)
+            .chest(0.0, 0.0, 18.0)
+            .head(0.0, 0.0, -18.0)
+            .shoulders(46.0, 14.0, -16.0)
+            .elbows(104.0)
+            .wrists(-10.0, 0.0, 0.0),
+        0.35,
+        -0.15,
+    )
+}
+
+/// Fully wound: chest turned hard right over hips turned left, the hands
+/// stacked at her right flank, knees up. A spring with nothing to stand on.
+fn gale_wound() -> Pose {
+    aloft(
+        ready()
+            .root(-4.0, 0.0, -30.0)
+            .spine(-2.0, 0.0, 22.0)
+            .chest(-4.0, 0.0, 30.0)
+            .head(4.0, 0.0, -30.0),
+        0.6,
+        -0.25,
+    )
+    // The two hands together at her right ribs, the near one a little back:
+    // where the angles would have put them depends on how far the chest has
+    // turned, and what has to be true is where they are.
+    .reach_r([0.22, 1.20, 0.06])
+    .reach_l([0.12, 1.24, 0.20])
+    .wrists(-6.0, 0.0, 0.0)
+}
+
+/// The throw, on the frame the disc leaves: the chest snapped through square
+/// and past, both hands out together at shoulder height, palms flat, legs
+/// scissored open behind it.
+fn gale_thrown() -> Pose {
+    aloft(
+        ready()
+            .root(4.0, 0.0, -4.0)
+            .spine(4.0, 0.0, -8.0)
+            .chest(2.0, 0.0, -14.0)
+            .head(-4.0, 0.0, 10.0),
+        0.1,
+        0.55,
+    )
+    .reach_r([0.07, 1.38, 0.64])
+    .reach_l([-0.07, 1.38, 0.64])
+    .wrists(6.0, 0.0, 0.0)
+}
+
+/// The end of the active window: the hands parting level, as wide as her
+/// reach -- the disc opening.
+fn gale_opened() -> Pose {
+    aloft(
+        ready()
+            .root(4.0, 0.0, -8.0)
+            .spine(2.0, 0.0, -2.0)
+            .chest(-2.0, 0.0, -4.0)
+            .head(-4.0, 0.0, 8.0),
+        0.05,
+        0.65,
+    )
+    .reach_r([0.46, 1.40, 0.44])
+    .reach_l([-0.46, 1.40, 0.44])
+    .wrists(8.0, 0.0, 0.0)
+}
+
+/// Recovery: the arms falling out of the spread, the body turning square.
+fn gale_drifting() -> Pose {
+    aloft(
+        ready()
+            .root(2.0, 0.0, -8.0)
+            .spine(2.0, 0.0, -2.0)
+            .chest(0.0, 0.0, -4.0)
+            .head(-2.0, 0.0, 4.0)
+            .shoulders(48.0, 40.0, 0.0)
+            .elbows(40.0)
+            .wrists(-8.0, 0.0, 0.0),
+        0.25,
+        0.25,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Landfall
+// ---------------------------------------------------------------------------
+
+/// Fissure from the air: both hands up, a hang, and the whole body brought
+/// down behind them into the floor.
+///
+/// **One frame of this clip is held for as long as she falls.** Landfall's
+/// startup ends on the floor rather than on a number: the sim runs the
+/// startup down to its last frame and *keeps* it there until her feet arrive
+/// (`sim::state::plunging`), and the renderer reads that as the first active
+/// frame, which is also the frame her feet meet the floor. So the contact key
+/// is not an impact but the **drop** -- legs reaching for the ground, hands
+/// driven down ahead of her, folded over them -- because that is what is on
+/// screen for the whole of a four-metre plunge, and the impact itself is the
+/// three active frames after it, collapsing into the deepest crouch she has.
+fn landfall() -> Recipe {
+    let clip = Clip::ElementalistLandfall;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let lift = (contact / 4).max(2);
+    let top = (contact * 5 / 9).max(lift + 1);
+    let half_way = top + (contact - top) / 2;
+    let lever = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(3);
+
+    Recipe {
+        clip,
+        looseness: SPRUNG,
+        notes: "Fissure's up-then-down, with the body that Fissure keeps on \
+                the floor taken off it. The hands sweep up and the knees tuck \
+                into the hang -- arms long overhead, a ball underneath them, \
+                the tallest and the most compact she is at once -- then the \
+                legs drop out of the tuck to reach for the floor as the hands \
+                come down ahead of her. The contact key is the plunge rather \
+                than the impact, because the sim holds the last startup frame \
+                until she lands and the renderer shows the contact frame for \
+                the whole fall: legs long underneath, hands driven down in \
+                front, folded over them. The landing is the three active \
+                frames after it, collapsing into a crouch deeper than \
+                Fissure's. Then, where Fissure peels her hands off the floor, \
+                this heaves them forward and up at the angle the slab comes \
+                out of the ground: the lever is the payoff, and the one frame \
+                that tells the two apart once they are both on the floor. \
+                MARTIAL for the reason Fissure is: the weight is in the pose, \
+                and HEAVY would spend it as delay."
+            .into(),
+        keys: vec![
+            Key::eased(0, air_ready(), Ease::OUT),
+            Key::eased(lift, landfall_rising(), Ease::SMOOTH),
+            Key::eased(top, landfall_hung(), Ease::ANTICIPATE),
+            Key::eased(half_way, landfall_dropping(), THROUGH),
+            Key::eased(contact, landfall_plunging(), Ease::STRIKE),
+            Key::eased(recover, landfall_landed(), Ease::OUT),
+            Key::eased(lever, landfall_levered(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell, and Fissure's: both hands sweeping up, here with the knees
+/// starting up under her.
+fn landfall_rising() -> Pose {
+    aloft(
+        ready()
+            .root(-2.0, 0.0, -8.0)
+            .spine(-4.0, 0.0, 3.0)
+            .chest(-2.0, 0.0, 4.0)
+            .head(14.0, 0.0, 4.0)
+            .shoulders(70.0, 24.0, -18.0)
+            .elbows(92.0)
+            .wrists(-28.0, 0.0, 0.0),
+        0.45,
+        0.0,
+    )
+}
+
+/// The hang: arms long overhead, knees tucked high, looking down at the
+/// floor she is about to hit.
+///
+/// Not arched as Fissure's top is. Arched over tucked knees, the body sits
+/// back in the air as if into a chair; upright, the tuck and the raised arms
+/// make one tall, narrow shape, which is the one that reads as poised.
+fn landfall_hung() -> Pose {
+    aloft(
+        ready()
+            .root(2.0, 0.0, -6.0)
+            .spine(-2.0, 0.0, 2.0)
+            .chest(-4.0, 0.0, 3.0)
+            .head(24.0, 0.0, 3.0)
+            .shoulders(150.0, 26.0, -14.0)
+            .elbows(30.0)
+            .wrists(-30.0, 0.0, 0.0),
+        0.9,
+        0.0,
+    )
+}
+
+/// Half way down: the arms level with the shoulders, the fold begun, the legs
+/// coming out of the tuck.
+fn landfall_dropping() -> Pose {
+    aloft(
+        ready()
+            .root(4.0, 0.0, -5.0)
+            .spine(14.0, 0.0, 2.0)
+            .chest(12.0, 0.0, 2.0)
+            .head(4.0, 0.0, 4.0)
+            .shoulders(124.0, 15.0, -19.0)
+            .elbows(24.0)
+            .wrists(-34.0, 0.0, 0.0),
+        0.45,
+        0.0,
+    )
+}
+
+/// The plunge, held for the whole fall and still on the frame her feet
+/// arrive: legs long under her and reaching for the floor, both hands driven
+/// down in front, the body folded over them, eyes on where she is landing.
+fn landfall_plunging() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.10, -0.03)
+            .root(8.0, 0.0, -4.0)
+            .spine(30.0, 0.0, 2.0)
+            .chest(24.0, 0.0, 2.0)
+            .head(-24.0, 0.0, 4.0)
+            .shoulders(98.0, 16.0, -12.0)
+            .elbows(10.0)
+            .wrists(-40.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The first recovery frame: the landing finished arriving -- lower than
+/// Fissure ever gets, hands into the floor, arms locked.
+fn landfall_landed() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.40, -0.03)
+            .root(12.0, 0.0, -4.0)
+            .spine(44.0, 0.0, 2.0)
+            .chest(32.0, 0.0, 2.0)
+            .head(-36.0, 0.0, 4.0)
+            .shoulders(92.0, 24.0, -8.0)
+            .elbows(6.0)
+            .wrists(-46.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The lever: hands heaved forward and up at the slab's own angle as it comes
+/// out of the floor, the body rising behind them.
+fn landfall_levered() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.20, 0.02)
+            .root(8.0, 0.0, -6.0)
+            .spine(20.0, 0.0, 2.0)
+            .chest(10.0, 0.0, 2.0)
+            .head(-16.0, 0.0, 4.0)
+            .shoulders(146.0, 20.0, -10.0)
+            .elbows(10.0)
+            .wrists(-40.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Air ball
+// ---------------------------------------------------------------------------
+
+/// Both hands cupped round a ball of air, then rolled away.
+///
+/// **The hold is frame zero.** The Air ball is a charge held *before* the
+/// move (`sim::moves::Charge::Gather`), and `view::play` shows a channel as
+/// the clip's first frame for as long as the button is down. So the cup is
+/// not a wind-up passing through: it is the pose she stands in while the
+/// ball grows, for up to a second, and the four frames of startup after the
+/// release are only the roll. The ball itself is out where the crosshair met
+/// the floor; this is the gesture of holding it, which is what says the hold
+/// is hers.
+fn air_ball() -> Recipe {
+    let clip = Clip::ElementalistAirBall;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let dip = (contact / 2).max(1);
+    let settle = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The held frame is the whole tell: one palm over and one palm \
+                under, a ball's width apart in front of her belly, elbows out, \
+                knees soft -- a body holding something round. It is frame \
+                zero because a held channel shows frame zero, so it is what \
+                is on screen for as long as the ball is growing. On the \
+                release the hands drop down and back past the hips and swing \
+                forward \
+                and up together, underhand, palms up and open, as the body \
+                rises behind them: a ball bowled with both hands, sent off \
+                the fingertips at waist height. Quake also puts both hands \
+                out low in front of her, but palms down and pressing, from a \
+                stamp; this is palms up and rising, from a cup, and the feet \
+                never leave the floor. CRISP: four frames of startup is a \
+                flick, and the read was made during the hold."
+            .into(),
+        keys: vec![
+            // Straight out of the hold and down: the read was made while it
+            // was held, and four frames is no time to ease out of anything.
+            Key::eased(0, cupping(), Ease::STRIKE),
+            Key::eased(dip, bowled_low(), Ease::SMOOTH),
+            Key::eased(contact, rolled(), Ease::OUT),
+            Key::eased(recover, rolled_through(), Ease::SMOOTH),
+            Key::eased(settle, rolled_after(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// Held for as long as the ball grows: the right palm over, the left palm
+/// under, a ball's width apart in front of the belly, elbows out.
+fn cupping() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.10, -0.01)
+            .root(4.0, 0.0, -12.0)
+            .spine(10.0, 0.0, 4.0)
+            .chest(4.0, 0.0, 4.0)
+            .head(0.0, 0.0, 4.0),
+        0.0,
+        0.0,
+    )
+    // Placed rather than angled: the whole read is two hands one over the
+    // other on her centre line, and that is a statement about where the
+    // wrists are. The ball they hold is about thirty centimetres across.
+    .reach_r(CUP_OVER)
+    .wrist_r(24.0, 0.0, 0.0)
+    .reach_l(CUP_UNDER)
+    .wrist_l(-30.0, 0.0, 0.0)
+}
+
+/// Where the wrists are while the Air ball is held, in character space: the
+/// right over and the left under, a ball's width apart in front of the belly.
+const CUP_OVER: [f32; 3] = [0.02, 1.30, 0.38];
+const CUP_UNDER: [f32; 3] = [-0.04, 1.03, 0.40];
+
+/// The backswing: both hands dropped down and a little back past the hips,
+/// the body sinking over them -- the bottom of a two-handed underhand bowl.
+fn bowled_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.17, -0.03)
+            .root(8.0, 0.0, -10.0)
+            .spine(24.0, 0.0, 3.0)
+            .chest(10.0, 0.0, 3.0)
+            .head(-20.0, 0.0, 4.0)
+            .shoulders(-4.0, 12.0, -10.0)
+            .forearm_l(14.0, 60.0)
+            .forearm_r(14.0, -60.0)
+            .wrists(-24.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The release, on the frame the ball goes: both arms swung through forward
+/// and up to waist height, palms up and open, the body risen behind them.
+fn rolled() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.05, 0.04)
+            .root(6.0, 0.0, -8.0)
+            .spine(8.0, 0.0, 2.0)
+            .chest(4.0, 0.0, 2.0)
+            .head(-6.0, 0.0, 4.0)
+            .shoulders(64.0, 10.0, -6.0)
+            .forearm_l(10.0, 70.0)
+            .forearm_r(10.0, -70.0)
+            .wrists(-30.0, 0.0, 0.0),
+        0.0,
+        0.02,
+    )
+}
+
+/// The end of the active window: the hands carried on up past the release,
+/// open, the rear heel up.
+fn rolled_through() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.035, 0.05)
+            .root(4.0, 0.0, -8.0)
+            .spine(4.0, 0.0, 2.0)
+            .chest(0.0, 0.0, 2.0)
+            .head(-6.0, 0.0, 4.0)
+            .shoulders(82.0, 12.0, -4.0)
+            .forearm_l(8.0, 70.0)
+            .forearm_r(8.0, -70.0)
+            .wrists(-26.0, 0.0, 0.0),
+        0.0,
+        0.03,
+    )
+}
+
+/// Recovery: the arms lowering out of the throw.
+fn rolled_after() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.05, 0.02)
+            .spine(5.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 5.0)
+            .head(-3.0, 0.0, 4.0)
+            .shoulders(40.0, 16.0, -8.0)
+            .forearm_l(40.0, 30.0)
+            .forearm_r(40.0, -30.0)
+            .wrists(-16.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Fire carpet
+// ---------------------------------------------------------------------------
+
+/// One arm swept low and out along the line, laying a strip of fire ahead.
+///
+/// Thrown in the air, so the arm has the whole height of her to sweep
+/// through: drawn up and back behind the shoulder, then brought down past the
+/// hip and out along the floor ahead, palm down, and *held there* while the
+/// strip runs out from it. The body tips forward over the arm and the legs
+/// trail behind, so for the active window she is long and level over the
+/// fire she is laying -- the only horizontal silhouette in the file.
+///
+/// One-armed like the Bolt and the Cinder spray, and told from both by where
+/// the hand goes: the Bolt's leaves from the ear in a straight line, the
+/// spray's crosses to the far hip and flings up; this one goes back and over
+/// and comes down, and finishes lower than it started.
+fn fire_carpet() -> Recipe {
+    let clip = Clip::ElementalistFireCarpet;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let draw = (contact / 2).max(2);
+    // The bottom of the arc, keyed: the hand has a metre and a half to
+    // travel from behind the shoulder to out along the floor, and hung on
+    // one gap the middle of it is faster than a hand goes.
+    let passing = draw + (contact - draw) / 2;
+    let laid = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "A one-armed sweep downward: the right arm drawn up and back \
+                behind the shoulder with the chest turned after it, then \
+                brought down past the hip and out ahead of her along the \
+                floor, palm down, fingers spread. The body tips forward over \
+                the arm and the legs trail out behind, so on the active frames \
+                she is long and level above the strip -- the one horizontal \
+                shape she makes. The arm stays out along the line through the \
+                first part of the recovery, because the fire is drawn running \
+                from the near end to the far one and the hand is where it \
+                comes from. The left arm goes back and wide as the \
+                counterweight. Told from the Bolt (from the ear, straight) and \
+                the Cinder spray (across, and up) by the hand coming *down*. \
+                CRISP, as the Downdraft is and for its reason: eight frames of \
+                startup thrown in the air, and on MARTIAL the sweeping arm was \
+                still hanging straight down on the contact frame, two frames \
+                behind the fire it was supposed to be laying."
+            .into(),
+        keys: vec![
+            Key::eased(0, air_ready(), Ease::OUT),
+            Key::eased(draw, carpet_drawn(), THROUGH),
+            Key::eased(passing, carpet_passing(), THROUGH),
+            Key::eased(contact, carpet_swept(), Ease::STRIKE),
+            Key::eased(recover, carpet_laid(), Ease::OUT),
+            Key::eased(laid, carpet_trailing(), Ease::SMOOTH),
+            Key::eased(home, air_ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: the right arm up and back behind the shoulder, the chest turned
+/// after it, knees drawn a little under her.
+fn carpet_drawn() -> Pose {
+    aloft(
+        ready()
+            .root(-4.0, 0.0, -10.0)
+            .spine(-6.0, 0.0, 12.0)
+            .chest(-6.0, 0.0, 18.0)
+            .head(6.0, 0.0, -18.0)
+            .shoulder_r(-40.0, 40.0, 10.0)
+            .elbow_r(40.0)
+            .wrist_r(-10.0, 0.0, 0.0)
+            .shoulder_l(56.0, 22.0, -10.0)
+            .elbow_l(40.0)
+            .wrist_l(-14.0, 0.0, 0.0),
+        0.4,
+        0.1,
+    )
+}
+
+/// The bottom of the sweep: the arm straight down past the hip, the chest
+/// turning back through square, the body starting to tip over it.
+fn carpet_passing() -> Pose {
+    aloft(
+        ready()
+            .root(6.0, 0.0, -12.0)
+            .spine(8.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 4.0)
+            .head(-10.0, 0.0, -4.0)
+            .shoulder_r(0.0, 22.0, 4.0)
+            .elbow_r(14.0)
+            .wrist_r(10.0, 0.0, 0.0)
+            .shoulder_l(14.0, 36.0, -4.0)
+            .elbow_l(28.0)
+            .wrist_l(0.0, 0.0, 0.0),
+        0.2,
+        0.0,
+    )
+}
+
+/// Contact, on the frame the carpet is laid: the arm swept down and out ahead
+/// along the floor, palm down; the body tipped forward over it and the legs
+/// trailing; the left arm back and wide.
+fn carpet_swept() -> Pose {
+    aloft(
+        ready()
+            .root(10.0, 0.0, -12.0)
+            .spine(16.0, 0.0, -6.0)
+            .chest(6.0, 0.0, -10.0)
+            .head(-24.0, 0.0, 6.0)
+            // Forward of the chest by more than it looks: the body is tipped
+            // thirty degrees over the arm, and that much of the swing only
+            // brings it back to hanging straight down.
+            .shoulder_r(76.0, 14.0, 0.0)
+            .elbow_r(6.0)
+            .wrist_r(26.0, 0.0, 0.0)
+            .shoulder_l(-24.0, 44.0, 0.0)
+            .elbow_l(18.0)
+            .wrist_l(10.0, 0.0, 0.0),
+        0.0,
+        -0.1,
+    )
+    .hip_l(-10.0, 6.0, 0.0)
+    .hip_r(-20.0, 6.0, 0.0)
+    .knee_l(32.0)
+    .knee_r(24.0)
+}
+
+/// The end of the active window: further along and lower still, the body
+/// near level.
+fn carpet_laid() -> Pose {
+    aloft(
+        ready()
+            .root(12.0, 0.0, -12.0)
+            .spine(19.0, 0.0, -8.0)
+            .chest(8.0, 0.0, -12.0)
+            .head(-28.0, 0.0, 6.0)
+            .shoulder_r(86.0, 12.0, 0.0)
+            .elbow_r(4.0)
+            .wrist_r(30.0, 0.0, 0.0)
+            .shoulder_l(-28.0, 48.0, 0.0)
+            .elbow_l(14.0)
+            .wrist_l(12.0, 0.0, 0.0),
+        0.0,
+        -0.1,
+    )
+    .hip_l(-12.0, 6.0, 0.0)
+    .hip_r(-24.0, 6.0, 0.0)
+    .knee_l(34.0)
+    .knee_r(26.0)
+}
+
+/// Recovery: the arm still out along the strip, the body coming back up
+/// over it.
+fn carpet_trailing() -> Pose {
+    aloft(
+        ready()
+            .root(8.0, 0.0, -12.0)
+            .spine(10.0, 0.0, -2.0)
+            .chest(4.0, 0.0, -4.0)
+            .head(-12.0, 0.0, 4.0)
+            .shoulder_r(60.0, 20.0, -4.0)
+            .elbow_r(30.0)
+            .wrist_r(10.0, 0.0, 0.0)
+            .shoulder_l(10.0, 36.0, -6.0)
+            .elbow_l(40.0)
+            .wrist_l(-6.0, 0.0, 0.0),
+        0.15,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Fire fountain
+// ---------------------------------------------------------------------------
+
+/// Both arms flung up as fire bursts under her and throws her up.
+///
+/// A takeoff: the startup is on the floor and the first active frame is the
+/// frame the sim lifts her (`sim::state`, the leap of a leaping move), so
+/// everything before contact keeps its feet where the idle has them and
+/// everything from contact on hangs its legs. The crouch is down onto the
+/// fire -- palms flat to the floor at her sides, head bowed over the spot --
+/// and the launch is everything opened at once: arms flung up and wide in a
+/// V, legs long and together with the toes pointed, the head thrown back. The
+/// tallest and the most open shape she has, which is what a body thrown by a
+/// fountain looks like.
+fn fire_fountain() -> Recipe {
+    let clip = Clip::ElementalistFireFountain;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    // Down by half way, so the fling has the other half: from the floor to
+    // over the head is most of two metres of hand travel, and the arms are
+    // still going up through the active window -- the V is reached on the
+    // first recovery frame, not on contact.
+    let crouch = (contact / 2).max(2);
+    // The legs open while the feet are still down: the last startup frame is
+    // a push from the toes, so the straight legs of the launch are reached by
+    // extending rather than by swinging a planted foot through the floor.
+    let drive = contact.saturating_sub(1).max(crouch + 1);
+    let riding = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: SPRUNG,
+        notes: "Down onto the fire, then thrown up by it. The crouch presses \
+                both palms flat to the floor at her sides with her head bowed \
+                over the spot, which is the only thing in the clip an opponent \
+                has time to read; on contact, the frame the burst lifts her, \
+                the arms are flung up and wide into a V, the legs go long and \
+                together with the toes pointed, and the head goes back. The V \
+                is held and widened through the active window while the burst \
+                burns under her, and then the arms come down into the shape \
+                the jump's own rise holds, so the hand-off to `jump_rise` is a \
+                continuation. Told from the earth jump by the arms: these go \
+                up and open, the earth jump's push down and stay low. Told \
+                from the pillar's haul, which also ends overhead, by the feet: \
+                the pillar never leaves the floor."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(crouch, fountain_crouch(), Ease::ANTICIPATE),
+            Key::eased(drive, fountain_driving(), Ease::SMOOTH),
+            Key::eased(contact, fountain_flung(), Ease::STRIKE),
+            Key::eased(recover, fountain_borne(), Ease::OUT),
+            Key::eased(riding, fountain_riding(), Ease::SMOOTH),
+            Key::eased(home, fountain_risen(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The crouch onto the fire: palms flat to the floor at her sides, head bowed.
+fn fountain_crouch() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.26, -0.02)
+            .root(8.0, 0.0, -10.0)
+            .spine(18.0, 0.0, 4.0)
+            .chest(8.0, 0.0, 4.0)
+            .head(18.0, 0.0, 4.0)
+            .shoulders(8.0, 32.0, -10.0)
+            .elbows(16.0)
+            .wrists(56.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The push: up on both toes, legs nearly long, the arms coming up through
+/// the front.
+fn fountain_driving() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.05, 0.0)
+            .root(2.0, 0.0, -10.0)
+            .spine(4.0, 0.0, 3.0)
+            .chest(0.0, 0.0, 3.0)
+            .head(-6.0, 0.0, 3.0)
+            .shoulders(72.0, 32.0, -6.0)
+            .elbows(22.0)
+            .wrists(10.0, 0.0, 0.0),
+        0.11,
+        0.11,
+    )
+}
+
+/// The launch, on the frame the burst throws her: arms flung up past the
+/// shoulders on their way to the V, legs long and together, toes pointed,
+/// head back.
+fn fountain_flung() -> Pose {
+    aloft(
+        ready()
+            .root(-4.0, 0.0, -10.0)
+            .spine(-8.0, 0.0, 3.0)
+            .chest(-8.0, 0.0, 3.0)
+            .head(-20.0, 0.0, 3.0)
+            .wrists(-10.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+    // Up off the floor by what the push left her: the legs are long and the
+    // toes pointed, and at the height of a standing body they would be through
+    // it on the one frame the sim has not yet lifted her.
+    .hips(0.0, 0.08, 0.0)
+    .hips_both(-4.0, 3.0, 0.0)
+    .knees(4.0)
+    .ankles(32.0, 0.0, 0.0)
+    // On their way up and already apart: placed, because overhead is where a
+    // shoulder's two angles stop meaning one thing each, and a V is a
+    // statement about where the hands are.
+    .reach_r([0.34, 1.80, 0.38])
+    .reach_l([-0.34, 1.80, 0.38])
+}
+
+/// The end of the burst: the V at its widest, the legs starting to trail.
+fn fountain_borne() -> Pose {
+    aloft(
+        ready()
+            .root(-5.0, 0.0, -10.0)
+            .spine(-8.0, 0.0, 3.0)
+            .chest(-6.0, 0.0, 3.0)
+            .head(-16.0, 0.0, 3.0)
+            .wrists(-8.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+    .hip_l(-12.0, 5.0, 0.0)
+    .hip_r(-8.0, 5.0, 0.0)
+    .knee_l(20.0)
+    .knee_r(14.0)
+    .ankles(40.0, 0.0, 0.0)
+    .reach_r(FOUNTAIN_V)
+    .reach_l([-FOUNTAIN_V[0], FOUNTAIN_V[1], FOUNTAIN_V[2]])
+}
+
+/// Where the right wrist is at the top of the fountain's V, in character
+/// space: up and out over the shoulder, a little in front of the head.
+const FOUNTAIN_V: [f32; 3] = [0.50, 1.90, 0.12];
+
+/// Riding it up: the arms coming down out of the V.
+fn fountain_riding() -> Pose {
+    aloft(
+        ready()
+            .root(-4.0, 0.0, -10.0)
+            .spine(-5.0, 0.0, 4.0)
+            .chest(-3.0, 0.0, 5.0)
+            .head(-12.0, 0.0, 4.0)
+            .wrists(-10.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+    .hip_l(-18.0, 6.0, 0.0)
+    .hip_r(-12.0, 5.0, 0.0)
+    .knee_l(36.0)
+    .knee_r(28.0)
+    .ankles(38.0, 0.0, 0.0)
+    .reach_r([0.40, 1.76, 0.22])
+    .reach_l([-0.40, 1.76, 0.22])
+}
+
+/// The hand-off: close to what `jump_rise` holds, arms up and the legs
+/// trailing, so the jump clips take over without a change of shape.
+fn fountain_risen() -> Pose {
+    aloft(
+        ready()
+            .root(-5.0, 0.0, -9.0)
+            .spine(-5.0, 0.0, 6.0)
+            .chest(-2.0, 0.0, 7.0)
+            .head(-12.0, 0.0, 4.0)
+            .shoulder_l(110.0, 26.0, 0.0)
+            .elbow_l(26.0)
+            .shoulder_r(100.0, 32.0, 0.0)
+            .elbow_r(34.0)
+            .wrists(-8.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+    .hip_l(-20.0, 6.0, 0.0)
+    .hip_r(-13.0, 5.0, 0.0)
+    .knee_l(42.0)
+    .knee_r(32.0)
+    .ankles(38.0, 0.0, 0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Earth jump
+// ---------------------------------------------------------------------------
+
+/// A crouch and a spring as a stone comes up under her.
+///
+/// Three frames of startup and the leap on the fourth, so the crouch is all
+/// there is to read and it has to be deep. The hands go *down* in front of
+/// the knees, palms to the floor, and on the spring they push down and back
+/// past the hips -- driving the stone up and herself off it -- rather than
+/// being thrown up as a jump throws them. Then the knees come up under her
+/// into a tuck and the hands open out low at her sides, palms down, and she
+/// looks down: she is waiting for the stone to meet her feet, which it does
+/// on the way up. Low and compact, where the fountain is tall and open.
+fn earth_jump() -> Recipe {
+    let clip = Clip::ElementalistEarthJump;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let crouch = contact.saturating_sub(1).max(1);
+    let tuck = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(1);
+
+    Recipe {
+        clip,
+        looseness: SPRUNG,
+        notes: "A crouch, a push and a tuck. The crouch is deep and quick -- \
+                three frames of startup -- with both hands reaching down in \
+                front of the knees, palms to the floor; the spring on the \
+                frame she leaves pushes the hands down and back past the hips \
+                as the legs drive, so the arms say the force went into the \
+                ground rather than into the sky. Off the floor the knees come \
+                up into a tuck and the hands open low at her sides, palms \
+                down, head down: she is watching for the stone, which meets \
+                her feet on the way up and which she should look ready to \
+                land on. The fountain is the same takeoff told the other way \
+                -- arms up, legs long -- so the two are opposite silhouettes \
+                from the launch frame on. Ends in the tuck rather than in the \
+                jump's own rise, because the stone arriving under her is what \
+                comes next."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(crouch, earth_crouch(), Ease::STRIKE),
+            Key::eased(contact, earth_spring(), Ease::OUT),
+            Key::eased(recover, earth_off(), Ease::SMOOTH),
+            Key::eased(tuck, earth_tucked(), Ease::SMOOTH),
+            Key::eased(home, earth_riding(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The crouch: deep, both hands reaching down in front of the knees, palms to
+/// the floor, eyes up.
+fn earth_crouch() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.28, 0.0)
+            .root(10.0, 0.0, -10.0)
+            .spine(22.0, 0.0, 4.0)
+            .chest(10.0, 0.0, 4.0)
+            .head(-16.0, 0.0, 4.0)
+            .shoulders(46.0, 14.0, -10.0)
+            .elbows(12.0)
+            .wrists(44.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The spring, on the frame she leaves: legs driving long, up on the toes,
+/// both hands pushed down and back past the hips.
+fn earth_spring() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, 0.0, 0.02)
+            .root(4.0, 0.0, -10.0)
+            .spine(6.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 4.0)
+            .head(-6.0, 0.0, 4.0)
+            .shoulders(-22.0, 20.0, -6.0)
+            .elbows(8.0)
+            .wrists(50.0, 0.0, 0.0),
+        0.10,
+        0.10,
+    )
+}
+
+/// Off the floor: legs long and pointed, the hands still down and back.
+fn earth_off() -> Pose {
+    aloft(
+        ready()
+            .root(2.0, 0.0, -10.0)
+            .spine(4.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 4.0)
+            .head(4.0, 0.0, 4.0)
+            .shoulders(-14.0, 30.0, -6.0)
+            .elbows(10.0)
+            .wrists(46.0, 0.0, 0.0),
+        0.1,
+        0.0,
+    )
+    .ankles(36.0, 0.0, 0.0)
+}
+
+/// The tuck: knees drawn up under her, the hands open low at her sides,
+/// palms down, looking down for the stone.
+fn earth_tucked() -> Pose {
+    aloft(
+        ready()
+            .root(4.0, 0.0, -10.0)
+            .spine(10.0, 0.0, 4.0)
+            .chest(4.0, 0.0, 4.0)
+            .head(22.0, 0.0, 4.0)
+            .shoulders(18.0, 48.0, -10.0)
+            .elbows(18.0)
+            .wrists(40.0, 0.0, 0.0),
+        1.0,
+        0.0,
+    )
+}
+
+/// The last frame: still tucked, arms out a little higher, ready to land.
+fn earth_riding() -> Pose {
+    aloft(
+        ready()
+            .root(2.0, 0.0, -10.0)
+            .spine(8.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 4.0)
+            .head(16.0, 0.0, 4.0)
+            .shoulders(26.0, 52.0, -10.0)
+            .elbows(24.0)
+            .wrists(32.0, 0.0, 0.0),
+        0.85,
         0.0,
     )
 }
