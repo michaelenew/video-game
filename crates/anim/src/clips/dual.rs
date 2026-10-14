@@ -1,4 +1,13 @@
-//! The Dual mage: two autos, two Lances, Judgement, Sweep.
+//! The Dual mage: two autos, two Lances, Judgement, Sweep -- and five spells
+//! off the floor, Flare, Phase, Nightfall, Dawn and Equinox.
+//!
+//! The first six clips were authored for the kit before every move became a
+//! spell (exploration 0010), and the moves in those slots now play them: the
+//! Shade bolt on the dark punch, Binary on the light Lance, Abyss on the Sweep,
+//! Sunray on the light punch, Reel on the dark Lance. The prose below about
+//! wings, tethers and shoves describes what each clip was made for. The five
+//! the rework appended have clips of their own since 2026-10-14, at the end of
+//! this file.
 //!
 //! A melee mage holding two forces apart. The body is the longest and the
 //! slightest in the roster -- `build_for(DualMage)` is tall, thin and
@@ -8,7 +17,7 @@
 //! because it is big. Every one of these clips is authored to be read from the
 //! silhouette's extremities, not from its bulk, because there is no bulk.
 //!
-//! That gives five uses of one vocabulary:
+//! That gives six uses of one vocabulary:
 //!
 //! - **The two autos** are one punch thrown with either arm: left is dark,
 //!   right is light, and which of the two just landed is how the whole class
@@ -43,6 +52,13 @@
 //!   is symmetric front to back and side to side, because it is the only thing
 //!   the class does with both forces *together*, and because symmetry is what
 //!   makes it read as a verdict rather than as a large swing.
+//! - **The spells off the floor** keep the class's handedness and add where
+//!   her feet are. Flare is the right hand alone, snapped open and kicked back
+//!   off its own burst; Phase is both hands together, the body made one long
+//!   line diving through. The three takeoffs are told apart by where the arms
+//!   go as she leaves the floor: Nightfall drives them **down**, Dawn scoops
+//!   them **up** and flings them open, Equinox throws them **out** level from
+//!   a cross. Dark, light, both.
 //!
 //! ## Two rules every clip in this file obeys
 //!
@@ -58,6 +74,12 @@
 //! idle takes over from wherever this left the body. Ending anywhere else is a
 //! pop, and a pop on the last frame of every attack is the most visible thing
 //! in the game.
+//!
+//! **Except where she is not standing.** The two air spells start and end on
+//! [`aloft`], because what plays either side of them is a jump or a fall, and
+//! the three takeoffs start on the stance and end rising, because what follows
+//! them is the jump. The rule underneath is the same: a clip starts on what was
+//! playing before it and ends on what plays after.
 
 use crate::bake::{Feel, Key, Looseness, Recipe};
 use crate::clips::locomotion::stance;
@@ -101,6 +123,11 @@ pub fn clips() -> Vec<Recipe> {
         dark_lance(),
         float(),
         drift(),
+        flare(),
+        phase(),
+        nightfall(),
+        dawn(),
+        equinox(),
     ]
 }
 
@@ -1409,6 +1436,941 @@ fn sweep() -> Recipe {
                 hands behind the left one and the follow-through carries them \
                 behind the right, which is what the arc actually sweeps and \
                 therefore what the body has to be doing while it does."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The spells off the floor -- two from the air, three that leave it
+// ---------------------------------------------------------------------------
+//
+// Five moves the rework (exploration 0010) added, and the five that took this
+// file off the floor. Two are thrown **in the air** -- Flare off the right
+// hand, Phase with both -- and three are **takeoffs**, space and a click
+// together: Nightfall from the left, Dawn from the right, Equinox from both.
+// So they are read the way the rest of the class is: dark leaves the left arm,
+// light the right, and twilight is the two together and symmetric.
+//
+// Two things follow from where her feet are, and every clip below obeys them:
+//
+// - **The air spells start and end on [`aloft`]**, not on the stance. What
+//   plays either side of them is a jump or a fall, so the idle's footing would
+//   be a pose she never stands in up there; the feet are pointed and under the
+//   body from the first frame to the last.
+// - **The takeoffs start on the stance and end in the air.** The startup is on
+//   the floor -- a crouch with both soles planted, because the simulation does
+//   not lift her until the first active frame -- and from the contact frame on
+//   the legs extend and trail with the toes pointed, which is what says the
+//   floor has been left. They end on a rising body, not on the stance: the jump
+//   clips cross-fade in after them.
+//
+// The three takeoffs are told apart by **where the arms go**, because that is
+// the one thing a person can read off a body leaving the floor at eighteen
+// metres a second: Nightfall drives them down, Dawn scoops them up and flings
+// them open, Equinox throws them out level from a cross. Down, up, out.
+
+/// Half-way from the stance into a takeoff's crouch, with the feet put back on
+/// the floor.
+///
+/// The crouch drops the hips twenty centimetres in two frames, and the frame
+/// between is interpolated in angle space, which does not know the floor is
+/// there: on its own it put a toe six centimetres through it. Both takeoffs
+/// that crouch from the stance go through this, with the feet half-way between
+/// where the stance and the crouch plant them.
+fn going_down(crouch: Pose) -> Pose {
+    stance()
+        .blend(&crouch, 0.5)
+        .plant_l([L - 0.025, GROUND, 0.14])
+        .plant_r([R + 0.025, GROUND + 0.016, -0.12])
+        .toe_l(0.0)
+        .toe_floor_r()
+}
+
+/// Her body in the air between spells: knees soft and under her, toes pointed,
+/// arms low and a little open. Halfway between the float's hang and the jump's
+/// fall, so that whichever of the two the air spells cut out of, the first
+/// frame is not far from it.
+fn aloft() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.0, 0.0)
+        .root(-2.0, 0.0, -6.0)
+        .spine(2.0, 0.0, 4.0)
+        .chest(0.0, 0.0, 4.0)
+        .head(2.0, 0.0, 2.0)
+        .shoulder_l(10.0, 30.0, -10.0)
+        .elbow_l(34.0)
+        .wrist_l(-10.0, 0.0, 0.0)
+        .shoulder_r(6.0, 32.0, 10.0)
+        .elbow_r(38.0)
+        .wrist_r(-10.0, 0.0, 0.0)
+        .hip_l(18.0, 7.0, 0.0)
+        .knee_l(46.0)
+        .hip_r(6.0, 6.0, 0.0)
+        .knee_r(38.0)
+        .ankles(36.0, 0.0, 0.0)
+}
+
+// -- Flare: the right hand, and the burst that throws her back ---------------
+
+/// The draw: the right hand pulled back beside the ear, palm already turned
+/// out, the chest turned away from the target to give it room to come through.
+/// The knees come up -- in the air the gather is a tuck, not a crouch.
+fn flare_draw() -> Pose {
+    aloft()
+        .root(4.0, 0.0, 6.0)
+        .spine(6.0, 0.0, 8.0)
+        .chest(2.0, 0.0, 16.0)
+        .head(0.0, 0.0, -14.0)
+        .shoulder_r(46.0, 50.0, 0.0)
+        .elbow_r(112.0)
+        .wrist_r(-30.0, 0.0, 0.0)
+        // The left hand goes out on the target as a sight, low: the one thing
+        // the left arm does in a light spell is point it.
+        .shoulder_l(58.0, 18.0, 0.0)
+        .elbow_l(30.0)
+        .wrist_l(-8.0, 0.0, 0.0)
+        .hip_l(34.0, 8.0, 0.0)
+        .knee_l(66.0)
+        .hip_r(22.0, 7.0, 0.0)
+        .knee_r(58.0)
+}
+
+/// The last startup frame: the hand is coming through past the shoulder and
+/// the sighting hand is getting out of its way.
+fn flare_through() -> Pose {
+    aloft()
+        .root(6.0, 0.0, 0.0)
+        .spine(8.0, 0.0, 0.0)
+        .chest(2.0, 0.0, -4.0)
+        .head(-2.0, 0.0, 0.0)
+        .shoulder_r(80.0, 22.0, 0.0)
+        .elbow_r(42.0)
+        .wrist_r(-28.0, 0.0, 0.0)
+        .shoulder_l(40.0, 26.0, 0.0)
+        .elbow_l(36.0)
+        .hip_l(28.0, 8.0, 0.0)
+        .knee_l(60.0)
+        .hip_r(18.0, 7.0, 0.0)
+        .knee_r(52.0)
+}
+
+/// The contact frame: the right arm dead straight and the palm snapped open on
+/// the line, the right shoulder driven through after it. One arm, one line --
+/// and the left opening out of it to the side, on its way to being flung back
+/// by the kick. Not flung back here: from the sight to behind her in one frame
+/// is four tenths of a metre of hand, which the continuity test calls a
+/// teleport, so the left goes out on the contact and back on the recoil.
+fn flare_open() -> Pose {
+    aloft()
+        .root(8.0, 0.0, -6.0)
+        .spine(8.0, 0.0, -8.0)
+        .chest(2.0, 0.0, -16.0)
+        .head(-6.0, 0.0, 14.0)
+        .shoulder_r(88.0, 10.0, 0.0)
+        .elbow_r(2.0)
+        .wrist_r(-38.0, 0.0, 0.0)
+        .shoulder_l(36.0, 34.0, 0.0)
+        .elbow_l(30.0)
+        .hip_l(24.0, 8.0, 0.0)
+        .knee_l(56.0)
+        .hip_r(14.0, 7.0, 0.0)
+        .knee_r(48.0)
+}
+
+/// The kick: the burst has gone off and she is the lighter thing. Head and
+/// shoulders snapped back, hips carried forward under them, the legs swung out
+/// in front because the top of her went first -- the shape of somebody blown
+/// off something. The arm that threw it rides up with the recoil.
+fn flare_kicked() -> Pose {
+    aloft()
+        .hips(0.0, 0.02, 0.04)
+        .root(-14.0, 0.0, -4.0)
+        .spine(-8.0, 0.0, -4.0)
+        .chest(-4.0, 0.0, -8.0)
+        .head(-14.0, 0.0, 8.0)
+        .shoulder_r(94.0, 20.0, 0.0)
+        .elbow_r(18.0)
+        .wrist_r(-20.0, 0.0, 0.0)
+        .shoulder_l(-8.0, 52.0, 0.0)
+        .elbow_l(36.0)
+        .hip_l(40.0, 10.0, 0.0)
+        .knee_l(44.0)
+        .hip_r(30.0, 9.0, 0.0)
+        .knee_r(38.0)
+        .ankles(30.0, 0.0, 0.0)
+}
+
+/// The far end of the recoil, two frames on: still leaning back, the throwing
+/// arm coming down out of it and the free one opening to catch the balance.
+fn flare_thrown() -> Pose {
+    aloft()
+        .hips(0.0, 0.02, 0.05)
+        .root(-16.0, 0.0, -4.0)
+        .spine(-8.0, 0.0, 0.0)
+        .chest(-4.0, 0.0, -2.0)
+        .head(-10.0, 0.0, 4.0)
+        .shoulder_r(84.0, 40.0, 0.0)
+        .elbow_r(30.0)
+        .wrist_r(-14.0, 0.0, 0.0)
+        .shoulder_l(-12.0, 60.0, 0.0)
+        .elbow_l(34.0)
+        .hip_l(42.0, 11.0, 0.0)
+        .knee_l(52.0)
+        .hip_r(32.0, 10.0, 0.0)
+        .knee_r(46.0)
+        .ankles(32.0, 0.0, 0.0)
+}
+
+/// Righting: the lean coming back out of her, both arms open and low, the legs
+/// dropping back under.
+fn flare_righting() -> Pose {
+    aloft()
+        .hips(0.0, 0.01, 0.03)
+        .root(-10.0, 0.0, -4.0)
+        .spine(-4.0, 0.0, 2.0)
+        .chest(-2.0, 0.0, 2.0)
+        .head(0.0, 0.0, 2.0)
+        .shoulder_r(30.0, 46.0, 6.0)
+        .elbow_r(34.0)
+        .shoulder_l(16.0, 46.0, -6.0)
+        .elbow_l(32.0)
+        .hip_l(34.0, 9.0, 0.0)
+        .knee_l(50.0)
+        .hip_r(22.0, 8.0, 0.0)
+        .knee_r(42.0)
+}
+
+fn flare() -> Recipe {
+    let clip = Clip::DualFlare;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, aloft(), Ease::OUT);
+    track.key(frac(0, windup, 0.5).max(1), flare_draw(), GATHER);
+    track.key(windup, flare_through(), Ease::STRIKE);
+    track.contact(contact, flare_open(), Ease::OUT);
+    // The burst is the active window, and the kick is what happens in it: the
+    // body leaves the hand where it was and goes back, so the frame after the
+    // contact is already the recoil rather than a held arm.
+    track.key(frac(contact, recovery, 0.67), flare_kicked(), Ease::OUT);
+    track.key(recovery + 1, flare_thrown(), Ease::SMOOTH);
+    track.key(frac(recovery, last, 0.55), flare_righting(), Ease::SMOOTH);
+    track.key(last, aloft(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            // Crisp into the snap and loose out of it. The hand has to be
+            // open on the line on the frame the burst appears, so the arms are
+            // tight; the torso and the head lag and ring, because the recoil
+            // is the body being moved rather than moving, and a kick that
+            // arrived on time everywhere would read as a pose change rather
+            // than as a blow.
+            root: Feel::new(1.2, 0.85),
+            spine: Feel::new(1.6, 0.75),
+            chest: Feel::new(1.8, 0.7),
+            head: Feel::new(2.4, 0.55),
+            arms: Feel::new(1.0, 0.95),
+            legs: Feel::new(2.2, 0.65),
+        },
+        notes: "The right hand snapped open in front of her, and then the \
+                burst throws her back off it. Light, so the right arm: drawn \
+                back beside the ear with the palm already turned out while the \
+                left goes out low on the target as a sight, then through, and \
+                dead straight on the contact frame with the right shoulder \
+                driven after it and the left opening out of the line, to be \
+                flung back by the recoil. The \
+                kick is the active window -- head and shoulders snapped back, \
+                hips carried forward under them, the legs swung out in front \
+                because the top of her went first -- which is the shape of \
+                somebody blown off something, and it is what tells the person \
+                opposite that the Flare met a wall or a body. In the air from \
+                the first frame to the last, so it starts and ends on `aloft` \
+                rather than on the stance: the knees tuck for the draw, because \
+                there is no floor to crouch on. Loose in the trunk and the \
+                legs and tight in the arms, so the hand is on the line on time \
+                and the body is what rings."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// -- Phase: both hands out, and through ---------------------------------------
+
+/// The fold: both hands drawn in to the chest, palms forward, the knees up and
+/// the chin down -- the smallest she gets. Three frames of startup, so this is
+/// on the first of them, and it is the tell: nothing else she does in the air
+/// makes herself small.
+fn phase_fold() -> Pose {
+    aloft()
+        .hips(0.0, 0.02, -0.02)
+        .root(6.0, 0.0, 0.0)
+        .spine(14.0, 0.0, 0.0)
+        .chest(6.0, 0.0, 0.0)
+        .head(14.0, 0.0, 0.0)
+        .shoulders(40.0, 26.0, 0.0)
+        .elbows(124.0)
+        .wrists(-34.0, 0.0, 0.0)
+        .hips_both(30.0, 8.0, 0.0)
+        .knees(62.0)
+        .ankles(30.0, 0.0, 0.0)
+}
+
+/// The last startup frame: unfolding, the hands leaving the chest together and
+/// the legs starting to stream out behind.
+fn phase_unfold() -> Pose {
+    aloft()
+        .hips(0.0, 0.02, 0.02)
+        .root(14.0, 0.0, 0.0)
+        .spine(14.0, 0.0, 0.0)
+        .chest(4.0, 0.0, 0.0)
+        .head(0.0, 0.0, 0.0)
+        .shoulders(80.0, 10.0, 0.0)
+        .elbows(70.0)
+        .wrists(-30.0, 0.0, 0.0)
+        .hips_both(14.0, 5.0, 0.0)
+        .knees(50.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+/// The contact frame, and the whole move: one long line from the pointed toes
+/// to both palms, pitched forward along the way she is going. The hands are
+/// together and the arms straight, the head between them -- the shape of
+/// diving through something, which is what the blink does.
+///
+/// Both hands, not one: Phase is twilight, both forces at once, and the only
+/// one of her air spells with no side to it.
+fn phase_through() -> Pose {
+    aloft()
+        .hips(0.0, 0.03, 0.06)
+        .root(26.0, 0.0, 0.0)
+        .spine(12.0, 0.0, 0.0)
+        .chest(4.0, 0.0, 0.0)
+        .head(-18.0, 0.0, 0.0)
+        .shoulders(148.0, 2.0, 0.0)
+        .elbows(4.0)
+        .wrists(-36.0, 0.0, 0.0)
+        .hips_both(-16.0, 3.0, 0.0)
+        .knees(10.0)
+        .ankles(48.0, 0.0, 0.0)
+}
+
+/// Out the other side: the line still long but the hands parting, the legs
+/// beginning to come back under.
+fn phase_out() -> Pose {
+    aloft()
+        .hips(0.0, 0.02, 0.04)
+        .root(16.0, 0.0, 0.0)
+        .spine(8.0, 0.0, 0.0)
+        .chest(2.0, 0.0, 0.0)
+        .head(-8.0, 0.0, 0.0)
+        .shoulders(96.0, 30.0, 0.0)
+        .elbows(14.0)
+        .wrists(-20.0, 0.0, 0.0)
+        .hips_both(-2.0, 5.0, 0.0)
+        .knees(28.0)
+        .ankles(44.0, 0.0, 0.0)
+}
+
+/// Arrived: the arms opened out wide and down, the body upright again.
+fn phase_arrived() -> Pose {
+    aloft()
+        .root(2.0, 0.0, -2.0)
+        .spine(2.0, 0.0, 2.0)
+        .head(0.0, 0.0, 0.0)
+        .shoulders(30.0, 52.0, 0.0)
+        .elbows(28.0)
+        .wrists(-14.0, 0.0, 0.0)
+        .hip_l(14.0, 7.0, 0.0)
+        .knee_l(42.0)
+        .hip_r(6.0, 6.0, 0.0)
+        .knee_r(36.0)
+}
+
+fn phase() -> Recipe {
+    let clip = Clip::DualPhase;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, aloft(), Ease::OUT);
+    // On the first frame, whatever the Oven says: a three-frame startup has
+    // no room for a tell anywhere else.
+    track.key(1.min(windup), phase_fold(), Ease::SMOOTH);
+    track.key(windup, phase_fold().blend(&phase_unfold(), 0.4), Ease::OUT);
+    // Held across the active frames: the blink is the body being somewhere
+    // else, and a line that is still moving while it happens reads as a lunge.
+    track.contact(contact, phase_through(), Ease::HOLD);
+    track.key(recovery, phase_through(), Ease::OUT);
+    track.key(frac(recovery, last, 0.35), phase_out(), Ease::SMOOTH);
+    track.key(frac(recovery, last, 0.7), phase_arrived(), Ease::SMOOTH);
+    track.key(last, aloft(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "Both hands pushed out together and the whole body made into one \
+                line behind them -- pointed toes, hips, shoulders, both palms -- \
+                pitched forward the way she goes. That is the shape of diving \
+                through something, which is what the blink does, and it is \
+                twilight: no side to it, both arms at once and symmetric, the \
+                only one of her air spells without a hand of its own. The \
+                startup is three frames, so the tell is on the first of them \
+                and it is the opposite shape: folded small, hands drawn in to \
+                the chest, knees up, chin down -- nothing else she does in the \
+                air makes herself small. The line is held across the active \
+                frames, because a body still travelling while the blink happens \
+                reads as a lunge, and then the hands part and the arms open as \
+                she arrives. Off the floor throughout, on `aloft` at both ends. \
+                Crisp: a blink is the one thing in the kit with no weight to \
+                show."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// -- Nightfall: the dark takeoff, arms driven down -----------------------------
+
+/// Two frames in: down into the crouch, and both hands come up in front of the
+/// chest with the palms turned to the floor, elbows out -- the arms loading
+/// for the drive. The left higher and further across: it is the dark one.
+fn night_load() -> Pose {
+    stance()
+        .hips(0.0, -0.20, -0.02)
+        .root(14.0, 0.0, -8.0)
+        .spine(16.0, 0.0, 4.0)
+        .chest(6.0, 0.0, 8.0)
+        .head(-16.0, 0.0, 2.0)
+        .shoulder_l(100.0, 40.0, -20.0)
+        .elbow_l(106.0)
+        .wrist_l(30.0, 0.0, 0.0)
+        .shoulder_r(90.0, 38.0, 20.0)
+        .elbow_r(102.0)
+        .wrist_r(30.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND, 0.12])
+        .plant_r([R + 0.02, GROUND, -0.09])
+        .toe_l(0.0)
+        .toe_r(0.0)
+}
+
+/// The last startup frame: the crouch at its deepest and the hands at the top
+/// of their travel, the body already rolling up onto the balls of its feet.
+fn night_coiled() -> Pose {
+    stance()
+        .hips(0.0, -0.21, 0.0)
+        .root(12.0, 0.0, -8.0)
+        .spine(14.0, 0.0, 4.0)
+        .chest(4.0, 0.0, 8.0)
+        .head(-14.0, 0.0, 2.0)
+        .shoulder_l(108.0, 38.0, -20.0)
+        .elbow_l(100.0)
+        .wrist_l(32.0, 0.0, 0.0)
+        .shoulder_r(98.0, 36.0, 20.0)
+        .elbow_r(98.0)
+        .wrist_r(32.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND + 0.02, 0.12])
+        .plant_r([R + 0.02, GROUND + 0.02, -0.09])
+        .toe_floor_l()
+        .toe_floor_r()
+}
+
+/// The contact frame: she leaves the floor, and the hands are halfway down --
+/// level with the hips, palms flat on the air, pressing. The legs open under
+/// her and the head goes down after the hands, to where the well is opening.
+fn night_drive() -> Pose {
+    Pose::rest()
+        .hips(0.0, -0.02, 0.0)
+        .root(4.0, 0.0, -6.0)
+        .spine(4.0, 0.0, 2.0)
+        .chest(0.0, 0.0, 4.0)
+        .head(18.0, 0.0, 0.0)
+        .shoulder_l(48.0, 34.0, -12.0)
+        .elbow_l(46.0)
+        .wrist_l(36.0, 0.0, 0.0)
+        .shoulder_r(40.0, 34.0, 12.0)
+        .elbow_r(42.0)
+        .wrist_r(36.0, 0.0, 0.0)
+        .hip_l(10.0, 5.0, 0.0)
+        .knee_l(26.0)
+        .hip_r(-6.0, 5.0, 0.0)
+        .knee_r(20.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+/// Driven through: both arms straight, down and out from the hips in an A,
+/// palms flat to the floor, and the knees drawn up under her -- she has pushed
+/// off what she left below and is rising away from it. The head and the
+/// shoulders curl down over the hands, looking at the well.
+///
+/// The tuck is what makes this read as leaving rather than as standing: arms
+/// down and legs straight is a body at attention, and the first version of
+/// this pose was exactly that.
+fn night_driven() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.06, 0.0)
+        .root(4.0, 0.0, -4.0)
+        .spine(8.0, 0.0, 0.0)
+        .chest(4.0, 0.0, 2.0)
+        .head(24.0, 0.0, 0.0)
+        .shoulder_l(-20.0, 42.0, -6.0)
+        .elbow_l(4.0)
+        .wrist_l(48.0, 0.0, 0.0)
+        .shoulder_r(-14.0, 40.0, 6.0)
+        .elbow_r(4.0)
+        .wrist_r(48.0, 0.0, 0.0)
+        .hip_l(34.0, 8.0, 0.0)
+        .knee_l(78.0)
+        .hip_r(22.0, 7.0, 0.0)
+        .knee_r(70.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+/// Rising off it: the arms stay down -- the spell is under her and she is
+/// still pushing off it -- while the tuck starts to let go and the head lifts
+/// from the well to where she is going.
+fn night_rising() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.05, -0.01)
+        .root(0.0, 0.0, -4.0)
+        .spine(2.0, 0.0, 2.0)
+        .chest(0.0, 0.0, 2.0)
+        .head(4.0, 0.0, 0.0)
+        .shoulder_l(-18.0, 40.0, -8.0)
+        .elbow_l(16.0)
+        .wrist_l(30.0, 0.0, 0.0)
+        .shoulder_r(-12.0, 36.0, 8.0)
+        .elbow_r(16.0)
+        .wrist_r(30.0, 0.0, 0.0)
+        .hip_l(20.0, 7.0, 0.0)
+        .knee_l(62.0)
+        .hip_r(8.0, 6.0, 0.0)
+        .knee_r(56.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+/// The end: going up with the arms low and open behind, the legs trailing --
+/// the jump's rise with the arms left where the spell put them.
+fn night_away() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.04, -0.02)
+        .root(-4.0, 0.0, -6.0)
+        .spine(-4.0, 0.0, 4.0)
+        .chest(-2.0, 0.0, 4.0)
+        .head(-6.0, 0.0, 2.0)
+        .shoulder_l(-4.0, 34.0, -10.0)
+        .elbow_l(26.0)
+        .wrist_l(10.0, 0.0, 0.0)
+        .shoulder_r(0.0, 32.0, 10.0)
+        .elbow_r(28.0)
+        .wrist_r(10.0, 0.0, 0.0)
+        .hip_l(-18.0, 6.0, 0.0)
+        .knee_l(40.0)
+        .hip_r(-12.0, 5.0, 0.0)
+        .knee_r(32.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+fn nightfall() -> Recipe {
+    let clip = Clip::DualNightfall;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, stance(), Ease::OUT);
+    track.key(1, going_down(night_load()), Ease::SMOOTH);
+    track.key(windup.saturating_sub(1).max(2), night_load(), Ease::SMOOTH);
+    track.key(windup, night_coiled(), Ease::IN);
+    // The drive is spread over the contact frame and the one after it: from
+    // chest height to straight down past the hips is most of a metre of hand,
+    // and in one frame that is a teleport rather than a push.
+    track.contact(contact, night_drive(), Ease::LINEAR);
+    track.key(
+        frac(contact, recovery, 0.5),
+        night_drive().blend(&night_driven(), 0.55),
+        Ease::OUT,
+    );
+    track.key(recovery, night_driven(), Ease::SMOOTH);
+    track.key(frac(recovery, last, 0.45), night_rising(), Ease::SMOOTH);
+    track.key(last, night_away(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            // Martial in the trunk and tight in the legs -- a takeoff is the
+            // body fighting gravity and a lagging leg never finishes extending
+            // -- and a little heavier in the arms than the light takeoff, so
+            // the drive arrives with weight on the end of it.
+            root: Feel::new(1.0, 1.0),
+            spine: Feel::new(1.2, 0.95),
+            chest: Feel::new(1.4, 0.9),
+            head: Feel::new(1.8, 0.75),
+            arms: Feel::new(1.2, 0.7),
+            legs: Feel::new(1.1, 0.95),
+        },
+        notes: "The dark takeoff: both arms driven down as she rises, onto the \
+                well she leaves below. The crouch brings the hands up in front \
+                of the chest, palms to the floor and elbows out, the left a \
+                little higher and further across because it is the dark one; \
+                then on the frame she leaves the ground they press down, and \
+                by the end of the live frames they are straight, down and out \
+                from the hips in an A with the palms flat, while the knees \
+                draw up under her -- she has pushed off what she left behind. \
+                The tuck is what makes it read as leaving rather than standing: \
+                arms down and legs straight is a body at attention. The head goes \
+                down after the hands, to the well, before it lifts to where she \
+                is going. Down is the whole read: Dawn scoops the arms up and \
+                Equinox throws them out level, so the three takeoffs are told \
+                apart by where the hands go from the first frame off the floor. \
+                The drive is spread over the whole live window because chest \
+                height to past the hips is most of a metre of hand. Starts on the stance, \
+                with both soles planted through the crouch -- the simulation \
+                does not lift her until the first active frame -- and ends \
+                rising, arms still low and open, for the jump to take over."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// -- Dawn: the light takeoff, heaved up and open -------------------------------
+
+/// Two frames in: folded down over the knees with both hands low in front of
+/// them, the right lower and further forward -- scooping. Nightfall's crouch
+/// lifts the hands to the chest; this one takes them to the floor, and the
+/// difference is visible from the second frame.
+fn dawn_scoop() -> Pose {
+    stance()
+        .hips(0.0, -0.22, -0.06)
+        .root(28.0, 0.0, -6.0)
+        .spine(26.0, 0.0, 2.0)
+        .chest(6.0, 0.0, -4.0)
+        .head(-30.0, 0.0, 0.0)
+        .shoulder_l(10.0, 16.0, 0.0)
+        .elbow_l(12.0)
+        .wrist_l(-10.0, 0.0, 0.0)
+        .shoulder_r(20.0, 10.0, 0.0)
+        .elbow_r(6.0)
+        .wrist_r(-10.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND, 0.12])
+        .plant_r([R + 0.02, GROUND, -0.09])
+        .toe_l(0.0)
+        .toe_r(0.0)
+}
+
+/// The last startup frame: the hands starting up from the bottom of the scoop,
+/// the trunk lifting, both heels coming off the floor.
+fn dawn_lift() -> Pose {
+    stance()
+        .hips(0.0, -0.18, -0.01)
+        .root(16.0, 0.0, -6.0)
+        .spine(14.0, 0.0, 2.0)
+        .chest(4.0, 0.0, -4.0)
+        .head(-20.0, 0.0, 0.0)
+        .shoulder_l(52.0, 16.0, 0.0)
+        .elbow_l(20.0)
+        .wrist_l(-10.0, 0.0, 0.0)
+        .shoulder_r(60.0, 10.0, 0.0)
+        .elbow_r(12.0)
+        .wrist_r(-10.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND + 0.03, 0.12])
+        .plant_r([R + 0.02, GROUND + 0.03, -0.09])
+        .toe_floor_l()
+        .toe_floor_r()
+}
+
+/// The contact frame: off the floor, the hands coming up in front of the chest
+/// together -- the sweep of light is a column rising with her, and
+/// `anim::track` lays both hands along its edge for the live frames, right
+/// hand leading. What this pose authors is the body under them: the legs
+/// driving straight down, the trunk opening up out of the fold.
+fn dawn_rise() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.0, 0.0)
+        .root(2.0, 0.0, -4.0)
+        .spine(0.0, 0.0, 0.0)
+        .chest(-2.0, 0.0, -4.0)
+        .head(-16.0, 0.0, 0.0)
+        .shoulders(96.0, 14.0, 0.0)
+        .elbows(12.0)
+        .wrists(-10.0, 0.0, 0.0)
+        .hip_l(4.0, 5.0, 0.0)
+        .knee_l(14.0)
+        .hip_r(-8.0, 5.0, 0.0)
+        .knee_r(10.0)
+        .ankles(44.0, 0.0, 0.0)
+}
+
+/// The top of the sweep, the last live frame: both arms straight up, the body
+/// at its longest from the toes to the hands, the chest arching back.
+fn dawn_crest() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.05, -0.02)
+        .root(-6.0, 0.0, -2.0)
+        .spine(-10.0, 0.0, 0.0)
+        .chest(-6.0, 0.0, -2.0)
+        .head(-26.0, 0.0, 0.0)
+        .shoulders(160.0, 14.0, 0.0)
+        .elbows(8.0)
+        .wrists(-10.0, 0.0, 0.0)
+        .hip_l(-8.0, 5.0, 0.0)
+        .knee_l(10.0)
+        .hip_r(-14.0, 5.0, 0.0)
+        .knee_r(8.0)
+        .ankles(48.0, 0.0, 0.0)
+}
+
+/// Thrown open: the arms flung out wide into a high V, the chest arched and
+/// the head back -- the body heaved up and open at the top of the light it
+/// made. The widest shape in the class.
+fn dawn_open() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.05, -0.03)
+        .root(-8.0, 0.0, -2.0)
+        .spine(-12.0, 0.0, 0.0)
+        .chest(-8.0, 0.0, -2.0)
+        .head(-22.0, 0.0, 0.0)
+        .shoulders(20.0, 135.0, 0.0)
+        .elbows(8.0)
+        .wrists(-16.0, 0.0, 0.0)
+        .hip_l(-16.0, 7.0, 0.0)
+        .knee_l(22.0)
+        .hip_r(-22.0, 6.0, 0.0)
+        .knee_r(30.0)
+        .ankles(46.0, 0.0, 0.0)
+}
+
+/// Still open, softening: the arms coming down out of the V to the sides, the
+/// legs trailing. The jump's rise takes over from here.
+fn dawn_held() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.04, -0.02)
+        .root(-5.0, 0.0, -4.0)
+        .spine(-6.0, 0.0, 2.0)
+        .chest(-4.0, 0.0, 2.0)
+        .head(-12.0, 0.0, 2.0)
+        .shoulders(14.0, 62.0, 0.0)
+        .elbows(28.0)
+        .wrists(-12.0, 0.0, 0.0)
+        .hip_l(-18.0, 6.0, 0.0)
+        .knee_l(36.0)
+        .hip_r(-12.0, 5.0, 0.0)
+        .knee_r(30.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+fn dawn() -> Recipe {
+    let clip = Clip::DualDawn;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, stance(), Ease::OUT);
+    track.key(1, going_down(dawn_scoop()), Ease::SMOOTH);
+    track.key(windup.saturating_sub(1).max(2), dawn_scoop(), Ease::SMOOTH);
+    track.key(windup, dawn_lift(), Ease::OUT);
+    track.contact(contact, dawn_rise(), Ease::SMOOTH);
+    // The column rises across the whole live window, so the arms do too --
+    // the track holds the hands on its edge, and these keys are what the body
+    // does underneath.
+    track.key(recovery.saturating_sub(1), dawn_crest(), Ease::LINEAR);
+    track.key(frac(recovery, last, 0.6), dawn_open(), Ease::SMOOTH);
+    track.key(last, dawn_held(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            // Tight in the legs for the same reason as every takeoff, and
+            // floaty in the arms on the way out: the fling at the top is the
+            // one moment in this file where an arm is allowed to carry past
+            // and come back, because it was thrown rather than placed.
+            root: Feel::new(1.0, 1.0),
+            spine: Feel::new(1.3, 0.9),
+            chest: Feel::new(1.5, 0.85),
+            head: Feel::new(2.0, 0.7),
+            arms: Feel::new(1.2, 0.6),
+            legs: Feel::new(1.1, 0.95),
+        },
+        notes: "The light takeoff: the whole body heaved up and open. The \
+                crouch folds down over the knees and takes both hands to the \
+                floor in front of them, right lower and further out -- a scoop, \
+                the opposite of Nightfall's hands lifted to the chest, and \
+                visible from the second frame. From the contact frame the hands \
+                come up together in front of her and keep rising for the whole \
+                live window, because Dawn's light is a column rising with her \
+                and `anim::track` lays both hands along its edge, right hand \
+                leading; the recipe authors the body under them, legs driving \
+                straight and toes pointed, the trunk opening out of the fold. \
+                At the top the arms are flung out into a high V with the chest \
+                arched and the head back -- the widest shape the class makes, \
+                and the one that says this takeoff took somebody up with it. \
+                Down for Nightfall, out for Equinox, up and open for Dawn. \
+                Starts on the stance with both soles planted until the first \
+                active frame, ends rising with the arms open to the sides."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// -- Equinox: both forces at once, crossed and thrown apart ---------------------
+
+/// The cross: down into the crouch with the forearms crossed in front of the
+/// chest, each hand at the other shoulder -- dark over light, the two forces
+/// held together for the only time in the kit. Square, because it is twilight.
+fn equinox_cross() -> Pose {
+    stance()
+        .hips(0.0, -0.19, -0.01)
+        .root(10.0, 0.0, 0.0)
+        .spine(12.0, 0.0, 0.0)
+        .chest(4.0, 0.0, 0.0)
+        .head(8.0, 0.0, 0.0)
+        .wrists(-10.0, 0.0, 0.0)
+        // Each hand at the other shoulder, the right a little further out so
+        // the two forearms cross rather than meet.
+        .reach_l([0.13, 1.20, 0.30])
+        .reach_r([-0.13, 1.23, 0.34])
+        .plant_l([L - 0.02, GROUND, 0.06])
+        .plant_r([R + 0.02, GROUND, -0.03])
+        .toe_l(0.0)
+        .toe_r(0.0)
+}
+
+/// Thrown apart, on the last live frame: both arms
+/// straight out level to the sides, palms out, the chest square and open, the
+/// legs together under her and pointed. A T: the two forces as far apart as
+/// her arms can hold them, and exactly balanced.
+fn equinox_apart() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.02, 0.0)
+        .root(0.0, 0.0, 0.0)
+        .spine(-2.0, 0.0, 0.0)
+        .chest(-4.0, 0.0, 0.0)
+        .head(-8.0, 0.0, 0.0)
+        .shoulders(10.0, 88.0, 0.0)
+        .elbows(4.0)
+        .wrists(-30.0, 0.0, 0.0)
+        .hips_both(-6.0, 2.0, 0.0)
+        .knees(8.0)
+        .ankles(48.0, 0.0, 0.0)
+}
+
+/// Half-way out of the cross: the last startup frame, the hands leaving the
+/// shoulders and the crouch beginning to drive.
+fn equinox_breaking() -> Pose {
+    stance()
+        .hips(0.0, -0.15, 0.0)
+        .root(6.0, 0.0, 0.0)
+        .spine(8.0, 0.0, 0.0)
+        .chest(2.0, 0.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+        .shoulders(58.0, 12.0, 0.0)
+        .elbows(92.0)
+        .wrists(-16.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND + 0.03, 0.06])
+        .plant_r([R + 0.02, GROUND + 0.03, -0.03])
+        .toe_floor_l()
+        .toe_floor_r()
+}
+
+/// The contact frame: off the floor, and the cross thrown open -- both arms
+/// half-way out, forward and wide, the legs driving straight. The T arrives a
+/// frame later: from each hand at the other shoulder to straight out at the
+/// side is a metre of hand, and in one frame that is a teleport.
+fn equinox_throwing() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.03, 0.0)
+        .root(2.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .chest(-2.0, 0.0, 0.0)
+        .head(-4.0, 0.0, 0.0)
+        .shoulders(52.0, 58.0, 0.0)
+        .elbows(30.0)
+        .wrists(-24.0, 0.0, 0.0)
+        .hips_both(-2.0, 2.0, 0.0)
+        .knees(12.0)
+        .ankles(44.0, 0.0, 0.0)
+}
+
+/// Rising in the T: the arms held out, a little higher, the legs starting to
+/// soften behind.
+fn equinox_held() -> Pose {
+    equinox_apart()
+        .hips(0.0, 0.04, -0.01)
+        .spine(-4.0, 0.0, 0.0)
+        .head(-12.0, 0.0, 0.0)
+        .shoulders(14.0, 96.0, 0.0)
+        .elbows(8.0)
+        .hips_both(-12.0, 4.0, 0.0)
+        .knees(20.0)
+        .ankles(44.0, 0.0, 0.0)
+}
+
+/// The end: the arms come down out of the T to low and open, symmetric still,
+/// the legs trailing -- the jump's rise takes over from here.
+fn equinox_settled() -> Pose {
+    Pose::rest()
+        .hips(0.0, 0.03, -0.02)
+        .root(-3.0, 0.0, 0.0)
+        .spine(-3.0, 0.0, 0.0)
+        .chest(-2.0, 0.0, 0.0)
+        .head(-6.0, 0.0, 0.0)
+        .shoulders(14.0, 50.0, 0.0)
+        .elbows(26.0)
+        .wrists(-14.0, 0.0, 0.0)
+        .hips_both(-14.0, 5.0, 0.0)
+        .knees(34.0)
+        .ankles(40.0, 0.0, 0.0)
+}
+
+fn equinox() -> Recipe {
+    let clip = Clip::DualEquinox;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, stance(), Ease::OUT);
+    track.key(1.min(windup), equinox_cross(), Ease::HOLD);
+    track.key(windup, equinox_breaking(), Ease::OUT);
+    track.contact(contact, equinox_throwing(), Ease::OUT);
+    track.key(contact + 1, equinox_apart(), Ease::OUT);
+    track.key(recovery + 2, equinox_held(), Ease::SMOOTH);
+    track.key(
+        frac(recovery, last, 0.6),
+        equinox_held().blend(&equinox_settled(), 0.5),
+        Ease::SMOOTH,
+    );
+    track.key(last, equinox_settled(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            // Tight everywhere but the head. This is the balance spell, and a
+            // T that wobbled on arrival would be saying the opposite.
+            root: Feel::new(1.0, 1.0),
+            spine: Feel::new(1.1, 1.0),
+            chest: Feel::new(1.3, 0.95),
+            head: Feel::new(1.8, 0.75),
+            arms: Feel::new(1.4, 0.85),
+            legs: Feel::new(1.1, 0.95),
+        },
+        notes: "Both forces at once, from the floor into the air: the arms \
+                crossed and thrown apart. The crouch is square and the forearms \
+                cross in front of the chest, each hand at the other shoulder -- \
+                the two forces held together, the only time in the kit -- and \
+                on the frame she leaves the floor the cross is thrown open, \
+                and by the last live frame it is a level T, palms out, legs \
+                together under her and pointed -- a frame later than the lift, \
+                because from each hand at the other shoulder to straight out at \
+                the side is a metre of hand. \
+                Symmetric from first frame to last, because Equinox is the \
+                twilight takeoff and its height is how level her two bars are: \
+                the body says balance the way Judgement's says verdict. Out \
+                level, where Nightfall drives the arms down and Dawn flings \
+                them up, so the three takeoffs read apart from the first frame \
+                off the floor. The cross is on frame one of a three-frame \
+                startup and held there, since there is nowhere else to put a \
+                tell. Starts on the stance with both soles planted, ends rising \
+                with the arms come down low and open."
             .into(),
         keys: track.done(),
     }

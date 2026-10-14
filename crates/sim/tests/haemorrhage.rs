@@ -228,10 +228,10 @@ fn bleeding(w: &mut World) {
 fn a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart() {
     // The point of the spell: the victim's own feet make the pools, and a
     // spike on any of them runs the trail. So the trail's pools must land
-    // inside a bare spike's eruption of each other. A tick's pool is small
-    // and drains away in under a second, so the live trail is the last few
-    // strides rather than the whole walk -- which is the part a chain has to
-    // cross to reach them anyway.
+    // within what one tick's eruption sets off of each other -- its own size
+    // and `tuning::erupt_chain` past its edge. Since the blaster the ticks are
+    // fewer and heavier (2026-10-12), so the stains are a stride or two apart
+    // and the chain reaches across the gap rather than the stains touching.
     let mut w = mage();
     bleeding(&mut w);
     // Walk sideways, so the dummy neither closes on her nor leaves the arena.
@@ -244,14 +244,15 @@ fn a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart() {
     );
     let mut sorted: Vec<Fx> = trail.iter().map(|p| p.pos.z).collect();
     sorted.sort_by_key(|z| z.raw());
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let tick = Fx::from_int(t::bleed_damage()).sqrt();
+    let sets_off = t::erupt_radius().mul(tick).add(t::erupt_chain());
     for pair in sorted.windows(2) {
         let gap = pair[1].sub(pair[0]);
         assert!(
-            gap.raw() <= spike.radius.raw(),
-            "two pools of the trail are {} m apart, past a bare spike's {} m",
+            gap.raw() <= sets_off.raw(),
+            "two pools of the trail are {} m apart, past the {} m one sets off",
             gap.to_f32_for_render(),
-            spike.radius.to_f32_for_render()
+            sets_off.to_f32_for_render()
         );
     }
     // And the newest is under their feet.
@@ -259,7 +260,7 @@ fn a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart() {
     assert!(
         trail
             .iter()
-            .any(|p| p.pos.sub(feet).flat_len().raw() < spike.radius.raw()),
+            .any(|p| p.pos.sub(feet).flat_len().raw() < sets_off.raw()),
         "no pool of the trail is near the bleeding fighter"
     );
 }
@@ -307,21 +308,25 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             .expect("the scan is not empty")
     };
     let health = w.players[1].health;
-    looking(&mut w, 2, keys::SPIKE, pitch, Input::A);
-    looking(&mut w, m.startup as u32 + 2, 0, pitch, Input::A);
-    let eruptions = w
-        .effects
-        .iter()
-        .flatten()
-        .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted())
-        .count();
+    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, Input::A);
+    // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
+    let mut eruptions = 0;
+    for _ in 0..m.startup as u32 + 4 * t::chain_delay() as u32 + 2 {
+        looking(&mut w, 1, 0, pitch, Input::A);
+        eruptions += w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted() && e.age == 1)
+            .count();
+    }
     assert!(
         eruptions >= 3,
         "a spike on the trail set off only {eruptions} eruptions"
     );
     // The chain reached them: an eruption's blow, not just the bleed's ticks.
     let took = health - w.players[1].health;
-    let ticks = (m.startup as i32 + 4) / t::bleed_tick() as i32 + 1;
+    let ticks = (m.startup as i32 + 4 * t::chain_delay() as i32 + 4) / t::bleed_tick() as i32 + 1;
     assert!(
         took > ticks * t::bleed_damage(),
         "the chain ran but never reached the bleeding fighter: they took {took}"
@@ -385,19 +390,26 @@ fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
     w.players[0].health = t::max_health() - 300;
     w.players[0].grey = 300;
     let at = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
+    let mut pool = Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 200);
+    // Settled: a stain is drunk only once it has (`tuning::stain_settles`).
+    pool.age = t::stain_settles();
+    w.effects[0] = Some(pool);
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(m.cost);
     bolt_the_dummy(&mut w, 4);
     let got = w.players[0].health - (before - paid);
-    let expect = m.drinks(200);
+    // What the cast cost lands where she aimed it -- on this stain, which it
+    // joins -- so the drink is of both (2026-10-13).
+    let expect = m.drinks(200 + paid);
     assert!(
         got >= expect - 4 && got <= expect,
-        "the bolt drank {got} of a pool of 200 at {}%",
+        "the bolt drank {got} of a pool of 200 and its cost at {}%",
         m.drink
     );
     // One and done: only the cut's own fresh pool is left.
     let left = pools(&w);
     assert_eq!(left.len(), 1, "the pool it drank is still there");
-    assert!(left[0].pool_volume() <= m.damage);
+    // What the cut spilled: its own blow, what the stain added to it, and a
+    // tick or two of the bleed it opened, gathered into the same figure.
+    assert!(left[0].pool_volume() <= m.damage + t::stain_hit_bonus(200) + 2 * t::bleed_damage());
 }

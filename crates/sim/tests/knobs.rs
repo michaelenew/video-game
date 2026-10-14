@@ -181,15 +181,58 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "pub const SCYTHE: u16 = Input::RIGHT",
-        "A binding, not a magnitude: which button is the Blood mage's scythe click.",
+        "A binding, not a magnitude: which button is the Blood mage's right click (Command and the Summon).",
     ),
     (
-        "pub const BLOODLETTER: u16 = Input::SPECIAL",
-        "A binding, not a magnitude: which button is the Blood mage's Bloodletter.",
+        "pub const SPIKE_FIELD: i32 = 2",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (a field of waves).",
     ),
     (
-        "pub const SPIKE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Blood mage's Black spike.",
+        "pub const SPIKE_AREA: i32 = 3",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (an area that only hits).",
+    ),
+    (
+        "pub const GATHER: u16 = Input::SPECIAL",
+        "A binding, not a magnitude: which button is the Blood mage's Coagulate.",
+    ),
+    (
+        "pub const SPIKE_ERUPTION: i32 = 1",
+        "A code, not a magnitude: what `Effect::banked` says a Black spike is (an eruption \
+         out of a stain, which spills nothing).",
+    ),
+    (
+        ".add(Fx::ratio(1, 4))",
+        "A tolerance, not a feel: the lip a thrall may step up on top of the steepest land, \
+         in `World::walk_round`.",
+    ),
+    (
+        "Fx::ratio(1, 12),",
+        "A search, not a feel: the headings a thrall tries round a wall, a twelfth of a turn \
+         apart out to a third (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 6),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 4),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "Fx::ratio(1, 3),",
+        "A search, not a feel: the headings a thrall tries round a wall (`World::walk_round`).",
+    ),
+    (
+        "pub const GROWING: i32 = 1",
+        "A code, not a magnitude: what `Effect::banked` says a Hemoplague still being held is.",
+    ),
+    (
+        "pub const UNLIT: u16 = u16::MAX",
+        "A code, not a magnitude: what `Effect::life` says a stain that is not lit is.",
+    ),
+    (
+        "pub const RAISE: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button is the Blood mage's Summon.",
     ),
     (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",

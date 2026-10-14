@@ -109,7 +109,7 @@ const ALONG: Fx = Fx::ratio(5, 10);
 const GOAD_TO: i32 = 80;
 /// The Blood mage's red, in percent, below which she stops paying for things.
 const RED_FLOOR: i32 = 25;
-const RED_GRASP: i32 = 70;
+const RED_CHARGE: i32 = 70;
 const RED_CUT: i32 = 70;
 /// **The Bulwark's throw and leap**: the nearest and furthest a window is
 /// worth crossing that way. Inside the near one he walks; past the far one
@@ -162,7 +162,8 @@ pub struct Uses {
     /// The Blood mage: spikes, spikes on a pool, Grasps, cuts, blinks.
     pub spikes: u32,
     pub erupted: u32,
-    pub grasps: u32,
+    pub charges: u32,
+    pub plagues: u32,
     pub cuts: u32,
     pub blinks: u32,
     /// The Dual mage: autos thrown with the hand the plan did not ask for so
@@ -197,7 +198,8 @@ impl Uses {
         self.shots += o.shots;
         self.spikes += o.spikes;
         self.erupted += o.erupted;
-        self.grasps += o.grasps;
+        self.charges += o.charges;
+        self.plagues += o.plagues;
         self.cuts += o.cuts;
         self.blinks += o.blinks;
         self.turned += o.turned;
@@ -256,7 +258,8 @@ impl Uses {
             Class::BloodMage => vec![
                 ("spikes", self.spikes, "Black spikes thrown"),
                 ("on a pool", self.erupted, "of those, at a pool under it"),
-                ("grasps", self.grasps, "held and let go at it"),
+                ("charges", self.charges, "Summons held to raise her stains"),
+                ("plagues", self.plagues, "Hemoplagues on it"),
                 ("cuts", self.cuts, "Haemorrhages from range"),
                 ("blinks", self.blinks, "to a pool, in or out"),
             ],
@@ -390,6 +393,7 @@ impl Hands {
         let standing = match (me.class, kind) {
             (Class::Elementalist, SLOT_SPECIAL) => Some(EffectKind::FirePillar),
             (Class::ShadowReaver, SLOT_SPECIAL) => Some(EffectKind::GuillotineLotus),
+            (Class::BloodMage, moves::blood::HEMOPLAGUE) => Some(EffectKind::Plague),
             _ => None,
         };
         standing.is_none_or(|k| {
@@ -428,16 +432,15 @@ impl Hands {
 
     /// **How far from what it is hitting this class hits it from.** The poke's
     /// reach -- the bolt's nine metres, for the Elementalist -- and for the
-    /// Blood mage the scythe's as it is now, grey making it longer: her poke
-    /// slot is the Bloodletter, a thrown blade, and a plan that walked to its
-    /// seven metres swung her scythe at the air. A plan that walks to "in
-    /// reach" walks this far.
+    /// Blood mage half her Haemorrhage's: she has no blade since 2026-10-13,
+    /// and a plan that walks to "in reach" walks this far, near enough for
+    /// her stains to land where she can reach them.
     pub fn reach(&self, me: &Player) -> Fx {
         let poke = moves::get(me.class, SLOT_POKE);
         match me.class {
-            Class::BloodMage => {
-                sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP))
-            }
+            Class::BloodMage => moves::get(me.class, moves::blood::HAEMORRHAGE)
+                .reach
+                .mul(Fx::ratio(1, 2)),
             _ => sim::state::live_reach(me, &poke),
         }
     }
@@ -561,9 +564,10 @@ impl Hands {
     }
 
     /// The Blood mage: **the spike on a pool under it**, which drinks the pool
-    /// whole and comes up half again as hard; **the Grasp** from range in a
-    /// long window, which hauls her to it; **the cut** from beyond the
-    /// scythe; and the scythe, which drinks what it passes over.
+    /// whole and comes up half again as hard; **the Hemoplague** on it in a
+    /// long window; **the Summon** when her stains are round her; **the cut**
+    /// from range; **Command** onto it when she has thralls standing; and the
+    /// Haemorrhage in reach.
     fn bleed(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let red = me.health * 100 / me.full_health().max(1);
         let far = flat(at.sub(me.pos)).flat_len();
@@ -580,8 +584,18 @@ impl Hands {
             self.uses.erupted += 1;
             return self.look_keeping(me, plan, pool, b);
         }
-        let sweep = sim::state::live_reach(me, &moves::get(me.class, moves::blood::SWEEP));
-        if let Some(input) = self.grasp(w, me, at, plan, window, red) {
+        let plague = moves::get(me.class, moves::blood::HEMOPLAGUE);
+        if red >= RED_CHARGE
+            && window >= (plague.startup + plague.active) as i32 + LONG_WINDOW
+            && far.raw() < plague.reach.sub(Fx::ratio(5, 10)).raw()
+            && self.ready(w, me, moves::blood::HEMOPLAGUE)
+            && let Some(b) = self.button(me, moves::blood::HEMOPLAGUE)
+        {
+            self.uses.plagues += 1;
+            return self.look_keeping(me, plan, at, b);
+        }
+        let sweep = self.reach(me);
+        if let Some(input) = self.charge(w, me, at, plan, window, red) {
             return input;
         }
         let cut = moves::get(me.class, moves::blood::HAEMORRHAGE);
@@ -595,65 +609,71 @@ impl Hands {
             self.uses.cuts += 1;
             return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
         }
-        // **The scythe, not the plan's heavy**, in its reach: a plan's heavy
-        // is her Haemorrhage, four in a hundred of her red for thirty against
-        // something that does not bleed, where the scythe costs one and
-        // drinks the pools under it.
-        // The scythe is her right click since 2026-10-09; asked of the kit
-        // rather than written down, as every other button here is.
-        let scythe = self.button(me, moves::blood::SWEEP).unwrap_or(Input::LEFT);
-        if plan.bits & ATTACKS != scythe {
-            if far.raw() < sweep.add(Fx::ratio(5, 10)).raw() {
-                return Input::looking_at((plan.bits & !ATTACKS) | scythe, plan.aim, plan.pitch);
-            }
-            if red < RED_CUT {
-                return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
-            }
+        // **Her thralls, sent onto it**, when she has any standing: a tap
+        // of Command on where it is.
+        let thralls = w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
+            .count();
+        if thralls > 0
+            && self.ready(w, me, moves::blood::COMMAND)
+            && let Some(b) = self.button(me, moves::blood::COMMAND)
+            && plan.bits & ATTACKS != b
+        {
+            return self.look_keeping(me, plan, at, b);
+        }
+        // In reach, the Haemorrhage rather than the plan's own press.
+        if far.raw() < sweep.add(Fx::ratio(5, 10)).raw()
+            && red >= RED_CUT
+            && let Some(b) = self.button(me, moves::blood::HAEMORRHAGE)
+        {
+            return self.look_keeping(me, plan, at, b);
+        }
+        if red < RED_CUT {
+            return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
         }
         plan
     }
 
-    /// The Grasp, if it is worth holding: from beyond the scythe, in a long
-    /// window, with red to spare. **Against a creature it is a way in and
-    /// little else**: the arms cannot haul it, so they haul her to it, and
-    /// what they deal is one arm's worth -- forty or fifty, measured on the
-    /// Pair, for seven in a hundred of her red. The hold sets the depth, so
-    /// it is held for the frames that put the arms' meeting point on `at`.
-    fn grasp(
+    /// **The Summon** on `E`, if there are stains of hers near her to raise
+    /// and room for more thralls.
+    fn charge(
         &mut self,
         w: &World,
         me: &Player,
-        at: V3,
+        _at: V3,
         plan: Input,
         window: i32,
         red: i32,
     ) -> Option<Input> {
-        let grasp = moves::get(me.class, moves::blood::GRASP);
-        let far = flat(at.sub(me.pos)).flat_len();
-        let far_end = grasp.reach;
-        // The hold whose reach is nearest the point.
-        let frames = (1..=grasp.channel)
-            .min_by_key(|h| grasp.reach_after(*h).sub(far).abs().raw())
-            .unwrap_or(1);
-        if red < RED_GRASP
-            || far.raw() < Fx::from_int(3).raw()
-            || far.raw() > far_end.sub(Fx::ratio(5, 10)).raw()
-            || window < frames as i32 + (grasp.startup + grasp.active) as i32 + LONG_WINDOW
-            || self.cool > 0
-            || !self.ready(w, me, moves::blood::GRASP)
+        let near = self
+            .pools_of(w, 1)
+            .filter(|p| flat(p.sub(me.pos)).flat_len().raw() <= sim::tuning::summon_reach().raw())
+            .count();
+        let standing = w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
+            .count() as i32;
+        let m = moves::get(me.class, moves::blood::SUMMON);
+        if red < RED_CUT
+            || near == 0
+            || standing >= sim::tuning::thrall_cap()
+            || window < (m.startup + m.active) as i32 + SPARE
+            || !self.ready(w, me, moves::blood::SUMMON)
         {
             return None;
         }
-        let b = self.button(me, moves::blood::GRASP)?;
-        self.uses.grasps += 1;
-        self.rest();
-        self.seq = Some(Seq::Hold {
-            bits: b,
-            at,
-            left: frames,
-        });
-        self.fresh = true;
-        Some(self.look_keeping(me, plan, at, b))
+        let b = self.button(me, moves::blood::SUMMON)?;
+        self.uses.charges += 1;
+        Some(Input::looking_at(
+            plan.bits & !ATTACKS | b,
+            plan.aim,
+            plan.pitch,
+        ))
     }
 
     /// The nearest of her pools to `at`, if one lies under it.
@@ -1006,11 +1026,10 @@ impl Hands {
                 Some(self.look(me, chest(shadow.pos), Input::SHIFT | Input::W))
             }
             Class::BloodMage => {
-                // **The Grasp is her way in**: the arms close on something
-                // that cannot be hauled and haul her to it instead, and the
-                // pool they spill is a spike's worth for the next window.
+                // **From range she does not need a way in**: her stains round
+                // her stood up as thralls go in for her.
                 let red = me.health * 100 / me.full_health().max(1);
-                if let Some(input) = self.grasp(w, me, at, self.look(me, at, 0), window, red) {
+                if let Some(input) = self.charge(w, me, at, self.look(me, at, 0), window, red) {
                     return Some(input);
                 }
                 if window <= dodge / 2 + 14 {

@@ -1032,6 +1032,31 @@ actually lives.
 
 ### Blood mage
 
+> **Revised 2026-10-13 from play.** Left: the Haemorrhage tapped, the Hemoplague held (growing),
+> the Black vines held to the end. Middle: one to seven Black spikes by the hold (the Stake in the
+> air), the Crimson cascade held to the end. Right: Command tapped, the Carpet of blood held, the
+> Blood golem held to the end. Space and a click is a takeoff (Blood wings, Upheaval, Rising reap);
+> `Q` Coagulate, `E` the Summon; `shift` with a stain under the crosshair teleports, otherwise an
+> ordinary dodge. A finisher spends all her grey. The table is
+> [kits/blood-mage.md](kits/blood-mage.md) §"Thralls and grey".
+>
+> **Superseded 2026-10-13: thralls and the Well.** A tap is the quick thing and a hold is the
+> field: left is the Haemorrhage tapped and the Carpet of blood held, middle the Black spike in
+> tiers (the Stake in the air), right Command tapped and the Summon held. Space and a click is a
+> takeoff from the floor and once in the air (Blood wings, the Upheaval, the Rising reap); `Q` is
+> Coagulate and `E` the Hemoplague; with a full Well, a hold kept to its end becomes the Thorn
+> garden, Exsanguinate or the Blood golem. The dodge with a stain under the crosshair is the
+> teleport, otherwise the Sanguine flow. The table is [kits/blood-mage.md](kits/blood-mage.md)
+> §"Thralls and the Well"; what follows it here is older still.
+>
+> **Superseded 2026-10-12: she is the blaster.** The three clicks held on the floor through
+> three tiers (left the Transfusion, middle the Black spike, right the sweep tapped and Tides
+> held), quick in the air (the Haemorrhage, the Stake, Reaper's chain), takeoffs with space
+> (Blood wings, the Upheaval, Reaper's leap); `Q` is Frenzy and `E` the Hemoplague; a jump or
+> a dodge out of a hold stores the charge. The dodge with a stain under the crosshair is the
+> teleport, otherwise the Sanguine flow. The table is [kits/blood-mage.md](kits/blood-mage.md)
+> §"The blaster"; what follows it here is older still.
+>
 > **Superseded 2026-10-09: she is on three clicks.** Left is *my blood* (the Blood nova held on
 > the floor, the Haemorrhage in the air), middle is *your blood* (the Grasp held, the Nail in
 > the air), right is the scythe (the Reaping sweep, the Hook in the air); space with a click is

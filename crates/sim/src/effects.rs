@@ -303,6 +303,44 @@ pub enum EffectKind {
     /// line, pierces whoever is on it and pins them, and waits where it
     /// stopped for him to arrive and tear it out.
     Javelin,
+    /// Blood mage, **the Hemoplague** (2026-10-12): a cloud at the crosshair,
+    /// `reach` across and `tuning::plague_height` tall, for
+    /// `tuning::plague_lasts`. It hurts everyone inside on its tick -- not a
+    /// hit: no stun, no shove, so it holds nobody -- and what it spills goes
+    /// to one stain at its centre. See `state::World::step_the_plague`.
+    Plague,
+    /// Blood mage, **the Carpet of blood** (2026-10-13): a disc of blood on
+    /// the floor where she aimed, `reach` across and growing for as long as
+    /// she holds the click. It slows and hurts what is inside on a tick, and
+    /// `banked` is the blood in it -- what she paid and what it spilled --
+    /// which it breaks into as stains when she lets go. See
+    /// `state::World::step_carpets`.
+    Carpet,
+    /// Blood mage, **a thrall** (2026-10-13): a stain on legs. `banked` is
+    /// its essence, exactly a stain's, draining as a stain's would; `home` is
+    /// where she sent it. It bites what it reaches, and each bite deals what
+    /// it spends and spills that much under its prey. Any one blow kills it,
+    /// and it falls back into a stain of what it had, less the blow. See
+    /// `state::World::step_thralls`.
+    Thrall,
+    /// Blood mage, **the Black vines** (2026-10-13): barbed vines erupting
+    /// out from where her Hemoplague stood to `reach` over
+    /// `tuning::vines_grow`, the blow in `banked` and a bleed on everything
+    /// the front passes, then standing for `vines_lasts`, bleeding and
+    /// slowing what enters. A finisher. See `state::World::step_the_vines`.
+    Vines,
+    /// Blood mage, **the Blood golem** (2026-10-13): a thrall that takes
+    /// blows off its health instead of dying to one. `banked` is its health;
+    /// `home` is where she sent it. It drains as a stain does, and every
+    /// punch costs it a share of what it dealt. A finisher.
+    Golem,
+    /// Blood mage, **the Crimson cascade** (2026-10-13): rings of eruptions
+    /// going out from `pos`, one every `tuning::cascade_every`, each
+    /// `reach` further out; the first ring's blow is `banked` and each after
+    /// carries `cascade_decay` of the last. Every stain of hers a ring
+    /// crosses is lit. A finisher; also the picture of the Rising reap's
+    /// sweep, for its few frames. See `state::World::step_the_cascade`.
+    Cascade,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -427,6 +465,12 @@ impl EffectKind {
             EffectKind::Shockwave => "shockwave",
             EffectKind::Cuts => "thousand cuts",
             EffectKind::Javelin => "javelin",
+            EffectKind::Plague => "hemoplague",
+            EffectKind::Carpet => "carpet of blood",
+            EffectKind::Thrall => "thrall",
+            EffectKind::Vines => "black vines",
+            EffectKind::Golem => "blood golem",
+            EffectKind::Cascade => "crimson cascade",
         }
     }
 
@@ -505,6 +549,14 @@ impl EffectKind {
             // ran; the ring is the floor breaking.
             EffectKind::Crescent | EffectKind::Cuts | EffectKind::Javelin => false,
             EffectKind::Shockwave => true,
+            // A cloud standing on the floor where she aimed it, and the rest
+            // of hers on the floor too -- the cone is drawn from her feet.
+            EffectKind::Plague
+            | EffectKind::Carpet
+            | EffectKind::Thrall
+            | EffectKind::Vines
+            | EffectKind::Golem
+            | EffectKind::Cascade => true,
         }
     }
 
@@ -648,6 +700,16 @@ impl EffectKind {
             29 => Some(EffectKind::Shockwave),
             30 => Some(EffectKind::Cuts),
             31 => Some(EffectKind::Javelin),
+            // The Blood mage's cloud, 2026-10-12: cast at the crosshair's
+            // spot on the floor like any grounded thing.
+            32 => Some(EffectKind::Plague),
+            // The rest of hers are put in the world by the move that makes
+            // them; listed so the numbering is complete.
+            33 => Some(EffectKind::Carpet),
+            34 => Some(EffectKind::Thrall),
+            35 => Some(EffectKind::Vines),
+            36 => Some(EffectKind::Golem),
+            37 => Some(EffectKind::Cascade),
             _ => None,
         }
     }
@@ -735,6 +797,15 @@ impl EffectKind {
             EffectKind::Cuts => t::cuts_delay()
                 .saturating_add(t::cuts_every().saturating_mul(t::cuts_count().max(1) as u16))
                 .saturating_add(1),
+            EffectKind::Plague => t::plague_lasts(),
+            // The carpet, a thrall and the golem have no clock: the carpet
+            // breaks when she lets go, the other two are gone when they run
+            // dry -- see `state::World::step_carpets` and `step_thralls`.
+            EffectKind::Carpet | EffectKind::Thrall | EffectKind::Golem => u16::MAX,
+            EffectKind::Vines => t::vines_lasts(),
+            EffectKind::Cascade => t::cascade_every()
+                .saturating_mul(t::cascade_waves().max(1) as u16)
+                .saturating_add(t::spike_erupt()),
         }
     }
 
@@ -810,6 +881,15 @@ impl EffectKind {
             EffectKind::Cuts => t::cuts_damage(),
             // The spear is the hit: the move's own number.
             EffectKind::Javelin => m.damage,
+            // The move's own number, on every tick.
+            EffectKind::Plague => m.damage,
+            // The move's own number: the carpet's tick, the thorns' tick, the
+            // golem's punch, the cone's blow. A thrall's bite is what it
+            // spends, not a number of its own.
+            EffectKind::Carpet | EffectKind::Vines | EffectKind::Golem | EffectKind::Cascade => {
+                m.damage
+            }
+            EffectKind::Thrall => 0,
         }
     }
 }
@@ -954,6 +1034,13 @@ impl Effect {
             EffectKind::BlackSpike => Control::slowing(t::slow_frames(), t::spike_slow()),
             EffectKind::GuillotineLotus => Control::slowing(t::slow_frames(), t::lotus_slow()),
             EffectKind::Grasp => Control::grabbing(self.source().grabs),
+            // Her cloud and her vines slow what is in them.
+            EffectKind::Plague => {
+                Control::slowing(t::plague_tick().saturating_add(10), t::plague_slow())
+            }
+            EffectKind::Vines => {
+                Control::slowing(t::vines_tick().saturating_add(10), t::plague_slow())
+            }
             _ => Control::default(),
         }
     }
@@ -1134,7 +1221,9 @@ impl Effect {
             EffectKind::AirBall | EffectKind::Fountain => self.reach,
             EffectKind::FireCarpet => self.source().radius,
             EffectKind::Nova => self.reach,
-            EffectKind::Nail => self.source().radius,
+            // The Stake in flight is a bolt's width; its row's radius is the
+            // area it lands in.
+            EffectKind::Nail => t::haemorrhage_radius(),
             EffectKind::ShadeBolt
             | EffectKind::Binary
             | EffectKind::Abyss
@@ -1147,6 +1236,9 @@ impl Effect {
             EffectKind::Shockwave => self.reach,
             EffectKind::Cuts => t::cuts_radius(),
             EffectKind::Javelin => self.source().radius,
+            EffectKind::Plague => self.reach,
+            EffectKind::Carpet | EffectKind::Vines | EffectKind::Cascade => self.reach,
+            EffectKind::Thrall | EffectKind::Golem => self.thrall_radius(),
         }
     }
 
@@ -1691,6 +1783,41 @@ impl Effect {
             banked: volume,
             power: Fx::ONE,
         }
+    }
+
+    /// Is this a thrall or the golem -- blood on legs?
+    pub const fn is_a_thrall(&self) -> bool {
+        matches!(self.kind, EffectKind::Thrall | EffectKind::Golem)
+    }
+
+    /// How wide a thrall stands: its stain's width, and the golem
+    /// `tuning::golem_size` times that.
+    pub fn thrall_radius(&self) -> Fx {
+        let r = t::body_radius().mul(self.pool_share());
+        if matches!(self.kind, EffectKind::Golem) {
+            r.mul(t::golem_size())
+        } else {
+            r
+        }
+    }
+
+    /// How tall it stands: its stain's height, and the golem
+    /// `tuning::golem_size` times that.
+    pub fn thrall_height(&self) -> Fx {
+        let h = t::body_height().mul(self.pool_share());
+        if matches!(self.kind, EffectKind::Golem) {
+            h.mul(t::golem_size())
+        } else {
+            h
+        }
+    }
+
+    /// Does a blow of this spill nothing? **An eruption out of a stain** --
+    /// it spends the blood it came out of -- so the same spot hit again runs
+    /// out rather than growing (2026-10-13). The critters' and the bleed's
+    /// paths ask the same.
+    pub const fn spills_nothing(&self) -> bool {
+        matches!(self.kind, EffectKind::BlackSpike) && self.banked == 1
     }
 
     pub const fn is_a_pool(&self) -> bool {

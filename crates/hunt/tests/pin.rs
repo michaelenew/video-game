@@ -38,6 +38,8 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // `state_checksum` hashes all of it. Before re-pinning, every one of these
 // hunts was compared frame by frame against the code before the change --
 // both fighters, the creature, the phase and the effects -- and was identical.
+// The Blood mage's, merged with her rework, moved for play too: her effects
+// overfilled twelve slots, and 128 evict nothing.
 const PINNED: [(Class, u32, u64); 7] = [
     (Class::Champion, 0x2545_F491, 0x1adf1c8e378c184f),
     (Class::Champion, 7, 0x88775a823d760199),
@@ -77,7 +79,11 @@ const PINNED: [(Class, u32, u64); 7] = [
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
     // for `Rise::floor`, the height her takeoff window remembers.
-    (Class::BloodMage, 83, 0xc1d6454cc6fb124c),
+    // Moved 2026-10-12, deliberately: the blaster -- the class layer holds a
+    // Transfusion to its third tier and drops a Hemoplague where it held a
+    // Grasp, and every stain she makes is collected; and again for her dodge
+    // sending her blood ahead. See feel-log.md.
+    (Class::BloodMage, 83, 0xf93a6da8fa8a7215),
 ];
 
 #[test]

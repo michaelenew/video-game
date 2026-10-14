@@ -1,8 +1,10 @@
 ---
-status: built — v1, then on three clicks (2026-10-09); unplayed
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), then thralls and the Well (2026-10-13); unplayed
 decided: 2026-09-09
 revised: 2026-09-23
-sources: ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
+revised: 2026-10-12
+revised: 2026-10-13
+sources: ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
 ---
 
 # Blood mage — kit
@@ -27,7 +29,193 @@ grows with how open she has left herself, and a floor she wants to fight on.
 > six combos it was built towards, are
 > [../exploration/0009_blood_mage_on_three_clicks.md](../exploration/0009_blood_mage_on_three_clicks.md).
 
-## On three clicks — built 2026-10-09
+> **The blaster, 2026-10-12 — built, unplayed.** The owner's verdict on three clicks: short,
+> awkward, pools too small, and "spam Black spike". §"The blaster" below is what is in the game
+> now; **where anything after it disagrees, §"The blaster" wins.** The direction, the six combos
+> and the questions still open are
+> [../exploration/0015_blood_mage_blaster.md](../exploration/0015_blood_mage_blaster.md).
+
+> **Thralls and the Well, 2026-10-13 — built, unplayed.** The owner's verdict on the blaster:
+> the stains and the detonation chain are the class, but the snowball feeds itself, the start
+> costs most of her bar, and the moves are not synergistic. §"Thralls and grey" below is
+> what is in the game now; **where anything after it disagrees, it wins.** The direction, the
+> nine combos and the answers are
+> [../exploration/0016_blood_mage_thralls_and_the_well.md](../exploration/0016_blood_mage_thralls_and_the_well.md).
+
+## Thralls and grey — built 2026-10-13, revised from play the same day
+
+| | Left: the area | Middle: the spikes | Right: the thralls |
+| --- | --- | --- | --- |
+| **Tapped** | **Haemorrhage** (floor and air) | **Black spike**, one | **Command** |
+| **Held** | **Hemoplague**, growing | **Black spike**, one to seven (air: **Stake**) | **Carpet of blood** |
+| **Held to the end** | **Black vines** | **Crimson cascade** | **Blood golem** |
+| **Space + click**, floor or once in the air | **Blood wings** | **Upheaval** | **Rising reap** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | **Coagulate** |
+| `E` | **Summon** |
+| `shift` + direction | The **teleport** to a stain under the crosshair (12 m); otherwise an ordinary dodge |
+
+**The rows were retuned, not renumbered**: the Transfusion's row is the Carpet, the sweep's
+Command, Tides' the Summon, the chain's Coagulate, the leap's the Rising reap, Frenzy's the
+Black vines; the cascade and the golem were appended (`sim::moves::blood`).
+`tests/blood_mage.rs` holds one test per move and rule.
+
+### Grey, and the finishers
+
+**Grey holds for `grey_grace` (two seconds) after it last opened, then fades at `grey_fade`
+(60 a second).** It is the window to spend it in. **A finisher is a hold kept to its end, at
+any time**, and it spends all her grey and the Well (`Player::fuel`): its blow is the row's
+damage and `finisher_per_grey` for every point spent, so it always beats the row and is bigger
+the more there was.
+
+- **Black vines** (left): barbed vines erupt out of the Hemoplague's middle to `vines_size` of
+  its radius over `vines_grow`, hitting and bleeding everything the front passes, then stand for
+  `vines_lasts` (five seconds), bleeding and slowing whatever is in them.
+- **Crimson cascade** (middle): rings of eruptions go out from the crosshair, one every
+  `cascade_every`, `cascade_step` further each, `cascade_waves` of them, each `cascade_decay` of
+  the last; every stain of hers a ring crosses is lit and goes up in turn.
+- **Blood golem** (right): everything the Carpet covers -- stains, thralls, what the carpet held
+  -- and all her grey, fused into one thrall with that many hit points. It takes blows off its
+  health, loses `golem_self_hurt` of every punch it lands, and drains as a stain does.
+
+### Every stain is one kind
+
+- **Every cost is a stain**, where it was aimed. **Every hit is a stain**, hers or a thrall's.
+- Collected by walking, teleporting, hitting through it, or the spike erupting it; it settles
+  for `stain_settles` first. **Eruptions spill nothing.** What her red cannot hold fills the
+  **Well**, the bar under her health.
+- **A chain runs link by link**: a stain set off by an eruption beside it waits `chain_delay`
+  (three frames) -- fast enough not to react to, slow enough to see where it started.
+- **The dodge** is an ordinary dodge unless the crosshair is on a stain within 12 m; it throws
+  nothing.
+
+### The fields
+
+- **Hemoplague** (left held): laid at the crosshair's floor when the hold opens, growing from
+  `plague_from` to `plague_to` over the hold, hurting and slowing to `plague_slow`; let go, it
+  stands at that size for `plague_lasts`.
+- **Carpet of blood** (right held): laid the same way, growing from `carpet_from` to
+  `carpet_to`, paying 1% of her red every `carpet_pays_every` into itself and hurting a little;
+  let go, it is **one big stain** of what it held, and every stain of hers it covered stands up
+  as a thrall. A longer hold is a bigger stain and a wider area.
+- **The Black spike** (middle held): one spike for a tap, and up to `spikes_most` (seven) on a
+  ring as wide as `spike_spread_most` at a full hold.
+
+### Thralls
+
+A thrall is **a stain on legs**, up to `thrall_cap`: stood up by the Carpet or by `E`. **Her
+click comes first**: Command sends every thrall and the golem to the crosshair's floor, and
+they bite nothing until they are there. Otherwise a thrall goes for **the nearest enemy** within
+`thrall_seek` -- a fighter, the creature, a pack's critter -- **walking round walls** (it
+follows a wall on the hand it turned to). **A bite spends what it deals** and spills it under
+the prey. One blow kills a thrall back into a stain of what it had less the blow. A creature
+turns on the golem, and on a thrall nearer it than she is. It is drawn as a fighter's body gone
+brutish -- the same rounded torso, head and limbs, crouched, horned, long-armed -- in
+translucent blood.
+
+## The blaster — built 2026-10-12 (superseded 2026-10-13)
+
+| | Left: my blood | Middle: your blood | Right: the scythe |
+| --- | --- | --- | --- |
+| **On foot** (held: three tiers) | **Transfusion** | **Black spike** | Reaping sweep (tap) / **Tides** (held) |
+| **In the air** | Haemorrhage | **Stake** | **Reaper's chain** |
+| **Leaving the floor** (space + click) | **Blood wings** | **Upheaval** | **Reaper's leap** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | **Frenzy** |
+| `E` | **Hemoplague** |
+| `shift` + direction | The **teleport** to a stain under the crosshair (20 m); otherwise the **Sanguine flow** |
+
+**The rows were retuned, not renumbered**: the Bloodletter's row is the Transfusion, the
+Grasp's the Hemoplague, the nova's Tides, the jet's the wings, Marionette's the Upheaval, the
+Nail's the Stake, the Hook's the chain, Harvest's the leap, and Frenzy was appended
+(`sim::moves::blood`). The Bloodletter and Grasp effects are still in the simulation and
+nothing casts them. Its tests were folded into `tests/blood_mage.rs` in 2026-10-13.
+
+### The charge
+
+Each click on the floor is **held through three tiers** (`moves::Charge::Tier`): a tap is the
+first; the second at `Charge, tier two at` (30 frames), the third at `tier three at` (60),
+sooner by up to `Charge, faster at full grey` (×1.5) with a full bar of grey. Each tier is
+paid in red as it is reached (`tier two costs` 3%, `tier three costs` 4%, on top of the
+row's own cost on the press). Holding, she crawls at `Charge, walk while holding` (35% of a
+walk). **A jump or a dodge out of the hold stores it** in her vessel (`Player::vessel`, the
+move and its tier) and she jumps or dodges that frame; a **fresh** press of the same click lets
+it go from wherever she is, in the air too, at the stored tier, with nothing paid again. The
+vessel bleeds 1% of red every `Vessel, 1% of red every` (60 frames). A hit while still holding
+loses the charge. Right click is the sweep on a tap: held past the sweep's startup it becomes
+Tides (`countdown`), paying Tides' own cost there.
+
+### Every stain is collected
+
+A stain is **drunk** -- its essence turned from grey back into red, grey still the ceiling --
+by any of three things: **walking** into it (`Stain, walked into drinks` 100%,
+`World::drink_underfoot` -- only as much as her grey can hold, the stain keeping the rest, so
+at full health she walks through her stains and leaves them for the spike), the **teleport**
+to it (the same share), or **an attack** whose
+volume, bolt or effect lands over it (every move's `Drinks of a pool` is 100%). **An attack
+through a stain is harder for it**: `stain_bonus` adds `Stain, a hit through one adds` (50%) of
+the stain's essence to the blow, on a fighter, a creature or a small body alike. A spike on a
+stain still **erupts** it instead, and every stain within the eruption and `Black spike, an
+eruption sets off stains this far past its edge` (2.5 m) erupts with it.
+
+Grey fades at 3 a second (was 12) and stains drain at 5 (was 10). **Every move deals damage**,
+the movement included, and **every hit on a creature spills** by the blow's own worth rather
+than what its hide let through. The bleed ticks 25 every half second for four seconds. Her own
+blood -- the wings' takeoff -- is still only a door.
+
+### The moves
+
+| Move | Reach | Damage | Notes |
+| --- | --- | --- | --- |
+| Transfusion | 20 m bolt | 45 / ×1.7 / ×2.6 | tier two pierces everybody on the line; tier three throws back at 14 m/s |
+| Black spike | 22 m, grounded | 100 / 3 × 80 / 3 waves × 80 | tier two: three spikes 1.6 m out from the point; tier three: a 3 m field, a wave every 30 frames |
+| Reaping sweep | 2.4 m, grows with grey | 45 | the tap |
+| Tides | a ring 4 / 6 / 8 m | 60 / ×1.7 / ×2.6 | the hold; throws out |
+| Haemorrhage | 18 m bolt | 30, then the bleed | |
+| Stake | to the crosshair, 18 m | 90 | pins anybody in the air (`NAILED`); lands in a 2.5 m area that slows |
+| Reaper's chain | to the crosshair, 18 m | 40 | a fighter is yanked to her (30 m/s); a creature, a critter, the floor or a wall pulls her (40 m/s); the sky, 5 m along the aim |
+| Blood wings | 8 m along the aim | 40 in 2 m | tapped; any way, up included; her own stain at the takeoff |
+| Upheaval | 15 m, grounded | 80, launches 18 m/s | a hop for her (12 m/s); on a stain it erupts |
+| Reaper's leap | an arc to the crosshair's floor, 10 m | 90 in 2.5 m | lands as the slam; drinks every stain within 3 m |
+| Hemoplague | 22 m, grounded | 30 every half second for 5 s | a 2.5 m-radius, 4 m-tall cloud; not a hit -- no stun, no shove; all it spills goes to one stain at its centre; one at a time |
+| Frenzy | 6 m round her | 15 every 10 frames | see below |
+
+### Frenzy
+
+`Q`. **Its own blows spill nothing** -- the area and the explosions -- or each would be a
+stain inside the area exploding for twice itself (the loop that killed a Mireback in twenty
+frames). She is **planted** for `Frenzy, lasts` (180 frames): no walking and no jumping; her
+only movement is the teleport. Within the row's reach (6 m) everyone takes the row's damage
+every `Frenzy, hurts every` (10 frames) and starts to bleed. Every stain of hers within
+`Frenzy, pulls stains within` (15 m) **rushes** to her at 12 m/s and **explodes** at the edge
+of the area for `Stain, explodes for` (×2 its essence) in 2.5 m. **The price**: no stain heals
+her while it lasts -- whatever would have been drunk explodes -- grey drains at 60 a second,
+and when it ends whatever grey is left is gone. A **teleport to a stain** explodes it where she
+arrives and adds `Frenzy, a teleport adds` (60 frames), to `Frenzy, lasts at most` (480).
+`Frenzy, needs grey of at least` is 0: it is BLAST-7 in 0015.
+
+### Send and zip: the teleport and the flow
+
+`shift` with a stain of hers under the crosshair, within `Teleport, to a stain within` (22 m)
+and with a clear line: she is there, drinks it, and arrives in a burst of blood (the wings'
+row: 40 in 2 m) -- in the air too, even with the airdodge spent, since the stain is on the
+floor. With none, the dodge is the **Sanguine flow**: `Dodge is a blink` is on, a flat 6 m
+slide in `Blink, frames to cross`, invulnerable for the dodge's frames, drinking every stain
+she crosses on the way -- **and it sends her blood**: a glob thrown to the crosshair's spot on
+the floor, up to `Dodge, sends her blood up to` (20 m), that lands as a stain of her own blood
+(60) -- a door, never a heal, and the only one: a new one replaces the last
+(`World::send_the_blood`, `land_the_sent`). An airdodge sends it too. **The traversal cycle is
+send, zip, send**: about 55 m in 2.5 s on flat ground, against 17.5 m walking.
+
+**Not drawn yet:** the vessel's glow, and the Frenzy area. The Hemoplague is a faint disc with
+wisps inside its column, the spike field a ring of spikes rising with each wave, and the moves
+borrow her five clips (`view::play`).
+
+## On three clicks — built 2026-10-09 (superseded 2026-10-12)
 
 | | Left: my blood | Middle: your blood | Right: the scythe |
 | --- | --- | --- | --- |

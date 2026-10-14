@@ -330,7 +330,7 @@ fn every_class_can_touch_a_gnawer_with_its_auto() {
             continue;
         }
         let auto = if class == Class::BloodMage {
-            sim::moves::blood::SWEEP
+            sim::moves::blood::BLACK_SPIKE
         } else {
             0
         };

@@ -501,6 +501,7 @@ scalars! {
     // with it, and the essence pools the other fighter bleeds onto the floor.
     // See `docs/design/blood-mage.md`.
     GreyFade,         "Blood mage", "Grey fades (health per second)",         Int,   0,        600;
+    GreyGrace, "Blood mage", "Grey, holds before it fades", Frames, 0, 600;
     GreyReach,        "Blood mage", "Scythe reach at full grey (x)",          Fixed, fx(1,1),  fx(4,1);
     GreyDamage,       "Blood mage", "Scythe damage at full grey (x)",         Fixed, fx(1,1),  fx(4,1);
     SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
@@ -774,6 +775,73 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **The Blood mage as the blaster**, 2026-10-12: every stain is
+    // collected -- walked into, teleported to, hit through -- and a hit
+    // through one is harder for it. See
+    // `docs/design/exploration/0015_blood_mage_blaster.md`.
+    StainHitBonus,        "Blood mage", "Stain, a hit through one adds (% of its essence)", Int, 0, 300;
+    StainWalkDrinks,      "Blood mage", "Stain, walked into drinks (% of its essence)", Int, 0, 100;
+    TierTwo, "Blood mage", "Charge, tier two at", Frames, 1, 180;
+    TierThree, "Blood mage", "Charge, tier three at", Frames, 1, 240;
+    TierTwoCost, "Blood mage", "Charge, tier two costs (% of red)", Int, 0, 50;
+    TierThreeCost, "Blood mage", "Charge, tier three costs (% of red)", Int, 0, 50;
+    TierTwoPower, "Blood mage", "Charge, tier two hits (x)", Fixed, fx(1,1), fx(5,1);
+    TierThreePower, "Blood mage", "Charge, tier three hits (x)", Fixed, fx(1,1), fx(8,1);
+    ChargeGreyFaster, "Blood mage", "Charge, faster at full grey (x)", Fixed, fx(1,1), fx(3,1);
+    VesselBleedsEvery, "Blood mage", "Vessel, 1% of red every", Frames, 1, 600;
+    SpikeTwoPower, "Blood mage", "Black spike, tier two each (x)", Fixed, 0, fx(2,1);
+    SpikeFieldRadius, "Blood mage", "Black spike, tier three field radius", Fixed, fx(1,1), fx(8,1);
+    SpikeFieldPower, "Blood mage", "Black spike, tier three each wave (x)", Fixed, 0, fx(2,1);
+    SpikeWaves, "Blood mage", "Black spike, tier three waves", Int, 1, 8;
+    SpikeWaveEvery, "Blood mage", "Black spike, tier three wave every", Frames, 1, 90;
+    WingsFrames, "Blood mage", "Blood wings, frames to cross", Frames, 1, 40;
+    TeleportReach, "Blood mage", "Teleport, to a stain within (m)", Fixed, fx(1,1), fx(40,1);
+    PlagueLasts, "Blood mage", "Hemoplague, cloud lasts", Frames, 1, 900;
+    PlagueTick, "Blood mage", "Hemoplague, hurts every", Frames, 1, 120;
+    PlagueHeight, "Blood mage", "Hemoplague, cloud height", Fixed, fx(1,1), fx(10,1);
+    ChargeCrawl, "Blood mage", "Charge, walk while holding (%)", Int, 0, 100;
+    EruptChain, "Blood mage", "Black spike, an eruption sets off stains this far past its edge (m)", Fixed, 0, fx(8,1);
+    // **The Blood mage: stains, thralls and the Well**, 2026-10-13. See
+    // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
+    WellFull, "Blood mage", "Well, full at", Int, 1, 2000;
+    StainSettles, "Blood mage", "Stain, settles before it can be drunk", Frames, 0, 60;
+    CarpetFrom, "Blood mage", "Carpet, starts at radius", Fixed, fx(1,2), fx(6,1);
+    CarpetTo, "Blood mage", "Carpet, grows to radius", Fixed, fx(1,1), fx(12,1);
+    CarpetPaysEvery, "Blood mage", "Carpet, 1% of red every", Frames, 1, 60;
+    CarpetTick, "Blood mage", "Carpet, hurts every", Frames, 1, 120;
+    CoagulateReach, "Blood mage", "Coagulate, gathers stains within (m)", Fixed, fx(1,1), fx(30,1);
+    CoagulateSpeed, "Blood mage", "Coagulate, stains slide at (m/s)", Fixed, fx(1,1), fx(60,1);
+    SummonReach, "Blood mage", "Summon, raises stains within (m)", Fixed, fx(1,1), fx(20,1);
+    ThrallCap, "Blood mage", "Thralls at once", Int, 1, 8;
+    ThrallSpeed, "Blood mage", "Thrall, runs at (m/s)", Fixed, fx(1,1), fx(20,1);
+    ThrallSeek, "Blood mage", "Thrall, goes for a body within (m)", Fixed, 0, fx(40,1);
+    ThrallReach, "Blood mage", "Thrall, bites within (m)", Fixed, fx(1,4), fx(4,1);
+    ThrallBite, "Blood mage", "Thrall, a bite spends (% of it)", Int, 1, 100;
+    ThrallBiteLeast, "Blood mage", "Thrall, a bite spends at least", Int, 1, 200;
+    ThrallBiteEvery, "Blood mage", "Thrall, bites every", Frames, 1, 120;
+    ReapCone, "Blood mage", "Rising reap, cone half-width (cos)", Fixed, 0, fx(1,1);
+    ReapHurl, "Blood mage", "Rising reap, hurls thralls at (m/s)", Fixed, 0, fx(40,1);
+    ReapHurlFor, "Blood mage", "Rising reap, hurls thralls for", Frames, 1, 90;
+    GolemSpeed, "Blood mage", "Golem, walks at (m/s)", Fixed, fx(1,2), fx(15,1);
+    GolemPunchEvery, "Blood mage", "Golem, punches every", Frames, 1, 180;
+    GolemReach, "Blood mage", "Golem, punches within (m)", Fixed, fx(1,2), fx(8,1);
+    GolemSize, "Blood mage", "Golem, stands this many thralls tall (x)", Fixed, fx(1,1), fx(4,1);
+    PlagueFrom, "Blood mage", "Hemoplague, starts at radius", Fixed, fx(1,4), fx(8,1);
+    PlagueTo, "Blood mage", "Hemoplague, grows to radius", Fixed, fx(1,1), fx(16,1);
+    PlagueSlow, "Blood mage", "Hemoplague, slows to (x)", Fixed, 0, fx(1,1);
+    FinisherPerGrey, "Blood mage", "Finisher, damage per grey spent (x)", Fixed, 0, fx(4,1);
+    VinesGrow, "Blood mage", "Black vines, erupt out over", Frames, 1, 120;
+    VinesLasts, "Blood mage", "Black vines, stand for", Frames, 1, 900;
+    VinesTick, "Blood mage", "Black vines, bleed what enters every", Frames, 1, 120;
+    VinesSize, "Blood mage", "Black vines, radius per cloud radius (x)", Fixed, fx(1,2), fx(3,1);
+    CascadeWaves, "Blood mage", "Crimson cascade, waves", Int, 1, 8;
+    CascadeEvery, "Blood mage", "Crimson cascade, a wave every", Frames, 1, 180;
+    CascadeStep, "Blood mage", "Crimson cascade, rings apart (m)", Fixed, fx(1,2), fx(10,1);
+    CascadeDecay, "Blood mage", "Crimson cascade, each wave of the last (x)", Fixed, fx(1,10), fx(1,1);
+    ChainDelay, "Blood mage", "Stain, a chained eruption waits", Frames, 0, 60;
+    SpikeSpreadMost, "Blood mage", "Black spike, widest ring at a full hold (m)", Fixed, 0, fx(10,1);
+    SpikesMost, "Blood mage", "Black spike, spikes at a full hold", Int, 1, 7;
+    GolemSelfHurt, "Blood mage", "Golem, hurts itself per blow dealt (x)", Fixed, 0, fx(2,1);
     // **The Champion's Rush, braced** (2026-10-12, exploration 0015 C1).
     // Appended, as every scalar is. A hit taken through most of the run costs
     // a share of its damage and does not stop him; one taken in its last few
