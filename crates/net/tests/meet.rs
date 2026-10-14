@@ -8,7 +8,7 @@
 
 use net::loopback::{Hall, MemoryBoard, MemoryLine, Wire};
 use net::meet::{Rendezvous, Room};
-use net::{NetInput, Progress, Seat, handle_requests, p2p};
+use net::{NetInput, Progress, Seat, handle_requests, handle_requests_kept, p2p};
 use sim::{Input, World};
 
 type MemRoom = Room<MemoryBoard, MemoryLine>;
@@ -532,5 +532,230 @@ fn four_play_a_match_in_sync_over_the_mesh() {
             "player four's class change, as seen by player {}",
             handle + 1
         );
+    }
+}
+
+/// **Somebody leaves, and the rest play on in step without them.** Three on
+/// the mesh; the third stops answering a few seconds in. The two left behind
+/// give the seat up on the same frame -- GGRS sees to that -- and from it the
+/// third fighter is out of the world on both machines (`World::away`),
+/// rather than standing there as a target with its look turned to zero. The
+/// two worlds agree, frame for frame, all the way to the end.
+#[test]
+fn three_play_and_one_leaves_and_the_two_agree() {
+    use std::time::{Duration, Instant};
+    const LEAVES_AT: u32 = 200;
+    const UNTIL: u32 = 700;
+    let seats = mesh(3, &[11, 22, 33]);
+    let mut peers: Vec<_> = seats
+        .into_iter()
+        .map(|s| {
+            let h = s.handle;
+            let start = World::with_classes([sim::Class::Champion; 3]);
+            let session = p2p::start_with(s, 2, Duration::from_millis(500)).expect("session");
+            (session, start, h, 0u32, false, None::<u64>)
+        })
+        .collect();
+    let mut rng = 0x2545_f491_4f6c_dd1d_u64;
+    let began = Instant::now();
+    while began.elapsed() < Duration::from_secs(30) {
+        let mut moved = false;
+        for (session, world, handle, frames, saw_leave, at_end) in peers.iter_mut() {
+            // The third player is gone: never polled again.
+            if *handle == 2 && *frames >= LEAVES_AT {
+                continue;
+            }
+            session.poll_remote_clients();
+            for event in session.events() {
+                match event {
+                    net::ggrs::GgrsEvent::DesyncDetected { frame, .. } => {
+                        panic!("desync at frame {frame}")
+                    }
+                    net::ggrs::GgrsEvent::Disconnected { .. } => *saw_leave = true,
+                    _ => {}
+                }
+            }
+            if session.current_state() != net::ggrs::SessionState::Running || *frames >= UNTIL {
+                continue;
+            }
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            let input = Input::aimed((rng & 0x1ff) as u16, (rng >> 20) as u16);
+            if session
+                .add_local_input(*handle, NetInput::from(input))
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                // A call that was over the prediction window plays nothing:
+                // the world's own frame is what counts.
+                handle_requests(world, requests);
+                moved |= world.frame != *frames;
+                *frames = world.frame;
+                if *frames == UNTIL {
+                    *at_end = Some(world.checksum());
+                }
+            }
+        }
+        let stayed = peers.iter().filter(|p| p.2 != 2);
+        if stayed.clone().all(|p| p.3 >= UNTIL && p.4) {
+            break;
+        }
+        if !moved {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    let stayed: Vec<_> = peers.iter().filter(|p| p.2 != 2).collect();
+    for (_, world, handle, frames, saw_leave, _) in &stayed {
+        assert!(
+            *saw_leave,
+            "player {} never heard the third leave",
+            handle + 1
+        );
+        assert_eq!(*frames, UNTIL, "player {} stalled", handle + 1);
+        assert!(
+            world.away.has(2),
+            "player {} still has the third in the fight",
+            handle + 1
+        );
+        assert!(!world.is_present(2));
+        assert_eq!(world.players[2].health, 0);
+    }
+    assert_eq!(
+        stayed[0].5, stayed[1].5,
+        "the two who stayed disagree about the world without the third"
+    );
+}
+
+/// **Four cells' worth of leaders on the mesh** (`net::cells`, `net::crowd`,
+/// 0018 §5): four play in one session; each keeps the region books, and at
+/// every epoch the leaders of each live region post its aggregate over the
+/// lines to the leaders next door, who collect it by agreement. In one
+/// session everybody sums the same confirmed world, so what arrives over the
+/// wire must equal what each ledger summed itself, two leaders must never
+/// be at odds, and every peer must follow the same streams.
+#[test]
+fn leaders_post_their_aggregates_over_the_mesh_and_the_rest_collect_them_in_agreement() {
+    use sim::tuning as t;
+    let seats = mesh(4, &[11, 22, 33, 44]);
+    let mut peers: Vec<_> = seats
+        .into_iter()
+        .map(|s| {
+            let h = s.handle;
+            let roster = s.roster.clone();
+            let post = s.post.clone();
+            let start = World::with_classes([sim::Class::Bulwark; 4]);
+            let ledger = regions::Ledger::new(&start, h, false);
+            (
+                p2p::start(s).expect("session"),
+                start,
+                h,
+                ledger,
+                post,
+                roster,
+                0u32,
+                0u32,
+            )
+        })
+        .collect();
+    let grid = sim::region::Grid::tuned();
+    let epoch_frames = t::crowd_epoch();
+    let until = 4 * epoch_frames + 30;
+    for _ in 0..60_000 {
+        for (session, world, handle, ledger, post, roster, heard, posted) in peers.iter_mut() {
+            session.poll_remote_clients();
+            if session.current_state() != net::ggrs::SessionState::Running || world.frame >= until {
+                continue;
+            }
+            ledger.tick();
+            if !ledger.may_advance(world.frame + 1) {
+                continue;
+            }
+            let input = Input::aimed(Input::W, (*handle as u16) << 14);
+            if session
+                .add_local_input(*handle, NetInput::from(input))
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                handle_requests_kept(world, requests, ledger, |_, _, _| {});
+                if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
+                    ledger.confirm_through(confirmed, world);
+                }
+                // The leader's duty, as the game does it.
+                let epoch = (world.frame / epoch_frames) as u16;
+                let members: Vec<net::cells::Member> = roster
+                    .iter()
+                    .enumerate()
+                    .map(|(seat, id)| net::cells::Member { seat, id: *id })
+                    .collect();
+                for a in ledger.summed() {
+                    if !net::cells::leads(world, &grid, &members, a.region, epoch, *handle) {
+                        continue;
+                    }
+                    for other in (0..4).filter(|o| o != handle) {
+                        let next_door =
+                            a.region.neighbours().iter().any(|n| {
+                                net::cells::leads(world, &grid, &members, *n, epoch, other)
+                            });
+                        if next_door {
+                            post.post(net::Peer::Line(other as u8), a);
+                            *posted += 1;
+                        }
+                    }
+                }
+                for a in post.collect(world.frame, epoch_frames) {
+                    // What came over the wire is what this ledger summed
+                    // itself for the same region and epoch, byte for byte.
+                    let own = ledger
+                        .summed()
+                        .iter()
+                        .find(|s| s.region == a.region && s.epoch == a.epoch);
+                    if let Some(own) = own {
+                        assert_eq!(*own, a, "player {} heard a different sum", *handle + 1);
+                    }
+                    ledger.offer(a);
+                    *heard += 1;
+                }
+            }
+            for event in session.events() {
+                if let net::ggrs::GgrsEvent::DesyncDetected { frame, .. } = event {
+                    panic!("desync at frame {frame}");
+                }
+            }
+        }
+        if peers.iter().all(|p| p.1.frame >= until) {
+            break;
+        }
+    }
+    let frames: Vec<u32> = peers.iter().map(|p| p.1.frame).collect();
+    assert!(frames.iter().all(|&f| f >= until), "frames: {frames:?}");
+    let posted: u32 = peers.iter().map(|p| p.7).sum();
+    let heard: u32 = peers.iter().map(|p| p.6).sum();
+    assert!(posted > 0, "nobody led a cell");
+    assert!(heard > 0, "nothing arrived over the lines: {posted} posted");
+    for (_, world, handle, ledger, post, ..) in &peers {
+        assert_eq!(
+            post.disputes(),
+            0,
+            "player {} saw leaders at odds",
+            handle + 1
+        );
+        assert!(
+            !ledger.followed().is_empty(),
+            "player {} follows nothing",
+            handle + 1
+        );
+        let _ = world;
+    }
+    // Every peer follows the same streams: the field is a function of the
+    // world, and the world is one.
+    let first: Vec<_> = peers[0].3.followed().iter().map(|f| f.region).collect();
+    for (_, _, handle, ledger, ..) in &peers[1..] {
+        let mine: Vec<_> = ledger.followed().iter().map(|f| f.region).collect();
+        assert_eq!(mine, first, "player {} follows other streams", handle + 1);
     }
 }

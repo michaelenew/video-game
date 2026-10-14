@@ -41,7 +41,7 @@ fn a_fight_seats_as_many_as_it_names() {
     // A hunt takes the seat out.
     assert_eq!(World::hunt([Class::Bulwark; 2]).seated(1).present(), 1);
     let w = World::with_classes(FOUR);
-    assert_eq!(w.players.map(|p| p.class), FOUR);
+    assert_eq!(w.players.map(|p| p.class)[..FOUR.len()], FOUR);
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn four_hunters_hunt_together() {
         w.advance([Input::default(); 4]);
     }
     assert!(w.hunting());
-    for p in &w.players {
+    for p in &w.players[..4] {
         assert!(p.health > 0, "a hunter is down before anything happened");
     }
     // The hunters cannot hurt each other: friendly fire is off with a

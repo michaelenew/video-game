@@ -48,11 +48,12 @@
 use crate::DT;
 use crate::arena::Terrain;
 use crate::critter::{
-    Critter, CritterField, CritterMove, Critters, MAX_CRITTERS, NO_SLOT, flag, is, stat, stat_fx,
+    Critter, CritterField, CritterMove, CritterSet, Critters, MAX_CRITTERS, NO_SLOT, flag, is,
+    stat, stat_fx,
 };
 use crate::fixed::{Fx, cos_turns};
 use crate::math::V3;
-use crate::monster::{Attack, Doing, Herd, NO_PART, mount_of, mount_slot};
+use crate::monster::{Attack, Doing, Herd, NO_MOUNT, mount_of, mount_slot};
 use crate::species::{Species, SpeciesId};
 use crate::state::{MAX_PLAYERS, NOBODY, Player};
 use crate::tuning as t;
@@ -176,13 +177,20 @@ pub struct Pack {
     /// field to the world. Twelve 32-bit words: the Hornback's bull, the
     /// largest ask in the bestiary, is about forty bytes.
     pub memo: [i32; MEMO],
+    /// **The species' own word per fighter**, beside [`Pack::memo`]: what it
+    /// remembers about each of them -- the Gnawers' pile-on bites and how
+    /// long somebody has been up a tree, the Hornback's who-was-trampled. It
+    /// used to be packed into the memo two fighters to a word, read as
+    /// `who & 1`, so with four fighters seats nought and two shared one
+    /// count; here every seat has its own, however many there are.
+    pub per: [u32; MAX_PLAYERS],
     /// **The referee's book** ([`watch`]), which the brain never reads: the
     /// bodies that were winding up when it last looked, one bit a slot; for
     /// each fighter, the bodies whose windup began off that fighter's screen;
     /// and how many frames running each fighter has stood under a marker
     /// drawn for something coming.
-    pub winding: u16,
-    pub unseen: [u16; MAX_PLAYERS],
+    pub winding: CritterSet,
+    pub unseen: [CritterSet; MAX_PLAYERS],
     pub marked: [u8; MAX_PLAYERS],
 }
 
@@ -212,8 +220,9 @@ impl Pack {
             home,
             seen: [Seen::default(); MAX_PLAYERS],
             memo: [0; MEMO],
-            winding: 0,
-            unseen: [0; MAX_PLAYERS],
+            per: [0; MAX_PLAYERS],
+            winding: CritterSet::EMPTY,
+            unseen: [CritterSet::EMPTY; MAX_PLAYERS],
             marked: [0; MAX_PLAYERS],
         }
     }
@@ -899,6 +908,10 @@ pub struct World<'a> {
     pub herd: &'a Herd,
     pub scene: &'a crate::aim::Scene<'a>,
     pub frame: u32,
+    /// **The crowd next door**, by the crowd field (`crate::crowd`): how
+    /// many fighters the regions round the pack's home are said to hold,
+    /// read slowly and late. Zero in any fight with nobody next door.
+    pub heard: Fx,
 }
 
 /// One frame of the pack: glance, mood, decisions, steering, physics.
@@ -949,7 +962,13 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
                     .iter()
                     .any(|s| s.alive && s.pos.sub(c.pos).flat_len().raw() <= alarm.raw())
             });
-            if near || alarm.raw() == 0 {
+            // **It hears the valley fill** (0018 §4): a crowd gathering in
+            // the regions next door, by the field, is an alarm too -- the
+            // slow kind, seconds late by construction, which is what makes
+            // it free of every hop it came over.
+            let hears = t::crowd_hears();
+            let heard = hears.raw() > 0 && w.heard.raw() >= hears.raw();
+            if near || alarm.raw() == 0 || heard {
                 pack.mood = mood::HUNTING;
             }
         }
@@ -1072,20 +1091,19 @@ pub fn watch(
     signs: &crate::sign::Signs,
 ) {
     let sp = critters.sp();
-    let mut winding = 0u16;
+    let mut winding = CritterSet::EMPTY;
     for (i, c) in critters.iter().enumerate() {
-        let bit = 1u16 << i;
         if !(c.alive() && matches!(c.state, is::STARTUP | is::ACTIVE)) {
             for u in pack.unseen.iter_mut() {
-                *u &= !bit;
+                u.unset(i);
             }
             continue;
         }
         if c.state != is::STARTUP {
             continue;
         }
-        winding |= bit;
-        if pack.winding & bit != 0 {
+        winding.set(i);
+        if pack.winding.has(i) {
             continue;
         }
         // Begun this frame: on whose screen?
@@ -1094,9 +1112,9 @@ pub fn watch(
             let seen = scene.players[who].health <= 0
                 || crate::aim::in_view(who, looks[who], at, t::SCREEN_HALF_VIEW, scene);
             if seen {
-                *u &= !bit;
+                u.unset(i);
             } else {
-                *u |= bit;
+                u.set(i);
             }
         }
     }
@@ -1131,7 +1149,7 @@ pub fn watch(
 /// for a reaction. See [`watch`].
 pub fn unanswered(pack: &Pack, i: usize, who: usize) -> bool {
     let who = who.min(MAX_PLAYERS - 1);
-    pack.unseen[who] & (1u16 << i) != 0 && (pack.marked[who] as u16) < t::HUMAN_REACTION_FRAMES
+    pack.unseen[who].has(i) && (pack.marked[who] as u16) < t::HUMAN_REACTION_FRAMES
 }
 
 /// Where the pack thinks fighter `who` will be: the glance, projected by
@@ -1557,7 +1575,7 @@ fn move_body(
         let part = crate::monster::mount_part(c.mount);
         let Some(rig) = rigs.get(slot).and_then(|r| r.as_ref()) else {
             // Nothing under it any more.
-            c.mount = NO_PART;
+            c.mount = NO_MOUNT;
             c.set(flag::AIRBORNE, true);
             return;
         };
@@ -1575,7 +1593,7 @@ fn move_body(
             }
             None => {
                 // Walked off the edge, or was thrown: it falls from here.
-                c.mount = NO_PART;
+                c.mount = NO_MOUNT;
                 c.pos = next;
                 c.set(flag::AIRBORNE, true);
             }

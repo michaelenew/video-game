@@ -232,9 +232,12 @@ fn a_critter_s_blow_lands_on_it_too() {
     let gnat = found.expect("somewhere a gnat's bite reaches the cart");
     for _ in 0..3 {
         park(&mut w);
-        let keep = w.critters[0].timer;
+        // The same body, still mid-move: its clock, and what its move has
+        // already struck (`Critter::struck_objectives`), are its own.
+        let keep = w.critters[0];
         w.critters[0] = Critter {
-            timer: keep.max(gnat.timer),
+            timer: keep.timer.max(gnat.timer),
+            struck_objectives: keep.struck_objectives,
             ..gnat
         };
         w.advance([Input::default(); 2]);

@@ -40,7 +40,7 @@ use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::{self, V3};
 use crate::moves;
-use crate::state::{Action, Player};
+use crate::state::{Action, Fighters, Player};
 use crate::tuning as t;
 
 /// This fighter's shadow, if this fighter is the one that has one.
@@ -128,7 +128,9 @@ pub fn step(p: &mut Player) {
             if shadow.hang > 0 {
                 shadow.hang -= 1;
                 if shadow.hang == 0 {
-                    shadow.doing = Ghost::Returning { struck: 0 };
+                    shadow.doing = Ghost::Returning {
+                        struck: Fighters::EMPTY,
+                    };
                 }
             }
             // **And she can simply go and stand on it**: within
@@ -487,7 +489,7 @@ pub fn take_collected(p: &mut Player) -> bool {
 /// Has the return already caught this fighter?
 pub fn already_cut(shadow: Shadow, victim: usize) -> bool {
     match shadow.doing {
-        Ghost::Returning { struck } => struck & (1 << victim) != 0,
+        Ghost::Returning { struck } => struck.has(victim),
         _ => false,
     }
 }
@@ -495,10 +497,9 @@ pub fn already_cut(shadow: Shadow, victim: usize) -> bool {
 /// Remember that the return caught this fighter, so it cuts them once.
 pub fn mark_cut(p: &mut Player, victim: usize) {
     let Some(mut shadow) = of(p) else { return };
-    if let Ghost::Returning { struck } = shadow.doing {
-        shadow.doing = Ghost::Returning {
-            struck: struck | (1 << victim),
-        };
+    if let Ghost::Returning { mut struck } = shadow.doing {
+        struck.set(victim);
+        shadow.doing = Ghost::Returning { struck };
         put(p, shadow);
     }
 }

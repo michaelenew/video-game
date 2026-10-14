@@ -241,6 +241,66 @@ pub fn step_over() -> Fx {
 }
 
 /// The steepest ground a body walks up, as rise over run (`valley::land`).
+/// The regions' declared reach: the farthest anything acts in one go. Not a
+/// rule any move obeys -- a declaration the dev watchdog holds the game to.
+/// See `crate::region`.
+pub fn region_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionReach))
+}
+
+/// The regions' declared speed of light, in metres a second.
+pub fn region_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionSpeed))
+}
+
+/// How many frames old a neighbouring region's outcome may be.
+pub fn region_delay() -> u32 {
+    oven::scalar(Scalar::RegionDelay).max(1) as u32
+}
+
+/// How far a region's checksum zone reaches past its hexagon.
+pub fn region_overlap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionOverlap))
+}
+
+/// A region hexagon's circumradius: centre to corner.
+pub fn region_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RegionSize))
+}
+
+/// How many frames behind a simulated neighbour's heartbeat runs.
+pub fn region_neighbour_lag() -> u32 {
+    oven::scalar(Scalar::RegionNeighbourLag).max(0) as u32
+}
+
+/// Frames between one region aggregate and the next (`crate::crowd`).
+pub fn crowd_epoch() -> u32 {
+    oven::scalar(Scalar::CrowdEpoch).max(1) as u32
+}
+
+/// How many frames after its epoch an aggregate is fed to the world: the
+/// lookahead that makes every hop free (0018, S1).
+pub fn crowd_lookahead() -> u32 {
+    oven::scalar(Scalar::CrowdLookahead).max(0) as u32
+}
+
+/// The crowd's and the flow's time constant, in frames: at least the
+/// lookahead, so a value read late reads as nearly current (0018, S3).
+pub fn crowd_tau() -> u32 {
+    oven::scalar(Scalar::CrowdTau).max(1) as u32
+}
+
+/// The heat's time constant, in frames.
+pub fn crowd_heat_tau() -> u32 {
+    oven::scalar(Scalar::CrowdHeatTau).max(1) as u32
+}
+
+/// How many fighters, by the field, next door before a calm pack takes it as
+/// an alarm. Zero: never.
+pub fn crowd_hears() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CrowdHears))
+}
+
 pub fn terrain_steepest() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSteepest)).max(Fx::ratio(1, 10))
 }

@@ -440,6 +440,12 @@ impl Mark {
     /// so two hunters side by side widen into a line of four rather than
     /// doubling up; facing each other (versus), the sides are each fighter's
     /// left, which puts the four on the corners of a square.
+    ///
+    /// Past the first two, each side's seats stand out along its flank in
+    /// ranks: the first a flank to one side, the next a flank to the other,
+    /// then two flanks out, and so on -- so no two seats are ever the same
+    /// mark, however many there are. (Seats two and three are where they
+    /// always were.)
     pub fn seat(marks: &[Mark; 2], i: usize) -> Mark {
         let own = marks[i % 2];
         if i < 2 {
@@ -454,8 +460,15 @@ impl Mark {
         } else {
             left
         };
+        let rank = i / 2;
+        let side = if rank % 2 == 1 {
+            side
+        } else {
+            V3::ZERO.sub(side)
+        };
+        let out = crate::tuning::seat_flank().mul(Fx::from_int(rank.div_ceil(2) as i32));
         Mark {
-            at: own.at.add(side.scale(crate::tuning::seat_flank())),
+            at: own.at.add(side.scale(out)),
             facing: own.facing,
         }
     }
@@ -965,8 +978,17 @@ fn supported_among(ground: &Terrain, pos: V3, radius: Fx) -> bool {
 fn ground_among(ground: &Terrain, pos: V3) -> Fx {
     let mut best = ground.relief_at(pos.x, pos.z);
     for s in ground.around(pos, Fx::ZERO) {
-        let overhead = ground.hangs(&s) && s.min.y.raw() > pos.y.raw();
-        if s.over(pos.x, pos.z, Fx::ZERO) && !overhead && s.max.y.raw() > best.raw() {
+        if !s.over(pos.x, pos.z, Fx::ZERO) || s.max.y.raw() <= best.raw() {
+            continue;
+        }
+        // **Whether it hangs is asked last**: on the map it is a sample of
+        // the land under the box -- every way, rim and octave of noise near
+        // it -- and asked of every box around the point first, it was most
+        // of a frame on the valley's cliffs. Only a box that starts above the
+        // feet can be over the head, and only one that would raise the floor
+        // needs asking at all.
+        let overhead = s.min.y.raw() > pos.y.raw() && ground.hangs(&s);
+        if !overhead {
             best = s.max.y;
         }
     }
@@ -1372,10 +1394,11 @@ impl Terrain {
         let mut best = self.relief_at(pos.x, pos.z);
         for s in self.around(pos, Fx::ZERO) {
             let top = s.max.y;
+            // Whether it hangs last: on the map it is a sample of the land.
             if s.over(pos.x, pos.z, Fx::ZERO)
-                && !self.hangs(&s)
                 && top.raw() <= pos.y.add(SKIN).raw()
                 && top.raw() > best.raw()
+                && !self.hangs(&s)
             {
                 best = top;
             }
@@ -1405,7 +1428,7 @@ impl Terrain {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
         for s in self.without_raised(self.around(at, CEILING_REACH)) {
-            if !self.hangs(&s) || s.min.y.raw() <= above.raw() {
+            if s.min.y.raw() <= above.raw() || !self.hangs(&s) {
                 continue;
             }
             let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
@@ -1425,7 +1448,7 @@ impl Terrain {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
         for s in self.without_raised(self.around(at, Fx::ZERO)) {
-            if !self.hangs(&s) || s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) {
+            if s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) || !self.hangs(&s) {
                 continue;
             }
             if best.is_none_or(|b| s.min.y.raw() < b.raw()) {
@@ -1454,7 +1477,7 @@ impl Terrain {
     pub fn fence(&self, mut pos: V3, radius: Fx, step: Fx) -> (V3, V3) {
         let start = pos;
         for solid in self.around(pos, radius.add(RESOLVE_REACH)) {
-            if self.hangs(&solid) || solid.max.y.raw() <= pos.y.add(step).raw() {
+            if solid.max.y.raw() <= pos.y.add(step).raw() || self.hangs(&solid) {
                 continue;
             }
             let (min_x, max_x) = (solid.min.x.sub(radius), solid.max.x.add(radius));

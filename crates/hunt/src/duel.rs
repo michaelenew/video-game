@@ -521,7 +521,7 @@ pub struct Duelist {
     pub mood: i32,
     health_was: [i32; DUEL],
     /// Bolts it has already decided about, by slot.
-    bolts_seen: u8,
+    bolts_seen: sim::bits::Bits<{ sim::bits::words_for(sim::bolt::MAX_BOLTS) }>,
     rounds_seen: u32,
     frame_was: u32,
     /// How many moves it has seen you start lately, decaying. A player who
@@ -615,7 +615,7 @@ impl Duelist {
             yaw: Fx::ZERO,
             mood: 0,
             health_was: [0; DUEL],
-            bolts_seen: 0,
+            bolts_seen: Default::default(),
             rounds_seen: u32::MAX,
             frame_was: u32::MAX,
             their_tempo: 0,
@@ -974,15 +974,13 @@ impl Duelist {
     /// sidestep, sometimes.
     fn dodge_bolts(&mut self, me: &Player, seen: &Seen) {
         for (slot, b) in seen.bolts.iter().enumerate() {
-            let bit = 1u8 << slot;
             let Some(b) = b else {
-                self.bolts_seen &= !bit;
+                self.bolts_seen.unset(slot);
                 continue;
             };
-            if self.bolts_seen & bit != 0 {
+            if !self.bolts_seen.insert(slot) {
                 continue;
             }
-            self.bolts_seen |= bit;
             let rel = flat(me.pos.sub(b.pos));
             let dir = flat(b.dir).normalized();
             let along = rel.dot(dir);

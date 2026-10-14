@@ -2311,14 +2311,15 @@ fn the_flower_opens_twelve_blades() {
         "the flower's blade count changed; the hit mask, the damage per blade \
          and the renderer all read it"
     );
-    // The bookkeeping has to be able to address all of them. This is a
-    // compile-time assertion in `effects.rs` as well, because at six blades the
-    // mask fitted a `u32` exactly and twelve would have truncated in silence --
-    // a blade that shares a bit with another goes quiet the moment that one
-    // lands.
+    // The bookkeeping has to be able to address all of them. At six blades
+    // the mask fitted a `u32` exactly and twelve would have truncated in
+    // silence -- a blade that shares a bit with another goes quiet the moment
+    // that one lands. The mask is sized from what it counts now
+    // (`effects::Struck`); this says it still is.
     const {
         assert!(
-            sim::effects::LOTUS_BLADES * sim::effects::VICTIMS <= 64,
+            sim::effects::LOTUS_BLADES * (sim::state::MAX_PLAYERS + sim::monster::MAX_MONSTERS)
+                <= sim::effects::Struck::CAPACITY,
             "the hit mask cannot address every blade against every victim"
         );
     }

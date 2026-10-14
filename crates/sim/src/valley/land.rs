@@ -134,6 +134,10 @@ pub struct Land {
     h: i64,
     starts: Vec<u32>,
     entries: Vec<u16>,
+    /// Which land this is, for [`Land::sample`]'s memory: given once, as it
+    /// is laid out, and kept by a clone, which is the same land. Zero for
+    /// the empty one.
+    id: u32,
 }
 
 /// What the land is at a point.
@@ -201,8 +205,11 @@ pub(crate) fn value(x: Fx, z: Fx, cell: i64, seed: u64) -> Fx {
     let size = cell * Fx::ONE.raw() as i64;
     let (xr, zr) = (x.raw() as i64, z.raw() as i64);
     let (i, j) = (xr.div_euclid(size), zr.div_euclid(size));
-    let fx = Fx::from_raw(((xr - i * size) * Fx::ONE.raw() as i64 / size) as i32);
-    let fz = Fx::from_raw(((zr - j * size) * Fx::ONE.raw() as i64 / size) as i32);
+    // `(r · ONE) / (cell · ONE)` is `r / cell`, exactly: the same fraction
+    // of the cell, without a 64-bit product and a division by a runtime
+    // size.
+    let fx = Fx::from_raw(((xr - i * size) / cell) as i32);
+    let fz = Fx::from_raw(((zr - j * size) / cell) as i32);
     let ease = |t: Fx| t.mul(t).mul(Fx::from_int(3).sub(t.add(t)));
     let (sx, sz) = (ease(fx), ease(fz));
     let v = |a: i64, b: i64| Fx::from_raw(lattice(a, b, seed));
@@ -246,9 +253,11 @@ impl Land {
                 });
             }
         }
+        static LAID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
         let mut land = Land {
             segs,
             pads,
+            id: LAID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             ..Land::default()
         };
         land.index();
@@ -341,7 +350,42 @@ impl Land {
     }
 
     /// **What the land is at a map point** (x, z).
+    ///
+    /// **Remembered**, as a creature's rig is (`monster::Monster::rig`): a
+    /// sample is a pure function of the land and the point, and it is most
+    /// of the cost of a body on the map -- every way, pad and rim near the
+    /// point, and six octaves of noise. A frame asks the same points again
+    /// and again: the feet, the step just taken, the four around them for
+    /// the slope, for every fighter and stone, and a body standing still asks
+    /// them every frame. A rollback asks every one of them again. So the
+    /// last few thousand are kept, keyed on the land and the exact point,
+    /// and the answer is exactly the one working it out would give: the
+    /// memory cannot change what happens, only how long it takes.
     pub fn sample(&self, x: Fx, z: Fx) -> Sample {
+        use std::cell::RefCell;
+        const KEPT: usize = 4096;
+        type Kept = Option<(u32, i32, i32, Sample)>;
+        thread_local! {
+            static SAMPLES: RefCell<[Kept; KEPT]> = const { RefCell::new([None; KEPT]) };
+        }
+        let slot = ((x.raw() as u32).wrapping_mul(0x9E37_79B1)
+            ^ (z.raw() as u32).wrapping_mul(0x85EB_CA77)
+            ^ self.id.wrapping_mul(0xC2B2_AE35)) as usize
+            % KEPT;
+        let key = (self.id, x.raw(), z.raw());
+        if let Some(s) = SAMPLES.with_borrow(|kept| match kept[slot] {
+            Some((id, kx, kz, s)) if (id, kx, kz) == key => Some(s),
+            _ => None,
+        }) {
+            return s;
+        }
+        let s = self.work_out(x, z);
+        SAMPLES.with_borrow_mut(|kept| kept[slot] = Some((key.0, key.1, key.2, s)));
+        s
+    }
+
+    /// [`Land::sample`], worked out.
+    fn work_out(&self, x: Fx, z: Fx) -> Sample {
         let (px, pz) = (x.raw() as i64, z.raw() as i64);
         let mut best = SKY_HIGH;
         let mut best_rise = SKY_HIGH;
@@ -414,15 +458,23 @@ impl Land {
                 let r = match &p.rim {
                     Some((rim, at)) => {
                         let (lx, lz) = (x.sub(at.0), z.sub(at.1));
-                        let r = rim.height(lx, lz).unwrap_or(Fx::ZERO);
+                        // The rim's noise here, worked out at most once
+                        // however many distances it is asked at.
+                        let mut grain = None;
+                        let mut grain_here = || *grain.get_or_insert_with(|| rim.grain(lx, lz));
+                        let out = rim.out_of(lx, lz);
+                        let r = match out {
+                            Some((d, foot)) => foot.add(rim.rise_with(d, grain_here())),
+                            None => Fx::ZERO,
+                        };
                         // Held up for its bank and a little past its
                         // crest, then falling away to whatever is round it.
                         let band = rim.run().add(crate::arena::rim::HELD);
                         let up = if d.raw() <= band.raw() {
                             r
                         } else {
-                            let foot = rim.foot_at(lx, lz);
-                            let crest = foot.add(rim.rise(band, lx, lz));
+                            let foot = out.map_or_else(|| rim.foot_at(lx, lz), |(_, foot)| foot);
+                            let crest = foot.add(rim.rise_with(band, grain_here()));
                             crest.sub(d.sub(band).mul(FALL))
                         };
                         // Only its own path, at its own door, cuts it.

@@ -46,17 +46,16 @@ pub mod word {
     /// Where the pile-on under way was called on, raw fixed point: the lane
     /// every leaper locks to.
     pub const PILE_X: usize = 1;
-    /// Pile-on bites landed this pile-on, per fighter: sixteen bits each.
-    pub const PILE_HITS: usize = 2;
+    /// Free: the pile-on's bites per fighter are in [`super::per`].
+    pub const _FREE_2: usize = 2;
     /// Two clocks: frames before the Big One may howl again, and frames since
     /// the pack last lost a body, counting down from `HowlAfterLoss`.
     pub const HOWL_CLOCKS: usize = 3;
     pub const PILE_Z: usize = 4;
     /// The Big One's strain: recent damage, bled each frame.
     pub const STRAIN: usize = 5;
-    /// Frames each fighter's feet have been above `LeapReach`: sixteen bits
-    /// each.
-    pub const TREED: usize = 6;
+    /// Free: how long each fighter has been treed is in [`super::per`].
+    pub const _FREE_6: usize = 6;
     /// The stone being gnawed, as its index in the stone field plus one, or
     /// zero.
     pub const GNAW_STONE: usize = 7;
@@ -67,8 +66,14 @@ pub mod word {
     pub const GNAW_Z: usize = 10;
     /// Bits: [`super::COOP_DONE`], [`super::WAS_ROUTED`].
     pub const BITS: usize = 11;
-    /// [`TREED`] for the third and fourth fighters.
-    pub const TREED_MORE: usize = 12;
+}
+
+/// What it keeps per fighter, in `Pack::per`: two halves.
+pub mod per {
+    /// Pile-on bites landed this pile-on.
+    pub const PILE_HITS: u32 = 0;
+    /// Frames the fighter's feet have been above `LeapReach`.
+    pub const TREED: u32 = 1;
 }
 
 /// The pack's four clocks, two to a memo word.
@@ -133,30 +138,33 @@ pub mod role {
 
 pub struct Mind;
 
-/// A sixteen-bit half of a memo word, per fighter.
-/// The memo word that holds fighter `who`'s treed count: two to a word.
-fn treed_word(who: usize) -> usize {
-    if who < 2 {
-        word::TREED
-    } else {
-        word::TREED_MORE
-    }
+fn half(word: i32, k: usize) -> i32 {
+    (word as u32 >> (16 * (k & 1)) & 0xFFFF) as i32
 }
 
-fn half(word: i32, who: usize) -> i32 {
-    (word as u32 >> (16 * (who & 1)) & 0xFFFF) as i32
-}
-
-fn set_half(word: &mut i32, who: usize, value: i32) {
-    let shift = 16 * (who & 1);
+fn set_half(word: &mut i32, k: usize, value: i32) {
+    let shift = 16 * (k & 1);
     let kept = *word as u32 & !(0xFFFF << shift);
     *word = (kept | ((value.clamp(0, 0xFFFF) as u32) << shift)) as i32;
+}
+
+/// Fighter `who`'s counter `k` (one of [`per`]).
+fn of(pack: &Pack, who: usize, k: u32) -> i32 {
+    pack.per.get(who).map_or(0, |&w| half(w as i32, k as usize))
+}
+
+fn set_of(pack: &mut Pack, who: usize, k: u32, value: i32) {
+    if let Some(w) = pack.per.get_mut(who) {
+        let mut word = *w as i32;
+        set_half(&mut word, k as usize, value);
+        *w = word as u32;
+    }
 }
 
 /// Is fighter `who` out of the pack's reach -- feet above `LeapReach` for
 /// longer than `TreedAfter`?
 pub fn treed(pack: &Pack, who: usize) -> bool {
-    half(pack.memo[treed_word(who)], who) > knob(Knob::TreedAfter)
+    of(pack, who, per::TREED) > knob(Knob::TreedAfter)
 }
 
 /// Is the Big One (or any critter) howling: winding the howl up or out?
@@ -322,7 +330,7 @@ impl PackMind for Mind {
         let bleed = knob(Knob::StrainBleed);
         pack.memo[word::STRAIN] = (pack.memo[word::STRAIN] - bleed).max(0);
         if clock(pack, Clock::PileLeft) == 0 {
-            pack.memo[word::PILE_HITS] = 0;
+            clear_pile_hits(pack);
         }
 
         // Treed: feet above what a leap reaches, counted while it lasts.
@@ -330,12 +338,8 @@ impl PackMind for Mind {
         for who in 0..MAX_PLAYERS {
             let s = pack.seen[who];
             let up = s.alive && s.pos.y.raw() > reach.raw();
-            let was = half(pack.memo[treed_word(who)], who);
-            set_half(
-                &mut pack.memo[treed_word(who)],
-                who,
-                if up { was + 1 } else { 0 },
-            );
+            let was = of(pack, who, per::TREED);
+            set_of(pack, who, per::TREED, if up { was + 1 } else { 0 });
         }
 
         // Coop: more bodies, and a token more, while two are hunting. The
@@ -636,10 +640,8 @@ impl PackMind for Mind {
                 c.target = who as u8;
             }
             PILE_ON => {
-                let mut hits = pack.memo[word::PILE_HITS];
-                let n = half(hits, who) + 1;
-                set_half(&mut hits, who, n);
-                pack.memo[word::PILE_HITS] = hits;
+                let n = of(pack, who, per::PILE_HITS) + 1;
+                set_of(pack, who, per::PILE_HITS, n);
                 let down = knob(Knob::PileonKnockdown);
                 if down > 0 && n == down {
                     let frames = knob(Knob::KnockdownFrames).max(1) as u16;
@@ -941,7 +943,14 @@ pub fn pile_on(pack: &mut Pack, critters: &mut Critters, who: usize) {
     let lane = crate::pack::lead_of(pack, who);
     pack.memo[word::PILE_X] = lane.x.raw();
     pack.memo[word::PILE_Z] = lane.z.raw();
-    pack.memo[word::PILE_HITS] = 0;
+    clear_pile_hits(pack);
+}
+
+/// A fresh pile-on: nobody bitten yet.
+fn clear_pile_hits(pack: &mut Pack) {
+    for who in 0..MAX_PLAYERS {
+        set_of(pack, who, per::PILE_HITS, 0);
+    }
 }
 
 /// A fighter's radius: how close behind the heels the scuttle aims.

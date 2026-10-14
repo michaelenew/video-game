@@ -130,24 +130,27 @@ pub mod flag {
 
 /// The words of its own region of the lore, after its eyes.
 pub mod word {
+    use crate::lore::per_fighter;
     use crate::species::mantis::sight::word::END as EYES;
 
     /// Each fighter's class plus one, four bits each: what it sees them
-    /// carrying.
+    /// carrying. A run as long as the seats need (`lore::per_fighter`).
     pub const CLASSES: usize = EYES;
     /// Frames each fighter has stood outside its arc within `BackNear`, a
-    /// half each: `back(m)`.
-    pub const BACK: usize = EYES + 1;
+    /// half each: `back(m)`. A run like [`CLASSES`]: it was one word, the
+    /// first fighter low and everybody else high, so the third and fourth
+    /// were counted as the second.
+    pub const BACK: usize = CLASSES + per_fighter(4);
     /// Frames since it last saw anybody commit to anything: `far(m)`.
-    pub const QUIET: usize = EYES + 2;
+    pub const QUIET: usize = BACK + per_fighter(16);
     /// **A guard it means to raise**, on a move it saw: the frame to raise
     /// it on (low 24 bits), and a valid bit at the top.
-    pub const PLAN: usize = EYES + 3;
+    pub const PLAN: usize = QUIET + 1;
     /// Where the dive will land, in centimetres: chosen as the leap leaves
     /// the floor, and drawn from then.
-    pub const DIVE_AT: usize = EYES + 4;
+    pub const DIVE_AT: usize = PLAN + 1;
     /// The memory: [`super::super::habit::DEPTH`] entries, then its meta.
-    pub const HABIT: usize = EYES + 5;
+    pub const HABIT: usize = DIVE_AT + 1;
     pub const HABIT_META: usize = HABIT + crate::species::mantis::habit::DEPTH;
     /// Frames its guard has had nothing seen coming at it.
     pub const GUARD_QUIET: usize = HABIT_META + 1;
@@ -218,7 +221,7 @@ pub fn blades(m: &Monster) -> i32 {
 
 /// The class a fighter carries, as it sees it: written by the hook.
 pub fn class_of(lore: &Lore, who: usize) -> Option<crate::Class> {
-    let c = (lore.word(word::CLASSES) >> (who * 4)) & 0xF;
+    let c = lore.field(word::CLASSES, 4, who);
     if c == 0 {
         return None;
     }
@@ -227,8 +230,7 @@ pub fn class_of(lore: &Lore, who: usize) -> Option<crate::Class> {
 
 /// Frames fighter `who` has stood outside its arc within `BackNear`.
 pub fn back_frames(lore: &Lore, who: usize) -> i32 {
-    let w = lore.word(word::BACK);
-    (if who == 0 { lore::lo(w) } else { lore::hi(w) }) as i32
+    lore.field(word::BACK, 16, who) as u16 as i16 as i32
 }
 
 /// Frames since it saw a commitment.
@@ -594,11 +596,9 @@ pub fn frame(w: &mut World) {
     let t = w.frame;
     let mut lore = w.lore;
     // What it sees each fighter carrying.
-    let mut classes = 0u32;
     for (who, p) in w.players.iter().enumerate() {
-        classes |= (p.class as u32 + 1) << (who * 4);
+        lore.set_field(word::CLASSES, 4, who, p.class as u32 + 1);
     }
-    lore.set_word(word::CLASSES, classes);
     let ground = w.terrain();
     let field = crate::stones::gather(&w.players);
     let hunters = w.players.iter().filter(|p| p.health > 0).count();
@@ -699,7 +699,9 @@ fn watch(m: &Monster, lore: &mut Lore, t: u32) {
             committed = true;
         }
     }
-    lore.set_word(word::BACK, lore::halves(back[0] as i16, back[1] as i16));
+    for (who, b) in back.iter().enumerate() {
+        lore.set_field(word::BACK, 16, who, *b as i16 as u16 as u32);
+    }
     let q = if committed {
         0
     } else {

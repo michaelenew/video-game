@@ -43,7 +43,14 @@ use crate::species::SpeciesId;
 /// grow into. **Forty since four fighters** (2026-10-14): the Mantis keeps a
 /// ring of glimpses and a list of deeds per fighter, which is 33 cells for
 /// four; `tests/lore.rs` checks every registered species' layout fits.
-pub const CELLS: usize = 40;
+///
+/// **Grown with the seats past four**: the Mantis's glimpses and deeds, and
+/// every species' per-fighter runs, are a fighter's worth each, so eight cells
+/// more for every seat -- what the Mantis, the largest, asks for a fighter.
+pub const CELLS: usize = {
+    let more = crate::state::MAX_PLAYERS.saturating_sub(4);
+    40 + 8 * more
+};
 
 /// One cell: sixteen bytes, as four words.
 pub type Cell = [u32; 4];
@@ -219,6 +226,43 @@ impl Lore {
     pub fn set_int(&mut self, i: usize, v: i32) {
         self.set_word(i, v as u32);
     }
+
+    /// **Fighter `who`'s field**, `bits` wide, in a run of words from `base`
+    /// that holds one per seat ([`per_fighter`] words of it). The first
+    /// word packs fighters from the bottom up, as every layout already did
+    /// for the first two or four, and the run carries on into the next word
+    /// rather than stopping there: a half each used to be `who == 0` low and
+    /// everybody else high, which made fighters one, two and three one
+    /// counter.
+    pub fn field(&self, base: usize, bits: u32, who: usize) -> u32 {
+        let (i, shift, mask) = place(base, bits, who);
+        (self.word(i) >> shift) & mask
+    }
+
+    /// Write fighter `who`'s field; see [`Lore::field`]. Bits past its width
+    /// are dropped.
+    pub fn set_field(&mut self, base: usize, bits: u32, who: usize, v: u32) {
+        let (i, shift, mask) = place(base, bits, who);
+        let word = (self.word(i) & !(mask << shift)) | ((v & mask) << shift);
+        self.set_word(i, word);
+    }
+}
+
+/// How many words a field `bits` wide for every seat takes: what a layout
+/// leaves between a per-fighter field and whatever follows it.
+pub const fn per_fighter(bits: u32) -> usize {
+    crate::state::MAX_PLAYERS.div_ceil((32 / bits) as usize)
+}
+
+/// Which word, shift and mask hold fighter `who`'s field `bits` wide.
+const fn place(base: usize, bits: u32, who: usize) -> (usize, u32, u32) {
+    let per = (32 / bits) as usize;
+    let mask = if bits >= 32 {
+        u32::MAX
+    } else {
+        (1 << bits) - 1
+    };
+    (base + who / per, (who % per) as u32 * bits, mask)
 }
 
 /// Pack two signed sixteen-bit halves into a word, low first.

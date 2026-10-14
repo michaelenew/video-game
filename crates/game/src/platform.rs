@@ -349,6 +349,11 @@ mod host {
     /// started from.
     pub fn report_panics() {}
 
+    /// A developer's line: the terminal the game was started from.
+    pub fn say(line: &str) {
+        eprintln!("{line}");
+    }
+
     /// The terminal the game was started from is the only place to say it.
     pub fn announce(line: &str) {
         if !line.is_empty() {
@@ -486,6 +491,12 @@ mod host {
     /// `RuntimeError: unreachable` in a console nobody opened. Somebody who was
     /// sent a link and hit a driver bug should be able to say *what* broke
     /// without being talked through the developer tools.
+    /// A developer's line: the browser console, as a warning -- an error would
+    /// fail the page-load smoke test, and this is a finding, not a failure.
+    pub fn say(line: &str) {
+        web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(line));
+    }
+
     pub fn report_panics() {
         std::panic::set_hook(Box::new(|info| {
             let message = format!("{info}");
@@ -553,7 +564,7 @@ mod host {
 use host::read_options;
 pub use host::{
     announce, load_replay, load_settings, load_trophies, log, page_url, pointer_lock_lost,
-    report_panics, save_replay, save_settings, save_trophies, show_room,
+    report_panics, save_replay, save_settings, save_trophies, say, show_room,
 };
 
 // ---------------------------------------------------------------------------

@@ -48,7 +48,7 @@ pub static FIGHT: FightDecl = FightDecl {
         hazards: HAZARD_CELLS,
         noises: 0,
         objectives: 0,
-        own: 21,
+        own: OWN_CELLS,
     },
     row: true,
     hazards: &HAZARDS,
@@ -131,7 +131,7 @@ pub mod word {
     /// **The glance of each hunter's look**: where they stood (centimetres)
     /// and which way they faced, now and a glance before (`lore::halves` of
     /// the two yaws in 1/65536 of a turn). The first two hunters, two words
-    /// each; the third and fourth are [`GLANCED_MORE`].
+    /// each; the rest are [`GLANCED_MORE`].
     pub const GLANCED: usize = 44;
     /// Frames to the next look glance.
     pub const GLANCE_LEFT: usize = 48;
@@ -187,11 +187,16 @@ pub mod word {
     pub const NOW: usize = 74;
     /// Strikes begun since it last cloaked.
     pub const STRIKES: usize = 75;
-    /// [`GLANCED`] for the third and fourth hunters (2026-10-14): where
-    /// they stood, then their two yaws, two words each.
+    /// [`GLANCED`] and [`VIEW`] for every hunter past the second
+    /// (2026-10-14): where they stood, then their two yaws, then what the
+    /// hook saw of them -- three runs, a word per hunter each, as long as
+    /// the seats need. Laid out exactly as the third and fourth were when
+    /// they were written down by hand, so four fighters keep their words;
+    /// a fifth used to land on the third's yaws.
     pub const GLANCED_MORE: usize = 76;
-    /// [`VIEW`] for the third and fourth hunters.
-    pub const VIEW_MORE: usize = 80;
+    const PAST_TWO: usize = crate::state::MAX_PLAYERS.saturating_sub(2);
+    /// The first word past its own.
+    pub const END: usize = GLANCED_MORE + 3 * PAST_TWO;
 
     /// The word holding where hunter `i` stood at the last glance.
     pub const fn glanced_at(i: usize) -> usize {
@@ -207,15 +212,26 @@ pub mod word {
         if i < 2 {
             GLANCED + 2 + i
         } else {
-            GLANCED_MORE + i
+            GLANCED_MORE + PAST_TWO + i - 2
         }
     }
 
     /// The word holding what the hook saw of hunter `i`.
     pub const fn view(i: usize) -> usize {
-        if i < 2 { VIEW + i } else { VIEW_MORE + i - 2 }
+        if i < 2 {
+            VIEW + i
+        } else {
+            GLANCED_MORE + 2 * PAST_TWO + i - 2
+        }
     }
 }
+
+/// Its own cells: every word in [`word`], and never fewer than it was
+/// given when it had four hunters to remember.
+const OWN_CELLS: u8 = {
+    let need = word::END.div_ceil(4);
+    if need > 21 { need as u8 } else { 21 }
+};
 
 /// The bits of a hunter's [`word::VIEW`].
 pub mod view {

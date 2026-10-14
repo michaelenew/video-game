@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 ggrs = { version = "0.11.1", features = ["sync-send"] }
 sim = { path = "../sim" }
+regions = { path = "../regions" }
 serde = { version = "1", features = ["derive"] }
 # GGRS's own wire format. A socket that is not GGRS's UDP one -- a WebRTC data
 # channel, the shared UDP port in `meet::direct` -- has to put a `Message` into

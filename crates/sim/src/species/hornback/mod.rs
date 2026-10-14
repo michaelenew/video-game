@@ -252,7 +252,7 @@ pub static FIGHT: FightDecl = FightDecl {
         hazards: 4,
         noises: 0,
         objectives: 1,
-        own: 3,
+        own: rules::OWN_CELLS,
     },
     hazards: &HAZARDS,
     objectives: &OBJECTIVES,

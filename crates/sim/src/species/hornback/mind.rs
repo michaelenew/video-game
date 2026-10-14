@@ -38,9 +38,9 @@ use crate::state::{MAX_PLAYERS, Player};
 /// The pack's memo, word by word. Twelve words.
 pub mod word {
     /// Bytes: the herd's state ([`super::HerdState`]); the bull's last move
-    /// plus one; [`super::bits`]; and per-fighter bits -- knocked down by this
-    /// stampede (low two), seen in a swing's startup at the last glance
-    /// (next two).
+    /// plus one; [`super::bits`]. Per-fighter bits -- knocked down by this
+    /// stampede, seen in a swing's startup at the last glance -- are each
+    /// fighter's own word (`Pack::per`).
     pub const HERD: usize = 0;
     /// Two clocks: the herd's own (a stampede's run, a calm-down), and the
     /// bellow's lockout.
@@ -204,15 +204,22 @@ pub(super) fn set_last_move(pack: &mut Pack, m: u8) {
     set_byte(pack, word::HERD, 1, m + 1);
 }
 
-/// Per-fighter bits in the top byte of [`word::HERD`].
+/// Per-fighter bits, in the fighter's own word of the pack (`Pack::per`).
+/// They were the top byte of [`word::HERD`], a bit per fighter read as
+/// `who % 2`, so with four fighters seats nought and two were trampled
+/// together.
 fn fighter_bit(pack: &Pack, base: u32, who: usize) -> bool {
-    byte(pack, word::HERD, 3) & (1 << (base + who as u32 % 2)) != 0
+    pack.per.get(who).is_some_and(|w| w & (1 << base) != 0)
 }
 
 fn set_fighter_bit(pack: &mut Pack, base: u32, who: usize, on: bool) {
-    let b = byte(pack, word::HERD, 3);
-    let bit = 1u8 << (base + who as u32 % 2);
-    set_byte(pack, word::HERD, 3, if on { b | bit } else { b & !bit });
+    if let Some(w) = pack.per.get_mut(who) {
+        *w = if on {
+            *w | 1 << base
+        } else {
+            *w & !(1 << base)
+        };
+    }
 }
 
 /// Fighter `who` has been knocked down by the stampede under way.

@@ -73,6 +73,7 @@
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
 use crate::arena::Terrain;
+use crate::bits::{Bits, words_for};
 use crate::class::Class;
 use crate::effects::Effects;
 use crate::fixed::Fx;
@@ -228,9 +229,13 @@ pub struct Gust {
     pub lit: bool,
     /// One bit per stone this shot has already shoved, so a disc overlapping
     /// a stone for several frames shoves it once rather than once a frame.
-    /// `stones::MAX_STONES` is six, so a byte is room enough.
-    pub pushed: u8,
+    /// Sized from `stones::MAX_STONES`: it was a byte while there were six
+    /// stones, and with twelve the last four shared the first four's bits.
+    pub pushed: Pushed,
 }
+
+/// A bit per stone: what a shot has already shoved.
+pub type Pushed = Bits<{ words_for(stones::MAX_STONES) }>;
 
 impl Gust {
     /// How far through its **opening** it is, from none of it to all of it.
@@ -274,7 +279,7 @@ pub fn throw(flight: &mut Flight, owner: u8, gale: Gale, path: Path) {
         travelled: Fx::ZERO,
         gale,
         lit: false,
-        pushed: 0,
+        pushed: Pushed::EMPTY,
     };
     if let Some(slot) = flight.iter_mut().find(|s| s.is_none()) {
         *slot = Some(fresh);
@@ -467,9 +472,7 @@ pub fn step(
                     // shoved bursts instead**, into burning debris along the
                     // disc's travel; and a burning disc lights what it
                     // passes, so the next shove is the burst.
-                    let bit = 1u8 << (index as u8 & 7);
-                    if shot.pushed & bit == 0 {
-                        shot.pushed |= bit;
+                    if shot.pushed.insert(index) {
                         if stones::is_lit(players, index) {
                             if let Some(middle) = stones::destroy(players, index) {
                                 burst_at(middle, Some(shot.dir));

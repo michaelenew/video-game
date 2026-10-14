@@ -90,8 +90,9 @@ pub mod word {
     pub const HOLD: usize = 21;
     /// Frames held.
     pub const HOLD_T: usize = 22;
-    /// The special key, per fighter: bit `i` held last frame (from inside),
-    /// bit `8 + i` pressed this frame.
+    /// The special key, per fighter: bit `i` held last frame (from inside).
+    /// Pressed this frame is [`PRESSED`]; the two shared a word, eight bits
+    /// apiece, which held eight fighters.
     pub const KEYS: usize = 23;
     /// How the last beach came about: [`super::route`].
     pub const ROUTE: usize = 24;
@@ -103,6 +104,8 @@ pub mod word {
     /// broken out on (low byte; zero for none), and why (next byte:
     /// [`super::end`]).
     pub const ENDED: usize = 27;
+    /// The special key, per fighter: bit `i` pressed this frame.
+    pub const PRESSED: usize = 28;
 }
 
 /// What it attended.
@@ -186,7 +189,7 @@ pub static FIGHT: FightDecl = FightDecl {
         hazards: 2,
         noises: 8,
         objectives: 0,
-        own: 7,
+        own: 8,
     },
     row: true,
     hazards: &HAZARDS,
@@ -785,7 +788,8 @@ fn from_inside(w: &mut World, _slot: usize, who: usize, input: Input) -> Input {
     if down {
         next |= held;
         if keys & held == 0 {
-            next |= 1 << (8 + who);
+            w.lore
+                .set_word(word::PRESSED, w.lore.word(word::PRESSED) | held);
         }
     }
     w.lore.set_word(word::KEYS, next);
@@ -1186,13 +1190,12 @@ fn throw_riders(w: &mut World, slot: usize, m: &mut Monster) {
 /// if the teeth are broken.
 fn hold(w: &mut World, slot: usize, m: &mut Monster) {
     let Some(who) = holding(&w.lore) else {
-        w.lore.set_word(word::KEYS, w.lore.word(word::KEYS) & 0xFF);
+        w.lore.set_word(word::PRESSED, 0);
         return;
     };
     let who = who.min(MAX_PLAYERS - 1);
-    let keys = w.lore.word(word::KEYS);
-    let pressed = keys & 1 << (8 + who) != 0;
-    w.lore.set_word(word::KEYS, keys & 0xFF);
+    let pressed = w.lore.word(word::PRESSED) & 1 << who != 0;
+    w.lore.set_word(word::PRESSED, 0);
     let still = matches!(m.doing, Doing::Active { kind: HOLD, .. });
     if w.players[who].health <= 0 || !still {
         release(w, slot, m, end::DROPPED, 0);

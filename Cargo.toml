@@ -2,7 +2,7 @@
 resolver = "3"
 members = ["crates/sim", "crates/net", "crates/view", "crates/anim",
     "crates/manual", "crates/game", "crates/web", "crates/hunt",
-    "crates/look", "crates/sound"]
+    "crates/look", "crates/sound", "crates/regions"]
 
 [workspace.package]
 edition = "2024"
