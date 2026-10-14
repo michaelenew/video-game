@@ -655,6 +655,7 @@ fn resolve_among(
     was_grounded: bool,
     radius: Fx,
     height: Fx,
+    step: Fx,
 ) -> Resolved {
     {
         let mut grounded = false;
@@ -674,7 +675,16 @@ fn resolve_among(
             if vel.y.raw() < 0 {
                 vel.y = Fx::ZERO;
             }
-            grounded = true;
+            // **Lifted by the floor is not landing on it while still
+            // rising**, for the reason a box's top below is not: a jump
+            // taken running up a slope meets the ground rising under it on
+            // its first frame, and counted as standing there, a held jump
+            // fired a second takeoff stacked on the first. The Reaver's dash
+            // jump across a hill left at 39 m/s straight up (2026-10-13,
+            // `tests/slopes.rs`). She is kept on the floor and keeps rising.
+            if vel.y.raw() <= 0 {
+                grounded = true;
+            }
         }
 
         let reach = radius.add(RESOLVE_REACH);
@@ -709,7 +719,20 @@ fn resolve_among(
             let az = pz.abs();
             let ay = py_up.min(py_down).abs();
 
-            if ay.raw() <= ax.raw() && ay.raw() <= az.raw() {
+            // **A step is walked up, not into** (2026-10-13, from play: a
+            // snow cap two hands high on a rock stopped a fighter dead). A
+            // body that was standing, and is not rising, put into the side
+            // of a box whose top is no more than a step above its feet is
+            // put on the top. Only a top it fits under the next thing over:
+            // a step into a gap too low to stand in is still a wall.
+            let steps_up = step.raw() > 0
+                && was_grounded
+                && vel.y.raw() <= 0
+                && py_up.raw() > 0
+                && py_up.raw() <= step.raw()
+                && py_up.raw() < py_down.raw()
+                && headroom(ground, V3::new(pos.x, solid.max.y, pos.z), radius, height);
+            if steps_up || (ay.raw() <= ax.raw() && ay.raw() <= az.raw()) {
                 if py_up.raw() <= py_down.raw() {
                     pos.y = solid.max.y;
                     if vel.y.raw() < 0 {
@@ -745,7 +768,11 @@ fn resolve_among(
 
         // On land, ground too steep to stand on is no footing: the body slides
         // down it, and cannot jump from it.
-        if grounded && ground.on_land(pos.x, pos.z) && pos.y.raw() <= floor.add(SKIN).raw() {
+        // Standing within a skin of it counts, as it does below for being
+        // grounded at all: otherwise a body that came to rest a hair above
+        // a mountainside stood on it and never slid.
+        let on_it = grounded || (was_grounded && vel.y.raw() <= 0);
+        if on_it && ground.on_land(pos.x, pos.z) && pos.y.raw() <= floor.add(SKIN).raw() {
             if let Some(down) = ground.downhill(pos.x, pos.z) {
                 let step = t::terrain_slide().mul(crate::DT);
                 pos.x = pos.x.add(down.x.mul(step));
@@ -768,19 +795,25 @@ fn resolve_among(
                 // down a hill puts the feet on the floor below rather than
                 // leaving them in the air for gravity to find: without this
                 // a body walked down every slope in a stutter of tiny falls.
-                // Only onto the open floor, only by `tuning::step_down` --
-                // one frame of the steepest slope -- and only where there is
-                // relief at all: a flat arena has nothing that falls away
-                // gently, and plays exactly as it did before there were
-                // hills (the pair's fight changed when this ran everywhere).
-                // Anything further down is a drop, and a drop is a fall.
+                // Only onto the open floor, only by `tuning::step_down` and
+                // **the steepest slope over the ground this frame covered**
+                // (2026-10-13: a fixed eight centimetres is one frame of a
+                // walk down a slope of 0.7, so anything steeper, or the same
+                // slope at a run or a dash, came down it in hops), and only
+                // where there is relief at all: a flat arena has nothing
+                // that falls away gently, and plays exactly as it did before
+                // there were hills (the pair's fight changed when this ran
+                // everywhere). Anything further down is a drop, and a drop
+                // is a fall.
                 let floor = ground.relief_at(pos.x, pos.z);
                 let under = ground_among(ground, pos);
                 let gap = pos.y.sub(under);
+                let run = crate::math::wide_len(V3::new(vel.x, Fx::ZERO, vel.z)).mul(crate::DT);
+                let follows = t::step_down().add(t::terrain_steepest().mul(run));
                 if !ground.is_flat_at(pos.x, pos.z)
                     && under.raw() == floor.raw()
                     && gap.raw() > 0
-                    && gap.raw() <= t::step_down().raw()
+                    && gap.raw() <= follows.raw()
                 {
                     pos.y = under;
                     grounded = true;
@@ -797,12 +830,22 @@ fn resolve_among(
     }
 }
 
-/// **Walking up ground too steep to walk up**: a body whose step this frame
-/// (`pos` less `vel` a frame) rose faster than `tuning::terrain_steepest`
-/// keeps whichever half of the step does not -- along the slope rather than
-/// up it -- or neither. Only for a body at or under the floor where it
+/// **Walking up ground too steep to walk up**: a body on the land whose step
+/// this frame (`pos` less `vel` a frame) arrives on ground with no footing --
+/// [`Terrain::downhill`], steeper than `tuning::terrain_steepest` across a
+/// metre -- and goes up it, keeps only the part of the step that runs along
+/// the slope, or none of it. Only for a body at or under the floor where it
 /// arrived: in the air nothing is climbing anything. True if the step was
-/// stopped, which is a wall.
+/// changed, which is a wall.
+///
+/// **Judged by the footing, not by the frame's rise** (2026-10-13). This used
+/// to compare the height one frame's step gained -- twelve centimetres of
+/// walking -- with the steepest slope, and a hair of slack on top. The slack
+/// let a walk up ground too steep to stand on, which then slid her back
+/// down, so a bank was a stutter of steps and slides; and a seam a hand high
+/// in the land was a cliff to it, which stopped her dead. Now the two rules
+/// are one: where there is footing she walks, wherever her step goes; where
+/// there is none she may cross it and come down it, never go up it.
 fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
     let arrived = ground.relief_at(pos.x, pos.z);
     if pos.y.raw() > arrived.add(SKIN).raw() {
@@ -813,24 +856,56 @@ fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
         pos.y,
         pos.z.sub(vel.z.mul(crate::DT)),
     );
-    let steepest = t::terrain_steepest();
+    // **A ledge in the land** -- a seam, where one shape of ground meets
+    // another a little above it -- is a step like a box's: walked up when no
+    // higher than `tuning::step_over` over what the steepest slope would
+    // rise across the step, and a wall when higher, slid along if half the
+    // step does not climb it. The footing below only sees a ledge as a slope
+    // across a metre, which is how a seam a hand high stopped a fighter
+    // dead (2026-10-13) and how one waist high would be walked up.
     let start = ground.relief_at(was.x, was.z);
-    let climbable = |x: Fx, z: Fx| {
+    let ledge = |x: Fx, z: Fx| {
         let run = crate::math::wide_len(V3::new(x.sub(was.x), Fx::ZERO, z.sub(was.z)));
         let rise = ground.relief_at(x, z).sub(start);
-        // A hair of slack, so walking along a slope's contour is not stopped
-        // by the rounding of one sample against the next.
-        rise.raw() <= steepest.mul(run).add(Fx::ratio(1, 50)).raw()
+        rise.raw() > t::terrain_steepest().mul(run).add(t::step_over()).raw()
     };
-    if climbable(pos.x, pos.z) {
-        return false;
+    if ledge(pos.x, pos.z) {
+        if !ledge(pos.x, was.z) {
+            pos.z = was.z;
+            vel.z = Fx::ZERO;
+        } else if !ledge(was.x, pos.z) {
+            pos.x = was.x;
+            vel.x = Fx::ZERO;
+        } else {
+            pos.x = was.x;
+            pos.z = was.z;
+            vel.x = Fx::ZERO;
+            vel.z = Fx::ZERO;
+        }
+        return true;
     }
-    if climbable(pos.x, was.z) {
-        pos.z = was.z;
-        vel.z = Fx::ZERO;
-    } else if climbable(was.x, pos.z) {
-        pos.x = was.x;
-        vel.x = Fx::ZERO;
+    // How far the step from `was` to (x, z) goes up the ground there, if it
+    // has no footing; nothing if it has.
+    let climbs = |x: Fx, z: Fx| -> Option<(V3, Fx)> {
+        let down = ground.downhill(x, z)?;
+        let up = x.sub(was.x).mul(down.x).add(z.sub(was.z).mul(down.z)).neg();
+        (up.raw() > 0).then_some((down, up))
+    };
+    let Some((down, up)) = climbs(pos.x, pos.z) else {
+        return false;
+    };
+    // Along the slope: the step less its part up it.
+    let along = V3::new(pos.x.add(down.x.mul(up)), pos.y, pos.z.add(down.z.mul(up)));
+    // The slope turns a little from one point to the next, so the step
+    // along it at the first may climb a hair at the second: that is still
+    // along it.
+    let still = climbs(along.x, along.z).map_or(Fx::ZERO, |(_, up)| up);
+    if still.raw() <= up.mul(Fx::ratio(1, 4)).raw() {
+        let into = vel.x.mul(down.x).add(vel.z.mul(down.z)).neg().max(Fx::ZERO);
+        vel.x = vel.x.add(down.x.mul(into));
+        vel.z = vel.z.add(down.z.mul(into));
+        pos.x = along.x;
+        pos.z = along.z;
     } else {
         pos.x = was.x;
         pos.z = was.z;
@@ -838,6 +913,16 @@ fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
         vel.z = Fx::ZERO;
     }
     true
+}
+
+/// Is there room for a body standing at `at`: nothing solid between its feet
+/// and its head? What a step up asks of the top it would put the body on.
+fn headroom(ground: &Terrain, at: V3, radius: Fx, height: Fx) -> bool {
+    let feet = at.y.add(SKIN);
+    let head = at.y.add(height);
+    !ground.around(at, radius).any(|s| {
+        s.over(at.x, at.z, radius) && s.min.y.raw() < head.raw() && s.max.y.raw() > feet.raw()
+    })
 }
 
 fn supported_among(ground: &Terrain, pos: V3, radius: Fx) -> bool {
@@ -1219,9 +1304,18 @@ impl Terrain {
         }
     }
 
-    /// [`Arena::resolve`], against the raised solids too.
+    /// [`Arena::resolve`], against the raised solids too. A fighter's: it
+    /// walks up a step (`tuning::step_over`), which nothing else does.
     pub fn resolve(&self, pos: V3, vel: V3, was_grounded: bool) -> Resolved {
-        self.resolve_sized(pos, vel, was_grounded, t::body_radius(), t::body_height())
+        resolve_among(
+            self,
+            pos,
+            vel,
+            was_grounded,
+            t::body_radius(),
+            t::body_height(),
+            t::step_over(),
+        )
     }
 
     /// [`Arena::resolve_sized`], against the raised solids too.
@@ -1233,7 +1327,7 @@ impl Terrain {
         radius: Fx,
         height: Fx,
     ) -> Resolved {
-        resolve_among(self, pos, vel, was_grounded, radius, height)
+        resolve_among(self, pos, vel, was_grounded, radius, height, Fx::ZERO)
     }
 
     /// [`Arena::ground_under`], with the raised solids standing on the floor.

@@ -1,11 +1,14 @@
-//! The Champion's weapons are drawn where the hit test is.
+//! The Champion's weapon is drawn where the hit test is, in the shape the
+//! move calls for.
 //!
-//! `view::arms` draws the sword, the hammer and the spear as three things
-//! unlike each other, and puts the one in her hands on the hit volume while a
-//! cut is out. These hold it to that: the tip on the capsule's far end on
-//! every active frame of the chain, the three silhouettes apart, and nothing
-//! drawn on anybody else. See `docs/design/kits/champion.md`, "The weapons you
-//! can see".
+//! `view::arms` draws one golden liquid that coils round her forearm between
+//! moves and runs into a sword, a hammer or a spear in the middle of them,
+//! three shapes unlike each other, and puts the weapon on the hit volume while
+//! a cut is out. These hold it to that: whole and on the capsule's far end on
+//! every active frame of the chain, a few frames to change shape, a few
+//! seconds kept and a slow melt after, the three silhouettes apart, and
+//! nothing drawn on anybody else. See `docs/design/kits/champion.md`, "The
+//! weapon you can see".
 
 use sim::moves::champion as c;
 use view::arms::{self, Torso};
@@ -32,6 +35,8 @@ fn torso(p: &sim::state::Player) -> Torso {
         chest_turn: turn,
         hips: math::add(at, [0.0, 0.95, 0.0]),
         hips_turn: turn,
+        shoulder: math::add(at, [-0.2, 1.45, 0.0]),
+        elbow: math::add(at, [-0.25, 1.2, 0.05]),
     }
 }
 
@@ -69,8 +74,10 @@ fn throw(kind: u8, mut each: impl FnMut(&sim::state::Player, u16)) {
     };
     let (startup, active, _) = sim::moves::frames(sim::Class::Champion, kind);
     let mut seen = 0;
-    for _ in 0..120u16 {
-        w.advance([sim::Input::aimed(button, 0), sim::Input::aimed(0, 1 << 15)]);
+    // Pressed once: a weapon held down is a charge (exploration 0015).
+    for f in 0..120u16 {
+        let press = if f == 0 { button } else { 0 };
+        w.advance([sim::Input::aimed(press, 0), sim::Input::aimed(0, 1 << 15)]);
         if let sim::state::Action::Active { kind: k, left } = w.players[0].action {
             if k == kind {
                 each(&w.players[0], startup + active.saturating_sub(left));
@@ -114,8 +121,12 @@ fn the_weapon_in_her_hands_ends_where_the_cut_does() {
                 "{}: the wrong weapon is out",
                 m.name
             );
+            assert!(
+                a.whole(),
+                "{} frame {frame}: the weapon is not whole on an active frame",
+                m.name
+            );
             let w = a.weapons[a.held as usize];
-            assert!(w.held);
             let off = math::length(math::sub(w.tip, v(hb.to)));
             if off > 0.01 {
                 short += 1;
@@ -170,21 +181,51 @@ fn the_weapon_never_points_anywhere_but_the_cut() {
     }
 }
 
+/// A Champion whose weapon was last called as `form`, `rest` frames after
+/// the move that called it ended.
+fn formed(form: sim::class::Form, rest: u16) -> sim::state::Player {
+    let mut p = sim::state::Player::new(sim::Class::Champion);
+    if let sim::class::Mechanic::Forms {
+        form: f, liquid, ..
+    } = &mut p.mechanic
+    {
+        *f = form;
+        *liquid =
+            sim::class::Quicksilver::new(rest.saturating_add(30), rest, None, u16::MAX, u16::MAX);
+    }
+    p
+}
+
 #[test]
 fn the_three_weapons_are_three_silhouettes() {
-    let p = sim::state::Player::new(sim::Class::Champion);
     let (left, right) = ([0.2, 1.1, -0.05], [0.35, 1.25, -0.05]);
-    let a = arms::champion_arms(&p, left, right, &torso(&p)).expect("she is armed");
-    let length = |w: u8| a.weapons[w as usize].length();
-    // The heaviest single piece of each: where the mass is.
-    let heaviest = |w: u8| {
-        arms::pieces(&a, w)
+    let shape = |form, w: u8| {
+        let p = formed(form, 0);
+        let a = arms::champion_arms(&p, left, right, &torso(&p)).expect("she is armed");
+        assert!(a.whole());
+        assert_eq!(a.held, w);
+        // One shape at a time: the others are not there at all.
+        for other in [c::SWORD, c::HAMMER, c::SPEAR] {
+            let shown = arms::pieces(&a, other).iter().any(|piece| piece.shown);
+            assert_eq!(shown, other == w, "weapon {other} drawn while {w} is out");
+        }
+        assert!(
+            a.beads.iter().all(|b| !b.shown),
+            "drops left over a whole weapon"
+        );
+        let length = a.weapons[w as usize].length();
+        // The heaviest single piece: where the mass is.
+        let heaviest = arms::pieces(&a, w)
             .iter()
             .filter(|piece| piece.shown)
             .map(|piece| piece.size[0] * piece.size[2] * piece.size[1].min(0.6))
-            .fold(0.0f32, f32::max)
+            .fold(0.0f32, f32::max);
+        (length, heaviest)
     };
-    let (sword, hammer, spear) = (length(c::SWORD), length(c::HAMMER), length(c::SPEAR));
+    use sim::class::Form;
+    let (sword, sword_mass) = shape(Form::Sword, c::SWORD);
+    let (hammer, hammer_mass) = shape(Form::Hammer, c::HAMMER);
+    let (spear, spear_mass) = shape(Form::Spear, c::SPEAR);
     assert!(
         spear > 1.6 * sword && spear > 1.6 * hammer,
         "the spear ({spear:.2} m) is not by far the longest (sword {sword:.2}, hammer {hammer:.2})"
@@ -194,14 +235,173 @@ fn the_three_weapons_are_three_silhouettes() {
         "the sword ({sword:.2} m) and the hammer ({hammer:.2} m) are the same length"
     );
     assert!(
-        heaviest(c::HAMMER) > 4.0 * heaviest(c::SWORD).max(heaviest(c::SPEAR)),
+        hammer_mass > 4.0 * sword_mass.max(spear_mass),
         "the hammer's head does not outweigh everything on the other two"
     );
-    // All three are on her at once, and only one is in her hands.
-    assert_eq!(a.weapons.iter().filter(|w| w.held).count(), 1);
+}
+
+#[test]
+fn between_moves_it_is_a_coil_round_her_arm() {
+    let p = sim::state::Player::new(sim::Class::Champion);
+    let t = torso(&p);
+    let right = math::add(t.elbow, [0.0, -0.05, 0.27]);
+    let a = arms::champion_arms(&p, [0.2, 1.1, -0.05], right, &t).expect("she is armed");
+    assert_eq!(a.weight, [0.0; 3], "a fresh Champion holds a weapon");
     for w in [c::SWORD, c::HAMMER, c::SPEAR] {
-        assert!(arms::pieces(&a, w).iter().any(|piece| piece.shown));
+        assert!(arms::pieces(&a, w).iter().all(|piece| !piece.shown));
     }
+    // Every drop is on the arm: within a hand of the upper arm or the forearm,
+    // and between the shoulder and the wrist.
+    let off_bone = |from: V3, to: V3, at: V3| {
+        let axis = math::normalize_or(math::sub(to, from), [0.0, 0.0, 1.0]);
+        let reach = math::length(math::sub(to, from));
+        let d = math::sub(at, from);
+        let along = math::dot(d, axis).clamp(0.0, reach);
+        math::length(math::sub(d, math::scale(axis, along)))
+    };
+    for b in &a.beads {
+        assert!(b.shown);
+        let off = off_bone(t.shoulder, t.elbow, b.centre).min(off_bone(t.elbow, right, b.centre));
+        assert!(off < 0.1, "a drop {off:.2} m off the arm");
+    }
+    // It winds the whole arm, not a bracelet: drops on both bones.
+    let near = |from, to| {
+        a.beads
+            .iter()
+            .filter(|b| off_bone(from, to, b.centre) < 0.1)
+            .count()
+    };
+    assert!(near(t.shoulder, t.elbow) >= 4 && near(t.elbow, right) >= 4);
+    // The glow has nowhere to be but the hand.
+    assert_eq!(a.head(), right);
+}
+
+#[test]
+fn it_keeps_its_shape_for_seconds_then_melts_slowly() {
+    use sim::class::Form;
+    let weight = |rest| {
+        let p = formed(Form::Hammer, rest);
+        arms::liquid(&p).expect("a Champion").weights()[c::HAMMER as usize]
+    };
+    assert_eq!(weight(0), 1.0);
+    // A few seconds: still a hammer, whole.
+    assert_eq!(weight(arms::HOLD), 1.0);
+    const { assert!(arms::HOLD >= 120, "kept for under two seconds") };
+    // Then slowly: most of a second at least, and never all at once.
+    const {
+        assert!(
+            arms::MELT >= 45,
+            "melts in under three quarters of a second"
+        )
+    };
+    let mut last = 1.0;
+    for f in 1..=arms::MELT {
+        let now = weight(arms::HOLD + f);
+        assert!(now < last, "the melt stalled at frame {f}");
+        assert!(
+            last - now < 0.05,
+            "the melt jumped {:.2} at frame {f}",
+            last - now
+        );
+        last = now;
+    }
+    assert_eq!(last, 0.0);
+}
+
+/// Advance a Champion and a distant dummy one frame, pressing `button`.
+fn press(w: &mut sim::World, button: u16) {
+    w.advance([sim::Input::aimed(button, 0), sim::Input::aimed(0, 1 << 15)]);
+}
+
+#[test]
+fn a_new_shape_takes_a_few_frames_and_is_whole_before_the_cut() {
+    let mut w = sim::World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
+    w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
+    // From the coil: a sword.
+    press(&mut w, sim::Input::LEFT);
+    let mut from_coil = 0;
+    let mut first = None;
+    for f in 0..200u16 {
+        let p = w.players[0];
+        let l = arms::liquid(&p).expect("a Champion");
+        if let Some(kind) = p.action.attack_kind() {
+            first.get_or_insert(kind);
+        }
+        if l.solid < 1.0 && p.action.attack_kind().is_some() {
+            from_coil += 1;
+        }
+        if matches!(p.action, sim::state::Action::Active { .. }) {
+            assert_eq!(l.solid, 1.0, "frame {f}: not whole on an active frame");
+        }
+        if p.action.attack_kind().is_none() && first.is_some() {
+            break;
+        }
+        w.advance([sim::Input::aimed(0, 0), sim::Input::aimed(0, 1 << 15)]);
+    }
+    assert!(first.is_some(), "the sword never came out");
+    assert!(
+        from_coil as u16 <= arms::FORM_IN,
+        "{from_coil} frames to run into a sword"
+    );
+    const {
+        assert!(
+            arms::FORM_IN <= 6,
+            "a change of shape is more than a few frames"
+        )
+    };
+    // While the sword is still whole: the hammer, which runs out of a sword.
+    let p = w.players[0];
+    assert_eq!(arms::liquid(&p).expect("a Champion").solid, 1.0);
+    press(&mut w, sim::Input::MIDDLE);
+    let mut changing = 0;
+    for _ in 0..20 {
+        let p = w.players[0];
+        let l = arms::liquid(&p).expect("a Champion");
+        if l.weapon == c::HAMMER && l.solid < 1.0 {
+            changing += 1;
+            assert_eq!(
+                l.was,
+                Some(c::SWORD),
+                "the hammer ran out of something else"
+            );
+            assert_eq!(l.was_solid, 1.0);
+            let weights = l.weights();
+            let total: f32 = weights.iter().sum();
+            assert!(
+                (total - 1.0).abs() < 1e-4,
+                "liquid lost in the change: {total}"
+            );
+        }
+        w.advance([sim::Input::aimed(0, 0), sim::Input::aimed(0, 1 << 15)]);
+    }
+    assert!(changing as u16 <= arms::FORM_IN);
+}
+
+#[test]
+fn the_timings_fit_the_clocks() {
+    // The snapshot's clocks stop counting where they stop meaning anything:
+    // past the end of a melt, and past the end of a change of shape.
+    use sim::class::Quicksilver as Q;
+    const { assert!(arms::HOLD + arms::MELT < Q::REST_MAX) };
+    const { assert!(arms::FORM_IN < Q::FORGED_MAX) };
+    let q = Q::new(3, 700, Some(sim::class::Form::Spear), 9, 2000);
+    assert_eq!(
+        (q.forged(), q.rest(), q.was(), q.was_forged(), q.was_rest()),
+        (3, 700, Some(sim::class::Form::Spear), 9, Q::REST_MAX)
+    );
+}
+
+#[test]
+fn the_shape_is_the_snapshots() {
+    // Drawn from the clocks in the snapshot and nothing of the renderer's own:
+    // the same player draws the same liquid every time.
+    let mut w = sim::World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
+    press(&mut w, sim::Input::RIGHT);
+    let p = w.players[0];
+    let t = torso(&p);
+    let a = arms::champion_arms(&p, [0.2, 1.1, -0.05], [0.35, 1.25, -0.05], &t);
+    let b = arms::champion_arms(&p, [0.2, 1.1, -0.05], [0.35, 1.25, -0.05], &t);
+    assert_eq!(a, b);
 }
 
 #[test]
@@ -262,6 +462,8 @@ fn nobody_else_carries_the_champions_weapons() {
         chest_turn: identity,
         hips: [0.0; 3],
         hips_turn: identity,
+        shoulder: [0.0; 3],
+        elbow: [0.0; 3],
     };
     for class in sim::class::ALL_CLASSES {
         if class == sim::Class::Champion {

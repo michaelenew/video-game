@@ -529,6 +529,8 @@ fn drawn_weapon(clip: view::Clip, frame: u16, p: &sim::state::Player) -> [f32; 3
         chest_turn: still,
         hips: pos,
         hips_turn: still,
+        shoulder: pos,
+        elbow: pos,
     };
     let arms = view::arms::champion_arms(p, hand(true), hand(false), &torso)
         .expect("a Champion holds a weapon");
@@ -564,8 +566,10 @@ fn swung_volume(kind: u8, frame: u16) -> Option<([f32; 3], sim::state::Player)> 
         _ => sim::Input::RIGHT,
     };
     let (startup, active, _) = sim::moves::frames(sim::Class::Champion, kind);
-    for _ in 0..120u16 {
-        w.advance([sim::Input::aimed(button, 0), sim::Input::aimed(0, 1 << 15)]);
+    // Pressed once: a weapon held down is a charge (exploration 0015).
+    for f in 0..120u16 {
+        let press = if f == 0 { button } else { 0 };
+        w.advance([sim::Input::aimed(press, 0), sim::Input::aimed(0, 1 << 15)]);
         let elapsed = match w.players[0].action {
             sim::state::Action::Startup { kind: k, left } if k == kind => {
                 startup.saturating_sub(left)

@@ -275,6 +275,7 @@ fn main() {
                     place_essence_swings,
                     place_champion_arms,
                     place_champion_trails,
+                    place_champion_glow,
                     place_pips,
                     place_hexes,
                 ),
@@ -306,6 +307,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                hud::update_momentum,
                 valley::update_text,
                 glint::update,
                 veil::place,
@@ -485,11 +487,12 @@ struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
 struct Hands([[Vec3; 2]; MAX_PLAYERS]);
 
 /// Where each fighter's chest and hips are drawn, in the arena: a point and a
-/// rotation each. Written by the posing pass and read by the one that hangs the
-/// Champion's stowed weapons on her back and at her hip, so they lean and turn
-/// with the body rather than floating at a fixed height.
+/// rotation each; and the shoulder and elbow of the arm that holds a weapon.
+/// Written by the posing pass and read by the one that winds the Champion's
+/// liquid weapon up her arm, so it bends and turns with the arm rather than
+/// floating.
 #[derive(Resource, Default)]
-struct Torsos([[(Vec3, Quat); 2]; MAX_PLAYERS]);
+struct Torsos([[(Vec3, Quat); 2]; MAX_PLAYERS], [[Vec3; 2]; MAX_PLAYERS]);
 
 /// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
 /// whatever it was, which is wrong by a few frames of blend weight and
@@ -552,6 +555,8 @@ impl Default for Sim {
         let mut w = start_world(opts, dummy);
         shot_bars(&mut w);
         shot_weight(&mut w);
+        shot_momentum(&mut w);
+        shot_form(&mut w);
         shot_at(&mut w);
         shot_move(&mut w);
         shot_blood(&mut w);
@@ -1246,6 +1251,59 @@ fn shot_weight(w: &mut World) {
     }
 }
 
+/// `SHOT_MOMENTUM=n` starts every Champion with `n` momentum (exploration
+/// 0015), so a capture can look at the meter and the glow on his weapon
+/// without landing his way up to them. The same kind of hook as
+/// `SHOT_WEIGHT`; it holds for two seconds and then drains.
+fn shot_momentum(w: &mut World) {
+    let Some(n) = platform::env("SHOT_MOMENTUM").and_then(|s| s.trim().parse::<i32>().ok()) else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Forms { fury, .. } = &mut p.mechanic {
+            fury.momentum = n.clamp(0, u16::MAX as i32) as u16;
+            fury.momentum_left = sim::tuning::momentum_holds().min(u8::MAX as u16) as u8;
+        }
+    }
+}
+
+/// `SHOT_FORM=<weapon>,<n>` starts every Champion with her liquid in that
+/// weapon's shape (`sword`, `hammer`, `spear`), as it is `n` frames after the
+/// move that called it ended: so `SHOT_FORM=hammer,0` is a whole hammer and
+/// one past `view::arms::HOLD` is a hammer starting to melt back into the
+/// coil (`docs/design/kits/champion.md`, "The weapon you can see"). The clock
+/// runs on from there, so pair it with `SHOT_FRAME` and count. The same kind
+/// of hook as `SHOT_MOMENTUM`.
+fn shot_form(w: &mut World) {
+    let Some(spec) = platform::env("SHOT_FORM") else {
+        return;
+    };
+    let mut it = spec.split(',');
+    let name = it.next().unwrap_or("").trim().to_lowercase();
+    let Some(form) = sim::class::FORMS.into_iter().find(|f| f.name() == name) else {
+        return;
+    };
+    let rest = it
+        .next()
+        .and_then(|n| n.trim().parse::<u16>().ok())
+        .unwrap_or(0);
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Forms {
+            form: f, liquid, ..
+        } = &mut p.mechanic
+        {
+            *f = form;
+            *liquid = sim::class::Quicksilver::new(
+                rest.saturating_add(60),
+                rest,
+                None,
+                u16::MAX,
+                u16::MAX,
+            );
+        }
+    }
+}
+
 /// `SHOT_AT=x,z` stands player one at that point of the place the world is
 /// in (metres), on whatever is under it, facing `+x`: a capture of somewhere
 /// that is not a start, such as the Waterfall at the head of the Pinewood
@@ -1652,19 +1710,24 @@ struct ScytheMesh {
 /// A weapon is a haft and a blade in two lengths, so its curve can be seen.
 const SCYTHE_PIECES: usize = 3;
 
-/// One piece of one of the Champion's three weapons.
+/// One piece of one of the shapes the Champion's weapon takes, or one drop
+/// of the liquid it is between them.
 ///
-/// A fixed pool -- every fighter gets all three weapons' worth, hidden unless
-/// they are a Champion -- because the class is picked at runtime and spawning
-/// meshes on Tab would put allocation on the frame. What shape and stuff each
-/// piece is comes from `view::arms::MAKE`, and where it is from
-/// `view::arms::pieces`.
+/// A fixed pool -- every fighter gets all three shapes' worth and the drops,
+/// hidden unless they are a Champion -- because the class is picked at runtime
+/// and spawning meshes on Tab would put allocation on the frame. What shape
+/// and stuff each piece is comes from `view::arms::MAKE`, and where it is from
+/// `view::arms::pieces`; a drop is `view::arms::Arms::beads`.
 #[derive(Component)]
 struct ArmsMesh {
     owner: usize,
+    /// A weapon, or [`BEAD`] for a drop of the liquid.
     weapon: u8,
     piece: usize,
 }
+
+/// The [`ArmsMesh::weapon`] of a drop of the Champion's liquid.
+const BEAD: u8 = u8::MAX;
 
 /// One segment of the arc a Champion's cut leaves: the band between two
 /// remembered frames of the hit volume. See `view::arms::trail`.
@@ -1682,6 +1745,15 @@ const TRAIL_STEPS: usize = 6;
 #[derive(Resource)]
 struct ArmsLook {
     trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 3],
+    /// **The glow at the head of the weapon in his hands** (exploration
+    /// 0015): one per momentum tier, ember to white, the HUD bar's colours.
+    glow: [Handle<StandardMaterial>; 4],
+}
+
+/// The glow itself, one per fighter. See `place_champion_glow`.
+#[derive(Component)]
+struct GlowMesh {
+    owner: usize,
 }
 
 /// The essence around the Blood mage's swing: the hit volume itself, drawn
@@ -2269,57 +2341,53 @@ fn setup(
     // The Champion's three weapons. Each piece is a unit mesh of its shape,
     // scaled per frame; see `view::arms`.
     let block = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    // All of it one gold: the weapon is a liquid, and these are only how it
+    // catches the light where it has set into an edge, a body or a grip.
     let stuff = |stuff: view::arms::Stuff| -> StandardMaterial {
         use view::arms::Stuff;
         match stuff {
-            // Polished: light, and shiny enough to catch the key light.
-            Stuff::Steel => StandardMaterial {
-                base_color: Color::srgb(0.82, 0.85, 0.90),
-                metallic: 0.9,
+            // Set to an edge: pale and polished, the brightest thing on her.
+            //
+            // Half metallic, not all: a fully metallic surface takes its
+            // colour from what it reflects, and with nothing round it to
+            // reflect it draws brown. A little light of its own keeps it gold
+            // on the shadow side too.
+            Stuff::Edge => StandardMaterial {
+                base_color: Color::srgb(1.0, 0.9, 0.6),
+                emissive: LinearRgba::rgb(0.30, 0.22, 0.08),
+                metallic: 0.55,
+                perceptual_roughness: 0.2,
+                ..default()
+            },
+            Stuff::Gold => StandardMaterial {
+                base_color: Color::srgb(1.0, 0.74, 0.25),
+                emissive: LinearRgba::rgb(0.22, 0.14, 0.03),
+                metallic: 0.55,
                 perceptual_roughness: 0.28,
                 ..default()
             },
-            // Forged and heavy: dark, dull, and the one thing on her that
-            // looks like it weighs something.
-            Stuff::Iron => StandardMaterial {
-                base_color: Color::srgb(0.26, 0.27, 0.30),
-                metallic: 0.8,
-                perceptual_roughness: 0.6,
-                ..default()
-            },
-            Stuff::Brass => StandardMaterial {
-                base_color: Color::srgb(0.80, 0.62, 0.28),
-                metallic: 0.85,
+            // Where hands go: deeper and duller.
+            Stuff::Deep => StandardMaterial {
+                base_color: Color::srgb(0.78, 0.5, 0.14),
+                emissive: LinearRgba::rgb(0.10, 0.06, 0.01),
+                metallic: 0.5,
                 perceptual_roughness: 0.4,
                 ..default()
             },
-            Stuff::Wood => StandardMaterial {
-                base_color: Color::srgb(0.40, 0.25, 0.13),
-                perceptual_roughness: 0.85,
-                ..default()
-            },
-            Stuff::Leather => StandardMaterial {
-                base_color: Color::srgb(0.20, 0.12, 0.08),
-                perceptual_roughness: 0.9,
-                ..default()
-            },
-            Stuff::Cloth => StandardMaterial {
-                base_color: Color::srgb(0.75, 0.10, 0.10),
-                perceptual_roughness: 0.95,
+            // Still running: glossy, and lit a little more from inside, so
+            // the coil reads against her sleeve in any light.
+            Stuff::Liquid => StandardMaterial {
+                base_color: Color::srgb(1.0, 0.8, 0.32),
+                emissive: LinearRgba::rgb(0.45, 0.30, 0.06),
+                metallic: 0.55,
+                perceptual_roughness: 0.12,
                 ..default()
             },
         }
     };
     use view::arms::Stuff;
-    let stuffs = [
-        Stuff::Steel,
-        Stuff::Iron,
-        Stuff::Brass,
-        Stuff::Wood,
-        Stuff::Leather,
-        Stuff::Cloth,
-    ];
-    let stuff_handles: [Handle<StandardMaterial>; 6] =
+    let stuffs = [Stuff::Edge, Stuff::Gold, Stuff::Deep, Stuff::Liquid];
+    let stuff_handles: [Handle<StandardMaterial>; 4] =
         std::array::from_fn(|i| materials.add(stuff(stuffs[i])));
     for owner in 0..MAX_PLAYERS {
         for weapon in 0..view::arms::WEAPONS {
@@ -2345,6 +2413,19 @@ fn setup(
                 ));
             }
         }
+        for bead in 0..view::arms::BEADS {
+            commands.spawn((
+                Mesh3d(look.ball.clone()),
+                MeshMaterial3d(stuff_handles[3].clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                ArmsMesh {
+                    owner,
+                    weapon: BEAD,
+                    piece: bead,
+                },
+            ));
+        }
         for segment in 0..view::arms::TRAIL - 1 {
             commands.spawn((
                 Mesh3d(block.clone()),
@@ -2354,7 +2435,24 @@ fn setup(
                 TrailMesh { owner, segment },
             ));
         }
+        commands.spawn((
+            Mesh3d(look.ball.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            GlowMesh { owner },
+        ));
     }
+    let glow = std::array::from_fn(|tier| {
+        let c = hud::momentum_colour(tier as u8).to_linear();
+        materials.add(StandardMaterial {
+            base_color: Color::LinearRgba(LinearRgba::new(c.red, c.green, c.blue, 0.7)),
+            emissive: LinearRgba::rgb(c.red * 3.0, c.green * 3.0, c.blue * 3.0),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        })
+    });
     // The trail, one colour per weapon so the three arcs are told apart as
     // well as the three silhouettes: the sword's cold and white, the hammer's
     // a hot ember, the spear's a thin blue streak. Unlit, so it reads the same
@@ -2375,7 +2473,7 @@ fn setup(
             })
         })
     });
-    commands.insert_resource(ArmsLook { trail });
+    commands.insert_resource(ArmsLook { trail, glow });
     commands.insert_resource(look);
 }
 
@@ -2902,8 +3000,9 @@ fn place_scythes(
     }
 }
 
-/// Put the Champion's three weapons where `view::arms` says they are: the one
-/// in her hands on the hit volume, the other two stowed on her body.
+/// Put the Champion's weapon where `view::arms` says it is, in whatever shape
+/// the liquid is in: the coil round her forearm, a weapon in her hands on the
+/// hit volume, or the drops running between the two.
 ///
 /// Like the scythe, **the renderer decides nothing about the reach**: the tip
 /// of the weapon out comes from the same `state::hitbox` the hit test reads,
@@ -2912,36 +3011,37 @@ fn place_champion_arms(
     sim: Res<Sim>,
     hands: Res<Hands>,
     torsos: Res<Torsos>,
-    inside: Res<InsideOwnHead>,
     mut meshes: Query<(&ArmsMesh, &mut Transform, &mut Visibility)>,
 ) {
     let mut placed: [Option<view::arms::Arms>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    let mut pieces = [[None; view::arms::WEAPONS]; MAX_PLAYERS];
     for (owner, slot) in placed.iter_mut().enumerate() {
         let [left, right] = hands.0[owner];
-        let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[owner];
-        let torso = view::arms::Torso {
-            chest: chest.into(),
-            chest_turn: quat(chest_turn),
-            hips: hips.into(),
-            hips_turn: quat(hips_turn),
-        };
+        let torso = torso_of(&torsos, owner);
         *slot =
             view::arms::champion_arms(&sim.cur.players[owner], left.into(), right.into(), &torso);
+        if let Some(arms) = slot.as_ref() {
+            for (which, out) in pieces[owner].iter_mut().enumerate() {
+                *out = Some(view::arms::pieces(arms, which as u8));
+            }
+        }
     }
-    let me = sim.local_player();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Some(arms) = placed[tag.owner].as_ref() else {
             *vis = Visibility::Hidden;
             continue;
         };
-        // What is on her back is in the way of a camera that has climbed into
-        // her head, and it says nothing to the player who is her.
-        let stowed = !arms.weapons[tag.weapon as usize].held;
-        if stowed && tag.owner == me && inside.0 > 0.3 {
-            *vis = Visibility::Hidden;
-            continue;
-        }
-        let piece = view::arms::pieces(arms, tag.weapon)[tag.piece];
+        let piece = if tag.weapon == BEAD {
+            arms.beads[tag.piece]
+        } else {
+            match pieces[tag.owner][tag.weapon as usize] {
+                Some(all) => all[tag.piece],
+                None => {
+                    *vis = Visibility::Hidden;
+                    continue;
+                }
+            }
+        };
         if !piece.shown {
             *vis = Visibility::Hidden;
             continue;
@@ -2954,6 +3054,100 @@ fn place_champion_arms(
         tf.translation = Vec3::from(piece.centre);
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
         tf.scale = Vec3::from(piece.size);
+    }
+}
+
+/// Where a fighter's chest, hips and weapon elbow are drawn, as `view::arms`
+/// reads them.
+fn torso_of(torsos: &Torsos, owner: usize) -> view::arms::Torso {
+    let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[owner];
+    view::arms::Torso {
+        chest: chest.into(),
+        chest_turn: quat(chest_turn),
+        hips: hips.into(),
+        hips_turn: quat(hips_turn),
+        shoulder: torsos.1[owner][0].into(),
+        elbow: torsos.1[owner][1].into(),
+    }
+}
+
+/// **The glow on the Champion's weapon** (exploration 0015): a ball of light
+/// at the head of whichever weapon is in his hands. It is his momentum -- none
+/// below a third, then ember, *Heated*, *Blazing* and white at full, the HUD
+/// bar's own colours -- and it swells while he holds a charge, to its full
+/// size at a full charge, so the hold is read off the weapon as it winds.
+fn place_champion_glow(
+    sim: Res<Sim>,
+    look: Res<ArmsLook>,
+    hands: Res<Hands>,
+    torsos: Res<Torsos>,
+    mut meshes: Query<(
+        &GlowMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let sim::class::Mechanic::Forms { fury, .. } = p.mechanic else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let [left, right] = hands.0[tag.owner];
+        let torso = torso_of(&torsos, tag.owner);
+        let Some(arms) = view::arms::champion_arms(p, left.into(), right.into(), &torso) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let tier = fury.tier();
+        // The hold, as a share of the press that makes it a finisher: it
+        // swells as the press is held and is at its biggest when the link has
+        // become its finisher.
+        let held = match p.action {
+            sim::state::Action::Channel { kind, held } => {
+                let startup = sim::moves::get(p.class, kind).startup as f32;
+                ((startup + held as f32) / sim::tuning::hold_from().max(1) as f32).min(1.0)
+            }
+            sim::state::Action::Startup { kind, .. } | sim::state::Action::Active { kind, .. }
+                if sim::moves::champion::is_full(kind) =>
+            {
+                1.0
+            }
+            _ => 0.0,
+        };
+        // Sized to be read from behind him across a fight: the first
+        // capture at a quarter of a metre was a bead on the tip. A finisher
+        // has spent the meter, and burns by what it spent.
+        let finishing = matches!(
+            p.action.attack_kind(),
+            Some(k) if sim::moves::champion::is_full(k)
+        );
+        let size = if finishing {
+            0.25 + 0.35 * fury.spent as f32 / 100.0
+        } else {
+            let base = match tier {
+                0 => 0.0,
+                1 => 0.24,
+                2 => 0.36,
+                _ => 0.5,
+            };
+            base + 0.4 * held
+        };
+        if size <= 0.0 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        tf.translation = Vec3::from(arms.head());
+        tf.scale = Vec3::splat(size);
+        // At full charge it is white whatever the meter says: the charge is
+        // the one big hit, and it looks like one.
+        let shade = if held >= 1.0 { 3 } else { tier as usize };
+        let want = &look.glow[shade.min(3)];
+        if mat.0 != *want {
+            mat.0 = want.clone();
+        }
     }
 }
 
@@ -3800,6 +3994,55 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 + Vec3::Y * sim::tuning::shadow_ring_width().to_f32_for_render(),
             sim::tuning::shadow_ring_width().to_f32_for_render(),
         )),
+        // **The Champion's full charges** (exploration 0015). The crescent:
+        // a wide flat blade of light where the hit test is, and two fading
+        // after-images behind it on its line.
+        EffectKind::Crescent if part < 3 => {
+            let r = effect.field_radius().to_f32_for_render();
+            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
+            let shrink = 1.0 - part as f32 * 0.3;
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Light,
+                at: fx3(effect.head()) - back,
+                scale: Vec3::new(r * 2.0 * shrink, 0.12, r * 2.0 * shrink),
+                turn: Quat::IDENTITY,
+            })
+        }
+        // The shockwave: broken ground on its live radius, standing where
+        // it stopped for as long as it lies there.
+        EffectKind::Shockwave if part < sim::effects::RING_PIECES => {
+            let height = sim::tuning::body_height().to_f32_for_render() * 0.35;
+            Some(standing(
+                Shape::Column,
+                Skin::Stone,
+                fx3(effect.ring_piece(part)),
+                0.45,
+                0.0,
+                height,
+            ))
+        }
+        // The cuts: small and faint along the line he ran while they hang,
+        // large on the frames they land.
+        EffectKind::Cuts if part < sim::effects::TETHER_BEADS => {
+            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
+            let end = fx3(effect.cuts_end());
+            let r = effect.field_radius().to_f32_for_render();
+            let landing = effect.age >= sim::tuning::cuts_delay();
+            let size = if landing { r * 0.8 } else { r * 0.2 };
+            Some(Piece {
+                shape: Shape::Column,
+                skin: Skin::Light,
+                at: at.lerp(end, t),
+                scale: Vec3::new(size * 2.0, 0.08, size * 2.0),
+                turn: Quat::IDENTITY,
+            })
+        }
+        // The javelin: a line of light behind its head, a spear's length.
+        EffectKind::Javelin if part < 4 => {
+            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
+            Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
+        }
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             shape: Shape::Column,
             skin: Skin::Shade,
@@ -4868,6 +5111,12 @@ fn apply_poses(
                 origin + turn * Vec3::new(at[0], at[1], at[2]),
                 turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
             );
+        }
+        // And the weapon arm's shoulder and elbow -- the right, which like the
+        // hand is not the slot of that name in a drawn pose.
+        for (slot, joint) in [(0, view::Joint::ArmR), (1, view::Joint::ForearmR)] {
+            let at = skins[owner].origin[view::drawn_joint(joint).index()];
+            torsos.1[owner][slot] = origin + turn * Vec3::new(at[0], at[1], at[2]);
         }
     }
 

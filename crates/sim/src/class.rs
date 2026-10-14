@@ -146,6 +146,11 @@ impl Class {
                 leap_banked: false,
                 rise_used: false,
                 lifted: 0,
+                fury: Fury {
+                    clash_by: u8::MAX,
+                    ..Fury::default()
+                },
+                liquid: Quicksilver::AT_REST,
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -303,6 +308,209 @@ impl Form {
             crate::moves::champion::HAMMER => Form::Hammer,
             crate::moves::champion::SPEAR => Form::Spear,
             _ => Form::Sword,
+        }
+    }
+}
+
+/// **The Champion's weapon is one weapon**: a golden, mercurial liquid that
+/// winds round her forearm and, in the middle of a move, runs into the shape of
+/// whichever weapon threw it. Animation clocks, and nothing else -- no rule of
+/// combat reads them. They are in the snapshot because the renderer draws the
+/// liquid from them, and a morph run off the renderer's own clock would replay
+/// differently every time a rollback re-simulated the frame it started on
+/// (`docs/design/architecture.md`). See `view::arms` and
+/// `docs/design/kits/champion.md`, "The weapon you can see".
+///
+/// The two clocks say how solid the weapon is now; the other three are what
+/// they said when the weapon was last called, so the renderer can tell what it
+/// is running *from* -- a coil, a sword still half there, or a spear in full.
+///
+/// **Four bytes, packed**, and kept in [`Mechanic::Forms`], because the
+/// snapshot was exactly at its cap: the clocks saturate as soon as they stop
+/// meaning anything new. A shape forms in a handful of frames, so `forged`
+/// counts to [`FORGED_MAX`](Self::FORGED_MAX); it is held and melted inside
+/// a few seconds, so `rest` counts to [`REST_MAX`](Self::REST_MAX).
+/// `view::arms` holds its own timings under those.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Quicksilver([u8; 4]);
+
+// Bit layout, low to high: forged 4, rest 10, was 2 (0 none, 1 + form),
+// was_forged 4, was_rest 10. Thirty bits.
+const FORGED_BITS: u32 = 4;
+const REST_BITS: u32 = 10;
+
+const fn saturate(v: u16, max: u16) -> u32 {
+    (if v > max { max } else { v }) as u32
+}
+
+impl Quicksilver {
+    /// The most frames [`forged`](Self::forged) counts before it stops.
+    pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1;
+    /// The most frames [`rest`](Self::rest) counts before it stops.
+    pub const REST_MAX: u16 = (1 << REST_BITS) - 1;
+
+    /// Nothing thrown for as long as anybody can remember: the liquid is a coil.
+    pub const AT_REST: Quicksilver = Quicksilver::new(
+        Self::FORGED_MAX,
+        Self::REST_MAX,
+        None,
+        Self::FORGED_MAX,
+        Self::REST_MAX,
+    );
+
+    /// From its five clocks, each saturating at its maximum.
+    pub const fn new(
+        forged: u16,
+        rest: u16,
+        was: Option<Form>,
+        was_forged: u16,
+        was_rest: u16,
+    ) -> Quicksilver {
+        let was = match was {
+            None => 0,
+            Some(Form::Hammer) => 1,
+            Some(Form::Sword) => 2,
+            Some(Form::Spear) => 3,
+        };
+        let bits = saturate(forged, Self::FORGED_MAX)
+            | saturate(rest, Self::REST_MAX) << 4
+            | was << 14
+            | saturate(was_forged, Self::FORGED_MAX) << 16
+            | saturate(was_rest, Self::REST_MAX) << 20;
+        Quicksilver(bits.to_le_bytes())
+    }
+
+    const fn bits(self) -> u32 {
+        u32::from_le_bytes(self.0)
+    }
+
+    /// Frames since the weapon was last called into a form: the start of the
+    /// move that holds it.
+    pub const fn forged(self) -> u16 {
+        (self.bits() & 0xf) as u16
+    }
+
+    /// Frames since her last move ended. Zero while one runs.
+    pub const fn rest(self) -> u16 {
+        (self.bits() >> 4 & 0x3ff) as u16
+    }
+
+    /// The form it was in, or running back out of, when it was last called.
+    pub const fn was(self) -> Option<Form> {
+        match self.bits() >> 14 & 0x3 {
+            1 => Some(Form::Hammer),
+            2 => Some(Form::Sword),
+            3 => Some(Form::Spear),
+            _ => None,
+        }
+    }
+
+    /// [`forged`](Self::forged) at that call.
+    pub const fn was_forged(self) -> u16 {
+        (self.bits() >> 16 & 0xf) as u16
+    }
+
+    /// [`rest`](Self::rest) at that call.
+    pub const fn was_rest(self) -> u16 {
+        (self.bits() >> 20 & 0x3ff) as u16
+    }
+
+    /// The four bytes, for the checksum.
+    pub const fn raw(self) -> u32 {
+        self.bits()
+    }
+
+    /// A move has called the weapon. `from` is the form it was in before.
+    pub fn call(&mut self, from: Form) {
+        *self = Quicksilver::new(0, self.rest(), Some(from), self.forged(), self.rest());
+    }
+
+    /// One frame, `moving` if a move is running at the end of it.
+    pub fn tick(&mut self, moving: bool) {
+        let rest = if moving {
+            0
+        } else {
+            self.rest().saturating_add(1)
+        };
+        *self = Quicksilver::new(
+            self.forged().saturating_add(1),
+            rest,
+            self.was(),
+            self.was_forged(),
+            self.was_rest(),
+        );
+    }
+}
+
+/// **What the 2026-10-12 rework added to the Champion**, kept together so the
+/// rest of [`Mechanic::Forms`] reads as it did. See
+/// `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+///
+/// Every field is a clock or a count the simulation needs to replay a frame,
+/// so it is in the snapshot and the checksum like the rest.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Fury {
+    /// Damage taken during the current Rush, after the bracing. Past
+    /// `tuning::rush_breaks` the Rush ends the ordinary way.
+    pub braced: u16,
+    /// The one blow a Rush's last frames eat whole has been eaten.
+    pub eaten: bool,
+    /// The shoulder has landed, or been blocked, this Rush. Once a run.
+    pub shouldered: bool,
+    /// The three weapon buttons as they were held last frame, as bits in
+    /// button order -- so a press can be told from a hold. See `beat`.
+    pub clicks: u8,
+    /// **The Beat** (C2): the weapon pressed inside the impact freeze of a
+    /// chain link that landed, as `clicks` bits; zero for none. It is held for
+    /// him until the next link comes out, and that link is a true link.
+    pub beat: u8,
+    /// The move running now is a true link: it hits harder and sticks longer.
+    pub true_link: bool,
+    /// Weapon buttons pressed and still down since, as `clicks` bits: a press
+    /// not yet spent on a move. A link whose button is in here when it starts
+    /// may be held; one thrown by a button held over from the link before it
+    /// may not, so holding a button down still runs the string as it always
+    /// did. See `state::find_the_beat`.
+    pub fresh: u8,
+    /// The link running now was started by a fresh press of its button, and
+    /// so held, it is that weapon's finisher.
+    pub may_hold: bool,
+    /// The place in the string -- 0, 1 or 2 -- the finisher running now was
+    /// held from: the third's are the grand finishers.
+    pub place: u8,
+    /// The momentum the last finisher spent, as a percentage of a full
+    /// meter: what it is worth over and above itself.
+    pub spent: u8,
+    /// **The Clash** (C7): who this frame's blow that met his heavy one was
+    /// thrown by -- a fighter's seat, `state::QUARRY` for a creature or a
+    /// critter -- or `state::NOBODY`. Settled and cleared the same frame.
+    pub clash_by: u8,
+    /// **Momentum** (C4): charge banked by fighting, from nought to
+    /// `tuning::momentum_max`. It is on him, not on whoever he hits, and he
+    /// loses it by leaving: every landed hit feeds it and re-arms
+    /// `momentum_left`, and once that runs out it drains.
+    pub momentum: u16,
+    /// Frames the meter holds before it starts to drain.
+    pub momentum_left: u8,
+    /// The weapon of the last hit that landed, plus one, for the swap's
+    /// extra; zero for none yet.
+    pub last_weapon: u8,
+}
+
+impl Fury {
+    /// Which of the three tiers the meter is in: 0 below a third, then
+    /// *Heated*, *Blazing*, and 3 -- *Champion* -- full.
+    pub fn tier(&self) -> u8 {
+        let max = crate::tuning::momentum_max().max(1);
+        let m = self.momentum as i32;
+        if m >= max {
+            3
+        } else if m * 3 >= max * 2 {
+            2
+        } else if m * 3 >= max {
+            1
+        } else {
+            0
         }
     }
 }
@@ -639,6 +847,13 @@ pub enum Mechanic {
         /// wind-up and is spent on contact, so it sits here in between -- see
         /// `state::bank_the_leap`.
         leap_banked: bool,
+        /// The rework's state: the bracing, the shoulder. See [`Fury`].
+        fury: Fury,
+        /// The weapon as the liquid it is between moves: when it was last
+        /// called into a form, and when her last move ended. Animation only;
+        /// see [`Quicksilver`]. Here rather than on the player because this
+        /// variant had room in the enum and the snapshot had none.
+        liquid: Quicksilver,
     },
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),

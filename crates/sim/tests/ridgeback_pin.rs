@@ -86,11 +86,27 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// hit bleeds. See `docs/design/exploration/0015_blood_mage_blaster.md`.
 /// **And again the same day**: her dodge sends her blood ahead, and Frenzy's
 /// own blows spill nothing. See the feel log.
+///
+/// **The Champion's was re-pinned 2026-10-12, later** for his rework: the
+/// braced Rush and its shoulder, a held weapon charging, the full charges and
+/// momentum. See `docs/design/exploration/0015_champion_momentum_and_the_charge.md`.
+/// **And again 2026-10-13**: tap to combo and hold to finish, momentum spent by
+/// every finisher, and the Clash where every blow lands.
+///
+/// **The Champion's and the Reaver's were re-pinned 2026-10-13, later**, for
+/// slopes, steps and lips: their random walks reach the arena's rim -- alone,
+/// an arena's rim is land -- at frames 2077 and 1292, where the steep-ground
+/// wall is the footing now. The Bulwark's never reaches it. See the feel log.
+///
+/// **The Champion's again the same day, with no change to play**: the clocks
+/// his liquid weapon is drawn from (`class::Quicksilver`) went into
+/// `state_checksum` with the rest of his mechanic. With them left out of it,
+/// every pin held bit for bit.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x339bb2066878e1c8),
+    (Class::Champion, 0xad92d8aa094c6517),
     (Class::Bulwark, 0x8465a86bccb8ef32),
-    (Class::ShadowReaver, 0x125b4fc5c2559d9d),
-    (Class::BloodMage, 0x236cf8434b16031f),
+    (Class::ShadowReaver, 0xf02c926cba5a3ae3),
+    (Class::BloodMage, 0x1c650076c6254dcf),
     (Class::DualMage, 0xd1dc8709fa4d36db),
     (Class::Elementalist, 0x19fbc249420a6a17),
 ];

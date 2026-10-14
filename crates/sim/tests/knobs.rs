@@ -56,10 +56,30 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1",
+        "Presentation, and a bit width: where the Champion's liquid weapon's \
+         `Quicksilver::forged` clock stops counting in its packed four bytes. No rule reads \
+         it; how fast the weapon forms is `view::arms::FORM_IN`, which must sit under it.",
+    ),
+    (
+        "pub const REST_MAX: u16 = (1 << REST_BITS) - 1",
+        "Presentation, and a bit width: where the Champion's liquid weapon's \
+         `Quicksilver::rest` clock stops counting in its packed four bytes. No rule reads it; \
+         how long a shape is kept and melts is `view::arms::HOLD` and `MELT`, which must sit \
+         under it.",
+    ),
+    (
         "u.mul(u).mul(Fx::from_int(3).sub(u.mul(Fx::from_int(2))))",
         "The smoothstep polynomial 3u^2 - 2u^3 in the camera's eye bubble: the coefficients are \
          what make the ease flat at both ends, a shape rather than a magnitude. How wide the ease \
          is, is the Oven's `Eye bubble, soft edge`.",
+    ),
+    (
+        "if still.raw() <= up.mul(Fx::ratio(1, 4)).raw() {",
+        "A numerical tolerance, not a feel: a step taken along a too-steep slope is checked again \
+         where it lands, and the slope's turn between two points a few centimetres apart leaves \
+         it climbing a hair. A quarter of what it would have climbed is that hair; how steep is \
+         too steep is the Oven's `Terrain, steepest walkable`.",
     ),
     (
         "let third = Fx::ratio(1, 3)",

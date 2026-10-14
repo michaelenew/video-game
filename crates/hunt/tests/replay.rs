@@ -59,7 +59,9 @@ fn the_hands_count_what_the_hunter_threw() {
     let judged = hunt::replay::judge(&tape).expect("the start rebuilds");
     let hands = &judged.hands[0];
     assert_eq!(hands.class, Some(Class::Champion));
-    let thrown: u32 = hands.thrown.iter().map(|(_, n)| *n).sum();
+    assert_eq!(hands.stints.len(), 1, "one class, one table");
+    assert_eq!(hands.stints[0].class, Class::Champion);
+    let thrown: u32 = hands.stints[0].thrown.iter().map(|(_, n)| *n).sum();
     assert!(thrown > 0, "the hunter threw nothing in fifty seconds");
     assert!(hands.frames > 0);
     let text = judged.render(&tape, true);
@@ -207,4 +209,45 @@ fn a_tape_with_no_link_still_says_what_the_simulation_costs_apart() {
     let text = judged.render(&tape, false);
     assert!(text.contains("THE LINK  not on this tape"), "{text}");
     assert!(text.contains("BY DISTANCE APART"), "{text}");
+}
+
+/// A class changed in the middle of a tape gets its own table, and the moves
+/// thrown before the change are named by the class that threw them -- a move
+/// is a slot number, and the same slot is a different move on every class.
+#[test]
+fn a_change_of_class_gets_its_own_table() {
+    let mut w = World::hunt_of([Class::Bulwark; MAX_PLAYERS], SpeciesId::RIDGEBACK).seated(1);
+    let mut tape = Tape::begin(&w, "test");
+    let swing = Input {
+        bits: Input::LEFT,
+        ..Input::default()
+    };
+    for f in 0..240u32 {
+        let mut mine = if f % 40 == 0 || f % 40 == 1 {
+            swing
+        } else {
+            Input::default()
+        };
+        if f == 120 {
+            mine.travel = sim::input::Travel::class(0, Class::Champion);
+        }
+        let inputs = [mine, Input::default()];
+        tape.record(w.frame, inputs);
+        w.advance(inputs);
+    }
+    tape.finish(&w);
+    let judged = hunt::replay::judge(&tape).expect("the start rebuilds");
+    let hands = &judged.hands[0];
+    let classes: Vec<Class> = hands.stints.iter().map(|s| s.class).collect();
+    assert_eq!(classes, [Class::Bulwark, Class::Champion]);
+    assert!(hands.stints.iter().all(|s| s.frames > 0));
+    assert_eq!(
+        hands.stints.iter().map(|s| s.frames).sum::<u32>(),
+        hands.frames
+    );
+    let text = judged.render(&tape, false);
+    assert!(
+        text.contains("Bulwark") && text.contains("Champion"),
+        "{text}"
+    );
 }
