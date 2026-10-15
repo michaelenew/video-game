@@ -89,7 +89,7 @@ and a slow frame loads fewer tiles -- a 45 s wait leaves mountains out).
 | `painted` | reference one | soft painted tones, violet shade, warm light, brush dabs, caught edges, coloured height haze, glow, cut stones, almost no line |
 | `depths` | reference two | the same pushed to one hue (blue) and to layers: thick air, dark foreground, strong shafts |
 | `wash` | the first brief | transparent watercolour on paper: pooled edges, granulation, dry brush, wavering sepia line |
-| `brushed` | GW2's concept art | crisp near, broad flat-brush strokes far and on every surface, sky strokes, a dry-brush frame |
+| `brushed` | GW2's concept art | crisp near, broad flat-brush strokes far and on every surface, sky strokes. Retuned on the owner's word (2026-10-15: *not paper texture; big areas are too busy, make the strokes much bigger for large uninterrupted areas*): strokes a fifth of their distance long, no fine marks over them, no paper frame -- so a big area is a few strokes and a small thing sits inside one |
 
 ![Hearth in plain, painted, depths and wash](gallery/painting-hearth.jpg)
 ![The falls in the same four](gallery/painting-falls.jpg)

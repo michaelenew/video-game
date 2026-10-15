@@ -263,10 +263,10 @@ fn broad(px: vec2<f32>, k: f32, layer: f32) -> vec3<f32> {
     let s = sin(turn);
     let u = (c * px.x + s * px.y) / k;
     let v = (-s * px.x + c * px.y) / k;
-    let width = 46.0;
+    let width = 120.0;
     let band = floor(v / width);
     let fv = fract(v / width);
-    let length = 230.0 + 140.0 * hash2(vec2<f32>(band, layer));
+    let length = 620.0 + 380.0 * hash2(vec2<f32>(band, layer));
     let slid = u + hash2(vec2<f32>(band, 7.0 + layer)) * 900.0;
     let seg = floor(slid / length);
     let fu = fract(slid / length);

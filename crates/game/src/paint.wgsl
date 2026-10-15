@@ -180,7 +180,9 @@ fn flat_stroke(p: vec3<f32>, n: vec3<f32>, len: f32) -> vec2<f32> {
     let lane = select(row, row + 1.0, side > 0.92);
     let shade = hash2(vec2<f32>(lane, own)) * 2.0 - 1.0;
     let warmth = hash2(vec2<f32>(lane + 0.37, own + 0.61)) * 2.0 - 1.0;
-    return vec2<f32>(shade * 0.8 + (bristle - 0.5) * 0.45, warmth);
+    // The bristles are a whisper inside the stroke, not a texture over it:
+    // a big quiet area should read as a few strokes, not as noise.
+    return vec2<f32>(shade * 0.9 + (bristle - 0.5) * 0.15, warmth);
 }
 
 /// **Broad strokes that hold still and keep their size.** Strokes fixed to
