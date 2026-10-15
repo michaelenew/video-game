@@ -1,5 +1,5 @@
 ---
-status: built 2026-10-15 -- `brushed` is the game's look; the other four stay as `--look` options. Parked here for now on the owner's word ("pretty good, call this good for now").
+status: built 2026-10-15; **opt-in since 2026-10-16** (`--look brushed`), because as the default it was too expensive to play -- see "Cost" below. The look is the target; making it cheap is the open work.
 ---
 
 # Painting -- how the picture is laid down
@@ -157,7 +157,7 @@ and a slow frame loads fewer tiles -- a 45 s wait leaves mountains out).
 | `painted` | reference one | soft painted tones, violet shade, warm light, brush dabs, caught edges, coloured height haze, glow, cut stones, almost no line |
 | `depths` | reference two | the same pushed to one hue (blue) and to layers: thick air, dark foreground, strong shafts |
 | `wash` | the first brief | transparent watercolour on paper: pooled edges, granulation, dry brush, wavering sepia line |
-| `brushed` (**the default**) | GW2's concept art | crisp near, broad flat-brush strokes far and on every surface, sky strokes. Retuned on the owner's word (2026-10-15: *not paper texture; big areas are too busy, make the strokes much bigger for large uninterrupted areas*): strokes a fifth of their distance long, no fine marks over them, no paper frame -- so a big area is a few strokes and a small thing sits inside one |
+| `brushed` (the target; opt-in) | GW2's concept art | crisp near, broad flat-brush strokes far and on every surface, sky strokes. Retuned on the owner's word (2026-10-15: *not paper texture; big areas are too busy, make the strokes much bigger for large uninterrupted areas*): strokes a fifth of their distance long, no fine marks over them, no paper frame -- so a big area is a few strokes and a small thing sits inside one |
 
 ![Hearth in plain, painted, depths and wash](gallery/painting-hearth.jpg)
 ![The falls in the same four](gallery/painting-falls.jpg)
@@ -283,8 +283,8 @@ Kept so nobody walks into the same wall twice. Most of these cost a round.
 
 ## Picking it back up
 
-- **Run it**: the game is `brushed` by default; `--look plain|painted|depths|wash`
-  for the others, `?look=` on the web.
+- **Run it**: `--look brushed` (the game is `plain` by default);
+  `painted|depths|wash` are the others, `?look=` on the web.
 - **Take shots**: `DEMO=0 SHOT_FRAME=150 SHOT_PITCH=0.1 SHOT_YAW=<y>
   GAME_ARGS="<args> --look <name>" ./scripts/screenshot.sh <out.png> <wait>`.
   The frames used throughout: Hearth (`SHOT_YAW=0.6`, no args) for

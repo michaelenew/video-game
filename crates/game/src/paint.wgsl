@@ -368,7 +368,10 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         );
     }
 #endif
-    let stroke = brush(p, n) * STROKE;
+    var stroke = 0.0;
+    if (STROKE > 0.0) {
+        stroke = brush(p, n) * STROKE;
+    }
     var key = 0.0;
     var key_strength = 0.0;
     let v = normalize(view.world_position - in.world_position.xyz);
