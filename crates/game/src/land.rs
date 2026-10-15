@@ -139,7 +139,76 @@ pub fn tile_mesh(
             ground_colour(&palette, m, slope, steepest, rise, path, x, z)
         },
     );
+    let mut mesh = mesh;
+    let half = f(sim::valley::land::PATH_HALF);
+    lay_strokes(&mut mesh, x0, z0, &|x, z, slope| {
+        let (m, _, path) = ground_at(atlas, x, z, slope, steepest);
+        if path > half + 1.5 {
+            return ([0.0, 0.0], ground_stroke(m, slope > steepest));
+        }
+        // **Along the road.** The distance from the road's middle changes
+        // fastest straight across it, so the way along is square to that.
+        let e = 0.75;
+        let d = |x: f32, z: f32| f(land.sample(fx(x), fx(z)).path);
+        let g = Vec2::new(d(x + e, z) - d(x - e, z), d(x, z + e) - d(x, z - e));
+        let along = Vec2::new(-g.y, g.x).normalize_or_zero();
+        (along.to_array(), PATH_STROKE)
+    });
     (mesh, water)
+}
+
+/// How the brush lays strokes on a path: along it, fairly regular.
+const PATH_STROKE: [f32; 2] = [0.45, 1.0];
+
+/// **How the brush lays strokes on ground of this kind**: its rigidity (0 a
+/// meadow -- strokes of every size, angle and colour -- to 1 coursed stone,
+/// parallel and even) and its strokes' size against the rest. Grass the
+/// loosest and broadest of all; bare rock loose but smaller; dressed stone
+/// nearly ruled. Read by `paint.wgsl`'s `strokes`.
+pub fn ground_stroke(m: Material, steep: bool) -> [f32; 2] {
+    if steep {
+        return [0.2, 1.3];
+    }
+    match m {
+        Material::Grass | Material::Peat => [0.0, 2.4],
+        Material::Ground | Material::Sand | Material::Snow | Material::Ash => [0.2, 1.6],
+        Material::Rock => [0.25, 1.3],
+        Material::Water => [0.5, 1.8],
+        Material::Stone => [0.9, 0.6],
+        Material::Wood => [0.8, 0.7],
+    }
+}
+
+/// Write how the brush lays its strokes into a land mesh's vertices: a
+/// direction on the ground to lay them along (`[0, 0]` for none: the shader
+/// then lays them uphill, or wandering on the flat) in the first texture
+/// coordinates, and the rigidity and size in the second. `at` is asked at
+/// each vertex's map point and slope.
+pub fn lay_strokes(
+    mesh: &mut Mesh,
+    x0: f32,
+    z0: f32,
+    at: &dyn Fn(f32, f32, f32) -> ([f32; 2], [f32; 2]),
+) {
+    let (Some(positions), Some(normals)) = (
+        mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+            .and_then(|a| a.as_float3()),
+        mesh.attribute(Mesh::ATTRIBUTE_NORMAL)
+            .and_then(|a| a.as_float3()),
+    ) else {
+        return;
+    };
+    let (along, kind): (Vec<[f32; 2]>, Vec<[f32; 2]>) = positions
+        .iter()
+        .zip(normals)
+        .map(|(p, n)| {
+            let up = n[1].clamp(1e-3, 1.0);
+            let slope = (1.0 - up * up).max(0.0).sqrt() / up;
+            at(x0 + p[0], z0 + p[2], slope)
+        })
+        .unzip();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, along);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, kind);
 }
 
 /// **The colour of open ground**: `Palette::land` for what it is made of,
@@ -523,7 +592,10 @@ pub fn draw_arena(
                     }
                 }
             };
-            let mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
+            let mut mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
+            lay_strokes(&mut mesh, x0, z0, &|_, _, slope| {
+                ([0.0, 0.0], ground_stroke(arena.floor, slope > steepest))
+            });
             commands.spawn((
                 Mesh3d(meshes.add(mesh)),
                 MeshMaterial3d(white.clone()),
@@ -723,7 +795,10 @@ pub fn draw_below(
                     z,
                 )
             };
-            let mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
+            let mut mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
+            lay_strokes(&mut mesh, x0, z0, &|_, _, slope| {
+                ([0.0, 0.0], ground_stroke(Material::Grass, slope > steepest))
+            });
             commands.spawn((
                 Mesh3d(meshes.add(mesh)),
                 MeshMaterial3d(white.clone()),

@@ -67,6 +67,40 @@ what it paints:
   (`crisp`, `painted_from`), so the fighters and the ground they are on stay
   3D and the brushwork lives behind them.
 
+## Which way, and how freely (2026-10-15)
+
+On the owner's word: *strokes on the path should follow the path, strokes on
+a hill should point uphill; exactly parallel and uniform is right for brick or
+cut stone, along its lines, and the closer to natural the more variation in
+size and angle; the grass's strokes much larger, with more variation in size,
+colour, shape and angle.*
+
+So every stroke is now placed one by one (`paint.wgsl` `strokes`): a few to
+each cell of a grid on the surface, each with its own place, angle, length,
+width, curve, tapered dry ends, shade and two colour shifts, the topmost
+covering a point being the one seen. Two things decide them:
+
+- **Which way** (`stroke_way`): along a direction the mesh gave (a road --
+  the way square to the gradient of the distance from its middle,
+  `land::tile_mesh`), else uphill on a slope, along the courses on upright
+  built work, and on the flat a direction that wanders slowly.
+- **How freely** -- *rigidity*, 0 to 1, with a size: at 1 the strokes sit on
+  the grid, parallel and alike; at 0 they are scattered, turned, sized and
+  coloured freely. Carried in the mesh's second texture coordinates
+  (`land::ground_stroke`, `shapes::lay_natural`), read off the face where a
+  mesh says nothing: upright is built, flat is open ground.
+
+| Surface | Rigidity | Size |
+| --- | --- | --- |
+| Grass, peat | 0 | 2.4 |
+| Earth, sand, snow, ash | 0.2 | 1.6 |
+| Bare rock, cliffs, boulders | 0.25 | 1.1 to 1.3 |
+| A road | 0.45 (along it) | 1.0 |
+| Water | 0.5 | 1.8 |
+| Timber | 0.8 | 0.7 |
+| Dressed stone | 0.9 | 0.6 |
+| Unmarked, upright (walls, plaster) | 0.85 | 0.7 |
+
 ## Built on open source
 
 | From | What we took | Licence |

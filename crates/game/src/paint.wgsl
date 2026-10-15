@@ -146,61 +146,134 @@ fn dabs(p: vec3<f32>, n: vec3<f32>, len: f32) -> f32 {
     return clamp(v * 0.8 + bristle * 0.5, -1.0, 1.0);
 }
 
-/// **One layer of flat-brush strokes** a stroke `len` metres long: rows of
-/// broad, square-ended strokes laid along the surface, each its own shade
-/// (x) and its own warmth (y), hard at the sides the way a flat brush or a
-/// palette knife leaves them, with bristle streaks along it and a dry tail
-/// that breaks up over the stroke laid before it.
-fn flat_stroke(p: vec3<f32>, n: vec3<f32>, len: f32) -> vec2<f32> {
-    let a = abs(n);
-    var uv = p.xy;
-    var tilt = 0.06;
-    if (a.y > max(a.x, a.z)) {
-        uv = p.xz;
-        tilt = 0.5;
-    } else if (a.x > a.z) {
-        uv = p.zy;
+/// **Which way the brush runs here**, in the surface: along `flow` where the
+/// mesh gave one (a road), else uphill on a slope, along the courses on an
+/// upright built face, and on the flat a direction that wanders slowly.
+fn stroke_way(p: vec3<f32>, n: vec3<f32>, flow: vec2<f32>, rigid: f32) -> vec3<f32> {
+    let up = vec3<f32>(0.0, 1.0, 0.0);
+    // Level along the face: the way a course of stone runs.
+    var level = cross(up, n);
+    if (length(level) < 1e-3) {
+        level = vec3<f32>(1.0, 0.0, 0.0);
     }
-    let c = cos(tilt);
-    let s = sin(tilt);
-    let r = vec2<f32>(c * uv.x + s * uv.y, -s * uv.x + c * uv.y) / len;
-    // Long and narrow: a broad stroke is five or six times as long as wide.
-    let width = 0.19;
-    let row = floor(r.y / width);
-    let fy = fract(r.y / width);
-    let x = r.x * (0.8 + 0.4 * hash2(vec2<f32>(row, 5.0))) + hash2(vec2<f32>(row, 3.0)) * 7.0;
-    let cell = floor(x);
-    let fx = fract(x);
-    let bristle = noise2(vec2<f32>(x * 2.5, r.y / width * 10.0));
-    // The tail of a stroke runs dry and the one before it shows through.
-    let dry = smoothstep(0.55, 1.0, fx) * 0.9;
-    let own = select(cell - 1.0, cell, bristle > dry);
-    // The sides: a flat brush's edge wanders a little and is otherwise hard.
-    let side = fy + (noise2(vec2<f32>(x * 4.0, row)) - 0.5) * 0.25;
-    let lane = select(row, row + 1.0, side > 0.92);
-    let shade = hash2(vec2<f32>(lane, own)) * 2.0 - 1.0;
-    let warmth = hash2(vec2<f32>(lane + 0.37, own + 0.61)) * 2.0 - 1.0;
-    // The bristles are a whisper inside the stroke, not a texture over it:
-    // a big quiet area should read as a few strokes, not as noise.
-    return vec2<f32>(shade * 0.9 + (bristle - 0.5) * 0.15, warmth);
+    level = normalize(level);
+    if (length(flow) > 0.1) {
+        let f = vec3<f32>(flow.x, 0.0, flow.y);
+        let on = f - n * dot(f, n);
+        if (length(on) > 1e-3) {
+            return normalize(on);
+        }
+    }
+    // Uphill: straight up, flattened into the surface.
+    let lean = sqrt(max(1.0 - n.y * n.y, 0.0));
+    var uphill = level;
+    if (lean > 1e-3) {
+        uphill = normalize(up - n * n.y);
+    }
+    // On the flat, a slow wander, so a meadow is not combed one way.
+    let a = noise2(p.xz / 38.0) * 6.28;
+    var wander = vec3<f32>(cos(a), 0.0, sin(a));
+    wander = wander - n * dot(wander, n);
+    if (dot(wander, uphill) < 0.0) {
+        wander = -wander;
+    }
+    let on_slope = smoothstep(0.03, 0.15, lean);
+    let natural = normalize(mix(normalize(wander + n * 1e-4), uphill, on_slope) + n * 1e-5);
+    // Built work runs along its courses however it is turned; nature runs
+    // uphill. An upright face is built unless it was marked otherwise.
+    let built = smoothstep(0.55, 0.8, rigid) * (1.0 - smoothstep(0.5, 0.8, abs(n.y)));
+    return normalize(mix(natural, level, built));
 }
 
-/// **Broad strokes that hold still and keep their size.** Strokes fixed to
-/// the world do not swim when the camera moves -- the failure of any brush
-/// laid over the screen -- but a stroke a metre long is a pixel at three
-/// hundred metres, and the distance is exactly where a painter's strokes are
-/// broadest. So the stroke's length is picked from the distance in powers of
-/// two and the two nearest are cross-faded, which keeps a stroke about the
-/// same size on screen at any distance (Bénard et al., "Dynamic 2D Patterns
-/// for Shading 3D Scenes", 2010).
-fn broad_strokes(p: vec3<f32>, n: vec3<f32>, dist: f32) -> vec2<f32> {
-    let l = log2(max(BROAD_SIZE * dist, 0.05));
+/// **One layer of strokes**, each `len` metres long at its usual size: a few
+/// strokes laid in every cell of a grid on the plane the surface most nearly
+/// faces, each with its own place, angle, length, width, curve, tapered dry
+/// ends, shade and warmth. `rigid` is how much they may vary: at 1 they sit
+/// on the grid, parallel to `way` and alike, as a mason's strokes along a
+/// course; at 0 they are scattered, turned, sized and coloured as freely as a
+/// meadow's. The topmost stroke covering a point is the one seen.
+///
+/// Returns shade, warmth and a second colour axis (each -1 to 1).
+fn strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> vec3<f32> {
+    let a = abs(n);
+    var u_axis = vec3<f32>(1.0, 0.0, 0.0);
+    var v_axis = vec3<f32>(0.0, 1.0, 0.0);
+    if (a.y > max(a.x, a.z)) {
+        v_axis = vec3<f32>(0.0, 0.0, 1.0);
+    } else if (a.x > a.z) {
+        u_axis = vec3<f32>(0.0, 0.0, 1.0);
+    }
+    let q = vec2<f32>(dot(p, u_axis), dot(p, v_axis));
+    var d = vec2<f32>(dot(way, u_axis), dot(way, v_axis));
+    if (length(d) < 1e-4) {
+        d = vec2<f32>(1.0, 0.0);
+    }
+    let base_angle = atan2(d.y, d.x);
+    let loose = 1.0 - rigid;
+    let cell = len * 0.5;
+    let home = floor(q / cell);
+    var best = -1.0;
+    var out = vec3<f32>(0.0);
+    for (var j = -1; j <= 1; j = j + 1) {
+        for (var i = -1; i <= 1; i = i + 1) {
+            let c = home + vec2<f32>(f32(i), f32(j));
+            for (var k = 0; k < 2; k = k + 1) {
+                let seed = c + vec2<f32>(f32(k) * 17.13, f32(k) * 31.71);
+                let h1 = hash2(seed);
+                let h2 = hash2(seed + 1.37);
+                let h3 = hash2(seed + 2.71);
+                let h4 = hash2(seed + 3.97);
+                let h5 = hash2(seed + 5.21);
+                let h6 = hash2(seed + 6.83);
+                // Where it sits: on the grid when ruled, anywhere in its cell
+                // when loose.
+                let centre = (c + 0.5 + (vec2<f32>(h1, h2) - 0.5) * mix(0.2, 1.0, loose)) * cell;
+                let angle = base_angle + (h3 - 0.5) * loose * 1.6;
+                let size = 1.0 + (h4 - 0.5) * loose * 1.4;
+                let long = len * size * mix(0.5, 0.55, h5);
+                let wide = len * size * mix(0.15, 0.13 + 0.12 * h6, loose);
+                let curve = (h5 - 0.5) * loose * 0.8;
+                let cs = cos(angle);
+                let sn = sin(angle);
+                let rel = q - centre;
+                let local = vec2<f32>(cs * rel.x + sn * rel.y, -sn * rel.x + cs * rel.y);
+                let u = local.x / long;
+                if (abs(u) > 1.2) {
+                    continue;
+                }
+                let v = (local.y - curve * wide * u * u) / wide;
+                // Ends: square and ruled, or tapered and dry, by how loose.
+                let taper = mix(1.0, sqrt(max(1.0 - u * u, 0.0)), 0.25 + 0.6 * loose);
+                let bristle = noise2(vec2<f32>(u * 4.0 + h1 * 9.0, v * 5.0 + h2 * 9.0)) - 0.5;
+                let inside = abs(v) < taper * (1.0 + bristle * 0.35 * loose)
+                    && abs(u) < 1.0 + bristle * 0.5;
+                let order = hash2(seed + 8.09);
+                if (inside && order > best) {
+                    best = order;
+                    out = vec3<f32>(
+                        hash2(seed + 9.41) * 2.0 - 1.0,
+                        hash2(seed + 10.7) * 2.0 - 1.0,
+                        hash2(seed + 11.3) * 2.0 - 1.0,
+                    ) * (0.85 + 0.15 * bristle * 2.0);
+                }
+            }
+        }
+    }
+    return out;
+}
+
+/// **Strokes that hold still and keep their size.** Fixed to the world so
+/// they do not swim when the camera moves; their length picked from the
+/// distance in powers of two, the two nearest cross-faded, so a stroke stays
+/// about the same size on screen at any range (Bénard et al., "Dynamic 2D
+/// Patterns for Shading 3D Scenes", 2010). `size` scales them per surface.
+fn broad_strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, dist: f32, rigid: f32, size: f32) -> vec3<f32> {
+    let l = log2(max(BROAD_SIZE * dist * size, 0.05));
     let lo = floor(l);
     let t = l - lo;
-    let a = flat_stroke(p, n, exp2(lo));
-    let b = flat_stroke(p + vec3<f32>(17.3, 5.1, 9.7), n, exp2(lo + 1.0));
-    // Two fields averaged lose contrast mid-fade; given it back.
-    return mix(a, b, t) / sqrt(t * t + (1.0 - t) * (1.0 - t));
+    let one = strokes(p, n, way, exp2(lo), rigid);
+    let two = strokes(p + vec3<f32>(17.3, 5.1, 9.7), n, way, exp2(lo + 1.0), rigid);
+    return mix(one, two, t) / sqrt(t * t + (1.0 - t) * (1.0 - t));
 }
 
 /// The light as washes: `TONES` flat levels from shade to light, the step
@@ -247,12 +320,27 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         base = vec4<f32>(base.rgb * (1.0 + g * v) * (1.0 + g * 0.5 * vec3<f32>(v, 0.0, -v)), base.a);
     }
     if (BROAD > 0.0) {
+        // What kind of surface this is, for the brush: the mesh's word if it
+        // gave one (`land::ground_stroke`, `shapes::lay_natural`), else read
+        // off the face -- upright is built, flat is open ground.
+        var flow = vec2<f32>(0.0);
+        var rigid = mix(0.85, 0.3, smoothstep(0.5, 0.85, abs(n.y)));
+        var size = mix(0.7, 1.2, smoothstep(0.5, 0.85, abs(n.y)));
+#ifdef VERTEX_UVS_A
+        flow = in.uv;
+#endif
+#ifdef VERTEX_UVS_B
+        rigid = in.uv_b.x;
+        size = in.uv_b.y;
+#endif
         let dist = length(view.world_position - p);
-        let b = broad_strokes(p, n, dist);
-        base = vec4<f32>(
-            base.rgb * (1.0 + BROAD * 0.45 * b.x) * (1.0 + BROAD * 0.3 * vec3<f32>(b.y, 0.15 * b.y, -b.y)),
-            base.a,
-        );
+        let way = stroke_way(p, n, flow, rigid);
+        let b = broad_strokes(p, n, way, dist, rigid, size);
+        // The looser the brush the further its colours wander: a meadow's
+        // strokes go yellow, blue and dark; a wall's stay close to its own.
+        let wander = BROAD * mix(0.45, 1.0, 1.0 - rigid);
+        let shift = vec3<f32>(b.y, 0.15 * b.y, -b.y) * 0.3 + vec3<f32>(0.25 * b.z, 0.2 * b.z, -0.35 * b.z) * (1.0 - rigid);
+        base = vec4<f32>(base.rgb * (1.0 + wander * 0.4 * b.x) * (1.0 + wander * shift), base.a);
     }
     let stroke = brush(p, n) * STROKE;
     var key = 0.0;

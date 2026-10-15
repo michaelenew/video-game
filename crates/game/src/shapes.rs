@@ -344,6 +344,7 @@ pub fn cut_rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) 
     if let Some((centre, base, brush)) = paint {
         self::paint(&mut mesh, h, centre, base, brush);
     }
+    lay_natural(&mut mesh, NATURAL_STONE);
     mesh
 }
 
@@ -404,7 +405,7 @@ pub fn rock_faceted(
     paint: Option<(Vec3, [f32; 3], &Brush)>,
 ) -> Mesh {
     let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
-    superellipsoid(size, (0.55, 0.55), facets, paint, move |p, n| {
+    let mut mesh = superellipsoid(size, (0.55, 0.55), facets, paint, move |p, n| {
         // Two octaves of a smooth value noise over the direction, scaled by
         // the rock's own size so a boulder and a pebble are rough alike.
         let q = p / size.max_element().max(1e-3);
@@ -415,7 +416,23 @@ pub fn rock_faceted(
         // the air. The roughness fades out as the face turns upward.
         let top = n.y.clamp(0.0, 1.0);
         1.0 - 0.28 * (0.5 + 0.5 * v) * (1.0 - top * top)
-    })
+    });
+    lay_natural(&mut mesh, NATURAL_STONE);
+    mesh
+}
+
+/// How the brush lays strokes on bare rock: loose, a little smaller than on
+/// open ground (`land::ground_stroke`, `paint.wgsl`'s `strokes`).
+pub const NATURAL_STONE: [f32; 2] = [0.25, 1.1];
+
+/// Mark a whole mesh as one kind of surface for the brush: rigidity and
+/// stroke size, with no direction of its own (uphill, or along its courses).
+/// A mesh that is never marked is read by its faces: upright ones as built
+/// work, ruled along their courses; flat ones as open ground.
+pub fn lay_natural(mesh: &mut Mesh, kind: [f32; 2]) {
+    let n = mesh.count_vertices();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0f32, 0.0]; n]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![kind; n]);
 }
 
 /// A column of raised earth: the Elementalist's stone, and the planted
@@ -1023,6 +1040,7 @@ pub fn cliff(
     // Normals from the roughened surface, so the lumps catch the light.
     mesh.compute_smooth_normals();
     let _ = normals;
+    lay_natural(&mut mesh, NATURAL_STONE);
     mesh
 }
 
