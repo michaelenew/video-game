@@ -48,6 +48,7 @@ struct Wash {
     right: vec4<f32>,  // the camera's axes in the world
     up: vec4<f32>,
     back: vec4<f32>,
+    fog: vec4<f32>,    // the fog's colour: the sky at the horizon, as seen
 }
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
@@ -126,17 +127,33 @@ fn tensor(at: vec2<f32>, size: vec2<f32>, d: f32) -> vec3<f32> {
     return vec3<f32>(dot(sx, sx), dot(sy, sy), dot(sx, sy));
 }
 
-// Acerola's anisotropic Kuwahara, eight sectors, with the tensor smoothed
-// over a 3x3 of taps in place of its two blur passes.
+// Forty-eight taps over the unit disc, four rings each turned half a step
+// from the last (and the middle makes forty-nine): what the Kuwahara reads,
+// in place of every pixel of its ellipse, where a dense radius of seven was
+// eight hundred. Twenty-five taps was tried first and smeared the grass into
+// streaks along the ellipse: with three samples a sector, the variance that
+// picks the calmest sector is noise. Each tap's eight sector weights are
+// worked out in the loop: a table of them, indexed per tap, was slower under
+// the software renderer (279 ms to 465 ms a pass), not faster.
+const TAPS = array<vec2<f32>, 48>(
+    vec2<f32>(0.2500, 0.0000), vec2<f32>(0.1768, 0.1768), vec2<f32>(0.0000, 0.2500), vec2<f32>(-0.1768, 0.1768),
+    vec2<f32>(-0.2500, 0.0000), vec2<f32>(-0.1768, -0.1768), vec2<f32>(-0.0000, -0.2500), vec2<f32>(0.1768, -0.1768),
+    vec2<f32>(0.4830, 0.1294), vec2<f32>(0.3536, 0.3536), vec2<f32>(0.1294, 0.4830), vec2<f32>(-0.1294, 0.4830),
+    vec2<f32>(-0.3536, 0.3536), vec2<f32>(-0.4830, 0.1294), vec2<f32>(-0.4830, -0.1294), vec2<f32>(-0.3536, -0.3536),
+    vec2<f32>(-0.1294, -0.4830), vec2<f32>(0.1294, -0.4830), vec2<f32>(0.3536, -0.3536), vec2<f32>(0.4830, -0.1294),
+    vec2<f32>(0.7500, 0.0000), vec2<f32>(0.6757, 0.3254), vec2<f32>(0.4676, 0.5864), vec2<f32>(0.1669, 0.7312),
+    vec2<f32>(-0.1669, 0.7312), vec2<f32>(-0.4676, 0.5864), vec2<f32>(-0.6757, 0.3254), vec2<f32>(-0.7500, 0.0000),
+    vec2<f32>(-0.6757, -0.3254), vec2<f32>(-0.4676, -0.5864), vec2<f32>(-0.1669, -0.7312), vec2<f32>(0.1669, -0.7312),
+    vec2<f32>(0.4676, -0.5864), vec2<f32>(0.6757, -0.3254), vec2<f32>(0.9262, 0.2114), vec2<f32>(0.7427, 0.5923),
+    vec2<f32>(0.4122, 0.8559), vec2<f32>(0.0000, 0.9500), vec2<f32>(-0.4122, 0.8559), vec2<f32>(-0.7427, 0.5923),
+    vec2<f32>(-0.9262, 0.2114), vec2<f32>(-0.9262, -0.2114), vec2<f32>(-0.7427, -0.5923), vec2<f32>(-0.4122, -0.8559),
+    vec2<f32>(-0.0000, -0.9500), vec2<f32>(0.4122, -0.8559), vec2<f32>(0.7427, -0.5923), vec2<f32>(0.9262, -0.2114),
+);
+
+// Acerola's anisotropic Kuwahara, eight sectors, read on the sparse taps
+// above and with its structure tensor one Sobel rather than a blurred nine.
 fn kuwahara(at: vec2<f32>, size: vec2<f32>, k: f32, reach: f32) -> vec3<f32> {
-    var g = vec3<f32>(0.0);
-    let spread = 2.0 * k;
-    for (var j = -1; j <= 1; j = j + 1) {
-        for (var i = -1; i <= 1; i = i + 1) {
-            let w = select(0.5, 1.0, i == 0 && j == 0);
-            g += w * tensor(at + vec2<f32>(f32(i), f32(j)) * spread, size, k);
-        }
-    }
+    let g = tensor(at, size, 1.5 * k);
     let root = sqrt(max(g.y * g.y - 2.0 * g.x * g.y + g.x * g.x + 4.0 * g.z * g.z, 0.0));
     let l1 = 0.5 * (g.y + g.x + root);
     let l2 = 0.5 * (g.y + g.x - root);
@@ -152,17 +169,16 @@ fn kuwahara(at: vec2<f32>, size: vec2<f32>, k: f32, reach: f32) -> vec3<f32> {
     if (l1 + l2 > 1e-6) {
         anisotropy = (l1 - l2) / (l1 + l2);
     }
-    // In flat areas give the wander some anisotropy too, so a sky is brushed.
     anisotropy = max(anisotropy, 0.35);
 
     let alpha = wash.a.y;
     let radius = reach * k;
-    let a = radius * clamp((alpha + anisotropy) / alpha, 0.1, 2.0);
-    let b = radius * clamp(alpha / (alpha + anisotropy), 0.1, 2.0);
+    // Stretched along the edge no more than half again: further, and the
+    // sparse taps along the long axis read as a smear.
+    let a = radius * clamp((alpha + anisotropy) / alpha, 0.1, 1.5);
+    let b = radius * clamp(alpha / (alpha + anisotropy), 0.1, 1.5);
     let cp = cos(phi);
     let sp = sin(phi);
-    let max_x = i32(sqrt(a * a * cp * cp + b * b * sp * sp));
-    let max_y = i32(sqrt(a * a * sp * sp + b * b * cp * cp));
     let zeta = 2.0 / max(radius, 1.0);
     let zero_cross = 0.58;
     let szc = sin(zero_cross);
@@ -170,47 +186,49 @@ fn kuwahara(at: vec2<f32>, size: vec2<f32>, k: f32, reach: f32) -> vec3<f32> {
 
     var m = array<vec4<f32>, 8>();
     var s = array<vec3<f32>, 8>();
-    for (var y = -max_y; y <= max_y; y = y + 1) {
-        for (var x = -max_x; x <= max_x; x = x + 1) {
-            let o = vec2<f32>(f32(x), f32(y));
-            // S·R: into the ellipse's own frame, scaled to a unit-half disc.
-            var v = vec2<f32>((cp * o.x - sp * o.y) * 0.5 / a, (sp * o.x + cp * o.y) * 0.5 / b);
-            if (dot(v, v) > 0.25) {
-                continue;
-            }
-            let c = clamp(read(at + o, size), vec3<f32>(0.0), vec3<f32>(1.0));
-            var w = array<f32, 8>();
-            var sum = 0.0;
-            var vxx = zeta - eta * v.x * v.x;
-            var vyy = zeta - eta * v.y * v.y;
-            var z = max(0.0, v.y + vxx);
-            w[0] = z * z;
-            z = max(0.0, -v.x + vyy);
-            w[2] = z * z;
-            z = max(0.0, -v.y + vxx);
-            w[4] = z * z;
-            z = max(0.0, v.x + vyy);
-            w[6] = z * z;
-            v = 0.70710678 * vec2<f32>(v.x - v.y, v.x + v.y);
-            vxx = zeta - eta * v.x * v.x;
-            vyy = zeta - eta * v.y * v.y;
-            z = max(0.0, v.y + vxx);
-            w[1] = z * z;
-            z = max(0.0, -v.x + vyy);
-            w[3] = z * z;
-            z = max(0.0, -v.y + vxx);
-            w[5] = z * z;
-            z = max(0.0, v.x + vyy);
-            w[7] = z * z;
-            for (var n = 0; n < 8; n = n + 1) {
-                sum += w[n];
-            }
-            let gauss = exp(-3.125 * dot(v, v)) / max(sum, 1e-6);
-            for (var n = 0; n < 8; n = n + 1) {
-                let wk = w[n] * gauss;
-                m[n] += vec4<f32>(c * wk, wk);
-                s[n] += c * c * wk;
-            }
+    for (var i = 0; i < 49; i = i + 1) {
+        // The tap in the ellipse's own frame, a unit-half disc...
+        var v = vec2<f32>(0.0);
+        if (i < 48) {
+            v = TAPS[i] * 0.5;
+        }
+        // ...and on the screen: the ellipse's inverse, R^T S^-1.
+        let o = vec2<f32>(
+            cp * (2.0 * a * v.x) + sp * (2.0 * b * v.y),
+            -sp * (2.0 * a * v.x) + cp * (2.0 * b * v.y),
+        );
+        let c = clamp(read(at + o, size), vec3<f32>(0.0), vec3<f32>(1.0));
+        var w = array<f32, 8>();
+        var sum = 0.0;
+        var vxx = zeta - eta * v.x * v.x;
+        var vyy = zeta - eta * v.y * v.y;
+        var z = max(0.0, v.y + vxx);
+        w[0] = z * z;
+        z = max(0.0, -v.x + vyy);
+        w[2] = z * z;
+        z = max(0.0, -v.y + vxx);
+        w[4] = z * z;
+        z = max(0.0, v.x + vyy);
+        w[6] = z * z;
+        v = 0.70710678 * vec2<f32>(v.x - v.y, v.x + v.y);
+        vxx = zeta - eta * v.x * v.x;
+        vyy = zeta - eta * v.y * v.y;
+        z = max(0.0, v.y + vxx);
+        w[1] = z * z;
+        z = max(0.0, -v.x + vyy);
+        w[3] = z * z;
+        z = max(0.0, -v.y + vxx);
+        w[5] = z * z;
+        z = max(0.0, v.x + vyy);
+        w[7] = z * z;
+        for (var n = 0; n < 8; n = n + 1) {
+            sum += w[n];
+        }
+        let gauss = exp(-3.125 * dot(v, v)) / max(sum, 1e-6);
+        for (var n = 0; n < 8; n = n + 1) {
+            let wk = w[n] * gauss;
+            m[n] += vec4<f32>(c * wk, wk);
+            s[n] += c * c * wk;
         }
     }
     var out = vec4<f32>(0.0);
@@ -221,7 +239,6 @@ fn kuwahara(at: vec2<f32>, size: vec2<f32>, k: f32, reach: f32) -> vec3<f32> {
         let mean = m[n].rgb / m[n].w;
         let spread2 = abs(s[n] / m[n].w - mean * mean);
         let sigma2 = spread2.r + spread2.g + spread2.b;
-        // Acerola's hardness 8, sharpness 8.
         let w = 1.0 / (1.0 + pow(8.0 * 1000.0 * sigma2, 4.0));
         out += vec4<f32>(mean * w, w);
     }
@@ -340,24 +357,10 @@ fn brush(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         c = c * (1.0 + wash.j.z * shade * 0.22);
     }
 
-    // **The sky's own colour**, read off the top of the picture where the
-    // depth says there is nothing, so the haze is every place's own air and
-    // not one colour laid over all of them.
-    var sky_sum = vec3<f32>(0.0);
-    var sky_n = 0.0;
-    for (var i = 0; i < 9; i = i + 1) {
-        for (var j = 0; j < 3; j = j + 1) {
-            let q = vec2<f32>((f32(i) + 0.5) / 9.0 * size.x, (f32(j) * 0.12 + 0.04) * size.y);
-            if (is_sky(depth_at(q, size), size, q)) {
-                sky_sum += read(q, size);
-                sky_n += 1.0;
-            }
-        }
-    }
-    var air = wash.b.xyz;
-    if (sky_n > 0.0) {
-        air = mix(sky_sum / sky_n, wash.b.xyz, wash.b.w);
-    }
+    // **The air's colour**: the sky at the horizon, which the camera's fog
+    // already fades into (`sky::fog`), handed in rather than hunted for across
+    // the top of the picture by every pixel.
+    let air = mix(wash.fog.xyz, wash.b.xyz, wash.b.w);
 
     if (!sky) {
         // **Corners and contacts are shaded**: the nearer what surrounds a
@@ -451,15 +454,15 @@ fn brush(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let toward = sun_px - px;
         var lit = 0.0;
         let jitter = hash2(px);
-        for (var i = 0; i < 20; i = i + 1) {
-            let t = (f32(i) + jitter) / 20.0;
+        for (var i = 0; i < 12; i = i + 1) {
+            let t = (f32(i) + jitter) / 12.0;
             let q = px + toward * t * 0.8;
             if (is_sky(depth_at(q, size), size, q)) {
                 lit += 1.0 - t * 0.6;
             }
         }
         let fade = 1.0 - smoothstep(0.3, 1.3, length(toward / size.y));
-        let shaft = lit / 20.0 * fade * wash.sun.z;
+        let shaft = lit / 12.0 * fade * wash.sun.z;
         c = c + air * shaft * wash.c.w * 0.6;
     }
 

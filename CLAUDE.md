@@ -314,6 +314,16 @@ screenshot, or with the logging build
 (`cargo run --release -p game --features bevy/bevy_log`), which prints the
 error.
 
+**What a brush does is baked, never worked out per pixel.** The painted
+looks (`--look`, [`docs/design/painting.md`](docs/design/painting.md)) lay
+strokes on every surface, and a stroke field is a pure function of the
+surface that is the same every frame: `look::strokes` draws it as tiling
+sheets, `crates/game/build.rs` bakes them into the binary, and `paint.wgsl`
+reads two texels. The version that evaluated the strokes in the shader was
+four times the cost of the whole surface pass and made the shader slow enough
+to compile that changing class froze the game. If a new effect needs more
+than a texture read and a few lines per pixel, bake it the same way.
+
 **Sound is the same rule, in `crates/sound`.** A sound is a function from a
 few numbers the simulation already has -- a blow's weight is its impact
 freeze, what it struck and how big that was, a telegraph is exactly as long
