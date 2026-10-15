@@ -461,13 +461,15 @@ pub fn update_text(
     stream: Res<crate::stream::Stream>,
     mut text: Query<&mut Text, With<ValleyText>>,
     mut shown: Local<String>,
+    near: Res<crate::near::Near>,
 ) {
     let mut now = self::text(&sim.cur);
     if crate::dev_mode() && sim.cur.valley.on {
         let (places, boxes, tiles) = stream.loaded();
+        let (baked, baking) = near.loaded();
         let atlas = sim::atlas::valley();
         now.push_str(&format!(
-            "\nloaded: {places} of {} places, {boxes} of {} boxes, {tiles} tiles of land",
+            "\nloaded: {places} of {} places, {boxes} of {} boxes, {tiles} tiles of land, {baked} baked near ({baking} baking)",
             atlas.places.len(),
             atlas.solids.len()
         ));

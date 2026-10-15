@@ -140,22 +140,44 @@ pub fn tile_mesh(
         },
     );
     let mut mesh = mesh;
-    let half = f(sim::valley::land::PATH_HALF);
     let relief = |x: f32, z: f32| f(atlas.relief_at(fx(x), fx(z)));
     lay_strokes(&mut mesh, x0, z0, &relief, &|x, z, slope| {
-        let (m, _, path) = ground_at(atlas, x, z, slope, steepest);
-        if path > half + 1.5 {
-            return ([0.0, 0.0], ground_stroke(m, slope > steepest));
-        }
-        // **Along the road.** The distance from the road's middle changes
-        // fastest straight across it, so the way along is square to that.
-        let e = 0.75;
-        let d = |x: f32, z: f32| f(land.sample(fx(x), fx(z)).path);
-        let g = Vec2::new(d(x + e, z) - d(x - e, z), d(x, z + e) - d(x, z - e));
-        let along = Vec2::new(-g.y, g.x).normalize_or_zero();
-        (along.to_array(), PATH_STROKE)
+        stroke_kind_at(atlas, x, z, slope)
     });
     (mesh, water)
+}
+
+/// **How the brush lays strokes at a map point**: the direction to lay them
+/// along (`[0, 0]` for none), and the rigidity and size -- what a tile's
+/// vertices carry (`lay_strokes`) and what a near tile's bake asks per
+/// texel (`crate::near`). `slope` is rise over run there.
+pub fn stroke_kind_at(atlas: &Atlas, x: f32, z: f32, slope: f32) -> ([f32; 2], [f32; 2]) {
+    let steepest = f(sim::tuning::terrain_steepest());
+    let land = atlas.land.as_ref().expect("a map with land");
+    let half = f(sim::valley::land::PATH_HALF);
+    let (m, _, path) = ground_at(atlas, x, z, slope, steepest);
+    if path > half + 1.5 {
+        return ([0.0, 0.0], ground_stroke(m, slope > steepest));
+    }
+    // **Along the road.** The distance from the road's middle changes
+    // fastest straight across it, so the way along is square to that.
+    let e = 0.75;
+    let d = |x: f32, z: f32| f(land.sample(fx(x), fx(z)).path);
+    let g = Vec2::new(d(x + e, z) - d(x - e, z), d(x, z + e) - d(x, z - e));
+    let along = Vec2::new(-g.y, g.x).normalize_or_zero();
+    (along.to_array(), PATH_STROKE)
+}
+
+/// The ground's normal at a map point, off the relief half a metre either
+/// way, and its slope (rise over run).
+pub fn ground_normal(atlas: &Atlas, x: f32, z: f32) -> ([f32; 3], f32) {
+    let h = |x: f32, z: f32| f(atlas.relief_at(fx(x), fx(z)));
+    let e = 0.5;
+    let dx = (h(x + e, z) - h(x - e, z)) / (2.0 * e);
+    let dz = (h(x, z + e) - h(x, z - e)) / (2.0 * e);
+    let n = Vec3::new(-dx, 1.0, -dz).normalize();
+    let up = n.y.clamp(1e-3, 1.0);
+    (n.to_array(), (1.0 - up * up).max(0.0).sqrt() / up)
 }
 
 /// How the brush lays strokes on a path: along it, fairly regular.

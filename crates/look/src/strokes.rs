@@ -104,9 +104,351 @@ fn mix(a: f32, b: f32, t: f32) -> f32 {
 /// sized and coloured as freely as a meadow's. The topmost covering stroke is
 /// the one seen. Periodic every `PERIOD`, by hashing the cell modulo it.
 pub fn field(q: [f32; 2], rigid: f32, turn: f32) -> [f32; 4] {
+    let cells = (PERIOD / 0.5).round() as i32;
+    field_in(q, rigid, turn, Some(cells))
+}
+
+/// **The field unwrapped**: the strokes of the whole plane, never repeating,
+/// which is what a near tile is baked from (`game::near`) -- a sheet's period
+/// is a few metres up close, and the eye finds a repeat at once. Shade,
+/// warmth and the third axis, -1 to 1; `q` in stroke lengths.
+pub fn stroke(q: [f32; 2], rigid: f32, turn: f32) -> [f32; 3] {
+    let f = field_in(q, rigid, turn, None);
+    [f[0], f[1], f[2]]
+}
+
+/// **The brush at a distance**, as `paint.wgsl`'s `broad_strokes` lays it:
+/// two layers of strokes, their lengths the powers of two either side of
+/// `broad_size * dist * size` metres, blended by where between the two it
+/// falls, and the blend kept at full strength. `q` in metres on the plane.
+/// The near bake fixes `dist` (`game::near::BAKE_DIST`), so its strokes are
+/// a fixed size in the world rather than on the screen.
+pub fn broad(
+    q: [f32; 2],
+    turn: f32,
+    rigid: f32,
+    size: f32,
+    dist: f32,
+    broad_size: f32,
+) -> [f32; 3] {
+    let l = (broad_size * dist * size).max(0.05).log2();
+    let lo = l.floor();
+    let t = l - lo;
+    let (len1, len2) = (lo.exp2(), (lo + 1.0).exp2());
+    let one = stroke([q[0] / len1, q[1] / len1], rigid, turn);
+    let two = stroke([(q[0] + 17.3) / len2, (q[1] + 9.7) / len2], rigid, turn);
+    let k = 1.0 / (t * t + (1.0 - t) * (1.0 - t)).sqrt();
+    [
+        mix(one[0], two[0], t) * k,
+        mix(one[1], two[1], t) * k,
+        mix(one[2], two[2], t) * k,
+    ]
+}
+
+/// **Which way the strokes run on the ground**, as `paint.wgsl`'s
+/// `stroke_way` decides it: along `flow` where the mesh gave one (a road),
+/// else uphill, wandering slowly on the flat; built work (`rigid` high) runs
+/// level along its courses. `p` is the point and `n` the ground's normal.
+pub fn way_on_ground(p: [f32; 3], n: [f32; 3], flow: [f32; 2], rigid: f32) -> [f32; 3] {
+    let up = [0.0, 1.0, 0.0];
+    let mut level = cross(up, n);
+    if len3(level) < 1e-3 {
+        level = [1.0, 0.0, 0.0];
+    }
+    let level = norm3(level);
+    if (flow[0] * flow[0] + flow[1] * flow[1]).sqrt() > 0.1 {
+        let f = [flow[0], 0.0, flow[1]];
+        let on = sub3(f, scale3(n, dot3(f, n)));
+        if len3(on) > 1e-3 {
+            return norm3(on);
+        }
+    }
+    let lean = (1.0 - n[1] * n[1]).max(0.0).sqrt();
+    let mut uphill = level;
+    if lean > 1e-3 {
+        uphill = norm3(sub3(up, scale3(n, n[1])));
+    }
+    // 6.28 rather than tau: the shader's number, matched to the digit.
+    #[allow(clippy::approx_constant)]
+    let a = noise2(p[0] / 38.0, p[2] / 38.0) * 6.28;
+    let mut wander = [a.cos(), 0.0, a.sin()];
+    wander = sub3(wander, scale3(n, dot3(wander, n)));
+    if dot3(wander, uphill) < 0.0 {
+        wander = scale3(wander, -1.0);
+    }
+    let on_slope = smoothstep(0.03, 0.15, lean);
+    let w = norm3(add3(wander, scale3(n, 1e-4)));
+    let natural = norm3(add3(lerp3(w, uphill, on_slope), scale3(n, 1e-5)));
+    let built = smoothstep(0.55, 0.8, rigid) * (1.0 - smoothstep(0.5, 0.8, n[1].abs()));
+    norm3(lerp3(natural, level, built))
+}
+
+/// **The brush with its strokes worked out once**: what `broad` says, for
+/// many points over one patch of plane -- a tile's bake. `broad` works every
+/// candidate stroke's place, size, angle and colours out again at every
+/// point, which is a hundred strokes a texel and most of the cost; here each
+/// stroke is worked out once for its cell and only the cheap part -- is this
+/// point inside it -- is asked per point. The answer is `broad`'s to within
+/// rounding (`the_brush_remembers_what_broad_says`).
+pub struct Brush {
+    lo: [f32; 2],
+    hi: [f32; 2],
+    /// One plane of marks per stroke length (a power of two), as they are
+    /// needed.
+    planes: Vec<(i32, Plane)>,
+}
+
+impl Brush {
+    /// A brush for points with `lo <= q <= hi`, in metres.
+    pub fn over(lo: [f32; 2], hi: [f32; 2]) -> Brush {
+        Brush {
+            lo,
+            hi,
+            planes: Vec::new(),
+        }
+    }
+
+    /// `broad`, remembered.
+    pub fn broad(
+        &mut self,
+        q: [f32; 2],
+        turn: f32,
+        rigid: f32,
+        size: f32,
+        dist: f32,
+        broad_size: f32,
+    ) -> [f32; 3] {
+        let l = (broad_size * dist * size).max(0.05).log2();
+        let lo = l.floor();
+        let t = l - lo;
+        let (len1, len2) = (lo.exp2(), (lo + 1.0).exp2());
+        let (sn, cs) = turn.sin_cos();
+        let one =
+            self.plane(lo as i32, len1, [0.0, 0.0])
+                .at([q[0] / len1, q[1] / len1], rigid, sn, cs);
+        let two = self.plane(lo as i32 + 1, len2, [17.3, 9.7]).at(
+            [(q[0] + 17.3) / len2, (q[1] + 9.7) / len2],
+            rigid,
+            sn,
+            cs,
+        );
+        let k = 1.0 / (t * t + (1.0 - t) * (1.0 - t)).sqrt();
+        [
+            mix(one[0], two[0], t) * k,
+            mix(one[1], two[1], t) * k,
+            mix(one[2], two[2], t) * k,
+        ]
+    }
+
+    fn plane(&mut self, level: i32, len: f32, shift: [f32; 2]) -> &mut Plane {
+        let at = match self.planes.iter().position(|(l, _)| *l == level) {
+            Some(at) => at,
+            None => {
+                let lo = [(self.lo[0] + shift[0]) / len, (self.lo[1] + shift[1]) / len];
+                let hi = [(self.hi[0] + shift[0]) / len, (self.hi[1] + shift[1]) / len];
+                self.planes.push((level, Plane::over(lo, hi)));
+                self.planes.len() - 1
+            }
+        };
+        &mut self.planes[at].1
+    }
+}
+
+/// One stroke, worked out for its cell: everything about it that does not
+/// depend on the point asking.
+#[derive(Clone, Copy)]
+struct Mark {
+    centre: [f32; 2],
+    /// Its own turn off the field's, as a sine and cosine.
+    sn: f32,
+    cs: f32,
+    long: f32,
+    wide: f32,
+    curve: f32,
+    order: f32,
+    colour: [f32; 3],
+    h1: f32,
+    h2: f32,
+}
+
+/// How many index cells a stroke's cell is across. The marks can be indexed
+/// on a finer grid than they are seeded on, so a point's list holds fewer
+/// strokes that cannot reach it; at two it held 31 where one holds 36, and
+/// the bake was slower for the lists it built, so one.
+const FINER: i32 = 1;
+
+/// The marks of a patch of plane, in stroke lengths: for each index cell,
+/// every stroke that can reach into it, worked out for the rigidity last
+/// asked there (a rigidity is a kind of ground, so it changes only at a
+/// border).
+struct Plane {
+    x0: i32,
+    y0: i32,
+    w: usize,
+    h: usize,
+    cells: Vec<Option<(f32, Vec<Mark>)>>,
+}
+
+impl Plane {
+    fn over(lo: [f32; 2], hi: [f32; 2]) -> Plane {
+        let cell = 0.5 / FINER as f32;
+        let x0 = (lo[0] / cell).floor() as i32 - 1;
+        let y0 = (lo[1] / cell).floor() as i32 - 1;
+        let w = ((hi[0] / cell).floor() as i32 + 2 - x0).max(1) as usize;
+        let h = ((hi[1] / cell).floor() as i32 + 2 - y0).max(1) as usize;
+        Plane {
+            x0,
+            y0,
+            w,
+            h,
+            cells: vec![None; w * h],
+        }
+    }
+
+    fn mark(c: [i32; 2], k: u32, rigid: f32) -> Mark {
+        let loose = 1.0 - rigid;
+        let cell = 0.5;
+        let h = |n: u32| hash(c[0] as u32, c[1] as u32, k * 16 + n);
+        let (h1, h2, h3, h4, h5, h6) = (h(1), h(2), h(3), h(4), h(5), h(6));
+        let scatter = mix(0.2, 1.0, loose);
+        let centre = [
+            (c[0] as f32 + 0.5 + (h1 - 0.5) * scatter) * cell,
+            (c[1] as f32 + 0.5 + (h2 - 0.5) * scatter) * cell,
+        ];
+        let (sn, cs) = ((h3 - 0.5) * loose * 1.6).sin_cos();
+        let size = 1.0 + (h4 - 0.5) * loose * 1.4;
+        Mark {
+            centre,
+            sn,
+            cs,
+            long: size * mix(0.5, 0.55, h5),
+            wide: size * mix(0.15, 0.13 + 0.12 * h6, loose),
+            curve: (h5 - 0.5) * loose * 0.8,
+            order: h(8),
+            colour: [h(9) * 2.0 - 1.0, h(10) * 2.0 - 1.0, h(11) * 2.0 - 1.0],
+            h1,
+            h2,
+        }
+    }
+
+    /// Every stroke of the two cells either way that can reach index cell
+    /// `c`, at this rigidity.
+    fn reaching(c: [i32; 2], rigid: f32) -> Vec<Mark> {
+        let cell = 0.5 / FINER as f32;
+        let (lo, hi) = (
+            [c[0] as f32 * cell, c[1] as f32 * cell],
+            [(c[0] + 1) as f32 * cell, (c[1] + 1) as f32 * cell],
+        );
+        let home = [c[0].div_euclid(FINER), c[1].div_euclid(FINER)];
+        let mut out = Vec::with_capacity(12);
+        for j in -2..=2 {
+            for i in -2..=2 {
+                for k in 0..2u32 {
+                    let m = Plane::mark([home[0] + i, home[1] + j], k, rigid);
+                    // How far the stroke reaches from its middle, any way
+                    // round: its half length past the prune, and its width
+                    // with its curve and bristles.
+                    let reach = m.long * 1.2 + m.wide * 2.0;
+                    let dx = (lo[0] - m.centre[0]).max(m.centre[0] - hi[0]).max(0.0);
+                    let dy = (lo[1] - m.centre[1]).max(m.centre[1] - hi[1]).max(0.0);
+                    if dx * dx + dy * dy <= reach * reach {
+                        out.push(m);
+                    }
+                }
+            }
+        }
+        // Topmost first: the first stroke a point is inside is the one it
+        // shows, and the rest need not be asked.
+        out.sort_by(|a, b| b.order.total_cmp(&a.order));
+        out
+    }
+
+    /// `stroke(q, rigid, turn)`, with the field's turn as its sine and
+    /// cosine.
+    fn at(&mut self, q: [f32; 2], rigid: f32, sn_t: f32, cs_t: f32) -> [f32; 3] {
+        let loose = 1.0 - rigid;
+        let cell = 0.5 / FINER as f32;
+        let home = [(q[0] / cell).floor() as i32, (q[1] / cell).floor() as i32];
+        let (cx, cy) = (home[0] - self.x0, home[1] - self.y0);
+        if cx < 0 || cy < 0 || cx as usize >= self.w || cy as usize >= self.h {
+            return stroke(q, rigid, sn_t.atan2(cs_t));
+        }
+        let slot = &mut self.cells[cy as usize * self.w + cx as usize];
+        let marks = match slot {
+            Some((r, marks)) if *r == rigid => marks,
+            _ => {
+                *slot = Some((rigid, Plane::reaching(home, rigid)));
+                &slot.as_ref().unwrap().1
+            }
+        };
+        for m in marks {
+            // The stroke's turn is the field's and its own: the sine and
+            // cosine of the sum.
+            let sn = sn_t * m.cs + cs_t * m.sn;
+            let cs = cs_t * m.cs - sn_t * m.sn;
+            let rel = [q[0] - m.centre[0], q[1] - m.centre[1]];
+            let local = [cs * rel[0] + sn * rel[1], -sn * rel[0] + cs * rel[1]];
+            let u = local[0] / m.long;
+            if u.abs() > 1.2 {
+                continue;
+            }
+            let v = (local[1] - m.curve * m.wide * u * u) / m.wide;
+            let taper = mix(1.0, (1.0 - u * u).max(0.0).sqrt(), 0.25 + 0.6 * loose);
+            // The bristles push an edge out by a sixth at most: a point
+            // further out than that is outside before the noise is asked.
+            if v.abs() >= taper * (1.0 + 0.175 * loose) {
+                continue;
+            }
+            let bristle = noise2(u * 4.0 + m.h1 * 9.0, v * 5.0 + m.h2 * 9.0) - 0.5;
+            let inside =
+                v.abs() < taper * (1.0 + bristle * 0.35 * loose) && u.abs() < 1.0 + bristle * 0.5;
+            if inside {
+                let k = 0.85 + 0.15 * bristle * 2.0;
+                return [m.colour[0] * k, m.colour[1] * k, m.colour[2] * k];
+            }
+        }
+        [0.0; 3]
+    }
+}
+
+fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+fn len3(a: [f32; 3]) -> f32 {
+    dot3(a, a).sqrt()
+}
+fn norm3(a: [f32; 3]) -> [f32; 3] {
+    let l = len3(a).max(1e-9);
+    [a[0] / l, a[1] / l, a[2] / l]
+}
+fn scale3(a: [f32; 3], k: f32) -> [f32; 3] {
+    [a[0] * k, a[1] * k, a[2] * k]
+}
+fn add3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn lerp3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)]
+}
+fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// The field, wrapped at `wrap` cells (a sheet) or not at all (the plane).
+fn field_in(q: [f32; 2], rigid: f32, turn: f32, wrap: Option<i32>) -> [f32; 4] {
     let loose = 1.0 - rigid;
     let cell = 0.5;
-    let cells = (PERIOD / cell).round() as i32;
     let home = [(q[0] / cell).floor() as i32, (q[1] / cell).floor() as i32];
     let mut best = -1.0;
     // No stroke: a phase of one half, so bare ground switches sheets midway.
@@ -116,7 +458,10 @@ pub fn field(q: [f32; 2], rigid: f32, turn: f32) -> [f32; 4] {
     for j in -2..=2 {
         for i in -2..=2 {
             let c = [home[0] + i, home[1] + j];
-            let wrapped = [c[0].rem_euclid(cells) as u32, c[1].rem_euclid(cells) as u32];
+            let wrapped = match wrap {
+                Some(cells) => [c[0].rem_euclid(cells) as u32, c[1].rem_euclid(cells) as u32],
+                None => [c[0] as u32, c[1] as u32],
+            };
             for k in 0..2u32 {
                 let h = |n: u32| hash(wrapped[0], wrapped[1], k * 16 + n);
                 let (h1, h2, h3, h4, h5, h6) = (h(1), h(2), h(3), h(4), h(5), h(6));
@@ -279,6 +624,120 @@ mod tests {
         assert!(
             same * 10 > seen * 3,
             "{same} of {seen} points keep their stroke a turn on"
+        );
+    }
+
+    #[test]
+    fn the_plane_does_not_repeat_but_the_sheet_does() {
+        let q = [1.3, 2.1];
+        let shifted = [q[0] + PERIOD, q[1]];
+        let a = field(q, 0.0, 0.0);
+        let b = field(shifted, 0.0, 0.0);
+        for k in 0..4 {
+            assert!(
+                (a[k] - b[k]).abs() < 0.05,
+                "a sheet tiles at its period: {a:?} {b:?}"
+            );
+        }
+        // Over a run of points, the plane differs from its shift somewhere.
+        let differs = (0..64).any(|k| {
+            let q = [k as f32 * 0.37, k as f32 * 0.23];
+            stroke(q, 0.0, 0.0) != stroke([q[0] + PERIOD, q[1]], 0.0, 0.0)
+        });
+        assert!(differs, "the plane repeated at the sheet's period");
+    }
+
+    #[test]
+    fn the_way_on_the_ground_follows_the_road_and_runs_uphill() {
+        let flat = [0.0, 1.0, 0.0];
+        let along = way_on_ground([3.0, 0.0, 4.0], flat, [0.0, 1.0], 0.2);
+        assert!(along[2] > 0.99, "{along:?} is not along the road");
+        // A slope facing +x: uphill is -x on the surface.
+        let n = [-0.6, 0.8, 0.0];
+        let up = way_on_ground([3.0, 0.0, 4.0], n, [0.0, 0.0], 0.2);
+        assert!(up[1] > 0.5 && up[0] > 0.5, "{up:?} does not run uphill");
+        // Built work on a wall runs level.
+        let wall = [1.0, 0.0, 0.0];
+        let course = way_on_ground([0.0, 0.0, 0.0], wall, [0.0, 0.0], 0.9);
+        assert!(course[1].abs() < 0.05, "{course:?} is not level");
+    }
+
+    #[test]
+    fn the_brush_blends_two_sizes_and_keeps_its_strength() {
+        let mut strong = 0.0f32;
+        for k in 0..400 {
+            let q = [k as f32 * 0.113, k as f32 * 0.071];
+            let b = broad(q, 0.3, 0.0, 1.0, 12.0, 0.04);
+            strong = strong.max(b[0].abs());
+        }
+        assert!(strong > 0.6, "the brush is faint: {strong}");
+    }
+
+    #[test]
+    fn the_brush_remembers_what_broad_says() {
+        let mut brush = Brush::over([0.0, 0.0], [16.0, 16.0]);
+        let mut off = 0;
+        let n = 2000;
+        for k in 0..n {
+            let q = [
+                (hash(k, 1, 1) * 16.0).clamp(0.0, 16.0),
+                (hash(k, 2, 2) * 16.0).clamp(0.0, 16.0),
+            ];
+            let turn = hash(k, 3, 3) * 6.28;
+            let rigid = [0.0, 0.25, 0.45, 0.85][k as usize % 4];
+            let size = 0.6 + hash(k, 4, 4);
+            let a = broad(q, turn, rigid, size, 12.0, 0.04);
+            let b = brush.broad(q, turn, rigid, size, 12.0, 0.04);
+            if (0..3).any(|i| (a[i] - b[i]).abs() > 1e-3) {
+                off += 1;
+            }
+        }
+        // A point on a stroke's very edge can fall either side by rounding.
+        assert!(off * 100 < n, "{off} of {n} points differ");
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    use super::*;
+
+    /// How long a tile's worth of points takes, and how many marks a cell
+    /// holds: `cargo test -p look brush_speed -- --ignored --nocapture`.
+    /// 0.4 s for a million points on 2026-10-15, down from 3.5 s before the
+    /// width prune and the topmost-first order.
+    #[test]
+    #[ignore]
+    fn brush_speed() {
+        let res = 1024;
+        let mut brush = Brush::over([0.0, 0.0], [16.0, 16.0]);
+        let t = std::time::Instant::now();
+        let mut acc = 0.0f32;
+        for j in 0..res {
+            for i in 0..res {
+                let q = [
+                    (i as f32 + 0.5) / res as f32 * 16.0,
+                    (j as f32 + 0.5) / res as f32 * 16.0,
+                ];
+                let b = brush.broad(q, 0.3, 0.0, 2.4, 12.0, 0.04);
+                acc += b[0];
+            }
+        }
+        let took = t.elapsed();
+        let (mut cells, mut marks) = (0usize, 0usize);
+        for (_, plane) in &brush.planes {
+            for c in plane.cells.iter().flatten() {
+                cells += 1;
+                marks += c.1.len();
+            }
+        }
+        eprintln!(
+            "1M points in {took:?} ({acc}); {marks} marks over {cells} cells = {:.1} a cell; planes {:?}",
+            marks as f32 / cells.max(1) as f32,
+            brush
+                .planes
+                .iter()
+                .map(|(l, p)| (*l, p.w, p.h))
+                .collect::<Vec<_>>()
         );
     }
 }
