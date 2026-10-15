@@ -26,7 +26,7 @@ started. In the browser the query string does the same (`?versus`).
 | `--dev` | Also shows how much of the map is loaded, under the place's name |
 | `--versus` | Start in the proving ground instead |
 | `--open` | Every waystone lit, as if every creature had been beaten: for walking the whole valley without the fights |
-| `--arena mouth` (and `bank`, `shelves`, `pinewood`, `saddle`, `hearth`, `ring`) | Start in that place, in the valley |
+| `--arena mouth` (and `bank`, `shelves`, `pinewood`, `saddle`, `hearth`, `ring`, `needle`, `great_wood`, `deep`, `high_plane`) | Start in that place, in the valley |
 
 ![The valley, from above](gallery/valley.png)
 

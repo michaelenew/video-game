@@ -36,7 +36,7 @@ So there are two problems, and they are separate:
 - **Places on one map.** Each place is still an arena, drawn in its own
   coordinates exactly as before. The map puts each one at an offset, cuts the
   doorways where two places meet, and adds the few boxes that belong to no
-  place (a cliff round a room, a door's sill). The valley's map is 36 places,
+  place (a cliff round a room, a door's sill). The valley's map is 37 places,
   20 doorways and about 2,100 boxes since the Great Wood, the Needle, the
   ranges, the Deep and the High Plane.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
