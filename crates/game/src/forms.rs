@@ -437,7 +437,17 @@ pub fn build_parts(
     let (floor, reach) = (-size.y * 0.5, 0.6_f32.min(size.y * 0.5));
     kit.settle(floor, reach, 0.3);
     relief.settle(floor, reach, 0.3);
-    Some((kit.build(), (!relief.is_empty()).then(|| relief.build())))
+    let mut mesh = kit.build();
+    // Stone as it was found is brushed loosely and coloured by how it bends,
+    // as the land is; dressed stone and timber keep the ruled stroke.
+    if matches!(
+        form,
+        Form::DryStone | Form::Menhir | Form::Spire | Form::Island | Form::Basalt
+    ) {
+        crate::shapes::lay_natural(&mut mesh, crate::shapes::NATURAL_STONE);
+        crate::shapes::lay_bend(&mut mesh);
+    }
+    Some((mesh, (!relief.is_empty()).then(|| relief.build())))
 }
 
 // ---------------------------------------------------------------------------

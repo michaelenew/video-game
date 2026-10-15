@@ -257,7 +257,7 @@ pub fn lay_strokes(
 
 /// **How the land bends at a point**, -1 on a crest to 1 in a hollow: the
 /// height's Laplacian -- how far the ground round about stands above or below
-/// this point -- at eight metres and at twenty-four, the broad one weighted
+/// this point -- at eight metres and at twenty-four, the narrow one weighted
 /// more, each squashed so a gully and a gentle swale both register.
 pub fn bend(height: &dyn Fn(f32, f32) -> f32, x: f32, z: f32) -> f32 {
     let h = height(x, z);
@@ -271,7 +271,9 @@ pub fn bend(height: &dyn Fn(f32, f32) -> f32, x: f32, z: f32) -> f32 {
     // twenty-four), and the middle of the land is near nothing.
     let near = (at(8.0) * 3.5).tanh();
     let far = (at(24.0) * 11.0).tanh();
-    (0.4 * near + 0.6 * far).clamp(-1.0, 1.0)
+    // The narrow scale leads: at the broad one a whole arena's floor, in its
+    // bowl of rim, reads as one hollow and goes blue all over.
+    (0.7 * near + 0.3 * far).clamp(-1.0, 1.0)
 }
 
 /// **The colour of open ground**: `Palette::land` for what it is made of,

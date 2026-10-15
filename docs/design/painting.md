@@ -118,6 +118,23 @@ cooler: blue-violet) and a crest's toward `crest` (warmer: red-orange), by
 `land::bend_tests::the_land_bends_by_degrees` holds the scale: the first one
 was ten times too strong and tinted all the land alike.
 
+**Deeper, and on stone too** (the owner, the same day). The tint is
+multiplied and also a little *added*, since a multiple of nearly black is
+still nearly black. Hollows go toward a deep violet-tinged shade
+(`[0.68, 0.64, 0.96]`), crests toward red-gold (`[1.24, 0.97, 0.78]`); a
+first, bluer hollow turned the Commons -- a floor in a bowl of rim -- blue
+all over, so the narrow scale now leads the broad (0.7 to 0.3).
+
+Rocks, cliffs, standing stones, spires, dry-stone walls, floating islands and
+basalt are not height fields, so their bend is their own (`shapes::bend_of`):
+corners welded, each point's neighbours' middle measured along its normal
+against the stone's own usual bend (a boulder is convex all over, so a ridge
+is *sharper than usual*), smoothed over the surface, plus the painter's habit
+for stone -- warm toward the top, deeper toward the foot and the undersides,
+which is all a flat facet has. `shapes::tests::a_stone_bends_by_degrees`
+holds it. The Waterfall's basalt barely shows it: that rock is nearly black
+and in its own shadow, which wants a palette or a light, not seasoning.
+
 ## Built on open source
 
 | From | What we took | Licence |

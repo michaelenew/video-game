@@ -353,10 +353,17 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
 #ifdef VERTEX_TANGENTS
     if (RICH > 0.0) {
         let bend = in.world_tangent.w;
-        let hollow = smoothstep(0.05, 0.6, bend);
-        let crest = smoothstep(0.05, 0.6, -bend);
+        let hollow = smoothstep(0.03, 0.5, bend);
+        let crest = smoothstep(0.03, 0.5, -bend);
+        // Multiplied, and a little added: a multiple of nearly black is
+        // still nearly black, so a dark rock would take no seasoning at all.
+        let lift = (HOLLOW - 1.0) * hollow + (CREST - 1.0) * crest;
         base = vec4<f32>(
-            base.rgb * mix(vec3<f32>(1.0), HOLLOW, hollow * RICH) * mix(vec3<f32>(1.0), CREST, crest * RICH),
+            max(
+                base.rgb * mix(vec3<f32>(1.0), HOLLOW, hollow * RICH) * mix(vec3<f32>(1.0), CREST, crest * RICH)
+                    + lift * RICH * 0.035,
+                vec3<f32>(0.0),
+            ),
             base.a,
         );
     }
