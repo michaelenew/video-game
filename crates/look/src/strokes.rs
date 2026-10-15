@@ -683,7 +683,7 @@ mod tests {
                 (hash(k, 1, 1) * 16.0).clamp(0.0, 16.0),
                 (hash(k, 2, 2) * 16.0).clamp(0.0, 16.0),
             ];
-            let turn = hash(k, 3, 3) * 6.28;
+            let turn = hash(k, 3, 3) * std::f32::consts::TAU;
             let rigid = [0.0, 0.25, 0.45, 0.85][k as usize % 4];
             let size = 0.6 + hash(k, 4, 4);
             let a = broad(q, turn, rigid, size, 12.0, 0.04);
