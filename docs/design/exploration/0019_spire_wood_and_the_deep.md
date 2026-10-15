@@ -1,7 +1,24 @@
 ---
-status: proposed
+status: building -- the shapes, the Great Wood and the Needle built 2026-10-15; ranges, the shorter road, the Deep and the High Plane next
 started: 2026-10-15
 ---
+
+> **The owner's answers, 2026-10-15.** VALE-1 yes, the road shortens and the
+> world grows up and down. VALE-2 **fall damage applies** in the Wood. VALE-3
+> a beaten roaming creature comes back **after a while**. VALE-4 provoking a
+> peaceful one **depends on the creature**: give the world variety. VALE-5 the
+> Spire's top is **a fight**, and no pool at its foot. VALE-6 **both** a tepui
+> and floating islands for the plane above. VALE-7 **more shapes** rather than
+> boxes, unless that costs performance: built as round and turned solids
+> ([../atlas.md](../atlas.md) §"Round and turned solids"), which cost a box's
+> query and a square root.
+>
+> **Built so far**: the shapes, the Great Wood and the Spire -- named **the
+> Needle** in the game, because the jump course is already called the Spire --
+> as [../valley.md](../valley.md) §1a has them. Where they differ from this
+> note: the Needle stands on a plaza just outside the town's south wall, not
+> in the square; its shaft is 315 m, so the ruins are 353 m up; and the climb
+> through the dome is the shaft's own vine running on into the chimney's.
 
 # 0019 — The Spire, the Great Wood, the planes above and below, and a valley that is lived in
 

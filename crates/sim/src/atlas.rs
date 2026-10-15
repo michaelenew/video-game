@@ -270,7 +270,8 @@ fn carve(s: &Solid, cut: &Solid, out: &mut Vec<Solid>) {
         && s.max.y.raw() > cut.min.y.raw()
         && s.min.z.raw() < cut.max.z.raw()
         && s.max.z.raw() > cut.min.z.raw();
-    if !overlaps {
+    // Only a box is cut: a round or turned solid is never in a doorway.
+    if !overlaps || s.shape != crate::arena::Shape::Box {
         out.push(*s);
         return;
     }
@@ -278,6 +279,7 @@ fn carve(s: &Solid, cut: &Solid, out: &mut Vec<Solid>) {
         min,
         max,
         material: s.material,
+        shape: crate::arena::Shape::Box,
     };
     let (x0, x1) = (s.min.x.max(cut.min.x), s.max.x.min(cut.max.x));
     let (z0, z1) = (s.min.z.max(cut.min.z), s.max.z.min(cut.max.z));
@@ -345,6 +347,7 @@ impl Atlas {
                     min: s.min.add(at),
                     max: s.max.add(at),
                     material: s.material,
+                    shape: s.shape,
                 };
                 for piece in cut_all(moved) {
                     solids.push(piece);

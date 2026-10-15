@@ -203,7 +203,10 @@ fn every_seam_with_a_door_is_on_the_map_and_every_place_is_reached() {
     }
     // A pass between every two reaches next to each other, and a door into
     // every room.
-    assert_eq!(atlas.doors.len(), 5 + sim::valley::layout::ROOMS.len());
+    assert_eq!(
+        atlas.doors.len(),
+        sim::valley::layout::PASSES.len() + sim::valley::layout::ROOMS.len()
+    );
     for d in &atlas.doors {
         for (id, k) in [d.a, d.b] {
             assert!(
@@ -222,8 +225,13 @@ fn the_valley_is_one_map_of_more_boxes_than_an_arena_may_hold() {
     let atlas = atlas::valley();
     assert!(atlas.solids.len() > 8 * sim::arena::MAX_SOLIDS);
     // And still only a handful in any one tile: what a body's query reads.
+    // Not twenty-four since 2026-10-15: a tower and a tree three hundred
+    // metres tall stack their stones and branches into the tiles under them
+    // (the Spire's column holds about eighty). A query reads them all and
+    // turns away all but the few at its height on their first comparison;
+    // `tests/budget.rs` stands at the foot of both and holds the frame.
     assert!(
-        atlas.busiest_tile() <= 24,
+        atlas.busiest_tile() <= 96,
         "a tile holds {} boxes",
         atlas.busiest_tile()
     );

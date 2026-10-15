@@ -392,6 +392,106 @@ pub fn form_of(arena: ArenaId, s: &Solid, hangs: bool) -> Form {
 }
 
 /// A seed for a box: where it is, so the same box is the same every time.
+/// **A round solid, drawn** (`sim::arena::Shape::Round`): a column of
+/// faces, `radii.0` across its foot and `radii.1` across its top, `height`
+/// tall, about its middle -- exactly the cone the simulation stands bodies on
+/// and shoots -- with a hole `hollow` across down its middle when that is
+/// above nothing. Bark ridged in alternate faces for timber, stone banded
+/// every few metres. Its top is flat, where feet go.
+pub fn round(radii: (f32, f32), hollow: f32, height: f32, material: Material, p: &Palette) -> Mesh {
+    let (bottom, top) = radii;
+    let mut kit = Kit::new();
+    let r = bottom.max(top);
+    let sides = ((r * 2.5) as usize).clamp(12, 64);
+    let (side, cap) = match material {
+        // A giant's bark is a step lighter than a sapling's: a trunk twenty
+        // metres across is seen mostly from its shaded side.
+        Material::Wood => {
+            let bark = giant_bark(p);
+            (bark, look::tint::mix(bark, p.moss(), 0.6))
+        }
+        Material::Rock => (p.crag(), p.moss()),
+        Material::Stone => (p.of(Material::Stone), p.of(Material::Stone)),
+        m => (p.of(m), p.of(m)),
+    };
+    let wood = material == Material::Wood;
+    // Bands up the side: a few metres each, so a two-hundred-metre trunk
+    // is not one stretched quad, and every other band a shade off.
+    let bands = ((height / 4.0).ceil() as usize).clamp(1, 80);
+    let y0 = -height * 0.5;
+    let at = |k: usize, y: f32, rr: f32| {
+        let a = k as f32 / sides as f32 * std::f32::consts::TAU;
+        Vec3::new(a.cos() * rr, y, a.sin() * rr)
+    };
+    let outer = |y: f32| bottom + (top - bottom) * (y - y0) / height;
+    for b in 0..bands {
+        let ya = y0 + height * b as f32 / bands as f32;
+        let yb = y0 + height * (b + 1) as f32 / bands as f32;
+        for k in 0..sides {
+            let shade = hash01(k as u32, b as u32, 17);
+            let rgb = vary(side, shade, if wood { 0.16 } else { 0.06 });
+            let (a0, a1) = (at(k, ya, outer(ya)), at(k + 1, ya, outer(ya)));
+            let (b0, b1) = (at(k, yb, outer(yb)), at(k + 1, yb, outer(yb)));
+            let mid = (a0 + a1 + b0 + b1) * 0.25;
+            kit.poly(&[a0, a1, b1, b0], Vec3::new(mid.x, 0.0, mid.z), rgb);
+            if hollow > 0.0 {
+                let (a0, a1) = (at(k, ya, hollow), at(k + 1, ya, hollow));
+                let (b0, b1) = (at(k, yb, hollow), at(k + 1, yb, hollow));
+                let mid = (a0 + a1 + b0 + b1) * 0.25;
+                kit.poly(
+                    &[a0, a1, b1, b0],
+                    Vec3::new(-mid.x, 0.0, -mid.z),
+                    vary(rgb, 0.3, 0.2),
+                );
+            }
+        }
+    }
+    for (y, face, rgb) in [(-y0, Vec3::Y, cap), (y0, -Vec3::Y, side)] {
+        if hollow > 0.0 {
+            for k in 0..sides {
+                let q = [
+                    at(k, y, hollow),
+                    at(k + 1, y, hollow),
+                    at(k + 1, y, outer(y)),
+                    at(k, y, outer(y)),
+                ];
+                kit.poly(&q, face, rgb);
+            }
+        } else {
+            let ring: Vec<Vec3> = (0..sides).map(|k| at(k, y, outer(y))).collect();
+            kit.poly(&ring, face, rgb);
+        }
+    }
+    kit.build()
+}
+
+/// **A giant's bark**: pale and grey, as an old redwood's is, and far
+/// lighter than a sapling's (`Palette::bark`). A trunk twenty metres across is
+/// seen mostly from its shaded side, where only the ambient reaches, and the
+/// sapling's bark there was black (2026-10-15, the Great Wood's first
+/// screenshot).
+pub fn giant_bark(p: &Palette) -> [f32; 3] {
+    look::tint::mix(p.of(Material::Wood), [0.80, 0.74, 0.66], 0.55)
+}
+
+/// **A mesh turned** about the upright by a solid's bearing
+/// (`sim::arena::Shape::Turned`): its own length along `cos`, `sin` in the
+/// floor plane, as the simulation turns it.
+pub fn turn(mesh: &mut Mesh, cos: f32, sin: f32) {
+    let spin = |v: &mut [f32; 3]| {
+        let (x, z) = (v[0], v[2]);
+        v[0] = x * cos - z * sin;
+        v[2] = x * sin + z * cos;
+    };
+    for attr in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_NORMAL] {
+        if let Some(bevy::render::mesh::VertexAttributeValues::Float32x3(vs)) =
+            mesh.attribute_mut(attr)
+        {
+            vs.iter_mut().for_each(spin);
+        }
+    }
+}
+
 pub fn seed_of(centre: Vec3, size: Vec3) -> u32 {
     (centre.x * 7.0 + centre.z * 13.0 + size.y * 3.0) as i32 as u32
 }

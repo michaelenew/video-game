@@ -80,6 +80,7 @@ impl World {
                     min: door.cut.min.sub(origin),
                     max: door.cut.max.sub(origin),
                     material: crate::arena::Material::Stone,
+                    shape: crate::arena::Shape::Box,
                 });
             }
         }

@@ -266,6 +266,26 @@ fn a_snapshot_is_a_small_flat_copy() {
 // The workload
 // ---------------------------------------------------------------------------
 
+/// Every fighter in the valley, stood at a map point of a reach (centimetres).
+fn standing_at(c: Class, place: sim::arena::ArenaId, at: (i32, i32)) -> World {
+    let mut w = World::arrive(
+        [c; 2],
+        sim::valley::Journey::default(),
+        place,
+        Some(0),
+        MAX_PLAYERS as u8,
+    );
+    let o = w.map_origin();
+    let ground = w.terrain();
+    for (i, p) in w.players.iter_mut().enumerate() {
+        let x = sim::arena::cm(at.0 + 150 * i as i32).sub(o.x);
+        let z = sim::arena::cm(at.1).sub(o.z);
+        let up = sim::V3::new(x, sim::Fx::from_int(1000), z);
+        p.pos = sim::V3::new(x, ground.floor_below(up), z);
+    }
+    w
+}
+
 /// A way to set up a match, and what to call it when it is the one over budget.
 type Scenario = (&'static str, fn(Class) -> World);
 
@@ -274,7 +294,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 17] {
+fn scenarios() -> [Scenario; 19] {
     [
         // The valley, one map of eighteen places: the Saddle, with every
         // other place's boxes in tiles around it, and a creature's room in it.
@@ -295,6 +315,15 @@ fn scenarios() -> [Scenario; 17] {
                 Some(0),
                 MAX_PLAYERS as u8,
             )
+        }),
+        // The two busiest columns of the map since 2026-10-15: the foot of
+        // the Spire, with its tower, its dome and its ruins stacked in the
+        // tiles over it, and the foot of the Great Wood's Great Tree.
+        ("the spire's foot", |c| {
+            standing_at(c, sim::arena::ArenaId::SPIRE, (1000, -5300))
+        }),
+        ("the great tree's foot", |c| {
+            standing_at(c, sim::arena::ArenaId::WOOD, (0, -33500))
         }),
         ("versus", |c| World::with_classes([c; 2])),
         ("hunt", |c| World::hunt([c; 2])),

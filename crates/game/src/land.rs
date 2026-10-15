@@ -423,7 +423,11 @@ pub struct Trees {
 /// Is a box of the map a tree's trunk: timber, thin and tall?
 pub fn is_tree(s: &sim::arena::Solid) -> bool {
     let size = s.max.sub(s.min);
-    s.material == Material::Wood && f(size.x) < 1.0 && f(size.z) < 1.0 && f(size.y) > 4.0
+    s.shape == sim::arena::Shape::Box
+        && s.material == Material::Wood
+        && f(size.x) < 1.0
+        && f(size.z) < 1.0
+        && f(size.y) > 4.0
 }
 
 /// Is a reach's wood pines?
@@ -793,6 +797,7 @@ fn tree(
         min: sim::V3::new(fx(x - 0.3), fx(y - 0.5), fx(z - 0.3)),
         max: sim::V3::new(fx(x + 0.3), fx(y + tall), fx(z + 0.3)),
         material: Material::Wood,
+        shape: sim::arena::Shape::Box,
     };
     trees.spawn(commands, meshes, materials, &trunk, id, palette, root);
 }

@@ -57,6 +57,66 @@ props are tables the collision is made from and the renderer draws from
 
 ![The Bank, looking back at the town](gallery/valley-bank.png)
 
+### 1a · The Needle and the Great Wood (2026-10-15)
+
+From [exploration/0019](exploration/0019_spire_wood_and_the_deep.md), the
+owner's brief to make the valley a place to play in. Both are south of the
+town, on one road that leaves the Mouth's just outside the east gate, crosses
+the river on a footbridge, and runs on south. `--arena needle` and
+`--arena great_wood` start at either.
+
+**The Needle** (`sim::arena::spire`, `tests/spire.rs`): Hearth's tower, on a
+plaza under the town's south wall -- the square was too full of town for it.
+A round shaft of pale stone nine metres across at its foot and 315 m tall,
+carrying an **inverted dome 90 m across and 35 m deep**, its rim over the
+town's south roofs; on the dome's top, 353 m up, **ruins**: broken walls,
+column stumps, two arches, a fallen column, a cistern. The way up:
+
+- **A vine** down the shaft's south face, the whole height, for anybody at the
+  vine's pace (about two and a half minutes). The shaft's top is narrower than
+  the chimney above it, so the vine runs straight on into **the chimney's**,
+  up the dome's stem to the ruins.
+- **The corkscrew**: stones jutting a quarter turn and eight metres apart --
+  the mechanic band -- and **balconies** every forty metres, three boards
+  round the shaft (never across the vine), a cairn on every other.
+- **The lantern**: four columns on the shaft's top carrying the dome, gaps
+  between them to step through, and **ledges** up the chimney's wall four
+  metres apart.
+
+The rim overhangs the shaft by forty metres, which no jump goes round from
+below: the way onto the dome is through it. The roost -- Galewings on the
+dome, a fight (VALE-5) -- is not built yet.
+
+![The Needle from the Mouth](gallery/valley-needle-from-the-mouth.jpg)
+
+**The Great Wood** (`sim::arena::wood`, `tests/wood.rs`): a clearing four
+hundred metres across past the Needle, and in it **fourteen giant trees 13
+to 20 metres across and 150 to 200 tall**, sized against what the classes do
+rather than the plain jump ("however big you're thinking of, probably triple
+that"). Each is climbed in **three bands**:
+
+| Band | How high | Between branches | Who |
+| --- | --- | --- | --- |
+| **Walking** | the first 40 m | 2.2 m up and a metre across at the bark | anybody: `tests/wood.rs` jumps every hop of the Great Tree's with every class |
+| **Mechanic** | to 25 m under the crown | 6.5 m up, four metres across | a mechanic a hop; a cairn every fifth branch |
+| **Expert** | the last 25 m, onto the crown, and the bridges | 11 m up a quarter turn; gaps of 25--40 m between trees | mechanics chained |
+
+A trunk is round, flared at its foot and tapering; a branch is a board of
+bark four or five metres wide turned to its bearing; a **crown** is a disc of
+leaves two and a half times the trunk across, with a cairn on it, reached by
+going out to a top branch's tip and back up round the crown's edge. Twelve
+**bridges** run between neighbouring trees at sixty to a hundred and forty
+metres; seven meet, five stop short. No branch runs within six metres of
+another tree's bark. **Falls cost what the fall rule says** (VALE-2), and a
+fall that ends you stands you on the last cairn you touched. Four trunks have
+a vine up their north side to sixty metres.
+
+The crowns cast no shadow: a disc forty metres across over every giant left
+the grove in one shade, and a trunk's shaded side lit by the ambient alone was
+black. A giant's bark is pale for the same reason (`game::forms::giant_bark`).
+
+![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
+
 | Place | The road | Rooms off it | The way on |
 | --- | --- | --- | --- |
 | **Hearth** | — | **the Ring** (north), **the Long Valley** (west, under the fifth waystone) | the east gate |

@@ -276,6 +276,8 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::SHELVES => &arena::shelves::PLACE,
         ArenaId::PINEWOOD => &arena::pinewood::PLACE,
         ArenaId::SADDLE => &arena::saddle::PLACE,
+        ArenaId::WOOD => &arena::wood::PLACE,
+        ArenaId::SPIRE => &arena::spire::PLACE,
         ArenaId::HIGHLANDS => &rooms::HIGHLANDS,
         ArenaId::HORNBACK => &rooms::MEADOW,
         ArenaId::GNAWERS => &rooms::COMMONS,

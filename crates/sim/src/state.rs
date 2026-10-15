@@ -2066,6 +2066,7 @@ impl World {
                 min: s.min.sub(origin),
                 max: s.max.sub(origin),
                 material: s.material,
+                shape: s.shape,
             });
         let p = &mut self.players[i];
         let (pos, facing) = match cairn {

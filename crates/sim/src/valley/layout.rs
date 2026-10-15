@@ -30,7 +30,7 @@ use crate::math::V3;
 use crate::valley::Crag;
 use crate::valley::land::{Land, Pad, Point, Way, at};
 
-use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves, waterfall};
+use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves, spire, waterfall, wood};
 
 /// Level ground round a room, past its own footprint, in centimetres.
 pub const APRON: i32 = 600;
@@ -211,9 +211,9 @@ const CLIFFS_BRIDGE: Solid = Solid::cm([90200, 8440, 2600], [90800, 8500, 5250],
 /// **The doors between reaches**, and the waystones' among them: the two
 /// seams, and the box across the pass (shut while its stone is dark).
 /// A door between two seams, and its box: two corners in centimetres.
-type Pass = ((ArenaId, u8), (ArenaId, u8), [[i32; 3]; 2]);
+pub type Pass = ((ArenaId, u8), (ArenaId, u8), [[i32; 3]; 2]);
 
-const PASSES: [Pass; 5] = [
+pub const PASSES: [Pass; 7] = [
     (
         (ArenaId::HEARTH, 0),
         (ArenaId::MOUTH, 0),
@@ -238,6 +238,16 @@ const PASSES: [Pass; 5] = [
         (ArenaId::PINEWOOD, 4),
         (ArenaId::SADDLE, 0),
         [[85100, 8100, -800], [85300, 9200, 2000]],
+    ),
+    (
+        (ArenaId::MOUTH, 3),
+        (ArenaId::SPIRE, 0),
+        [[4400, 0, -5900], [4600, 600, -4900]],
+    ),
+    (
+        (ArenaId::SPIRE, 1),
+        (ArenaId::WOOD, 0),
+        [[800, 0, -14050], [2000, 600, -13950]],
     ),
 ];
 
@@ -368,6 +378,7 @@ fn door_of(r: &Room) -> (V3, Solid) {
             min: cut.0,
             max: cut.1,
             material: Material::Ground,
+            shape: crate::arena::Shape::Box,
         },
     )
 }
@@ -438,6 +449,17 @@ fn ways() -> Vec<Way> {
     out.push(road(&pinewood::ABOVE));
     out.push(road(&saddle::WAY));
     out.push(road(&saddle::SHRINE_WAY));
+    out.push(road(&wood::WAY));
+    out.push(Way {
+        points: spire::PLAZA.to_vec(),
+        path: false,
+        water: None,
+    });
+    out.push(Way {
+        points: wood::CLEARING.to_vec(),
+        path: false,
+        water: None,
+    });
     for r in &TOWN_ROADS {
         out.push(road(r));
     }
@@ -499,6 +521,7 @@ fn crag(land: &Land, c: &Crag, out: &mut Vec<Solid>) {
         min: V3::new(cm(c.x - h), low.sub(Fx::ONE), cm(c.z - h)),
         max: V3::new(cm(c.x + h), top, cm(c.z + h)),
         material: Material::Rock,
+        shape: crate::arena::Shape::Box,
     });
     for k in 1..=c.ledges as i32 {
         let ledge_top = base.add(cm(Crag::RISE * k));
@@ -516,12 +539,14 @@ fn crag(land: &Land, c: &Crag, out: &mut Vec<Solid>) {
             ),
             max: V3::new(cm(c.x - h), ledge_top, cm(z1)),
             material: Material::Rock,
+            shape: crate::arena::Shape::Box,
         });
     }
     out.push(Solid {
         min: V3::new(cm(c.x - 100), top, cm(c.z - 100)),
         max: V3::new(cm(c.x + 100), top.add(Fx::ratio(2, 5)), cm(c.z + 100)),
         material: Material::Snow,
+        shape: crate::arena::Shape::Box,
     });
 }
 
@@ -532,6 +557,7 @@ fn cairn(land: &Land, x: i32, z: i32, out: &mut Vec<Solid>) {
         min: V3::new(cm(x - 100), low.sub(Fx::ratio(3, 10)), cm(z - 100)),
         max: V3::new(cm(x + 100), high.add(Fx::ratio(2, 5)), cm(z + 100)),
         material: Material::Snow,
+        shape: crate::arena::Shape::Box,
     });
 }
 
@@ -596,6 +622,7 @@ fn growth(land: &Land, crags: &[Crag], out: &mut Vec<Solid>) {
                             min: V3::new(cm(jx - half), low.sub(Fx::ratio(1, 2)), cm(jz - half)),
                             max: V3::new(cm(jx + half), low.add(cm(tall)), cm(jz + half)),
                             material: Material::Wood,
+                            shape: crate::arena::Shape::Box,
                         });
                     }
                 } else if roll > 985 && clear(land, x, z, crags, Fx::from_int(4)) {
@@ -612,6 +639,7 @@ fn growth(land: &Land, crags: &[Crag], out: &mut Vec<Solid>) {
                         min: V3::new(cm(jx - w / 2), low.sub(Fx::ratio(1, 2)), cm(jz - d / 2)),
                         max: V3::new(cm(jx + w / 2), high.add(cm(h)), cm(jz + d / 2)),
                         material: Material::Rock,
+                        shape: crate::arena::Shape::Box,
                     });
                 }
                 gz += SPACING;
@@ -650,6 +678,8 @@ pub fn plan() -> Plan {
         ArenaId::SHELVES,
         ArenaId::PINEWOOD,
         ArenaId::SADDLE,
+        ArenaId::WOOD,
+        ArenaId::SPIRE,
     ] {
         plan.places.push(PlanPlace {
             arena: id,
@@ -703,6 +733,7 @@ pub fn plan() -> Plan {
         .chain(shelves::CAIRNS.iter())
         .chain(pinewood::CAIRNS.iter())
         .chain(saddle::CAIRNS.iter())
+        .chain(wood::CAIRNS.iter())
     {
         cairn(&land, x, z, &mut plan.extras);
     }
@@ -711,6 +742,10 @@ pub fn plan() -> Plan {
     plan.extras.extend(waterfall::placed(waterfall::VALLEY_AT));
     plan.extras
         .push(waterfall::solid(&waterfall::CROWN, waterfall::VALLEY_AT));
+    // The Great Wood's giants, on the land under them.
+    wood::build(&|x, z| land.height(x, z), &mut plan.extras);
+    // The Spire, on its plaza under the town's south wall.
+    spire::build(&|x, z| land.height(x, z), &mut plan.extras);
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);
