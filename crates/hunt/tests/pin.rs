@@ -92,8 +92,11 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-12, deliberately: the blaster -- the class layer holds a
     // Transfusion to its third tier and drops a Hemoplague where it held a
     // Grasp, and every stain she makes is collected; and again for her dodge
-    // sending her blood ahead. See feel-log.md.
-    (Class::BloodMage, 83, 0xf93a6da8fa8a7215),
+    // sending her blood ahead. See feel-log.md. Moved 2026-10-14,
+    // deliberately: the spike on the floor winds up in 16 frames rather
+    // than 30, Command waits on the Champion's window, a spike aimed through
+    // a stain's column goes to it, and a finisher pays back its grey.
+    (Class::BloodMage, 83, 0x2f7c3fe27330ee07),
 ];
 
 #[test]

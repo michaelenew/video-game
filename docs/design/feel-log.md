@@ -8697,3 +8697,42 @@ point is the floor behind a body (bodies are not on its ray), metres past a crea
 and the first bolt looked for a body within 4 m of that point. It now looks along the bolt's
 whole line from the cloud to the point (`aim::chain_next`), which is where the bolt visibly goes.
 
+### 2026-10-14 — the Blood mage's Command is a tap you can make
+
+From the owner: Command was very hard to get on right click. Its wind-up is one frame, and
+the click was read as held -- the Carpet -- if it was still down at the end of that frame, so
+a tap had to come up within a frame or two. Tap or hold is now decided on the Champion's
+window (`Hold, a finisher after`, 12 frames from the press): Command waits at the top of its
+one-frame wind-up until the press either comes up (Command) or reaches twelve frames (the
+Carpet). The Carpet opens eleven frames later than it did. The Haemorrhage's twelve-frame
+startup already covered the window, so the left click is unchanged.
+
+### 2026-10-14 — the Blood mage: essence pools that stand, a floor spike worth throwing, finishers that pay back
+
+From the owner, with a replay of her fights (`13782477-blood-mage-fights.replay`, build 7ce716c,
+reproduced bit for bit). **The best play was jumping in circles throwing the Stake**: it came
+out in 10 frames to the floor spike's 30, landed in a 2.5 m area to the floor's 1.6 and cost 4%
+to the floor's 6%, and every one drank the stains it landed on. The replay agrees: 68 Stakes to
+37 floor spikes, 187 jumps in nine minutes, and 52 Carpets against 60 Commands -- the right
+click's tap problem from the same day. **Now**: the floor spike winds up in 16 (one past
+reaction time; 14 was tried and `the_spike_takes_long_enough_to_be_seen_coming` refused it),
+stands 2.2 m wide and costs 5%; the Stake lands in 1.8 m and costs 5%.
+
+**The finishers were a loss** whether they landed or not: they burn all her grey, and grey is
+the only health she can drink back, so a full charge gave up health for good for damage two or
+three Stakes would match while moving. **What a finisher burns is now owed back**
+(`Player::owed`): every point of damage it deals turns a point of that grey back into red
+(`finisher_repays`, 100%). Landed, a finisher is a heal as well as the biggest blow she has;
+whiffed, it is the loss it was.
+
+**The stains read as bloodstains and were hard to aim at.** The sim already tested them as a
+standing column a body's height at most, but they were drawn flat and the spikes only counted
+a hit on the disc. Now they are drawn as essence -- the class's colour moved from blood red to
+a crimson-violet lit from inside, with a swaying flame of it standing out of each pool to the
+column's height -- and a spike aimed through the column goes to the stain
+(`aim::column_on_sight`).
+
+Not done, and the open question the owner raised: whether to cut the mobile options or raise
+the others. This pass raised the floor and trimmed the Stake's area; the jump itself is
+untouched.
+

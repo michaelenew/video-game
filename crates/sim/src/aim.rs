@@ -1213,6 +1213,43 @@ pub fn pointing_at_disc(
     crate::math::ray_hits_cylinder(eye, look.look_dir(), at, radius, height).is_some()
 }
 
+/// **Which standing column the crosshair is on first** (2026-10-14): of
+/// `columns` -- each a base on the floor, a radius and a height -- the one
+/// the camera's ray passes through nearest the eye, in front of whatever the
+/// ray meets ([`sight`]) and within `reach` of the caster's feet, flat.
+///
+/// The Blood mage's spikes ask it of her pools: a pool stands a body's
+/// height at most, and a spike aimed through that column is aimed at the
+/// pool, not at the floor a few metres behind it. Without it a stain had to
+/// be hit on its disc, which past a few metres is a pixel-hunt. Bodies are
+/// not on the ray here either.
+pub fn column_on_sight(
+    who: usize,
+    look: Input,
+    reach: Fx,
+    columns: impl Iterator<Item = (V3, Fx, Fx)>,
+    scene: &Scene,
+) -> Option<V3> {
+    let me = &scene.players[who];
+    let eye = crate::camera::eye_under(me.pos, look, me.aloft, me.clear, scene.arena);
+    let seen = sight(who, look, reach, scene);
+    let mut best: Option<(V3, Fx)> = None;
+    for (base, radius, height) in columns {
+        let Some(dist) = crate::math::ray_hits_cylinder(eye, look.look_dir(), base, radius, height)
+        else {
+            continue;
+        };
+        let flat = V3::new(base.x.sub(me.pos.x), Fx::ZERO, base.z.sub(me.pos.z)).flat_len();
+        if dist.raw() > seen.dist.raw() || flat.raw() > reach.raw() {
+            continue;
+        }
+        if best.is_none_or(|(_, d)| dist.raw() < d.raw()) {
+            best = Some((base, dist));
+        }
+    }
+    best.map(|(base, _)| base)
+}
+
 /// Is there a straight line from one body to another that nothing solid
 /// crosses?
 ///

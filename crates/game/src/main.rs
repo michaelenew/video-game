@@ -2135,10 +2135,13 @@ fn setup(
             ..default()
         }),
         essence: std::array::from_fn(|step| {
+            // **Essence, not blood** (2026-10-14): a crimson gone toward
+            // violet, lit from inside, so it reads as something she draws
+            // out of a body rather than what a wound leaves on the floor.
             let solid = 0.18 + 0.72 * step as f32 / (ESSENCE_STEPS - 1) as f32;
             materials.add(StandardMaterial {
-                base_color: Color::srgba(0.30, 0.04, 0.06, solid),
-                emissive: LinearRgba::rgb(0.25 * solid, 0.02, 0.04),
+                base_color: Color::srgba(0.26, 0.03, 0.20, solid),
+                emissive: LinearRgba::rgb(0.70 * solid, 0.04, 0.50 * solid),
                 perceptual_roughness: 0.9,
                 alpha_mode: AlphaMode::Blend,
                 ..default()
@@ -4847,9 +4850,10 @@ const FIELD_SPIKES: usize = 7;
 /// Presentation: the hit test is the column.
 const PLAGUE_WISPS: usize = 8;
 
-/// A stain's pieces: a few flat blobs for its body and three roots of three
-/// segments each. See `stain_piece`.
-const STAIN_PARTS: usize = 12;
+/// A stain's pieces: a few flat blobs for its body, three roots of three
+/// segments each, and the standing essence -- a flame, its core and two
+/// motes. See `stain_piece`.
+const STAIN_PARTS: usize = 16;
 
 /// The Black vines' pieces: a dark wash, six vines of three segments and a
 /// dozen barbs. See `vine_piece`.
@@ -4883,12 +4887,14 @@ fn wander(from: Vec3, turn: f32, segment: usize, length: f32, seed: u32) -> (Vec
     (at, heading)
 }
 
-/// One piece of a stain: **not a disc but a spill** -- two or three flat
-/// lobes of blood off-centre from each other, and three roots creeping out
-/// of it in crooked steps, as blood runs along the cracks of a floor. Its
-/// size is the hit test's (`Effect::pool_radius`), the lobes inside it and
-/// the roots reaching past; drawn more solid the more essence is left. A lit
-/// stain -- going up in a moment -- swells and throbs.
+/// One piece of a stain: **a pool of essence, not of blood** (2026-10-14)
+/// -- two or three flat lobes off-centre from each other, three roots
+/// creeping out of it in crooked steps, and **standing out of it, the
+/// essence itself**: a slow, swaying flame as tall as the column the
+/// crosshair and the spikes find it by (`Effect::pool_height`), a brighter
+/// core in it and two motes rising off it. Its size is the hit test's
+/// (`Effect::pool_radius`); drawn more solid the more essence is left. A
+/// lit stain -- going up in a moment -- swells and throbs.
 fn stain_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
     let r = effect.pool_radius().to_f32_for_render().max(0.12) * 1.3;
     let step = (effect.pool_share().to_f32_for_render() * (ESSENCE_STEPS - 1) as f32).round() as u8;
@@ -4908,6 +4914,54 @@ fn stain_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
         scale: Vec3::new(w, 0.04, d),
         turn: Quat::from_rotation_y(yaw),
     };
+    if part >= 12 {
+        // The standing essence: a column of it, swaying, as tall as the
+        // pool stands in the hit test.
+        let tall = effect.pool_height().to_f32_for_render().max(0.3) * throb;
+        let t = effect.age as f32 / 60.0 + wobble(seed) * 10.0;
+        let sway = Vec3::new((t * 1.3).sin(), 0.0, (t * 1.7).cos()) * r * 0.12;
+        let faint = Skin::Essence(step.min(2));
+        let limb = |shape, from, to, thick, ahead| {
+            let mut piece = limb(shape, from, to, thick, ahead);
+            piece.skin = faint;
+            piece
+        };
+        return match part {
+            // A tapering flame of it, its tip swaying, and a brighter
+            // tongue inside it leaning the other way.
+            12 => limb(
+                Shape::Spike,
+                at + Vec3::Y * 0.02,
+                at + sway * 2.0 + Vec3::Y * tall,
+                r * 0.8,
+                Vec3::X,
+            ),
+            13 => {
+                let lean = Vec3::new(-sway.z, 0.0, sway.x) * 2.5;
+                let foot = at + Vec3::new(sway.x, 0.0, -sway.z) * 1.5;
+                let mut tongue = limb(
+                    Shape::Spike,
+                    foot + Vec3::Y * 0.02,
+                    foot + lean + Vec3::Y * tall * 0.7,
+                    r * 0.35,
+                    Vec3::X,
+                );
+                tongue.skin = skin;
+                tongue
+            }
+            _ => {
+                let k = (part - 14) as f32;
+                let up = (t * 0.45 + k * 0.5).fract();
+                let turn = wobble(seed.wrapping_add(part as u32 * 3)) * std::f32::consts::TAU + t;
+                let out = Vec3::new(turn.cos(), 0.0, turn.sin()) * r * 0.35;
+                floating_in(
+                    faint,
+                    at + out + Vec3::Y * tall * (0.3 + 0.9 * up),
+                    r * 0.12 * (1.0 - up * 0.6),
+                )
+            }
+        };
+    }
     if part < 3 {
         let k = part as u32;
         let a = wobble(seed.wrapping_add(k * 7)) * std::f32::consts::TAU;
@@ -6608,7 +6662,14 @@ mod tests {
             "its body is on its disc"
         );
         for (k, piece) in pieces.iter().enumerate() {
-            assert!(piece.at.y < 0.1, "piece {k} is off the floor");
+            // The spill is on the floor; the essence stands out of it, no
+            // taller than the column the crosshair finds it by.
+            let top = if k < 12 {
+                0.1
+            } else {
+                effect.pool_height().to_f32_for_render().max(0.3) * 1.4
+            };
+            assert!(piece.at.y < top, "piece {k} is {} m up", piece.at.y);
             assert!(
                 piece.at.xz().distance(centre.xz()) < radius * 4.0,
                 "piece {k} is {} m from a stain {radius} m across",
