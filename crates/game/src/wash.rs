@@ -76,6 +76,13 @@ pub fn surface_defs() -> Vec<ShaderDefVal> {
         milli("WASH_GRAIN", w.grain),
         milli("WASH_BROAD", w.broad),
         milli("WASH_BROAD_SIZE", w.broad_size),
+        milli("WASH_RICH", w.rich),
+        milli("WASH_HOLLOW_R", w.hollow[0]),
+        milli("WASH_HOLLOW_G", w.hollow[1]),
+        milli("WASH_HOLLOW_B", w.hollow[2]),
+        milli("WASH_CREST_R", w.crest[0]),
+        milli("WASH_CREST_G", w.crest[1]),
+        milli("WASH_CREST_B", w.crest[2]),
     ]
 }
 

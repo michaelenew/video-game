@@ -141,7 +141,8 @@ pub fn tile_mesh(
     );
     let mut mesh = mesh;
     let half = f(sim::valley::land::PATH_HALF);
-    lay_strokes(&mut mesh, x0, z0, &|x, z, slope| {
+    let relief = |x: f32, z: f32| f(atlas.relief_at(fx(x), fx(z)));
+    lay_strokes(&mut mesh, x0, z0, &relief, &|x, z, slope| {
         let (m, _, path) = ground_at(atlas, x, z, slope, steepest);
         if path > half + 1.5 {
             return ([0.0, 0.0], ground_stroke(m, slope > steepest));
@@ -184,10 +185,17 @@ pub fn ground_stroke(m: Material, steep: bool) -> [f32; 2] {
 /// then lays them uphill, or wandering on the flat) in the first texture
 /// coordinates, and the rigidity and size in the second. `at` is asked at
 /// each vertex's map point and slope.
+///
+/// It also writes **how the land bends** there, for the colour that follows
+/// its contours (`paint.wgsl`): the curvature of `height` at two scales, a
+/// few metres and a few tens, -1 on a crest to 1 in a hollow, in the last
+/// component of the tangent -- the one channel a vertex has spare, and one
+/// the standard vertex shader hands through untouched.
 pub fn lay_strokes(
     mesh: &mut Mesh,
     x0: f32,
     z0: f32,
+    height: &dyn Fn(f32, f32) -> f32,
     at: &dyn Fn(f32, f32, f32) -> ([f32; 2], [f32; 2]),
 ) {
     let (Some(positions), Some(normals)) = (
@@ -207,8 +215,63 @@ pub fn lay_strokes(
             at(x0 + p[0], z0 + p[2], slope)
         })
         .unzip();
+    // The bend is broad (eight metres and up), so it is measured on a coarse
+    // lattice over the mesh and read between: nine height samples a lattice
+    // point rather than nine a vertex, which kept the land from streaming in.
+    let (mut lo, mut hi) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+    for p in positions {
+        lo = lo.min(Vec2::new(p[0], p[2]));
+        hi = hi.max(Vec2::new(p[0], p[2]));
+    }
+    const STEP: f32 = 4.0;
+    let n = ((hi - lo) / STEP).ceil().as_uvec2() + UVec2::ONE;
+    let lattice: Vec<f32> = (0..=n.y)
+        .flat_map(|j| (0..=n.x).map(move |i| (i, j)))
+        .map(|(i, j)| {
+            bend(
+                height,
+                x0 + lo.x + i as f32 * STEP,
+                z0 + lo.y + j as f32 * STEP,
+            )
+        })
+        .collect();
+    let read = |x: f32, z: f32| {
+        let u = ((x - lo.x) / STEP).clamp(0.0, n.x as f32 - 1e-3);
+        let v = ((z - lo.y) / STEP).clamp(0.0, n.y as f32 - 1e-3);
+        let (i, j) = (u as usize, v as usize);
+        let (fu, fv) = (u - i as f32, v - j as f32);
+        let w = n.x as usize + 1;
+        let at = |i: usize, j: usize| lattice[j * w + i];
+        let top = at(i, j) + (at(i + 1, j) - at(i, j)) * fu;
+        let bottom = at(i, j + 1) + (at(i + 1, j + 1) - at(i, j + 1)) * fu;
+        top + (bottom - top) * fv
+    };
+    let bends: Vec<[f32; 4]> = positions
+        .iter()
+        .map(|p| [1.0, 0.0, 0.0, read(p[0], p[2])])
+        .collect();
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, along);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, kind);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, bends);
+}
+
+/// **How the land bends at a point**, -1 on a crest to 1 in a hollow: the
+/// height's Laplacian -- how far the ground round about stands above or below
+/// this point -- at eight metres and at twenty-four, the broad one weighted
+/// more, each squashed so a gully and a gentle swale both register.
+pub fn bend(height: &dyn Fn(f32, f32) -> f32, x: f32, z: f32) -> f32 {
+    let h = height(x, z);
+    let at = |s: f32| {
+        let round =
+            height(x + s, z) + height(x - s, z) + height(x, z + s) + height(x, z - s) - 4.0 * h;
+        round / (s * s)
+    };
+    // Scaled so the sharpest one in fifty across the valley's places reaches
+    // most of the way (measured: 0.2 to 0.35 at eight metres, 0.07 to 0.1 at
+    // twenty-four), and the middle of the land is near nothing.
+    let near = (at(8.0) * 3.5).tanh();
+    let far = (at(24.0) * 11.0).tanh();
+    (0.4 * near + 0.6 * far).clamp(-1.0, 1.0)
 }
 
 /// **The colour of open ground**: `Palette::land` for what it is made of,
@@ -593,7 +656,7 @@ pub fn draw_arena(
                 }
             };
             let mut mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
-            lay_strokes(&mut mesh, x0, z0, &|_, _, slope| {
+            lay_strokes(&mut mesh, x0, z0, &height, &|_, _, slope| {
                 ([0.0, 0.0], ground_stroke(arena.floor, slope > steepest))
             });
             commands.spawn((
@@ -796,7 +859,7 @@ pub fn draw_below(
                 )
             };
             let mut mesh = grid_mesh(x0, z0, size, cells, &height, &mut colour);
-            lay_strokes(&mut mesh, x0, z0, &|_, _, slope| {
+            lay_strokes(&mut mesh, x0, z0, &height, &|_, _, slope| {
                 ([0.0, 0.0], ground_stroke(Material::Grass, slope > steepest))
             });
             commands.spawn((
@@ -837,5 +900,38 @@ pub fn draw_below(
                 &mut trees, commands, meshes, materials, arena.id, palette, root, x, y, z, tall,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod bend_tests {
+    use super::*;
+
+    /// The colour that follows the land's contours is only worth having if
+    /// the bend it reads *varies*: the first scaling was ten times too strong
+    /// and sat at one or minus one nearly everywhere, which tints all the land
+    /// alike. Across every place in the valley, most ground must be gently
+    /// bent and only the sharpest crests and hollows near the ends.
+    #[test]
+    fn the_land_bends_by_degrees() {
+        let atlas = sim::atlas::valley();
+        let h = |x: f32, z: f32| f(atlas.relief_at(fx(x), fx(z)));
+        let mut bends = vec![];
+        for p in &atlas.places {
+            let (cx, cz) = (
+                f(p.lo.0) * 0.5 + f(p.hi.0) * 0.5,
+                f(p.lo.1) * 0.5 + f(p.hi.1) * 0.5,
+            );
+            for i in -12..12 {
+                for j in -12..12 {
+                    bends.push(bend(&h, cx + i as f32 * 13.0, cz + j as f32 * 13.0));
+                }
+            }
+        }
+        bends.sort_by(|a, b| a.abs().total_cmp(&b.abs()));
+        let q = |t: f32| bends[((bends.len() - 1) as f32 * t) as usize].abs();
+        assert!(q(0.5) < 0.35, "the middle of the land bends {}", q(0.5));
+        assert!(q(0.95) > 0.3, "the sharpest bends only reach {}", q(0.95));
+        assert!(q(0.99) < 0.99, "the bend is pinned at its end: {}", q(0.99));
     }
 }

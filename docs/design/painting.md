@@ -101,6 +101,23 @@ covering a point being the one seen. Two things decide them:
 | Dressed stone | 0.9 | 0.6 |
 | Unmarked, upright (walls, plaster) | 0.85 | 0.7 |
 
+## Colour that follows the land (2026-10-15)
+
+On the owner's word: *add some blue and red -- in the colour-theory sense,
+like salt in cookies -- in a smooth overlay that follows the contour of the
+terrain, so deeper colours bring out its curves.*
+
+The land's **bend** (`land::bend`) is its curvature: how far the ground round
+a point stands above or below it, at eight metres and at twenty-four, squashed
+to -1 on a crest and 1 in a hollow. It is measured on a 4 m lattice when a tile
+is built (nine height samples a lattice point; per vertex it kept the
+mountains from streaming in) and rides in the last component of each vertex's
+tangent. `paint.wgsl` multiplies a hollow's colour toward `hollow` (deeper,
+cooler: blue-violet) and a crest's toward `crest` (warmer: red-orange), by
+`rich`. The bend is smooth over metres, so the tint is.
+`land::bend_tests::the_land_bends_by_degrees` holds the scale: the first one
+was ten times too strong and tinted all the land alike.
+
 ## Built on open source
 
 | From | What we took | Licence |

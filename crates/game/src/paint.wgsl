@@ -56,6 +56,9 @@ const TOP: f32 = f32(#{WASH_TOP}) / 1000.0;
 const GRAIN: f32 = f32(#{WASH_GRAIN}) / 1000.0;
 const BROAD: f32 = f32(#{WASH_BROAD}) / 1000.0;
 const BROAD_SIZE: f32 = f32(#{WASH_BROAD_SIZE}) / 1000.0;
+const RICH: f32 = f32(#{WASH_RICH}) / 1000.0;
+const HOLLOW: vec3<f32> = vec3<f32>(f32(#{WASH_HOLLOW_R}), f32(#{WASH_HOLLOW_G}), f32(#{WASH_HOLLOW_B})) / 1000.0;
+const CREST: vec3<f32> = vec3<f32>(f32(#{WASH_CREST_R}), f32(#{WASH_CREST_G}), f32(#{WASH_CREST_B})) / 1000.0;
 
 fn hash2(p: vec2<f32>) -> f32 {
     var q = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
@@ -342,6 +345,22 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let shift = vec3<f32>(b.y, 0.15 * b.y, -b.y) * 0.3 + vec3<f32>(0.25 * b.z, 0.2 * b.z, -0.35 * b.z) * (1.0 - rigid);
         base = vec4<f32>(base.rgb * (1.0 + wander * 0.4 * b.x) * (1.0 + wander * shift), base.a);
     }
+    // **Colour that follows the land's contours**: a pinch of blue-violet
+    // laid into its hollows and folds and a pinch of red-orange onto its
+    // crests -- not to make them blue or red but to deepen them, the salt in
+    // the painting -- so the colour itself models the form. The bend is the
+    // land's own (`land::bend`), smooth over metres, so the tint is too.
+#ifdef VERTEX_TANGENTS
+    if (RICH > 0.0) {
+        let bend = in.world_tangent.w;
+        let hollow = smoothstep(0.05, 0.6, bend);
+        let crest = smoothstep(0.05, 0.6, -bend);
+        base = vec4<f32>(
+            base.rgb * mix(vec3<f32>(1.0), HOLLOW, hollow * RICH) * mix(vec3<f32>(1.0), CREST, crest * RICH),
+            base.a,
+        );
+    }
+#endif
     let stroke = brush(p, n) * STROKE;
     var key = 0.0;
     var key_strength = 0.0;

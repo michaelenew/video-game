@@ -59,6 +59,14 @@ pub struct Wash {
     pub broad: f32,
     /// How long such a stroke is, as a share of its distance from the eye.
     pub broad_size: f32,
+    /// How strongly the land's colour follows its contours: its hollows
+    /// deepened toward `hollow`, its crests toward `crest`. A seasoning, not a
+    /// colour: at full strength a hollow is multiplied by `hollow` once.
+    pub rich: f32,
+    /// What a hollow's colour is multiplied toward: deeper, cooler.
+    pub hollow: [f32; 3],
+    /// What a crest's colour is multiplied toward: warmer.
+    pub crest: [f32; 3],
     /// Whether a rock is cut in flat facets (a stone blocked in with a flat
     /// brush) rather than a rounded lump.
     pub cut: bool,
@@ -156,6 +164,9 @@ pub const PLAIN: Wash = Wash {
     grain: 0.0,
     broad: 0.0,
     broad_size: 0.05,
+    rich: 0.0,
+    hollow: [1.0, 1.0, 1.0],
+    crest: [1.0, 1.0, 1.0],
     cut: false,
     brush: 0.0,
     drawn: 1.0,
@@ -211,6 +222,9 @@ pub const PAINTED: Wash = Wash {
     grain: 0.22,
     broad: 0.0,
     broad_size: 0.05,
+    rich: 0.0,
+    hollow: [1.0, 1.0, 1.0],
+    crest: [1.0, 1.0, 1.0],
     cut: true,
     brush: 5.0,
     drawn: 1.5,
@@ -266,6 +280,9 @@ pub const BRUSHED: Wash = Wash {
     grain: 0.0,
     broad: 0.75,
     broad_size: 0.22,
+    rich: 1.0,
+    hollow: [0.74, 0.82, 1.12],
+    crest: [1.14, 0.96, 0.84],
     cut: true,
     brush: 7.0,
     drawn: 1.8,
@@ -320,6 +337,9 @@ pub const DEPTHS: Wash = Wash {
     grain: 0.25,
     broad: 0.0,
     broad_size: 0.05,
+    rich: 0.0,
+    hollow: [1.0, 1.0, 1.0],
+    crest: [1.0, 1.0, 1.0],
     cut: true,
     brush: 3.0,
     drawn: 1.0,
@@ -374,6 +394,9 @@ pub const WASH: Wash = Wash {
     grain: 0.08,
     broad: 0.0,
     broad_size: 0.05,
+    rich: 0.0,
+    hollow: [1.0, 1.0, 1.0],
+    crest: [1.0, 1.0, 1.0],
     cut: false,
     brush: 2.0,
     drawn: 1.6,
