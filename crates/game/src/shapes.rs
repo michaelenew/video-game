@@ -233,7 +233,161 @@ pub fn soft_cylinder(size: Vec3, ends: f32, segments: usize) -> Mesh {
 /// closely. A unit rock that is scaled afterwards says how fine it wants to
 /// be with [`rock_faceted`].
 pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    if crate::wash::style().cut {
+        return cut_rock(size, seed, paint);
+    }
     rock_faceted(size, seed, rock_facets(size), paint)
+}
+
+/// **A cut stone**: the box, with its corners sliced off by a handful of
+/// planes at angles the seed picks, and every face flat. A chunky faceted rock
+/// of the kind a painter blocks in with a flat brush -- planes, not a lump --
+/// and convex, so it is still exactly inside its box.
+///
+/// The cuts spare the middle of the top, which is where feet stand: a plane
+/// that would take it lower is moved out until it does not.
+pub fn cut_rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    let h = size * 0.5;
+    // The box's six faces, each wound to face out.
+    let c = |x: f32, y: f32, z: f32| Vec3::new(x * h.x, y * h.y, z * h.z);
+    let mut faces: Vec<Vec<Vec3>> = vec![
+        vec![
+            c(1., -1., -1.),
+            c(1., 1., -1.),
+            c(1., 1., 1.),
+            c(1., -1., 1.),
+        ],
+        vec![
+            c(-1., -1., 1.),
+            c(-1., 1., 1.),
+            c(-1., 1., -1.),
+            c(-1., -1., -1.),
+        ],
+        vec![
+            c(-1., 1., -1.),
+            c(-1., 1., 1.),
+            c(1., 1., 1.),
+            c(1., 1., -1.),
+        ],
+        vec![
+            c(-1., -1., 1.),
+            c(-1., -1., -1.),
+            c(1., -1., -1.),
+            c(1., -1., 1.),
+        ],
+        vec![
+            c(-1., -1., 1.),
+            c(1., -1., 1.),
+            c(1., 1., 1.),
+            c(-1., 1., 1.),
+        ],
+        vec![
+            c(1., -1., -1.),
+            c(-1., -1., -1.),
+            c(-1., 1., -1.),
+            c(1., 1., -1.),
+        ],
+    ];
+    let cuts = 7 + (hash01(seed, 0, 0) * 5.0) as u32;
+    // The patch of top that has to survive, as a fraction of the top.
+    let keep = [
+        Vec3::new(0.35 * h.x, h.y, 0.35 * h.z),
+        Vec3::new(-0.35 * h.x, h.y, 0.35 * h.z),
+        Vec3::new(0.35 * h.x, h.y, -0.35 * h.z),
+        Vec3::new(-0.35 * h.x, h.y, -0.35 * h.z),
+    ];
+    for i in 0..cuts {
+        let yaw = hash01(seed, i, 1) * std::f32::consts::TAU;
+        // Mostly round the sides and the upper rim, a few from below.
+        let tilt = (hash01(seed, i, 2) * 2.0 - 0.6).clamp(-0.9, 0.85);
+        let d = Vec3::new(
+            yaw.cos() * (1.0 - tilt * tilt).sqrt(),
+            tilt,
+            yaw.sin() * (1.0 - tilt * tilt).sqrt(),
+        )
+        .normalize();
+        let support = d.x.abs() * h.x + d.y.abs() * h.y + d.z.abs() * h.z;
+        let depth = 0.10 + 0.22 * hash01(seed, i, 3);
+        let mut o = support * (1.0 - depth);
+        for k in keep {
+            o = o.max(d.dot(k) + 1e-3);
+        }
+        faces = clip(faces, d, o);
+    }
+
+    let (mut positions, mut normals, mut indices) = (vec![], vec![], vec![]);
+    for face in &faces {
+        if face.len() < 3 {
+            continue;
+        }
+        let mut n = Vec3::ZERO;
+        for (a, b) in face.iter().zip(face.iter().cycle().skip(1)) {
+            n += a.cross(*b);
+        }
+        let n = n.normalize_or_zero();
+        let start = positions.len() as u32;
+        for p in face {
+            positions.push(p.to_array());
+            normals.push(n.to_array());
+        }
+        for k in 1..face.len() as u32 - 1 {
+            indices.extend([start, start + k, start + k + 1]);
+        }
+    }
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_indices(Indices::U32(indices));
+    if let Some((centre, base, brush)) = paint {
+        self::paint(&mut mesh, h, centre, base, brush);
+    }
+    mesh
+}
+
+/// A convex polyhedron, as its faces, cut by the plane `d · x = o`: what is
+/// past it goes, and the cut is closed with a face of its own.
+fn clip(faces: Vec<Vec<Vec3>>, d: Vec3, o: f32) -> Vec<Vec<Vec3>> {
+    let inside = |p: Vec3| d.dot(p) <= o;
+    let mut out = Vec::with_capacity(faces.len() + 1);
+    let mut cut: Vec<Vec3> = vec![];
+    for face in faces {
+        let mut kept = vec![];
+        for (i, &a) in face.iter().enumerate() {
+            let b = face[(i + 1) % face.len()];
+            if inside(a) {
+                kept.push(a);
+            }
+            if inside(a) != inside(b) {
+                let t = (o - d.dot(a)) / d.dot(b - a);
+                let p = a + (b - a) * t;
+                kept.push(p);
+                cut.push(p);
+            }
+        }
+        if kept.len() >= 3 {
+            out.push(kept);
+        }
+    }
+    if cut.len() >= 3 {
+        // Wind the new face round its middle, facing out along `d`.
+        let mid = cut.iter().copied().sum::<Vec3>() / cut.len() as f32;
+        let u = (cut[0] - mid).normalize_or_zero();
+        let v = d.cross(u);
+        cut.sort_by(|a, b| {
+            let (pa, pb) = (*a - mid, *b - mid);
+            pa.dot(v)
+                .atan2(pa.dot(u))
+                .total_cmp(&pb.dot(v).atan2(pb.dot(u)))
+        });
+        cut.dedup_by(|a, b| a.distance(*b) < 1e-5);
+        if cut.len() >= 3 {
+            out.push(cut);
+        }
+    }
+    out
 }
 
 /// How many bands a rock of this size is built in: about three a metre
@@ -973,5 +1127,32 @@ mod tests {
         looks_out(&soft_box(size, 0.3, 16, None), "soft_box", 1.0);
         looks_out(&soft_cylinder(size, 0.3, 16), "soft_cylinder", 1.0);
         looks_out(&rock(size, 5, None), "rock", 0.95);
+        for seed in 0..40 {
+            looks_out(&cut_rock(size, seed, None), "cut_rock", 1.0);
+        }
+    }
+
+    #[test]
+    fn a_cut_stone_stays_in_its_box_and_keeps_its_top() {
+        // Every cut takes away and none adds, and the middle of the top --
+        // where feet stand -- is never cut.
+        let size = Vec3::new(2.4, 1.2, 1.6);
+        for seed in 0..40 {
+            let tris = triangles(&cut_rock(size, seed, None));
+            assert!(tris.len() >= 12, "seed {seed}: {} triangles", tris.len());
+            let mut top = false;
+            for [a, b, c] in &tris {
+                for p in [a, b, c] {
+                    assert!(
+                        p.abs().cmple(size * 0.5 + 1e-4).all(),
+                        "seed {seed}: {p} outside"
+                    );
+                }
+                let n = (*b - *a).cross(*c - *a);
+                top |=
+                    n.y > 0.0 && n.x.abs() + n.z.abs() < 1e-4 && (a.y - size.y * 0.5).abs() < 1e-4;
+            }
+            assert!(top, "seed {seed}: no flat top");
+        }
     }
 }

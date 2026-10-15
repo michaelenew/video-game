@@ -109,6 +109,10 @@ pub const SECTIONS: &[Section] = &[
                 "A frame-cost readout every two seconds, to the terminal: frame time, how many entities there are and how many meshes are on screen, and -- where the driver can time its own work -- what each render pass cost the GPU and how many triangles and pixels it drew. Beside it, the knobs that let one build be measured at several render settings: --cascades <n> and --shadow-reach <m> set the sun's shadow cascades (Bevy's defaults are 4 to 150 m), --shadow-map <px> the shadow map's size (2048), --shadow-filter hard|gaussian how its edge is softened (gaussian, thirteen taps a pixel; hard is one), and --no-outline, --no-fxaa and --no-prepass take a pass over the finished picture away, so its cost is what the frame time drops by. Twelve seconds in it lists the heaviest meshes in view and the heaviest casting shadows, with how many copies and how far away, which is what says where a pass's triangles come from. --quit-after <s> leaves cleanly after that many seconds, so a build with bevy/trace_chrome writes its trace. scripts/profile.sh runs it headlessly under lavapipe. What was found with it is in docs/design/architecture.md under The frame budget.",
             ),
             e(
+                "cargo run -p game --release -- --look painted",
+                "Paints the picture in one of the looks being judged (docs/design/painting.md): plain (as it was), painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper) or brushed (Guild Wars 2's broad dry-brush strokes: crisp near, painted far, a dry-brush frame). On the web it is ?look=painted, and there it has no effect yet: the look reads a depth buffer the browser build cannot.",
+            ),
+            e(
                 "cargo run -p manual",
                 "This text, without building the game.",
             ),

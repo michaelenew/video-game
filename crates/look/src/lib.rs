@@ -24,7 +24,9 @@ pub mod skies;
 pub mod sky;
 pub mod swatch;
 pub mod tint;
+pub mod wash;
 
 pub use edge::Edge;
 pub use palette::Palette;
 pub use sky::Sky;
+pub use wash::Wash;
