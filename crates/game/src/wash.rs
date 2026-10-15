@@ -44,13 +44,14 @@ use bevy::render::view::ViewTarget;
 
 const SHADER: Handle<Shader> = weak_handle!("b4d1c0e7-3a5f-4e92-8c61-0f7e2d9a5b38");
 
-/// The treatment this run is painted in.
+/// The treatment this run is painted in: `brushed` unless `--look` names
+/// another (`plain` is the picture as it was before any of this).
 pub fn style() -> look::Wash {
     static STYLE: OnceLock<look::Wash> = OnceLock::new();
     *STYLE.get_or_init(|| {
         crate::platform::value("--look")
             .and_then(look::wash::named)
-            .unwrap_or(look::wash::PLAIN)
+            .unwrap_or(look::wash::BRUSHED)
     })
 }
 

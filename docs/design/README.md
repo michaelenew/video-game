@@ -6,8 +6,8 @@ Everything currently decided, proposed, or parked, in one place. This supersedes
 **Start here:** [combat kernel](combat-kernel.md) → [controls](controls.md) →
 [ability spec](ability-spec.md) → a class kit. For implementation, see
 [architecture](architecture.md); before touching anything that is *pointed at
-something*, see [aiming](aiming.md); how the picture is painted -- the looks being judged,
-watercolour to Guild Wars 2's brushwork -- is [painting](painting.md); the world's checksum logic -- the
+something*, see [aiming](aiming.md); how the picture is painted -- Guild Wars 2's
+brushwork, how it was found and what did not work -- is [painting](painting.md); the world's checksum logic -- the
 overlapping regions every build keeps its books in -- is
 [regions](regions.md), and where it goes next is
 [exploration/0018](exploration/0018_crowds.md).

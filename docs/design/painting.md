@@ -1,5 +1,5 @@
 ---
-status: exploring 2026-10-15 -- four looks built to compare, none chosen
+status: built 2026-10-15 -- `brushed` is the game's look; the other four stay as `--look` options. Parked here for now on the owner's word ("pretty good, call this good for now").
 ---
 
 # Painting -- how the picture is laid down
@@ -41,8 +41,8 @@ camera's height, axes and lens and the sun's place on screen kept current by
 `wash::follow`.
 
 **Both passes read the depth prepass the outline asks for**, so on the browser
-build (WebGL2 cannot sample depth) there is no treatment and the picture is
-the plain one. That has to change before any of this ships -- see below.
+build (WebGL2 cannot sample depth) only the surface half is drawn -- the
+strokes, their direction, the contour colour -- and none of the air.
 
 ## Brushwork that holds still
 
@@ -157,7 +157,7 @@ and a slow frame loads fewer tiles -- a 45 s wait leaves mountains out).
 | `painted` | reference one | soft painted tones, violet shade, warm light, brush dabs, caught edges, coloured height haze, glow, cut stones, almost no line |
 | `depths` | reference two | the same pushed to one hue (blue) and to layers: thick air, dark foreground, strong shafts |
 | `wash` | the first brief | transparent watercolour on paper: pooled edges, granulation, dry brush, wavering sepia line |
-| `brushed` | GW2's concept art | crisp near, broad flat-brush strokes far and on every surface, sky strokes. Retuned on the owner's word (2026-10-15: *not paper texture; big areas are too busy, make the strokes much bigger for large uninterrupted areas*): strokes a fifth of their distance long, no fine marks over them, no paper frame -- so a big area is a few strokes and a small thing sits inside one |
+| `brushed` (**the default**) | GW2's concept art | crisp near, broad flat-brush strokes far and on every surface, sky strokes. Retuned on the owner's word (2026-10-15: *not paper texture; big areas are too busy, make the strokes much bigger for large uninterrupted areas*): strokes a fifth of their distance long, no fine marks over them, no paper frame -- so a big area is a few strokes and a small thing sits inside one |
 
 ![Hearth in plain, painted, depths and wash](gallery/painting-hearth.jpg)
 ![The falls in the same four](gallery/painting-falls.jpg)
@@ -165,22 +165,161 @@ and a slow frame loads fewer tiles -- a 45 s wait leaves mountains out).
 ![Brushed: Hearth](gallery/painting-brushed-hearth.jpg)
 ![Brushed: the falls](gallery/painting-brushed-falls.jpg)
 
-## What has to be decided
+## How it was made, in order
 
-1. **Which look**, or which parts of which. The knobs are independent; any
-   mix is a new row in `look::wash::STYLES`.
-2. **Light, not just paint.** Most of the first reference is its lighting:
-   dusk, warm lamps and glowing windows against violet air. The arenas are
-   lit by one sun at midday. A dusk sky per place and lamps that light their
-   surroundings (point lights, or a cheap glow volume) would do more than any
-   filter.
-3. **The browser build.** A depth-free fallback (no haze, no edges) or a
-   depth texture written by the main pass itself.
-4. **What is cut.** Only `shapes::rock` is cut so far; the spires, cliffs,
-   dykes and the Elementalist's stones are not.
-5. **Steep faces.** A surface's strokes are laid on the plane it most
-   nearly faces, so a slope at forty-five degrees gets stretched strokes (the
-   Mouth's left wall). Strokes laid along the slope's own direction would fix
-   it.
-6. **Cost.** The Kuwahara is the expensive part (up to ~120 taps a pixel at
-   radius 5). Not yet measured against the frame budget.
+The look was found by building candidates in the real renderer and showing the
+owner screenshots of the same frames, not mockups. Each step below is a round:
+what was asked, what was built, what the owner said.
+
+1. **Brief: "watercoloured, almost brushed at colour gradients".** First pass:
+   a surface half (light in soft tones with a brushed border, cool shade, warm
+   light, wandering pigment) and a screen half (pigment pooling at edges,
+   colour bleed, paper grain, a paper-coloured vignette, a wavering sepia
+   line), as three presets. Too dark, muddy, smoky edges.
+2. **Owner: "find open source and start from there".** Ported MNPR's
+   watercolour chain and its paper scan, and Acerola's anisotropic Kuwahara.
+   The `wash` look is that, and it is a fair watercolour.
+3. **Owner sends references** (a painted dusk town; a one-hue layered 2D
+   scene). The target was never paint on paper: it was *painted surfaces,
+   coloured light, atmospheric depth*. Built `painted` and `depths`: height
+   haze in the sky's own colour, near things darkened, contact shading from
+   depth, glow, sun shafts, a split-tone grade, edges caught and creases
+   darkened from the depth, brush dabs on surfaces, cut stones.
+4. **Owner: "GW2's brush aesthetic", then "like this but working in 3D and in
+   motion".** Built `brushed`: crisp near and painted far, broad flat-brush
+   strokes fixed to the world at a constant screen size (Bénard et al. 2010),
+   sky strokes on the sky's directions, a dry-brush frame.
+5. **Owner: "I don't mean paper texture; big areas are too busy, make the
+   strokes much bigger".** Frame off, strokes three times larger, all fine
+   marks over them removed. *This was the turn*: the look is a few broad
+   strokes over large areas and clean small things, not texture everywhere.
+6. **Owner: strokes should follow the path and point uphill; rigid for
+   brick, varied for nature; grass much bigger and freer.** Strokes placed one
+   by one with a direction field and a rigidity per surface.
+7. **Owner: "a pinch of blue and red, following the contours".** Colour that
+   follows the land's curvature; then deeper, and on rocks and cliffs.
+
+## What did not work, and why
+
+Kept so nobody walks into the same wall twice. Most of these cost a round.
+
+**Look and direction**
+
+- **Literal watercolour on paper** (paper grain, granulation, pooled edges,
+  a paper vignette, sepia line). Technically sound -- it is MNPR -- but it was
+  not what the owner meant by "watercolour". He meant painterly colour
+  gradients, and paper read as a filter over a game. It survives as `wash`.
+- **The paper-coloured vignette** read as smoke or fog at the edges, at every
+  setting tried; a hard ragged edge read as damage. Dropped.
+- **The dry-brush frame** (the picture's edges breaking into bare paper, after
+  the GW2 concept art): the first version's bristles were two axis-aligned
+  noises and read as a glitch grid; drawn before the outline, the outline was
+  drawn over the bare paper. Fixed both, and the owner still did not want
+  paper. Off (`frame: 0`), code kept.
+- **Uniform filters** (`painted`, `depths`): they recolour the scene but the
+  surfaces still read as flat CG fills. A filter cannot invent brushwork the
+  geometry does not have; the strokes had to be on the surfaces.
+- **Small dabs everywhere** (`grain`): reads as camouflage or stucco, "too
+  busy". The rule that came out of it: *stroke size follows the size of the
+  uninterrupted area*, and fine marks only where something is genuinely
+  detailed.
+
+**Technique**
+
+- **Screen-space strokes swim.** Any brush laid over the screen stays put
+  while the world slides under it. Strokes are in world space on surfaces and
+  in direction space on the sky; only a frame may be screen-space.
+- **World-space strokes of a fixed size** shrink to noise in the distance,
+  which is backwards for painting. Size from distance in powers of two,
+  cross-faded (and the fade loses contrast mid-way: divided back by
+  `sqrt(t^2 + (1-t)^2)`).
+- **Rows of strokes** (the first flat-brush): nearly square cells read as a
+  mosaic, "Minecraft". Long thin strokes (5:1) fixed that, but rows still
+  look combed; individually placed strokes with jitter scaled by rigidity are
+  what reads as painted.
+- **Swirly brush marks** came from turning the stroke direction by a noise of
+  the same position; iso-lines curl into wood grain. Turn a little, slowly.
+- **Rotating the stroke frame per pixel by a direction field** scrambles
+  strokes far from the origin (a small turn at 500 m shifts the grid
+  metres). The grid is fixed to the plane the surface faces; only each
+  stroke's angle follows the field.
+- **Banded light ("tones") with a hard border** looked like toon shading,
+  not paint; it needs a soft border pushed about by a brush noise, and at
+  `brushed`'s strength it is mostly a soft gradient.
+- **Edges caught from the depth** first lit every fold between two triangles
+  of the land; thresholds had to rise (0.002 to 0.008 relative depth). On
+  cobbles the effect at 0.9 made them glassy; 0.25 in `brushed`.
+- **The haze** at first sampled the sky by "depth is zero" -- but the sky is a
+  dome mesh 480 m out, so it found nothing and the air went pure tint
+  (violet). The sky is "past the dome" now. Its first density hid the
+  mountains completely.
+- **The curvature scale** for the contour colour was first ten times too
+  strong: pinned at plus or minus one almost everywhere, a flat tint. And the
+  24 m scale reads a whole arena floor in its rim as one hollow, which turned
+  the Commons blue all over: the 8 m scale leads now and the hollow colour is
+  deep violet-grey rather than blue. Both are held by tests.
+- **A convex stone measured absolutely** is all ridge. Measured against its
+  own median bend, it has ridges and hollows.
+- **Multiplying a tint into a near-black rock** changes nothing; the contour
+  colour adds a little as well. The Waterfall's basalt is still too dark to
+  season: that wants a lighter rock or light on it, not more tint.
+
+**Engineering traps**
+
+- **A uniform whose Rust and WGSL layouts differ** draws a black screen with
+  no error (a `Vec3` pad aligns to 16 bytes in `encase`). The uniform is all
+  `Vec4`s now.
+- **A shader that fails to compile is silent** in this game (no log plugin):
+  the picture just goes black or a thing vanishes. `cargo run --release -p
+  game --features bevy/bevy_log` prints the error; otherwise, look at a
+  screenshot after every shader change.
+- **Per-vertex height sampling** (nine samples a vertex for the curvature)
+  slowed land streaming so the mountains never loaded; a 4 m lattice per
+  tile, read between, costs forty times less.
+- **Captures under the software renderer** (`lavapipe`) take 100 s and more;
+  the land streams by *frame*, so a heavier look loads fewer tiles in the same
+  wait and mountains go missing. Use `WAIT=300` for the valley's wide shots.
+  It is not a bug in the look; on a GPU there are many frames a second.
+
+## Picking it back up
+
+- **Run it**: the game is `brushed` by default; `--look plain|painted|depths|wash`
+  for the others, `?look=` on the web.
+- **Take shots**: `DEMO=0 SHOT_FRAME=150 SHOT_PITCH=0.1 SHOT_YAW=<y>
+  GAME_ARGS="<args> --look <name>" ./scripts/screenshot.sh <out.png> <wait>`.
+  The frames used throughout: Hearth (`SHOT_YAW=0.6`, no args) for
+  buildings; the Mouth (`--arena mouth`, wait 300) for grass, path and
+  mountains; the Waterfall (`--arena pinewood --open`, `SHOT_AT=772,-4`) for
+  cliffs; the Commons (`--arena commons`) for standing stones and a rim.
+- **Turn a knob**: every number is a field of `look::wash::Wash`, one row per
+  look. The surface ones reach `paint.wgsl` as shader defs (thousandths),
+  the rest as the camera's `wash::Wash` uniform.
+- **Say what a surface is**: `land::ground_stroke` (rigidity and size by
+  ground material), `shapes::lay_natural` and `shapes::lay_bend` (a mesh of
+  natural stone), and for a direction, the first texture coordinates.
+  Unmarked meshes are read by their faces: upright is built, flat is open.
+
+### Open, in rough order of what would help most
+
+1. **Light.** Most of the dusk-town reference is its lighting: warm lamps and
+   glowing windows against violet air. The places are lit by one midday sun.
+   A dusk sky per place and lamps that light their surroundings would do more
+   than any further brushwork.
+2. **The Waterfall cliff** and other dark basalt: a lighter, warmer rock so the
+   contour colour and the strokes can work on it, and less of a box grid.
+3. **Brick and paving locked to their joints**: strokes on masonry are level
+   but not aligned to the actual courses; the town's paving is not marked as
+   dressed stone yet and is brushed as open ground.
+4. **Steep land**: strokes are laid on the plane a surface most nearly faces,
+   so a 45-degree slope gets stretched strokes in the projection.
+5. **The browser build** draws the surface half only (the passes need the
+   depth prepass WebGL2 cannot sample). A depth-free fallback, or depth
+   written by the main pass.
+6. **Cost**: the Kuwahara (up to ~150 taps a pixel at radius 7 in the
+   distance) and the stroke placement (36 strokes tested a pixel on painted
+   surfaces) are not yet measured against the frame budget on a GPU.
+7. **In motion**: everything is built to hold still under a moving camera,
+   but it has only been judged in stills.
+8. **Characters** are untouched by the surface half (they are not drawn in
+   `Paint`) and only lightly by the passes. GW2's subject-crisp-in-a-painting
+   is the intent, but the fighters may want a painted treatment of their own.
