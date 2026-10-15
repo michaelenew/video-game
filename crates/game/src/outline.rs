@@ -121,7 +121,12 @@ pub struct Outline {
     /// below a pixel: a binary one-pixel line cannot be thinner than one pixel,
     /// but it can be fainter.
     pub weight: f32,
-    pub pad: Vec2,
+    /// How far the line wavers, in pixels: a hand's line rather than a
+    /// plotter's (`look::wash`).
+    pub wobble: f32,
+    /// How much the line is one sepia ink rather than a deeper shade of what
+    /// it outlines.
+    pub sepia: f32,
 }
 
 impl Outline {
@@ -145,6 +150,7 @@ impl Outline {
     }
 
     fn plain(line: look::edge::Line) -> Outline {
+        let wash = crate::wash::style();
         Outline {
             radius: 1.0,
             step: 0.035,
@@ -155,14 +161,15 @@ impl Outline {
             near: 0.1,
             haze: 200.0,
             gone: 420.0,
-            weight: 0.62,
-            pad: Vec2::ZERO,
+            weight: 0.62 * wash.line,
+            wobble: wash.wobble,
+            sepia: wash.sepia,
         }
     }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct OutlineLabel;
+pub(crate) struct OutlineLabel;
 
 pub struct OutlinePlugin;
 

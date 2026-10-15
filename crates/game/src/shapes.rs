@@ -233,7 +233,163 @@ pub fn soft_cylinder(size: Vec3, ends: f32, segments: usize) -> Mesh {
 /// closely. A unit rock that is scaled afterwards says how fine it wants to
 /// be with [`rock_faceted`].
 pub fn rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    if crate::wash::style().cut {
+        return cut_rock(size, seed, paint);
+    }
     rock_faceted(size, seed, rock_facets(size), paint)
+}
+
+/// **A cut stone**: the box, with its corners sliced off by a handful of
+/// planes at angles the seed picks, and every face flat. A chunky faceted rock
+/// of the kind a painter blocks in with a flat brush -- planes, not a lump --
+/// and convex, so it is still exactly inside its box.
+///
+/// The cuts spare the middle of the top, which is where feet stand: a plane
+/// that would take it lower is moved out until it does not.
+pub fn cut_rock(size: Vec3, seed: u32, paint: Option<(Vec3, [f32; 3], &Brush)>) -> Mesh {
+    let h = size * 0.5;
+    // The box's six faces, each wound to face out.
+    let c = |x: f32, y: f32, z: f32| Vec3::new(x * h.x, y * h.y, z * h.z);
+    let mut faces: Vec<Vec<Vec3>> = vec![
+        vec![
+            c(1., -1., -1.),
+            c(1., 1., -1.),
+            c(1., 1., 1.),
+            c(1., -1., 1.),
+        ],
+        vec![
+            c(-1., -1., 1.),
+            c(-1., 1., 1.),
+            c(-1., 1., -1.),
+            c(-1., -1., -1.),
+        ],
+        vec![
+            c(-1., 1., -1.),
+            c(-1., 1., 1.),
+            c(1., 1., 1.),
+            c(1., 1., -1.),
+        ],
+        vec![
+            c(-1., -1., 1.),
+            c(-1., -1., -1.),
+            c(1., -1., -1.),
+            c(1., -1., 1.),
+        ],
+        vec![
+            c(-1., -1., 1.),
+            c(1., -1., 1.),
+            c(1., 1., 1.),
+            c(-1., 1., 1.),
+        ],
+        vec![
+            c(1., -1., -1.),
+            c(-1., -1., -1.),
+            c(-1., 1., -1.),
+            c(1., 1., -1.),
+        ],
+    ];
+    let cuts = 7 + (hash01(seed, 0, 0) * 5.0) as u32;
+    // The patch of top that has to survive, as a fraction of the top.
+    let keep = [
+        Vec3::new(0.35 * h.x, h.y, 0.35 * h.z),
+        Vec3::new(-0.35 * h.x, h.y, 0.35 * h.z),
+        Vec3::new(0.35 * h.x, h.y, -0.35 * h.z),
+        Vec3::new(-0.35 * h.x, h.y, -0.35 * h.z),
+    ];
+    for i in 0..cuts {
+        let yaw = hash01(seed, i, 1) * std::f32::consts::TAU;
+        // Mostly round the sides and the upper rim, a few from below.
+        let tilt = (hash01(seed, i, 2) * 2.0 - 0.6).clamp(-0.9, 0.85);
+        let d = Vec3::new(
+            yaw.cos() * (1.0 - tilt * tilt).sqrt(),
+            tilt,
+            yaw.sin() * (1.0 - tilt * tilt).sqrt(),
+        )
+        .normalize();
+        let support = d.x.abs() * h.x + d.y.abs() * h.y + d.z.abs() * h.z;
+        let depth = 0.10 + 0.22 * hash01(seed, i, 3);
+        let mut o = support * (1.0 - depth);
+        for k in keep {
+            o = o.max(d.dot(k) + 1e-3);
+        }
+        faces = clip(faces, d, o);
+    }
+
+    let (mut positions, mut normals, mut indices) = (vec![], vec![], vec![]);
+    for face in &faces {
+        if face.len() < 3 {
+            continue;
+        }
+        let mut n = Vec3::ZERO;
+        for (a, b) in face.iter().zip(face.iter().cycle().skip(1)) {
+            n += a.cross(*b);
+        }
+        let n = n.normalize_or_zero();
+        let start = positions.len() as u32;
+        for p in face {
+            positions.push(p.to_array());
+            normals.push(n.to_array());
+        }
+        for k in 1..face.len() as u32 - 1 {
+            indices.extend([start, start + k, start + k + 1]);
+        }
+    }
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_indices(Indices::U32(indices));
+    if let Some((centre, base, brush)) = paint {
+        self::paint(&mut mesh, h, centre, base, brush);
+    }
+    lay_natural(&mut mesh, NATURAL_STONE);
+    lay_bend(&mut mesh);
+    mesh
+}
+
+/// A convex polyhedron, as its faces, cut by the plane `d · x = o`: what is
+/// past it goes, and the cut is closed with a face of its own.
+fn clip(faces: Vec<Vec<Vec3>>, d: Vec3, o: f32) -> Vec<Vec<Vec3>> {
+    let inside = |p: Vec3| d.dot(p) <= o;
+    let mut out = Vec::with_capacity(faces.len() + 1);
+    let mut cut: Vec<Vec3> = vec![];
+    for face in faces {
+        let mut kept = vec![];
+        for (i, &a) in face.iter().enumerate() {
+            let b = face[(i + 1) % face.len()];
+            if inside(a) {
+                kept.push(a);
+            }
+            if inside(a) != inside(b) {
+                let t = (o - d.dot(a)) / d.dot(b - a);
+                let p = a + (b - a) * t;
+                kept.push(p);
+                cut.push(p);
+            }
+        }
+        if kept.len() >= 3 {
+            out.push(kept);
+        }
+    }
+    if cut.len() >= 3 {
+        // Wind the new face round its middle, facing out along `d`.
+        let mid = cut.iter().copied().sum::<Vec3>() / cut.len() as f32;
+        let u = (cut[0] - mid).normalize_or_zero();
+        let v = d.cross(u);
+        cut.sort_by(|a, b| {
+            let (pa, pb) = (*a - mid, *b - mid);
+            pa.dot(v)
+                .atan2(pa.dot(u))
+                .total_cmp(&pb.dot(v).atan2(pb.dot(u)))
+        });
+        cut.dedup_by(|a, b| a.distance(*b) < 1e-5);
+        if cut.len() >= 3 {
+            out.push(cut);
+        }
+    }
+    out
 }
 
 /// How many bands a rock of this size is built in: about three a metre
@@ -250,7 +406,7 @@ pub fn rock_faceted(
     paint: Option<(Vec3, [f32; 3], &Brush)>,
 ) -> Mesh {
     let s = seed.wrapping_mul(0x9E37_79B9) as f32 * 1e-4;
-    superellipsoid(size, (0.55, 0.55), facets, paint, move |p, n| {
+    let mut mesh = superellipsoid(size, (0.55, 0.55), facets, paint, move |p, n| {
         // Two octaves of a smooth value noise over the direction, scaled by
         // the rock's own size so a boulder and a pebble are rough alike.
         let q = p / size.max_element().max(1e-3);
@@ -261,7 +417,142 @@ pub fn rock_faceted(
         // the air. The roughness fades out as the face turns upward.
         let top = n.y.clamp(0.0, 1.0);
         1.0 - 0.28 * (0.5 + 0.5 * v) * (1.0 - top * top)
-    })
+    });
+    lay_natural(&mut mesh, NATURAL_STONE);
+    lay_bend(&mut mesh);
+    mesh
+}
+
+/// How the brush lays strokes on bare rock: loose, a little smaller than on
+/// open ground (`land::ground_stroke`, `paint.wgsl`'s `strokes`).
+pub const NATURAL_STONE: [f32; 2] = [0.25, 1.1];
+
+/// Write how a solid bends ([`bend_of`]) into the last component of each
+/// vertex's tangent, where `paint.wgsl` reads the land's: the colour that
+/// follows the contours, on a rock.
+pub fn lay_bend(mesh: &mut Mesh) {
+    let Some(positions) = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .and_then(|a| a.as_float3())
+        .map(|p| p.iter().map(|&v| Vec3::from(v)).collect::<Vec<_>>())
+    else {
+        return;
+    };
+    let Some(normals) = mesh
+        .attribute(Mesh::ATTRIBUTE_NORMAL)
+        .and_then(|a| a.as_float3())
+        .map(|n| n.iter().map(|&v| Vec3::from(v)).collect::<Vec<_>>())
+    else {
+        return;
+    };
+    let indices: Vec<usize> = match mesh.indices() {
+        Some(i) => i.iter().collect(),
+        None => (0..positions.len()).collect(),
+    };
+    let bends = bend_of(&positions, &normals, &indices);
+    let tangents: Vec<[f32; 4]> = bends.iter().map(|&b| [1.0, 0.0, 0.0, b]).collect();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, tangents);
+}
+
+/// **How a solid's surface bends**, -1 on a ridge to 1 in a crevice, at each
+/// vertex: the land's `bend` for a shape that is not a height field.
+///
+/// Corners of a faceted mesh are welded first (a cut stone repeats each
+/// corner once a face), so a facet's edge is seen as the ridge it is. Then at
+/// each point, how far its neighbours' middle stands out along its normal --
+/// out is a crevice, in is a ridge -- against the length of an edge, smoothed
+/// over the surface a few times so the colour flows instead of speckling.
+/// And the painter's habit for stone on top of that: warm toward the top,
+/// deeper toward the foot and the undersides, which is all a flat facet has.
+pub fn bend_of(positions: &[Vec3], normals: &[Vec3], indices: &[usize]) -> Vec<f32> {
+    use std::collections::HashMap;
+    let n = positions.len();
+    if n == 0 {
+        return vec![];
+    }
+    let key = |p: Vec3| ((p * 1000.0).round().as_ivec3()).to_array();
+    let mut weld: HashMap<[i32; 3], usize> = HashMap::new();
+    let mut id = vec![0usize; n];
+    for (i, p) in positions.iter().enumerate() {
+        let next = weld.len();
+        id[i] = *weld.entry(key(*p)).or_insert(next);
+    }
+    let m = weld.len();
+    let mut at = vec![Vec3::ZERO; m];
+    let mut normal = vec![Vec3::ZERO; m];
+    for i in 0..n {
+        at[id[i]] = positions[i];
+        normal[id[i]] += normals[i];
+    }
+    let mut near: Vec<Vec<usize>> = vec![vec![]; m];
+    for t in indices.chunks_exact(3) {
+        let (a, b, c) = (id[t[0]], id[t[1]], id[t[2]]);
+        for (u, v) in [(a, b), (b, c), (c, a)] {
+            if u != v && !near[u].contains(&v) {
+                near[u].push(v);
+                near[v].push(u);
+            }
+        }
+    }
+    let (lo, hi) = at.iter().fold(
+        (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+        |(l, h), p| (l.min(*p), h.max(*p)),
+    );
+    let mid = (lo + hi) * 0.5;
+    let half = ((hi - lo) * 0.5).max(Vec3::splat(1e-3));
+    let bend: Vec<f32> = (0..m)
+        .map(|v| {
+            if near[v].is_empty() {
+                return 0.0;
+            }
+            let centre = near[v].iter().map(|&u| at[u]).sum::<Vec3>() / near[v].len() as f32;
+            let edge =
+                near[v].iter().map(|&u| at[u].distance(at[v])).sum::<f32>() / near[v].len() as f32;
+            let dir = normal[v].normalize_or(Vec3::Y);
+            (centre - at[v]).dot(dir) / edge.max(1e-4)
+        })
+        .collect();
+    // **Against the stone's own bend.** A boulder is convex all over, so
+    // every point stands proud of its neighbours; what reads as a ridge is
+    // sharper than the stone's usual, a hollow flatter or sunk below it.
+    let mut sorted = bend.clone();
+    sorted.sort_by(f32::total_cmp);
+    let usual = sorted[sorted.len() / 2];
+    let spread = (sorted[sorted.len() * 9 / 10] - sorted[sorted.len() / 10]).max(1e-3);
+    let mut bend: Vec<f32> = bend
+        .iter()
+        .map(|b| ((b - usual) / spread * 1.6).tanh())
+        .collect();
+    for _ in 0..4 {
+        bend = (0..m)
+            .map(|v| {
+                if near[v].is_empty() {
+                    return bend[v];
+                }
+                let round = near[v].iter().map(|&u| bend[u]).sum::<f32>() / near[v].len() as f32;
+                0.4 * bend[v] + 0.6 * round
+            })
+            .collect();
+    }
+    (0..n)
+        .map(|i| {
+            let v = id[i];
+            // Low and facing down is deep; high and facing up is warm.
+            let height = (at[v].y - mid.y) / half.y;
+            let habit = -0.35 * height - 0.25 * normals[i].y;
+            (bend[v] * 0.6 + habit).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
+/// Mark a whole mesh as one kind of surface for the brush: rigidity and
+/// stroke size, with no direction of its own (uphill, or along its courses).
+/// A mesh that is never marked is read by its faces: upright ones as built
+/// work, ruled along their courses; flat ones as open ground.
+pub fn lay_natural(mesh: &mut Mesh, kind: [f32; 2]) {
+    let n = mesh.count_vertices();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0f32, 0.0]; n]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![kind; n]);
 }
 
 /// A column of raised earth: the Elementalist's stone, and the planted
@@ -357,14 +648,17 @@ pub fn rock_column(seed: u32) -> Mesh {
         }
     }
     let count = positions.len();
-    Mesh::new(
+    let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32, 1.0, 1.0, 1.0]; count])
-    .with_inserted_indices(Indices::U32(indices))
+    .with_inserted_indices(Indices::U32(indices));
+    lay_natural(&mut mesh, NATURAL_STONE);
+    lay_bend(&mut mesh);
+    mesh
 }
 
 /// The superellipsoid itself, with a radial scale per vertex. `rounding` is
@@ -675,14 +969,17 @@ pub fn ground_grid(size: Vec2, centre: Vec3, cell: f32, h: &dyn Fn(f32, f32) -> 
         }
     }
     let count = positions.len();
-    Mesh::new(
+    let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32, 1.0, 1.0, 1.0]; count])
-    .with_inserted_indices(Indices::U32(indices))
+    .with_inserted_indices(Indices::U32(indices));
+    lay_natural(&mut mesh, NATURAL_STONE);
+    lay_bend(&mut mesh);
+    mesh
 }
 
 /// A disc of floor at the simulation's own heights, for a region of a floor
@@ -731,14 +1028,17 @@ pub fn ground_disc(radius: f32, centre: Vec3, cell: f32, h: &dyn Fn(f32, f32) ->
         }
     }
     let count = positions.len();
-    Mesh::new(
+    let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32, 1.0, 1.0, 1.0]; count])
-    .with_inserted_indices(Indices::U32(indices))
+    .with_inserted_indices(Indices::U32(indices));
+    lay_natural(&mut mesh, NATURAL_STONE);
+    lay_bend(&mut mesh);
+    mesh
 }
 
 /// Scale every vertex colour by a factor of its height, `shade(y)`: how the
@@ -869,6 +1169,8 @@ pub fn cliff(
     // Normals from the roughened surface, so the lumps catch the light.
     mesh.compute_smooth_normals();
     let _ = normals;
+    lay_natural(&mut mesh, NATURAL_STONE);
+    lay_bend(&mut mesh);
     mesh
 }
 
@@ -973,5 +1275,76 @@ mod tests {
         looks_out(&soft_box(size, 0.3, 16, None), "soft_box", 1.0);
         looks_out(&soft_cylinder(size, 0.3, 16), "soft_cylinder", 1.0);
         looks_out(&rock(size, 5, None), "rock", 0.95);
+        for seed in 0..40 {
+            looks_out(&cut_rock(size, seed, None), "cut_rock", 1.0);
+        }
+    }
+
+    #[test]
+    fn a_cut_stone_stays_in_its_box_and_keeps_its_top() {
+        // Every cut takes away and none adds, and the middle of the top --
+        // where feet stand -- is never cut.
+        let size = Vec3::new(2.4, 1.2, 1.6);
+        for seed in 0..40 {
+            let tris = triangles(&cut_rock(size, seed, None));
+            assert!(tris.len() >= 12, "seed {seed}: {} triangles", tris.len());
+            let mut top = false;
+            for [a, b, c] in &tris {
+                for p in [a, b, c] {
+                    assert!(
+                        p.abs().cmple(size * 0.5 + 1e-4).all(),
+                        "seed {seed}: {p} outside"
+                    );
+                }
+                let n = (*b - *a).cross(*c - *a);
+                top |=
+                    n.y > 0.0 && n.x.abs() + n.z.abs() < 1e-4 && (a.y - size.y * 0.5).abs() < 1e-4;
+            }
+            assert!(top, "seed {seed}: no flat top");
+        }
+    }
+
+    /// The colour that follows a stone's contours needs a bend that varies
+    /// across it -- not pinned at an end, not flat -- for a lumpy rock, a cut
+    /// stone and a cliff alike.
+    #[test]
+    fn a_stone_bends_by_degrees() {
+        let brush = Brush {
+            palette: look::palette::Palette::under(&look::skies::of(sim::arena::ArenaId::MOUTH)),
+            edge: look::edge::EDGE,
+        };
+        let size = Vec3::new(3.0, 2.0, 2.4);
+        let grey = [0.5, 0.5, 0.5];
+        for (what, mesh) in [
+            ("rock", rock_faceted(size, 5, rock_facets(size), None)),
+            ("cut_rock", cut_rock(size, 5, None)),
+            ("column", rock_column(5)),
+            (
+                "cliff",
+                cliff(
+                    Vec3::new(30.0, 13.0, 44.0),
+                    7,
+                    grey,
+                    grey,
+                    Vec3::ZERO,
+                    &brush,
+                ),
+            ),
+        ] {
+            let mut b: Vec<f32> = mesh
+                .attribute(Mesh::ATTRIBUTE_TANGENT)
+                .and_then(|a| match a {
+                    bevy::render::mesh::VertexAttributeValues::Float32x4(v) => {
+                        Some(v.iter().map(|t| t[3]).collect())
+                    }
+                    _ => None,
+                })
+                .expect("a bend");
+            b.sort_by(f32::total_cmp);
+            let q = |t: f32| b[((b.len() - 1) as f32 * t) as usize];
+            println!("{what}: {:?}", [q(0.02), q(0.25), q(0.5), q(0.75), q(0.98)]);
+            assert!(q(0.98) - q(0.02) > 0.5, "{what}: barely bends");
+            assert!(q(0.25) > -0.98 && q(0.75) < 0.98, "{what}: pinned");
+        }
     }
 }

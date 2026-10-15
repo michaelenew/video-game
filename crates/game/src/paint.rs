@@ -98,6 +98,9 @@ impl Material for Paint {
         if key.bind_group_data.two_sided {
             descriptor.primitive.cull_mode = None;
         }
+        if let Some(fragment) = descriptor.fragment.as_mut() {
+            fragment.shader_defs.extend(crate::wash::surface_defs());
+        }
         Ok(())
     }
 }

@@ -50,6 +50,7 @@ mod town;
 mod trophies;
 mod valley;
 mod veil;
+mod wash;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -216,6 +217,14 @@ fn main() {
         // quietly -- the pipeline is built whether or not a camera asks for it,
         // and on WebGL2 building it is the panic.
         .add_plugins(outline::OutlinePlugin.only_if(platform::draws_outlines()))
+        // The watercolour's paper half, round the line (`wash`, `look::wash`).
+        .add_plugins(wash::WashPlugin {
+            outlines: platform::draws_outlines(),
+        })
+        .add_systems(
+            PostUpdate,
+            wash::follow.after(TransformSystem::TransformPropagate),
+        )
         .add_plugins(profile::ProfilePlugin)
         .add_systems(
             Startup,
@@ -1935,6 +1944,9 @@ fn setup(
             bevy::core_pipeline::fxaa::Fxaa::default(),
         ))
         .id();
+    if let Some(paper) = wash::Wash::of(wash::style()).filter(|_| platform::draws_outlines()) {
+        commands.entity(eye).insert(paper);
+    }
     if platform::draws_outlines() {
         // The line round everything: a pass over the finished picture rather
         // than a second copy of every object (`outline`), and the depth-only

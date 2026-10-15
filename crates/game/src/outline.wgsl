@@ -39,7 +39,9 @@ struct Outline {
     gone: f32,
     // How strongly the ink is laid on, 0 to 1.
     weight: f32,
-    _pad: vec2<f32>,
+    // How far the line wavers, in pixels, and how much of it is one sepia ink.
+    wobble: f32,
+    sepia: f32,
 }
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
@@ -135,9 +137,32 @@ fn ink_over(lit: vec3<f32>) -> vec3<f32> {
     return clamp(un_oklab(vec3<f32>(dark, hue * lo)), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+fn hash2(p: vec2<f32>) -> f32 {
+    var q = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
+    q = q + dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+}
+
+fn noise2(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(hash2(i), hash2(i + vec2<f32>(1.0, 0.0)), u.x),
+        mix(hash2(i + vec2<f32>(0.0, 1.0)), hash2(i + vec2<f32>(1.0, 1.0)), u.x),
+        u.y,
+    );
+}
+
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let here = vec2<i32>(in.position.xy);
+    // **A hand's line**: the depth is read a pixel or so off where it is
+    // drawn, by a slow noise, so a straight edge comes out as a line that
+    // wavers -- and is laid on a little heavier and lighter along its length.
+    let px = in.position.xy;
+    let waver = vec2<f32>(noise2(px / 9.0), noise2(px / 9.0 + vec2<f32>(19.0, 7.0))) - 0.5;
+    let here = vec2<i32>(round(px + waver * 2.0 * settings.wobble));
+    let pressure = 1.0 - 0.45 * min(settings.wobble, 1.0) * noise2(px / 14.0 + 3.0);
     let size = vec2<i32>(textureDimensions(depth_texture));
     let mine = along(depth_at(here, size));
     let reach = i32(ceil(settings.radius));
@@ -182,7 +207,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         fold = max(fold, abs((one + two) * 0.5 - mine) / max(mine, 1e-9));
     }
 
-    let colour = textureLoad(screen_texture, here, 0);
+    let colour = textureLoad(screen_texture, vec2<i32>(px), 0);
 
     // **A line fades where the air takes over.** Ink does not haze: left to
     // itself the pass draws the far rim of a two-kilometre drop plane against
@@ -190,7 +215,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // of the picture whose whole job is to dissolve. So it is wound down over
     // the same distance the fog is.
     let metres = mine * settings.near;
-    let seen = settings.weight * (1.0 - smoothstep(settings.haze, settings.gone, metres));
+    let seen = settings.weight * pressure * (1.0 - smoothstep(settings.haze, settings.gone, metres));
     if (seen <= 0.001) {
         return colour;
     }
@@ -203,5 +228,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     } else {
         return colour;
     }
-    return vec4<f32>(mix(colour.rgb, ink, seen), colour.a);
+    // Sepia: one warm dark ink, the colour of what it outlines showing
+    // through it a little.
+    ink = mix(ink, vec3<f32>(0.045, 0.026, 0.016) + ink * 0.25, settings.sepia);
+    let out = mix(colour.rgb, ink, min(seen, 1.0));
+    return vec4<f32>(out, colour.a);
 }
