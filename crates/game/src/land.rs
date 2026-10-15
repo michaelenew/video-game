@@ -198,6 +198,10 @@ pub fn lay_strokes(
     height: &dyn Fn(f32, f32) -> f32,
     at: &dyn Fn(f32, f32, f32) -> ([f32; 2], [f32; 2]),
 ) {
+    // Nothing to read it on a plain picture, and the bend is not free.
+    if !crate::wash::painted() {
+        return;
+    }
     let (Some(positions), Some(normals)) = (
         mesh.attribute(Mesh::ATTRIBUTE_POSITION)
             .and_then(|a| a.as_float3()),

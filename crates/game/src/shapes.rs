@@ -431,6 +431,9 @@ pub const NATURAL_STONE: [f32; 2] = [0.25, 1.1];
 /// vertex's tangent, where `paint.wgsl` reads the land's: the colour that
 /// follows the contours, on a rock.
 pub fn lay_bend(mesh: &mut Mesh) {
+    if !crate::wash::painted() {
+        return;
+    }
     let Some(positions) = mesh
         .attribute(Mesh::ATTRIBUTE_POSITION)
         .and_then(|a| a.as_float3())
@@ -550,6 +553,9 @@ pub fn bend_of(positions: &[Vec3], normals: &[Vec3], indices: &[usize]) -> Vec<f
 /// A mesh that is never marked is read by its faces: upright ones as built
 /// work, ruled along their courses; flat ones as open ground.
 pub fn lay_natural(mesh: &mut Mesh, kind: [f32; 2]) {
+    if !crate::wash::painted() {
+        return;
+    }
     let n = mesh.count_vertices();
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0f32, 0.0]; n]);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![kind; n]);
@@ -1331,15 +1337,24 @@ mod tests {
                 ),
             ),
         ] {
-            let mut b: Vec<f32> = mesh
-                .attribute(Mesh::ATTRIBUTE_TANGENT)
-                .and_then(|a| match a {
-                    bevy::render::mesh::VertexAttributeValues::Float32x4(v) => {
-                        Some(v.iter().map(|t| t[3]).collect())
-                    }
-                    _ => None,
-                })
-                .expect("a bend");
+            // Measured straight off the mesh: `lay_bend` lays nothing on a
+            // plain picture, which a test run is.
+            let positions: Vec<Vec3> = mesh
+                .attribute(Mesh::ATTRIBUTE_POSITION)
+                .and_then(|a| a.as_float3())
+                .expect("positions")
+                .iter()
+                .map(|&v| Vec3::from(v))
+                .collect();
+            let normals: Vec<Vec3> = mesh
+                .attribute(Mesh::ATTRIBUTE_NORMAL)
+                .and_then(|a| a.as_float3())
+                .expect("normals")
+                .iter()
+                .map(|&v| Vec3::from(v))
+                .collect();
+            let indices: Vec<usize> = mesh.indices().expect("indices").iter().collect();
+            let mut b = bend_of(&positions, &normals, &indices);
             b.sort_by(f32::total_cmp);
             let q = |t: f32| b[((b.len() - 1) as f32 * t) as usize];
             println!("{what}: {:?}", [q(0.02), q(0.25), q(0.5), q(0.75), q(0.98)]);

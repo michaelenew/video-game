@@ -160,9 +160,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // drawn, by a slow noise, so a straight edge comes out as a line that
     // wavers -- and is laid on a little heavier and lighter along its length.
     let px = in.position.xy;
-    let waver = vec2<f32>(noise2(px / 9.0), noise2(px / 9.0 + vec2<f32>(19.0, 7.0))) - 0.5;
-    let here = vec2<i32>(round(px + waver * 2.0 * settings.wobble));
-    let pressure = 1.0 - 0.45 * min(settings.wobble, 1.0) * noise2(px / 14.0 + 3.0);
+    var here = vec2<i32>(px);
+    var pressure = 1.0;
+    if (settings.wobble > 0.0) {
+        let waver = vec2<f32>(noise2(px / 9.0), noise2(px / 9.0 + vec2<f32>(19.0, 7.0))) - 0.5;
+        here = vec2<i32>(round(px + waver * 2.0 * settings.wobble));
+        pressure = 1.0 - 0.45 * min(settings.wobble, 1.0) * noise2(px / 14.0 + 3.0);
+    }
     let size = vec2<i32>(textureDimensions(depth_texture));
     let mine = along(depth_at(here, size));
     let reach = i32(ceil(settings.radius));

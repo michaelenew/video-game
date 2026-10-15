@@ -44,15 +44,24 @@ use bevy::render::view::ViewTarget;
 
 const SHADER: Handle<Shader> = weak_handle!("b4d1c0e7-3a5f-4e92-8c61-0f7e2d9a5b38");
 
-/// The treatment this run is painted in: `brushed` unless `--look` names
-/// another (`plain` is the picture as it was before any of this).
+/// The treatment this run is painted in: `plain` -- the picture as it was
+/// before any of this -- unless `--look` names another. The painted looks are
+/// opt-in until they are cheap enough to be the default: `brushed` as the
+/// default cost the owner the game (fan, a walk at a crawl, a class change
+/// that froze), 2026-10-16.
 pub fn style() -> look::Wash {
     static STYLE: OnceLock<look::Wash> = OnceLock::new();
     *STYLE.get_or_init(|| {
         crate::platform::value("--look")
             .and_then(look::wash::named)
-            .unwrap_or(look::wash::BRUSHED)
+            .unwrap_or(look::wash::PLAIN)
     })
+}
+
+/// Is the picture painted at all? False for `plain`, and then nothing here
+/// runs: no passes, no paper, no strokes or bends laid into a mesh.
+pub fn painted() -> bool {
+    style() != look::wash::PLAIN
 }
 
 /// The surface half, as the shader defs `paint.wgsl` reads: thousandths.
@@ -210,6 +219,9 @@ pub struct WashPlugin {
 
 impl Plugin for WashPlugin {
     fn build(&self, app: &mut App) {
+        if !painted() {
+            return;
+        }
         app.world_mut().resource_mut::<Assets<Shader>>().insert(
             SHADER.id(),
             Shader::from_wgsl(include_str!("wash.wgsl"), "game/src/wash.wgsl"),
@@ -244,6 +256,9 @@ impl Plugin for WashPlugin {
     }
 
     fn finish(&self, app: &mut App) {
+        if !painted() {
+            return;
+        }
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.init_resource::<WashPipeline>();
         }
