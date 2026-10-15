@@ -161,6 +161,12 @@ pub fn of(id: ArenaId) -> Sky {
             reach: 1100.0,
             ..Sky::over([0.90, 0.88, 0.84])
         },
+        // The High Plane and the Sky Road: the thinnest air in the game,
+        // and the furthest you see from anywhere you can stand.
+        ArenaId::HIGH_PLANE | ArenaId::SKY_ROAD => Sky {
+            reach: 1200.0,
+            ..Sky::over([0.72, 0.84, 0.99])
+        },
         ArenaId::WOOD => Sky {
             reach: 760.0,
             glow: Some([0.86, 0.80, 0.48]),
@@ -257,8 +263,8 @@ mod tests {
         // enough colour left in it to read as sky rather than as fog -- the
         // failure that produced an all-brown wash the first time round.
         for arena in sim::arena::all() {
-            if arena.id == ArenaId::BROODMOTHER {
-                continue; // A cave. The one place dark is the right answer.
+            if arena.id == ArenaId::BROODMOTHER || arena.id == ArenaId::DEEP {
+                continue; // A cave. The places dark is the right answer.
             }
             let h = Lch::of(of(arena.id).resolved().horizon);
             let name = arena.name;

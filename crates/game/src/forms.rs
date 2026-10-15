@@ -387,6 +387,9 @@ pub fn form_of(arena: ArenaId, s: &Solid, hangs: bool) -> Form {
         Material::Wood if size.y >= 2.0 && long >= 3.0 * thin => Form::Cordwood,
         Material::Wood if long >= 2.5 * thin && size.y <= 2.0 => Form::Log,
         Material::Wood if hangs => Form::Deck,
+        // A slab of turf in the air, in the valley as on a course: the Sky
+        // Road's islands (`sim::arena::heights`).
+        Material::Grass if hangs && size.y <= 6.0 => Form::Island,
         _ => Form::Plain,
     }
 }

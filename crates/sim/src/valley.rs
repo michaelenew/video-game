@@ -280,6 +280,8 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::WOOD => &arena::wood::PLACE,
         ArenaId::SPIRE => &arena::spire::PLACE,
         ArenaId::DEEP => &arena::deep::PLACE,
+        ArenaId::HIGH_PLANE => &arena::heights::PLANE_PLACE,
+        ArenaId::SKY_ROAD => &arena::heights::SKY_ROAD_PLACE,
         ArenaId::HIGHLANDS => &rooms::HIGHLANDS,
         ArenaId::HORNBACK => &rooms::MEADOW,
         ArenaId::GNAWERS => &rooms::COMMONS,

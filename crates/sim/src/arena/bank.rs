@@ -64,7 +64,18 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
-const VINES: [Zone; 1] = [CRAGS[0].vine()];
+/// The crag's vine, and the Hanging Stones' up from the road
+/// (`super::heights`).
+const VINES: [Zone; 1 + super::heights::BANK_VINES.len()] = {
+    let hanging = super::heights::BANK_VINES;
+    let mut out = [CRAGS[0].vine(); 1 + super::heights::BANK_VINES.len()];
+    let mut i = 0;
+    while i < hanging.len() {
+        out[i + 1] = hanging[i];
+        i += 1;
+    }
+    out
+};
 
 const SEAMS: [Seam; 3] = [
     // Back down to the Mouth.

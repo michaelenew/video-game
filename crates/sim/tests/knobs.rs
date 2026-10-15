@@ -60,6 +60,7 @@ const LEVEL_DATA: &[&str] = &[
     "spire.rs",
     "deep.rs",
     "ranges.rs",
+    "heights.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an

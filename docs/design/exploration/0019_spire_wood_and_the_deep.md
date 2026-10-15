@@ -1,5 +1,5 @@
 ---
-status: building -- the shapes, the Great Wood, the Needle, ranges (the roost among them) and the Deep built 2026-10-15; the High Plane next; the shorter road held (§4 below)
+status: built 2026-10-15 -- the shapes, the Great Wood, the Needle, ranges (the roost among them), the Deep and the High Plane; the shorter road held (below)
 started: 2026-10-15
 ---
 
@@ -39,6 +39,11 @@ started: 2026-10-15
 > eighth. Halving it means moving rooms -- across the road, or up the
 > slopes on shelves of their own -- which is a layout of its own, and wants
 > the owner's say on which rooms go where.
+>
+> **The High Plane** is a table mountain 300 m up with a rim holding the land
+> up to it (§3b's other half), reached by the Sky Road's islands from the
+> Needle's dome and by the Hanging Stones from the Bank, vines strung across
+> every gap of the second. [../valley.md](../valley.md) §1d.
 
 # 0019 — The Spire, the Great Wood, the planes above and below, and a valley that is lived in
 

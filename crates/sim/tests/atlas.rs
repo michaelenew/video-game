@@ -192,7 +192,16 @@ fn no_two_places_of_the_valley_sit_on_each_other() {
             if q.band.is_some() {
                 false
             } else if range(p) || range(q) {
-                q.pad || p.pad || (range(p) && range(q))
+                // A range must not be in a room; in a place that keeps its
+                // own floor and is no room -- the High Plane, the Deep -- it
+                // stands as it does in a reach.
+                let room = |a: &atlas::Placed| {
+                    matches!(
+                        sim::valley::place(a.arena).map(|p| p.kind),
+                        Some(sim::valley::Kind::Room(_))
+                    ) && !range(a)
+                };
+                room(p) || room(q) || (range(p) && range(q))
             } else {
                 q.pad == p.pad
             }

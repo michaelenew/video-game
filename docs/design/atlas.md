@@ -36,8 +36,9 @@ So there are two problems, and they are separate:
 - **Places on one map.** Each place is still an arena, drawn in its own
   coordinates exactly as before. The map puts each one at an offset, cuts the
   doorways where two places meet, and adds the few boxes that belong to no
-  place (a cliff round a room, a door's sill). The valley's map is 20 places,
-  19 doorways and about 1,700 boxes since the Great Wood and the Needle.
+  place (a cliff round a room, a door's sill). The valley's map is 36 places,
+  20 doorways and about 2,100 boxes since the Great Wood, the Needle, the
+  ranges, the Deep and the High Plane.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
   touch it, in map order, and the places whose footprint does. A query over a
   box reads the tiles under it and merges their lists in map order, each box

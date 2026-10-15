@@ -929,14 +929,33 @@ mod bend_tests {
         let atlas = sim::atlas::valley();
         let h = |x: f32, z: f32| f(atlas.relief_at(fx(x), fx(z)));
         let mut bends = vec![];
-        for p in &atlas.places {
+        // The pit and the table mountain are sheer on purpose, and a range is
+        // the land of the reach it stands in, sampled already.
+        let sheer = |id: sim::arena::ArenaId| {
+            id == sim::arena::ArenaId::DEEP
+                || id == sim::arena::ArenaId::HIGH_PLANE
+                || sim::valley::ranges::of(id).is_some()
+        };
+        for p in atlas.places.iter().filter(|p| !sheer(p.arena)) {
             let (cx, cz) = (
                 f(p.lo.0) * 0.5 + f(p.hi.0) * 0.5,
                 f(p.lo.1) * 0.5 + f(p.hi.1) * 0.5,
             );
             for i in -12..12 {
                 for j in -12..12 {
-                    bends.push(bend(&h, cx + i as f32 * 13.0, cz + j as f32 * 13.0));
+                    let (x, z) = (cx + i as f32 * 13.0, cz + j as f32 * 13.0);
+                    // Nor round their edges, from a neighbour's samples.
+                    let edge = atlas
+                        .places
+                        .iter()
+                        .filter(|q| {
+                            q.arena == sim::arena::ArenaId::DEEP
+                                || q.arena == sim::arena::ArenaId::HIGH_PLANE
+                        })
+                        .any(|q| q.holds_within(fx(x), fx(z), fx(60.0)));
+                    if !edge {
+                        bends.push(bend(&h, x, z));
+                    }
                 }
             }
         }

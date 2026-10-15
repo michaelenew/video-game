@@ -122,7 +122,7 @@ const ROOST_SITES: [Site; 2] = [
 
 /// **The ranges**, nearest the town first. Easy by the town and harder the
 /// further in -- by species, the tiers the waystones count, and by temper.
-pub const RANGES: [Range; 11] = [
+pub const RANGES: [Range; 14] = [
     // The Hornback herd, grazing the Great Wood's edge: they run if you
     // start anything.
     range(
@@ -267,7 +267,45 @@ pub const RANGES: [Range; 11] = [
             3,
         )
     },
+    // **The High Plane** (`arena::heights`): its own creatures, 300 m up.
+    range(
+        11,
+        "Sky Meadow",
+        SpeciesId::RIDGEBACK,
+        2,
+        plane(-6000, 4000),
+        2500,
+        Temperament::Peaceful,
+        1,
+    ),
+    range(
+        12,
+        "Eyrie",
+        SpeciesId::GALEWING,
+        1,
+        plane(8000, -2000),
+        3000,
+        Temperament::Hunting,
+        2,
+    ),
+    range(
+        13,
+        "Sky Shrine",
+        SpeciesId::MANTIS,
+        1,
+        plane(2000, 8000),
+        2200,
+        Temperament::Territorial { ring: 1500 },
+        2,
+    ),
 ];
+
+/// A point of the High Plane on the map, from its middle (centimetres), at
+/// its floor.
+const fn plane(x: i32, z: i32) -> (i32, i32, i32) {
+    let p = crate::arena::heights::PLANE_AT;
+    (p[0] + x, p[2] + z, p[1])
+}
 
 /// **A range on a warren's floor**: centred on a cell of its maze, three
 /// cells across, only at its level.
@@ -368,6 +406,9 @@ pub static ARENAS: [Arena; COUNT] = [
     arena_of(&RANGES[8]),
     arena_of(&RANGES[9]),
     arena_of(&RANGES[10]),
+    arena_of(&RANGES[11]),
+    arena_of(&RANGES[12]),
+    arena_of(&RANGES[13]),
 ];
 
 const fn place_of(r: &Range) -> Place {
@@ -393,4 +434,7 @@ pub static PLACES: [Place; COUNT] = [
     place_of(&RANGES[8]),
     place_of(&RANGES[9]),
     place_of(&RANGES[10]),
+    place_of(&RANGES[11]),
+    place_of(&RANGES[12]),
+    place_of(&RANGES[13]),
 ];

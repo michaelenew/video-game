@@ -191,6 +191,45 @@ a material of its own (`Material::Crystal`, `violet` and light).
 
 ![The Caverns](gallery/valley-deep-caverns.jpg)
 
+### 1d · The High Plane (2026-10-15)
+
+`sim::arena::heights`, `tests/heights.rs`, `--arena high_plane`. "Sections
+that lead up ... to full separate planes with different creatures there",
+and asked whether that should be a table mountain or islands in the sky,
+"both":
+
+- **The plane** is a table mountain 260 by 220 m with its floor **300 m
+  up**, north of the Bank behind the valley's mountains (they top out near
+  190 m). Its rim holds the land up to its edge -- a lip a metre and a half
+  high -- and the land falls three in one below it, so from the valley it is
+  a flat top over the ridges, and what is drawn is what is stood on (a pad
+  above the land with no rim would be drawn at the mountains' height under
+  an invisible floor). Standing stones, boulders, a cairn where each route
+  arrives, and its own creatures (§1b): **Sky Meadow**, two Ridgebacks,
+  peaceful, temper 1; **Eyrie**, a Galewing, hunting, temper 2; **Sky
+  Shrine**, the Mantis, territorial, temper 2.
+- **The Sky Road** -- the islands -- leaves the Needle's dome 353 m up: 22
+  turf islands, stones and precision stones (1.4 m across) over the town,
+  the Mouth and the mountains, coming down gently to the plane's south-west
+  corner. Gaps of 8 to 22 m with a drop of a metre or two, a rise of three
+  now and then: the mechanic and expert bands, "treacherous" as asked. A
+  cairn on every big island. Its stretch over the mountains is a place of
+  its own, **the Sky Road**, so its vines and cairns belong somewhere.
+- **The Hanging Stones** climb from the Bank's road: a column of 25 stones
+  seven metres apart **with a vine strung across every gap**, then a span of
+  18 stones north over the mountains, ten metres apart and six up, each gap
+  strung with a vine too, and a last vine up the plane's cliff to its lip.
+  Anybody climbs it at the vine's pace; a mechanic skips the vines.
+  `tests/heights.rs` climbs it with a Bulwark from the road to the plane.
+
+![The High Plane, looking back at the Needle's dome and the Sky Road](gallery/valley-plane-view.jpg)
+
+![The plane over the Bank's mountains, the Hanging Stones under it](gallery/valley-plane-from-bank.jpg)
+
+**Crystal** and the **floating islands** are drawn as what they are: crystal
+violet and faceted, a hanging slab of turf as an island of turf on rock
+(`game::forms::form_of`), in the valley as on a course.
+
 | Place | The road | Rooms off it | The way on |
 | --- | --- | --- | --- |
 | **Hearth** | — | **the Ring** (north), **the Long Valley** (west, under the fifth waystone) | the east gate |

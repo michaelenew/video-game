@@ -30,7 +30,9 @@ use crate::math::V3;
 use crate::valley::Crag;
 use crate::valley::land::{Land, Pad, Point, Way, at};
 
-use crate::arena::{bank, deep, hearth, mouth, pinewood, saddle, shelves, spire, waterfall, wood};
+use crate::arena::{
+    bank, deep, hearth, heights, mouth, pinewood, saddle, shelves, spire, waterfall, wood,
+};
 
 /// Level ground round a room, past its own footprint, in centimetres.
 pub const APRON: i32 = 600;
@@ -411,6 +413,16 @@ fn pads() -> Vec<Pad> {
         rim: None,
         door: (at.x, at.z),
     });
+    // The High Plane: 300 m up, its rim holding the land up to its edge.
+    let at = v3(heights::PLANE_AT);
+    let (hx, hz) = (cm(heights::PLANE_HALF.0), cm(heights::PLANE_HALF.1));
+    out.push(Pad {
+        lo: (at.x.sub(hx), at.z.sub(hz)),
+        hi: (at.x.add(hx), at.z.add(hz)),
+        y: at.y,
+        rim: heights::PLANE.rim.map(|rim| (rim, (at.x, at.z))),
+        door: (at.x, at.z),
+    });
     for r in &ROOMS {
         let (lo, hi) = pad_of(r);
         let at = v3(r.at);
@@ -707,14 +719,6 @@ pub fn plan() -> Plan {
             band: None,
         });
     }
-    // The Deep: its own floor under the whole lid.
-    plan.places.push(PlanPlace {
-        arena: ArenaId::DEEP,
-        at: v3(deep::AT),
-        apron: Fx::ZERO,
-        pad: true,
-        band: None,
-    });
     // The ranges: places on the land, so first on the map before the reaches
     // they stand in. The roost is stacked over the Needle's plaza, between
     // the dome's top and some way over it.
@@ -730,6 +734,24 @@ pub fn plan() -> Plan {
                 .map(|up| (floor.sub(Fx::from_int(2)), floor.add(cm(up)))),
         });
     }
+    // The High Plane and the Deep after the ranges in them, so a point on
+    // a range is on it.
+    // The High Plane: its own floor, 300 m up.
+    plan.places.push(PlanPlace {
+        arena: ArenaId::HIGH_PLANE,
+        at: v3(heights::PLANE_AT),
+        apron: Fx::ZERO,
+        pad: true,
+        band: None,
+    });
+    // The Deep: its own floor under the whole lid.
+    plan.places.push(PlanPlace {
+        arena: ArenaId::DEEP,
+        at: v3(deep::AT),
+        apron: Fx::ZERO,
+        pad: true,
+        band: None,
+    });
     for id in [
         ArenaId::MOUTH,
         ArenaId::BANK,
@@ -738,6 +760,7 @@ pub fn plan() -> Plan {
         ArenaId::SADDLE,
         ArenaId::WOOD,
         ArenaId::SPIRE,
+        ArenaId::SKY_ROAD,
     ] {
         plan.places.push(PlanPlace {
             arena: id,
@@ -807,6 +830,8 @@ pub fn plan() -> Plan {
     spire::build(&|x, z| land.height(x, z), &mut plan.extras);
     // The Deep: its lid, its warrens and its Caverns.
     deep::build(&mut plan.extras);
+    // The routes up to the High Plane.
+    heights::build(&|x, z| land.height(x, z), &mut plan.extras);
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);

@@ -107,6 +107,8 @@ pub mod spire;
 
 pub mod deep;
 
+pub mod heights;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -175,6 +177,10 @@ impl ArenaId {
     /// **The Deep** (`deep`): the caves under the Shelves, down to the
     /// Caverns.
     pub const DEEP: ArenaId = ArenaId(35);
+    /// **The High Plane** (`heights`): the table mountain over the valley,
+    /// and the stretch of the Sky Road over the mountains to it.
+    pub const HIGH_PLANE: ArenaId = ArenaId(36);
+    pub const SKY_ROAD: ArenaId = ArenaId(37);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -254,6 +260,8 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::WOOD => Some(&wood::ARENA),
         ArenaId::SPIRE => Some(&spire::ARENA),
         ArenaId::DEEP => Some(&deep::ARENA),
+        ArenaId::HIGH_PLANE => Some(&heights::PLANE),
+        ArenaId::SKY_ROAD => Some(&heights::SKY_ROAD),
         ArenaId(n)
             if n >= crate::valley::ranges::FIRST
                 && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
