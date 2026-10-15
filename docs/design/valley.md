@@ -84,8 +84,8 @@ column stumps, two arches, a fallen column, a cistern. The way up:
   metres apart.
 
 The rim overhangs the shaft by forty metres, which no jump goes round from
-below: the way onto the dome is through it. The roost -- Galewings on the
-dome, a fight (VALE-5) -- is not built yet.
+below: the way onto the dome is through it. The roost -- a Galewing on the
+dome, a fight (VALE-5) -- is a range (§1b).
 
 ![The Needle from the Mouth](gallery/valley-needle-from-the-mouth.jpg)
 
@@ -116,6 +116,47 @@ the grove in one shade, and a trunk's shaded side lit by the ambient alone was
 black. A giant's bark is pale for the same reason (`game::forms::giant_bark`).
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
+
+### 1b · Ranges: creatures out on the land (2026-10-15)
+
+`sim::valley::ranges`, `tests/ranges.rs`. **A range is a room without
+walls**: a place of the map with an arena of its own, so its creature fights
+in its own coordinates and is kept inside its own bounds, but its floor is the
+land -- a pocket of meadow fifty metres off the road, the Wood's clearing, the
+Needle's dome -- and nothing rings it. Walking into one wakes it, as walking
+into a room does; walking more than `Hunt, held this far outside its room`
+away puts it back to sleep. The road never passes through one
+(`the_road_never_wakes_a_range`): you see them from it and choose.
+
+| Range | Where | What | Temperament | Temper |
+| --- | --- | --- | --- | --- |
+| **Wood's Edge** | the Great Wood's clearing, by its entrance | the Hornback herd | skittish | 0 |
+| **South Bank** | across the Mouth's river from the road | the Gnawers | hunting | 0 |
+| **Upper Meadow** | the Bank, south of the road | two Ridgebacks | peaceful | 0 |
+| **Glade** | the Pinewood, north of the road | the Pair | territorial, 14 m | 2 |
+| **Snowfield** | the Saddle, south of the road | a Ridgeback | hunting | 3 |
+| **Roost** | the Needle's dome, 353 m up | a Galewing, circling the ruins and perching on the tallest stump | territorial, 32 m | 1 |
+
+**Temperaments** (VALE-4, "depends per creature"): *hunting* comes for you;
+*territorial* watches until somebody is inside its ring, or hurts it;
+*peaceful* starts nothing, and hurt, fights back; *skittish* never fights, and
+hurt, the herd runs to the far side of the range from whoever started it. A
+held creature is held in the moment it takes to notice you (`Brain::grace`),
+a held pack in its calm; a hurt is noticed as the creatures' health, all of
+it, falling (`Journey::stock`). **The temper rises with the distance from
+Hearth** -- the same Ridgeback is temper 0 on the Bank and 3 on the Saddle.
+
+**Beaten, a range rests** for `Range, rests after it is beaten` (300 s,
+VALE-3 "after a while") and then is back; **lost**, nobody wakes outside --
+there is no outside -- and everybody stands up on their last cairn.
+
+**The roost is stacked**: it is over the Needle's plaza, so it is a place only
+between the dome's top and forty metres over it (`PlanPlace::band`,
+`Atlas::place_for`); on the plaza underneath you are in the Needle, and the
+vines and cairns there are the Needle's. Climbing out of the chimney onto the
+ruins wakes the Galewing (`tests/spire.rs`).
+
+![The Upper Meadow's two Ridgebacks, watching](gallery/valley-upper-meadow.jpg)
 
 | Place | The road | Rooms off it | The way on |
 | --- | --- | --- | --- |

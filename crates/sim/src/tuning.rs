@@ -3464,6 +3464,12 @@ pub fn hunt_held_past() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HuntHeldPast)).max(Fx::ZERO)
 }
 
+/// **How long a range rests once beaten** before its creature is back
+/// (`valley::ranges`, VALE-3: "after a while"), in frames.
+pub fn range_rest_frames() -> u32 {
+    (oven::scalar(Scalar::RangeRest).max(0) as u32).saturating_mul(crate::TICK_HZ)
+}
+
 /// What a cash-in adds for each mark squared, on top of `mark_worth` a mark: what makes the last mark worth the most.
 pub fn mark_curve() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MarkCurve)).max(Fx::ZERO)

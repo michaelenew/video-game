@@ -449,6 +449,22 @@ fn ways() -> Vec<Way> {
     out.push(road(&pinewood::ABOVE));
     out.push(road(&saddle::WAY));
     out.push(road(&saddle::SHRINE_WAY));
+    // The ranges' pockets of meadow beside the road (`ranges`): level
+    // ground for a creature to roam, the land rising round it.
+    for r in super::ranges::RANGES.iter().filter(|r| r.stacked.is_none()) {
+        if r.arena == super::ranges::RANGES[0].arena {
+            continue; // the Wood's edge is the clearing's own floor
+        }
+        let (x, z, half) = (r.at.0, r.at.1, r.half + 600);
+        out.push(Way {
+            points: vec![
+                at(x - r.half / 2, z, r.floor, half),
+                at(x + r.half / 2, z, r.floor, half),
+            ],
+            path: false,
+            water: None,
+        });
+    }
     out.push(road(&wood::WAY));
     out.push(Way {
         points: spire::PLAZA.to_vec(),
@@ -663,6 +679,7 @@ pub fn plan() -> Plan {
         at: V3::ZERO,
         apron: cm(APRON),
         pad: true,
+        band: None,
     });
     for r in &ROOMS {
         plan.places.push(PlanPlace {
@@ -670,6 +687,22 @@ pub fn plan() -> Plan {
             at: v3(r.at),
             apron: apron_of(r),
             pad: true,
+            band: None,
+        });
+    }
+    // The ranges: places on the land, so first on the map before the reaches
+    // they stand in. The roost is stacked over the Needle's plaza, between
+    // the dome's top and some way over it.
+    for r in &super::ranges::RANGES {
+        let floor = cm(r.floor);
+        plan.places.push(PlanPlace {
+            arena: r.arena,
+            at: V3::new(cm(r.at.0), floor, cm(r.at.1)),
+            apron: Fx::ZERO,
+            pad: false,
+            band: r
+                .stacked
+                .map(|up| (floor.sub(Fx::from_int(2)), floor.add(cm(up)))),
         });
     }
     for id in [
@@ -686,6 +719,7 @@ pub fn plan() -> Plan {
             at: V3::ZERO,
             apron: Fx::ZERO,
             pad: false,
+            band: None,
         });
     }
 

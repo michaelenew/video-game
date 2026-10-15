@@ -69,6 +69,8 @@ pub struct Placed {
     pub end: u32,
     /// It keeps its own floor over its footprint ([`PlanPlace::pad`]).
     pub pad: bool,
+    /// **Only between these heights** on the map, if it says ([`PlanPlace::band`]).
+    pub band: Option<(Fx, Fx)>,
 }
 
 impl Placed {
@@ -91,6 +93,18 @@ impl Placed {
             && x.raw() <= self.hi.0.add(margin).raw()
             && z.raw() >= self.lo.1.sub(margin).raw()
             && z.raw() <= self.hi.1.add(margin).raw()
+    }
+
+    /// Is the map point in it, height and all: in its footprint, and within
+    /// its band if it has one.
+    pub fn holds_feet(&self, feet: V3) -> bool {
+        self.holds(feet.x, feet.z) && self.in_band(feet.y)
+    }
+
+    /// Is a map height within its band? Always, for a place with none.
+    pub fn in_band(&self, y: Fx) -> bool {
+        self.band
+            .is_none_or(|(lo, hi)| y.raw() >= lo.raw() && y.raw() <= hi.raw())
     }
 
     /// A point in its own coordinates, on the map.
@@ -168,6 +182,11 @@ pub struct PlanPlace {
     /// It keeps its own floor -- the town, the Ring, a room -- where the land
     /// would otherwise be. A place that does not (a reach) is the land.
     pub pad: bool,
+    /// **A place stacked over another** (2026-10-15): it is only where it is
+    /// between these heights on the map -- the roost on the Needle's dome,
+    /// over the plaza the Needle stands on. [`Atlas::place_at`], which asks
+    /// in the floor plane, never finds it; [`Atlas::place_for`] does.
+    pub band: Option<(Fx, Fx)>,
 }
 
 /// One doorway of a [`Plan`].
@@ -365,6 +384,7 @@ impl Atlas {
                 first,
                 end: solids.len() as u32,
                 pad: pp.pad,
+                band: pp.band,
             });
         }
         for (i, s) in plan.extras.iter().enumerate() {
@@ -537,7 +557,27 @@ impl Atlas {
             .places(self.grid.index(tx, tz))
             .iter()
             .map(|&k| &self.places[k as usize])
-            .find(|p| p.holds(x, z))
+            .find(|p| p.band.is_none() && p.holds(x, z))
+    }
+
+    /// **The place a body's feet are in**, height and all: a place stacked
+    /// over another ([`PlanPlace::band`]) where the feet are in its band,
+    /// and otherwise [`Atlas::place_at`]. What decides the frame the world
+    /// runs in (`valley::open`).
+    pub fn place_for(&self, feet: V3) -> Option<&Placed> {
+        let (tx, tz) = (
+            tile_of(feet.x) - self.grid.x0,
+            tile_of(feet.z) - self.grid.z0,
+        );
+        if tx < 0 || tz < 0 || tx >= self.grid.w || tz >= self.grid.h {
+            return None;
+        }
+        self.grid
+            .places(self.grid.index(tx, tz))
+            .iter()
+            .map(|&k| &self.places[k as usize])
+            .find(|p| p.band.is_some() && p.holds_feet(feet))
+            .or_else(|| self.place_at(feet.x, feet.z))
     }
 
     /// **The floor's height at a map point**: the relief of the place it is

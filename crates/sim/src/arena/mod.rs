@@ -178,8 +178,9 @@ impl ArenaId {
     }
 }
 
-/// How many ids there are, registered or not.
-pub const COUNT: usize = 40;
+/// How many ids there are, registered or not: the valley's ranges are
+/// numbered from forty (`valley::ranges::FIRST`).
+pub const COUNT: usize = 64;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -247,6 +248,12 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::HIGHLANDS => Some(&highlands::ARENA),
         ArenaId::WOOD => Some(&wood::ARENA),
         ArenaId::SPIRE => Some(&spire::ARENA),
+        ArenaId(n)
+            if n >= crate::valley::ranges::FIRST
+                && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
+        {
+            Some(&crate::valley::ranges::ARENAS[(n - crate::valley::ranges::FIRST) as usize])
+        }
         _ => None,
     }
 }

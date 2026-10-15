@@ -122,9 +122,10 @@ fn the_spire_stands_with_its_dome_and_its_chimney() {
 /// Climb a vine to its top, holding jump and pressing at the shaft's axis so
 /// the feet keep to it; `Ok` with the frames it took.
 fn climb(w: &mut World, top: Fx, frames: u32) -> Result<u32, String> {
-    let o = w.map_origin();
     for f in 0..frames {
-        let p = w.players[0].pos.add(o);
+        // The frame can move under her -- onto the roost at the top -- so
+        // the map is asked every frame.
+        let p = w.players[0].pos.add(w.map_origin());
         if p.y.raw() >= top.raw() {
             return Ok(f);
         }
@@ -135,7 +136,7 @@ fn climb(w: &mut World, top: Fx, frames: u32) -> Result<u32, String> {
             Input::new(0),
         ]);
     }
-    let p = w.players[0].pos.add(o);
+    let p = w.players[0].pos.add(w.map_origin());
     Err(format!(
         "got to {} m of {}",
         p.y.to_f32_for_render(),
@@ -146,9 +147,8 @@ fn climb(w: &mut World, top: Fx, frames: u32) -> Result<u32, String> {
 /// Walk toward a map point at the fighter's height for a while, jumping
 /// when `jump`, and return where she ends.
 fn walk(w: &mut World, to: (Fx, Fx), frames: u32, jump: bool) -> V3 {
-    let o = w.map_origin();
     for f in 0..frames {
-        let p = w.players[0].pos.add(o);
+        let p = w.players[0].pos.add(w.map_origin());
         let (dx, dz) = (to.0.sub(p.x), to.1.sub(p.z));
         if sim::math::wide_flat_len(V3::new(dx, Fx::ZERO, dz)).raw() < Fx::ratio(1, 2).raw() {
             break;
@@ -157,7 +157,7 @@ fn walk(w: &mut World, to: (Fx, Fx), frames: u32, jump: bool) -> V3 {
         let bits = Input::W | if jump && f < 20 { Input::SPACE } else { 0 };
         w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
     }
-    w.players[0].pos.add(o)
+    w.players[0].pos.add(w.map_origin())
 }
 
 /// The plaza's height at the shaft: what every height in the table is above.
@@ -198,7 +198,9 @@ fn a_fighter_climbs_to_the_ruins_by_the_vines() {
         TOP / 100
     );
     assert!(w.players[0].health > 0);
-    assert_eq!(w.arena, ArenaId::SPIRE);
+    // And on the dome's top she is on the roost: its Galewing is awake.
+    assert_eq!(w.arena, sim::valley::ranges::RANGES[5].arena);
+    assert!(w.hunting(), "the roost did not wake");
 }
 
 #[test]

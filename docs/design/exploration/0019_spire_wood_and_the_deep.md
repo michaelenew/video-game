@@ -1,5 +1,5 @@
 ---
-status: building -- the shapes, the Great Wood and the Needle built 2026-10-15; ranges, the shorter road, the Deep and the High Plane next
+status: building -- the shapes, the Great Wood, the Needle and ranges (the roost among them) built 2026-10-15; the shorter road, the Deep and the High Plane next
 started: 2026-10-15
 ---
 
@@ -19,6 +19,13 @@ started: 2026-10-15
 > note: the Needle stands on a plaza just outside the town's south wall, not
 > in the square; its shaft is 315 m, so the ruins are 353 m up; and the climb
 > through the dome is the shaft's own vine running on into the chimney's.
+>
+> **Ranges** are built as §3c has them, but simpler than the clock: a
+> sleeping range keeps nothing at all -- its creature is put on its marks when
+> you walk in, as a room's is -- so nothing needed a closed-form wander. Six of
+> them, temper 0 by the town to 3 on the Saddle, with four temperaments
+> (hunting, territorial, peaceful, skittish); the roost is one of them,
+> stacked over the Needle's plaza. [../valley.md](../valley.md) §1b.
 
 # 0019 — The Spire, the Great Wood, the planes above and below, and a valley that is lived in
 

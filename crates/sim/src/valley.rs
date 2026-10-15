@@ -42,6 +42,7 @@ use crate::state::MAX_PLAYERS;
 pub mod land;
 pub mod layout;
 pub mod open;
+pub mod ranges;
 
 /// A box of the world a body's feet can be in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -289,7 +290,7 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::VEILSTALKER => &rooms::ASHWOOD,
         ArenaId::MANTIS => &rooms::SHRINE,
         ArenaId::SIEGESHELL => &rooms::LONG_VALLEY,
-        _ => return None,
+        id => &ranges::PLACES[ranges::index(id)?],
     })
 }
 
@@ -435,6 +436,15 @@ pub struct Journey {
     /// Each fighter's last cairn, plus one: a box of the valley's map, by
     /// its index there (`crate::atlas`).
     pub cairn: [u16; MAX_PLAYERS],
+    /// **When each range was last beaten**, a frame of the world (zero:
+    /// never): it rests for `tuning::range_rest` after (`ranges`).
+    pub rested: [u32; ranges::COUNT],
+    /// The live range's creature has been roused -- hurt, or come too close
+    /// to -- and its temperament no longer holds it.
+    pub roused: bool,
+    /// The live range's creatures' health, all of it, last frame: what
+    /// noticing a hurt reads. Zero before the first frame of a hunt.
+    pub stock: i32,
 }
 
 impl Journey {

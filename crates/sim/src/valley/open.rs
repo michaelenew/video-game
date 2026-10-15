@@ -109,7 +109,7 @@ impl World {
             let held = self.standing().next().is_none()
                 || self.standing().any(|i| {
                     let f = feet(self, i);
-                    here.holds_within(f.x, f.z, margin)
+                    here.holds_within(f.x, f.z, margin) && here.in_band(f.y)
                 });
             if held {
                 return;
@@ -120,26 +120,141 @@ impl World {
         let room = self.standing().find_map(|i| {
             let f = feet(self, i);
             atlas
-                .place_at(f.x, f.z)
+                .place_for(f)
                 .filter(|p| p.arena != self.arena && is_room(p))
                 .copied()
         });
         let to = room.or_else(|| {
             let i = self.standing().next()?;
             let f = feet(self, i);
-            if here.holds(f.x, f.z) {
+            // Still here -- and, for a range stacked over another place,
+            // still at its height -- unless a stacked place has the feet.
+            let over = atlas.place_for(f).filter(|p| p.band.is_some());
+            if here.holds_feet(f) && over.is_none_or(|p| p.arena == here.arena) {
                 return None;
             }
-            atlas.place_at(f.x, f.z).copied()
+            atlas.place_for(f).copied()
         });
         let Some(to) = to else {
             return;
         };
         self.rebase(atlas, &here, &to);
         match super::place(to.arena).map(|p| p.kind) {
+            // A range beaten not long ago is resting: its pocket is empty.
+            Some(Kind::Room(_)) if self.resting(to.arena) => {}
             Some(Kind::Room(species)) => self.begin_hunt(species),
             Some(Kind::Ring) => self.enter_the_ring(),
             _ => {}
+        }
+    }
+
+    /// **Is this range resting**: beaten less than `tuning::range_rest` ago.
+    /// Never, for a room, or a range never beaten.
+    pub fn resting(&self, id: crate::arena::ArenaId) -> bool {
+        let Some(k) = super::ranges::index(id) else {
+            return false;
+        };
+        let won = self.valley.rested[k];
+        won != 0 && self.frame.wrapping_sub(won) < crate::tuning::range_rest_frames()
+    }
+
+    /// **A range's temperament, kept** (`valley::ranges`), once a frame after
+    /// the creatures have stepped: a creature that is not to start anything
+    /// is held in the moment it takes to notice you (`Brain::grace`), and a
+    /// pack in its calm, until it is roused -- by being hurt, or by somebody
+    /// coming too close to a territorial one. Roused, a skittish pack runs.
+    pub(crate) fn tend_range(&mut self) {
+        let Some(range) = super::ranges::of(self.arena) else {
+            return;
+        };
+        if !self.hunting() {
+            return;
+        }
+        use super::ranges::Temperament as T;
+        // Hurt since last frame: the creatures' health, all of it, fell.
+        let stock: i32 = self
+            .monsters
+            .iter()
+            .flatten()
+            .map(|m| m.health.max(0))
+            .sum::<i32>()
+            + self
+                .critters
+                .iter()
+                .filter(|c| c.alive())
+                .map(|c| c.health.max(0) as i32)
+                .sum::<i32>();
+        let was = self.valley.roused;
+        if self.valley.stock != 0 && stock < self.valley.stock {
+            self.valley.roused = true;
+        }
+        self.valley.stock = stock.max(1);
+        if let T::Territorial { ring } = range.temperament {
+            let ring = crate::arena::cm(ring);
+            let near = self.standing().any(|i| {
+                let p = self.players[i].pos;
+                crate::math::wide_flat_len(V3::new(p.x, crate::fixed::Fx::ZERO, p.z)).raw()
+                    <= ring.raw()
+            });
+            if near {
+                self.valley.roused = true;
+            }
+        }
+        // Roused this frame, and not skittish: it wakes now, not when the
+        // moment it was held in runs out.
+        if self.valley.roused && !was && range.temperament != T::Skittish {
+            for m in self.monsters.iter_mut().flatten() {
+                m.brain.grace = 0;
+            }
+            if let Some(pack) = self.pack.as_mut() {
+                pack.grace = 0;
+                if pack.mood == crate::pack::mood::CALM {
+                    pack.mood = crate::pack::mood::HUNTING;
+                }
+            }
+        }
+        let hold = match range.temperament {
+            T::Hunting => false,
+            T::Territorial { .. } | T::Peaceful => !self.valley.roused,
+            // A skittish creature never starts and never fights: roused, it
+            // runs.
+            T::Skittish => true,
+        };
+        // The far side of the range from the fighters, four fifths of the
+        // way to its edge: where a skittish herd runs.
+        let away = {
+            let (mut sx, mut sz, mut n) = (0i64, 0i64, 0i64);
+            for i in self.standing() {
+                let p = self.players[i].pos;
+                sx += p.x.raw() as i64;
+                sz += p.z.raw() as i64;
+                n += 1;
+            }
+            let mid = V3::new(
+                crate::fixed::Fx::from_raw((sx / n.max(1)) as i32),
+                crate::fixed::Fx::ZERO,
+                crate::fixed::Fx::from_raw((sz / n.max(1)) as i32),
+            );
+            let out = crate::arena::cm(range.half * 4 / 5);
+            crate::math::wide_normalized(mid)
+                .scale(out)
+                .scale(crate::fixed::Fx::ONE.neg())
+        };
+        if hold {
+            for m in self.monsters.iter_mut().flatten() {
+                m.brain.grace = m.brain.grace.max(u16::MAX / 2);
+            }
+            if let Some(pack) = self.pack.as_mut() {
+                pack.grace = pack.grace.max(u16::MAX / 2);
+                if !self.valley.roused {
+                    pack.mood = crate::pack::mood::CALM;
+                } else if range.temperament == T::Skittish {
+                    // It runs for "home", so home is the far side of the
+                    // range from whoever started it.
+                    pack.mood = crate::pack::mood::BROKEN;
+                    pack.home = away;
+                }
+            }
         }
     }
 
@@ -192,9 +307,16 @@ impl World {
 
     /// **A hunt starts**: the room's creature, its pack and its lore, as
     /// `World::hunt_in` would put them, with the hunters where they stand.
-    fn begin_hunt(&mut self, species: SpeciesId) {
+    pub(crate) fn begin_hunt(&mut self, species: SpeciesId) {
         let classes = self.players.map(|p| p.class);
-        let fresh = World::hunt_in(classes, crate::replay::herd_of(species), self.arena);
+        let range = super::ranges::of(self.arena);
+        let mut herd = crate::replay::herd_of(species);
+        if let Some(r) = range.filter(|_| species.get().has_body()) {
+            for (k, slot) in herd.iter_mut().enumerate() {
+                *slot = (k < r.bodies as usize).then_some(species);
+            }
+        }
+        let fresh = World::hunt_in(classes, herd, self.arena);
         self.monsters = fresh.monsters;
         self.pack = fresh.pack;
         self.critters = fresh.critters;
@@ -202,6 +324,19 @@ impl World {
         self.phase = Phase::Fighting;
         for m in self.monsters.iter_mut().flatten() {
             m.brain.seen = self.players[0].pos;
+        }
+        // A range's creature: as clever as it is far from the town, and as
+        // quick to start as its temperament.
+        self.valley.roused = false;
+        self.valley.stock = 0;
+        if let Some(r) = range {
+            for m in self.monsters.iter_mut().flatten() {
+                m.temper = r.temper;
+            }
+            if let Some(p) = self.pack.as_mut() {
+                p.temper = r.temper;
+            }
+            self.tend_range();
         }
         // A seat nobody plays is out of the hunt, as it always was.
         let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);

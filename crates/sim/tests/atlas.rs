@@ -175,10 +175,28 @@ fn no_two_places_of_the_valley_sit_on_each_other() {
     // Rooms and the town sit in clearings inside the reaches' wide bounds,
     // and are first on the map, so a point on one is on it. What must not
     // overlap is two rooms, or two reaches.
+    // A range (`valley::ranges`) is the land like a reach, and sits inside
+    // one as a room does: it must not overlap a room or another range.
     let atlas = atlas::valley();
     assert!(atlas.places.len() >= 18, "{} places", atlas.places.len());
-    for (i, p) in atlas.places.iter().enumerate() {
-        for q in atlas.places[i + 1..].iter().filter(|q| q.pad == p.pad) {
+    // A place stacked over others (the roost, high over the town's south
+    // wall) overlaps them in plan by being stacked.
+    let range = |p: &atlas::Placed| sim::valley::ranges::of(p.arena).is_some();
+    for (i, p) in atlas
+        .places
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.band.is_none())
+    {
+        for q in atlas.places[i + 1..].iter().filter(|q| {
+            if q.band.is_some() {
+                false
+            } else if range(p) || range(q) {
+                q.pad || p.pad || (range(p) && range(q))
+            } else {
+                q.pad == p.pad
+            }
+        }) {
             let x = p.lo.0.raw() < q.hi.0.raw() && q.lo.0.raw() < p.hi.0.raw();
             let z = p.lo.1.raw() < q.hi.1.raw() && q.lo.1.raw() < p.hi.1.raw();
             assert!(
