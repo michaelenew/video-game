@@ -30,7 +30,7 @@ view = { path = "../view" }
 # The two platform blocks below add to this list rather than replacing it:
 # Cargo unions the features of a dependency declared more than once, which is
 # how one crate builds for a window and for a canvas.
-bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "tonemapping_luts", "jpeg", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font", "bevy_audio", "wav"] }
+bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "tonemapping_luts", "jpeg", "png", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font", "bevy_audio", "wav"] }
 # `manage_clipboard`: the Esc menu's Copy link, and pasting a friend's link
 # into it -- the system clipboard on a desktop, the browser's in a page.
 bevy_egui = { version = "0.34", default-features = false, features = ["render", "bevy_picking", "default_fonts", "manage_clipboard"] }
@@ -54,3 +54,9 @@ bevy = { version = "0.16", default-features = false, features = ["webgl2"] }
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["Blob", "BlobPropertyBag", "Document", "Element", "History", "HtmlAnchorElement", "HtmlElement", "Location", "Storage", "Url", "Window", "console"] }
 js-sys = "0.3"
+
+# The build script bakes the brush strokes (`look::strokes`) into a PNG the
+# game compiles in: the one place a dependency on an image encoder is paid.
+[build-dependencies]
+look = { path = "../look" }
+png = "0.18"

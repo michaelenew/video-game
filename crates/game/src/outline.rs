@@ -58,6 +58,7 @@ use bevy::ecs::query::QueryItem;
 use bevy::image::BevyDefault;
 use bevy::prelude::*;
 use bevy::render::RenderApp;
+use bevy::render::diagnostic::RecordDiagnostics;
 use bevy::render::extract_component::{
     ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin,
     UniformComponentPlugin,
@@ -353,6 +354,7 @@ impl ViewNode for OutlineNode {
                 &world.resource::<OutlineSamplers>().depth,
             )),
         );
+        let diagnostics = render_context.diagnostic_recorder();
         let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("outline"),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -364,9 +366,12 @@ impl ViewNode for OutlineNode {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+        // Timed under its own name, so `--profile` can say what it costs.
+        let span = diagnostics.pass_span(&mut pass, "outline");
         pass.set_render_pipeline(ready);
         pass.set_bind_group(0, &bind, &[offset.index()]);
         pass.draw(0..3, 0..1);
+        span.end(&mut pass);
         Ok(())
     }
 }

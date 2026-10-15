@@ -30,6 +30,15 @@ struct Paint {
 }
 
 @group(2) @binding(0) var<uniform> paint: Paint;
+// The brush strokes, baked (`look::strokes`): four tiling sheets, one a
+// rigidity, each texel a stroke's shade and two colour shifts.
+@group(2) @binding(1) var strokes_tex: texture_2d_array<f32>;
+@group(2) @binding(2) var strokes_sampler: sampler;
+// How many stroke lengths a sheet is across (`look::strokes::PERIOD`), and
+// how many angles a rigidity is drawn at (`look::strokes::ANGLES`).
+const STROKE_PERIOD: f32 = 8.0;
+const STROKE_ANGLES: f32 = 6.0;
+const STROKE_ANGLES_I: i32 = 6;
 
 const PI: f32 = 3.14159265;
 // A matte surface: the standard material's perceptual roughness 0.92,
@@ -188,13 +197,19 @@ fn stroke_way(p: vec3<f32>, n: vec3<f32>, flow: vec2<f32>, rigid: f32) -> vec3<f
     return normalize(mix(natural, level, built));
 }
 
-/// **One layer of strokes**, each `len` metres long at its usual size: a few
-/// strokes laid in every cell of a grid on the plane the surface most nearly
-/// faces, each with its own place, angle, length, width, curve, tapered dry
-/// ends, shade and warmth. `rigid` is how much they may vary: at 1 they sit
-/// on the grid, parallel to `way` and alike, as a mason's strokes along a
-/// course; at 0 they are scattered, turned, sized and coloured as freely as a
-/// meadow's. The topmost stroke covering a point is the one seen.
+/// **One layer of strokes**, each `len` metres long at its usual size: the
+/// baked sheet (`look::strokes`, which says what a stroke is) read on the
+/// plane the surface most nearly faces, scaled to `len`, from the sheet
+/// nearest this rigidity and one of the two angle sheets nearest the way the
+/// strokes run here. Four texels where there were thirty-six strokes worked
+/// out a pixel.
+///
+/// **The lookup is never turned.** Turning it about the origin to point the
+/// strokes along `way` moved the sample by the distance from the origin times
+/// the field's change between two pixels -- metres, far out on the map -- and
+/// smeared every stroke on the ground into a streak. The angle sheets hold
+/// the same strokes turned about their own middles; which of the two nearest
+/// a pixel shows is decided by the stroke's own phase, never by a blend.
 ///
 /// Returns shade, warmth and a second colour axis (each -1 to 1).
 fn strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> vec3<f32> {
@@ -211,58 +226,37 @@ fn strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> 
     if (length(d) < 1e-4) {
         d = vec2<f32>(1.0, 0.0);
     }
-    let base_angle = atan2(d.y, d.x);
-    let loose = 1.0 - rigid;
-    let cell = len * 0.5;
-    let home = floor(q / cell);
-    var best = -1.0;
-    var out = vec3<f32>(0.0);
-    for (var j = -1; j <= 1; j = j + 1) {
-        for (var i = -1; i <= 1; i = i + 1) {
-            let c = home + vec2<f32>(f32(i), f32(j));
-            for (var k = 0; k < 2; k = k + 1) {
-                let seed = c + vec2<f32>(f32(k) * 17.13, f32(k) * 31.71);
-                let h1 = hash2(seed);
-                let h2 = hash2(seed + 1.37);
-                let h3 = hash2(seed + 2.71);
-                let h4 = hash2(seed + 3.97);
-                let h5 = hash2(seed + 5.21);
-                let h6 = hash2(seed + 6.83);
-                // Where it sits: on the grid when ruled, anywhere in its cell
-                // when loose.
-                let centre = (c + 0.5 + (vec2<f32>(h1, h2) - 0.5) * mix(0.2, 1.0, loose)) * cell;
-                let angle = base_angle + (h3 - 0.5) * loose * 1.6;
-                let size = 1.0 + (h4 - 0.5) * loose * 1.4;
-                let long = len * size * mix(0.5, 0.55, h5);
-                let wide = len * size * mix(0.15, 0.13 + 0.12 * h6, loose);
-                let curve = (h5 - 0.5) * loose * 0.8;
-                let cs = cos(angle);
-                let sn = sin(angle);
-                let rel = q - centre;
-                let local = vec2<f32>(cs * rel.x + sn * rel.y, -sn * rel.x + cs * rel.y);
-                let u = local.x / long;
-                if (abs(u) > 1.2) {
-                    continue;
-                }
-                let v = (local.y - curve * wide * u * u) / wide;
-                // Ends: square and ruled, or tapered and dry, by how loose.
-                let taper = mix(1.0, sqrt(max(1.0 - u * u, 0.0)), 0.25 + 0.6 * loose);
-                let bristle = noise2(vec2<f32>(u * 4.0 + h1 * 9.0, v * 5.0 + h2 * 9.0)) - 0.5;
-                let inside = abs(v) < taper * (1.0 + bristle * 0.35 * loose)
-                    && abs(u) < 1.0 + bristle * 0.5;
-                let order = hash2(seed + 8.09);
-                if (inside && order > best) {
-                    best = order;
-                    out = vec3<f32>(
-                        hash2(seed + 9.41) * 2.0 - 1.0,
-                        hash2(seed + 10.7) * 2.0 - 1.0,
-                        hash2(seed + 11.3) * 2.0 - 1.0,
-                    ) * (0.85 + 0.15 * bristle * 2.0);
-                }
-            }
-        }
+    let uv = q / (len * STROKE_PERIOD);
+    // `look::strokes::RIGIDITIES`: 0, 0.25, 0.5, 0.85, nearest.
+    var sheet = 3;
+    if (rigid < 0.125) {
+        sheet = 0;
+    } else if (rigid < 0.375) {
+        sheet = 1;
+    } else if (rigid < 0.675) {
+        sheet = 2;
     }
-    return out;
+    // The angle, over a half turn (a stroke turned half a turn is the same
+    // stroke), as a place between two of the angle sheets.
+    var turn = atan2(d.y, d.x);
+    if (turn < 0.0) {
+        turn = turn + PI;
+    }
+    let place = turn / PI * STROKE_ANGLES;
+    let lo = i32(floor(place)) % STROKE_ANGLES_I;
+    let hi = (lo + 1) % STROKE_ANGLES_I;
+    let t = fract(place);
+    let base = sheet * STROKE_ANGLES_I;
+    let one = textureSampleLevel(strokes_tex, strokes_sampler, uv, base + lo, 0.0);
+    let two = textureSampleLevel(strokes_tex, strokes_sampler, uv, base + hi, 0.0);
+    // One or the other, never a blend: the earlier sheet until the place
+    // between the two passes the phase of the stroke it shows here, then the
+    // later. Each stroke switches at its own moment, so nothing lines up into
+    // a seam, and a stroke is always a whole hard stroke.
+    if (t < one.a) {
+        return one.rgb * 2.0 - 1.0;
+    }
+    return two.rgb * 2.0 - 1.0;
 }
 
 /// **Strokes that hold still and keep their size.** Fixed to the world so
