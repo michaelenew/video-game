@@ -1,5 +1,5 @@
 ---
-status: building -- the shapes, the Great Wood, the Needle and ranges (the roost among them) built 2026-10-15; the shorter road, the Deep and the High Plane next
+status: building -- the shapes, the Great Wood, the Needle, ranges (the roost among them) and the Deep built 2026-10-15; the High Plane next; the shorter road held (§4 below)
 started: 2026-10-15
 ---
 
@@ -26,6 +26,19 @@ started: 2026-10-15
 > them, temper 0 by the town to 3 on the Saddle, with four temperaments
 > (hunting, territorial, peaceful, skittish); the roost is one of them,
 > stacked over the Needle's plaza. [../valley.md](../valley.md) §1b.
+>
+> **The Deep** is §3b's answer, built: a pit sunk 140 m with a lid at the
+> road's height, three generated warrens and the Caverns under it, the
+> pit's own floor and its rock walls the cave, and ranges stacked on every
+> level. [../valley.md](../valley.md) §1c.
+>
+> **The shorter road is held.** The rooms either side of the road are
+> already 30 to 50 metres apart (the Mire and the Pan, the Den and the
+> Highlands), so the road cannot be scaled without walking rooms into each
+> other; the stretches with nothing on them add up to about 120 m, an
+> eighth. Halving it means moving rooms -- across the road, or up the
+> slopes on shelves of their own -- which is a layout of its own, and wants
+> the owner's say on which rooms go where.
 
 # 0019 — The Spire, the Great Wood, the planes above and below, and a valley that is lived in
 

@@ -61,6 +61,8 @@ impl Material {
             F::Peat => Material::Peat,
             F::Water => Material::Water,
             F::Wood => Material::Wood,
+            // Crystal rings as hard as dressed stone underfoot.
+            F::Crystal => Material::Stone,
         }
     }
 

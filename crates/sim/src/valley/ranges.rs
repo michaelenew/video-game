@@ -122,7 +122,7 @@ const ROOST_SITES: [Site; 2] = [
 
 /// **The ranges**, nearest the town first. Easy by the town and harder the
 /// further in -- by species, the tiers the waystones count, and by temper.
-pub const RANGES: [Range; 6] = [
+pub const RANGES: [Range; 11] = [
     // The Hornback herd, grazing the Great Wood's edge: they run if you
     // start anything.
     range(
@@ -200,7 +200,108 @@ pub const RANGES: [Range; 6] = [
             1,
         )
     },
+    // **The Deep** (`arena::deep`): a range on each warren's floor and two
+    // in the Caverns, stacked over each other -- each only at its own level.
+    deep_range(
+        6,
+        "Upper Warren",
+        SpeciesId::GNAWERS,
+        1,
+        (5, 4),
+        0,
+        Temperament::Hunting,
+        1,
+    ),
+    deep_range(
+        7,
+        "Middle Warren",
+        SpeciesId::PAIR,
+        2,
+        (4, 3),
+        1,
+        Temperament::Territorial { ring: 1000 },
+        2,
+    ),
+    deep_range(
+        8,
+        "Lower Warren",
+        SpeciesId::GNAWERS,
+        1,
+        (3, 4),
+        2,
+        Temperament::Hunting,
+        2,
+    ),
+    Range {
+        half: 2600,
+        stacked: Some(3000),
+        ..range(
+            9,
+            "Crystal Shore",
+            SpeciesId::HORNBACK,
+            1,
+            (
+                crate::arena::deep::AT[0] - 3000,
+                crate::arena::deep::AT[2],
+                crate::arena::deep::AT[1],
+            ),
+            2600,
+            Temperament::Skittish,
+            0,
+        )
+    },
+    Range {
+        stacked: Some(3000),
+        ..range(
+            10,
+            "Caverns",
+            SpeciesId::RIDGEBACK,
+            2,
+            (
+                crate::arena::deep::AT[0] + 4500,
+                crate::arena::deep::AT[2] + 3500,
+                crate::arena::deep::AT[1],
+            ),
+            2400,
+            Temperament::Hunting,
+            3,
+        )
+    },
 ];
+
+/// **A range on a warren's floor**: centred on a cell of its maze, three
+/// cells across, only at its level.
+#[allow(clippy::too_many_arguments)]
+const fn deep_range(
+    k: u8,
+    name: &'static str,
+    species: SpeciesId,
+    bodies: u8,
+    cell: (i32, i32),
+    level: usize,
+    temperament: Temperament,
+    temper: u8,
+) -> Range {
+    use crate::arena::deep;
+    let (x, z) = deep::cell_middle(cell);
+    Range {
+        stacked: Some(2500),
+        ..range(
+            k,
+            name,
+            species,
+            bodies,
+            (
+                deep::AT[0] + x,
+                deep::AT[2] + z,
+                deep::AT[1] + deep::LEVELS[level],
+            ),
+            1800,
+            temperament,
+            temper,
+        )
+    }
+}
 
 /// How many ranges there are.
 pub const COUNT: usize = RANGES.len();
@@ -262,6 +363,11 @@ pub static ARENAS: [Arena; COUNT] = [
     arena_of(&RANGES[3]),
     arena_of(&RANGES[4]),
     arena_of(&RANGES[5]),
+    arena_of(&RANGES[6]),
+    arena_of(&RANGES[7]),
+    arena_of(&RANGES[8]),
+    arena_of(&RANGES[9]),
+    arena_of(&RANGES[10]),
 ];
 
 const fn place_of(r: &Range) -> Place {
@@ -282,4 +388,9 @@ pub static PLACES: [Place; COUNT] = [
     place_of(&RANGES[3]),
     place_of(&RANGES[4]),
     place_of(&RANGES[5]),
+    place_of(&RANGES[6]),
+    place_of(&RANGES[7]),
+    place_of(&RANGES[8]),
+    place_of(&RANGES[9]),
+    place_of(&RANGES[10]),
 ];

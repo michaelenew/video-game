@@ -177,6 +177,7 @@ pub fn ground_stroke(m: Material, steep: bool) -> [f32; 2] {
         Material::Water => [0.5, 1.8],
         Material::Stone => [0.9, 0.6],
         Material::Wood => [0.8, 0.7],
+        Material::Crystal => [1.0, 0.4],
     }
 }
 

@@ -149,6 +149,12 @@ pub fn of(id: ArenaId) -> Sky {
         ArenaId::HIGHLANDS => Sky::over([0.82, 0.86, 0.92]),
         // The Great Wood: green-gold light under giants, and a long reach,
         // because the trees are meant to be seen from the town's wall.
+        // The Deep: under a lid of rock, the air a cool violet the crystals
+        // answer -- and over the lid, a stone plain among peaks, so not a fog.
+        ArenaId::DEEP => Sky {
+            reach: 420.0,
+            ..Sky::over([0.70, 0.74, 0.86])
+        },
         // The Spire: the town's morning, and the furthest reach in the
         // valley, because from its dome you see all of it.
         ArenaId::SPIRE => Sky {

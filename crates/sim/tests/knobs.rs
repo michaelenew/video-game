@@ -47,7 +47,9 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// Wood's: where each giant stands, how it tapers, how far apart its
 /// branches climb -- a staircase sized against the jump envelope and judged
 /// by `tests/wood.rs` jumping it, as the crags are; and the Spire's, a
-/// tower's height and where its stones jut (`tests/spire.rs`).
+/// tower's height and where its stones jut (`tests/spire.rs`); the Deep's,
+/// a pit's depth and its warrens' levels (`tests/deep.rs`); and where the
+/// ranges are and how far their creatures let you come (`tests/ranges.rs`).
 const LEVEL_DATA: &[&str] = &[
     "land.rs",
     "layout.rs",
@@ -56,6 +58,8 @@ const LEVEL_DATA: &[&str] = &[
     "waterfall.rs",
     "wood.rs",
     "spire.rs",
+    "deep.rs",
+    "ranges.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an

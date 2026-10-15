@@ -30,7 +30,7 @@ use crate::math::V3;
 use crate::valley::Crag;
 use crate::valley::land::{Land, Pad, Point, Way, at};
 
-use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves, spire, waterfall, wood};
+use crate::arena::{bank, deep, hearth, mouth, pinewood, saddle, shelves, spire, waterfall, wood};
 
 /// Level ground round a room, past its own footprint, in centimetres.
 pub const APRON: i32 = 600;
@@ -213,7 +213,7 @@ const CLIFFS_BRIDGE: Solid = Solid::cm([90200, 8440, 2600], [90800, 8500, 5250],
 /// A door between two seams, and its box: two corners in centimetres.
 pub type Pass = ((ArenaId, u8), (ArenaId, u8), [[i32; 3]; 2]);
 
-pub const PASSES: [Pass; 7] = [
+pub const PASSES: [Pass; 8] = [
     (
         (ArenaId::HEARTH, 0),
         (ArenaId::MOUTH, 0),
@@ -248,6 +248,11 @@ pub const PASSES: [Pass; 7] = [
         (ArenaId::SPIRE, 1),
         (ArenaId::WOOD, 0),
         [[800, 0, -14050], [2000, 600, -13950]],
+    ),
+    (
+        (ArenaId::SHELVES, 4),
+        (ArenaId::DEEP, 0),
+        [[60000, 4400, -14950], [62000, 5200, -14850]],
     ),
 ];
 
@@ -395,6 +400,17 @@ fn pads() -> Vec<Pad> {
         rim: None,
         door: (Fx::ZERO, Fx::ZERO),
     });
+    // The Deep's pit: its floor 140 m under the road, over the pit alone --
+    // the lid round it is the Deep's place but the land's crater.
+    let at = v3(deep::AT);
+    let (hx, hz) = (cm(deep::HALF.0), cm(deep::HALF.1));
+    out.push(Pad {
+        lo: (at.x.sub(hx), at.z.sub(hz)),
+        hi: (at.x.add(hx), at.z.add(hz)),
+        y: at.y,
+        rim: None,
+        door: (at.x, at.z),
+    });
     for r in &ROOMS {
         let (lo, hi) = pad_of(r);
         let at = v3(r.at);
@@ -466,6 +482,7 @@ fn ways() -> Vec<Way> {
         });
     }
     out.push(road(&wood::WAY));
+    out.push(road(&deep::PATH));
     out.push(Way {
         points: spire::PLAZA.to_vec(),
         path: false,
@@ -690,6 +707,14 @@ pub fn plan() -> Plan {
             band: None,
         });
     }
+    // The Deep: its own floor under the whole lid.
+    plan.places.push(PlanPlace {
+        arena: ArenaId::DEEP,
+        at: v3(deep::AT),
+        apron: Fx::ZERO,
+        pad: true,
+        band: None,
+    });
     // The ranges: places on the land, so first on the map before the reaches
     // they stand in. The roost is stacked over the Needle's plaza, between
     // the dome's top and some way over it.
@@ -780,6 +805,8 @@ pub fn plan() -> Plan {
     wood::build(&|x, z| land.height(x, z), &mut plan.extras);
     // The Spire, on its plaza under the town's south wall.
     spire::build(&|x, z| land.height(x, z), &mut plan.extras);
+    // The Deep: its lid, its warrens and its Caverns.
+    deep::build(&mut plan.extras);
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);

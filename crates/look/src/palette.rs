@@ -349,8 +349,10 @@ pub fn lit(albedo: [f32; 3]) -> [f32; 3] {
 /// - **Wood** is `orange` deep, which is redder than the ground it is lying on
 ///   -- timber against dirt, and far enough round the wheel to tell apart.
 /// - **Ash** is a cool dark grey, and **snow** the one swatch above the band.
+/// - **Crystal** (the Deep's Caverns) is `violet` and light: the one thing in
+///   a cave that should catch the eye, and a hue nothing else here has.
 pub fn local(material: Material) -> [f32; 3] {
-    use crate::swatch::{self, S300, S500, S600, S700, S800};
+    use crate::swatch::{self, S200, S300, S500, S600, S700, S800};
     match material {
         Material::Ground => swatch::AMBER.at(S700),
         Material::Rock => swatch::BLUE_GREY.at(S600),
@@ -362,11 +364,12 @@ pub fn local(material: Material) -> [f32; 3] {
         Material::Wood => swatch::ORANGE.at(S800),
         Material::Water => swatch::CYAN.at(S600),
         Material::Snow => swatch::SLATE.at(S300),
+        Material::Crystal => swatch::VIOLET.at(S200),
     }
 }
 
 /// Every material, for anything that wants to walk them.
-pub const EVERY: [Material; 10] = [
+pub const EVERY: [Material; 11] = [
     Material::Ground,
     Material::Rock,
     Material::Stone,
@@ -377,6 +380,7 @@ pub const EVERY: [Material; 10] = [
     Material::Wood,
     Material::Water,
     Material::Snow,
+    Material::Crystal,
 ];
 /// The palette for an arena. Derived from its sky, so an arena that has one has
 /// both.

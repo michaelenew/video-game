@@ -876,6 +876,8 @@ pub fn solid_mesh(
             Material::Stone => crate::shapes::chamfered_box(size, 0.06, Some((at, rgb, brush))),
             Material::Wood => crate::shapes::chamfered_box(size, 0.04, Some((at, rgb, brush))),
             Material::Water => crate::shapes::boxy(size, at, rgb, brush),
+            // Crystal is cut sharp: a facet catches the light.
+            Material::Crystal => crate::shapes::chamfered_box(size, 0.02, Some((at, rgb, brush))),
         }
     };
     Some((mesh, None, at))
@@ -1013,7 +1015,7 @@ fn scatter(
                     );
                 }
             }
-            Material::Water | Material::Wood => {}
+            Material::Water | Material::Wood | Material::Crystal => {}
         }
     }
     if kit.is_empty() {

@@ -30,7 +30,7 @@ fn reach_of(r: &Range) -> ArenaId {
     atlas
         .places
         .iter()
-        .find(|p| !p.pad && ranges::of(p.arena).is_none() && p.holds(cm(r.at.0), cm(r.at.1)))
+        .find(|p| ranges::of(p.arena).is_none() && p.holds(cm(r.at.0), cm(r.at.1)))
         .expect("on the map")
         .arena
 }

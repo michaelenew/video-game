@@ -105,6 +105,8 @@ pub mod wood;
 
 pub mod spire;
 
+pub mod deep;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -170,6 +172,9 @@ impl ArenaId {
     pub const WOOD: ArenaId = ArenaId(33);
     /// **The Spire** (`spire`): Hearth's tower, outside its south wall.
     pub const SPIRE: ArenaId = ArenaId(34);
+    /// **The Deep** (`deep`): the caves under the Shelves, down to the
+    /// Caverns.
+    pub const DEEP: ArenaId = ArenaId(35);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -248,6 +253,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::HIGHLANDS => Some(&highlands::ARENA),
         ArenaId::WOOD => Some(&wood::ARENA),
         ArenaId::SPIRE => Some(&spire::ARENA),
+        ArenaId::DEEP => Some(&deep::ARENA),
         ArenaId(n)
             if n >= crate::valley::ranges::FIRST
                 && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
@@ -307,6 +313,8 @@ pub enum Material {
     Water,
     /// Timber: trunks, cordwood, a fallen tree.
     Wood,
+    /// **Crystal**: the Caverns' columns and shards (`deep`).
+    Crystal,
 }
 
 impl Material {

@@ -158,6 +158,39 @@ ruins wakes the Galewing (`tests/spire.rs`).
 
 ![The Upper Meadow's two Ridgebacks, watching](gallery/valley-upper-meadow.jpg)
 
+### 1c · The Deep (2026-10-15)
+
+`sim::arena::deep`, `tests/deep.rs`, `--arena deep`. The ask: "ways down
+[that] lead to caves with monsters ... twist about and form kind of a maze
+and keep going down and down until they open in to big spectacular caverns
+with crystals". **The land is one surface**, so nothing can be under it: the
+Deep is a place with its own floor, **a pit sunk 140 m** south of the
+Shelves' road, past the mountains, and **a lid of rock** laid over it at the
+road's height, out to where the mountains round it rise through it. From the
+road by the second pass a path runs south through a notch to a stone plain
+among peaks; in the plain is the mouth. Under the lid everything is solids:
+
+| Level | Over the pit's floor | What | Who |
+| --- | --- | --- | --- |
+| **The mouth** | 140 m | a shaft through the lid, a vine down it | -- |
+| **Upper Warren** | 110 m | a maze of tunnels fourteen metres wide, ten cells by eight, every cell reached by one way | Gnawers, hunting, temper 1 |
+| **Middle Warren** | 80 m | another, its way in under the last's way out | the Pair, territorial, temper 2 |
+| **Lower Warren** | 50 m | a third | Gnawers, hunting, temper 2 |
+| **The Caverns** | 0 | the pit's floor, 160 by 128 m under a vault 47 m up: crystal columns up to 36 m, crystal spears down from the vault, shards hung in the air stepping down from beside the shaft, a lake on crystal sand | the Hornback herd by the lake (skittish), two Ridgebacks (hunting, temper 3) |
+
+Each warren's way down is a shaft at the far end of its maze from its way
+in, **the whole shaft a vine**: whoever drops in catches on it, and crouch
+slides down (`tests/deep.rs` rides every one from the mouth to the floor
+unhurt). The mazes are a fixed draw, so both machines dig the same tunnels;
+`tests/deep.rs` walks each from its way in to its way down. Walls round the
+pit's edge seal the space under the lid from the land's crater round the pit.
+Cairns on every warren's floor by its way in, and one by the lake. Crystal is
+a material of its own (`Material::Crystal`, `violet` and light).
+
+![The way in: the path from the Shelves to the Deep's lid](gallery/valley-deep-the-way-in.jpg)
+
+![The Caverns](gallery/valley-deep-caverns.jpg)
+
 | Place | The road | Rooms off it | The way on |
 | --- | --- | --- | --- |
 | **Hearth** | — | **the Ring** (north), **the Long Valley** (west, under the fifth waystone) | the east gate |
