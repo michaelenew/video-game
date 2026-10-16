@@ -147,19 +147,17 @@ fn strokes_image() -> Image {
     if crate::wash::painted() {
         return baked_strokes();
     }
-    {
-        return Image::new_fill(
-            Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: look::strokes::LAYERS as u32,
-            },
-            TextureDimension::D2,
-            &[128, 128, 128, 255],
-            TextureFormat::Rgba8Unorm,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-    }
+    Image::new_fill(
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: look::strokes::LAYERS as u32,
+        },
+        TextureDimension::D2,
+        &[128, 128, 128, 255],
+        TextureFormat::Rgba8Unorm,
+        RenderAssetUsages::RENDER_WORLD,
+    )
 }
 
 /// The baked sheets, as the painted looks read them.

@@ -39,6 +39,9 @@ struct Paint {
 const STROKE_PERIOD: f32 = 8.0;
 const STROKE_ANGLES: f32 = 6.0;
 const STROKE_ANGLES_I: i32 = 6;
+// How far from the eye the brush is worked out at the pixel, in metres
+// (`WASH_NEAR_EXACT`, thousandths): negative is everywhere, 0 is never.
+const NEAR_EXACT: f32 = f32(#{WASH_NEAR_EXACT}) / 1000.0;
 
 const PI: f32 = 3.14159265;
 // A matte surface: the standard material's perceptual roughness 0.92,
@@ -259,6 +262,91 @@ fn strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> 
     return two.rgb * 2.0 - 1.0;
 }
 
+/// **The brush worked out at the pixel** -- the painting: every candidate
+/// stroke's place, angle, size, curve, dry ends and bristles, for this very
+/// pixel, and every stroke the same size on the screen whatever its
+/// distance, as a brush is the same size on a canvas. The sheets below
+/// approximate it and read as a decal: the owner's call, 2026-10-16. The
+/// sheets are read beyond `NEAR_EXACT` metres, or everywhere with
+/// `--exact 0`, for a machine that cannot afford this.
+fn strokes_exact(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> vec3<f32> {
+    let a = abs(n);
+    var u_axis = vec3<f32>(1.0, 0.0, 0.0);
+    var v_axis = vec3<f32>(0.0, 1.0, 0.0);
+    if (a.y > max(a.x, a.z)) {
+        v_axis = vec3<f32>(0.0, 0.0, 1.0);
+    } else if (a.x > a.z) {
+        u_axis = vec3<f32>(0.0, 0.0, 1.0);
+    }
+    let q = vec2<f32>(dot(p, u_axis), dot(p, v_axis));
+    var d = vec2<f32>(dot(way, u_axis), dot(way, v_axis));
+    if (length(d) < 1e-4) {
+        d = vec2<f32>(1.0, 0.0);
+    }
+    let base_angle = atan2(d.y, d.x);
+    let loose = 1.0 - rigid;
+    let cell = len * 0.5;
+    let home = floor(q / cell);
+    var best = -1.0;
+    var out = vec3<f32>(0.0);
+    for (var j = -1; j <= 1; j = j + 1) {
+        for (var i = -1; i <= 1; i = i + 1) {
+            let c = home + vec2<f32>(f32(i), f32(j));
+            for (var k = 0; k < 2; k = k + 1) {
+                let seed = c + vec2<f32>(f32(k) * 17.13, f32(k) * 31.71);
+                let h1 = hash2(seed);
+                let h2 = hash2(seed + 1.37);
+                let h3 = hash2(seed + 2.71);
+                let h4 = hash2(seed + 3.97);
+                let h5 = hash2(seed + 5.21);
+                let h6 = hash2(seed + 6.83);
+                // Where it sits: on the grid when ruled, anywhere in its cell
+                // when loose.
+                let centre = (c + 0.5 + (vec2<f32>(h1, h2) - 0.5) * mix(0.2, 1.0, loose)) * cell;
+                let angle = base_angle + (h3 - 0.5) * loose * 1.6;
+                let size = 1.0 + (h4 - 0.5) * loose * 1.4;
+                let long = len * size * mix(0.5, 0.55, h5);
+                let wide = len * size * mix(0.15, 0.13 + 0.12 * h6, loose);
+                let curve = (h5 - 0.5) * loose * 0.8;
+                let cs = cos(angle);
+                let sn = sin(angle);
+                let rel = q - centre;
+                let local = vec2<f32>(cs * rel.x + sn * rel.y, -sn * rel.x + cs * rel.y);
+                let u = local.x / long;
+                if (abs(u) > 1.2) {
+                    continue;
+                }
+                let v = (local.y - curve * wide * u * u) / wide;
+                // Ends: square and ruled, or tapered and dry, by how loose.
+                let taper = mix(1.0, sqrt(max(1.0 - u * u, 0.0)), 0.25 + 0.6 * loose);
+                let bristle = noise2(vec2<f32>(u * 4.0 + h1 * 9.0, v * 5.0 + h2 * 9.0)) - 0.5;
+                let inside = abs(v) < taper * (1.0 + bristle * 0.35 * loose)
+                    && abs(u) < 1.0 + bristle * 0.5;
+                let order = hash2(seed + 8.09);
+                if (inside && order > best) {
+                    best = order;
+                    out = vec3<f32>(
+                        hash2(seed + 9.41) * 2.0 - 1.0,
+                        hash2(seed + 10.7) * 2.0 - 1.0,
+                        hash2(seed + 11.3) * 2.0 - 1.0,
+                    ) * (0.85 + 0.15 * bristle * 2.0);
+                }
+            }
+        }
+    }
+    return out;
+}
+
+/// `broad_strokes` with the brush worked out at the pixel.
+fn broad_exact(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, dist: f32, rigid: f32, size: f32) -> vec3<f32> {
+    let l = log2(max(BROAD_SIZE * dist * size, 0.05));
+    let lo = floor(l);
+    let t = l - lo;
+    let one = strokes_exact(p, n, way, exp2(lo), rigid);
+    let two = strokes_exact(p + vec3<f32>(17.3, 5.1, 9.7), n, way, exp2(lo + 1.0), rigid);
+    return mix(one, two, t) / sqrt(t * t + (1.0 - t) * (1.0 - t));
+}
+
 /// **Strokes that hold still and keep their size.** Fixed to the world so
 /// they do not swim when the camera moves; their length picked from the
 /// distance in powers of two, the two nearest cross-faded, so a stroke stays
@@ -332,7 +420,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
 #endif
         let dist = length(view.world_position - p);
         let way = stroke_way(p, n, flow, rigid);
-        let b = broad_strokes(p, n, way, dist, rigid, size);
+        var b: vec3<f32>;
+        if (NEAR_EXACT < 0.0 || dist < NEAR_EXACT) {
+            b = broad_exact(p, n, way, dist, rigid, size);
+        } else {
+            b = broad_strokes(p, n, way, dist, rigid, size);
+        }
         // The looser the brush the further its colours wander: a meadow's
         // strokes go yellow, blue and dark; a wall's stay close to its own.
         let wander = BROAD * mix(0.45, 1.0, 1.0 - rigid);

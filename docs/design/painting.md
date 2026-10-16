@@ -304,6 +304,22 @@ became the default)
   until the angle's place passes the phase of the stroke there, then the
   later: hard strokes, and no seam, since every stroke switches at its own
   moment.
+- **Baking the painting into the land, near the eye.** Two days were spent
+  on this and the owner's judgement ended it: the land within 20 m of the
+  eye got the original brush baked into a texture a tile (`look::strokes::
+  Brush`, worked out once per cell; 0.65 s a tile on four cores; 1024
+  texels, five megabytes with mipmaps; `near.rs`, all in the history at
+  #164). It was crisp and it looked *stamped on*: "a computer splotched
+  flat shapes onto the ground", where the original "looks like a painter
+  painted it". The difference is not resolution. A bake fixes a stroke's
+  size to the world, so strokes shrink with distance like a decal; the
+  painting's brush is the same size on the *screen* everywhere, as a brush
+  is on a canvas, which only the pixel can do. The sheets have the same
+  flaw in a milder form (they are scaled by distance, but hold six angles
+  and sixty-four texels a stroke) and read as simpler and flatter. So the
+  brush is worked out at the pixel, the sheets are the fallback, and no
+  bake of the painting is worth trying again unless it keeps the brush on
+  the canvas rather than on the ground.
 - **A table of the Kuwahara's sector weights.** Each tap's eight sector
   weights depend only on the tap, so a table of them looked like a free
   saving over working them out per tap. Under the software renderer the pass
@@ -369,6 +385,17 @@ became the default)
 
 - **Run it**: `--look brushed` (the game is `plain` by default);
   `painted|depths|wash` are the others, `?look=` on the web.
+- **The brush is worked out at the pixel** (`paint.wgsl` `strokes_exact`,
+  `broad_exact`): the painting. Every stroke the same size on the screen
+  whatever its distance, as a brush is on a canvas, with its dry ends and
+  bristles decided per pixel. The sheets (`look::strokes`, `strokes`,
+  `broad_strokes`) approximate it, and `--exact <m>` reads them beyond so
+  many metres (`--exact 0`: everywhere), for a machine that cannot afford
+  the brush. Measured under the software renderer (the Mouth, 1280 x 760,
+  with the forty-nine-tap screen pass): the surface pass is 254 ms with the
+  brush everywhere, 204 ms within 20 m, 119 ms on the sheets alone, 98 ms
+  plain; the whole frame 691, 646, 556, 294. The brush costs a quarter of a
+  frame over the sheets, and the sheets cost the painting.
 - **Measure it**: `./scripts/profile.sh target/p.log 45 --arena mouth --look
   brushed` prints every pass's cost under the software renderer every two
   seconds, the painted passes (`wash brush`, `outline`) among them; compare
