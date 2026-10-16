@@ -189,25 +189,13 @@ fn shaft(k: usize, out: &mut Vec<Solid>) {
     }
     // The west wall; the Caverns' with a slot through it onto the first
     // shard (`crystals`), its sill a step under a ledge.
-    let west = ((x - h - WALL, z - h), (x - h, z + h));
+    let (w0, w1) = ([x - h - WALL, lo, z - h], [x - h, hi, z + h]);
     match (k == SHAFTS.len() - 1).then_some(SHARDS_FROM) {
         Some(sill) => {
-            out.push(put(
-                [west.0.0, lo, west.0.1],
-                [west.1.0, sill, west.1.1],
-                Material::Rock,
-            ));
-            out.push(put(
-                [west.0.0, sill + 300, west.0.1],
-                [west.1.0, hi, west.1.1],
-                Material::Rock,
-            ));
+            out.push(put(w0, [w1[0], sill, w1[2]], Material::Rock));
+            out.push(put([w0[0], sill + 300, w0[2]], w1, Material::Rock));
         }
-        None => out.push(put(
-            [west.0.0, lo, west.0.1],
-            [west.1.0, hi, west.1.1],
-            Material::Rock,
-        )),
+        None => out.push(put(w0, w1, Material::Rock)),
     }
     for (a, b) in shaft_ledges(k) {
         out.push(put(a, b, Material::Rock));
