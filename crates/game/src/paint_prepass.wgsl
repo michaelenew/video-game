@@ -10,7 +10,7 @@
     prepass_io::VertexOutput,
     mesh_view_bindings::view,
 }
-#import game::cut::in_window
+#import game::cut::window
 
 struct Paint {
     color: vec4<f32>,
@@ -24,7 +24,7 @@ struct Paint {
 // because the camera is behind it.
 fn cut_away(in: VertexOutput) -> bool {
     let orthographic = view.clip_from_view[3][3] == 1.0;
-    return !orthographic && in_window(paint.cut, view.world_position, in.world_position.xyz, in.position.xy);
+    return !orthographic && window(paint.cut, view.world_position, in.world_position.xyz) > 0.0;
 }
 
 // Bevy defines `FragmentOutput` only when the pass writes something besides

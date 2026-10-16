@@ -67,6 +67,9 @@ pub struct Paint {
     /// alpha-masked, so the depth prepass runs `paint_prepass.wgsl` and
     /// cuts the same hole the colour does.
     pub windowed: bool,
+    /// **Only the window, see-through** ([`Paint::ghost`]): drawn blended,
+    /// over the hole a [`Paint::window`] cuts.
+    pub ghost: bool,
 }
 
 impl Default for Paint {
@@ -84,6 +87,7 @@ impl Paint {
             strokes: STROKES,
             two_sided: false,
             windowed: false,
+            ghost: false,
         }
     }
 
@@ -106,6 +110,19 @@ impl Paint {
         }
     }
 
+    /// **The wood in the window, see-through**: the same mesh drawn a second
+    /// time over a [`Paint::window`], with the same [`Paint::cut`], keeping
+    /// only what the window cut away and blending it over what is behind --
+    /// thinnest in the middle, solid at the rim where the window's own wood
+    /// takes over (`cut.wgsl`). Without it the window was a clean hole, a
+    /// bite out of the tree.
+    pub fn ghost() -> Self {
+        Self {
+            ghost: true,
+            ..Self::white()
+        }
+    }
+
     /// One colour, sRGB, for a mesh with no colours of its own.
     pub fn srgb(rgb: [f32; 3]) -> Self {
         let c = Color::srgb(rgb[0], rgb[1], rgb[2]).to_linear();
@@ -115,6 +132,7 @@ impl Paint {
             strokes: STROKES,
             two_sided: false,
             windowed: false,
+            ghost: false,
         }
     }
 }
@@ -124,6 +142,7 @@ impl Paint {
 pub struct PaintKey {
     two_sided: bool,
     windowed: bool,
+    ghost: bool,
 }
 
 impl From<&Paint> for PaintKey {
@@ -131,6 +150,7 @@ impl From<&Paint> for PaintKey {
         Self {
             two_sided: p.two_sided,
             windowed: p.windowed,
+            ghost: p.ghost,
         }
     }
 }
@@ -149,7 +169,9 @@ impl Material for Paint {
     /// Masked is what makes Bevy run a fragment shader in the depth prepass
     /// at all; the mask's alpha is never read, the window discards.
     fn alpha_mode(&self) -> AlphaMode {
-        if self.windowed {
+        if self.ghost {
+            AlphaMode::Blend
+        } else if self.windowed {
             AlphaMode::Mask(0.5)
         } else {
             AlphaMode::Opaque
@@ -164,7 +186,7 @@ impl Material for Paint {
     ) -> Result<(), SpecializedMeshPipelineError> {
         if key.bind_group_data.two_sided {
             descriptor.primitive.cull_mode = None;
-        } else if key.bind_group_data.windowed {
+        } else if key.bind_group_data.windowed || key.bind_group_data.ghost {
             // Bevy's prepass draws both faces unless the material says
             // otherwise, and the colour pass only the front. Through a
             // window that difference is on screen: the inside of the far
@@ -174,6 +196,9 @@ impl Material for Paint {
         }
         if let Some(fragment) = descriptor.fragment.as_mut() {
             fragment.shader_defs.extend(crate::wash::surface_defs());
+            if key.bind_group_data.ghost {
+                fragment.shader_defs.push("PAINT_GHOST".into());
+            }
         }
         Ok(())
     }

@@ -117,6 +117,7 @@ impl Warm for Paint {
     fn key(&self, h: &mut DefaultHasher) {
         self.two_sided.hash(h);
         self.windowed.hash(h);
+        self.ghost.hash(h);
     }
 }
 

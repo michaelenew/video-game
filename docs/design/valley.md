@@ -161,7 +161,12 @@ spaces as checkpoints ... I want the canopy to be a reward"):
   well as the colour (`Paint::window`, `paint_prepass.wgsl`), and the
   windowed paint culls its back faces there too: cut in the colour alone,
   the depth of the wood stayed in front of the fighter and the window came
-  out the colour of the sky -- a white hole (2026-10-16).
+  out the colour of the sky -- a white hole (2026-10-16). A clean hole read
+  as a bite out of the tree, so the wood it cuts away is drawn again
+  see-through over it (`Paint::ghost`): 30% of the wood in the middle,
+  thickening to solid at a soft rim, drawn only for the trees the line from
+  the eye to the fighter comes near. Each layer's rim still gets a faint
+  outline, where the depth steps.
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 
