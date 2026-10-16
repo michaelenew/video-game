@@ -43,10 +43,20 @@ pub struct Paint {
     /// all.
     #[uniform(0)]
     pub color: Vec4,
+    /// **A near tile's own strokes** (`crate::near`): where on the map its
+    /// texture lies -- corner x, corner z, size -- and, in the last, how far
+    /// from the eye it is read before the sheet takes over. All zero for a
+    /// paint with none, which is every paint but a near tile's.
+    #[uniform(0)]
+    pub near: Vec4,
     /// The baked brush strokes ([`STROKES`]); the same for every paint.
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
     pub strokes: Handle<Image>,
+    /// The near tile's texture, if this paint is a near tile's.
+    #[texture(3)]
+    #[sampler(4)]
+    pub near_tex: Option<Handle<Image>>,
     /// Drawn from both sides: the land's tiles, whose skirts face out
     /// either way round.
     pub two_sided: bool,
@@ -64,6 +74,8 @@ impl Paint {
         Self {
             color: Vec4::ONE,
             strokes: STROKES,
+            near: Vec4::ZERO,
+            near_tex: None,
             two_sided: false,
         }
     }
@@ -74,6 +86,8 @@ impl Paint {
         Self {
             color: Vec4::new(c.red, c.green, c.blue, 1.0),
             strokes: STROKES,
+            near: Vec4::ZERO,
+            near_tex: None,
             two_sided: false,
         }
     }
@@ -147,19 +161,17 @@ fn strokes_image() -> Image {
     if crate::wash::painted() {
         return baked_strokes();
     }
-    {
-        return Image::new_fill(
-            Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: look::strokes::LAYERS as u32,
-            },
-            TextureDimension::D2,
-            &[128, 128, 128, 255],
-            TextureFormat::Rgba8Unorm,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-    }
+    Image::new_fill(
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: look::strokes::LAYERS as u32,
+        },
+        TextureDimension::D2,
+        &[128, 128, 128, 255],
+        TextureFormat::Rgba8Unorm,
+        RenderAssetUsages::RENDER_WORLD,
+    )
 }
 
 /// The baked sheets, as the painted looks read them.

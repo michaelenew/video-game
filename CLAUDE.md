@@ -319,10 +319,13 @@ looks (`--look`, [`docs/design/painting.md`](docs/design/painting.md)) lay
 strokes on every surface, and a stroke field is a pure function of the
 surface that is the same every frame: `look::strokes` draws it as tiling
 sheets, `crates/game/build.rs` bakes them into the binary, and `paint.wgsl`
-reads two texels. The version that evaluated the strokes in the shader was
-four times the cost of the whole surface pass and made the shader slow enough
-to compile that changing class froze the game. If a new effect needs more
-than a texture read and a few lines per pixel, bake it the same way.
+reads four texels; close to the eye, where the sheets fall short, each tile
+of land gets the original brush baked into a texture of its own on a
+background thread (`crates/game/src/near.rs`, `look::strokes::Brush`). The
+version that evaluated the strokes in the shader was four times the cost of
+the whole surface pass and made the shader slow enough to compile that
+changing class froze the game. If a new effect needs more than a texture
+read and a few lines per pixel, bake it the same way.
 
 **Sound is the same rule, in `crates/sound`.** A sound is a function from a
 few numbers the simulation already has -- a blow's weight is its impact

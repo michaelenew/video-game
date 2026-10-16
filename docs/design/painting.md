@@ -304,6 +304,34 @@ became the default)
   until the angle's place passes the phase of the stroke there, then the
   later: hard strokes, and no seam, since every stroke switches at its own
   moment.
+- **Baking the painting rather than the brush, everywhere.** The sheets are
+  a bake of the brush, not of the painting: the shader still lays them on
+  each surface, from six angles, at sixty-four texels a stroke. The owner
+  wanted the painting itself precomputed. At the fineness the original
+  wants, the valley is tens of billions of texels; so the painting is baked
+  only in a window round the player (the near bake above), and the sheets
+  are the far bake. Two things resist baking any further: the strokes are a
+  constant size on the *screen* (the near bake fixes them at their size four
+  metres out, at the fighter's feet, and the fade hides the join), and the screen pass
+  cannot be baked at all.
+- **Baking the near tiles on the GPU.** A one-shot camera rendering each
+  tile into its own texture would be free in time, but Bevy 0.16 makes no
+  mipmaps for a render target, and a near texture without them shimmers at
+  a slant; the pure functions were already in `look::strokes` from the
+  sheets; and a CPU bake works the same on every driver. So the CPU, on the
+  async task pool. The first version took seven seconds a tile: every
+  texel worked every candidate stroke's place, size, angle and colours out
+  again (a hundred strokes a texel, with a sine and twelve hashes each).
+  `look::strokes::Brush` works each stroke out once for its cell, keeps
+  only the strokes that reach a cell with it, topmost first, and prunes by
+  the stroke's width before asking the bristle noise: 0.4 s a million
+  points. Then reading the ground's kind *between* lattice points gave
+  every texel of a border band its own rigidity and the brush worked its
+  strokes out afresh for each; read from the nearest point, 0.9 s a tile;
+  in bands across the cores, 0.65 s. Indexing the strokes on a finer grid
+  than their cells did not help (31 candidates a point where 36, and the
+  lists cost more to build). 2048 texels a tile was ten seconds a tile
+  before the bands and is left as the knob.
 - **A table of the Kuwahara's sector weights.** Each tap's eight sector
   weights depend only on the tap, so a table of them looked like a free
   saving over working them out per tap. Under the software renderer the pass
@@ -369,6 +397,21 @@ became the default)
 
 - **Run it**: `--look brushed` (the game is `plain` by default);
   `painted|depths|wash` are the others, `?look=` on the web.
+- **The near bake** (`crates/game/src/near.rs`): the land within
+  `near::REACH` (20 m) of the eye is baked with the original brush --
+  `look::strokes::Brush`, every stroke at its exact angle, four texels a
+  centimetre -- one texture a tile (five megabytes with its mipmaps), on
+  the task pool in bands across every core, two thirds of a second a tile
+  on four cores, and the surface shader reads it in place of the sheets,
+  fading to them over the band's last eight metres. The strokes are sized
+  as the original sizes them four metres from the eye. What is still short
+  of the original: at the feet a texel is five pixels, so a stroke's edge
+  is that much softer (`near::RES` at 2048 halves it, for four times the
+  memory and the bake), and the strokes do not grow with distance across
+  the band as the original's do. The far land keeps the
+  sheets, which past a few tens of metres are the same picture. The dev
+  overlay (`--dev`) counts the tiles baked and baking. The browser build
+  keeps the sheets everywhere (`platform::bakes_near`).
 - **Measure it**: `./scripts/profile.sh target/p.log 45 --arena mouth --look
   brushed` prints every pass's cost under the software renderer every two
   seconds, the painted passes (`wash brush`, `outline`) among them; compare

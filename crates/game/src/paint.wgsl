@@ -27,6 +27,7 @@
 
 struct Paint {
     color: vec4<f32>,
+    near: vec4<f32>,
 }
 
 @group(2) @binding(0) var<uniform> paint: Paint;
@@ -34,6 +35,12 @@ struct Paint {
 // rigidity, each texel a stroke's shade and two colour shifts.
 @group(2) @binding(1) var strokes_tex: texture_2d_array<f32>;
 @group(2) @binding(2) var strokes_sampler: sampler;
+// A near tile's own strokes (`near.rs`): the original brush, every stroke
+// at its exact angle, baked once for the tile. Read where `paint.near`
+// places it, and faded into the sheet's strokes over the last metres of
+// its reach, where the two are already much the same.
+@group(2) @binding(3) var near_tex: texture_2d<f32>;
+@group(2) @binding(4) var near_sampler: sampler;
 // How many stroke lengths a sheet is across (`look::strokes::PERIOD`), and
 // how many angles a rigidity is drawn at (`look::strokes::ANGLES`).
 const STROKE_PERIOD: f32 = 8.0;
@@ -332,7 +339,18 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
 #endif
         let dist = length(view.world_position - p);
         let way = stroke_way(p, n, flow, rigid);
-        let b = broad_strokes(p, n, way, dist, rigid, size);
+        var b = broad_strokes(p, n, way, dist, rigid, size);
+        if (paint.near.z > 0.0) {
+            // The tile's own bake, on the ground it was baked over (a cliff
+            // face keeps the sheet), fading to the sheet over the last eight
+            // metres of its reach. `paint.near` is in world coordinates,
+            // kept so by `near.rs` as the map's origin moves.
+            let uv = (p.xz - paint.near.xy) / paint.near.z;
+            let baked = textureSample(near_tex, near_sampler, uv).xyz * 2.0 - 1.0;
+            let far = smoothstep(paint.near.w - 8.0, paint.near.w, dist);
+            let flat = smoothstep(0.5, 0.7, abs(n.y));
+            b = mix(b, baked, (1.0 - far) * flat);
+        }
         // The looser the brush the further its colours wander: a meadow's
         // strokes go yellow, blue and dark; a wall's stay close to its own.
         let wander = BROAD * mix(0.45, 1.0, 1.0 - rigid);
