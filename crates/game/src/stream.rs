@@ -231,16 +231,18 @@ pub fn stream(
         }
     }
 
-    // The trees' window on to the fighter, wherever the camera now is: the
-    // fighter, a little over two metres across where it nears them and short
-    // of what they stand on.
+    // The trees' window on to the fighter, wherever the camera now is: six
+    // metres across where it nears them, and short of what they stand on.
+    // Two and a half until 2026-10-16, when seeing what was going on in the
+    // Wood was a fight of its own; the forest is not meant to be one about
+    // seeing.
     let see_through = st
         .see_through
         .get_or_insert_with(|| materials.paint.add(Paint::white()))
         .clone();
     if let Some(p) = materials.paint.get_mut(&see_through) {
         let f = rig.0.focus();
-        p.cut = Vec4::new(f[0], f[1], f[2], 1.3);
+        p.cut = Vec4::new(f[0], f[1], f[2], 3.0);
     }
     let Ok(eye) = camera.single() else {
         return;

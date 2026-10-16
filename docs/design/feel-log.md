@@ -8812,3 +8812,35 @@ ledge, as only a solid's side is a wall). Space while hanging does nothing.
 penalty and short enough not to be a punishment; whether 2 m/s and 0.2 m forgive enough of a
 walk-off, or too much of a jump that meant to clear; whether 20 frames of hold-on reads as a
 hang or as a stall.
+
+### 2026-10-16 — a limb is walked along, not stopped on
+
+**Reported**: "the player just gets stuck on a small lip ... in the trees section, where a
+branch forks. The tiny lip halts me completely." Wanted: anything lower than a knee is
+stepped up or over without stopping, never jumped.
+
+**Found**: a limb is drawn as a smooth tapering cylinder but stood on as a stair of flat
+boards (`valley::trees::solids`), one board per 40 cm of rise -- capped at eight boards a
+limb. On a long limb the cap won, and the risers between boards came to 45-65 cm, just over
+the 0.45 m step (2026-10-13). A riser nobody can see is a lip that stops you dead. Walking
+along every board of the fourteen trees nearest the Wood, both ways, stopped about one walk
+in four.
+
+**Changed**: a limb's boards are cut one per 36 cm of rise, rounded up, with the cap raised to
+fourteen, so no riser along a limb comes near a step (35 cm and sixteen cleared the same lips
+at a busiest tile of 372 boxes; 36 and fourteen hold it at 307, and its cap went from 256 to
+320); and `Step, walked up onto` is raised from
+0.45 m to 0.5 m, a knee on a 1.8 m body. Stops along limbs fell by a third; what still stops a
+walk is the trunk, a buttress root taller than a knee, or a limb so close overhead that there
+is no room to stand up on the next board (`tests/wood.rs`,
+`a_limb_is_walked_along_without_stopping_on_a_lip`). Before the change it found 150 such
+stops on the Great Tree alone. The Great Tree's stair test met one hop that now falls short
+and catches the limb's edge; its script now climbs an edge of the limb it was hopping for, and
+starts every try with nothing held. The Reaver's pinned hunt moved with the step, and nothing
+else did.
+
+**And the window through the trees is wider** (the same day, from the same play: "it's hard
+to see what's going on. I don't want visibility to be part of the challenge of the forest").
+What stands between the camera and the fighter is cut away six metres across at the
+fighter's end, not 2.6, and half that next to the camera rather than a third
+(`game::stream`, `paint.wgsl`).

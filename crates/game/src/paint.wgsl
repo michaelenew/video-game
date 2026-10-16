@@ -386,7 +386,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let t = dot(in.world_position.xyz - eye, to) / max(dot(to, to), 1e-4);
         if (t > 0.0 && t < 0.85) {
             let off = length(in.world_position.xyz - (eye + to * t));
-            let r = paint.cut.w * (0.35 + 0.65 * t);
+            let r = paint.cut.w * (0.5 + 0.5 * t);
             let grain = fract(sin(dot(in.position.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
             if (off < r * (0.75 + 0.25 * grain)) {
                 discard;
