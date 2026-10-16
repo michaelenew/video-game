@@ -135,12 +135,14 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// its speed along the face now eased toward what the stick asks
 /// (`hold_to_the_wall`). The Dual mage's moved no body -- both fighters'
 /// positions and speeds are identical on every frame -- only the new wall
-/// state in the hash. The Champion's never met a wall.
+/// state in the hash. The Champion's never met a wall. With the same-wall
+/// drop merged in on top, the Bulwark's and the Blood mage's moved once more,
+/// where the two wall changes meet.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0xf120f5bb83270f02),
+    (Class::Bulwark, 0x3e9b7ca3a71bd73b),
     (Class::ShadowReaver, 0x846a6c304191d07a),
-    (Class::BloodMage, 0x5561ae6a26eedce1),
+    (Class::BloodMage, 0xa2dea1fbacdb7bc1),
     (Class::DualMage, 0x810a930f65195268),
     (Class::Elementalist, 0xf2a70e1351a46db9),
 ];
