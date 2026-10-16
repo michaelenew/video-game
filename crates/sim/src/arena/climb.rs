@@ -89,18 +89,18 @@ pub static STAIR: Arena = Arena {
 const STAIR_SOLIDS: [Solid; 7] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 6800, 300], Rock),
-    // up 1 m
-    Solid::cm([600, 6600, -250], [1100, 6900, 250], Grass),
-    // up 1.5 m
-    Solid::cm([600, 6750, 600], [1100, 7050, 1100], Grass),
-    // up 2 m
-    Solid::cm([1400, 6950, 600], [1900, 7250, 1100], Grass),
-    // up 2.5 m
-    Solid::cm([2150, 7200, 600], [2650, 7500, 1100], Grass),
-    // level 4 m
-    Solid::cm([2150, 7200, -300], [2650, 7500, 200], Grass),
-    // up 2 m, the nest
-    Solid::cm([2950, 7300, -450], [3750, 7700, 350], Wood),
+    // up 1 m, 4.5 m
+    Solid::cm([750, 6600, -250], [1250, 6900, 250], Grass),
+    // up 1.5 m, 5 m
+    Solid::cm([750, 6750, 750], [1250, 7050, 1250], Grass),
+    // up 2 m, 4.5 m
+    Solid::cm([1700, 6950, 750], [2200, 7250, 1250], Grass),
+    // up 2.5 m, 3.8 m
+    Solid::cm([2580, 7200, 750], [3080, 7500, 1250], Grass),
+    // level 5.5 m
+    Solid::cm([2580, 7200, -300], [3080, 7500, 200], Grass),
+    // up 2 m, 4.3 m, the nest
+    Solid::cm([3510, 7300, -450], [4310, 7700, 350], Wood),
 ];
 
 static STAIR_COURSE: Course = Course {
@@ -121,44 +121,44 @@ static STAIR_COURSE: Course = Course {
         Step {
             solid: 1,
             check: false,
-            gap: 300,
+            gap: 450,
             rise: 100,
-            ask: "up 1 m",
+            ask: "up 1 m, 4.5 m",
         },
         Step {
             solid: 2,
             check: false,
-            gap: 350,
+            gap: 500,
             rise: 150,
-            ask: "up 1.5 m",
+            ask: "up 1.5 m, 5 m",
         },
         Step {
             solid: 3,
             check: true,
-            gap: 300,
+            gap: 450,
             rise: 200,
-            ask: "up 2 m",
+            ask: "up 2 m, 4.5 m",
         },
         Step {
             solid: 4,
             check: false,
-            gap: 250,
+            gap: 380,
             rise: 250,
-            ask: "up 2.5 m",
+            ask: "up 2.5 m, 3.8 m",
         },
         Step {
             solid: 5,
             check: false,
-            gap: 400,
+            gap: 550,
             rise: 0,
-            ask: "level 4 m",
+            ask: "level 5.5 m",
         },
         Step {
             solid: 6,
             check: true,
-            gap: 300,
+            gap: 430,
             rise: 200,
-            ask: "up 2 m, the nest",
+            ask: "up 2 m, 4.3 m, the nest",
         },
     ],
 };
@@ -184,20 +184,20 @@ pub static CAUSEWAY: Arena = Arena {
 const CAUSEWAY_SOLIDS: [Solid; 8] = [
     // the foot: a spire standing on the floor, the start
     Solid::cm([-300, 0, -300], [300, 8000, 300], Rock),
-    // level 4.5 m
-    Solid::cm([750, 7700, -200], [1250, 8000, 200], Grass),
-    // down 1 m, 5 m
-    Solid::cm([1750, 7600, -200], [2150, 7900, 200], Grass),
-    // stepping stone
-    Solid::cm([2550, 7820, -100], [2750, 7900, 100], Rock),
-    // stepping stone
-    Solid::cm([3150, 7820, -100], [3350, 7900, 100], Rock),
-    // down 2 m, 5.5 m
-    Solid::cm([3900, 7400, -250], [4400, 7700, 250], Grass),
-    // the bridge
-    Solid::cm([4700, 7580, -125], [6700, 7700, 125], Rock),
-    // level 5 m, the far island
-    Solid::cm([7200, 7300, -400], [8000, 7700, 400], Wood),
+    // level 5.5 m
+    Solid::cm([850, 7700, -200], [1350, 8000, 200], Grass),
+    // down 1 m, 6 m
+    Solid::cm([1950, 7600, -200], [2350, 7900, 200], Grass),
+    // stepping stone, 5 m
+    Solid::cm([2850, 7820, -100], [3050, 7900, 100], Rock),
+    // stepping stone, 5 m
+    Solid::cm([3550, 7820, -100], [3750, 7900, 100], Rock),
+    // down 2 m, 6.5 m
+    Solid::cm([4400, 7400, -250], [4900, 7700, 250], Grass),
+    // the bridge, 4 m
+    Solid::cm([5300, 7580, -125], [7300, 7700, 125], Rock),
+    // level 6 m, the far island
+    Solid::cm([7900, 7300, -400], [8700, 7700, 400], Wood),
 ];
 
 static CAUSEWAY_COURSE: Course = Course {
@@ -218,51 +218,51 @@ static CAUSEWAY_COURSE: Course = Course {
         Step {
             solid: 1,
             check: false,
-            gap: 450,
+            gap: 550,
             rise: 0,
-            ask: "level 4.5 m",
+            ask: "level 5.5 m",
         },
         Step {
             solid: 2,
             check: false,
-            gap: 500,
+            gap: 600,
             rise: -100,
-            ask: "down 1 m, 5 m",
+            ask: "down 1 m, 6 m",
         },
         Step {
             solid: 3,
             check: false,
-            gap: 400,
+            gap: 500,
             rise: 0,
             ask: "stepping stone",
         },
         Step {
             solid: 4,
             check: true,
-            gap: 400,
+            gap: 500,
             rise: 0,
             ask: "stepping stone",
         },
         Step {
             solid: 5,
             check: false,
-            gap: 550,
+            gap: 650,
             rise: -200,
-            ask: "down 2 m, 5.5 m",
+            ask: "down 2 m, 6.5 m",
         },
         Step {
             solid: 6,
             check: false,
-            gap: 300,
+            gap: 400,
             rise: 0,
             ask: "the bridge",
         },
         Step {
             solid: 7,
             check: true,
-            gap: 500,
+            gap: 600,
             rise: 0,
-            ask: "level 5 m, the far island",
+            ask: "level 6 m, the far island",
         },
     ],
 };
@@ -1070,7 +1070,7 @@ pub static WATERFALL: Arena = Arena {
     id: ArenaId::CLIMB_WATERFALL,
     name: "Waterfall",
     creature: None,
-    bounds: Bounds::cm((-2300, 8000), (-4500, 4500)),
+    bounds: Bounds::cm((-2300, 8000), (-6000, 6000)),
     floor: Peat,
     regions: &[],
     solids: &WATERFALL_SOLIDS,

@@ -48,9 +48,6 @@ So there are two problems, and they are separate:
   boxes built from it are hidden. The camera does not keep out of a hidden
   box (`Terrain::seen_around`); the renderer cuts it away round the line to
   the fighter instead.
-- **Vines of no place** (`Plan::vines`, `Atlas::vines`): a vine hung where
-  something grown put it -- a liana off a broadleaf's roof -- in map
-  coordinates, read by `valley::vine_on` beside each place's own.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
   touch it, in map order, and the places whose footprint does. A query over a
   box reads the tiles under it and merges their lists in map order, each box
@@ -203,7 +200,7 @@ on ground metres up and is not a ceiling for being there.
 - **A waystone's door** is a box across a pass, shut while the stone is dark.
 - **Crags, cairns, trees and boulders** are made by the layout, standing on
   the land wherever it is under them: a crag is a pillar of rock with ledges
-  up one face a jump apart, a vine down another and a cairn on top; a tree's
+  up one face a catch apart and a cairn on top; a tree's
   trunk is a box you cannot walk through, which the renderer draws as a tree.
 
 Three things changed in the places themselves on the first pass and stay:
@@ -285,7 +282,7 @@ camera comes within reach and dropped when it goes further than that by
 another 60 m (so the edge never flickers):
 
 - **A place**: its floor, the patches on it, its props, what is scattered on
-  its floor, its seams and vines, under one entity.
+  its floor, its seams, under one entity.
 - **A box**: each box of the map on its own, found through the tiles round
   the camera, so loading reads the tiles near the camera and not the map.
 

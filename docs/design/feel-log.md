@@ -8876,3 +8876,48 @@ to see what's going on. I don't want visibility to be part of the challenge of t
 What stands between the camera and the fighter is cut away six metres across at the
 fighter's end, not 2.6, and half that next to the camera rather than a third
 (`game::stream`, `paint.wgsl`).
+
+### 2026-10-16 — no vines; climbs by catch and kick, and the gaps go out
+
+**Changed** Vines are gone: the mechanic (`climb_and_ride`'s vine branch),
+its knob (`Vine, climbing speed`), every place's table of them, the Great
+Wood's lianas and their drawing. What they carried is climbed with the ledge
+catch and the wall jump:
+
+- **The Needle**: a stair of blocks up the south face, 4 m apart and
+  zig-zagging; a landing every 40 m with a cairn every other; the chimney's
+  ledges north and south by turns, 4 m apart; a lip stone in its mouth.
+- **The Deep**: each shaft walled; down by a wall slide, up by ledges 4 m
+  apart between its north and south walls.
+- **The Hanging Stones**: a column of fifty stones 4.2 m apart (from 25 at
+  7 m with vines), and a span broken by **four gullies** -- 12 m drops
+  between walls 3 m apart, crossed by kicking from wall to wall
+  (`sim::arena::gully`, new bench lanes measured it).
+- **The broadleaves' roofs**: a hanging root with bracket fungus up it, 4 m
+  apart, where each liana hung.
+
+And the spacing rule moved: a required hop was inside the Bulwark's plain
+*landing*, and is now inside its plain *catch* (`envelope::widest_caught`).
+**Crags** 2.2 m → 3.6 m between ledges, 1 → 1.5 m across. **The Waterfall**
+a third wider along the face (behind the falls 3.5 → 4.7 m). **The Stair**
+course 2.5–4 → 3.8–5.5 m, **the Causeway** 4–5.5 → 5–6.5 m.
+
+**Why** The owner: "remove all vines in the game. We now have ledge grabs
+and wall jumps, and the vines are just awful to get stuck in. I also want you
+to make some sections where the intended pathway is to wall jump ... now
+that jumps are more forgiving it's worth spacing things out a bit more ...
+the bigger the gaps the cooler it's going to feel." Measured off the plain
+running jump: a catch is worth about a metre of distance and two of height
+(Bulwark level 5.2 landed / 6.0 caught; +3 m none landed / 4.9 caught). In a
+gully nobody's plain jump carries 12 m (the Dual mage's ~9 caught) and five
+kicks carry everybody; the Bulwark tops out at 12, the rest make 15–18.
+
+**Verdict** Unplayed. Every route above is climbed by every class in the
+tests through one stand-in player (`tests/pilot`), which is a lower bound on
+a person and says nothing about whether it is fun. Things to watch: a gully
+asks you to *hold forward* while touching the wall (the stick into the wall
+is a slide, which bleeds the run away) -- if players push into the wall by
+instinct, the gully will feel impossible and the slide rule wants a look; the
+Needle's stair is 78 catches for the Bulwark; and a dome's ring rim is not
+caught from inside its hole (`Terrain::ledge_near` reads a ring's top as
+its outer disc), which the lip stone works round rather than fixes.

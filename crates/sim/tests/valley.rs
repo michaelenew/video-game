@@ -4,6 +4,8 @@
 //! what they say. The map itself -- tiles, doorways, nothing overlapping --
 //! is `tests/atlas.rs`.
 
+mod pilot;
+
 use sim::arena::{ArenaId, Terrain};
 use sim::input::{Destination, Travel};
 use sim::species::SpeciesId;
@@ -776,4 +778,69 @@ fn no_road_junction_is_inside_a_hunts_margin() {
             margin.to_f32_for_render()
         );
     }
+}
+
+/// **Every class climbs a crag**, the Mouth's: from the meadow at its foot up
+/// its ledges -- landed, or caught at the hands and climbed -- and on to its
+/// top.
+#[test]
+fn every_class_climbs_a_crag() {
+    use sim::arena::{Material, Solid};
+    use sim::valley::Crag;
+    let c = sim::arena::mouth::CRAGS[0];
+    let atlas = sim::atlas::valley();
+    let cm = sim::arena::cm;
+    let (x, z) = (cm(c.x), cm(c.z));
+    let r = Fx::from_int(8);
+    let near: Vec<Solid> = atlas
+        .near((x.sub(r), z.sub(r)), (x.add(r), z.add(r)))
+        .map(|i| atlas.solids[i as usize])
+        .collect();
+    let face = cm(c.x - Crag::HALF);
+    let mut ledges: Vec<Solid> = near
+        .iter()
+        .filter(|s| s.max.x == face && s.min.x.raw() < face.raw())
+        .copied()
+        .collect();
+    ledges.sort_by_key(|s| s.max.y.raw());
+    assert_eq!(ledges.len(), c.ledges as usize, "the crag's ledges");
+    let pillar = *near
+        .iter()
+        .filter(|s| s.min.x == face && s.max.x == cm(c.x + Crag::HALF))
+        .max_by_key(|s| s.max.y.raw())
+        .expect("the pillar");
+    // The meadow west of the face, beside the half the first ledge is not on.
+    let gx = face.sub(cm(Crag::OUT + 300));
+    let gz = z.add(Fx::from_int(2));
+    let ground = atlas.relief_at(gx, gz);
+    let start = Solid {
+        min: V3::new(gx.sub(Fx::ONE), ground.sub(Fx::ONE), gz.sub(Fx::ONE)),
+        max: V3::new(gx.add(Fx::ONE), ground, gz.add(Fx::ONE)),
+        material: Material::Grass,
+        shape: sim::arena::Shape::Box,
+    };
+    let mut route = vec![start];
+    route.extend(ledges);
+    // The top's west edge, where the last ledge comes up beside it.
+    let mut top = pillar;
+    top.max.x = face.add(Fx::from_int(2));
+    route.push(top);
+    let mut failed = Vec::new();
+    for class in sim::class::ALL_CLASSES {
+        let mut w = World::arrive(
+            [class, class],
+            valley::Journey::default(),
+            ArenaId::MOUTH,
+            Some(0),
+            1,
+        );
+        for (k, pair) in route.windows(2).enumerate() {
+            let (a, b) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));
+            if let Err(e) = pilot::jump(&mut w, a, b) {
+                failed.push(format!("{}: step {}: {e}", class.name(), k + 1));
+                break;
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

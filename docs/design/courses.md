@@ -76,8 +76,8 @@ nest. `N` cycles all ten, in this order.
 
 | Course | `--arena` | Tier (guess) | What it is |
 | --- | --- | --- | --- |
-| The Stair | `stair` | easy | Six islands, each up to 2.5 m higher, gaps 2.5–4 m. |
-| The Causeway | `causeway` | easy | Level gaps, two stepping stones, a 20 m bridge. |
+| The Stair | `stair` | easy | Six islands, each up to 2.5 m higher, gaps 3.8–5.5 m (2.5–4 m until 2026-10-16). |
+| The Causeway | `causeway` | easy | Level gaps of 5–6.5 m (4–5.5 m until 2026-10-16), two stepping stones, a 20 m bridge. |
 | The Spiral | `spiral` | hard | Twenty ledges climbing round a 10 m pillar: a turn of short grass hops (+0.75 m each), then a turn of sand stones with longer gaps (+0.9 m), a checkpoint every four, the nest on the crown. Two tall shortcuts. |
 | The Falls | `falls` | hard | A meadow, a stone stair to a 22 m arch, a required 14 m leap down off its end onto a wide landing, a zig-zag of six small stones stepping down 1.3 m each, a pool to rest on, the nest. |
 | The Slalom | `slalom` | hard | Eight 2.2 m stones zig-zagging across a line of tall grey pillars, then islands under a cave mouth -- the one roof in the set, two metres over a head -- and a required 13 m leap out of it to the nest. |
@@ -162,15 +162,21 @@ cargo test -p sim --test waterfall
 
 | Beat | Hops |
 | --- | --- |
-| Out of the pool | Three mossy column tops: 1.5 m and +1.0, 2.1 m and +1.5, 2.2 m and +1.7, then the first shelf (a cairn) |
-| Up the right | A ledge 3 m along and +2.0; a column standing out of the pool, 2.6 m and +2.0; a ledge over the shelf, 2.4 m and +2.0 |
-| **Behind the falls** | Three level leaps of 3.5 m (+0.5 each) along ledges between the cliff and the water, under the lip, to the second shelf (a cairn) |
-| Up the left | Three hops of 3 m, 3 m and 2.9 m at +2.1, between face ledges and a column standing out; then 2.5 m and +2.2 onto the top |
+| Out of the pool | Three mossy column tops: 1.5 m and +1.0, 2.9 m and +1.5, 2.7 m and +1.7, then the first shelf (a cairn) |
+| Up the right | A ledge 4 m along and +2.0; a column standing out of the pool, 3.4 m and +2.0; a ledge over the shelf, 3.1 m and +2.0 |
+| **Behind the falls** | Three level leaps of 4.7 m (+0.5 each) along ledges between the cliff and the water, under the lip, to the second shelf (a cairn) |
+| Up the left | Three hops of 4 m, 4 m and 3.8 m at +2.1, between face ledges and a column standing out; then 2.5 m and +2.2 onto the top |
 
-- **Every hop is inside the Bulwark's plain running jump** (apex 2.7 m; 3.9 m
-  out at +2.2), because the road is for everybody and the Bulwark sets the
-  valley's gaps (valley.md §6). For the Bulwark it is close to the edge; for
-  the Dual mage it is easy. `tests/waterfall.rs` reads every hop off the
+**A third wider along the face since 2026-10-16** (`waterfall::piece`
+stretches the table's `z`; heights unchanged): the hops were inside the
+Bulwark's plain landing, and with ledges catching they are inside its plain
+catch instead -- it lands the short ones and hangs from the long ones; every
+other class still lands them all.
+
+- **Every hop is inside the Bulwark's plain running jump, caught at the
+  hands** (apex 2.6 m; 5.3 m out at +2 caught, 4.1 landed), because the road
+  is for everybody and the Bulwark sets the valley's gaps (valley.md §3, §6).
+  For the Bulwark it is a climb of catches; for the Dual mage it is easy. `tests/waterfall.rs` reads every hop off the
   table and checks each class against `sim::envelope`, and then **jumps
   every hop with every class**, in the valley and in the course, by a
   stand-in player that tries a few run-ups.
@@ -221,11 +227,14 @@ narrow question later:
 
 ## 4 · Props a shared world could give every class
 
-**Vines and updraft vents are built** (2026-10-08), for the valley rather than
-the courses: a vine is a face anybody climbs at 2.5 m/s holding jump, and a
-vent lifts a body in the air at 8 m/s to its top. Both are tables in a
-valley place and knobs in the Oven; see [valley.md](valley.md) §3. A course
-could take them by the same tables; none does yet. Still not built:
+**Updraft vents are built** (2026-10-08), for the valley rather than the
+courses: a vent lifts a body in the air at 8 m/s to its top -- a table in a
+valley place and a knob in the Oven; see [valley.md](valley.md) §3. **Vines
+were built beside them and removed on 2026-10-16** (the owner: "awful to get
+stuck in"): the ledge catch and the wall jump do what they did. **A gully**
+(`sim::arena::gully`) is the wall jump's piece of level -- a drop too long to
+jump between two walls close enough to kick between -- measured on the
+bench's gully lanes and used on the Hanging Stones (valley.md §3). Still not built:
 **drifting rocks** on fixed paths (a timing gate the same for every class;
 the sim has no moving solids yet).
 

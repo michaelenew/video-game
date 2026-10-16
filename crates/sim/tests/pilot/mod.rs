@@ -175,7 +175,9 @@ fn try_jump(
             return Err("died".into());
         }
         if jumped && f > 20 && w.players[0].grounded {
-            return if on_top(w, o, &to) {
+            // On it -- or on something higher still, which is further up.
+            let higher = feet(w, o).y.raw() > to.max.y.add(Fx::ratio(1, 2)).raw();
+            return if on_top(w, o, &to) || higher {
                 Ok(())
             } else {
                 Err(format!(

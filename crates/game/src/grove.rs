@@ -31,11 +31,6 @@ fn m(v: i32) -> f32 {
     v as f32 / 100.0
 }
 
-/// RENDER-ONLY. Fixed point to metres.
-fn fx(v: sim::Fx) -> f32 {
-    v.to_f32_for_render()
-}
-
 /// A colour a little off its own.
 fn vary(rgb: [f32; 3], k: f32, by: f32) -> [f32; 3] {
     let f = 1.0 + by * (k - 0.5) * 2.0;

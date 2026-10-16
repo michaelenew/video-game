@@ -14,14 +14,15 @@
 //! | Beat | What it is |
 //! | --- | --- |
 //! | The pool | Three mossy stones stepping up out of the pool on the right of the falls, to the first shelf (a cairn) |
-//! | The right side | Up the face: a ledge, a column standing out of the pool, a ledge -- two metres up each time |
-//! | Behind the falls | Three level leaps of three and a half metres along ledges between the cliff and the falling water, to the second shelf (a cairn) on the left |
-//! | The left side | Three hops of 2.1 m up, between ledges on the face and a column standing out from it, and 2.2 m onto the top |
+//! | The right side | Up the face: a ledge, a column standing out of the pool, a ledge -- two metres up each time, three to four along |
+//! | Behind the falls | Three level leaps of 4.7 m along ledges between the cliff and the falling water, to the second shelf (a cairn) on the left |
+//! | The left side | Three hops of 2.1 m up and about 4 m along, between ledges on the face and a column standing out from it, and 2.2 m onto the top |
 //! | The top | The cliff's top, where the river goes over |
 //!
-//! **Every hop is inside the Bulwark's plain running jump**, because the road
-//! is for everybody (`tests/waterfall.rs` reads the hops off this table and
-//! checks each class against `crate::envelope`). It is hard by its height and
+//! **Every hop is inside the Bulwark's plain running jump caught at the
+//! hands** (landed, until ledges caught: 2026-10-16), because the road is for
+//! everybody (`tests/waterfall.rs` reads the hops off this table and checks
+//! each class against `crate::envelope::widest_caught`). It is hard by its height and
 //! by the water, not by its gaps: a slip from the left side is a fall the
 //! fall rule does not forgive, and **the falling water pushes down** anything
 //! in it (`tuning::falls_push`), so nobody jumps up through the curtain -- the
@@ -50,9 +51,21 @@ pub struct Piece {
     pub material: Material,
 }
 
+/// A piece, from the table's corners: **along the face (`z`) the climb is a
+/// third wider than the table reads** (2026-10-16, when ledges started
+/// catching): every gap along the face grows by a third and every height
+/// stays, so the hops that were the Bulwark's landings are its catches now,
+/// and everybody else's landings still.
 const fn piece(min: [i32; 3], max: [i32; 3], material: Material) -> Piece {
-    Piece { min, max, material }
+    Piece {
+        min: [min[0], min[1], min[2] * WIDER.0 / WIDER.1],
+        max: [max[0], max[1], max[2] * WIDER.0 / WIDER.1],
+        material,
+    }
 }
+
+/// How much wider along the face the climb is than its table.
+const WIDER: (i32, i32) = (4, 3);
 
 /// How tall the cliff is, from the shore to its top.
 pub const HEIGHT: i32 = 2200;

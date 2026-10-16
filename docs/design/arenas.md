@@ -185,14 +185,14 @@ back to.
   proving ground's square in sand, through Hearth's north door, the one place
   in the valley for fighting each other; five **reaches** -- **the Mouth**,
   **the Bank**, **the Shelves**, **the Pinewood**, **the Saddle** -- 170 to
-  220 m long, climbing 20 to 36 m by shelves, traverses, chimneys and vines;
+  220 m long, climbing 20 to 36 m by shelves, traverses and chimneys;
   and **the Highlands** (`arena/highlands.rs`), the proving ground's plan on a
   moor, the Ridgeback's room in the valley. Generated from one script and
   checked by `tests/valley.rs`; see [valley.md](valley.md). The reaches are
   the first arenas whose **floor climbs**: `relief::Ramp` raises the ground
   along an axis by a smoothstep, so a scree or a river terrace is ground and
-  not a box. A valley place also carries a `valley::Place` -- its seams,
-  vines and updrafts -- beside its `Arena`.
+  not a box. A valley place also carries a `valley::Place` -- its seams
+  and updrafts -- beside its `Arena`.
 
 Every one of them, with its creature in it, is in the
 [gallery](gallery/README.md). Terrain-sized boxes (more than six metres

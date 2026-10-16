@@ -830,10 +830,12 @@ pub fn plan() -> Plan {
     // wood is drawn from their skeletons, not as boxes.
     let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
     let ground = |x: i32, z: i32| to_cm(land.height(cm(x), cm(z)));
-    let grown = wood::grow(&ground);
+    let mut grown = wood::grow(&ground);
     let mut wood_boxes = Vec::new();
     let mut wood_cairns = Vec::new();
     wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
+    let ladders = wood::ladders(&mut grown, &wood_boxes, &ground);
+    wood_boxes.extend(ladders);
     let first = plan.extras.len();
     plan.extras.extend(wood_boxes);
     plan.hidden.push(first..plan.extras.len());

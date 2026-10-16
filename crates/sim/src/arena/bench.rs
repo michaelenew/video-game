@@ -31,13 +31,12 @@ pub const LANES: [(&str, usize, usize); 18] = [
 ];
 
 /// **A gully lane** (2026-10-16): a runway at 60 m, then `long` of drop
-/// between two walls `GULLY_WIDE` apart -- from 10 m under the runway to 12 m
-/// over it -- and a landing 2 m down at the far end. Too long to jump; the
-/// way over is off the walls, side to side (`docs/design/valley.md` §3).
-pub const GULLY_WIDE: i32 = 300;
-
+/// between two walls a gully's width apart ([`super::gully::WIDE`]) -- from
+/// 10 m under the runway to 12 m over it -- and a landing 2 m down at the far
+/// end. Too long to jump; the way over is off the walls, side to side
+/// (`docs/design/valley.md` §3). What `super::gully` was measured on.
 const fn gully(z: i32, long: i32) -> [Solid; 4] {
-    let h = GULLY_WIDE / 2;
+    let h = super::gully::WIDE / 2;
     [
         Solid::cm([-2500, 5700, z - h], [0, 6000, z + h], Rock),
         Solid::cm([long, 5500, z - h], [long + 600, 5800, z + h], Grass),

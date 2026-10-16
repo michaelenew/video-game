@@ -62,7 +62,7 @@ The plan beside them is `cargo run -p look --example valley`.
 
 | | |
 | --- | --- |
-| ![](valley.png) **The plan**, every place from above, Hearth at the top: seams boxed (gold open, grey behind a waystone), waystones yellow, cairns white, vines green, updrafts pale rings. | ![](valley-hearth.jpg) **Hearth**: the square, and the stair up the inside of the wall to the lookout on the left. |
+| ![](valley.png) **The plan**, every place from above, Hearth at the top: seams boxed (gold open, grey behind a waystone), waystones yellow, cairns white, vines green (vines removed 2026-10-16; the sheet is older), updrafts pale rings. | ![](valley-hearth.jpg) **Hearth**: the square, and the stair up the inside of the wall to the lookout on the left. |
 | ![](valley-ring.jpg) **The Ring**, through Hearth's north door: the proving ground in sand, the one place you can fight each other. | ![](valley-mouth.jpg) **The Mouth**: the road out of the gate, the river on the left, the scree rising to the Step. |
-| ![](valley-bank.jpg) **The Bank**: the den's mouth at the foot, the ten-shelf stair up the face, the vine at its south end. | ![](valley-shelves.jpg) **The Shelves**: on the first terrace, the traverse's ledge along the right-hand wall. |
+| ![](valley-bank.jpg) **The Bank**: the den's mouth at the foot, the ten-shelf stair up the face, the vine at its south end (since removed). | ![](valley-shelves.jpg) **The Shelves**: on the first terrace, the traverse's ledge along the right-hand wall. |
 | ![](valley-pinewood.jpg) **The Pinewood**: the trunks, the Highlands' stair up the left wall, the chimney's ledges between the giant trunks ahead. | ![](valley-saddle.jpg) **The Saddle**: on the west platform's turf, the ridge running out ahead to the spires. |
