@@ -8758,3 +8758,9 @@ proving ground's walls). The new paths also turned up an older hole in the Pair:
 up between the rake's two hits reported no window, so the partner could commit a hit landing
 inside the gap just before the drop. The hold now reports the drop's window
 (`pair::fight::live_window`).
+
+**Same day, from the owner:** "never twice running off the same wall" was more than needed.
+Now the same wall is offered again once the body is `Wall jump, same wall again once this far
+below` (1 m) under where it last jumped off it. Every return to a wall leaves from lower down,
+so the back-track loop still runs downhill, and a wall can be used again on the way down. The
+falloff stays, for corners.

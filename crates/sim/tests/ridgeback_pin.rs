@@ -127,9 +127,12 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// against the proving ground's walls, which now slow the fall and take a
 /// press of space as a jump off them. Not only the hash: with the wall
 /// fields left out of `state_checksum` the same five still moved.
+/// **The Bulwark's again the same day**: the same wall is offered again once
+/// a body is `wall_jump_drop` below the last jump off it, rather than never,
+/// and his random presses take one.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0xbe81b0094595b06d),
+    (Class::Bulwark, 0xdf231e126174739b),
     (Class::ShadowReaver, 0xdc33cf7e5f40c303),
     (Class::BloodMage, 0x3d6aab4386e3f321),
     (Class::DualMage, 0x4f860ccfcb70b885),

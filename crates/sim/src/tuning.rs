@@ -618,10 +618,10 @@ pub fn wall_jump_push() -> Fx {
 
 /// What each wall jump after the first in one airtime is worth, compounding.
 ///
-/// **The same-wall rule alone does not bound the height.** It stops jumping
-/// off a wall, air-steering back and jumping off it again, but an inside
-/// corner is two walls a step apart, and alternating between them is never
-/// the same wall twice running. Compounding the rise makes the sum of every
+/// **The same-wall drop alone does not bound the height.** It stops jumping
+/// off a wall, air-steering back and jumping off it again from as high, but
+/// an inside corner is two walls a step apart, and alternating between them
+/// never meets the same wall twice running. Compounding the rise makes the sum of every
 /// wall jump's height a geometric series, bounded however many walls there
 /// are -- the argument [`air_stall_falloff`] makes for the hangs. Reset on
 /// landing.
@@ -646,6 +646,18 @@ pub fn wall_same_turn() -> Fx {
 /// two boxes' faces in one line are one face to a body sliding along them.
 pub fn wall_same_gap() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSameGap))
+}
+
+/// **How far below the last jump off a wall the next one off it may be.**
+///
+/// The wall jump just taken off a face is not offered off that face again
+/// until the body is this much lower than where it jumped. That is what
+/// stops jump, strafe back, jump again being a ladder: every jump off the
+/// same wall leaves from at least this much below the last, so the climb
+/// runs downhill however it is played. Any height above zero bounds it; the
+/// size is how much a return trip costs. A different wall is not held to it.
+pub fn wall_jump_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpDrop)).max(Fx::ZERO)
 }
 
 /// Fraction of your upward speed kept when you let go of jump while rising.

@@ -74,8 +74,8 @@ after the first in a single airtime is worth less** — a class with two interch
 could otherwise alternate them and never come down.
 **Walls slide and can be jumped off — added 2026-10-16.** Falling against a wall is a slide a
 little slower than a fall, and it is footing for the fall rule, so a wall reached cancels or
-shortens a fall. Space on one is a small jump away from it that gives nothing back — never
-twice running off the same wall, and each one in an airtime worth less. See
+shortens a fall. Space on one is a small jump away from it that gives nothing back — off the
+same wall again only from a metre below the last, and each one in an airtime worth less. See
 [controls.md](controls.md#walls-slide-and-can-be-jumped-off--added-2026-10-16).
 
 **The jump is the floor of the movement system, not the whole of it — ⚠️ retuned 2026-09-17.**
