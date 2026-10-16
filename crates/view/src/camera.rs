@@ -306,6 +306,13 @@ impl CameraRig {
         }
     }
 
+    /// Where the camera is looking from round: the smoothed focus, at the
+    /// followed fighter. What the renderer cuts a tree away round the line
+    /// to (`game::grove`).
+    pub fn focus(&self) -> [f32; 3] {
+        self.focus
+    }
+
     pub fn set_fov(&mut self, radians: f32) {
         self.cfg.fov = radians;
     }
@@ -622,7 +629,9 @@ fn unobstructed_fraction(
 fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Terrain) -> bool {
     // On a map, only the tiles round the point: the arm is a few metres long.
     let at = sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2]));
-    arena.around(at, fx_of(pad + 1.0)).any(|s| {
+    // Not a grown tree, which is cut away round the line to the fighter
+    // instead (`Terrain::seen_around`).
+    arena.seen_around(at, fx_of(pad + 1.0)).any(|s| {
         let lo = [
             s.min.x.to_f32_for_render() - pad,
             s.min.y.to_f32_for_render() - pad,

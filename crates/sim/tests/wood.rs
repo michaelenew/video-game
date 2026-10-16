@@ -49,6 +49,7 @@ fn grown(kind: Kind, ground: &dyn Fn(i32, i32) -> i32, neighbours: &[Neighbour])
             height,
             girth,
             seed: 41,
+            vine: None,
         },
     )
 }
@@ -150,6 +151,7 @@ fn a_crown_leans_off_its_neighbour() {
         at: (4000, 0),
         girth: 900,
         crown: 5000,
+        bole: 3000,
     }];
     for kind in KINDS {
         let alone = crown_middle(&grown(kind, &flat, &[]));
@@ -315,7 +317,20 @@ fn nearest(t: &Tree, from: &Solid, to: &Solid) -> (Fx, V3, V3) {
     let foot = (cm(t.base[0]), cm(t.base[2]));
     let clear = |m: V3| {
         let d = sim::math::wide_flat_len(V3::new(m.x.sub(foot.0), Fx::ZERO, m.z.sub(foot.1)));
-        d.raw() > trunk_at(t, m.y).add(Fx::ratio(1, 2)).raw()
+        // Nor under a shelf, where there is no room to stand.
+        let roofed = t.pads.iter().any(|p| {
+            let bottom = cm(p.at[1] - p.thick);
+            m.y.raw() < bottom.raw()
+                && m.y.raw() > bottom.sub(Fx::ratio(35, 10)).raw()
+                && sim::math::wide_flat_len(V3::new(
+                    m.x.sub(cm(p.at[0])),
+                    Fx::ZERO,
+                    m.z.sub(cm(p.at[2])),
+                ))
+                .raw()
+                    < cm(p.outer + 50).raw()
+        });
+        d.raw() > trunk_at(t, m.y).add(Fx::ratio(1, 2)).raw() && !roofed
     };
     nearest_clear(from, to, &clear)
 }
@@ -340,8 +355,11 @@ fn nearest_clear(from: &Solid, to: &Solid, clear: &dyn Fn(V3) -> bool) -> (Fx, V
 /// **The stair**: from the lowest limb, each step the nearest limb a
 /// little higher -- the way somebody climbing picks the next one.
 fn stair(t: &Tree, up_to: i32) -> Vec<Solid> {
-    let boards = first_boards(t);
-    let top = cm(t.base[1] + up_to);
+    let top = cm(up_to);
+    let boards: Vec<Solid> = first_boards(t)
+        .into_iter()
+        .filter(|b| b.max.y.raw() < top.sub(Fx::ratio(3, 10)).raw())
+        .collect();
     let mut path = vec![boards[0]];
     loop {
         let last = *path.last().unwrap();
@@ -353,36 +371,263 @@ fn stair(t: &Tree, up_to: i32) -> Vec<Solid> {
             })
             .min_by_key(|b| nearest(t, &last, b).0.raw());
         match next {
-            Some(b) if last.max.y.raw() < top.raw() => path.push(*b),
+            Some(b) => path.push(*b),
             _ => break,
         }
     }
     path
 }
 
+/// A pad of a tree, as the solid it is on the map.
+fn pad_solid(p: &trees::Pad) -> Solid {
+    near(p.at[0], p.at[2], 100)
+        .into_iter()
+        .find(|s| {
+            matches!(s.shape, Shape::Round { .. })
+                && s.max.y.raw() == cm(p.at[1]).raw()
+                && s.middle().0.sub(cm(p.at[0])).abs().raw() < Fx::ratio(1, 10).raw()
+                && s.middle().1.sub(cm(p.at[2])).abs().raw() < Fx::ratio(1, 10).raw()
+        })
+        .expect("the pad is on the map")
+}
+
+/// The Great Tree's first shelf: the lobe of it nearest the top of the
+/// stair, and the step on to it -- from where the limb comes out from under
+/// it, up and in over its edge.
+fn onto_the_shelf(t: &Tree, last: &Solid) -> (trees::Pad, V3, V3) {
+    let first = t.pads[0].at[1];
+    let flat = |a: V3, p: &trees::Pad| {
+        sim::math::wide_flat_len(V3::new(
+            a.x.sub(cm(p.at[0])),
+            Fx::ZERO,
+            a.z.sub(cm(p.at[2])),
+        ))
+    };
+    let lobes: Vec<trees::Pad> = t
+        .pads
+        .iter()
+        .filter(|p| (p.at[1] - first).abs() < 300)
+        .copied()
+        .collect();
+    let (lobe, from) = lobes
+        .iter()
+        .flat_map(|p| (60..=940).step_by(10).map(move |k| (*p, along(last, k))))
+        .filter(|(p, a)| flat(*a, p).raw() > cm(p.outer + 60).raw())
+        .min_by_key(|(p, a)| flat(*a, p).raw())
+        .expect("the stair comes by a lobe");
+    let inward = sim::math::wide_normalized(V3::new(
+        cm(lobe.at[0]).sub(from.x),
+        Fx::ZERO,
+        cm(lobe.at[2]).sub(from.z),
+    ));
+    let gap = flat(from, &lobe).sub(cm(lobe.outer));
+    (
+        lobe,
+        from,
+        from.add(inward.scale(gap.add(Fx::ratio(15, 10)))),
+    )
+}
+
 #[test]
-fn the_great_tree_s_first_forty_metres_are_a_stair() {
+fn the_great_tree_s_first_forty_metres_are_a_stair_to_its_shelf() {
     let atlas = sim::atlas::valley();
     let t = &atlas.trees[0];
-    let path = stair(t, 4000);
-    let top = path.last().unwrap().max.y.sub(cm(t.base[1]));
+    let shelf = t.pads[0];
+    let path = stair(t, shelf.at[1]);
+    let last = *path.last().unwrap();
+    let (lobe, p, _) = onto_the_shelf(t, &last);
+    let below = cm(lobe.at[1]).sub(last.max.y);
+    let across = sim::math::wide_flat_len(V3::new(
+        p.x.sub(cm(lobe.at[0])),
+        Fx::ZERO,
+        p.z.sub(cm(lobe.at[2])),
+    ))
+    .sub(cm(lobe.outer));
     assert!(
-        top.raw() >= Fx::from_int(38).raw(),
-        "the stair stops {} m up",
-        top.to_f32_for_render()
+        across.raw() <= Fx::from_int(3).raw(),
+        "the stair's top is {} m from the shelf",
+        across.to_f32_for_render()
+    );
+    assert!(
+        below.raw() <= cm(230).raw(),
+        "the stair stops {} m under the shelf",
+        below.to_f32_for_render()
     );
     for pair in path.windows(2) {
-        let gap = nearest(t, &pair[0], &pair[1]).0;
-        eprintln!(
-            "step to {} m, {} m across",
-            pair[1].max.y.sub(cm(t.base[1])).to_f32_for_render(),
-            gap.to_f32_for_render()
-        );
+        let (gap, p, q) = nearest(t, &pair[0], &pair[1]);
+        // Past the vine the stair's limbs stand aside, and the vine is the
+        // step.
+        if by_the_vine(p) && by_the_vine(q) {
+            continue;
+        }
         assert!(
-            gap.raw() <= Fx::from_int(4).raw(),
-            "{} m between steps",
+            gap.raw() <= Fx::ratio(9, 2).raw(),
+            "{} m between steps, from {p:?} to {q:?}",
             gap.to_f32_for_render()
         );
+    }
+}
+
+/// The Great Tree's vine.
+fn great_vine() -> valley::Zone {
+    wood::VINES[0]
+}
+
+/// Is a map point within a few metres of the Great Tree's vine?
+fn by_the_vine(p: V3) -> bool {
+    let v = great_vine();
+    let (cx, cz) = (
+        Fx::from_raw((v.min.x.raw() + v.max.x.raw()) / 2),
+        Fx::from_raw((v.min.z.raw() + v.max.z.raw()) / 2),
+    );
+    sim::math::wide_flat_len(V3::new(p.x.sub(cx), Fx::ZERO, p.z.sub(cz))).raw()
+        < Fx::from_int(7).raw()
+}
+
+/// **From the vine on to a limb beside it**: hung on the vine level with
+/// `from`, climbed until a little over `to`, then let go toward it -- the
+/// step off the vine on to a branch.
+fn off_the_vine(w: &mut World, t: &Tree, from: &Solid, to: &Solid) -> Result<(), String> {
+    let o = w.map_origin();
+    let _ = t;
+    let v = great_vine();
+    let middle = V3::new(
+        Fx::from_raw((v.min.x.raw() + v.max.x.raw()) / 2),
+        Fx::ZERO,
+        Fx::from_raw((v.min.z.raw() + v.max.z.raw()) / 2),
+    );
+    // The point of the limb nearest the vine.
+    let q = (60..=940)
+        .step_by(20)
+        .map(|k| along(to, k))
+        .min_by_key(|p| {
+            sim::math::wide_flat_len(V3::new(p.x.sub(middle.x), Fx::ZERO, p.z.sub(middle.z))).raw()
+        })
+        .unwrap();
+    let start = V3::new(
+        Fx::from_raw((v.min.x.raw() + v.max.x.raw()) / 2),
+        from.max.y.add(Fx::ratio(1, 2)),
+        Fx::from_raw((v.min.z.raw() + v.max.z.raw()) / 2),
+    );
+    let pl = &mut w.players[0];
+    pl.pos = start.sub(o);
+    pl.vel = V3::ZERO;
+    pl.grounded = false;
+    pl.fall_over = pl.pos.y;
+    pl.health = 1000;
+    let goal = to.max.y.add(Fx::ratio(6, 10)).sub(o.y);
+    let q = q.sub(o);
+    for _ in 0..600 {
+        let pl = &w.players[0];
+        let (dx, dz) = (q.x.sub(pl.pos.x), q.z.sub(pl.pos.z));
+        let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
+        let bits = if pl.pos.y.raw() < goal.raw() {
+            Input::SPACE
+        } else {
+            Input::W
+        };
+        w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
+        let pl = &w.players[0];
+        if pl.grounded && pl.pos.y.raw() > to.max.y.sub(o.y).sub(Fx::ratio(1, 10)).raw() {
+            return Ok(());
+        }
+        if pl.grounded {
+            return Err(format!(
+                "stepped off on to {:?}, for {q:?} on a limb at {} m",
+                pl.pos,
+                to.max.y.to_f32_for_render()
+            ));
+        }
+    }
+    Err(format!("still on the vine at {:?}", w.players[0].pos))
+}
+
+/// **The vine lets off at its top on to the first shelf**: climbed from the
+/// foot, and a step toward the trunk once at the top.
+#[test]
+fn the_vine_comes_up_beside_the_first_shelf() {
+    let atlas = sim::atlas::valley();
+    let t = &atlas.trees[0];
+    // The vine's own lobe is the tree's first pad.
+    let shelf = t.pads[0];
+    let mut w = World::arrive(
+        [Class::Bulwark, Class::Champion],
+        open_journey(),
+        ArenaId::WOOD,
+        Some(0),
+        1,
+    );
+    let o = w.map_origin();
+    let v = great_vine();
+    let pl = &mut w.players[0];
+    pl.pos = V3::new(
+        Fx::from_raw((v.min.x.raw() + v.max.x.raw()) / 2),
+        cm(t.base[1] + 600),
+        Fx::from_raw((v.min.z.raw() + v.max.z.raw()) / 2),
+    )
+    .sub(o);
+    pl.vel = V3::ZERO;
+    pl.health = 1000;
+    let top = cm(shelf.at[1]).sub(o.y);
+    let mut blocked = None;
+    for f in 0..60 * 30 {
+        let pl = &w.players[0];
+        let up = pl.pos.y.raw() < top.add(Fx::ratio(1, 5)).raw();
+        // Toward the trunk, south, once over the shelf's top.
+        let bits = if up { Input::SPACE } else { Input::W };
+        let was = pl.pos.y;
+        w.advance([Input::looking_at(bits, 49152, 0), Input::new(0)]);
+        let pl = &w.players[0];
+        if up
+            && f > 30
+            && pl.pos.y.raw() <= was.raw()
+            && pl.pos.y.raw() < top.sub(Fx::ONE).raw()
+            && blocked.is_none()
+        {
+            blocked = Some(pl.pos);
+        }
+        if pl.grounded && pl.pos.y.sub(top).abs().raw() < Fx::ratio(1, 5).raw() {
+            assert!(blocked.is_none(), "the climb was held up at {blocked:?}");
+            return;
+        }
+    }
+    panic!(
+        "never stood on the shelf at {} m: at {:?}, held up at {blocked:?}",
+        shelf.at[1] / 100,
+        w.players[0].pos
+    );
+}
+
+/// **Nothing of a tree is in a vine's way**: up the middle of each, from
+/// three metres to its top, no solid.
+#[test]
+fn every_vine_is_clear_to_its_top() {
+    let atlas = sim::atlas::valley();
+    for v in wood::VINES {
+        let (cx, cz) = (
+            Fx::from_raw((v.min.x.raw() + v.max.x.raw()) / 2),
+            Fx::from_raw((v.min.z.raw() + v.max.z.raw()) / 2),
+        );
+        let ground = atlas.relief_at(cx, cz);
+        let r = Fx::from_int(2);
+        let mut y = ground.add(Fx::from_int(3));
+        while y.raw() < v.max.y.raw() {
+            for i in atlas.near((cx.sub(r), cz.sub(r)), (cx.add(r), cz.add(r))) {
+                let s = atlas.solids[i as usize];
+                let level =
+                    s.min.y.raw() < y.add(Fx::ratio(18, 10)).raw() && s.max.y.raw() > y.raw();
+                assert!(
+                    !level
+                        || s.side_push(cx, cz, Fx::ratio(4, 10), y, y.add(Fx::ratio(18, 10)))
+                            .is_none(),
+                    "a vine at ({}, {}) is blocked {} m up by {s:?}",
+                    cx.to_f32_for_render(),
+                    cz.to_f32_for_render(),
+                    y.to_f32_for_render()
+                );
+            }
+            y = y.add(Fx::ONE);
+        }
     }
 }
 
@@ -391,12 +636,24 @@ fn the_great_tree_s_first_forty_metres_are_a_stair() {
 /// point, the jump held, braked or steered onto it -- tried every way
 /// before it is given up, as somebody climbing would.
 fn hop(w: &mut World, t: &Tree, from: &Solid, to: &Solid) -> Result<(), String> {
-    let o = w.map_origin();
-    let (_, p, q0) = nearest(t, from, to);
-    let (p, q0) = (p.sub(o), q0.sub(o));
+    let (_, p, q) = nearest(t, from, to);
     let Shape::Turned { cos, sin, .. } = to.shape else {
         unreachable!()
     };
+    hop_at(w, from, to, (p, q), (cos, sin))
+}
+
+/// [`hop`] from `p` on `from` to `q` on `to` (map points), trying landings
+/// a metre or two along `slide` either way.
+fn hop_at(
+    w: &mut World,
+    from: &Solid,
+    to: &Solid,
+    (p, q0): (V3, V3),
+    (cos, sin): (Fx, Fx),
+) -> Result<(), String> {
+    let o = w.map_origin();
+    let (p, q0) = (p.sub(o), q0.sub(o));
     let local = |s: &Solid| Solid {
         min: s.min.sub(o),
         max: s.max.sub(o),
@@ -491,7 +748,7 @@ fn hop(w: &mut World, t: &Tree, from: &Solid, to: &Solid) -> Result<(), String> 
 #[test]
 fn every_class_climbs_the_great_tree_s_stair() {
     let atlas = sim::atlas::valley();
-    let path = stair(&atlas.trees[0], 4000);
+    let path = stair(&atlas.trees[0], atlas.trees[0].pads[0].at[1]);
     let mut failed = Vec::new();
     for class in sim::class::ALL_CLASSES {
         for (n, pair) in path.windows(2).enumerate() {
@@ -504,9 +761,34 @@ fn every_class_climbs_the_great_tree_s_stair() {
                 Some(0),
                 1,
             );
-            if let Err(e) = hop(&mut w, &atlas.trees[0], &pair[0], &pair[1]) {
+            let t = &atlas.trees[0];
+            let (_, p, q) = nearest(t, &pair[0], &pair[1]);
+            // A hop; or, by the vine, the vine.
+            let done = hop(&mut w, t, &pair[0], &pair[1]).or_else(|e| {
+                if by_the_vine(p) && by_the_vine(q) {
+                    off_the_vine(&mut w, t, &pair[0], &pair[1])
+                } else {
+                    Err(e)
+                }
+            });
+            if let Err(e) = done {
                 failed.push(format!("{}: limb {n} to {}: {e}", class.name(), n + 1));
             }
+        }
+        // And off the top of the stair on to the shelf.
+        let mut w = World::arrive(
+            [class, Class::Champion],
+            open_journey(),
+            ArenaId::WOOD,
+            Some(0),
+            1,
+        );
+        let t = &atlas.trees[0];
+        let last = *path.last().unwrap();
+        let (lobe, p, q) = onto_the_shelf(t, &last);
+        let slide = sim::math::wide_normalized(V3::new(q.z.sub(p.z), Fx::ZERO, p.x.sub(q.x)));
+        if let Err(e) = hop_at(&mut w, &last, &pad_solid(&lobe), (p, q), (slide.x, slide.z)) {
+            failed.push(format!("{}: on to the shelf: {e}", class.name()));
         }
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
@@ -552,4 +834,80 @@ fn the_road_to_the_wood_can_be_walked() {
     }
     assert_eq!(w.arena, ArenaId::WOOD, "ended in {}", w.arena().name);
     assert!(w.players[0].health > 0);
+}
+
+/// **Every broadleaf's crown is a roof you can walk**, with a lip round it
+/// higher than the terrace inside, every terrace a step from the next; and
+/// **every roof is reached** by a liana hung off its lip: climbed from the
+/// ground, and a step in over the lip at its top, on to the roof.
+#[test]
+fn every_broadleaf_has_a_roof_its_liana_climbs_to() {
+    let atlas = sim::atlas::valley();
+    let broad: Vec<(usize, &Tree)> = atlas
+        .trees
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.kind != Kind::Sentinel)
+        .collect();
+    assert_eq!(atlas.vines.len(), broad.len(), "a liana each");
+    for (n, (k, t)) in broad.into_iter().enumerate() {
+        let roof: Vec<&trees::Pad> = t.pads.iter().collect();
+        assert!(roof.len() >= 3, "tree {k} has a roof of {}", roof.len());
+        let rim = *roof.last().unwrap();
+        assert_eq!(rim.kind, trees::PadKind::Rim, "tree {k}");
+        let inside = roof[roof.len() - 2];
+        assert!(rim.at[1] > inside.at[1] + 80, "tree {k}: its lip is no lip");
+        for pair in roof[..roof.len() - 1].windows(2) {
+            assert!((pair[0].at[1] - pair[1].at[1]).abs() <= 40, "tree {k}");
+        }
+        // Up the liana, and in.
+        let v = atlas.vines[n];
+        let mut w = World::arrive(
+            [Class::Bulwark, Class::Champion],
+            open_journey(),
+            ArenaId::WOOD,
+            Some(0),
+            1,
+        );
+        let o = w.map_origin();
+        let foot = v.middle();
+        let pl = &mut w.players[0];
+        pl.pos = V3::new(
+            foot.x,
+            atlas.relief_at(foot.x, foot.z).add(Fx::from_int(3)),
+            foot.z,
+        )
+        .sub(o);
+        pl.vel = V3::ZERO;
+        pl.health = 1000;
+        let lip = cm(rim.at[1]).sub(o.y);
+        let middle = V3::new(cm(rim.at[0]), Fx::ZERO, cm(rim.at[2])).sub(o);
+        let mut on = false;
+        for _ in 0..60 * 120 {
+            let pl = &w.players[0];
+            let (dx, dz) = (middle.x.sub(pl.pos.x), middle.z.sub(pl.pos.z));
+            let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
+            let bits = if pl.pos.y.raw() < lip.add(Fx::ratio(1, 5)).raw() && !pl.grounded {
+                Input::SPACE
+            } else {
+                Input::W
+            };
+            w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
+            let pl = &w.players[0];
+            let inward = sim::math::wide_flat_len(V3::new(dx, Fx::ZERO, dz));
+            if pl.grounded
+                && pl.pos.y.raw() > lip.sub(Fx::from_int(5)).raw()
+                && inward.raw() < cm(rim.inner).raw()
+            {
+                on = true;
+                break;
+            }
+        }
+        assert!(
+            on,
+            "tree {k}: the liana never put her on the roof at {} m: at {:?}",
+            rim.at[1] / 100,
+            w.players[0].pos
+        );
+    }
 }

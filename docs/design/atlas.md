@@ -45,7 +45,12 @@ So there are two problems, and they are separate:
   because something else draws what it is. The Wood's grown trees
   (`sim::valley::trees`) are the one case: the map keeps each tree's skeleton
   (`Atlas::trees`), the renderer draws the skeleton (`game::grove`), and the
-  boxes built from it are hidden.
+  boxes built from it are hidden. The camera does not keep out of a hidden
+  box (`Terrain::seen_around`); the renderer cuts it away round the line to
+  the fighter instead.
+- **Vines of no place** (`Plan::vines`, `Atlas::vines`): a vine hung where
+  something grown put it -- a liana off a broadleaf's roof -- in map
+  coordinates, read by `valley::vine_on` beside each place's own.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
   touch it, in map order, and the places whose footprint does. A query over a
   box reads the tiles under it and merges their lists in map order, each box

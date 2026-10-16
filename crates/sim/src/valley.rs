@@ -323,6 +323,7 @@ pub fn vine_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
             let m = feet.add(ground.origin());
             a.place_at(m.x, m.z)
                 .is_some_and(|p| vine_at(p.arena, p.from_map(m)).is_some())
+                || a.vines.iter().any(|v| v.holds(m))
         }
     }
 }

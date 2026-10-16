@@ -96,18 +96,58 @@ pub struct Tree {
     /// Its foliage: a clump at each twig's end -- where (x, y, z) and how big
     /// (a radius), centimetres.
     pub leaves: Vec<[i32; 4]>,
-    /// Tops a cairn stands on: the highest of its thick limbs, and some on
-    /// the way.
+    /// Tops a cairn stands on: one on every [`Pad`].
     pub cairns: Vec<[i32; 3]>,
+    /// **Its wide places**: the shelves up a Sentinel, and the roof over a
+    /// broadleaf's crown.
+    pub pads: Vec<Pad>,
+}
+
+/// What a [`Pad`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PadKind {
+    /// **A shelf fungus** grown round a Sentinel's trunk, every forty metres
+    /// up: a checkpoint, with a cairn on it.
+    Shelf,
+    /// **A terrace of a broadleaf's roof**: the top of its crown, a step down
+    /// from the one inside it, so the canopy is a dome you walk.
+    Roof,
+    /// **The roof's lip**: its outermost terrace, standing up above the one
+    /// inside it, so the canopy is hard to walk off.
+    Rim,
+}
+
+/// **A wide flat place** on a tree: a ring round `at` (its middle, and its
+/// top), from `inner` out to `outer` (radii), `thick` deep (centimetres).
+#[derive(Clone, Copy, Debug)]
+pub struct Pad {
+    pub at: [i32; 3],
+    pub inner: i32,
+    pub outer: i32,
+    pub thick: i32,
+    pub kind: PadKind,
+}
+
+/// **A vine hung by a tree**: the way it hangs from the trunk (thousandths
+/// of a turn), how far out from the axis its near side is, and how high its
+/// top is (centimetres, on the map). The tree keeps its limbs out of the
+/// vine's way and grows a shelf beside its top to step off on to.
+#[derive(Clone, Copy, Debug)]
+pub struct Vine {
+    pub heading: i64,
+    pub out: i32,
+    pub top: i32,
 }
 
 /// A neighbour, as the tree growing sees it: where its trunk stands, how
-/// thick it is and how far its crown reaches (centimetres).
+/// thick it is, how far its crown reaches and how high its trunk stands
+/// before it breaks into a crown (centimetres).
 #[derive(Clone, Copy, Debug)]
 pub struct Neighbour {
     pub at: (i32, i32),
     pub girth: i32,
     pub crown: i32,
+    pub bole: i32,
 }
 
 /// **Where a tree grows**: its foot on the map, the ground (a height in
@@ -120,6 +160,8 @@ pub struct Site<'a> {
     pub height: i32,
     pub girth: i32,
     pub seed: u32,
+    /// A vine it hangs, if any.
+    pub vine: Option<Vine>,
 }
 
 // ---------------------------------------------------------------------------
@@ -313,8 +355,10 @@ pub fn grow(kind: Kind, site: &Site) -> Tree {
     let mut dice = Dice(site.seed.wrapping_mul(2_654_435_761) | 1);
     let mut nodes: Vec<Node> = Vec::new();
     let mut leaves: Vec<[i32; 4]> = Vec::new();
+    let shelves = shelves(&r);
+    let mut lobes = Vec::new();
     match kind {
-        Kind::Sentinel => sentinel(&r, &mut dice, &mut nodes, &mut leaves),
+        Kind::Sentinel => sentinel(&r, &mut dice, &mut nodes, &mut leaves, &shelves, &mut lobes),
         Kind::Elder | Kind::Strangler => broadleaf(kind, &r, &mut dice, &mut nodes, &mut leaves),
     }
     pipe(&mut nodes, site.girth);
@@ -322,13 +366,18 @@ pub fn grow(kind: Kind, site: &Site) -> Tree {
         props(&r, &mut dice, &mut nodes);
     }
     roots(kind, &r, &mut dice, &mut nodes);
-    let cairns = cairns(&nodes, kind);
+    let pads = match kind {
+        Kind::Sentinel => shelf_pads(&r, &nodes, &lobes),
+        _ => roof(kind, &r, &mut leaves),
+    };
+    let cairns = cairns(&pads);
     Tree {
         kind,
         base: at(r.base),
         nodes,
         leaves,
         cairns,
+        pads,
     }
 }
 
@@ -381,7 +430,14 @@ fn on_leader(nodes: &[Node], leader: &[u32], base: V, h: i64) -> (u32, V) {
 /// at the golden angle, close where you start climbing and further apart
 /// above, the lower drooping and the upper rising, each with side shoots and
 /// foliage.
-fn sentinel(r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>, leaves: &mut Vec<[i32; 4]>) {
+fn sentinel(
+    r: &Reading,
+    dice: &mut Dice,
+    nodes: &mut Vec<Node>,
+    leaves: &mut Vec<[i32; 4]>,
+    shelves: &[i64],
+    lobes: &mut Vec<(i64, i64)>,
+) {
     let h = r.site.height as i64;
     let girth = r.site.girth as i64;
     let lead = leader(r, dice, h, 250, 40, nodes);
@@ -397,6 +453,9 @@ fn sentinel(r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>, leaves: &mut Ve
         } else {
             450
         };
+        // A shelf's tier grows bracket fungus where its limbs would be: the
+        // next step of the spiral is a wide one.
+        let at_shelf = shelves.contains(&y);
         let (from, p) = on_leader(nodes, &lead, r.base, y);
         // How thick the trunk is here, before the pipe model says: enough to
         // start the branch at its bark.
@@ -407,7 +466,33 @@ fn sentinel(r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>, leaves: &mut Ve
         for k in 0..limbs {
             // Held close to the golden angle low down, where it makes the stair.
             let wander = if y < 4000 { 6 } else { 25 };
-            let turn = phase + k * (1000 / limbs) + dice.range(-wander, wander);
+            let mut turn = phase + k * (1000 / limbs) + dice.range(-wander, wander);
+            // Out of a vine's way, below its top: turned aside to stand
+            // beside it, a limb to step off on to rather than one to climb
+            // into.
+            if let Some(v) = r.site.vine {
+                if r.base[1] + y < v.top as i64 + 300 {
+                    let off = (turn - v.heading + 500).rem_euclid(1000) - 500;
+                    // Pinned beside it, the one or two of a spiral's limbs
+                    // that would cross it: a step off the vine on either
+                    // side, and the vine the step between them.
+                    let clear = vine_clear(&v);
+                    if off.abs() < VINE_GATHER {
+                        turn = v.heading + if off < 0 { -clear } else { clear };
+                    }
+                }
+            }
+            if at_shelf {
+                // A lobe is wider than a limb: none near a vine, whose own
+                // lobe is there instead.
+                let by_vine = r.site.vine.is_some_and(|v| {
+                    ((turn - v.heading + 500).rem_euclid(1000) - 500).abs() < VINE_GATHER * 2
+                });
+                if !by_vine {
+                    lobes.push((y, turn));
+                }
+                continue;
+            }
             let dir = heading(turn);
             // The crown a cone: long low, short high; longer toward the light
             // and shorter into a neighbour's shade.
@@ -782,8 +867,16 @@ fn roots(kind: Kind, r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>) {
         -(g(x, z + 800) - g(x, z - 800)) as i64,
     ]);
     for _ in 0..count {
-        let dir = heading(phase + dice.range(-40, 40));
+        let mut turn = phase + dice.range(-40, 40);
         phase += GOLDEN;
+        // Not out under a vine: its foot is to be walked into.
+        if let Some(v) = r.site.vine {
+            let off = (turn - v.heading + 500).rem_euclid(1000) - 500;
+            if off.abs() < VINE_ROOTS {
+                turn = v.heading + if off < 0 { -VINE_ROOTS } else { VINE_ROOTS };
+            }
+        }
+        let dir = heading(turn);
         let along = (dir[0] * downhill[0] + dir[2] * downhill[2]) / UNIT;
         let long = girth * spread / 100 * (UNIT + along * 35 / 100) / UNIT;
         root(r, dice, nodes, 0, dir, long, downhill, true);
@@ -868,6 +961,14 @@ fn root(
                 nd = add(nd, scale(unit(o), 600, UNIT));
             }
         }
+        // And round the foot of a vine, the same way.
+        if let Some(v) = r.site.vine {
+            let foot = add(r.base, scale(heading(v.heading), v.out as i64 + 120, UNIT));
+            let o = sub([p[0], 0, p[2]], [foot[0], 0, foot[2]]);
+            if flat_len(o) < 600 {
+                nd = add(nd, scale(unit(o), 900, UNIT));
+            }
+        }
         d = unit([nd[0], 0, nd[2]]);
         p = add(p, scale(d, step, UNIT));
         p[1] = r.ground(p);
@@ -895,36 +996,162 @@ fn root(
     }
 }
 
-/// **Where cairns go**: on the highest thick, level limbs, and two on the
-/// way up, each well apart.
-fn cairns(nodes: &[Node], kind: Kind) -> Vec<[i32; 3]> {
-    let base = nodes[0].at[1];
-    let thick = match kind {
-        Kind::Sentinel => 70,
-        _ => 80,
-    };
-    let mut level: Vec<(i32, [i32; 3])> = nodes
-        .iter()
-        .filter(|n| n.part == Part::Limb && n.radius >= thick && n.parent != NONE)
-        .filter(|n| {
-            let p = nodes[n.parent as usize].at;
-            let rise = (n.at[1] - p[1]).abs() as i64;
-            let run = flat_len(sub(v(n.at), v(p)));
-            rise * 4 < run
-        })
-        .map(|n| (n.at[1], [n.at[0], n.at[1] + n.radius, n.at[2]]))
-        .collect();
-    level.sort_by_key(|(y, _)| -*y);
+/// **Where cairns go**: one on each shelf -- on the first of its lobes, the
+/// vine's where there is one -- and one in the middle of a roof.
+fn cairns(pads: &[Pad]) -> Vec<[i32; 3]> {
     let mut out: Vec<[i32; 3]> = Vec::new();
-    for (y, p) in level {
-        if out.len() >= 3 {
-            break;
-        }
-        if out.iter().all(|q| (q[1] - p[1]).abs() > 3000) && y - base > 2500 {
-            out.push(p);
+    for p in pads {
+        let first = match p.kind {
+            PadKind::Shelf => out.iter().all(|c| (c[1] - p.at[1]).abs() > 300),
+            PadKind::Roof => p.inner == 0,
+            PadKind::Rim => false,
+        };
+        if first {
+            out.push(p.at);
         }
     }
     out
+}
+
+/// **How far either side of a vine's heading no limb grows** (thousandths of
+/// a turn), below its top: far enough that a limb's side stands clear of a
+/// body on the vine where it hangs nearest the trunk -- a body's half-width,
+/// a limb's and a hand, a metre sixty-five of arc in all -- and no
+/// further, so you walk off the vine on to it: a vine is climbed with the
+/// jump, so you step off one, you cannot jump.
+fn vine_clear(v: &Vine) -> i64 {
+    165 * 1000 / (6283 * v.out.max(1) as i64 / 1000)
+}
+
+/// How far either side of a vine the limbs are squeezed aside.
+const VINE_GATHER: i64 = 45;
+
+/// And no root, so the vine's foot is walked into.
+const VINE_ROOTS: i64 = 110;
+
+/// **Which of a Sentinel's tiers are shelves** (heights over its foot): the
+/// first of the six-metre tiers, forty metres up, and every seventh after
+/// it, to twenty-five under the top. A broadleaf has none.
+fn shelves(r: &Reading) -> Vec<i64> {
+    let top = r.site.height as i64 - 2500;
+    (0..)
+        .map(|k| 4000 + 4200 * k)
+        .take_while(|&y| y < top)
+        .collect()
+}
+
+/// How far a shelf's lobe reaches (a radius), and how far out of the trunk's
+/// axis its middle is past the bark.
+const LOBE: i32 = 420;
+const LOBE_OUT: i32 = 150;
+
+/// **The shelves, grown**: a bracket of fungus out of the bark where each of
+/// a shelf tier's limbs would be, its top a step over where that limb's
+/// would be; and on a tree with a vine, one more at the vine's top, its edge
+/// under the vine's near side, so the climb steps off on to it.
+fn shelf_pads(r: &Reading, nodes: &[Node], lobes: &[(i64, i64)]) -> Vec<Pad> {
+    let trunk_at = |y: i64| {
+        nodes
+            .iter()
+            .filter(|n| n.part == Part::Trunk)
+            .min_by_key(|n| (n.at[1] as i64 - y).abs())
+            .copied()
+            .unwrap_or(nodes[0])
+    };
+    let lobe = |c: V, top: i64| Pad {
+        at: [c[0] as i32, top as i32, c[2] as i32],
+        inner: 0,
+        outer: LOBE,
+        thick: 80,
+        kind: PadKind::Shelf,
+    };
+    let mut pads = Vec::new();
+    for (k, &(y, turn)) in lobes.iter().enumerate() {
+        let top = r.base[1] + y + 70;
+        let trunk = trunk_at(top);
+        // The vine's own, first: the checkpoint a climb of it comes to.
+        if let Some(vine) = r.site.vine.filter(|_| k == 0 && y == 4000) {
+            let t = trunk_at(vine.top as i64);
+            let c = add(
+                v(t.at),
+                scale(heading(vine.heading), (vine.out + 20 - LOBE) as i64, UNIT),
+            );
+            pads.push(lobe(c, vine.top as i64 - 30));
+        }
+        let c = add(
+            v(trunk.at),
+            scale(heading(turn), (trunk.radius + LOBE_OUT) as i64, UNIT),
+        );
+        pads.push(lobe(c, top));
+    }
+    pads
+}
+
+/// **A broadleaf's roof**: the top of its crown made a dome of terraces you
+/// walk, each a step down from the one inside it and the last a lip standing
+/// up, so a body is hard put to walk off it. The leaves it covers are taken
+/// away -- the roof is drawn as leaves.
+fn roof(kind: Kind, r: &Reading, leaves: &mut Vec<[i32; 4]>) -> Vec<Pad> {
+    if leaves.is_empty() {
+        return Vec::new();
+    }
+    let n = leaves.len() as i64;
+    let mid = [
+        leaves.iter().map(|l| l[0] as i64).sum::<i64>() / n,
+        0,
+        leaves.iter().map(|l| l[2] as i64).sum::<i64>() / n,
+    ];
+    let far = leaves
+        .iter()
+        .map(|l| flat_len(sub([l[0] as i64, 0, l[2] as i64], mid)))
+        .max()
+        .unwrap_or(0);
+    let share = match kind {
+        Kind::Strangler => 75,
+        _ => 65,
+    };
+    let mut reach = far * share / 100;
+    // Short of every neighbour's trunk that stands as high, and half way
+    // to a neighbour whose crown is there instead.
+    let high = leaves.iter().map(|l| l[1] as i64).max().unwrap_or(0) - r.base[1];
+    for nb in r.site.neighbours {
+        let d = flat_len(sub([nb.at.0 as i64, 0, nb.at.1 as i64], mid));
+        reach = reach.min(if nb.bole as i64 > high / 2 {
+            d - nb.girth as i64 - 400
+        } else {
+            d * 6 / 10
+        });
+    }
+    let top = leaves
+        .iter()
+        .filter(|l| flat_len(sub([l[0] as i64, 0, l[2] as i64], mid)) < reach / 2)
+        .map(|l| l[1] as i64)
+        .max()
+        .unwrap_or(0)
+        - 150;
+    let wide = 450;
+    let rings = (reach / wide).max(2);
+    let step = 30;
+    let mut pads = Vec::new();
+    for k in 0..rings {
+        let rim = k == rings - 1;
+        let y = top - k * step + if rim { 140 } else { 0 };
+        pads.push(Pad {
+            at: [mid[0] as i32, y as i32, mid[2] as i32],
+            inner: if k == 0 { 0 } else { (k * wide - 20) as i32 },
+            outer: ((k + 1) * wide + 20) as i32,
+            thick: if rim { 260 } else { 150 },
+            kind: if rim { PadKind::Rim } else { PadKind::Roof },
+        });
+    }
+    // The leaves under the roof's top are its own; those that would poke
+    // through it go.
+    let outer = rings * wide;
+    leaves.retain(|l| {
+        let d = flat_len(sub([l[0] as i64, 0, l[2] as i64], mid));
+        d > outer || ((l[1] + l[3]) as i64) < top - (d / wide) * step - 200
+    });
+    pads
 }
 
 // ---------------------------------------------------------------------------
@@ -939,44 +1166,64 @@ fn cm(v: i64) -> Fx {
     Fx::from_raw((v * 65536 / 100) as i32)
 }
 
-/// **A tree's solids**: every segment thick enough to stand on, as what a
-/// body can collide with. A steep one is a stack of round slices up its
-/// axis; a gentle one a run of turned boards along it, each its own top at
-/// the branch's top and no more than a step above the last, so a limb is a
-/// slope you walk up. Roots the same, hugging the ground.
-pub fn solids(tree: &Tree, out: &mut Vec<Solid>) {
-    // A broadleaf's limbs are thick a long way out: only the great ones are
-    // stood on. A root only near the trunk, where it is a buttress.
+/// **Is the segment into node `i` stood on**: thick enough for its kind --
+/// a broadleaf's limbs are thick a long way out, so only its great ones are
+/// -- and not where a branch leaves the trunk (it is inside it), nor a root
+/// but a buttress near the trunk. Twigs never. What [`solids`] builds and
+/// what the renderer paints as footing (`game::grove`).
+pub fn stood_on(tree: &Tree, i: usize) -> bool {
+    let nodes = &tree.nodes;
+    let n = nodes[i];
+    if n.parent == NONE || n.part == Part::Twig {
+        return false;
+    }
     let thick = match tree.kind {
         Kind::Sentinel => STOOD_ON as i64,
         Kind::Elder => STOOD_ON as i64 * 2,
         Kind::Strangler => STOOD_ON as i64 * 5 / 2,
     };
-    let nodes = &tree.nodes;
     let girth = nodes[0].radius as i64;
+    let p = nodes[n.parent as usize];
+    if p.part == Part::Trunk && n.part != Part::Trunk {
+        return false;
+    }
+    if (p.radius.max(n.radius) as i64) < thick {
+        return false;
+    }
+    !(n.part == Part::Root
+        && ((n.radius as i64) < thick * 4 / 3 || flat_len(sub(v(n.at), v(tree.base))) > girth * 3))
+}
+
+/// **A tree's solids**: every segment [`stood_on`], as what a body can
+/// collide with, and its pads. A steep segment is a stack of round slices up
+/// its axis; a gentle one a run of turned boards along it, each its own top
+/// at the branch's top and no more than a step above the last, so a limb is
+/// a slope you walk up. Roots the same, hugging the ground. A pad is a ring.
+pub fn solids(tree: &Tree, out: &mut Vec<Solid>) {
+    for p in &tree.pads {
+        let (x, y, z) = (p.at[0] as i64, p.at[1] as i64, p.at[2] as i64);
+        out.push(Solid::ring(
+            cm(x),
+            cm(z),
+            cm(y - p.thick as i64),
+            cm(y),
+            (cm(p.outer as i64), cm(p.outer as i64)),
+            cm(p.inner as i64),
+            if p.kind == PadKind::Shelf {
+                Material::Wood
+            } else {
+                Material::Grass
+            },
+        ));
+    }
+    let nodes = &tree.nodes;
     let mut children = vec![0u32; nodes.len()];
     for n in nodes.iter() {
         if n.parent != NONE {
             children[n.parent as usize] += 1;
         }
     }
-    let stood = |i: usize| {
-        let n = nodes[i];
-        if n.parent == NONE || n.part == Part::Twig {
-            return false;
-        }
-        let p = nodes[n.parent as usize];
-        // Where a branch leaves the trunk it is inside it.
-        if p.part == Part::Trunk && n.part != Part::Trunk {
-            return false;
-        }
-        if (p.radius.max(n.radius) as i64) < thick {
-            return false;
-        }
-        !(n.part == Part::Root
-            && ((n.radius as i64) < thick * 4 / 3
-                || flat_len(sub(v(n.at), v(tree.base))) > girth * 3))
-    };
+    let stood = |i: usize| stood_on(tree, i);
     let steep = |i: usize| {
         let n = nodes[i];
         let d = sub(v(n.at), v(nodes[n.parent as usize].at));

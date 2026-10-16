@@ -494,6 +494,37 @@ impl Palette {
         }
     }
 
+    /// **Footing on a grown giant**: the top of a limb you can stand on,
+    /// worn pale and mossed where feet go -- what tells a limb that bears you
+    /// from one that does not, which stays bark.
+    pub fn grown_footing(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        let bark = self.grown_bark(kind);
+        let moss = Lch::of(tint::mix(bark, self.moss(), 0.5));
+        Lch {
+            l: (moss.l * 1.35).min(0.92),
+            ..moss
+        }
+        .rgb()
+    }
+
+    /// **A shelf fungus**: the cream of a bracket's top, the same on every
+    /// tree, balanced into the place's light.
+    pub fn shelf(&self) -> [f32; 3] {
+        self.surface([0.86, 0.74, 0.52])
+    }
+
+    /// **A canopy's top**: the leaves where they are a floor, a step lighter
+    /// and yellower than the crown's own -- a meadow in the air.
+    pub fn canopy(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        let g = Lch::of(self.grown_leaves(kind));
+        Lch {
+            l: (g.l * 1.3).min(0.9),
+            h: g.h + 0.03,
+            ..g
+        }
+        .rgb()
+    }
+
     /// **A grown giant's leaves**: a Sentinel's needles the pine's, an
     /// Elder's the broadleaf's, a Strangler's a glossier, yellower green.
     pub fn grown_leaves(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {

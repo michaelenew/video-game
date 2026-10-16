@@ -43,6 +43,13 @@ pub struct Paint {
     /// all.
     #[uniform(0)]
     pub color: Vec4,
+    /// **A hole along the line from the eye to the fighter**: where the
+    /// fighter is (`xyz`, world) and how wide the hole is there (`w`,
+    /// metres; zero, none). What lets a grown tree stand between the camera
+    /// and the fighter without hiding them (`crate::grove`): the camera does
+    /// not dodge a tree's wood, so the wood gets out of the way instead.
+    #[uniform(0)]
+    pub cut: Vec4,
     /// The baked brush strokes ([`STROKES`]); the same for every paint.
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
@@ -63,6 +70,7 @@ impl Paint {
     pub fn white() -> Self {
         Self {
             color: Vec4::ONE,
+            cut: Vec4::ZERO,
             strokes: STROKES,
             two_sided: false,
         }
@@ -73,6 +81,7 @@ impl Paint {
         let c = Color::srgb(rgb[0], rgb[1], rgb[2]).to_linear();
         Self {
             color: Vec4::new(c.red, c.green, c.blue, 1.0),
+            cut: Vec4::ZERO,
             strokes: STROKES,
             two_sided: false,
         }

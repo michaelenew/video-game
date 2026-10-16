@@ -162,6 +162,24 @@ impl Kit {
         rgb: [f32; 3],
         caps: Option<[f32; 3]>,
     ) {
+        self.tube_topped(a, b, ra, rb, sides, (rgb, rgb), caps);
+    }
+
+    /// [`Kit::tube`] with its upward faces -- those facing more up than
+    /// sideways -- coloured `colours.1`, the rest `colours.0`: a limb's
+    /// footing on its bark.
+    #[allow(clippy::too_many_arguments)]
+    pub fn tube_topped(
+        &mut self,
+        a: Vec3,
+        b: Vec3,
+        ra: f32,
+        rb: f32,
+        sides: usize,
+        colours: ([f32; 3], [f32; 3]),
+        caps: Option<[f32; 3]>,
+    ) {
+        let (rgb, top) = colours;
         let axis = (b - a).normalize_or(Vec3::Y);
         let side = if axis.y.abs() < 0.9 {
             axis.cross(Vec3::Y).normalize()
@@ -179,7 +197,8 @@ impl Kit {
             let mid = (p0 + p1 + q0 + q1) * 0.25;
             let out = mid - (a + (b - a) * 0.5);
             let out = out - axis * out.dot(axis);
-            self.poly(&[p0, p1, q1, q0], out, rgb);
+            let up = out.normalize_or(Vec3::X).y > 0.45;
+            self.poly(&[p0, p1, q1, q0], out, if up { top } else { rgb });
         }
         if let Some(cap) = caps {
             let ends = [(a, ra, -axis), (b, rb, axis)];

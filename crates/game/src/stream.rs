@@ -101,6 +101,9 @@ pub struct Stream {
     /// Each giant's meshes, its wood and its leaves, and how far it
     /// reaches: built once, the first time it comes near, and kept.
     grown: HashMap<usize, (Handle<Mesh>, Handle<Mesh>, f32)>,
+    /// The paint the grown giants are drawn in: the plain one, with a hole
+    /// cut along the line to the fighter ([`Paint::cut`]), moved every frame.
+    see_through: Option<Handle<Paint>>,
     ground: Option<Handle<Paint>>,
     water: Option<Handle<StandardMaterial>>,
 }
@@ -148,6 +151,7 @@ fn boxes_near(atlas: &Atlas, at: Vec3, reach: f32) -> HashSet<u32> {
 pub fn stream(
     mut commands: Commands,
     sim: Res<crate::Sim>,
+    rig: Res<crate::Rig>,
     mut st: ResMut<Stream>,
     camera: Query<&Transform, With<crate::MainCamera>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -227,6 +231,17 @@ pub fn stream(
         }
     }
 
+    // The trees' window on to the fighter, wherever the camera now is: the
+    // fighter, a little over two metres across where it nears them and short
+    // of what they stand on.
+    let see_through = st
+        .see_through
+        .get_or_insert_with(|| materials.paint.add(Paint::white()))
+        .clone();
+    if let Some(p) = materials.paint.get_mut(&see_through) {
+        let f = rig.0.focus();
+        p.cut = Vec4::new(f[0], f[1], f[2], 1.3);
+    }
     let Ok(eye) = camera.single() else {
         return;
     };
@@ -411,7 +426,7 @@ pub fn stream(
         root,
         at,
         reach,
-        &white,
+        &see_through,
     );
     // The land: every tile within reach, drawn as finely as its distance
     // asks, nearest first.
@@ -490,7 +505,7 @@ fn groves(
                 .entry(place.arena)
                 .or_insert_with(|| PlaceLook::of(place.get()))
                 .clone();
-            let (wood, leaves) = crate::grove::meshes(tree, &look.palette);
+            let (wood, leaves) = crate::grove::meshes(tree, &look.palette, &atlas.vines);
             st.grown.insert(
                 k,
                 (

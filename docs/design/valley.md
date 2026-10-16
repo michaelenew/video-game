@@ -128,13 +128,36 @@ you fall through a twig. The boxes are hidden from the renderer
 Wood, the busiest tile under an Elder's crown about two hundred and thirty;
 the frame at the Great Tree's foot costs a fifth of its budget.
 
-Cairns stand on the highest of each tree's thick level limbs and on two on the
-way. **Falls cost what the fall rule says** (VALE-2). Four Sentinels have a
-vine up their north side to sixty metres.
+**The second pass** (2026-10-16, from play: "it needs to be easier to tell
+where you can stand ... the vines often get blocked by a branch ... wider
+spaces as checkpoints ... I want the canopy to be a reward"):
 
-The leaves cast no shadow: a crown a hundred metres across over every giant
-left the grove in one shade, and a trunk's shaded side lit by the ambient
-alone was black.
+- **What bears you looks it.** A limb you can stand on (`trees::stood_on`,
+  the rule the boxes are built by) is worn pale on top
+  (`look::Palette::grown_footing`); one you cannot stays bark all round.
+  Leaves hang -- needles in drooping tufts, a broadleaf's in rounded clumps,
+  fewer and smaller than the first pass's flat sprays, which read as ledges
+  -- except where they are a floor.
+- **Shelves.** A Sentinel's first six-metre tier, forty metres up, and every
+  seventh after it, grows **bracket fungus** where its limbs would be: three
+  lobes 8.4 m across, each the next step of the spiral and a checkpoint, a
+  cairn on the first. The stair's last limb comes out from under one and is a
+  plain jump below it.
+- **Vines are clear and let off.** A vine hangs a body's width off the bark
+  (1.3 girths out), so nothing of the foot is in its way; no limb grows across
+  it below its top, the one or two of a spiral's limbs that would are pinned
+  just beside it -- near enough to walk off on to, since a vine is climbed with
+  the jump and cannot be jumped off -- and its top comes up beside a lobe of
+  its own. `tests/wood.rs` climbs each and walks off.
+- **A broadleaf's canopy is a roof**: concentric terraces of leaves 4.5 m
+  wide, each 30 cm under the one inside it, and a **lip** 1.4 m up round the
+  edge, so it is hard to walk off. A **liana** hangs off every lip to the
+  ground, where nothing of any tree is in its way (`wood::lianas`,
+  `Atlas::vines`): climbed, it comes up beside the lip and you step in.
+- **The camera passes through a tree** rather than being pulled in by every
+  branch (`Terrain::seen_around`), and the trees are drawn with a window cut
+  along the line from the eye to the fighter (`game::paint`'s `cut`), so
+  nothing of a tree hides you.
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 

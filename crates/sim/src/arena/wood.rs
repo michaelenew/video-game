@@ -21,8 +21,9 @@
 //! limbs and on two on the way up.
 
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
+use crate::fixed::Fx;
 use crate::valley::land::{Point, at};
-use crate::valley::trees::{self, Kind as Grows, Neighbour, Site, Tree};
+use crate::valley::trees::{self, Kind as Grows, Neighbour, Site, Tree, Vine};
 use crate::valley::{Gate, Kind, Place, Seam, Zone};
 
 pub static ARENA: Arena = Arena {
@@ -126,16 +127,35 @@ pub const fn crown(g: &Giant) -> i32 {
     }
 }
 
-/// The trees a vine hangs down -- Sentinels all -- and how far up it goes:
-/// the slow way past the first tiers, for anybody.
-const VINED: [usize; 4] = [0, 3, 6, 10];
-const VINE_TOP: i32 = 6000;
+/// How high a giant's trunk stands before it breaks into its crown
+/// (centimetres): a Sentinel's all the way.
+pub const fn bole(g: &Giant) -> i32 {
+    match g.kind {
+        Sentinel => g.height,
+        Elder => g.height * 30 / 100,
+        Strangler => g.height * 38 / 100,
+    }
+}
 
-/// A vine up a trunk's north side, from below its foot to [`VINE_TOP`]:
-/// against the bark of its foot, which flares to half again its girth.
+/// The trees a vine hangs down -- Sentinels all -- and how far up it goes:
+/// to the first shelf, forty metres up, for anybody.
+const VINED: [usize; 4] = [0, 3, 6, 10];
+const VINE_TOP: i32 = 4100;
+
+/// How far out from a trunk's axis its vine hangs: past the bark at its foot
+/// and the shelf at its top, so nothing of the tree is in its way.
+const fn vine_out(g: &Giant) -> i32 {
+    g.radius * 13 / 10
+}
+
+/// A vine hung down a trunk's north side, clear of the bark, from below its
+/// foot to [`VINE_TOP`], where it comes up beside the first shelf's edge.
 const fn vine(g: &Giant) -> Zone {
-    let out = g.radius * 14 / 10 + 80;
-    Zone::cm([g.x - 120, -2000, g.z], [g.x + 120, VINE_TOP, g.z + out])
+    let out = vine_out(g);
+    Zone::cm(
+        [g.x - 120, -2000, g.z + out],
+        [g.x + 120, VINE_TOP, g.z + out + 240],
+    )
 }
 
 /// The vines, for the movement that reads them.
@@ -194,6 +214,7 @@ pub fn grow(height: &dyn Fn(i32, i32) -> i32) -> Vec<Tree> {
                     at: (o.x, o.z),
                     girth: o.radius,
                     crown: crown(o),
+                    bole: bole(o),
                 })
                 .collect();
             let site = Site {
@@ -203,6 +224,13 @@ pub fn grow(height: &dyn Fn(i32, i32) -> i32) -> Vec<Tree> {
                 height: g.height,
                 girth: g.radius,
                 seed: 7919 * (k as u32 + 1),
+                // North is a quarter turn; the Wood is at the map's origin,
+                // so the vine's top is its height on the map.
+                vine: VINED.contains(&k).then(|| Vine {
+                    heading: 250,
+                    out: vine_out(g),
+                    top: VINE_TOP,
+                }),
             };
             trees::grow(g.kind, &site)
         })
@@ -218,4 +246,45 @@ pub fn build(trees: &[Tree], wood: &mut Vec<Solid>, cairns: &mut Vec<Solid>) {
         trees::cairns_of(t, cairns);
     }
     cairns.push(BRIDGE);
+}
+
+/// **A liana off every broadleaf's roof**: a vine hung from just outside its
+/// lip to the ground, where nothing of any tree (`wood`, every tree's
+/// solids) is in its way -- the first such place round the roof, from the
+/// side facing the Great Tree. A climb of it comes up beside the lip and
+/// steps on to it (`tests/wood.rs`). Map coordinates (`Atlas::vines`).
+pub fn lianas(trees: &[Tree], wood: &[Solid], height: &dyn Fn(i32, i32) -> i32) -> Vec<Zone> {
+    let mut out = Vec::new();
+    for t in trees {
+        let Some(rim) = t.pads.iter().find(|p| p.kind == trees::PadKind::Rim) else {
+            continue;
+        };
+        let (mx, mz) = (rim.at[0] as i64, rim.at[2] as i64);
+        let toward = crate::math::atan2_turns(
+            Fx::from_int(((GIANTS[0].z as i64 - mz) / 100) as i32),
+            Fx::from_int(((GIANTS[0].x as i64 - mx) / 100) as i32),
+        );
+        let start = (toward.raw() as i64 * 1000) >> 16;
+        let out_r = rim.outer as i64 + 150;
+        let found = (0..40).find_map(|k| {
+            let turn = start + if k % 2 == 0 { k / 2 } else { -(k + 1) / 2 } * 25;
+            let d = crate::math::V3::from_turns(Fx::ratio(turn.rem_euclid(1000) as i32, 1000));
+            let cx = mx + ((d.x.raw() as i64 * out_r) >> 16);
+            let cz = mz + ((d.z.raw() as i64 * out_r) >> 16);
+            let floor = height(cx as i32, cz as i32);
+            let zone = Zone::cm(
+                [cx as i32 - 120, floor - 200, cz as i32 - 120],
+                [cx as i32 + 120, rim.at[1] + 30, cz as i32 + 120],
+            );
+            let (x, z) = (super::cm(cx as i32), super::cm(cz as i32));
+            let (lo, hi) = (super::cm(floor + 250), zone.max.y);
+            let blocked = wood.iter().any(|s| {
+                let (a, b) = (s.min.y.max(lo), s.max.y.min(hi));
+                a.raw() < b.raw() && s.side_push(x, z, Fx::ratio(1, 2), a, b).is_some()
+            });
+            (!blocked).then_some(zone)
+        });
+        out.extend(found);
+    }
+    out
 }

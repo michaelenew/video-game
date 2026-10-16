@@ -1485,6 +1485,8 @@ impl std::ops::Deref for Terrain {
 pub struct Solids<'a> {
     own: Own<'a>,
     raised: std::slice::Iter<'a, Solid>,
+    /// Leave out the map's hidden boxes ([`Terrain::seen_around`]).
+    seen: bool,
 }
 
 // The map's arm carries a few hundred bytes of tile cursors. It lives on the
@@ -1511,7 +1513,14 @@ impl Iterator for Solids<'_> {
                 near,
                 origin,
                 ..
-            } => near.next().map(|i| {
+            } => {
+                let mut i = near.next();
+                while i.is_some_and(|k| self.seen && atlas.hidden[k as usize]) {
+                    i = near.next();
+                }
+                i
+            }
+            .map(|i| {
                 let s = atlas.solids[i as usize];
                 Solid {
                     min: s.min.sub(*origin),
@@ -1595,7 +1604,19 @@ impl Terrain {
         Solids {
             own,
             raised: self.raised().iter(),
+            seen: false,
         }
+    }
+
+    /// **The solids within `reach` of a point that are drawn as themselves**:
+    /// [`Terrain::around`] without a grown tree's wood (`Atlas::hidden`).
+    /// What the camera keeps out of -- a tree is cut away round the line to
+    /// the fighter instead (`game::grove`), because a camera shoved in by
+    /// every branch it passes jerks the whole way up a tree.
+    pub fn seen_around(&self, at: V3, reach: Fx) -> Solids<'_> {
+        let mut s = self.around(at, reach);
+        s.seen = true;
+        s
     }
 
     /// The solids within `reach` of a point, sideways.
