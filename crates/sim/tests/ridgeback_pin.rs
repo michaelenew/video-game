@@ -138,13 +138,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// state in the hash. The Champion's never met a wall. With the same-wall
 /// drop merged in on top, the Bulwark's and the Blood mage's moved once more,
 /// where the two wall changes meet.
+/// And four again when the ledge became one catch rule: the random presses
+/// had walked off edges and been caught, and a walk off is no longer caught.
+/// Neither fighter catches a ledge in any of those four now.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0x3e9b7ca3a71bd73b),
-    (Class::ShadowReaver, 0x846a6c304191d07a),
-    (Class::BloodMage, 0xa2dea1fbacdb7bc1),
+    (Class::Bulwark, 0xd12b055c26db8afb),
+    (Class::ShadowReaver, 0x68c6cdbd9dbf459a),
+    (Class::BloodMage, 0x8aa1ac49e9445901),
     (Class::DualMage, 0x810a930f65195268),
-    (Class::Elementalist, 0xf2a70e1351a46db9),
+    (Class::Elementalist, 0xa2d1095986bff1d9),
 ];
 
 #[test]

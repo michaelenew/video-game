@@ -49,7 +49,9 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // that day for the stick against a wall: a slide now starts only pushing
 // into the wall, so a hunter brushing one is no longer held to it. Counted
 // over all five hunts, no hunter catches a ledge and two slide, for 4 and
-// 10 frames: nothing hangs.
+// 10 frames: nothing hangs. The Dual mage's and the Reaver's again when the
+// ledge became one catch rule (a walk off an edge is no longer caught): no
+// hunter in any of these catches a ledge now.
 const PINNED: [(Class, u32, u64); 7] = [
     (Class::Champion, 0x2545_F491, 0x1adf1c8e378c184f),
     (Class::Champion, 7, 0x88775a823d760199),
@@ -78,7 +80,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // autos again, each hopping her the way she holds (0016); and again for
     // the second round -- forward wings, long holds, spending majors -- and
     // the third: the autos a ball, every click a tap or a hold (2026-10-13).
-    (Class::DualMage, 2_222, 0x40bcc17082e134b6),
+    (Class::DualMage, 2_222, 0x7b30b06e00dae706),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
@@ -86,7 +88,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-12 with no change to her fight: an effect is hashed by
     // its kind's number, and the Dual mage's retired Shade bolt sat before
     // her shadow's blades in the list (0015).
-    (Class::ShadowReaver, 31, 0x3dc3d441dea3d8e4),
+    (Class::ShadowReaver, 31, 0x8f0b96b170446a34),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
