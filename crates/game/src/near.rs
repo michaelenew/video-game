@@ -191,7 +191,7 @@ pub fn near(
         }
     }
     // Bake what has come within reach, nearest first.
-    let mut baking = near
+    let baking = near
         .tiles
         .values()
         .filter(|t| matches!(t, NearTile::Baking(_)))
@@ -204,13 +204,9 @@ pub fn near(
         .filter(|(_, d)| *d < REACH)
         .collect();
     wanted.sort_by(|a, b| a.1.total_cmp(&b.1));
-    for (t, _) in wanted {
-        if baking >= IN_FLIGHT {
-            break;
-        }
+    for (t, _) in wanted.into_iter().take(IN_FLIGHT.saturating_sub(baking)) {
         let task = AsyncComputeTaskPool::get().spawn(async move { bake(t.0, t.1, broad_size) });
         near.tiles.insert(t, NearTile::Baking(task));
-        baking += 1;
     }
 }
 
