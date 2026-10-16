@@ -7072,8 +7072,8 @@ fn hold_to_the_wall(p: &mut Player, input: Input) {
 ///                    the stick is pushing away from it. The near miss.
 /// ```
 ///
-/// Only an edge [`Terrain::ledge_near`] says holds a body: a real edge, a drop
-/// under it deeper than a hang, and a top to climb on to.
+/// Only an edge [`Terrain::ledge_near`] says a body fits beside, hanging.
+/// Whether it can be climbed is asked when the climb is.
 fn catch_a_ledge(p: &mut Player, was_grounded: bool, input: Input, ground: &Terrain) {
     if p.ledge.is_some()
         || p.grounded
@@ -7131,7 +7131,8 @@ fn catch_a_ledge(p: &mut Player, was_grounded: bool, input: Input, ground: &Terr
 ///   nothing         hangs
 ///   into the wall   climbs up: `ledge_climb` frames, unable to act -- slow,
 ///                   because the ledge is the forgiving way up and a landed
-///                   jump the quick one
+///                   jump the quick one. Only where there is room on the top
+///                   (`Terrain::room_on_top`); under a roof, nothing
 ///   away from it    lets go into a fall, free to act on the next frame --
 ///                   quick, the other side of the trade. Only a fresh push:
 ///                   see `Ledge::armed`
@@ -7172,7 +7173,9 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
                 return let_go_of_the_ledge(p, true, ground);
             }
             match lean {
-                Lean::Into => {
+                // Only where there is a top to stand on, with room: under a
+                // roof, into the wall is as nothing.
+                Lean::Into if ground.room_on_top(p.ledge.edge) => {
                     p.ledge.grip = Grip::Climb;
                     p.ledge.clock = 0;
                 }
@@ -7194,7 +7197,7 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
                         p.ledge.edge = next;
                     }
                 }
-                Lean::Away | Lean::Still => {}
+                Lean::Into | Lean::Away | Lean::Still => {}
             }
             p.pos = p.ledge.edge.hang(depth);
         }

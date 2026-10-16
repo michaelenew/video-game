@@ -717,13 +717,6 @@ pub fn ledge_depth() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LedgeDepth))
 }
 
-/// **Only a drop worth hanging over is a ledge**: the floor under a hanging
-/// body has to be at least this far under the top (and never above its
-/// feet). Walking off a boulder is a step down; walking off a tower is not.
-pub fn ledge_drop() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LedgeDrop))
-}
-
 /// Frames a catch takes to settle the body into the hang. Walking off, the
 /// body drops a hang's depth to get there, and drawn in one frame that is a
 /// pop.

@@ -8758,8 +8758,10 @@ falloff is too stingy for a chimney.
 **Changed** added the ledge grab, for every class, and gave the wall slide the same stick.
 Walking off an edge no faster than 7.5 m/s (a walk, a creep -- not a dodge or a blow) catches
 it; so does falling past one whose top is between 1.2 and 2.3 m over the feet, within 0.2 m of
-the body's side, unless the stick pushes away. Only over a drop of 3 m or more, and only where a
-body fits hanging and there is a top to stand on. The catch settles the body over 8 frames into
+the body's side, unless the stick pushes away. Only where a body fits hanging (the first pass
+also asked for a 3 m drop and room on the top; the owner took both out the same day, to leave
+room for a wall-shuffle section -- an edge with no room over it is hung from and gone along,
+and into the wall there does nothing). The catch settles the body over 8 frames into
 a hang 1.9 m under the top, facing the wall. Hanging, the stick is read in three envelopes
 against the wall -- within 45° of straight in, within 45° of straight out, and the half of the
 circle between -- on the stick as it would walk you, by the camera. Into the wall climbs: 48
@@ -8776,10 +8778,9 @@ below hand reach of the tower's top, where the ledge now catches them.
 **Why** from the owner: the precision jump sections were "super annoying because you can easily
 slide off into nothing no matter how slowly you move". The ledge is meant as a forgiving way up
 that is plainly not the optimal one, so the climb is slow and the drop is quick. The envelopes
-and the debounce are the owner's; the fresh push to let go, the minimum drop, the crouch into a
-slide and the regrab lockout are mine, each for a failure the owner's rules would otherwise
-have: holding forward off an edge would let go on the frame it caught; a boulder would be
-something you hang off ten centimetres above the floor; there was no way into a slide from a
+and the debounce are the owner's; the fresh push to let go, the crouch into a slide and the
+regrab lockout are mine, each for a failure the owner's rules would otherwise have: holding
+forward off an edge would let go on the frame it caught; there was no way into a slide from a
 hang; and letting go next to the face would catch the same edge again.
 **Not done** a hanging or climbing pose -- the renderer draws the hang with the airborne clip, and
 the climb as that clip rising -- and ledges on the valley's land (only a solid's top is a

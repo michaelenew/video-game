@@ -779,10 +779,15 @@ walking off at up to` (7.5 m/s, just over the walk: a walk or a creep, never a d
 blow); or, falling, a top between `Ledge, caught falling, top over the feet from` and `up to`
 (1.2 m and 2.3 m — about the chest to the reach of a hand) within `Ledge, caught within, past
 the body` (0.2 m) of your side, unless the stick is pushing away from it. Only while free to
-act and not rising, and only an edge that holds a body (`Terrain::ledge_near`): a real edge, not
-a seam between two boxes; room to hang beside it; a drop of at least `Ledge, only over a drop of
-at least` (3 m) under it, so a boulder is a step down; and a top to stand on, with room. Only a
-solid's top is a ledge — land too steep to climb is a slope, as it is to the slide.
+act and not rising, and only an edge a body fits beside, hanging (`Terrain::ledge_near`):
+nothing solid where it would hang and no floor above its feet — which is also what tells a
+real edge from a seam between two boxes. **Nothing is asked of the top.** An edge with no room
+over it — a lip under a roof, a shelf in a wall — is hung from and gone along hand over hand
+like any other, which is what makes a shuffle along a wall something an agility section can be
+built from; it is only never climbed (`Terrain::room_on_top`, asked when the climb would
+start). And no drop is too short, so long as the hanging feet clear the floor: a 2 m boulder is
+a ledge, a 1.5 m step is not. Only a solid's top is a ledge — land too steep to climb is a
+slope, as it is to the slide.
 
 **Hanging** (`state::hang_on`): the catch settles you over `Ledge, catching, settles over` (8
 frames) into a hang `Ledge, hanging, feet under the top` (1.9 m) under the top, facing the
@@ -792,7 +797,7 @@ cancelled. Then the same three envelopes as the slide:
 | Stick | Does |
 | --- | --- |
 | Nothing | Hangs |
-| Into the wall | **Climbs up**: `Ledge, climbing up takes` (48 frames), unable to act and open to a blow, and ends standing on the top |
+| Into the wall | **Climbs up**: `Ledge, climbing up takes` (48 frames), unable to act and open to a blow, and ends standing on the top. Where there is no room on the top, nothing |
 | Away from it | **Lets go**: a fall pushed `Ledge, let go, pushed off at` (1.5 m/s) off the face, free to act on the next frame |
 | Along it | Hand over hand along the edge (`Ledge, hand over hand at`, 1.5 m/s), round an outside corner, for as far as the edge holds a body |
 | Crouch | Lets go into a wall slide down the face |

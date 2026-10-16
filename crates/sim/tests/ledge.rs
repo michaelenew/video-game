@@ -2,8 +2,9 @@
 //! `state::catch_a_ledge`, `state::hang_on`, `state::keep_sliding`).
 //!
 //! What is pinned: walking off an edge catches it, and a dodge off it does
-//! not; a drop shorter than `Ledge, only over a drop of at least` is a step
-//! down; falling past an edge with it at the hands catches it, unless the
+//! not; a drop shorter than a hang is a step down, and anything deeper is a
+//! ledge; an edge with no room over it is hung from and gone along, never
+//! climbed; falling past an edge with it at the hands catches it, unless the
 //! stick pushes away; nothing pressed hangs, even holding the stick that
 //! walked off -- letting go wants a fresh push away; the climb up is slow and
 //! ends standing on the top, and letting go is quick; along the wall goes
@@ -116,7 +117,8 @@ fn a_dodge_off_an_edge_does_not_catch_it() {
 fn a_short_drop_is_a_step_down() {
     // The bank along the range's north wall: 3 m, with a 1.5 m step in
     // front of it at z 21 to 22. Walking off the top on to the step is a
-    // drop of 1.5 m; walking off the step is a drop of 1.5 m.
+    // drop of 1.5 m, and so is walking off the step: shorter than a hang, so
+    // a hanging body would stand in the floor, and neither is a ledge.
     let mut w = on_the_top(Fx::ZERO);
     w.players[0].pos = V3::new(Fx::from_int(20), Fx::from_int(3), Fx::ratio(225, 10));
     for _ in 0..120 {
@@ -312,4 +314,53 @@ fn along_a_slide_steers_a_little() {
         along.raw() <= t::wall_slide_steer().add(Fx::ratio(1, 100)).raw(),
         "steered at {along:?}"
     );
+}
+
+#[test]
+fn any_drop_a_body_hangs_in_is_a_ledge() {
+    // A boulder on the range's grass, 2 m tall: a hang is 1.9 m, so the feet
+    // clear the floor, and walking off it catches it.
+    let mut w = on_the_top(Fx::ZERO);
+    w.players[0].pos = V3::new(Fx::from_int(90), Fx::from_int(2), Fx::from_int(-9));
+    for _ in 0..60 {
+        press(&mut w, Input::W, NORTH, 1);
+        if holding(&w) {
+            break;
+        }
+    }
+    assert!(holding(&w), "walked off the boulder: {:?}", w.players[0].pos);
+}
+
+/// Hanging from a pillar in the range's cave, which runs from the floor into
+/// the vault: its top is the roof's underside, with no room over it.
+fn under_the_roof() -> World {
+    let mut w = on_the_top(Fx::ZERO);
+    let p = &mut w.players[0];
+    p.pos = V3::new(Fx::from_int(55), Fx::from_int(11), Fx::ratio(-54, 10));
+    p.vel = V3::new(Fx::ZERO, Fx::from_int(-2), Fx::ZERO);
+    p.grounded = false;
+    for _ in 0..30 {
+        press(&mut w, 0, SOUTH, 1);
+        if holding(&w) {
+            break;
+        }
+    }
+    assert!(holding(&w), "fell past the pillar: {:?}", w.players[0].pos);
+    press(&mut w, 0, SOUTH, t::ledge_catch() as u32 + 1);
+    w
+}
+
+#[test]
+fn an_edge_with_no_room_over_it_is_hung_from_and_not_climbed() {
+    let mut w = under_the_roof();
+    let y = w.players[0].pos.y;
+    press(&mut w, Input::W, SOUTH, 120);
+    assert!(holding(&w), "let go pushing into the wall");
+    assert_eq!(w.players[0].ledge.grip, Grip::Hang, "climbed into the roof");
+    assert_eq!(w.players[0].pos.y, y);
+    // And along it, hand over hand: a shuffle along a wall with no way up.
+    let x0 = w.players[0].pos.x;
+    press(&mut w, Input::A, SOUTH, 30);
+    assert!(holding(&w));
+    assert!(w.players[0].pos.x != x0, "did not go along");
 }

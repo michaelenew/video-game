@@ -1061,7 +1061,6 @@ scalars! {
     LedgeReachHigh,       "Ledge",    "Caught falling, top over the feet up to (m)",         Fixed, 0, fx(4,1);
     LedgeReach,           "Ledge",    "Caught within, past the body (m)",                    Fixed, 0, fx(1,1);
     LedgeDepth,           "Ledge",    "Hanging, feet under the top (m)",                     Fixed, fx(1,2), fx(3,1);
-    LedgeDrop,            "Ledge",    "Only over a drop of at least (m)",                    Fixed, 0, fx(10,1);
     LedgeCatch,           "Ledge",    "Catching, settles over",                              Frames, 1, 60;
     LedgeClimb,           "Ledge",    "Climbing up takes",                                   Frames, 1, 240;
     LedgeClimbRise,       "Ledge",    "Climbing up, share spent rising (%)",                 Percent, 0, 100;

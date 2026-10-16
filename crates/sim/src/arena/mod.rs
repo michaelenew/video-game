@@ -1972,13 +1972,14 @@ impl Terrain {
     /// body's radius and `reach` from its middle, flat. The nearest such rim
     /// wins, the first in order among equals.
     ///
-    /// **Only an edge that holds a body.** The top is a real edge rather than
-    /// a seam between two boxes laid side by side: a body hanging from it
-    /// `depth` under the top fits there, with nothing solid in it and no
-    /// ground above its feet or within `tuning::ledge_drop` of the top (so a
-    /// short drop is a step down, not a ledge); and a body climbing up it has a top to stand on, and
-    /// room to stand. Only a solid's top is a ledge: land too steep to climb
-    /// is a slope, as it is to the wall slide.
+    /// **Only an edge a body fits beside.** A body hanging from it `depth`
+    /// under the top has nothing solid in it and no ground above its feet --
+    /// which is also what tells a real edge from a seam between two boxes
+    /// laid side by side. Nothing is asked about the top: an edge with no room
+    /// over it is still one to hang from and go along hand over hand, and
+    /// whether it can be climbed is [`Terrain::room_on_top`]'s question, asked
+    /// when the climb is. Only a solid's top is a ledge: land too steep to
+    /// climb is a slope, as it is to the wall slide.
     pub fn ledge_near(&self, pos: V3, lo: Fx, hi: Fx, reach: Fx, depth: Fx) -> Option<Edge> {
         let radius = t::body_radius();
         let height = t::body_height();
@@ -2004,17 +2005,24 @@ impl Terrain {
                 normal: V3::new(gap.x.div(d), Fx::ZERO, gap.z.div(d)),
             };
             let hang = edge.hang(depth);
-            let stand = edge.stand();
             if headroom(self, hang, radius, height)
                 && self.floor_below(hang).raw() < hang.y.raw()
-                && self.floor_below(hang).raw() <= top.sub(t::ledge_drop()).raw()
-                && supported_among(self, stand, radius)
-                && headroom(self, stand, radius, height)
             {
                 best = Some((d, edge));
             }
         }
         best.map(|(_, e)| e)
+    }
+
+    /// **Can a body climb up on to this edge's top**: is there a top under
+    /// where it would stand (`Edge::stand`), and room to stand there? What
+    /// the climb asks before it starts; an edge with no room over it -- a
+    /// shelf under a roof, a lip in a wall -- is hung from and gone along,
+    /// never climbed.
+    pub fn room_on_top(&self, edge: Edge) -> bool {
+        let stand = edge.stand();
+        let radius = t::body_radius();
+        supported_among(self, stand, radius) && headroom(self, stand, radius, t::body_height())
     }
 
     /// **A creature against the solids** (for a species that `collides`): an
