@@ -8752,3 +8752,38 @@ because an inside corner alternates two walls and the same-wall rule never fires
 **Verdict** open -- unplayed. Things to feel for: whether ×0.7 reads as a slide at all on a
 short wall, whether the stick catches people who only meant to brush past, and whether the
 falloff is too stingy for a chimney.
+
+### 2026-10-16 — ledge grabs, and the stick against a wall
+
+**Changed** added the ledge grab, for every class, and gave the wall slide the same stick.
+Walking off an edge no faster than 7.5 m/s (a walk, a creep -- not a dodge or a blow) catches
+it; so does falling past one whose top is between 1.2 and 2.3 m over the feet, within 0.2 m of
+the body's side, unless the stick pushes away. Only over a drop of 3 m or more, and only where a
+body fits hanging and there is a top to stand on. The catch settles the body over 8 frames into
+a hang 1.9 m under the top, facing the wall. Hanging, the stick is read in three envelopes
+against the wall -- within 45° of straight in, within 45° of straight out, and the half of the
+circle between -- on the stick as it would walk you, by the camera. Into the wall climbs: 48
+frames, unable to act. Away lets go into a fall at 1.5 m/s off the face, free to act on the next
+frame; but only a fresh push away, so a body still holding the stick that walked it off keeps
+hanging. Along goes hand over hand at 1.5 m/s for as far as the edge holds a body. Nothing
+hangs. Crouch lets go into a wall slide. A blow lets go. No ledge is caught for 20 frames after
+letting go of one.
+
+The wall slide now starts only by pushing into the wall (it used to start on any contact) and
+ends by pushing away, and neither changes within 8 frames of the last; along the wall the stick
+steers it at up to 2 m/s, closing a fifth of the gap a frame. The wall slide's tests were moved
+below hand reach of the tower's top, where the ledge now catches them.
+**Why** from the owner: the precision jump sections were "super annoying because you can easily
+slide off into nothing no matter how slowly you move". The ledge is meant as a forgiving way up
+that is plainly not the optimal one, so the climb is slow and the drop is quick. The envelopes
+and the debounce are the owner's; the fresh push to let go, the minimum drop, the crouch into a
+slide and the regrab lockout are mine, each for a failure the owner's rules would otherwise
+have: holding forward off an edge would let go on the frame it caught; a boulder would be
+something you hang off ten centimetres above the floor; there was no way into a slide from a
+hang; and letting go next to the face would catch the same edge again.
+**Not done** a hanging or climbing pose -- the renderer draws the hang with the airborne clip, and
+the climb as that clip rising -- and ledges on the valley's land (only a solid's top is a
+ledge, as only a solid's side is a wall). Space while hanging does nothing.
+**Verdict** open -- unplayed. Things to feel for: whether 48 frames is slow enough to be a
+penalty and short enough not to be a punishment; whether catching every walk-off is right or the
+threshold should sit under the walk; whether the fresh push to let go reads as sticky.

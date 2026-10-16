@@ -1,8 +1,8 @@
 //! **The wall slide and the wall jump** (2026-10-16, `state::cling_to_the_wall`).
 //!
-//! What is pinned: a body falling against a wall slides, a little slower than
-//! a fall and no slower than half of one; it stays on the wall with nothing
-//! held, for as far as the wall goes, and steering away leaves it; a slide to
+//! What is pinned: a body falling against a wall and pushing into it slides,
+//! a little slower than a fall and no slower than half of one; it stays on
+//! the wall for as far as the wall goes, and steering away leaves it; a slide to
 //! the floor costs no fall damage where the same fall in the open does; space
 //! on a wall jumps up and away from it without giving back the airdodge;
 //! never twice running off the same wall, wherever along it; each wall jump
@@ -10,6 +10,9 @@
 //!
 //! The walls are the range's tower: its north face (z = 6, x 17 to 23, a
 //! clean 12 m from the floor) and the south face of its 9 m ledge (z = -6).
+//! Every body here starts with the top out of a hand's reach, or the ledge
+//! would catch it (`tests/ledge.rs`); how the stick starts and ends a slide
+//! is pinned there too.
 
 use sim::arena::ArenaId;
 use sim::fixed::Fx;
@@ -49,16 +52,24 @@ fn idle(w: &mut World, frames: u32) {
     }
 }
 
+/// Pushing into the north face (forward, looking south): what starts a slide
+/// and keeps it.
+fn lean_in(w: &mut World, frames: u32) {
+    for _ in 0..frames {
+        w.advance([Input::aimed(Input::W, SOUTH), Input::default()]);
+    }
+}
+
 fn on_the_wall(w: &World) -> bool {
     w.players[0].wall_since == 0
 }
 
 #[test]
 fn a_slide_is_a_little_slower_than_a_fall() {
-    let mut wall = against_the_north_face(11, mid_face());
-    let mut open = in_the_open(11);
+    let mut wall = against_the_north_face(9, mid_face());
+    let mut open = in_the_open(9);
     for f in 0..40 {
-        idle(&mut wall, 1);
+        lean_in(&mut wall, 1);
         idle(&mut open, 1);
         if f >= 3 {
             assert!(on_the_wall(&wall), "came off the wall on frame {f}");
@@ -77,15 +88,15 @@ fn a_slide_is_a_little_slower_than_a_fall() {
 
 #[test]
 fn a_slide_to_the_floor_costs_nothing_where_the_fall_would() {
-    let mut wall = against_the_north_face(11, mid_face());
-    let mut open = in_the_open(11);
+    let mut wall = against_the_north_face(9, mid_face());
+    let mut open = in_the_open(9);
     // Dropped as from twenty metres up, so the open fall hurts.
     for w in [&mut wall, &mut open] {
         w.players[0].falling_from(Fx::from_int(20));
     }
     let full = wall.players[0].health;
     for _ in 0..240 {
-        idle(&mut wall, 1);
+        lean_in(&mut wall, 1);
         idle(&mut open, 1);
     }
     for w in [&wall, &open] {
@@ -97,16 +108,16 @@ fn a_slide_to_the_floor_costs_nothing_where_the_fall_would() {
 
 #[test]
 fn letting_go_partway_down_costs_only_the_rest() {
-    // Slid from eleven metres to about eight, then steered off: the fall is
+    // Slid from nine metres to about six, then steered off: the fall is
     // measured from where it let go, so it costs less than the whole drop.
-    let mut wall = against_the_north_face(11, mid_face());
-    let mut open = in_the_open(11);
+    let mut wall = against_the_north_face(9, mid_face());
+    let mut open = in_the_open(9);
     for w in [&mut wall, &mut open] {
         w.players[0].falling_from(Fx::from_int(20));
     }
     let full = wall.players[0].health;
-    while wall.players[0].pos.y.raw() > Fx::from_int(8).raw() {
-        idle(&mut wall, 1);
+    while wall.players[0].pos.y.raw() > Fx::from_int(6).raw() {
+        lean_in(&mut wall, 1);
     }
     for _ in 0..240 {
         wall.advance([Input::aimed(Input::W, NORTH), Input::default()]);
@@ -121,10 +132,10 @@ fn letting_go_partway_down_costs_only_the_rest() {
 
 #[test]
 fn steering_away_leaves_the_wall() {
-    let mut w = against_the_north_face(11, mid_face());
-    idle(&mut w, 6);
+    let mut w = against_the_north_face(9, mid_face());
+    lean_in(&mut w, 6);
     assert!(on_the_wall(&w));
-    for _ in 0..10 {
+    for _ in 0..20 {
         w.advance([Input::aimed(Input::W, NORTH), Input::default()]);
     }
     assert!(!on_the_wall(&w), "still on it");
@@ -133,8 +144,8 @@ fn steering_away_leaves_the_wall() {
 
 #[test]
 fn a_wall_jump_goes_up_and_away_and_gives_nothing_back() {
-    let mut w = against_the_north_face(10, mid_face());
-    idle(&mut w, 20);
+    let mut w = against_the_north_face(8, mid_face());
+    lean_in(&mut w, 20);
     assert!(on_the_wall(&w) && w.players[0].vel.y.raw() < 0);
     w.players[0].air_dodged = true;
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
@@ -154,8 +165,8 @@ fn a_wall_jump_goes_up_and_away_and_gives_nothing_back() {
 
 #[test]
 fn a_wall_jump_is_still_there_a_few_frames_after_leaving() {
-    let mut w = against_the_north_face(10, mid_face());
-    idle(&mut w, 10);
+    let mut w = against_the_north_face(8, mid_face());
+    lean_in(&mut w, 20);
     w.advance([Input::aimed(Input::W, NORTH), Input::default()]);
     w.advance([Input::aimed(Input::W, NORTH), Input::default()]);
     assert!(!on_the_wall(&w));
@@ -168,8 +179,8 @@ fn a_wall_jump_is_still_there_a_few_frames_after_leaving() {
 
 #[test]
 fn never_twice_running_off_the_same_wall() {
-    let mut w = against_the_north_face(10, mid_face());
-    idle(&mut w, 10);
+    let mut w = against_the_north_face(8, mid_face());
+    lean_in(&mut w, 10);
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
     assert_eq!(w.players[0].wall_jumps, 1);
     // Back on to the same face, two metres along it. Turned round by hand:
@@ -200,16 +211,21 @@ fn never_twice_running_off_the_same_wall() {
 
 #[test]
 fn each_wall_jump_in_an_airtime_rises_less() {
-    let mut w = against_the_north_face(10, mid_face());
-    idle(&mut w, 10);
+    let mut w = against_the_north_face(8, mid_face());
+    lean_in(&mut w, 10);
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
     let first = w.players[0].vel.y;
     // Now against the ledge's south face, a different wall, falling.
     let p = &mut w.players[0];
-    p.pos = V3::new(mid_face(), Fx::from_int(7), Fx::ratio(-651, 100));
+    p.pos = V3::new(mid_face(), Fx::from_int(5), Fx::ratio(-651, 100));
     p.vel = V3::new(Fx::ZERO, Fx::from_int(-4), Fx::from_int(3));
-    w.advance([Input::aimed(0, NORTH), Input::default()]);
-    w.advance([Input::aimed(Input::SPACE, NORTH), Input::default()]);
+    // Pushing into it, so it is a slide as the first was: both jumps leave
+    // a slide, and so both frames after have had a slide's gravity.
+    w.advance([Input::aimed(Input::W, NORTH), Input::default()]);
+    w.advance([
+        Input::aimed(Input::W | Input::SPACE, NORTH),
+        Input::default(),
+    ]);
     let p = &w.players[0];
     assert_eq!(p.wall_jumps, 2, "the second wall refused: {:?}", p.pos);
     assert!(p.vel.z.raw() < 0, "pushed the wrong way: {:?}", p.vel);
@@ -228,7 +244,7 @@ fn each_wall_jump_in_an_airtime_rises_less() {
 #[test]
 fn landing_forgets_the_wall() {
     let mut w = against_the_north_face(3, mid_face());
-    idle(&mut w, 4);
+    lean_in(&mut w, 4);
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
     assert_eq!(w.players[0].wall_jumps, 1);
     idle(&mut w, 120);

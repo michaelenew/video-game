@@ -494,6 +494,47 @@ impl Solid {
         (dx.mul(cos).add(dz.mul(sin)), dz.mul(cos).sub(dx.mul(sin)))
     }
 
+    /// **The point of its top nearest (x, z)**, flat: (x, z) itself when the
+    /// top covers it. Where a hand reaching for this solid's rim from beside
+    /// it would close (`Terrain::ledge_near`). A round solid's top is its
+    /// disc at the top (a ring's hole is not an edge anybody hangs from), a
+    /// turned box's its turned rectangle.
+    pub fn nearest_on_top(&self, x: Fx, z: Fx) -> (Fx, Fx) {
+        match self.shape {
+            Shape::Box => (
+                x.clamp(self.min.x, self.max.x),
+                z.clamp(self.min.z, self.max.z),
+            ),
+            Shape::Round { bottom, top, .. } => {
+                let (mx, mz) = self.middle();
+                let r = self.radius_at(bottom, top, self.max.y);
+                let (dx, dz) = (x.sub(mx), z.sub(mz));
+                let d = crate::math::wide_flat_len(V3::new(dx, Fx::ZERO, dz));
+                if d.raw() <= r.raw() {
+                    return (x, z);
+                }
+                let k =
+                    |v: Fx| Fx::from_raw((v.raw() as i64 * r.raw() as i64 / d.raw() as i64) as i32);
+                (mx.add(k(dx)), mz.add(k(dz)))
+            }
+            Shape::Turned {
+                half,
+                half_wide,
+                cos,
+                sin,
+            } => {
+                let (mx, mz) = self.middle();
+                let (lx, lz) = self.local(x, z, cos, sin);
+                let lx = lx.clamp(half.neg(), half);
+                let lz = lz.clamp(half_wide.neg(), half_wide);
+                (
+                    mx.add(lx.mul(cos).sub(lz.mul(sin))),
+                    mz.add(lx.mul(sin).add(lz.mul(cos))),
+                )
+            }
+        }
+    }
+
     /// How far (x, z) is outside its footprint at height `y`, flat: zero
     /// inside. For a box, the larger of the two flat distances, as the
     /// ceilings always measured it.
@@ -939,6 +980,40 @@ pub struct Resolved {
     /// because this is what a wall slide clings to and a wall jump leaves
     /// (`state::cling_to_the_wall`).
     pub wall_normal: V3,
+}
+
+/// **An edge a body can hang from** (2026-10-16, `state::catch_a_ledge`):
+/// where the hands close -- on the rim of a solid's top, at its height -- and
+/// which way the face under it looks, level and out of the solid, a unit
+/// vector. Found by [`Terrain::ledge_near`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Edge {
+    pub at: V3,
+    pub normal: V3,
+}
+
+impl Edge {
+    /// Where a body hanging from it stands in the air: a body's radius and
+    /// two skins out from the face, its feet `depth` under the top.
+    pub fn hang(self, depth: Fx) -> V3 {
+        let out = t::body_radius().add(SKIN).add(SKIN);
+        V3::new(
+            self.at.x.add(self.normal.x.mul(out)),
+            self.at.y.sub(depth),
+            self.at.z.add(self.normal.z.mul(out)),
+        )
+    }
+
+    /// Where a body that climbs up it stands: on the top, a body's radius in
+    /// from the rim, so all of it is over the top.
+    pub fn stand(self) -> V3 {
+        let r = t::body_radius();
+        V3::new(
+            self.at.x.sub(self.normal.x.mul(r)),
+            self.at.y,
+            self.at.z.sub(self.normal.z.mul(r)),
+        )
+    }
 }
 
 /// How far a body is held off a surface before it counts as standing on it.
@@ -1889,6 +1964,57 @@ impl Terrain {
     fn without_raised<'a>(&self, mut solids: Solids<'a>) -> Solids<'a> {
         solids.raised = [].iter();
         solids
+    }
+
+    /// **The edge a fighter at `pos` could take hold of** (2026-10-16,
+    /// `state::catch_a_ledge`): the rim of a solid's top whose height above
+    /// the feet is between `lo` and `hi`, and that is no further than the
+    /// body's radius and `reach` from its middle, flat. The nearest such rim
+    /// wins, the first in order among equals.
+    ///
+    /// **Only an edge that holds a body.** The top is a real edge rather than
+    /// a seam between two boxes laid side by side: a body hanging from it
+    /// `depth` under the top fits there, with nothing solid in it and no
+    /// ground above its feet or within `tuning::ledge_drop` of the top (so a
+    /// short drop is a step down, not a ledge); and a body climbing up it has a top to stand on, and
+    /// room to stand. Only a solid's top is a ledge: land too steep to climb
+    /// is a slope, as it is to the wall slide.
+    pub fn ledge_near(&self, pos: V3, lo: Fx, hi: Fx, reach: Fx, depth: Fx) -> Option<Edge> {
+        let radius = t::body_radius();
+        let height = t::body_height();
+        let out = radius.add(reach);
+        let mut best: Option<(Fx, Edge)> = None;
+        for s in self.around(pos, out) {
+            let top = s.max.y;
+            let rel = top.sub(pos.y);
+            if rel.raw() < lo.raw() || rel.raw() > hi.raw() {
+                continue;
+            }
+            let (ex, ez) = s.nearest_on_top(pos.x, pos.z);
+            let gap = V3::new(pos.x.sub(ex), Fx::ZERO, pos.z.sub(ez));
+            let d = crate::math::wide_flat_len(gap);
+            if d.raw() == 0 || d.raw() > out.raw() {
+                continue;
+            }
+            if best.is_some_and(|(b, _)| b.raw() <= d.raw()) {
+                continue;
+            }
+            let edge = Edge {
+                at: V3::new(ex, top, ez),
+                normal: V3::new(gap.x.div(d), Fx::ZERO, gap.z.div(d)),
+            };
+            let hang = edge.hang(depth);
+            let stand = edge.stand();
+            if headroom(self, hang, radius, height)
+                && self.floor_below(hang).raw() < hang.y.raw()
+                && self.floor_below(hang).raw() <= top.sub(t::ledge_drop()).raw()
+                && supported_among(self, stand, radius)
+                && headroom(self, stand, radius, height)
+            {
+                best = Some((d, edge));
+            }
+        }
+        best.map(|(_, e)| e)
     }
 
     /// **A creature against the solids** (for a species that `collides`): an

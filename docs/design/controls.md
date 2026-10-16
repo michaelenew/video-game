@@ -708,14 +708,33 @@ would let a whiffed aerial stay safe by simply remaining out of reach.
 
 ### Walls slide, and can be jumped off — added 2026-10-16
 
-**Falling against the side of a solid is a slide.** Gravity and terminal velocity are both
-a little lower while you are on it (`Wall slide, gravity` and `Wall slide, terminal velocity`
-in the Oven, ×0.7 each) — not so much slower than a fall that a wall is a perch, but enough
-that reaching one is worth something. Both are scaled because a short fall never reaches the
-cap, and a slide that only lowered the cap would do nothing on one. You are held to the wall
-with nothing pressed (`Wall slide, held to the wall at`) and slide for as far as the wall
-goes; steering away from it is how you leave. A body being thrown — in a stun, or spiked
-toward the floor — is not slowed by a wall it goes past.
+**Falling beside the side of a solid and pushing into it is a slide.** Gravity and terminal
+velocity are both a little lower while you are on it (`Wall slide, gravity` and `Wall slide,
+terminal velocity` in the Oven, ×0.7 each) — not so much slower than a fall that a wall is a
+perch, but enough that reaching one is worth something. Both are scaled because a short fall
+never reaches the cap, and a slide that only lowered the cap would do nothing on one. You are
+held to the wall (`Wall slide, held to the wall at`) and slide for as far as the wall goes. A
+body being thrown — in a stun, or spiked toward the floor — is not slowed by a wall it goes
+past.
+
+**The stick against a wall is three envelopes** (2026-10-16, `state::lean_against`): within 45°
+of straight into the wall, within 45° of straight out of it, and the half of the circle between
+— read on the stick as it would walk you on the floor, by the camera (`Walls, into or away
+within`, the cosine). On a slide:
+
+| Stick | Does |
+| --- | --- |
+| Into the wall | Starts a slide, falling beside one; on one, nothing more |
+| Away from it | Ends the slide |
+| Along it | Steers the slide a little (`Wall slide, steered along at`, 2 m/s) |
+| Nothing | Keeps whichever it is: on the slide, or falling past |
+
+**Neither starting nor ending comes within `Wall slide, on or off no faster than` (8 frames) of
+the last.** The two answers meet at a line, and without the debounce a stick wobbling across it
+— or a body pushed off a wall by leaving it and steered straight back — starts and ends a slide
+on alternate frames, each start resetting the fall's height. The wall ending, a rise, a throw or
+the floor end a slide outright: that is the world deciding, not the stick. The same envelopes
+work a ledge (below).
 
 **A wall is footing for the fall rule.** While you slide, the height a fall is measured from
 is reset to where you are, the way a vine resets it. A wall slid all the way to the floor
@@ -744,7 +763,50 @@ climbed forever. Both reset on landing.
 
 Only a solid's side is a wall. Ground too steep to climb is a slope you slide down, and the
 Elementalist's stones are not walls for this (they have their own rules for bodies). Pinned by
-`crates/sim/tests/wall_jump.rs`; the code is `state::cling_to_the_wall`.
+`crates/sim/tests/wall_jump.rs` and, for the stick, `crates/sim/tests/ledge.rs`; the code is
+`state::cling_to_the_wall` and `state::keep_sliding`.
+
+### Ledges catch — added 2026-10-16
+
+**A forgiving way up that is plainly not the quick one.** The jump sections were losing people
+to near misses and to walking off edges they were creeping along, so an edge now catches a body
+that walks off it slowly or falls past it with the top at its hands — and getting up from there
+is slow, while letting go is quick. A landed jump is still the way to play; the ledge is what a
+miss costs instead of the whole section.
+
+**What catches** (`state::catch_a_ledge`): walking off an edge no faster than `Ledge, caught
+walking off at up to` (7.5 m/s, just over the walk: a walk or a creep, never a dodge or a
+blow); or, falling, a top between `Ledge, caught falling, top over the feet from` and `up to`
+(1.2 m and 2.3 m — about the chest to the reach of a hand) within `Ledge, caught within, past
+the body` (0.2 m) of your side, unless the stick is pushing away from it. Only while free to
+act and not rising, and only an edge that holds a body (`Terrain::ledge_near`): a real edge, not
+a seam between two boxes; room to hang beside it; a drop of at least `Ledge, only over a drop of
+at least` (3 m) under it, so a boulder is a step down; and a top to stand on, with room. Only a
+solid's top is a ledge — land too steep to climb is a slope, as it is to the slide.
+
+**Hanging** (`state::hang_on`): the catch settles you over `Ledge, catching, settles over` (8
+frames) into a hang `Ledge, hanging, feet under the top` (1.9 m) under the top, facing the
+wall. The hang is footing for the fall rule, like a vine, so a ledge caught is a fall
+cancelled. Then the same three envelopes as the slide:
+
+| Stick | Does |
+| --- | --- |
+| Nothing | Hangs |
+| Into the wall | **Climbs up**: `Ledge, climbing up takes` (48 frames), unable to act and open to a blow, and ends standing on the top |
+| Away from it | **Lets go**: a fall pushed `Ledge, let go, pushed off at` (1.5 m/s) off the face, free to act on the next frame |
+| Along it | Hand over hand along the edge (`Ledge, hand over hand at`, 1.5 m/s), round an outside corner, for as far as the edge holds a body |
+| Crouch | Lets go into a wall slide down the face |
+
+**Letting go wants a fresh push away.** A body that walked off an edge is holding the stick
+away from the wall it now hangs on; read plainly, that lets go on the frame it settles, and
+walking off an edge would be exactly what it was before. So away only lets go once the stick
+has been anywhere else since the catch. No ledge catches for `Ledge, not caught again for` (20
+frames) after letting go of one, or the edge just let go of would catch again.
+
+A blow lets go, and so does dying. Space while hanging does nothing — the wall jump is a thing
+a slide gives, and a hang that gave it would be a perch with a ladder attached. Pinned by
+`crates/sim/tests/ledge.rs`. **Not built**: a hanging or climbing pose; the renderer draws the
+hang with the airborne clip.
 
 ### Airborne attacks — ⚠️ open
 
