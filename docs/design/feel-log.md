@@ -8805,10 +8805,42 @@ the debounce, the catch rule and the hold-on are the owner's; the crouch into a 
 regrab lockout are mine, each for a failure the owner's rules would otherwise have: there was
 no way into a slide from a hang, and letting go next to the face would catch the same edge
 again.
-**Not done** a hanging or climbing pose -- the renderer draws the hang with the airborne clip, and
-the climb as that clip rising -- and ledges on the valley's land (only a solid's top is a
-ledge, as only a solid's side is a wall). Space while hanging does nothing.
+**Not done** ledges on the valley's land (only a solid's top is a ledge, as only a solid's side
+is a wall). Space while hanging does nothing. (The hanging and climbing poses came the same
+day: see below.)
 **Verdict** open -- unplayed. Things to feel for: whether 48 frames is slow enough to be a
 penalty and short enough not to be a punishment; whether 2 m/s and 0.2 m forgive enough of a
 walk-off, or too much of a jump that meant to clear; whether 20 frames of hold-on reads as a
 hang or as a stall.
+
+### 2026-10-16 — the ledge drawn: hanging, hand over hand, climbing
+
+**Changed** three clips for the ledge (`crates/anim/src/clips/ledge.rs`), chosen by
+`view::play` off a new `interp::Hold` -- which grip, how far into it, and how fast along the wall,
+read off the two snapshots' positions because a hanging body's velocity is held at zero.
+`ledge_hang` (90 frames, a slow sway) puts both wrists on the rim with `reach`, 1.86 m over the
+feet and 0.44 m in front, with the hips 24 cm forward and 16 cm down: the simulation holds the
+body a collision radius off the face, wider than the drawn body, and hung straight down from
+there it hung behind its own hands with its elbows bent out -- hands up, not hanging. The catch's
+settle is the hang's cross-fade from the fall. `ledge_shuffle` (16 frames) is hand over hand to
+her right, the hands meeting in the middle and parting, a planted hand sliding back at the
+shuffle's 1.5 m/s; played backwards it goes left. `ledge_climb` is `Length::LedgeClimb`, as long
+as `ledge_climb`, and keyed against the edge where the climb has carried it: a pull-up with the
+knees coming up, a press to straight arms with the right knee high, a fold on the lip with the
+left leg hanging down the face, and standing into the stance. The climb's end and a let-go now
+reset `air_frames`, so neither plays the heavy landing a long hang would otherwise read as.
+
+Two things were tried and changed on the preview sheet: the trailing leg on the lip first
+stretched back along a floor that is not there; and the arms went from overhead to the pull-up
+by swinging out straight in front, until a key at frame 6 held the hands on the edge on the way.
+
+Re-baking also brought `blood_mechanic` back in step with its move (56 frames to 42): the baked
+table on main was stale against the move table.
+
+`SHOT_AT` takes decimals now, and `SHOT_FALL=1` leaves player one in the air there: how the hang
+was captured in the game (`SHOT_AT=20,6.55,10.4 SHOT_FALL=1 SHOT_FRAME=40 SHOT_YAW=-1.57`,
+`--arena range`).
+**Not done** the climb was looked at on the preview sheet only, not in the game: a still capture
+cannot hold the stick into the wall. The shuffle's widths are written for 1.5 m/s and the climb's
+keys for 48 frames; retuning either knob wants them moved.
+**Verdict** open -- unplayed.

@@ -7239,6 +7239,9 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
                 p.pos = stand;
                 p.grounded = true;
                 p.ledge = Ledge::NONE;
+                // The climb is its own landing: no flight to land from, or
+                // a long hang would be drawn arriving like a long fall.
+                p.air_frames = 0;
             }
         }
     }
@@ -7264,6 +7267,9 @@ fn let_go_of_the_ledge(p: &mut Player, into_a_slide: bool, ground: &Terrain) {
     p.ledge = Ledge::NONE;
     p.ledge_regrab = t::ledge_regrab();
     p.slide_flip = t::wall_slide_flip();
+    // The fall starts here: the hang was not flight, and a landing drawn
+    // from the length of the hang would be a heavy one after a short drop.
+    p.air_frames = 0;
     p.fall_over = hang.y.sub(t::fall_free()).max(ground.lowest());
     if into_a_slide {
         // Against the face, so the hold into it meets it next frame.
