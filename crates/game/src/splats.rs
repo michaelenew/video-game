@@ -19,8 +19,9 @@
 //! season, `broad_strokes`' blend of the two nearest lengths, is what keeps
 //! the brush the same size on the screen.
 //!
-//! What it costs: placing is hashing, a few milliseconds for the finest
-//! tile; drawing is four or five fragments a pixel of one noise lookup
+//! What it costs: placing is hashing, some twenty milliseconds for a tile
+//! at the finest level, spread nearest first under [`PLACE_BUDGET_MS`];
+//! drawing is four or five fragments a pixel of one noise lookup
 //! each (4.3 million at 1280 x 760, measured), which a GPU makes nothing
 //! of and the software renderer, which charges per fragment, 260 ms of.
 
@@ -30,6 +31,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use bevy::asset::weak_handle;
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
@@ -82,11 +84,10 @@ const FINEST: i32 = -2;
 /// The coarsest: sixty-four-metre strokes, for the far mountains.
 const COARSEST: i32 = 8;
 
-/// A tile's strokes, on the GPU.
+/// A tile's strokes, on the GPU: one instance each, drawn as a quad.
 #[derive(Component, Clone, ExtractComponent)]
 pub struct Splats {
-    vertices: Buffer,
-    indices: Buffer,
+    strokes: Buffer,
     count: u32,
 }
 
@@ -98,9 +99,20 @@ struct Frame {
 }
 
 /// Which levels each tile has built, so a tile is rebuilt only when its
-/// distance asks for a level it does not have.
+/// distance asks for a level it does not have; and the stroke sizes its
+/// ground asks for, sampled once. Sampling them every frame for every
+/// tile in the stream was a frame that climbed with the tile count
+/// (2026-10-16).
 #[derive(Resource, Default)]
-struct Built(HashMap<(i32, i32), (Entity, i32, i32)>);
+struct Built {
+    levels: HashMap<(i32, i32), (Entity, i32, i32)>,
+    sizes: HashMap<(i32, i32), (f32, f32)>,
+}
+
+/// How long one frame may spend placing strokes. A near tile at the finest
+/// level is tens of thousands of strokes; placing every tile the stream
+/// brought in the same frame was a hitch. Nearest first, at least one.
+const PLACE_BUDGET_MS: f32 = 2.0;
 
 pub struct SplatsPlugin;
 
@@ -222,7 +234,8 @@ fn follow(
 ) {
     let w = &sim.cur;
     if !w.valley.on {
-        built.0.clear();
+        built.levels.clear();
+        built.sizes.clear();
         return;
     }
     let Ok(eye) = camera.single() else {
@@ -239,8 +252,19 @@ fn follow(
     frame.params = Vec4::new(broad_size, 0.0, 0.0, 0.0);
     let at = eye.translation + origin;
     let size = TILE_M as f32;
-    built.0.retain(|t, _| st.tiles().contains_key(t));
+    built.levels.retain(|t, _| st.tiles().contains_key(t));
+    built.sizes.retain(|t, _| st.tiles().contains_key(t));
     let atlas = atlas::valley();
+    // What wants placing, nearest first.
+    struct Want {
+        near: f32,
+        t: (i32, i32),
+        e: Entity,
+        cells: usize,
+        lo: i32,
+        hi: i32,
+    }
+    let mut work: Vec<Want> = Vec::new();
     for (&t, &(e, cells, _)) in st.tiles() {
         let (x0, z0) = (t.0 as f32 * size, t.1 as f32 * size);
         // The nearest and farthest points of the tile, flat.
@@ -252,19 +276,48 @@ fn follow(
         let far = (fx * fx + fz * fz).sqrt();
         // The levels in season somewhere on the tile, for the kinds of
         // ground on it, and one coarser, so a step back does not rebuild.
-        let (size_lo, size_hi) = Splats::sizes(atlas, t);
+        let (size_lo, size_hi) = *built
+            .sizes
+            .entry(t)
+            .or_insert_with(|| Splats::sizes(atlas, t));
         let l_min = (broad_size * near * size_lo).max(0.05).log2();
         let l_max = (broad_size * far * size_hi).max(0.05).log2();
         let lo = (l_min.floor() as i32).clamp(FINEST, COARSEST);
         let hi = (l_max.ceil() as i32 + 1).clamp(FINEST, COARSEST);
-        let have = built.0.get(&t).copied();
+        let have = built.levels.get(&t).copied();
         if have.is_some_and(|(he, hlo, hhi)| he == e && hlo <= lo && hhi >= hi) {
             continue;
+        }
+        work.push(Want {
+            near,
+            t,
+            e,
+            cells,
+            lo,
+            hi,
+        });
+    }
+    work.sort_by(|a, b| a.near.total_cmp(&b.near));
+    let started = Instant::now();
+    for (
+        n,
+        Want {
+            t,
+            e,
+            cells,
+            lo,
+            hi,
+            ..
+        },
+    ) in work.into_iter().enumerate()
+    {
+        if n > 0 && started.elapsed().as_secs_f32() * 1000.0 > PLACE_BUDGET_MS {
+            break;
         }
         let splats = Splats::place(&device, atlas, t, cells, lo, hi);
         if let Ok(mut ec) = commands.get_entity(e) {
             ec.insert(splats);
-            built.0.insert(t, (e, lo, hi));
+            built.levels.insert(t, (e, lo, hi));
         }
     }
 }
@@ -289,8 +342,8 @@ impl Splats {
         (lo, hi)
     }
 
-    /// Every stroke of the tile at levels `lo..=hi`: four corners each,
-    /// in painter's order.
+    /// Every stroke of the tile at levels `lo..=hi`, one instance each
+    /// (`splats.wgsl` makes the quad), in painter's order.
     /// `cells` is how finely the tile's mesh is drawn: the strokes lie on
     /// that mesh, read between its vertices, not on the relief it samples,
     /// or far out, where a cell is metres, they would sink under it.
@@ -351,65 +404,43 @@ impl Splats {
             let (s, k) = read(x, z);
             [s[4].atan2(s[3]), k[0], k[1]]
         };
-        let mut vertices: Vec<u8> = Vec::new();
-        let mut indices: Vec<u8> = Vec::new();
-        let mut strokes = 0u32;
+        let mut strokes: Vec<f32> = Vec::new();
+        let mut count = 0u32;
         for level in lo..=hi {
             for s in look::strokes::place(level, [x0, z0], [x0 + size, z0 + size], &kind) {
                 let (g, _) = read(s.centre[0], s.centre[1]);
-                let (h, nx, nz) = (g[0], g[1], g[2]);
-                let ny = (1.0 - nx * nx - nz * nz).max(1e-3).sqrt();
-                let (sn, cs) = s.angle.sin_cos();
-                let base = strokes * 4;
-                strokes += 1;
-                for (cu, cv) in [(-1.2, -1.8), (1.2, -1.8), (1.2, 1.8), (-1.2, 1.8)] {
-                    let dx = cu * s.long * cs - cv * s.wide * sn;
-                    let dz = cu * s.long * sn + cv * s.wide * cs;
-                    // On the ground's plane at the stroke's middle.
-                    let y = h - (nx * dx + nz * dz) / ny;
-                    for v in [
-                        s.centre[0] + dx,
-                        y,
-                        s.centre[1] + dz,
-                        cu,
-                        cv,
-                        s.order,
-                        level as f32,
-                        s.scale,
-                        s.loose,
-                        s.colour[0],
-                        s.colour[1],
-                        s.colour[2],
-                        s.curve,
-                        s.seeds[0],
-                        s.seeds[1],
-                        s.long,
-                        0.0,
-                    ] {
-                        vertices.extend_from_slice(&v.to_le_bytes());
-                    }
-                }
-                for i in [base, base + 1, base + 2, base, base + 2, base + 3] {
-                    indices.extend_from_slice(&i.to_le_bytes());
-                }
+                count += 1;
+                strokes.extend_from_slice(&[
+                    s.centre[0],
+                    g[0],
+                    s.centre[1],
+                    s.angle,
+                    g[1],
+                    g[2],
+                    s.long,
+                    s.wide,
+                    s.order,
+                    level as f32,
+                    s.scale,
+                    s.loose,
+                    s.colour[0],
+                    s.colour[1],
+                    s.colour[2],
+                    s.curve,
+                    s.seeds[0],
+                    s.seeds[1],
+                    s.long,
+                    0.0,
+                ]);
             }
         }
-        let vertices = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("splats vertices"),
-            contents: &vertices,
+        let bytes: Vec<u8> = strokes.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let strokes = device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("splats"),
+            contents: &bytes,
             usage: BufferUsages::VERTEX,
         });
-        let count = strokes * 6;
-        let indices = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("splats indices"),
-            contents: &indices,
-            usage: BufferUsages::INDEX,
-        });
-        Splats {
-            vertices,
-            indices,
-            count,
-        }
+        Splats { strokes, count }
     }
 }
 
@@ -470,11 +501,13 @@ impl FromWorld for SplatsPipeline {
                 shader: SHADER,
                 shader_defs: vec![],
                 entry_point: "vertex".into(),
+                // One stroke an instance; the six vertices of its quad are
+                // the shader's.
                 buffers: vec![VertexBufferLayout::from_vertex_formats(
-                    VertexStepMode::Vertex,
+                    VertexStepMode::Instance,
                     [
-                        VertexFormat::Float32x3,
-                        VertexFormat::Float32x2,
+                        VertexFormat::Float32x4,
+                        VertexFormat::Float32x4,
                         VertexFormat::Float32x4,
                         VertexFormat::Float32x4,
                         VertexFormat::Float32x4,
@@ -593,9 +626,8 @@ impl ViewNode for SplatsNode {
         pass.set_render_pipeline(ready);
         pass.set_bind_group(0, &bind, &[view_offset.offset]);
         for s in &batch.0 {
-            pass.set_vertex_buffer(0, s.vertices.slice(..));
-            pass.set_index_buffer(s.indices.slice(..), 0, IndexFormat::Uint32);
-            pass.draw_indexed(0..s.count, 0, 0..1);
+            pass.set_vertex_buffer(0, s.strokes.slice(..));
+            pass.draw(0..6, 0..s.count);
         }
         span.end(&mut pass);
         Ok(())

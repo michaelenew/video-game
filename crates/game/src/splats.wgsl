@@ -22,10 +22,15 @@ struct Splats {
 // ground and off the air in front of it.
 @group(0) @binding(2) var depth_tex: texture_depth_2d;
 
+// One stroke, drawn as six vertices of one quad (`corner`): what the
+// placer wrote, once a stroke.
 struct VertexIn {
-    @location(0) pos: vec3<f32>,
-    // Along and across the stroke, in half-lengths and half-widths.
-    @location(1) uv: vec2<f32>,
+    @builtin(vertex_index) corner: u32,
+    // The stroke's middle on the ground, and its angle on the plane.
+    @location(0) p: vec4<f32>,
+    // The ground's normal there (x, z), and the stroke's half length and
+    // half width.
+    @location(1) q: vec4<f32>,
     // order, level, the ground's stroke size, loose
     @location(2) a: vec4<f32>,
     // shade, warmth, the third axis, curve
@@ -56,7 +61,22 @@ struct FragmentOut {
 @vertex
 fn vertex(in: VertexIn) -> VertexOut {
     var out: VertexOut;
-    let world = in.pos - splats.origin.xyz;
+    // The quad's corner, in half-lengths and half-widths, with room for
+    // the bristles' reach; laid on the ground's plane at the stroke's
+    // middle.
+    var corners = array<vec2<f32>, 4>(
+        vec2<f32>(-1.2, -1.8), vec2<f32>(1.2, -1.8), vec2<f32>(1.2, 1.8), vec2<f32>(-1.2, 1.8),
+    );
+    var order = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
+    let uv = corners[order[in.corner % 6u]];
+    let sn = sin(in.p.w);
+    let cs = cos(in.p.w);
+    let dx = uv.x * in.q.z * cs - uv.y * in.q.w * sn;
+    let dz = uv.x * in.q.z * sn + uv.y * in.q.w * cs;
+    let ny = sqrt(max(1.0 - in.q.x * in.q.x - in.q.y * in.q.y, 1e-3));
+    let y = in.p.y - (in.q.x * dx + in.q.y * dz) / ny;
+    let pos = vec3<f32>(in.p.x + dx, y, in.p.z + dz);
+    let world = pos - splats.origin.xyz;
     let to_eye = view.world_position - world;
     let dist = length(to_eye);
     let level = in.a.y;
@@ -76,7 +96,7 @@ fn vertex(in: VertexIn) -> VertexOut {
     out.clip = view.clip_from_world * vec4<f32>(world, 1.0);
     out.depth = -(view.view_from_world * vec4<f32>(world, 1.0)).z;
     out.world = world;
-    out.uv = in.uv;
+    out.uv = uv;
     out.b = in.b;
     out.c = vec4<f32>(in.c.xy, in.a.w, size);
     out.odd = vec2<f32>(f32(i32(level) & 1), level);

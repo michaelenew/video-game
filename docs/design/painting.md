@@ -319,6 +319,23 @@ became the default)
   depth buffer. The two levels are always one even and one odd, so each
   parity gets a texture of its own, replaced in painter's order, and the
   surface shader adds the two.
+- **The tile's stroke sizes sampled every frame** (the first push of the
+  splats, 2026-10-16). `follow` asked the ground of every tile in the
+  stream, sixteen points of ten land samples each, every frame, to know
+  which levels could be in season on it. The owner's Mac: a frame that
+  climbed from 45 ms to 100 over the minute the land reach (300--700 m)
+  takes to fill in, and stayed there, while the brush at the pixel held
+  33--36. Sampled once a tile now, and `follow` is a few flops a tile.
+- **Every tile placed the frame the stream brought it.** A near tile is
+  forty thousand strokes, three quarters of them the finest level, about
+  20 ms on this box with nothing else running; the stream brings in
+  twenty-four tiles a frame. Placed nearest first under a 2 ms budget now,
+  at least one a frame, so a step onto a new tile is one frame's hitch
+  of a tile. Next if it still shows: the finest level in quarters, or
+  placing on the compute pool.
+- **Four corners a stroke.** The placer wrote each stroke's quad as four
+  vertices of seventeen floats; one instance of twenty now, and the
+  shader makes the quad, a quarter of the bytes and of the placing.
 - **A render-world-only target.** The screen-sized texture was made with
   `RenderAssetUsages::RENDER_WORLD`, which unloads it from the main world
   the frame after it is extracted, so the size check found nothing and
@@ -446,6 +463,13 @@ became the default)
   triangles casting shadows into four cascades, most of them "grown
   giants" 250--450 m off. Next for the frame: the screen pass at half
   resolution, and what casts shadows at that distance.
+- **With the splats, on the Mac** (2026-10-16, the first push): `brushed`
+  45 ms in the first seconds, climbing to 100 as the land filled in (the
+  dead end below); `--exact 999` 33--36 ms steady; `--no-wash` took about
+  10 ms off either. So the screen pass is 10 ms at retina, and the brush at
+  the pixel is cheaper on that GPU than the surface pass's share here
+  suggested. The splats' own steady cost is the next measurement, now the
+  climb is gone.
 - **Measure it**: `./scripts/profile.sh target/p.log 45 --arena mouth --look
   brushed` prints every pass's cost under the software renderer every two
   seconds, the painted passes (`wash brush`, `outline`) among them; compare
