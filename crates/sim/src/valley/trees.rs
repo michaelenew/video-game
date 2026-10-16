@@ -578,7 +578,7 @@ fn broadleaf(
         points.push(p);
     }
     let first = lead[lead.len() / 3] as usize;
-    colonise(r, nodes, &mut points, first, (2400, 650, 380), (up, flat));
+    colonise(r, nodes, &points, first, (2400, 650, 380), (up, flat));
     // Foliage at every branch's end.
     let mut children = vec![0u32; nodes.len()];
     for n in nodes.iter() {
@@ -602,7 +602,7 @@ fn broadleaf(
 fn colonise(
     r: &Reading,
     nodes: &mut Vec<Node>,
-    points: &mut Vec<V>,
+    points: &[V],
     first: usize,
     sizes: (i64, i64, i64),
     lean: (i64, i64),
@@ -817,8 +817,7 @@ fn roots(kind: Kind, r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>) {
     }
     // Half buried: each root node a third of its thickness into the ground,
     // and the buttress at its foot flaring up the trunk.
-    for i in first..nodes.len() {
-        let n = nodes[i];
+    for n in nodes.iter_mut().skip(first) {
         let p = v(n.at);
         let gy = r.ground(p);
         let out = flat_len(sub(p, r.base));
@@ -827,7 +826,7 @@ fn roots(kind: Kind, r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>) {
         } else {
             0
         };
-        nodes[i].at[1] = (gy - n.radius as i64 / 3 + flare) as i32;
+        n.at[1] = (gy - n.radius as i64 / 3 + flare) as i32;
     }
 }
 
