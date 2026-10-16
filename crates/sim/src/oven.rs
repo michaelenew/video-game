@@ -1055,12 +1055,14 @@ scalars! {
     WallSlideSteer,       "Air",      "Wall slide, steered along at (m/s)",                  Fixed, 0, fx(10,1);
     WallSlideGrip,        "Air",      "Wall slide, steering arrives per frame (x)",          Fixed, fx(1,100), fx(1,1);
     // **The ledge grab** (2026-10-16). A forgiving way up that is plainly not
-    // the quick one: walking off an edge slowly, or falling past one with it
-    // at the hands, catches it; the climb up is slow, letting go is quick.
-    // See `state::catch_a_ledge` and `state::hang_on`.
-    LedgeWalkOff,         "Ledge",    "Caught walking off at up to (m/s)",                   Fixed, 0, fx(20,1);
-    LedgeReachLow,        "Ledge",    "Caught falling, top over the feet from (m)",          Fixed, 0, fx(3,1);
-    LedgeReachHigh,       "Ledge",    "Caught falling, top over the feet up to (m)",         Fixed, 0, fx(4,1);
+    // the quick one: a body fully off an edge, not leaving it fast, with the
+    // top at its hands and the stick not pushing away, catches it; the climb
+    // up is slow, letting go is quick. See `state::catch_a_ledge` and
+    // `state::hang_on`.
+    LedgeAway,            "Ledge",    "Caught moving away from it at up to (m/s)",           Fixed, 0, fx(20,1);
+    LedgeHoldOn,          "Ledge",    "Held into the wall from the catch, climbs after",     Frames, 0, 120;
+    LedgeReachLow,        "Ledge",    "Caught, top over the feet from (m)",                  Fixed, 0, fx(3,1);
+    LedgeReachHigh,       "Ledge",    "Caught, top over the feet up to (m)",                 Fixed, 0, fx(4,1);
     LedgeReach,           "Ledge",    "Caught within, past the body (m)",                    Fixed, 0, fx(1,1);
     LedgeDepth,           "Ledge",    "Hanging, feet under the top (m)",                     Fixed, fx(1,2), fx(3,1);
     LedgeCatch,           "Ledge",    "Catching, settles over",                              Frames, 1, 60;

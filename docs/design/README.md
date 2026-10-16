@@ -79,8 +79,8 @@ same wall again only from a metre below the last, and each one in an airtime wor
 slide starts by pushing into the wall and ends by pushing away, no faster than a short
 debounce. See
 [controls.md](controls.md#walls-slide-and-can-be-jumped-off--added-2026-10-16).
-**Ledges catch — added 2026-10-16.** Walking off an edge slowly, or falling past one with its
-top at your hands, hangs you from it: into the wall climbs up, slowly; away lets go, quickly;
+**Ledges catch — added 2026-10-16.** Off an edge, not leaving it fast, with its top at your
+hands and the stick not pushing away, you hang from it: into the wall climbs up, slowly; away lets go, quickly;
 along goes hand over hand. A forgiving way up that is plainly not the quick one. See
 [controls.md](controls.md#ledges-catch--added-2026-10-16).
 

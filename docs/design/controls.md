@@ -779,20 +779,30 @@ that walks off it slowly or falls past it with the top at its hands — and gett
 is slow, while letting go is quick. A landed jump is still the way to play; the ledge is what a
 miss costs instead of the whole section.
 
-**What catches** (`state::catch_a_ledge`): walking off an edge no faster than `Ledge, caught
-walking off at up to` (7.5 m/s, just over the walk: a walk or a creep, never a dodge or a
-blow); or, falling, a top between `Ledge, caught falling, top over the feet from` and `up to`
-(1.2 m and 2.3 m — about the chest to the reach of a hand) within `Ledge, caught within, past
-the body` (0.2 m) of your side, unless the stick is pushing away from it. Only while free to
-act and not rising, and only an edge a body fits beside, hanging (`Terrain::ledge_near`):
-nothing solid where it would hang and no floor above its feet — which is also what tells a
-real edge from a seam between two boxes. **Nothing is asked of the top.** An edge with no room
-over it — a lip under a roof, a shelf in a wall — is hung from and gone along hand over hand
-like any other, which is what makes a shuffle along a wall something an agility section can be
-built from; it is only never climbed (`Terrain::room_on_top`, asked when the climb would
-start). And no drop is too short, so long as the hanging feet clear the floor: a 2 m boulder is
-a ledge, a 1.5 m step is not. Only a solid's top is a ledge — land too steep to climb is a
-slope, as it is to the slide.
+**What catches** (`state::catch_a_ledge`) is one rule, asked every frame in the air, whether
+you walked off the edge, jumped short of it or fell past it:
+
+| Part | Knob | Default |
+| --- | --- | --- |
+| Fully off the edge: no part of the body over the top | `Ledge, caught within, past the body` | out to 0.2 m past the body's side |
+| Not leaving fast: moving away from the face no faster than this (toward it, any speed) | `Ledge, caught moving away from it at up to` | 2 m/s |
+| At the hands: the top between the shoulder and the arms' reach overhead | `Ledge, caught, top over the feet from` / `up to` | 1.5 m to 2.3 m |
+| Not pushing away: the stick into the wall, along it, or let go | `Walls, into or away within` | 45° |
+
+Only while free to act and not rising — an edge passed on the way up is one a jump is clearing.
+**A walk off an edge is not caught at these numbers**: it is 7 m/s away from the face, and by
+the time the top reaches the shoulders the body is two metres out. What is caught is drifting
+off slowly, a jump that falls short against the face, or a fall past an edge with the stick
+toward it; the two knobs above decide how much more of a walk-off is forgiven.
+
+And only an edge a body fits beside, hanging (`Terrain::ledge_near`): nothing solid where it
+would hang and no floor above its feet — which is also what tells a real edge from a seam
+between two boxes. **Nothing is asked of the top.** An edge with no room over it — a lip under a
+roof, a shelf in a wall — is hung from and gone along hand over hand like any other, which is
+what makes a shuffle along a wall something an agility section can be built from; it is only
+never climbed (`Terrain::room_on_top`, asked when the climb would start). And no drop is too
+short, so long as the hanging feet clear the floor: a 2 m boulder is a ledge, a 1.5 m step is
+not. Only a solid's top is a ledge — land too steep to climb is a slope, as it is to the slide.
 
 **Hanging** (`state::hang_on`): the catch settles you over `Ledge, catching, settles over` (8
 frames) into a hang `Ledge, hanging, feet under the top` (1.9 m) under the top, facing the
@@ -807,10 +817,10 @@ cancelled. Then the same three envelopes as the slide:
 | Along it | Hand over hand along the edge (`Ledge, hand over hand at`, 1.5 m/s), round an outside corner, for as far as the edge holds a body |
 | Crouch | Lets go into a wall slide down the face |
 
-**Letting go wants a fresh push away.** A body that walked off an edge is holding the stick
-away from the wall it now hangs on; read plainly, that lets go on the frame it settles, and
-walking off an edge would be exactly what it was before. So away only lets go once the stick
-has been anywhere else since the catch. No ledge catches for `Ledge, not caught again for` (20
+**Into the wall is both "catch it" and "climb it".** A player who pushed toward the edge to
+catch it may want to hang there, so a stick held into the wall through the catch only climbs
+once `Ledge, held into the wall from the catch, climbs after` (20 frames) has run; one let go
+and pressed in again climbs at once. No ledge catches for `Ledge, not caught again for` (20
 frames) after letting go of one, or the edge just let go of would catch again.
 
 A blow lets go, and so does dying. Space while hanging does nothing — the wall jump is a thing

@@ -1,17 +1,18 @@
 //! **The ledge grab, and the stick against a wall** (2026-10-16,
 //! `state::catch_a_ledge`, `state::hang_on`, `state::keep_sliding`).
 //!
-//! What is pinned: walking off an edge catches it, and a dodge off it does
-//! not; a drop shorter than a hang is a step down, and anything deeper is a
-//! ledge; an edge with no room over it is hung from and gone along, never
-//! climbed; falling past an edge with it at the hands catches it, unless the
-//! stick pushes away; nothing pressed hangs, even holding the stick that
-//! walked off -- letting go wants a fresh push away; the climb up is slow and
-//! ends standing on the top, and letting go is quick; along the wall goes
-//! hand over hand, at the edge's own height; crouch lets go into a slide; a
-//! blow lets go. And the slide: only pushing into a wall starts one, pushing
-//! away ends one, neither faster than the flip, and along the wall steers a
-//! little.
+//! What is pinned: one rule catches an edge however the body got there --
+//! fully off it, not leaving fast, the top at its hands, the stick not
+//! pushing away -- so drifting off one catches it, and walking, dodging or
+//! falling away from it fast does not; a drop shorter than a hang is a step
+//! down, and anything deeper is a ledge; an edge with no room over it is hung
+//! from and gone along, never climbed; nothing pressed hangs; a stick held
+//! into the wall through the catch climbs only after the hold-on, one pressed
+//! in afresh at once; the climb up is slow and ends standing on the top, and
+//! letting go is quick; along the wall goes hand over hand, at the edge's own
+//! height; crouch lets go into a slide; a blow lets go. And the slide: only
+//! pushing into a wall starts one, pushing away ends one, neither faster than
+//! the flip, and along the wall steers a little.
 //!
 //! The walls are the range's tower: its north ledge (x 17 to 23, z 4.5 to 6)
 //! is 12 m to its top, and its face at z = 6 drops clean to the floor.
@@ -62,23 +63,25 @@ fn holding(w: &World) -> bool {
     w.players[0].ledge.is_some()
 }
 
-/// Walked off the north edge and settled into the hang.
-fn hanging() -> World {
-    let mut w = on_the_top(Fx::ratio(55, 10));
-    for _ in 0..60 {
-        press(&mut w, Input::W, NORTH, 1);
-        if holding(&w) {
-            break;
-        }
-    }
+/// Just off the north edge, its top at the shoulders, falling: caught.
+fn caught() -> World {
+    let mut w = beside_the_face(top().sub(Fx::ratio(16, 10)));
+    w.players[0].vel = V3::ZERO;
+    press(&mut w, 0, SOUTH, 1);
     assert!(holding(&w), "never caught the edge: {:?}", w.players[0].pos);
-    press(&mut w, 0, NORTH, t::ledge_catch() as u32 + 1);
+    w
+}
+
+/// Caught and settled into the hang.
+fn hanging() -> World {
+    let mut w = caught();
+    press(&mut w, 0, SOUTH, t::ledge_catch() as u32 + 1);
     assert_eq!(w.players[0].ledge.grip, Grip::Hang);
     w
 }
 
 #[test]
-fn walking_off_an_edge_catches_it() {
+fn the_hang_is_under_the_top_facing_the_wall() {
     let w = hanging();
     let p = &w.players[0];
     assert_eq!(p.pos.y, top().sub(t::ledge_depth()));
@@ -87,20 +90,87 @@ fn walking_off_an_edge_catches_it() {
         "not off the face: {:?}",
         p.pos
     );
-    // Facing the wall it hangs on.
     assert!(p.facing.z.raw() < 0, "facing {:?}", p.facing);
 }
 
 #[test]
-fn holding_the_stick_that_walked_off_does_not_let_go() {
+fn drifting_off_an_edge_catches_it() {
+    // Just gone over the rim, drifting off it at half a metre a second with
+    // nothing pressed: as the top comes to the shoulders, it holds.
+    let mut w = on_the_top(Fx::ratio(655, 100));
+    let p = &mut w.players[0];
+    p.grounded = false;
+    p.vel = V3::new(Fx::ZERO, Fx::ZERO, Fx::ratio(1, 2));
+    for _ in 0..60 {
+        press(&mut w, 0, NORTH, 1);
+        if holding(&w) {
+            break;
+        }
+    }
+    assert!(
+        holding(&w),
+        "drifted off into nothing: {:?}",
+        w.players[0].pos
+    );
+}
+
+#[test]
+fn walking_off_an_edge_at_a_walk_does_not_catch_it() {
+    // A walk is far faster away from the face than `Ledge, caught moving
+    // away from it at up to`, and by the time the top is at the shoulders
+    // the body is well out from it: a body that meant to go.
     let mut w = on_the_top(Fx::ratio(55, 10));
-    press(&mut w, Input::W, NORTH, 120);
-    assert!(holding(&w), "fell: {:?}", w.players[0].pos);
-    assert_eq!(w.players[0].pos.y, top().sub(t::ledge_depth()));
-    // Let go of the stick, and push away again: that is a let go.
-    press(&mut w, 0, NORTH, 1);
-    press(&mut w, Input::W, NORTH, 1);
-    assert!(!holding(&w), "a fresh push away did not let go");
+    for _ in 0..120 {
+        press(&mut w, Input::W, NORTH, 1);
+        assert!(
+            !holding(&w),
+            "a walk off caught the edge at {:?}",
+            w.players[0].pos
+        );
+    }
+}
+
+#[test]
+fn moving_away_fast_does_not_catch() {
+    let mut w = beside_the_face(top().sub(Fx::ratio(16, 10)));
+    w.players[0].vel = V3::new(Fx::ZERO, Fx::ZERO, t::ledge_away().add(Fx::ONE));
+    for _ in 0..30 {
+        press(&mut w, 0, NORTH, 1);
+        assert!(!holding(&w), "caught leaving fast");
+    }
+}
+
+#[test]
+fn held_into_the_wall_climbs_only_after_the_hold_on() {
+    let mut w = beside_the_face(top().sub(Fx::ratio(16, 10)));
+    w.players[0].vel = V3::ZERO;
+    press(&mut w, Input::W, SOUTH, 1);
+    assert!(holding(&w));
+    let mut since = 1;
+    while w.players[0].ledge.grip != Grip::Climb {
+        press(&mut w, Input::W, SOUTH, 1);
+        since += 1;
+        assert!(since < 200, "never climbed");
+    }
+    assert!(
+        since >= t::ledge_hold_on() as u32,
+        "climbed {since} frames after the catch"
+    );
+}
+
+#[test]
+fn pressed_into_the_wall_afresh_climbs_at_once() {
+    let mut w = beside_the_face(top().sub(Fx::ratio(16, 10)));
+    w.players[0].vel = V3::ZERO;
+    press(&mut w, Input::W, SOUTH, 1);
+    assert!(holding(&w));
+    press(&mut w, 0, SOUTH, t::ledge_catch() as u32 + 1);
+    press(&mut w, Input::W, SOUTH, 1);
+    assert_eq!(
+        w.players[0].ledge.grip,
+        Grip::Climb,
+        "a fresh press did not climb"
+    );
 }
 
 #[test]
@@ -190,7 +260,6 @@ fn the_climb_up_is_slow_and_ends_standing_on_the_top() {
 #[test]
 fn letting_go_is_quick() {
     let mut w = hanging();
-    press(&mut w, 0, NORTH, 2);
     press(&mut w, Input::W, NORTH, 1);
     let p = &w.players[0];
     assert!(!holding(&w));
@@ -319,16 +388,13 @@ fn along_a_slide_steers_a_little() {
 #[test]
 fn any_drop_a_body_hangs_in_is_a_ledge() {
     // A boulder on the range's grass, 2 m tall: a hang is 1.9 m, so the feet
-    // clear the floor, and walking off it catches it.
+    // clear the floor, and a body falling just off its north side catches it.
     let mut w = on_the_top(Fx::ZERO);
-    w.players[0].pos = V3::new(Fx::from_int(90), Fx::from_int(2), Fx::from_int(-9));
-    for _ in 0..60 {
-        press(&mut w, Input::W, NORTH, 1);
-        if holding(&w) {
-            break;
-        }
-    }
-    assert!(holding(&w), "walked off the boulder: {:?}", w.players[0].pos);
+    let p = &mut w.players[0];
+    p.pos = V3::new(Fx::from_int(90), Fx::ratio(4, 10), Fx::ratio(-82, 10));
+    p.grounded = false;
+    press(&mut w, 0, SOUTH, 1);
+    assert!(holding(&w), "fell past the boulder: {:?}", w.players[0].pos);
 }
 
 /// Hanging from a pillar in the range's cave, which runs from the floor into

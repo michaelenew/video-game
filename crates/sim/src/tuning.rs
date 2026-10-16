@@ -696,14 +696,22 @@ pub fn wall_slide_grip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideGrip))
 }
 
-/// **The fastest a fighter can walk off an edge and still catch it**, flat,
-/// in metres a second.
+/// **How fast a body may be moving away from an edge and still catch it**,
+/// in metres a second, out of the face. Moving toward it is never too fast.
+/// Faster away is a body that meant to go -- a run off the edge, a dodge -- or
+/// was sent.
+pub fn ledge_away() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeAway))
+}
+
+/// Frames from the catch before a stick held into the wall through it climbs.
 ///
-/// Just over the walk, so walking -- or creeping -- off an edge catches it,
-/// and a dodge, a knockback or a run-up's air speed does not: those are a
-/// body that meant to go, or was sent.
-pub fn ledge_walk_off() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LedgeWalkOff))
+/// **Into the wall means two things on a ledge**: catch it, and climb it. A
+/// player who pushed toward the edge to catch it may want to hang, so a push
+/// held through the catch waits this long; one let go and pressed in again
+/// is a decision, and climbs at once.
+pub fn ledge_hold_on() -> u8 {
+    oven::scalar(Scalar::LedgeHoldOn).clamp(0, 250) as u8
 }
 
 /// A falling body catches a ledge whose top is between this ...
@@ -711,7 +719,8 @@ pub fn ledge_reach_low() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LedgeReachLow))
 }
 
-/// ... and this far over its feet: about the chest to the reach of a hand.
+/// ... and this far over its feet: about the shoulder to the reach of the
+/// arms stretched overhead.
 /// Wide enough that a fall at terminal velocity cannot step over the band in
 /// one frame.
 pub fn ledge_reach_high() -> Fx {

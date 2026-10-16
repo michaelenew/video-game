@@ -364,11 +364,14 @@ pub struct Ledge {
     pub grip: Grip,
     /// Frames into the grip.
     pub clock: u8,
-    /// Set once the stick has been anywhere but away from the wall since the
-    /// catch. **Letting go asks for a fresh push away**: a body that walked
-    /// off an edge is holding the stick away from the wall it now hangs on,
-    /// and would otherwise let go on the frame it settled.
-    pub armed: bool,
+    /// Frames since the catch, whatever the grip.
+    pub since: u8,
+    /// Set once the stick has been anywhere but into the wall since the
+    /// catch. **Into the wall is both "catch it" and "climb it"**, so a stick
+    /// held into the wall through the catch climbs only once
+    /// `tuning::ledge_hold_on` has run -- time to decide to hang -- while
+    /// one let go and pressed in again climbs at once.
+    pub fresh: bool,
 }
 
 /// How a fighter is holding a ledge.
@@ -391,7 +394,8 @@ impl Ledge {
         from: V3::ZERO,
         grip: Grip::Hang,
         clock: 0,
-        armed: false,
+        since: 0,
+        fresh: false,
     };
 
     pub fn is_some(self) -> bool {
@@ -6905,7 +6909,7 @@ fn step_player(
         meet_the_critters(p, scene.critters);
     }
     if !p.aboard() {
-        catch_a_ledge(p, was_grounded, input, scene.arena);
+        catch_a_ledge(p, input, scene.arena);
     }
     if p.grounded {
         // Driven into the floor. The hit that spiked them did its damage in
@@ -7063,25 +7067,28 @@ fn hold_to_the_wall(p: &mut Player, input: Input) {
     p.vel.z = across.z.mul(along).add(n.z.mul(into));
 }
 
-/// **Catching a ledge** (2026-10-16): the forgiving way up, and the end of
-/// walking off into nothing. Two ways to catch one, both only for a body free
-/// to act and not rising, and neither within `tuning::ledge_regrab` of
-/// letting go of one:
+/// **Catching a ledge** (2026-10-16): the forgiving way up. One rule, asked
+/// every frame in the air, whether the body walked off the edge, jumped short
+/// of it or fell past it -- the owner's, word for word in its parts:
 ///
 /// ```text
-///   walking off      a body that stood last frame and does not now, going
-///                    no faster than `ledge_walk_off` -- a walk, a creep --
-///                    catches the edge it walked off. Faster is a body that
-///                    meant to go (a dodge) or was sent (a blow).
-///   falling past     a body in the air with a top between `ledge_reach_low`
-///                    and `ledge_reach_high` over its feet -- at its hands --
-///                    within `ledge_reach` past its side, catches it, unless
-///                    the stick is pushing away from it. The near miss.
+///   fully off the edge     no part of the body over the top: its middle at
+///                          least its radius out from the rim, and no more
+///                          than `ledge_reach` past that
+///   not leaving fast       moving away from the face no faster than
+///                          `ledge_away` (toward it, any speed)
+///   at the hands           the top between `ledge_reach_low` and
+///                          `ledge_reach_high` over the feet: about the
+///                          shoulder to the reach of the arms overhead
+///   not pushing away       the stick into the wall, along it or let go;
+///                          away from it is a body that means to go
 /// ```
 ///
-/// Only an edge [`Terrain::ledge_near`] says a body fits beside, hanging.
-/// Whether it can be climbed is asked when the climb is.
-fn catch_a_ledge(p: &mut Player, was_grounded: bool, input: Input, ground: &Terrain) {
+/// And only for a body free to act and not rising -- an edge passed on the
+/// way up is one a jump is clearing -- and not within `tuning::ledge_regrab`
+/// of letting go of one. Only an edge [`Terrain::ledge_near`] says a body fits
+/// beside, hanging; whether it can be climbed is asked when the climb is.
+fn catch_a_ledge(p: &mut Player, input: Input, ground: &Terrain) {
     if p.ledge.is_some()
         || p.grounded
         || p.aboard()
@@ -7093,26 +7100,20 @@ fn catch_a_ledge(p: &mut Player, was_grounded: bool, input: Input, ground: &Terr
     {
         return;
     }
-    let depth = t::ledge_depth();
-    let edge = if was_grounded {
-        let flat = crate::math::wide_flat_len(V3::new(p.vel.x, Fx::ZERO, p.vel.z));
-        if flat.raw() > t::ledge_walk_off().raw() {
-            return;
-        }
-        let skin = crate::arena::SKIN;
-        ground.ledge_near(p.pos, skin.neg(), skin, t::ledge_reach(), depth)
-    } else {
-        ground
-            .ledge_near(
-                p.pos,
-                t::ledge_reach_low(),
-                t::ledge_reach_high(),
-                t::ledge_reach(),
-                depth,
-            )
-            .filter(|e| lean_against(input, e.normal) != Lean::Away)
-    };
-    let Some(edge) = edge else {
+    let Some(edge) = ground
+        .ledge_near(
+            p.pos,
+            t::ledge_reach_low(),
+            t::ledge_reach_high(),
+            t::ledge_reach(),
+            t::ledge_depth(),
+        )
+        .filter(|e| lean_against(input, e.normal) != Lean::Away)
+        .filter(|e| {
+            let away = p.vel.x.mul(e.normal.x).add(p.vel.z.mul(e.normal.z));
+            away.raw() <= t::ledge_away().raw()
+        })
+    else {
         return;
     };
     p.ledge = Ledge {
@@ -7120,7 +7121,8 @@ fn catch_a_ledge(p: &mut Player, was_grounded: bool, input: Input, ground: &Terr
         from: p.pos,
         grip: Grip::Catch,
         clock: 0,
-        armed: false,
+        since: 0,
+        fresh: false,
     };
     p.vel = V3::ZERO;
     p.sliding = false;
@@ -7138,11 +7140,12 @@ fn catch_a_ledge(p: &mut Player, was_grounded: bool, input: Input, ground: &Terr
 ///   nothing         hangs
 ///   into the wall   climbs up: `ledge_climb` frames, unable to act -- slow,
 ///                   because the ledge is the forgiving way up and a landed
-///                   jump the quick one. Only where there is room on the top
+///                   jump the quick one. Held in since the catch, only once
+///                   `ledge_hold_on` has run; pressed in afresh, at once (see
+///                   `Ledge::fresh`). Only where there is room on the top
 ///                   (`Terrain::room_on_top`); under a roof, nothing
 ///   away from it    lets go into a fall, free to act on the next frame --
-///                   quick, the other side of the trade. Only a fresh push:
-///                   see `Ledge::armed`
+///                   quick, the other side of the trade
 ///   crouch          lets go into a wall slide down the face
 ///   along it        hand over hand along the edge, for as far as it holds a
 ///                   body
@@ -7160,10 +7163,11 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
     p.air_stall = 0;
     p.facing = V3::new(n.x.neg(), Fx::ZERO, n.z.neg());
     let lean = lean_against(input, n);
-    if lean != Lean::Away {
-        p.ledge.armed = true;
+    if lean != Lean::Into {
+        p.ledge.fresh = true;
     }
     p.ledge.clock = p.ledge.clock.saturating_add(1);
+    p.ledge.since = p.ledge.since.saturating_add(1);
     let clock = p.ledge.clock;
     match p.ledge.grip {
         Grip::Catch => {
@@ -7182,11 +7186,14 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
             match lean {
                 // Only where there is a top to stand on, with room: under a
                 // roof, into the wall is as nothing.
-                Lean::Into if ground.room_on_top(p.ledge.edge) => {
+                Lean::Into
+                    if (p.ledge.fresh || p.ledge.since >= t::ledge_hold_on())
+                        && ground.room_on_top(p.ledge.edge) =>
+                {
                     p.ledge.grip = Grip::Climb;
                     p.ledge.clock = 0;
                 }
-                Lean::Away if p.ledge.armed => return let_go_of_the_ledge(p, false, ground),
+                Lean::Away => return let_go_of_the_ledge(p, false, ground),
                 Lean::Along(dir) => {
                     let probe = p
                         .ledge
@@ -7204,7 +7211,7 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
                         p.ledge.edge = next;
                     }
                 }
-                Lean::Into | Lean::Away | Lean::Still => {}
+                Lean::Into | Lean::Still => {}
             }
             p.pos = p.ledge.edge.hang(depth);
         }
@@ -10621,7 +10628,8 @@ fn hash_player(h: &mut Fnv, p: &Player) {
         hash_v3(h, &p.ledge.from);
         h.write_u32(p.ledge.grip as u32);
         h.write_u32(p.ledge.clock as u32);
-        h.write_u32(p.ledge.armed as u32);
+        h.write_u32(p.ledge.since as u32);
+        h.write_u32(p.ledge.fresh as u32);
         h.write_u32(p.ledge_regrab as u32);
     }
     h.write_u32(p.hit_used as u32);

@@ -1968,8 +1968,9 @@ impl Terrain {
 
     /// **The edge a fighter at `pos` could take hold of** (2026-10-16,
     /// `state::catch_a_ledge`): the rim of a solid's top whose height above
-    /// the feet is between `lo` and `hi`, and that is no further than the
-    /// body's radius and `reach` from its middle, flat. The nearest such rim
+    /// the feet is between `lo` and `hi`, with the body fully off it -- its
+    /// middle at least its radius from the rim, flat -- and no further than
+    /// its radius and `reach`. The nearest such rim
     /// wins, the first in order among equals.
     ///
     /// **Only an edge a body fits beside.** A body hanging from it `depth`
@@ -1994,7 +1995,8 @@ impl Terrain {
             let (ex, ez) = s.nearest_on_top(pos.x, pos.z);
             let gap = V3::new(pos.x.sub(ex), Fx::ZERO, pos.z.sub(ez));
             let d = crate::math::wide_flat_len(gap);
-            if d.raw() == 0 || d.raw() > out.raw() {
+            // Fully off it: no part of the body over the top.
+            if d.raw() < radius.raw() || d.raw() > out.raw() {
                 continue;
             }
             if best.is_some_and(|(b, _)| b.raw() <= d.raw()) {
@@ -2005,9 +2007,7 @@ impl Terrain {
                 normal: V3::new(gap.x.div(d), Fx::ZERO, gap.z.div(d)),
             };
             let hang = edge.hang(depth);
-            if headroom(self, hang, radius, height)
-                && self.floor_below(hang).raw() < hang.y.raw()
-            {
+            if headroom(self, hang, radius, height) && self.floor_below(hang).raw() < hang.y.raw() {
                 best = Some((d, edge));
             }
         }
