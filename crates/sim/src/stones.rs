@@ -970,6 +970,7 @@ pub fn resolve_body(
         vel,
         grounded,
         wall: false,
+        wall_normal: V3::ZERO,
     }
 }
 

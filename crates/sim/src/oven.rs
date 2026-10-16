@@ -1025,6 +1025,21 @@ scalars! {
     // marks; the third and fourth fighters stand beside the first and second,
     // this far to the side away from the other mark (`arena::Mark::seat`).
     SeatFlank,            "Match",    "Third and fourth fighters, beside a mark (m)",       Fixed, 0, fx(6,1);
+    // **The wall slide and the wall jump** (2026-10-16). Falling against the
+    // side of a solid slows the fall a little -- gravity and terminal
+    // velocity both scaled -- and counts as footing for the fall rule, so a
+    // wall reached is a partial recovery. Space against it is a small jump
+    // away from it; never twice running off the same face, and each one in
+    // an airtime worth less than the last. See `state::cling_to_the_wall`.
+    WallSlideGravity,     "Air",      "Wall slide, gravity (x)",                             Fixed, fx(1,10), fx(1,1);
+    WallSlideFall,        "Air",      "Wall slide, terminal velocity (x)",                   Fixed, fx(1,10), fx(1,1);
+    WallStick,            "Air",      "Wall slide, held to the wall at (m/s)",               Fixed, 0, fx(4,1);
+    WallJumpRise,         "Air",      "Wall jump, rise (x takeoff)",                         Fixed, 0, fx(3,2);
+    WallJumpPush,         "Air",      "Wall jump, pushed off at (m/s)",                      Fixed, 0, fx(20,1);
+    WallJumpFalloff,      "Air",      "Wall jump, each one after (x)",                       Fixed, fx(1,10), fx(1,1);
+    WallJumpGrace,        "Air",      "Wall jump, still off a wall left",                    Frames, 0, 12;
+    WallSameTurn,         "Air",      "Wall jump, same wall within (cos)",                   Fixed, fx(1,2), fx(1,1);
+    WallSameGap,          "Air",      "Wall jump, same wall within (m)",                     Fixed, 0, fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

@@ -8736,3 +8736,19 @@ Not done, and the open question the owner raised: whether to cut the mobile opti
 the others. This pass raised the floor and trimmed the Stake's area; the jump itself is
 untouched.
 
+### 2026-10-16 — wall slides and wall jumps
+
+**Changed** added both, for every class. Falling against a solid's side slides at ×0.7
+gravity and ×0.7 terminal velocity, held to the wall at 1 m/s unless steering away, with no
+limit on how far; the slide is footing for the fall rule. Space on a wall (or within 4 frames
+of leaving one) sets the rise to 0.6 of a takeoff and pushes 7 m/s off the face. Never twice
+running off the same face (within cos 0.9 and 0.75 m); each wall jump in an airtime ×0.7 of
+the last.
+**Why** from the owner: a Mario-style slide as a partial recovery -- some mobility back and a
+way to cancel or reduce fall damage -- and a wall jump worth a little height that does not
+reset the jump attack. The owner named the exploit to close: jump off a wall, strafe back with
+aerials, jump off it again. The same-wall rule closes that; the falloff was added on top
+because an inside corner alternates two walls and the same-wall rule never fires there.
+**Verdict** open -- unplayed. Things to feel for: whether ×0.7 reads as a slide at all on a
+short wall, whether the stick catches people who only meant to brush past, and whether the
+falloff is too stingy for a chimney.
