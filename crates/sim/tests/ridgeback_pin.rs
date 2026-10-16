@@ -130,13 +130,24 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Bulwark's again the same day**: the same wall is offered again once
 /// a body is `wall_jump_drop` below the last jump off it, rather than never,
 /// and his random presses take one.
+/// **And again the same day, for the stick against a wall and ledge grabs.** Replayed against the code before, frame by frame,
+/// each hunt's first difference is a fighter in the air against a wall --
+/// its speed along the face now eased toward what the stick asks
+/// (`hold_to_the_wall`). The Dual mage's moved no body -- both fighters'
+/// positions and speeds are identical on every frame -- only the new wall
+/// state in the hash. The Champion's never met a wall. With the same-wall
+/// drop merged in on top, the Bulwark's and the Blood mage's moved once more,
+/// where the two wall changes meet.
+/// And four again when the ledge became one catch rule: the random presses
+/// had walked off edges and been caught, and a walk off is no longer caught.
+/// Neither fighter catches a ledge in any of those four now.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0xdf231e126174739b),
-    (Class::ShadowReaver, 0xdc33cf7e5f40c303),
-    (Class::BloodMage, 0x3d6aab4386e3f321),
-    (Class::DualMage, 0x4f860ccfcb70b885),
-    (Class::Elementalist, 0x8691536dc4d6f3e8),
+    (Class::Bulwark, 0xd12b055c26db8afb),
+    (Class::ShadowReaver, 0x68c6cdbd9dbf459a),
+    (Class::BloodMage, 0x8aa1ac49e9445901),
+    (Class::DualMage, 0x810a930f65195268),
+    (Class::Elementalist, 0xa2d1095986bff1d9),
 ];
 
 #[test]

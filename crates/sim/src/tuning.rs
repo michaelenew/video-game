@@ -660,6 +660,127 @@ pub fn wall_jump_drop() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallJumpDrop)).max(Fx::ZERO)
 }
 
+/// **The three envelopes a wall is pushed in**: the cosine of the half-angle
+/// round straight into a wall, and round straight out of it, inside which the
+/// stick counts as into it or away from it. Between the two it is along the
+/// wall. Measured on the stick as it would walk you on the floor, by the
+/// camera -- what "toward the wall" means to the player. At 45 degrees the
+/// three are a quarter, a quarter and a half of the circle.
+pub fn wall_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallCone))
+}
+
+/// How many frames a wall slide holds whichever it last became, on or off,
+/// before the stick can change it again.
+///
+/// **A debounce, because the two answers meet at a line.** Without it a
+/// stick that wobbles across the edge of the "into" envelope -- or a body
+/// pushed off a wall by leaving it, and steered back by the same hand --
+/// would start and end a slide on alternate frames, each start resetting the
+/// fall's height and each end freeing the air control, which is a fall
+/// cancelled by wiggling.
+pub fn wall_slide_flip() -> u8 {
+    oven::scalar(Scalar::WallSlideFlip).clamp(0, 200) as u8
+}
+
+/// How fast the stick steers a wall slide along the wall: a little, not a
+/// walk. Into the wall does nothing more than hold it there.
+pub fn wall_slide_steer() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideSteer))
+}
+
+/// How much of the gap between the slide's speed along the wall and what the
+/// stick asks for is closed each frame: momentum carried onto a wall bleeds
+/// away rather than stopping dead.
+pub fn wall_slide_grip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideGrip))
+}
+
+/// **How fast a body may be moving away from an edge and still catch it**,
+/// in metres a second, out of the face. Moving toward it is never too fast.
+/// Faster away is a body that meant to go -- a run off the edge, a dodge -- or
+/// was sent.
+pub fn ledge_away() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeAway))
+}
+
+/// Frames from the catch before a stick held into the wall through it climbs.
+///
+/// **Into the wall means two things on a ledge**: catch it, and climb it. A
+/// player who pushed toward the edge to catch it may want to hang, so a push
+/// held through the catch waits this long; one let go and pressed in again
+/// is a decision, and climbs at once.
+pub fn ledge_hold_on() -> u8 {
+    oven::scalar(Scalar::LedgeHoldOn).clamp(0, 250) as u8
+}
+
+/// A falling body catches a ledge whose top is between this ...
+pub fn ledge_reach_low() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeReachLow))
+}
+
+/// ... and this far over its feet: about the shoulder to the reach of the
+/// arms stretched overhead.
+/// Wide enough that a fall at terminal velocity cannot step over the band in
+/// one frame.
+pub fn ledge_reach_high() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeReachHigh))
+}
+
+/// How far past the body's radius an edge can be and still be caught: the
+/// near miss forgiven.
+pub fn ledge_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeReach))
+}
+
+/// How far under the top a hanging body's feet are.
+pub fn ledge_depth() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeDepth))
+}
+
+/// Frames a catch takes to settle the body into the hang. Walking off, the
+/// body drops a hang's depth to get there, and drawn in one frame that is a
+/// pop.
+pub fn ledge_catch() -> u8 {
+    oven::scalar(Scalar::LedgeCatch).clamp(1, 250) as u8
+}
+
+/// **Frames the climb up takes**, all of them unable to act and open to
+/// being hit -- a hit lets go of the ledge.
+///
+/// **Slow on purpose.** The ledge is the forgiving way up, and a jump that
+/// lands is the quick one: a climb that cost less than a missed jump's retry
+/// would make catching the ledge the way to play.
+pub fn ledge_climb() -> u8 {
+    oven::scalar(Scalar::LedgeClimb).clamp(1, 250) as u8
+}
+
+/// The share of the climb spent pulling up to the top; the rest is getting
+/// over it onto the top.
+pub fn ledge_climb_rise() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::LedgeClimbRise).clamp(0, 100), 100)
+}
+
+/// How fast a hanging body moves hand over hand along its edge.
+pub fn ledge_shuffle() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeShuffle))
+}
+
+/// How fast letting go of a ledge pushes a body off its face.
+///
+/// **Letting go is quick.** No frames are spent on it: a body that lets go
+/// is falling, and free to act, on the next frame -- the opposite trade to
+/// the climb.
+pub fn ledge_let_go() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LedgeLetGo))
+}
+
+/// Frames after letting go of a ledge before any ledge catches again, so
+/// letting go is not caught by the ledge just let go of.
+pub fn ledge_regrab() -> u8 {
+    oven::scalar(Scalar::LedgeRegrab).clamp(0, 250) as u8
+}
+
 /// Fraction of your upward speed kept when you let go of jump while rising.
 ///
 /// The sustain alone cannot give a short hop worth having. Holding reduces

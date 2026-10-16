@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 628] = [
+pub const SCALARS: [i32; 644] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -636,6 +636,22 @@ pub const SCALARS: [i32; 628] = [
            58982, // air.wall_jump,_same_wall_within_(cos) = 0.9
            49152, // air.wall_jump,_same_wall_within_(m) = 0.75
            65536, // air.wall_jump,_same_wall_again_once_this_far_below_(m) = 1
+           46341, // air.walls,_into_or_away_within_(cos) = 0.707
+               8, // air.wall_slide,_on_or_off_no_faster_than = 8
+          131072, // air.wall_slide,_steered_along_at_(m/s) = 2
+           13107, // air.wall_slide,_steering_arrives_per_frame_(x) = 0.2
+          131072, // ledge.caught_moving_away_from_it_at_up_to_(m/s) = 2
+              20, // ledge.held_into_the_wall_from_the_catch,_climbs_after = 20
+           98304, // ledge.caught,_top_over_the_feet_from_(m) = 1.5
+          150733, // ledge.caught,_top_over_the_feet_up_to_(m) = 2.3
+           13107, // ledge.caught_within,_past_the_body_(m) = 0.2
+          124518, // ledge.hanging,_feet_under_the_top_(m) = 1.9
+               8, // ledge.catching,_settles_over = 8
+              48, // ledge.climbing_up_takes = 48
+              65, // ledge.climbing_up,_share_spent_rising_(%) = 65
+           98304, // ledge.hand_over_hand_at_(m/s) = 1.5
+           98304, // ledge.let_go,_pushed_off_at_(m/s) = 1.5
+              20, // ledge.not_caught_again_for = 20
 ];
 
 #[rustfmt::skip]

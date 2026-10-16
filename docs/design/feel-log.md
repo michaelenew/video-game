@@ -8764,3 +8764,51 @@ Now the same wall is offered again once the body is `Wall jump, same wall again 
 below` (1 m) under where it last jumped off it. Every return to a wall leaves from lower down,
 so the back-track loop still runs downhill, and a wall can be used again on the way down. The
 falloff stays, for corners.
+
+### 2026-10-16 — ledge grabs, and the stick against a wall
+
+**Changed** added the ledge grab, for every class, and gave the wall slide the same stick.
+One rule catches an edge, asked every frame in the air, however the body got there (the
+owner's, the same day, after a first pass that also caught every walk-off at a walk and broke
+seven stored search lines that step down off a ledge on purpose): the body fully off the edge
+(its middle at least its radius out from the rim, and no more than 0.2 m past that), moving
+away from the face no faster than 2 m/s, the top between 1.5 m and 2.3 m over the feet (the
+shoulder to the arms' reach overhead), and the stick into the wall, along it or let go -- not
+away. Not while rising, and only where a body fits hanging. The first pass also asked for a 3 m
+drop and room on the top; the owner took both out, to leave room for a wall-shuffle section:
+an edge with no room over it is hung from and gone along, and into the wall there does nothing.
+The catch settles the body over 8 frames into a hang 1.9 m under the top, facing the wall.
+Hanging, the stick is read in three envelopes against the wall -- within 45° of straight in,
+within 45° of straight out, and the half of the circle between -- on the stick as it would
+walk you, by the camera. Into the wall climbs: 48 frames, unable to act; but a stick held into
+the wall through the catch waits 20 frames first, because into the wall is both "catch it" and
+"climb it", while one let go and pressed in again climbs at once. Away lets go into a fall at
+1.5 m/s off the face, free to act on the next frame. Along goes hand over hand at 1.5 m/s for
+as far as the edge holds a body. Nothing hangs. Crouch lets go into a wall slide. A blow lets
+go. No ledge is caught for 20 frames after letting go of one.
+
+**What it means at these numbers**: a walk (7 m/s) off an edge is never caught -- it is too
+fast away, and by the time the top reaches the shoulders the body is two metres out. What is
+caught is a body that drifts off slowly, a jump that falls short against the face, or a fall
+past an edge with the stick toward it. `Ledge, caught moving away from it at up to` and
+`Ledge, caught within, past the body` are the two knobs that decide how much of a walk-off is
+forgiven.
+
+The wall slide now starts only by pushing into the wall (it used to start on any contact) and
+ends by pushing away, and neither changes within 8 frames of the last; along the wall the stick
+steers it at up to 2 m/s, closing a fifth of the gap a frame. The wall slide's tests were moved
+below hand reach of the tower's top, where the ledge now catches them.
+**Why** from the owner: the precision jump sections were "super annoying because you can easily
+slide off into nothing no matter how slowly you move". The ledge is meant as a forgiving way up
+that is plainly not the optimal one, so the climb is slow and the drop is quick. The envelopes
+the debounce, the catch rule and the hold-on are the owner's; the crouch into a slide and the
+regrab lockout are mine, each for a failure the owner's rules would otherwise have: there was
+no way into a slide from a hang, and letting go next to the face would catch the same edge
+again.
+**Not done** a hanging or climbing pose -- the renderer draws the hang with the airborne clip, and
+the climb as that clip rising -- and ledges on the valley's land (only a solid's top is a
+ledge, as only a solid's side is a wall). Space while hanging does nothing.
+**Verdict** open -- unplayed. Things to feel for: whether 48 frames is slow enough to be a
+penalty and short enough not to be a punishment; whether 2 m/s and 0.2 m forgive enough of a
+walk-off, or too much of a jump that meant to clear; whether 20 frames of hold-on reads as a
+hang or as a stall.

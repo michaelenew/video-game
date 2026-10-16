@@ -75,8 +75,14 @@ could otherwise alternate them and never come down.
 **Walls slide and can be jumped off — added 2026-10-16.** Falling against a wall is a slide a
 little slower than a fall, and it is footing for the fall rule, so a wall reached cancels or
 shortens a fall. Space on one is a small jump away from it that gives nothing back — off the
-same wall again only from a metre below the last, and each one in an airtime worth less. See
+same wall again only from a metre below the last, and each one in an airtime worth less. A
+slide starts by pushing into the wall and ends by pushing away, no faster than a short
+debounce. See
 [controls.md](controls.md#walls-slide-and-can-be-jumped-off--added-2026-10-16).
+**Ledges catch — added 2026-10-16.** Off an edge, not leaving it fast, with its top at your
+hands and the stick not pushing away, you hang from it: into the wall climbs up, slowly; away lets go, quickly;
+along goes hand over hand. A forgiving way up that is plainly not the quick one. See
+[controls.md](controls.md#ledges-catch--added-2026-10-16).
 
 **The jump is the floor of the movement system, not the whole of it — ⚠️ retuned 2026-09-17.**
 Every class has one thing it does with the ground, and a jump good enough to go most of the

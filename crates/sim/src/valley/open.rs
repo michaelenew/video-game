@@ -388,6 +388,8 @@ fn shift_player(p: &mut Player, d: V3) {
     p.haul_to = p.haul_to.add(d);
     p.wall.at = p.wall.at.add(d);
     p.wall_jumped.at = p.wall_jumped.at.add(d);
+    p.ledge.edge.at = p.ledge.edge.at.add(d);
+    p.ledge.from = p.ledge.from.add(d);
     p.ball_at = p.ball_at.add(d);
     p.fall_over = p.fall_over.add(d.y);
     p.aim_path.from = p.aim_path.from.add(d);
