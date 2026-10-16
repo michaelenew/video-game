@@ -57,7 +57,11 @@ pub fn draw(
         return;
     }
     let now = time.elapsed_secs_f64();
-    let ctx = contexts.ctx_mut();
+    // None as the window closes: the frame the context is gone and the
+    // menu still runs (the panic on quit, 2026-10-16).
+    let Some(ctx) = contexts.try_ctx_mut() else {
+        return;
+    };
     egui::Window::new("Menu")
         .anchor(egui::Align2::LEFT_TOP, egui::vec2(18.0, 150.0))
         .resizable(false)

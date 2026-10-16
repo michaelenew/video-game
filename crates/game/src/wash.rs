@@ -69,7 +69,7 @@ pub fn painted() -> bool {
 pub fn surface_defs() -> Vec<ShaderDefVal> {
     let w = style();
     let milli = |name: &str, v: f32| ShaderDefVal::Int(name.into(), (v * 1000.0).round() as i32);
-    vec![
+    let mut defs = vec![
         milli("WASH_BANDS", w.bands),
         milli("WASH_TONES", w.tones),
         milli("WASH_SOFT", w.soft),
@@ -103,7 +103,11 @@ pub fn surface_defs() -> Vec<ShaderDefVal> {
         milli("WASH_CREST_R", w.crest[0]),
         milli("WASH_CREST_G", w.crest[1]),
         milli("WASH_CREST_B", w.crest[2]),
-    ]
+    ];
+    if crate::splats::on() {
+        defs.push(ShaderDefVal::Bool("WASH_SPLATS".into(), true));
+    }
+    defs
 }
 
 /// The air and paper halves' numbers, and where the camera and the sun are

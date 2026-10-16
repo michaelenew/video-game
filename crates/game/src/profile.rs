@@ -155,7 +155,8 @@ fn experiment(
         }
     }
     // The passes over the finished picture, one at a time, so each can be
-    // measured by its absence: `--no-outline`, `--no-fxaa`, `--no-prepass`.
+    // measured by its absence: `--no-outline`, `--no-fxaa`, `--no-prepass`,
+    // `--no-wash` (a painted look's screen pass).
     for camera in &cameras {
         if crate::platform::flag("--no-outline") {
             commands.entity(camera).remove::<crate::outline::Outline>();
@@ -164,6 +165,9 @@ fn experiment(
             commands
                 .entity(camera)
                 .remove::<bevy::core_pipeline::fxaa::Fxaa>();
+        }
+        if crate::platform::flag("--no-wash") {
+            commands.entity(camera).remove::<crate::wash::Wash>();
         }
         if crate::platform::flag("--no-prepass") {
             commands.entity(camera).remove::<(
@@ -181,7 +185,7 @@ fn experiment(
     .iter()
     .filter_map(|flag| crate::platform::value(flag).map(|v| format!("{flag} {v}")))
     .chain(
-        ["--no-outline", "--no-fxaa", "--no-prepass"]
+        ["--no-outline", "--no-fxaa", "--no-prepass", "--no-wash"]
             .into_iter()
             .filter(|flag| crate::platform::flag(flag))
             .map(String::from),

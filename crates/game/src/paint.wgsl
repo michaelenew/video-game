@@ -37,6 +37,11 @@ struct Paint {
 // rigidity, each texel a stroke's shade and two colour shifts.
 @group(2) @binding(1) var strokes_tex: texture_2d_array<f32>;
 @group(2) @binding(2) var strokes_sampler: sampler;
+// The strokes drawn as splats this frame (`splats.rs`): what the brush
+// says at this very pixel, worked out once a stroke rather than a hundred
+// times a pixel.
+@group(2) @binding(3) var splats_tex: texture_2d<f32>;
+@group(2) @binding(4) var splats_odd_tex: texture_2d<f32>;
 // How many stroke lengths a sheet is across (`look::strokes::PERIOD`), and
 // how many angles a rigidity is drawn at (`look::strokes::ANGLES`).
 const STROKE_PERIOD: f32 = 8.0;
@@ -440,11 +445,20 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let dist = length(view.world_position - p);
         let way = stroke_way(p, n, flow, rigid);
         var b: vec3<f32>;
+#ifdef WASH_SPLATS
+        // The two levels in season, each the topmost stroke of its own,
+        // added: `broad_strokes`' blend of its two layers.
+        let even = textureLoad(splats_tex, vec2<i32>(in.position.xy), 0);
+        let odd = textureLoad(splats_odd_tex, vec2<i32>(in.position.xy), 0);
+        b = (even.rgb - 0.5) * 4.0 * even.a + (odd.rgb - 0.5) * 4.0 * odd.a;
+
+#else
         if (NEAR_EXACT < 0.0 || dist < NEAR_EXACT) {
             b = broad_exact(p, n, way, dist, rigid, size);
         } else {
             b = broad_strokes(p, n, way, dist, rigid, size);
         }
+#endif
         // The looser the brush the further its colours wander: a meadow's
         // strokes go yellow, blue and dark; a wall's stay close to its own.
         let wander = BROAD * mix(0.45, 1.0, 1.0 - rigid);
@@ -539,5 +553,6 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     pbr_input.frag_coord = in.position;
     var out: FragmentOutput;
     out.color = main_pass_post_lighting_processing(pbr_input, vec4(lit * view.exposure, base.a));
+
     return out;
 }

@@ -247,6 +247,18 @@ each box is. First the land, where the picture lives; then the town.
 5. **Compose and compare**: the same shots as #165's, the owner's eye.
 6. **The town and the forms**, then the sky's strokes the same way.
 
+## 5a. Built, 2026-10-16
+
+Steps 2--5 the same day: `look::strokes::place`, `crates/game/src/splats.rs`
+and `splats.wgsl`, the two parity textures, the fragment-side depth test and
+season. The picture is the brush at the pixel's to 3.7% RMS, at stroke
+edges. Under the software renderer the surface pass fell from 144 ms to 45
+and the splat pass costs 260 ms for 4.3 million fragments, which is the
+software renderer's price per fragment, not a GPU's. The owner's Mac:
+`plain` 23 ms, `brushed` 36--39 ms before the splats; Metal gives no
+per-pass times, so the next measurement is his. The dead ends are in
+[painting.md](../painting.md).
+
 ## 6. Open
 
 - **SPLAT-1** Real numbers. The whole brief rests on a GPU none of this
