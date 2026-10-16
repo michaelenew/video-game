@@ -121,13 +121,21 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// spike winds up in 16 frames rather than 30 and stands wider, the Stake
 /// narrower, Command waits on the Champion's window, a spike aimed through
 /// a stain's column goes to it, and a finisher pays back the grey it burned.
+///
+/// **Five re-pinned 2026-10-16, for play**: wall slides, the stick against a
+/// wall and ledge grabs. Replayed against the code before, frame by frame,
+/// each hunt's first difference is a fighter in the air against a wall --
+/// its speed along the face now eased toward what the stick asks
+/// (`hold_to_the_wall`). The Dual mage's moved no body -- both fighters'
+/// positions and speeds are identical on every frame -- only the new wall
+/// state in the hash. The Champion's never met a wall.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0x11c745d19fbec112),
-    (Class::ShadowReaver, 0xa45935d2dff6f3e9),
-    (Class::BloodMage, 0x1c20d06b60541887),
-    (Class::DualMage, 0x24161222c7142c96),
-    (Class::Elementalist, 0x31a1cb586ada4b67),
+    (Class::Bulwark, 0xf120f5bb83270f02),
+    (Class::ShadowReaver, 0x846a6c304191d07a),
+    (Class::BloodMage, 0x5561ae6a26eedce1),
+    (Class::DualMage, 0x810a930f65195268),
+    (Class::Elementalist, 0xf2a70e1351a46db9),
 ];
 
 #[test]
