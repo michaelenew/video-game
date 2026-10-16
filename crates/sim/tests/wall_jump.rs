@@ -5,7 +5,8 @@
 //! the wall for as far as the wall goes, and steering away leaves it; a slide to
 //! the floor costs no fall damage where the same fall in the open does; space
 //! on a wall jumps up and away from it without giving back the airdodge;
-//! never twice running off the same wall, wherever along it; each wall jump
+//! off the same wall again, anywhere along it, only once the body is
+//! `wall_jump_drop` below where it last jumped off it; each wall jump
 //! in an airtime rises less than the one before; and landing forgets it all.
 //!
 //! The walls are the range's tower: its north face (z = 6, x 17 to 23, a
@@ -178,11 +179,12 @@ fn a_wall_jump_is_still_there_a_few_frames_after_leaving() {
 }
 
 #[test]
-fn never_twice_running_off_the_same_wall() {
+fn the_same_wall_again_only_from_lower_down() {
     let mut w = against_the_north_face(8, mid_face());
     lean_in(&mut w, 10);
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
     assert_eq!(w.players[0].wall_jumps, 1);
+    let jumped_at = w.players[0].wall_jumped.at.y;
     // Back on to the same face, two metres along it. Turned round by hand:
     // however it is done in play -- strafing, an aerial's hang to buy the
     // time -- arriving back is what the rule is about.
@@ -198,15 +200,29 @@ fn never_twice_running_off_the_same_wall() {
         }
     }
     assert!(back, "never got back to the wall: {:?}", w.players[0].pos);
+    // Higher than the drop allows: refused, and it slides on.
+    assert!(w.players[0].pos.y.raw() > jumped_at.sub(t::wall_jump_drop()).raw());
     let before = w.players[0].vel;
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
     let p = &w.players[0];
-    assert_eq!(p.wall_jumps, 1, "jumped off the same wall twice");
+    assert_eq!(p.wall_jumps, 1, "jumped off the same wall from as high");
     assert!(
         p.vel.y.raw() < before.y.raw() && p.vel.z.raw() <= 0,
         "jumped off the same wall: {before:?} to {:?}",
         p.vel
     );
+    // Slid the drop's worth below where it jumped: offered again.
+    // Still rising, so the wall is not holding it yet: kept against it.
+    while w.players[0].pos.y.raw() > jumped_at.sub(t::wall_jump_drop()).raw() {
+        w.players[0].vel.z = w.players[0].vel.z.min(Fx::from_int(-1));
+        idle(&mut w, 1);
+        assert!(!w.players[0].grounded, "came down before the drop");
+    }
+    assert!(on_the_wall(&w), "off the wall: {:?}", w.players[0].pos);
+    w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
+    let p = &w.players[0];
+    assert_eq!(p.wall_jumps, 2, "refused from below the drop");
+    assert!(p.vel.y.raw() > 0 && p.vel.z.raw() > 0, "{:?}", p.vel);
 }
 
 #[test]

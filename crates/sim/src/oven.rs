@@ -1029,8 +1029,9 @@ scalars! {
     // side of a solid slows the fall a little -- gravity and terminal
     // velocity both scaled -- and counts as footing for the fall rule, so a
     // wall reached is a partial recovery. Space against it is a small jump
-    // away from it; never twice running off the same face, and each one in
-    // an airtime worth less than the last. See `state::cling_to_the_wall`.
+    // away from it; off the same face again only from lower down than the
+    // last, and each one in an airtime worth less than the last. See
+    // `state::cling_to_the_wall`.
     WallSlideGravity,     "Air",      "Wall slide, gravity (x)",                             Fixed, fx(1,10), fx(1,1);
     WallSlideFall,        "Air",      "Wall slide, terminal velocity (x)",                   Fixed, fx(1,10), fx(1,1);
     WallStick,            "Air",      "Wall slide, held to the wall at (m/s)",               Fixed, 0, fx(4,1);
@@ -1040,6 +1041,7 @@ scalars! {
     WallJumpGrace,        "Air",      "Wall jump, still off a wall left",                    Frames, 0, 12;
     WallSameTurn,         "Air",      "Wall jump, same wall within (cos)",                   Fixed, fx(1,2), fx(1,1);
     WallSameGap,          "Air",      "Wall jump, same wall within (m)",                     Fixed, 0, fx(4,1);
+    WallJumpDrop,         "Air",      "Wall jump, same wall again once this far below (m)",  Fixed, 0, fx(6,1);
     // **Which way the stick points at a wall** (2026-10-16): within this of
     // straight into it is into it, within this of straight out is away, and
     // anything between is along it -- the same three envelopes on a wall

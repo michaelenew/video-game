@@ -748,15 +748,20 @@ Champion), never less than the rise you already had, and a push of `Wall jump, p
 height is the wall's to give, not the button's. **It gives nothing back** — not the jump
 attack, not the airdodge, not the aerial hangs. It is height and a direction.
 
-**Never twice running off the same wall.** Without that, a wall jump, an air-strafe back with
-an aerial's hang to buy the time, and another jump off the same wall is a ladder. "The same
-wall" is the same *face* — facing within `Wall jump, same wall within (cos)` of the last one
-and no further across from it than `Wall jump, same wall within (m)` — so moving along a long
-wall, or to the next box in the same line, does not make it a new one.
+**Off the same wall again only from lower down** (`Wall jump, same wall again once this far
+below`, 1 m). Without a rule, a wall jump, an air-strafe back with an aerial's hang to buy the
+time, and another jump off the same wall is a ladder. With it, each jump off the same wall
+leaves from at least that much below the last, so going back to a wall always runs downhill —
+but the wall is still yours to use again on the way down. Any drop above zero is enough to
+stop the climb; the size is how much a return trip costs. "The same wall" is the same *face* —
+facing within `Wall jump, same wall within (cos)` of the last one and no further across from
+it than `Wall jump, same wall within (m)` — so moving along a long wall, or to the next box in
+the same line, does not make it a new one. *(First built as "never twice running off the same
+wall"; changed the same day at the owner's request.)*
 
 **And each wall jump in an airtime rises less than the last** (`Wall jump, each one after`,
-×0.7, compounding). The same-wall rule is not enough on its own: an inside corner is two walls
-a step apart, and alternating between them is never the same wall twice running. With the
+×0.7, compounding). The same-wall drop is not enough on its own: an inside corner is two walls
+a step apart, and alternating between them never meets the same wall twice running. With the
 falloff the heights add up to a bounded sum however many walls there are — the argument the
 aerial hangs make above. A chimney or a corner can still be climbed a little; it cannot be
 climbed forever. Both reset on landing.

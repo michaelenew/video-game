@@ -122,8 +122,15 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// narrower, Command waits on the Champion's window, a spike aimed through
 /// a stain's column goes to it, and a finisher pays back the grey it burned.
 ///
-/// **Five re-pinned 2026-10-16, for play**: wall slides, the stick against a
-/// wall and ledge grabs. Replayed against the code before, frame by frame,
+/// **Every class but the Champion moved 2026-10-16, deliberately: wall slides
+/// and wall jumps** (`state::cling_to_the_wall`). The random presses jump
+/// against the proving ground's walls, which now slow the fall and take a
+/// press of space as a jump off them. Not only the hash: with the wall
+/// fields left out of `state_checksum` the same five still moved.
+/// **The Bulwark's again the same day**: the same wall is offered again once
+/// a body is `wall_jump_drop` below the last jump off it, rather than never,
+/// and his random presses take one.
+/// **And again the same day, for the stick against a wall and ledge grabs.** Replayed against the code before, frame by frame,
 /// each hunt's first difference is a fighter in the air against a wall --
 /// its speed along the face now eased toward what the stick asks
 /// (`hold_to_the_wall`). The Dual mage's moved no body -- both fighters'

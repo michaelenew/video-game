@@ -8753,6 +8753,18 @@ because an inside corner alternates two walls and the same-wall rule never fires
 short wall, whether the stick catches people who only meant to brush past, and whether the
 falloff is too stingy for a chimney.
 
+The pinned hunts moved for every class but the Champion (the hunters jump against the
+proving ground's walls). The new paths also turned up an older hole in the Pair: the paw held
+up between the rake's two hits reported no window, so the partner could commit a hit landing
+inside the gap just before the drop. The hold now reports the drop's window
+(`pair::fight::live_window`).
+
+**Same day, from the owner:** "never twice running off the same wall" was more than needed.
+Now the same wall is offered again once the body is `Wall jump, same wall again once this far
+below` (1 m) under where it last jumped off it. Every return to a wall leaves from lower down,
+so the back-track loop still runs downhill, and a wall can be used again on the way down. The
+falloff stays, for corners.
+
 ### 2026-10-16 — ledge grabs, and the stick against a wall
 
 **Changed** added the ledge grab, for every class, and gave the wall slide the same stick.

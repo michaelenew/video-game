@@ -473,11 +473,13 @@ pub struct Player {
     /// Frames since the resolve last held this fighter off a wall in the air:
     /// zero while against one, `u8::MAX` on the floor or never.
     pub wall_since: u8,
-    /// The wall the last wall jump left, this airtime, or [`Wall::NONE`].
+    /// The wall the last wall jump left, this airtime, and where the body was
+    /// when it jumped; or [`Wall::NONE`].
     ///
-    /// **Never twice running off the same wall.** Without it a wall jump, an
-    /// air-steer back with an aerial's hang to buy the time, and another wall
-    /// jump is a ladder. Cleared on landing.
+    /// **Off the same wall again only from lower down**
+    /// (`tuning::wall_jump_drop`). Without it a wall jump, an air-steer back
+    /// with an aerial's hang to buy the time, and another wall jump is a
+    /// ladder. Cleared on landing.
     pub wall_jumped: Wall,
     /// How many wall jumps this airtime, for `tuning::wall_jump_falloff`.
     /// Reset on landing.
@@ -6972,9 +6974,10 @@ fn step_player(
 ///                             a fall is measured from where it let go.
 ///   space, on one or just off  the wall jump: `wall_jump_rise` of a takeoff
 ///                             straight up, `wall_jump_push` away from it.
-///                             Never twice running off the same wall, and
-///                             each one in an airtime worth
-///                             `wall_jump_falloff` of the one before.
+///                             Off the same wall again only from
+///                             `wall_jump_drop` below the last, and each one
+///                             in an airtime worth `wall_jump_falloff` of
+///                             the one before.
 /// ```
 ///
 /// **A wall is reached, not given.** The slide is a partial recovery -- some
@@ -6984,12 +6987,16 @@ fn step_player(
 /// give back the airdodge, the jump attack or anything else an airtime
 /// spends: it is height and a direction, and nothing more.
 ///
-/// **Why there is no ladder.** Two rules, because one is not enough. Never
-/// twice running off the same wall (`Wall::same_as`, a face rather than a
-/// box) answers jumping off a wall, steering back with an aerial's hang and
-/// jumping off it again. It does not answer an inside corner, which is two
-/// walls a step apart; the falloff does, because the heights it allows add up
-/// to a bounded sum however many walls there are.
+/// **Why there is no ladder.** Two rules, because one is not enough. Off the
+/// same wall again only from `wall_jump_drop` below where the last jump off
+/// it left (`Wall::same_as`, a face rather than a box) answers jumping off a
+/// wall, steering back with an aerial's hang and jumping off it again: every
+/// return leaves from lower down, so the climb runs downhill. It does not
+/// answer an inside corner, which is two walls a step apart; the falloff
+/// does, because the heights it allows add up to a bounded sum however many
+/// walls there are. (Until 2026-10-16 the same wall was refused outright;
+/// the owner asked for a drop instead, so a wall can be used again on the
+/// way down.)
 ///
 /// Called after the resolve with the wall it reported, if it reported one.
 fn cling_to_the_wall(p: &mut Player, normal: V3, ground: &Terrain) {
@@ -7271,10 +7278,18 @@ fn let_go_of_the_ledge(p: &mut Player, into_a_slide: bool, ground: &Terrain) {
     }
 }
 
-/// May this fighter jump off the wall it was last against: not the wall the
-/// last wall jump left.
+/// May this fighter jump off the wall it was last against: any wall but the
+/// one the last wall jump left, and that one from `tuning::wall_jump_drop`
+/// below where it jumped.
 fn may_wall_jump(p: &Player) -> bool {
-    p.wall.is_some() && !p.wall.same_as(p.wall_jumped)
+    if !p.wall.is_some() {
+        return false;
+    }
+    if !p.wall.same_as(p.wall_jumped) {
+        return true;
+    }
+    let lowest = p.wall_jumped.at.y.sub(t::wall_jump_drop());
+    p.pos.y.raw() <= lowest.raw()
 }
 
 /// **Jump off the wall**: a fresh rise, never less than the body already
@@ -7292,7 +7307,10 @@ fn jump_off_the_wall(p: &mut Player, jump: Fx) {
     p.vel.x = p.vel.x.add(n.x.mul(off));
     p.vel.z = p.vel.z.add(n.z.mul(off));
     p.jump_hold = 0;
-    p.wall_jumped = p.wall;
+    p.wall_jumped = Wall {
+        at: p.pos,
+        normal: p.wall.normal,
+    };
     p.wall_jumps = p.wall_jumps.saturating_add(1);
     p.wall_since = u8::MAX;
 }
