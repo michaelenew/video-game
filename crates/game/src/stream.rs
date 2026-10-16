@@ -124,6 +124,12 @@ pub struct Stream {
 }
 
 impl Stream {
+    /// The land's tiles by (column, row): the tile, how finely it is drawn,
+    /// and its water. `splats::follow` places the brush's strokes on them.
+    pub fn tiles(&self) -> &HashMap<(i32, i32), (Entity, usize, Option<Entity>)> {
+        &self.tiles
+    }
+
     /// How many places and boxes are drawn: what the dev overlay shows.
     pub fn loaded(&self) -> (usize, usize, usize) {
         (self.places.len(), self.solids.len(), self.tiles.len())

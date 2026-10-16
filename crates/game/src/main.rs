@@ -46,6 +46,7 @@ mod signs;
 mod sky;
 mod sound;
 mod species;
+mod splats;
 mod stream;
 mod town;
 mod trophies;
@@ -220,6 +221,7 @@ fn main() {
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
         .add_plugins(paint::PaintPlugin)
+        .add_plugins(splats::SplatsPlugin)
         .add_plugins(warm::WarmPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see

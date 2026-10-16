@@ -60,6 +60,12 @@ pub struct Paint {
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
     pub strokes: Handle<Image>,
+    /// The strokes drawn as splats this frame (`crate::splats::TARGET`),
+    /// read at the pixel; the same handle for every paint.
+    #[texture(3)]
+    pub splats: Handle<Image>,
+    #[texture(4)]
+    pub splats_odd: Handle<Image>,
     /// Drawn from both sides: the land's tiles, whose skirts face out
     /// either way round.
     pub two_sided: bool,
@@ -85,6 +91,8 @@ impl Paint {
             color: Vec4::ONE,
             cut: Vec4::ZERO,
             strokes: STROKES,
+            splats: crate::splats::TARGET,
+            splats_odd: crate::splats::TARGET_ODD,
             two_sided: false,
             windowed: false,
             ghost: false,
@@ -130,6 +138,8 @@ impl Paint {
             color: Vec4::new(c.red, c.green, c.blue, 1.0),
             cut: Vec4::ZERO,
             strokes: STROKES,
+            splats: crate::splats::TARGET,
+            splats_odd: crate::splats::TARGET_ODD,
             two_sided: false,
             windowed: false,
             ghost: false,

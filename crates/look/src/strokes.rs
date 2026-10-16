@@ -93,6 +93,164 @@ fn mix(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
+/// **One stroke of the brush, placed** -- what the game draws as a quad
+/// (`game::splats`), where `paint.wgsl`'s `strokes_exact` worked every pixel
+/// out against a hundred of them. The same stroke: the same place in its
+/// cell, the same turn off the field, size, width, curve, order and colours,
+/// so the picture is the picture. Lengths in metres on the plane.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placed {
+    pub centre: [f32; 2],
+    /// Its turn on the plane, radians, the field's and its own.
+    pub angle: f32,
+    /// Half its length and half its width at the middle; the quad drawn
+    /// is a fifth wider each way, the room the bristles and the prune have.
+    pub long: f32,
+    pub wide: f32,
+    pub curve: f32,
+    /// Topmost wins: a point in two strokes shows the higher.
+    pub order: f32,
+    /// Shade, warmth and the third axis, -1 to 1.
+    pub colour: [f32; 3],
+    /// The bristle noise's seeds.
+    pub seeds: [f32; 2],
+    pub loose: f32,
+    /// The ground's stroke size against the rest, which with the distance
+    /// says when this level is in season.
+    pub scale: f32,
+}
+
+/// **The brush's strokes of one length**, placed over a patch of plane:
+/// level `level` is strokes `2^level` metres long at their usual size, two
+/// a cell of half that, every cell whose square meets `lo..hi`. `kind` is
+/// asked at each stroke's middle for the way the strokes run there (radians
+/// on the plane), the ground's rigidity and its strokes' size against the
+/// rest (`game::land::ground_stroke`). Sorted by order, lowest first, so
+/// drawn in this order the topmost lands last.
+pub fn place(
+    level: i32,
+    lo: [f32; 2],
+    hi: [f32; 2],
+    kind: &dyn Fn(f32, f32) -> [f32; 3],
+) -> Vec<Placed> {
+    let len = (level as f32).exp2();
+    let cell = len * 0.5;
+    let (c0, c1) = ((lo[0] / cell).floor() as i32, (lo[1] / cell).floor() as i32);
+    let (d0, d1) = ((hi[0] / cell).ceil() as i32, (hi[1] / cell).ceil() as i32);
+    let mut out = Vec::with_capacity(((d0 - c0) * (d1 - c1) * 2).max(0) as usize);
+    for cj in c1..d1 {
+        for ci in c0..d0 {
+            for k in 0..2u32 {
+                // The seeds: the cell, which of its two, and the level, so
+                // one level's strokes are not another's grown.
+                let h = |n: u32| {
+                    hash(
+                        ci as u32,
+                        cj as u32,
+                        (level as u32).wrapping_mul(64) ^ (k * 16 + n),
+                    )
+                };
+                let (h1, h2, h3, h4, h5, h6) = (h(1), h(2), h(3), h(4), h(5), h(6));
+                let (cx, cz) = ((ci as f32 + 0.5) * cell, (cj as f32 + 0.5) * cell);
+                let [turn, rigid, scale] = kind(cx, cz);
+                let loose = 1.0 - rigid;
+                let scatter = mix(0.2, 1.0, loose);
+                let centre = [
+                    (ci as f32 + 0.5 + (h1 - 0.5) * scatter) * cell,
+                    (cj as f32 + 0.5 + (h2 - 0.5) * scatter) * cell,
+                ];
+                let size = 1.0 + (h4 - 0.5) * loose * 1.4;
+                out.push(Placed {
+                    centre,
+                    angle: turn + (h3 - 0.5) * loose * 1.6,
+                    long: len * size * mix(0.5, 0.55, h5),
+                    wide: len * size * mix(0.15, 0.13 + 0.12 * h6, loose),
+                    curve: (h5 - 0.5) * loose * 0.8,
+                    order: h(8),
+                    colour: [h(9) * 2.0 - 1.0, h(10) * 2.0 - 1.0, h(11) * 2.0 - 1.0],
+                    seeds: [h1, h2],
+                    loose,
+                    scale,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.order.total_cmp(&b.order));
+    out
+}
+
+/// **Which way the strokes run on the ground**, as `paint.wgsl`'s
+/// `stroke_way` decides it: along `flow` where the mesh gave one (a road),
+/// else uphill, wandering slowly on the flat; built work (`rigid` high) runs
+/// level along its courses. `p` is the point and `n` the ground's normal.
+pub fn way_on_ground(p: [f32; 3], n: [f32; 3], flow: [f32; 2], rigid: f32) -> [f32; 3] {
+    let up = [0.0, 1.0, 0.0];
+    let mut level = cross(up, n);
+    if len3(level) < 1e-3 {
+        level = [1.0, 0.0, 0.0];
+    }
+    let level = norm3(level);
+    if (flow[0] * flow[0] + flow[1] * flow[1]).sqrt() > 0.1 {
+        let f = [flow[0], 0.0, flow[1]];
+        let on = sub3(f, scale3(n, dot3(f, n)));
+        if len3(on) > 1e-3 {
+            return norm3(on);
+        }
+    }
+    let lean = (1.0 - n[1] * n[1]).max(0.0).sqrt();
+    let mut uphill = level;
+    if lean > 1e-3 {
+        uphill = norm3(sub3(up, scale3(n, n[1])));
+    }
+    // 6.28 rather than tau: the shader's number, matched to the digit.
+    #[allow(clippy::approx_constant)]
+    let a = noise2(p[0] / 38.0, p[2] / 38.0) * 6.28;
+    let mut wander = [a.cos(), 0.0, a.sin()];
+    wander = sub3(wander, scale3(n, dot3(wander, n)));
+    if dot3(wander, uphill) < 0.0 {
+        wander = scale3(wander, -1.0);
+    }
+    let on_slope = smoothstep(0.03, 0.15, lean);
+    let w = norm3(add3(wander, scale3(n, 1e-4)));
+    let natural = norm3(add3(lerp3(w, uphill, on_slope), scale3(n, 1e-5)));
+    let built = smoothstep(0.55, 0.8, rigid) * (1.0 - smoothstep(0.5, 0.8, n[1].abs()));
+    norm3(lerp3(natural, level, built))
+}
+
+fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+fn len3(a: [f32; 3]) -> f32 {
+    dot3(a, a).sqrt()
+}
+fn norm3(a: [f32; 3]) -> [f32; 3] {
+    let l = len3(a).max(1e-9);
+    [a[0] / l, a[1] / l, a[2] / l]
+}
+fn scale3(a: [f32; 3], k: f32) -> [f32; 3] {
+    [a[0] * k, a[1] * k, a[2] * k]
+}
+fn add3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn lerp3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)]
+}
+fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// The stroke field at a point `q` (in stroke lengths) on a sheet of this
 /// rigidity: shade, warmth and a third axis, -1 to 1, or zero where no stroke
 /// covers it.
@@ -279,6 +437,38 @@ mod tests {
         assert!(
             same * 10 > seen * 3,
             "{same} of {seen} points keep their stroke a turn on"
+        );
+    }
+
+    #[test]
+    fn the_placed_strokes_cover_the_patch_and_come_topmost_last() {
+        let kind = |_x: f32, _z: f32| [0.3, 0.0, 2.4];
+        let strokes = place(-1, [0.0, 0.0], [16.0, 16.0], &kind);
+        // Half-metre strokes, cells a quarter: 64 x 64 x 2.
+        assert_eq!(strokes.len(), 64 * 64 * 2);
+        assert!(strokes.windows(2).all(|w| w[0].order <= w[1].order));
+        for s in &strokes {
+            assert!(s.centre[0] >= -0.5 && s.centre[0] <= 16.5, "{s:?}");
+            assert!(
+                s.long > 0.05 && s.long < 0.6 && s.wide > 0.0 && s.wide < s.long,
+                "{s:?}"
+            );
+        }
+        // Ruled ground sits on its grid, parallel, alike.
+        let ruled = place(0, [0.0, 0.0], [4.0, 4.0], &|_, _| [0.0, 1.0, 0.6]);
+        assert!(
+            ruled
+                .iter()
+                .all(|s| s.angle == 0.0 && s.curve == 0.0 && (s.long - 0.525).abs() < 0.03)
+        );
+        // Another level is other strokes, not these grown.
+        let coarser = place(0, [0.0, 0.0], [16.0, 16.0], &kind);
+        assert!(
+            coarser
+                .iter()
+                .take(10)
+                .zip(strokes.iter())
+                .any(|(a, b)| a.order != b.order)
         );
     }
 }
