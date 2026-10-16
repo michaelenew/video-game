@@ -7,7 +7,7 @@
 //! dropped when it goes further than that again:
 //!
 //! - **A place**: its floor, the patches on it, its props and what is
-//!   scattered on the floor, its seams and vines -- everything
+//!   scattered on the floor, its seams -- everything
 //!   `arenas::draw_place` draws -- under one entity, gone together.
 //! - **A box**: each of the map's boxes on its own, found through the map's
 //!   tiles, so loading the boxes round the camera reads the tiles round the
@@ -507,7 +507,7 @@ fn groves(
                 .entry(place.arena)
                 .or_insert_with(|| PlaceLook::of(place.get()))
                 .clone();
-            let (wood, leaves) = crate::grove::meshes(tree, &look.palette, &atlas.vines);
+            let (wood, leaves) = crate::grove::meshes(tree, &look.palette);
             st.grown.insert(
                 k,
                 (

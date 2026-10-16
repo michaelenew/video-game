@@ -67,11 +67,8 @@ pub static PLACE: Place = Place {
     arena: ArenaId::SHELVES,
     kind: Kind::Reach,
     seams: &SEAMS,
-    vines: &VINES,
     vents: &[],
 };
-
-const VINES: [Zone; 1] = [CRAGS[0].vine()];
 
 const SEAMS: [Seam; 5] = [
     // Back through the first pass to the Bank.

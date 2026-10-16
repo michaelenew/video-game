@@ -14,16 +14,20 @@
 //!
 //! | Level | Floor, over the pit's floor | What |
 //! | --- | --- | --- |
-//! | **The mouth** | 140 m (the lid's top) | A hole in the lid, a vine down it |
+//! | **The mouth** | 140 m (the lid's top) | A hole in the lid, a shaft under it |
 //! | **The Upper Warren** | 110 m | A maze of tunnels fourteen metres wide, generated, ten cells by eight |
 //! | **The Middle Warren** | 80 m | Another, its way in under the last one's way out, at the far end |
 //! | **The Lower Warren** | 50 m | A third |
 //! | **The Caverns** | 0 | The pit's own floor, 160 by 140 m and widening up its walls, under a vault 47 m up: crystal columns, crystal shards hung in the air, a lake |
 //!
 //! Each warren's way down is a shaft through its floor in a cell at the far
-//! end of the maze from its way in, with a vine down it; the Lower Warren's
-//! opens in the Caverns' vault, and its vine reaches the floor. The mazes are
-//! a fixed draw (`dice`), so both machines dig the same tunnels.
+//! end of the maze from its way in; the Lower Warren's opens in the Caverns'
+//! vault and reaches the floor. **A shaft is walled** from the floor above to
+//! a body's height over the one below (2026-10-16, from a vine down each:
+//! [`shaft`]): down is a slide down a wall, or ledge to ledge; up is the
+//! ledges, zig-zagging between its north and south walls a catch apart
+//! ([`shaft_ledges`]). The mazes are a fixed draw (`dice`), so both machines
+//! dig the same tunnels.
 
 use super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 use crate::fixed::Fx;
@@ -119,29 +123,102 @@ pub const fn cell_middle(c: (i32, i32)) -> (i32, i32) {
     )
 }
 
-/// A shaft's vine, down from a floor `from` to the one below `to`, on the
-/// shaft's north side, in the pit's coordinates.
-/// The whole shaft is the vine: whoever drops into it catches on it.
-const fn shaft_vine(c: (i32, i32), from: i32, to: i32) -> Zone {
-    let (x, z) = cell_middle(c);
+/// **The shafts**: each hole's, from the floor it is in down to the one
+/// below -- the lid's mouth to the Upper Warren, each warren to the next,
+/// the Lower Warren to the Caverns' floor.
+pub const SHAFTS: [(i32, i32); 4] = [
+    (LID, LEVELS[0]),
+    (LEVELS[0], LEVELS[1]),
+    (LEVELS[1], LEVELS[2]),
+    (LEVELS[2], 0),
+];
+
+/// How far apart a shaft's ledges are, one over the next: inside the
+/// Bulwark's catch across the shaft.
+pub const LEDGE_RISE: i32 = 400;
+/// How far a ledge stands out of its wall, and how wide it is along it.
+const LEDGE_OUT: i32 = 220;
+const LEDGE_WIDE: i32 = 300;
+/// How far over the floor below a shaft's walls end: a body walks out under.
+const OPEN: i32 = 300;
+/// The first shard's top, over the Caverns' floor: and the sill of the slot
+/// in the Caverns' shaft's west wall that steps out on to it, half a metre
+/// under the ledge beside it.
+const SHARDS_FROM: i32 = 3550;
+
+/// **A shaft's ledges**, foot to top, in the pit's coordinates: every
+/// [`LEDGE_RISE`] up from the floor below, the first on the south wall and
+/// then turn about, the last a step under the floor it comes up through.
+pub fn shaft_ledges(k: usize) -> Vec<([i32; 3], [i32; 3])> {
+    let (from, to) = SHAFTS[k];
+    let (x, z) = cell_middle(HOLES[k]);
     let h = SHAFT / 2;
-    Zone::cm([x - h, to - 100, z - h], [x + h, from + 100, z + h])
+    let mut out = Vec::new();
+    let mut y = to + LEDGE_RISE;
+    let mut n = 0;
+    while y <= from - 150 {
+        let (z0, z1) = if n % 2 == 0 {
+            (z - h, z - h + LEDGE_OUT)
+        } else {
+            (z + h - LEDGE_OUT, z + h)
+        };
+        out.push((
+            [x - LEDGE_WIDE / 2, y - 60, z0],
+            [x + LEDGE_WIDE / 2, y, z1],
+        ));
+        y += LEDGE_RISE;
+        n += 1;
+    }
+    out
 }
 
-/// The vines down the shafts: the mouth's, each warren's way down.
-pub const VINES: [Zone; 4] = [
-    shaft_vine(HOLES[0], LID, LEVELS[0]),
-    shaft_vine(HOLES[1], LEVELS[0], LEVELS[1]),
-    shaft_vine(HOLES[2], LEVELS[1], LEVELS[2]),
-    shaft_vine(HOLES[3], LEVELS[2], 0),
-];
+/// **A shaft's walls and ledges**: four walls round the hole from the top
+/// of the floor it is in -- through the slab, so the rim is the one edge --
+/// to [`OPEN`] over the floor below, and its ledges.
+fn shaft(k: usize, out: &mut Vec<Solid>) {
+    let (from, to) = SHAFTS[k];
+    let (x, z) = cell_middle(HOLES[k]);
+    let h = SHAFT / 2;
+    let (lo, hi) = (to + OPEN, from);
+    for (a, b) in [
+        ((x - h - WALL, z - h - WALL), (x + h + WALL, z - h)),
+        ((x - h - WALL, z + h), (x + h + WALL, z + h + WALL)),
+        ((x + h, z - h), (x + h + WALL, z + h)),
+    ] {
+        out.push(put([a.0, lo, a.1], [b.0, hi, b.1], Material::Rock));
+    }
+    // The west wall; the Caverns' with a slot through it onto the first
+    // shard (`crystals`), its sill a step under a ledge.
+    let west = ((x - h - WALL, z - h), (x - h, z + h));
+    match (k == SHAFTS.len() - 1).then_some(SHARDS_FROM) {
+        Some(sill) => {
+            out.push(put(
+                [west.0.0, lo, west.0.1],
+                [west.1.0, sill, west.1.1],
+                Material::Rock,
+            ));
+            out.push(put(
+                [west.0.0, sill + 300, west.0.1],
+                [west.1.0, hi, west.1.1],
+                Material::Rock,
+            ));
+        }
+        None => out.push(put(
+            [west.0.0, lo, west.0.1],
+            [west.1.0, hi, west.1.1],
+            Material::Rock,
+        )),
+    }
+    for (a, b) in shaft_ledges(k) {
+        out.push(put(a, b, Material::Rock));
+    }
+}
 
 /// How the Deep joins the valley.
 pub static PLACE: Place = Place {
     arena: ArenaId::DEEP,
     kind: Kind::Reach,
     seams: &SEAMS,
-    vines: &VINES,
     vents: &[],
 };
 
@@ -193,7 +270,8 @@ fn dice(a: i32, b: i32, salt: u32) -> i32 {
 }
 
 /// **A slab with a hole in it**: from `lo` to `hi` (x, z) at `top`, `SLAB`
-/// thick, less the square `SHAFT` across round `hole`'s middle -- four boxes.
+/// thick, less the square round `hole`'s middle that its shaft's walls stand
+/// in (`SHAFT` across, and a `WALL` either side) -- four boxes.
 fn holed(lo: (i32, i32), hi: (i32, i32), top: i32, hole: Option<(i32, i32)>, out: &mut Vec<Solid>) {
     let (y0, y1) = (top - SLAB, top);
     let Some(c) = hole else {
@@ -201,7 +279,7 @@ fn holed(lo: (i32, i32), hi: (i32, i32), top: i32, hole: Option<(i32, i32)>, out
         return;
     };
     let (x, z) = cell_middle(c);
-    let h = SHAFT / 2;
+    let h = SHAFT / 2 + WALL;
     // West and east of the hole, the slab's whole depth; north and south of
     // it, between them.
     out.push(put([lo.0, y0, lo.1], [x - h, y1, hi.1], Material::Rock));
@@ -376,8 +454,8 @@ fn crystals(out: &mut Vec<Solid>) {
     // The shards: from beside the shaft, stepping down and across toward the
     // lake, each a jump from the last.
     let (sx, sz) = cell_middle(HOLES[3]);
-    // Beside the shaft, not under it: its vine drops clear to the floor.
-    let mut at = (sx - SHAFT, sz, vault - 1200);
+    // Out past the shaft's west wall, its first a step from the slot in it.
+    let mut at = (sx - SHAFT / 2 - WALL - 550, sz, SHARDS_FROM);
     for k in 0..9 {
         let yaw = Fx::ratio(dice(k, 9, 47) % 1000, 1000);
         out.push(Solid::turned(
@@ -400,6 +478,9 @@ fn crystals(out: &mut Vec<Solid>) {
 pub fn build(out: &mut Vec<Solid>) {
     let (hx, hz) = (HALF.0 + LID_OUT, HALF.1 + LID_OUT);
     holed((-hx, -hz), (hx, hz), LID, Some(HOLES[0]), out);
+    for k in 0..SHAFTS.len() {
+        shaft(k, out);
+    }
     for level in 0..LEVELS.len() {
         warren(level, out);
     }

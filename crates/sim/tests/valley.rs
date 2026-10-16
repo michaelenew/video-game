@@ -666,41 +666,12 @@ fn nobody_can_hurt_anybody_in_a_reach() {
 }
 
 #[test]
-fn a_vine_is_climbed_with_the_jump_held() {
-    let mut w = arrived(ArenaId::MOUTH, Some(0));
-    let vine = valley::vines(ArenaId::MOUTH)[0];
-    let mid = vine.middle();
-    let up = V3::new(mid.x, Fx::from_int(200), mid.z);
-    w.players[0].pos = V3::new(mid.x, w.terrain().floor_below(up), mid.z);
-    let start = w.players[0].pos.y;
-    // Straight up for three seconds: a vine is slow, but it goes.
-    for _ in 0..180 {
-        w.advance([Input::new(Input::SPACE), Input::new(0)]);
-    }
-    let climbed = w.players[0].pos.y.sub(start);
-    assert!(
-        climbed.raw() > Fx::from_int(6).raw(),
-        "climbed only {climbed:?}"
-    );
-    // Let go of everything: it clings.
-    let held = w.players[0].pos.y;
-    for _ in 0..30 {
-        w.advance(idle());
-    }
-    assert!(
-        w.players[0].pos.y.sub(held).abs().raw() < Fx::ratio(1, 10).raw(),
-        "it did not cling"
-    );
-}
-
-#[test]
-fn outside_the_valley_there_are_no_vines_or_seams() {
+fn outside_the_valley_there_are_no_seams() {
     let mut w = World::with_classes(CLASSES);
     let before = w.checksum();
     w.advance(idle());
     assert!(!w.valley.on);
     assert_ne!(before, w.checksum());
-    assert!(valley::vines(ArenaId::PROVING_GROUND).is_empty());
     assert!(valley::place(ArenaId::PROVING_GROUND).is_none());
 }
 
@@ -708,12 +679,15 @@ fn outside_the_valley_there_are_no_vines_or_seams() {
 /// road climbs on foot and nothing on it needs a jump; the climbs are the
 /// crags beside it, each ledge a rise up and across from the last, and the
 /// pillar's top a rise over the last ledge. Every class has to make each of
-/// them with a plain running jump, because a crag is for everybody
-/// (`docs/design/courses.md` §0), as gap and rise in centimetres.
+/// them with a plain running jump **caught at the hands** -- landed is the
+/// quick way, caught and climbed the forgiving one (2026-10-16: the gaps went
+/// out to the catch when the ledges started catching) -- because a crag is
+/// for everybody (`docs/design/courses.md` §0), as gap and rise in
+/// centimetres.
 const REQUIRED: &[(&str, i32, i32)] = &[
     (
         "a crag: from one ledge to the next",
-        100,
+        sim::valley::Crag::ACROSS,
         sim::valley::Crag::RISE,
     ),
     (
@@ -730,14 +704,15 @@ fn every_class_can_make_the_hops_nobody_can_go_round() {
         let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
         let apex = sim::envelope::path_apex(&path);
         for (what, gap, rise) in REQUIRED {
-            // High enough with room to spare, and far enough at that height:
-            // a short hop up is a jump from closer in with less run, which a
-            // person does without thinking, so the running path's own width
-            // at the rise is what bounds it.
+            // High enough to catch with room to spare, and far enough at that
+            // height: a short hop up is a jump from closer in with less run,
+            // which a person does without thinking, so the running path's own
+            // reach at the rise is what bounds it.
             let (gap, rise) = (Fx::ratio(*gap, 100), Fx::ratio(*rise, 100));
-            let widest = sim::envelope::widest(std::slice::from_ref(&path), rise);
+            let reach = apex.add(sim::tuning::ledge_reach_high());
+            let widest = sim::envelope::widest_caught(std::slice::from_ref(&path), rise);
             assert!(
-                apex.raw() >= rise.add(Fx::ratio(3, 10)).raw()
+                reach.raw() >= rise.add(Fx::ratio(3, 10)).raw()
                     && widest.is_some_and(|w| w.raw() >= gap.raw()),
                 "{}: cannot make {what} ({} m out, {} m up)",
                 class.name(),

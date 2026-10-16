@@ -72,11 +72,8 @@ pub static PLACE: Place = Place {
     arena: ArenaId::SADDLE,
     kind: Kind::Reach,
     seams: &SEAMS,
-    vines: &VINES,
     vents: &[],
 };
-
-const VINES: [Zone; 1] = [CRAGS[0].vine()];
 
 const SEAMS: [Seam; 4] = [
     // Back through the third pass to the Pinewood.

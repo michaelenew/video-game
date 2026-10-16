@@ -21,7 +21,6 @@
 
 use bevy::prelude::*;
 use look::Palette;
-use sim::valley::Zone;
 use sim::valley::trees::{self, Kind, NONE, Pad, PadKind, Part, Tree};
 
 use crate::forms::Kit;
@@ -69,9 +68,9 @@ pub fn reach(tree: &Tree) -> f32 {
         .fold(0.0, f32::max)
 }
 
-/// **A tree's two meshes**, about its foot: its wood (with its shelves and
-/// the lianas off it, of `vines`), and its leaves (with its roof).
-pub fn meshes(tree: &Tree, palette: &Palette, vines: &[Zone]) -> (Mesh, Mesh) {
+/// **A tree's two meshes**, about its foot: its wood (with its shelves), and
+/// its leaves (with its roof).
+pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
     let at = |p: [i32; 3]| {
         Vec3::new(
             m(p[0] - tree.base[0]),
@@ -133,23 +132,6 @@ pub fn meshes(tree: &Tree, palette: &Palette, vines: &[Zone]) -> (Mesh, Mesh) {
             _ => terrace(&mut leaves, c, pad, palette.canopy(tree.kind), green),
         }
     }
-    // The lianas hung off its roof.
-    if let Some(rim) = tree.pads.iter().find(|p| p.kind == PadKind::Rim) {
-        let mid = Vec2::new(m(rim.at[0]), m(rim.at[2]));
-        for v in vines {
-            let (lo, hi) = (
-                Vec3::new(fx(v.min.x), fx(v.min.y), fx(v.min.z)),
-                Vec3::new(fx(v.max.x), fx(v.max.y), fx(v.max.z)),
-            );
-            let foot = Vec2::new((lo.x + hi.x) * 0.5, (lo.z + hi.z) * 0.5);
-            if foot.distance(mid) > m(rim.outer) + 4.0 {
-                continue;
-            }
-            let base = Vec3::new(m(tree.base[0]), m(tree.base[1]), m(tree.base[2]));
-            liana(&mut wood, lo - base, hi - base, palette.vine());
-        }
-    }
-
     for (i, l) in tree.leaves.iter().enumerate() {
         let c = at([l[0], l[1], l[2]]);
         let r = m(l[3]);
@@ -283,26 +265,5 @@ fn terrace(kit: &mut Kit, top: Vec3, pad: &Pad, floor: [f32; 3], green: [f32; 3]
             out,
             vary(green, hash01(k as u32, 3, 9), 0.1),
         );
-    }
-}
-
-/// **A liana**: a few strands hung down the zone a body climbs, from its top
-/// to the ground.
-fn liana(kit: &mut Kit, lo: Vec3, hi: Vec3, rgb: [f32; 3]) {
-    let c = (lo + hi) * 0.5;
-    let foot = lo.y + 2.0;
-    for k in 0..4 {
-        let a = k as f32 * 1.7;
-        let off = Vec3::new(a.cos(), 0.0, a.sin()) * 0.45;
-        let mut y = hi.y;
-        let mut was = Vec3::new(c.x, y, c.z) + off;
-        while y > foot {
-            let step = 6.0f32.min(y - foot);
-            y -= step;
-            let sway = (y * 0.21 + k as f32).sin() * 0.25;
-            let p = Vec3::new(c.x + off.x + sway, y, c.z + off.z - sway);
-            kit.tube(was, p, 0.09, 0.09, 4, rgb, None);
-            was = p;
-        }
     }
 }
