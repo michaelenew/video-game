@@ -161,6 +161,10 @@ spaces as checkpoints ... I want the canopy to be a reward"):
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 
+![On an Elder's roof](gallery/valley-wood-roof.jpg)
+
+![The Great Tree's first shelf, where its vine comes up](gallery/valley-wood-shelf.jpg)
+
 ### 1b · Ranges: creatures out on the land (2026-10-15)
 
 `sim::valley::ranges`, `tests/ranges.rs`. **A range is a room without

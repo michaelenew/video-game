@@ -1824,7 +1824,11 @@ impl Terrain {
     pub fn ceiling_near(&self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
-        for s in self.without_raised(self.around(at, CEILING_REACH)) {
+        // Not a grown tree's limb: the eye is not held under every branch
+        // overhead, which in the Wood shoved it down at each one it passed
+        // under (2026-10-16, from play); the tree is cut away round the eye's
+        // line instead (`game::grove`).
+        for s in self.without_raised(self.seen_around(at, CEILING_REACH)) {
             if s.min.y.raw() <= above.raw() || !self.hangs(&s) {
                 continue;
             }
@@ -1842,7 +1846,7 @@ impl Terrain {
     pub fn ceiling_over(&self, x: Fx, z: Fx, above: Fx) -> Option<Fx> {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
-        for s in self.without_raised(self.around(at, Fx::ZERO)) {
+        for s in self.without_raised(self.seen_around(at, Fx::ZERO)) {
             if s.min.y.raw() <= above.raw() || !s.under(x, z, Fx::ZERO) || !self.hangs(&s) {
                 continue;
             }

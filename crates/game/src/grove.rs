@@ -116,7 +116,10 @@ pub fn meshes(tree: &Tree, palette: &Palette, vines: &[Zone]) -> (Mesh, Mesh) {
             rgb
         };
         let s = sides(ra.max(rb));
-        wood.tube_topped(at(p.at), at(n.at), ra, rb, s, (rgb, top), None);
+        // Capped where it is thick: a joint that bends opens a sliver,
+        // and through an open tube the sky shows.
+        let caps = (ra.max(rb) > 0.25).then_some(rgb);
+        wood.tube_topped(at(p.at), at(n.at), ra, rb, s, (rgb, top), caps);
     }
     // Dark at the foot, where the light does not reach.
     wood.settle(0.0, 8.0, 0.35);
@@ -151,6 +154,15 @@ pub fn meshes(tree: &Tree, palette: &Palette, vines: &[Zone]) -> (Mesh, Mesh) {
         let c = at([l[0], l[1], l[2]]);
         let r = m(l[3]);
         let seed = i as u32 ^ (tree.base[2] as u32).wrapping_mul(7919);
+        // Thinned: a crown you can see through to the limbs inside it --
+        // the first pass's, every clump drawn, was a wall (2026-10-16).
+        let keep = match tree.kind {
+            Kind::Sentinel => 0.75,
+            _ => 0.6,
+        };
+        if hash01(seed, 2, 5) > keep {
+            continue;
+        }
         let rgb = vary(green, hash01(seed, 1, 5), 0.14);
         match tree.kind {
             // Needles: a tuft hanging from the twig's end, taller than it is
@@ -246,6 +258,19 @@ fn terrace(kit: &mut Kit, top: Vec3, pad: &Pad, floor: [f32; 3], green: [f32; 3]
             );
         } else {
             kit.poly(&[top, o0, o1], Vec3::Y, shade);
+        }
+        // Its underside, leaves seen from below: a ceiling of the crown's
+        // own green, not the floor's.
+        let (u0, u1) = (o0.with_y(top.y - deep), o1.with_y(top.y - deep));
+        let under = vary(green, 0.3, 0.1);
+        if ri > 0.0 {
+            let (v0, v1) = (
+                round(top, ri, top.y - deep, k, n),
+                round(top, ri, top.y - deep, k + 1, n),
+            );
+            kit.poly(&[v0, v1, u1, u0], -Vec3::Y, under);
+        } else {
+            kit.poly(&[top.with_y(top.y - deep), u1, u0], -Vec3::Y, under);
         }
         // The fringe down its outside.
         let (d0, d1) = (

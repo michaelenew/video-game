@@ -501,7 +501,7 @@ impl Palette {
         let bark = self.grown_bark(kind);
         let moss = Lch::of(tint::mix(bark, self.moss(), 0.5));
         Lch {
-            l: (moss.l * 1.35).min(0.92),
+            l: (moss.l * 1.15).min(0.78),
             ..moss
         }
         .rgb()

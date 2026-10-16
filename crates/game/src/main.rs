@@ -1376,7 +1376,16 @@ fn shot_at(w: &mut World) {
         sim::Fx::from_int(from),
         sim::Fx::from_int(z),
     );
-    let y = w.terrain().floor_below(up);
+    // Or the top of anything hanging there -- a shelf up a tree, a roof
+    // over a crown -- which a floor is not.
+    let ground = w.terrain();
+    let y = ground
+        .around(up, sim::Fx::ZERO)
+        .filter(|s| s.over(up.x, up.z, sim::Fx::ZERO) && s.max.y.raw() <= up.y.raw())
+        .map(|s| s.max.y)
+        .fold(ground.floor_below(up), |a, b| {
+            if b.raw() > a.raw() { b } else { a }
+        });
     let p = &mut w.players[0];
     p.pos = sim::V3::new(up.x, y, up.z);
     p.vel = sim::V3::ZERO;
