@@ -30,7 +30,51 @@ impl Plugin for ProfilePlugin {
         ))
         .add_systems(Startup, experiment.after(crate::setup))
         .add_systems(Update, (census, heaviest, quit_after));
+        if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render.add_systems(bevy::render::Render, pipelines);
+        }
     }
+}
+
+/// **Every pipeline the moment it is asked for**: what it is for, and the
+/// mesh layout and treatment it was specialised on. A pipeline is compiled
+/// the first time something on screen needs it, and a compile is the hitch
+/// a player sees as the game seizing for a moment -- so a pipeline that is
+/// first asked for minutes into a fight, rather than as the game starts, is
+/// one the warm-up missed.
+fn pipelines(
+    cache: Res<bevy::render::render_resource::PipelineCache>,
+    mut seen: Local<usize>,
+    mut started: Local<Option<bevy::platform::time::Instant>>,
+) {
+    use bevy::render::render_resource::PipelineDescriptor;
+    let started = *started.get_or_insert_with(bevy::platform::time::Instant::now);
+    let all: Vec<_> = cache.pipelines().collect();
+    if all.len() == *seen {
+        return;
+    }
+    let at = started.elapsed().as_secs_f32();
+    for p in &all[*seen..] {
+        let PipelineDescriptor::RenderPipelineDescriptor(d) = &p.descriptor else {
+            eprintln!("pipeline {at:.1}s compute");
+            continue;
+        };
+        let label = d.label.as_deref().unwrap_or("?");
+        let defs: Vec<String> = d
+            .fragment
+            .as_ref()
+            .map(|f| &f.shader_defs)
+            .unwrap_or(&d.vertex.shader_defs)
+            .iter()
+            .filter_map(|def| match def {
+                bevy::render::render_resource::ShaderDefVal::Bool(name, true) => Some(name.clone()),
+                _ => None,
+            })
+            .filter(|n| n.starts_with("VERTEX_") || n.contains("PREPASS") || n.contains("SHADOW"))
+            .collect();
+        eprintln!("pipeline {at:.1}s {label} [{}]", defs.join(" "));
+    }
+    *seen = all.len();
 }
 
 /// How many meshes there are, and how many the camera can see, every two
@@ -148,28 +192,35 @@ fn experiment(
     }
 }
 
-/// **What the triangles are**, once, twelve seconds in: the meshes the
+/// **What the triangles are**, twelve seconds in and a minute in: the meshes the
 /// camera can see and the meshes that cast shadows, heaviest first, each
 /// with how many copies of it there are and how far it is from the camera.
 /// A pass's triangle count in the census says *that* it is drawing too much;
 /// this says what. It is how the valley's walls were found drawing three
 /// million triangles into four shadow cascades.
+#[allow(clippy::type_complexity)] // A Bevy query: one component per thing the list reads.
 fn heaviest(
     time: Res<Time>,
-    mut done: Local<bool>,
+    mut done: Local<usize>,
     meshes: Res<Assets<Mesh>>,
     all: Query<(
+        Entity,
         &Mesh3d,
         &GlobalTransform,
         &ViewVisibility,
+        &InheritedVisibility,
         Has<bevy::pbr::NotShadowCaster>,
     )>,
+    names: Query<(Option<&Name>, Option<&ChildOf>)>,
     cameras: Query<&GlobalTransform, With<crate::MainCamera>>,
 ) {
-    if *done || time.elapsed_secs() < 12.0 {
+    // Twelve seconds in, and a minute in, when a slow machine has finished
+    // loading what is round it.
+    let due = [12.0, 60.0];
+    if *done >= due.len() || time.elapsed_secs() < due[*done] {
         return;
     }
-    *done = true;
+    *done += 1;
     let eye = cameras
         .single()
         .map(|c| c.translation())
@@ -180,29 +231,50 @@ fn heaviest(
             .and_then(|m| m.indices())
             .map_or(0, |i| i.len() / 3)
     };
-    let list = |title: &str, keep: &dyn Fn(bool, bool) -> bool| {
-        let mut by: HashMap<AssetId<Mesh>, (usize, usize, f32)> = HashMap::new();
+    // What a mesh is, as far as anybody named it: its own name or the
+    // nearest named thing it hangs off.
+    let named = |mut e: Entity| {
+        for _ in 0..8 {
+            let Ok((name, parent)) = names.get(e) else {
+                break;
+            };
+            if let Some(name) = name {
+                return name.as_str().to_string();
+            }
+            let Some(parent) = parent else {
+                break;
+            };
+            e = parent.parent();
+        }
+        String::from("?")
+    };
+    let list = |title: &str, keep: &dyn Fn(bool, bool, bool) -> bool| {
+        let mut by: HashMap<AssetId<Mesh>, (usize, usize, f32, Entity)> = HashMap::new();
         let mut total = 0;
-        for (m, at, seen, no_shadow) in &all {
-            if !keep(seen.get(), !no_shadow) {
+        for (e, m, at, seen, shown, no_shadow) in &all {
+            if !keep(seen.get(), shown.get(), !no_shadow) {
                 continue;
             }
             let n = tris(m);
             let row = by
                 .entry(m.0.id())
-                .or_insert((n, 0, at.translation().distance(eye)));
+                .or_insert((n, 0, at.translation().distance(eye), e));
             row.1 += 1;
             total += n;
         }
         let mut rows: Vec<_> = by.into_values().collect();
         rows.sort_by_key(|r| std::cmp::Reverse(r.0 * r.1));
         eprintln!("{title}: {total} triangles in {} meshes", rows.len());
-        for (n, copies, far) in rows.into_iter().take(20) {
-            eprintln!("  {n:>8} triangles x {copies:>4}, {far:>5.0} m away");
+        for (n, copies, far, e) in rows.into_iter().take(20) {
+            eprintln!(
+                "  {n:>8} triangles x {copies:>4}, {far:>5.0} m away  {}",
+                named(e)
+            );
         }
     };
-    list("in view", &|seen, _| seen);
-    list("casting shadows", &|_, casts| casts);
+    list("in view", &|seen, _, _| seen);
+    // Shown, not hidden in a pool: a hidden mesh casts nothing.
+    list("casting shadows", &|_, shown, casts| shown && casts);
 }
 
 /// `--quit-after <seconds>`: leave cleanly after that long, so a build with

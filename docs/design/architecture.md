@@ -291,6 +291,44 @@ Each is exact -- every pinned hunt and every walked road held -- and four fighte
 well inside the budget. Eight are at its edge, which is where the next step is: a body on
 land costs what sampling the land costs, so the lever is the sample itself.
 
+### Hitches: a pipeline compiled mid-fight (found 2026-10-16, a replay)
+
+The complaint: since the painted look's first merge, the game seized for a moment at
+random and got better the longer it was played. A replay of a quiet Bulwark mirror in
+Hearth, played back headlessly with `--profile`, showed the game's own systems flat --
+no frame of simulation, streaming or HUD anywhere near a hitch -- and the GPU being asked
+for **new pipelines** 16, 73 and 77 seconds in. A pipeline is a mesh layout, a material
+and a way of blending compiled together, and Bevy compiles one the first frame something
+on screen needs it: the first parry flash, the first time the camera closes in and one's
+own skin goes translucent (`fade_own_body` turns it from opaque to blended), the first box
+of a layout not seen yet streaming in. With `--sync-pipelines` -- how a browser and macOS
+always compile -- each of those blocked its frame for 35-150 ms here, and more in a
+browser, whose own shader compiler runs behind naga's. "Better the longer you play" is the
+pipeline cache filling. The flat paint (`game::paint`) made it worse without being wrong:
+a second material type is a second set of pipelines for every layout.
+
+**`game::warm`**: every mesh, the moment it is made -- the pooled effects hidden until they
+are used included -- is checked against the combinations already asked for, and a new one
+gets a primer, the same mesh and material as a speck no frustum culls, for three frames.
+The standard material is primed opaque and blended both, for the fade. In the same
+replay every pipeline is now asked for in the first three seconds and none after;
+`--profile` prints each as it is asked for, so one that turns up mid-fight is one this
+missed. `crates/game/tests/warm.rs` fails if a material type is drawn but never warmed.
+
+### The simulation over its budget again (2026-10-16, callgrind)
+
+`sim/tests/budget.rs` was failing on main: **862 µs** a frame for the Shadow Reaver beside
+the Siegeshell, against 520, and 640-730 µs for her in any fight with a pack. Callgrind
+said where, and every fix is exact -- the same answers, asked more cheaply:
+
+| What | Frame (worst case) | Why |
+| --- | --- | --- |
+| Before | 862 µs | Her blades are slabs, and a slab asked of every critter slot found each one's closest point and a square root, about 1,650 instructions, for bodies metres away: 360 of them a frame. The same for every one of the Siegeshell's 44 parts, two matrix products each. |
+| ...far on an axis, first | 526 µs (now the Elementalist in the Saddle) | `math::far_on_an_axis`: a body or a part further off on one axis than the blow's reach plus its own size cannot be touched, and saying so is three comparisons. Its slack is wider than any rounding in the exact test, so it never says no where that would have said yes. |
+| ...a square root in six steps, not twenty-four | **256 µs** | `Fx::sqrt` took twenty-four Newton steps from 2^24 for every input, and `math::isqrt` forty from 2^31 -- a division each. Started just above the root, five or six reach the same answer, except one short of a perfect square, where the long way rocks between two answers and where it stops depends on the count; those inputs still take it. Checked against the long way for all 2^31 inputs (`tests/sqrt.rs` keeps a sample). |
+
+Every class in every scenario is now under half the budget.
+
 ## Four fighters
 
 **`MAX_PLAYERS` is four** (2026-10-14). Every fight seats one to four, and the seats past

@@ -99,11 +99,36 @@ impl Fx {
     }
 
     /// Integer Newton-Raphson square root. Negative inputs return zero.
+    ///
+    /// **The answer is the one twenty-four steps from 2^24 always gave**
+    /// ([`Fx::sqrt_by_steps`]), found in the four to six steps a start just
+    /// above the root needs. Those steps settle on the root rounded down for
+    /// every input but one kind: one short of a perfect square, where they
+    /// rock between the root and one above it and where they stop depends on
+    /// how many steps were taken -- so that kind, one input in a few
+    /// thousand, still takes the long way. Checked against the long way for
+    /// every one of the 2^31 inputs (2026-10-16); a square root is in most
+    /// distances the simulation measures, and the long way was a sixth of
+    /// a crowded frame.
     pub const fn sqrt(self) -> Fx {
         if self.0 <= 0 {
             return Fx::ZERO;
         }
         // sqrt(x * 2^16) * 2^8 == sqrt(x) in 16.16 terms.
+        let n = (self.0 as i64) << FRAC_BITS;
+        let s = floor_sqrt(n as u64) as i64;
+        if (s + 1) * (s + 1) == n + 1 {
+            return self.sqrt_by_steps();
+        }
+        Fx(saturate(s))
+    }
+
+    /// The square root as it was always worked out: twenty-four Newton steps
+    /// from 2^24, whatever the input. What [`Fx::sqrt`] must agree with.
+    pub const fn sqrt_by_steps(self) -> Fx {
+        if self.0 <= 0 {
+            return Fx::ZERO;
+        }
         let n = (self.0 as i64) << FRAC_BITS;
         let mut guess: i64 = 1 << 24;
         let mut i = 0;
@@ -112,6 +137,23 @@ impl Fx {
             i += 1;
         }
         Fx(saturate(guess))
+    }
+}
+
+/// The square root of `n`, rounded down: Newton's steps from a power of two
+/// at or above the root, until they stop falling.
+pub const fn floor_sqrt(n: u64) -> u64 {
+    if n < 2 {
+        return n;
+    }
+    let bits = 64 - n.leading_zeros();
+    let mut x = 1u64 << bits.div_ceil(2);
+    loop {
+        let y = (x + n / x) >> 1;
+        if y >= x {
+            return x;
+        }
+        x = y;
     }
 }
 

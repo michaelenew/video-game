@@ -50,6 +50,7 @@ mod town;
 mod trophies;
 mod valley;
 mod veil;
+mod warm;
 mod wash;
 
 use bevy::input::mouse::MouseMotion;
@@ -177,10 +178,17 @@ fn main() {
     }
     platform::report_panics();
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(window()),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(window()),
+                    ..default()
+                })
+                .set(bevy::render::RenderPlugin {
+                    synchronous_pipeline_compilation: platform::flag("--sync-pipelines"),
+                    ..default()
+                }),
+        )
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
         .init_resource::<Sim>()
         .init_resource::<arenas::Drawn>()
@@ -211,6 +219,7 @@ fn main() {
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
         .add_plugins(paint::PaintPlugin)
+        .add_plugins(warm::WarmPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
         // `platform::draws_outlines`. Registering it anyway would not fail

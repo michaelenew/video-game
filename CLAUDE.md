@@ -230,6 +230,14 @@ timing budgets run at 5–40x the measured cost and will only catch a change of
 The full reasoning is [`docs/design/architecture.md`](docs/design/architecture.md)
 §"The frame budget".
 
+**A pipeline compiled mid-fight is a hitch.** The GPU compiles a pipeline the
+first frame something needs it, and in a browser and on macOS the frame waits:
+the game seizes the first time each effect, fade or new kind of box is seen.
+`game::warm` asks for every mesh-and-material combination as the mesh is made;
+a new material type goes on its list. Enforced by `crates/game/tests/warm.rs`;
+`--profile` prints every pipeline as it is asked for, and `--sync-pipelines`
+makes any machine wait for them the way a browser does.
+
 ## Feel is a set of properties, not a vibe
 
 `crates/sim/tests/feel.rs` holds the relationships that must survive tuning:
