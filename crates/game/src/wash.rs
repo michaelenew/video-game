@@ -87,6 +87,15 @@ pub fn surface_defs() -> Vec<ShaderDefVal> {
         milli("WASH_GRAIN", w.grain),
         milli("WASH_BROAD", w.broad),
         milli("WASH_BROAD_SIZE", w.broad_size),
+        // `--exact <m>`: the brush worked out at the pixel within so many
+        // metres and read off the sheets beyond; 0 is the sheets everywhere.
+        // Without it, the brush at the pixel everywhere: the painting.
+        milli(
+            "WASH_NEAR_EXACT",
+            crate::platform::value("--exact")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(-1.0),
+        ),
         milli("WASH_RICH", w.rich),
         milli("WASH_HOLLOW_R", w.hollow[0]),
         milli("WASH_HOLLOW_G", w.hollow[1]),
