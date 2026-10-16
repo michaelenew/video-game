@@ -430,3 +430,26 @@ fn an_edge_with_no_room_over_it_is_hung_from_and_not_climbed() {
     assert!(holding(&w));
     assert!(w.players[0].pos.x != x0, "did not go along");
 }
+
+#[test]
+fn neither_the_climb_nor_letting_go_is_drawn_as_landing_from_the_hang() {
+    // A long hang counts frames in the air; the climb is its own landing, and
+    // a let-go fall starts at the hang, so neither carries the hang's length
+    // into the landing clip (`view::play`'s heavy landing reads it).
+    let mut w = hanging();
+    press(&mut w, 0, SOUTH, 120);
+    while w.players[0].ledge.is_some() {
+        press(&mut w, Input::W, SOUTH, 1);
+    }
+    assert!(w.players[0].grounded);
+    assert!(
+        w.players[0].air_frames <= 1,
+        "climbed up with {} frames of flight",
+        w.players[0].air_frames
+    );
+    let mut w = hanging();
+    press(&mut w, 0, SOUTH, 120);
+    press(&mut w, Input::W, NORTH, 1);
+    assert!(!holding(&w));
+    assert!(w.players[0].air_frames <= 1, "{}", w.players[0].air_frames);
+}
