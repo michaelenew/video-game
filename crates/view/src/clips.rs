@@ -105,6 +105,10 @@ pub enum Length {
     /// clip of any other length would either be cut off or hold its last frame
     /// while the body kept travelling.
     ShadowFlight,
+    /// The climb up from a ledge: a simulation clock, `tuning::ledge_climb`,
+    /// and the body is carried along the climb's path frame by frame, so the
+    /// clip has to be exactly as long.
+    LedgeClimb,
 }
 
 clips! {
@@ -157,6 +161,14 @@ clips! {
         "Absorbing a short drop. Knees give a little and recover.";
     LandHeavy,       "land_heavy",      Air, "air", Length::Fixed(20), false,
         "Absorbing a real fall. Deep, with a hand down and a slow recovery.";
+
+    // -- On a ledge (2026-10-16, `sim::state::hang_on`) -----------------------
+    LedgeHang,       "ledge_hang",      Air, "ledge", Length::Fixed(90), true,
+        "Hanging by both hands from an edge, facing the wall. Still, heavy, the legs dangling -- held, not resting.";
+    LedgeShuffle,    "ledge_shuffle",   Air, "ledge", Length::Fixed(16), true,
+        "Hand over hand along the edge, moving to her right; played backwards to go left. The hands meet and part; the planted one stays on the edge.";
+    LedgeClimb,      "ledge_climb",     Air, "ledge", Length::LedgeClimb, false,
+        "The slow way up: a pull-up, a press to straight arms with a knee brought up on to the top, a crouch on the lip, and standing. As long as the climb is.";
 
     // -- Dodging -----------------------------------------------------------
     DodgeForward,    "dodge_forward",   Dodge, "dodge", Length::Dodge, false,
@@ -449,6 +461,7 @@ impl Clip {
             Length::Dodge => sim::tuning::dodge_frames().max(2),
             Length::AirDodge => sim::tuning::air_dodge_frames().max(2),
             Length::ShadowFlight => sim::tuning::shadow_send_frames().max(2),
+            Length::LedgeClimb => (sim::tuning::ledge_climb() as u16).max(2),
         }
     }
 
