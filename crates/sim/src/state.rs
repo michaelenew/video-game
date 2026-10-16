@@ -273,6 +273,136 @@ pub struct Rise {
     pub floor: Fx,
 }
 
+/// **A wall, as a fighter met it in the air**: a point on its face -- where
+/// the body's middle was, held a body's radius off it -- and which way it
+/// faces, level. Enough to push away from it and to tell whether the next
+/// wall is the same one (`Wall::same_as`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Wall {
+    pub at: V3,
+    /// Out of the wall, a unit vector; zero for no wall.
+    pub normal: V3,
+}
+
+impl Wall {
+    pub const NONE: Wall = Wall {
+        at: V3::ZERO,
+        normal: V3::ZERO,
+    };
+
+    pub fn is_some(self) -> bool {
+        self.normal != V3::ZERO
+    }
+
+    /// Is `other` this wall: facing the same way, within
+    /// `tuning::wall_same_turn`, and its face no further than
+    /// `tuning::wall_same_gap` from this one's? Measured across the face, so
+    /// anywhere along one long wall is the same wall.
+    pub fn same_as(self, other: Wall) -> bool {
+        if !self.is_some() || !other.is_some() {
+            return false;
+        }
+        let facing = self.normal.dot(other.normal);
+        let across = other.at.sub(self.at).dot(self.normal).abs();
+        facing.raw() >= t::wall_same_turn().raw() && across.raw() <= t::wall_same_gap().raw()
+    }
+}
+
+/// **Which way the stick points at a wall** (2026-10-16): the stick as it
+/// would walk you on the floor, by the camera, against the way the wall
+/// faces. See [`lean_against`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Lean {
+    /// Nothing pressed, or a stick that cancels itself out.
+    Still,
+    /// Within `tuning::wall_cone` of straight into the wall.
+    Into,
+    /// Within it of straight out of the wall, along its face's normal.
+    Away,
+    /// Anything between: along the wall, this way (a level unit vector on
+    /// its face).
+    Along(V3),
+}
+
+/// **Where the stick points, against a wall facing `normal`** (level, unit,
+/// out of the wall): into it, away from it or along it, with
+/// `tuning::wall_cone` either side of straight in and straight out. The one
+/// reading of the stick against a wall, for the wall slide and the ledge.
+pub fn lean_against(input: Input, normal: V3) -> Lean {
+    let (ax, az) = input.move_axis();
+    if ax == 0 && az == 0 || normal == V3::ZERO {
+        return Lean::Still;
+    }
+    let dir = move_dir(input.aim_turns(), ax, az);
+    let out = dir.x.mul(normal.x).add(dir.z.mul(normal.z));
+    let cone = t::wall_cone();
+    if out.raw() >= cone.raw() {
+        Lean::Away
+    } else if out.neg().raw() >= cone.raw() {
+        Lean::Into
+    } else {
+        // Along the face: the stick less its part out of it, which is never
+        // zero here -- a stick inside neither cone is not along the normal.
+        let along = V3::new(
+            dir.x.sub(normal.x.mul(out)),
+            Fx::ZERO,
+            dir.z.sub(normal.z.mul(out)),
+        );
+        Lean::Along(along.normalized())
+    }
+}
+
+/// **The ledge a fighter is holding** (2026-10-16): which edge, and how far
+/// into holding it. [`Ledge::NONE`] when it holds none. See [`hang_on`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Ledge {
+    /// The edge held: where the hands are, and which way its face looks.
+    pub edge: crate::arena::Edge,
+    /// Where the body was when it caught the edge: the catch settles it from
+    /// here into the hang.
+    pub from: V3,
+    pub grip: Grip,
+    /// Frames into the grip.
+    pub clock: u8,
+    /// Frames since the catch, whatever the grip.
+    pub since: u8,
+    /// Set once the stick has been anywhere but into the wall since the
+    /// catch. **Into the wall is both "catch it" and "climb it"**, so a stick
+    /// held into the wall through the catch climbs only once
+    /// `tuning::ledge_hold_on` has run -- time to decide to hang -- while
+    /// one let go and pressed in again climbs at once.
+    pub fresh: bool,
+}
+
+/// How a fighter is holding a ledge.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Grip {
+    /// Settling into the hang, from wherever the catch found the body.
+    Catch,
+    /// Hanging: still, or hand over hand along the edge.
+    Hang,
+    /// Climbing up onto the top.
+    Climb,
+}
+
+impl Ledge {
+    pub const NONE: Ledge = Ledge {
+        edge: crate::arena::Edge {
+            at: V3::ZERO,
+            normal: V3::ZERO,
+        },
+        from: V3::ZERO,
+        grip: Grip::Hang,
+        clock: 0,
+        since: 0,
+        fresh: false,
+    };
+
+    pub fn is_some(self) -> bool {
+        self.edge.normal != V3::ZERO
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Player {
     pub pos: V3,
@@ -339,6 +469,35 @@ pub struct Player {
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
     /// burst of horizontal speed with invulnerability attached.
     pub air_dodged: bool,
+    /// The last wall this fighter's body was against in the air.
+    ///
+    /// Frames since are [`Player::wall_since`]; the slide and the wall jump
+    /// read both. See [`cling_to_the_wall`].
+    pub wall: Wall,
+    /// Frames since the resolve last held this fighter off a wall in the air:
+    /// zero while against one, `u8::MAX` on the floor or never.
+    pub wall_since: u8,
+    /// The wall the last wall jump left, this airtime, and where the body was
+    /// when it jumped; or [`Wall::NONE`].
+    ///
+    /// **Off the same wall again only from lower down**
+    /// (`tuning::wall_jump_drop`). Without it a wall jump, an air-steer back
+    /// with an aerial's hang to buy the time, and another wall jump is a
+    /// ladder. Cleared on landing.
+    pub wall_jumped: Wall,
+    /// How many wall jumps this airtime, for `tuning::wall_jump_falloff`.
+    /// Reset on landing.
+    pub wall_jumps: u8,
+    /// **On a wall slide**, as the stick last left it (`keep_sliding`):
+    /// started by pushing into the wall, ended by pushing away from it.
+    pub sliding: bool,
+    /// Frames before the slide may start or end again
+    /// (`tuning::wall_slide_flip`).
+    pub slide_flip: u8,
+    /// The ledge this fighter is holding, or [`Ledge::NONE`]. See [`hang_on`].
+    pub ledge: Ledge,
+    /// Frames before a ledge can be caught again (`tuning::ledge_regrab`).
+    pub ledge_regrab: u8,
     /// True once the current active window has connected, so a move hits once.
     pub hit_used: bool,
     pub class: Class,
@@ -1312,6 +1471,14 @@ impl Default for Player {
             haul_speed: Fx::ZERO,
             air_stalls: 0,
             air_dodged: false,
+            wall: Wall::NONE,
+            wall_since: u8::MAX,
+            wall_jumped: Wall::NONE,
+            wall_jumps: 0,
+            sliding: false,
+            slide_flip: 0,
+            ledge: Ledge::NONE,
+            ledge_regrab: 0,
             hit_used: false,
             repeat_lock: [0; moves::LOCKED_SLOTS],
             reactivate_lock: [0; moves::LOCKED_SLOTS],
@@ -5837,6 +6004,23 @@ fn step_player(
     // Before anything moves the body, so the frame the feet land on still
     // sees the fall that got them there.
     bulwark::track_fall(p);
+    // **The wall, as the last resolve left it** (`cling_to_the_wall`), read
+    // before anything moves and then aged a frame: the resolve below puts it
+    // back to zero if the body is still against one. Aged up here, above the
+    // rider's early returns, so a wall touched before mounting is not a wall
+    // the dismount can jump off.
+    if p.footed() {
+        p.wall_since = u8::MAX;
+        p.wall_jumped = Wall::NONE;
+        p.wall_jumps = 0;
+        p.sliding = false;
+        p.slide_flip = 0;
+        p.ledge_regrab = 0;
+    }
+    p.ledge_regrab = p.ledge_regrab.saturating_sub(1);
+    let on_wall = p.wall_since == 0;
+    let near_wall = p.wall_since <= t::wall_jump_grace();
+    p.wall_since = p.wall_since.saturating_add(1);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     // **The dead do not ride.** A fighter killed on its back falls off it,
@@ -5926,6 +6110,22 @@ fn step_player(
     p.side_b_held = input.has(Input::SIDE_B);
     let pressed_earth = input.has(moves::elementalist::keys::EARTH) && !p.earth_held;
     p.earth_held = input.has(moves::elementalist::keys::EARTH);
+
+    // **Holding a ledge is a tick of its own** (`hang_on`), like riding the
+    // creature: no gravity, no resolve, no moves -- the stick climbs, lets go
+    // or goes hand over hand. Below the press edges, so a button held through
+    // the hang is not pressed again on the frame it ends. **A blow takes the
+    // hands off it** (`apply_hit` has already set the stun and the shove), and
+    // so does dying.
+    if p.ledge.is_some() {
+        if p.action.actionable() && p.health > 0 {
+            step_mechanic(p, scene.arena);
+            hang_on(p, input, scene.arena);
+            return;
+        }
+        p.ledge = Ledge::NONE;
+        p.ledge_regrab = t::ledge_regrab();
+    }
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -6455,6 +6655,15 @@ fn step_player(
         p.vel.z = Fx::ZERO;
     }
 
+    // **Sliding down a wall** (`cling_to_the_wall`): against one last frame,
+    // not rising, and nobody else's -- a fighter knocked into a wall or
+    // spiked past one is being thrown, and a throw is not slowed by the wall
+    // it goes past. Held to it, unless steering away from it.
+    let sliding = keep_sliding(p, on_wall, input);
+    if sliding {
+        hold_to_the_wall(p, input);
+    }
+
     // Space is a vertical takeoff, whatever your feet are doing. Holding a
     // direction while jumping carries your momentum up with you; it does not
     // turn the jump into something else.
@@ -6478,7 +6687,25 @@ fn step_player(
     // **Before the ordinary takeoff**, which clears `grounded` on the frame
     // it fires: read after it, the press that left the floor would look like a
     // press in the air and spend the second jump on the first.
-    if pressed_space && !p.grounded && p.action.actionable() && dual::may_beat_wings(p) {
+    // **The wall jump**, ahead of the second jump for the same reason the
+    // second jump is ahead of the takeoff: one press, one jump. Against a
+    // wall, or a few frames off one, a press is a jump off it rather than
+    // the class's own thing in the air. See `cling_to_the_wall`.
+    let wall_jump = pressed_space
+        && !p.grounded
+        && near_wall
+        && !carrying
+        && p.action.actionable()
+        && may_wall_jump(p);
+    if wall_jump {
+        jump_off_the_wall(p, mob.jump);
+    }
+    if pressed_space
+        && !wall_jump
+        && !p.grounded
+        && p.action.actionable()
+        && dual::may_beat_wings(p)
+    {
         p.vel.y = t::jump_speed().mul(mob.jump).mul(t::second_jump());
         p.jump_hold = 0;
         dual::spend_wing_beat(p);
@@ -6610,9 +6837,15 @@ fn step_player(
             if sustaining {
                 gravity = gravity.mul(t::jump_hold_gravity());
             }
+            if sliding {
+                gravity = gravity.mul(t::wall_slide_gravity());
+            }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
             // Slower at the Dual mage's second tier; one for everybody else.
             let mut floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
+            if sliding {
+                floor = floor.mul(t::wall_slide_fall());
+            }
             // **Sail** (2026-10-10): the Bulwark's guard held in the air is a
             // sail, and he falls no faster than it lets him.
             if p.class == Class::Bulwark && p.action.guarding() {
@@ -6656,10 +6889,12 @@ fn step_player(
     let impact = p.vel.y;
     let was_grounded = p.grounded;
     let r = scene.arena.resolve(p.pos, p.vel, was_grounded);
+    let wall_normal = r.wall_normal;
     let r = stones::resolve_body(field, r.pos, r.vel, r.grounded, was_grounded);
     p.pos = r.pos;
     p.vel = r.vel;
     p.grounded = r.grounded;
+    cling_to_the_wall(p, wall_normal, scene.arena);
     // Every creature there is, in slot order, until one of them has you.
     for (slot, beast) in herd.iter().enumerate() {
         if let Some(beast) = beast {
@@ -6672,6 +6907,9 @@ fn step_player(
     // And any back a critter offers (`CritterKind::mountable`).
     if !p.aboard() {
         meet_the_critters(p, scene.critters);
+    }
+    if !p.aboard() {
+        catch_a_ledge(p, input, scene.arena);
     }
     if p.grounded {
         // Driven into the floor. The hit that spiked them did its damage in
@@ -6726,6 +6964,368 @@ fn step_player(
         p.leap_used = false;
         dual::feet_down(p);
     }
+}
+
+/// **The wall slide and the wall jump** (2026-10-16): what a body against the
+/// side of a solid in the air gets from it, and the record of which wall.
+///
+/// ```text
+///   against a wall, falling   the slide: gravity and terminal velocity a
+///                             little lower (`wall_slide_gravity`,
+///                             `wall_slide_fall`), held to the wall at
+///                             `wall_stick` unless steering away, for as far
+///                             as the wall goes. Footing for the fall rule:
+///                             a fall is measured from where it let go.
+///   space, on one or just off  the wall jump: `wall_jump_rise` of a takeoff
+///                             straight up, `wall_jump_push` away from it.
+///                             Off the same wall again only from
+///                             `wall_jump_drop` below the last, and each one
+///                             in an airtime worth `wall_jump_falloff` of
+///                             the one before.
+/// ```
+///
+/// **A wall is reached, not given.** The slide is a partial recovery -- some
+/// control back, and the fall's height reset to where you let go, so a wall
+/// slid all the way down costs nothing to land from -- and it is only a
+/// little slower than falling, so a wall is never a perch. The jump does not
+/// give back the airdodge, the jump attack or anything else an airtime
+/// spends: it is height and a direction, and nothing more.
+///
+/// **Why there is no ladder.** Two rules, because one is not enough. Off the
+/// same wall again only from `wall_jump_drop` below where the last jump off
+/// it left (`Wall::same_as`, a face rather than a box) answers jumping off a
+/// wall, steering back with an aerial's hang and jumping off it again: every
+/// return leaves from lower down, so the climb runs downhill. It does not
+/// answer an inside corner, which is two walls a step apart; the falloff
+/// does, because the heights it allows add up to a bounded sum however many
+/// walls there are. (Until 2026-10-16 the same wall was refused outright;
+/// the owner asked for a drop instead, so a wall can be used again on the
+/// way down.)
+///
+/// Called after the resolve with the wall it reported, if it reported one.
+fn cling_to_the_wall(p: &mut Player, normal: V3, ground: &Terrain) {
+    if p.grounded || p.aboard() || normal == V3::ZERO {
+        return;
+    }
+    p.wall = Wall { at: p.pos, normal };
+    p.wall_since = 0;
+    if p.sliding && slides(p) {
+        p.fall_over = p.pos.y.sub(t::fall_free()).max(ground.lowest());
+    }
+}
+
+/// Is this body one a wall slows: not rising, and not being thrown -- in a
+/// stun, or spiked toward the floor.
+fn slides(p: &Player) -> bool {
+    p.vel.y.raw() <= 0 && !p.action.stunned() && p.slam.raw() <= 0
+}
+
+/// **On the slide or off it, by the stick** (2026-10-16): pushing into the
+/// wall a body is falling beside starts a slide, pushing away from it ends
+/// one, and anything else keeps whichever it is -- nothing pressed hangs on to
+/// the slide, as it hangs on to a ledge. Neither change comes faster than
+/// `tuning::wall_slide_flip` after the last (see there for why). A wall gone,
+/// a rise, a throw or the floor ends a slide outright, with no debounce: that
+/// is the world deciding, not the stick.
+fn keep_sliding(p: &mut Player, on_wall: bool, input: Input) -> bool {
+    p.slide_flip = p.slide_flip.saturating_sub(1);
+    if p.grounded || !on_wall || !slides(p) {
+        p.sliding = false;
+        return false;
+    }
+    if p.slide_flip == 0 {
+        let want = match lean_against(input, p.wall.normal) {
+            Lean::Into => true,
+            Lean::Away => false,
+            Lean::Still | Lean::Along(_) => p.sliding,
+        };
+        if want != p.sliding {
+            p.sliding = want;
+            p.slide_flip = t::wall_slide_flip();
+        }
+    }
+    p.sliding
+}
+
+/// Hold a sliding body to its wall: its speed into the wall becomes
+/// `tuning::wall_stick`, and along it the stick steers a little
+/// (`tuning::wall_slide_steer`, arrived at by `wall_slide_grip` a frame), so
+/// whatever it carried on to the wall bleeds away. Into the wall does nothing
+/// more than hold it; away from it, until the slide ends (`keep_sliding`),
+/// holds it too.
+fn hold_to_the_wall(p: &mut Player, input: Input) {
+    let n = p.wall.normal;
+    let across = V3::new(n.z.neg(), Fx::ZERO, n.x);
+    let along = p.vel.x.mul(across.x).add(p.vel.z.mul(across.z));
+    let want = match lean_against(input, n) {
+        Lean::Along(dir) => dir.dot(across).mul(t::wall_slide_steer()),
+        _ => Fx::ZERO,
+    };
+    let along = along.add(want.sub(along).mul(t::wall_slide_grip()));
+    let into = t::wall_stick().neg();
+    p.vel.x = across.x.mul(along).add(n.x.mul(into));
+    p.vel.z = across.z.mul(along).add(n.z.mul(into));
+}
+
+/// **Catching a ledge** (2026-10-16): the forgiving way up. One rule, asked
+/// every frame in the air, whether the body walked off the edge, jumped short
+/// of it or fell past it -- the owner's, word for word in its parts:
+///
+/// ```text
+///   fully off the edge     no part of the body over the top: its middle at
+///                          least its radius out from the rim, and no more
+///                          than `ledge_reach` past that
+///   not leaving fast       moving away from the face no faster than
+///                          `ledge_away` (toward it, any speed)
+///   at the hands           the top between `ledge_reach_low` and
+///                          `ledge_reach_high` over the feet: about the
+///                          shoulder to the reach of the arms overhead
+///   not pushing away       the stick into the wall, along it or let go;
+///                          away from it is a body that means to go
+/// ```
+///
+/// And only for a body free to act and not rising -- an edge passed on the
+/// way up is one a jump is clearing -- and not within `tuning::ledge_regrab`
+/// of letting go of one. Only an edge [`Terrain::ledge_near`] says a body fits
+/// beside, hanging; whether it can be climbed is asked when the climb is.
+fn catch_a_ledge(p: &mut Player, input: Input, ground: &Terrain) {
+    if p.ledge.is_some()
+        || p.grounded
+        || p.aboard()
+        || p.ledge_regrab > 0
+        || !p.action.actionable()
+        || p.health <= 0
+        || p.vel.y.raw() > 0
+        || p.slam.raw() > 0
+    {
+        return;
+    }
+    let Some(edge) = ground
+        .ledge_near(
+            p.pos,
+            t::ledge_reach_low(),
+            t::ledge_reach_high(),
+            t::ledge_reach(),
+            t::ledge_depth(),
+        )
+        .filter(|e| lean_against(input, e.normal) != Lean::Away)
+        .filter(|e| {
+            let away = p.vel.x.mul(e.normal.x).add(p.vel.z.mul(e.normal.z));
+            away.raw() <= t::ledge_away().raw()
+        })
+    else {
+        return;
+    };
+    p.ledge = Ledge {
+        edge,
+        from: p.pos,
+        grip: Grip::Catch,
+        clock: 0,
+        since: 0,
+        fresh: false,
+    };
+    p.vel = V3::ZERO;
+    p.sliding = false;
+    p.jump_hold = 0;
+    p.air_stall = 0;
+}
+
+/// **Hanging from a ledge, a frame on** (2026-10-16). Gravity is off and the
+/// body is held where the edge says (`Edge::hang`), facing the wall; the hang
+/// is footing for the fall rule, as a vine is.
+///
+/// ```text
+///   catching        settled into the hang over `ledge_catch` frames; the
+///                   stick does nothing yet
+///   nothing         hangs
+///   into the wall   climbs up: `ledge_climb` frames, unable to act -- slow,
+///                   because the ledge is the forgiving way up and a landed
+///                   jump the quick one. Held in since the catch, only once
+///                   `ledge_hold_on` has run; pressed in afresh, at once (see
+///                   `Ledge::fresh`). Only where there is room on the top
+///                   (`Terrain::room_on_top`); under a roof, nothing
+///   away from it    lets go into a fall, free to act on the next frame --
+///                   quick, the other side of the trade
+///   crouch          lets go into a wall slide down the face
+///   along it        hand over hand along the edge, for as far as it holds a
+///                   body
+/// ```
+///
+/// Into, away and along are `lean_against`'s three envelopes: the stick as it
+/// would walk you, by the camera, against the face.
+fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
+    let n = p.ledge.edge.normal;
+    let depth = t::ledge_depth();
+    p.vel = V3::ZERO;
+    p.grounded = false;
+    p.crouching = false;
+    p.jump_hold = 0;
+    p.air_stall = 0;
+    p.facing = V3::new(n.x.neg(), Fx::ZERO, n.z.neg());
+    let lean = lean_against(input, n);
+    if lean != Lean::Into {
+        p.ledge.fresh = true;
+    }
+    p.ledge.clock = p.ledge.clock.saturating_add(1);
+    p.ledge.since = p.ledge.since.saturating_add(1);
+    let clock = p.ledge.clock;
+    match p.ledge.grip {
+        Grip::Catch => {
+            let total = t::ledge_catch();
+            let hang = p.ledge.edge.hang(depth);
+            p.pos = toward(p.ledge.from, hang, clock, total);
+            if clock >= total {
+                p.ledge.grip = Grip::Hang;
+                p.ledge.clock = 0;
+            }
+        }
+        Grip::Hang => {
+            if input.has(Input::CROUCH) {
+                return let_go_of_the_ledge(p, true, ground);
+            }
+            match lean {
+                // Only where there is a top to stand on, with room: under a
+                // roof, into the wall is as nothing.
+                Lean::Into
+                    if (p.ledge.fresh || p.ledge.since >= t::ledge_hold_on())
+                        && ground.room_on_top(p.ledge.edge) =>
+                {
+                    p.ledge.grip = Grip::Climb;
+                    p.ledge.clock = 0;
+                }
+                Lean::Away => return let_go_of_the_ledge(p, false, ground),
+                Lean::Along(dir) => {
+                    let probe = p
+                        .ledge
+                        .edge
+                        .hang(depth)
+                        .add(dir.scale(t::ledge_shuffle().mul(DT)));
+                    // The same top, a hand further along: the edge found
+                    // from there, with a little slack for the step and for
+                    // going round an outside corner.
+                    let skin = crate::arena::SKIN;
+                    let slack = skin.add(skin).add(t::ledge_reach());
+                    if let Some(next) =
+                        ground.ledge_near(probe, depth.sub(skin), depth.add(skin), slack, depth)
+                    {
+                        p.ledge.edge = next;
+                    }
+                }
+                Lean::Into | Lean::Still => {}
+            }
+            p.pos = p.ledge.edge.hang(depth);
+        }
+        Grip::Climb => {
+            // Up the face to the top, then over it on to the top.
+            let total = t::ledge_climb();
+            let rising = (Fx::from_int(total as i32)
+                .mul(t::ledge_climb_rise())
+                .to_int() as u8)
+                .clamp(1, total);
+            let hang = p.ledge.edge.hang(depth);
+            let lip = V3::new(hang.x, p.ledge.edge.at.y, hang.z);
+            let stand = p.ledge.edge.stand();
+            p.pos = if clock <= rising {
+                toward(hang, lip, clock, rising)
+            } else {
+                toward(
+                    lip,
+                    stand,
+                    clock - rising,
+                    total.saturating_sub(rising).max(1),
+                )
+            };
+            if clock >= total {
+                p.pos = stand;
+                p.grounded = true;
+                p.ledge = Ledge::NONE;
+                // The climb is its own landing: no flight to land from, or
+                // a long hang would be drawn arriving like a long fall.
+                p.air_frames = 0;
+            }
+        }
+    }
+    p.fall_over = p.pos.y.sub(t::fall_free()).max(ground.lowest());
+}
+
+/// `clock` frames of `total` of the way from `from` to `to`, in a straight
+/// line.
+fn toward(from: V3, to: V3, clock: u8, total: u8) -> V3 {
+    let k = Fx::ratio(clock.min(total) as i32, total.max(1) as i32);
+    from.add(to.sub(from).scale(k))
+}
+
+/// **Letting go of a ledge**: from the hang, into a fall pushed a little off
+/// the face (`tuning::ledge_let_go`), or -- `into_a_slide` -- against the face
+/// on a wall slide. Free to act from the next frame either way, and no ledge
+/// caught again for `tuning::ledge_regrab`, nor the slide changed for
+/// `wall_slide_flip`.
+fn let_go_of_the_ledge(p: &mut Player, into_a_slide: bool, ground: &Terrain) {
+    let edge = p.ledge.edge;
+    let n = edge.normal;
+    let hang = edge.hang(t::ledge_depth());
+    p.ledge = Ledge::NONE;
+    p.ledge_regrab = t::ledge_regrab();
+    p.slide_flip = t::wall_slide_flip();
+    // The fall starts here: the hang was not flight, and a landing drawn
+    // from the length of the hang would be a heavy one after a short drop.
+    p.air_frames = 0;
+    p.fall_over = hang.y.sub(t::fall_free()).max(ground.lowest());
+    if into_a_slide {
+        // Against the face, so the hold into it meets it next frame.
+        let r = t::body_radius();
+        p.pos = V3::new(edge.at.x.add(n.x.mul(r)), hang.y, edge.at.z.add(n.z.mul(r)));
+        p.vel = V3::ZERO;
+        p.sliding = true;
+        p.wall = Wall {
+            at: p.pos,
+            normal: n,
+        };
+        p.wall_since = 0;
+    } else {
+        p.pos = hang;
+        p.vel = n.scale(t::ledge_let_go());
+        p.sliding = false;
+        // A drop, not a kick off the wall: no wall jump's grace.
+        p.wall_since = u8::MAX;
+    }
+}
+
+/// May this fighter jump off the wall it was last against: any wall but the
+/// one the last wall jump left, and that one from `tuning::wall_jump_drop`
+/// below where it jumped.
+fn may_wall_jump(p: &Player) -> bool {
+    if !p.wall.is_some() {
+        return false;
+    }
+    if !p.wall.same_as(p.wall_jumped) {
+        return true;
+    }
+    let lowest = p.wall_jumped.at.y.sub(t::wall_jump_drop());
+    p.pos.y.raw() <= lowest.raw()
+}
+
+/// **Jump off the wall**: a fresh rise, never less than the body already
+/// has, and a push away from the face, keeping the speed along it. `jump` is
+/// the class's takeoff multiplier.
+fn jump_off_the_wall(p: &mut Player, jump: Fx) {
+    let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
+    for _ in 0..p.wall_jumps {
+        rise = rise.mul(t::wall_jump_falloff());
+    }
+    p.vel.y = p.vel.y.max(rise);
+    let n = p.wall.normal;
+    let away = p.vel.x.mul(n.x).add(p.vel.z.mul(n.z));
+    let off = t::wall_jump_push().sub(away.min(Fx::ZERO));
+    p.vel.x = p.vel.x.add(n.x.mul(off));
+    p.vel.z = p.vel.z.add(n.z.mul(off));
+    p.jump_hold = 0;
+    p.wall_jumped = Wall {
+        at: p.pos,
+        normal: p.wall.normal,
+    };
+    p.wall_jumps = p.wall_jumps.saturating_add(1);
+    p.wall_since = u8::MAX;
 }
 
 /// Which move a click asks for, if any.
@@ -10012,6 +10612,32 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     hash_v3(h, &p.haul_to);
     h.write_i32(p.haul_speed.raw());
     h.write_u32(p.air_stalls as u32);
+    // Only once a wall has been touched: a fight that never meets one
+    // hashes as it did before there were wall jumps.
+    if p.wall.is_some() || p.wall_jumped.is_some() || p.wall_jumps != 0 {
+        h.write_u32(0x3A11);
+        hash_v3(h, &p.wall.at);
+        hash_v3(h, &p.wall.normal);
+        h.write_u32(p.wall_since as u32);
+        hash_v3(h, &p.wall_jumped.at);
+        hash_v3(h, &p.wall_jumped.normal);
+        h.write_u32(p.wall_jumps as u32);
+    }
+    // The same for the slide's state and a ledge: a fight that never slides
+    // or hangs hashes as it did before either existed.
+    if p.sliding || p.slide_flip != 0 || p.ledge.is_some() || p.ledge_regrab != 0 {
+        h.write_u32(0x1ED6);
+        h.write_u32(p.sliding as u32);
+        h.write_u32(p.slide_flip as u32);
+        hash_v3(h, &p.ledge.edge.at);
+        hash_v3(h, &p.ledge.edge.normal);
+        hash_v3(h, &p.ledge.from);
+        h.write_u32(p.ledge.grip as u32);
+        h.write_u32(p.ledge.clock as u32);
+        h.write_u32(p.ledge.since as u32);
+        h.write_u32(p.ledge.fresh as u32);
+        h.write_u32(p.ledge_regrab as u32);
+    }
     h.write_u32(p.hit_used as u32);
     h.write_u32(p.crouching as u32);
     h.write_u32(p.stride as u32);

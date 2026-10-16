@@ -1287,8 +1287,12 @@ pub fn solids(tree: &Tree, out: &mut Vec<Solid>) {
                 ));
             }
         } else {
-            // Gentle: boards, each a step up from the last at most.
-            let pieces = (rise / 40).max(run / 900).clamp(1, 8);
+            // Gentle: boards, each under a step up from the last. The limb
+            // is drawn smooth, so a riser between two boards is a lip nobody
+            // can see: rounded up, and never capped short of it -- capped at
+            // eight, a long limb's risers came to over half a metre and
+            // stopped a walk along it dead (2026-10-16).
+            let pieces = ((rise + 35) / 36).max(run / 900).clamp(1, 14);
             let yaw =
                 crate::math::atan2_turns(Fx::from_int(d[2] as i32), Fx::from_int(d[0] as i32));
             for k in 0..pieces {

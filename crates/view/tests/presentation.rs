@@ -764,6 +764,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         round_left: None,
         sim_frame: frame,
         shudder: 0.0,
+        ledge: None,
         bind_pose: false,
     }
 }
@@ -1528,5 +1529,52 @@ fn a_struck_body_shudders_through_the_freeze_and_the_striker_does_not() {
     assert!(
         shook.windows(2).all(|p| p[0] * p[1] < 0.0),
         "the shudder does not alternate: {shook:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// On a ledge (2026-10-16)
+// ---------------------------------------------------------------------------
+
+fn on_a_ledge(grip: sim::state::Grip, clock: u8, since: u8, along: f32) -> PoseInput {
+    PoseInput {
+        grounded: false,
+        ledge: Some(view::interp::Hold {
+            grip,
+            clock,
+            since,
+            along,
+        }),
+        ..input_at(Action::Free, 0.0, 40)
+    }
+}
+
+#[test]
+fn a_body_on_a_ledge_hangs_shuffles_and_climbs_rather_than_falls() {
+    use sim::state::Grip;
+    use view::clips::Clip;
+    let hang = pose_for(on_a_ledge(Grip::Hang, 30, 30, 0.0));
+    assert_eq!(hang.channels, Clip::LedgeHang.at(30).channels);
+    // The catch's settle is the hang too.
+    let catch = pose_for(on_a_ledge(Grip::Catch, 3, 3, 0.0));
+    assert_eq!(catch.channels, Clip::LedgeHang.at(3).channels);
+    // Along the wall to her right plays the shuffle forward, to her left
+    // backward.
+    let right = pose_for(on_a_ledge(Grip::Hang, 30, 3, 1.5));
+    assert_eq!(right.channels, Clip::LedgeShuffle.at(3).channels);
+    let left = pose_for(on_a_ledge(Grip::Hang, 30, 3, -1.5));
+    let len = Clip::LedgeShuffle.length() as u32;
+    assert_eq!(left.channels, Clip::LedgeShuffle.at(len - 3).channels);
+    // The climb is on the simulation's clock, which counts from one.
+    let climb = pose_for(on_a_ledge(Grip::Climb, 10, 60, 0.0));
+    assert_eq!(climb.channels, Clip::LedgeClimb.at(9).channels);
+    assert_ne!(climb.channels, Clip::JumpFall.at(0).channels);
+}
+
+#[test]
+fn the_climb_is_as_long_as_the_simulation_says() {
+    assert_eq!(
+        view::clips::Clip::LedgeClimb.length(),
+        sim::tuning::ledge_climb() as u16
     );
 }

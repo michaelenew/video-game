@@ -688,6 +688,7 @@ fn hop_at(
         pl.facing = d;
         pl.fall_over = pl.pos.y;
         pl.health = 1000;
+        pl.ledge = sim::state::Ledge::NONE;
         let mut jumped = false;
         let mut took_off = 0;
         let mut landed = None;
@@ -718,6 +719,19 @@ fn hop_at(
                 } else {
                     0
                 };
+            // A hop that falls short and catches the limb's edge climbs it:
+            // the stick into the face, and up.
+            let edge = pl.ledge.edge.at;
+            let on_to = to.max.y.sub(edge.y).abs().raw() <= Fx::ratio(1, 10).raw();
+            let (bits, aim) = if pl.ledge.is_some() && on_to {
+                let n = pl.ledge.edge.normal;
+                (
+                    Input::W,
+                    sim::math::atan2_turns(n.z.neg(), n.x.neg()).raw() as u16,
+                )
+            } else {
+                (bits, aim)
+            };
             w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
             let pl = &w.players[0];
             if jumped && f > 12 && pl.grounded {
@@ -910,4 +924,101 @@ fn every_broadleaf_has_a_roof_its_liana_climbs_to() {
             w.players[0].pos
         );
     }
+}
+
+/// **A limb is walked along, not stopped on** (2026-10-16, from play: "the
+/// player just gets stuck on a small lip ... where a branch forks"). A limb
+/// is drawn smooth and stood on as a stair of boards, so a riser between two
+/// of them is a lip nobody can see. Walked along every limb of the Great
+/// Tree, both ways, a body may be stopped by the trunk, by a buttress, by
+/// something taller than a knee, or by a limb so close overhead that there
+/// is no room to stand up on the next board -- never by a board of the limb
+/// itself that comes up no higher than a knee.
+#[test]
+fn a_limb_is_walked_along_without_stopping_on_a_lip() {
+    let atlas = sim::atlas::valley();
+    let tree = &atlas.trees[0];
+    let mut boards = Vec::new();
+    trees::solids(tree, &mut boards);
+    let base = World::arrive(
+        [Class::Champion, Class::Bulwark],
+        open_journey(),
+        ArenaId::WOOD,
+        Some(0),
+        1,
+    );
+    let o = base.map_origin();
+    let radius = sim::tuning::body_radius();
+    let height = sim::tuning::body_height();
+    let knee = Fx::ratio(6, 10);
+    let limb = |s: &Solid| matches!(s.shape, Shape::Turned { half, half_wide, .. } if half.raw() >= half_wide.raw());
+    let mut stopped = Vec::new();
+    for s in boards.iter().filter(|s| limb(s)) {
+        let Shape::Turned { half, cos, sin, .. } = s.shape else {
+            unreachable!()
+        };
+        let (mx, mz) = s.middle();
+        for way in [Fx::ONE, Fx::ONE.neg()] {
+            let d = V3::new(cos.mul(way), Fx::ZERO, sin.mul(way));
+            let back = half.mul(Fx::ratio(6, 10));
+            let start = V3::new(mx.sub(d.x.mul(back)), s.max.y, mz.sub(d.z.mul(back))).sub(o);
+            let mut w = base.clone();
+            let pl = &mut w.players[0];
+            pl.pos = start;
+            pl.vel = V3::ZERO;
+            pl.grounded = true;
+            pl.fall_over = start.y;
+            pl.health = 1000;
+            w.players[1].pos = start.add(V3::new(Fx::from_int(60), Fx::ZERO, Fx::ZERO));
+            let aim = sim::math::atan2_turns(d.z, d.x).raw() as u16;
+            for f in 0..40 {
+                let was = w.players[0].pos;
+                w.advance([Input::looking_at(Input::W, aim, 0), Input::new(0)]);
+                let p = w.players[0];
+                if !p.grounded && f > 5 {
+                    break;
+                }
+                let moved = p.pos.sub(was).flat_len();
+                let stride = sim::tuning::move_speed().mul(sim::DT);
+                if f <= 12 || !p.grounded || moved.raw() >= stride.mul(Fx::ratio(3, 10)).raw() {
+                    continue;
+                }
+                // Stopped. By what?
+                let ground = w.terrain();
+                let ahead = p.pos.add(d.scale(Fx::ratio(1, 10)));
+                let (feet, head) = (p.pos.y, p.pos.y.add(height));
+                let lips: Vec<Solid> = ground
+                    .around(ahead, Fx::ONE)
+                    .filter(|b| {
+                        b.max.y.raw() > feet.add(Fx::ratio(1, 100)).raw()
+                            && b.min.y.raw() < head.raw()
+                            && b.side_push(ahead.x, ahead.z, radius, feet, head).is_some()
+                    })
+                    .collect();
+                let low = lips
+                    .iter()
+                    .all(|b| limb(b) && b.max.y.sub(feet).raw() <= knee.raw());
+                let room = |top: Fx| {
+                    !ground
+                        .around(V3::new(p.pos.x, top, p.pos.z), radius)
+                        .any(|c| {
+                            let (lo, hi) = (top.add(Fx::ratio(1, 32)), top.add(height));
+                            c.min.y.raw() < hi.raw()
+                                && c.max.y.raw() > lo.raw()
+                                && c.side_push(p.pos.x, p.pos.z, radius, lo, hi).is_some()
+                        })
+                };
+                if !lips.is_empty() && low && lips.iter().all(|b| room(b.max.y)) {
+                    let rise = lips.iter().map(|b| b.max.y.sub(feet).raw()).max().unwrap();
+                    stopped.push(format!(
+                        "at {:?}: a lip {} cm high",
+                        p.pos.add(o),
+                        rise * 100 / Fx::ONE.raw()
+                    ));
+                }
+                break;
+            }
+        }
+    }
+    assert!(stopped.is_empty(), "{}", stopped.join("\n"));
 }

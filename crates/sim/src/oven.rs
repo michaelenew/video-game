@@ -1019,12 +1019,59 @@ scalars! {
     // into a tiny little lip completely stops the character"). A grounded
     // body walked into a box whose top is no further above its feet than
     // this is put on top of it rather than stopped by it -- a kerb, a snow
-    // cap on a rock, the lip of a seam in the land. Above it, a jump.
+    // cap on a rock, the lip of a seam in the land. Above it, a jump. A knee
+    // high, 0.5 m, since 2026-10-16: a limb's boards met one at 0.45 m.
     StepOver,             "Movement", "Step, walked up onto (m)",                         Fixed, 0, fx(1,1);
     // **Four fighters** (2026-10-14). Every arena, seam and hunt names two
     // marks; the third and fourth fighters stand beside the first and second,
     // this far to the side away from the other mark (`arena::Mark::seat`).
     SeatFlank,            "Match",    "Third and fourth fighters, beside a mark (m)",       Fixed, 0, fx(6,1);
+    // **The wall slide and the wall jump** (2026-10-16). Falling against the
+    // side of a solid slows the fall a little -- gravity and terminal
+    // velocity both scaled -- and counts as footing for the fall rule, so a
+    // wall reached is a partial recovery. Space against it is a small jump
+    // away from it; off the same face again only from lower down than the
+    // last, and each one in an airtime worth less than the last. See
+    // `state::cling_to_the_wall`.
+    WallSlideGravity,     "Air",      "Wall slide, gravity (x)",                             Fixed, fx(1,10), fx(1,1);
+    WallSlideFall,        "Air",      "Wall slide, terminal velocity (x)",                   Fixed, fx(1,10), fx(1,1);
+    WallStick,            "Air",      "Wall slide, held to the wall at (m/s)",               Fixed, 0, fx(4,1);
+    WallJumpRise,         "Air",      "Wall jump, rise (x takeoff)",                         Fixed, 0, fx(3,2);
+    WallJumpPush,         "Air",      "Wall jump, pushed off at (m/s)",                      Fixed, 0, fx(20,1);
+    WallJumpFalloff,      "Air",      "Wall jump, each one after (x)",                       Fixed, fx(1,10), fx(1,1);
+    WallJumpGrace,        "Air",      "Wall jump, still off a wall left",                    Frames, 0, 12;
+    WallSameTurn,         "Air",      "Wall jump, same wall within (cos)",                   Fixed, fx(1,2), fx(1,1);
+    WallSameGap,          "Air",      "Wall jump, same wall within (m)",                     Fixed, 0, fx(4,1);
+    WallJumpDrop,         "Air",      "Wall jump, same wall again once this far below (m)",  Fixed, 0, fx(6,1);
+    // **Which way the stick points at a wall** (2026-10-16): within this of
+    // straight into it is into it, within this of straight out is away, and
+    // anything between is along it -- the same three envelopes on a wall
+    // slide and a ledge. See `state::lean_against`.
+    WallCone,             "Air",      "Walls, into or away within (cos)",                    Fixed, 0, fx(1,1);
+    // **The wall slide, steered** (2026-10-16). Started by pushing into a
+    // wall while falling beside it, left by pushing away, and neither
+    // changes faster than the flip allows; along the wall the stick steers
+    // a little.
+    WallSlideFlip,        "Air",      "Wall slide, on or off no faster than",                Frames, 0, 60;
+    WallSlideSteer,       "Air",      "Wall slide, steered along at (m/s)",                  Fixed, 0, fx(10,1);
+    WallSlideGrip,        "Air",      "Wall slide, steering arrives per frame (x)",          Fixed, fx(1,100), fx(1,1);
+    // **The ledge grab** (2026-10-16). A forgiving way up that is plainly not
+    // the quick one: a body fully off an edge, not leaving it fast, with the
+    // top at its hands and the stick not pushing away, catches it; the climb
+    // up is slow, letting go is quick. See `state::catch_a_ledge` and
+    // `state::hang_on`.
+    LedgeAway,            "Ledge",    "Caught moving away from it at up to (m/s)",           Fixed, 0, fx(20,1);
+    LedgeHoldOn,          "Ledge",    "Held into the wall from the catch, climbs after",     Frames, 0, 120;
+    LedgeReachLow,        "Ledge",    "Caught, top over the feet from (m)",                  Fixed, 0, fx(3,1);
+    LedgeReachHigh,       "Ledge",    "Caught, top over the feet up to (m)",                 Fixed, 0, fx(4,1);
+    LedgeReach,           "Ledge",    "Caught within, past the body (m)",                    Fixed, 0, fx(1,1);
+    LedgeDepth,           "Ledge",    "Hanging, feet under the top (m)",                     Fixed, fx(1,2), fx(3,1);
+    LedgeCatch,           "Ledge",    "Catching, settles over",                              Frames, 1, 60;
+    LedgeClimb,           "Ledge",    "Climbing up takes",                                   Frames, 1, 240;
+    LedgeClimbRise,       "Ledge",    "Climbing up, share spent rising (%)",                 Percent, 0, 100;
+    LedgeShuffle,         "Ledge",    "Hand over hand at (m/s)",                             Fixed, 0, fx(5,1);
+    LedgeLetGo,           "Ledge",    "Let go, pushed off at (m/s)",                         Fixed, 0, fx(10,1);
+    LedgeRegrab,          "Ledge",    "Not caught again for",                                Frames, 0, 120;
 }
 
 // ---------------------------------------------------------------------------

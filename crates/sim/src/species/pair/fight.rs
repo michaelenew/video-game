@@ -633,6 +633,17 @@ pub fn frame(w: &mut World) {
 
 /// The frames a cat's move in progress will be live across, from `now`.
 pub fn live_window(m: &Monster, now: u32) -> Option<(u32, u32)> {
+    // **The paw held up is the second rake's tell**, and its window is the
+    // drop's (2026-10-16): the hold hurts nobody, so it used to report no
+    // window at all, and the partner committed a move whose hit landed a few
+    // frames before the drop -- the two hits together the gap exists to
+    // prevent. The drop starts the frame the hold runs out (`moves`). Found
+    // by a fighter's walk in `tests/pair.rs` once fighters slid down walls.
+    if let Doing::Startup { kind: COCK, left } = m.doing {
+        let drop = SPECIES.attack(RAKE2);
+        let from = now.wrapping_add(left as u32 + drop.startup as u32 + 1);
+        return Some((from, from.wrapping_add(drop.active as u32)));
+    }
     let a = SPECIES.attack(m.doing.attacking()?);
     if a.damage <= 0 {
         return None;
