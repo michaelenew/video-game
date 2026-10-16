@@ -71,7 +71,7 @@ use bevy::render::render_resource::binding_types::{
 };
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::view::ViewTarget;
+use bevy::render::view::{ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms};
 
 const SHADER: Handle<Shader> = weak_handle!("2f9b1a64-6c3d-47e1-9d5a-7a1c3e8b4d20");
 
@@ -128,6 +128,10 @@ pub struct Outline {
     /// How much the line is one sepia ink rather than a deeper shade of what
     /// it outlines.
     pub sepia: f32,
+    /// **The trees' window on to the fighter** (`Paint::cut`, world space;
+    /// `w` zero, none), set every frame by `crate::stream`: an edge at its
+    /// rim is the camera's, not the world's, and gets no line.
+    pub cut: Vec4,
 }
 
 impl Outline {
@@ -165,6 +169,7 @@ impl Outline {
             weight: 0.62 * wash.line,
             wobble: wash.wobble,
             sepia: wash.sepia,
+            cut: Vec4::ZERO,
         }
     }
 }
@@ -271,6 +276,7 @@ impl FromWorld for OutlinePipeline {
                     texture_depth_2d(),
                     uniform_buffer::<Outline>(true),
                     sampler(SamplerBindingType::NonFiltering),
+                    uniform_buffer::<ViewUniform>(true),
                 ),
             ),
         );
@@ -309,13 +315,14 @@ impl ViewNode for OutlineNode {
         &'static ViewTarget,
         &'static ViewPrepassTextures,
         &'static DynamicUniformIndex<Outline>,
+        &'static ViewUniformOffset,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (target, prepass, offset): QueryItem<Self::ViewQuery>,
+        (target, prepass, offset, view_offset): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let pipeline = world.resource::<OutlinePipeline>();
@@ -328,6 +335,10 @@ impl ViewNode for OutlineNode {
             .uniforms()
             .binding()
         else {
+            return Ok(());
+        };
+
+        let Some(view) = world.resource::<ViewUniforms>().uniforms.binding() else {
             return Ok(());
         };
 
@@ -352,6 +363,7 @@ impl ViewNode for OutlineNode {
                 depth,
                 binding.clone(),
                 &world.resource::<OutlineSamplers>().depth,
+                view,
             )),
         );
         let diagnostics = render_context.diagnostic_recorder();
@@ -369,7 +381,7 @@ impl ViewNode for OutlineNode {
         // Timed under its own name, so `--profile` can say what it costs.
         let span = diagnostics.pass_span(&mut pass, "outline");
         pass.set_render_pipeline(ready);
-        pass.set_bind_group(0, &bind, &[offset.index()]);
+        pass.set_bind_group(0, &bind, &[offset.index(), view_offset.offset]);
         pass.draw(0..3, 0..1);
         span.end(&mut pass);
         Ok(())
