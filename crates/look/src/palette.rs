@@ -349,8 +349,10 @@ pub fn lit(albedo: [f32; 3]) -> [f32; 3] {
 /// - **Wood** is `orange` deep, which is redder than the ground it is lying on
 ///   -- timber against dirt, and far enough round the wheel to tell apart.
 /// - **Ash** is a cool dark grey, and **snow** the one swatch above the band.
+/// - **Crystal** (the Deep's Caverns) is `violet` and light: the one thing in
+///   a cave that should catch the eye, and a hue nothing else here has.
 pub fn local(material: Material) -> [f32; 3] {
-    use crate::swatch::{self, S300, S500, S600, S700, S800};
+    use crate::swatch::{self, S200, S300, S500, S600, S700, S800};
     match material {
         Material::Ground => swatch::AMBER.at(S700),
         Material::Rock => swatch::BLUE_GREY.at(S600),
@@ -362,11 +364,12 @@ pub fn local(material: Material) -> [f32; 3] {
         Material::Wood => swatch::ORANGE.at(S800),
         Material::Water => swatch::CYAN.at(S600),
         Material::Snow => swatch::SLATE.at(S300),
+        Material::Crystal => swatch::VIOLET.at(S200),
     }
 }
 
 /// Every material, for anything that wants to walk them.
-pub const EVERY: [Material; 10] = [
+pub const EVERY: [Material; 11] = [
     Material::Ground,
     Material::Rock,
     Material::Stone,
@@ -377,6 +380,7 @@ pub const EVERY: [Material; 10] = [
     Material::Wood,
     Material::Water,
     Material::Snow,
+    Material::Crystal,
 ];
 /// The palette for an arena. Derived from its sky, so an arena that has one has
 /// both.
@@ -473,6 +477,71 @@ impl Palette {
     /// purple under a lilac one.
     pub fn trodden(&self) -> [f32; 3] {
         self.surface([0.58, 0.47, 0.36])
+    }
+
+    /// **A grown giant's bark** (`sim::valley::trees`), by its kind: a
+    /// Sentinel's the red-brown of a redwood's, an Elder's the grey-brown of
+    /// an old oak's, a Strangler's the pale grey of a fig's -- each a step
+    /// lighter than a sapling's, because a trunk twenty metres across is
+    /// seen mostly from its shaded side.
+    pub fn grown_bark(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        use sim::valley::trees::Kind;
+        let wood = self.of(Material::Wood);
+        match kind {
+            Kind::Sentinel => tint::mix(wood, [0.70, 0.46, 0.34], 0.6),
+            Kind::Elder => tint::mix(wood, [0.74, 0.68, 0.60], 0.55),
+            Kind::Strangler => tint::mix(wood, [0.82, 0.80, 0.74], 0.65),
+        }
+    }
+
+    /// **Footing on a grown giant**: the top of a limb you can stand on,
+    /// worn pale and mossed where feet go -- what tells a limb that bears you
+    /// from one that does not, which stays bark.
+    pub fn grown_footing(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        let bark = self.grown_bark(kind);
+        let moss = Lch::of(tint::mix(bark, self.moss(), 0.5));
+        Lch {
+            l: (moss.l * 1.15).min(0.78),
+            ..moss
+        }
+        .rgb()
+    }
+
+    /// **A shelf fungus**: the cream of a bracket's top, the same on every
+    /// tree, balanced into the place's light.
+    pub fn shelf(&self) -> [f32; 3] {
+        self.surface([0.86, 0.74, 0.52])
+    }
+
+    /// **A canopy's top**: the leaves where they are a floor, a step lighter
+    /// and yellower than the crown's own -- a meadow in the air.
+    pub fn canopy(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        let g = Lch::of(self.grown_leaves(kind));
+        Lch {
+            l: (g.l * 1.3).min(0.9),
+            h: g.h + 0.03,
+            ..g
+        }
+        .rgb()
+    }
+
+    /// **A grown giant's leaves**: a Sentinel's needles the pine's, an
+    /// Elder's the broadleaf's, a Strangler's a glossier, yellower green.
+    pub fn grown_leaves(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        use sim::valley::trees::Kind;
+        match kind {
+            Kind::Sentinel => self.foliage(true),
+            Kind::Elder => self.foliage(false),
+            Kind::Strangler => {
+                let g = Lch::of(self.foliage(false));
+                Lch {
+                    l: g.l * 1.05,
+                    h: g.h + 0.04,
+                    ..g
+                }
+                .rgb()
+            }
+        }
     }
 
     /// A tree's trunk: the place's timber, darker and greyer -- bark is

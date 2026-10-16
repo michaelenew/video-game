@@ -73,7 +73,7 @@ pub static PLACE: Place = Place {
 
 const VINES: [Zone; 1] = [CRAGS[0].vine()];
 
-const SEAMS: [Seam; 4] = [
+const SEAMS: [Seam; 5] = [
     // Back through the first pass to the Bank.
     Seam {
         zone: Zone::cm([43200, 3900, -1000], [44000, 5000, 200]),
@@ -125,5 +125,18 @@ const SEAMS: [Seam; 4] = [
         gate: crate::valley::tier::TWO,
         waystone: Some(0),
         says: "the Pinewood",
+    },
+    // South down the path between the mountains, to the Deep's lid.
+    Seam {
+        zone: Zone::cm([60000, 4000, -14000], [62000, 5600, -13400]),
+        to: ArenaId::DEEP,
+        at: 0,
+        marks: [
+            Mark::cm(60700, -9000, (60300, -1500)),
+            Mark::cm(61000, -9000, (60300, -1500)),
+        ],
+        gate: Gate::Open,
+        waystone: None,
+        says: "the Deep",
     },
 ];

@@ -42,6 +42,8 @@ use crate::state::MAX_PLAYERS;
 pub mod land;
 pub mod layout;
 pub mod open;
+pub mod ranges;
+pub mod trees;
 
 /// A box of the world a body's feet can be in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,6 +278,11 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::SHELVES => &arena::shelves::PLACE,
         ArenaId::PINEWOOD => &arena::pinewood::PLACE,
         ArenaId::SADDLE => &arena::saddle::PLACE,
+        ArenaId::WOOD => &arena::wood::PLACE,
+        ArenaId::SPIRE => &arena::spire::PLACE,
+        ArenaId::DEEP => &arena::deep::PLACE,
+        ArenaId::HIGH_PLANE => &arena::heights::PLANE_PLACE,
+        ArenaId::SKY_ROAD => &arena::heights::SKY_ROAD_PLACE,
         ArenaId::HIGHLANDS => &rooms::HIGHLANDS,
         ArenaId::HORNBACK => &rooms::MEADOW,
         ArenaId::GNAWERS => &rooms::COMMONS,
@@ -287,7 +294,7 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::VEILSTALKER => &rooms::ASHWOOD,
         ArenaId::MANTIS => &rooms::SHRINE,
         ArenaId::SIEGESHELL => &rooms::LONG_VALLEY,
-        _ => return None,
+        id => &ranges::PLACES[ranges::index(id)?],
     })
 }
 
@@ -316,6 +323,7 @@ pub fn vine_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
             let m = feet.add(ground.origin());
             a.place_at(m.x, m.z)
                 .is_some_and(|p| vine_at(p.arena, p.from_map(m)).is_some())
+                || a.vines.iter().any(|v| v.holds(m))
         }
     }
 }
@@ -433,6 +441,15 @@ pub struct Journey {
     /// Each fighter's last cairn, plus one: a box of the valley's map, by
     /// its index there (`crate::atlas`).
     pub cairn: [u16; MAX_PLAYERS],
+    /// **When each range was last beaten**, a frame of the world (zero:
+    /// never): it rests for `tuning::range_rest` after (`ranges`).
+    pub rested: [u32; ranges::COUNT],
+    /// The live range's creature has been roused -- hurt, or come too close
+    /// to -- and its temperament no longer holds it.
+    pub roused: bool,
+    /// The live range's creatures' health, all of it, last frame: what
+    /// noticing a hurt reads. Zero before the first frame of a hunt.
+    pub stock: i32,
 }
 
 impl Journey {

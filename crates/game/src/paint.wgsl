@@ -27,6 +27,9 @@
 
 struct Paint {
     color: vec4<f32>,
+    // A hole along the line from the eye to `cut.xyz`, `cut.w` across at
+    // that end and narrower toward the eye; none where `cut.w` is zero.
+    cut: vec4<f32>,
 }
 
 @group(2) @binding(0) var<uniform> paint: Paint;
@@ -374,6 +377,22 @@ fn washed(x: f32) -> f32 {
 
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
+    // **Out of the way of the fighter** (`Paint::cut`): what stands between
+    // the eye and them, near the line, is not drawn -- its edge stippled, so
+    // it reads as a window rather than a missing piece.
+    if (paint.cut.w > 0.0) {
+        let eye = view.world_position;
+        let to = paint.cut.xyz - eye;
+        let t = dot(in.world_position.xyz - eye, to) / max(dot(to, to), 1e-4);
+        if (t > 0.0 && t < 0.85) {
+            let off = length(in.world_position.xyz - (eye + to * t));
+            let r = paint.cut.w * (0.35 + 0.65 * t);
+            let grain = fract(sin(dot(in.position.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+            if (off < r * (0.75 + 0.25 * grain)) {
+                discard;
+            }
+        }
+    }
     var base = paint.color;
 #ifdef VERTEX_COLORS
     base = base * in.color;

@@ -774,6 +774,10 @@ scalars! {
     // backing out through a door mid-fight leaves the creature as it was.
     // Further than that, the hunt is over, unwon. See `valley::open`.
     HuntHeldPast,         "Valley", "Hunt, held this far outside its room (m)", Fixed, 0, fx(200,1);
+    // **A range beaten rests this long** before its creature is back
+    // (`valley::ranges`): long enough that walking back past it is quiet,
+    // short enough that the valley fills again while you are out in it.
+    RangeRest,            "Valley", "Range, rests after it is beaten (s)",     Int,   0, 3600;
     // **Regions** (`docs/design/regions.md`): the overlapping hexagons every
     // build keeps its books in, and the speed of light they are sized by.
     // `reach` and `speed` are a declaration, not a rule a move obeys: the dev

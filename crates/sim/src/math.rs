@@ -184,6 +184,263 @@ pub fn ray_hits_box(from: V3, dir: V3, min: V3, max: V3) -> Option<Fx> {
     Some(near)
 }
 
+/// **Distance along a ray to a solid of the arena**, whatever its shape
+/// (`arena::Shape`), grown by `fat` all round -- the travelling thing's girth,
+/// or zero. `None` if it misses; zero if the ray starts inside, as a box has
+/// always answered.
+pub fn ray_hits_solid(from: V3, dir: V3, s: &crate::arena::Solid, fat: Fx) -> Option<Fx> {
+    use crate::arena::Shape;
+    let grow = V3::new(fat, fat, fat);
+    match s.shape {
+        Shape::Box => ray_hits_box(from, dir, s.min.sub(grow), s.max.add(grow)),
+        Shape::Round {
+            bottom,
+            top,
+            hollow,
+        } => {
+            let (x, z) = s.middle();
+            let span = (s.min.y.sub(fat), s.max.y.add(fat));
+            let outer = (bottom.add(fat), top.add(fat));
+            if hollow.raw() <= 0 {
+                return ray_hits_round(from, dir, (x, z), span, outer);
+            }
+            ray_hits_ring(
+                from,
+                dir,
+                (x, z),
+                span,
+                outer,
+                hollow.sub(fat).max(Fx::ZERO),
+            )
+        }
+        Shape::Turned {
+            half,
+            half_wide,
+            cos,
+            sin,
+        } => {
+            let (x, z) = s.middle();
+            let (ox, oz) = (from.x.sub(x), from.z.sub(z));
+            let o = V3::new(
+                ox.mul(cos).add(oz.mul(sin)),
+                from.y,
+                oz.mul(cos).sub(ox.mul(sin)),
+            );
+            let d = V3::new(
+                dir.x.mul(cos).add(dir.z.mul(sin)),
+                dir.y,
+                dir.z.mul(cos).sub(dir.x.mul(sin)),
+            );
+            let (hx, hz) = (half.add(fat), half_wide.add(fat));
+            ray_hits_box(
+                o,
+                d,
+                V3::new(hx.neg(), s.min.y.sub(fat), hz.neg()),
+                V3::new(hx, s.max.y.add(fat), hz),
+            )
+        }
+    }
+}
+
+/// **Distance along a ray to an upright round solid** -- a cone's frustum
+/// standing on the floor plane, centred on `at` (x, z), between heights
+/// `span`, `radii.0` across at the bottom and `radii.1` at the top; a
+/// cylinder when they are equal. `dir` is a unit vector. Zero if the ray
+/// starts inside, `None` if it misses.
+///
+/// Worked in 128-bit integers on the raw fixed-point values: a trunk forty
+/// metres across seen from two hundred metres away squares numbers 16.16
+/// cannot hold, and integers give the same answer on every machine.
+pub fn ray_hits_round(
+    from: V3,
+    dir: V3,
+    at: (Fx, Fx),
+    span: (Fx, Fx),
+    radii: (Fx, Fx),
+) -> Option<Fx> {
+    const S: i128 = 1 << 16;
+    let (y0, y1) = (span.0.raw() as i128, span.1.raw() as i128);
+    let (r0, r1) = (radii.0.raw() as i128, radii.1.raw() as i128);
+    let h = y1 - y0;
+    if h <= 0 || (r0 <= 0 && r1 <= 0) {
+        return None;
+    }
+    let ox = from.x.raw() as i128 - at.0.raw() as i128;
+    let oz = from.z.raw() as i128 - at.1.raw() as i128;
+    let oy = from.y.raw() as i128;
+    let (dx, dy, dz) = (
+        dir.x.raw() as i128,
+        dir.y.raw() as i128,
+        dir.z.raw() as i128,
+    );
+    let radius_at = |y: i128| r0 + (r1 - r0) * (y - y0) / h;
+
+    // Inside already: point blank.
+    if oy >= y0 && oy <= y1 {
+        let r = radius_at(oy);
+        if r > 0 && ox * ox + oz * oz <= r * r {
+            return Some(Fx::ZERO);
+        }
+    }
+
+    let mut best: Option<i128> = None;
+    let mut keep = |t: i128| {
+        if t >= 0 && best.is_none_or(|b| t < b) {
+            best = Some(t);
+        }
+    };
+    let y_at = |t: i128| oy + dy * t / S;
+
+    // The side: |o + t d|_flat = r(o.y + t d.y), squared.
+    let ry = r0 + (r1 - r0) * (oy - y0) / h;
+    let dr = (r1 - r0) * dy / h;
+    let a = dx * dx + dz * dz - dr * dr;
+    let half_b = ox * dx + oz * dz - ry * dr;
+    let c = ox * ox + oz * oz - ry * ry;
+    let side = |t: i128| {
+        let y = y_at(t);
+        y >= y0 && y <= y1 && radius_at(y) >= 0
+    };
+    if a != 0 {
+        let disc = half_b * half_b - a * c;
+        if disc >= 0 {
+            let root = isqrt_wide(disc as u128) as i128;
+            for num in [-half_b - root, -half_b + root] {
+                let t = num * S / a;
+                if side(t) {
+                    keep(t);
+                }
+            }
+        }
+    } else if half_b != 0 {
+        let t = -c * S / (2 * half_b);
+        if side(t) {
+            keep(t);
+        }
+    }
+
+    // The caps.
+    if dy != 0 {
+        for (face, r) in [(y0, r0), (y1, r1)] {
+            let t = (face - oy) * S / dy;
+            if t < 0 || r <= 0 {
+                continue;
+            }
+            let x = ox + dx * t / S;
+            let z = oz + dz * t / S;
+            if x * x + z * z <= r * r {
+                keep(t);
+            }
+        }
+    }
+    best.map(|t| Fx::from_raw(t.min(i32::MAX as i128) as i32))
+}
+
+/// **Distance along a ray to a round solid with a hole down its middle**
+/// ([`ray_hits_round`] less an upright cylinder `hollow` across): the first
+/// point of the ray that is in the outer shape and not in the hole. Its
+/// candidates are where the ray meets the outer shape, the hole's wall and
+/// the two caps; each is kept only if the ring is really there.
+pub fn ray_hits_ring(
+    from: V3,
+    dir: V3,
+    at: (Fx, Fx),
+    span: (Fx, Fx),
+    radii: (Fx, Fx),
+    hollow: Fx,
+) -> Option<Fx> {
+    const S: i128 = 1 << 16;
+    let (y0, y1) = (span.0.raw() as i128, span.1.raw() as i128);
+    let (r0, r1) = (radii.0.raw() as i128, radii.1.raw() as i128);
+    let h = y1 - y0;
+    let hole = hollow.raw() as i128;
+    if h <= 0 {
+        return None;
+    }
+    let ox = from.x.raw() as i128 - at.0.raw() as i128;
+    let oz = from.z.raw() as i128 - at.1.raw() as i128;
+    let oy = from.y.raw() as i128;
+    let (dx, dy, dz) = (
+        dir.x.raw() as i128,
+        dir.y.raw() as i128,
+        dir.z.raw() as i128,
+    );
+    let radius_at = |y: i128| r0 + (r1 - r0) * (y.clamp(y0, y1) - y0) / h;
+    // Is the point `t` along the ray in the ring, with a hair of slack?
+    let slack = 64;
+    let solid = |t: i128| {
+        let (x, y, z) = (ox + dx * t / S, oy + dy * t / S, oz + dz * t / S);
+        if y < y0 - slack || y > y1 + slack {
+            return false;
+        }
+        let d2 = x * x + z * z;
+        let r = radius_at(y) + slack;
+        let inner = (hole - slack).max(0);
+        d2 <= r * r && d2 >= inner * inner
+    };
+    let inside = {
+        let d2 = ox * ox + oz * oz;
+        oy >= y0 && oy <= y1 && d2 > hole * hole && {
+            let r = radius_at(oy);
+            d2 <= r * r
+        }
+    };
+    if inside {
+        return Some(Fx::ZERO);
+    }
+    let mut best: Option<i128> = None;
+    let mut keep = |t: i128| {
+        if t >= 0 && best.is_none_or(|b| t < b) && solid(t) {
+            best = Some(t);
+        }
+    };
+    // The outer shape: every way in, the hole's mouth included.
+    if let Some(t) = ray_hits_round(from, dir, at, span, radii) {
+        keep(t.raw() as i128);
+    }
+    // The hole's wall, from inside it.
+    let a = dx * dx + dz * dz;
+    if a > 0 {
+        let half_b = ox * dx + oz * dz;
+        let c = ox * ox + oz * oz - hole * hole;
+        let disc = half_b * half_b - a * c;
+        if disc >= 0 {
+            let root = isqrt_wide(disc as u128) as i128;
+            for num in [-half_b - root, -half_b + root] {
+                keep(num * S / a);
+            }
+        }
+    }
+    // The caps, round the hole.
+    if dy != 0 {
+        for face in [y0, y1] {
+            keep((face - oy) * S / dy);
+        }
+    }
+    best.map(|t| Fx::from_raw(t.min(i32::MAX as i128) as i32))
+}
+
+/// The integer square root of a 128-bit number, digit by digit: exact, and a
+/// fixed amount of work whatever the number.
+pub fn isqrt_wide(n: u128) -> u128 {
+    let mut rem = n;
+    let mut root: u128 = 0;
+    let mut bit: u128 = 1 << 126;
+    while bit > rem {
+        bit >>= 2;
+    }
+    while bit != 0 {
+        if rem >= root + bit {
+            rem -= root + bit;
+            root = (root >> 1) + bit;
+        } else {
+            root >>= 1;
+        }
+        bit >>= 2;
+    }
+    root
+}
+
 fn component(v: V3, axis: usize) -> Fx {
     match axis {
         0 => v.x,
@@ -289,6 +546,36 @@ pub fn point_box_gap(p: V3, min: V3, max: V3) -> Fx {
         out(p.y, min.y, max.y),
         out(p.z, min.z, max.z),
     ))
+}
+
+/// **Certainly further than `reach`**, judged by the longest axis of `d`
+/// alone: no square root and no division, for throwing out what cannot
+/// possibly touch before an exact test that costs a thousand instructions.
+///
+/// A vector is at least as long as any one of its axes, so an axis past
+/// `reach` is a vector past it. The slack -- a sixteenth of the reach and
+/// half a metre -- is wider than any rounding the exact tests downstream can
+/// make (a rotation chained down a creature's bones, a closest point found by
+/// division), so `true` here is only ever said where the exact test would
+/// have said the same: the answers do not move, only what they cost.
+pub fn far_on_an_axis(d: V3, reach: Fx) -> bool {
+    let reach = reach.raw().max(0) as i64;
+    let past = reach + reach / 16 + (Fx::ONE.raw() as i64) / 2;
+    (d.x.raw() as i64).abs() > past
+        || (d.y.raw() as i64).abs() > past
+        || (d.z.raw() as i64).abs() > past
+}
+
+/// How far `p` is outside the box round the segment `a`-`b`, on each axis:
+/// zero on an axis where it is level with some part of the segment. Every
+/// point of the segment is at least this far away on each axis, which is
+/// what [`far_on_an_axis`] wants to be handed.
+pub fn outside_span(a: V3, b: V3, p: V3) -> V3 {
+    let out = |a: Fx, b: Fx, v: Fx| {
+        let (lo, hi) = if a.raw() <= b.raw() { (a, b) } else { (b, a) };
+        lo.sub(v).max(v.sub(hi)).max(Fx::ZERO)
+    };
+    V3::new(out(a.x, b.x, p.x), out(a.y, b.y, p.y), out(a.z, b.z, p.z))
 }
 
 /// The distance, in the floor plane only, from a point to a box's footprint.
@@ -700,10 +987,26 @@ pub fn sqrt(v: Fx) -> Fx {
 
 /// Integer square root of a 64-bit value, saturating into `i32`.
 ///
-/// A fixed iteration count rather than "until it converges": a value that
-/// depends on how hard it was to compute is not something two machines can be
-/// relied on to agree about.
+/// The answer forty steps from 2^31 always gave ([`isqrt_by_steps`]), in the
+/// handful a start just above the root needs; see [`Fx::sqrt`] for why the
+/// inputs one short of a square still take the long way.
 fn isqrt(n: i64) -> i32 {
+    if n <= 0 {
+        return 0;
+    }
+    let s = crate::fixed::floor_sqrt(n as u64) as i64;
+    if (s as i128 + 1) * (s as i128 + 1) == n as i128 + 1 {
+        return isqrt_by_steps(n);
+    }
+    if s > i32::MAX as i64 {
+        i32::MAX
+    } else {
+        s as i32
+    }
+}
+
+/// [`isqrt`] as it was always worked out: forty Newton steps from 2^31.
+fn isqrt_by_steps(n: i64) -> i32 {
     if n <= 0 {
         return 0;
     }
@@ -995,4 +1298,32 @@ pub const fn hex_neighbours(q: i32, r: i32) -> [(i32, i32); 6] {
 
 fn sat(v: i64) -> i32 {
     v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
+#[cfg(test)]
+mod isqrt_tests {
+    use super::{isqrt, isqrt_by_steps};
+
+    /// The short integer root agrees with the forty-step one: a spread of
+    /// magnitudes, and either side of perfect squares, where the long way's
+    /// answer depends on how many steps it took.
+    #[test]
+    fn the_short_integer_root_is_the_long_one() {
+        let mut r: u64 = 0x9E37_79B9_7F4A_7C15;
+        for i in 0..200_000u64 {
+            r ^= r << 13;
+            r ^= r >> 7;
+            r ^= r << 17;
+            let n = ((r >> 1) >> (i % 63)) as i64;
+            assert_eq!(isqrt(n), isqrt_by_steps(n), "isqrt {n}");
+        }
+        let mut k: i64 = 1;
+        while k < 3_037_000_499 {
+            for d in [-2, -1, 0, 1] {
+                let n = k * k + d;
+                assert_eq!(isqrt(n), isqrt_by_steps(n), "isqrt {n}");
+            }
+            k += 1 + k / 1024;
+        }
+    }
 }

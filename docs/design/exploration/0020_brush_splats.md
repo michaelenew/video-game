@@ -1,4 +1,4 @@
-# 0019 — The brush as a primitive: strokes at the cost of nothing
+# 0020 — The brush as a primitive: strokes at the cost of nothing
 
 **Thread.** The brushed look is the painting the owner wants (the brush
 worked out at the pixel, [#165](https://github.com/michaelenew/video-game/pull/165)),

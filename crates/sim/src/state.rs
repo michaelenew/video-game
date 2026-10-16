@@ -1657,8 +1657,9 @@ impl World {
         seats: u8,
     ) -> World {
         let place = crate::valley::place(to);
+        let range = crate::valley::ranges::of(to);
         let mut w = match place.map(|p| p.kind) {
-            Some(crate::valley::Kind::Room(species)) => {
+            Some(crate::valley::Kind::Room(species)) if range.is_none() => {
                 World::hunt_all(classes, crate::replay::herd_of(species), to)
             }
             _ => World::hunt_all(classes, [None; MAX_MONSTERS], to),
@@ -1684,7 +1685,16 @@ impl World {
                 }
             }
         }
-        w.seated(seats)
+        let mut w = w.seated(seats);
+        // **Arriving on a range** wakes it as walking into it does, unless
+        // it is resting: its herd, its temper, its temperament.
+        w.valley.rested = journey.rested;
+        if let Some(r) = range
+            && !w.resting(to)
+        {
+            w.begin_hunt(r.species);
+        }
+        w
     }
 
     /// A versus match in a chosen arena.
@@ -1986,6 +1996,7 @@ impl World {
             }
         }
         self.reframe();
+        self.tend_range();
         None
     }
 
@@ -2066,6 +2077,7 @@ impl World {
                 min: s.min.sub(origin),
                 max: s.max.sub(origin),
                 material: s.material,
+                shape: s.shape,
             });
         let p = &mut self.players[i];
         let (pos, facing) = match cairn {
@@ -2170,6 +2182,8 @@ impl World {
         for (slot, place) in self.monsters.iter_mut().enumerate() {
             let Some(old) = *place else { continue };
             let mut beast = Monster::new(old.species);
+            // Its temper is the hunt's, not its position's: kept.
+            beast.temper = old.temper;
             let sp = beast.sp();
             // Well back, and facing the hunters. A creature that spawns on top
             // of you has taken the opening read away from both of you. Two
@@ -2402,9 +2416,27 @@ impl World {
             // goes quiet and you walk out the way you came; lost, you wake
             // outside, at the seam you went in by.
             if self.valley.on && self.hunting() {
+                let range = crate::valley::ranges::index(self.arena);
                 if self.hunt_won().is_some() {
                     self.quiet();
                     self.phase = Phase::Fighting;
+                    // A range beaten rests a while before it is back.
+                    if let Some(k) = range {
+                        self.valley.rested[k] = self.frame.max(1);
+                    }
+                } else if range.is_some() {
+                    // **Lost on a range**: nothing to wake outside of. The
+                    // creature goes back to its grazing and everybody stands
+                    // up on their last cairn, as a death in a reach does.
+                    self.calm();
+                    self.valley.roused = false;
+                    self.valley.stock = 0;
+                    if let Some(place) = crate::valley::place(self.arena) {
+                        let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+                        for i in 0..seats {
+                            self.stand_back(i, place);
+                        }
+                    }
                 } else {
                     *self = self.woke_outside();
                 }
@@ -3777,6 +3809,17 @@ impl World {
             // unseen.
             for pair in v.cairn.chunks(2) {
                 h.write_u32(pair[0] as u32 | (*pair.get(1).unwrap_or(&0) as u32) << 16);
+            }
+            // The ranges' rests and the live one's rousing, only once one has
+            // been met: every journey before there were ranges hashes as it
+            // did.
+            if v.rested.iter().any(|&f| f != 0) || v.roused || v.stock != 0 {
+                h.write_u32(0x4A26);
+                for &f in &v.rested {
+                    h.write_u32(f);
+                }
+                h.write_u32(v.roused as u32);
+                h.write_u32(v.stock as u32);
             }
         }
         // Who has left, only when somebody has: every match with everybody

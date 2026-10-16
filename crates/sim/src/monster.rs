@@ -1800,6 +1800,21 @@ impl Monster {
             }
             let sh = sp.shape(index);
             let frame = rig.of(index);
+            // **Nowhere near this part**, first: a struck part has a point
+            // within `body_height` of the feet and `radius` of its box, so
+            // the feet are no further from the part's origin than those two
+            // and the furthest corner of the box (a corner's axes, summed,
+            // being never less than its distance). Most of a forty-part
+            // creature is metres from any one blow.
+            let corner = |lo: Fx, hi: Fx| lo.abs().max(hi.abs());
+            let reach = radius
+                .add(body_height)
+                .add(corner(sh.min.x, sh.max.x))
+                .add(corner(sh.min.y, sh.max.y))
+                .add(corner(sh.min.z, sh.max.z));
+            if crate::math::far_on_an_axis(centre.sub(frame.at), reach) {
+                continue;
+            }
             let feet = frame.world_to_local(centre);
             let head = frame.world_to_local(V3::new(centre.x, centre.y.add(body_height), centre.z));
             let low = feet.y.min(head.y);

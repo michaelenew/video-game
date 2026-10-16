@@ -69,6 +69,8 @@ pub struct Placed {
     pub end: u32,
     /// It keeps its own floor over its footprint ([`PlanPlace::pad`]).
     pub pad: bool,
+    /// **Only between these heights** on the map, if it says ([`PlanPlace::band`]).
+    pub band: Option<(Fx, Fx)>,
 }
 
 impl Placed {
@@ -91,6 +93,18 @@ impl Placed {
             && x.raw() <= self.hi.0.add(margin).raw()
             && z.raw() >= self.lo.1.sub(margin).raw()
             && z.raw() <= self.hi.1.add(margin).raw()
+    }
+
+    /// Is the map point in it, height and all: in its footprint, and within
+    /// its band if it has one.
+    pub fn holds_feet(&self, feet: V3) -> bool {
+        self.holds(feet.x, feet.z) && self.in_band(feet.y)
+    }
+
+    /// Is a map height within its band? Always, for a place with none.
+    pub fn in_band(&self, y: Fx) -> bool {
+        self.band
+            .is_none_or(|(lo, hi)| y.raw() >= lo.raw() && y.raw() <= hi.raw())
     }
 
     /// A point in its own coordinates, on the map.
@@ -152,6 +166,16 @@ pub struct Plan {
     pub land: Option<Land>,
     /// Boxes in no place, on the map: cliffs round a room, a door's sill.
     pub extras: Vec<Solid>,
+    /// **Extras not drawn as boxes**, by their indices in [`Plan::extras`]:
+    /// a grown tree's wood, which the renderer draws as the tree it is
+    /// (`Plan::trees`) from the skeleton the boxes were made from.
+    pub hidden: Vec<std::ops::Range<usize>>,
+    /// **The grown trees** (`crate::valley::trees`), for the renderer.
+    pub trees: Vec<crate::valley::trees::Tree>,
+    /// **Vines of no place**, in map coordinates: hung where something grown
+    /// put them -- a liana off a broadleaf's roof -- rather than in a place's
+    /// own table.
+    pub vines: Vec<crate::valley::Zone>,
     /// The floor where no place is: far enough under every place that
     /// anything there has fallen out of the world.
     pub void: Fx,
@@ -168,6 +192,11 @@ pub struct PlanPlace {
     /// It keeps its own floor -- the town, the Ring, a room -- where the land
     /// would otherwise be. A place that does not (a reach) is the land.
     pub pad: bool,
+    /// **A place stacked over another** (2026-10-15): it is only where it is
+    /// between these heights on the map -- the roost on the Needle's dome,
+    /// over the plaza the Needle stands on. [`Atlas::place_at`], which asks
+    /// in the floor plane, never finds it; [`Atlas::place_for`] does.
+    pub band: Option<(Fx, Fx)>,
 }
 
 /// One doorway of a [`Plan`].
@@ -198,6 +227,13 @@ pub struct Atlas {
     /// Everything on the map lies inside this (x, z).
     pub lo: (Fx, Fx),
     pub hi: (Fx, Fx),
+    /// **Not drawn as a box**, box for box: a grown tree's wood
+    /// ([`Plan::hidden`]).
+    pub hidden: Vec<bool>,
+    /// The grown trees, drawn from their skeletons.
+    pub trees: Vec<crate::valley::trees::Tree>,
+    /// Vines of no place, on the map ([`Plan::vines`]).
+    pub vines: Vec<crate::valley::Zone>,
     grid: Grid,
 }
 
@@ -270,7 +306,8 @@ fn carve(s: &Solid, cut: &Solid, out: &mut Vec<Solid>) {
         && s.max.y.raw() > cut.min.y.raw()
         && s.min.z.raw() < cut.max.z.raw()
         && s.max.z.raw() > cut.min.z.raw();
-    if !overlaps {
+    // Only a box is cut: a round or turned solid is never in a doorway.
+    if !overlaps || s.shape != crate::arena::Shape::Box {
         out.push(*s);
         return;
     }
@@ -278,6 +315,7 @@ fn carve(s: &Solid, cut: &Solid, out: &mut Vec<Solid>) {
         min,
         max,
         material: s.material,
+        shape: crate::arena::Shape::Box,
     };
     let (x0, x1) = (s.min.x.max(cut.min.x), s.max.x.min(cut.max.x));
     let (z0, z1) = (s.min.z.max(cut.min.z), s.max.z.min(cut.max.z));
@@ -345,6 +383,7 @@ impl Atlas {
                     min: s.min.add(at),
                     max: s.max.add(at),
                     material: s.material,
+                    shape: s.shape,
                 };
                 for piece in cut_all(moved) {
                     solids.push(piece);
@@ -362,14 +401,18 @@ impl Atlas {
                 first,
                 end: solids.len() as u32,
                 pad: pp.pad,
+                band: pp.band,
             });
         }
+        let mut hidden = vec![false; solids.len()];
         for (i, s) in plan.extras.iter().enumerate() {
+            let unseen = plan.hidden.iter().any(|r| r.contains(&i));
             for piece in cut_all(*s) {
                 solids.push(piece);
+                hidden.push(unseen);
                 sources.push(Source {
                     place: EXTRA,
-                    index: i as u16,
+                    index: (i as u32).min(u16::MAX as u32 - 1) as u16,
                 });
             }
         }
@@ -500,6 +543,9 @@ impl Atlas {
             land: plan.land.clone(),
             lo,
             hi,
+            hidden,
+            trees: plan.trees.clone(),
+            vines: plan.vines.clone(),
             grid: Grid {
                 x0,
                 z0,
@@ -534,7 +580,27 @@ impl Atlas {
             .places(self.grid.index(tx, tz))
             .iter()
             .map(|&k| &self.places[k as usize])
-            .find(|p| p.holds(x, z))
+            .find(|p| p.band.is_none() && p.holds(x, z))
+    }
+
+    /// **The place a body's feet are in**, height and all: a place stacked
+    /// over another ([`PlanPlace::band`]) where the feet are in its band,
+    /// and otherwise [`Atlas::place_at`]. What decides the frame the world
+    /// runs in (`valley::open`).
+    pub fn place_for(&self, feet: V3) -> Option<&Placed> {
+        let (tx, tz) = (
+            tile_of(feet.x) - self.grid.x0,
+            tile_of(feet.z) - self.grid.z0,
+        );
+        if tx < 0 || tz < 0 || tx >= self.grid.w || tz >= self.grid.h {
+            return None;
+        }
+        self.grid
+            .places(self.grid.index(tx, tz))
+            .iter()
+            .map(|&k| &self.places[k as usize])
+            .find(|p| p.band.is_some() && p.holds_feet(feet))
+            .or_else(|| self.place_at(feet.x, feet.z))
     }
 
     /// **The floor's height at a map point**: the relief of the place it is

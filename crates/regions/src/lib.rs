@@ -74,8 +74,13 @@ impl Entry {
 /// The last [`TAPE`] frames, by frame number. A frame run again -- a rollback
 /// -- overwrites what was there, so the tape always holds the latest version
 /// of each frame.
+///
+/// The slots are on the heap from the start. A tape is `TAPE` worlds, over
+/// half a megabyte, and `Box::new(Tape { slots: [..] })` builds it on the
+/// stack before moving it: the browser's whole stack is one megabyte, and
+/// the page died on it (`a_tape_is_a_handle`).
 pub struct Tape {
-    slots: [Option<Entry>; TAPE],
+    slots: Box<[Option<Entry>]>,
 }
 
 impl Default for Tape {
@@ -87,7 +92,7 @@ impl Default for Tape {
 impl Tape {
     pub fn new() -> Tape {
         Tape {
-            slots: std::array::from_fn(|_| None),
+            slots: (0..TAPE).map(|_| None).collect(),
         }
     }
 

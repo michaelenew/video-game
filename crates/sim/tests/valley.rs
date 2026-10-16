@@ -625,6 +625,7 @@ fn a_death_in_a_reach_stands_you_on_your_last_cairn() {
         min: s.min.sub(origin),
         max: s.max.sub(origin),
         material: s.material,
+        shape: s.shape,
     };
     w.players[0].pos = V3::new(
         cairn.min.x.add(Fx::ratio(1, 2)),

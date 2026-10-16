@@ -304,7 +304,7 @@ became the default)
   until the angle's place passes the phase of the stroke there, then the
   later: hard strokes, and no seam, since every stroke switches at its own
   moment.
-- **Where this goes next**: [exploration/0019](exploration/0019_brush_splats.md),
+- **Where this goes next**: [exploration/0020](exploration/0020_brush_splats.md),
   the brush as a primitive -- strokes placed once per tile and drawn as
   screen-sized quads, which is how every shipped painterly renderer keeps
   the brush on the canvas for the cost of a particle pass.

@@ -36,13 +36,31 @@ So there are two problems, and they are separate:
 - **Places on one map.** Each place is still an arena, drawn in its own
   coordinates exactly as before. The map puts each one at an offset, cuts the
   doorways where two places meet, and adds the few boxes that belong to no
-  place (a cliff round a room, a door's sill). The valley's map is 18 places,
-  17 doorways and about 600 boxes.
+  place (a cliff round a room, a door's sill). The valley's map is 37 places,
+  20 doorways and about 12,000 boxes since the Great Wood, the Needle, the
+  ranges, the Deep and the High Plane -- ten thousand of them the Wood's grown
+  trees.
+- **Hidden boxes, and the trees.** A box of no place can be marked hidden
+  (`Plan::hidden`, `Atlas::hidden`): stood on and run into, but not drawn,
+  because something else draws what it is. The Wood's grown trees
+  (`sim::valley::trees`) are the one case: the map keeps each tree's skeleton
+  (`Atlas::trees`), the renderer draws the skeleton (`game::grove`), and the
+  boxes built from it are hidden. The camera does not keep out of a hidden
+  box (`Terrain::seen_around`); the renderer cuts it away round the line to
+  the fighter instead.
+- **Vines of no place** (`Plan::vines`, `Atlas::vines`): a vine hung where
+  something grown put it -- a liana off a broadleaf's roof -- in map
+  coordinates, read by `valley::vine_on` beside each place's own.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
   touch it, in map order, and the places whose footprint does. A query over a
   box reads the tiles under it and merges their lists in map order, each box
-  once. The busiest tile in the valley holds 18 boxes, so a body's collision
-  reads a few dozen boxes however large the map grows. `tests/atlas.rs` checks
+  once. The busiest tile held 18 boxes until 2026-10-15; a tower and a tree
+  two hundred metres tall stack theirs into the tiles under them -- the
+  Needle's column about eighty, a grown giant's about two hundred, an Elder's
+  crown the most at about two hundred and thirty -- nearly all of which a
+  query turns away at its first comparison of heights (`tests/budget.rs`
+  stands at the foot of both).
+  However large the map grows, a body reads what is near it. `tests/atlas.rs` checks
   that a query never misses a box (against walking every box, 2,000 random
   queries over a thousand scattered boxes), and that a map a hundred times
   bigger costs a body-sized query no more.
@@ -58,6 +76,38 @@ So there are two problems, and they are separate:
   an arena that is fought on *alone* (a creature's own arena, a course),
   because alone it is still one table walked end to end. A place that only
   ever lives on a map — the town and the reaches — is not held to it.
+
+## Round and turned solids (2026-10-15)
+
+Every solid was an upright box until the Great Wood and the Needle
+([exploration/0019](exploration/0019_spire_wood_and_the_deep.md) VALE-7:
+"I'd prefer we have more shapes to work with unless that's going to cause
+performance hits"). `arena::Shape` is what a solid is inside its box:
+
+- **`Box`** -- the whole box, and still almost every solid. Every question
+  answers for it exactly as it always did, bit for bit: every pinned fight
+  hashes as before.
+- **`Round { bottom, top, hollow }`** -- upright and round in plan, `bottom`
+  across at its foot and `top` at its top (a cylinder, a tapering trunk, a
+  dome's slab widening), with a hole `hollow` across down its middle when
+  that is above nothing: a ring, a tube, a chimney, a cistern.
+- **`Turned { half, half_wide, cos, sin }`** -- a box turned about the upright
+  to any bearing: a branch.
+
+A solid's `min` and `max` stay the box that holds all of it, so the tiles, a
+query's broad phase and whether it hangs read every shape alike; only the
+narrow questions ask the shape -- is a body in it and which way out
+(`Solid::side_push`), does its top or underside cover a point (`over`,
+`under`), how far a point is outside it (`outside_at`), and where a ray meets
+it (`math::ray_hits_solid`, the one place, by the one-aim rule). The round
+rays work in 128-bit integers: a dome ninety metres across seen from two
+hundred metres away squares numbers 16.16 cannot hold. A body pushed out of a
+round or turned side keeps the part of its velocity along the face, so it
+slides round a trunk; a box still takes the whole axis off, as it did.
+
+Nothing angled up or down: a slope is still the land's, and a staircase of
+boxes. `tests/shapes.rs` holds the shapes; `game::forms::round` and
+`forms::turn` draw them as exactly what the simulation collides against.
 
 ## The land (`sim::valley::land`) — since the second pass, 2026-10-09
 

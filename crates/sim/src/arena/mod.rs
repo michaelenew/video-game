@@ -101,6 +101,14 @@ pub mod saddle;
 
 pub mod highlands;
 
+pub mod wood;
+
+pub mod spire;
+
+pub mod deep;
+
+pub mod heights;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -161,6 +169,18 @@ impl ArenaId {
     /// **The Waterfall** as a jump course of its own (`waterfall`): the
     /// same cliff the valley's road climbs at the head of the Pinewood.
     pub const CLIMB_WATERFALL: ArenaId = ArenaId(32);
+    /// **The Great Wood** (`wood`): the giant trees south of Hearth, the
+    /// valley's playground.
+    pub const WOOD: ArenaId = ArenaId(33);
+    /// **The Spire** (`spire`): Hearth's tower, outside its south wall.
+    pub const SPIRE: ArenaId = ArenaId(34);
+    /// **The Deep** (`deep`): the caves under the Shelves, down to the
+    /// Caverns.
+    pub const DEEP: ArenaId = ArenaId(35);
+    /// **The High Plane** (`heights`): the table mountain over the valley,
+    /// and the stretch of the Sky Road over the mountains to it.
+    pub const HIGH_PLANE: ArenaId = ArenaId(36);
+    pub const SKY_ROAD: ArenaId = ArenaId(37);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -169,8 +189,9 @@ impl ArenaId {
     }
 }
 
-/// How many ids there are, registered or not.
-pub const COUNT: usize = 40;
+/// How many ids there are, registered or not: the valley's ranges are
+/// numbered from forty (`valley::ranges::FIRST`).
+pub const COUNT: usize = 64;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -236,6 +257,17 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::PINEWOOD => Some(&pinewood::ARENA),
         ArenaId::SADDLE => Some(&saddle::ARENA),
         ArenaId::HIGHLANDS => Some(&highlands::ARENA),
+        ArenaId::WOOD => Some(&wood::ARENA),
+        ArenaId::SPIRE => Some(&spire::ARENA),
+        ArenaId::DEEP => Some(&deep::ARENA),
+        ArenaId::HIGH_PLANE => Some(&heights::PLANE),
+        ArenaId::SKY_ROAD => Some(&heights::SKY_ROAD),
+        ArenaId(n)
+            if n >= crate::valley::ranges::FIRST
+                && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
+        {
+            Some(&crate::valley::ranges::ARENAS[(n - crate::valley::ranges::FIRST) as usize])
+        }
         _ => None,
     }
 }
@@ -289,6 +321,8 @@ pub enum Material {
     Water,
     /// Timber: trunks, cordwood, a fallen tree.
     Wood,
+    /// **Crystal**: the Caverns' columns and shards (`deep`).
+    Crystal,
 }
 
 impl Material {
@@ -304,7 +338,37 @@ impl Material {
     }
 }
 
-/// An axis-aligned box of the arena's geometry.
+/// **What shape a solid is** inside its box (`docs/design/exploration/0019`).
+///
+/// A solid's `min` and `max` are always the box that holds all of it, so the
+/// tiles, a query's broad phase and whether it hangs read every shape alike;
+/// the shape is what the narrow questions ask -- is a body in it, is a point
+/// under its top, where does a ray meet it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Shape {
+    /// The whole box. Every solid until 2026-10-15, and still almost all.
+    #[default]
+    Box,
+    /// **Round in plan**, upright, about the box's middle: `bottom` across at
+    /// the box's floor and `top` at its top, straight between -- a column
+    /// where the two are equal, a trunk tapering up, a dome's slab widening
+    /// -- and, with `hollow` above zero, **a ring**: a hole that wide (a
+    /// radius, the same at every height) down its middle. A tube, a chimney,
+    /// a cistern's wall.
+    Round { bottom: Fx, top: Fx, hollow: Fx },
+    /// **A box turned** about the upright through the box's middle: `half`
+    /// long along its own length and `half_wide` across it, its length
+    /// pointing `cos`, `sin` in the floor plane (x, z). A branch.
+    Turned {
+        half: Fx,
+        half_wide: Fx,
+        cos: Fx,
+        sin: Fx,
+    },
+}
+
+/// An upright piece of the arena's geometry: an axis-aligned box, or a round
+/// or turned shape inside one ([`Shape`]).
 ///
 /// Every face stops a body; the top is a surface you can stand on, however
 /// high it is; and one that hangs from the roof (its bottom above the floor)
@@ -315,6 +379,19 @@ pub struct Solid {
     pub max: V3,
     /// What its top is made of, for [`Arena::material_under`] and the renderer.
     pub material: Material,
+    /// What shape it is inside its box.
+    pub shape: Shape,
+}
+
+/// How a solid stands against a body beside it: the push that takes the body
+/// out sideways by the shorter way, how far that is, and -- for a box -- which
+/// axis it is along (0 for x, 2 for z), so a box keeps exactly the push it
+/// always had.
+#[derive(Clone, Copy, Debug)]
+pub struct SidePush {
+    pub push: (Fx, Fx),
+    pub depth: Fx,
+    pub axis: Option<u8>,
 }
 
 impl Solid {
@@ -323,6 +400,300 @@ impl Solid {
             min,
             max,
             material: Material::Stone,
+            shape: Shape::Box,
+        }
+    }
+
+    /// **A round solid**: centred on (x, z), from `y0` up to `y1`, `bottom`
+    /// across its foot and `top` across its top (radii, metres).
+    pub fn round(x: Fx, z: Fx, y0: Fx, y1: Fx, bottom: Fx, top: Fx, material: Material) -> Solid {
+        Solid::ring(x, z, y0, y1, (bottom, top), Fx::ZERO, material)
+    }
+
+    /// **A ring**: [`Solid::round`] with a hole `hollow` across (a radius)
+    /// down its middle.
+    pub fn ring(
+        x: Fx,
+        z: Fx,
+        y0: Fx,
+        y1: Fx,
+        radii: (Fx, Fx),
+        hollow: Fx,
+        material: Material,
+    ) -> Solid {
+        let (bottom, top) = radii;
+        let r = bottom.max(top);
+        Solid {
+            min: V3::new(x.sub(r), y0, z.sub(r)),
+            max: V3::new(x.add(r), y1, z.add(r)),
+            material,
+            shape: Shape::Round {
+                bottom,
+                top,
+                hollow,
+            },
+        }
+    }
+
+    /// **A turned box**: centred on (x, z), from `y0` up to `y1`, `half` long
+    /// either way along `yaw` (turns, as `V3::from_turns`) and `half_wide`
+    /// either way across it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn turned(
+        x: Fx,
+        z: Fx,
+        y0: Fx,
+        y1: Fx,
+        half: Fx,
+        half_wide: Fx,
+        yaw: Fx,
+        material: Material,
+    ) -> Solid {
+        let d = V3::from_turns(yaw);
+        let (c, s) = (d.x, d.z);
+        // The box round it: each corner of the turned rectangle.
+        let ex = half.mul(c.abs()).add(half_wide.mul(s.abs()));
+        let ez = half.mul(s.abs()).add(half_wide.mul(c.abs()));
+        Solid {
+            min: V3::new(x.sub(ex), y0, z.sub(ez)),
+            max: V3::new(x.add(ex), y1, z.add(ez)),
+            material,
+            shape: Shape::Turned {
+                half,
+                half_wide,
+                cos: c,
+                sin: s,
+            },
+        }
+    }
+
+    /// The middle of its box in the floor plane.
+    pub fn middle(&self) -> (Fx, Fx) {
+        (
+            Fx::from_raw(self.min.x.raw() / 2 + self.max.x.raw() / 2),
+            Fx::from_raw(self.min.z.raw() / 2 + self.max.z.raw() / 2),
+        )
+    }
+
+    /// A round solid's radius at height `y` (clamped to its span).
+    fn radius_at(&self, bottom: Fx, top: Fx, y: Fx) -> Fx {
+        let span = self.max.y.sub(self.min.y);
+        if span.raw() <= 0 || bottom == top {
+            return top;
+        }
+        let t = y.sub(self.min.y).clamp(Fx::ZERO, span);
+        let d = top.raw() as i64 - bottom.raw() as i64;
+        let k = d * t.raw() as i64 / span.raw() as i64;
+        Fx::from_raw((bottom.raw() as i64 + k) as i32)
+    }
+
+    /// A point in a turned solid's own frame: along its length, across it.
+    fn local(&self, x: Fx, z: Fx, cos: Fx, sin: Fx) -> (Fx, Fx) {
+        let (mx, mz) = self.middle();
+        let (dx, dz) = (x.sub(mx), z.sub(mz));
+        (dx.mul(cos).add(dz.mul(sin)), dz.mul(cos).sub(dx.mul(sin)))
+    }
+
+    /// How far (x, z) is outside its footprint at height `y`, flat: zero
+    /// inside. For a box, the larger of the two flat distances, as the
+    /// ceilings always measured it.
+    pub fn outside_at(&self, x: Fx, z: Fx, y: Fx) -> Fx {
+        match self.shape {
+            Shape::Box => {
+                let dx = self.min.x.sub(x).max(x.sub(self.max.x)).max(Fx::ZERO);
+                let dz = self.min.z.sub(z).max(z.sub(self.max.z)).max(Fx::ZERO);
+                dx.max(dz)
+            }
+            Shape::Round {
+                bottom,
+                top,
+                hollow,
+            } => {
+                let (mx, mz) = self.middle();
+                let d = crate::math::wide_flat_len(V3::new(x.sub(mx), Fx::ZERO, z.sub(mz)));
+                d.sub(self.radius_at(bottom, top, y))
+                    .max(hollow.sub(d))
+                    .max(Fx::ZERO)
+            }
+            Shape::Turned {
+                half,
+                half_wide,
+                cos,
+                sin,
+            } => {
+                let (lx, lz) = self.local(x, z, cos, sin);
+                let dx = lx.abs().sub(half).max(Fx::ZERO);
+                let dz = lz.abs().sub(half_wide).max(Fx::ZERO);
+                dx.max(dz)
+            }
+        }
+    }
+
+    /// Does its footprint at height `y` cover (x, z), grown by `pad` all
+    /// round? Strictly inside, as [`Solid::over`] has always been.
+    pub fn covers_at(&self, x: Fx, z: Fx, y: Fx, pad: Fx) -> bool {
+        match self.shape {
+            Shape::Box => {
+                x.raw() > self.min.x.sub(pad).raw()
+                    && x.raw() < self.max.x.add(pad).raw()
+                    && z.raw() > self.min.z.sub(pad).raw()
+                    && z.raw() < self.max.z.add(pad).raw()
+            }
+            Shape::Round {
+                bottom,
+                top,
+                hollow,
+            } => {
+                let (mx, mz) = self.middle();
+                let r = self.radius_at(bottom, top, y).add(pad);
+                let dx = x.sub(mx).raw() as i64;
+                let dz = z.sub(mz).raw() as i64;
+                let r = r.raw() as i64;
+                let d2 = dx * dx + dz * dz;
+                let hole = hollow.sub(pad).raw().max(0) as i64;
+                r > 0 && d2 < r * r && (hollow.raw() <= 0 || d2 > hole * hole)
+            }
+            Shape::Turned {
+                half,
+                half_wide,
+                cos,
+                sin,
+            } => {
+                let (lx, lz) = self.local(x, z, cos, sin);
+                lx.abs().raw() < half.add(pad).raw() && lz.abs().raw() < half_wide.add(pad).raw()
+            }
+        }
+    }
+
+    /// Does its **top** cover this point, grown by `pad` all round? What
+    /// standing on it asks.
+    pub fn over(&self, x: Fx, z: Fx, pad: Fx) -> bool {
+        self.covers_at(x, z, self.max.y, pad)
+    }
+
+    /// Does its **underside** cover this point? What a ceiling asks.
+    pub fn under(&self, x: Fx, z: Fx, pad: Fx) -> bool {
+        self.covers_at(x, z, self.min.y, pad)
+    }
+
+    /// **The push out of its side** for an upright body at (x, z) of
+    /// `radius`, overlapping it between heights `lo` and `hi`: `None` when
+    /// the body is not in it. A box gives exactly the push it always gave
+    /// (the shallower of x and z); a round solid pushes straight out from its
+    /// axis, at its widest over the overlap; a turned box out of its nearer
+    /// side, turned back into the floor plane.
+    pub fn side_push(&self, x: Fx, z: Fx, radius: Fx, lo: Fx, hi: Fx) -> Option<SidePush> {
+        match self.shape {
+            Shape::Box => {
+                let (min_x, max_x) = (self.min.x.sub(radius), self.max.x.add(radius));
+                let (min_z, max_z) = (self.min.z.sub(radius), self.max.z.add(radius));
+                let inside = x.raw() > min_x.raw()
+                    && x.raw() < max_x.raw()
+                    && z.raw() > min_z.raw()
+                    && z.raw() < max_z.raw();
+                if !inside {
+                    return None;
+                }
+                let px = min_penetration(x, min_x, max_x);
+                let pz = min_penetration(z, min_z, max_z);
+                Some(if px.abs().raw() <= pz.abs().raw() {
+                    SidePush {
+                        push: (px, Fx::ZERO),
+                        depth: px.abs(),
+                        axis: Some(0),
+                    }
+                } else {
+                    SidePush {
+                        push: (Fx::ZERO, pz),
+                        depth: pz.abs(),
+                        axis: Some(2),
+                    }
+                })
+            }
+            Shape::Round {
+                bottom,
+                top,
+                hollow,
+            } => {
+                let (mx, mz) = self.middle();
+                let lo = lo.max(self.min.y);
+                let hi = hi.min(self.max.y);
+                let r = self
+                    .radius_at(bottom, top, lo)
+                    .max(self.radius_at(bottom, top, hi))
+                    .add(radius);
+                let (dx, dz) = (x.sub(mx), z.sub(mz));
+                let d = crate::math::wide_flat_len(V3::new(dx, Fx::ZERO, dz));
+                if d.raw() >= r.raw() {
+                    return None;
+                }
+                // In a ring's hole, clear of its inner wall: nothing.
+                let inner = hollow.sub(radius);
+                if hollow.raw() > 0 && d.raw() <= inner.raw() {
+                    return None;
+                }
+                let out = r.sub(d);
+                // A ring's wall pushes a body back into the hole when that
+                // is the shorter way.
+                let (depth, sign) = if hollow.raw() > 0 && d.sub(inner).raw() < out.raw() {
+                    (d.sub(inner), -1)
+                } else {
+                    (out, 1)
+                };
+                let push = if d.raw() == 0 {
+                    (depth, Fx::ZERO)
+                } else if sign < 0 {
+                    (
+                        Fx::from_raw(
+                            (-(dx.raw() as i64) * depth.raw() as i64 / d.raw() as i64) as i32,
+                        ),
+                        Fx::from_raw(
+                            (-(dz.raw() as i64) * depth.raw() as i64 / d.raw() as i64) as i32,
+                        ),
+                    )
+                } else {
+                    (
+                        Fx::from_raw(
+                            (dx.raw() as i64 * depth.raw() as i64 / d.raw() as i64) as i32,
+                        ),
+                        Fx::from_raw(
+                            (dz.raw() as i64 * depth.raw() as i64 / d.raw() as i64) as i32,
+                        ),
+                    )
+                };
+                Some(SidePush {
+                    push,
+                    depth,
+                    axis: None,
+                })
+            }
+            Shape::Turned {
+                half,
+                half_wide,
+                cos,
+                sin,
+            } => {
+                let (lx, lz) = self.local(x, z, cos, sin);
+                let (hx, hz) = (half.add(radius), half_wide.add(radius));
+                if lx.abs().raw() >= hx.raw() || lz.abs().raw() >= hz.raw() {
+                    return None;
+                }
+                let px = min_penetration(lx, hx.neg(), hx);
+                let pz = min_penetration(lz, hz.neg(), hz);
+                let (ux, uz, depth) = if px.abs().raw() <= pz.abs().raw() {
+                    (px, Fx::ZERO, px.abs())
+                } else {
+                    (Fx::ZERO, pz, pz.abs())
+                };
+                // Back into the floor plane: length along (cos, sin), across
+                // along (-sin, cos).
+                let push = (ux.mul(cos).sub(uz.mul(sin)), ux.mul(sin).add(uz.mul(cos)));
+                Some(SidePush {
+                    push,
+                    depth,
+                    axis: None,
+                })
+            }
         }
     }
 
@@ -334,15 +705,8 @@ impl Solid {
             min: V3::new(cm(min[0]), cm(min[1]), cm(min[2])),
             max: V3::new(cm(max[0]), cm(max[1]), cm(max[2])),
             material,
+            shape: Shape::Box,
         }
-    }
-
-    /// Does its footprint cover this point, grown by `pad` all round?
-    pub fn over(&self, x: Fx, z: Fx, pad: Fx) -> bool {
-        x.raw() > self.min.x.sub(pad).raw()
-            && x.raw() < self.max.x.add(pad).raw()
-            && z.raw() > self.min.z.sub(pad).raw()
-            && z.raw() < self.max.z.add(pad).raw()
     }
 
     /// Does it hang from the roof -- its bottom above the floor?
@@ -730,34 +1094,21 @@ fn resolve_among(
 
         let reach = radius.add(RESOLVE_REACH);
         for solid in ground.around(pos, reach) {
-            // Expand the box by the body radius horizontally, so the body can
-            // be treated as a point in X and Z.
-            let min_x = solid.min.x.sub(radius);
-            let max_x = solid.max.x.add(radius);
-            let min_z = solid.min.z.sub(radius);
-            let max_z = solid.max.z.add(radius);
-
             let feet = pos.y;
             let head = pos.y.add(height);
-
-            let inside = pos.x.raw() > min_x.raw()
-                && pos.x.raw() < max_x.raw()
-                && pos.z.raw() > min_z.raw()
-                && pos.z.raw() < max_z.raw()
-                && head.raw() > solid.min.y.raw()
-                && feet.raw() < solid.max.y.raw();
-            if !inside {
+            if head.raw() <= solid.min.y.raw() || feet.raw() >= solid.max.y.raw() {
                 continue;
             }
+            // The body as a point in X and Z against the solid grown by its
+            // radius (`Solid::side_push`): a box exactly as it always was.
+            let Some(side) = solid.side_push(pos.x, pos.z, radius, feet, head) else {
+                continue;
+            };
 
             // Penetration depth on each axis; resolve the shallowest.
-            let px = min_penetration(pos.x, min_x, max_x);
-            let pz = min_penetration(pos.z, min_z, max_z);
             let py_up = solid.max.y.sub(feet); // push up onto the top
             let py_down = head.sub(solid.min.y); // push down out from under
 
-            let ax = px.abs();
-            let az = pz.abs();
             let ay = py_up.min(py_down).abs();
 
             // **A step is walked up, not into** (2026-10-13, from play: a
@@ -773,7 +1124,7 @@ fn resolve_among(
                 && py_up.raw() <= step.raw()
                 && py_up.raw() < py_down.raw()
                 && headroom(ground, V3::new(pos.x, solid.max.y, pos.z), radius, height);
-            if steps_up || (ay.raw() <= ax.raw() && ay.raw() <= az.raw()) {
+            if steps_up || ay.raw() <= side.depth.raw() {
                 if py_up.raw() <= py_down.raw() {
                     pos.y = solid.max.y;
                     if vel.y.raw() < 0 {
@@ -796,13 +1147,16 @@ fn resolve_among(
                         vel.y = Fx::ZERO;
                     }
                 }
-            } else if ax.raw() <= az.raw() {
-                pos.x = pos.x.add(px);
-                vel.x = Fx::ZERO;
-                wall = true;
             } else {
-                pos.z = pos.z.add(pz);
-                vel.z = Fx::ZERO;
+                pos.x = pos.x.add(side.push.0);
+                pos.z = pos.z.add(side.push.1);
+                match side.axis {
+                    Some(0) => vel.x = Fx::ZERO,
+                    Some(_) => vel.z = Fx::ZERO,
+                    // Round or turned: only the part of the velocity into
+                    // the face is taken off, so a body slides round a trunk.
+                    None => vel = off_the_face(vel, side),
+                }
                 wall = true;
             }
         }
@@ -956,13 +1310,34 @@ fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
     true
 }
 
+/// The velocity with its part into a side push's face taken off: what a body
+/// keeps sliding round a round or turned solid.
+fn off_the_face(vel: V3, side: SidePush) -> V3 {
+    let (px, pz) = side.push;
+    let d = crate::math::wide_flat_len(V3::new(px, Fx::ZERO, pz));
+    if d.raw() == 0 {
+        return vel;
+    }
+    let (nx, nz) = (px.div(d), pz.div(d));
+    let into = vel.x.mul(nx).add(vel.z.mul(nz));
+    if into.raw() >= 0 {
+        return vel;
+    }
+    V3::new(vel.x.sub(nx.mul(into)), vel.y, vel.z.sub(nz.mul(into)))
+}
+
 /// Is there room for a body standing at `at`: nothing solid between its feet
 /// and its head? What a step up asks of the top it would put the body on.
 fn headroom(ground: &Terrain, at: V3, radius: Fx, height: Fx) -> bool {
     let feet = at.y.add(SKIN);
     let head = at.y.add(height);
     !ground.around(at, radius).any(|s| {
-        s.over(at.x, at.z, radius) && s.min.y.raw() < head.raw() && s.max.y.raw() > feet.raw()
+        s.min.y.raw() < head.raw()
+            && s.max.y.raw() > feet.raw()
+            && match s.shape {
+                Shape::Box => s.over(at.x, at.z, radius),
+                _ => s.side_push(at.x, at.z, radius, feet, head).is_some(),
+            }
     })
 }
 
@@ -1110,6 +1485,8 @@ impl std::ops::Deref for Terrain {
 pub struct Solids<'a> {
     own: Own<'a>,
     raised: std::slice::Iter<'a, Solid>,
+    /// Leave out the map's hidden boxes ([`Terrain::seen_around`]).
+    seen: bool,
 }
 
 // The map's arm carries a few hundred bytes of tile cursors. It lives on the
@@ -1136,12 +1513,20 @@ impl Iterator for Solids<'_> {
                 near,
                 origin,
                 ..
-            } => near.next().map(|i| {
+            } => {
+                let mut i = near.next();
+                while i.is_some_and(|k| self.seen && atlas.hidden[k as usize]) {
+                    i = near.next();
+                }
+                i
+            }
+            .map(|i| {
                 let s = atlas.solids[i as usize];
                 Solid {
                     min: s.min.sub(*origin),
                     max: s.max.sub(*origin),
                     material: s.material,
+                    shape: s.shape,
                 }
             }),
         };
@@ -1219,7 +1604,19 @@ impl Terrain {
         Solids {
             own,
             raised: self.raised().iter(),
+            seen: false,
         }
+    }
+
+    /// **The solids within `reach` of a point that are drawn as themselves**:
+    /// [`Terrain::around`] without a grown tree's wood (`Atlas::hidden`).
+    /// What the camera keeps out of -- a tree is cut away round the line to
+    /// the fighter instead (`game::grove`), because a camera shoved in by
+    /// every branch it passes jerks the whole way up a tree.
+    pub fn seen_around(&self, at: V3, reach: Fx) -> Solids<'_> {
+        let mut s = self.around(at, reach);
+        s.seen = true;
+        s
     }
 
     /// The solids within `reach` of a point, sideways.
@@ -1427,13 +1824,15 @@ impl Terrain {
     pub fn ceiling_near(&self, x: Fx, z: Fx, above: Fx, slope: Fx) -> Option<Fx> {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
-        for s in self.without_raised(self.around(at, CEILING_REACH)) {
+        // Not a grown tree's limb: the eye is not held under every branch
+        // overhead, which in the Wood shoved it down at each one it passed
+        // under (2026-10-16, from play); the tree is cut away round the eye's
+        // line instead (`game::grove`).
+        for s in self.without_raised(self.seen_around(at, CEILING_REACH)) {
             if s.min.y.raw() <= above.raw() || !self.hangs(&s) {
                 continue;
             }
-            let dx = s.min.x.sub(x).max(x.sub(s.max.x)).max(Fx::ZERO);
-            let dz = s.min.z.sub(z).max(z.sub(s.max.z)).max(Fx::ZERO);
-            let at = s.min.y.add(dx.max(dz).mul(slope));
+            let at = s.min.y.add(s.outside_at(x, z, s.min.y).mul(slope));
             if best.is_none_or(|b| at.raw() < b.raw()) {
                 best = Some(at);
             }
@@ -1447,8 +1846,8 @@ impl Terrain {
     pub fn ceiling_over(&self, x: Fx, z: Fx, above: Fx) -> Option<Fx> {
         let mut best: Option<Fx> = None;
         let at = V3::new(x, Fx::ZERO, z);
-        for s in self.without_raised(self.around(at, Fx::ZERO)) {
-            if s.min.y.raw() <= above.raw() || !s.over(x, z, Fx::ZERO) || !self.hangs(&s) {
+        for s in self.without_raised(self.seen_around(at, Fx::ZERO)) {
+            if s.min.y.raw() <= above.raw() || !s.under(x, z, Fx::ZERO) || !self.hangs(&s) {
                 continue;
             }
             if best.is_none_or(|b| s.min.y.raw() < b.raw()) {
@@ -1480,21 +1879,9 @@ impl Terrain {
             if solid.max.y.raw() <= pos.y.add(step).raw() || self.hangs(&solid) {
                 continue;
             }
-            let (min_x, max_x) = (solid.min.x.sub(radius), solid.max.x.add(radius));
-            let (min_z, max_z) = (solid.min.z.sub(radius), solid.max.z.add(radius));
-            let inside = pos.x.raw() > min_x.raw()
-                && pos.x.raw() < max_x.raw()
-                && pos.z.raw() > min_z.raw()
-                && pos.z.raw() < max_z.raw();
-            if !inside {
-                continue;
-            }
-            let px = min_penetration(pos.x, min_x, max_x);
-            let pz = min_penetration(pos.z, min_z, max_z);
-            if px.abs().raw() <= pz.abs().raw() {
-                pos.x = pos.x.add(px);
-            } else {
-                pos.z = pos.z.add(pz);
+            if let Some(side) = solid.side_push(pos.x, pos.z, radius, pos.y, solid.max.y) {
+                pos.x = pos.x.add(side.push.0);
+                pos.z = pos.z.add(side.push.1);
             }
         }
         (pos, pos.sub(start))

@@ -272,6 +272,7 @@ pub fn lands(path: &Path, gap: Fx, rise: Fx) -> bool {
         min: V3::new(gap, Fx::ZERO, m(-50)),
         max: V3::new(gap.add(m(50)), lift.add(rise), m(50)),
         material: Material::Rock,
+        shape: crate::arena::Shape::Box,
     };
     let bench = bench_arena(ledge);
     let mut grounded = false;
