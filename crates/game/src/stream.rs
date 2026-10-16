@@ -46,9 +46,12 @@ const REACH: (f32, f32) = (160.0, 600.0);
 /// How far the camera moves before the loaded set is worked out again.
 const RESTREAM: f32 = 6.0;
 /// How wide the window through the trees is where it reaches the fighter,
-/// metres (`Paint::cut`'s `w`): the ghost is thinnest across the inner
-/// three-fifths of it and thickens to solid wood at its edge.
-const WINDOW: f32 = 1.8;
+/// metres (`Paint::cut`'s `w`), and half that by the camera: six metres
+/// across. Two and a half until 2026-10-16, when seeing what was going on in
+/// the Wood was a fight of its own; the forest is not meant to be one about
+/// seeing. The ghost is thinnest in the middle and thickens to solid wood
+/// at its edge.
+const WINDOW: f32 = 3.0;
 
 /// **How much is built in one frame**: places, and boxes. Building a place's
 /// floor and its scatter, or a cliff's roughened mesh, is real work on the

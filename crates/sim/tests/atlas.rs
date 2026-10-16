@@ -258,9 +258,11 @@ fn the_valley_is_one_map_of_more_boxes_than_an_arena_may_hold() {
     // hundred, an Elder's crown, thick to its middle, the most. A query reads
     // them all and turns away all but the few at its height on their first
     // comparison; `tests/budget.rs` stands at the foot of both and holds the
-    // frame.
+    // frame. Not 256 since 2026-10-16: a limb's boards are cut a riser of
+    // 36 cm apart, so walking along one never stops on a lip, and a crown
+    // has more of them.
     assert!(
-        atlas.busiest_tile() <= 256,
+        atlas.busiest_tile() <= 320,
         "a tile holds {} boxes",
         atlas.busiest_tile()
     );

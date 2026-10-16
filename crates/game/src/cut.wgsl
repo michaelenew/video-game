@@ -24,7 +24,7 @@ fn window(cut: vec4<f32>, eye: vec3<f32>, at: vec3<f32>) -> f32 {
         return 0.0;
     }
     let off = length(at - (eye + to * t));
-    let r = cut.w * (0.35 + 0.65 * t);
+    let r = cut.w * (0.5 + 0.5 * t);
     let across = 1.0 - smoothstep(0.3 * r, r, off);
     let along = 1.0 - smoothstep(0.7, 0.85, t);
     return across * along;
@@ -45,5 +45,5 @@ fn by_window(cut: vec4<f32>, eye: vec3<f32>, at: vec3<f32>) -> bool {
         return false;
     }
     let off = length(at - (eye + to * t));
-    return off < 1.4 * cut.w * (0.35 + 0.65 * t);
+    return off < 1.4 * cut.w * (0.5 + 0.5 * t);
 }
