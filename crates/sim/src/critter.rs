@@ -620,8 +620,20 @@ impl Body {
 
     /// Can a capsule from `a` to `b` of `radius` not possibly reach it? One
     /// closed-form distance, before the search [`Body::gap_to_segment`] does.
+    ///
+    /// Cheapest first: a body metres off the segment's box on one axis is out
+    /// of reach without the closest point being found. Its length, width and
+    /// height together are never less than the half diagonal [`Body::bound`]
+    /// measures, so the quick answer never contradicts the exact one.
     fn out_of_reach(&self, a: V3, b: V3, radius: Fx) -> bool {
         let m = self.middle();
+        let loose = radius
+            .add(self.half_len)
+            .add(self.half_wid)
+            .add(self.height);
+        if crate::math::far_on_an_axis(crate::math::outside_span(a, b, m), loose) {
+            return true;
+        }
         crate::math::segment_gap(a, b, m, m).raw() > radius.add(self.bound()).raw()
     }
 

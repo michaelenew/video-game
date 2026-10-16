@@ -291,6 +291,36 @@ pub fn point_box_gap(p: V3, min: V3, max: V3) -> Fx {
     ))
 }
 
+/// **Certainly further than `reach`**, judged by the longest axis of `d`
+/// alone: no square root and no division, for throwing out what cannot
+/// possibly touch before an exact test that costs a thousand instructions.
+///
+/// A vector is at least as long as any one of its axes, so an axis past
+/// `reach` is a vector past it. The slack -- a sixteenth of the reach and
+/// half a metre -- is wider than any rounding the exact tests downstream can
+/// make (a rotation chained down a creature's bones, a closest point found by
+/// division), so `true` here is only ever said where the exact test would
+/// have said the same: the answers do not move, only what they cost.
+pub fn far_on_an_axis(d: V3, reach: Fx) -> bool {
+    let reach = reach.raw().max(0) as i64;
+    let past = reach + reach / 16 + (Fx::ONE.raw() as i64) / 2;
+    (d.x.raw() as i64).abs() > past
+        || (d.y.raw() as i64).abs() > past
+        || (d.z.raw() as i64).abs() > past
+}
+
+/// How far `p` is outside the box round the segment `a`-`b`, on each axis:
+/// zero on an axis where it is level with some part of the segment. Every
+/// point of the segment is at least this far away on each axis, which is
+/// what [`far_on_an_axis`] wants to be handed.
+pub fn outside_span(a: V3, b: V3, p: V3) -> V3 {
+    let out = |a: Fx, b: Fx, v: Fx| {
+        let (lo, hi) = if a.raw() <= b.raw() { (a, b) } else { (b, a) };
+        lo.sub(v).max(v.sub(hi)).max(Fx::ZERO)
+    };
+    V3::new(out(a.x, b.x, p.x), out(a.y, b.y, p.y), out(a.z, b.z, p.z))
+}
+
 /// The distance, in the floor plane only, from a point to a box's footprint.
 /// What a flat disc -- a volume with no top and no bottom -- is measured by.
 pub fn flat_box_gap(p: V3, min: V3, max: V3) -> Fx {
@@ -700,10 +730,26 @@ pub fn sqrt(v: Fx) -> Fx {
 
 /// Integer square root of a 64-bit value, saturating into `i32`.
 ///
-/// A fixed iteration count rather than "until it converges": a value that
-/// depends on how hard it was to compute is not something two machines can be
-/// relied on to agree about.
+/// The answer forty steps from 2^31 always gave ([`isqrt_by_steps`]), in the
+/// handful a start just above the root needs; see [`Fx::sqrt`] for why the
+/// inputs one short of a square still take the long way.
 fn isqrt(n: i64) -> i32 {
+    if n <= 0 {
+        return 0;
+    }
+    let s = crate::fixed::floor_sqrt(n as u64) as i64;
+    if (s as i128 + 1) * (s as i128 + 1) == n as i128 + 1 {
+        return isqrt_by_steps(n);
+    }
+    if s > i32::MAX as i64 {
+        i32::MAX
+    } else {
+        s as i32
+    }
+}
+
+/// [`isqrt`] as it was always worked out: forty Newton steps from 2^31.
+fn isqrt_by_steps(n: i64) -> i32 {
     if n <= 0 {
         return 0;
     }
@@ -995,4 +1041,32 @@ pub const fn hex_neighbours(q: i32, r: i32) -> [(i32, i32); 6] {
 
 fn sat(v: i64) -> i32 {
     v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
+#[cfg(test)]
+mod isqrt_tests {
+    use super::{isqrt, isqrt_by_steps};
+
+    /// The short integer root agrees with the forty-step one: a spread of
+    /// magnitudes, and either side of perfect squares, where the long way's
+    /// answer depends on how many steps it took.
+    #[test]
+    fn the_short_integer_root_is_the_long_one() {
+        let mut r: u64 = 0x9E37_79B9_7F4A_7C15;
+        for i in 0..200_000u64 {
+            r ^= r << 13;
+            r ^= r >> 7;
+            r ^= r << 17;
+            let n = ((r >> 1) >> (i % 63)) as i64;
+            assert_eq!(isqrt(n), isqrt_by_steps(n), "isqrt {n}");
+        }
+        let mut k: i64 = 1;
+        while k < 3_037_000_499 {
+            for d in [-2, -1, 0, 1] {
+                let n = k * k + d;
+                assert_eq!(isqrt(n), isqrt_by_steps(n), "isqrt {n}");
+            }
+            k += 1 + k / 1024;
+        }
+    }
 }
