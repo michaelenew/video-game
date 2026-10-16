@@ -32,7 +32,6 @@ mod hub;
 mod hud;
 mod land;
 mod menu;
-mod near;
 mod online;
 mod outline;
 mod paint;
@@ -186,7 +185,6 @@ fn main() {
         .init_resource::<Sim>()
         .init_resource::<arenas::Drawn>()
         .init_resource::<stream::Stream>()
-        .init_resource::<near::Near>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
@@ -266,7 +264,6 @@ fn main() {
                     arenas::dress,
                     sky::weather,
                     stream::stream,
-                    near::near,
                     valley::update,
                     falls::update,
                     sky::follow,

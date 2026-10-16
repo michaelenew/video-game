@@ -101,17 +101,6 @@ pub struct Stream {
 }
 
 impl Stream {
-    /// The land's tiles by (column, row): the tile, how finely it is drawn,
-    /// and its water. `near::near` paints the close ones.
-    pub fn tiles(&self) -> &HashMap<(i32, i32), (Entity, usize, Option<Entity>)> {
-        &self.tiles
-    }
-
-    /// The paint every tile of land is drawn in, once one has been.
-    pub fn ground(&self) -> Option<&Handle<Paint>> {
-        self.ground.as_ref()
-    }
-
     /// How many places and boxes are drawn: what the dev overlay shows.
     pub fn loaded(&self) -> (usize, usize, usize) {
         (self.places.len(), self.solids.len(), self.tiles.len())

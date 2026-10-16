@@ -583,13 +583,6 @@ pub fn draws_outlines() -> bool {
     !cfg!(target_arch = "wasm32")
 }
 
-/// Whether the land near the eye is baked at its finest (`crate::near`):
-/// most of a second of a core a tile, which the browser build has no
-/// background thread to give, so there the sheets stand in.
-pub fn bakes_near() -> bool {
-    !cfg!(target_arch = "wasm32")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

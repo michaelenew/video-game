@@ -110,7 +110,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game --release -- --look brushed",
-                "Paints the picture in one of the looks built in docs/design/painting.md. They are opt-in: the game is plain by default until a painted look is cheap enough to carry. brushed is Guild Wars 2's broad strokes (crisp near, painted far, strokes that follow paths and slopes, colour that follows the land's contours); the others are painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper). On the web it is ?look=brushed; there only the surface half of a look is drawn, since the rest reads a depth buffer the browser build cannot.",
+                "Paints the picture in one of the looks built in docs/design/painting.md. They are opt-in: the game is plain by default until a painted look is cheap enough to carry. brushed is Guild Wars 2's broad strokes (crisp near, painted far, strokes that follow paths and slopes, colour that follows the land's contours); the others are painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper). On the web it is ?look=brushed; there only the surface half of a look is drawn, since the rest reads a depth buffer the browser build cannot. The brush is worked out at every pixel, which is what makes it a painting; --exact <m> reads it off baked sheets beyond so many metres instead, and --exact 0 everywhere, for a machine that cannot afford the brush.",
             ),
             e(
                 "cargo run -p manual",
