@@ -121,13 +121,22 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// spike winds up in 16 frames rather than 30 and stands wider, the Stake
 /// narrower, Command waits on the Champion's window, a spike aimed through
 /// a stain's column goes to it, and a finisher pays back the grey it burned.
+///
+/// **Every class but the Champion moved 2026-10-16, deliberately: wall slides
+/// and wall jumps** (`state::cling_to_the_wall`). The random presses jump
+/// against the proving ground's walls, which now slow the fall and take a
+/// press of space as a jump off them. Not only the hash: with the wall
+/// fields left out of `state_checksum` the same five still moved.
+/// **The Bulwark's again the same day**: the same wall is offered again once
+/// a body is `wall_jump_drop` below the last jump off it, rather than never,
+/// and his random presses take one.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0x11c745d19fbec112),
-    (Class::ShadowReaver, 0xa45935d2dff6f3e9),
-    (Class::BloodMage, 0x1c20d06b60541887),
-    (Class::DualMage, 0x24161222c7142c96),
-    (Class::Elementalist, 0x31a1cb586ada4b67),
+    (Class::Bulwark, 0xdf231e126174739b),
+    (Class::ShadowReaver, 0xdc33cf7e5f40c303),
+    (Class::BloodMage, 0x3d6aab4386e3f321),
+    (Class::DualMage, 0x4f860ccfcb70b885),
+    (Class::Elementalist, 0x8691536dc4d6f3e8),
 ];
 
 #[test]

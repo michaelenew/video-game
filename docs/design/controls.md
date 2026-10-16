@@ -706,6 +706,51 @@ A hang is also always **shorter than the move that carries it** (`sim/tests/feel
 longer than its move is a float with an attack attached rather than the other way round, and it
 would let a whiffed aerial stay safe by simply remaining out of reach.
 
+### Walls slide, and can be jumped off — added 2026-10-16
+
+**Falling against the side of a solid is a slide.** Gravity and terminal velocity are both
+a little lower while you are on it (`Wall slide, gravity` and `Wall slide, terminal velocity`
+in the Oven, ×0.7 each) — not so much slower than a fall that a wall is a perch, but enough
+that reaching one is worth something. Both are scaled because a short fall never reaches the
+cap, and a slide that only lowered the cap would do nothing on one. You are held to the wall
+with nothing pressed (`Wall slide, held to the wall at`) and slide for as far as the wall
+goes; steering away from it is how you leave. A body being thrown — in a stun, or spiked
+toward the floor — is not slowed by a wall it goes past.
+
+**A wall is footing for the fall rule.** While you slide, the height a fall is measured from
+is reset to where you are, the way a vine resets it. A wall slid all the way to the floor
+costs nothing to land from; one let go partway costs only the drop from where you let go.
+That is the recovery: a wall reached is a fall cancelled or shortened.
+
+**Space on a wall, or a few frames off one (`Wall jump, still off a wall left`, 4), jumps off
+it**: a fresh rise of `Wall jump, rise` (0.6 of the class's takeoff — about a metre on the
+Champion), never less than the rise you already had, and a push of `Wall jump, pushed off at`
+(7 m/s, a walk) away from the face, keeping your speed along it. There is no sustain: the
+height is the wall's to give, not the button's. **It gives nothing back** — not the jump
+attack, not the airdodge, not the aerial hangs. It is height and a direction.
+
+**Off the same wall again only from lower down** (`Wall jump, same wall again once this far
+below`, 1 m). Without a rule, a wall jump, an air-strafe back with an aerial's hang to buy the
+time, and another jump off the same wall is a ladder. With it, each jump off the same wall
+leaves from at least that much below the last, so going back to a wall always runs downhill —
+but the wall is still yours to use again on the way down. Any drop above zero is enough to
+stop the climb; the size is how much a return trip costs. "The same wall" is the same *face* —
+facing within `Wall jump, same wall within (cos)` of the last one and no further across from
+it than `Wall jump, same wall within (m)` — so moving along a long wall, or to the next box in
+the same line, does not make it a new one. *(First built as "never twice running off the same
+wall"; changed the same day at the owner's request.)*
+
+**And each wall jump in an airtime rises less than the last** (`Wall jump, each one after`,
+×0.7, compounding). The same-wall drop is not enough on its own: an inside corner is two walls
+a step apart, and alternating between them never meets the same wall twice running. With the
+falloff the heights add up to a bounded sum however many walls there are — the argument the
+aerial hangs make above. A chimney or a corner can still be climbed a little; it cannot be
+climbed forever. Both reset on landing.
+
+Only a solid's side is a wall. Ground too steep to climb is a slope you slide down, and the
+Elementalist's stones are not walls for this (they have their own rules for bodies). Pinned by
+`crates/sim/tests/wall_jump.rs`; the code is `state::cling_to_the_wall`.
+
 ### Airborne attacks — ⚠️ open
 
 Grounded and airborne should differ, as they do in every platform fighter. The intended shape,

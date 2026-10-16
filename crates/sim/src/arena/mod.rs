@@ -933,6 +933,12 @@ pub struct Resolved {
     /// can decide what happens to the speed that is *not* zeroed -- see
     /// `stones::step`.
     pub wall: bool,
+    /// Which way the last solid that stopped a body sideways faces, out of
+    /// it and level: a unit vector, or zero when nothing did. Only a solid's
+    /// side is a face -- ground too steep to climb is a slope, not a wall --
+    /// because this is what a wall slide clings to and a wall jump leaves
+    /// (`state::cling_to_the_wall`).
+    pub wall_normal: V3,
 }
 
 /// How far a body is held off a surface before it counts as standing on it.
@@ -1065,6 +1071,7 @@ fn resolve_among(
     {
         let mut grounded = false;
         let mut wall = false;
+        let mut wall_normal = V3::ZERO;
 
         // On land, ground too steep to walk up is a wall: the step that
         // would climb it is taken back, or slid along.
@@ -1158,6 +1165,7 @@ fn resolve_among(
                     None => vel = off_the_face(vel, side),
                 }
                 wall = true;
+                wall_normal = face_of(side);
             }
         }
 
@@ -1221,6 +1229,7 @@ fn resolve_among(
             vel,
             grounded,
             wall,
+            wall_normal,
         }
     }
 }
@@ -1312,6 +1321,25 @@ fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
 
 /// The velocity with its part into a side push's face taken off: what a body
 /// keeps sliding round a round or turned solid.
+/// **Which way a side push faces**: out of the solid and level, as a unit
+/// vector. Exact on a box's face, radial off a round one.
+fn face_of(side: SidePush) -> V3 {
+    let (px, pz) = side.push;
+    let sign = |v: Fx| if v.raw() < 0 { Fx::ONE.neg() } else { Fx::ONE };
+    match side.axis {
+        Some(0) => V3::new(sign(px), Fx::ZERO, Fx::ZERO),
+        Some(_) => V3::new(Fx::ZERO, Fx::ZERO, sign(pz)),
+        None => {
+            let d = crate::math::wide_flat_len(V3::new(px, Fx::ZERO, pz));
+            if d.raw() == 0 {
+                V3::ZERO
+            } else {
+                V3::new(px.div(d), Fx::ZERO, pz.div(d))
+            }
+        }
+    }
+}
+
 fn off_the_face(vel: V3, side: SidePush) -> V3 {
     let (px, pz) = side.push;
     let d = crate::math::wide_flat_len(V3::new(px, Fx::ZERO, pz));

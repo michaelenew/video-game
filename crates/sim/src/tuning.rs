@@ -575,6 +575,91 @@ pub fn air_stall_falloff() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirStallFalloff))
 }
 
+/// What gravity is multiplied by while sliding down a wall.
+///
+/// **A little slower than a fall, not a ledge.** The slide is a partial
+/// recovery -- reaching a wall buys some control back and the fall rule's
+/// footing (`state::cling_to_the_wall`) -- so it has to be felt, but a slide
+/// slow enough to be a perch would make every wall a place to wait. Gravity
+/// and the cap are both scaled because a short fall never reaches the cap,
+/// and a slide that only changed the cap would do nothing on one.
+pub fn wall_slide_gravity() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideGravity))
+}
+
+/// What the fall cap is multiplied by while sliding down a wall.
+pub fn wall_slide_fall() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideFall))
+}
+
+/// How fast a slide holds a body into the wall it is on.
+///
+/// The resolve only reports a wall it had to push a body out of, and a body
+/// against a wall has had its speed into it taken off -- so with nothing
+/// holding it there, a slide would last one frame. Steering away from the
+/// wall is how a slide is left, so this is kept small: any push away beats it.
+pub fn wall_stick() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallStick))
+}
+
+/// A wall jump's rise, as a share of the class's takeoff speed.
+///
+/// A fresh vertical speed rather than an addition, like the Dual mage's
+/// second jump, so it works on the way down -- which is when you are on a
+/// wall. No sustain: the height is the wall's to give, not the button's.
+pub fn wall_jump_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpRise))
+}
+
+/// How fast a wall jump pushes a body away from the wall, in metres a second.
+pub fn wall_jump_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpPush))
+}
+
+/// What each wall jump after the first in one airtime is worth, compounding.
+///
+/// **The same-wall drop alone does not bound the height.** It stops jumping
+/// off a wall, air-steering back and jumping off it again from as high, but
+/// an inside corner is two walls a step apart, and alternating between them
+/// never meets the same wall twice running. Compounding the rise makes the sum of every
+/// wall jump's height a geometric series, bounded however many walls there
+/// are -- the argument [`air_stall_falloff`] makes for the hangs. Reset on
+/// landing.
+pub fn wall_jump_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpFalloff))
+}
+
+/// How many frames after leaving a wall a jump is still off it.
+pub fn wall_jump_grace() -> u8 {
+    oven::scalar(Scalar::WallJumpGrace).clamp(0, 200) as u8
+}
+
+/// Two walls are the same wall when they face within this of each other
+/// (the cosine of the angle between them) ...
+pub fn wall_same_turn() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSameTurn))
+}
+
+/// ... and their faces are no further apart than this, in metres.
+///
+/// A face, not a box: a long wall built from several boxes is one wall, and
+/// two boxes' faces in one line are one face to a body sliding along them.
+pub fn wall_same_gap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSameGap))
+}
+
+/// **How far below the last jump off a wall the next one off it may be.**
+///
+/// The wall jump just taken off a face is not offered off that face again
+/// until the body is this much lower than where it jumped. That is what
+/// stops jump, strafe back, jump again being a ladder: every jump off the
+/// same wall leaves from at least this much below the last, so the climb
+/// runs downhill however it is played. Any height above zero bounds it; the
+/// size is how much a return trip costs. A different wall is not held to it.
+pub fn wall_jump_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpDrop)).max(Fx::ZERO)
+}
+
 /// Fraction of your upward speed kept when you let go of jump while rising.
 ///
 /// The sustain alone cannot give a short hop worth having. Holding reduces

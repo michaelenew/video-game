@@ -273,6 +273,41 @@ pub struct Rise {
     pub floor: Fx,
 }
 
+/// **A wall, as a fighter met it in the air**: a point on its face -- where
+/// the body's middle was, held a body's radius off it -- and which way it
+/// faces, level. Enough to push away from it and to tell whether the next
+/// wall is the same one (`Wall::same_as`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Wall {
+    pub at: V3,
+    /// Out of the wall, a unit vector; zero for no wall.
+    pub normal: V3,
+}
+
+impl Wall {
+    pub const NONE: Wall = Wall {
+        at: V3::ZERO,
+        normal: V3::ZERO,
+    };
+
+    pub fn is_some(self) -> bool {
+        self.normal != V3::ZERO
+    }
+
+    /// Is `other` this wall: facing the same way, within
+    /// `tuning::wall_same_turn`, and its face no further than
+    /// `tuning::wall_same_gap` from this one's? Measured across the face, so
+    /// anywhere along one long wall is the same wall.
+    pub fn same_as(self, other: Wall) -> bool {
+        if !self.is_some() || !other.is_some() {
+            return false;
+        }
+        let facing = self.normal.dot(other.normal);
+        let across = other.at.sub(self.at).dot(self.normal).abs();
+        facing.raw() >= t::wall_same_turn().raw() && across.raw() <= t::wall_same_gap().raw()
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Player {
     pub pos: V3,
@@ -339,6 +374,25 @@ pub struct Player {
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
     /// burst of horizontal speed with invulnerability attached.
     pub air_dodged: bool,
+    /// The last wall this fighter's body was against in the air.
+    ///
+    /// Frames since are [`Player::wall_since`]; the slide and the wall jump
+    /// read both. See [`cling_to_the_wall`].
+    pub wall: Wall,
+    /// Frames since the resolve last held this fighter off a wall in the air:
+    /// zero while against one, `u8::MAX` on the floor or never.
+    pub wall_since: u8,
+    /// The wall the last wall jump left, this airtime, and where the body was
+    /// when it jumped; or [`Wall::NONE`].
+    ///
+    /// **Off the same wall again only from lower down**
+    /// (`tuning::wall_jump_drop`). Without it a wall jump, an air-steer back
+    /// with an aerial's hang to buy the time, and another wall jump is a
+    /// ladder. Cleared on landing.
+    pub wall_jumped: Wall,
+    /// How many wall jumps this airtime, for `tuning::wall_jump_falloff`.
+    /// Reset on landing.
+    pub wall_jumps: u8,
     /// True once the current active window has connected, so a move hits once.
     pub hit_used: bool,
     pub class: Class,
@@ -1312,6 +1366,10 @@ impl Default for Player {
             haul_speed: Fx::ZERO,
             air_stalls: 0,
             air_dodged: false,
+            wall: Wall::NONE,
+            wall_since: u8::MAX,
+            wall_jumped: Wall::NONE,
+            wall_jumps: 0,
             hit_used: false,
             repeat_lock: [0; moves::LOCKED_SLOTS],
             reactivate_lock: [0; moves::LOCKED_SLOTS],
@@ -5837,6 +5895,19 @@ fn step_player(
     // Before anything moves the body, so the frame the feet land on still
     // sees the fall that got them there.
     bulwark::track_fall(p);
+    // **The wall, as the last resolve left it** (`cling_to_the_wall`), read
+    // before anything moves and then aged a frame: the resolve below puts it
+    // back to zero if the body is still against one. Aged up here, above the
+    // rider's early returns, so a wall touched before mounting is not a wall
+    // the dismount can jump off.
+    if p.footed() {
+        p.wall_since = u8::MAX;
+        p.wall_jumped = Wall::NONE;
+        p.wall_jumps = 0;
+    }
+    let on_wall = p.wall_since == 0;
+    let near_wall = p.wall_since <= t::wall_jump_grace();
+    p.wall_since = p.wall_since.saturating_add(1);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     // **The dead do not ride.** A fighter killed on its back falls off it,
@@ -6455,6 +6526,15 @@ fn step_player(
         p.vel.z = Fx::ZERO;
     }
 
+    // **Sliding down a wall** (`cling_to_the_wall`): against one last frame,
+    // not rising, and nobody else's -- a fighter knocked into a wall or
+    // spiked past one is being thrown, and a throw is not slowed by the wall
+    // it goes past. Held to it, unless steering away from it.
+    let sliding = on_wall && slides(p);
+    if sliding {
+        hold_to_the_wall(p);
+    }
+
     // Space is a vertical takeoff, whatever your feet are doing. Holding a
     // direction while jumping carries your momentum up with you; it does not
     // turn the jump into something else.
@@ -6478,7 +6558,25 @@ fn step_player(
     // **Before the ordinary takeoff**, which clears `grounded` on the frame
     // it fires: read after it, the press that left the floor would look like a
     // press in the air and spend the second jump on the first.
-    if pressed_space && !p.grounded && p.action.actionable() && dual::may_beat_wings(p) {
+    // **The wall jump**, ahead of the second jump for the same reason the
+    // second jump is ahead of the takeoff: one press, one jump. Against a
+    // wall, or a few frames off one, a press is a jump off it rather than
+    // the class's own thing in the air. See `cling_to_the_wall`.
+    let wall_jump = pressed_space
+        && !p.grounded
+        && near_wall
+        && !carrying
+        && p.action.actionable()
+        && may_wall_jump(p);
+    if wall_jump {
+        jump_off_the_wall(p, mob.jump);
+    }
+    if pressed_space
+        && !wall_jump
+        && !p.grounded
+        && p.action.actionable()
+        && dual::may_beat_wings(p)
+    {
         p.vel.y = t::jump_speed().mul(mob.jump).mul(t::second_jump());
         p.jump_hold = 0;
         dual::spend_wing_beat(p);
@@ -6610,9 +6708,15 @@ fn step_player(
             if sustaining {
                 gravity = gravity.mul(t::jump_hold_gravity());
             }
+            if sliding {
+                gravity = gravity.mul(t::wall_slide_gravity());
+            }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
             // Slower at the Dual mage's second tier; one for everybody else.
             let mut floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
+            if sliding {
+                floor = floor.mul(t::wall_slide_fall());
+            }
             // **Sail** (2026-10-10): the Bulwark's guard held in the air is a
             // sail, and he falls no faster than it lets him.
             if p.class == Class::Bulwark && p.action.guarding() {
@@ -6656,10 +6760,12 @@ fn step_player(
     let impact = p.vel.y;
     let was_grounded = p.grounded;
     let r = scene.arena.resolve(p.pos, p.vel, was_grounded);
+    let wall_normal = r.wall_normal;
     let r = stones::resolve_body(field, r.pos, r.vel, r.grounded, was_grounded);
     p.pos = r.pos;
     p.vel = r.vel;
     p.grounded = r.grounded;
+    cling_to_the_wall(p, wall_normal, scene.arena);
     // Every creature there is, in slot order, until one of them has you.
     for (slot, beast) in herd.iter().enumerate() {
         if let Some(beast) = beast {
@@ -6726,6 +6832,111 @@ fn step_player(
         p.leap_used = false;
         dual::feet_down(p);
     }
+}
+
+/// **The wall slide and the wall jump** (2026-10-16): what a body against the
+/// side of a solid in the air gets from it, and the record of which wall.
+///
+/// ```text
+///   against a wall, falling   the slide: gravity and terminal velocity a
+///                             little lower (`wall_slide_gravity`,
+///                             `wall_slide_fall`), held to the wall at
+///                             `wall_stick` unless steering away, for as far
+///                             as the wall goes. Footing for the fall rule:
+///                             a fall is measured from where it let go.
+///   space, on one or just off  the wall jump: `wall_jump_rise` of a takeoff
+///                             straight up, `wall_jump_push` away from it.
+///                             Off the same wall again only from
+///                             `wall_jump_drop` below the last, and each one
+///                             in an airtime worth `wall_jump_falloff` of
+///                             the one before.
+/// ```
+///
+/// **A wall is reached, not given.** The slide is a partial recovery -- some
+/// control back, and the fall's height reset to where you let go, so a wall
+/// slid all the way down costs nothing to land from -- and it is only a
+/// little slower than falling, so a wall is never a perch. The jump does not
+/// give back the airdodge, the jump attack or anything else an airtime
+/// spends: it is height and a direction, and nothing more.
+///
+/// **Why there is no ladder.** Two rules, because one is not enough. Off the
+/// same wall again only from `wall_jump_drop` below where the last jump off
+/// it left (`Wall::same_as`, a face rather than a box) answers jumping off a
+/// wall, steering back with an aerial's hang and jumping off it again: every
+/// return leaves from lower down, so the climb runs downhill. It does not
+/// answer an inside corner, which is two walls a step apart; the falloff
+/// does, because the heights it allows add up to a bounded sum however many
+/// walls there are. (Until 2026-10-16 the same wall was refused outright;
+/// the owner asked for a drop instead, so a wall can be used again on the
+/// way down.)
+///
+/// Called after the resolve with the wall it reported, if it reported one.
+fn cling_to_the_wall(p: &mut Player, normal: V3, ground: &Terrain) {
+    if p.grounded || p.aboard() || normal == V3::ZERO {
+        return;
+    }
+    p.wall = Wall { at: p.pos, normal };
+    p.wall_since = 0;
+    if slides(p) {
+        p.fall_over = p.pos.y.sub(t::fall_free()).max(ground.lowest());
+    }
+}
+
+/// Is this body one a wall slows: not rising, and not being thrown -- in a
+/// stun, or spiked toward the floor.
+fn slides(p: &Player) -> bool {
+    p.vel.y.raw() <= 0 && !p.action.stunned() && p.slam.raw() <= 0
+}
+
+/// Hold a sliding body to its wall: its speed into the wall becomes
+/// `tuning::wall_stick`, unless it is already moving away -- which is how a
+/// slide is left.
+fn hold_to_the_wall(p: &mut Player) {
+    let n = p.wall.normal;
+    let away = p.vel.x.mul(n.x).add(p.vel.z.mul(n.z));
+    if away.raw() > 0 {
+        return;
+    }
+    let by = t::wall_stick().neg().sub(away);
+    p.vel.x = p.vel.x.add(n.x.mul(by));
+    p.vel.z = p.vel.z.add(n.z.mul(by));
+}
+
+/// May this fighter jump off the wall it was last against: any wall but the
+/// one the last wall jump left, and that one from `tuning::wall_jump_drop`
+/// below where it jumped.
+fn may_wall_jump(p: &Player) -> bool {
+    if !p.wall.is_some() {
+        return false;
+    }
+    if !p.wall.same_as(p.wall_jumped) {
+        return true;
+    }
+    let lowest = p.wall_jumped.at.y.sub(t::wall_jump_drop());
+    p.pos.y.raw() <= lowest.raw()
+}
+
+/// **Jump off the wall**: a fresh rise, never less than the body already
+/// has, and a push away from the face, keeping the speed along it. `jump` is
+/// the class's takeoff multiplier.
+fn jump_off_the_wall(p: &mut Player, jump: Fx) {
+    let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
+    for _ in 0..p.wall_jumps {
+        rise = rise.mul(t::wall_jump_falloff());
+    }
+    p.vel.y = p.vel.y.max(rise);
+    let n = p.wall.normal;
+    let away = p.vel.x.mul(n.x).add(p.vel.z.mul(n.z));
+    let off = t::wall_jump_push().sub(away.min(Fx::ZERO));
+    p.vel.x = p.vel.x.add(n.x.mul(off));
+    p.vel.z = p.vel.z.add(n.z.mul(off));
+    p.jump_hold = 0;
+    p.wall_jumped = Wall {
+        at: p.pos,
+        normal: p.wall.normal,
+    };
+    p.wall_jumps = p.wall_jumps.saturating_add(1);
+    p.wall_since = u8::MAX;
 }
 
 /// Which move a click asks for, if any.
@@ -10012,6 +10223,17 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     hash_v3(h, &p.haul_to);
     h.write_i32(p.haul_speed.raw());
     h.write_u32(p.air_stalls as u32);
+    // Only once a wall has been touched: a fight that never meets one
+    // hashes as it did before there were wall jumps.
+    if p.wall.is_some() || p.wall_jumped.is_some() || p.wall_jumps != 0 {
+        h.write_u32(0x3A11);
+        hash_v3(h, &p.wall.at);
+        hash_v3(h, &p.wall.normal);
+        h.write_u32(p.wall_since as u32);
+        hash_v3(h, &p.wall_jumped.at);
+        hash_v3(h, &p.wall_jumped.normal);
+        h.write_u32(p.wall_jumps as u32);
+    }
     h.write_u32(p.hit_used as u32);
     h.write_u32(p.crouching as u32);
     h.write_u32(p.stride as u32);
