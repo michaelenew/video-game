@@ -112,6 +112,24 @@ pub struct PlayerView {
     /// simulation's clocks -- see [`roll_of`] -- so a rollback redraws it.
     /// Presentation only: the body, the camera and the aim never turn over.
     pub roll: [f32; 2],
+    /// The ledge this fighter is holding, if any. See [`Hold`].
+    pub ledge: Option<Hold>,
+}
+
+/// **A fighter on a ledge, as the renderer needs it** (`sim::state::Ledge`):
+/// how it is holding on, how far into that, and how fast it is going hand
+/// over hand.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Hold {
+    pub grip: sim::state::Grip,
+    /// Frames into the grip: the climb's clip is indexed by it.
+    pub clock: u8,
+    /// Frames since the catch, which the hang and the shuffle loop on.
+    pub since: u8,
+    /// Metres a second along the wall, positive to the character's own right.
+    /// **Off the two snapshots' positions**, because a hanging body's velocity
+    /// is held at zero -- the shuffle moves it by placing it.
+    pub along: f32,
 }
 
 /// How far the body is turned over this snapshot. See [`PlayerView::roll`].
@@ -319,7 +337,28 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         },
         shudder: shudder_of(c),
         roll: roll_of(c),
+        ledge: hold_of(p, c, facing),
     }
+}
+
+/// The ledge held between two snapshots. See [`Hold`].
+fn hold_of(p: &sim::state::Player, c: &sim::state::Player, facing: [f32; 3]) -> Option<Hold> {
+    if !c.ledge.is_some() {
+        return None;
+    }
+    let along = if p.ledge.is_some() && p.ledge.grip == c.ledge.grip {
+        let side = [facing[2], -facing[0]];
+        let step = [fx(c.pos.x) - fx(p.pos.x), fx(c.pos.z) - fx(p.pos.z)];
+        (step[0] * side[0] + step[1] * side[1]) * crate::TICK_HZ
+    } else {
+        0.0
+    };
+    Some(Hold {
+        grip: c.ledge.grip,
+        clock: c.ledge.clock,
+        since: c.ledge.since,
+        along,
+    })
 }
 
 /// The shadow between two snapshots.

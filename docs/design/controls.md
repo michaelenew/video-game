@@ -825,8 +825,10 @@ frames) after letting go of one, or the edge just let go of would catch again.
 
 A blow lets go, and so does dying. Space while hanging does nothing — the wall jump is a thing
 a slide gives, and a hang that gave it would be a perch with a ladder attached. Pinned by
-`crates/sim/tests/ledge.rs`. **Not built**: a hanging or climbing pose; the renderer draws the
-hang with the airborne clip.
+`crates/sim/tests/ledge.rs`. **Drawn** with three clips (2026-10-16, `crates/anim/src/clips/ledge.rs`):
+`ledge_hang`, both hands on the rim and the body long under them; `ledge_shuffle`, hand over
+hand, played backwards to go the other way; and `ledge_climb`, as long as the climb, keyed
+against the edge as the climb carries the body up to it.
 
 ### Airborne attacks — ⚠️ open
 
