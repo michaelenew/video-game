@@ -157,7 +157,11 @@ spaces as checkpoints ... I want the canopy to be a reward"):
 - **The camera passes through a tree** rather than being pulled in by every
   branch (`Terrain::seen_around`), and the trees are drawn with a window cut
   along the line from the eye to the fighter (`game::paint`'s `cut`), so
-  nothing of a tree hides you.
+  nothing of a tree hides you. The window is cut in the depth prepass as
+  well as the colour (`Paint::window`, `paint_prepass.wgsl`), and the
+  windowed paint culls its back faces there too: cut in the colour alone,
+  the depth of the wood stayed in front of the fighter and the window came
+  out the colour of the sky -- a white hole (2026-10-16).
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 

@@ -201,7 +201,7 @@ pub fn stream(
     }
     let white = st
         .white
-        .get_or_insert_with(|| materials.paint.add(Paint::white()))
+        .get_or_insert_with(|| materials.paint.add(Paint::window()))
         .clone();
     if st.gates.is_empty() {
         spawn_gates(
@@ -236,7 +236,7 @@ pub fn stream(
     // of what they stand on.
     let see_through = st
         .see_through
-        .get_or_insert_with(|| materials.paint.add(Paint::white()))
+        .get_or_insert_with(|| materials.paint.add(Paint::window()))
         .clone();
     if let Some(p) = materials.paint.get_mut(&see_through) {
         let f = rig.0.focus();
