@@ -315,6 +315,7 @@ impl Standing {
             min: V3::new(self.at.x.sub(e.x), self.at.y, self.at.z.sub(e.z)),
             max: V3::new(self.at.x.add(e.x), self.at.y.add(e.y), self.at.z.add(e.z)),
             material: self.site.material,
+            shape: crate::arena::Shape::Box,
         }
     }
 

@@ -85,7 +85,7 @@ pub static PLACE: Place = Place {
 
 const VINES: [Zone; 1] = [CRAGS[0].vine()];
 
-const SEAMS: [Seam; 3] = [
+const SEAMS: [Seam; 4] = [
     // Back to the town, at its east gate.
     Seam {
         zone: Zone::cm([5200, -300, -500], [6000, 700, 500]),
@@ -124,5 +124,18 @@ const SEAMS: [Seam; 3] = [
         gate: Gate::Open,
         waystone: None,
         says: "the Bank",
+    },
+    // South down the Wood's road, to the Spire and the giant trees.
+    Seam {
+        zone: Zone::cm([4600, -300, -5900], [5200, 700, -4900]),
+        to: ArenaId::SPIRE,
+        at: 0,
+        marks: [
+            Mark::cm(5600, -4800, (7200, -4500)),
+            Mark::cm(5800, -4900, (7200, -4500)),
+        ],
+        gate: Gate::Open,
+        waystone: None,
+        says: "the Needle",
     },
 ];

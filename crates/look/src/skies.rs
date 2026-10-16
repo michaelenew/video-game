@@ -147,6 +147,31 @@ pub fn of(id: ArenaId) -> Sky {
             ..Sky::over([0.73, 0.84, 0.98])
         },
         ArenaId::HIGHLANDS => Sky::over([0.82, 0.86, 0.92]),
+        // The Great Wood: green-gold light under giants, and a long reach,
+        // because the trees are meant to be seen from the town's wall.
+        // The Deep: under a lid of rock, the air a cool violet the crystals
+        // answer -- and over the lid, a stone plain among peaks, so not a fog.
+        ArenaId::DEEP => Sky {
+            reach: 420.0,
+            ..Sky::over([0.70, 0.74, 0.86])
+        },
+        // The Spire: the town's morning, and the furthest reach in the
+        // valley, because from its dome you see all of it.
+        ArenaId::SPIRE => Sky {
+            reach: 1100.0,
+            ..Sky::over([0.90, 0.88, 0.84])
+        },
+        // The High Plane and the Sky Road: the thinnest air in the game,
+        // and the furthest you see from anywhere you can stand.
+        ArenaId::HIGH_PLANE | ArenaId::SKY_ROAD => Sky {
+            reach: 1200.0,
+            ..Sky::over([0.72, 0.84, 0.99])
+        },
+        ArenaId::WOOD => Sky {
+            reach: 760.0,
+            glow: Some([0.86, 0.80, 0.48]),
+            ..Sky::over([0.80, 0.90, 0.80])
+        },
 
         // --- the jump courses ---------------------------------------------
         //
@@ -238,8 +263,8 @@ mod tests {
         // enough colour left in it to read as sky rather than as fog -- the
         // failure that produced an all-brown wash the first time round.
         for arena in sim::arena::all() {
-            if arena.id == ArenaId::BROODMOTHER {
-                continue; // A cave. The one place dark is the right answer.
+            if arena.id == ArenaId::BROODMOTHER || arena.id == ArenaId::DEEP {
+                continue; // A cave. The places dark is the right answer.
             }
             let h = Lch::of(of(arena.id).resolved().horizon);
             let name = arena.name;

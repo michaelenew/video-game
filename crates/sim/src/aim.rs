@@ -624,7 +624,7 @@ fn nearest_terrain(
     // a skillshot flies level over the spot or straight at it.
     keep(floor_hit(eye, dir, scene.arena, limit), Met::Ground);
     for solid in scene.arena.along(eye, dir, limit, Fx::ONE) {
-        let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
+        let hit = crate::math::ray_hits_solid(eye, dir, &solid, Fx::ZERO);
         keep(hit, facing(hit, eye, dir, solid.max.y));
     }
     for stone in scene.stones.iter().flatten() {
@@ -1481,7 +1481,7 @@ fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
         }
     };
     for solid in scene.arena.along(a, dir, reach, Fx::ONE) {
-        consider(crate::math::ray_hits_box(a, dir, solid.min, solid.max));
+        consider(crate::math::ray_hits_solid(a, dir, &solid, Fx::ZERO));
     }
     for stone in scene.stones.iter().flatten() {
         consider(crate::math::ray_hits_cylinder(
@@ -1635,7 +1635,7 @@ fn nothing_between(a: V3, b: V3, scene: &Scene) -> bool {
     // other body is standing on has not been stopped by it.
     let stopped = |hit: Option<Fx>| hit.is_some_and(|d| d.raw() < reach.raw());
     for solid in scene.arena.along(a, dir, reach, Fx::ONE) {
-        if stopped(crate::math::ray_hits_box(a, dir, solid.min, solid.max)) {
+        if stopped(crate::math::ray_hits_solid(a, dir, &solid, Fx::ZERO)) {
             return false;
         }
     }
@@ -2409,18 +2409,15 @@ pub fn first_along(
         // The blockout's own boxes, grown by the travelling thing's girth in
         // all three axes -- the same trick the stones use, so "do these two
         // volumes touch" stays one ray against one shape.
-        let fat = V3::new(girth, girth, girth);
         for solid in scene.arena.along(from, dir, limit, girth.add(Fx::ONE)) {
-            if let Some(dist) =
-                crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
-            {
+            if let Some(dist) = crate::math::ray_hits_solid(from, dir, &solid, girth) {
                 keep(Contact::Terrain { dist });
             }
         }
     }
     if targets.walls {
         for solid in scene.arena.along(from, dir, limit, Fx::ONE) {
-            if let Some(dist) = crate::math::ray_hits_box(from, dir, solid.min, solid.max) {
+            if let Some(dist) = crate::math::ray_hits_solid(from, dir, &solid, Fx::ZERO) {
                 keep(Contact::Terrain { dist });
             }
         }

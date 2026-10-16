@@ -28,6 +28,7 @@ mod falls;
 mod forms;
 mod glint;
 mod ground;
+mod grove;
 mod hub;
 mod hud;
 mod land;
@@ -1362,7 +1363,8 @@ fn shot_form(w: &mut World) {
 }
 
 /// `SHOT_AT=x,z` stands player one at that point of the place the world is
-/// in (metres), on whatever is under it, facing `+x`: a capture of somewhere
+/// in (metres), on whatever is under it, facing `+x` -- `SHOT_AT=x,z,y` on
+/// whatever is under that height: a capture of somewhere
 /// that is not a start, such as the Waterfall at the head of the Pinewood
 /// (`SHOT_AT=772,-4` with `--arena pinewood --open`). A round start puts
 /// fighters back on their marks, so in a fight or a course it does nothing.
@@ -1375,12 +1377,24 @@ fn shot_at(w: &mut World) {
     let (Some(x), Some(z)) = (it.next(), it.next()) else {
         return;
     };
+    // A third number is the height to look down from: under a lid, in a
+    // cave, the floor below that rather than the roof.
+    let from = it.next().unwrap_or(1000);
     let up = sim::V3::new(
         sim::Fx::from_int(x),
-        sim::Fx::from_int(1000),
+        sim::Fx::from_int(from),
         sim::Fx::from_int(z),
     );
-    let y = w.terrain().floor_below(up);
+    // Or the top of anything hanging there -- a shelf up a tree, a roof
+    // over a crown -- which a floor is not.
+    let ground = w.terrain();
+    let y = ground
+        .around(up, sim::Fx::ZERO)
+        .filter(|s| s.over(up.x, up.z, sim::Fx::ZERO) && s.max.y.raw() <= up.y.raw())
+        .map(|s| s.max.y)
+        .fold(ground.floor_below(up), |a, b| {
+            if b.raw() > a.raw() { b } else { a }
+        });
     let p = &mut w.players[0];
     p.pos = sim::V3::new(up.x, y, up.z);
     p.vel = sim::V3::ZERO;

@@ -175,10 +175,37 @@ fn no_two_places_of_the_valley_sit_on_each_other() {
     // Rooms and the town sit in clearings inside the reaches' wide bounds,
     // and are first on the map, so a point on one is on it. What must not
     // overlap is two rooms, or two reaches.
+    // A range (`valley::ranges`) is the land like a reach, and sits inside
+    // one as a room does: it must not overlap a room or another range.
     let atlas = atlas::valley();
     assert!(atlas.places.len() >= 18, "{} places", atlas.places.len());
-    for (i, p) in atlas.places.iter().enumerate() {
-        for q in atlas.places[i + 1..].iter().filter(|q| q.pad == p.pad) {
+    // A place stacked over others (the roost, high over the town's south
+    // wall) overlaps them in plan by being stacked.
+    let range = |p: &atlas::Placed| sim::valley::ranges::of(p.arena).is_some();
+    for (i, p) in atlas
+        .places
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.band.is_none())
+    {
+        for q in atlas.places[i + 1..].iter().filter(|q| {
+            if q.band.is_some() {
+                false
+            } else if range(p) || range(q) {
+                // A range must not be in a room; in a place that keeps its
+                // own floor and is no room -- the High Plane, the Deep -- it
+                // stands as it does in a reach.
+                let room = |a: &atlas::Placed| {
+                    matches!(
+                        sim::valley::place(a.arena).map(|p| p.kind),
+                        Some(sim::valley::Kind::Room(_))
+                    ) && !range(a)
+                };
+                room(p) || room(q) || (range(p) && range(q))
+            } else {
+                q.pad == p.pad
+            }
+        }) {
             let x = p.lo.0.raw() < q.hi.0.raw() && q.lo.0.raw() < p.hi.0.raw();
             let z = p.lo.1.raw() < q.hi.1.raw() && q.lo.1.raw() < p.hi.1.raw();
             assert!(
@@ -203,7 +230,10 @@ fn every_seam_with_a_door_is_on_the_map_and_every_place_is_reached() {
     }
     // A pass between every two reaches next to each other, and a door into
     // every room.
-    assert_eq!(atlas.doors.len(), 5 + sim::valley::layout::ROOMS.len());
+    assert_eq!(
+        atlas.doors.len(),
+        sim::valley::layout::PASSES.len() + sim::valley::layout::ROOMS.len()
+    );
     for d in &atlas.doors {
         for (id, k) in [d.a, d.b] {
             assert!(
@@ -222,8 +252,15 @@ fn the_valley_is_one_map_of_more_boxes_than_an_arena_may_hold() {
     let atlas = atlas::valley();
     assert!(atlas.solids.len() > 8 * sim::arena::MAX_SOLIDS);
     // And still only a handful in any one tile: what a body's query reads.
+    // Not twenty-four since 2026-10-15: a tower and a tree two hundred
+    // metres tall stack their stones and limbs into the tiles under them --
+    // the Spire's column about eighty, a grown giant's trunk about two
+    // hundred, an Elder's crown, thick to its middle, the most. A query reads
+    // them all and turns away all but the few at its height on their first
+    // comparison; `tests/budget.rs` stands at the foot of both and holds the
+    // frame.
     assert!(
-        atlas.busiest_tile() <= 24,
+        atlas.busiest_tile() <= 256,
         "a tile holds {} boxes",
         atlas.busiest_tile()
     );

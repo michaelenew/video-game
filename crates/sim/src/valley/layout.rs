@@ -30,7 +30,9 @@ use crate::math::V3;
 use crate::valley::Crag;
 use crate::valley::land::{Land, Pad, Point, Way, at};
 
-use crate::arena::{bank, hearth, mouth, pinewood, saddle, shelves, waterfall};
+use crate::arena::{
+    bank, deep, hearth, heights, mouth, pinewood, saddle, shelves, spire, waterfall, wood,
+};
 
 /// Level ground round a room, past its own footprint, in centimetres.
 pub const APRON: i32 = 600;
@@ -211,9 +213,9 @@ const CLIFFS_BRIDGE: Solid = Solid::cm([90200, 8440, 2600], [90800, 8500, 5250],
 /// **The doors between reaches**, and the waystones' among them: the two
 /// seams, and the box across the pass (shut while its stone is dark).
 /// A door between two seams, and its box: two corners in centimetres.
-type Pass = ((ArenaId, u8), (ArenaId, u8), [[i32; 3]; 2]);
+pub type Pass = ((ArenaId, u8), (ArenaId, u8), [[i32; 3]; 2]);
 
-const PASSES: [Pass; 5] = [
+pub const PASSES: [Pass; 8] = [
     (
         (ArenaId::HEARTH, 0),
         (ArenaId::MOUTH, 0),
@@ -238,6 +240,21 @@ const PASSES: [Pass; 5] = [
         (ArenaId::PINEWOOD, 4),
         (ArenaId::SADDLE, 0),
         [[85100, 8100, -800], [85300, 9200, 2000]],
+    ),
+    (
+        (ArenaId::MOUTH, 3),
+        (ArenaId::SPIRE, 0),
+        [[4400, 0, -5900], [4600, 600, -4900]],
+    ),
+    (
+        (ArenaId::SPIRE, 1),
+        (ArenaId::WOOD, 0),
+        [[800, 0, -14050], [2000, 600, -13950]],
+    ),
+    (
+        (ArenaId::SHELVES, 4),
+        (ArenaId::DEEP, 0),
+        [[60000, 4400, -14950], [62000, 5200, -14850]],
     ),
 ];
 
@@ -368,6 +385,7 @@ fn door_of(r: &Room) -> (V3, Solid) {
             min: cut.0,
             max: cut.1,
             material: Material::Ground,
+            shape: crate::arena::Shape::Box,
         },
     )
 }
@@ -383,6 +401,27 @@ fn pads() -> Vec<Pad> {
         y: Fx::ZERO,
         rim: None,
         door: (Fx::ZERO, Fx::ZERO),
+    });
+    // The Deep's pit: its floor 140 m under the road, over the pit alone --
+    // the lid round it is the Deep's place but the land's crater.
+    let at = v3(deep::AT);
+    let (hx, hz) = (cm(deep::HALF.0), cm(deep::HALF.1));
+    out.push(Pad {
+        lo: (at.x.sub(hx), at.z.sub(hz)),
+        hi: (at.x.add(hx), at.z.add(hz)),
+        y: at.y,
+        rim: None,
+        door: (at.x, at.z),
+    });
+    // The High Plane: 300 m up, its rim holding the land up to its edge.
+    let at = v3(heights::PLANE_AT);
+    let (hx, hz) = (cm(heights::PLANE_HALF.0), cm(heights::PLANE_HALF.1));
+    out.push(Pad {
+        lo: (at.x.sub(hx), at.z.sub(hz)),
+        hi: (at.x.add(hx), at.z.add(hz)),
+        y: at.y,
+        rim: heights::PLANE.rim.map(|rim| (rim, (at.x, at.z))),
+        door: (at.x, at.z),
     });
     for r in &ROOMS {
         let (lo, hi) = pad_of(r);
@@ -438,6 +477,34 @@ fn ways() -> Vec<Way> {
     out.push(road(&pinewood::ABOVE));
     out.push(road(&saddle::WAY));
     out.push(road(&saddle::SHRINE_WAY));
+    // The ranges' pockets of meadow beside the road (`ranges`): level
+    // ground for a creature to roam, the land rising round it.
+    for r in super::ranges::RANGES.iter().filter(|r| r.stacked.is_none()) {
+        if r.arena == super::ranges::RANGES[0].arena {
+            continue; // the Wood's edge is the clearing's own floor
+        }
+        let (x, z, half) = (r.at.0, r.at.1, r.half + 600);
+        out.push(Way {
+            points: vec![
+                at(x - r.half / 2, z, r.floor, half),
+                at(x + r.half / 2, z, r.floor, half),
+            ],
+            path: false,
+            water: None,
+        });
+    }
+    out.push(road(&wood::WAY));
+    out.push(road(&deep::PATH));
+    out.push(Way {
+        points: spire::PLAZA.to_vec(),
+        path: false,
+        water: None,
+    });
+    out.push(Way {
+        points: wood::CLEARING.to_vec(),
+        path: false,
+        water: None,
+    });
     for r in &TOWN_ROADS {
         out.push(road(r));
     }
@@ -499,6 +566,7 @@ fn crag(land: &Land, c: &Crag, out: &mut Vec<Solid>) {
         min: V3::new(cm(c.x - h), low.sub(Fx::ONE), cm(c.z - h)),
         max: V3::new(cm(c.x + h), top, cm(c.z + h)),
         material: Material::Rock,
+        shape: crate::arena::Shape::Box,
     });
     for k in 1..=c.ledges as i32 {
         let ledge_top = base.add(cm(Crag::RISE * k));
@@ -516,12 +584,14 @@ fn crag(land: &Land, c: &Crag, out: &mut Vec<Solid>) {
             ),
             max: V3::new(cm(c.x - h), ledge_top, cm(z1)),
             material: Material::Rock,
+            shape: crate::arena::Shape::Box,
         });
     }
     out.push(Solid {
         min: V3::new(cm(c.x - 100), top, cm(c.z - 100)),
         max: V3::new(cm(c.x + 100), top.add(Fx::ratio(2, 5)), cm(c.z + 100)),
         material: Material::Snow,
+        shape: crate::arena::Shape::Box,
     });
 }
 
@@ -532,6 +602,7 @@ fn cairn(land: &Land, x: i32, z: i32, out: &mut Vec<Solid>) {
         min: V3::new(cm(x - 100), low.sub(Fx::ratio(3, 10)), cm(z - 100)),
         max: V3::new(cm(x + 100), high.add(Fx::ratio(2, 5)), cm(z + 100)),
         material: Material::Snow,
+        shape: crate::arena::Shape::Box,
     });
 }
 
@@ -596,6 +667,7 @@ fn growth(land: &Land, crags: &[Crag], out: &mut Vec<Solid>) {
                             min: V3::new(cm(jx - half), low.sub(Fx::ratio(1, 2)), cm(jz - half)),
                             max: V3::new(cm(jx + half), low.add(cm(tall)), cm(jz + half)),
                             material: Material::Wood,
+                            shape: crate::arena::Shape::Box,
                         });
                     }
                 } else if roll > 985 && clear(land, x, z, crags, Fx::from_int(4)) {
@@ -612,6 +684,7 @@ fn growth(land: &Land, crags: &[Crag], out: &mut Vec<Solid>) {
                         min: V3::new(cm(jx - w / 2), low.sub(Fx::ratio(1, 2)), cm(jz - d / 2)),
                         max: V3::new(cm(jx + w / 2), high.add(cm(h)), cm(jz + d / 2)),
                         material: Material::Rock,
+                        shape: crate::arena::Shape::Box,
                     });
                 }
                 gz += SPACING;
@@ -635,6 +708,7 @@ pub fn plan() -> Plan {
         at: V3::ZERO,
         apron: cm(APRON),
         pad: true,
+        band: None,
     });
     for r in &ROOMS {
         plan.places.push(PlanPlace {
@@ -642,20 +716,58 @@ pub fn plan() -> Plan {
             at: v3(r.at),
             apron: apron_of(r),
             pad: true,
+            band: None,
         });
     }
+    // The ranges: places on the land, so first on the map before the reaches
+    // they stand in. The roost is stacked over the Needle's plaza, between
+    // the dome's top and some way over it.
+    for r in &super::ranges::RANGES {
+        let floor = cm(r.floor);
+        plan.places.push(PlanPlace {
+            arena: r.arena,
+            at: V3::new(cm(r.at.0), floor, cm(r.at.1)),
+            apron: Fx::ZERO,
+            pad: false,
+            band: r
+                .stacked
+                .map(|up| (floor.sub(Fx::from_int(2)), floor.add(cm(up)))),
+        });
+    }
+    // The High Plane and the Deep after the ranges in them, so a point on
+    // a range is on it.
+    // The High Plane: its own floor, 300 m up.
+    plan.places.push(PlanPlace {
+        arena: ArenaId::HIGH_PLANE,
+        at: v3(heights::PLANE_AT),
+        apron: Fx::ZERO,
+        pad: true,
+        band: None,
+    });
+    // The Deep: its own floor under the whole lid.
+    plan.places.push(PlanPlace {
+        arena: ArenaId::DEEP,
+        at: v3(deep::AT),
+        apron: Fx::ZERO,
+        pad: true,
+        band: None,
+    });
     for id in [
         ArenaId::MOUTH,
         ArenaId::BANK,
         ArenaId::SHELVES,
         ArenaId::PINEWOOD,
         ArenaId::SADDLE,
+        ArenaId::WOOD,
+        ArenaId::SPIRE,
+        ArenaId::SKY_ROAD,
     ] {
         plan.places.push(PlanPlace {
             arena: id,
             at: V3::ZERO,
             apron: Fx::ZERO,
             pad: false,
+            band: None,
         });
     }
 
@@ -703,6 +815,7 @@ pub fn plan() -> Plan {
         .chain(shelves::CAIRNS.iter())
         .chain(pinewood::CAIRNS.iter())
         .chain(saddle::CAIRNS.iter())
+        .chain(wood::CAIRNS.iter())
     {
         cairn(&land, x, z, &mut plan.extras);
     }
@@ -711,6 +824,28 @@ pub fn plan() -> Plan {
     plan.extras.extend(waterfall::placed(waterfall::VALLEY_AT));
     plan.extras
         .push(waterfall::solid(&waterfall::CROWN, waterfall::VALLEY_AT));
+    // The Great Wood's giants, on the land under them.
+    // The Great Wood's giants, grown where they stand on the land: their
+    // wood is drawn from their skeletons, not as boxes.
+    let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
+    let ground = |x: i32, z: i32| to_cm(land.height(cm(x), cm(z)));
+    let grown = wood::grow(&ground);
+    let mut wood_boxes = Vec::new();
+    let mut wood_cairns = Vec::new();
+    wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
+    plan.vines
+        .extend(wood::lianas(&grown, &wood_boxes, &ground));
+    let first = plan.extras.len();
+    plan.extras.extend(wood_boxes);
+    plan.hidden.push(first..plan.extras.len());
+    plan.extras.extend(wood_cairns);
+    plan.trees = grown;
+    // The Spire, on its plaza under the town's south wall.
+    spire::build(&|x, z| land.height(x, z), &mut plan.extras);
+    // The Deep: its lid, its warrens and its Caverns.
+    deep::build(&mut plan.extras);
+    // The routes up to the High Plane.
+    heights::build(&|x, z| land.height(x, z), &mut plan.extras);
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);

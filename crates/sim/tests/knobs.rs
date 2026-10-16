@@ -43,13 +43,27 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// Oven. A fight's rim (how steep its bank, how far its noise grows) and the
 /// town's tables (how far apart the merlons, how high the wall) are the same
 /// kind of thing. So is the Waterfall's table: a cliff's height and where
-/// its ledges are, put down in the valley and as a course.
+/// its ledges are, put down in the valley and as a course. And the Great
+/// Wood's: where each giant stands, how it tapers, how far apart its
+/// branches climb -- a staircase sized against the jump envelope and judged
+/// by `tests/wood.rs` jumping it, as the crags are; and the Spire's, a
+/// tower's height and where its stones jut (`tests/spire.rs`); the Deep's,
+/// a pit's depth and its warrens' levels (`tests/deep.rs`); and where the
+/// ranges are and how far their creatures let you come (`tests/ranges.rs`);
+/// and how the Wood's trees grow -- the shape of a kind of tree, how far its
+/// tiers are apart and how thick a limb is to be stood on (`tests/wood.rs`).
 const LEVEL_DATA: &[&str] = &[
     "land.rs",
     "layout.rs",
     "rim.rs",
     "hearth.rs",
     "waterfall.rs",
+    "wood.rs",
+    "spire.rs",
+    "deep.rs",
+    "ranges.rs",
+    "heights.rs",
+    "trees.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an

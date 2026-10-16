@@ -680,6 +680,13 @@ pub fn draw_solid(
             Transform::from_translation(at + offset),
         ),
     );
+    // **A crown of leaves lets the light through** (the Great Wood's): a
+    // disc forty metres across over every giant, casting the whole grove into
+    // one shadow, left the trunks and the branches lit by nothing but the
+    // ambient, which is black.
+    if matches!(solid.shape, sim::arena::Shape::Round { .. }) && solid.material == Material::Grass {
+        commands.entity(e).insert(bevy::pbr::NotShadowCaster);
+    }
     if let Some(relief) = relief {
         commands.spawn((
             Mesh3d(meshes.add(relief)),
@@ -711,6 +718,81 @@ pub fn solid_mesh(
     // Part of something the town draws whole: drawn there.
     if crate::town::whole(look.id, min, max) {
         return None;
+    }
+    // **A round or turned solid** (`sim::arena::Shape`): drawn as the shape
+    // the simulation collides against, not as its box.
+    match solid.shape {
+        sim::arena::Shape::Box => {}
+        sim::arena::Shape::Round {
+            bottom,
+            top,
+            hollow,
+        } => {
+            let mesh = crate::forms::round(
+                (fx(bottom), fx(top)),
+                fx(hollow),
+                size.y,
+                solid.material,
+                palette,
+            );
+            return Some((mesh, None, at));
+        }
+        sim::arena::Shape::Turned {
+            half,
+            half_wide,
+            cos,
+            sin,
+        } => {
+            // Its own box, untouched by the turn: the form it would be lying
+            // square, then turned.
+            let own = Vec3::new(fx(half) * 2.0, size.y, fx(half_wide) * 2.0);
+            let local = sim::arena::Solid::new(
+                sim::math::V3::new(sim::Fx::ZERO, sim::Fx::ZERO, sim::Fx::ZERO),
+                sim::math::V3::new(
+                    half.add(half),
+                    solid.max.y.sub(solid.min.y),
+                    half_wide.add(half_wide),
+                ),
+            );
+            let local = sim::arena::Solid {
+                material: solid.material,
+                ..local
+            };
+            // A giant's branch is a board of its bark, not a fallen log.
+            let form = if solid.material == Material::Wood {
+                crate::forms::Form::Plain
+            } else {
+                crate::forms::form_of(look.id, &local, hangs)
+            };
+            let mut mesh = match crate::forms::build_parts(
+                form,
+                own,
+                crate::forms::seed_of(at, own),
+                solid.material,
+                palette,
+                near,
+            ) {
+                Some((m, _)) => m,
+                None => match solid.material {
+                    Material::Rock => {
+                        crate::shapes::rock(own, 7, Some((at, palette.of(solid.material), brush)))
+                    }
+                    Material::Wood => crate::shapes::soft_box(
+                        own,
+                        0.25,
+                        6,
+                        Some((at, crate::forms::giant_bark(palette), brush)),
+                    ),
+                    _ => crate::shapes::chamfered_box(
+                        own,
+                        0.04,
+                        Some((at, palette.of(solid.material), brush)),
+                    ),
+                },
+            };
+            crate::forms::turn(&mut mesh, fx(cos), fx(sin));
+            return Some((mesh, None, at));
+        }
     }
     // **A form**, where the box is one (`crate::forms`): a wall in courses,
     // a log, a column, an island. Built in the box's own coordinates.
@@ -794,6 +876,8 @@ pub fn solid_mesh(
             Material::Stone => crate::shapes::chamfered_box(size, 0.06, Some((at, rgb, brush))),
             Material::Wood => crate::shapes::chamfered_box(size, 0.04, Some((at, rgb, brush))),
             Material::Water => crate::shapes::boxy(size, at, rgb, brush),
+            // Crystal is cut sharp: a facet catches the light.
+            Material::Crystal => crate::shapes::chamfered_box(size, 0.02, Some((at, rgb, brush))),
         }
     };
     Some((mesh, None, at))
@@ -931,7 +1015,7 @@ fn scatter(
                     );
                 }
             }
-            Material::Water | Material::Wood => {}
+            Material::Water | Material::Wood | Material::Crystal => {}
         }
     }
     if kit.is_empty() {

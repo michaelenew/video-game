@@ -191,6 +191,7 @@ fn climb_everywhere(make: impl Fn(Class) -> World, at: [i32; 3], origin: impl Fn
             min: s.min.sub(o),
             max: s.max.sub(o),
             material: s.material,
+            shape: s.shape,
         };
         for k in 0..ROUTE.len() {
             let from = if k == 0 {

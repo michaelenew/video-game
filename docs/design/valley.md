@@ -26,7 +26,7 @@ started. In the browser the query string does the same (`?versus`).
 | `--dev` | Also shows how much of the map is loaded, under the place's name |
 | `--versus` | Start in the proving ground instead |
 | `--open` | Every waystone lit, as if every creature had been beaten: for walking the whole valley without the fights |
-| `--arena mouth` (and `bank`, `shelves`, `pinewood`, `saddle`, `hearth`, `ring`) | Start in that place, in the valley |
+| `--arena mouth` (and `bank`, `shelves`, `pinewood`, `saddle`, `hearth`, `ring`, `needle`, `great_wood`, `deep`, `high_plane`) | Start in that place, in the valley |
 
 ![The valley, from above](gallery/valley.png)
 
@@ -56,6 +56,227 @@ props are tables the collision is made from and the renderer draws from
 (`game::town`), so a roof you see is a roof you land on.
 
 ![The Bank, looking back at the town](gallery/valley-bank.png)
+
+### 1a · The Needle and the Great Wood (2026-10-15)
+
+From [exploration/0019](exploration/0019_spire_wood_and_the_deep.md), the
+owner's brief to make the valley a place to play in. Both are south of the
+town, on one road that leaves the Mouth's just outside the east gate, crosses
+the river on a footbridge, and runs on south. `--arena needle` and
+`--arena great_wood` start at either.
+
+**The Needle** (`sim::arena::spire`, `tests/spire.rs`): Hearth's tower, on a
+plaza under the town's south wall -- the square was too full of town for it.
+A round shaft of pale stone nine metres across at its foot and 315 m tall,
+carrying an **inverted dome 90 m across and 35 m deep**, its rim over the
+town's south roofs; on the dome's top, 353 m up, **ruins**: broken walls,
+column stumps, two arches, a fallen column, a cistern. The way up:
+
+- **A vine** down the shaft's south face, the whole height, for anybody at the
+  vine's pace (about two and a half minutes). The shaft's top is narrower than
+  the chimney above it, so the vine runs straight on into **the chimney's**,
+  up the dome's stem to the ruins.
+- **The corkscrew**: stones jutting a quarter turn and eight metres apart --
+  the mechanic band -- and **balconies** every forty metres, three boards
+  round the shaft (never across the vine), a cairn on every other.
+- **The lantern**: four columns on the shaft's top carrying the dome, gaps
+  between them to step through, and **ledges** up the chimney's wall four
+  metres apart.
+
+The rim overhangs the shaft by forty metres, which no jump goes round from
+below: the way onto the dome is through it. The roost -- a Galewing on the
+dome, a fight (VALE-5) -- is a range (§1b).
+
+![The Needle from the Mouth](gallery/valley-needle-from-the-mouth.jpg)
+
+**The Great Wood** (`sim::arena::wood`, `tests/wood.rs`): a clearing four
+hundred metres across past the Needle, and in it **fourteen giant trees 13
+to 20 metres across and 100 to 200 tall**, sized against what the classes do
+rather than the plain jump ("however big you're thinking of, probably triple
+that").
+
+**The trees are grown** (`sim::valley::trees`, the owner's ask of the same
+day: "a procedural generator ... using some nature mimicking algorithm ...
+roots that wrap around the landscape ... a few versions ... in a specific
+place in the world where the tree grows"). Each is grown **where it stands**,
+from a site: the land under and round it, and its neighbours. Three kinds,
+each one of the ways botanists describe a tree growing:
+
+| Kind | How it grows | What it is to climb |
+| --- | --- | --- |
+| **Sentinel** (seven) | Massart's model: one leader straight up, and tiers of three limbs off it, each tier turned from the last by the **golden angle** (137.5°, the angle leaves are set round a stem), lower limbs drooping, upper ones rising, a cone of a crown | **a spiral stair**: tiers two metres apart for the first forty metres, the nearest limb of the next tier a short turn round, 2--4 m across at the bark -- `tests/wood.rs` climbs the Great Tree's with every class and the plain jump -- then six apart above, for the mechanics |
+| **Elder** (four) | an oak: a short trunk under a dome of a crown grown by **space colonisation** (Runions et al., 2007) -- points scattered through the room the crown may fill, each pulling the nearest bud toward it until a branch reaches it, so branches compete for space and fork | broad limbs to walk out along, forking |
+| **Strangler** (three) | a banyan: the same, held toward the level, under a crown wider than it is tall, and **prop roots** dropped from its great limbs to the ground | the props are pillars to climb into a roof |
+
+For all three: **the pipe model** (da Vinci's rule) -- a branch is as thick as
+everything it carries, its cross-section the sum of its children's -- so they
+taper as real ones do and the limbs low down, which carry most, are the ones
+you stand on. **A tree answers its place**: its crown is pushed off its
+neighbours' toward the open side and downhill, where the light is; a limb that
+would grow into the hillside lifts off it; no branch grows into another tree.
+**Roots wrap the landscape**: buttresses flaring up the trunk's foot, then
+roots running out over the land node by node, a third buried, further
+downhill than up, round a neighbour's foot rather than into it.
+
+What is drawn is the skeleton (`game::grove`: a tapered tube a segment, a
+clump of leaves at each twig's end, bark and leaves by kind from
+`look::Palette::grown_bark`); what is stood on is built from the same skeleton
+(`trees::solids`): its steep parts round slices, its gentle ones turned boards
+a step apart, nothing thinner than 45 cm (a broadleaf's, 90 cm and more) --
+you fall through a twig. The boxes are hidden from the renderer
+(`Atlas::hidden`), which draws the tree. About ten thousand of them for the
+Wood, the busiest tile under an Elder's crown about two hundred and thirty;
+the frame at the Great Tree's foot costs a fifth of its budget.
+
+**The second pass** (2026-10-16, from play: "it needs to be easier to tell
+where you can stand ... the vines often get blocked by a branch ... wider
+spaces as checkpoints ... I want the canopy to be a reward"):
+
+- **What bears you looks it.** A limb you can stand on (`trees::stood_on`,
+  the rule the boxes are built by) is worn pale on top
+  (`look::Palette::grown_footing`); one you cannot stays bark all round.
+  Leaves hang -- needles in drooping tufts, a broadleaf's in rounded clumps,
+  fewer and smaller than the first pass's flat sprays, which read as ledges
+  -- except where they are a floor.
+- **Shelves.** A Sentinel's first six-metre tier, forty metres up, and every
+  seventh after it, grows **bracket fungus** where its limbs would be: three
+  lobes 8.4 m across, each the next step of the spiral and a checkpoint, a
+  cairn on the first. The stair's last limb comes out from under one and is a
+  plain jump below it.
+- **Vines are clear and let off.** A vine hangs a body's width off the bark
+  (1.3 girths out), so nothing of the foot is in its way; no limb grows across
+  it below its top, the one or two of a spiral's limbs that would are pinned
+  just beside it -- near enough to walk off on to, since a vine is climbed with
+  the jump and cannot be jumped off -- and its top comes up beside a lobe of
+  its own. `tests/wood.rs` climbs each and walks off.
+- **A broadleaf's canopy is a roof**: concentric terraces of leaves 4.5 m
+  wide, each 30 cm under the one inside it, and a **lip** 1.4 m up round the
+  edge, so it is hard to walk off. A **liana** hangs off every lip to the
+  ground, where nothing of any tree is in its way (`wood::lianas`,
+  `Atlas::vines`): climbed, it comes up beside the lip and you step in.
+- **The camera passes through a tree** rather than being pulled in by every
+  branch (`Terrain::seen_around`), and the trees are drawn with a window cut
+  along the line from the eye to the fighter (`game::paint`'s `cut`), so
+  nothing of a tree hides you.
+
+![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
+
+![On an Elder's roof](gallery/valley-wood-roof.jpg)
+
+![The Great Tree's first shelf, where its vine comes up](gallery/valley-wood-shelf.jpg)
+
+### 1b · Ranges: creatures out on the land (2026-10-15)
+
+`sim::valley::ranges`, `tests/ranges.rs`. **A range is a room without
+walls**: a place of the map with an arena of its own, so its creature fights
+in its own coordinates and is kept inside its own bounds, but its floor is the
+land -- a pocket of meadow fifty metres off the road, the Wood's clearing, the
+Needle's dome -- and nothing rings it. Walking into one wakes it, as walking
+into a room does; walking more than `Hunt, held this far outside its room`
+away puts it back to sleep. The road never passes through one
+(`the_road_never_wakes_a_range`): you see them from it and choose.
+
+| Range | Where | What | Temperament | Temper |
+| --- | --- | --- | --- | --- |
+| **Wood's Edge** | the Great Wood's clearing, by its entrance | the Hornback herd | skittish | 0 |
+| **South Bank** | across the Mouth's river from the road | the Gnawers | hunting | 0 |
+| **Upper Meadow** | the Bank, south of the road | two Ridgebacks | peaceful | 0 |
+| **Glade** | the Pinewood, north of the road | the Pair | territorial, 14 m | 2 |
+| **Snowfield** | the Saddle, south of the road | a Ridgeback | hunting | 3 |
+| **Roost** | the Needle's dome, 353 m up | a Galewing, circling the ruins and perching on the tallest stump | territorial, 32 m | 1 |
+
+**Temperaments** (VALE-4, "depends per creature"): *hunting* comes for you;
+*territorial* watches until somebody is inside its ring, or hurts it;
+*peaceful* starts nothing, and hurt, fights back; *skittish* never fights, and
+hurt, the herd runs to the far side of the range from whoever started it. A
+held creature is held in the moment it takes to notice you (`Brain::grace`),
+a held pack in its calm; a hurt is noticed as the creatures' health, all of
+it, falling (`Journey::stock`). **The temper rises with the distance from
+Hearth** -- the same Ridgeback is temper 0 on the Bank and 3 on the Saddle.
+
+**Beaten, a range rests** for `Range, rests after it is beaten` (300 s,
+VALE-3 "after a while") and then is back; **lost**, nobody wakes outside --
+there is no outside -- and everybody stands up on their last cairn.
+
+**The roost is stacked**: it is over the Needle's plaza, so it is a place only
+between the dome's top and forty metres over it (`PlanPlace::band`,
+`Atlas::place_for`); on the plaza underneath you are in the Needle, and the
+vines and cairns there are the Needle's. Climbing out of the chimney onto the
+ruins wakes the Galewing (`tests/spire.rs`).
+
+![The Upper Meadow's two Ridgebacks, watching](gallery/valley-upper-meadow.jpg)
+
+### 1c · The Deep (2026-10-15)
+
+`sim::arena::deep`, `tests/deep.rs`, `--arena deep`. The ask: "ways down
+[that] lead to caves with monsters ... twist about and form kind of a maze
+and keep going down and down until they open in to big spectacular caverns
+with crystals". **The land is one surface**, so nothing can be under it: the
+Deep is a place with its own floor, **a pit sunk 140 m** south of the
+Shelves' road, past the mountains, and **a lid of rock** laid over it at the
+road's height, out to where the mountains round it rise through it. From the
+road by the second pass a path runs south through a notch to a stone plain
+among peaks; in the plain is the mouth. Under the lid everything is solids:
+
+| Level | Over the pit's floor | What | Who |
+| --- | --- | --- | --- |
+| **The mouth** | 140 m | a shaft through the lid, a vine down it | -- |
+| **Upper Warren** | 110 m | a maze of tunnels fourteen metres wide, ten cells by eight, every cell reached by one way | Gnawers, hunting, temper 1 |
+| **Middle Warren** | 80 m | another, its way in under the last's way out | the Pair, territorial, temper 2 |
+| **Lower Warren** | 50 m | a third | Gnawers, hunting, temper 2 |
+| **The Caverns** | 0 | the pit's floor, 160 by 128 m under a vault 47 m up: crystal columns up to 36 m, crystal spears down from the vault, shards hung in the air stepping down from beside the shaft, a lake on crystal sand | the Hornback herd by the lake (skittish), two Ridgebacks (hunting, temper 3) |
+
+Each warren's way down is a shaft at the far end of its maze from its way
+in, **the whole shaft a vine**: whoever drops in catches on it, and crouch
+slides down (`tests/deep.rs` rides every one from the mouth to the floor
+unhurt). The mazes are a fixed draw, so both machines dig the same tunnels;
+`tests/deep.rs` walks each from its way in to its way down. Walls round the
+pit's edge seal the space under the lid from the land's crater round the pit.
+Cairns on every warren's floor by its way in, and one by the lake. Crystal is
+a material of its own (`Material::Crystal`, `violet` and light).
+
+![The way in: the path from the Shelves to the Deep's lid](gallery/valley-deep-the-way-in.jpg)
+
+![The Caverns](gallery/valley-deep-caverns.jpg)
+
+### 1d · The High Plane (2026-10-15)
+
+`sim::arena::heights`, `tests/heights.rs`, `--arena high_plane`. "Sections
+that lead up ... to full separate planes with different creatures there",
+and asked whether that should be a table mountain or islands in the sky,
+"both":
+
+- **The plane** is a table mountain 260 by 220 m with its floor **300 m
+  up**, north of the Bank behind the valley's mountains (they top out near
+  190 m). Its rim holds the land up to its edge -- a lip a metre and a half
+  high -- and the land falls three in one below it, so from the valley it is
+  a flat top over the ridges, and what is drawn is what is stood on (a pad
+  above the land with no rim would be drawn at the mountains' height under
+  an invisible floor). Standing stones, boulders, a cairn where each route
+  arrives, and its own creatures (§1b): **Sky Meadow**, two Ridgebacks,
+  peaceful, temper 1; **Eyrie**, a Galewing, hunting, temper 2; **Sky
+  Shrine**, the Mantis, territorial, temper 2.
+- **The Sky Road** -- the islands -- leaves the Needle's dome 353 m up: 22
+  turf islands, stones and precision stones (1.4 m across) over the town,
+  the Mouth and the mountains, coming down gently to the plane's south-west
+  corner. Gaps of 8 to 22 m with a drop of a metre or two, a rise of three
+  now and then: the mechanic and expert bands, "treacherous" as asked. A
+  cairn on every big island. Its stretch over the mountains is a place of
+  its own, **the Sky Road**, so its vines and cairns belong somewhere.
+- **The Hanging Stones** climb from the Bank's road: a column of 25 stones
+  seven metres apart **with a vine strung across every gap**, then a span of
+  18 stones north over the mountains, ten metres apart and six up, each gap
+  strung with a vine too, and a last vine up the plane's cliff to its lip.
+  Anybody climbs it at the vine's pace; a mechanic skips the vines.
+  `tests/heights.rs` climbs it with a Bulwark from the road to the plane.
+
+![The High Plane, looking back at the Needle's dome and the Sky Road](gallery/valley-plane-view.jpg)
+
+![The plane over the Bank's mountains, the Hanging Stones under it](gallery/valley-plane-from-bank.jpg)
+
+**Crystal** and the **floating islands** are drawn as what they are: crystal
+violet and faceted, a hanging slab of turf as an island of turf on rock
+(`game::forms::form_of`), in the valley as on a course.
 
 | Place | The road | Rooms off it | The way on |
 | --- | --- | --- | --- |

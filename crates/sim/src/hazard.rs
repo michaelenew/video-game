@@ -552,6 +552,7 @@ impl Placed {
             min: V3::new(self.a.x.sub(r), self.a.y, self.a.z.sub(r)),
             max: V3::new(self.a.x.add(r), self.a.y.add(tall), self.a.z.add(r)),
             material: self.decl.material,
+            shape: crate::arena::Shape::Box,
         })
     }
 }

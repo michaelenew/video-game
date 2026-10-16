@@ -257,6 +257,102 @@ pub fn draw(
                     && p.z < fx(s.max.z)
             })
         };
+        // **A vine on a round trunk** (the Great Wood's): strands hung on
+        // the bark, following its taper, from the foot to the zone's top.
+        let trunk: Vec<&sim::arena::Solid> = near
+            .iter()
+            .filter(|s| {
+                let (x, z) = s.middle();
+                matches!(s.shape, sim::arena::Shape::Round { .. })
+                    && fx(x) > lo.x - 0.5
+                    && fx(x) < hi.x + 0.5
+                    && fx(z) > lo.z - 0.5
+                    && fx(z) < hi.z + 0.5
+            })
+            .collect();
+        if !trunk.is_empty() {
+            let (cx, cz) = trunk[0].middle();
+            let (cx, cz) = (fx(cx), fx(cz));
+            // Which way out of the axis the zone lies.
+            let out = Vec2::new(mid.x - cx, mid.z - cz).normalize_or(Vec2::Y);
+            // A vine inside a ring's hole (the Spire's chimney) hangs on the
+            // hole's wall, not the outside.
+            let inside = |s: &sim::arena::Solid| {
+                let sim::arena::Shape::Round { hollow, .. } = s.shape else {
+                    return false;
+                };
+                Vec2::new(mid.x - cx, mid.z - cz).length() < fx(hollow)
+            };
+            let wanted: Vec<&sim::arena::Solid> = {
+                let any_inside = trunk
+                    .iter()
+                    .any(|s| inside(s) && fx(s.min.y) < hi.y && fx(s.max.y) > lo.y);
+                trunk
+                    .iter()
+                    .copied()
+                    .filter(|s| !any_inside || inside(s))
+                    .collect()
+            };
+            let trunk = wanted;
+            let skin = |y: f32| {
+                trunk
+                    .iter()
+                    .find(|s| fx(s.min.y) <= y && fx(s.max.y) >= y)
+                    .map(|s| {
+                        let sim::arena::Shape::Round {
+                            bottom,
+                            top,
+                            hollow,
+                        } = s.shape
+                        else {
+                            return 0.0;
+                        };
+                        if inside(s) {
+                            return fx(hollow) - 0.18;
+                        }
+                        let t = (y - fx(s.min.y)) / (fx(s.max.y) - fx(s.min.y)).max(0.01);
+                        fx(bottom) + (fx(top) - fx(bottom)) * t
+                    })
+                    .unwrap_or(0.0)
+            };
+            let foot = trunk
+                .iter()
+                .map(|s| fx(s.min.y))
+                .fold(f32::MAX, f32::min)
+                .max(lo.y)
+                + 1.0;
+            let top =
+                hi.y.min(trunk.iter().map(|s| fx(s.max.y)).fold(foot, f32::max));
+            for k in 0..5 {
+                let spread = (k as f32 - 2.0) * 0.07;
+                let dir = Vec2::new(out.x - out.y * spread, out.y + out.x * spread).normalize();
+                let mut y = foot;
+                while y < top {
+                    let step = 4.0f32.min(top - y);
+                    let (s0, s1) = (skin(y), skin(y + step));
+                    if s0 <= 0.0 || s1 <= 0.0 {
+                        y += step;
+                        continue;
+                    }
+                    let (r0, r1) = (s0 + 0.06, s1 + 0.06);
+                    let a = Vec3::new(cx + dir.x * r0, y, cz + dir.y * r0);
+                    let b = Vec3::new(cx + dir.x * r1, y + step, cz + dir.y * r1);
+                    let len = (b - a).length();
+                    put(
+                        commands,
+                        under,
+                        (
+                            Mesh3d(meshes.add(Cuboid::new(0.12, len, 0.12))),
+                            MeshMaterial3d(vine.clone()),
+                            Transform::from_translation((a + b) * 0.5)
+                                .with_rotation(Quat::from_rotation_arc(Vec3::Y, (b - a) / len)),
+                        ),
+                    );
+                    y += step;
+                }
+            }
+            continue;
+        }
         // From the floor at its foot to the top of the face it hangs on: a
         // zone may run from the void to the sky, and the vine does not.
         let floor = fx(ground.floor_below(to_v(Vec3::new(mid.x, hi.y.min(1000.0), mid.z))));
