@@ -27,3 +27,10 @@ inherits = "release"
 opt-level = "z"
 panic = "abort"
 strip = true
+
+# Build scripts at full speed: `crates/game/build.rs` draws the brush strokes,
+# which is a second optimised and most of a minute not.
+[profile.dev.build-override]
+opt-level = 3
+[profile.release.build-override]
+opt-level = 3

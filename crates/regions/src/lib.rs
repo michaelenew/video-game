@@ -171,6 +171,12 @@ pub struct Ledger {
     /// heard on each: what the gate holds for.
     followed: [HeardCrowd; MAX_STREAMS],
     followed_len: usize,
+    /// Regions the session layer said a peer is behind (`peer_behind`):
+    /// those are real whether or not anybody of ours stands in them. Kept
+    /// apart from `followed` so a region we were live in goes back to being
+    /// spoken for once we leave it.
+    peers: [RegionId; MAX_STREAMS],
+    peers_len: usize,
     /// The live regions' aggregates summed at the last epoch's frame: what
     /// a leader of each posts to the leaders next door (`net::crowd`).
     summed: [Aggregate; MAX_LIVE],
@@ -229,6 +235,8 @@ impl Ledger {
                 simulated: true,
             }; MAX_STREAMS],
             followed_len: 0,
+            peers: [RegionId::default(); MAX_STREAMS],
+            peers_len: 0,
             summed: [Aggregate::NONE; MAX_LIVE],
             summed_len: 0,
         }
@@ -309,6 +317,20 @@ impl Ledger {
     /// it, and the gate holds for its aggregates. What the session layer
     /// says as lines come and go. Remembered for a region not yet followed.
     pub fn peer_behind(&mut self, region: RegionId, real: bool) {
+        let at = self.peers[..self.peers_len]
+            .iter()
+            .position(|r| *r == region);
+        match (at, real) {
+            (None, true) if self.peers_len < MAX_STREAMS => {
+                self.peers[self.peers_len] = region;
+                self.peers_len += 1;
+            }
+            (Some(i), false) => {
+                self.peers[i] = self.peers[self.peers_len - 1];
+                self.peers_len -= 1;
+            }
+            _ => {}
+        }
         if let Some(f) = self.followed[..self.followed_len]
             .iter_mut()
             .find(|f| f.region == region)
@@ -612,7 +634,7 @@ impl Ledger {
             let live = self.live[..self.live_len].contains(&s.region);
             // Spoken for unless somebody is behind it: a live region (this
             // peer is), or a peer the session layer said has a line open.
-            let real = live || kept.is_some_and(|k| !k.simulated);
+            let real = live || self.peers[..self.peers_len].contains(&s.region);
             followed[followed_len] = HeardCrowd {
                 region: s.region,
                 epoch: kept.and_then(|k| k.epoch),
@@ -623,6 +645,23 @@ impl Ledger {
         self.followed = followed;
         self.followed_len = followed_len;
         let e = t::crowd_epoch();
+        // **A live region followed mid-epoch** -- the first frames of a
+        // fight, a restart, a fighter stepping into a new region -- has no
+        // aggregate for this epoch, and nobody but this ledger will ever sum
+        // one. Left for the epoch's frame, the gate holds for it and the
+        // world never reaches that frame: the freeze of 2026-10-15, four
+        // seconds into every fight. So it is summed now, from this frame,
+        // and the stream heard through this epoch; what it would have said
+        // before it was followed, nobody was following.
+        let current = (world.frame / e) as u16;
+        for k in 0..self.followed_len {
+            let f = self.followed[k];
+            let live = self.live[..self.live_len].contains(&f.region);
+            if live && f.epoch.is_none_or(|have| have < current) {
+                self.offer(world.aggregate(&grid, f.region, current));
+                self.followed[k].epoch = Some(current);
+            }
+        }
         if world.frame % e == 0 {
             let epoch = (world.frame / e) as u16;
             self.summed_len = 0;

@@ -28,6 +28,7 @@ use bevy::ecs::query::QueryItem;
 use bevy::image::BevyDefault;
 use bevy::prelude::*;
 use bevy::render::RenderApp;
+use bevy::render::diagnostic::RecordDiagnostics;
 use bevy::render::extract_component::{
     ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin,
     UniformComponentPlugin,
@@ -86,6 +87,15 @@ pub fn surface_defs() -> Vec<ShaderDefVal> {
         milli("WASH_GRAIN", w.grain),
         milli("WASH_BROAD", w.broad),
         milli("WASH_BROAD_SIZE", w.broad_size),
+        // `--exact <m>`: the brush worked out at the pixel within so many
+        // metres and read off the sheets beyond; 0 is the sheets everywhere.
+        // Without it, the brush at the pixel everywhere: the painting.
+        milli(
+            "WASH_NEAR_EXACT",
+            crate::platform::value("--exact")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(-1.0),
+        ),
         milli("WASH_RICH", w.rich),
         milli("WASH_HOLLOW_R", w.hollow[0]),
         milli("WASH_HOLLOW_G", w.hollow[1]),
@@ -138,6 +148,8 @@ pub struct Wash {
     pub right: Vec4,
     pub up: Vec4,
     pub back: Vec4,
+    /// The fog's colour, as seen: what the air is mixed from.
+    pub fog: Vec4,
 }
 
 impl Wash {
@@ -170,6 +182,7 @@ impl Wash {
             right: Vec4::X,
             up: Vec4::Y,
             back: Vec4::Z,
+            fog: Vec4::ONE,
         })
     }
 }
@@ -177,10 +190,20 @@ impl Wash {
 /// Keeps the camera's height, axes and lens, and the sun's place on screen,
 /// current in the camera's [`Wash`].
 pub fn follow(
-    mut cams: Query<(&Camera, &GlobalTransform, &Projection, &mut Wash)>,
+    mut cams: Query<(
+        &Camera,
+        &GlobalTransform,
+        &Projection,
+        Option<&DistanceFog>,
+        &mut Wash,
+    )>,
     sun: Query<&GlobalTransform, With<crate::arenas::Sun>>,
 ) {
-    for (camera, at, projection, mut wash) in &mut cams {
+    for (camera, at, projection, fog, mut wash) in &mut cams {
+        if let Some(fog) = fog {
+            let c = fog.color.to_srgba();
+            wash.fog = Vec4::new(c.red, c.green, c.blue, 1.0);
+        }
         let (right, up, back) = (at.right(), at.up(), at.back());
         wash.cam = Vec4::new(at.translation().y, right.y, up.y, back.y);
         wash.right = right.extend(0.0);
@@ -233,11 +256,15 @@ impl Plugin for WashPlugin {
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
-        render_app
-            .add_render_graph_node::<ViewNodeRunner<WashNode<false>>>(Core3d, BrushLabel)
-            .add_render_graph_node::<ViewNodeRunner<WashNode<true>>>(Core3d, PaperLabel);
-        if self.outlines {
-            render_app.add_render_graph_edges(
+        // The paper pass only where there is paper or a frame to draw: for
+        // the rest it would be a copy of the whole picture.
+        let paper = style().on_paper || style().frame > 0.0;
+        render_app.add_render_graph_node::<ViewNodeRunner<WashNode<false>>>(Core3d, BrushLabel);
+        if paper {
+            render_app.add_render_graph_node::<ViewNodeRunner<WashNode<true>>>(Core3d, PaperLabel);
+        }
+        match (self.outlines, paper) {
+            (true, true) => render_app.add_render_graph_edges(
                 Core3d,
                 (
                     Node3d::Tonemapping,
@@ -246,13 +273,23 @@ impl Plugin for WashPlugin {
                     PaperLabel,
                     Node3d::Fxaa,
                 ),
-            );
-        } else {
-            render_app.add_render_graph_edges(
+            ),
+            (true, false) => render_app.add_render_graph_edges(
+                Core3d,
+                (
+                    Node3d::Tonemapping,
+                    BrushLabel,
+                    crate::outline::OutlineLabel,
+                    Node3d::Fxaa,
+                ),
+            ),
+            (false, true) => render_app.add_render_graph_edges(
                 Core3d,
                 (Node3d::Tonemapping, BrushLabel, PaperLabel, Node3d::Fxaa),
-            );
-        }
+            ),
+            (false, false) => render_app
+                .add_render_graph_edges(Core3d, (Node3d::Tonemapping, BrushLabel, Node3d::Fxaa)),
+        };
     }
 
     fn finish(&self, app: &mut App) {
@@ -423,6 +460,7 @@ impl<const PAPER: bool> ViewNode for WashNode<PAPER> {
                 &pipeline.depth_sampler,
             )),
         );
+        let diagnostics = render_context.diagnostic_recorder();
         let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some(if PAPER { "wash paper" } else { "wash brush" }),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -434,9 +472,13 @@ impl<const PAPER: bool> ViewNode for WashNode<PAPER> {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+        // Timed under its own name, so `--profile` can say what it costs.
+        let span =
+            diagnostics.pass_span(&mut pass, if PAPER { "wash paper" } else { "wash brush" });
         pass.set_render_pipeline(ready);
         pass.set_bind_group(0, &bind, &[offset.index()]);
         pass.draw(0..3, 0..1);
+        span.end(&mut pass);
         Ok(())
     }
 }

@@ -30,6 +30,18 @@ struct Paint {
 }
 
 @group(2) @binding(0) var<uniform> paint: Paint;
+// The brush strokes, baked (`look::strokes`): four tiling sheets, one a
+// rigidity, each texel a stroke's shade and two colour shifts.
+@group(2) @binding(1) var strokes_tex: texture_2d_array<f32>;
+@group(2) @binding(2) var strokes_sampler: sampler;
+// How many stroke lengths a sheet is across (`look::strokes::PERIOD`), and
+// how many angles a rigidity is drawn at (`look::strokes::ANGLES`).
+const STROKE_PERIOD: f32 = 8.0;
+const STROKE_ANGLES: f32 = 6.0;
+const STROKE_ANGLES_I: i32 = 6;
+// How far from the eye the brush is worked out at the pixel, in metres
+// (`WASH_NEAR_EXACT`, thousandths): negative is everywhere, 0 is never.
+const NEAR_EXACT: f32 = f32(#{WASH_NEAR_EXACT}) / 1000.0;
 
 const PI: f32 = 3.14159265;
 // A matte surface: the standard material's perceptual roughness 0.92,
@@ -188,16 +200,76 @@ fn stroke_way(p: vec3<f32>, n: vec3<f32>, flow: vec2<f32>, rigid: f32) -> vec3<f
     return normalize(mix(natural, level, built));
 }
 
-/// **One layer of strokes**, each `len` metres long at its usual size: a few
-/// strokes laid in every cell of a grid on the plane the surface most nearly
-/// faces, each with its own place, angle, length, width, curve, tapered dry
-/// ends, shade and warmth. `rigid` is how much they may vary: at 1 they sit
-/// on the grid, parallel to `way` and alike, as a mason's strokes along a
-/// course; at 0 they are scattered, turned, sized and coloured as freely as a
-/// meadow's. The topmost stroke covering a point is the one seen.
+/// **One layer of strokes**, each `len` metres long at its usual size: the
+/// baked sheet (`look::strokes`, which says what a stroke is) read on the
+/// plane the surface most nearly faces, scaled to `len`, from the sheet
+/// nearest this rigidity and one of the two angle sheets nearest the way the
+/// strokes run here. Four texels where there were thirty-six strokes worked
+/// out a pixel.
+///
+/// **The lookup is never turned.** Turning it about the origin to point the
+/// strokes along `way` moved the sample by the distance from the origin times
+/// the field's change between two pixels -- metres, far out on the map -- and
+/// smeared every stroke on the ground into a streak. The angle sheets hold
+/// the same strokes turned about their own middles; which of the two nearest
+/// a pixel shows is decided by the stroke's own phase, never by a blend.
 ///
 /// Returns shade, warmth and a second colour axis (each -1 to 1).
 fn strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> vec3<f32> {
+    let a = abs(n);
+    var u_axis = vec3<f32>(1.0, 0.0, 0.0);
+    var v_axis = vec3<f32>(0.0, 1.0, 0.0);
+    if (a.y > max(a.x, a.z)) {
+        v_axis = vec3<f32>(0.0, 0.0, 1.0);
+    } else if (a.x > a.z) {
+        u_axis = vec3<f32>(0.0, 0.0, 1.0);
+    }
+    let q = vec2<f32>(dot(p, u_axis), dot(p, v_axis));
+    var d = vec2<f32>(dot(way, u_axis), dot(way, v_axis));
+    if (length(d) < 1e-4) {
+        d = vec2<f32>(1.0, 0.0);
+    }
+    let uv = q / (len * STROKE_PERIOD);
+    // `look::strokes::RIGIDITIES`: 0, 0.25, 0.5, 0.85, nearest.
+    var sheet = 3;
+    if (rigid < 0.125) {
+        sheet = 0;
+    } else if (rigid < 0.375) {
+        sheet = 1;
+    } else if (rigid < 0.675) {
+        sheet = 2;
+    }
+    // The angle, over a half turn (a stroke turned half a turn is the same
+    // stroke), as a place between two of the angle sheets.
+    var turn = atan2(d.y, d.x);
+    if (turn < 0.0) {
+        turn = turn + PI;
+    }
+    let place = turn / PI * STROKE_ANGLES;
+    let lo = i32(floor(place)) % STROKE_ANGLES_I;
+    let hi = (lo + 1) % STROKE_ANGLES_I;
+    let t = fract(place);
+    let base = sheet * STROKE_ANGLES_I;
+    let one = textureSampleLevel(strokes_tex, strokes_sampler, uv, base + lo, 0.0);
+    let two = textureSampleLevel(strokes_tex, strokes_sampler, uv, base + hi, 0.0);
+    // One or the other, never a blend: the earlier sheet until the place
+    // between the two passes the phase of the stroke it shows here, then the
+    // later. Each stroke switches at its own moment, so nothing lines up into
+    // a seam, and a stroke is always a whole hard stroke.
+    if (t < one.a) {
+        return one.rgb * 2.0 - 1.0;
+    }
+    return two.rgb * 2.0 - 1.0;
+}
+
+/// **The brush worked out at the pixel** -- the painting: every candidate
+/// stroke's place, angle, size, curve, dry ends and bristles, for this very
+/// pixel, and every stroke the same size on the screen whatever its
+/// distance, as a brush is the same size on a canvas. The sheets below
+/// approximate it and read as a decal: the owner's call, 2026-10-16. The
+/// sheets are read beyond `NEAR_EXACT` metres, or everywhere with
+/// `--exact 0`, for a machine that cannot afford this.
+fn strokes_exact(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> vec3<f32> {
     let a = abs(n);
     var u_axis = vec3<f32>(1.0, 0.0, 0.0);
     var v_axis = vec3<f32>(0.0, 1.0, 0.0);
@@ -263,6 +335,16 @@ fn strokes(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, len: f32, rigid: f32) -> 
         }
     }
     return out;
+}
+
+/// `broad_strokes` with the brush worked out at the pixel.
+fn broad_exact(p: vec3<f32>, n: vec3<f32>, way: vec3<f32>, dist: f32, rigid: f32, size: f32) -> vec3<f32> {
+    let l = log2(max(BROAD_SIZE * dist * size, 0.05));
+    let lo = floor(l);
+    let t = l - lo;
+    let one = strokes_exact(p, n, way, exp2(lo), rigid);
+    let two = strokes_exact(p + vec3<f32>(17.3, 5.1, 9.7), n, way, exp2(lo + 1.0), rigid);
+    return mix(one, two, t) / sqrt(t * t + (1.0 - t) * (1.0 - t));
 }
 
 /// **Strokes that hold still and keep their size.** Fixed to the world so
@@ -338,7 +420,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
 #endif
         let dist = length(view.world_position - p);
         let way = stroke_way(p, n, flow, rigid);
-        let b = broad_strokes(p, n, way, dist, rigid, size);
+        var b: vec3<f32>;
+        if (NEAR_EXACT < 0.0 || dist < NEAR_EXACT) {
+            b = broad_exact(p, n, way, dist, rigid, size);
+        } else {
+            b = broad_strokes(p, n, way, dist, rigid, size);
+        }
         // The looser the brush the further its colours wander: a meadow's
         // strokes go yellow, blue and dark; a wall's stay close to its own.
         let wander = BROAD * mix(0.45, 1.0, 1.0 - rigid);

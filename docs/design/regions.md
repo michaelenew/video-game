@@ -210,7 +210,28 @@ as built the same day:
   nothing, on its simulated clock), sums every live region's aggregate at
   each epoch's frame (what a leader posts), and **holds the gate** for a
   stream with a peer behind it (`Ledger::peer_behind`) until the aggregate
-  the next frame reads has come.
+  the next frame reads has come. **A live region followed mid-epoch is
+  summed the frame it is followed**, and heard through that epoch: left for
+  the epoch's frame, the gate held for its aggregate and the world could
+  not reach the frame that would have summed it -- every fight froze four
+  seconds in, or the moment a fighter walked into a new region
+  (2026-10-15, `tests/restart.rs`). A region is real because somebody
+  stands in it *now* or a peer is behind it; one we stood in and left goes
+  back to being spoken for. **A live region followed mid-epoch is
+  summed the frame it is followed**, and heard through that epoch: left for
+  the epoch's frame, the gate held for its aggregate and the world could
+  not reach the frame that would have summed it -- every fight froze four
+  seconds in, or the moment a fighter walked into a new region
+  (2026-10-15, `tests/restart.rs`). A region is real because somebody
+  stands in it *now* or a peer is behind it; one we stood in and left goes
+  back to being spoken for. **A live region followed mid-epoch is
+  summed the frame it is followed**, and heard through that epoch: left for
+  the epoch's frame, the gate held for its aggregate and the world could
+  not reach the frame that would have summed it -- every fight froze four
+  seconds in, or the moment a fighter crossed into a new region
+  (2026-10-15, `tests/restart.rs`). A region is real because somebody
+  stands in it *now* or a peer is behind it; one we stood in and left goes
+  back to being spoken for.
 - **The first reader**: a calm pack **hears the valley fill next door**
   (`Crowds, a pack hears`: three fighters by the field, in the regions round
   its home, never its own) and takes it as an alarm. Inert in every pinned
