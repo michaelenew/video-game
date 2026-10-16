@@ -8794,6 +8794,12 @@ and the debounce are the owner's; the fresh push to let go, the crouch into a sl
 regrab lockout are mine, each for a failure the owner's rules would otherwise have: holding
 forward off an edge would let go on the frame it caught; there was no way into a slide from a
 hang; and letting go next to the face would catch the same edge again.
+One stored movement-search line stopped landing: the Shadow Reaver's best "full" line on lab
+lane 9 walked her off a 48 m platform at a walk to drop 2 m on to the goal 1.5 m out, and the
+walk-off now catches the edge. With the catch off it landed as before. The search was rerun for
+her and that one line replaced (70.2 m to 68.0 m); every other stored line of hers still lands
+across its old gap, so those were kept rather than swapped for the rerun's, which came out both
+better and worse lane by lane.
 **Not done** a hanging or climbing pose -- the renderer draws the hang with the airborne clip, and
 the climb as that clip rising -- and ledges on the valley's land (only a solid's top is a
 ledge, as only a solid's side is a wall). Space while hanging does nothing.
