@@ -37,15 +37,24 @@ So there are two problems, and they are separate:
   coordinates exactly as before. The map puts each one at an offset, cuts the
   doorways where two places meet, and adds the few boxes that belong to no
   place (a cliff round a room, a door's sill). The valley's map is 37 places,
-  20 doorways and about 2,100 boxes since the Great Wood, the Needle, the
-  ranges, the Deep and the High Plane.
+  20 doorways and about 12,000 boxes since the Great Wood, the Needle, the
+  ranges, the Deep and the High Plane -- ten thousand of them the Wood's grown
+  trees.
+- **Hidden boxes, and the trees.** A box of no place can be marked hidden
+  (`Plan::hidden`, `Atlas::hidden`): stood on and run into, but not drawn,
+  because something else draws what it is. The Wood's grown trees
+  (`sim::valley::trees`) are the one case: the map keeps each tree's skeleton
+  (`Atlas::trees`), the renderer draws the skeleton (`game::grove`), and the
+  boxes built from it are hidden.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
   touch it, in map order, and the places whose footprint does. A query over a
   box reads the tiles under it and merges their lists in map order, each box
   once. The busiest tile held 18 boxes until 2026-10-15; a tower and a tree
-  three hundred metres tall stack theirs into the tiles under them, and the
-  Needle's column holds about eighty, nearly all of which a query turns away
-  at its first comparison of heights (`tests/budget.rs` stands at its foot).
+  two hundred metres tall stack theirs into the tiles under them -- the
+  Needle's column about eighty, a grown giant's about two hundred, an Elder's
+  crown the most at about two hundred and thirty -- nearly all of which a
+  query turns away at its first comparison of heights (`tests/budget.rs`
+  stands at the foot of both).
   However large the map grows, a body reads what is near it. `tests/atlas.rs` checks
   that a query never misses a box (against walking every box, 2,000 random
   queries over a thousand scattered boxes), and that a map a hundred times

@@ -825,7 +825,19 @@ pub fn plan() -> Plan {
     plan.extras
         .push(waterfall::solid(&waterfall::CROWN, waterfall::VALLEY_AT));
     // The Great Wood's giants, on the land under them.
-    wood::build(&|x, z| land.height(x, z), &mut plan.extras);
+    // The Great Wood's giants, grown where they stand on the land: their
+    // wood is drawn from their skeletons, not as boxes.
+    let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
+    let ground = |x: i32, z: i32| to_cm(land.height(cm(x), cm(z)));
+    let grown = wood::grow(&ground);
+    let mut wood_boxes = Vec::new();
+    let mut wood_cairns = Vec::new();
+    wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
+    let first = plan.extras.len();
+    plan.extras.extend(wood_boxes);
+    plan.hidden.push(first..plan.extras.len());
+    plan.extras.extend(wood_cairns);
+    plan.trees = grown;
     // The Spire, on its plaza under the town's south wall.
     spire::build(&|x, z| land.height(x, z), &mut plan.extras);
     // The Deep: its lid, its warrens and its Caverns.

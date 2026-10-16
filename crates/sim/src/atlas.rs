@@ -166,6 +166,12 @@ pub struct Plan {
     pub land: Option<Land>,
     /// Boxes in no place, on the map: cliffs round a room, a door's sill.
     pub extras: Vec<Solid>,
+    /// **Extras not drawn as boxes**, by their indices in [`Plan::extras`]:
+    /// a grown tree's wood, which the renderer draws as the tree it is
+    /// (`Plan::trees`) from the skeleton the boxes were made from.
+    pub hidden: Vec<std::ops::Range<usize>>,
+    /// **The grown trees** (`crate::valley::trees`), for the renderer.
+    pub trees: Vec<crate::valley::trees::Tree>,
     /// The floor where no place is: far enough under every place that
     /// anything there has fallen out of the world.
     pub void: Fx,
@@ -217,6 +223,11 @@ pub struct Atlas {
     /// Everything on the map lies inside this (x, z).
     pub lo: (Fx, Fx),
     pub hi: (Fx, Fx),
+    /// **Not drawn as a box**, box for box: a grown tree's wood
+    /// ([`Plan::hidden`]).
+    pub hidden: Vec<bool>,
+    /// The grown trees, drawn from their skeletons.
+    pub trees: Vec<crate::valley::trees::Tree>,
     grid: Grid,
 }
 
@@ -387,12 +398,15 @@ impl Atlas {
                 band: pp.band,
             });
         }
+        let mut hidden = vec![false; solids.len()];
         for (i, s) in plan.extras.iter().enumerate() {
+            let unseen = plan.hidden.iter().any(|r| r.contains(&i));
             for piece in cut_all(*s) {
                 solids.push(piece);
+                hidden.push(unseen);
                 sources.push(Source {
                     place: EXTRA,
-                    index: i as u16,
+                    index: (i as u32).min(u16::MAX as u32 - 1) as u16,
                 });
             }
         }
@@ -523,6 +537,8 @@ impl Atlas {
             land: plan.land.clone(),
             lo,
             hi,
+            hidden,
+            trees: plan.trees.clone(),
             grid: Grid {
                 x0,
                 z0,

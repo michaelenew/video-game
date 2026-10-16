@@ -479,6 +479,40 @@ impl Palette {
         self.surface([0.58, 0.47, 0.36])
     }
 
+    /// **A grown giant's bark** (`sim::valley::trees`), by its kind: a
+    /// Sentinel's the red-brown of a redwood's, an Elder's the grey-brown of
+    /// an old oak's, a Strangler's the pale grey of a fig's -- each a step
+    /// lighter than a sapling's, because a trunk twenty metres across is
+    /// seen mostly from its shaded side.
+    pub fn grown_bark(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        use sim::valley::trees::Kind;
+        let wood = self.of(Material::Wood);
+        match kind {
+            Kind::Sentinel => tint::mix(wood, [0.70, 0.46, 0.34], 0.6),
+            Kind::Elder => tint::mix(wood, [0.74, 0.68, 0.60], 0.55),
+            Kind::Strangler => tint::mix(wood, [0.82, 0.80, 0.74], 0.65),
+        }
+    }
+
+    /// **A grown giant's leaves**: a Sentinel's needles the pine's, an
+    /// Elder's the broadleaf's, a Strangler's a glossier, yellower green.
+    pub fn grown_leaves(&self, kind: sim::valley::trees::Kind) -> [f32; 3] {
+        use sim::valley::trees::Kind;
+        match kind {
+            Kind::Sentinel => self.foliage(true),
+            Kind::Elder => self.foliage(false),
+            Kind::Strangler => {
+                let g = Lch::of(self.foliage(false));
+                Lch {
+                    l: g.l * 1.05,
+                    h: g.h + 0.04,
+                    ..g
+                }
+                .rgb()
+            }
+        }
+    }
+
     /// A tree's trunk: the place's timber, darker and greyer -- bark is
     /// weathered wood, and a red trunk reads as a painted post.
     pub fn bark(&self) -> [f32; 3] {

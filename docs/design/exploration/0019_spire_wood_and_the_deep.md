@@ -13,6 +13,13 @@ started: 2026-10-15
 > ([../atlas.md](../atlas.md) §"Round and turned solids"), which cost a box's
 > query and a square root.
 >
+> **The Wood's trees are grown** since the same day's second ask: §2b's
+> hand-laid spiral of boards, bridges and crown discs is replaced by
+> `sim::valley::trees` -- Sentinels, Elders and Stranglers grown where they
+> stand, by Massart's model and space colonisation, with the pipe model's
+> taper and roots laid along the land. Their limbs reaching into each other's
+> are the bridges now. [../valley.md](../valley.md) §1a.
+>
 > **Built so far**: the shapes, the Great Wood and the Spire -- named **the
 > Needle** in the game, because the jump course is already called the Spire --
 > as [../valley.md](../valley.md) §1a has them. Where they differ from this

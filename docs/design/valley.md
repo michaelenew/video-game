@@ -91,29 +91,50 @@ dome, a fight (VALE-5) -- is a range (§1b).
 
 **The Great Wood** (`sim::arena::wood`, `tests/wood.rs`): a clearing four
 hundred metres across past the Needle, and in it **fourteen giant trees 13
-to 20 metres across and 150 to 200 tall**, sized against what the classes do
+to 20 metres across and 100 to 200 tall**, sized against what the classes do
 rather than the plain jump ("however big you're thinking of, probably triple
-that"). Each is climbed in **three bands**:
+that").
 
-| Band | How high | Between branches | Who |
-| --- | --- | --- | --- |
-| **Walking** | the first 40 m | 2.2 m up and a metre across at the bark | anybody: `tests/wood.rs` jumps every hop of the Great Tree's with every class |
-| **Mechanic** | to 25 m under the crown | 6.5 m up, four metres across | a mechanic a hop; a cairn every fifth branch |
-| **Expert** | the last 25 m, onto the crown, and the bridges | 11 m up a quarter turn; gaps of 25--40 m between trees | mechanics chained |
+**The trees are grown** (`sim::valley::trees`, the owner's ask of the same
+day: "a procedural generator ... using some nature mimicking algorithm ...
+roots that wrap around the landscape ... a few versions ... in a specific
+place in the world where the tree grows"). Each is grown **where it stands**,
+from a site: the land under and round it, and its neighbours. Three kinds,
+each one of the ways botanists describe a tree growing:
 
-A trunk is round, flared at its foot and tapering; a branch is a board of
-bark four or five metres wide turned to its bearing; a **crown** is a disc of
-leaves two and a half times the trunk across, with a cairn on it, reached by
-going out to a top branch's tip and back up round the crown's edge. Twelve
-**bridges** run between neighbouring trees at sixty to a hundred and forty
-metres; seven meet, five stop short. No branch runs within six metres of
-another tree's bark. **Falls cost what the fall rule says** (VALE-2), and a
-fall that ends you stands you on the last cairn you touched. Four trunks have
-a vine up their north side to sixty metres.
+| Kind | How it grows | What it is to climb |
+| --- | --- | --- |
+| **Sentinel** (seven) | Massart's model: one leader straight up, and tiers of three limbs off it, each tier turned from the last by the **golden angle** (137.5°, the angle leaves are set round a stem), lower limbs drooping, upper ones rising, a cone of a crown | **a spiral stair**: tiers two metres apart for the first forty metres, the nearest limb of the next tier a short turn round, 2--4 m across at the bark -- `tests/wood.rs` climbs the Great Tree's with every class and the plain jump -- then six apart above, for the mechanics |
+| **Elder** (four) | an oak: a short trunk under a dome of a crown grown by **space colonisation** (Runions et al., 2007) -- points scattered through the room the crown may fill, each pulling the nearest bud toward it until a branch reaches it, so branches compete for space and fork | broad limbs to walk out along, forking |
+| **Strangler** (three) | a banyan: the same, held toward the level, under a crown wider than it is tall, and **prop roots** dropped from its great limbs to the ground | the props are pillars to climb into a roof |
 
-The crowns cast no shadow: a disc forty metres across over every giant left
-the grove in one shade, and a trunk's shaded side lit by the ambient alone was
-black. A giant's bark is pale for the same reason (`game::forms::giant_bark`).
+For all three: **the pipe model** (da Vinci's rule) -- a branch is as thick as
+everything it carries, its cross-section the sum of its children's -- so they
+taper as real ones do and the limbs low down, which carry most, are the ones
+you stand on. **A tree answers its place**: its crown is pushed off its
+neighbours' toward the open side and downhill, where the light is; a limb that
+would grow into the hillside lifts off it; no branch grows into another tree.
+**Roots wrap the landscape**: buttresses flaring up the trunk's foot, then
+roots running out over the land node by node, a third buried, further
+downhill than up, round a neighbour's foot rather than into it.
+
+What is drawn is the skeleton (`game::grove`: a tapered tube a segment, a
+clump of leaves at each twig's end, bark and leaves by kind from
+`look::Palette::grown_bark`); what is stood on is built from the same skeleton
+(`trees::solids`): its steep parts round slices, its gentle ones turned boards
+a step apart, nothing thinner than 45 cm (a broadleaf's, 90 cm and more) --
+you fall through a twig. The boxes are hidden from the renderer
+(`Atlas::hidden`), which draws the tree. About ten thousand of them for the
+Wood, the busiest tile under an Elder's crown about two hundred and thirty;
+the frame at the Great Tree's foot costs a fifth of its budget.
+
+Cairns stand on the highest of each tree's thick level limbs and on two on the
+way. **Falls cost what the fall rule says** (VALE-2). Four Sentinels have a
+vine up their north side to sixty metres.
+
+The leaves cast no shadow: a crown a hundred metres across over every giant
+left the grove in one shade, and a trunk's shaded side lit by the ambient
+alone was black.
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 

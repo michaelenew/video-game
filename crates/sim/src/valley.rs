@@ -43,6 +43,7 @@ pub mod land;
 pub mod layout;
 pub mod open;
 pub mod ranges;
+pub mod trees;
 
 /// A box of the world a body's feet can be in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

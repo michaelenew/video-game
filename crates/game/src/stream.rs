@@ -96,6 +96,11 @@ pub struct Stream {
     /// The palette for each place, for the land's colours.
     palettes: HashMap<ArenaId, look::Palette>,
     trees: crate::land::Trees,
+    /// The grown giants (`Atlas::trees`) drawn, by index.
+    groves: HashMap<usize, Entity>,
+    /// Each giant's meshes, its wood and its leaves, and how far it
+    /// reaches: built once, the first time it comes near, and kept.
+    grown: HashMap<usize, (Handle<Mesh>, Handle<Mesh>, f32)>,
     ground: Option<Handle<Paint>>,
     water: Option<Handle<StandardMaterial>>,
 }
@@ -163,6 +168,7 @@ pub fn stream(
         st.solids.clear();
         st.gates.clear();
         st.tiles.clear();
+        st.groves.clear();
         st.origin = None;
         st.at = None;
         return;
@@ -305,6 +311,8 @@ pub fn stream(
     // fineness for where the camera now is.
     let mut new: Vec<u32> = want
         .into_iter()
+        // A grown tree's boxes are drawn as the tree.
+        .filter(|i| !atlas.hidden[*i as usize])
         .filter(|i| match st.solids.get(i) {
             None => true,
             Some((_, None)) => false,
@@ -394,6 +402,17 @@ pub fn stream(
             commands.entity(old).despawn();
         }
     }
+    // The grown giants: each whole, by how near its crown comes.
+    behind |= groves(
+        &mut commands,
+        &mut meshes,
+        &mut st,
+        atlas,
+        root,
+        at,
+        reach,
+        &white,
+    );
     // The land: every tile within reach, drawn as finely as its distance
     // asks, nearest first.
     behind |= land_tiles(
@@ -413,6 +432,98 @@ pub fn stream(
     if behind {
         st.at = None;
     }
+}
+
+/// **Load and drop the grown giants** (`crate::grove`): a tree is drawn
+/// while its crown is within reach, its meshes built the first time and
+/// kept. One built a frame; true if more wait.
+#[allow(clippy::too_many_arguments)]
+fn groves(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    st: &mut Stream,
+    atlas: &Atlas,
+    root: Entity,
+    at: Vec3,
+    reach: f32,
+    white: &Handle<Paint>,
+) -> bool {
+    let mut built = false;
+    let mut behind = false;
+    for (k, tree) in atlas.trees.iter().enumerate() {
+        let foot = Vec3::new(
+            tree.base[0] as f32 / 100.0,
+            tree.base[1] as f32 / 100.0,
+            tree.base[2] as f32 / 100.0,
+        );
+        let flat = Vec2::new(foot.x - at.x, foot.z - at.z).length();
+        // How far it reaches, before it is built: what the trees grow to.
+        let spread = st.grown.get(&k).map_or(110.0, |g| g.2);
+        let d = (flat - spread).max(0.0);
+        let loaded = st.groves.contains_key(&k);
+        if loaded && d > reach + SLACK {
+            if let Some(e) = st.groves.remove(&k) {
+                commands.entity(e).despawn();
+            }
+            continue;
+        }
+        if loaded || d > reach {
+            continue;
+        }
+        if !st.grown.contains_key(&k) {
+            if built {
+                behind = true;
+                continue;
+            }
+            built = true;
+            let place = atlas
+                .place_at(
+                    sim::Fx::from_raw((foot.x * 65536.0) as i32),
+                    sim::Fx::from_raw((foot.z * 65536.0) as i32),
+                )
+                .or(atlas.places.first());
+            let Some(place) = place else {
+                continue;
+            };
+            let look = st
+                .looks
+                .entry(place.arena)
+                .or_insert_with(|| PlaceLook::of(place.get()))
+                .clone();
+            let (wood, leaves) = crate::grove::meshes(tree, &look.palette);
+            st.grown.insert(
+                k,
+                (
+                    meshes.add(wood),
+                    meshes.add(leaves),
+                    crate::grove::reach(tree),
+                ),
+            );
+        }
+        let (wood, leaves, _) = st.grown[&k].clone();
+        let e = commands
+            .spawn((
+                Mesh3d(wood),
+                MeshMaterial3d(white.clone()),
+                Transform::from_translation(foot),
+                Visibility::default(),
+                ChildOf(root),
+                Name::new("a grown giant"),
+            ))
+            .id();
+        // Leaves let the light through: a crown a hundred metres across
+        // casting one shadow left the grove under it lit by the ambient
+        // alone, which is black (2026-10-15).
+        commands.spawn((
+            Mesh3d(leaves),
+            MeshMaterial3d(white.clone()),
+            Transform::default(),
+            bevy::pbr::NotShadowCaster,
+            ChildOf(e),
+        ));
+        st.groves.insert(k, e);
+    }
+    behind
 }
 
 /// One slab per waystone's doorway, dark and a little translucent, hidden
