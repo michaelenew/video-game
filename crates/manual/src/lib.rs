@@ -967,7 +967,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_AT=<x>,<z>",
-                "Stand player one at that point of the place the world is in (metres), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
+                "Stand player one at that point of the place the world is in (metres, decimals allowed), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A third number is the height to look down from. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
+            ),
+            e(
+                "SHOT_FALL=1",
+                "With SHOT_AT, leave player one in the air at that point and height, falling, rather than on whatever is under it -- a capture of a ledge being caught: SHOT_AT=20,6.55,10.4 SHOT_FALL=1 SHOT_FRAME=40 SHOT_YAW=-1.57 DEMO=0 with --arena range lands on the hang from the tower's north face.",
             ),
             e(
                 "SHOT_MOVE=<move>",
