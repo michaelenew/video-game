@@ -502,9 +502,11 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
             continue;
         }
         var shadow = 1.0;
+#ifndef NO_SHADOW_LOOKUP
         if (ndotl > 0.0 && ((*light).flags & DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u) {
             shadow = fetch_directional_shadow(i, in.world_position, n, view_z);
         }
+#endif
         // How much of this light the surface takes: as it was, or laid down
         // as washes with the brush pushing the border between them about.
         let smooth_light = ndotl * shadow;

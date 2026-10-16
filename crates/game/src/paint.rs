@@ -118,6 +118,11 @@ impl Material for Paint {
         }
         if let Some(fragment) = descriptor.fragment.as_mut() {
             fragment.shader_defs.extend(crate::wash::surface_defs());
+            // `--profile --no-shadow-lookup`: what the still world's light
+            // costs with its shadow read off something already baked.
+            if crate::platform::flag("--no-shadow-lookup") {
+                fragment.shader_defs.push("NO_SHADOW_LOOKUP".into());
+            }
         }
         Ok(())
     }

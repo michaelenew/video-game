@@ -29,7 +29,7 @@ impl Plugin for ProfilePlugin {
             RenderDiagnosticsPlugin,
         ))
         .add_systems(Startup, experiment.after(crate::setup))
-        .add_systems(Update, (census, heaviest, quit_after));
+        .add_systems(Update, (census, heaviest, quit_after, casters));
         if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
             render.add_systems(bevy::render::Render, pipelines);
         }
@@ -120,14 +120,23 @@ fn census(
 /// be measured at several: `--cascades <n>` and `--shadow-reach <m>` for the
 /// sun's cascades, `--shadow-map <px>` for their resolution, `--shadow-filter
 /// hard|gaussian` for the edge, and `--no-outline`, `--no-fxaa` and
-/// `--no-prepass` to take a pass over the finished picture away. None of
+/// `--no-prepass` to take a pass over the finished picture away,
+/// `--casters` and `--no-shadow-lookup` for what a baked shadow would save
+/// ([`casters`]), and `--no-vsync` so the frame time shows a saving instead
+/// of the screen's 16.7 ms. None of
 /// them is a setting: the defaults are the game's, and these exist so a
 /// change to them is a measurement before it is an argument.
 fn experiment(
     mut commands: Commands,
     suns: Query<Entity, With<crate::arenas::Sun>>,
     cameras: Query<Entity, With<crate::MainCamera>>,
+    mut windows: Query<&mut Window>,
 ) {
+    if crate::platform::flag("--no-vsync") {
+        for mut window in &mut windows {
+            window.present_mode = bevy::window::PresentMode::AutoNoVsync;
+        }
+    }
     use bevy::pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, ShadowFilteringMethod};
     let cascades: Option<usize> = crate::platform::value("--cascades").and_then(|v| v.parse().ok());
     let reach: Option<f32> = crate::platform::value("--shadow-reach").and_then(|v| v.parse().ok());
@@ -177,18 +186,57 @@ fn experiment(
         "--shadow-reach",
         "--shadow-map",
         "--shadow-filter",
+        "--casters",
     ]
     .iter()
     .filter_map(|flag| crate::platform::value(flag).map(|v| format!("{flag} {v}")))
     .chain(
-        ["--no-outline", "--no-fxaa", "--no-prepass"]
-            .into_iter()
-            .filter(|flag| crate::platform::flag(flag))
-            .map(String::from),
+        [
+            "--no-outline",
+            "--no-fxaa",
+            "--no-prepass",
+            "--no-vsync",
+            "--no-shadow-lookup",
+        ]
+        .into_iter()
+        .filter(|flag| crate::platform::flag(flag))
+        .map(String::from),
     )
     .collect();
     if !overrides.is_empty() {
         eprintln!("profiling with {}", overrides.join(", "));
+    }
+}
+
+/// Everything drawn in the paint that still casts a shadow.
+type Still = (
+    With<Mesh3d>,
+    With<MeshMaterial3d<crate::paint::Paint>>,
+    Without<bevy::pbr::NotShadowCaster>,
+);
+
+/// **Who casts a shadow**, for measuring what a baked shadow would save:
+/// `--casters no-giants` takes the grown giants' wood out of the sun's
+/// cascades, as a shadow stand-in a few hundred triangles big would;
+/// `--casters moving` takes out everything drawn in the paint -- everything
+/// that stands still -- leaving the fighters and creatures, which is what a
+/// cascade would hold if the still world's shadow were baked. Runs every
+/// frame because the stream keeps spawning; what it has marked drops out of
+/// its own query.
+fn casters(
+    mut commands: Commands,
+    still: Query<(Entity, Option<&Name>), Still>,
+    mut which: Local<Option<Option<String>>>,
+) {
+    let which = which.get_or_insert_with(|| crate::platform::value("--casters").map(String::from));
+    let Some(which) = which.as_deref() else {
+        return;
+    };
+    for (e, name) in &still {
+        let giant = name.is_some_and(|n| n.as_str() == "a grown giant");
+        if which == "moving" || (which == "no-giants" && giant) {
+            commands.entity(e).insert(bevy::pbr::NotShadowCaster);
+        }
     }
 }
 
