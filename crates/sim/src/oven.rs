@@ -1019,7 +1019,8 @@ scalars! {
     // into a tiny little lip completely stops the character"). A grounded
     // body walked into a box whose top is no further above its feet than
     // this is put on top of it rather than stopped by it -- a kerb, a snow
-    // cap on a rock, the lip of a seam in the land. Above it, a jump.
+    // cap on a rock, the lip of a seam in the land. Above it, a jump. A knee
+    // high, 0.5 m, since 2026-10-16: a limb's boards met one at 0.45 m.
     StepOver,             "Movement", "Step, walked up onto (m)",                         Fixed, 0, fx(1,1);
     // **Four fighters** (2026-10-14). Every arena, seam and hunt names two
     // marks; the third and fourth fighters stand beside the first and second,
