@@ -8752,3 +8752,9 @@ because an inside corner alternates two walls and the same-wall rule never fires
 **Verdict** open -- unplayed. Things to feel for: whether ×0.7 reads as a slide at all on a
 short wall, whether the stick catches people who only meant to brush past, and whether the
 falloff is too stingy for a chimney.
+
+The pinned hunts moved for every class but the Champion (the hunters jump against the
+proving ground's walls). The new paths also turned up an older hole in the Pair: the paw held
+up between the rake's two hits reported no window, so the partner could commit a hit landing
+inside the gap just before the drop. The hold now reports the drop's window
+(`pair::fight::live_window`).
