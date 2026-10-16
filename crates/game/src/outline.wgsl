@@ -14,6 +14,8 @@
 // laid *outside* the thing it outlines and never eats into it.
 
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+#import bevy_render::view::View
+#import game::cut::by_window
 
 struct Outline {
     // The line's half-width, in pixels.
@@ -42,6 +44,9 @@ struct Outline {
     // How far the line wavers, in pixels, and how much of it is one sepia ink.
     wobble: f32,
     sepia: f32,
+    // The trees' window on to the fighter (`Paint::cut`), world space; `w`
+    // zero where there is none.
+    cut: vec4<f32>,
 }
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
@@ -54,6 +59,7 @@ struct Outline {
 // a route both backends have.
 @group(0) @binding(4) var depth_sampler: sampler;
 @group(0) @binding(3) var<uniform> settings: Outline;
+@group(0) @binding(5) var<uniform> view: View;
 
 /// The depth at a pixel, clamped to the picture.
 fn depth_at(at: vec2<i32>, size: vec2<i32>) -> f32 {
@@ -135,6 +141,14 @@ fn ink_over(lit: vec3<f32>) -> vec3<f32> {
         }
     }
     return clamp(un_oklab(vec3<f32>(dark, hue * lo)), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+/// Where in the world the surface at a pixel is, from its depth.
+fn world_at(at: vec2<i32>, size: vec2<i32>) -> vec3<f32> {
+    let uv = (vec2<f32>(at) + 0.5) / vec2<f32>(size);
+    let clip = vec4<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth_at(at, size), 1.0);
+    let w = view.world_from_clip * clip;
+    return w.xyz / w.w;
 }
 
 fn hash2(p: vec2<f32>) -> f32 {
@@ -226,8 +240,17 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     var ink = colour.rgb;
     if (closest > settings.step) {
+        // **No ring round the trees' window**: the step from the wood at its
+        // rim to what is behind is the camera's doing, not an edge in the
+        // world (`cut.wgsl`).
+        if (by_window(settings.cut, view.world_position, world_at(found, size))) {
+            return colour;
+        }
         ink = ink_over(textureLoad(screen_texture, found, 0).rgb);
     } else if (fold > settings.fold) {
+        if (by_window(settings.cut, view.world_position, world_at(here, size))) {
+            return colour;
+        }
         ink = ink_over(colour.rgb);
     } else {
         return colour;

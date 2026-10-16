@@ -55,9 +55,9 @@ const ROUGHNESS: f32 = 0.85;
 const PERCEPTUAL_ROUGHNESS: f32 = 0.92;
 const F0: f32 = 0.04;
 // How much of the wood is left in the middle of the window on to the
-// fighter (`Paint::ghost`): enough to read as the tree, little enough to see
-// them through it.
-const GHOST_ALPHA: f32 = 0.3;
+// fighter (`Paint::ghost`): a trace, so the window reads as the camera's and
+// never as a hole in the tree.
+const GHOST_ALPHA: f32 = 0.1;
 
 // **The wash** (`look::wash`, the surface half): the light laid down as a few
 // flat washes with a brushed border between them, a cool shade and a warm

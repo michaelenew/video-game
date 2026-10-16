@@ -25,7 +25,25 @@ fn window(cut: vec4<f32>, eye: vec3<f32>, at: vec3<f32>) -> f32 {
     }
     let off = length(at - (eye + to * t));
     let r = cut.w * (0.35 + 0.65 * t);
-    let across = 1.0 - smoothstep(0.6 * r, r, off);
+    let across = 1.0 - smoothstep(0.3 * r, r, off);
     let along = 1.0 - smoothstep(0.7, 0.85, t);
     return across * along;
+}
+
+// Is this point at the window's rim or inside it: the window grown a little
+// either way. What the outline asks of the nearer side of an edge before it
+// inks it (`outline.wgsl`): the wood around the window stands in front of
+// what is behind it, and a line drawn round that step is a ring that says
+// there is a hole in the tree, which there is not -- it is the camera's.
+fn by_window(cut: vec4<f32>, eye: vec3<f32>, at: vec3<f32>) -> bool {
+    if (cut.w <= 0.0) {
+        return false;
+    }
+    let to = cut.xyz - eye;
+    let t = dot(at - eye, to) / max(dot(to, to), 1e-4);
+    if (t <= 0.0 || t >= 0.9) {
+        return false;
+    }
+    let off = length(at - (eye + to * t));
+    return off < 1.4 * cut.w * (0.35 + 0.65 * t);
 }

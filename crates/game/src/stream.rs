@@ -170,6 +170,7 @@ pub fn stream(
     mut standard: ResMut<Assets<StandardMaterial>>,
     mut paints: ResMut<Assets<Paint>>,
     mut gates: Query<&mut Visibility>,
+    mut outlines: Query<&mut crate::outline::Outline>,
 ) {
     let mut materials = Materials {
         standard: &mut standard,
@@ -177,6 +178,9 @@ pub fn stream(
     };
     let w = &sim.cur;
     if !w.valley.on {
+        for mut o in &mut outlines {
+            o.cut = Vec4::ZERO;
+        }
         if let Some(root) = st.root.take() {
             commands.entity(root).despawn();
         }
@@ -261,6 +265,10 @@ pub fn stream(
         if let Some(p) = materials.paint.get_mut(paint) {
             p.cut = focus.extend(WINDOW);
         }
+    }
+    // The outline is told too, so it draws no ring round the window.
+    for mut o in &mut outlines {
+        o.cut = focus.extend(WINDOW);
     }
     let Ok(eye) = camera.single() else {
         return;
