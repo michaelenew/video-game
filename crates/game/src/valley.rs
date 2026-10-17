@@ -1,7 +1,7 @@
 //! **The valley, drawn** (`docs/design/valley.md`, `sim::valley`): what the
-//! simulation's seams, waystones, vines and updrafts look like.
+//! simulation's seams, waystones and updrafts look like.
 //!
-//! Nothing here decides a colour -- `look::palette` does (`beacon`, `vine`,
+//! Nothing here decides a colour -- `look::palette` does (`beacon`,
 //! `draft`) -- and nothing here decides where anything is: every
 //! shape is read off the place's table, so a seam moved in `sim` moves here.
 //!
@@ -10,7 +10,6 @@
 //!   dark waystone shuts it.
 //! - **A waystone** carries a light on its top, lit or dark with its gate,
 //!   and while it is dark its doorway is a wall of the same grey.
-//! - **A vine** is a few dark-green strands down the face it climbs.
 //! - **An updraft** is a faint column of rising air from the floor to its top.
 //!
 //! The lookout's painted ridges are gone: the valley is one map now, and what
@@ -54,7 +53,7 @@ fn linear(rgb: [f32; 3]) -> [f32; 3] {
     look::tint::linear(rgb)
 }
 
-/// Draw a place's seams, waystones, vines and updrafts. Called by
+/// Draw a place's seams, waystones and updrafts. Called by
 /// `arenas::draw_place` with the place it is drawing; everything spawned goes
 /// where the place's other pieces go.
 pub fn draw(
@@ -215,187 +214,6 @@ pub fn draw(
                         shown: None,
                         strength: 0.95,
                     },
-                ),
-            );
-        }
-    }
-
-    // Vines: a few strands down the face each one climbs.
-    let vine = materials.standard.add(StandardMaterial {
-        base_color: {
-            let c = linear(palette.vine());
-            Color::linear_rgb(c[0], c[1], c[2])
-        },
-        perceptual_roughness: 0.95,
-        ..default()
-    });
-    for v in place.vines {
-        let (lo, hi) = (
-            Vec3::new(fx(v.min.x), fx(v.min.y), fx(v.min.z)),
-            Vec3::new(fx(v.max.x), fx(v.max.y), fx(v.max.z)),
-        );
-        // The face is on whichever thin side of the zone has rock against
-        // it; the strands hang a hand in front of it.
-        let along_z = (hi.x - lo.x) < (hi.z - lo.z);
-        let to_v = |p: Vec3| {
-            sim::V3::new(
-                sim::Fx::from_raw((p.x * 65536.0) as i32),
-                sim::Fx::from_raw((p.y * 65536.0) as i32),
-                sim::Fx::from_raw((p.z * 65536.0) as i32),
-            )
-        };
-        let mid = (lo + hi) * 0.5;
-        // Every box near the zone: a crag's on the map is not the place's own.
-        let near: Vec<sim::arena::Solid> = ground.around(to_v(mid), sim::Fx::from_int(3)).collect();
-        let probe = |p: Vec3| {
-            near.iter().any(|s| {
-                p.x > fx(s.min.x)
-                    && p.x < fx(s.max.x)
-                    && p.y > fx(s.min.y)
-                    && p.y < fx(s.max.y)
-                    && p.z > fx(s.min.z)
-                    && p.z < fx(s.max.z)
-            })
-        };
-        // **A vine on a round trunk** (the Great Wood's): strands hung on
-        // the bark, following its taper, from the foot to the zone's top.
-        let trunk: Vec<&sim::arena::Solid> = near
-            .iter()
-            .filter(|s| {
-                let (x, z) = s.middle();
-                matches!(s.shape, sim::arena::Shape::Round { .. })
-                    && fx(x) > lo.x - 0.5
-                    && fx(x) < hi.x + 0.5
-                    && fx(z) > lo.z - 0.5
-                    && fx(z) < hi.z + 0.5
-            })
-            .collect();
-        if !trunk.is_empty() {
-            let (cx, cz) = trunk[0].middle();
-            let (cx, cz) = (fx(cx), fx(cz));
-            // Which way out of the axis the zone lies.
-            let out = Vec2::new(mid.x - cx, mid.z - cz).normalize_or(Vec2::Y);
-            // A vine inside a ring's hole (the Spire's chimney) hangs on the
-            // hole's wall, not the outside.
-            let inside = |s: &sim::arena::Solid| {
-                let sim::arena::Shape::Round { hollow, .. } = s.shape else {
-                    return false;
-                };
-                Vec2::new(mid.x - cx, mid.z - cz).length() < fx(hollow)
-            };
-            let wanted: Vec<&sim::arena::Solid> = {
-                let any_inside = trunk
-                    .iter()
-                    .any(|s| inside(s) && fx(s.min.y) < hi.y && fx(s.max.y) > lo.y);
-                trunk
-                    .iter()
-                    .copied()
-                    .filter(|s| !any_inside || inside(s))
-                    .collect()
-            };
-            let trunk = wanted;
-            let skin = |y: f32| {
-                trunk
-                    .iter()
-                    .find(|s| fx(s.min.y) <= y && fx(s.max.y) >= y)
-                    .map(|s| {
-                        let sim::arena::Shape::Round {
-                            bottom,
-                            top,
-                            hollow,
-                        } = s.shape
-                        else {
-                            return 0.0;
-                        };
-                        if inside(s) {
-                            return fx(hollow) - 0.18;
-                        }
-                        let t = (y - fx(s.min.y)) / (fx(s.max.y) - fx(s.min.y)).max(0.01);
-                        fx(bottom) + (fx(top) - fx(bottom)) * t
-                    })
-                    .unwrap_or(0.0)
-            };
-            let foot = trunk
-                .iter()
-                .map(|s| fx(s.min.y))
-                .fold(f32::MAX, f32::min)
-                .max(lo.y)
-                + 1.0;
-            let top =
-                hi.y.min(trunk.iter().map(|s| fx(s.max.y)).fold(foot, f32::max));
-            for k in 0..5 {
-                let spread = (k as f32 - 2.0) * 0.07;
-                let dir = Vec2::new(out.x - out.y * spread, out.y + out.x * spread).normalize();
-                let mut y = foot;
-                while y < top {
-                    let step = 4.0f32.min(top - y);
-                    let (s0, s1) = (skin(y), skin(y + step));
-                    if s0 <= 0.0 || s1 <= 0.0 {
-                        y += step;
-                        continue;
-                    }
-                    let (r0, r1) = (s0 + 0.06, s1 + 0.06);
-                    let a = Vec3::new(cx + dir.x * r0, y, cz + dir.y * r0);
-                    let b = Vec3::new(cx + dir.x * r1, y + step, cz + dir.y * r1);
-                    let len = (b - a).length();
-                    put(
-                        commands,
-                        under,
-                        (
-                            Mesh3d(meshes.add(Cuboid::new(0.12, len, 0.12))),
-                            MeshMaterial3d(vine.clone()),
-                            Transform::from_translation((a + b) * 0.5)
-                                .with_rotation(Quat::from_rotation_arc(Vec3::Y, (b - a) / len)),
-                        ),
-                    );
-                    y += step;
-                }
-            }
-            continue;
-        }
-        // From the floor at its foot to the top of the face it hangs on: a
-        // zone may run from the void to the sky, and the vine does not.
-        let floor = fx(ground.floor_below(to_v(Vec3::new(mid.x, hi.y.min(1000.0), mid.z))));
-        let face_top = near
-            .iter()
-            .filter(|s| {
-                fx(s.max.x) > lo.x - 0.5
-                    && fx(s.min.x) < hi.x + 0.5
-                    && fx(s.max.z) > lo.z - 0.5
-                    && fx(s.min.z) < hi.z + 0.5
-            })
-            .map(|s| fx(s.max.y))
-            .fold(floor + 2.0, f32::max);
-        let base = lo.y.max(floor) + 1.0;
-        let top = hi.y.min(face_top);
-        let mid_y = (base + top) * 0.5;
-        let height = (top - base).max(1.0);
-        let strands = 5;
-        for k in 0..strands {
-            let t = (k as f32 + 0.5) / strands as f32;
-            let (x, z) = if along_z {
-                let face = if probe(Vec3::new(hi.x + 0.2, mid_y, (lo.z + hi.z) * 0.5)) {
-                    hi.x - 0.06
-                } else {
-                    lo.x + 0.06
-                };
-                (face, lo.z + (hi.z - lo.z) * t)
-            } else {
-                let face = if probe(Vec3::new((lo.x + hi.x) * 0.5, mid_y, hi.z + 0.2)) {
-                    hi.z - 0.06
-                } else {
-                    lo.z + 0.06
-                };
-                (lo.x + (hi.x - lo.x) * t, face)
-            };
-            let sway = 0.85 + 0.3 * ((k * 7 % 5) as f32 / 5.0);
-            put(
-                commands,
-                under,
-                (
-                    Mesh3d(meshes.add(Cuboid::new(0.09, height * sway, 0.09))),
-                    MeshMaterial3d(vine.clone()),
-                    Transform::from_xyz(x, base + height * sway * 0.5, z),
                 ),
             );
         }

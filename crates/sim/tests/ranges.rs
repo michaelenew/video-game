@@ -366,7 +366,13 @@ fn a_roused_range_fights() {
     {
         let mut w = walked_in(r);
         let o = w.map_origin();
-        w.players[0].pos = V3::new(cm(r.at.0), cm(r.floor).add(Fx::ONE), cm(r.at.1)).sub(o);
+        // In its middle -- but the roost's middle is the Needle's chimney,
+        // which a vine held her in until 2026-10-16: on the dome beside it.
+        let mut at = V3::new(cm(r.at.0), cm(r.floor).add(Fx::ONE), cm(r.at.1)).sub(o);
+        if r.species == sim::species::SpeciesId::GALEWING && r.stacked.is_some() {
+            at.z = at.z.sub(Fx::from_int(8));
+        }
+        w.players[0].pos = at;
         w.players[0].health = 100_000;
         hurt(&mut w);
         let start = w.players[0].health;

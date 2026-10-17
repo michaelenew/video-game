@@ -737,7 +737,7 @@ the floor end a slide outright: that is the world deciding, not the stick. The s
 work a ledge (below).
 
 **A wall is footing for the fall rule.** While you slide, the height a fall is measured from
-is reset to where you are, the way a vine resets it. A wall slid all the way to the floor
+is reset to where you are, the way a ledge's hang resets it. A wall slid all the way to the floor
 costs nothing to land from; one let go partway costs only the drop from where you let go.
 That is the recovery: a wall reached is a fall cancelled or shortened.
 
@@ -806,7 +806,7 @@ not. Only a solid's top is a ledge — land too steep to climb is a slope, as it
 
 **Hanging** (`state::hang_on`): the catch settles you over `Ledge, catching, settles over` (8
 frames) into a hang `Ledge, hanging, feet under the top` (1.9 m) under the top, facing the
-wall. The hang is footing for the fall rule, like a vine, so a ledge caught is a fall
+wall. The hang is footing for the fall rule, like a wall slide, so a ledge caught is a fall
 cancelled. Then the same three envelopes as the slide:
 
 | Stick | Does |

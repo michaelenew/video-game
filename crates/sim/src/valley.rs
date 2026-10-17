@@ -224,9 +224,6 @@ pub struct Place {
     pub arena: ArenaId,
     pub kind: Kind,
     pub seams: &'static [Seam],
-    /// Climbable faces: a box in front of a face, its feet anywhere in which
-    /// can climb with the jump held.
-    pub vines: &'static [Zone],
     pub vents: &'static [Vent],
 }
 
@@ -303,29 +300,10 @@ pub fn all() -> impl Iterator<Item = &'static Place> {
     (0..crate::arena::COUNT as u8).filter_map(|i| place(ArenaId(i)))
 }
 
-/// The vines and vents an arena has, for the movement that reads them --
-/// whether or not the world is the valley, since they are part of the
-/// ground.
-pub fn vines(id: ArenaId) -> &'static [Zone] {
-    place(id).map_or(&[], |p| p.vines)
-}
-
+/// The vents an arena has, for the movement that reads them -- whether or
+/// not the world is the valley, since they are part of the ground.
 pub fn vents(id: ArenaId) -> &'static [Vent] {
     place(id).map_or(&[], |p| p.vents)
-}
-
-/// **Is a body's feet in a vine**, on whatever ground it is: on the valley's
-/// map, the vines of the place under it.
-pub fn vine_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
-    match ground.atlas() {
-        None => vine_at(ground.id, feet).is_some(),
-        Some(a) => {
-            let m = feet.add(ground.origin());
-            a.place_at(m.x, m.z)
-                .is_some_and(|p| vine_at(p.arena, p.from_map(m)).is_some())
-                || a.vines.iter().any(|v| v.holds(m))
-        }
-    }
 }
 
 /// **Is a body in an updraft's column**, on whatever ground it is.
@@ -379,18 +357,13 @@ pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
         })
 }
 
-/// The vine a body's feet are in, if any.
-pub fn vine_at(id: ArenaId, feet: V3) -> Option<&'static Zone> {
-    vines(id).iter().find(|v| v.holds(feet))
-}
-
 /// The vent carrying a body, if any.
 pub fn vent_at(id: ArenaId, feet: V3) -> Option<&'static Vent> {
     vents(id).iter().find(|v| v.carries(feet))
 }
 
 /// **A crag**: a pillar of rock standing on the land, with ledges up one face
-/// a jump apart, a vine down the other, and a cairn on its top. The climbs the
+/// a jump apart, and a cairn on its top. The climbs the
 /// valley used to be made of, kept as something to climb off the path: a
 /// view, a checkpoint, and a jump every class makes (`tests/valley.rs`).
 ///
@@ -409,19 +382,14 @@ pub struct Crag {
 impl Crag {
     /// Half the pillar's side, in centimetres.
     pub const HALF: i32 = 400;
-    /// How far each ledge is above the last, in centimetres.
-    pub const RISE: i32 = 220;
+    /// How far each ledge is above the last, in centimetres: past the
+    /// Bulwark's landing, inside its catch (2026-10-16, from 2.2 m when a
+    /// ledge did not catch) -- the plainest jump hangs from each and climbs.
+    pub const RISE: i32 = 360;
+    /// How far apart the two halves of the face its ledges zig-zag on are.
+    pub const ACROSS: i32 = 150;
     /// How far a ledge stands out from the face.
     pub const OUT: i32 = 160;
-
-    /// The vine down its east face: a column a body's feet are in when they
-    /// stand against it, from the land to the sky.
-    pub const fn vine(&self) -> Zone {
-        Zone::cm(
-            [self.x + Self::HALF, -10_000, self.z - 120],
-            [self.x + Self::HALF + 60, 30_000, self.z + 120],
-        )
-    }
 }
 
 /// "No seam" and "no cairn", in the journey's bytes.
@@ -487,7 +455,6 @@ pub mod rooms {
             arena,
             kind: Kind::Room(species),
             seams,
-            vines: &[],
             vents: &[],
         }
     }

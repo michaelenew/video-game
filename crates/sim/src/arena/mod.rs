@@ -109,6 +109,8 @@ pub mod deep;
 
 pub mod heights;
 
+pub mod gully;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose

@@ -630,7 +630,6 @@ pub static PLACE: Place = Place {
     arena: ArenaId::HEARTH,
     kind: Kind::Town,
     seams: &SEAMS,
-    vines: &[],
     vents: &[],
 };
 

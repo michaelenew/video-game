@@ -65,7 +65,6 @@ pub static PLACE: Place = Place {
     arena: ArenaId::RING,
     kind: Kind::Ring,
     seams: &SEAMS,
-    vines: &[],
     vents: &[],
 };
 

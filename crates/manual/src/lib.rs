@@ -540,8 +540,8 @@ pub const SECTIONS: &[Section] = &[
                 "Shelves, gaps, traverses along a face, chimneys between two walls -- the jump is all there is to it, and a fall costs what the fall rule says: free to nine metres, twenty-five a metre past that. A long way round always exists. Snow on a top is a cairn: touch it to rest, and if you die you are stood on the last one you touched.",
             ),
             e(
-                "Vines and updrafts",
-                "Green strands down a face are a vine: hold Space to climb it, crouch to slide down, let go of both to cling. A pale column of air on the Saddle is an updraft: jump into it and it carries you up.",
+                "Ledges and walls",
+                "An edge at your hands catches you when you fall past it or jump short of it: push into the wall to climb up (slowly), away from it to let go, along it to go hand over hand, crouch to slide down the face. Falling beside a wall and pushing into it slides you down it, and a slide is a fall cancelled. Space against a wall, or just off one, jumps off it -- up a little and away -- and some gaps are only crossed that way: a gully between two walls over a drop is a run of jumps from wall to wall. A pale column of air is an updraft: jump into it and it carries you up.",
             ),
             e(
                 "The Ring",

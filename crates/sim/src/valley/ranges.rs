@@ -416,7 +416,6 @@ const fn place_of(r: &Range) -> Place {
         arena: r.arena,
         kind: Kind::Room(r.species),
         seams: &[],
-        vines: &[],
         vents: &[],
     }
 }

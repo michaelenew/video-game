@@ -1,8 +1,11 @@
 //! **The Deep** (`sim::arena::deep`, exploration 0019 §2d): caves under the
 //! Shelves. The path from the road reaches the lid; every warren's maze
-//! leads from its way in to its way down; the vines carry a fighter from the
-//! mouth to the Caverns' floor unhurt; the lid seals the pit everywhere but
-//! its mouth; and each range in it is only at its own level.
+//! leads from its way in to its way down; a slide down each shaft's wall
+//! carries a fighter from the mouth to the Caverns' floor unhurt, and every
+//! class climbs back up each by its ledges; the lid seals the pit everywhere
+//! but its mouth; and each range in it is only at its own level.
+
+mod pilot;
 
 use sim::arena::deep::{self, AT, CELL, CELLS, HOLES, LEVELS, LID};
 use sim::arena::{ArenaId, Solid};
@@ -165,8 +168,21 @@ fn the_lid_seals_the_pit_but_for_its_mouth() {
     }
 }
 
+/// A box in the pit's coordinates, on the map.
+fn pit_box(min: [i32; 3], max: [i32; 3]) -> Solid {
+    Solid::cm(
+        [AT[0] + min[0], AT[1] + min[1], AT[2] + min[2]],
+        [AT[0] + max[0], AT[1] + max[1], AT[2] + max[2]],
+        sim::arena::Material::Rock,
+    )
+}
+
+/// **Down every shaft by its wall**: dropped in beside a shaft's east wall
+/// -- the one with no ledges -- and pushing into it, a fighter slides to the
+/// floor below, and the whole way down from the mouth to the Caverns costs
+/// nothing.
 #[test]
-fn the_vines_carry_a_fighter_from_the_mouth_to_the_caverns() {
+fn a_slide_down_every_shaft_s_wall_is_free() {
     let mut w = World::arrive(
         [Class::Champion, Class::Elementalist],
         journey(),
@@ -174,39 +190,73 @@ fn the_vines_carry_a_fighter_from_the_mouth_to_the_caverns() {
         Some(0),
         1,
     );
-    let (x, z) = deep::cell_middle(HOLES[0]);
-    let start = pit(x, LID + 50, z);
-    w.players[0].pos = start.sub(w.map_origin());
-    w.players[0].vel = V3::ZERO;
     w.players[0].health = 1000;
     let health = w.players[0].health;
-    // Down each shaft with crouch held, and across each warren to its way
-    // down: the next shaft.
-    for k in 0..HOLES.len() {
-        let floor = if k + 1 < HOLES.len() { LEVELS[k] } else { 0 };
-        for _ in 0..60 * 60 {
-            w.advance([Input::new(Input::CROUCH), Input::new(0)]);
-            let feet = w.players[0].pos.add(w.map_origin());
-            if w.players[0].grounded && feet.y.sub(cm(AT[1] + floor)).abs().raw() < Fx::ONE.raw() {
+    for (k, &(from, to)) in deep::SHAFTS.iter().enumerate() {
+        let (x, z) = deep::cell_middle(HOLES[k]);
+        // In the shaft beside its east wall, under the floor it goes
+        // through: lower than a hand's reach of the rim, which would catch.
+        let at = pit(x + 300, from - 600, z);
+        w.players[0].pos = at.sub(w.map_origin());
+        w.players[0].vel = V3::ZERO;
+        w.players[0].grounded = false;
+        w.players[0].fall_over = w.players[0].pos.y;
+        // East is +x: looking that way, forward is into the wall.
+        for _ in 0..60 * 30 {
+            w.advance([Input::looking_at(Input::W, 0, 0), Input::new(0)]);
+            if w.players[0].grounded {
                 break;
             }
         }
         let feet = w.players[0].pos.add(w.map_origin());
         assert!(
-            feet.y.sub(cm(AT[1] + floor)).abs().raw() < Fx::ONE.raw(),
+            feet.y.sub(cm(AT[1] + to)).abs().raw() < Fx::ONE.raw(),
             "shaft {k}: at {} m, not on the floor at {}",
             feet.y.to_f32_for_render(),
-            (AT[1] + floor) / 100
+            (AT[1] + to) / 100
         );
-        if k + 1 < HOLES.len() {
-            // Carried to the next shaft (the maze is walked by the test
-            // above); stood over its middle.
-            let (nx, nz) = deep::cell_middle(HOLES[k + 1]);
-            w.players[0].pos = pit(nx, floor + 20, nz).sub(w.map_origin());
-            w.players[0].vel = V3::ZERO;
-        }
+        // Walk out under the walls, on to the next shaft (the maze is
+        // walked by the test above).
+        let _ = (x, z);
     }
     assert_eq!(w.players[0].health, health, "the way down hurt her");
+}
+
+/// **Every class climbs back up every shaft**: from the floor under it,
+/// ledge by ledge -- landed, or caught at the hands and climbed -- and off
+/// the last on to the floor it comes up through.
+#[test]
+fn every_class_climbs_every_shaft() {
+    let mut failed = Vec::new();
+    for class in sim::class::ALL_CLASSES {
+        let mut w = World::arrive([class, class], journey(), ArenaId::DEEP, Some(0), 1);
+        for (k, &(from, to)) in deep::SHAFTS.iter().enumerate() {
+            let (x, z) = deep::cell_middle(HOLES[k]);
+            let h = 400;
+            let ledges = deep::shaft_ledges(k);
+            // The floor under it, but for what is under the first ledge (on
+            // the south wall) and a step short of it: a jump from right
+            // beside a ledge goes up under it.
+            let mut route = vec![pit_box([x - h, to - 100, z - h + 370], [x + h, to, z + h])];
+            route.extend(ledges.iter().map(|&(a, b)| pit_box(a, b)));
+            // Up the wall the last ledge is on, over its rim: the ledges
+            // start on the south wall and turn about.
+            let north = ledges.len() % 2 == 0;
+            route.push(if north {
+                pit_box([x - h, from - 300, z + h], [x + h, from, z + h + 400])
+            } else {
+                pit_box([x - h, from - 300, z - h - 400], [x + h, from, z - h])
+            });
+            for (n, pair) in route.windows(2).enumerate() {
+                let (a, b) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));
+                if let Err(e) = pilot::jump(&mut w, a, b) {
+                    failed.push(format!("{}: shaft {k}, step {}: {e}", class.name(), n + 1));
+                    break;
+                }
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
 #[test]

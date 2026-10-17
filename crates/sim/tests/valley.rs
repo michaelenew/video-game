@@ -4,6 +4,8 @@
 //! what they say. The map itself -- tiles, doorways, nothing overlapping --
 //! is `tests/atlas.rs`.
 
+mod pilot;
+
 use sim::arena::{ArenaId, Terrain};
 use sim::input::{Destination, Travel};
 use sim::species::SpeciesId;
@@ -666,41 +668,12 @@ fn nobody_can_hurt_anybody_in_a_reach() {
 }
 
 #[test]
-fn a_vine_is_climbed_with_the_jump_held() {
-    let mut w = arrived(ArenaId::MOUTH, Some(0));
-    let vine = valley::vines(ArenaId::MOUTH)[0];
-    let mid = vine.middle();
-    let up = V3::new(mid.x, Fx::from_int(200), mid.z);
-    w.players[0].pos = V3::new(mid.x, w.terrain().floor_below(up), mid.z);
-    let start = w.players[0].pos.y;
-    // Straight up for three seconds: a vine is slow, but it goes.
-    for _ in 0..180 {
-        w.advance([Input::new(Input::SPACE), Input::new(0)]);
-    }
-    let climbed = w.players[0].pos.y.sub(start);
-    assert!(
-        climbed.raw() > Fx::from_int(6).raw(),
-        "climbed only {climbed:?}"
-    );
-    // Let go of everything: it clings.
-    let held = w.players[0].pos.y;
-    for _ in 0..30 {
-        w.advance(idle());
-    }
-    assert!(
-        w.players[0].pos.y.sub(held).abs().raw() < Fx::ratio(1, 10).raw(),
-        "it did not cling"
-    );
-}
-
-#[test]
-fn outside_the_valley_there_are_no_vines_or_seams() {
+fn outside_the_valley_there_are_no_seams() {
     let mut w = World::with_classes(CLASSES);
     let before = w.checksum();
     w.advance(idle());
     assert!(!w.valley.on);
     assert_ne!(before, w.checksum());
-    assert!(valley::vines(ArenaId::PROVING_GROUND).is_empty());
     assert!(valley::place(ArenaId::PROVING_GROUND).is_none());
 }
 
@@ -708,12 +681,15 @@ fn outside_the_valley_there_are_no_vines_or_seams() {
 /// road climbs on foot and nothing on it needs a jump; the climbs are the
 /// crags beside it, each ledge a rise up and across from the last, and the
 /// pillar's top a rise over the last ledge. Every class has to make each of
-/// them with a plain running jump, because a crag is for everybody
-/// (`docs/design/courses.md` §0), as gap and rise in centimetres.
+/// them with a plain running jump **caught at the hands** -- landed is the
+/// quick way, caught and climbed the forgiving one (2026-10-16: the gaps went
+/// out to the catch when the ledges started catching) -- because a crag is
+/// for everybody (`docs/design/courses.md` §0), as gap and rise in
+/// centimetres.
 const REQUIRED: &[(&str, i32, i32)] = &[
     (
         "a crag: from one ledge to the next",
-        100,
+        sim::valley::Crag::ACROSS,
         sim::valley::Crag::RISE,
     ),
     (
@@ -730,14 +706,15 @@ fn every_class_can_make_the_hops_nobody_can_go_round() {
         let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
         let apex = sim::envelope::path_apex(&path);
         for (what, gap, rise) in REQUIRED {
-            // High enough with room to spare, and far enough at that height:
-            // a short hop up is a jump from closer in with less run, which a
-            // person does without thinking, so the running path's own width
-            // at the rise is what bounds it.
+            // High enough to catch with room to spare, and far enough at that
+            // height: a short hop up is a jump from closer in with less run,
+            // which a person does without thinking, so the running path's own
+            // reach at the rise is what bounds it.
             let (gap, rise) = (Fx::ratio(*gap, 100), Fx::ratio(*rise, 100));
-            let widest = sim::envelope::widest(std::slice::from_ref(&path), rise);
+            let reach = apex.add(sim::tuning::ledge_reach_high());
+            let widest = sim::envelope::widest_caught(std::slice::from_ref(&path), rise);
             assert!(
-                apex.raw() >= rise.add(Fx::ratio(3, 10)).raw()
+                reach.raw() >= rise.add(Fx::ratio(3, 10)).raw()
                     && widest.is_some_and(|w| w.raw() >= gap.raw()),
                 "{}: cannot make {what} ({} m out, {} m up)",
                 class.name(),
@@ -801,4 +778,69 @@ fn no_road_junction_is_inside_a_hunts_margin() {
             margin.to_f32_for_render()
         );
     }
+}
+
+/// **Every class climbs a crag**, the Mouth's: from the meadow at its foot up
+/// its ledges -- landed, or caught at the hands and climbed -- and on to its
+/// top.
+#[test]
+fn every_class_climbs_a_crag() {
+    use sim::arena::{Material, Solid};
+    use sim::valley::Crag;
+    let c = sim::arena::mouth::CRAGS[0];
+    let atlas = sim::atlas::valley();
+    let cm = sim::arena::cm;
+    let (x, z) = (cm(c.x), cm(c.z));
+    let r = Fx::from_int(8);
+    let near: Vec<Solid> = atlas
+        .near((x.sub(r), z.sub(r)), (x.add(r), z.add(r)))
+        .map(|i| atlas.solids[i as usize])
+        .collect();
+    let face = cm(c.x - Crag::HALF);
+    let mut ledges: Vec<Solid> = near
+        .iter()
+        .filter(|s| s.max.x == face && s.min.x.raw() < face.raw())
+        .copied()
+        .collect();
+    ledges.sort_by_key(|s| s.max.y.raw());
+    assert_eq!(ledges.len(), c.ledges as usize, "the crag's ledges");
+    let pillar = *near
+        .iter()
+        .filter(|s| s.min.x == face && s.max.x == cm(c.x + Crag::HALF))
+        .max_by_key(|s| s.max.y.raw())
+        .expect("the pillar");
+    // The meadow west of the face, beside the half the first ledge is not on.
+    let gx = face.sub(cm(Crag::OUT + 300));
+    let gz = z.add(Fx::from_int(2));
+    let ground = atlas.relief_at(gx, gz);
+    let start = Solid {
+        min: V3::new(gx.sub(Fx::ONE), ground.sub(Fx::ONE), gz.sub(Fx::ONE)),
+        max: V3::new(gx.add(Fx::ONE), ground, gz.add(Fx::ONE)),
+        material: Material::Grass,
+        shape: sim::arena::Shape::Box,
+    };
+    let mut route = vec![start];
+    route.extend(ledges);
+    // The top's west edge, where the last ledge comes up beside it.
+    let mut top = pillar;
+    top.max.x = face.add(Fx::from_int(2));
+    route.push(top);
+    let mut failed = Vec::new();
+    for class in sim::class::ALL_CLASSES {
+        let mut w = World::arrive(
+            [class, class],
+            valley::Journey::default(),
+            ArenaId::MOUTH,
+            Some(0),
+            1,
+        );
+        for (k, pair) in route.windows(2).enumerate() {
+            let (a, b) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));
+            if let Err(e) = pilot::jump(&mut w, a, b) {
+                failed.push(format!("{}: step {}: {e}", class.name(), k + 1));
+                break;
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

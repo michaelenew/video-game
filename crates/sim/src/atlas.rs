@@ -172,10 +172,6 @@ pub struct Plan {
     pub hidden: Vec<std::ops::Range<usize>>,
     /// **The grown trees** (`crate::valley::trees`), for the renderer.
     pub trees: Vec<crate::valley::trees::Tree>,
-    /// **Vines of no place**, in map coordinates: hung where something grown
-    /// put them -- a liana off a broadleaf's roof -- rather than in a place's
-    /// own table.
-    pub vines: Vec<crate::valley::Zone>,
     /// The floor where no place is: far enough under every place that
     /// anything there has fallen out of the world.
     pub void: Fx,
@@ -232,8 +228,6 @@ pub struct Atlas {
     pub hidden: Vec<bool>,
     /// The grown trees, drawn from their skeletons.
     pub trees: Vec<crate::valley::trees::Tree>,
-    /// Vines of no place, on the map ([`Plan::vines`]).
-    pub vines: Vec<crate::valley::Zone>,
     grid: Grid,
 }
 
@@ -545,7 +539,6 @@ impl Atlas {
             hi,
             hidden,
             trees: plan.trees.clone(),
-            vines: plan.vines.clone(),
             grid: Grid {
                 x0,
                 z0,
