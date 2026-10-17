@@ -24,12 +24,15 @@
     pbr_types::{pbr_input_new, STANDARD_MATERIAL_FLAGS_FOG_ENABLED_BIT},
     shadows::fetch_directional_shadow,
 }
+#import game::still
 
 struct Paint {
     color: vec4<f32>,
     // A hole along the line from the eye to `cut.xyz`, `cut.w` across at
     // that end and narrower toward the eye; none where `cut.w` is zero.
     cut: vec4<f32>,
+    // Where the still world's shadow map is (`still::Shade`).
+    shade: still::Shade,
 }
 
 @group(2) @binding(0) var<uniform> paint: Paint;
@@ -37,6 +40,9 @@ struct Paint {
 // rigidity, each texel a stroke's shade and two colour shifts.
 @group(2) @binding(1) var strokes_tex: texture_2d_array<f32>;
 @group(2) @binding(2) var strokes_sampler: sampler;
+// The still world's two shadow maps (`still::MAP_A`, `still::MAP_B`).
+@group(2) @binding(3) var map_a: texture_2d<f32>;
+@group(2) @binding(4) var map_b: texture_2d<f32>;
 // How many stroke lengths a sheet is across (`look::strokes::PERIOD`), and
 // how many angles a rigidity is drawn at (`look::strokes::ANGLES`).
 const STROKE_PERIOD: f32 = 8.0;
@@ -377,6 +383,14 @@ fn washed(x: f32) -> f32 {
 
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
+    // **Drawn by the still world's shadow camera** (`crate::still`), the only
+    // orthographic view there is: not a colour but how far along the sun
+    // this surface is.
+    if (view.clip_from_view[3][3] == 1.0) {
+        var depth: FragmentOutput;
+        depth.color = still::encode(-(view.view_from_world * vec4<f32>(in.world_position.xyz, 1.0)).z);
+        return depth;
+    }
     // **Out of the way of the fighter** (`Paint::cut`): what stands between
     // the eye and them, near the line, is not drawn -- its edge stippled, so
     // it reads as a window rather than a missing piece.
@@ -504,7 +518,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         var shadow = 1.0;
 #ifndef NO_SHADOW_LOOKUP
         if (ndotl > 0.0 && ((*light).flags & DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u) {
-            shadow = fetch_directional_shadow(i, in.world_position, n, view_z);
+            shadow = fetch_directional_shadow(i, in.world_position, n, view_z)
+                * still::shade(paint.shade, map_a, map_b, p, n);
         }
 #endif
         // How much of this light the surface takes: as it was, or laid down

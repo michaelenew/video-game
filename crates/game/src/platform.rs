@@ -583,6 +583,17 @@ pub fn draws_outlines() -> bool {
     !cfg!(target_arch = "wasm32")
 }
 
+/// Whether this build draws the still world's shadow once (`crate::still`)
+/// rather than into Bevy's cascades every frame.
+///
+/// The map is drawn by a camera into a half-float picture, which WebGL2
+/// renders only with an extension, and read back four texels a pixel; the
+/// browser keeps the cascades it has always had until it moves to WebGPU.
+/// A platform capability, like [`draws_outlines`], not a setting.
+pub fn bakes_shadows() -> bool {
+    !cfg!(target_arch = "wasm32")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

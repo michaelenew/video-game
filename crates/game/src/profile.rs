@@ -84,6 +84,7 @@ fn census(
     time: Res<Time>,
     mut last: Local<f32>,
     store: Res<DiagnosticsStore>,
+    still: Res<crate::still::Maps>,
     meshes: Query<(&ViewVisibility, &Visibility), With<Mesh3d>>,
     casters: Query<&ViewVisibility, (With<Mesh3d>, Without<bevy::pbr::NotShadowCaster>)>,
 ) {
@@ -111,6 +112,7 @@ fn census(
     for row in rows {
         eprintln!("{row}");
     }
+    eprintln!("still world's shadow maps finished: {}", still.finished);
     eprintln!(
         "meshes: {total} pooled, {shown} not hidden, {seen} in view, {cast} of those cast shadows"
     );
@@ -122,8 +124,9 @@ fn census(
 /// hard|gaussian` for the edge, and `--no-outline`, `--no-fxaa` and
 /// `--no-prepass` to take a pass over the finished picture away,
 /// `--casters` and `--no-shadow-lookup` for what a baked shadow would save
-/// ([`casters`]), and `--no-vsync` so the frame time shows a saving instead
-/// of the screen's 16.7 ms. None of
+/// ([`casters`]), `--no-still` to draw the still world's shadow every frame
+/// as it was (`crate::still`), and `--no-vsync` so the frame time shows a
+/// saving instead of the screen's 16.7 ms. None of
 /// them is a setting: the defaults are the game's, and these exist so a
 /// change to them is a measurement before it is an argument.
 fn experiment(
@@ -197,6 +200,7 @@ fn experiment(
             "--no-prepass",
             "--no-vsync",
             "--no-shadow-lookup",
+            "--no-still",
         ]
         .into_iter()
         .filter(|flag| crate::platform::flag(flag))
