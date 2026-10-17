@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 644] = [
+pub const SCALARS: [i32; 643] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -343,7 +343,6 @@ pub const SCALARS: [i32; 644] = [
                4, // champion.rising_attack,_still_from_the_floor = 4
                6, // champion.jump_after_a_click_still_rises = 6
             5243, // movement.terrain,_step_down_(m) = 0.08
-          163840, // valley.vine,_climbing_speed_(m/s) = 2.5
           524288, // valley.updraft,_rising_speed_(m/s) = 8
            68813, // valley.terrain,_steepest_walkable_(slope) = 1.05
           524288, // valley.terrain,_slide_speed_(m/s) = 8
@@ -624,7 +623,7 @@ pub const SCALARS: [i32; 644] = [
           393216, // champion.clash,_staggers_a_fighter_within_(m) = 6
          1966080, // champion.hammer_slam_from_the_air,_dive_speed_(m/s) = 30
             6554, // champion.hammer_slam_from_the_air,_cone_round_straight_down_(turns) = 0.1
-           29491, // movement.step,_walked_up_onto_(m) = 0.45
+           32768, // movement.step,_walked_up_onto_(m) = 0.5
           131072, // match.third_and_fourth_fighters,_beside_a_mark_(m) = 2
            45875, // air.wall_slide,_gravity_(x) = 0.7
            45875, // air.wall_slide,_terminal_velocity_(x) = 0.7

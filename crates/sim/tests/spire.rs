@@ -2,13 +2,15 @@
 //! a shaft 315 m tall with an inverted dome on it 90 m across. It stands
 //! where the table says, the chimney up the dome's stem is open, the dome's
 //! underside is a thing a shot meets, nothing jutting from the shaft is in
-//! the vine's way -- and a fighter climbs the vine, on up the chimney's, and
-//! stands among the ruins 353 m up.
+//! the stair's way -- and every class climbs the stair up its south face, on
+//! up the chimney's ledges, and stands among the ruins 353 m up.
+
+mod pilot;
 
 use sim::arena::spire::{self, AT, CHIMNEY, DOME_FROM, RIM, SHAFT, TOP};
-use sim::arena::{ArenaId, Shape};
+use sim::arena::{ArenaId, Material, Shape, Solid};
 use sim::valley;
-use sim::{Class, Fx, Input, V3, World};
+use sim::{Class, Fx, V3, World};
 
 fn cm(v: i32) -> Fx {
     sim::arena::cm(v)
@@ -119,47 +121,6 @@ fn the_spire_stands_with_its_dome_and_its_chimney() {
     );
 }
 
-/// Climb a vine to its top, holding jump and pressing at the shaft's axis so
-/// the feet keep to it; `Ok` with the frames it took.
-fn climb(w: &mut World, top: Fx, frames: u32) -> Result<u32, String> {
-    for f in 0..frames {
-        // The frame can move under her -- onto the roost at the top -- so
-        // the map is asked every frame.
-        let p = w.players[0].pos.add(w.map_origin());
-        if p.y.raw() >= top.raw() {
-            return Ok(f);
-        }
-        let (dx, dz) = (cm(AT.0).sub(p.x), cm(AT.1).sub(p.z));
-        let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
-        w.advance([
-            Input::looking_at(Input::SPACE | Input::W, aim, 0),
-            Input::new(0),
-        ]);
-    }
-    let p = w.players[0].pos.add(w.map_origin());
-    Err(format!(
-        "got to {} m of {}",
-        p.y.to_f32_for_render(),
-        top.to_f32_for_render()
-    ))
-}
-
-/// Walk toward a map point at the fighter's height for a while, jumping
-/// when `jump`, and return where she ends.
-fn walk(w: &mut World, to: (Fx, Fx), frames: u32, jump: bool) -> V3 {
-    for f in 0..frames {
-        let p = w.players[0].pos.add(w.map_origin());
-        let (dx, dz) = (to.0.sub(p.x), to.1.sub(p.z));
-        if sim::math::wide_flat_len(V3::new(dx, Fx::ZERO, dz)).raw() < Fx::ratio(1, 2).raw() {
-            break;
-        }
-        let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
-        let bits = Input::W | if jump && f < 20 { Input::SPACE } else { 0 };
-        w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
-    }
-    w.players[0].pos.add(w.map_origin())
-}
-
 /// The plaza's height at the shaft: what every height in the table is above.
 fn base() -> Fx {
     near()
@@ -172,55 +133,138 @@ fn base() -> Fx {
         .sub(cm(SHAFT.2))
 }
 
+/// A step's top as a box on the map: the part of it a body stands on, out
+/// of the shaft or of the chimney's wall -- what a hop is aimed at.
+fn step_box(b: Fx, s: &spire::Step, inside: bool) -> Solid {
+    let mut s = *s;
+    if inside {
+        s.z = if s.z.0 < 0 {
+            (-CHIMNEY + 30, s.z.1)
+        } else {
+            (s.z.0, CHIMNEY - 30)
+        };
+    } else {
+        s.z.1 = -shaft_r(s.top) - 50;
+    }
+    s.solid(b, 100)
+}
+
+fn shaft_r(y: i32) -> i32 {
+    SHAFT.0 - (SHAFT.0 - SHAFT.1) * y / SHAFT.2
+}
+/// **Every class climbs to the ruins**: from the plaza up the stair on the
+/// shaft's south face, stone by stone -- landed, or caught at the hands and
+/// climbed -- on to the shaft's top, up the chimney's ledges and out of its
+/// mouth on to the dome.
 #[test]
-fn a_fighter_climbs_to_the_ruins_by_the_vines() {
-    let mut w = world();
-    let o = w.map_origin();
+fn every_class_climbs_to_the_ruins_by_the_stair() {
     let b = base();
-    // At the foot of the outside vine, on the plaza.
-    let foot = V3::new(cm(AT.0), Fx::ZERO, cm(AT.1 - SHAFT.0 - 60));
-    w.players[0].pos = foot.sub(o);
-    w.players[0].health = 1000;
-    // Up the outside vine and on up the chimney's: the shaft's top is
-    // narrower than the chimney, so the one vine runs into the other.
-    climb(&mut w, b.add(cm(TOP)), 60 * 200).expect("up the vines");
-    // Out of the chimney's mouth, onto the dome's top.
-    let p = walk(
-        &mut w,
-        (cm(AT.0 + 120), cm(AT.1 - CHIMNEY - 400)),
-        180,
-        true,
+    let mut route = Vec::new();
+    // The plaza beside the stair's foot, under its second stone.
+    let (px, pz) = (cm(AT.0 - 200), cm(AT.1 - SHAFT.0 - 450));
+    route.push(Solid {
+        min: V3::new(px.sub(Fx::ONE), b.sub(Fx::ONE), pz.sub(Fx::ONE)),
+        max: V3::new(px.add(Fx::ONE), b, pz.add(Fx::ONE)),
+        material: Material::Stone,
+        shape: Shape::Box,
+    });
+    route.extend(spire::stair().map(|s| step_box(b, &s, false)));
+    // The shaft's top, inside the chimney: come up on to it anywhere, and
+    // jump for the first ledge (on the south wall) from north of it -- from
+    // under it, a jump goes up under it.
+    let r = cm(SHAFT.1);
+    route.push(Solid {
+        min: V3::new(cm(AT.0).sub(r), b.add(cm(SHAFT.2 - 100)), cm(AT.1).sub(r)),
+        max: V3::new(cm(AT.0).add(r), b.add(cm(SHAFT.2)), cm(AT.1).add(r)),
+        material: Material::Stone,
+        shape: Shape::Box,
+    });
+    route.push(Solid {
+        min: V3::new(cm(AT.0 - 150), b.add(cm(SHAFT.2 - 100)), cm(AT.1 - 90)),
+        max: V3::new(cm(AT.0 + 150), b.add(cm(SHAFT.2)), cm(AT.1 + 250)),
+        material: Material::Stone,
+        shape: Shape::Box,
+    });
+    let ledges: Vec<spire::Step> = spire::chimney().collect();
+    route.extend(ledges.iter().map(|s| step_box(b, s, true)));
+    // Out over the mouth's rim, up the wall the last ledge is on.
+    let last = ledges.last().unwrap();
+    let (mx, mz) = (
+        cm(AT.0),
+        cm(AT.1
+            + if last.z.0 < 0 {
+                -CHIMNEY - 110
+            } else {
+                CHIMNEY + 110
+            }),
     );
-    assert!(
-        p.y.sub(b.add(cm(TOP))).abs().raw() < Fx::ratio(1, 5).raw(),
-        "ended at {} m, not on the dome's top at {}",
-        p.y.to_f32_for_render(),
-        TOP / 100
-    );
-    assert!(w.players[0].health > 0);
-    // And on the dome's top she is on the roost: its Galewing is awake.
-    assert_eq!(w.arena, sim::valley::ranges::RANGES[5].arena);
-    assert!(w.hunting(), "the roost did not wake");
+    let h = Fx::ratio(8, 10);
+    route.push(Solid {
+        min: V3::new(mx.sub(h), b.add(cm(TOP - 100)), mz.sub(h)),
+        max: V3::new(mx.add(h), b.add(cm(TOP)), mz.add(h)),
+        material: Material::Stone,
+        shape: Shape::Box,
+    });
+    let mut failed = Vec::new();
+    for class in sim::class::ALL_CLASSES {
+        let j = valley::Journey {
+            beaten: u32::MAX,
+            ..valley::Journey::default()
+        };
+        let mut w = World::arrive([class, class], j, ArenaId::SPIRE, Some(0), 1);
+        for (k, pair) in route.windows(2).enumerate() {
+            let (from, to) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));
+            if let Err(e) = pilot::jump(&mut w, from, to) {
+                failed.push(format!(
+                    "{}: step {} ({} m up): {e}",
+                    class.name(),
+                    k + 1,
+                    pair[1].max.y.sub(b).to_int()
+                ));
+                break;
+            }
+        }
+        if failed.is_empty() {
+            // And on the dome's top she is on the roost.
+            assert_eq!(w.arena, sim::valley::ranges::RANGES[5].arena);
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
 #[test]
-fn nothing_jutting_from_the_shaft_is_across_the_vine() {
-    for v in spire::VINES {
-        for s in near() {
-            if !matches!(s.shape, Shape::Turned { .. }) {
-                continue;
-            }
-            let (x, z) = s.middle();
-            let inside = x.raw() > v.min.x.raw()
-                && x.raw() < v.max.x.raw()
-                && z.raw() > v.min.z.raw()
-                && z.raw() < v.max.z.raw()
-                && s.max.y.raw() > v.min.y.raw()
-                && s.min.y.raw() < v.max.y.raw();
+fn nothing_jutting_from_the_shaft_is_across_the_stair() {
+    // The corkscrew's stones and the balconies: none in the room round a
+    // stair stone a body jumps through -- half a metre either side of it,
+    // and from under it to a jump over it.
+    let b = base();
+    let room: Vec<Solid> = spire::stair()
+        .map(|mut s| {
+            // The part out of the shaft: the rest is in it.
+            s.z.1 = -shaft_r(s.top);
+            let mut s = s.solid(b, 200);
+            let side = Fx::ratio(1, 2);
+            s.min = s.min.sub(V3::new(side, Fx::from_int(2), side));
+            s.max = s.max.add(V3::new(side, Fx::from_int(3), side));
+            s
+        })
+        .collect();
+    for s in near() {
+        if !matches!(s.shape, Shape::Turned { .. }) || s.max.y.raw() > b.add(cm(SHAFT.2)).raw() {
+            continue;
+        }
+        for r in &room {
+            let meets = s.min.x.raw() < r.max.x.raw()
+                && s.max.x.raw() > r.min.x.raw()
+                && s.min.y.raw() < r.max.y.raw()
+                && s.max.y.raw() > r.min.y.raw()
+                && s.min.z.raw() < r.max.z.raw()
+                && s.max.z.raw() > r.min.z.raw();
             assert!(
-                !inside,
-                "a stone at {} m is in a vine's way",
-                s.max.y.to_f32_for_render()
+                !meets,
+                "a stone at {} m is in the way of the stair's at {} m",
+                s.max.y.sub(b).to_f32_for_render(),
+                r.max.y.sub(b).to_int() - 4
             );
         }
     }

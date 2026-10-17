@@ -30,6 +30,11 @@ use bevy::render::render_resource::{
 };
 
 const SHADER: Handle<Shader> = weak_handle!("7c1e5a2b-9d44-4f3e-8b6a-2e0f5c7d9a13");
+/// The depth a windowed paint leaves in the prepass, with its window cut
+/// ([`Paint::window`]).
+const PREPASS: Handle<Shader> = weak_handle!("3e8d1f6a-2c57-4b09-a7e4-9f1b6c3d5e82");
+/// The window itself, which both of the paint's passes import.
+const CUT: Handle<Shader> = weak_handle!("b5c2e7d9-4a13-4f68-8d2e-6a9c1f4b7e30");
 /// The brush strokes, baked (`look::strokes`, drawn by `build.rs`): a sheet
 /// per rigidity and angle, as a texture array every paint reads.
 const STROKES: Handle<Image> = weak_handle!("a1f3c9e2-5b7d-4c80-9e41-3d6f8a2b7c15");
@@ -48,6 +53,7 @@ pub struct Paint {
     /// metres; zero, none). What lets a grown tree stand between the camera
     /// and the fighter without hiding them (`crate::grove`): the camera does
     /// not dodge a tree's wood, so the wood gets out of the way instead.
+    /// Only a [`Paint::window`] paint cuts it all the way through.
     #[uniform(0)]
     pub cut: Vec4,
     /// Where the still world's shadow map is (`crate::still`), and
@@ -59,17 +65,30 @@ pub struct Paint {
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
     pub strokes: Handle<Image>,
+    /// The strokes drawn as splats this frame (`crate::splats::TARGET`),
+    /// read at the pixel; the same handle for every paint.
+    #[texture(3)]
+    pub splats: Handle<Image>,
+    #[texture(4)]
+    pub splats_odd: Handle<Image>,
     /// The still world's two shadow maps (`still::MAP_A`, `still::MAP_B`): one read while
     /// the other is drawn.
-    #[texture(3)]
+    #[texture(5)]
     pub map_a: Handle<Image>,
-    #[texture(4)]
+    #[texture(6)]
     pub map_b: Handle<Image>,
     /// Which [`Paint::shade`] this was last told (`still::Maps`).
     pub stamp: u32,
     /// Drawn from both sides: the land's tiles, whose skirts face out
     /// either way round.
     pub two_sided: bool,
+    /// **Its window cut in the depth too** ([`Paint::window`]): drawn
+    /// alpha-masked, so the depth prepass runs `paint_prepass.wgsl` and
+    /// cuts the same hole the colour does.
+    pub windowed: bool,
+    /// **Only the window, see-through** ([`Paint::ghost`]): drawn blended,
+    /// over the hole a [`Paint::window`] cuts.
+    pub ghost: bool,
 }
 
 impl Default for Paint {
@@ -86,10 +105,46 @@ impl Paint {
             cut: Vec4::ZERO,
             shade: crate::still::Shade::NONE,
             strokes: STROKES,
+            splats: crate::splats::TARGET,
+            splats_odd: crate::splats::TARGET_ODD,
             map_a: crate::still::MAP_A,
             map_b: crate::still::MAP_B,
             stamp: 0,
             two_sided: false,
+            windowed: false,
+            ghost: false,
+        }
+    }
+
+    /// **The paint with a window in it**: [`Paint::white`], with [`Paint::cut`]
+    /// cut through the depth prepass as well as the colour.
+    ///
+    /// A hole only in the colour is not a hole. The depth prepass draws
+    /// every opaque surface first, and the colour pass draws only what is
+    /// no further than that depth, so the fighter behind a tree cut in the
+    /// colour alone still fails against the tree's depth and nothing is
+    /// drawn there at all: the clear colour, the sky's. In play that was a
+    /// white shape where the tree should have opened. The same goes for the
+    /// inside of the far wall seen through the hole, which is why a
+    /// windowed paint culls back faces in the prepass as the colour does
+    /// ([`Material::specialize`]).
+    pub fn window() -> Self {
+        Self {
+            windowed: true,
+            ..Self::white()
+        }
+    }
+
+    /// **The wood in the window, see-through**: the same mesh drawn a second
+    /// time over a [`Paint::window`], with the same [`Paint::cut`], keeping
+    /// only what the window cut away and blending it over what is behind --
+    /// thinnest in the middle, solid at the rim where the window's own wood
+    /// takes over (`cut.wgsl`). Without it the window was a clean hole, a
+    /// bite out of the tree.
+    pub fn ghost() -> Self {
+        Self {
+            ghost: true,
+            ..Self::white()
         }
     }
 
@@ -101,10 +156,14 @@ impl Paint {
             cut: Vec4::ZERO,
             shade: crate::still::Shade::NONE,
             strokes: STROKES,
+            splats: crate::splats::TARGET,
+            splats_odd: crate::splats::TARGET_ODD,
             map_a: crate::still::MAP_A,
             map_b: crate::still::MAP_B,
             stamp: 0,
             two_sided: false,
+            windowed: false,
+            ghost: false,
         }
     }
 }
@@ -113,12 +172,16 @@ impl Paint {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PaintKey {
     two_sided: bool,
+    windowed: bool,
+    ghost: bool,
 }
 
 impl From<&Paint> for PaintKey {
     fn from(p: &Paint) -> Self {
         Self {
             two_sided: p.two_sided,
+            windowed: p.windowed,
+            ghost: p.ghost,
         }
     }
 }
@@ -126,6 +189,24 @@ impl From<&Paint> for PaintKey {
 impl Material for Paint {
     fn fragment_shader() -> ShaderRef {
         ShaderRef::Handle(SHADER)
+    }
+
+    /// Run only where the material may discard: a [`Paint::window`].
+    /// Everything else keeps the prepass's depth-only draw.
+    fn prepass_fragment_shader() -> ShaderRef {
+        ShaderRef::Handle(PREPASS)
+    }
+
+    /// Masked is what makes Bevy run a fragment shader in the depth prepass
+    /// at all; the mask's alpha is never read, the window discards.
+    fn alpha_mode(&self) -> AlphaMode {
+        if self.ghost {
+            AlphaMode::Blend
+        } else if self.windowed {
+            AlphaMode::Mask(0.5)
+        } else {
+            AlphaMode::Opaque
+        }
     }
 
     fn specialize(
@@ -136,6 +217,13 @@ impl Material for Paint {
     ) -> Result<(), SpecializedMeshPipelineError> {
         if key.bind_group_data.two_sided {
             descriptor.primitive.cull_mode = None;
+        } else if key.bind_group_data.windowed || key.bind_group_data.ghost {
+            // Bevy's prepass draws both faces unless the material says
+            // otherwise, and the colour pass only the front. Through a
+            // window that difference is on screen: the inside of the far
+            // wall stands in the depth, the colour never draws it, and the
+            // hole is the colour of the sky.
+            descriptor.primitive.cull_mode = Some(bevy::render::render_resource::Face::Back);
         }
         if let Some(fragment) = descriptor.fragment.as_mut() {
             fragment.shader_defs.extend(crate::wash::surface_defs());
@@ -143,6 +231,9 @@ impl Material for Paint {
             // costs with its shadow read off something already baked.
             if crate::platform::flag("--no-shadow-lookup") {
                 fragment.shader_defs.push("NO_SHADOW_LOOKUP".into());
+            }
+            if key.bind_group_data.ghost {
+                fragment.shader_defs.push("PAINT_GHOST".into());
             }
         }
         Ok(())
@@ -164,6 +255,17 @@ impl Plugin for PaintPlugin {
         app.world_mut().resource_mut::<Assets<Shader>>().insert(
             SHADER.id(),
             Shader::from_wgsl(include_str!("paint.wgsl"), "game/src/paint.wgsl"),
+        );
+        app.world_mut().resource_mut::<Assets<Shader>>().insert(
+            PREPASS.id(),
+            Shader::from_wgsl(
+                include_str!("paint_prepass.wgsl"),
+                "game/src/paint_prepass.wgsl",
+            ),
+        );
+        app.world_mut().resource_mut::<Assets<Shader>>().insert(
+            CUT.id(),
+            Shader::from_wgsl(include_str!("cut.wgsl"), "game/src/cut.wgsl"),
         );
         app.world_mut()
             .resource_mut::<Assets<Image>>()

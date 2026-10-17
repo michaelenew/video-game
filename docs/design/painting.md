@@ -304,10 +304,44 @@ became the default)
   until the angle's place passes the phase of the stroke there, then the
   later: hard strokes, and no seam, since every stroke switches at its own
   moment.
-- **Where this goes next**: [exploration/0020](exploration/0020_brush_splats.md),
-  the brush as a primitive -- strokes placed once per tile and drawn as
-  screen-sized quads, which is how every shipped painterly renderer keeps
-  the brush on the canvas for the cost of a particle pass.
+- **The season judged at the corners** (the splats' first day). A quad's
+  in-season weight was worked out per vertex and interpolated: a
+  sixty-metre stroke whose far corner was in season painted the feet, where
+  that length is three octaves out. Per fragment, from the fragment's own
+  distance, with the corners only culling what can never be in season.
+- **A hardware depth test for the splats.** One-sided: a wide stroke's flat
+  quad on a slope cuts through the air in front of the ground as much as
+  under it, and the air half passed. The fragment reads the prepass depth
+  and keeps itself within a tolerance of the ground both ways.
+- **Blending the two levels.** Alpha-blending the strokes of the level
+  coming in over the level going out replaced where the original adds, and
+  with a depth nudge for the topmost rule the two levels fought over one
+  depth buffer. The two levels are always one even and one odd, so each
+  parity gets a texture of its own, replaced in painter's order, and the
+  surface shader adds the two.
+- **The tile's stroke sizes sampled every frame** (the first push of the
+  splats, 2026-10-16). `follow` asked the ground of every tile in the
+  stream, sixteen points of ten land samples each, every frame, to know
+  which levels could be in season on it. The owner's Mac: a frame that
+  climbed from 45 ms to 100 over the minute the land reach (300--700 m)
+  takes to fill in, and stayed there, while the brush at the pixel held
+  33--36. Sampled once a tile now, and `follow` is a few flops a tile.
+- **Every tile placed the frame the stream brought it.** A near tile is
+  forty thousand strokes, three quarters of them the finest level, about
+  20 ms on this box with nothing else running; the stream brings in
+  twenty-four tiles a frame. Placed nearest first under a 2 ms budget now,
+  at least one a frame, so a step onto a new tile is one frame's hitch
+  of a tile. Next if it still shows: the finest level in quarters, or
+  placing on the compute pool.
+- **Four corners a stroke.** The placer wrote each stroke's quad as four
+  vertices of seventeen floats; one instance of twenty now, and the
+  shader makes the quad, a quarter of the bytes and of the placing.
+- **A render-world-only target.** The screen-sized texture was made with
+  `RenderAssetUsages::RENDER_WORLD`, which unloads it from the main world
+  the frame after it is extracted, so the size check found nothing and
+  remade it every frame, and the paints kept binding the first. Kept in
+  both worlds, and the paints are marked changed the frame *after* a
+  remake, since a bind group built the same frame binds the old texture.
 - **Baking the painting into the land, near the eye.** Two days were spent
   on this and the owner's judgement ended it: the land within 20 m of the
   eye got the original brush baked into a texture a tile (`look::strokes::
@@ -389,8 +423,28 @@ became the default)
 
 - **Run it**: `--look brushed` (the game is `plain` by default);
   `painted|depths|wash` are the others, `?look=` on the web.
-- **The brush is worked out at the pixel** (`paint.wgsl` `strokes_exact`,
-  `broad_exact`): the painting. Every stroke the same size on the screen
+- **The brush is drawn as splats** (`crates/game/src/splats.rs`,
+  `splats.wgsl`; [exploration/0020](exploration/0020_brush_splats.md)):
+  every stroke of every tile of land in sight is placed once on the CPU
+  (`look::strokes::place`, the same strokes `strokes_exact` finds) and
+  drawn as a quad lying on the ground, in a pass of its own after the depth
+  prepass, with the original's inner loop as its fragment shader. Two
+  screen-sized textures, one for even levels and one for odd, since the two
+  levels in season at a pixel are one of each and the original adds them;
+  within a level the topmost stroke wins by painter's order. A fragment
+  keeps itself only on its ground (the prepass depth, both ways) and only in
+  season at *its own* distance, which is what makes a sixty-metre stroke on
+  a far slope not paint the feet. `paint.wgsl` reads the two textures at
+  its pixel in place of the hundred-stroke search. Measured under the
+  software renderer, which charges per fragment: the surface pass 45 ms
+  where the brush at the pixel is 144 (plain 98), and the splat pass 260 ms
+  for 4.3 million fragments (4.4 a pixel) -- a cost a GPU makes nothing of
+  (half a millisecond at 1080p) and the software renderer makes everything
+  of. The picture is the original's to a pixel difference of 3.7%, all of
+  it at stroke edges. `--exact <m>` is the brush at the pixel within so
+  many metres, `--exact 0` the sheets alone; both keep the old paths.
+- **The brush at the pixel** (`paint.wgsl` `strokes_exact`,
+  `broad_exact`): the painting, as the owner first saw it. Every stroke the same size on the screen
   whatever its distance, as a brush is on a canvas, with its dry ends and
   bristles decided per pixel. The sheets (`look::strokes`, `strokes`,
   `broad_strokes`) approximate it, and `--exact <m>` reads them beyond so
@@ -400,6 +454,22 @@ became the default)
   brush everywhere, 204 ms within 20 m, 119 ms on the sheets alone, 98 ms
   plain; the whole frame 691, 646, 556, 294. The brush costs a quarter of a
   frame over the sheets, and the sheets cost the painting.
+- **On the owner's Mac** (2026-10-16, `--profile`, retina window, the
+  Mouth): `plain` 23 ms a frame, `brushed` 36--39 ms, with the brush at the
+  pixel. Metal gives no per-pass GPU times, so the 13 ms is one number;
+  by the software renderer's shares it is mostly the screen pass (the
+  49-tap Kuwahara and the outline, at four times the pixels of a 1280-wide
+  window) rather than the brush, and `plain`'s own 23 ms is a million
+  triangles casting shadows into four cascades, most of them "grown
+  giants" 250--450 m off. Next for the frame: the screen pass at half
+  resolution, and what casts shadows at that distance.
+- **With the splats, on the Mac** (2026-10-16, the first push): `brushed`
+  45 ms in the first seconds, climbing to 100 as the land filled in (the
+  dead end below); `--exact 999` 33--36 ms steady; `--no-wash` took about
+  10 ms off either. So the screen pass is 10 ms at retina, and the brush at
+  the pixel is cheaper on that GPU than the surface pass's share here
+  suggested. The splats' own steady cost is the next measurement, now the
+  climb is gone.
 - **Measure it**: `./scripts/profile.sh target/p.log 45 --arena mouth --look
   brushed` prints every pass's cost under the software renderer every two
   seconds, the painted passes (`wash brush`, `outline`) among them; compare

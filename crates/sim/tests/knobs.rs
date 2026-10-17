@@ -51,7 +51,10 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// a pit's depth and its warrens' levels (`tests/deep.rs`); and where the
 /// ranges are and how far their creatures let you come (`tests/ranges.rs`);
 /// and how the Wood's trees grow -- the shape of a kind of tree, how far its
-/// tiers are apart and how thick a limb is to be stood on (`tests/wood.rs`).
+/// tiers are apart and how thick a limb is to be stood on (`tests/wood.rs`);
+/// and a gully's, how far apart its walls and how long its drop, sized
+/// against the wall jump on the bench and judged by `tests/heights.rs`
+/// kicking across them.
 const LEVEL_DATA: &[&str] = &[
     "land.rs",
     "layout.rs",
@@ -64,6 +67,7 @@ const LEVEL_DATA: &[&str] = &[
     "ranges.rs",
     "heights.rs",
     "trees.rs",
+    "gully.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an
@@ -307,9 +311,13 @@ const EXEMPT: &[(&str, &str)] = &[
         "Level data, like an arena's table: how wide a crag is.",
     ),
     (
-        "pub const RISE: i32 = 220",
-        "Level data: how far a crag's ledges are apart, sized to the plainest jump \
-         (`tests/valley.rs` holds every class to it).",
+        "pub const RISE: i32 = 360",
+        "Level data: how far a crag's ledges are apart, sized to the plainest jump's \
+         catch (`tests/valley.rs` holds every class to it).",
+    ),
+    (
+        "pub const ACROSS: i32 = 150",
+        "Level data: how far apart the two halves of a crag's face its ledges zig-zag on.",
     ),
     (
         "pub const OUT: i32 = 160",

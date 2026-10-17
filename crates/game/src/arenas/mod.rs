@@ -356,7 +356,7 @@ pub fn dress(
 
 /// **A place, less its boxes**: its floor and the regions on it, its props,
 /// what is scattered on its floor, and -- in the valley -- its seams,
-/// waystones, vines and updrafts. In the place's own coordinates, under
+/// waystones and updrafts. In the place's own coordinates, under
 /// `under`.
 pub fn draw_place(
     commands: &mut Commands,
@@ -640,7 +640,7 @@ pub fn draw_place(
         crate::town::draw(commands, meshes, materials, palette, white, under);
     }
 
-    // The valley's seams, waystones, vines and updrafts: `crate::valley`, for
+    // The valley's seams, waystones and updrafts: `crate::valley`, for
     // a place that is one.
     crate::valley::draw(commands, meshes, materials, arena, palette, under);
     // The Waterfall's water, where the place has one.

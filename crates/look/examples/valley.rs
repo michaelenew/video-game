@@ -9,8 +9,8 @@
 //! -- in its material's colour as the arena's palette has it, lit from the
 //! north-west by the height so cliffs and shelves read as steps. Over it,
 //! **the ways out** (a box round each seam: gold open, grey behind a
-//! waystone), **waystones** (yellow), **cairns** (white), **vines** (green
-//! bars) and **updrafts** (pale rings). A place is judged in seconds here,
+//! waystone), **waystones** (yellow), **cairns** (white)
+//! and **updrafts** (pale rings). A place is judged in seconds here,
 //! where in the game it is a walk; what this cannot show is how a jump feels,
 //! which is what the game is for.
 
@@ -119,15 +119,6 @@ fn draw(a: &'static Arena) -> (usize, usize, Vec<[u8; 3]>) {
                 (f(s.min.z) + f(s.max.z)) * 0.5,
                 3,
                 [250, 250, 250],
-            );
-        }
-        for v in place.vines {
-            rect(
-                &mut px,
-                (f(v.min.x), f(v.min.z)),
-                (f(v.max.x), f(v.max.z)),
-                [60, 200, 90],
-                true,
             );
         }
         for v in place.vents {

@@ -5,23 +5,26 @@
 //! then jumped, by every class, in the valley and in the course -- the
 //! falling water pushes down, and the cliff cannot be walked round.
 
+mod pilot;
+
 use sim::arena::waterfall::{self, PIECES, ROUTE, SHORE};
 use sim::arena::{ArenaId, Solid, cm};
 use sim::{Class, Fx, Input, V3, World};
 
-/// **Every hop is inside every class's plain running jump**, with the same
-/// margin the valley asks of a crag: high enough with 30 cm to spare, and
-/// far enough at that height.
+/// **Every hop is inside every class's plain running jump, caught at the
+/// hands** (2026-10-16: landed until ledges caught), with the same margin
+/// the valley asks of a crag: high enough with 30 cm to spare, and far
+/// enough at that height.
 #[test]
 fn every_class_can_make_every_hop_on_paper() {
     for class in sim::class::ALL_CLASSES {
         let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
-        let apex = sim::envelope::path_apex(&path);
+        let reach = sim::envelope::path_apex(&path).add(sim::tuning::ledge_reach_high());
         for (piece, gap, rise) in waterfall::hops() {
             let (g, r) = (Fx::ratio(gap, 100), Fx::ratio(rise, 100));
-            let widest = sim::envelope::widest(std::slice::from_ref(&path), r);
+            let widest = sim::envelope::widest_caught(std::slice::from_ref(&path), r);
             assert!(
-                apex.raw() >= r.add(Fx::ratio(3, 10)).raw()
+                reach.raw() >= r.add(Fx::ratio(3, 10)).raw()
                     && widest.is_some_and(|w| w.raw() >= g.raw()),
                 "{}: cannot make the hop to piece {piece} ({} m out, {} m up)",
                 class.name(),
@@ -68,118 +71,6 @@ fn top_in(piece: &waterfall::Piece, at: [i32; 3]) -> Solid {
     waterfall::solid(piece, at)
 }
 
-fn mid(a: Fx, b: Fx) -> Fx {
-    Fx::from_raw(a.raw() / 2 + b.raw() / 2)
-}
-
-/// How far a body at `p` can go along the flat direction `d` before leaving
-/// the top of `s`.
-fn to_the_edge(s: &Solid, p: V3, d: (Fx, Fx)) -> Fx {
-    let mut t = Fx::from_int(1000);
-    for (pos, dir, lo, hi) in [(p.x, d.0, s.min.x, s.max.x), (p.z, d.1, s.min.z, s.max.z)] {
-        if dir.raw() > 0 {
-            t = t.min(hi.sub(pos).div(dir));
-        } else if dir.raw() < 0 {
-            t = t.min(lo.sub(pos).div(dir));
-        }
-    }
-    t
-}
-
-/// The point of `s`'s top nearest `to`, kept `inset` inside its edges.
-fn nearest_on(s: &Solid, to: V3, inset: Fx) -> (Fx, Fx) {
-    let clamp = |v: Fx, lo: Fx, hi: Fx| {
-        let (lo, hi) = (lo.add(inset), hi.sub(inset));
-        if lo.raw() > hi.raw() {
-            mid(lo, hi)
-        } else {
-            v.max(lo).min(hi)
-        }
-    };
-    (clamp(to.x, s.min.x, s.max.x), clamp(to.z, s.min.z, s.max.z))
-}
-
-/// **One hop, jumped**, the way a person would try it: from a run-up of
-/// nothing to two and a half metres, braking in the air sooner or later or
-/// not at all, until one lands. `Ok` if any does; the last miss if none.
-fn jump(w: &mut World, from: Solid, to: Solid) -> Result<(), String> {
-    let mut last = String::new();
-    for run in [0, 50, 100, 150, 250] {
-        for coast in [None, Some(0), Some(100), Some(200)] {
-            match try_jump(w, from, to, Fx::ratio(run, 100), coast) {
-                Ok(()) => return Ok(()),
-                Err(e) => last = e,
-            }
-        }
-    }
-    Err(last)
-}
-
-/// One try: fighter one stood on `from`, `run` back from the point nearest
-/// `to` (as far as the top allows), runs at the middle of `to`'s top, jumps
-/// at the edge and holds it, steering at the middle -- and, `coast`ing,
-/// pulls back once she is over it or within that many centimetres of its
-/// middle.
-fn try_jump(
-    w: &mut World,
-    from: Solid,
-    to: Solid,
-    run: Fx,
-    coast: Option<i32>,
-) -> Result<(), String> {
-    let target = V3::new(mid(to.min.x, to.max.x), to.max.y, mid(to.min.z, to.max.z));
-    let inset = Fx::ratio(35, 100);
-    let near = nearest_on(&from, target, inset);
-    let flat = V3::new(target.x.sub(near.0), Fx::ZERO, target.z.sub(near.1));
-    let d = if flat.flat_len().raw() == 0 {
-        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
-    } else {
-        flat.normalized()
-    };
-    let back = V3::new(near.0, from.max.y, near.1).sub(d.scale(run));
-    let start = nearest_on(&from, back, inset);
-    let p = &mut w.players[0];
-    p.pos = V3::new(start.0, from.max.y, start.1);
-    p.vel = V3::ZERO;
-    p.grounded = true;
-    p.facing = d;
-    p.fall_over = p.pos.y;
-    let mut jumped = false;
-    for f in 0..300 {
-        let p = &w.players[0];
-        let (dx, dz) = (target.x.sub(p.pos.x), target.z.sub(p.pos.z));
-        let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
-        let edge = to_the_edge(&from, p.pos, (d.x, d.z));
-        if !jumped && p.grounded && (edge.raw() <= Fx::ratio(3, 10).raw() || f > 90) {
-            jumped = true;
-        }
-        // Coasting, she brakes once she is over it, or near its middle.
-        let off = sim::math::wide_len(V3::new(dx, Fx::ZERO, dz));
-        let brake = coast
-            .is_some_and(|near| to.over(p.pos.x, p.pos.z, Fx::ZERO) || off.raw() < cm(near).raw());
-        let walk = if jumped && brake { Input::S } else { Input::W };
-        let bits = walk | if jumped { Input::SPACE } else { 0 };
-        w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
-        let p = &w.players[0];
-
-        if jumped && f > 20 && p.grounded {
-            // Standing on its edge counts: a body is half a metre across.
-            let on = to.over(p.pos.x, p.pos.z, Fx::ratio(1, 2))
-                && p.pos.y.sub(to.max.y).abs().raw() < Fx::ratio(1, 10).raw();
-            return if on {
-                Ok(())
-            } else {
-                Err(format!(
-                    "landed at {:?}, not on the top at {} m",
-                    p.pos,
-                    to.max.y.to_f32_for_render()
-                ))
-            };
-        }
-    }
-    Err("never landed".into())
-}
-
 /// Every hop of the climb, jumped by every class, in a world whose frame is
 /// `at` in `arena` -- with the shore under the first.
 fn climb_everywhere(make: impl Fn(Class) -> World, at: [i32; 3], origin: impl Fn(&World) -> V3) {
@@ -200,7 +91,7 @@ fn climb_everywhere(make: impl Fn(Class) -> World, at: [i32; 3], origin: impl Fn
                 &PIECES[ROUTE[k - 1]]
             };
             let to = &PIECES[ROUTE[k]];
-            if let Err(e) = jump(&mut w, local(top_in(from, at)), local(top_in(to, at))) {
+            if let Err(e) = pilot::jump(&mut w, local(top_in(from, at)), local(top_in(to, at))) {
                 failed.push(format!(
                     "{}: to piece {} ({}): {e}",
                     class.name(),

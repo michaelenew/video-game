@@ -419,13 +419,6 @@ impl Palette {
         }
     }
 
-    /// A vine on a face: the arena's grass, a step darker, because it hangs
-    /// in the face's shadow.
-    pub fn vine(&self) -> [f32; 3] {
-        let g = Lch::of(self.of(Material::Grass));
-        Lch { l: g.l * 0.72, ..g }.rgb()
-    }
-
     /// An updraft: the light itself, which is all rising air is.
     pub fn draft(&self) -> [f32; 3] {
         self.surface([0.94, 0.96, 1.0])

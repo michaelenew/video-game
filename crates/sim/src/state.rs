@@ -1349,13 +1349,7 @@ impl Player {
     }
 }
 
-/// **A vine and an updraft**, after gravity has had its say.
-///
-/// A body whose feet are in a vine **climbs** with the jump held, at
-/// `tuning::vine_speed`, **slides down** with crouch, and otherwise **clings**:
-/// a body falling past a vine catches on it. Sideways it moves at half pace.
-/// A vine is footing for the fall rule -- you can only fall from it from
-/// where you let go -- so the fall is measured from here.
+/// **An updraft and falling water**, after gravity has had its say.
 ///
 /// A body in the air inside an updraft's column, below its top, is carried
 /// up at `tuning::vent_rise` at least, and let go at the top to drift. That
@@ -1364,27 +1358,10 @@ impl Player {
 /// A body in the air in a waterfall's falling water is **pushed down** at
 /// `tuning::falls_push` at least, and its held jump is spent: the curtain is
 /// not a way up (`arena::waterfall`).
-fn climb_and_ride(p: &mut Player, input: Input, ground: &Terrain) {
-    if crate::valley::vine_on(ground, p.pos) {
-        let speed = t::vine_speed();
-        let climbing = input.has(Input::SPACE);
-        let sliding = input.has(Input::CROUCH) && !p.grounded;
-        if climbing {
-            p.vel.y = speed;
-            p.grounded = false;
-        } else if sliding {
-            p.vel.y = speed.neg();
-        } else if !p.grounded {
-            p.vel.y = Fx::ZERO;
-        }
-        if !p.grounded {
-            p.vel.x = crate::math::half(p.vel.x);
-            p.vel.z = crate::math::half(p.vel.z);
-            p.jump_hold = 0;
-            p.fall_over = p.pos.y.sub(t::fall_free()).max(ground.lowest());
-        }
-        return;
-    }
+///
+/// (Vines went on 2026-10-16: ledges catch and walls are jumped off now, and
+/// a vine was a place to get stuck in.)
+fn ride_the_air(p: &mut Player, ground: &Terrain) {
     if !p.grounded && crate::valley::vent_on(ground, p.pos) {
         let rise = t::vent_rise();
         if p.vel.y.raw() < rise.raw() {
@@ -6857,10 +6834,10 @@ fn step_player(
         }
     }
 
-    // **The valley's two props** (`crate::valley`), for anybody: a vine and
-    // an updraft. Neither is a class's, and neither costs anything but time.
+    // **The valley's two props of the air** (`crate::valley`), for anybody:
+    // an updraft and falling water. Neither is a class's.
     if dashing.is_none() && !hauling {
-        climb_and_ride(p, input, scene.arena);
+        ride_the_air(p, scene.arena);
     }
 
     p.pos = p.pos.add(p.vel.scale(DT));
@@ -7132,7 +7109,7 @@ fn catch_a_ledge(p: &mut Player, input: Input, ground: &Terrain) {
 
 /// **Hanging from a ledge, a frame on** (2026-10-16). Gravity is off and the
 /// body is held where the edge says (`Edge::hang`), facing the wall; the hang
-/// is footing for the fall rule, as a vine is.
+/// is footing for the fall rule, as a slide is.
 ///
 /// ```text
 ///   catching        settled into the hang over `ledge_catch` frames; the
@@ -7239,6 +7216,9 @@ fn hang_on(p: &mut Player, input: Input, ground: &Terrain) {
                 p.pos = stand;
                 p.grounded = true;
                 p.ledge = Ledge::NONE;
+                // The climb is its own landing: no flight to land from, or
+                // a long hang would be drawn arriving like a long fall.
+                p.air_frames = 0;
             }
         }
     }
@@ -7264,6 +7244,9 @@ fn let_go_of_the_ledge(p: &mut Player, into_a_slide: bool, ground: &Terrain) {
     p.ledge = Ledge::NONE;
     p.ledge_regrab = t::ledge_regrab();
     p.slide_flip = t::wall_slide_flip();
+    // The fall starts here: the hang was not flight, and a landing drawn
+    // from the length of the hang would be a heavy one after a short drop.
+    p.air_frames = 0;
     p.fall_over = hang.y.sub(t::fall_free()).max(ground.lowest());
     if into_a_slide {
         // Against the face, so the hold into it meets it next frame.

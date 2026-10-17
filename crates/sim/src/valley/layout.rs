@@ -570,11 +570,12 @@ fn crag(land: &Land, c: &Crag, out: &mut Vec<Solid>) {
     });
     for k in 1..=c.ledges as i32 {
         let ledge_top = base.add(cm(Crag::RISE * k));
-        // Alternating halves of the face, a metre apart: up and across.
+        // Alternating halves of the face, `ACROSS` apart: up and across.
+        let half = Crag::ACROSS / 2;
         let (z0, z1) = if k % 2 == 1 {
-            (c.z - h + 50, c.z - 50)
+            (c.z - h + 50, c.z - half)
         } else {
-            (c.z + 50, c.z + h - 50)
+            (c.z + half, c.z + h - 50)
         };
         out.push(Solid {
             min: V3::new(
@@ -829,12 +830,12 @@ pub fn plan() -> Plan {
     // wood is drawn from their skeletons, not as boxes.
     let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
     let ground = |x: i32, z: i32| to_cm(land.height(cm(x), cm(z)));
-    let grown = wood::grow(&ground);
+    let mut grown = wood::grow(&ground);
     let mut wood_boxes = Vec::new();
     let mut wood_cairns = Vec::new();
     wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
-    plan.vines
-        .extend(wood::lianas(&grown, &wood_boxes, &ground));
+    let ladders = wood::ladders(&mut grown, &wood_boxes, &ground);
+    wood_boxes.extend(ladders);
     let first = plan.extras.len();
     plan.extras.extend(wood_boxes);
     plan.hidden.push(first..plan.extras.len());

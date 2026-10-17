@@ -583,6 +583,13 @@ pub fn draws_outlines() -> bool {
     !cfg!(target_arch = "wasm32")
 }
 
+/// Whether the brush's strokes are drawn as splats (`crate::splats`): a
+/// pass of its own with the prepass depth, which the browser build has not
+/// been tried with yet, so there the brush stays at the pixel.
+pub fn draws_splats() -> bool {
+    !cfg!(target_arch = "wasm32")
+}
+
 /// Whether this build draws the still world's shadow once (`crate::still`)
 /// rather than into Bevy's cascades every frame.
 ///

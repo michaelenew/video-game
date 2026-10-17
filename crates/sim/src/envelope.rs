@@ -342,6 +342,26 @@ pub fn widest(paths: &[Path], rise: Fx) -> Option<Fx> {
     best
 }
 
+/// **The widest ledge `rise` above the edge that a path catches**, if it
+/// does not land on it (2026-10-16, `state::catch_a_ledge`): the body's front
+/// reaches the ledge's face while its feet are no lower than the arms'
+/// reach under the top. Whatever it meets the face at -- rising past it or
+/// falling -- it slides down it to the hands and is caught, so the first
+/// frame the front gets there high enough decides. Read off the path rather
+/// than replayed: the catch's own rule is the body's, not the resolve's.
+pub fn widest_caught(paths: &[Path], rise: Fx) -> Option<Fx> {
+    let r = crate::tuning::body_radius();
+    let low = rise.sub(crate::tuning::ledge_reach_high());
+    paths
+        .iter()
+        .flat_map(|p| p.iter())
+        .filter(|a| a.y.raw() >= low.raw())
+        .map(|a| a.x.add(r))
+        .fold(None, |best: Option<Fx>, x| {
+            Some(best.map_or(x, |b| b.max(x)))
+        })
+}
+
 /// Every airdodge timing worth trying: one every three frames through the
 /// airtime.
 ///

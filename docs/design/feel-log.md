@@ -8805,10 +8805,119 @@ the debounce, the catch rule and the hold-on are the owner's; the crouch into a 
 regrab lockout are mine, each for a failure the owner's rules would otherwise have: there was
 no way into a slide from a hang, and letting go next to the face would catch the same edge
 again.
-**Not done** a hanging or climbing pose -- the renderer draws the hang with the airborne clip, and
-the climb as that clip rising -- and ledges on the valley's land (only a solid's top is a
-ledge, as only a solid's side is a wall). Space while hanging does nothing.
+**Not done** ledges on the valley's land (only a solid's top is a ledge, as only a solid's side
+is a wall). Space while hanging does nothing. (The hanging and climbing poses came the same
+day: see below.)
 **Verdict** open -- unplayed. Things to feel for: whether 48 frames is slow enough to be a
 penalty and short enough not to be a punishment; whether 2 m/s and 0.2 m forgive enough of a
 walk-off, or too much of a jump that meant to clear; whether 20 frames of hold-on reads as a
 hang or as a stall.
+
+### 2026-10-16 — the ledge drawn: hanging, hand over hand, climbing
+
+**Changed** three clips for the ledge (`crates/anim/src/clips/ledge.rs`), chosen by
+`view::play` off a new `interp::Hold` -- which grip, how far into it, and how fast along the wall,
+read off the two snapshots' positions because a hanging body's velocity is held at zero.
+`ledge_hang` (90 frames, a slow sway) puts both wrists on the rim with `reach`, 1.86 m over the
+feet and 0.44 m in front, with the hips 24 cm forward and 16 cm down: the simulation holds the
+body a collision radius off the face, wider than the drawn body, and hung straight down from
+there it hung behind its own hands with its elbows bent out -- hands up, not hanging. The catch's
+settle is the hang's cross-fade from the fall. `ledge_shuffle` (16 frames) is hand over hand to
+her right, the hands meeting in the middle and parting, a planted hand sliding back at the
+shuffle's 1.5 m/s; played backwards it goes left. `ledge_climb` is `Length::LedgeClimb`, as long
+as `ledge_climb`, and keyed against the edge where the climb has carried it: a pull-up with the
+knees coming up, a press to straight arms with the right knee high, a fold on the lip with the
+left leg hanging down the face, and standing into the stance. The climb's end and a let-go now
+reset `air_frames`, so neither plays the heavy landing a long hang would otherwise read as.
+
+Two things were tried and changed on the preview sheet: the trailing leg on the lip first
+stretched back along a floor that is not there; and the arms went from overhead to the pull-up
+by swinging out straight in front, until a key at frame 6 held the hands on the edge on the way.
+
+Re-baking also brought `blood_mechanic` back in step with its move (56 frames to 42): the baked
+table on main was stale against the move table.
+
+`SHOT_AT` takes decimals now, and `SHOT_FALL=1` leaves player one in the air there: how the hang
+was captured in the game (`SHOT_AT=20,6.55,10.4 SHOT_FALL=1 SHOT_FRAME=40 SHOT_YAW=-1.57`,
+`--arena range`).
+**Not done** the climb was looked at on the preview sheet only, not in the game: a still capture
+cannot hold the stick into the wall. The shuffle's widths are written for 1.5 m/s and the climb's
+keys for 48 frames; retuning either knob wants them moved.
+**Verdict** open -- unplayed.
+
+### 2026-10-16 — a limb is walked along, not stopped on
+
+**Reported**: "the player just gets stuck on a small lip ... in the trees section, where a
+branch forks. The tiny lip halts me completely." Wanted: anything lower than a knee is
+stepped up or over without stopping, never jumped.
+
+**Found**: a limb is drawn as a smooth tapering cylinder but stood on as a stair of flat
+boards (`valley::trees::solids`), one board per 40 cm of rise -- capped at eight boards a
+limb. On a long limb the cap won, and the risers between boards came to 45-65 cm, just over
+the 0.45 m step (2026-10-13). A riser nobody can see is a lip that stops you dead. Walking
+along every board of the fourteen trees nearest the Wood, both ways, stopped about one walk
+in four.
+
+**Changed**: a limb's boards are cut one per 36 cm of rise, rounded up, with the cap raised to
+fourteen, so no riser along a limb comes near a step (35 cm and sixteen cleared the same lips
+at a busiest tile of 372 boxes; 36 and fourteen hold it at 307, and its cap went from 256 to
+320); and `Step, walked up onto` is raised from
+0.45 m to 0.5 m, a knee on a 1.8 m body. Stops along limbs fell by a third; what still stops a
+walk is the trunk, a buttress root taller than a knee, or a limb so close overhead that there
+is no room to stand up on the next board (`tests/wood.rs`,
+`a_limb_is_walked_along_without_stopping_on_a_lip`). Before the change it found 150 such
+stops on the Great Tree alone. The Great Tree's stair test met one hop that now falls short
+and catches the limb's edge; its script now climbs an edge of the limb it was hopping for, and
+starts every try with nothing held. The Reaver's pinned hunt moved with the step, and nothing
+else did.
+
+**And the window through the trees is wider** (the same day, from the same play: "it's hard
+to see what's going on. I don't want visibility to be part of the challenge of the forest").
+What stands between the camera and the fighter is cut away six metres across at the
+fighter's end, not 2.6, and half that next to the camera rather than a third
+(`game::stream`, `paint.wgsl`).
+
+### 2026-10-16 — no vines; climbs by catch and kick, and the gaps go out
+
+**Changed** Vines are gone: the mechanic (`climb_and_ride`'s vine branch),
+its knob (`Vine, climbing speed`), every place's table of them, the Great
+Wood's lianas and their drawing. What they carried is climbed with the ledge
+catch and the wall jump:
+
+- **The Needle**: a stair of blocks up the south face, 4 m apart and
+  zig-zagging; a landing every 40 m with a cairn every other; the chimney's
+  ledges north and south by turns, 4 m apart; a lip stone in its mouth.
+- **The Deep**: each shaft walled; down by a wall slide, up by ledges 4 m
+  apart between its north and south walls.
+- **The Hanging Stones**: a column of fifty stones 4.2 m apart (from 25 at
+  7 m with vines), and a span broken by **four gullies** -- 12 m drops
+  between walls 3 m apart, crossed by kicking from wall to wall
+  (`sim::arena::gully`, new bench lanes measured it).
+- **The broadleaves' roofs**: a hanging root with bracket fungus up it, 4 m
+  apart, where each liana hung.
+
+And the spacing rule moved: a required hop was inside the Bulwark's plain
+*landing*, and is now inside its plain *catch* (`envelope::widest_caught`).
+**Crags** 2.2 m → 3.6 m between ledges, 1 → 1.5 m across. **The Waterfall**
+a third wider along the face (behind the falls 3.5 → 4.7 m). **The Stair**
+course 2.5–4 → 3.8–5.5 m, **the Causeway** 4–5.5 → 5–6.5 m.
+
+**Why** The owner: "remove all vines in the game. We now have ledge grabs
+and wall jumps, and the vines are just awful to get stuck in. I also want you
+to make some sections where the intended pathway is to wall jump ... now
+that jumps are more forgiving it's worth spacing things out a bit more ...
+the bigger the gaps the cooler it's going to feel." Measured off the plain
+running jump: a catch is worth about a metre of distance and two of height
+(Bulwark level 5.2 landed / 6.0 caught; +3 m none landed / 4.9 caught). In a
+gully nobody's plain jump carries 12 m (the Dual mage's ~9 caught) and five
+kicks carry everybody; the Bulwark tops out at 12, the rest make 15–18.
+
+**Verdict** Unplayed. Every route above is climbed by every class in the
+tests through one stand-in player (`tests/pilot`), which is a lower bound on
+a person and says nothing about whether it is fun. Things to watch: a gully
+asks you to *hold forward* while touching the wall (the stick into the wall
+is a slide, which bleeds the run away) -- if players push into the wall by
+instinct, the gully will feel impossible and the slide rule wants a look; the
+Needle's stair is 78 catches for the Bulwark; and a dome's ring rim is not
+caught from inside its hole (`Terrain::ledge_near` reads a ring's top as
+its outer disc), which the lip stone works round rather than fixes.

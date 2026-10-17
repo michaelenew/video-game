@@ -72,16 +72,19 @@ carrying an **inverted dome 90 m across and 35 m deep**, its rim over the
 town's south roofs; on the dome's top, 353 m up, **ruins**: broken walls,
 column stumps, two arches, a fallen column, a cistern. The way up:
 
-- **A vine** down the shaft's south face, the whole height, for anybody at the
-  vine's pace (about two and a half minutes). The shaft's top is narrower than
-  the chimney above it, so the vine runs straight on into **the chimney's**,
-  up the dome's stem to the ruins.
+- **The stair** up the shaft's south face, the whole height, for anybody
+  (since 2026-10-16, where a vine hung): blocks four metres apart zig-zagging
+  east and west of the south, so none is over the one under it -- a landing
+  for most classes and a catch at the hands for the Bulwark -- with a wider
+  landing every forty metres and a cairn on every other one. From its top
+  you climb on to the shaft's top inside **the chimney**, and up the
+  chimney's ledges, north and south wall by turns, to a **lip stone** set in
+  its mouth: a ring's edge is not caught from inside its hole, a block's is.
 - **The corkscrew**: stones jutting a quarter turn and eight metres apart --
   the mechanic band -- and **balconies** every forty metres, three boards
-  round the shaft (never across the vine), a cairn on every other.
+  round the shaft (never across the stair), a cairn on every other.
 - **The lantern**: four columns on the shaft's top carrying the dome, gaps
-  between them to step through, and **ledges** up the chimney's wall four
-  metres apart.
+  between them to step through.
 
 The rim overhangs the shaft by forty metres, which no jump goes round from
 below: the way onto the dome is through it. The roost -- a Galewing on the
@@ -130,7 +133,8 @@ the frame at the Great Tree's foot costs a fifth of its budget.
 
 **The second pass** (2026-10-16, from play: "it needs to be easier to tell
 where you can stand ... the vines often get blocked by a branch ... wider
-spaces as checkpoints ... I want the canopy to be a reward"):
+spaces as checkpoints ... I want the canopy to be a reward"; the vines
+themselves went the same day, below):
 
 - **What bears you looks it.** A limb you can stand on (`trees::stood_on`,
   the rule the boxes are built by) is worn pale on top
@@ -143,27 +147,38 @@ spaces as checkpoints ... I want the canopy to be a reward"):
   lobes 8.4 m across, each the next step of the spiral and a checkpoint, a
   cairn on the first. The stair's last limb comes out from under one and is a
   plain jump below it.
-- **Vines are clear and let off.** A vine hangs a body's width off the bark
-  (1.3 girths out), so nothing of the foot is in its way; no limb grows across
-  it below its top, the one or two of a spiral's limbs that would are pinned
-  just beside it -- near enough to walk off on to, since a vine is climbed with
-  the jump and cannot be jumped off -- and its top comes up beside a lobe of
-  its own. `tests/wood.rs` climbs each and walks off.
+- **No vines** (2026-10-16, the owner: "the vines are just awful to get
+  stuck in"). The Sentinels' vines went; the spiral stair is the way up a
+  Sentinel, and `tests/wood.rs` climbs the Great Tree's with every class.
 - **A broadleaf's canopy is a roof**: concentric terraces of leaves 4.5 m
   wide, each 30 cm under the one inside it, and a **lip** 1.4 m up round the
-  edge, so it is hard to walk off. A **liana** hangs off every lip to the
-  ground, where nothing of any tree is in its way (`wood::lianas`,
-  `Atlas::vines`): climbed, it comes up beside the lip and you step in.
+  edge, so it is hard to walk off. A **hanging root** drops off every lip to
+  the ground, where nothing of any tree is in its way (`wood::ladders`, where
+  a liana hung until 2026-10-16), with **bracket fungus** up it either side by
+  turns, four metres apart -- a catch at the hands for the Bulwark -- the top
+  one two metres under the lip: climbed, you step in over it.
+  `tests/wood.rs` climbs every one with every class.
 - **The camera passes through a tree** rather than being pulled in by every
   branch (`Terrain::seen_around`), and the trees are drawn with a window cut
   along the line from the eye to the fighter (`game::paint`'s `cut`), so
-  nothing of a tree hides you.
+  nothing of a tree hides you. The window is cut in the depth prepass as
+  well as the colour (`Paint::window`, `paint_prepass.wgsl`), and the
+  windowed paint culls its back faces there too: cut in the colour alone,
+  the depth of the wood stayed in front of the fighter and the window came
+  out the colour of the sky -- a white hole (2026-10-16). A clean hole read
+  as a bite out of the tree, so the wood it cuts away is drawn again
+  see-through over it (`Paint::ghost`): a trace of it in the middle (10%),
+  thickening to solid over a long soft rim, drawn only for the trees the
+  line from the eye to the fighter comes near. The outline is handed the
+  same window and draws no ring round it (`cut.wgsl`'s `by_window`): the
+  window is the camera's, not a hole in the tree, and nothing about it
+  should say otherwise.
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 
 ![On an Elder's roof](gallery/valley-wood-roof.jpg)
 
-![The Great Tree's first shelf, where its vine comes up](gallery/valley-wood-shelf.jpg)
+![The Great Tree's first shelf](gallery/valley-wood-shelf.jpg)
 
 ### 1b · Ranges: creatures out on the land (2026-10-15)
 
@@ -201,7 +216,7 @@ there is no outside -- and everybody stands up on their last cairn.
 **The roost is stacked**: it is over the Needle's plaza, so it is a place only
 between the dome's top and forty metres over it (`PlanPlace::band`,
 `Atlas::place_for`); on the plaza underneath you are in the Needle, and the
-vines and cairns there are the Needle's. Climbing out of the chimney onto the
+stair and cairns there are the Needle's. Climbing out of the chimney onto the
 ruins wakes the Galewing (`tests/spire.rs`).
 
 ![The Upper Meadow's two Ridgebacks, watching](gallery/valley-upper-meadow.jpg)
@@ -220,16 +235,23 @@ among peaks; in the plain is the mouth. Under the lid everything is solids:
 
 | Level | Over the pit's floor | What | Who |
 | --- | --- | --- | --- |
-| **The mouth** | 140 m | a shaft through the lid, a vine down it | -- |
+| **The mouth** | 140 m | a shaft through the lid, walled down to the Upper Warren | -- |
 | **Upper Warren** | 110 m | a maze of tunnels fourteen metres wide, ten cells by eight, every cell reached by one way | Gnawers, hunting, temper 1 |
 | **Middle Warren** | 80 m | another, its way in under the last's way out | the Pair, territorial, temper 2 |
 | **Lower Warren** | 50 m | a third | Gnawers, hunting, temper 2 |
 | **The Caverns** | 0 | the pit's floor, 160 by 128 m under a vault 47 m up: crystal columns up to 36 m, crystal spears down from the vault, shards hung in the air stepping down from beside the shaft, a lake on crystal sand | the Hornback herd by the lake (skittish), two Ridgebacks (hunting, temper 3) |
 
 Each warren's way down is a shaft at the far end of its maze from its way
-in, **the whole shaft a vine**: whoever drops in catches on it, and crouch
-slides down (`tests/deep.rs` rides every one from the mouth to the floor
-unhurt). The mazes are a fixed draw, so both machines dig the same tunnels;
+in, **walled** from the floor it goes through to three metres over the one
+below (since 2026-10-16, when each shaft's vine went). **Down is a wall
+slide**: drop in and push into a wall and the slide is a fall cancelled --
+`tests/deep.rs` slides every one from the mouth to the Caverns' floor unhurt
+-- or go ledge to ledge. **Up is the ledges**, four metres apart and
+zig-zagging between the north and south walls, a catch at the hands across
+the shaft for the plainest jump; the last is a step under the rim of the wall
+it is on (`tests/deep.rs` climbs every shaft with every class). The Caverns'
+shaft has a slot through its west wall at 35 m on to the first crystal
+shard. The mazes are a fixed draw, so both machines dig the same tunnels;
 `tests/deep.rs` walks each from its way in to its way down. Walls round the
 pit's edge seal the space under the lid from the land's crater round the pit.
 Cairns on every warren's floor by its way in, and one by the lake. Crystal is
@@ -262,13 +284,17 @@ and asked whether that should be a table mountain or islands in the sky,
   corner. Gaps of 8 to 22 m with a drop of a metre or two, a rise of three
   now and then: the mechanic and expert bands, "treacherous" as asked. A
   cairn on every big island. Its stretch over the mountains is a place of
-  its own, **the Sky Road**, so its vines and cairns belong somewhere.
-- **The Hanging Stones** climb from the Bank's road: a column of 25 stones
-  seven metres apart **with a vine strung across every gap**, then a span of
-  18 stones north over the mountains, ten metres apart and six up, each gap
-  strung with a vine too, and a last vine up the plane's cliff to its lip.
-  Anybody climbs it at the vine's pace; a mechanic skips the vines.
-  `tests/heights.rs` climbs it with a Bulwark from the road to the plane.
+  its own, **the Sky Road**, so its cairns belong somewhere.
+- **The Hanging Stones** climb from the Bank's road (rebuilt 2026-10-16,
+  when their vines went): **a column of fifty stones** round a six-metre
+  square, each 4.2 m over the last -- past every class's landing but the
+  best jumpers', inside the Bulwark's catch -- every tenth wider with a
+  cairn; then **the span** north over the mountains, four stretches of four
+  stones stepping up 2.5 m with 4.2 m gaps, **each ending in a gully** (§3),
+  and seven steeper stones to the plane's edge, the last two standing on the
+  land the plane's rim holds up. `tests/heights.rs` climbs it with every
+  class from the road to the plane -- each gully off its walls, five kicks
+  apiece -- and checks no class's plain jump crosses a gully.
 
 ![The High Plane, looking back at the Needle's dome and the Sky Road](gallery/valley-plane-view.jpg)
 
@@ -370,7 +396,9 @@ waystone. **It is the one stretch of the main route that is jumped, not
 walked**: out of the pool on three column tops, up the right of the falls,
 three level leaps behind the falling water, up the left to the lip -- a cairn
 at the foot and on each of its two shelves, and one on the top. Every hop is
-inside the Bulwark's plain jump, so every class can do it; the height and the
+inside the Bulwark's plain jump caught at the hands (a third wider along the
+face since 2026-10-16: the leaps behind the falls are 4.7 m), so every class
+can do it; the height and the
 water (which pushes down, so the curtain is no way up) are what make it hard.
 It is one table (`sim::arena::waterfall`) and the same cliff is a jump course
 of its own, `--arena waterfall`; [courses.md](courses.md) §1c has the hops.
@@ -379,11 +407,42 @@ the cliff cannot be walked round; the road test walks to the pool, back a
 way, and on from the top.
 
 **The climbs are crags beside the road**: a pillar of rock with ledges up one
-face, each a rise of 2.2 m and a metre across from the last, and a cairn on
-its top — a view, a checkpoint, and a jump every class makes with a plain
-running jump (`REQUIRED`, checked against `sim::envelope`). A vine down the
-crag's other face is the slow way up, for anyone: hold jump to climb at
-`vine_speed`, crouch to slide down, otherwise cling.
+face, each a rise of 3.6 m and a metre and a half across from the last (2.2 m
+and a metre until 2026-10-16), and a cairn on its top — a view, a checkpoint,
+and a jump every class makes with a plain running jump caught at the hands
+(`REQUIRED`, checked against `sim::envelope::widest_caught`): the Bulwark
+hangs from each ledge and climbs, the best jumpers land. The vine down the
+crag's other face is gone.
+
+**No vines** (2026-10-16). The owner: "remove all vines in the game. We now
+have ledge grabs and wall jumps, and the vines are just awful to get stuck
+in." Everything a vine carried is climbed with the catch or the wall jump
+now: the Needle's stair, the Deep's walled shafts, the Hanging Stones' column
+and gullies, the broadleaves' hanging roots. **The spacing rule moved with
+it**: a required hop used to be inside the Bulwark's plain *landing*; it is
+inside its plain *catch* now, with 30 cm to spare -- landed is the quick way,
+caught and climbed the forgiving one. Measured off the plain running jump
+(`envelope::off_the_edge`, ledge reach 2.3 m over the feet):
+
+| Rise | Bulwark lands / catches | Champion | Dual mage |
+| --- | --- | --- | --- |
+| level | 5.2 / 6.0 m | 6.7 / 7.5 | 8.9 / 10.1 |
+| +2 m | 4.1 / 5.3 | 5.7 / 6.7 | 8.0 / 9.2 |
+| +3 m | -- / 4.9 | 5.1 / 6.4 | 7.6 / 8.7 |
+| +4 m | -- / 4.3 | 3.9 / 5.9 | 7.1 / 8.2 |
+
+**A gully** (`sim::arena::gully`, 2026-10-16: "make some sections where the
+intended pathway is to wall jump"): a drop twelve metres long between two
+walls three metres apart, standing twelve metres over the takeoff so their
+tops are no ledge, with a landing two metres down. No class's plain running
+jump carries it -- the Dual mage's, the longest, about nine metres caught --
+and every class crosses it by kicking from wall to wall: run along one side
+of the takeoff, jump, drift into the wall beside you, and press jump each
+time you touch one, *holding forward*, because the stick into a wall is a
+slide and a slide bleeds the run away. Measured on the bench's gully lanes
+(`--arena bench`): five kicks carry everybody over 12 m; the Bulwark tops out
+there, the rest of the roster makes 15 to 18. The Hanging Stones' span has
+four; nothing on the road needs one.
 
 **The mountains are the edge**: ground steeper than `terrain_steepest` is a
 wall you slide back down, so the valley needs no boxes to keep you in it
@@ -405,7 +464,6 @@ water is the other way about: a body in a waterfall's sheet is pushed down
   Where one reach runs on into the next there is nothing to mark;
 - a dark waystone's doorway as a slab of its grey, while it is shut;
 - each waystone's light on its stone's top;
-- vines, from the ground to the top of the crag they hang on;
 - from Hearth's wall, the reaches themselves, as far as the fog lets you
   see. (The painted ridges that stood in for them went when the valley
   became one map.) Only what is within the sky's reach is drawn

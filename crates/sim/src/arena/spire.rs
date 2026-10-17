@@ -12,12 +12,12 @@
 //! | Part | What it is |
 //! | --- | --- |
 //! | **The shaft** | Round, pale stone, nine metres across at its foot and under eight at its top, 315 m tall |
-//! | **The vine** | Down its south face the whole height: anybody, at the vine's pace, about two minutes |
+//! | **The stair** | Up its south face the whole height, zig-zagging: stones four metres apart, a catch at the hands for the plainest jump and a landing for the best, a wide one every forty metres (a cairn on every other) |
 //! | **The corkscrew** | Stones jutting from the shaft a quarter turn and eight metres apart: the mechanic band |
-//! | **The balconies** | Every forty metres, three boards round the shaft (never across the vine), a cairn on the north one every other time |
+//! | **The balconies** | Every forty metres, three boards round the shaft (never across the stair), a cairn on the north one every other time |
 //! | **The lantern** | Four columns on the shaft's top carrying the dome, gaps between them to walk through |
 //! | **The dome** | Inverted, 90 m across and 35 m deep, its point on the lantern: eight slabs of a sphere, every one a ring round **the chimney** up its stem |
-//! | **The chimney** | Nine metres across, 38 m from the shaft's top to the dome's: ledges spiralling up its wall, and a vine |
+//! | **The chimney** | Nine metres across, 38 m from the shaft's top to the dome's: ledges spiralling up its wall, a catch apart |
 //! | **The ruins** | On the dome's top, 353 m up: broken walls, column stumps, an arch, a fallen column, a cistern, a cairn by the chimney's mouth |
 //!
 //! The roost -- Galewings on the dome, fought there -- is a range's
@@ -71,30 +71,21 @@ pub const DOME_FROM: i32 = SHAFT.2 + LANTERN;
 pub const TOP: i32 = DOME_FROM + DEPTH;
 const SLABS: i32 = 8;
 
-/// The bearing the vines hang on (south), in thousandths of a turn, and how
-/// far either side of it nothing else is put.
-const VINE_BEARING: i32 = 750;
-const VINE_CLEAR: i32 = 80;
-
-/// The vine down the shaft's south face, from the plaza to the shaft's top.
-const OUTSIDE: Zone = Zone::cm(
-    [AT.0 - 120, -2000, AT.1 - SHAFT.0 - 100],
-    [AT.0 + 120, SHAFT.2, AT.1],
-);
-/// The vine up the chimney's south wall, from the shaft's top to the dome's.
-const INSIDE: Zone = Zone::cm(
-    [AT.0 - 120, SHAFT.2, AT.1 - CHIMNEY],
-    [AT.0 + 120, TOP, AT.1],
-);
-
-pub const VINES: [Zone; 2] = [OUTSIDE, INSIDE];
+/// **The stair** (2026-10-16, where a vine hung until then): the bearing it
+/// climbs on (south), in thousandths of a turn, and how far either side of
+/// it nothing else is put.
+const STAIR_BEARING: i32 = 750;
+const STAIR_CLEAR: i32 = 230;
+/// How far each of its stones is above the last: past most classes'
+/// landing, inside the Bulwark's catch. Every tenth is a landing, forty
+/// metres apart, as the balconies are.
+pub const STAIR_RISE: i32 = 400;
 
 /// How the Spire joins the valley.
 pub static PLACE: Place = Place {
     arena: ArenaId::SPIRE,
     kind: Kind::Reach,
     seams: &SEAMS,
-    vines: &VINES,
     vents: &[],
 };
 
@@ -139,10 +130,113 @@ fn turns(milli: i32) -> Fx {
     Fx::ratio(milli.rem_euclid(1000), 1000)
 }
 
-/// Is a bearing clear of the vine's?
-fn off_the_vine(bearing: i32) -> bool {
-    let d = (bearing - VINE_BEARING).rem_euclid(1000);
-    d > VINE_CLEAR && d < 1000 - VINE_CLEAR
+/// Is a bearing clear of the stair's?
+fn off_the_stair(bearing: i32) -> bool {
+    let d = (bearing - STAIR_BEARING).rem_euclid(1000);
+    d > STAIR_CLEAR && d < 1000 - STAIR_CLEAR
+}
+
+/// **A step of a climb**, as a block in the shaft's own frame (centimetres
+/// from its axis, `x` east and `z` north): its corners across, its top over
+/// the plaza, and whether a cairn stands on it.
+#[derive(Clone, Copy, Debug)]
+pub struct Step {
+    pub x: (i32, i32),
+    pub z: (i32, i32),
+    pub top: i32,
+    pub cairn: bool,
+}
+
+impl Step {
+    /// The block on the map, on a shaft standing on `base`, `deep` from its
+    /// top down.
+    pub fn solid(&self, base: Fx, deep: i32) -> Solid {
+        Solid {
+            min: V3::new(
+                cm(AT.0 + self.x.0),
+                base.add(cm(self.top - deep)),
+                cm(AT.1 + self.z.0),
+            ),
+            max: V3::new(
+                cm(AT.0 + self.x.1),
+                base.add(cm(self.top)),
+                cm(AT.1 + self.z.1),
+            ),
+            material: Material::Stone,
+            shape: Shape::Box,
+        }
+    }
+}
+
+/// How far the stair's stones stand out from the shaft, and how wide they
+/// are; how far apart the two sides it zig-zags between are.
+const STAIR_OUT: i32 = 250;
+const STAIR_WIDE: i32 = 240;
+const STAIR_APART: i32 = 140;
+
+/// **The stair's stones**, foot to top: every [`STAIR_RISE`] from the plaza
+/// to a step under the shaft's top, out of its south face, zig-zagging east
+/// and west of the south so none is over the one under it -- the crags'
+/// way of going up. Every tenth is a landing, standing a metre further out,
+/// and every other landing has a cairn.
+pub fn stair() -> impl Iterator<Item = Step> {
+    (1..)
+        .take_while(|k| STAIR_RISE * k <= SHAFT.2 - 300)
+        .map(|k| {
+            let y = STAIR_RISE * k;
+            let r = shaft_at(y);
+            let landing = k % 10 == 0;
+            // A landing is wider, away from the middle, for its cairn.
+            let wide = STAIR_WIDE + if landing { 120 } else { 0 };
+            let (x0, x1) = if k % 2 == 0 {
+                (-STAIR_APART / 2 - wide, -STAIR_APART / 2)
+            } else {
+                (STAIR_APART / 2, STAIR_APART / 2 + wide)
+            };
+            let out = STAIR_OUT + if landing { 100 } else { 0 };
+            Step {
+                x: (x0, x1),
+                z: (-r - out, -r + 150),
+                top: y,
+                cairn: landing && k % 20 == 0,
+            }
+        })
+}
+
+/// How far apart the chimney's ledges are, one over the next, and how far
+/// one stands out of its wall.
+const CHIMNEY_RISE: i32 = 400;
+const CHIMNEY_OUT: i32 = 260;
+
+/// **The chimney's ledges**: up its north and south walls by turns, from
+/// just over the shaft's top to a step under the dome's -- every one a
+/// catch across from the last.
+pub fn chimney() -> impl Iterator<Item = Step> {
+    (0..)
+        .map(|n| (n, SHAFT.2 + 350 + CHIMNEY_RISE * n))
+        .take_while(|&(_, y)| y <= TOP - 250)
+        .map(|(n, y)| {
+            let z = if n % 2 == 0 {
+                (-CHIMNEY - 100, -CHIMNEY + CHIMNEY_OUT)
+            } else {
+                (CHIMNEY - CHIMNEY_OUT, CHIMNEY + 100)
+            };
+            Step {
+                x: (-150, 150),
+                z,
+                top: y,
+                cairn: false,
+            }
+        })
+}
+
+/// Where a point a distance out from the axis on a bearing is on the map.
+pub fn out_at(bearing: i32, dist: i32) -> (Fx, Fx) {
+    let d = V3::from_turns(turns(bearing));
+    (
+        cm(AT.0).add(d.x.mul(cm(dist))),
+        cm(AT.1).add(d.z.mul(cm(dist))),
+    )
 }
 
 /// The shaft's radius at a height above the plaza.
@@ -193,15 +287,6 @@ fn cairn_on(x: Fx, z: Fx, y: Fx) -> Solid {
         material: Material::Snow,
         shape: Shape::Box,
     }
-}
-
-/// A point on the map at a bearing and a distance from the axis.
-fn out_at(bearing: i32, dist: i32) -> (Fx, Fx) {
-    let d = V3::from_turns(turns(bearing));
-    (
-        cm(AT.0).add(d.x.mul(cm(dist))),
-        cm(AT.1).add(d.z.mul(cm(dist))),
-    )
 }
 
 /// **The ruins on the dome's top**: what is left of a village 353 metres up.
@@ -391,7 +476,7 @@ pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
     while y < SHAFT.2 - 600 {
         let balcony = 4000;
         let near_balcony = (y % balcony) < 300 || (y % balcony) > balcony - 300;
-        if off_the_vine(bearing) && !near_balcony {
+        if off_the_stair(bearing) && !near_balcony {
             let r = shaft_at(y);
             out.push(board(
                 base,
@@ -461,25 +546,37 @@ pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
         ));
     }
 
-    // The chimney's ledges: up its wall from the shaft's top, clear of the
-    // vine, four metres and a half apart.
-    let mut bearing = 0;
-    let mut y = SHAFT.2 + 400;
-    while y < TOP - 150 {
-        if off_the_vine(bearing) {
-            out.push(board(
-                base,
-                bearing,
-                CHIMNEY - 230,
-                CHIMNEY + 60,
-                y,
-                300,
-                80,
-                Material::Stone,
-            ));
+    // The stair up the south face, and the chimney's ledges.
+    for s in stair() {
+        // Deep, so a jump rising beside one meets its face rather than
+        // going up under it.
+        out.push(s.solid(base, 200));
+        if s.cairn {
+            // At the end away from the middle: the climb comes up the other.
+            let cx = if s.x.0 < 0 { s.x.0 + 110 } else { s.x.1 - 110 };
+            let (cx, cz) = (AT.0 + cx, AT.1 + s.z.0 + 150);
+            out.push(cairn_on(cm(cx), cm(cz), base.add(cm(s.top))));
         }
-        bearing += 310;
-        y += 420;
+    }
+    for s in chimney() {
+        out.push(s.solid(base, 150));
+    }
+    // **The lip stone**: a block set into the chimney's mouth over the last
+    // ledge, its top the dome's. A ring's edge is not caught from inside its
+    // hole; a block's is, so the plainest jump hangs from it and climbs out.
+    if let Some(last) = chimney().last() {
+        let z = if last.z.0 < 0 {
+            (-CHIMNEY - 150, -CHIMNEY + 10)
+        } else {
+            (CHIMNEY - 10, CHIMNEY + 150)
+        };
+        let lip = Step {
+            x: (-150, 150),
+            z,
+            top: TOP,
+            cairn: false,
+        };
+        out.push(lip.solid(base, 150));
     }
 
     // The ruins on the top, and a cairn by the chimney's mouth.

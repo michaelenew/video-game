@@ -46,6 +46,7 @@ mod signs;
 mod sky;
 mod sound;
 mod species;
+mod splats;
 mod still;
 mod stream;
 mod town;
@@ -222,6 +223,7 @@ fn main() {
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
         .add_plugins(paint::PaintPlugin)
         .add_plugins(still::StillPlugin)
+        .add_plugins(splats::SplatsPlugin)
         .add_plugins(warm::WarmPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
@@ -1370,23 +1372,36 @@ fn shot_form(w: &mut World) {
 /// that is not a start, such as the Waterfall at the head of the Pinewood
 /// (`SHOT_AT=772,-4` with `--arena pinewood --open`). A round start puts
 /// fighters back on their marks, so in a fight or a course it does nothing.
-/// The same kind of hook as `SHOT_WEIGHT`.
+/// The same kind of hook as `SHOT_WEIGHT`. The numbers may be decimals.
+///
+/// `SHOT_FALL=1` with it leaves player one **in the air** at that height,
+/// falling, rather than on what is under it: a capture of a ledge being
+/// caught, `SHOT_AT=20,6.55,10.4` beside the range tower's north face with
+/// `--arena range`, `DEMO=0` and `SHOT_FRAME=40` lands on the hang.
 fn shot_at(w: &mut World) {
     let Some(spec) = platform::env("SHOT_AT") else {
         return;
     };
-    let mut it = spec.split(',').filter_map(|v| v.trim().parse::<i32>().ok());
+    let metres = |v: f32| sim::Fx::from_raw((v * 65536.0).round() as i32);
+    let mut it = spec
+        .split(',')
+        .filter_map(|v| v.trim().parse::<f32>().ok())
+        .map(metres);
     let (Some(x), Some(z)) = (it.next(), it.next()) else {
         return;
     };
     // A third number is the height to look down from: under a lid, in a
     // cave, the floor below that rather than the roof.
-    let from = it.next().unwrap_or(1000);
-    let up = sim::V3::new(
-        sim::Fx::from_int(x),
-        sim::Fx::from_int(from),
-        sim::Fx::from_int(z),
-    );
+    let from = it.next().unwrap_or(sim::Fx::from_int(1000));
+    let up = sim::V3::new(x, from, z);
+    if platform::env("SHOT_FALL").as_deref() == Some("1") {
+        let p = &mut w.players[0];
+        p.pos = up;
+        p.vel = sim::V3::ZERO;
+        p.grounded = false;
+        p.facing = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
+        return;
+    }
     // Or the top of anything hanging there -- a shelf up a tree, a roof
     // over a crown -- which a floor is not.
     let ground = w.terrain();
@@ -6218,6 +6233,7 @@ fn shadow_input(
     input.crouching = false;
     input.rise = 0.0;
     input.turn_rate = 0.0;
+    input.ledge = None;
     input.bind_pose = bind_pose;
     input
 }

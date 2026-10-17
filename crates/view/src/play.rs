@@ -127,6 +127,9 @@ pub struct PoseInput {
     /// `interp::PlayerView::shudder`; added to the hips on top of whatever
     /// the clip does, so it shakes the body without choosing its pose.
     pub shudder: f32,
+    /// The ledge held, if any (`interp::Hold`): a hang, a shuffle or a climb
+    /// instead of a flight.
+    pub ledge: Option<crate::interp::Hold>,
     /// Show the skeleton at rest instead of animating it. The toggle exists so
     /// that "is this the clip or is this the rig?" can be answered in one
     /// keypress while looking at the thing.
@@ -158,6 +161,7 @@ impl PoseInput {
             round_left: frame.round_left,
             sim_frame: frame.sim_frame,
             shudder: view.shudder,
+            ledge: view.ledge,
             bind_pose: false,
         }
     }
@@ -210,7 +214,14 @@ fn shape_of(input: PoseInput) -> Shape {
         Action::Held { .. } => 204,
         Action::Dodge { .. } => 205,
         Action::Free => {
-            if !input.grounded {
+            if let Some(hold) = input.ledge {
+                match on_the_ledge(hold) {
+                    Holding::Hang => 212,
+                    Holding::Shuffle { right: true } => 213,
+                    Holding::Shuffle { right: false } => 214,
+                    Holding::Climb => 215,
+                }
+            } else if !input.grounded {
                 206
             } else if input.crouching {
                 207
@@ -766,6 +777,9 @@ fn dodge(input: PoseInput, left: u16) -> Pose {
 /// Nobody is doing anything to this character and it is not attacking: the
 /// state a player spends most of a match in, and the one worth the most care.
 fn free(input: PoseInput) -> Pose {
+    if let Some(hold) = input.ledge {
+        return ledge(hold);
+    }
     if !input.grounded {
         return airborne(input);
     }
@@ -788,6 +802,52 @@ fn free(input: PoseInput) -> Pose {
     }
 
     grounded(input)
+}
+
+/// How fast along the wall a hanging body has to be going before its hands
+/// go over one another, in metres a second. Under the shuffle's own speed
+/// (`tuning::ledge_shuffle`), over the wobble of a body settling on its edge.
+const SHUFFLING: f32 = 0.3;
+
+/// What a body on a ledge is doing, in the terms the clips are cut in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Holding {
+    Hang,
+    Shuffle { right: bool },
+    Climb,
+}
+
+fn on_the_ledge(hold: crate::interp::Hold) -> Holding {
+    use sim::state::Grip;
+    match hold.grip {
+        Grip::Climb => Holding::Climb,
+        _ if hold.along.abs() > SHUFFLING => Holding::Shuffle {
+            right: hold.along > 0.0,
+        },
+        _ => Holding::Hang,
+    }
+}
+
+/// **On a ledge** (`sim::state::hang_on`): the hang, the shuffle or the climb.
+///
+/// The catch -- the frames the simulation spends settling the body from its
+/// fall into the hang -- is the hang itself: the shape changes from the fall's
+/// to the hang's on the frame of the catch, and the cross-fade is the settle.
+/// The shuffle is one clip moving to her right, and played backwards it moves
+/// to her left: a planted hand slides one way across the body, and time run
+/// the other way slides it the other. The climb is indexed by the
+/// simulation's own clock, because the body is carried along the climb's path
+/// by it, frame by frame.
+fn ledge(hold: crate::interp::Hold) -> Pose {
+    match on_the_ledge(hold) {
+        Holding::Hang => Clip::LedgeHang.at(hold.since as u32),
+        Holding::Shuffle { right } => {
+            let len = Clip::LedgeShuffle.length() as u32;
+            let at = hold.since as u32 % len;
+            Clip::LedgeShuffle.at(if right { at } else { (len - at) % len })
+        }
+        Holding::Climb => Clip::LedgeClimb.at(hold.clock.saturating_sub(1) as u32),
+    }
 }
 
 fn airborne(input: PoseInput) -> Pose {

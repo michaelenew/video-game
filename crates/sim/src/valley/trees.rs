@@ -51,7 +51,6 @@
 use crate::arena::{Material, Shape, Solid};
 use crate::fixed::Fx;
 use crate::math::V3;
-use crate::valley::Zone;
 
 /// **What kind of tree.**
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,17 +127,6 @@ pub struct Pad {
     pub kind: PadKind,
 }
 
-/// **A vine hung by a tree**: the way it hangs from the trunk (thousandths
-/// of a turn), how far out from the axis its near side is, and how high its
-/// top is (centimetres, on the map). The tree keeps its limbs out of the
-/// vine's way and grows a shelf beside its top to step off on to.
-#[derive(Clone, Copy, Debug)]
-pub struct Vine {
-    pub heading: i64,
-    pub out: i32,
-    pub top: i32,
-}
-
 /// A neighbour, as the tree growing sees it: where its trunk stands, how
 /// thick it is, how far its crown reaches and how high its trunk stands
 /// before it breaks into a crown (centimetres).
@@ -160,8 +148,6 @@ pub struct Site<'a> {
     pub height: i32,
     pub girth: i32,
     pub seed: u32,
-    /// A vine it hangs, if any.
-    pub vine: Option<Vine>,
 }
 
 // ---------------------------------------------------------------------------
@@ -466,31 +452,9 @@ fn sentinel(
         for k in 0..limbs {
             // Held close to the golden angle low down, where it makes the stair.
             let wander = if y < 4000 { 6 } else { 25 };
-            let mut turn = phase + k * (1000 / limbs) + dice.range(-wander, wander);
-            // Out of a vine's way, below its top: turned aside to stand
-            // beside it, a limb to step off on to rather than one to climb
-            // into.
-            if let Some(v) = r.site.vine {
-                if r.base[1] + y < v.top as i64 + 300 {
-                    let off = (turn - v.heading + 500).rem_euclid(1000) - 500;
-                    // Pinned beside it, the one or two of a spiral's limbs
-                    // that would cross it: a step off the vine on either
-                    // side, and the vine the step between them.
-                    let clear = vine_clear(&v);
-                    if off.abs() < VINE_GATHER {
-                        turn = v.heading + if off < 0 { -clear } else { clear };
-                    }
-                }
-            }
+            let turn = phase + k * (1000 / limbs) + dice.range(-wander, wander);
             if at_shelf {
-                // A lobe is wider than a limb: none near a vine, whose own
-                // lobe is there instead.
-                let by_vine = r.site.vine.is_some_and(|v| {
-                    ((turn - v.heading + 500).rem_euclid(1000) - 500).abs() < VINE_GATHER * 2
-                });
-                if !by_vine {
-                    lobes.push((y, turn));
-                }
+                lobes.push((y, turn));
                 continue;
             }
             let dir = heading(turn);
@@ -867,15 +831,8 @@ fn roots(kind: Kind, r: &Reading, dice: &mut Dice, nodes: &mut Vec<Node>) {
         -(g(x, z + 800) - g(x, z - 800)) as i64,
     ]);
     for _ in 0..count {
-        let mut turn = phase + dice.range(-40, 40);
+        let turn = phase + dice.range(-40, 40);
         phase += GOLDEN;
-        // Not out under a vine: its foot is to be walked into.
-        if let Some(v) = r.site.vine {
-            let off = (turn - v.heading + 500).rem_euclid(1000) - 500;
-            if off.abs() < VINE_ROOTS {
-                turn = v.heading + if off < 0 { -VINE_ROOTS } else { VINE_ROOTS };
-            }
-        }
         let dir = heading(turn);
         let along = (dir[0] * downhill[0] + dir[2] * downhill[2]) / UNIT;
         let long = girth * spread / 100 * (UNIT + along * 35 / 100) / UNIT;
@@ -961,14 +918,6 @@ fn root(
                 nd = add(nd, scale(unit(o), 600, UNIT));
             }
         }
-        // And round the foot of a vine, the same way.
-        if let Some(v) = r.site.vine {
-            let foot = add(r.base, scale(heading(v.heading), v.out as i64 + 120, UNIT));
-            let o = sub([p[0], 0, p[2]], [foot[0], 0, foot[2]]);
-            if flat_len(o) < 600 {
-                nd = add(nd, scale(unit(o), 900, UNIT));
-            }
-        }
         d = unit([nd[0], 0, nd[2]]);
         p = add(p, scale(d, step, UNIT));
         p[1] = r.ground(p);
@@ -996,8 +945,8 @@ fn root(
     }
 }
 
-/// **Where cairns go**: one on each shelf -- on the first of its lobes, the
-/// vine's where there is one -- and one in the middle of a roof.
+/// **Where cairns go**: one on each shelf -- on the first of its lobes --
+/// and one in the middle of a roof.
 fn cairns(pads: &[Pad]) -> Vec<[i32; 3]> {
     let mut out: Vec<[i32; 3]> = Vec::new();
     for p in pads {
@@ -1012,22 +961,6 @@ fn cairns(pads: &[Pad]) -> Vec<[i32; 3]> {
     }
     out
 }
-
-/// **How far either side of a vine's heading no limb grows** (thousandths of
-/// a turn), below its top: far enough that a limb's side stands clear of a
-/// body on the vine where it hangs nearest the trunk -- a body's half-width,
-/// a limb's and a hand, a metre sixty-five of arc in all -- and no
-/// further, so you walk off the vine on to it: a vine is climbed with the
-/// jump, so you step off one, you cannot jump.
-fn vine_clear(v: &Vine) -> i64 {
-    165 * 1000 / (6283 * v.out.max(1) as i64 / 1000)
-}
-
-/// How far either side of a vine the limbs are squeezed aside.
-const VINE_GATHER: i64 = 45;
-
-/// And no root, so the vine's foot is walked into.
-const VINE_ROOTS: i64 = 110;
 
 /// **Which of a Sentinel's tiers are shelves** (heights over its foot): the
 /// first of the six-metre tiers, forty metres up, and every seventh after
@@ -1047,8 +980,7 @@ const LOBE_OUT: i32 = 150;
 
 /// **The shelves, grown**: a bracket of fungus out of the bark where each of
 /// a shelf tier's limbs would be, its top a step over where that limb's
-/// would be; and on a tree with a vine, one more at the vine's top, its edge
-/// under the vine's near side, so the climb steps off on to it.
+/// would be.
 fn shelf_pads(r: &Reading, nodes: &[Node], lobes: &[(i64, i64)]) -> Vec<Pad> {
     let trunk_at = |y: i64| {
         nodes
@@ -1066,18 +998,9 @@ fn shelf_pads(r: &Reading, nodes: &[Node], lobes: &[(i64, i64)]) -> Vec<Pad> {
         kind: PadKind::Shelf,
     };
     let mut pads = Vec::new();
-    for (k, &(y, turn)) in lobes.iter().enumerate() {
+    for &(y, turn) in lobes {
         let top = r.base[1] + y + 70;
         let trunk = trunk_at(top);
-        // The vine's own, first: the checkpoint a climb of it comes to.
-        if let Some(vine) = r.site.vine.filter(|_| k == 0 && y == 4000) {
-            let t = trunk_at(vine.top as i64);
-            let c = add(
-                v(t.at),
-                scale(heading(vine.heading), (vine.out + 20 - LOBE) as i64, UNIT),
-            );
-            pads.push(lobe(c, vine.top as i64 - 30));
-        }
         let c = add(
             v(trunk.at),
             scale(heading(turn), (trunk.radius + LOBE_OUT) as i64, UNIT),
@@ -1287,8 +1210,12 @@ pub fn solids(tree: &Tree, out: &mut Vec<Solid>) {
                 ));
             }
         } else {
-            // Gentle: boards, each a step up from the last at most.
-            let pieces = (rise / 40).max(run / 900).clamp(1, 8);
+            // Gentle: boards, each under a step up from the last. The limb
+            // is drawn smooth, so a riser between two boards is a lip nobody
+            // can see: rounded up, and never capped short of it -- capped at
+            // eight, a long limb's risers came to over half a metre and
+            // stopped a walk along it dead (2026-10-16).
+            let pieces = ((rise + 35) / 36).max(run / 900).clamp(1, 14);
             let yaw =
                 crate::math::atan2_turns(Fx::from_int(d[2] as i32), Fx::from_int(d[0] as i32));
             for k in 0..pieces {
@@ -1322,12 +1249,4 @@ pub fn cairns_of(tree: &Tree, out: &mut Vec<Solid>) {
             shape: Shape::Box,
         });
     }
-}
-
-/// **A vine up a trunk's north side**, from under its foot to sixty metres:
-/// the slow way past a Sentinel's first tiers, for anybody.
-pub fn vine(tree: &Tree, girth: i32) -> Zone {
-    let [x, y, z] = tree.base;
-    let out = girth * 14 / 10 + 80;
-    Zone::cm([x - 120, y - 2000, z], [x + 120, y + 6000, z + out])
 }

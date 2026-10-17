@@ -19,6 +19,7 @@ pub mod defence;
 pub mod dodge;
 pub mod dual;
 pub mod elementalist;
+pub mod ledge;
 pub mod locomotion;
 pub mod reactions;
 pub mod reaver;
@@ -30,6 +31,7 @@ pub fn all() -> Vec<Recipe> {
     out.extend(locomotion::clips());
     out.extend(turns::clips());
     out.extend(air::clips());
+    out.extend(ledge::clips());
     out.extend(dodge::clips());
     out.extend(defence::clips());
     out.extend(reactions::clips());

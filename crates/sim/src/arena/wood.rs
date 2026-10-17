@@ -22,8 +22,9 @@
 
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::fixed::Fx;
+
 use crate::valley::land::{Point, at};
-use crate::valley::trees::{self, Kind as Grows, Neighbour, Site, Tree, Vine};
+use crate::valley::trees::{self, Kind as Grows, Neighbour, Site, Tree};
 use crate::valley::{Gate, Kind, Place, Seam, Zone};
 
 pub static ARENA: Arena = Arena {
@@ -137,35 +138,6 @@ pub const fn bole(g: &Giant) -> i32 {
     }
 }
 
-/// The trees a vine hangs down -- Sentinels all -- and how far up it goes:
-/// to the first shelf, forty metres up, for anybody.
-const VINED: [usize; 4] = [0, 3, 6, 10];
-const VINE_TOP: i32 = 4100;
-
-/// How far out from a trunk's axis its vine hangs: past the bark at its foot
-/// and the shelf at its top, so nothing of the tree is in its way.
-const fn vine_out(g: &Giant) -> i32 {
-    g.radius * 13 / 10
-}
-
-/// A vine hung down a trunk's north side, clear of the bark, from below its
-/// foot to [`VINE_TOP`], where it comes up beside the first shelf's edge.
-const fn vine(g: &Giant) -> Zone {
-    let out = vine_out(g);
-    Zone::cm(
-        [g.x - 120, -2000, g.z + out],
-        [g.x + 120, VINE_TOP, g.z + out + 240],
-    )
-}
-
-/// The vines, for the movement that reads them.
-pub const VINES: [Zone; 4] = [
-    vine(&GIANTS[VINED[0]]),
-    vine(&GIANTS[VINED[1]]),
-    vine(&GIANTS[VINED[2]]),
-    vine(&GIANTS[VINED[3]]),
-];
-
 /// Where the floor cairns lie: at the clearing's edge.
 pub const CAIRNS: [(i32, i32); 1] = [(1500, -16500)];
 
@@ -174,7 +146,6 @@ pub static PLACE: Place = Place {
     arena: ArenaId::WOOD,
     kind: Kind::Reach,
     seams: &SEAMS,
-    vines: &VINES,
     vents: &[],
 };
 
@@ -224,13 +195,6 @@ pub fn grow(height: &dyn Fn(i32, i32) -> i32) -> Vec<Tree> {
                 height: g.height,
                 girth: g.radius,
                 seed: 7919 * (k as u32 + 1),
-                // North is a quarter turn; the Wood is at the map's origin,
-                // so the vine's top is its height on the map.
-                vine: VINED.contains(&k).then(|| Vine {
-                    heading: 250,
-                    out: vine_out(g),
-                    top: VINE_TOP,
-                }),
             };
             trees::grow(g.kind, &site)
         })
@@ -248,15 +212,32 @@ pub fn build(trees: &[Tree], wood: &mut Vec<Solid>, cairns: &mut Vec<Solid>) {
     cairns.push(BRIDGE);
 }
 
-/// **A liana off every broadleaf's roof**: a vine hung from just outside its
-/// lip to the ground, where nothing of any tree (`wood`, every tree's
-/// solids) is in its way -- the first such place round the roof, from the
-/// side facing the Great Tree. A climb of it comes up beside the lip and
-/// steps on to it (`tests/wood.rs`). Map coordinates (`Atlas::vines`).
-pub fn lianas(trees: &[Tree], wood: &[Solid], height: &dyn Fn(i32, i32) -> i32) -> Vec<Zone> {
+/// How far apart a hanging root's shelves are, one over the next: inside the
+/// Bulwark's catch.
+pub const LADDER_RISE: i32 = 400;
+/// How far either side of its root a shelf stands, how big it is (a
+/// radius) and how deep.
+const LADDER_SIDE: i32 = 260;
+const LADDER_SHELF: i32 = 130;
+const LADDER_DEEP: i32 = 150;
+
+/// **A hanging root up to every broadleaf's roof** (2026-10-16, where a
+/// liana hung until then): a root dropped from just outside the roof's lip
+/// to the ground, where nothing of any tree (`wood`, every tree's solids) is
+/// in its way -- the first such place round the roof, from the side facing
+/// the Great Tree -- with bracket fungus up it, either side of it by turns,
+/// a catch apart, the top one a step under the lip. The shelves are put on
+/// the tree (`Tree::pads`, drawn as its shelves are) and the root among its
+/// nodes; what is returned is the shelves' solids, to go with its wood.
+pub fn ladders(trees: &mut [Tree], wood: &[Solid], height: &dyn Fn(i32, i32) -> i32) -> Vec<Solid> {
     let mut out = Vec::new();
-    for t in trees {
-        let Some(rim) = t.pads.iter().find(|p| p.kind == trees::PadKind::Rim) else {
+    for t in trees.iter_mut() {
+        let Some(rim) = t
+            .pads
+            .iter()
+            .find(|p| p.kind == trees::PadKind::Rim)
+            .copied()
+        else {
             continue;
         };
         let (mx, mz) = (rim.at[0] as i64, rim.at[2] as i64);
@@ -265,26 +246,97 @@ pub fn lianas(trees: &[Tree], wood: &[Solid], height: &dyn Fn(i32, i32) -> i32) 
             Fx::from_int(((GIANTS[0].x as i64 - mx) / 100) as i32),
         );
         let start = (toward.raw() as i64 * 1000) >> 16;
-        let out_r = rim.outer as i64 + 150;
+        let out_r = rim.outer as i64 + LADDER_SHELF as i64 + 60;
         let found = (0..40).find_map(|k| {
             let turn = start + if k % 2 == 0 { k / 2 } else { -(k + 1) / 2 } * 25;
             let d = crate::math::V3::from_turns(Fx::ratio(turn.rem_euclid(1000) as i32, 1000));
             let cx = mx + ((d.x.raw() as i64 * out_r) >> 16);
             let cz = mz + ((d.z.raw() as i64 * out_r) >> 16);
             let floor = height(cx as i32, cz as i32);
-            let zone = Zone::cm(
-                [cx as i32 - 120, floor - 200, cz as i32 - 120],
-                [cx as i32 + 120, rim.at[1] + 30, cz as i32 + 120],
-            );
-            let (x, z) = (super::cm(cx as i32), super::cm(cz as i32));
-            let (lo, hi) = (super::cm(floor + 250), zone.max.y);
-            let blocked = wood.iter().any(|s| {
-                let (a, b) = (s.min.y.max(lo), s.max.y.min(hi));
-                a.raw() < b.raw() && s.side_push(x, z, Fx::ratio(1, 2), a, b).is_some()
+            let pads = shelves(cx as i32, cz as i32, d, floor, rim.at[1]);
+            let blocked = pads.iter().any(|p| {
+                let (x, z) = (super::cm(p.at[0]), super::cm(p.at[2]));
+                let (lo, hi) = (
+                    super::cm(p.at[1] - LADDER_DEEP - 200),
+                    super::cm(p.at[1] + 250),
+                );
+                wood.iter().any(|s| {
+                    let (a, b) = (s.min.y.max(lo), s.max.y.min(hi));
+                    a.raw() < b.raw()
+                        && s.side_push(x, z, super::cm(LADDER_SHELF + 60), a, b)
+                            .is_some()
+                })
             });
-            (!blocked).then_some(zone)
+            (!blocked).then_some((cx as i32, cz as i32, floor, pads))
         });
-        out.extend(found);
+        let Some((cx, cz, floor, pads)) = found else {
+            continue;
+        };
+        // The root: from the lip's height down to the ground, hung from the
+        // nearest of the crown's nodes.
+        let top = [cx, rim.at[1], cz];
+        let parent = t
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.part != trees::Part::Root)
+            .min_by_key(|(_, n)| {
+                let d = [n.at[0] - top[0], n.at[1] - top[1], n.at[2] - top[2]];
+                d.iter().map(|v| (*v as i64).pow(2)).sum::<i64>()
+            })
+            .map_or(0, |(i, _)| i as u32);
+        let mut last = parent;
+        let mut y = rim.at[1];
+        loop {
+            t.nodes.push(trees::Node {
+                at: [cx, y, cz],
+                parent: last,
+                radius: 40,
+                part: trees::Part::Prop,
+            });
+            last = t.nodes.len() as u32 - 1;
+            if y <= floor {
+                break;
+            }
+            y = (y - 600).max(floor - 50);
+        }
+        for p in &pads {
+            out.push(Solid::ring(
+                super::cm(p.at[0]),
+                super::cm(p.at[2]),
+                super::cm(p.at[1] - p.thick),
+                super::cm(p.at[1]),
+                (super::cm(p.outer), super::cm(p.outer)),
+                Fx::ZERO,
+                Material::Wood,
+            ));
+        }
+        t.pads.extend(pads);
     }
     out
+}
+
+/// A hanging root's shelves, at `(x, z)` hung `d` out from its roof, from
+/// [`LADDER_RISE`] over the ground `floor` to two metres under the lip at
+/// `lip`, evenly, either side of the root by turns.
+fn shelves(x: i32, z: i32, d: crate::math::V3, floor: i32, lip: i32) -> Vec<trees::Pad> {
+    let (from, to) = (floor + LADDER_RISE, lip - 200);
+    let n = ((to - from + LADDER_RISE - 1) / LADDER_RISE).max(1);
+    // Across the way out from the roof: (-z, x) of `d`, in centimetres.
+    let (ax, az) = (
+        -((d.z.raw() as i64 * LADDER_SIDE as i64) >> 16) as i32,
+        ((d.x.raw() as i64 * LADDER_SIDE as i64) >> 16) as i32,
+    );
+    (0..=n)
+        .map(|k| {
+            let s = if k % 2 == 0 { 1 } else { -1 };
+            trees::Pad {
+                at: [x + s * ax, from + (to - from) * k / n, z + s * az],
+                inner: 0,
+                outer: LADDER_SHELF,
+                thick: LADDER_DEEP,
+                kind: trees::PadKind::Shelf,
+            }
+        })
+        .collect()
 }

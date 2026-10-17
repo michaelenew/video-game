@@ -2,14 +2,17 @@
 //! mountain 300 m up and the two routes to it. The plane stands where the
 //! table says, over the mountains, with the land held up to its edge so what
 //! is drawn is what is stood on; no stone of either route is in the land; the
-//! Sky Road's gaps are what its table says; and a Bulwark -- the plainest
-//! jump there is -- climbs the Hanging Stones from the Bank's road to the
-//! plane by the vines between them.
+//! Sky Road's gaps are what its table says; no plain jump crosses a gully;
+//! and every class climbs the Hanging Stones from the Bank's road to the
+//! plane -- each stone landed or caught at the hands, each gully crossed off
+//! its walls.
 
-use sim::arena::heights::{self, LADDER, PLANE_AT, PLANE_HALF, SPAN, Stone};
+mod pilot;
+
+use sim::arena::heights::{self, LADDER, PLANE_AT, PLANE_HALF, SPAN, SPAN_HOPS, Stone};
 use sim::arena::{ArenaId, Solid};
-use sim::valley::{self, Journey};
-use sim::{Class, Fx, Input, V3, World};
+use sim::valley::Journey;
+use sim::{Fx, V3, World};
 
 fn cm(v: i32) -> Fx {
     sim::arena::cm(v)
@@ -95,108 +98,110 @@ fn the_sky_road_runs_from_the_needle_s_dome_to_the_plane() {
     );
 }
 
-/// The solids of the map near a point.
-fn near(x: Fx, z: Fx, r: Fx) -> Vec<Solid> {
-    let atlas = sim::atlas::valley();
-    atlas
-        .near((x.sub(r), z.sub(r)), (x.add(r), z.add(r)))
-        .map(|i| atlas.solids[i as usize])
-        .collect()
-}
-
-/// **From one stone to the next**, as somebody with no mechanic does it:
-/// run at it and jump; and if the jump falls short, catch the vine by it and
-/// climb. `Ok` once she stands on its top.
-fn onto(w: &mut World, from: &Stone, to: &Stone) -> Result<(), String> {
-    let target = (cm(to.x), cm(to.z));
-    for f in 0..60 * 40 {
-        let o = w.map_origin();
-        let feet = w.players[0].pos.add(o);
-        let p = &w.players[0];
-        // On its top, or on the cairn on it.
-        if p.grounded
-            && feet.y.sub(cm(to.top)).raw() > Fx::ratio(-1, 5).raw()
-            && feet.y.sub(cm(to.top)).raw() < Fx::ratio(3, 5).raw()
-            && feet.x.sub(target.0).abs().raw() <= cm(to.half).raw()
-            && feet.z.sub(target.1).abs().raw() <= cm(to.half).raw()
-        {
-            return Ok(());
-        }
-        let (dx, dz) = (target.0.sub(feet.x), target.1.sub(feet.z));
-        let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
-        let on_vine = valley::vine_on(&w.terrain(), p.pos);
-        let below = feet.y.raw() < cm(to.top).add(Fx::ratio(1, 2)).raw();
-        // On a vine and under the top: climb. Otherwise run at it, jumping
-        // when the stone underfoot runs out.
-        let bits = if on_vine && below {
-            Input::SPACE
-                | if feet.y.raw() > cm(to.top).raw() {
-                    Input::W
-                } else {
-                    0
-                }
-        } else {
-            // At the edge of the stone she is on: jump, and hold it.
-            let d = sim::math::wide_normalized(V3::new(dx, Fx::ZERO, dz));
-            let ahead = feet.add(d.scale(Fx::ratio(1, 2)));
-            let on = |s: &Stone| {
-                ahead.x.sub(cm(s.x)).abs().raw() <= cm(s.half).raw()
-                    && ahead.z.sub(cm(s.z)).abs().raw() <= cm(s.half).raw()
-            };
-            let edge = p.grounded && !on(from) && !on(to);
-            Input::W
-                | if edge || !p.grounded || f > 600 {
-                    Input::SPACE
-                } else {
-                    0
-                }
-        };
-        w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
-        if w.players[0].health <= 0 {
-            return Err("fell".into());
-        }
-        let _ = near;
-    }
-    let feet = w.players[0].pos.add(w.map_origin());
-    let p = &w.players[0];
-    Err(format!(
-        "never stood on it: at {feet:?}, grounded {}, vel {:?}, on a vine {}",
-        p.grounded,
-        p.vel,
-        valley::vine_on(&w.terrain(), p.pos)
-    ))
+/// A stone's top as a box, on the map: what a hop is judged against.
+fn top_of(s: &Stone) -> Solid {
+    Solid::cm(
+        [s.x - s.half, s.top - 100, s.z - s.half],
+        [s.x + s.half, s.top, s.z + s.half],
+        sim::arena::Material::Rock,
+    )
 }
 
 #[test]
-fn a_bulwark_climbs_the_hanging_stones_to_the_plane_by_the_vines() {
-    let j = Journey {
-        beaten: u32::MAX,
-        ..Journey::default()
-    };
-    let mut w = World::arrive([Class::Bulwark, Class::Champion], j, ArenaId::BANK, None, 1);
-    let s0 = LADDER[0];
-    let o = w.map_origin();
-    w.players[0].pos = V3::new(cm(s0.x), cm(s0.top), cm(s0.z)).sub(o);
-    w.players[0].vel = V3::ZERO;
-    w.players[0].health = 10_000;
-    let route: Vec<Stone> = LADDER.iter().chain(SPAN.iter()).copied().collect();
-    for (k, pair) in route.windows(2).enumerate() {
-        if let Err(e) = onto(&mut w, &pair[0], &pair[1]) {
-            panic!(
-                "stone {} of the climb ({} m up): {e}",
-                k + 1,
-                pair[1].top / 100
-            );
-        }
+fn the_span_ends_a_hop_short_of_the_plane_and_above_it() {
+    let last = SPAN.last().unwrap();
+    let edge = PLANE_AT[2] - PLANE_HALF.1;
+    let short = edge - (last.z + last.half);
+    assert!(
+        (100..500).contains(&short),
+        "the span ends {} m short of the plane",
+        short as f32 / 100.0
+    );
+    let over = last.top - PLANE_AT[1];
+    assert!(
+        (200..900).contains(&over),
+        "the span's last stone is {} m over the plane",
+        over as f32 / 100.0
+    );
+}
+
+/// **No class's plain jump crosses a gully**, so the walls are the way: the
+/// longest plain running jump there is, at the gully's drop, falls short of
+/// its length even caught at the hands.
+#[test]
+fn no_plain_jump_crosses_a_gully() {
+    use sim::arena::gully::{DROP, LONG};
+    for class in sim::class::ALL_CLASSES {
+        let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
+        let rise = Fx::ratio(-DROP, 100);
+        let caught = sim::envelope::widest_caught(std::slice::from_ref(&path), rise);
+        assert!(
+            caught.is_none_or(|c| c.raw() < cm(LONG - 50).raw()),
+            "{} jumps a gully without a wall: {:?}",
+            class.name(),
+            caught
+        );
     }
-    // And off the last onto the plane.
-    let plane = Stone {
-        x: SPAN.last().unwrap().x,
-        z: PLANE_AT[2] - PLANE_HALF.1 + 800,
-        top: PLANE_AT[1],
-        half: 600,
-        grounded: true,
-    };
-    onto(&mut w, SPAN.last().unwrap(), &plane).expect("onto the plane");
-    assert_eq!(w.arena, ArenaId::HIGH_PLANE, "ended in {}", w.arena().name);
+}
+
+/// **Every class climbs the Hanging Stones from the Bank's road to the
+/// plane**: up the column hop by hop, landed or caught and climbed, along
+/// the span, across each gully off its walls, and onto the plane.
+#[test]
+fn every_class_climbs_the_hanging_stones_to_the_plane() {
+    let mut failed = Vec::new();
+    for class in sim::class::ALL_CLASSES {
+        let j = Journey {
+            beaten: u32::MAX,
+            ..Journey::default()
+        };
+        let mut w = World::arrive([class, class], j, ArenaId::BANK, None, 1);
+        let s0 = LADDER[0];
+        let o = w.map_origin();
+        w.players[0].pos = V3::new(cm(s0.x), cm(s0.top), cm(s0.z)).sub(o);
+        let route: Vec<Stone> = LADDER.iter().chain(SPAN.iter()).copied().collect();
+        let mut kicked = Vec::new();
+        for (k, pair) in route.windows(2).enumerate() {
+            let (from, to) = (
+                pilot::local(&w, top_of(&pair[0])),
+                pilot::local(&w, top_of(&pair[1])),
+            );
+            let span = k + 1 >= LADDER.len();
+            let gully = span && matches!(SPAN_HOPS[k + 1 - LADDER.len()], heights::Hop::Gully);
+            let done = if gully {
+                pilot::kick_across(&mut w, from, to, (0, 1)).map(|n| kicked.push(n))
+            } else {
+                pilot::jump(&mut w, from, to)
+            };
+            if let Err(e) = done {
+                failed.push(format!(
+                    "{}: {} {} ({} m up): {e}",
+                    class.name(),
+                    if gully {
+                        "the gully onto stone"
+                    } else {
+                        "stone"
+                    },
+                    k + 1,
+                    pair[1].top / 100
+                ));
+            }
+        }
+        // And off the last onto the plane.
+        let last = *SPAN.last().unwrap();
+        let edge = PLANE_AT[2] - PLANE_HALF.1;
+        let plane = Solid::cm(
+            [last.x - 600, PLANE_AT[1] - 100, edge + 200],
+            [last.x + 600, PLANE_AT[1], edge + 1400],
+            sim::arena::Material::Grass,
+        );
+        let (from, to) = (pilot::local(&w, top_of(&last)), pilot::local(&w, plane));
+        if let Err(e) = pilot::jump(&mut w, from, to) {
+            failed.push(format!("{}: onto the plane: {e}", class.name()));
+        } else if w.arena != ArenaId::HIGH_PLANE {
+            failed.push(format!("{}: ended in {}", class.name(), w.arena().name));
+        }
+        println!("{}: kicks per gully {kicked:?}", class.name());
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

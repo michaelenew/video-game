@@ -6,7 +6,7 @@
 //! | --- | --- |
 //! | The gate road | Out of the town's east gate, a dirt road between low hills |
 //! | The river meadow | The valley opens fifty metres wide; a river runs down its south side, the road along its north. The herd's meadow is up a side path to the north |
-//! | The crag | A rock standing in the meadow: ledges up its west face, a vine down its east, a cairn on top |
+//! | The crag | A rock standing in the meadow: ledges up its west face, a cairn on top |
 //! | The scree | The road bends south and climbs, ten metres over sixty |
 //! | The Lip | Twenty metres up, the valley narrows, and the road goes on to the Bank |
 //!
@@ -79,11 +79,8 @@ pub static PLACE: Place = Place {
     arena: ArenaId::MOUTH,
     kind: Kind::Reach,
     seams: &SEAMS,
-    vines: &VINES,
     vents: &[],
 };
-
-const VINES: [Zone; 1] = [CRAGS[0].vine()];
 
 const SEAMS: [Seam; 4] = [
     // Back to the town, at its east gate.

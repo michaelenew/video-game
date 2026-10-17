@@ -311,11 +311,6 @@ pub fn terrain_slide() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSlide)).max(Fx::ZERO)
 }
 
-/// How fast a vine is climbed, or slid down.
-pub fn vine_speed() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::VineSpeed)).max(Fx::ZERO)
-}
-
 /// How fast an updraft carries a body up.
 pub fn vent_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VentRise)).max(Fx::ZERO)
