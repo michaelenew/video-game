@@ -56,6 +56,11 @@ pub struct Paint {
     /// Only a [`Paint::window`] paint cuts it all the way through.
     #[uniform(0)]
     pub cut: Vec4,
+    /// Where the still world's shadow map is (`crate::still`), and
+    /// whether there is one; the same for every paint, kept up by
+    /// `still::tell`.
+    #[uniform(0)]
+    pub shade: crate::still::Shade,
     /// The baked brush strokes ([`STROKES`]); the same for every paint.
     #[texture(1, dimension = "2d_array")]
     #[sampler(2)]
@@ -66,6 +71,14 @@ pub struct Paint {
     pub splats: Handle<Image>,
     #[texture(4)]
     pub splats_odd: Handle<Image>,
+    /// The still world's two shadow maps (`still::MAP_A`, `still::MAP_B`): one read while
+    /// the other is drawn.
+    #[texture(5)]
+    pub map_a: Handle<Image>,
+    #[texture(6)]
+    pub map_b: Handle<Image>,
+    /// Which [`Paint::shade`] this was last told (`still::Maps`).
+    pub stamp: u32,
     /// Drawn from both sides: the land's tiles, whose skirts face out
     /// either way round.
     pub two_sided: bool,
@@ -90,9 +103,13 @@ impl Paint {
         Self {
             color: Vec4::ONE,
             cut: Vec4::ZERO,
+            shade: crate::still::Shade::NONE,
             strokes: STROKES,
             splats: crate::splats::TARGET,
             splats_odd: crate::splats::TARGET_ODD,
+            map_a: crate::still::MAP_A,
+            map_b: crate::still::MAP_B,
+            stamp: 0,
             two_sided: false,
             windowed: false,
             ghost: false,
@@ -137,9 +154,13 @@ impl Paint {
         Self {
             color: Vec4::new(c.red, c.green, c.blue, 1.0),
             cut: Vec4::ZERO,
+            shade: crate::still::Shade::NONE,
             strokes: STROKES,
             splats: crate::splats::TARGET,
             splats_odd: crate::splats::TARGET_ODD,
+            map_a: crate::still::MAP_A,
+            map_b: crate::still::MAP_B,
+            stamp: 0,
             two_sided: false,
             windowed: false,
             ghost: false,
@@ -206,6 +227,11 @@ impl Material for Paint {
         }
         if let Some(fragment) = descriptor.fragment.as_mut() {
             fragment.shader_defs.extend(crate::wash::surface_defs());
+            // `--profile --no-shadow-lookup`: what the still world's light
+            // costs with its shadow read off something already baked.
+            if crate::platform::flag("--no-shadow-lookup") {
+                fragment.shader_defs.push("NO_SHADOW_LOOKUP".into());
+            }
             if key.bind_group_data.ghost {
                 fragment.shader_defs.push("PAINT_GHOST".into());
             }

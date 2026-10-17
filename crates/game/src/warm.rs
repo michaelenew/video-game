@@ -33,6 +33,7 @@ use bevy::render::view::NoFrustumCulling;
 
 use crate::beast::MarkMaterial;
 use crate::paint::Paint;
+use crate::still::SkinMaterial;
 
 /// How many frames a primer stays: one to be extracted, one to be
 /// specialised, and one spare.
@@ -51,6 +52,7 @@ impl Plugin for WarmPlugin {
                 prime::<StandardMaterial>,
                 prime::<Paint>,
                 prime::<MarkMaterial>,
+                prime::<SkinMaterial>,
                 retire,
             )
                 .before(bevy::render::view::VisibilitySystems::CheckVisibility),
@@ -75,6 +77,11 @@ pub trait Warm: Material + Clone {
     /// first.
     fn forms(&self) -> Vec<Self> {
         vec![self.clone()]
+    }
+    /// Drawn into the still world's shadow map as well as the picture
+    /// (`crate::still`), whose camera wants pipelines of its own.
+    fn still() -> bool {
+        false
     }
 }
 
@@ -118,6 +125,29 @@ impl Warm for Paint {
         self.two_sided.hash(h);
         self.windowed.hash(h);
         self.ghost.hash(h);
+    }
+
+    fn still() -> bool {
+        true
+    }
+}
+
+impl Warm for SkinMaterial {
+    fn key(&self, h: &mut DefaultHasher) {
+        self.base.key(h);
+    }
+
+    /// Opaque and blended, as the standard material: it is the fighters'
+    /// skin `fade_own_body` fades.
+    fn forms(&self) -> Vec<Self> {
+        self.base
+            .forms()
+            .into_iter()
+            .map(|base| SkinMaterial {
+                base,
+                extension: self.extension.clone(),
+            })
+            .collect()
     }
 }
 
@@ -189,6 +219,15 @@ fn prime<M: Warm>(
             }
             if no_receive {
                 e.insert(NotShadowReceiver);
+            }
+            // Seen by the still world's shadow camera too, which asks for
+            // its own pipelines the next time it draws -- and a new kind of
+            // still thing streaming in is a reason it will.
+            if M::still() {
+                e.insert(bevy::render::view::RenderLayers::from_layers(&[
+                    0,
+                    crate::still::LAYER,
+                ]));
             }
         }
     }

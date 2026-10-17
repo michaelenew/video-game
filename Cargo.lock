@@ -2889,6 +2889,7 @@ dependencies = [
  "js-sys",
  "look",
  "manual",
+ "naga",
  "net",
  "png",
  "regions",

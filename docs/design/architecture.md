@@ -270,6 +270,51 @@ lower and its texture reads relatively dearer, so the shadow taps' share is if a
 larger there. The number that matters is `main_opaque_pass_3d/elapsed_gpu` from
 `--profile` on the machine in question.
 
+### The still world's shadow (measured 2026-10-17, `--profile`)
+
+The grown giants (`game::grove`) undid the table above: 1.14 million triangles casting
+shadows at the town where there had been 163,000, and a MacBook's whole desktop lagging
+behind the game in the Great Wood. Under lavapipe, standing among the giants, the four
+cascades were **423 ms of a 666 ms frame**, 4.5 million vertices; the giants alone were
+416 ms of it. Taking things out of the cascades one at a time (`--casters no-giants`,
+`--casters moving`, `--no-shadow-lookup`) said what each way of not drawing them every
+frame could save, and the answer was the same for all of them in the wood: about 60%.
+
+Almost nothing that casts in the valley moves, and the sun does not move within a place.
+So **the still world's shadow is drawn once** (`game::still`): everything the stream
+puts under the map's root, in the paint, comes out of Bevy's cascades and goes into one
+depth map square to the sun, 400 m across round the camera, 20 cm a texel. It is drawn
+again only when the camera has walked 40 m from its middle, the sun has turned a little
+under a degree, or something still has come or gone inside it. The cascades keep the
+fighters and creatures. The paint reads both; the fighters' skin (`still::SkinMaterial`)
+takes the sun's share of its light away where the map says shade.
+
+**A redraw never costs a frame.** Two maps: the one on screen is left alone while the
+other is drawn by a camera that sees only the still world, one tile of sixteen a frame,
+each tile a viewport writing only its own square; when the last is drawn they swap. The
+alternative, the whole map in one frame, was measured as one 400 m cascade: a 176 ms
+frame in the wood under lavapipe. Spread over sixteen, it is the cost below on each of
+them, a quarter of a second, during which the old map is the one being read.
+
+| Lavapipe, 1280x760 | Before (`--no-still`) | After | During a redraw |
+| --- | --- | --- | --- |
+| The Great Wood, among the giants | 680 ms | 294 ms | 321 ms |
+| Hearth's square | 230 ms | 174 ms | 188 ms |
+| Vertices drawn into shadow maps, the wood | 4.5 million | 20,000 | |
+
+The map's camera writes a colour, not a depth -- a Bevy camera's picture is the only
+thing that can be drawn into one tile at a time and left alone elsewhere -- so the paint
+knows it is being drawn for the map by the view being orthographic (nothing else is), and
+puts out its depth along the sun in two half-floats (`still.wgsl`, `encode`), because one
+half-float holds a depth over the camera's two kilometres to a third of a metre. Read
+back, four bilinear readings half a texel apart soften the edge over two texels; one
+reading was a visible stair at 20 cm a texel.
+
+What it costs: two maps of 16 MB each, and a camera's picture and depth (48 MB) only
+while a map is being drawn. Outside the valley, and in a browser
+(`platform::bakes_shadows`), nothing changes: the maps are a texel each and the cascades
+hold everything as they did.
+
 ### The valley's simulation (measured 2026-10-14, callgrind)
 
 The renderer was the valley's cost; the simulation's own budget (`sim/tests/budget.rs`)

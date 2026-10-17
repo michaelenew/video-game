@@ -47,6 +47,7 @@ mod sky;
 mod sound;
 mod species;
 mod splats;
+mod still;
 mod stream;
 mod town;
 mod trophies;
@@ -221,6 +222,7 @@ fn main() {
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
         .add_plugins(paint::PaintPlugin)
+        .add_plugins(still::StillPlugin)
         .add_plugins(splats::SplatsPlugin)
         .add_plugins(warm::WarmPlugin)
         // The line round every silhouette, as a pass over the finished picture.
@@ -1961,6 +1963,7 @@ fn setup(
     settings: Res<settings::Settings>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut skins: ResMut<Assets<still::SkinMaterial>>,
 ) {
     let eye = commands
         .spawn((
@@ -2040,11 +2043,13 @@ fn setup(
 
     // Fighters: a root per player, six primitive parts parented to it.
     for (owner, colour) in hud::SEAT_COLOURS.iter().enumerate() {
-        let skin = materials.add(StandardMaterial {
+        // The still world's shade falls on them as it does on the ground
+        // (`still::SkinMaterial`).
+        let skin = skins.add(still::skin(StandardMaterial {
             base_color: *colour,
             perceptual_roughness: 0.65,
             ..default()
-        });
+        }));
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
@@ -2631,8 +2636,8 @@ fn setup(
 fn fade_own_body(
     sim: Res<Sim>,
     inside: Res<InsideOwnHead>,
-    parts: Query<(&BodyPart, &MeshMaterial3d<StandardMaterial>)>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
+    mut materials: ResMut<Assets<still::SkinMaterial>>,
 ) {
     let me = sim.local_player();
     // The rig has already worked out how much of the body to take away and
@@ -2650,17 +2655,17 @@ fn fade_own_body(
         let Some(skin) = materials.get(&material.0) else {
             continue;
         };
-        if (skin.base_color.alpha() - alpha).abs() < 0.001 {
+        if (skin.base.base_color.alpha() - alpha).abs() < 0.001 {
             continue;
         }
         let Some(skin) = materials.get_mut(&material.0) else {
             continue;
         };
-        skin.base_color.set_alpha(alpha);
+        skin.base.base_color.set_alpha(alpha);
         // Blending only while it is actually translucent. An always-blended
         // fighter sorts against the other one and against the arena for no
         // reason the rest of the time.
-        skin.alpha_mode = if alpha >= 1.0 {
+        skin.base.alpha_mode = if alpha >= 1.0 {
             AlphaMode::Opaque
         } else {
             AlphaMode::Blend

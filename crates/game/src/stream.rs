@@ -141,6 +141,19 @@ fn fx(v: sim::Fx) -> f32 {
     v.to_f32_for_render()
 }
 
+impl Stream {
+    /// The entity everything streamed hangs off, while the valley is drawn.
+    pub fn root(&self) -> Option<Entity> {
+        self.root
+    }
+
+    /// The map origin the root stands at the negative of: add it to a
+    /// position in the picture to have it in the map's own coordinates.
+    pub fn origin(&self) -> Option<Vec3> {
+        self.origin
+    }
+}
+
 fn v3(v: sim::V3) -> Vec3 {
     Vec3::new(fx(v.x), fx(v.y), fx(v.z))
 }

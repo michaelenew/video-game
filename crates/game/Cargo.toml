@@ -60,3 +60,9 @@ js-sys = "0.3"
 [build-dependencies]
 look = { path = "../look" }
 png = "0.18"
+
+# The shader checks (`still.rs`): naga is what wgpu compiles WGSL with, at
+# the version wgpu already pulls in, so a module that imports nothing can be
+# validated in a test instead of vanishing silently from the picture.
+[dev-dependencies]
+naga = { version = "24", features = ["wgsl-in"] }
