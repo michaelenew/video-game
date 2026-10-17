@@ -322,21 +322,22 @@ screenshot, or with the logging build
 (`cargo run --release -p game --features bevy/bevy_log`), which prints the
 error.
 
-**The brush is worked out at the pixel, and that is a decision, not an
-oversight.** The painted looks (`--look`,
+**The brush is a primitive, never a search at the pixel, and never a
+texture of the painting.** The painted looks (`--look`,
 [`docs/design/painting.md`](docs/design/painting.md)) lay strokes on every
-surface, and a stroke field is a pure function of the surface, so the
-obvious saving is to bake it: `look::strokes` draws tiling sheets,
-`crates/game/build.rs` bakes them into the binary, and for two days each
-tile of land near the eye was baked into a texture of its own. Both read as
-flat shapes stamped on the ground, because a bake fixes a stroke's size to
-the world and a painting's brush is the same size on the *screen*
-everywhere. So `paint.wgsl` works the brush out per pixel (`strokes_exact`),
-at a quarter of a frame over the sheets under the software renderer, and
-the sheets are the fallback (`--exact <m>`). What *is* still baked: the
-screen pass reads forty-nine fixed taps, the air's colour comes off the fog
-on the CPU, and anything that can be a texture read without moving the
-brush off the canvas should be one.
+surface. A painting's brush is the same size on the *screen* everywhere
+and anchored to the *world*, and two days of baking it into textures
+(`look::strokes`' sheets, a texture a tile) read as flat shapes stamped on
+the ground, because a texture fixes a stroke's size to the world. What
+keeps the brush on the canvas for the cost of a particle pass is what every
+shipped painterly renderer does: every stroke is placed once per tile
+(`look::strokes::place`) and drawn as a quad, with the stroke's own inner
+loop as its fragment shader (`crates/game/src/splats.rs`,
+[exploration/0020](docs/design/exploration/0020_brush_splats.md)). The brush
+worked out at the pixel (`paint.wgsl` `strokes_exact`, `--exact`) is the
+reference it is measured against, a hundred strokes a pixel. What *is*
+baked: the sheets, as the fallback (`--exact 0`), and anything that can be a
+texture read without moving the brush off the canvas.
 
 **Sound is the same rule, in `crates/sound`.** A sound is a function from a
 few numbers the simulation already has -- a blow's weight is its impact

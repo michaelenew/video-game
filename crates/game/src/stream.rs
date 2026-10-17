@@ -45,6 +45,13 @@ const REACH: (f32, f32) = (160.0, 600.0);
 
 /// How far the camera moves before the loaded set is worked out again.
 const RESTREAM: f32 = 6.0;
+/// How wide the window through the trees is where it reaches the fighter,
+/// metres (`Paint::cut`'s `w`), and half that by the camera: six metres
+/// across. Two and a half until 2026-10-16, when seeing what was going on in
+/// the Wood was a fight of its own; the forest is not meant to be one about
+/// seeing. The ghost is thinnest in the middle and thickens to solid wood
+/// at its edge.
+const WINDOW: f32 = 3.0;
 
 /// **How much is built in one frame**: places, and boxes. Building a place's
 /// floor and its scatter, or a cliff's roughened mesh, is real work on the
@@ -104,11 +111,25 @@ pub struct Stream {
     /// The paint the grown giants are drawn in: the plain one, with a hole
     /// cut along the line to the fighter ([`Paint::cut`]), moved every frame.
     see_through: Option<Handle<Paint>>,
+    /// The wood the window cut away, drawn again see-through over the hole
+    /// ([`Paint::ghost`]), with the same cut.
+    ghost: Option<Handle<Paint>>,
+    /// Each drawn giant's ghost, where its foot is (map) and how far it
+    /// reaches: shown only while the line from the eye to the fighter
+    /// comes within its reach, so a tree is drawn twice only where it could
+    /// be in the way.
+    ghosts: HashMap<usize, (Entity, Vec3, f32)>,
     ground: Option<Handle<Paint>>,
     water: Option<Handle<StandardMaterial>>,
 }
 
 impl Stream {
+    /// The land's tiles by (column, row): the tile, how finely it is drawn,
+    /// and its water. `splats::follow` places the brush's strokes on them.
+    pub fn tiles(&self) -> &HashMap<(i32, i32), (Entity, usize, Option<Entity>)> {
+        &self.tiles
+    }
+
     /// How many places and boxes are drawn: what the dev overlay shows.
     pub fn loaded(&self) -> (usize, usize, usize) {
         (self.places.len(), self.solids.len(), self.tiles.len())
@@ -158,6 +179,7 @@ pub fn stream(
     mut standard: ResMut<Assets<StandardMaterial>>,
     mut paints: ResMut<Assets<Paint>>,
     mut gates: Query<&mut Visibility>,
+    mut outlines: Query<&mut crate::outline::Outline>,
 ) {
     let mut materials = Materials {
         standard: &mut standard,
@@ -165,6 +187,9 @@ pub fn stream(
     };
     let w = &sim.cur;
     if !w.valley.on {
+        for mut o in &mut outlines {
+            o.cut = Vec4::ZERO;
+        }
         if let Some(root) = st.root.take() {
             commands.entity(root).despawn();
         }
@@ -173,6 +198,7 @@ pub fn stream(
         st.gates.clear();
         st.tiles.clear();
         st.groves.clear();
+        st.ghosts.clear();
         st.origin = None;
         st.at = None;
         return;
@@ -231,22 +257,47 @@ pub fn stream(
         }
     }
 
-    // The trees' window on to the fighter, wherever the camera now is: six
-    // metres across where it nears them, and short of what they stand on.
-    // Two and a half until 2026-10-16, when seeing what was going on in the
-    // Wood was a fight of its own; the forest is not meant to be one about
-    // seeing.
+    // The trees' window on to the fighter, wherever the camera now is: the
+    // fighter, a few metres across where it nears them and short of what
+    // they stand on, with the wood it cuts away drawn see-through over it.
     let see_through = st
         .see_through
-        .get_or_insert_with(|| materials.paint.add(Paint::white()))
+        .get_or_insert_with(|| materials.paint.add(Paint::window()))
         .clone();
-    if let Some(p) = materials.paint.get_mut(&see_through) {
-        let f = rig.0.focus();
-        p.cut = Vec4::new(f[0], f[1], f[2], 3.0);
+    let ghost = st
+        .ghost
+        .get_or_insert_with(|| materials.paint.add(Paint::ghost()))
+        .clone();
+    let f = rig.0.focus();
+    let focus = Vec3::new(f[0], f[1], f[2]);
+    for paint in [&see_through, &ghost] {
+        if let Some(p) = materials.paint.get_mut(paint) {
+            p.cut = focus.extend(WINDOW);
+        }
+    }
+    // The outline is told too, so it draws no ring round the window.
+    for mut o in &mut outlines {
+        o.cut = focus.extend(WINDOW);
     }
     let Ok(eye) = camera.single() else {
         return;
     };
+    // A tree's ghost is shown while the window could fall on it: the line
+    // from the eye to the fighter, flat, within its reach of its foot.
+    let (a, b) = (eye.translation.xz(), focus.xz());
+    for &(e, foot, spread) in st.ghosts.values() {
+        let foot = (foot - origin).xz();
+        let ab = b - a;
+        let t = ((foot - a).dot(ab) / ab.length_squared().max(1e-4)).clamp(0.0, 1.0);
+        let near = foot.distance(a + ab * t) < spread + WINDOW;
+        if let Ok(mut v) = gates.get_mut(e) {
+            v.set_if_neq(if near {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            });
+        }
+    }
     let at = eye.translation + origin;
     if st.at.is_some_and(|last| last.distance(at) < RESTREAM) {
         return;
@@ -429,6 +480,7 @@ pub fn stream(
         at,
         reach,
         &see_through,
+        &ghost,
     );
     // The land: every tile within reach, drawn as finely as its distance
     // asks, nearest first.
@@ -464,6 +516,7 @@ fn groves(
     at: Vec3,
     reach: f32,
     white: &Handle<Paint>,
+    ghost: &Handle<Paint>,
 ) -> bool {
     let mut built = false;
     let mut behind = false;
@@ -482,6 +535,7 @@ fn groves(
             if let Some(e) = st.groves.remove(&k) {
                 commands.entity(e).despawn();
             }
+            st.ghosts.remove(&k);
             continue;
         }
         if loaded || d > reach {
@@ -517,10 +571,10 @@ fn groves(
                 ),
             );
         }
-        let (wood, leaves, _) = st.grown[&k].clone();
+        let (wood, leaves, spread) = st.grown[&k].clone();
         let e = commands
             .spawn((
-                Mesh3d(wood),
+                Mesh3d(wood.clone()),
                 MeshMaterial3d(white.clone()),
                 Transform::from_translation(foot),
                 Visibility::default(),
@@ -532,13 +586,34 @@ fn groves(
         // casting one shadow left the grove under it lit by the ambient
         // alone, which is black (2026-10-15).
         commands.spawn((
-            Mesh3d(leaves),
+            Mesh3d(leaves.clone()),
             MeshMaterial3d(white.clone()),
             Transform::default(),
             bevy::pbr::NotShadowCaster,
             ChildOf(e),
         ));
+        // The same wood and leaves again, see-through, over the window. The
+        // tree already casts its shadow; a ghost casting one too would
+        // darken it twice.
+        let g = commands
+            .spawn((
+                Mesh3d(wood),
+                MeshMaterial3d(ghost.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                bevy::pbr::NotShadowCaster,
+                ChildOf(e),
+            ))
+            .id();
+        commands.spawn((
+            Mesh3d(leaves),
+            MeshMaterial3d(ghost.clone()),
+            Transform::default(),
+            bevy::pbr::NotShadowCaster,
+            ChildOf(g),
+        ));
         st.groves.insert(k, e);
+        st.ghosts.insert(k, (g, foot, spread));
     }
     behind
 }

@@ -583,6 +583,13 @@ pub fn draws_outlines() -> bool {
     !cfg!(target_arch = "wasm32")
 }
 
+/// Whether the brush's strokes are drawn as splats (`crate::splats`): a
+/// pass of its own with the prepass depth, which the browser build has not
+/// been tried with yet, so there the brush stays at the pixel.
+pub fn draws_splats() -> bool {
+    !cfg!(target_arch = "wasm32")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

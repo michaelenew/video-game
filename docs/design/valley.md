@@ -161,7 +161,18 @@ themselves went the same day, below):
 - **The camera passes through a tree** rather than being pulled in by every
   branch (`Terrain::seen_around`), and the trees are drawn with a window cut
   along the line from the eye to the fighter (`game::paint`'s `cut`), so
-  nothing of a tree hides you.
+  nothing of a tree hides you. The window is cut in the depth prepass as
+  well as the colour (`Paint::window`, `paint_prepass.wgsl`), and the
+  windowed paint culls its back faces there too: cut in the colour alone,
+  the depth of the wood stayed in front of the fighter and the window came
+  out the colour of the sky -- a white hole (2026-10-16). A clean hole read
+  as a bite out of the tree, so the wood it cuts away is drawn again
+  see-through over it (`Paint::ghost`): a trace of it in the middle (10%),
+  thickening to solid over a long soft rim, drawn only for the trees the
+  line from the eye to the fighter comes near. The outline is handed the
+  same window and draws no ring round it (`cut.wgsl`'s `by_window`): the
+  window is the camera's, not a hole in the tree, and nothing about it
+  should say otherwise.
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 

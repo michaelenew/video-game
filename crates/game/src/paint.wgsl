@@ -24,6 +24,7 @@
     pbr_types::{pbr_input_new, STANDARD_MATERIAL_FLAGS_FOG_ENABLED_BIT},
     shadows::fetch_directional_shadow,
 }
+#import game::cut::window
 
 struct Paint {
     color: vec4<f32>,
@@ -37,6 +38,11 @@ struct Paint {
 // rigidity, each texel a stroke's shade and two colour shifts.
 @group(2) @binding(1) var strokes_tex: texture_2d_array<f32>;
 @group(2) @binding(2) var strokes_sampler: sampler;
+// The strokes drawn as splats this frame (`splats.rs`): what the brush
+// says at this very pixel, worked out once a stroke rather than a hundred
+// times a pixel.
+@group(2) @binding(3) var splats_tex: texture_2d<f32>;
+@group(2) @binding(4) var splats_odd_tex: texture_2d<f32>;
 // How many stroke lengths a sheet is across (`look::strokes::PERIOD`), and
 // how many angles a rigidity is drawn at (`look::strokes::ANGLES`).
 const STROKE_PERIOD: f32 = 8.0;
@@ -53,6 +59,10 @@ const PI: f32 = 3.14159265;
 const ROUGHNESS: f32 = 0.85;
 const PERCEPTUAL_ROUGHNESS: f32 = 0.92;
 const F0: f32 = 0.04;
+// How much of the wood is left in the middle of the window on to the
+// fighter (`Paint::ghost`): a trace, so the window reads as the camera's and
+// never as a hole in the tree.
+const GHOST_ALPHA: f32 = 0.1;
 
 // **The wash** (`look::wash`, the surface half): the light laid down as a few
 // flat washes with a brushed border between them, a cool shade and a warm
@@ -378,21 +388,20 @@ fn washed(x: f32) -> f32 {
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
     // **Out of the way of the fighter** (`Paint::cut`): what stands between
-    // the eye and them, near the line, is not drawn -- its edge stippled, so
-    // it reads as a window rather than a missing piece.
-    if (paint.cut.w > 0.0) {
-        let eye = view.world_position;
-        let to = paint.cut.xyz - eye;
-        let t = dot(in.world_position.xyz - eye, to) / max(dot(to, to), 1e-4);
-        if (t > 0.0 && t < 0.85) {
-            let off = length(in.world_position.xyz - (eye + to * t));
-            let r = paint.cut.w * (0.5 + 0.5 * t);
-            let grain = fract(sin(dot(in.position.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-            if (off < r * (0.75 + 0.25 * grain)) {
-                discard;
-            }
-        }
+    // the eye and them, near the line, is not drawn solid. The ghost
+    // (`Paint::ghost`, `PAINT_GHOST`) draws exactly that part again, see-
+    // through: thinnest in the middle and solid at the rim, where the solid
+    // wood takes over.
+    let in_window = window(paint.cut, view.world_position, in.world_position.xyz);
+#ifdef PAINT_GHOST
+    if (in_window <= 0.0) {
+        discard;
     }
+#else
+    if (in_window > 0.0) {
+        discard;
+    }
+#endif
     var base = paint.color;
 #ifdef VERTEX_COLORS
     base = base * in.color;
@@ -440,11 +449,20 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let dist = length(view.world_position - p);
         let way = stroke_way(p, n, flow, rigid);
         var b: vec3<f32>;
+#ifdef WASH_SPLATS
+        // The two levels in season, each the topmost stroke of its own,
+        // added: `broad_strokes`' blend of its two layers.
+        let even = textureLoad(splats_tex, vec2<i32>(in.position.xy), 0);
+        let odd = textureLoad(splats_odd_tex, vec2<i32>(in.position.xy), 0);
+        b = (even.rgb - 0.5) * 4.0 * even.a + (odd.rgb - 0.5) * 4.0 * odd.a;
+
+#else
         if (NEAR_EXACT < 0.0 || dist < NEAR_EXACT) {
             b = broad_exact(p, n, way, dist, rigid, size);
         } else {
             b = broad_strokes(p, n, way, dist, rigid, size);
         }
+#endif
         // The looser the brush the further its colours wander: a meadow's
         // strokes go yellow, blue and dark; a wall's stay close to its own.
         let wander = BROAD * mix(0.45, 1.0, 1.0 - rigid);
@@ -539,5 +557,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     pbr_input.frag_coord = in.position;
     var out: FragmentOutput;
     out.color = main_pass_post_lighting_processing(pbr_input, vec4(lit * view.exposure, base.a));
+#ifdef PAINT_GHOST
+    out.color.a = mix(1.0, GHOST_ALPHA, in_window);
+#endif
     return out;
 }
