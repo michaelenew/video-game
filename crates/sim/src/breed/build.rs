@@ -749,7 +749,8 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                     // stride. Not flying, folded: swept hard back along
                     // the body, barely out from it.
                     Some(_) if flies => {
-                        let a = sin_turns(phase).mul(fx(1, 8));
+                        // Shallow: a box drawn round a steep plane is a wall.
+                        let a = sin_turns(phase).mul(fx(1, 20));
                         v3(
                             limb.mul(fx(-1, 10)),
                             seg.mul(sin_turns(a)).add(limb.mul(fx(1, 15))),
@@ -779,7 +780,15 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                         name,
                         bone_i,
                         sweep.scale(fx(1, 2)),
-                        v3(chords[k].mul(fx(1, 2)), thick, seg.mul(fx(1, 2))),
+                        // The plane spans its segment: as high as the
+                        // segment rises, as far out as it goes.
+                        v3(
+                            chords[k].mul(fx(1, 2)),
+                            thick
+                                .max(sweep.y.abs().mul(fx(1, 2)))
+                                .min(chords[k].mul(fx(1, 4))),
+                            sweep.z.abs().mul(fx(1, 2)).max(thick),
+                        ),
                     );
                 }
                 span = limb.add(half_w).mul(Fx::from_int(2));
