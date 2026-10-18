@@ -5,9 +5,11 @@ rem Double-click to install what the game needs, fetch it, build it and play.
 rem The PowerShell below does the work; this part only starts it, because a
 rem .cmd is the one kind of script Windows runs on a double-click.
 set "LAUNCHER=%~f0"
+set "LAUNCHER_ARGS=%*"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression ([IO.File]::ReadAllText($env:LAUNCHER))"
 set "CODE=%ERRORLEVEL%"
-if not "%CODE%"=="0" (
+rem A launcher handed over to by another leaves the pause to that one.
+if not "%CODE%"=="0" if not defined LAUNCHER_HANDED_OFF (
     echo.
     echo Something went wrong ^(exit code %CODE%^). The messages above say what.
     pause
@@ -24,9 +26,12 @@ exit /b %CODE%
 #   - Rust (rustup, cargo), which builds the game.
 # Then clones the game into %USERPROFILE%\video-game (or pulls the latest if
 # it is already there) and runs it with `cargo run --release -p game`.
+# Arguments are passed to the game.
 #
 # Run it again any time: what is installed is skipped, and only what changed
-# since last time is rebuilt. If this file sits inside a checkout (as it does
+# since last time is rebuilt. Once the game is fetched, this hands over to the
+# launcher that came with it, so the newest launcher always does the rest and
+# this file never needs downloading again. If this file sits inside a checkout (as it does
 # in the repository's scripts\ folder), it plays that checkout instead and
 # leaves its git state alone.
 #
@@ -128,6 +133,8 @@ if (Get-Command rustup -ErrorAction SilentlyContinue) {
 }
 
 # --- 4. The game --------------------------------------------------------------
+$GameArgs = @()
+if ($env:LAUNCHER_ARGS) { $GameArgs = @($env:LAUNCHER_ARGS -split '\s+' | Where-Object { $_ }) }
 $LauncherDir = Split-Path -Parent $env:LAUNCHER
 $Checkout = Split-Path -Parent $LauncherDir
 if ((Test-Path (Join-Path $Checkout 'Cargo.toml')) -and (Test-Path (Join-Path $Checkout 'crates\game'))) {
@@ -145,11 +152,21 @@ if ((Test-Path (Join-Path $Checkout 'Cargo.toml')) -and (Test-Path (Join-Path $C
         git clone -c core.longpaths=true $Repo $Checkout
         if ($LASTEXITCODE -ne 0) { Fail 'git clone did not work. Check the internet connection and run this again.' }
     }
+    # The copy in the checkout is the newest launcher: whatever it installs or
+    # does differently happens on this run. It is inside a checkout, so it
+    # plays rather than handing over again; the flag makes sure of it.
+    $Fresh = Join-Path $Checkout 'scripts\play-windows.cmd'
+    if ((Test-Path $Fresh) -and -not $env:LAUNCHER_HANDED_OFF) {
+        Say 'Handing over to the launcher that came with this version'
+        $env:LAUNCHER_HANDED_OFF = '1'
+        & $Fresh @GameArgs
+        exit $LASTEXITCODE
+    }
 }
 
 Say 'Building and starting the game'
 Write-Host '    The first build takes a long while - often 10 to 30 minutes, and several GB of disk.'
 Write-Host '    Later runs only rebuild what changed. The game opens in its own window when it is ready.'
 Set-Location $Checkout
-cargo run --release -p game
+cargo run --release -p game -- @GameArgs
 exit $LASTEXITCODE

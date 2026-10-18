@@ -102,6 +102,36 @@ prototype is nowhere near the point where the API is what limits it.
 
 Switching later is a feature flag in `crates/game/Cargo.toml` and nothing else.
 
+## Two things the browser does that the desktop does not (2026-10-18)
+
+The page used to play for about ten seconds after the click that captured the
+mouse and then go black. Two causes, both fixed where the platform's
+differences live:
+
+- **A flood of mouse moves.** winit reads a `pointermove`'s
+  `getCoalescedEvents()` -- every position the browser folded into the one
+  event -- and makes each a `CursorMoved` and a `MouseMotion`. With the
+  pointer locked, Chromium returned lists tens of thousands long, none of them
+  moving, and longer the slower the last frame was: a frame spent reading
+  them made the next list longer. Bevy's event queues reached a third of a
+  gigabyte and the frame time ran away. `platform::one_move_an_event` removes
+  the method before the game starts, so winit reads the event itself, as it
+  always has on Safari. Chromium sums the folded movement into the event it
+  dispatches, so the camera turns exactly as far.
+- **A texture WebGL could not make.** wgpu's WebGL backend guesses a
+  texture's kind from its shape, and square layers in a multiple of six are a
+  cube map. The brush's twenty-four sheets (`paint::layers`) were made as a
+  cube-map array, which WebGL2 does not have: an `INVALID_ENUM` on every
+  upload and every bind, every frame. They carry a blank twenty-fifth sheet
+  now.
+
+How it was found, for next time: a counting global allocator, charged around
+the stream's stages and the render schedule's sets, said the growth was
+between frames; a stack taken from JS at each allocation over a megabyte
+named `Vec<WindowEvent>`; counting `pointermove` and its coalesced events in
+the page named the browser. Headless Chromium shows it only once the pointer
+is locked, so a probe has to click the canvas and play.
+
 ## Why single-threaded
 
 Threads in WebAssembly need `SharedArrayBuffer`, which needs the page to be

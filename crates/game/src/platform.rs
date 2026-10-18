@@ -349,6 +349,9 @@ mod host {
     /// started from.
     pub fn report_panics() {}
 
+    /// A window's mouse arrives one move at a time already.
+    pub fn one_move_an_event() {}
+
     /// A developer's line: the terminal the game was started from.
     pub fn say(line: &str) {
         eprintln!("{line}");
@@ -511,6 +514,35 @@ mod host {
         }));
     }
 
+    /// **One mouse move per `pointermove`**, not every move the browser
+    /// folded into it.
+    ///
+    /// winit reads a pointer event's `getCoalescedEvents()` where the browser
+    /// has it, and turns every entry into a `CursorMoved` and a `MouseMotion`.
+    /// With the pointer locked, Chromium hands back lists of tens of
+    /// thousands of entries, all at the same place and none of them moving,
+    /// and the list grows with the frame time: the slower a frame, the more
+    /// events the next one reads, the slower it is. The page went from a
+    /// clean start to a black canvas about ten seconds after the click that
+    /// captured the mouse, with a third of a gigabyte in Bevy's event queues
+    /// (2026-10-18).
+    ///
+    /// Without the method winit reads the event itself, as it already does
+    /// on Safari, which has none. Nothing is lost: Chromium sums the folded
+    /// movement into the event it dispatches, and the mouse turns the camera
+    /// by movement, never by where a pointer that is locked would have been.
+    pub fn one_move_an_event() {
+        use wasm_bindgen::JsCast;
+        let name = wasm_bindgen::JsValue::from_str;
+        let prototype = js_sys::Reflect::get(&js_sys::global(), &name("PointerEvent"))
+            .and_then(|class| js_sys::Reflect::get(&class, &name("prototype")));
+        if let Ok(prototype) = prototype {
+            if let Some(prototype) = prototype.dyn_ref::<js_sys::Object>() {
+                let _ = js_sys::Reflect::delete_property(prototype, &name("getCoalescedEvents"));
+            }
+        }
+    }
+
     /// This page's own address, without its query or `#`: a room made here is
     /// a room on this deploy.
     pub fn page_url() -> String {
@@ -563,8 +595,8 @@ mod host {
 
 use host::read_options;
 pub use host::{
-    announce, load_replay, load_settings, load_trophies, log, page_url, pointer_lock_lost,
-    report_panics, save_replay, save_settings, save_trophies, say, show_room,
+    announce, load_replay, load_settings, load_trophies, log, one_move_an_event, page_url,
+    pointer_lock_lost, report_panics, save_replay, save_settings, save_trophies, say, show_room,
 };
 
 // ---------------------------------------------------------------------------
