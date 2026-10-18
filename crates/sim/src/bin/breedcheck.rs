@@ -241,7 +241,7 @@ fn herd(seed: u64) {
         .map(|i| archetypes::vary(&RIDGEBACK, seed * 8 + i))
         .collect();
     for generation in 0..20 {
-        herd.sort_by(|a, b| b.sliders.size.cmp(&a.sliders.size));
+        herd.sort_by_key(|g| std::cmp::Reverse(g.sliders.size));
         let sizes: Vec<String> = herd
             .iter()
             .map(|g| format!("{:.3}", f(g.sliders.size)))

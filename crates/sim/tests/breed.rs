@@ -291,7 +291,7 @@ fn breeding_the_biggest_breeds_bigger() {
     let mean = |h: &[Genome]| h.iter().map(|g| f(g.sliders.size)).sum::<f32>() / h.len() as f32;
     let start = mean(&herd);
     for _ in 0..15 {
-        herd.sort_by(|a, b| b.sliders.size.cmp(&a.sliders.size));
+        herd.sort_by_key(|g| std::cmp::Reverse(g.sliders.size));
         let (a, b) = (herd[0], herd[1]);
         herd = (0..8)
             .map(|_| cross::breed(&a, &b, &Rates::DEFAULT, &mut rng).genome)
@@ -778,14 +778,10 @@ fn a_grazer_eats_grass_and_a_dangerous_one_needs_better() {
 
 #[test]
 fn heavier_and_bigger_is_slower_and_harder() {
-    let big = build::moves(&RIDGEBACK)
+    let big = *build::moves(&RIDGEBACK).get(MoveKind::Bite).unwrap();
+    let small = *build::moves(&archetypes::GNAWER)
         .get(MoveKind::Bite)
-        .unwrap()
-        .clone();
-    let small = build::moves(&archetypes::GNAWER)
-        .get(MoveKind::Bite)
-        .unwrap()
-        .clone();
+        .unwrap();
     assert!(
         big.startup > small.startup,
         "{} vs {}",
