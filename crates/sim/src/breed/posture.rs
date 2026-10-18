@@ -88,6 +88,9 @@ pub struct Posture {
     pub support: (Fx, Fx),
     pub balanced: bool,
     pub applied: Applied,
+    /// Its legs cannot lift it: the belly is on the floor and the legs
+    /// splay out as paddles.
+    pub bellied: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -267,10 +270,10 @@ fn natural_extension(stance: Stance, build: Build, wing_walks: bool) -> Fx {
             if splayed(stance, build) {
                 fx(4, 5)
             } else {
-                fx(19, 20)
+                fx(9, 10)
             }
         }
-        Build::Sprung => fx(4, 5),
+        Build::Sprung => fx(3, 4),
         Build::Raptorial => fx(7, 10),
         Build::Spindle => fx(1, 2),
         Build::Stub => fx(7, 10),
@@ -345,7 +348,9 @@ impl Solver<'_> {
     fn error(&self) -> Fx {
         let com = self.masses.com(self.pose.pitch);
         let (lo, hi) = self.support();
-        let band = hi.sub(lo).mul(BAND);
+        // A fifth of the span in from each end, but never more than a
+        // fifth of the torso: a wide stance is all the steadier for it.
+        let band = hi.sub(lo).mul(BAND).min(self.p.torso.mul(fx(1, 5)));
         let (lo, hi) = (lo.add(band), hi.sub(band));
         // Within a hundredth of the torso is balanced: the arithmetic is
         // fixed point and the feet are not points.
@@ -674,6 +679,26 @@ impl Solver<'_> {
     fn feet(&mut self) {
         let root = self.pose.root;
         let pitch = self.pose.pitch;
+        // A walking wing's wrist lands clear ahead of the next pair's feet:
+        // a wing is not a leg among the legs.
+        for i in 0..STATIONS {
+            if !self.pose.stations[i].wing_walks {
+                continue;
+            }
+            let mut behind = Fx::from_int(-1_000);
+            for j in 0..STATIONS {
+                if j != i && self.pose.stations[j].grounded && !self.pose.stations[j].wing_walks {
+                    let fl = self.p.limb[j].mul(fx(3, 20));
+                    behind = behind.max(self.foot_x(j).add(fl));
+                }
+            }
+            let gap = self.spacing(i, i).add(self.p.limb[i].mul(fx(1, 10)));
+            let want = behind.add(gap);
+            let here = self.foot_x(i);
+            if here < want {
+                self.pose.stations[i].reach = self.pose.stations[i].reach.add(want.sub(here));
+            }
+        }
         for i in 0..STATIONS {
             if !self.pose.stations[i].grounded {
                 continue;
@@ -782,6 +807,7 @@ pub fn posture(g: &Genome) -> Posture {
             support: (Fx::ZERO, Fx::ZERO),
             balanced: false,
             applied: Applied::default(),
+            bellied: false,
         },
     };
     if g.stance != Stance::Limbless && g.pair_count() > 0 {
@@ -792,9 +818,20 @@ pub fn posture(g: &Genome) -> Posture {
     // follow the weight once more.
     solver.feet();
     if g.stance != Stance::Limbless && g.pair_count() > 0 {
-        // Clamping the reach can move the feet off the weight again: the
-        // last word is the limbs', and then the feet are settled on it.
-        solver.force();
+        // Clamping the reach, or clearing a wrist from the hind feet, can
+        // move the feet off the weight again: the limbs take the
+        // difference, the feet settle, and once more for the wrist.
+        for _ in 0..2 {
+            solver.force();
+            solver.feet();
+        }
+    }
+    // Legs too weak for the body: it rests on its belly, the legs out to
+    // the sides as paddles, bent as far as the floor makes them.
+    if g.stance != Stance::Limbless && super::plan::leg_strength(g) < super::plan::WEAK_LEGS {
+        solver.pose.bellied = true;
+        solver.pose.root = solver.pose.root.min(solver.p.half_h);
+        solver.pose.pitch = Fx::ZERO;
         solver.feet();
     }
     solver.hop();
@@ -802,5 +839,10 @@ pub fn posture(g: &Genome) -> Posture {
     solver.pose.com = solver.masses.com(solver.pose.pitch);
     solver.pose.support = solver.support();
     solver.pose.balanced = g.stance == Stance::Limbless || solver.error() == Fx::ZERO;
+    if solver.pose.bellied {
+        // A belly on the floor is its own support, end to end.
+        solver.pose.support = (solver.p.rear, solver.p.front);
+        solver.pose.balanced = true;
+    }
     solver.pose
 }

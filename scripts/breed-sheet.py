@@ -27,6 +27,9 @@ COL = {
     "limb": (80, 120, 180),
     "foot": (50, 80, 130),
     "wing": (90, 170, 120),
+    "feathered": (90, 170, 120),
+    "membrane": (70, 150, 160),
+    "furred": (140, 150, 90),
     "tail": (170, 140, 80),
 }
 BG = (250, 249, 245)
@@ -43,6 +46,9 @@ def parse(path):
                 "n": int(parts[1]), "stance": parts[2], "plaus": float(parts[3]),
                 "tier": parts[4], "caps": caps, "desc": desc.strip(), "parts": [],
             })
+        elif line.startswith("obox "):
+            _, tag, name, cx, cy, cz, ux, uy, uz, hl, r = line.split()
+            gens[-1].setdefault("oboxes", []).append((tag, name, float(cx), float(cy), float(cz), float(ux), float(uy), float(uz), float(hl), float(r)))
         elif line.startswith("part "):
             _, tag, name, x0, y0, x1, y1, z0, z1 = line.split()
             gens[-1]["parts"].append((tag, name, float(x0), float(y0), float(x1), float(y1), float(z0), float(z1)))
@@ -122,6 +128,50 @@ def draw_box(d, box, col, origin, scale):
     d.polygon(top, fill=shade(col, 1.15), outline=edge)
 
 
+def draw_obox(d, ob, col, origin, scale):
+    """An oriented cuboid: centre, unit axis, half-length, radius. Its six
+    faces, far to near."""
+    tag, name, cx, cy, cz, ux, uy, uz, hl, r = ob
+    # two perpendiculars to the axis
+    ax = (ux, uy, uz)
+    ref = (0.0, 1.0, 0.0) if abs(uy) < 0.9 else (1.0, 0.0, 0.0)
+    def cross(a, b):
+        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+    def norm(a):
+        l = math.sqrt(a[0] ** 2 + a[1] ** 2 + a[2] ** 2) or 1.0
+        return (a[0] / l, a[1] / l, a[2] / l)
+    v = norm(cross(ax, ref))
+    w = norm(cross(ax, v))
+    ox, oy = origin
+    def corner(sa, sv, sw):
+        x = cx + ax[0] * hl * sa + v[0] * r * sv + w[0] * r * sw
+        y = cy + ax[1] * hl * sa + v[1] * r * sv + w[1] * r * sw
+        z = cz + ax[2] * hl * sa + v[2] * r * sv + w[2] * r * sw
+        px, py = iso(x, y, z)
+        return (ox + px * scale, oy + py * scale, x + z + y * 0.5)
+    faces = []
+    for fixed in range(3):
+        for sign in (-1, 1):
+            quad = []
+            for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                s = [0, 0, 0]
+                s[fixed] = sign
+                others = [i for i in range(3) if i != fixed]
+                s[others[0]] = a
+                s[others[1]] = b
+                quad.append(corner(*s))
+            depth = sum(q[2] for q in quad) / 4
+            # shade by which way the face points, roughly: up brightest
+            n = [0.0, 0.0, 0.0]
+            basis = (ax, v, w)
+            n = tuple(basis[fixed][i] * sign for i in range(3))
+            k = 0.75 + 0.4 * max(0.0, n[1]) + 0.12 * max(0.0, n[0]) + 0.08 * max(0.0, n[2])
+            faces.append((depth, [(q[0], q[1]) for q in quad], shade(col, k)))
+    faces.sort(key=lambda f: f[0])
+    for _, quad, c in faces:
+        d.polygon(quad, fill=c, outline=shade(col, 0.5))
+
+
 def draw_ground(d, origin, scale, extent, step):
     ox, oy = origin
     lo = -extent
@@ -190,10 +240,24 @@ def draw_strip(name, gens, cell_w=300, cell_h=300):
         for (_, _, x0, y0, x1, y1, z0, z1) in parts:
             pts = [iso(x0, 0, z0), iso(x1, 0, z0), iso(x1, 0, z1), iso(x0, 0, z1)]
             td.polygon([(origin[0] + px * scale, origin[1] + py * scale) for px, py in pts], fill=(205, 200, 184))
-        # the boxes, far to near
-        order = sorted(parts, key=lambda p: (p[2] + p[6] + p[3] * 0.5))
-        for tag, pname, x0, y0, x1, y1, z0, z1 in order:
-            draw_box(td, (x0, y0, x1, y1, z0, z1), COL.get(tag, (100, 100, 100)), origin, scale)
+        # the boxes, far to near; a limb segment with an oriented box is
+        # drawn as that instead of its bounding box
+        oboxes = g.get("oboxes", [])
+        oriented = {ob[1] for ob in oboxes}
+        items = []
+        for p in parts:
+            if p[1] in oriented:
+                continue
+            items.append((p[2] + p[6] + p[3] * 0.5, "box", p))
+        for ob in oboxes:
+            items.append((ob[2] + ob[4] + ob[3] * 0.5, "obox", ob))
+        items.sort(key=lambda it: it[0])
+        for _, kind, it in items:
+            if kind == "box":
+                tag, pname, x0, y0, x1, y1, z0, z1 = it
+                draw_box(td, (x0, y0, x1, y1, z0, z1), COL.get(tag, (100, 100, 100)), origin, scale)
+            else:
+                draw_obox(td, it, COL.get(it[0], (100, 100, 100)), origin, scale)
         im.paste(tile, (ox + 3, top + head_h))
         d.text((ox + 8, top + 4), f"gen {g['n']}  {g['stance']}  p={g['plaus']:.2f}  tier {g['tier']}", fill=(30, 30, 30), font=FONT)
         d.text((ox + 8, top + 20), g["caps"][:52], fill=(90, 90, 90), font=SMALL)

@@ -327,6 +327,45 @@ pub fn wants(g: &Genome) -> Wants {
 }
 
 // ---------------------------------------------------------------------------
+// Leg strength
+// ---------------------------------------------------------------------------
+
+/// How much leg a body has for its weight, nought up: one is the Ridgeback
+/// (thirteen metres of stone on pillars half a metre across), under a half
+/// is a body its legs cannot lift.
+///
+/// Bone carries load by its cross-section and weight grows with volume, so
+/// the rule is **area against mass**: the grounded pairs' cross-sections
+/// summed, over the body's length cubed times its density, against the
+/// Ridgeback's ratio. A creature that grows faster than its legs thicken
+/// loses it, which is what the gnawer fed a spider's sacs did.
+pub fn leg_strength(g: &Genome) -> Fx {
+    let p = super::build::proportions(g);
+    let weight = p
+        .len
+        .mul(p.len)
+        .mul(p.len)
+        .mul(fx(1, 2).add(g.sliders.mass));
+    let mut area = Fx::ZERO;
+    for (st, pair) in g.pairs() {
+        if pair.role.grounded() {
+            let gi = p.girth[st.index()].mul(Fx::from_int(2));
+            area = area.add(gi.mul(gi).mul(Fx::from_int(2)));
+        }
+    }
+    if g.stance == Stance::Limbless || area == Fx::ZERO {
+        return Fx::ONE;
+    }
+    // The Ridgeback: area 2.16 over weight 3200.
+    area.div(weight.max(fx(1, 100)))
+        .mul(fx(3200, 1))
+        .div(fx(216, 100))
+}
+
+/// Legs this weak cannot lift the body: it rests on its belly.
+pub const WEAK_LEGS: Fx = fx(1, 2);
+
+// ---------------------------------------------------------------------------
 // Settle
 // ---------------------------------------------------------------------------
 
@@ -342,6 +381,10 @@ pub fn settle(g: &mut Genome) {
         }
     }
     let stance = g.stance;
+    // Legs want to be as thick as the body is heavy: a weak body's legs
+    // thicken over the generations, a light body's slim. The say is the
+    // torso's -- the weight is the torso's.
+    let strength = leg_strength(g);
     for station in Station::ALL {
         if let Some(p) = g.limbs[station.index()].as_mut() {
             let own = p.build.own_want();
@@ -354,6 +397,12 @@ pub fn settle(g: &mut Genome) {
                 len = len.add(t.length.mul(t.weight));
                 girth = girth.add(t.girth.mul(t.weight));
                 total = total.add(t.weight);
+            }
+            if p.role.grounded() && strength < Fx::ONE {
+                // Thicker by the root of what is missing, at the torso's say.
+                let want = unit(p.girth.div(strength.max(fx(1, 10)).sqrt()));
+                girth = girth.add(want.mul(TORSO_SAY));
+                total = total.add(TORSO_SAY);
             }
             let (len, girth) = (len.div(total), girth.div(total));
             p.length = unit(p.length.add(len.sub(p.length).mul(LIMB_SETTLE_RATE)));
@@ -555,6 +604,9 @@ pub struct Caps {
     /// Something a rider can stand on: a big enough level back.
     pub mountable: bool,
     pub swallows: bool,
+    /// Its legs cannot lift it ([`leg_strength`] under a half): it rests
+    /// on its belly and nothing it does is quick.
+    pub weak_legs: bool,
 }
 
 /// The verdict on a genome.
@@ -585,17 +637,22 @@ pub fn flight_margin(g: &Genome) -> Fx {
 pub fn assess(g: &Genome) -> Assessment {
     let s = &g.sliders;
     let margin = flight_margin(g);
+    let strength = leg_strength(g);
+    let weak = strength < WEAK_LEGS;
     let caps = Caps {
         flies: g.has_wings() && margin > Fx::ZERO,
         vestigial_wings: g.has_wings() && margin <= Fx::ZERO,
         charges: g.grounded_pairs() >= 2
             && g.stance == Stance::Level
             && s.speed >= fx(2, 5)
-            && s.size >= fx(1, 4),
+            && s.size >= fx(1, 4)
+            && !weak,
         pounces: g
             .pairs()
             .any(|(_, p)| p.build == Build::Sprung && p.role.grounded())
-            && s.mass < fx(7, 10),
+            && s.mass < fx(7, 10)
+            && !weak,
+        weak_legs: weak,
         guards: s.guard >= fx(1, 2)
             || g.pairs()
                 .any(|(_, p)| p.build == Build::Raptorial && p.role != Role::Walk),
@@ -627,6 +684,9 @@ pub fn assess(g: &Genome) -> Assessment {
     }
     if caps.vestigial_wings {
         p = p.sub(fx(3, 20));
+    }
+    if strength < Fx::ONE {
+        p = p.sub(Fx::ONE.sub(strength).mul(fx(3, 10)));
     }
     if g.stance == Stance::Upright && s.mass > fx(7, 10) {
         p = p.sub(fx(1, 5));

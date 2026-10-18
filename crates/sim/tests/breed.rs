@@ -329,7 +329,10 @@ fn a_cross_lands_between_its_parents() {
                 "seed {seed}: {sl:?} = {v:.2} outside {lo:.2}..{hi:.2}"
             );
         }
-        assert!(f(plan::assess(&c).plausibility) >= 0.4, "seed {seed}");
+        // A thirteen-metre body on a mantis's legs is weak-legged, and
+        // the score says so: a cross is a creature in transition.
+        let p = f(plan::assess(&c).plausibility);
+        assert!(p >= 0.15, "seed {seed}: plausibility {p:.2}");
     }
 }
 
@@ -366,7 +369,7 @@ fn a_mantis_trophy_pulls_a_ridgeback_a_little_toward_the_mantis() {
         // awkward for a generation; one whose plan held is not.
         let p = f(plan::assess(&g).plausibility);
         assert!(
-            p >= if out.moved.any() { 0.3 } else { 0.5 },
+            p >= if out.moved.any() { 0.2 } else { 0.5 },
             "seed {seed}: {p:.2} {:?}",
             out.moved
         );

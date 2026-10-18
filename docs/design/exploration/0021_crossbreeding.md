@@ -229,6 +229,54 @@ hangs, and it is flagged).
   posture reads as strained it is the plausibility score's business to
   say so, which it does not yet.
 
+### Legs against weight, wings that read, and standing easy (third pass)
+
+Three more things the posed sheets asked for:
+
+- **Leg strength** ([`plan::leg_strength`](../../../crates/sim/src/breed/plan.rs)).
+  Bone carries load by its cross-section and weight grows with volume, so
+  the rule is area against mass: the grounded pairs' cross-sections over
+  the body's length cubed times its density, against the Ridgeback's
+  ratio. The cast comes out between 0.9 (the Mantis) and 9 (the cats);
+  a gnawer grown to a spider's size on a gnawer's legs is under a half.
+  Under one, the settle thickens the legs by the root of what is missing
+  (the torso's say, so a body that outgrows its legs grows them back over
+  generations), the plausibility falls by three tenths of the shortfall,
+  and under a half the creature is **weak-legged**: it cannot charge or
+  pounce, and its posture rests its belly on the floor with the legs out
+  as paddles -- which is its own support, so it is balanced by it.
+- **Wings** are drawn by what they are made of (`build::WingLook`, from
+  the hide): *feathered* keeps its chord to the tip and fans primaries
+  behind it; a *membrane* tapers to a point along a leading-edge finger;
+  a *furred* wing is a thick fringed plane. Each segment is two slabs
+  along it, so a swept or rising wing is a staircase of overlapping planes
+  rather than boxes floating apart; a beat is shallow because a box round
+  a steep plane is a wall. A wing that walks is drawn as a wing's bone,
+  thin, and its wrist lands clear ahead of the hind feet by a pair's
+  spacing -- a wing is not a leg among the legs. The raptorial arm is a
+  mantis's Z: up and forward from the shoulder, the blade folded back
+  down under it with the point ahead; walking, the leading arm
+  half-extends.
+- **Standing easy.** Nothing stands straight: a pillar at nine tenths,
+  a sprung leg at three quarters. And each creature has its own slack,
+  rolled once from its genome: one side's feet a sixteenth of a limb
+  ahead, the head turned a hair that way, the tail curving the other.
+  Walking adds the stride, the lift, the bob, the turned head, the
+  swaying tail, the beat or the fold.
+
+- **A bent limb is drawn along its bone.** The builder's parts are boxes
+  in a bone's frame, as the species tables' are, and a segment that slants
+  every way has a bounding box that is a block -- which is what made every
+  walking wing look like a fat leg. `breedcheck -- boxes` now also prints
+  each limb segment as an oriented box along its bone with the pair's own
+  girth, and the sheet draws that; the game will draw the same thing
+  through a rotated bone, as it does for every creature already.
+
+- **BREED-13 · The band is capped.** The mass has to sit a fifth of the
+  stance in from either end, but never more than a fifth of the torso:
+  a wide stance is all the steadier, and a wrist put down ahead should not
+  count against the body behind.
+
 ## 4 · Crossing
 
 [`cross.rs`](../../../crates/sim/src/breed/cross.rs). Three operations, each

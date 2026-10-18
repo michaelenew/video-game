@@ -9,7 +9,7 @@
 //! became wings, a creature with fore limbs and nothing behind, hind limbs
 //! longer than the fore.
 
-use sim::breed::archetypes::{self, CAST, GALEWING, RIDGEBACK};
+use sim::breed::archetypes::{self, CAST, GALEWING, RIDGEBACK, SIEGESHELL};
 use sim::breed::build::{self, MoveKind};
 use sim::breed::plan;
 use sim::breed::posture::{self, Posture};
@@ -156,6 +156,14 @@ fn a_ridgeback_with_wings_for_forelegs_still_stands() {
         if a.wing_walks {
             let i = q.stations.iter().position(|s| s.wing_walks).unwrap();
             assert!(q.stations[i].grounded);
+            // The wrist lands clear ahead of the hind feet.
+            let body = build::body(&r);
+            let wrist = f(body.at(body.bone_named("fore.l.foot").unwrap()).x);
+            let hind = f(body.at(body.bone_named("hind.l.foot").unwrap()).x);
+            assert!(
+                wrist > hind + 0.5,
+                "wrist at {wrist:.2}, hind foot at {hind:.2}"
+            );
         }
     }
     assert!(
@@ -314,4 +322,46 @@ fn any_repaired_plan_stands() {
         dangling < 60,
         "{dangling} of 2000 random plans have a limb that cannot reach the floor"
     );
+}
+
+/// Legs against weight: the cast has legs for its bodies; a body grown
+/// twice its size on the same legs does not, and rests on its belly; and
+/// over generations with nobody pulling the other way, its legs thicken
+/// back toward what the weight needs.
+#[test]
+fn legs_are_held_to_the_weight_they_carry() {
+    for (_, name, g, _) in CAST {
+        let s = f(plan::leg_strength(g));
+        assert!(s >= 0.8, "{name}: leg strength {s:.2}");
+        assert!(!plan::assess(g).caps.weak_legs, "{name}: weak legs");
+    }
+    // A gnawer grown to the Siegeshell's size on a gnawer's legs: bone
+    // carries by area and weight grows by volume, so strength falls as
+    // one over the length, and a rat twenty times as long has a
+    // twentieth of what it had.
+    let mut g = archetypes::GNAWER;
+    g.sliders.size = SIEGESHELL.sliders.size;
+    let s = f(plan::leg_strength(&g));
+    assert!(
+        s < 0.5,
+        "a rat the size of a spider has leg strength {s:.2}"
+    );
+    let a = plan::assess(&g);
+    assert!(a.caps.weak_legs && !a.caps.pounces && !a.caps.charges);
+    let q = posture::posture(&g);
+    assert!(q.bellied && q.balanced, "{q:?}");
+    let body = build::body(&g);
+    assert!(
+        f(body.hips) <= f(body.half_width) * 0.45 + 0.01,
+        "its belly is off the floor"
+    );
+    // Thirty generations of settling: the legs thicken.
+    let before = f(g.limbs[3].unwrap().girth);
+    let mut x = g;
+    for _ in 0..30 {
+        plan::settle(&mut x);
+    }
+    let after = f(x.limbs[3].unwrap().girth);
+    assert!(after > before + 0.1, "girth {before:.2} -> {after:.2}");
+    assert!(f(plan::leg_strength(&x)) > s * 1.2);
 }

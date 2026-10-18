@@ -325,14 +325,80 @@ fn boxes(args: &[String]) {
                 .trim_end_matches(']'),
             describe(&g)
         );
+        let q = sim::breed::posture::posture(&g);
+        let p = build::proportions(&g);
         let body = match phase {
-            Some(ph) => build::body_posed(&g, &sim::breed::posture::posture(&g), ph),
+            Some(ph) => build::body_posed(&g, &q, ph),
             None => build::body(&g),
         };
+        // Every limb segment also as an oriented box along its bone --
+        // `obox <tag> <name> <cx> <cy> <cz> <ux> <uy> <uz> <half-length>
+        // <radius>` -- since the box in the table is its bounding box, and
+        // a bent leg drawn as that is a block. The sheet draws these in
+        // place of the segment's box.
+        for part in body.parts() {
+            let name = part.name;
+            let is_segment =
+                (name.starts_with("fore") || name.starts_with("hind") || name.starts_with("mid"))
+                    && !name.contains("foot");
+            if !is_segment {
+                continue;
+            }
+            // The segment runs from this part's bone to its child bone.
+            let Some(child) = body
+                .bones()
+                .iter()
+                .position(|b| b.parent == part.shape.bone && b.name != name)
+            else {
+                continue;
+            };
+            let seg = body.bones()[child].rest;
+            let at = body.at(part.shape.bone);
+            let len = seg
+                .x
+                .mul(seg.x)
+                .add(seg.y.mul(seg.y))
+                .add(seg.z.mul(seg.z))
+                .sqrt();
+            if len == Fx::ZERO {
+                continue;
+            }
+            // The segment's thickness is the pair's girth (a walking wing's
+            // is a wing bone's), not the bounding box's smallest side,
+            // which for a segment slanting every way is nothing like it.
+            let station = ["fore.", "midfore.", "midhind.", "hind."]
+                .iter()
+                .position(|s| name.starts_with(s))
+                .unwrap_or(0);
+            let walking_wing = q.stations[station].wing_walks;
+            let mut radius = p.girth[station];
+            if walking_wing {
+                radius = build::walking_wing_girth(p.len, radius);
+            }
+            let tag = if walking_wing { "wing" } else { "limb" };
+            println!(
+                "obox {tag} {} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3}",
+                name.replace(' ', "_"),
+                f(at.x.add(seg.x.mul(Fx::ratio(1, 2)))),
+                f(at.y.add(seg.y.mul(Fx::ratio(1, 2)))),
+                f(at.z.add(seg.z.mul(Fx::ratio(1, 2)))),
+                f(seg.x.div(len)),
+                f(seg.y.div(len)),
+                f(seg.z.div(len)),
+                f(len.mul(Fx::ratio(1, 2))),
+                f(radius)
+            );
+        }
         for part in body.parts() {
             let at = body.at(part.shape.bone);
             let name = part.name;
-            let tag = if name.contains("foot") {
+            let tag = if name.starts_with("wing_feather") {
+                "feathered"
+            } else if name.starts_with("wing_membrane") {
+                "membrane"
+            } else if name.starts_with("wing_fur") {
+                "furred"
+            } else if name.contains("foot") {
                 "foot"
             } else if name.starts_with("fore")
                 || name.starts_with("hind")

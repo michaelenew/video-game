@@ -373,11 +373,96 @@ pub fn body_posed(g: &Genome, q: &super::posture::Posture, phase: Fx) -> Body {
 const STRIDE: Fx = fx(1, 4);
 const LIFT: Fx = fx(1, 5);
 
+/// What a wing is made of, from the hide: three looks that each read as
+/// a wing. Feathered keeps its chord to the tip and fans primaries behind
+/// it; a membrane tapers to a point along a leading-edge finger; a furred
+/// wing is a thick fringed plane.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WingLook {
+    Feathered,
+    Membrane,
+    Furred,
+}
+
+impl WingLook {
+    pub const fn of(hide: Hide) -> WingLook {
+        match hide {
+            Hide::Feathers => WingLook::Feathered,
+            Hide::Fur => WingLook::Furred,
+            Hide::Skin | Hide::Plates | Hide::Shell | Hide::Chitin | Hide::Slick => {
+                WingLook::Membrane
+            }
+        }
+    }
+
+    /// The chord of each of the three segments, as shares of the body's
+    /// length: the Galewing's root chord is three metres on a body of
+    /// five and a half.
+    const fn chords(self) -> [(i32, i32); 3] {
+        match self {
+            WingLook::Feathered => [(9, 20), (2, 5), (3, 10)],
+            WingLook::Membrane => [(1, 2), (3, 10), (3, 20)],
+            WingLook::Furred => [(2, 5), (7, 20), (1, 4)],
+        }
+    }
+
+    /// Part names, by side, so the sheet can colour the look.
+    const fn names(self, side: usize) -> [&'static str; 3] {
+        match (self, side) {
+            (WingLook::Feathered, 0) => {
+                ["wing_feather.l", "wing_feather.l.mid", "wing_feather.l.tip"]
+            }
+            (WingLook::Feathered, _) => {
+                ["wing_feather.r", "wing_feather.r.mid", "wing_feather.r.tip"]
+            }
+            (WingLook::Membrane, 0) => [
+                "wing_membrane.l",
+                "wing_membrane.l.mid",
+                "wing_membrane.l.tip",
+            ],
+            (WingLook::Membrane, _) => [
+                "wing_membrane.r",
+                "wing_membrane.r.mid",
+                "wing_membrane.r.tip",
+            ],
+            (WingLook::Furred, 0) => ["wing_fur.l", "wing_fur.l.mid", "wing_fur.l.tip"],
+            (WingLook::Furred, _) => ["wing_fur.r", "wing_fur.r.mid", "wing_fur.r.tip"],
+        }
+    }
+}
+
+/// How a creature stands when nothing is asked of it: a little weight on
+/// one side, the head turned a hair, the tail not quite straight. Rolled
+/// once from the genome, so each creature has its own.
+#[derive(Clone, Copy)]
+struct Relax {
+    /// Which side's feet stand a little ahead: `1` or `-1`.
+    lead: Fx,
+    head_yaw: Fx,
+    tail_yaw: Fx,
+}
+
+fn relax(g: &Genome) -> Relax {
+    let mut rng = super::Rng::new(g.fingerprint() ^ 0x5e1f);
+    let lead = if rng.chance(fx(1, 2)) {
+        Fx::ONE
+    } else {
+        Fx::ONE.neg()
+    };
+    Relax {
+        lead,
+        head_yaw: rng.unit().mul(fx(1, 30)).mul(lead),
+        tail_yaw: rng.unit().mul(fx(1, 40)).mul(lead.neg()),
+    }
+}
+
 fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
     let mut r = Rig::new();
     // sin and cos of the stride cycle, and a second harmonic for the bob.
     let phase = gait.unwrap_or(Fx::ZERO);
     let flies = super::plan::assess(g).caps.flies;
+    let relax = relax(g);
+    let look = WingLook::of(g.minors.hide);
     let p = proportions(g);
     let (len, torso, half_w, half_h) = (p.len, p.torso, p.half_w, p.half_h);
     let pitch = q.pitch;
@@ -559,7 +644,7 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             sin_turns(phase.mul(Fx::from_int(2))).mul(fx(1, 50)),
         )
     } else {
-        (Fx::ZERO, Fx::ZERO)
+        (relax.head_yaw, Fx::ZERO)
     };
     let neck_pitch = pitch.add(q.neck_rise).add(neck_dip);
     let neck_dir = v3(
@@ -680,7 +765,7 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                     .mul(fx(1, 16))
                     .mul(Fx::from_int(k + 1))
             } else {
-                Fx::ZERO
+                relax.tail_yaw.mul(Fx::from_int(k + 1))
             };
             let l = tail_len.mul(fx(1, 3));
             v3(
@@ -741,8 +826,10 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             let half_limb = limb.mul(fx(1, 2));
             if pair.role == Role::Wing && !pose.wing_walks {
                 // A wing: three segments out to the side, swept back and
-                // rising a little, each a broad thin plane whose chord
-                // narrows toward the tip.
+                // rising a little, each a broad thin plane. Each segment
+                // is drawn as two slabs along it, so a swept or rising
+                // wing is a staircase of overlapping planes rather than
+                // boxes floating apart.
                 let seg = limb.mul(fx(1, 3));
                 let sweep = match gait {
                     // Flying, a beat: the wing rises and falls through the
@@ -764,31 +851,62 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                     ),
                     None => v3(limb.mul(fx(-1, 10)), limb.mul(fx(1, 15)), seg.mul(sd)),
                 };
-                let thick = len.mul(fx(3, 200)).max(girth.mul(fx(1, 4)));
+                let thick = match look {
+                    WingLook::Furred => len.mul(fx(1, 40)).max(girth.mul(fx(1, 2))),
+                    _ => len.mul(fx(1, 100)).max(girth.mul(fx(1, 5))),
+                };
                 let arm = r.bone(names[1], hip, sweep, side);
                 let hand = r.bone(names[2], arm, sweep, side);
-                let chords = [
-                    torso.mul(fx(1, 2)),
-                    torso.mul(fx(2, 5)),
-                    torso.mul(fx(1, 4)),
-                ];
-                for (k, (bone_i, name)) in [(hip, names[0]), (arm, names[1]), (hand, names[2])]
-                    .into_iter()
-                    .enumerate()
-                {
+                let chords = look.chords();
+                let wnames = look.names(side_i);
+                let bones = [hip, arm, hand];
+                for k in 0..3 {
+                    let chord = len.mul(fx(chords[k].0, chords[k].1));
+                    for half in 0..2 {
+                        let at = sweep.scale(fx(2 * half + 1, 4));
+                        // Behind the leading edge, since a wing's area is
+                        // aft of its bone.
+                        let at = v3(at.x.sub(chord.mul(fx(1, 4))), at.y, at.z);
+                        r.boxed(
+                            wnames[k],
+                            bones[k],
+                            at,
+                            v3(
+                                chord.mul(fx(1, 2)),
+                                // Thin at any size: a steep beat is layered
+                                // plates, never a block.
+                                thick
+                                    .max(sweep.y.abs().mul(fx(1, 4)))
+                                    .min(len.mul(fx(1, 50)).max(thick)),
+                                sweep.z.abs().mul(fx(7, 20)).max(thick),
+                            ),
+                        );
+                    }
+                    if look == WingLook::Membrane {
+                        // The finger along the leading edge.
+                        r.boxed(
+                            wnames[k],
+                            bones[k],
+                            sweep.scale(fx(1, 2)),
+                            v3(
+                                thick.mul(Fx::from_int(2)),
+                                thick.mul(Fx::from_int(2)),
+                                sweep.z.abs().mul(fx(1, 2)),
+                            ),
+                        );
+                    }
+                }
+                if look == WingLook::Feathered {
+                    // Primaries: a fan trailing behind the tip.
                     r.boxed(
-                        name,
-                        bone_i,
-                        sweep.scale(fx(1, 2)),
-                        // The plane spans its segment: as high as the
-                        // segment rises, as far out as it goes.
+                        wnames[2],
+                        hand,
                         v3(
-                            chords[k].mul(fx(1, 2)),
-                            thick
-                                .max(sweep.y.abs().mul(fx(1, 2)))
-                                .min(chords[k].mul(fx(1, 4))),
-                            sweep.z.abs().mul(fx(1, 2)).max(thick),
+                            sweep.x.sub(len.mul(fx(3, 10))),
+                            sweep.y,
+                            sweep.z.mul(fx(4, 5)),
                         ),
+                        v3(len.mul(fx(1, 6)), thick, seg.mul(fx(1, 4))),
                     );
                 }
                 span = limb.add(half_w).mul(Fx::from_int(2));
@@ -797,10 +915,26 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             if !pose.grounded {
                 // A striking limb held up and forward: folded blades.
                 let (upper, lower) = match pair.build {
-                    Build::Raptorial => (
-                        v3(half_limb.mul(fx(1, 2)), half_limb.mul(fx(1, 2)), Fx::ZERO),
-                        v3(half_limb, Fx::ZERO, Fx::ZERO),
-                    ),
+                    // A mantis's fold: the upper arm up and forward from
+                    // the shoulder, the blade folded back down under it
+                    // with its point ahead -- a Z held at the chest.
+                    // Walking, the leading arm half-extends.
+                    Build::Raptorial => {
+                        let lead = gait.is_some() && side_i == 0;
+                        let lower = if lead {
+                            v3(half_limb.mul(fx(4, 5)), half_limb.mul(fx(-1, 2)), Fx::ZERO)
+                        } else {
+                            v3(half_limb.mul(fx(1, 4)), half_limb.mul(fx(-9, 10)), Fx::ZERO)
+                        };
+                        (
+                            v3(
+                                half_limb.mul(fx(7, 10)),
+                                half_limb.mul(fx(7, 10)),
+                                half_w.mul(fx(-1, 4)).mul(sd),
+                            ),
+                            lower,
+                        )
+                    }
                     _ => (
                         v3(half_limb.mul(fx(1, 2)), half_limb.mul(fx(-1, 2)), Fx::ZERO),
                         v3(half_limb.mul(fx(1, 2)), Fx::ZERO, Fx::ZERO),
@@ -853,7 +987,8 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                         standing.mul(LIFT).mul(sin_turns(theta).max(Fx::ZERO)),
                     )
                 }
-                None => (Fx::ZERO, Fx::ZERO),
+                // At rest: one side's feet a little ahead of the other's.
+                None => (standing.mul(fx(1, 16)).mul(relax.lead).mul(sd), Fx::ZERO),
             };
             let mut down = hip_y.sub(lift);
             let mut reach = pose.reach.add(swing);
@@ -917,6 +1052,12 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                     )
                 }
             };
+            // A walking wing's arm is a wing's bone, not a leg: thin.
+            let girth = if pose.wing_walks {
+                walking_wing_girth(len, girth)
+            } else {
+                girth
+            };
             let knee = r.bone(names[1], hip, upper, side);
             let foot_bone = r.bone(names[2], knee, lower, side);
             let up = r.boxed(
@@ -941,27 +1082,33 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             );
             if pose.wing_walks {
                 // The hand folds up and back from the wrist, a long thin
-                // plane along the body.
+                // plane along the body, in the wing's own look.
                 let seg = limb.mul(fx(1, 3));
                 let fold = v3(seg.mul(fx(-3, 5)), seg.mul(fx(4, 5)), Fx::ZERO);
-                let thick = len.mul(fx(3, 200)).max(girth.mul(fx(1, 4)));
-                let hand_name = if side < 0 {
-                    "wing.l.hand"
-                } else {
-                    "wing.r.hand"
-                };
-                r.boxed(
-                    hand_name,
-                    foot_bone,
-                    fold.scale(fx(1, 2)),
-                    v3(seg.mul(fx(3, 10)), seg.mul(fx(2, 5)), thick),
-                );
+                let thick = len.mul(fx(1, 100)).max(girth.mul(fx(1, 2)));
+                // Slim: a folded wing lies along its finger, two plates
+                // following the fold, thin across the body.
+                let wnames = look.names(side_i);
+                for half in 0..2 {
+                    r.boxed(
+                        wnames[2],
+                        foot_bone,
+                        fold.scale(fx(2 * half + 1, 4)),
+                        v3(seg.mul(fx(1, 10)), fold.y.abs().mul(fx(1, 4)), thick),
+                    );
+                }
             }
             r.leg(up, lo, hip, knee, fore, side);
         }
     }
     r.body.span = span;
     r.body
+}
+
+/// How thick a wing's bone is when it walks on it: a sixtieth of the body,
+/// or a third of what the leg would be, whichever is more.
+pub fn walking_wing_girth(len: Fx, girth: Fx) -> Fx {
+    len.mul(fx(1, 60)).max(girth.mul(fx(1, 3)))
 }
 
 /// A limb segment's half-size: along its own direction half its length,
