@@ -96,7 +96,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // into `state_checksum`, which had been leaving them out. And after the
     // second playtest: `Rise::floor`, and a stone carries whoever stands on it.
     // And 2026-10-13: slopes, steps and lips, at the rim (see the Bulwark's).
-    (Class::Elementalist, 59, 0xead0646afe0ca6dc),
+    // Moved 2026-10-18, deliberately: her QoL pass (a bigger, longer
+    // pillar, pushes that act on the whole line, a sliding Fissure, burning
+    // wind, a higher Updraft). Nobody else's moved.
+    (Class::Elementalist, 59, 0x19195853a2d00770),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
