@@ -49,6 +49,7 @@
 //! | --- | --- |
 //! | [`mod.rs`] | [`Genome`] and its genes, the sliders, the deterministic [`Rng`] |
 //! | [`plan`] | what every major wants, the settle, the repair, the plausibility verdict |
+//! | [`posture`] | how a plan stands: balance over the feet, every foot on the floor, the head carried up |
 //! | [`build`] | the genome as a body (bones, parts, legs in metres) and a move set |
 //! | [`cross`] | breeding two genomes, grafting a trophy, mutation |
 //! | [`rear`] | an egg incubated, a hatchling fed and grown, the rebellion, the taming |
@@ -63,6 +64,7 @@ pub mod archetypes;
 pub mod build;
 pub mod cross;
 pub mod plan;
+pub mod posture;
 pub mod rear;
 
 use crate::fixed::Fx;

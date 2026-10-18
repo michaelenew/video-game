@@ -219,25 +219,39 @@ fn v3(x: Fx, y: Fx, z: Fx) -> V3 {
     V3::new(x, y, z)
 }
 
-/// How much of a limb's length the hips stand off the floor by: a pillar
-/// stands straight, a sprung leg is bent, a splayed one is mostly sideways.
-fn standing_share(build: Build, stance: Stance) -> Fx {
-    match stance {
-        Stance::Lowslung => fx(2, 5),
-        Stance::Upright => fx(9, 10),
-        _ => match build {
-            Build::Column => fx(19, 20),
-            Build::Sprung => fx(9, 10),
-            Build::Spindle => fx(3, 5),
-            _ => fx(17, 20),
-        },
-    }
+// ---------------------------------------------------------------------------
+// Proportions
+// ---------------------------------------------------------------------------
+
+/// The body's measurements in metres, before anything is placed: what the
+/// posture pass balances and the builder draws. Positions are along the
+/// torso's axis, forward positive, from the root.
+#[derive(Clone, Copy, Debug)]
+pub struct Proportions {
+    pub len: Fx,
+    pub torso: Fx,
+    pub half_w: Fx,
+    pub half_h: Fx,
+    pub head_half: Fx,
+    pub neck_len: Fx,
+    pub tail_len: Fx,
+    pub thorax: bool,
+    pub abdomen: bool,
+    pub shell: bool,
+    /// Where the neck leaves: the front of the last segment.
+    pub front: Fx,
+    /// The rear of the last segment behind the root.
+    pub rear: Fx,
+    /// The furthest back a limb may attach: the haunch's rear.
+    pub rear_attach: Fx,
+    /// Each pair's length in metres (a wing's is longer than its share),
+    /// where it attaches by default, and its half-thickness.
+    pub limb: [Fx; super::STATIONS],
+    pub attach: [Fx; super::STATIONS],
+    pub girth: [Fx; super::STATIONS],
 }
 
-/// Build the body. Every length is a share of the body's length, every
-/// angle a share of a quarter turn.
-pub fn body(g: &Genome) -> Body {
-    let mut r = Rig::new();
+pub fn proportions(g: &Genome) -> Proportions {
     let s = &g.sliders;
     let len = length_m(s.size);
     let mut half_w = len.mul(fx(3, 50).add(s.mass.mul(fx(3, 50))));
@@ -245,40 +259,116 @@ pub fn body(g: &Genome) -> Body {
         half_w = half_w.mul(Fx::from_int(4));
     }
     let half_h = half_w.mul(fx(9, 20));
-    // Hips: off the longest grounded pair.
-    let mut hips = Fx::ZERO;
-    for (_, p) in g.pairs() {
-        if p.role.grounded() {
-            let h = p.length.mul(len).mul(standing_share(p.build, g.stance));
-            hips = hips.max(h);
-        }
-    }
-    if g.stance == Stance::Lowslung {
-        // Splayed legs hold the belly half its depth off the floor.
-        hips = hips.add(half_h.mul(fx(1, 2)));
-    }
-    if g.stance == Stance::Limbless {
-        hips = half_w;
-    }
-    let pitch = s.pitch.mul(fx(1, 4));
-    let along = v3(cos_turns(pitch), sin_turns(pitch), Fx::ZERO);
     let torso = match g.stance {
         Stance::Level => len.mul(fx(3, 10)),
         Stance::Upright => len.mul(fx(1, 4)),
         Stance::Lowslung => len.mul(fx(9, 20)),
         Stance::Limbless => len.mul(fx(1, 16)),
     };
+    let sixth = torso.mul(fx(1, 6));
+    let front = if g.segments.thorax {
+        torso.add(sixth)
+    } else {
+        torso.mul(fx(5, 6))
+    };
+    let rear = if g.segments.abdomen {
+        torso.mul(fx(-9, 4))
+    } else {
+        sixth.neg()
+    };
+    let head_half = len.mul(fx(1, 20)).add(half_w.mul(fx(1, 4)));
+    let neck_len = match g.head {
+        HeadKind::Forward => len.mul(fx(3, 20)),
+        HeadKind::Raised => len.mul(fx(1, 5)),
+        HeadKind::Low => len.mul(fx(3, 20)),
+        HeadKind::Merged => len.mul(fx(1, 16)),
+    };
+    let tail_len = match g.segments.tail {
+        Tail::None => Fx::ZERO,
+        Tail::Level | Tail::Drooping => len.mul(fx(2, 5)),
+        Tail::Raised => len.mul(fx(1, 4)),
+    };
+    let mut limb = [Fx::ZERO; super::STATIONS];
+    let mut attach = [Fx::ZERO; super::STATIONS];
+    let mut girth = [Fx::ZERO; super::STATIONS];
+    for station in Station::ALL {
+        let i = station.index();
+        // Where a pair sits by default: under the front segment, along
+        // the body, and just behind the root. On an upright body the
+        // walking pairs cluster at the base of the raised part.
+        attach[i] = match (g.stance, station) {
+            (Stance::Upright, Station::Fore) => torso.mul(fx(1, 3)),
+            (Stance::Upright, Station::MidFore) => sixth,
+            (Stance::Upright, Station::MidHind) => torso.mul(fx(1, 12)),
+            (Stance::Upright, Station::Hind) => torso.mul(fx(-1, 12)),
+            (_, Station::Fore) => front.sub(sixth),
+            (_, Station::MidFore) => torso.mul(fx(1, 2)),
+            (_, Station::MidHind) => torso.mul(fx(1, 4)),
+            (_, Station::Hind) => torso.mul(fx(-1, 12)),
+        };
+        let Some(p) = g.pair(station) else { continue };
+        // A wing is longer than a leg of the same share: the Galewing's
+        // reach nine metres on a body of five and a half.
+        limb[i] = if p.role == Role::Wing {
+            p.length.mul(len).mul(fx(3, 2))
+        } else {
+            p.length.mul(len)
+        };
+        // A limb's half-thickness: a fourteenth of its length times its
+        // girth, plus an eighth of the body's half-width unless it is a
+        // spindle, and never under a thirtieth of its length.
+        let mut gi = limb[i].mul(p.girth).mul(fx(1, 14));
+        if p.build != Build::Spindle {
+            gi = gi.add(half_w.mul(fx(1, 8)));
+        }
+        girth[i] = gi.max(limb[i].mul(fx(1, 30)));
+    }
+    Proportions {
+        len,
+        torso,
+        half_w,
+        half_h,
+        head_half,
+        neck_len,
+        tail_len,
+        thorax: g.segments.thorax,
+        abdomen: g.segments.abdomen,
+        shell: g.minors.back == Back::Burden || g.minors.hide == Hide::Shell,
+        front,
+        rear,
+        rear_attach: sixth.neg(),
+        limb,
+        attach,
+        girth,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The body
+// ---------------------------------------------------------------------------
+
+/// Build the body, standing as its posture says.
+pub fn body(g: &Genome) -> Body {
+    let q = super::posture::posture(g);
+    body_in(g, &q)
+}
+
+/// Build the body in a given posture.
+pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
+    let mut r = Rig::new();
+    let p = proportions(g);
+    let (len, torso, half_w, half_h) = (p.len, p.torso, p.half_w, p.half_h);
+    let pitch = q.pitch;
+    let along = v3(cos_turns(pitch), sin_turns(pitch), Fx::ZERO);
     r.body.length = len;
-    r.body.hips = hips;
+    r.body.hips = q.root;
     r.body.half_width = half_w;
     r.body.pitch = pitch;
 
-    let root = r.bone("root", NO_PARENT, v3(Fx::ZERO, hips, Fx::ZERO), 0);
+    let root = r.bone("root", NO_PARENT, v3(Fx::ZERO, q.root, Fx::ZERO), 0);
 
     // The torso and its segments.
     let (fore_bone, fore_at) = if g.stance == Stance::Limbless {
-        // A chain: five segments ahead of the root, the head at the end,
-        // five behind as the tail.
         let seg = along.scale(torso);
         let mut parent = root;
         r.boxed(
@@ -363,6 +453,25 @@ pub fn body(g: &Genome) -> Body {
             );
         }
     }
+    if q.drags {
+        // The rear rests on the floor and trails: a rump from the haunch's
+        // underside down to the ground behind it.
+        let bottom = q.root.sub(half_h).max(Fx::ZERO);
+        r.part(
+            "rump",
+            root,
+            v3(
+                p.rear.sub(q.drag_len),
+                q.root.neg(),
+                half_w.neg().mul(fx(4, 5)),
+            ),
+            v3(
+                p.rear.add(torso.mul(fx(1, 12))),
+                bottom.sub(q.root).add(half_h.mul(fx(1, 2))),
+                half_w.mul(fx(4, 5)),
+            ),
+        );
+    }
     if g.minors.back == Back::Ridge {
         r.boxed(
             "ridge",
@@ -379,7 +488,7 @@ pub fn body(g: &Genome) -> Body {
             ),
         );
     }
-    if g.minors.back == Back::Burden || g.minors.hide == Hide::Shell {
+    if p.shell {
         r.boxed(
             "shell",
             root,
@@ -388,22 +497,12 @@ pub fn body(g: &Genome) -> Body {
         );
     }
 
-    // The head.
-    let head_half = len.mul(fx(1, 20)).add(half_w.mul(fx(1, 4)));
-    let neck_len = match g.head {
-        HeadKind::Forward => len.mul(fx(3, 20)),
-        HeadKind::Raised => len.mul(fx(1, 5)),
-        HeadKind::Low => len.mul(fx(3, 20)),
-        HeadKind::Merged => len.mul(fx(1, 16)),
-    };
-    let rise = match g.head {
-        HeadKind::Raised => fx(1, 10),
-        HeadKind::Low => fx(-3, 25),
-        _ => Fx::ZERO,
-    };
+    // The head, on a neck raised as the posture says.
+    let head_half = p.head_half;
+    let neck_len = p.neck_len;
     let neck_dir = v3(
-        cos_turns(pitch.add(rise)),
-        sin_turns(pitch.add(rise)),
+        cos_turns(pitch.add(q.neck_rise)),
+        sin_turns(pitch.add(q.neck_rise)),
         Fx::ZERO,
     );
     let head = if g.head == HeadKind::Merged {
@@ -476,11 +575,7 @@ pub fn body(g: &Genome) -> Body {
     }
 
     // The tail.
-    let tail_len = match g.segments.tail {
-        Tail::None => Fx::ZERO,
-        Tail::Level | Tail::Drooping => len.mul(fx(2, 5)),
-        Tail::Raised => len.mul(fx(1, 4)),
-    };
+    let tail_len = p.tail_len;
     if g.stance == Stance::Limbless {
         let seg = along.scale(torso.neg());
         let mut parent = root;
@@ -529,59 +624,165 @@ pub fn body(g: &Genome) -> Body {
         );
     }
 
-    // The limbs.
+    // The limbs, each standing as its station's pose says.
     let mut span = Fx::ZERO;
+    let hang = half_h.mul(super::posture::ATTACH_DOWN);
     for station in Station::ALL {
-        let Some(p) = g.pair(station) else { continue };
-        // A wing is longer than a leg of the same share: the Galewing's
-        // reach nine metres on a body of five and a half.
-        let limb = if p.role == Role::Wing {
-            p.length.mul(len).mul(fx(3, 2))
-        } else {
-            p.length.mul(len)
+        let i = station.index();
+        let Some(pair) = g.pair(station) else {
+            continue;
         };
-        let (attach_bone, attach_x) = match station {
-            Station::Fore => (thorax, torso.mul(fx(1, 6))),
-            Station::MidFore => (fore_bone, Fx::ZERO),
-            Station::MidHind => (root, torso.mul(fx(1, 6))),
-            Station::Hind => (root, torso.mul(fx(-1, 6))),
-        };
-        // A limb's half-thickness: an eighth of the body's half-width plus
-        // a fourteenth of its length times its girth, and never thinner
-        // than a twentieth of its length. The Ridgeback's legs come out
-        // half a metre across, the cats' a hand.
-        let girth = half_w
-            .mul(fx(1, 8))
-            .add(limb.mul(p.girth).mul(fx(1, 14)))
-            .max(limb.mul(fx(1, 20)));
+        let pose = q.stations[i];
+        let limb = p.limb[i];
+        let girth = p.girth[i];
+        let fore = matches!(station, Station::Fore | Station::MidFore);
+        // The hip: on the flank, down at the belly line, where the posture
+        // put the pair along the body.
+        let hip_at = v3(
+            pose.attach.mul(cos_turns(pitch)),
+            pose.attach.mul(sin_turns(pitch)).sub(hang),
+            Fx::ZERO,
+        );
+        let hip_y = q.root.add(hip_at.y);
         for (side_i, side) in [-1, 1].into_iter().enumerate() {
             let names = LIMB_NAMES[station.index()][side_i];
-            let z = half_w.mul(Fx::from_int(side));
+            let sd = Fx::from_int(side);
+            let z = half_w.mul(sd);
+            let hip = r.bone(names[0], root, v3(hip_at.x, hip_at.y, z), side);
             let half_limb = limb.mul(fx(1, 2));
-            // Where the upper and lower bones go, by build.
-            let (upper, lower) = match p.build {
-                Build::Column | Build::Sprung => (
-                    v3(Fx::ZERO, half_limb.neg(), Fx::ZERO),
-                    v3(Fx::ZERO, half_limb.neg(), Fx::ZERO),
-                ),
-                Build::Spindle | Build::Stub => (
-                    v3(
-                        Fx::ZERO,
-                        Fx::ZERO,
-                        z.mul(fx(0, 1)).add(half_limb.mul(Fx::from_int(side))),
+            if pair.role == Role::Wing && !pose.wing_walks {
+                // A wing: three segments out to the side, swept back and
+                // rising a little, each a broad thin plane whose chord
+                // narrows toward the tip.
+                let seg = limb.mul(fx(1, 3));
+                let sweep = v3(limb.mul(fx(-1, 10)), limb.mul(fx(1, 15)), seg.mul(sd));
+                let thick = len.mul(fx(3, 200)).max(girth.mul(fx(1, 4)));
+                let arm = r.bone(names[1], hip, sweep, side);
+                let hand = r.bone(names[2], arm, sweep, side);
+                let chords = [
+                    torso.mul(fx(1, 2)),
+                    torso.mul(fx(2, 5)),
+                    torso.mul(fx(1, 4)),
+                ];
+                for (k, (bone_i, name)) in [(hip, names[0]), (arm, names[1]), (hand, names[2])]
+                    .into_iter()
+                    .enumerate()
+                {
+                    r.boxed(
+                        name,
+                        bone_i,
+                        sweep.scale(fx(1, 2)),
+                        v3(chords[k].mul(fx(1, 2)), thick, seg.mul(fx(1, 2))),
+                    );
+                }
+                span = limb.add(half_w).mul(Fx::from_int(2));
+                continue;
+            }
+            if !pose.grounded {
+                // A striking limb held up and forward: folded blades.
+                let (upper, lower) = match pair.build {
+                    Build::Raptorial => (
+                        v3(half_limb.mul(fx(1, 2)), half_limb.mul(fx(1, 2)), Fx::ZERO),
+                        v3(half_limb, Fx::ZERO, Fx::ZERO),
                     ),
-                    v3(Fx::ZERO, half_limb.neg(), Fx::ZERO),
-                ),
-                Build::Raptorial => (
-                    v3(half_limb.mul(fx(1, 2)), half_limb.mul(fx(1, 2)), Fx::ZERO),
-                    v3(half_limb, Fx::ZERO, Fx::ZERO),
-                ),
-                Build::Wing => (
-                    v3(Fx::ZERO, Fx::ZERO, half_limb.mul(Fx::from_int(side))),
-                    v3(Fx::ZERO, Fx::ZERO, half_limb.mul(Fx::from_int(side))),
-                ),
+                    _ => (
+                        v3(half_limb.mul(fx(1, 2)), half_limb.mul(fx(-1, 2)), Fx::ZERO),
+                        v3(half_limb.mul(fx(1, 2)), Fx::ZERO, Fx::ZERO),
+                    ),
+                };
+                let knee = r.bone(names[1], hip, upper, side);
+                let foot = r.bone(names[2], knee, lower, side);
+                r.boxed(
+                    names[0],
+                    hip,
+                    upper.scale(fx(1, 2)),
+                    limb_half(upper, girth),
+                );
+                r.boxed(
+                    names[1],
+                    knee,
+                    lower.scale(fx(1, 2)),
+                    limb_half(lower, girth),
+                );
+                let tip_half = match pair.tip {
+                    Tip::Blade => v3(
+                        girth.mul(fx(3, 1)),
+                        girth.mul(fx(1, 2)),
+                        girth.mul(fx(1, 2)),
+                    ),
+                    _ => v3(girth.mul(fx(3, 2)), girth, girth),
+                };
+                r.boxed(names[2], foot, V3::ZERO, tip_half);
+                continue;
+            }
+            // A standing limb: hip to foot is a straight line of length d,
+            // with the foot `reach` ahead of the hip on the floor; the
+            // joint sits off the midpoint of that line.
+            let splay = super::posture::splayed(g.stance, pair.build);
+            let standing =
+                super::posture::standing_length(g.stance, pair.build, pose.wing_walks, limb);
+            let mut down = hip_y;
+            let mut reach = pose.reach;
+            let mut d = down.mul(down).add(reach.mul(reach)).sqrt();
+            if d > standing {
+                // It cannot reach: it hangs toward the floor.
+                let k = standing.div(d.max(fx(1, 100)));
+                down = down.mul(k);
+                reach = reach.mul(k);
+                d = standing;
+            }
+            let (upper, lower) = match pair.build {
+                _ if pose.wing_walks => {
+                    // Two wing segments reach the floor, elbow out.
+                    let seg = limb.mul(fx(1, 3));
+                    let h = seg
+                        .mul(seg)
+                        .sub(d.mul(d).mul(fx(1, 4)))
+                        .max(Fx::ZERO)
+                        .sqrt();
+                    (
+                        v3(reach.mul(fx(1, 2)), down.neg().mul(fx(1, 2)), h.mul(sd)),
+                        v3(
+                            reach.mul(fx(1, 2)),
+                            down.neg().mul(fx(1, 2)),
+                            h.neg().mul(sd),
+                        ),
+                    )
+                }
+                _ if splay => {
+                    // Out to the side, then down.
+                    let out = half_limb
+                        .mul(half_limb)
+                        .sub(reach.mul(reach).mul(fx(1, 4)))
+                        .max(Fx::ZERO)
+                        .sqrt();
+                    (
+                        v3(reach.mul(fx(1, 2)), Fx::ZERO, out.mul(sd)),
+                        v3(reach.mul(fx(1, 2)), down.neg(), Fx::ZERO),
+                    )
+                }
+                _ => {
+                    // Two halves, the joint off the line: elbow back on a
+                    // fore limb, knee forward on a hind one.
+                    let h = half_limb
+                        .mul(half_limb)
+                        .sub(d.mul(d).mul(fx(1, 4)))
+                        .max(Fx::ZERO)
+                        .sqrt();
+                    let (ux, uy) = (
+                        reach.div(d.max(fx(1, 100))),
+                        down.neg().div(d.max(fx(1, 100))),
+                    );
+                    let (nx, ny) = (uy.neg(), ux);
+                    let bend = if fore { h.neg() } else { h };
+                    let mid = v3(reach.mul(fx(1, 2)), down.neg().mul(fx(1, 2)), Fx::ZERO);
+                    let knee = v3(mid.x.add(nx.mul(bend)), mid.y.add(ny.mul(bend)), Fx::ZERO);
+                    (
+                        knee,
+                        v3(reach.sub(knee.x), down.neg().sub(knee.y), Fx::ZERO),
+                    )
+                }
             };
-            let hip = r.bone(names[0], attach_bone, v3(attach_x, Fx::ZERO, z), side);
             let knee = r.bone(names[1], hip, upper, side);
             let foot_bone = r.bone(names[2], knee, lower, side);
             let up = r.boxed(
@@ -596,30 +797,33 @@ pub fn body(g: &Genome) -> Body {
                 lower.scale(fx(1, 2)),
                 limb_half(lower, girth),
             );
-            let tip_half = match p.tip {
-                Tip::Blade => v3(
-                    girth.mul(fx(3, 1)),
-                    girth.mul(fx(1, 2)),
-                    girth.mul(fx(1, 2)),
-                ),
-                Tip::Feather => v3(girth.mul(fx(4, 1)), girth.mul(fx(1, 2)), limb.mul(fx(1, 5))),
-                _ => v3(girth.mul(fx(3, 2)), girth, girth),
-            };
-            r.boxed(names[2], foot_bone, V3::ZERO, tip_half);
-            if p.role.grounded() {
-                r.leg(
-                    up,
-                    lo,
-                    hip,
-                    knee,
-                    matches!(station, Station::Fore | Station::MidFore),
-                    side,
+            // The foot sits on the floor: its box rises from the sole.
+            let foot_half = v3(girth.mul(fx(3, 2)), girth.mul(fx(1, 2)), girth);
+            r.boxed(
+                names[2],
+                foot_bone,
+                v3(girth.mul(fx(1, 2)), girth.mul(fx(1, 2)), Fx::ZERO),
+                foot_half,
+            );
+            if pose.wing_walks {
+                // The hand folds up and back from the wrist, a long thin
+                // plane along the body.
+                let seg = limb.mul(fx(1, 3));
+                let fold = v3(seg.mul(fx(-3, 5)), seg.mul(fx(4, 5)), Fx::ZERO);
+                let thick = len.mul(fx(3, 200)).max(girth.mul(fx(1, 4)));
+                let hand_name = if side < 0 {
+                    "wing.l.hand"
+                } else {
+                    "wing.r.hand"
+                };
+                r.boxed(
+                    hand_name,
+                    foot_bone,
+                    fold.scale(fx(1, 2)),
+                    v3(seg.mul(fx(3, 10)), seg.mul(fx(2, 5)), thick),
                 );
             }
-            let _ = lo;
-        }
-        if p.role == Role::Wing {
-            span = limb.mul(Fx::from_int(2)).add(half_w.mul(Fx::from_int(2)));
+            r.leg(up, lo, hip, knee, fore, side);
         }
     }
     r.body.span = span;

@@ -60,7 +60,9 @@ const LEVEL_DATA: &[&str] = &[
     // genomes are species tables in another notation, judged the way the
     // species tables are -- by `tests/breed.rs` rebuilding the cast from
     // them -- and what each body plan wants of the rest is the shape of an
-    // animal, not a feel. The rates a lineage moves at (`cross::Rates`, the
+    // animal, not a feel; how a body stands (`posture.rs`: where limbs hang
+    // on the flank, how far a limb leans, how straight a pillar stands) the
+    // same. The rates a lineage moves at (`cross::Rates`, the
     // rearing's growth per meal) are the one part that is tuning, and they
     // become Oven knobs with the first egg in the game; until then the
     // generations in `tests/breed.rs` are what they are judged by.
@@ -68,6 +70,7 @@ const LEVEL_DATA: &[&str] = &[
     "build.rs",
     "cross.rs",
     "plan.rs",
+    "posture.rs",
     "rear.rs",
     "land.rs",
     "layout.rs",

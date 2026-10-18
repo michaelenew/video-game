@@ -164,6 +164,71 @@ has just become a wing -- a stub, half the length its leg was, on bones
 still at 0.75 -- is at about minus a half, and has to lighten to under a
 half and grow the wing past two thirds of its body before the margin turns.
 
+## 3b · Posture: a legal plan also stands (2026-10-18, second pass)
+
+The first sheets showed it: a Ridgeback whose fore pair had become wings
+kept its hind pair where it was and stood with its weight out in front of
+its only legs. Repair makes a plan *legal*; nothing made it *stand*.
+[`posture.rs`](../../../crates/sim/src/breed/posture.rs) does, between the
+repair and the builder, from one principle: **a body at rest is balanced
+when its centre of mass sits over its feet.** Every part has a mass (its
+box's volume times a density the mass slider sets -- a spider's abdomen
+counts light for its size, a wing lighter still), every grounded pair has
+feet, and when the mass is outside the feet's span the pass has the ways a
+real animal has of putting it there:
+
+- **shift** the limbs along the body (bring the hind pair forward under
+  the weight), keeping their order and a natural spacing between pairs;
+- **reach**: lean the limbs so the feet land ahead of or behind the hips,
+  up to two fifths of the limb;
+- **pitch** the torso up to a tenth of a turn, which moves the front mass
+  back over the hind feet (a low-slung body hardly pitches at all);
+- put the **wings down** and walk on the wrist, a pterosaur, when the
+  weight is ahead of the legs -- rolled, so some such creatures do and
+  some do not, and forced when nothing else can balance it;
+- **drag**: with fore limbs and nothing behind them, the rear rests on
+  the floor and lengthens into a rump that trails.
+
+Which mix a creature uses is rolled once from its genome's fingerprint:
+each continuous strategy takes a random share of the correction, and any
+of them may sit a creature out, so two creatures with the same problem may
+solve it differently and the same creature always stands the same way.
+What a roll cannot reach, the limbs take regardless, within the torso.
+
+Then the **vertical**: the root height, and the pitch if need be, at
+which every grounded limb reaches the floor with a bend between a crouch
+and nearly straight. Each build has a standing length (a column or a
+sprung leg its whole length, a splayed one -- a spindle, a stub, anything
+on a low-slung body -- its lower half, a walking wing its first two
+segments) and a bend it likes (a pillar near straight, a spindle deep in
+its splay); limbs attach at the bottom of the flank, where every creature
+in the tables has them. A longer hind pair bends its knees more: that is a
+**hopper**, recorded for the move set. A head is carried above the back
+unless the head kind says low. The builder then places two-segment limbs
+with the joint off the line -- elbow back on a fore limb, knee forward on
+a hind one -- splayed limbs out then down, wings as three broad thin planes
+swept back and rising with the chord narrowing to the tip, a walking wing
+with its hand folded up along the body, and a dragging rump down to the
+floor.
+
+`tests/posture.rs`: every archetype stands as written (the bird's legs
+come forward under its weight, nothing else moves), the same genome always
+stands the same way, heads are above backs, the winged Ridgeback stands by
+at least three different mixes across forty near-identical creatures with
+some of them walking on their wings, fore limbs alone drag a rump that
+touches the floor, long hind limbs make a hopper with its hind knees bent
+more than its fore, the Galewing never walks on its wings, and two
+thousand random repaired plans all stand with their feet on the floor (a
+belly on the floor with legs too short to reach is the one case a limb
+hangs, and it is flagged).
+
+- **BREED-12 · A strategy's caps are the body's, not the stance's taste.**
+  A level body may pitch a tenth of a turn and lean its legs two fifths of
+  their length because that is what the limbs allow, not because it looks
+  right; what looks right is the mean want the settle pulls toward. If a
+  posture reads as strained it is the plausibility score's business to
+  say so, which it does not yet.
+
 ## 4 · Crossing
 
 [`cross.rs`](../../../crates/sim/src/breed/cross.rs). Three operations, each
