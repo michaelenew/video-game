@@ -853,6 +853,10 @@ pub const SECTIONS: &[Section] = &[
                 "What a creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry. --species <name> for a creature other than the Ridgeback; everything it prints is read off the species' table.",
             ),
             e(
+                "cargo run -p sim --bin breedcheck",
+                "What the creature builder makes of the cast: every creature rebuilt from its genome beside its hand-written table (legs, hips, length, span, every move with its frames and damage, what it drops), and the verdict on each. `feathers <seed>` watches a Ridgeback given a Galewing's feathers generation by generation, `mantis <seed>` one given a Mantis's claw, `drift <seed>` every creature forty generations alone, `herd <seed>` the biggest Ridgebacks bred to each other.",
+            ),
+            e(
                 "cargo run -p sim --bin critcheck",
                 "Can every move touch something short? Stands one critter of a pack at 1, 2, 3 and 5 m in front of each class, crosshair on its middle, presses every move, and prints where it touched -- beside where the same move touches a fighter standing there, which is what it is held to. The dev pack's 0.6 m gnat by default; --species <pack> --kind <name> for another.",
             ),

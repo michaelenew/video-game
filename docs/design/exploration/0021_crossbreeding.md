@@ -244,7 +244,10 @@ kick); only the Galewing flies; the tiers come out in the bestiary's order
   of four hundred births and their body sliders within a quarter.
 - *The biggest breed bigger*: a herd of eight varied Ridgebacks, the two
   largest bred each generation, grows its mean size slider by more than
-  0.04 in fifteen -- a metre or two of animal.
+  0.04 in fifteen; `breedcheck -- herd` shows it reaching the slider's end,
+  a thirty-six-metre animal, in twenty -- selection on a hundredth of
+  mutation a generation is strong, and the cap is the only thing stopping
+  it (BREED-4).
 - *A cross lands between its parents*: Ridgeback × Mantis, thirty-two
   seeds, every child's majors from one parent, its sliders within a fifth
   of the parents' range, standing up.
@@ -314,17 +317,54 @@ What the harness prints for one feather lineage is in §8.
 
 ## 8 · One lineage, as printed
 
-`cargo run -p sim --bin breedcheck -- feathers 7`, trimmed to the
-generations where something changed:
+`cargo run -p sim --bin breedcheck -- feathers 9`: the bones lighten from the
+first feather (its pull on bulk), the wings arrive at the ninth as stubs a
+quarter of the body long, and two generations of growing them later it
+flies. Across eight seeds the wings came between the second and the ninth
+feather and flight two or three after -- *multiple generations*, as the
+brief asks, and the pace is `Rates::graft_major` (BREED-5) if that is too
+quick:
 
 ```text
-@FEATHERS@
+generation   1: Level fore=Both/Column pitch 0.00 mass 0.75 size 0.78 margin -1.00 tier 4 plausibility 0.94 [charges, mountable]
+generation   2: Level fore=Both/Column pitch 0.01 mass 0.71 size 0.78 margin -1.00 tier 4 plausibility 0.96 [charges, mountable]  <- a major moved
+generation   3: Level fore=Both/Column pitch 0.00 mass 0.69 size 0.75 margin -1.00 tier 4 plausibility 0.97 [charges, mountable]
+generation   4: Level fore=Both/Column pitch 0.01 mass 0.64 size 0.76 margin -1.00 tier 4 plausibility 0.93 [charges, mountable]
+generation   5: Level fore=Both/Column pitch 0.01 mass 0.64 size 0.75 margin -1.00 tier 3 plausibility 0.95 [charges, mountable]
+generation   6: Level fore=Both/Column pitch 0.01 mass 0.64 size 0.75 margin -1.00 tier 3 plausibility 0.96 [charges, mountable]
+generation   7: Level fore=Both/Column pitch 0.02 mass 0.60 size 0.75 margin -1.00 tier 3 plausibility 0.96 [charges, mountable]
+generation   8: Level fore=Both/Column pitch 0.02 mass 0.60 size 0.73 margin -1.00 tier 3 plausibility 0.97 [charges, mountable]
+generation   9: Level fore=Wing/Wing pitch 0.01 mass 0.54 size 0.72 wing 0.27 margin -0.55 tier 3 plausibility 0.46 [vestigial wings, mountable]  <- a major moved
+generation  10: Level fore=Wing/Wing pitch 0.02 mass 0.52 size 0.69 wing 0.39 margin -0.34 tier 3 plausibility 0.49 [vestigial wings, mountable]
+generation  11: Level fore=Wing/Wing pitch 0.02 mass 0.50 size 0.67 wing 0.68 margin 0.12 tier 4 plausibility 0.70 [flies, mountable]
+generation  12: Level fore=Wing/Wing pitch 0.01 mass 0.48 size 0.66 wing 0.79 margin 0.30 tier 3 plausibility 0.74 [flies, mountable]
+generation  13: Level fore=Wing/Wing pitch 0.02 mass 0.45 size 0.68 wing 0.88 margin 0.46 tier 3 plausibility 0.77 [flies, mountable]
+generation  14: Level fore=Wing/Wing pitch 0.03 mass 0.44 size 0.68 wing 0.91 margin 0.51 tier 4 plausibility 0.76 [flies, mountable]
+generation  15: Level fore=Wing/Wing pitch 0.02 mass 0.44 size 0.66 wing 0.92 margin 0.53 tier 3 plausibility 0.76 [flies, mountable]
+...
 ```
 
-And the brief's own example, `breedcheck -- mantis 7`:
+And the brief's own example, `breedcheck -- mantis 7`, trimmed to where a
+major moved and a few milestones: eighteen claws of a Ridgeback leaning
+slightly, lightening, its fore pair creeping longer; then the arms go over,
+the torso follows them up over the next six generations to two thirds
+upright, and what is left is a duellist with a Ridgeback's tail:
 
 ```text
-@MANTIS@
+generation   1: Level fore=Both/Column pitch 0.02 mass 0.79 size 0.77 margin -1.00 tier 4 plausibility 0.93 [charges, mountable]
+generation   4: Level fore=Both/Column pitch 0.08 mass 0.73 size 0.77 margin -1.00 tier 4 plausibility 0.87 [charges, mountable]  <- a major moved
+generation   5: Level fore=Both/Column pitch 0.10 mass 0.70 size 0.75 margin -1.00 tier 4 plausibility 0.82 [charges, pounces, mountable]  <- a major moved
+generation   8: Level fore=Both/Column pitch 0.07 mass 0.61 size 0.72 margin -1.00 tier 4 plausibility 0.91 [charges, pounces, mountable]
+generation  13: Level fore=Both/Column pitch 0.11 mass 0.54 size 0.70 margin -1.00 tier 4 plausibility 0.92 [charges, pounces, mountable]
+generation  15: Level fore=Strike/Raptorial pitch 0.16 mass 0.50 size 0.69 margin -1.00 tier 4 plausibility 0.81 [charges, pounces, guards, mountable]  <- a major moved
+generation  16: Upright fore=Strike/Raptorial pitch 0.27 mass 0.47 size 0.68 margin -1.00 tier 4 plausibility 0.75 [pounces, guards]  <- a major moved
+generation  25: Upright fore=Strike/Raptorial pitch 0.64 mass 0.33 size 0.63 margin -1.00 tier 4 plausibility 0.95 [pounces, guards]
+generation  26: Upright fore=Strike/Raptorial pitch 0.65 mass 0.32 size 0.64 margin -1.00 tier 4 plausibility 0.93 [pounces, guards]  <- a major moved
+generation  33: Upright fore=Strike/Raptorial pitch 0.70 mass 0.32 size 0.65 margin -1.00 tier 4 plausibility 0.97 [pounces, guards]
+generation  35: Upright fore=Strike/Raptorial pitch 0.70 mass 0.31 size 0.64 margin -1.00 tier 4 plausibility 0.94 [pounces, guards]  <- a major moved
+generation  39: Upright fore=Strike/Raptorial pitch 0.68 mass 0.32 size 0.61 margin -1.00 tier 4 plausibility 0.95 [pounces, guards]
+   final: Upright Forward thorax=false abdomen=true tail=Level | Fore:Strike/Raptorial/Blade 0.56x0.20, MidFore:Walk/Sprung/Claw 0.30x0.26, Hind:Walk/Sprung/Claw 0.35x0.26 | M
+   moves: bite, tail sweep, scythe, lunge, parry, pounce, leap, wing flare, shoulder, quill fling, guard
 ```
 
 ## 9 · Open
