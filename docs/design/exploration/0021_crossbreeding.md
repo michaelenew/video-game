@@ -272,6 +272,51 @@ Three more things the posed sheets asked for:
   part through its rotated bone. `breedcheck -- boxes` prints every part
   as its centre, its axis and its extents, and the sheet draws that.
 
+### Wings by degrees, and a spider's form (fourth pass)
+
+The owner's read of the posed sheets: wings jumped from big flying wings to
+walking wings and back, which reads as a creature losing something; the
+Broodmother's base form was wrong; and the Ridgeback-to-Mantis lineage went
+strange in the middle.
+
+- **The middle of Ridgeback × Mantis** was two bugs. A leg rebuilt as
+  another kind of leg (column to sprung) was halved by the rule meant for
+  a leg becoming a wing, so a ten-metre body found itself on stubs and
+  lay on its belly; the rule now applies only to a limb becoming a wing.
+  And balancing on its hind legs alone, the pitch search was free to drop
+  the nose; it may now drop it a hair at most -- an animal rears to get
+  its weight back, it does not bow.
+- **How far a wing leans is a number** (`StationPose::wing_lean`), not a
+  coin rolled per creature -- the coin re-rolled every generation, which
+  is what flickered. It is how far the weight sits ahead of the hind
+  feet against how far those legs could comfortably come under it: held
+  and tight, the wrist lowered, touching (`WING_PLANT`), carrying more and
+  planted further ahead. A lineage's wings come down and go back up a
+  little at a time (`tests/posture.rs`, `wings_lean_by_degrees`).
+- **Wings are folded at rest and walking, for everybody, and spread only
+  in flight** (`build::body_flying`, the `_flight` sheets): airborne for a
+  creature that flies, flared on the ground for one whose wings cannot
+  lift it. Flight is a capability, read from the lift margin, and never
+  tied to whether the wings also walk -- a pterosaur walks on its wings
+  and flies on them, and its flight sheet shows the wings it flies on. A
+  folded wing is drawn as one: the humerus back along the flank, the
+  forearm forward to a wrist near the shoulder, the hand folded back to
+  the flank and tucked to about the tail's tip, a band of feathers or
+  membrane along it as large as the wing has grown -- a stub folds
+  small, a full wing folds full. A wing is a fifth humerus, three tenths
+  forearm and half hand, as a bird's is, solved as a two-bone reach for
+  held and walking wings alike, so the two are one geometry.
+- **The Broodmother** stands as a spider: her cephalothorax is narrow
+  (the toad's width rule no longer applies to a body on spindles), her
+  eight legs radiate in a fan from it -- the fore pair reaching forward,
+  the hind pair back -- with the knees high above the body and the feet
+  far out, and her abdomen hangs from the waist at the haunch's rear,
+  tilted up and sized as a sac, rather than floating half a torso behind.
+- **BREED-14 · A level body rears a sixteenth of a turn at most.** With
+  the nose kept up, a level biped balancing on its hind legs would rear
+  to the stance's whole pitch cap; a bird standing tall is about a
+  sixteenth.
+
 - **BREED-13 · The band is capped.** The mass has to sit a fifth of the
   stance in from either end, but never more than a fifth of the torso:
   a wide stance is all the steadier, and a wrist put down ahead should not

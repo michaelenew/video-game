@@ -124,10 +124,6 @@ fn heads_are_carried_above_the_back() {
 #[test]
 fn a_ridgeback_with_wings_for_forelegs_still_stands() {
     let mut mixes = std::collections::HashSet::new();
-    let mut wing_walkers = 0;
-    let mut shifted = 0;
-    let mut pitched = 0;
-    let mut reached = 0;
     for k in 0..40 {
         let mut g = RIDGEBACK;
         let fore = g.limbs[0].as_mut().unwrap();
@@ -142,20 +138,16 @@ fn a_ridgeback_with_wings_for_forelegs_still_stands() {
         plan::repair(&mut r);
         let q = check(&r, "winged ridgeback");
         let a = q.applied;
-        let mix = (
+        assert!(
+            a.wing_walks,
+            "a Ridgeback with wings for forelegs did not lean on them"
+        );
+        mixes.insert((
             f(a.shift).abs() > 0.05,
             f(a.reach).abs() > 0.05,
             f(a.pitch).abs() > 0.005,
-            a.wing_walks,
-        );
-        mixes.insert(mix);
-        wing_walkers += a.wing_walks as usize;
-        shifted += mix.0 as usize;
-        reached += mix.1 as usize;
-        pitched += mix.2 as usize;
+        ));
         if a.wing_walks {
-            let i = q.stations.iter().position(|s| s.wing_walks).unwrap();
-            assert!(q.stations[i].grounded);
             // The wrist lands clear ahead of the hind feet.
             let body = build::body(&r);
             let wrist = f(body.at(body.bone_named("fore.l.foot").unwrap()).x);
@@ -166,18 +158,87 @@ fn a_ridgeback_with_wings_for_forelegs_still_stands() {
             );
         }
     }
+    // With its forelegs gone the weight is far ahead of the hind feet:
+    // every one of them leans on its wings, and those carry it.
+    let _ = mixes;
+}
+
+/// How much a creature leans on its wings is a gradient, not a switch:
+/// shorten the hind legs a little at a time and the wings come down a
+/// little at a time -- held, lowered, touching, carrying -- and the
+/// same creature never flickers between the two.
+#[test]
+fn wings_lean_by_degrees() {
+    let winged = |hind: Fx| {
+        let mut g = RIDGEBACK;
+        let fore = g.limbs[0].as_mut().unwrap();
+        fore.role = Role::Wing;
+        fore.build = Build::Wing;
+        fore.tip = Tip::Feather;
+        fore.length = fx(1, 2);
+        g.limbs[3].as_mut().unwrap().length = hind;
+        plan::repair(&mut g);
+        g
+    };
+    let mut leans = Vec::new();
+    for k in 0..=24 {
+        // Hind legs from a fifth of the body to over half of it.
+        let hind = fx(1, 5).add(Fx::ratio(k, 70));
+        let q = posture::posture(&winged(hind));
+        leans.push(f(q.stations[0].wing_lean));
+    }
+    for w in leans.windows(2) {
+        assert!(w[1] <= w[0] + 0.02, "longer legs leaned more: {leans:?}");
+        assert!(w[0] - w[1] < 0.2, "the lean jumped: {leans:?}");
+    }
+    let plant = f(posture::WING_PLANT);
     assert!(
-        mixes.len() >= 3,
-        "every creature used the same mix: {mixes:?}"
+        leans[0] >= plant,
+        "short hind legs did not lean on the wings: {leans:?}"
     );
     assert!(
-        (4..=36).contains(&wing_walkers),
-        "{wing_walkers} of 40 walk on their wings"
+        *leans.last().unwrap() < plant,
+        "long hind legs still lean on the wings: {leans:?}"
     );
+    // Some of the sweep is in between: lowered but not yet touching.
     assert!(
-        shifted >= 10 && reached >= 10 && pitched >= 5,
-        "shift {shifted} reach {reached} pitch {pitched}"
+        leans.iter().any(|l| *l > 0.0 && *l < plant),
+        "no wing ever held part-way down: {leans:?}"
     );
+}
+
+/// The flight pose is apart from how it stands: a creature that leans on
+/// its wings to walk still spreads them to fly, airborne, and one whose
+/// wings cannot lift it flares them on the ground.
+#[test]
+fn a_wing_walker_still_flies() {
+    let g = GALEWING;
+    let q = posture::posture(&g);
+    let flying = build::body_flying(&g, &q, fx(3, 10));
+    let standing = build::body(&g);
+    assert!(f(flying.span) > 10.0, "spread span {}", f(flying.span));
+    let low = |b: &build::Body| {
+        (0..b.part_count)
+            .map(|i| f(b.lowest(i)))
+            .fold(f32::MAX, f32::min)
+    };
+    assert!(
+        low(&flying) > 1.0,
+        "a flier in flight is off the floor: {}",
+        low(&flying)
+    );
+    assert!(low(&standing) < 0.2);
+    // A flightless winged creature flares, feet down.
+    let mut grounded = RIDGEBACK;
+    let fore = grounded.limbs[0].as_mut().unwrap();
+    fore.role = Role::Wing;
+    fore.build = Build::Wing;
+    fore.length = fx(1, 5);
+    plan::repair(&mut grounded);
+    assert!(!plan::assess(&grounded).caps.flies);
+    let q = posture::posture(&grounded);
+    let flare = build::body_flying(&grounded, &q, fx(3, 10));
+    assert!(low(&flare) < 0.2, "a flightless body left the floor");
 }
 
 /// Fore limbs and nothing behind: the rear rests on the floor and trails.

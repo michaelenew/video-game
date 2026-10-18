@@ -364,9 +364,11 @@ pub fn breed(a: &Genome, b: &Genome, rates: &Rates, rng: &mut Rng) -> Outcome {
 /// discrete parts from `b` if `from_b`.
 fn blend_pair(a: &LimbPair, b: &LimbPair, share: Fx, from_b: bool) -> LimbPair {
     let mut length = unit(a.length.add(b.length.sub(a.length).mul(share)));
-    // A limb rebuilt as another kind comes in short -- a wing that was a
-    // leg is a stub of a wing first, and has to grow before it lifts.
-    if from_b && b.build != a.build {
+    // A limb that becomes a wing comes in short -- a wing that was a leg
+    // is a stub of a wing first, and has to grow before it lifts. A leg
+    // rebuilt as another kind of leg keeps its length: it still has to
+    // carry the body.
+    if from_b && b.role == Role::Wing && a.role != Role::Wing {
         length = length.mul(fx(1, 2));
     }
     LimbPair {

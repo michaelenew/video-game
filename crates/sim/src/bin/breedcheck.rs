@@ -7,7 +7,7 @@
 //! cargo run -p sim --bin breedcheck -- mantis [seed]     # a Ridgeback given a Mantis's claw
 //! cargo run -p sim --bin breedcheck -- drift [seed]      # every creature, forty generations alone
 //! cargo run -p sim --bin breedcheck -- herd [seed]       # breeding the biggest Ridgebacks
-//! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens> [phase]
+//! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens> [phase [fly]]
 //!                                            # every generation's body as side-view boxes, for a sheet
 //! ```
 
@@ -18,8 +18,54 @@ use sim::breed::plan;
 use sim::breed::{Genome, Rng, Role};
 use sim::fixed::Fx;
 
-fn f(x: Fx) -> f32 {
-    x.to_f32_for_render()
+/// A fixed-point number for printing, with `{:.N}` honoured by integer
+/// arithmetic: this file is under `crates/sim/src`, where the no-floats
+/// guard holds, and a diagnostic that rounds through `f32` reports on a
+/// different number from the one the simulation runs.
+#[derive(Clone, Copy)]
+struct D(Fx);
+
+impl std::fmt::Display for D {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let places = out.precision().unwrap_or(2).min(4) as u32;
+        let scale = 10i64.pow(places);
+        let raw = self.0.raw() as i64;
+        // Round half away from zero, in 16.16.
+        let scaled = (raw.abs() * scale + (1 << 15)) >> 16;
+        let sign = if raw < 0 && scaled != 0 { "-" } else { "" };
+        if places == 0 {
+            return write!(out, "{sign}{scaled}");
+        }
+        write!(
+            out,
+            "{sign}{}.{:0width$}",
+            scaled / scale,
+            scaled % scale,
+            width = places as usize
+        )
+    }
+}
+
+fn f(x: Fx) -> D {
+    D(x)
+}
+
+/// A decimal argument ("0.3") as fixed point, read without a float.
+fn parse_fx(s: &str) -> Option<Fx> {
+    let (whole, frac) = s.split_once('.').unwrap_or((s, ""));
+    let whole: i32 = if whole.is_empty() {
+        0
+    } else {
+        whole.parse().ok()?
+    };
+    let digits: String = frac.chars().take(4).collect();
+    let den = 10i32.pow(digits.len() as u32);
+    let num: i32 = if digits.is_empty() {
+        0
+    } else {
+        digits.parse().ok()?
+    };
+    Some(Fx::from_int(whole).add(Fx::ratio(num, den)))
 }
 
 fn describe(g: &Genome) -> String {
@@ -219,17 +265,18 @@ fn drift(seed: u64) {
         let mut rng = Rng::new(seed);
         let mut x = *g;
         let mut majors = 0;
-        let mut worst = 1.0f32;
+        let mut worst = Fx::ONE;
         for _ in 0..40 {
             let out = cross::mutate(&x, &Rates::DEFAULT, &mut rng);
             x = out.genome;
             if out.moved.any() {
                 majors += 1;
             }
-            worst = worst.min(f(plan::assess(&x).plausibility));
+            worst = worst.min(plan::assess(&x).plausibility);
         }
         println!(
-            "== {name}: {majors} major changes in 40 generations, worst plausibility {worst:.2}"
+            "== {name}: {majors} major changes in 40 generations, worst plausibility {:.2}",
+            f(worst)
         );
         println!("   {}", describe(&x));
     }
@@ -296,10 +343,9 @@ fn boxes(args: &[String]) {
     let seed: u64 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
     let gens: u32 = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(40);
     // A seventh argument poses every body at that point of its stride.
-    let phase: Option<Fx> = args
-        .get(6)
-        .and_then(|s| s.parse::<f32>().ok())
-        .map(|f| Fx::ratio((f * 1000.0) as i32, 1000));
+    let phase: Option<Fx> = args.get(6).and_then(|s| parse_fx(s));
+    // An eighth, `fly`, poses it in flight instead (`build::body_flying`).
+    let flight = args.get(7).is_some_and(|a| a == "fly");
     let mut rng = Rng::new(seed);
     let mut g = egg;
     for generation in 0..=gens {
@@ -327,6 +373,7 @@ fn boxes(args: &[String]) {
         );
         let q = sim::breed::posture::posture(&g);
         let body = match phase {
+            Some(ph) if flight => build::body_flying(&g, &q, ph),
             Some(ph) => build::body_posed(&g, &q, ph),
             None => build::body(&g),
         };

@@ -391,8 +391,15 @@ pub fn proportions(g: &Genome) -> Proportions {
     let s = &g.sliders;
     let len = length_m(s.size);
     let mut half_w = len.mul(fx(3, 50).add(s.mass.mul(fx(3, 50))));
+    // A low body is wide -- a toad, a walking hill -- unless it stands on
+    // spindles, whose width is in their legs: a spider's cephalothorax is
+    // narrow and its legs make the span.
+    let spindly = g.pairs().any(|(_, p)| p.role.grounded())
+        && g.pairs()
+            .filter(|(_, p)| p.role.grounded())
+            .all(|(_, p)| p.build == Build::Spindle);
     if g.stance == Stance::Lowslung {
-        half_w = half_w.mul(Fx::from_int(4));
+        half_w = half_w.mul(if spindly { fx(7, 5) } else { Fx::from_int(4) });
     }
     let half_h = half_w.mul(fx(9, 20));
     let torso = match g.stance {
@@ -407,8 +414,10 @@ pub fn proportions(g: &Genome) -> Proportions {
     } else {
         torso.mul(fx(5, 6))
     };
+    // An abdomen hangs from the waist at the haunch's rear and runs a
+    // torso and a half behind it.
     let rear = if g.segments.abdomen {
-        torso.mul(fx(-9, 4))
+        sixth.neg().sub(torso.mul(fx(3, 2)))
     } else {
         sixth.neg()
     };
@@ -491,7 +500,7 @@ pub fn body(g: &Genome) -> Body {
 
 /// Build the body in a given posture.
 pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
-    build(g, q, None)
+    build(g, q, None, false)
 }
 
 /// A moment of its walk: `phase` is where in the stride cycle, nought to
@@ -502,7 +511,17 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
 /// length. The same genome at phase nought is not the rest pose: a walk
 /// is never still.
 pub fn body_posed(g: &Genome, q: &super::posture::Posture, phase: Fx) -> Body {
-    build(g, q, Some(phase))
+    build(g, q, Some(phase), false)
+}
+
+/// A moment of its flight: wings spread through the beat, legs trailing,
+/// the body lifted off the floor by half its length. A creature whose
+/// wings cannot lift it **flares** them on the ground instead -- spread
+/// and standing. A creature with no wings walks. The pose that says
+/// whether it flies, kept apart from how it stands, so a creature that
+/// leans on its wings to walk still shows the wings it flies on.
+pub fn body_flying(g: &Genome, q: &super::posture::Posture, phase: Fx) -> Body {
+    build(g, q, Some(phase), true)
 }
 
 /// The walk's shape, as shares of a limb's standing length.
@@ -592,11 +611,16 @@ fn relax(g: &Genome) -> Relax {
     }
 }
 
-fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
+fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>, flight: bool) -> Body {
     let mut r = Rig::new();
     // sin and cos of the stride cycle, and a second harmonic for the bob.
     let phase = gait.unwrap_or(Fx::ZERO);
     let flies = super::plan::assess(g).caps.flies;
+    // In the air: off the floor by half its length, legs trailing.
+    let aloft = flight && flies;
+    // Wings spread in the flight pose, airborne or flared on the ground;
+    // folded otherwise.
+    let spread = flight && g.has_wings();
     let relax = relax(g);
     let look = WingLook::of(g.minors.hide);
     let p = proportions(g);
@@ -614,6 +638,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             .mul(sin_turns(phase.mul(Fx::from_int(2))))
     } else {
         Fx::ZERO
+    };
+    let bob = if aloft {
+        bob.add(len.mul(fx(1, 2)))
+    } else {
+        bob
     };
     let root = r.bone(
         "root",
@@ -706,29 +735,51 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         fore_bone
     };
     if g.segments.abdomen {
-        let back = along.scale(torso.neg());
-        let a = r.bone("abdomen", root, back, 0);
+        // The waist: the haunch's rear. The abdomen runs back from it,
+        // overlapping the haunch so the two are one body, tilted up a
+        // little when it is a sac (a spider's) and trailing level when it
+        // is not (a mantis's).
+        let waist = along.scale(torso.mul(fx(-1, 6)));
+        let a = r.bone("abdomen", root, waist, 0);
+        let sac = g.minors.back == Back::Sacs;
+        let tilt = if sac { fx(1, 24) } else { Fx::ZERO };
+        let dir = v3(
+            cos_turns(tilt.sub(pitch)).neg(),
+            sin_turns(tilt.sub(pitch)),
+            Fx::ZERO,
+        );
+        let (half_len, half_up, half_across) = if sac {
+            (
+                torso.mul(fx(3, 4)),
+                torso.mul(fx(2, 5)),
+                torso.mul(fx(11, 20)),
+            )
+        } else {
+            (
+                torso.mul(fx(3, 4)),
+                half_h.mul(fx(6, 5)),
+                half_w.mul(fx(9, 10)),
+            )
+        };
+        let centre = dir.scale(half_len.mul(fx(9, 10)));
         r.along(
             "abdomen",
             a,
-            v3(torso.mul(fx(-1, 2)), half_h.mul(fx(1, 2)), Fx::ZERO),
-            along,
-            v3(
-                torso.mul(fx(3, 4)),
-                half_h.mul(fx(3, 2)),
-                half_w.mul(fx(6, 5)),
-            ),
+            centre,
+            dir,
+            v3(half_len, half_up, half_across),
         );
-        if g.minors.back == Back::Sacs {
+        if sac {
+            // The sacs ride the top of it.
             r.along(
                 "sacs",
                 a,
-                v3(torso.mul(fx(-1, 2)), half_h.mul(fx(2, 1)), Fx::ZERO),
-                along,
+                centre.add(v3(Fx::ZERO, half_up.mul(fx(4, 5)), Fx::ZERO)),
+                dir,
                 v3(
-                    torso.mul(fx(1, 2)),
-                    half_h.mul(fx(1, 2)),
-                    half_w.mul(fx(1, 2)),
+                    half_len.mul(fx(3, 5)),
+                    half_up.mul(fx(2, 5)),
+                    half_across.mul(fx(3, 5)),
                 ),
             );
         }
@@ -973,7 +1024,13 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
     }
 
     // The limbs, each standing as its station's pose says.
+    // Tip to tip with the wings open, whatever pose they are in now.
     let mut span = Fx::ZERO;
+    for (st, pair) in g.pairs() {
+        if pair.role == Role::Wing {
+            span = span.max(p.limb[st.index()].add(half_w).mul(Fx::from_int(2)));
+        }
+    }
     let hang = half_h.mul(super::posture::ATTACH_DOWN);
     for station in Station::ALL {
         let i = station.index();
@@ -986,9 +1043,16 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         let fore = matches!(station, Station::Fore | Station::MidFore);
         // The hip: on the flank, down at the belly line, where the posture
         // put the pair along the body.
+        // A wing that is not walked on roots at the top of the flank, as a
+        // bird's does; every other limb at the belly line.
+        let root_at = if pair.role == Role::Wing && !pose.wing_walks {
+            half_h.mul(fx(1, 2)).neg()
+        } else {
+            hang
+        };
         let hip_at = v3(
             pose.attach.mul(cos_turns(pitch)),
-            pose.attach.mul(sin_turns(pitch)).sub(hang),
+            pose.attach.mul(sin_turns(pitch)).sub(root_at),
             Fx::ZERO,
         );
         let hip_y = q.root.add(hip_at.y);
@@ -998,32 +1062,31 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             let z = half_w.mul(sd);
             let hip = r.bone(names[0], root, v3(hip_at.x, hip_at.y, z), side);
             let half_limb = limb.mul(fx(1, 2));
-            if pair.role == Role::Wing && !pose.wing_walks {
-                // A wing: three segments out to the side, swept back and
-                // rising a little, each a broad thin plane. Each segment
-                // is drawn as two slabs along it, so a swept or rising
-                // wing is a staircase of overlapping planes rather than
-                // boxes floating apart.
+            // How far the wing has grown, nought to one: its chord grows
+            // with it, so a wing that was a leg a few generations ago is a
+            // small wing, folded or spread, and a full one a full one.
+            let grown = pair.length.max(fx(1, 5));
+            // How far behind the shoulder a folded wing may lie: to about
+            // the tip of the tail, or the rump without one.
+            let reach_back = pose
+                .attach
+                .add(torso.mul(fx(1, 6)))
+                .add(p.tail_len.mul(fx(4, 5)));
+            if pair.role == Role::Wing && spread {
+                // A wing spread: three segments out to the side, swept
+                // back and rising a little, each a broad thin plane.
                 let seg = limb.mul(fx(1, 3));
-                let sweep = match gait {
-                    // Flying, a beat: the wing rises and falls through the
-                    // stride. Not flying, folded: swept hard back along
-                    // the body, barely out from it.
-                    Some(_) if flies => {
-                        // Shallow: a box drawn round a steep plane is a wall.
-                        let a = sin_turns(phase).mul(fx(1, 20));
-                        v3(
-                            limb.mul(fx(-1, 10)),
-                            seg.mul(sin_turns(a)).add(limb.mul(fx(1, 15))),
-                            seg.mul(cos_turns(a)).mul(sd),
-                        )
-                    }
-                    Some(_) => v3(
-                        seg.mul(fx(-9, 10)),
-                        seg.mul(fx(1, 8)),
-                        seg.mul(fx(1, 4)).mul(sd),
-                    ),
-                    None => v3(limb.mul(fx(-1, 10)), limb.mul(fx(1, 15)), seg.mul(sd)),
+                let sweep = if aloft {
+                    // In the air, a beat: the wing rises and falls.
+                    let a = sin_turns(phase).mul(fx(1, 8));
+                    v3(
+                        limb.mul(fx(-1, 10)),
+                        seg.mul(sin_turns(a)).add(limb.mul(fx(1, 15))),
+                        seg.mul(cos_turns(a)).mul(sd),
+                    )
+                } else {
+                    // On the ground, a flare: spread and raised.
+                    v3(limb.mul(fx(-1, 10)), limb.mul(fx(1, 8)), seg.mul(sd))
                 };
                 let thick = match look {
                     WingLook::Furred => len.mul(fx(1, 40)).max(girth.mul(fx(1, 2))),
@@ -1035,7 +1098,7 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 let wnames = look.names(side_i);
                 let bones = [hip, arm, hand];
                 for k in 0..3 {
-                    let chord = len.mul(fx(chords[k].0, chords[k].1));
+                    let chord = len.mul(fx(chords[k].0, chords[k].1)).mul(grown);
                     // One plane along the segment, a little past either
                     // end so the segments meet, its area aft of the bone.
                     let at =
@@ -1047,7 +1110,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                         bones[k],
                         at,
                         sweep,
-                        v3(seg.mul(fx(1, 2)).add(thick), thick, chord.mul(fx(1, 2))),
+                        v3(
+                            vlen(sweep).mul(fx(1, 2)).add(thick),
+                            thick,
+                            chord.mul(fx(1, 2)),
+                        ),
                     );
                     if look == WingLook::Membrane {
                         // The finger along the leading edge.
@@ -1079,6 +1146,33 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                     );
                 }
                 span = limb.add(half_w).mul(Fx::from_int(2));
+                continue;
+            }
+            if pair.role == Role::Wing && !pose.wing_walks {
+                // A wing folded and held: the humerus back along the
+                // flank, the forearm forward to a wrist just below the
+                // shoulder, coming down toward the floor as the body
+                // leans more on it, the hand folded back to the flank.
+                let (arm_a, arm_b) = wing_arm(limb);
+                // Eased in: a wing is held high and tight until the body
+                // really leans on it, then comes down to the floor.
+                let reach_lean = super::unit(pose.wing_lean.div(super::posture::WING_PLANT));
+                let reach_lean = reach_lean.mul(reach_lean);
+                let held = limb.mul(fx(1, 20));
+                let floor = hip_y.sub(girth);
+                let down = held.add(floor.sub(held).max(Fx::ZERO).mul(reach_lean));
+                let want = v3(limb.mul(fx(1, 10)), down.neg(), Fx::ZERO);
+                let (elbow, wrist) = ik2(arm_a, arm_b, want, v3(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO));
+                let lower = wrist.sub(elbow);
+                let girth = walking_wing_girth(len, girth);
+                let wnames = look.names(side_i);
+                let e = r.bone(names[1], hip, elbow, side);
+                let w = r.bone(names[2], e, lower, side);
+                r.segment(wnames[0], hip, elbow, girth);
+                r.segment(wnames[1], e, lower, girth);
+                fold_planes(
+                    &mut r, look, side_i, e, w, lower, wrist, limb, len, girth, grown, reach_back,
+                );
                 continue;
             }
             if !pose.grounded {
@@ -1149,8 +1243,12 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 // At rest: one side's feet a little ahead of the other's.
                 None => (standing.mul(fx(1, 16)).mul(relax.lead).mul(sd), Fx::ZERO),
             };
-            let mut down = hip_y.sub(lift);
-            let mut reach = pose.reach.add(swing);
+            let (mut down, mut reach) = if aloft {
+                // In the air the legs trail, folded under and back.
+                (standing.mul(fx(11, 20)), standing.mul(fx(-9, 20)))
+            } else {
+                (hip_y.sub(lift), pose.reach.add(swing))
+            };
             let mut d = down.mul(down).add(reach.mul(reach)).sqrt();
             if d > standing {
                 // It cannot reach: it hangs toward the floor.
@@ -1161,21 +1259,45 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             }
             let (upper, lower) = match pair.build {
                 _ if pose.wing_walks => {
-                    // Two wing segments reach the floor, elbow out.
-                    let seg = limb.mul(fx(1, 3));
-                    let h = seg
-                        .mul(seg)
+                    // The humerus and forearm reach the floor, elbow out
+                    // to the side, the wrist planted.
+                    let (arm_a, arm_b) = wing_arm(limb);
+                    let (elbow, wrist) = ik2(
+                        arm_a,
+                        arm_b,
+                        v3(reach, down.neg(), Fx::ZERO),
+                        v3(Fx::ZERO, Fx::ZERO, sd),
+                    );
+                    (elbow, wrist.sub(elbow))
+                }
+                Build::Spindle if !pose.wing_walks => {
+                    // A spider's leg: out along its fan -- the fore pair
+                    // reaching forward, the hind pair back -- the knee
+                    // high above the body, the foot far out on the floor.
+                    let yaw = match station {
+                        Station::Fore => fx(1, 12),
+                        Station::MidFore => fx(1, 36),
+                        Station::MidHind => fx(-1, 36),
+                        Station::Hind => fx(-1, 10),
+                    };
+                    let (fan_x, fan_z) = (sin_turns(yaw), cos_turns(yaw).mul(sd));
+                    let want = limb.mul(fx(7, 10));
+                    let out = want
+                        .mul(want)
+                        .sub(down.mul(down))
+                        .sub(reach.mul(reach))
+                        .max(Fx::ZERO)
+                        .sqrt();
+                    let foot = v3(reach.add(fan_x.mul(out)), down.neg(), fan_z.mul(out));
+                    let d = vlen(foot).min(limb);
+                    let h = half_limb
+                        .mul(half_limb)
                         .sub(d.mul(d).mul(fx(1, 4)))
                         .max(Fx::ZERO)
                         .sqrt();
-                    (
-                        v3(reach.mul(fx(1, 2)), down.neg().mul(fx(1, 2)), h.mul(sd)),
-                        v3(
-                            reach.mul(fx(1, 2)),
-                            down.neg().mul(fx(1, 2)),
-                            h.neg().mul(sd),
-                        ),
-                    )
+                    let (_, up) = frame(foot);
+                    let knee = foot.scale(fx(1, 2)).add(up.scale(h));
+                    (knee, foot.sub(knee))
                 }
                 _ if splay => {
                     // Out to the side, then down.
@@ -1219,8 +1341,15 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             };
             let knee = r.bone(names[1], hip, upper, side);
             let foot_bone = r.bone(names[2], knee, lower, side);
-            let up = r.segment(names[0], hip, upper, girth);
-            let lo = r.segment(names[1], knee, lower, girth);
+            // A walking wing's bones are drawn as the wing they are.
+            let (n0, n1) = if pose.wing_walks {
+                let w = look.names(side_i);
+                (w[0], w[1])
+            } else {
+                (names[0], names[1])
+            };
+            let up = r.segment(n0, hip, upper, girth);
+            let lo = r.segment(n1, knee, lower, girth);
             // The foot sits on the floor: its box rises from the sole.
             let foot_half = v3(girth.mul(fx(3, 2)), girth.mul(fx(1, 2)), girth);
             r.boxed(
@@ -1230,20 +1359,19 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 foot_half,
             );
             if pose.wing_walks {
-                // The hand folds up and back from the wrist, a long thin
-                // plane along the body, in the wing's own look.
-                let seg = limb.mul(fx(1, 3));
-                let fold = v3(seg.mul(fx(-9, 20)), seg.mul(fx(3, 5)), Fx::ZERO);
-                let thick = len.mul(fx(1, 100)).max(girth.mul(fx(1, 2)));
-                // Slim: a folded wing lies along its finger, two plates
-                // following the fold, thin across the body.
-                let wnames = look.names(side_i);
-                r.along(
-                    wnames[2],
+                fold_planes(
+                    &mut r,
+                    look,
+                    side_i,
+                    knee,
                     foot_bone,
-                    fold.scale(fx(1, 2)),
-                    fold,
-                    v3(vlen(fold).mul(fx(1, 2)), seg.mul(fx(1, 10)), thick),
+                    lower,
+                    upper.add(lower),
+                    limb,
+                    len,
+                    girth,
+                    grown,
+                    reach_back,
                 );
             }
             r.leg(up, lo, hip, knee, fore, side);
@@ -1251,6 +1379,107 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
     }
     r.body.span = span;
     r.body
+}
+
+/// A wing's arm: the humerus and forearm, as shares of the wing. The hand
+/// and its primaries are the other half: a wing's span is mostly hand.
+pub fn wing_arm(limb: Fx) -> (Fx, Fx) {
+    (limb.mul(fx(1, 5)), limb.mul(fx(3, 10)))
+}
+
+/// Two bones of lengths `a` and `b` reaching from the origin toward `t`:
+/// the joint between them, bent toward `toward`, and where the end lands
+/// (at `t`, or as near as the bones reach).
+fn ik2(a: Fx, b: Fx, t: V3, toward: V3) -> (V3, V3) {
+    // Nearer than the bones can fold to: the end goes out level, keeping
+    // its height, rather than along the line -- a wrist on the floor stays
+    // on the floor.
+    let nearest = a.sub(b).abs().add(fx(1, 50));
+    let t = if vlen(t) < nearest {
+        let flat = v3(t.x, Fx::ZERO, t.z);
+        let dir = if vlen(flat) < fx(1, 1000) {
+            v3(Fx::ONE, Fx::ZERO, Fx::ZERO)
+        } else {
+            unit(flat)
+        };
+        let out = nearest.mul(nearest).sub(t.y.mul(t.y)).max(Fx::ZERO).sqrt();
+        v3(dir.x.mul(out), t.y, dir.z.mul(out))
+    } else {
+        t
+    };
+    let u = unit(t);
+    let d = vlen(t)
+        .min(a.add(b).mul(fx(99, 100)))
+        .max(a.sub(b).abs().add(fx(1, 100)));
+    let x = a
+        .mul(a)
+        .sub(b.mul(b))
+        .add(d.mul(d))
+        .div(d.mul(Fx::from_int(2)));
+    let h = a.mul(a).sub(x.mul(x)).max(Fx::ZERO).sqrt();
+    let n = unit(toward.sub(u.scale(dot(u, toward))));
+    (u.scale(x).add(n.scale(h)), u.scale(d))
+}
+
+/// A folded wing's planes: the hand folded from the wrist back to the
+/// flank with its primaries along it, and the forearm's secondaries
+/// below the forearm -- as large as the wing has grown, so a folded full
+/// wing reads as a wing and a stub as a stub. The same whether the wrist
+/// is held up or walked on; `wrist_at` is where the wrist is, from the
+/// shoulder.
+#[allow(clippy::too_many_arguments)]
+fn fold_planes(
+    r: &mut Rig,
+    look: WingLook,
+    side_i: usize,
+    elbow: usize,
+    wrist: usize,
+    forearm: V3,
+    wrist_at: V3,
+    limb: Fx,
+    len: Fx,
+    girth: Fx,
+    grown: Fx,
+    reach_back: Fx,
+) {
+    // The primaries tuck to about the tail's tip and no further: the
+    // rest of the hand lies folded under them.
+    let hand = limb.mul(fx(1, 2)).min(reach_back.max(limb.mul(fx(1, 5))));
+    // Back to the flank behind the shoulder, whatever height the wrist is.
+    let fold = unit(v3(hand.mul(fx(-9, 10)), Fx::ZERO, Fx::ZERO).sub(wrist_at)).scale(hand);
+    let chords = look.chords();
+    let thick = match look {
+        WingLook::Furred => len.mul(fx(1, 40)).max(girth.mul(fx(1, 2))),
+        _ => len.mul(fx(1, 100)).max(girth.mul(fx(1, 4))),
+    };
+    let names = look.names(side_i);
+    // Folded, the feathers stack: a folded wing shows a band about an
+    // eighth of its open chord deep, along the bone.
+    let c_hand = len
+        .mul(fx(chords[1].0, chords[1].1))
+        .mul(grown)
+        .mul(fx(1, 8));
+    r.along(
+        names[2],
+        wrist,
+        fold.scale(fx(1, 2))
+            .add(v3(Fx::ZERO, c_hand.mul(fx(-1, 4)), Fx::ZERO)),
+        fold,
+        v3(hand.mul(fx(1, 2)).add(thick), c_hand, thick),
+    );
+    let c_arm = len
+        .mul(fx(chords[0].0, chords[0].1))
+        .mul(grown)
+        .mul(fx(1, 8));
+    r.along(
+        names[1],
+        elbow,
+        forearm
+            .scale(fx(1, 2))
+            .add(v3(Fx::ZERO, c_arm.mul(fx(-1, 4)), Fx::ZERO)),
+        forearm,
+        v3(vlen(forearm).mul(fx(1, 2)).add(thick), c_arm, thick),
+    );
 }
 
 /// How thick a wing's bone is when it walks on it: a sixtieth of the body,

@@ -13,6 +13,9 @@ from PIL import Image, ImageDraw, ImageFont
 S = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
 # --posed reads lines_posed/ (bodies mid-stride) and writes *_posed sheets.
 POSED = "--posed" in sys.argv
+# --flight reads lines_flight/ (wings spread, airborne if it flies) and
+# writes *_flight sheets.
+FLIGHT = "--flight" in sys.argv
 FONT = ImageFont.load_default()
 try:
     FONT = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 13)
@@ -300,14 +303,15 @@ def draw_strip(name, gens, cell_w=300, cell_h=300):
 
 
 def main():
-    files = sorted(glob.glob(os.path.join(S, "lines_posed" if POSED else "lines", "*.txt")))
+    sub = "lines_flight" if FLIGHT else "lines_posed" if POSED else "lines"
+    files = sorted(glob.glob(os.path.join(S, sub, "*.txt")))
     groups = {"low": [], "med": [], "high": []}
     for f in files:
         base = os.path.basename(f)[:-4]
         strip = draw_strip(base, parse(f))
         groups[base.split("_")[0]].append(strip)
     legend_h = 30
-    posed = " -- posed mid-stride" if POSED else " -- at rest"
+    posed = " -- in flight (wings spread; flared on the ground if they cannot lift it)" if FLIGHT else " -- posed mid-stride" if POSED else " -- at rest"
     for key, title in [("low", "Low: drift alone, no trophies, 60 generations" + posed),
                        ("med", "Medium: one trophy every four generations, 60 generations" + posed),
                        ("high", "High: a trophy every generation, 40 generations" + posed)]:
@@ -327,7 +331,8 @@ def main():
         for s in strips:
             sheet.paste(s, (0, y))
             y += s.height
-        out = os.path.join(S, f"lineages_{key}{'_posed' if POSED else ''}.png")
+        suffix = "_flight" if FLIGHT else "_posed" if POSED else ""
+        out = os.path.join(S, f"lineages_{key}{suffix}.png")
         sheet.save(out)
         print(out, sheet.size)
 

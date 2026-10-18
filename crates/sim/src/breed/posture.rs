@@ -51,6 +51,11 @@ pub struct StationPose {
     pub grounded: bool,
     /// A wing that walks on its wrist.
     pub wing_walks: bool,
+    /// How far a wing leans toward the floor, nought to one: nought is
+    /// folded and held, [`WING_PLANT`] is the wrist touching, one is
+    /// leaning its full share of the weight on it. Continuous in the
+    /// body's balance, so a lineage's wings go down and come up gradually.
+    pub wing_lean: Fx,
     /// It could not reach the ground at any height the rest allowed: it
     /// hangs. Never true of an archetype.
     pub dangles: bool,
@@ -175,7 +180,7 @@ fn masses(g: &Genome, p: &Proportions) -> Masses {
     }
     if p.abdomen {
         out.push(
-            t.mul(fx(-3, 2)),
+            t.mul(fx(-9, 10)),
             p.half_h.mul(fx(1, 2)),
             // Big, but hollow: a spider's abdomen is lighter than its size.
             slab.mul(Fx::from_int(2)),
@@ -238,6 +243,10 @@ fn masses(g: &Genome, p: &Proportions) -> Masses {
 // The pass
 // ---------------------------------------------------------------------------
 
+/// The lean at which a folded wing's wrist reaches the floor and starts
+/// to carry weight.
+pub const WING_PLANT: Fx = fx(3, 10);
+
 /// A limb is **splayed** -- out to the side, then down -- when it is a
 /// spindle or a stub, or on any low-slung body (the Siegeshell's pillars
 /// go out eleven metres before they come down).
@@ -250,7 +259,8 @@ pub fn splayed(stance: Stance, build: Build) -> bool {
 /// two segments.
 pub fn standing_length(stance: Stance, build: Build, wing_walks: bool, l: Fx) -> Fx {
     if wing_walks {
-        return l.mul(fx(2, 3));
+        // The humerus and forearm: half the wing.
+        return l.mul(fx(1, 2));
     }
     if splayed(stance, build) {
         l.mul(fx(1, 2))
@@ -275,7 +285,7 @@ fn natural_extension(stance: Stance, build: Build, wing_walks: bool) -> Fx {
         }
         Build::Sprung => fx(5, 6),
         Build::Raptorial => fx(7, 10),
-        Build::Spindle => fx(1, 2),
+        Build::Spindle => fx(4, 5),
         Build::Stub => fx(7, 10),
         Build::Wing => fx(4, 5),
     }
@@ -286,6 +296,9 @@ fn natural_extension(stance: Stance, build: Build, wing_walks: bool) -> Fx {
 fn pitch_cap(stance: Stance) -> Fx {
     match stance {
         Stance::Lowslung => fx(1, 50),
+        // A level body rears up a little to get its weight back -- a bird
+        // standing tall -- not half way to upright.
+        Stance::Level => fx(1, 16),
         _ => fx(3, 25),
     }
 }
@@ -455,6 +468,11 @@ impl Solver<'_> {
                 if next.sub(base).abs() > pitch_cap(self.g.stance) {
                     continue;
                 }
+                // No animal drops its nose to get its weight back over
+                // its hind legs: down by a hair at most.
+                if next < base.sub(fx(1, 50)) {
+                    continue;
+                }
                 let before = self.pose.pitch;
                 self.pose.pitch = next;
                 let e2 = self.error();
@@ -492,15 +510,18 @@ impl Solver<'_> {
             self.pose.drag_len = self.p.torso.mul(fx(2, 5));
             self.pose.applied.drags = true;
         }
-        // Weight ahead of the legs and wings to put down: half the time
-        // the wings walk.
-        if e0 > Fx::ZERO {
-            if let Some(w) = wing {
-                if !self.pose.stations[w].grounded && self.rng.chance(fx(1, 2)) {
-                    self.pose.stations[w].grounded = true;
-                    self.pose.stations[w].wing_walks = true;
-                    self.pose.stations[w].reach = self.p.limb[w].mul(fx(1, 5));
-                    self.pose.applied.wing_walks = true;
+        // Weight ahead of the legs, and wings to lean on: how far ahead,
+        // against how far the hind legs could comfortably come under it,
+        // is how far the wings lean -- folded and held, the wrist lowered,
+        // touching, carrying. Continuous in the body, so a lineage's wings
+        // come down and go back up a little at a time.
+        if let Some(w) = wing {
+            if !self.pose.stations[w].grounded {
+                let cap = self.hind_capacity();
+                let lean = super::unit(e0.sub(cap.mul(fx(1, 5))).div(cap.max(fx(1, 100))));
+                self.pose.stations[w].wing_lean = lean;
+                if lean >= WING_PLANT {
+                    self.plant(w);
                 }
             }
         }
@@ -542,10 +563,9 @@ impl Solver<'_> {
                 // even if the roll said not to; then there is nothing more.
                 if let Some(w) = wing {
                     if !self.pose.stations[w].grounded && self.error() > Fx::ZERO {
-                        self.pose.stations[w].grounded = true;
-                        self.pose.stations[w].wing_walks = true;
-                        self.pose.stations[w].reach = self.p.limb[w].mul(fx(1, 5));
-                        self.pose.applied.wing_walks = true;
+                        let s = &mut self.pose.stations[w];
+                        s.wing_lean = s.wing_lean.max(WING_PLANT);
+                        self.plant(w);
                         continue;
                     }
                 }
@@ -553,6 +573,31 @@ impl Solver<'_> {
             }
         }
         self.force();
+    }
+
+    /// How far the hind legs could come under the weight without strain:
+    /// their lean and a sixth of the torso's shift.
+    fn hind_capacity(&self) -> Fx {
+        let mut cap = Fx::ZERO;
+        for i in [Station::MidHind.index(), Station::Hind.index()] {
+            if let Some(pair) = self.g.limbs[i] {
+                if pair.role.grounded() {
+                    let standing =
+                        standing_length(self.g.stance, pair.build, false, self.p.limb[i]);
+                    cap = cap.max(standing.mul(REACH_CAP));
+                }
+            }
+        }
+        cap.add(self.p.torso.mul(fx(1, 6)))
+    }
+
+    /// Put a wing's wrist on the floor.
+    fn plant(&mut self, w: usize) {
+        let s = &mut self.pose.stations[w];
+        s.grounded = true;
+        s.wing_walks = true;
+        s.reach = Fx::ZERO;
+        self.pose.applied.wing_walks = true;
     }
 
     /// Whatever is left, the limbs take regardless of their caps: a body
@@ -692,7 +737,13 @@ impl Solver<'_> {
                     behind = behind.max(self.foot_x(j).add(fl));
                 }
             }
-            let gap = self.spacing(i, i).add(self.p.limb[i].mul(fx(1, 10)));
+            // The more it leans, the further ahead the wrist is planted.
+            let lean = self.pose.stations[i].wing_lean;
+            let more = super::unit(lean.sub(WING_PLANT).div(Fx::ONE.sub(WING_PLANT)));
+            let gap = self
+                .spacing(i, i)
+                .add(self.p.limb[i].mul(fx(1, 10)))
+                .add(self.p.limb[i].mul(fx(1, 5)).mul(more));
             let want = behind.add(gap);
             let here = self.foot_x(i);
             if here < want {
@@ -778,6 +829,7 @@ pub fn posture(g: &Genome) -> Posture {
                 extension: Fx::ZERO,
                 grounded: pair.role.grounded(),
                 wing_walks: false,
+                wing_lean: Fx::ZERO,
                 dangles: false,
             };
         }
