@@ -3,6 +3,16 @@
 Design notes live in [`docs/`](docs/README.md) — current design in [`docs/design/`](docs/design/README.md),
 with the original Google Drive export archived alongside it.
 
+To play on Windows or a Mac with nothing installed, download
+[`play-windows.cmd`](https://github.com/michaelenew/video-game/releases/download/launcher/play-windows.cmd)
+or [`play-macos.zip`](https://github.com/michaelenew/video-game/releases/download/launcher/play-macos.zip)
+and double-click it (on a Mac, the `play-macos.command` inside). It installs
+what is missing (the C++ build tools or Apple's Command Line Tools, Git, Rust),
+clones the game into your home folder (or updates it), and runs it. Run it again
+to update and play. The [release](https://github.com/michaelenew/video-game/releases/tag/launcher)
+says what to click past the first time; `.github/workflows/launcher.yml` keeps it
+current with `scripts/`.
+
 Run it with `cargo run -p game`; `cargo run -p game -- --help` lists everything
 you can type. `--hunt` starts a hunt (`--hunt <creature>` for any creature that
 is built, in its own arena, and `H` / `Shift+H` switch in game; a creature's

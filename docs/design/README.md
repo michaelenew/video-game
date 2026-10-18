@@ -3,6 +3,10 @@
 Everything currently decided, proposed, or parked, in one place. This supersedes
 [`../archive/`](../archive/README.md), which is 2016–2019 source material kept for reference.
 
+**What the game is for** -- the draw, the mastery arc, how hard fights and
+jumps should feel, and what is still open about progression and story -- is
+[intent](intent.md); every other document serves it.
+
 **Start here:** [combat kernel](combat-kernel.md) → [controls](controls.md) →
 [ability spec](ability-spec.md) → a class kit. For implementation, see
 [architecture](architecture.md); before touching anything that is *pointed at
@@ -150,6 +154,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 
 | Document | Covers | Status |
 | --- | --- | --- |
+| [intent.md](intent.md) | **What the game is for**: soulslike draw, fighting-game mastery, MMO spectacle; fights fair but tough, mobility fair but feeling dangerous (never a rage game); progression and story open | **Intent, 2026-10-17** |
 | [combat-kernel.md](combat-kernel.md) | No cooldowns, TTK, what that breaks | Decided |
 | [controls.md](controls.md) | Input grammar, per-class schemes | Proposed |
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
@@ -223,7 +228,9 @@ creature (`CLASS-5`).
 
 ## 5 · Parked — not slated for initial implementation
 
-**Progression and equipment.** See [parked.md](parked.md). The classes are the product; a
+**Progression and equipment.** See [parked.md](parked.md), and [intent.md](intent.md) §4 for
+the owner's leaning (2026-10-17): unlocking parts of the character, perhaps as weapons that
+change what the clicks do, with any gear ramp capped early. The classes are the product; a
 build system has nothing to modify until they exist.
 
 The leading proposal is **offensive items as auto-attack modifiers** — mild buffs that change
