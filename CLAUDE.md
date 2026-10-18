@@ -407,6 +407,6 @@ cargo test --workspace
 
 These are the only checks there are: they run on your machine, and nothing
 runs them for you. The two workflows in `.github/` publish things and test
-nothing: one the browser build to GitHub Pages, the other the Windows launcher
-to its release. A green run means something deployed, not that the change is
+nothing: one the browser build to GitHub Pages, the other the Windows and Mac
+launchers to their release. A green run means something deployed, not that the change is
 good.

@@ -5,6 +5,7 @@ rem Double-click to install what the game needs, fetch it, build it and play.
 rem The PowerShell below does the work; this part only starts it, because a
 rem .cmd is the one kind of script Windows runs on a double-click.
 set "LAUNCHER=%~f0"
+set "LAUNCHER_ARGS=%*"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression ([IO.File]::ReadAllText($env:LAUNCHER))"
 set "CODE=%ERRORLEVEL%"
 if not "%CODE%"=="0" (
@@ -24,6 +25,7 @@ exit /b %CODE%
 #   - Rust (rustup, cargo), which builds the game.
 # Then clones the game into %USERPROFILE%\video-game (or pulls the latest if
 # it is already there) and runs it with `cargo run --release -p game`.
+# Arguments are passed to the game.
 #
 # Run it again any time: what is installed is skipped, and only what changed
 # since last time is rebuilt. If this file sits inside a checkout (as it does
@@ -151,5 +153,7 @@ Say 'Building and starting the game'
 Write-Host '    The first build takes a long while - often 10 to 30 minutes, and several GB of disk.'
 Write-Host '    Later runs only rebuild what changed. The game opens in its own window when it is ready.'
 Set-Location $Checkout
-cargo run --release -p game
+$GameArgs = @()
+if ($env:LAUNCHER_ARGS) { $GameArgs = @($env:LAUNCHER_ARGS -split '\s+' | Where-Object { $_ }) }
+cargo run --release -p game -- @GameArgs
 exit $LASTEXITCODE
