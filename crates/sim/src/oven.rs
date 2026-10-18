@@ -691,7 +691,7 @@ scalars! {
     // the Air ball off an edge, steered and knocked off a wall.
     PlacementDrop,        "Elementalist", "Placed, at most below her (m)", Fixed, 0, fx(20,1);
     AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
-    AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
+    AirBallSteer,         "Elementalist", "Air ball, turns while she rides (turns/s)", Fixed, 0, fx(2,1);
     AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
     // **The Dual mage, every move a spell**, 2026-10-09, re-cast in place for
     // her spellbook, 2026-10-12: the curse and its purge, the stars, the black
@@ -1095,6 +1095,19 @@ scalars! {
     HarvestReach,         "Blood mage", "Harvest, reaches all round (m)",                   Fixed, fx(1,1), fx(12,1);
     // **A heart is earned** (2026-10-18): what she has to deal to plant one.
     HeartMeterFull,       "Blood mage", "Heart, earned by dealing",                         Int, 1, 5000;
+    // **The Elementalist's QoL pass**, 2026-10-18, appended for the reason
+    // everything above is. Wind that has caught fire burns.
+    WindFireBurn,         "Elementalist", "Wind on fire, Air ball burns per tick",           Int, 0, 300;
+    DraftFireBurn,        "Elementalist", "Wind on fire, a draft burns each body for",        Int, 0, 400;
+    // Her Updraft steers: the direction she holds pushes her while it blows.
+    UpdraftSteer,         "Elementalist", "Updraft, steered by her walk (m/s per s)",        Fixed, 0, fx(120,1);
+    UpdraftSteerCap,      "Elementalist", "Updraft, steered up to (m/s)",                    Fixed, 0, fx(30,1);
+    // Fissure's surge: the stone comes up while it slides, carrying whoever
+    // stands at its front and striking the rest harder the longer it was held.
+    SurgeSpeed,           "Elementalist", "Fissure surge, speed (m/s)",                      Fixed, fx(1,1), fx(60,1);
+    SurgeDamageGain,      "Elementalist", "Fissure surge, damage at a full hold (+x)",       Fixed, 0, fx(5,1);
+    SurgeKnockGain,       "Elementalist", "Fissure surge, knockback at a full hold (+x)",    Fixed, 0, fx(5,1);
+    SurgeLift,            "Elementalist", "Fissure surge, throws up at (m/s)",               Fixed, 0, fx(30,1);
 }
 
 // ---------------------------------------------------------------------------

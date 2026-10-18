@@ -139,11 +139,11 @@ fn stones_of(w: &World) -> Vec<sim::class::Structure> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_drawn_beam_ends_where_the_shot_stopped() {
+fn the_drawn_beam_goes_on_through_her_stone() {
     // The overlay draws `state::hitbox`, and for this move that is the line
-    // itself. A beam stopped by a stone is as long as the gap to the stone; one
-    // that met nothing runs to the edge of its range. Drawing either as the
-    // other is how you end up unable to tell why a shot did not connect.
+    // itself. Since 2026-10-18 the beam acts on every stone on its line and
+    // ends only at a wall, so aimed at a stone it is drawn on past it, to
+    // its range. Drawing it short would say the stone stopped it.
     let mut w = elementalist();
     run(&mut w, 2, RAISE, 0); // a stone, a few metres ahead
     run(&mut w, 30, 0, 0);
@@ -166,8 +166,8 @@ fn the_drawn_beam_ends_where_the_shot_stopped() {
     let drawn = hb.to.sub(hb.from).len();
     let to_stone = stone.sub(hb.from).flat_len();
     assert!(
-        drawn.raw() <= to_stone.raw(),
-        "the beam was drawn {} m long past a stone standing {} m away",
+        drawn.raw() > to_stone.raw(),
+        "the beam was drawn {} m long, stopping at a stone standing {} m away",
         drawn.to_f32_for_render(),
         to_stone.to_f32_for_render()
     );

@@ -271,6 +271,12 @@ pub struct Rise {
     /// here (`back_to_the_floor`); asking the arena for its floor instead put
     /// somebody jumping off a stone back on the ground under it.
     pub floor: Fx,
+    /// The stone her feet were last on, as `aim::Contact::Stone` counts them,
+    /// plus one; nought for the floor. The earth jump asks it when her feet
+    /// have left the stone's edge during the jump's wind-up (2026-10-18, from
+    /// play: half off a stone and walking, she raised a new stone in the air
+    /// instead of pushing off the one she stood on).
+    pub stone: u8,
 }
 
 /// **A wall, as a fighter met it in the air**: a point on its face -- where
@@ -2587,6 +2593,7 @@ impl World {
             return;
         }
 
+        let wire = self.steer_the_balls(wire);
         let here = self.terrain();
         let here = &here;
         if let Phase::RoundOver { winner, left } = self.phase {
@@ -3628,6 +3635,7 @@ impl World {
         self.step_shadows();
         self.burst_the_collected();
         self.step_effects();
+        self.fire_lights_the_stones();
         let standing = self.effects;
         let versus = self.pvp();
         bolt::step(
@@ -6227,7 +6235,7 @@ fn step_player(
     // reason the Rush cancel does -- a recovery that has been cut short has to
     // reach the input below on the frame it was cut, not the frame after.
     arm_takeoff(p, input);
-    rise_window(p, input);
+    rise_window(p, input, field);
     // A stored charge is let go by a fresh press of its click, so the click
     // that charged it has to come up first.
     if p.vessel != NO_VESSEL && !input.has(moves::blood::click_of(p.vessel)) {
@@ -6718,6 +6726,7 @@ fn step_player(
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;
     }
+    steer_in_the_updraft(p, who, input, scene);
 
     // **Sliding down a wall** (`cling_to_the_wall`): against one last frame,
     // not rising, and nobody else's -- a fighter knocked into a wall or
@@ -7633,7 +7642,7 @@ fn keyed_q(p: &Player) -> Option<u8> {
 /// the floor; counted off the floor; and the trip's takeoff handed back once
 /// the feet are down and free. The Champion's three of the same live in
 /// `Mechanic::Forms` and are run by `arm_takeoff` and `refresh_the_rise`.
-fn rise_window(p: &mut Player, input: Input) {
+fn rise_window(p: &mut Player, input: Input, field: &Field) {
     if !matches!(
         p.class,
         Class::Elementalist
@@ -7657,6 +7666,7 @@ fn rise_window(p: &mut Player, input: Input) {
     };
     if p.grounded {
         r.floor = p.pos.y;
+        r.stone = stones::under_in(field, p.pos).map_or(0, |i| i as u8 + 1);
     }
     if p.grounded && p.action.actionable() {
         r.used = false;
@@ -8647,6 +8657,38 @@ fn updraft_off_the_floor(p: &mut Player, input: Input) {
     p.vel.x = p.vel.x.add(dir.x.mul(push));
     p.vel.z = p.vel.z.add(dir.z.mul(push));
     clamp_air_speed(p);
+}
+
+/// **Steered while her Updraft blows** (2026-10-18, from play): for as long
+/// as a column of hers stands and she is off the floor, the direction she
+/// holds pushes her that way at `tuning::updraft_steer`, up to
+/// `tuning::updraft_steer_cap` along it -- so the jump attack goes where she
+/// leans, not only up.
+fn steer_in_the_updraft(p: &mut Player, who: usize, input: Input, scene: &Scene) {
+    if p.class != Class::Elementalist || p.grounded {
+        return;
+    }
+    let (ax, az) = input.move_axis();
+    if ax == 0 && az == 0 {
+        return;
+    }
+    let blowing = scene
+        .effects
+        .iter()
+        .flatten()
+        .any(|e| e.kind == EffectKind::Updraft && e.owner as usize == who);
+    if !blowing {
+        return;
+    }
+    let dir = move_dir(input.aim_turns(), ax, az);
+    let along = p.vel.x.mul(dir.x).add(p.vel.z.mul(dir.z));
+    let room = t::updraft_steer_cap().sub(along);
+    if room.raw() <= 0 {
+        return;
+    }
+    let push = t::updraft_steer().mul(DT).min(room);
+    p.vel.x = p.vel.x.add(dir.x.mul(push));
+    p.vel.z = p.vel.z.add(dir.z.mul(push));
 }
 
 /// **The thrown shield's volume this frame**, in the same shape a swing's
@@ -10807,6 +10849,10 @@ fn hash_player(h: &mut Fnv, p: &Player) {
         p.swim as i32,
         p.string as i32,
     ];
+    // The stone under her feet, only while there is one (2026-10-18).
+    if p.rise.stone != 0 {
+        h.write_u32(p.rise.stone as u32);
+    }
     if blaster.iter().any(|v| *v != 0) {
         for v in blaster {
             h.write_i32(v);
@@ -12552,6 +12598,8 @@ impl World {
             EffectKind::Vines => self.step_the_vines(effect),
             // The Rising reap's sweep, which is only to look at.
             EffectKind::Cascade => {}
+            // Fissure's surge. See `step_the_surge`.
+            EffectKind::Surge => self.step_the_surge(effect),
 
             // A thrall and a heart are stepped in passes of their own
             // (`step_thralls`, `step_hearts`).
@@ -12853,6 +12901,7 @@ impl World {
                     }
                 }
                 self.ride_the_thermal(effect);
+                self.burn_in_the_draft(effect);
                 if effect.age == 1 {
                     let inside = stones::within(&self.players, effect.pos, effect.reach);
                     for (index, hit) in inside.into_iter().enumerate() {
@@ -12870,6 +12919,7 @@ impl World {
             // broken ground where it stood. Once per stone, on the bits
             // `banked` lends for it.
             EffectKind::Downdraft => {
+                self.burn_in_the_draft(effect);
                 let slab = effect.draft_volume();
                 let (radius, height) = (t::body_radius(), t::body_height());
                 let drive = Fx::ZERO.sub(t::downdraft_drive());
@@ -15372,8 +15422,10 @@ impl World {
 
         // The line: her hand to the point the crosshair was on when she threw
         // it. Not a direction and a range -- see `crate::aim`.
-        let beam = beam_of(&shooter);
         let m = moves::get(shooter.class, kind);
+        // On through the point she aimed at, to the move's whole reach: what
+        // is behind the stone the crosshair is on is on the line too.
+        let beam = aim::through(beam_of(&shooter), m.reach);
         let field = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
@@ -15387,44 +15439,51 @@ impl World {
             critters: &crowd,
             arena: &self.terrain(),
         };
-        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets());
+        // **Everything on the line, at once** (2026-10-18): every stone and
+        // every fire up to the first wall, so a stone in front of another
+        // no longer takes the shot meant for the one behind it.
+        let (met, n) = aim::every_along(beam, m.radius, i as u8, &scene, bolt::targets());
 
         // How long the line actually is, whether or not it still has a hit to
-        // spend. A spent beam is still a beam, and it is still drawn.
-        self.players[i].beam_reach = met.map_or(beam.length(), |c| c.dist());
+        // spend: to the wall that ends it, or its whole length. A spent beam
+        // is still a beam, and it is still drawn.
+        let (n, reach) = line_ends(&self.players, &met[..n], beam.length());
+        self.players[i].beam_reach = reach;
         if shooter.hit_used {
             return;
         }
 
-        match met {
-            // The stone goes along the line, pitch included: through the
-            // ground aimed down it, up into the air aimed above it.
-            Some(Contact::Stone { index, .. }) => {
-                if stones::is_lit(&self.players, index) {
-                    self.burst_the_stone(i, index, beam.dir());
-                } else {
-                    stones::kick(&mut self.players, index, beam.dir());
+        for c in met[..n].iter().flatten() {
+            match *c {
+                // The stone goes along the line, pitch included: through the
+                // ground aimed down it, up into the air aimed above it.
+                Contact::Stone { index, .. } => {
+                    if stones::is_lit(&self.players, index) {
+                        self.burst_the_stone(i, index, beam.dir());
+                    } else {
+                        stones::kick(&mut self.players, index, beam.dir());
+                    }
+                    self.players[i].hit_used = true;
                 }
-                self.players[i].hit_used = true;
+                // A hazard is not a wall. The beam does not stop at the fire,
+                // it lights it, and what leaves the pillar is the poke.
+                Contact::Fire { dist, .. } => {
+                    bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir());
+                    self.players[i].hit_used = true;
+                }
+                // A solid wall: the line ends there, and it is the last
+                // thing on the list.
+                //
+                // A body cannot arrive: the beam does not ask for one -- it
+                // goes through people and acts only on what she built (see
+                // `bolt::targets`). The arms are spelled out rather than
+                // wildcarded so that whatever is added to `Contact` next is a
+                // compile error here instead of silence.
+                Contact::Terrain { .. }
+                | Contact::Fighter { .. }
+                | Contact::Quarry { .. }
+                | Contact::Critter { .. } => {}
             }
-            // A hazard is not a wall. The beam does not stop at the fire, it
-            // lights it, and what leaves the pillar is the poke.
-            Some(Contact::Fire { dist }) => {
-                bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir());
-                self.players[i].hit_used = true;
-            }
-            // A solid wall: the line ends there and nothing happens.
-            //
-            // A body cannot arrive: the beam does not ask for one -- it goes
-            // through people and acts only on what she built (see
-            // `bolt::targets`). The arms are spelled out rather than
-            // wildcarded so that whatever is added to `Contact` next is a
-            // compile error here instead of silence.
-            Some(Contact::Terrain { .. })
-            | Some(Contact::Fighter { .. })
-            | Some(Contact::Quarry { .. })
-            | Some(Contact::Critter { .. })
-            | None => {}
         }
     }
 
@@ -15449,8 +15508,10 @@ impl World {
             return;
         }
 
-        let beam = beam_of(&shooter);
         let m = moves::get(shooter.class, kind);
+        // On through the point she aimed at, to the move's whole reach: what
+        // is behind the stone the crosshair is on is on the line too.
+        let beam = aim::through(beam_of(&shooter), m.reach);
         let field = stones::gather(&self.players);
         let seen = self.players;
         let effects = self.effects;
@@ -15464,90 +15525,115 @@ impl World {
             critters: &crowd,
             arena: &self.terrain(),
         };
-        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets());
+        // Every stone and every fire on the line, as the beam's (2026-10-18).
+        let (met, n) = aim::every_along(beam, m.radius, i as u8, &scene, bolt::targets());
 
-        self.players[i].beam_reach = met.map_or(beam.length(), |c| c.dist());
+        let (n, reach) = line_ends(&self.players, &met[..n], beam.length());
+        self.players[i].beam_reach = reach;
         if shooter.hit_used {
             return;
         }
 
-        match met {
-            // Broken outright, and thrown outward as debris rather than
-            // detonated on the spot -- see `crate::debris`.
-            Some(Contact::Stone { index, .. }) => {
-                if stones::is_lit(&self.players, index) {
-                    self.burst_the_stone(i, index, beam.dir());
-                } else if let Some(at) = stones::destroy(&mut self.players, index) {
-                    debris::blast(&mut self.debris, i as u8, at, beam.dir());
-                }
-                self.players[i].hit_used = true;
-            }
-            // Not charged -- torn loose. The same `Effect`, the same two
-            // volumes, now moving. `age` and `life` are untouched: a pillar
-            // that had barely started keeps growing on the same clock it was
-            // already on, now while travelling, and one that was already
-            // fully grown stays that way rather than snapping back down to
-            // nothing and regrowing -- either would be a visible glitch at
-            // the exact moment nothing about its *size* actually changed.
-            // What is left of the original pillar's life is what the tornado
-            // gets to travel on; the arena's own edge is the other way it can
-            // run out. `banked` takes a snapshot of `age` right here, so its
-            // flight can be measured from this moment rather than from
-            // whenever the pillar was first planted -- see
-            // `Effect::tornado_pos`. See `crate::effects::EffectKind::FireTornado`.
-            Some(Contact::Fire { dist }) => {
-                let at = beam.at(dist);
-                if let Some(slot) = fire_pillar_slot_at(&self.effects, at) {
-                    if let Some(effect) = self.effects[slot].as_mut() {
-                        effect.kind = EffectKind::FireTornado;
-                        // Flattened, not the raw beam: Cataclysm is only
-                        // level when it was aimed at the ground (see
-                        // `aim::skillshot_path`) -- anywhere else it meets a
-                        // wall, a body height, or the range sphere at
-                        // whatever pitch the camera happened to be at, and a
-                        // tornado is a ground hazard the same way the pillar
-                        // it came from was. A tilted `dir` walks `tornado_pos`
-                        // straight through the floor (or into the sky) a
-                        // couple of frames after it starts moving, and
-                        // `arena::inside` reads that as having wandered off
-                        // the map -- the tornado never gets to be seen at
-                        // all, it just vanishes where the pillar stood.
-                        effect.dir = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
-                        effect.struck.clear();
-                        effect.banked = effect.age as i32;
+        for c in met[..n].iter().flatten() {
+            match *c {
+                // Broken outright, and thrown outward as debris rather than
+                // detonated on the spot -- see `crate::debris`.
+                Contact::Stone { index, .. } => {
+                    if stones::is_lit(&self.players, index) {
+                        self.burst_the_stone(i, index, beam.dir());
+                    } else if let Some(at) = stones::destroy(&mut self.players, index) {
+                        debris::blast(&mut self.debris, i as u8, at, beam.dir());
                     }
+                    self.players[i].hit_used = true;
                 }
-                self.players[i].hit_used = true;
+                // Not charged -- torn loose. The same `Effect`, the same two
+                // volumes, now moving. `age` and `life` are untouched: a
+                // pillar that had barely started keeps growing on the same
+                // clock it was already on, now while travelling, and one that
+                // was already fully grown stays that way rather than snapping
+                // back down to nothing and regrowing -- either would be a
+                // visible glitch at the exact moment nothing about its *size*
+                // actually changed. What is left of the original pillar's
+                // life is what the tornado gets to travel on; the arena's own
+                // edge is the other way it can run out. `banked` takes a
+                // snapshot of `age` right here, so its flight can be measured
+                // from this moment rather than from whenever the pillar was
+                // first planted -- see `Effect::tornado_pos`. See
+                // `crate::effects::EffectKind::FireTornado`.
+                Contact::Fire { effect, .. } => {
+                    if let Some(e) = self.effects[effect].as_mut() {
+                        if e.kind == EffectKind::FirePillar {
+                            e.kind = EffectKind::FireTornado;
+                            // Flattened, not the raw beam: Cataclysm is only
+                            // level when it was aimed at the ground (see
+                            // `aim::skillshot_path`) -- anywhere else it
+                            // meets a wall, a body height, or the range
+                            // sphere at whatever pitch the camera happened to
+                            // be at, and a tornado is a ground hazard the same
+                            // way the pillar it came from was. A tilted `dir`
+                            // walks `tornado_pos` straight through the floor
+                            // (or into the sky) a couple of frames after it
+                            // starts moving, and `arena::inside` reads that as
+                            // having wandered off the map -- the tornado never
+                            // gets to be seen at all, it just vanishes where
+                            // the pillar stood.
+                            e.dir = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
+                            e.struck.clear();
+                            e.banked = e.age as i32;
+                        }
+                    }
+                    self.players[i].hit_used = true;
+                }
+                // A solid wall ends the line; a body is never met. See the
+                // same arm in `fire_the_beam`.
+                Contact::Terrain { .. }
+                | Contact::Fighter { .. }
+                | Contact::Quarry { .. }
+                | Contact::Critter { .. } => {}
             }
-            // A solid wall ends the line; a body is never met. See the
-            // same arm in `fire_the_beam`.
-            Some(Contact::Terrain { .. })
-            | Some(Contact::Fighter { .. })
-            | Some(Contact::Quarry { .. })
-            | Some(Contact::Critter { .. })
-            | None => {}
         }
     }
+}
+
+/// Where one of her two pushes ends: at the first wall, or the first planted
+/// shield -- a Bulwark's wall is a wall to her line, as it always was -- or
+/// its whole length; it goes through everything else (`aim::every_along`).
+/// How many of `met` it reaches, and how long it is drawn.
+fn line_ends(players: &[Player; MAX_PLAYERS], met: &[Option<Contact>], length: Fx) -> (usize, Fx) {
+    for (k, c) in met.iter().enumerate() {
+        let ends = match c {
+            Some(Contact::Terrain { .. }) => true,
+            Some(Contact::Stone { index, .. }) => matches!(
+                players[index / class::MAX_STRUCTURES].mechanic,
+                Mechanic::Shield(_)
+            ),
+            _ => false,
+        };
+        if ends {
+            return (k + 1, c.map_or(length, |c| c.dist()));
+        }
+    }
+    (met.len(), length)
 }
 
 /// Is this the Elementalist's heavy?
 ///
 impl World {
-    /// Fissure's crack, on the move's first active frame: from the stone the
-    /// Elementalist held churning, along the line the hold bought, to the
-    /// first body it meets or the end.
+    /// Fissure, on the move's first active frame: the stone she held churning
+    /// **comes up while it slides** (2026-10-18, from play), along the line
+    /// the hold bought, as a surge (`EffectKind::Surge`, stepped by
+    /// [`World::step_the_surge`]).
     ///
-    /// Three things happen where it stops, and they are one event. The body
-    /// it met takes the move's own hit -- the crack is the hitbox, and her own
-    /// body puts out none (`moves::shape`). The stone she held is moved to
-    /// that spot and let go, so it erupts there: Fissure is a Raise that went
-    /// somewhere. And the line it ran is left as rough terrain for a while,
-    /// which is the setup the Strike wants.
+    /// It used to be a crack raced out at once that stopped at the first body
+    /// and erupted the stone there. Now the stone erupts from where it was
+    /// held and travels: whoever stands at its front is carried -- her too,
+    /// so held at her own feet it is a ride she jumps off at its speed -- and
+    /// everybody else it reaches is struck once and shoved on, harder and
+    /// further the longer the hold. The line is still left rough.
     ///
     /// Without a held stone -- the slot thrown some other way, or the stone
-    /// evicted mid-hold -- the crack still runs from her feet and still hits;
-    /// only the eruption at the end is missing, because there is nothing to
-    /// erupt.
+    /// evicted mid-hold -- the surge still runs from her feet and still
+    /// strikes; it only has no stone to carry.
     fn race_the_crack(&mut self, i: usize, input: Input) {
         let p = self.players[i];
         let m = moves::get(p.class, SLOT_COMMITTED);
@@ -15556,7 +15642,6 @@ impl World {
         let effects = self.effects;
         let beast = self.monsters;
         let crowd = self.critters;
-        let versus = self.pvp();
         let scene = Scene {
             stones: &field,
             players: &seen,
@@ -15566,86 +15651,47 @@ impl World {
             arena: &self.terrain(),
         };
         // Along the floor it was raised on: stopped at an edge rather than
-        // run off it into the floor below (`aim::kept_along`).
+        // run off it into the floor below (`aim::kept_along`), and at a wall.
         let path = aim::kept_along(p.aim_path, &scene);
-        let met = aim::first_along(
-            path,
-            m.radius,
-            i as u8,
-            &scene,
-            Targets::none().fighters(versus).quarry(!versus),
-        );
-        let end = met.map_or(path.to, |c| path.at(c.dist()));
-        let dir = V3::new(path.dir().x, Fx::ZERO, path.dir().z).normalized();
-        match met {
-            Some(Contact::Fighter { index, .. }) => {
-                let victim = self.players[index];
-                let (guarding, parried) = guard_against(&victim, p.pos, m.unblockable);
-                apply_hit(
-                    &mut self.players[index],
-                    Hit {
-                        damage: m.damage,
-                        hitstun: m.hitstun,
-                        blockstun: m.blockstun,
-                        knockback: m.knockback,
-                        launch: Fx::ZERO,
-                        grabs: 0,
-                        by: i as u8,
-                        dir,
-                        blocked: guarding,
-                        parried,
-                        interrupts: true,
-                    },
-                );
-                if parried {
-                    self.players[i].action = Action::Stagger {
-                        left: t::parry_stagger(),
-                    };
-                    self.players[i].stun_total = t::parry_stagger();
-                    self.players[index].parried = PARRY_FLOURISH;
-                }
-                self.players[i].hit_used = true;
-            }
-            Some(Contact::Quarry { slot, part, .. }) => {
-                if let Some(beast) = self.monsters[slot].as_mut() {
-                    beast.take_blow(
-                        part,
-                        m.damage,
-                        &monster::Blow {
-                            from: p.pos,
-                            unblockable: m.unblockable,
-                            who: i as u8,
-                            class: p.class,
-                            kind: SLOT_COMMITTED,
-                        },
-                    );
-                }
-                self.players[i].hit_used = true;
-            }
-            Some(Contact::Critter { index, .. }) => {
-                pack::hurt(
-                    &mut self.pack,
-                    &mut self.critters,
-                    index,
-                    m.damage,
-                    dir,
-                    m.knockback,
-                    Fx::ZERO,
-                );
-                self.players[i].hit_used = true;
-            }
-            _ => {}
-        }
-        // The stone arrives where the crack stopped, and erupts there.
+        let length = aim::first_along(path, Fx::ZERO, i as u8, &scene, Targets::none().walls())
+            .map_or(path.length(), |c| c.dist());
+        let dir = path.dir();
+        let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+        // How much of a full hold this was: a tap's run is the row's
+        // `channel, reach at no hold`, a full one its `reach`.
+        let least = m.channel_from;
+        let share = if m.reach.raw() > least.raw() {
+            p.aim_path
+                .length()
+                .sub(least)
+                .div(m.reach.sub(least))
+                .max(Fx::ZERO)
+                .min(Fx::ONE)
+        } else {
+            Fx::ONE
+        };
         let held = self.players[i].charging_stone;
-        if held != NO_STONE {
-            let index = i * class::MAX_STRUCTURES + held as usize;
+        let stone = (held != NO_STONE).then(|| i * class::MAX_STRUCTURES + held as usize);
+        // The stone erupts where it was held, and the surge carries it on.
+        if let Some(index) = stone {
             let ground = self.terrain();
-            stones::relocate_and_erupt(&mut self.players, index, end, &ground);
+            stones::relocate_and_erupt(&mut self.players, index, path.from, &ground);
             self.players[i].charging_stone = NO_STONE;
         }
-        // And the scar: the whole line, however far the crack got.
-        let length = end.sub(path.from).flat_len();
+        spawn_effect(
+            &mut self.effects,
+            Effect::surge(
+                i as u8,
+                p.class,
+                SLOT_COMMITTED,
+                path.from,
+                dir,
+                length,
+                stone,
+                share,
+            ),
+        );
+        // And the scar: the whole line it will run.
         if length.raw() > 0 {
             let from = V3::new(
                 path.from.x,
@@ -15660,16 +15706,112 @@ impl World {
                     p.class,
                     SLOT_COMMITTED,
                     from,
-                    dir,
+                    flat,
                     length,
                 ),
             );
         }
+        self.players[i].hit_used = true;
         // `input` is what the crack was aimed with; the path was locked on
         // release and this only reads it, but the frame's input is what every
         // other first-active-frame hand-off receives, and the signature says
         // so for the day the crack wants the stick.
         let _ = input;
+    }
+
+    /// **One frame of Fissure's surge**: the front moves on along its line,
+    /// carrying its stone -- coming up out of the ground on its own clock --
+    /// and every body standing at it; anybody but her it reaches for the
+    /// first time is struck, and thrown on along the line.
+    ///
+    /// **Carried** is a moving floor, as the Air ball's is: a body at the
+    /// front on its feet is moved with it frame for frame, and one off its
+    /// feet -- jumped, or thrown -- is given its speed along the line, so
+    /// jumping out of the eruption at the right moment leaves with both the
+    /// stone's climb and the surge's run.
+    fn step_the_surge(&mut self, effect: &mut Effect) {
+        let owner = effect.owner as usize;
+        let front = effect.surge_front();
+        let was = effect.surge_front_at(effect.age.saturating_sub(1));
+        let moved = V3::new(front.x.sub(was.x), Fx::ZERO, front.z.sub(was.z));
+        let flat = V3::new(effect.dir.x, Fx::ZERO, effect.dir.z).normalized();
+        let running = moved.flat_len().raw() > 0;
+        let speed = t::surge_speed();
+        let ground = self.terrain();
+        if let Some(index) = (effect.banked as usize).checked_sub(1) {
+            if running {
+                stones::slide_to(&mut self.players, index, front, &ground);
+            }
+        }
+        let m = effect.source();
+        let reach = m.radius.add(t::body_radius());
+        let top = front.y.add(t::structure_height());
+        let power = effect.power;
+        let worth = |gain: Fx| Fx::ONE.add(gain.mul(power));
+        for i in 0..MAX_PLAYERS {
+            let q = self.players[i];
+            if q.health <= 0 {
+                continue;
+            }
+            let apart = V3::new(q.pos.x.sub(front.x), Fx::ZERO, q.pos.z.sub(front.z));
+            let at_front = apart.flat_len().raw() <= reach.raw()
+                && q.pos.y.raw() >= front.y.sub(t::body_radius()).raw()
+                && q.pos.y.raw() <= top.add(t::body_radius()).raw();
+            if !at_front {
+                continue;
+            }
+            // Struck, the first time it reaches anybody but her.
+            if i != owner && self.effects_reach(i, effect.owner) && effect.take_hit(0, i) {
+                let (guarding, parried) = guard_against(&q, front, m.unblockable);
+                apply_hit(
+                    &mut self.players[i],
+                    Hit {
+                        damage: Fx::from_int(m.damage)
+                            .mul(worth(t::surge_damage_gain()))
+                            .to_int(),
+                        hitstun: m.hitstun,
+                        blockstun: m.blockstun,
+                        knockback: m.knockback.mul(worth(t::surge_knock_gain())),
+                        launch: t::surge_lift().mul(worth(t::surge_knock_gain())),
+                        grabs: 0,
+                        by: effect.owner,
+                        dir: flat,
+                        blocked: guarding,
+                        parried,
+                        interrupts: true,
+                    },
+                );
+                if parried {
+                    self.players[i].parried = PARRY_FLOURISH;
+                }
+                continue;
+            }
+            if !running {
+                continue;
+            }
+            // Carried: on its feet, moved with it; off them, given its run.
+            let r = &mut self.players[i];
+            if r.grounded {
+                r.pos.x = r.pos.x.add(moved.x);
+                r.pos.z = r.pos.z.add(moved.z);
+            } else {
+                let along = r.vel.x.mul(flat.x).add(r.vel.z.mul(flat.z));
+                if along.raw() < speed.raw() {
+                    let more = speed.sub(along);
+                    r.vel.x = r.vel.x.add(flat.x.mul(more));
+                    r.vel.z = r.vel.z.add(flat.z.mul(more));
+                }
+            }
+        }
+        // The creatures and the small bodies it reaches, once each, at the
+        // hold's worth.
+        let share = worth(t::surge_damage_gain());
+        for slot in 0..MAX_MONSTERS {
+            if self.monsters[slot].is_some() {
+                self.gore_for_a_share(slot, effect, 0, front, m.radius, share);
+            }
+        }
+        self.gore_critters_by(effect, EffectReach::Column(front, m.radius), share);
     }
 
     /// The shake is over: everyone still in the patch takes the eruption and
@@ -15798,6 +15940,70 @@ impl World {
                 t::embers_radius(),
             ),
         );
+    }
+
+    /// **Fire on a stone lights it, every time they touch** (2026-10-18):
+    /// every fire standing in the world this frame, in its own shape, against
+    /// every stone. The pillar's base and column, a tornado's where it has
+    /// got to, a cloud of embers, the fountain's wash, the carpet's strip and
+    /// the ring of fire out to how far it has raced. The fire bolt lights the
+    /// stone that stops it (`bolt::step`) and a lit shot the stones it passes
+    /// (`gust::step`), each where it already meets them.
+    fn fire_lights_the_stones(&mut self) {
+        if !stones::gather(&self.players).iter().any(Option::is_some) {
+            return;
+        }
+        let fire = self.effects;
+        for e in fire.iter().flatten() {
+            if !e.kind.ignites() {
+                continue;
+            }
+            match e.kind {
+                EffectKind::FirePillar | EffectKind::FireTornado => {
+                    let at = if e.kind == EffectKind::FireTornado {
+                        e.tornado_pos()
+                    } else {
+                        e.pos
+                    };
+                    let (base, column) = e.pillar_volumes();
+                    for slab in [base, column] {
+                        let foot = V3::new(at.x, at.y.add(slab.bottom), at.z);
+                        stones::light_touching(
+                            &mut self.players,
+                            foot,
+                            slab.radius,
+                            slab.top.sub(slab.bottom),
+                        );
+                    }
+                }
+                EffectKind::FireCarpet => {
+                    let (a, b) = e.carpet_line();
+                    stones::light_along(&mut self.players, a, b, e.field_radius());
+                }
+                EffectKind::FireRing => {
+                    stones::light_touching(
+                        &mut self.players,
+                        e.pos,
+                        e.ring_radius(),
+                        t::body_height(),
+                    );
+                }
+                _ => {
+                    let slab = if e.kind == EffectKind::Fountain {
+                        e.fountain_volume()
+                    } else {
+                        e.ember_volume()
+                    };
+                    let foot = V3::new(e.pos.x, e.pos.y.add(slab.bottom), e.pos.z);
+                    stones::light_touching(
+                        &mut self.players,
+                        foot,
+                        slab.radius,
+                        slab.top.sub(slab.bottom),
+                    );
+                }
+            }
+        }
     }
 
     /// Put a draft's column under the Elementalist's feet.
@@ -17793,7 +17999,20 @@ impl World {
     fn earth_jump(&mut self, i: usize) {
         let p = self.players[i];
         let feet = p.pos;
-        match stones::under(&self.players, feet) {
+        // Off the stone she was standing on when it began, if her feet have
+        // only left its edge during the wind-up -- still at its top, and no
+        // further past its side than a walk carries her through the wind-up.
+        let windup = moves::get(p.class, moves::elementalist::EARTH_JUMP).startup;
+        let walked = t::move_speed().mul(DT).mul(Fx::from_int(windup as i32 + 2));
+        let last = (p.rise.stone as usize).checked_sub(1).filter(|&index| {
+            stones::gather(&self.players)[index].is_some_and(|s| {
+                let apart = V3::new(s.at.x.sub(feet.x), Fx::ZERO, s.at.z.sub(feet.z));
+                let reach = s.radius().add(t::body_radius()).add(walked);
+                apart.flat_len().raw() <= reach.raw()
+                    && feet.y.sub(s.top()).abs().raw() <= t::body_radius().raw()
+            })
+        });
+        match stones::under(&self.players, feet).or(last) {
             Some(index) if stones::resting(&self.players, index) => {
                 let lit = stones::is_lit(&self.players, index);
                 if let Some(middle) = stones::destroy(&mut self.players, index) {
@@ -17864,24 +18083,6 @@ impl World {
         }
 
         let speed = crate::effects::ball_speed(effect.reach);
-        // **Steered by her walk** (2026-10-09, from play): while she is in it,
-        // the share of her own walking that is sideways to its roll turns it
-        // -- A and D, looking where it goes. The ball keeps its speed; only
-        // the heading bends, by her sideways speed over its own.
-        if effect.already_hit(0, owner) {
-            let walk = self.players[owner].vel;
-            let side = V3::new(Fx::ZERO.sub(effect.dir.z), Fx::ZERO, effect.dir.x);
-            let lateral = walk.x.mul(side.x).add(walk.z.mul(side.z));
-            let turn = lateral
-                .mul(t::air_ball_steer())
-                .mul(DT)
-                .div(speed.max(Fx::ONE));
-            let bent = effect.dir.add(side.scale(turn));
-            let bent = V3::new(bent.x, Fx::ZERO, bent.z).normalized();
-            if bent != V3::ZERO {
-                effect.dir = bent;
-            }
-        }
         let step = effect.dir.scale(speed.mul(DT));
         // A ball climbs a step up to half its own size.
         let climbs = effect.reach.mul(Fx::ratio(1, 2));
@@ -17996,6 +18197,142 @@ impl World {
             shrink = shrink.mul(t::air_ball_carried_shrink());
         }
         effect.reach = effect.reach.sub(shrink).max(Fx::ZERO);
+
+        // **Rolled through fire, it is fire** (2026-10-18): it burns whoever
+        // it holds on the tick -- the one wind move that hurt nobody -- and
+        // lights a stone it runs into.
+        let (radius, tall) = (effect.reach, effect.reach.add(effect.reach));
+        if !effect.lit() && self.touches_fire(effect.pos, radius, tall) {
+            effect.catch_fire();
+        }
+        if effect.lit() && effect.reach.raw() > 0 {
+            stones::light_touching(&mut self.players, effect.pos, radius, tall);
+            if effect.ticks_now() {
+                self.burn_in_column(effect.owner, effect.pos, radius, tall, t::wind_fire_burn());
+            }
+        }
+    }
+
+    /// **Is this column touching fire?** `radius` wide, from `foot` up
+    /// `height`: any fire effect in its own shape (`body_in_fire`), or a lit
+    /// stone. What sets wind alight (`Effect::lit`).
+    fn touches_fire(&self, foot: V3, radius: Fx, height: Fx) -> bool {
+        if self
+            .effects
+            .iter()
+            .flatten()
+            .any(|e| e.kind.ignites() && body_in_fire(e, foot, radius, height))
+        {
+            return true;
+        }
+        stones::gather(&self.players).iter().flatten().any(|s| {
+            let apart = V3::new(s.at.x.sub(foot.x), Fx::ZERO, s.at.z.sub(foot.z));
+            s.lit > 0
+                && crate::math::wide_flat_len(apart).raw() <= radius.add(s.radius()).raw()
+                && foot.y.raw() <= s.top().raw()
+                && foot.y.add(height).raw() >= s.at.y.raw()
+        })
+    }
+
+    /// **Burn everything standing in a column** but its owner -- fighters,
+    /// creatures and critters -- for `damage`, as fire under a body does
+    /// (no stun, no shove). Burning wind's bite.
+    fn burn_in_column(&mut self, owner: u8, foot: V3, radius: Fx, height: Fx, damage: i32) {
+        let column = crate::effects::Pillar {
+            radius,
+            bottom: Fx::ZERO,
+            top: height,
+        };
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if self.effects_reach(i, owner)
+                && column.contains(foot, p.pos, t::body_radius(), t::body_height())
+            {
+                self.players[i].wound(damage);
+            }
+        }
+        for beast in self.monsters.iter_mut().flatten() {
+            if beast.alive() && beast.part_struck(foot, radius, height).is_some() {
+                beast.scorch(damage);
+            }
+        }
+        for i in 0..crate::critter::MAX_CRITTERS {
+            let c = self.critters[i];
+            if c.alive() && column.contains(foot, c.pos, Fx::ZERO, Fx::ONE) {
+                pack::hurt(
+                    &mut self.pack,
+                    &mut self.critters,
+                    i,
+                    damage,
+                    V3::ZERO,
+                    Fx::ZERO,
+                    Fx::ZERO,
+                );
+            }
+        }
+    }
+
+    /// A draft that has touched fire burns each body in it once, on its own
+    /// part (2), and is drawn as fire from then on.
+    fn burn_in_the_draft(&mut self, effect: &mut Effect) {
+        let slab = effect.draft_volume();
+        let foot = V3::new(effect.pos.x, effect.pos.y.add(slab.bottom), effect.pos.z);
+        let tall = slab.top.sub(slab.bottom);
+        if !effect.lit() && self.touches_fire(foot, slab.radius, tall) {
+            effect.catch_fire();
+        }
+        if !effect.lit() {
+            return;
+        }
+        stones::light_touching(&mut self.players, foot, slab.radius, tall);
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if self.effects_reach(i, effect.owner)
+                && !effect.already_hit(2, i)
+                && slab.contains(effect.pos, p.pos, t::body_radius(), t::body_height())
+            {
+                effect.take_hit(2, i);
+                self.players[i].wound(t::draft_fire_burn());
+            }
+        }
+        // Creatures and critters on the column's first burning frame only:
+        // they have no bit of their own here.
+        if !effect.already_hit(2, effect.owner as usize) {
+            effect.take_hit(2, effect.owner as usize);
+            for beast in self.monsters.iter_mut().flatten() {
+                if beast.alive() && beast.part_struck(foot, slab.radius, tall).is_some() {
+                    beast.scorch(t::draft_fire_burn());
+                }
+            }
+        }
+    }
+
+    /// **She steers the Air ball she is riding** (2026-10-18, from play: the
+    /// first steering, by the sideways share of her walk, walked her out of
+    /// the side of it before it turned at all). While she is carried by her
+    /// own ball, A and D turn it -- left and right, at
+    /// `tuning::air_ball_turn` -- and her walk is taken off her, so she stays
+    /// in it however she steers. A jump still leaves it. Anybody else it
+    /// carries walks as they like.
+    fn steer_the_balls(&mut self, mut wire: [Input; MAX_PLAYERS]) -> [Input; MAX_PLAYERS] {
+        for e in self.effects.iter_mut().flatten() {
+            if e.kind != EffectKind::AirBall || !e.ball_sent() {
+                continue;
+            }
+            let owner = e.owner as usize;
+            if owner >= MAX_PLAYERS || !e.already_hit(0, owner) || !self.players[owner].grounded {
+                continue;
+            }
+            let input = &mut wire[owner];
+            let (ax, _) = input.move_axis();
+            if ax != 0 {
+                let yaw = crate::math::atan2_turns(e.dir.z, e.dir.x);
+                let turn = t::air_ball_turn().mul(DT).mul(Fx::from_int(ax));
+                e.dir = V3::from_turns(yaw.add(turn));
+            }
+            input.bits &= !(Input::W | Input::A | Input::S | Input::D);
+        }
+        wire
     }
 
     /// **The Thermal**: her Updraft and her own fire sharing space, whichever
@@ -18077,35 +18414,6 @@ fn throws_a_cataclysm(p: &Player, kind: u8) -> bool {
     p.class == Class::Elementalist
         && kind == SLOT_HEAVY
         && moves::get(p.class, kind).aim() == aim::Kind::Skillshot
-}
-
-/// Which fire pillar a point sits inside, if any.
-///
-/// `aim::Contact::Fire` says a shot met fire and how far along its path, not
-/// which of the (at most two, one per fighter) pillars on the field it was --
-/// that bookkeeping already happens once inside `aim::first_along`, and
-/// redoing the search here rather than threading an index back out of it is
-/// the smaller change against a module that fails the build if anything but
-/// `crate::aim` reaches for its own intersection arithmetic.
-///
-/// Nearest by flat distance to its own centre, rather than strict containment:
-/// the contact point is where the shot entered the pillar's radius *plus its
-/// own girth*, which sits just outside the pillar's true footprint, so a
-/// contains-test tuned to the bare radius misses the very point that found it.
-fn fire_pillar_slot_at(effects: &[Option<Effect>; MAX_EFFECTS], at: V3) -> Option<usize> {
-    effects
-        .iter()
-        .enumerate()
-        .filter_map(|(i, slot)| {
-            let e = (*slot)?;
-            (e.kind == EffectKind::FirePillar).then_some((i, e))
-        })
-        .min_by_key(|(_, e)| {
-            V3::new(at.x.sub(e.pos.x), Fx::ZERO, at.z.sub(e.pos.z))
-                .flat_len()
-                .raw()
-        })
-        .map(|(i, _)| i)
 }
 
 // ---------------------------------------------------------------------------

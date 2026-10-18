@@ -386,7 +386,11 @@ can be seen, and points nothing anywhere: twenty-seven functions as of
 2026-10-01, beside the five lines. The raycast itself is `aim::sight` (and
 `aim::sight_for_attack`, below); where a cast leaves the body is `aim::origin`
 and, for a one-armed move, `aim::hand_origin`; what a path runs into is
-`aim::first_along` (§"What the path runs into"). The rest, one question each:
+`aim::first_along` (§"What the path runs into"), and everything it runs
+into, nearest first and up to the first wall, `aim::every_along` -- the
+Elementalist's two pushes, which act on every stone and fire on their line
+(2026-10-18), along a line `aim::through` carries on past the crosshair's
+point to the move's reach. The rest, one question each:
 
 **Is the crosshair on the shadow?** `aim::pointing_at` answers it, and the
 Reaver's forward dodge reads the answer to decide whether it is a dodge or the

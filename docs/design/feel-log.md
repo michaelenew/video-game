@@ -213,6 +213,37 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-18 — the Elementalist's QoL pass, from play
+
+**Changed**
+- **Fire pillar** 1.5x every size knob (base radius 1.1→1.65 new, 2.6→3.9
+  grown; base height 0.9→1.35; column radius 0.8→1.2, 1.2→1.8; height 2.5→3.75,
+  6→9; the move's own radius 2→3) and its life 180→360 frames. `Strike, worth`
+  1→0.5, so the Strike -- the pillar's whole burn as one hit -- is worth what it
+  was rather than doubling with the burn.
+- **Lit shot, damage bonus** 50%→100%, and a lit Gale is drawn in fire now (it
+  was drawn as air whatever it carried).
+- **Air ball, shrinks by** 0.7→0.28 m/s (2.5x the life on open floor; about 2x
+  in the proving ground, where its edge knocks size off it). `Air ball, steered
+  by her walk` became `Air ball, turns while she rides`, 0.35 turns a second.
+- **Updraft from the floor, lift** 21.5→26.3 m/s and the move's `self_lift`
+  14→17.15 (the air one): height goes with the square, so 1.5x as high,
+  measured 6.3→9.5 m. New: `Updraft, steered by her walk` 40 m/s² up to
+  `Updraft, steered up to` 14 m/s while her column blows.
+- New knobs: `Wind on fire` (a burning Air ball 40 a tick, a burning draft 90
+  once a body), and Fissure's surge (`speed` 16 m/s, `damage at a full hold`
+  +1.5x, `knockback at a full hold` +1x, `throws up at` 6 m/s).
+
+**Why** The person's list from play: fire on a stone lit it only on the frame a
+pillar was cast; two stones one behind the other made both pushes useless;
+Fissure wanted to come up while it slid and to carry bodies, her own
+included, as a one-move combo that grows with the hold; wind through fire did
+not read as fire and the Air ball hurt nobody; the ball was too short and the
+sideways-walk steering walked her out of it; the earth jump half off a stone
+raised a new one; the Updraft takeoff wanted height and a direction.
+
+**Verdict** Unplayed. `tests/elementalist_qol.rs` holds each as a property.
+
 ### 2026-10-14 — the cascade spills pools, and stains and vines grow like roots
 **Changed** The Crimson cascade is pools, not rings: the impact spills 6 pools of her spent
 grey, each erupts 50 frames later and spills 2 more at 0.6 of it, 2.75 m further, for 4

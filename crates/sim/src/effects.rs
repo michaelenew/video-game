@@ -355,7 +355,21 @@ pub enum EffectKind {
     /// crosses is lit. A finisher; also the picture of the Rising reap's
     /// sweep, for its few frames. See `state::World::step_the_cascade`.
     Cascade,
+    /// Elementalist. **Fissure's surge** (2026-10-18, from play): the stone
+    /// she held churning comes up out of the ground *while it slides*, along
+    /// the line the hold bought. `pos` is where it started, `dir` the way it
+    /// runs (the floor's slope and all), `reach` how far, `power` the share
+    /// of a full hold. Its front ([`Effect::surge_front`]) carries the stone
+    /// and everybody standing at it -- her included, so cast at her own feet
+    /// it is a ride she can jump off at its speed -- and strikes everybody
+    /// else it reaches once, harder and further the longer it was held.
+    /// `banked` is the stone it carries, as `aim::Contact::Stone` counts
+    /// them, plus one. See `state::World::step_the_surge`.
+    Surge,
 }
+
+/// The bit of `Effect::banked` that says wind has caught fire.
+const WIND_LIT: i32 = 1 << 30;
 
 /// How many pieces a ring of fire is drawn as.
 ///
@@ -488,6 +502,7 @@ impl EffectKind {
             EffectKind::Thrall => "thrall",
             EffectKind::Vines => "black vines",
             EffectKind::Cascade => "crimson cascade",
+            EffectKind::Surge => "surge",
         }
     }
 
@@ -549,6 +564,7 @@ impl EffectKind {
             // hangs in the air where she laid it.
             EffectKind::AirBall | EffectKind::Fountain => true,
             EffectKind::FireCarpet => false,
+            EffectKind::Surge => true,
             // Round her, wherever she stood; thrown along her aim.
             EffectKind::Nova => true,
             EffectKind::Nail => false,
@@ -616,6 +632,7 @@ impl EffectKind {
                     | EffectKind::ShadowRing
                     | EffectKind::Shockwave
                     | EffectKind::Cuts
+                    | EffectKind::Surge
             )
     }
 
@@ -817,6 +834,9 @@ impl EffectKind {
             EffectKind::Heart | EffectKind::Thrall => u16::MAX,
             EffectKind::Vines => t::vines_lasts(),
             EffectKind::Cascade => t::spell_flash().saturating_mul(2),
+            // Set where it is made: as long as its run takes
+            // (`Effect::surge`).
+            EffectKind::Surge => 1,
         }
     }
 
@@ -894,10 +914,10 @@ impl EffectKind {
             EffectKind::Javelin => m.damage,
             // The move's own number, on every tick.
             EffectKind::Plague => m.damage,
-            // The move's own number: the thorns' tick, the cone's blow. A
-            // thrall's bite is what it spends, not a number of its own, and a
-            // heart hits nobody.
-            EffectKind::Vines | EffectKind::Cascade => m.damage,
+            // The move's own number: the thorns' tick, the cone's blow, the
+            // surge's strike at a tap. A thrall's bite is what it spends, not
+            // a number of its own, and a heart hits nobody.
+            EffectKind::Vines | EffectKind::Cascade | EffectKind::Surge => m.damage,
             EffectKind::Thrall | EffectKind::Heart => 0,
         }
     }
@@ -1314,6 +1334,7 @@ impl Effect {
             EffectKind::Vines | EffectKind::Cascade => self.reach,
             EffectKind::Thrall => self.thrall_radius(),
             EffectKind::Heart => t::heart_ground(),
+            EffectKind::Surge => self.source().radius,
         }
     }
 
@@ -1842,6 +1863,56 @@ impl Effect {
     /// `slot` is the move that spilled it, kept for the same reason every
     /// effect keeps one: a reader asking what made this is answered from the
     /// table rather than from a copy.
+    /// **Wind that has caught fire** (2026-10-18): an Air ball, an Updraft or
+    /// a Downdraft that has touched fire -- any of hers, or a lit stone --
+    /// burns what it holds, and is drawn as fire. Kept in a bit of `banked`
+    /// well above the Downdraft's one-per-stone bits, rather than a field of
+    /// its own, because every effect slot pays for a field and the snapshot
+    /// is capped.
+    pub const fn lit(&self) -> bool {
+        self.banked & WIND_LIT != 0
+    }
+
+    /// Set this wind alight. See [`Effect::lit`].
+    pub fn catch_fire(&mut self) {
+        self.banked |= WIND_LIT;
+    }
+
+    /// Fissure's surge, from `from` along `dir` for `reach`, carrying the
+    /// stone `stone` (as `aim::Contact::Stone` counts them; `None` for no
+    /// stone), struck at `share` of a full hold. It lives as long as its run
+    /// takes at `tuning::surge_speed`, and one frame more.
+    #[allow(clippy::too_many_arguments)]
+    pub fn surge(
+        owner: u8,
+        class: Class,
+        slot: u8,
+        from: V3,
+        dir: V3,
+        reach: Fx,
+        stone: Option<usize>,
+        share: Fx,
+    ) -> Effect {
+        let mut e = Effect::cast(EffectKind::Surge, owner, class, slot, from, dir, reach);
+        e.life = frames_to(reach, t::surge_speed()).saturating_add(1).max(2);
+        e.banked = stone.map_or(0, |i| i as i32 + 1);
+        e.power = share;
+        e
+    }
+
+    /// Where a surge's front is this frame: `age` frames of its speed along
+    /// its line, and no further than its end.
+    pub fn surge_front(&self) -> V3 {
+        self.surge_front_at(self.age)
+    }
+
+    /// [`Effect::surge_front`] at another age: the frame before is how far it
+    /// moved, which is what it carries a body by.
+    pub fn surge_front_at(&self, age: u16) -> V3 {
+        let run = t::surge_speed().mul(DT).mul(Fx::from_int(age as i32));
+        self.pos.add(self.dir.scale(run.min(self.reach)))
+    }
+
     pub fn pool(owner: u8, class: Class, slot: u8, at: V3, volume: i32) -> Effect {
         Effect {
             kind: EffectKind::Pool,

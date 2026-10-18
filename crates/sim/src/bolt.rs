@@ -247,7 +247,10 @@ pub fn step(
                 *slot = None;
                 continue;
             }
-            Some(Contact::Stone { .. }) => {
+            // Stopped -- and fire on a stone lights it (2026-10-18: every
+            // fire she makes, wherever it touches one).
+            Some(Contact::Stone { index, .. }) => {
+                stones::light(players, index);
                 *slot = None;
                 continue;
             }
