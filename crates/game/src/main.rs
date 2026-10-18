@@ -180,6 +180,7 @@ fn main() {
         return;
     }
     platform::report_panics();
+    platform::one_move_an_event();
     App::new()
         .add_plugins(
             DefaultPlugins
