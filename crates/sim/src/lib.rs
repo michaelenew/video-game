@@ -30,6 +30,7 @@ pub mod fixed;
 pub mod gust;
 pub mod hazard;
 pub mod input;
+pub mod keep;
 pub mod lore;
 pub mod math;
 pub mod monster;

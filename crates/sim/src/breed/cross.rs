@@ -46,6 +46,9 @@ pub struct Rates {
     pub mutation_minor: Fx,
     /// Chance a major mutates at random.
     pub mutation_major: Fx,
+    /// How much harder a trophy pulls the sliders than the slow rate: one
+    /// for a lineage, more for a morph that has to change while you watch.
+    pub slider_gain: Fx,
 }
 
 impl Rates {
@@ -56,7 +59,22 @@ impl Rates {
         mutation_sigma: fx(3, 100),
         mutation_minor: fx(1, 200),
         mutation_major: fx(1, 400),
+        slider_gain: Fx::ONE,
     };
+
+    /// A morph's: what it is fed shows at once (the Oven's `Morph`
+    /// family). Mutation stays the slow rate's -- a morph changes by what
+    /// it eats, not by chance.
+    pub fn morph() -> Rates {
+        use crate::tuning as t;
+        Rates {
+            graft_major: t::morph_major(),
+            graft_minor: t::morph_minor(),
+            graft_new_limb: t::morph_new_limb(),
+            slider_gain: t::morph_slider_gain(),
+            ..Rates::DEFAULT
+        }
+    }
 }
 
 impl Default for Rates {
@@ -494,13 +512,186 @@ pub fn graft(egg: &Genome, trophy: &Trophy, rates: &Rates, rng: &mut Rng) -> Out
             Slider::Pitch => pull.plan,
             _ => pull.temper,
         };
-        let share = rng.share().mul(channel).mul(s.inertia());
+        let share = rng
+            .share()
+            .mul(channel)
+            .mul(s.inertia())
+            .mul(rates.slider_gain)
+            .min(Fx::ONE);
         let v = g.sliders.get(s);
         g.sliders.set(s, v.add(d.sliders.get(s).sub(v).mul(share)));
     }
 
     mutate_in_place(&mut g, rates, rng, &mut moved);
     finish(g, moved)
+}
+
+// ---------------------------------------------------------------------------
+// Feeding a morph
+// ---------------------------------------------------------------------------
+
+/// A trophy fed to a morph: a graft at the morph's rates, and **always a
+/// change you can see**. If the graft moved nothing a player would notice
+/// -- no major, no minor, no limb, nothing it can now do or no longer can,
+/// the size by less than a tenth -- one difference between it and the
+/// donor goes over anyway, picked by the trophy's pull: a horn moves the
+/// head first, a feather the limbs. A body that is already the donor in
+/// every part has only its sliders left to move.
+pub fn feed(egg: &Genome, trophy: &Trophy, rng: &mut Rng) -> Outcome {
+    let out = graft(egg, trophy, &Rates::morph(), rng);
+    if visible(egg, &out.genome) {
+        return out;
+    }
+    // One difference at a time, until one survives the repair: turning a
+    // legged body limbless is repaired back to low-slung, which may be
+    // what it already was.
+    let mut tried = 0u32;
+    for _ in 0..16 {
+        let mut g = out.genome;
+        let mut moved = out.moved;
+        let pull = trophy.kind.pull();
+        let Some(which) = force_one(&mut g, &trophy.donor, &pull, rng, &mut moved, tried) else {
+            break;
+        };
+        tried |= 1 << which;
+        let forced = finish(g, moved);
+        if visible(egg, &forced.genome) {
+            return forced;
+        }
+    }
+    out
+}
+
+/// Whether a player would see that `a` became `b`: anything the morph's
+/// account of a change ([`super::morph::changes`]) would say.
+pub fn visible(a: &Genome, b: &Genome) -> bool {
+    !super::morph::changes(a, b, None).is_empty()
+}
+
+/// One part of the donor, onto the body: of the parts they differ in, one
+/// picked by the trophy's pull on its channel, skipping the ones in
+/// `skip` (a bit each). Which it moved, or none if nothing differs.
+fn force_one(
+    g: &mut Genome,
+    d: &Genome,
+    pull: &Pull,
+    rng: &mut Rng,
+    moved: &mut Moved,
+    skip: u32,
+) -> Option<u8> {
+    // (weight, which) for every difference.
+    let mut options = [(Fx::ZERO, 0u8); 16];
+    let mut n = 0;
+    // Every difference is on offer, the trophy's own channels most of all:
+    // a trophy carries a little of everything its donor is.
+    let mut offer = |w: Fx, which: u8| {
+        let w = w.max(fx(1, 20));
+        if n < options.len() && skip & (1 << which) == 0 {
+            options[n] = (w, which);
+            n += 1;
+        }
+    };
+    if g.stance != d.stance {
+        offer(pull.plan, 0);
+    }
+    if g.head != d.head {
+        offer(pull.head, 1);
+    }
+    if g.segments.tail != d.segments.tail {
+        offer(pull.tail, 2);
+    }
+    if g.segments.thorax != d.segments.thorax || g.segments.abdomen != d.segments.abdomen {
+        offer(pull.plan, 3);
+    }
+    if g.minors.jaw != d.minors.jaw || g.minors.crown != d.minors.crown {
+        offer(pull.head, 4);
+    }
+    if g.minors.tail_tip != d.minors.tail_tip {
+        offer(pull.tail, 5);
+    }
+    if g.minors.hide != d.minors.hide || g.minors.back != d.minors.back {
+        offer(pull.hide, 6);
+    }
+    for i in 0..STATIONS {
+        let differs = match (g.limbs[i], d.limbs[i]) {
+            (Some(x), Some(y)) => x.role != y.role || x.build != y.build || x.tip != y.tip,
+            (None, Some(_)) => true,
+            // A pair the donor has nothing at goes, if it is not the last
+            // the body stands on.
+            (Some(_), None) => g.pair_count() > 1,
+            _ => false,
+        };
+        if differs {
+            offer(pull.limbs, 7 + i as u8);
+        }
+    }
+    if g.sliders.size.sub(d.sliders.size).abs() >= fx(1, 10) {
+        offer(pull.bulk, 11);
+    }
+    let total = options[..n].iter().fold(Fx::ZERO, |a, (w, _)| a.add(*w));
+    if total == Fx::ZERO {
+        return None;
+    }
+    let mut pick = rng.unit().mul(total);
+    let mut which = options[n - 1].1;
+    for (w, k) in &options[..n] {
+        if pick < *w {
+            which = *k;
+            break;
+        }
+        pick = pick.sub(*w);
+    }
+    match which {
+        0 => {
+            g.stance = d.stance;
+            moved.stance = true;
+        }
+        1 => {
+            g.head = d.head;
+            moved.head = true;
+        }
+        2 => {
+            g.segments.tail = d.segments.tail;
+            moved.segments = true;
+        }
+        3 => {
+            g.segments.thorax = d.segments.thorax;
+            g.segments.abdomen = d.segments.abdomen;
+            moved.segments = true;
+        }
+        4 => {
+            g.minors.jaw = d.minors.jaw;
+            g.minors.crown = d.minors.crown;
+        }
+        5 => g.minors.tail_tip = d.minors.tail_tip,
+        6 => {
+            g.minors.hide = d.minors.hide;
+            g.minors.back = d.minors.back;
+        }
+        // The donor's size: the one thing left to take.
+        11 => g.sliders.size = d.sliders.size,
+        k => {
+            let i = (k - 7) as usize;
+            match (g.limbs[i].as_mut(), d.limbs[i]) {
+                (Some(mine), Some(theirs)) => {
+                    mine.role = theirs.role;
+                    mine.build = theirs.build;
+                    mine.tip = theirs.tip;
+                }
+                (None, Some(theirs)) => {
+                    g.limbs[i] = Some(LimbPair {
+                        length: theirs.length.mul(fx(1, 2)),
+                        girth: theirs.girth.mul(fx(1, 2)),
+                        ..theirs
+                    });
+                }
+                (Some(_), None) => g.limbs[i] = None,
+                _ => {}
+            }
+            moved.limbs[i] = true;
+        }
+    }
+    Some(which)
 }
 
 // ---------------------------------------------------------------------------

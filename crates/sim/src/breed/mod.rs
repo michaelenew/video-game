@@ -67,6 +67,7 @@ pub mod build;
 pub mod cross;
 pub mod drive;
 pub mod locomotion;
+pub mod morph;
 pub mod plan;
 pub mod posture;
 pub mod rear;

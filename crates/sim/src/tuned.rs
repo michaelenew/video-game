@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 651] = [
+pub const SCALARS: [i32; 665] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -659,6 +659,20 @@ pub const SCALARS: [i32; 651] = [
              240, // breeding.stays_under_at_most = 240
            32768, // breeding.travels_under_at_(x_top_speed) = 0.5
           131072, // breeding.goes_under_to_close_beyond_(mark_widths) = 2
+           32768, // morph.a_major_goes_over,_at_full_pull_(chance) = 0.5
+           65536, // morph.a_minor_goes_over,_at_full_pull_(chance) = 1
+           32768, // morph.a_limb_it_lacks_buds,_at_full_pull_(chance) = 0.5
+          196608, // morph.sliders_pulled_(x_a_lineage's) = 3
+           26214, // morph.hatched_at_(share_of_grown) = 0.4
+            9830, // morph.grows_a_trophy_(share_of_grown) = 0.15
+           78643, // keep.picked_up_within_(m) = 1.2
+          393216, // keep.an_egg_lies_behind_its_creature_by_(m) = 6
+               2, // keep.trophies_a_beaten_creature_drops = 2
+          196608, // keep.the_morph_follows_past_(m) = 3
+          163840, // keep.fed_by_a_crouch_within_(m) = 2.5
+              30, // keep.eats_again_after = 30
+         1572864, // keep.the_morph,_left_further_than_this,_catches_up_(m) = 24
+          131072, // keep.the_morph_hurries_at_most_(x_its_walk) = 2
 ];
 
 #[rustfmt::skip]

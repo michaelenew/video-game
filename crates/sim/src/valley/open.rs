@@ -106,7 +106,10 @@ impl World {
             // while nobody is on their feet anywhere, which is a hunt being
             // lost, and the round's end decides that.
             let margin = crate::tuning::hunt_held_past();
-            let held = self.standing().next().is_none()
+            // And held while anybody carries the egg of what is hunted
+            // here: it does not stop until it is beaten (`crate::keep`).
+            let held = self.egg_carrier().is_some()
+                || self.standing().next().is_none()
                 || self.standing().any(|i| {
                     let f = feet(self, i);
                     here.holds_within(f.x, f.z, margin) && here.in_band(f.y)
@@ -297,6 +300,12 @@ impl World {
         for s in self.debris.iter_mut().flatten() {
             s.pos = s.pos.add(d);
         }
+        for l in self.loose.iter_mut().flatten() {
+            l.at = l.at.add(d);
+        }
+        for h in self.heel.iter_mut() {
+            h.at = h.at.add(d);
+        }
         for g in self.gusts.iter_mut().flatten() {
             g.pos = g.pos.add(d);
         }
@@ -338,6 +347,7 @@ impl World {
             }
             self.tend_range();
         }
+        self.lay_the_egg(species);
         // A seat nobody plays is out of the hunt, as it always was.
         let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
         for p in self.players.iter_mut().skip(seats) {

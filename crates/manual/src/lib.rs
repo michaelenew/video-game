@@ -89,6 +89,10 @@ pub const SECTIONS: &[Section] = &[
                 "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
+                "cargo run -p game -- --range <name>",
+                "Start in the valley, walked into one of its creature ranges by name (Wood's Edge, Sky Shrine, ...: crates/sim/src/valley/ranges.rs): its hunt begun and its egg lying behind it. Walk into the egg to pick it up -- the creature then will not stop until you beat it -- walk into the trophies a beaten creature drops, and crouch beside your morph (the small thing at your heel) to feed it: an egg makes it that creature's young, a trophy grows it a generation. The lines at the bottom left say what you carry and what your morph just became.",
+            ),
+            e(
                 "cargo run -p game -- --hunt <creature> --temper <n>",
                 "Start the hunt at a temper, 0 to 3, whatever you have earned, and let T offer every temper. A temper is the same creature cleverer: it glances more often, leads you further, picks its best move more surely, and stays methodical as it tires. Its health and its hide do not change.",
             ),

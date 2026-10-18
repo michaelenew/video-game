@@ -594,6 +594,14 @@ pub const CAST: [(SpeciesId, &str, &Genome, &[MoveKind]); 11] = [
     ),
 ];
 
+/// A species' genome, by its id: what its egg is and its trophies come
+/// from. None for one with no genome (a dev pack).
+pub fn of_species(id: SpeciesId) -> Option<&'static Genome> {
+    CAST.iter()
+        .find(|(s, _, _, _)| *s == id)
+        .map(|(_, _, g, _)| *g)
+}
+
 /// What a creature drops, by its genome: the trophies its parts are.
 pub fn drops(g: &Genome) -> [Option<TrophyKind>; 6] {
     let mut out = [None; 6];

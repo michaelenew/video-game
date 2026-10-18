@@ -418,6 +418,8 @@ pub struct Journey {
     /// The live range's creatures' health, all of it, last frame: what
     /// noticing a hurt reads. Zero before the first frame of a hunt.
     pub stock: i32,
+    /// What every seat carries, and its morph (`crate::keep`).
+    pub keep: crate::keep::Keep,
 }
 
 impl Journey {

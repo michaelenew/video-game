@@ -4509,3 +4509,83 @@ pub fn breed_under_speed() -> Fx {
 pub fn breed_burrow_from() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BreedBurrowFrom))
 }
+
+// ---------------------------------------------------------------------------
+// The morph (`sim::breed::morph`, `sim::breed::cross::feed`)
+// ---------------------------------------------------------------------------
+
+/// A trophy fed to a morph: the chance at full pull that a major goes over.
+pub fn morph_major() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphMajor))
+}
+
+/// ... that a minor does.
+pub fn morph_minor() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphMinor))
+}
+
+/// ... that a limb the morph lacks buds.
+pub fn morph_new_limb() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphNewLimb))
+}
+
+/// How much harder than a lineage's a trophy pulls a morph's sliders.
+pub fn morph_slider_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphSliderGain))
+}
+
+/// How grown a morph is when an egg makes it young again, as a share.
+pub fn morph_born() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphBorn))
+}
+
+/// How much it grows for every trophy, as a share.
+pub fn morph_grows() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphGrows))
+}
+
+// ---------------------------------------------------------------------------
+// What you carry (`crate::keep`)
+// ---------------------------------------------------------------------------
+
+/// Walking within this of an egg or a trophy picks it up.
+pub fn pickup_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepPickup))
+}
+
+/// How far behind its creature, from where the hunters came in, an egg
+/// lies when the hunt begins.
+pub fn egg_behind() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepEggBehind))
+}
+
+/// How many trophies a beaten creature drops.
+pub fn trophies_dropped() -> i32 {
+    oven::scalar(Scalar::KeepTrophies)
+}
+
+/// A morph stays put until its seat is further than this, then follows.
+pub fn morph_follow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepFollow))
+}
+
+/// Crouching within this of your morph feeds it.
+pub fn feed_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepFeedReach))
+}
+
+/// Frames before a morph eats again, so one crouch is one feeding.
+pub fn feed_cool() -> i32 {
+    oven::scalar(Scalar::KeepFeedCool)
+}
+
+/// A morph left further behind than this is put back beside its seat: a
+/// jump down a cliff, a fall, a seam.
+pub fn morph_catch_up() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepCatchUp))
+}
+
+/// The fastest a morph hurries after its seat, as a share of its walk.
+pub fn morph_hurry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepHurry))
+}

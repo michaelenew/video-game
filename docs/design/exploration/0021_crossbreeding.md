@@ -806,3 +806,66 @@ measure holds for a Hornback grafted thirty generations with a Sandmaw's
 plates. On the sheets: `moves_sandmaw.png` and `moves_hornback_spades.png`
 (the mole); parts below the floor are not drawn, and the churning ground
 over them is the brown ring.
+
+## 12 · In the world, v1: eggs, trophies, and the morph (2026-10-18)
+
+The owner: *"you find an egg (every enemy has one) and need to beat the enemy
+to stop it pursuing you to get the egg back ... rather than a breeding
+program you feed the egg to a 'morph' and it resets into the baby version,
+and as you feed it trophies the animal grows a 'generation'. I have friends
+playing this in short bursts, so I want the reward to be immediate ... each
+trophy makes a clear difference."*
+
+**The loop** (`sim::keep`, `tests/keep.rs`):
+- **Every creature has an egg.** When its hunt begins, its egg lies on the
+  floor behind it, from where you came in -- you go past it to get it
+  (`KeepEggBehind`, 6 m). Walking into it picks it up (`KeepPickup`, 1.2 m);
+  there is no button, and nothing to learn.
+- **Carry its egg and it does not stop.** It is roused at once, held by
+  nothing, on the one carrying it; and the hunt cannot be walked away from
+  -- it ends when the creature is beaten. Fall, and the egg drops where you
+  fell; lose the hunt, and it took its egg back.
+- **Beaten, it drops trophies**: two of what its parts are
+  (`archetypes::drops`, `KeepTrophies`), a different two each time, picked
+  up the same way.
+- **Each player has a morph at heel**, a small plain thing until it eats an
+  egg. It follows past three metres (`KeepFollow`), hurrying when it is far
+  behind, and is put back beside you after a seam or a fall.
+- **Crouch beside it to feed it.** It eats an egg first -- it starts over as
+  that creature's young -- unless the egg's creature is still hunting you
+  for it (beat it first). Then the last trophy you picked up: a generation.
+
+**Fast, and always visible** (`cross::feed`, `tests/morph.rs`). A morph's
+rates are the Oven's `Morph` family, far above a lineage's: a major goes
+over at half the trophy's pull (a lineage: an eighth), a minor always does,
+a missing limb buds at half, the sliders are pulled three times as hard. And
+**every trophy shows**: if the graft moved nothing you would see, one
+difference between the morph and the donor goes over anyway, picked by the
+trophy's pull -- a horn moves the head, a feather the limbs -- and it has to
+survive the repair (a limbless stance on a legged body is repaired back, so
+something else is tried). "Something you can see" is one definition,
+`morph::changes`, which also writes the line the game shows: "Generation 3:
+front limbs: wing (wing), hide: feathers." Six Galewing feathers give most
+Hornback morphs wings; six Sandmaw plates give most of them spades. The
+morph grows as it eats: hatched at two fifths of its size, a seventh more
+each trophy.
+
+**Where it lives.** What you carry and your morph are the journey's
+(`Journey::keep`): they go with you through seams and survive a won hunt,
+which rebuilds the fighters. What lies on the floor and where the morphs
+stand are the place's (`World::loose`, `World::heel`), shifted with it.
+The whole thing is about 640 bytes of snapshot, inside the 20 KiB cap with
+room to spare, and hashed only once anything has been picked up, fed or
+dropped, so every checksum pinned before it still holds.
+
+**On screen** (`game::keep`): an egg is big, pale and glowing in its
+creature's colour, bobbing and turning under a column of light you can see
+across a range; a trophy is the same, small and gold. The morph is the
+builder's own body, in its egg-creature's colours, walking at the gait its
+body chooses. A few lines at the bottom left say what you carry, what your
+morph is, what the last feeding changed, and -- when it is so -- that the
+creature wants its egg back.
+
+**Not yet**: the morph does not fight (a hatchling in a fight is BREED-11);
+morphs are not drawn in arenas outside the valley; eggs and trophies are
+the valley's only.
