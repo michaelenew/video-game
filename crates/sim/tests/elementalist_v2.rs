@@ -812,6 +812,18 @@ fn letting_go_races_the_crack_and_the_stone_erupts_at_its_end() {
         w.players[0].action
     );
     run(&mut w, (m.startup + 1) as u32, 0, 0);
+    // The stone comes up while it slides (2026-10-18): it is at the end once
+    // the surge has run.
+    for _ in 0..240 {
+        if w.effects
+            .iter()
+            .flatten()
+            .all(|e| e.kind != EffectKind::Surge)
+        {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
     let s = stones_of(&w);
     assert_eq!(s.len(), 1, "the same stone");
     let ran = s[0].at.x.sub(held_at.x);
@@ -833,8 +845,11 @@ fn letting_go_races_the_crack_and_the_stone_erupts_at_its_end() {
     );
 }
 
+/// Was "the crack stops at the first body and hits it". Since 2026-10-18 the
+/// stone comes up while it slides: it strikes whoever it reaches, harder for
+/// a long hold, and runs on past them, shoving them along.
 #[test]
-fn the_crack_stops_at_the_first_body_and_hits_it() {
+fn the_crack_strikes_a_body_it_reaches_and_runs_on_past_it() {
     let mut w = elementalist();
     run(&mut w, 1, RAISE, 0);
     let raised = stones_of(&w)[0].at;
@@ -852,20 +867,23 @@ fn the_crack_stops_at_the_first_body_and_hits_it() {
     }
     assert!(matches!(w.players[0].action, Action::Channel { .. }));
     run(&mut w, 1, 0, 0);
-    run(&mut w, (m.startup + 1) as u32, 0, 0);
-    assert_eq!(full - w.players[1].health, m.damage, "the crack is the hit");
-    assert!(w.players[1].action.stunned(), "and it staggers");
+    let mut stunned = false;
+    for _ in 0..120 {
+        run(&mut w, 1, 0, 0);
+        stunned |= w.players[1].action.stunned();
+    }
+    assert!(
+        full - w.players[1].health > m.damage,
+        "a long hold's surge strikes for more than the row: {}",
+        full - w.players[1].health
+    );
+    assert!(stunned, "and it staggers");
     let s = stones_of(&w)[0];
     assert!(
-        s.at.x.sub(body.x).abs().raw() < Fx::from_int(2).raw(),
-        "the stone came up at them, not past them: {} against {}",
+        s.at.x.raw() > body.x.add(Fx::ONE).raw(),
+        "the stone ran on past them: {} against {}",
         s.at.x.to_int(),
         body.x.to_int()
-    );
-    let scar = scars(&w)[0];
-    assert!(
-        scar.reach.raw() < m.reach.raw(),
-        "the scar stops where the crack did"
     );
 }
 
@@ -1434,8 +1452,14 @@ fn a_pillar_cast_on_a_stone_lights_it_and_a_lit_stone_burns_its_stander() {
     let full = w.players[1].health;
     run(&mut w, 40, 0, 0);
     assert!(w.players[1].health < full, "a lit stone is a stove");
-    // And it goes out on its own clock.
-    run(&mut w, t::lit_stone_life() as u32, 0, 0);
+    // And it goes out on its own clock, once the pillar beside it -- which
+    // keeps it lit for as long as the two touch (2026-10-18) -- is gone.
+    run(
+        &mut w,
+        (t::pillar_life() + t::lit_stone_life()) as u32,
+        0,
+        0,
+    );
     assert_eq!(stones_of(&w)[0].lit, 0);
 }
 

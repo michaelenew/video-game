@@ -85,7 +85,7 @@ fn pools(w: &World) -> Vec<Effect> {
 
 /// The dummy inside the scythe's reach, standing still.
 fn in_reach(w: &mut World) {
-    let sweep = sim::moves::get(Class::BloodMage, b::COMMAND);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     w.players[1].pos = w.players[0].pos.add(V3::new(
         sweep.reach.mul(Fx::ratio(1, 2)),
         Fx::ZERO,
@@ -145,10 +145,10 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
 /// Which button throws each of her moves, in the order the kit reads.
 fn kit() -> [(u8, u16); 4] {
     [
-        (b::COMMAND, Input::RIGHT),
-        (b::HAEMORRHAGE, Input::LEFT),
+        (b::SWEEP, Input::RIGHT),
+        (b::THORN_LASH, Input::LEFT),
         (b::BLACK_SPIKE, Input::MIDDLE),
-        (b::HEMOPLAGUE, Input::MECHANIC),
+        (b::BRAMBLE, Input::MECHANIC),
     ]
 }
 
@@ -184,7 +184,7 @@ fn reach_table() {
         "  {:>6}{:>10}{:>10}{:>10}",
         "grey", "reach m", "radius m", "damage x"
     );
-    let sweep = sim::moves::get(Class::BloodMage, b::COMMAND);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     for grey in [0, 250, 500, 750, t::max_health() - 1] {
         let mut p = sim::state::Player::new(Class::BloodMage);
         p.health = t::max_health() - grey;
@@ -261,7 +261,7 @@ fn drink_table() {
         in_reach(&mut w);
         wounded(&mut w, 500);
         let at = w.players[1].pos;
-        w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::COMMAND, at, volume));
+        w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, volume));
         let before = w.players[0].health;
         let paid = w.players[0].cost_of(m.cost);
         cast(&mut w, slot, button);
@@ -285,7 +285,7 @@ fn grey_over_time() {
     );
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    let sweep = sim::moves::get(Class::BloodMage, b::COMMAND);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     let bash = sim::moves::get(Class::Bulwark, sim::state::SLOT_POKE);
     let log = |w: &World, event: &str| {
         let p = w.players[0];
@@ -332,7 +332,7 @@ fn grey_over_time() {
     w.effects[0] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::COMMAND,
+        b::SWEEP,
         at,
         t::pool_full(),
     ));
@@ -344,7 +344,7 @@ fn grey_over_time() {
 }
 
 fn bleed_table() {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     println!(
         "Haemorrhage: the bolt on the dummy, and the bleed after it -- {} frames, a tick every {} of {} -- \
          standing still and walking away. The trail is read half way through the bleed",
@@ -372,7 +372,7 @@ fn bleed_table() {
         };
         // Thrown by hand rather than through `cast`, which runs on past the
         // landing and would fold the first ticks into the bolt.
-        let pitch = pitch_at(&w, b::HAEMORRHAGE, w.players[1].pos);
+        let pitch = pitch_at(&w, b::THORN_LASH, w.players[1].pos);
         looking(&mut w, 2, Input::RIGHT, pitch, 0);
         for _ in 0..m.startup as u32 + t::haemorrhage_flight() as u32 + 2 {
             looking(&mut w, 1, 0, pitch, 0);
@@ -428,8 +428,8 @@ fn against_the_creature() {
         "state", "dealt", "volume", "radius m"
     );
     for (name, toppled, slot, button) in [
-        ("swept, standing", false, b::COMMAND, Input::LEFT),
-        ("swept, toppled", true, b::COMMAND, Input::LEFT),
+        ("swept, standing", false, b::SWEEP, Input::LEFT),
+        ("swept, toppled", true, b::SWEEP, Input::LEFT),
     ] {
         let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
         let mut beast = w.monster().copied().expect("a hunt has a creature");

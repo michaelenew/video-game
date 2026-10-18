@@ -74,6 +74,12 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "const WIND_LIT: i32 = 1 << 30",
+        "A bit position, not a magnitude: which bit of `Effect::banked` says the \
+         Elementalist's wind has caught fire, set well above the Downdraft's one bit \
+         per stone.",
+    ),
+    (
         "pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1",
         "Presentation, and a bit width: where the Champion's liquid weapon's \
          `Quicksilver::forged` clock stops counting in its packed four bytes. No rule reads \
@@ -198,16 +204,16 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Bulwark's guard click.",
     ),
     (
-        "pub const MY_BLOOD: u16 = Input::LEFT",
-        "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
+        "pub const THORNS: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Blood mage's thorns click.",
     ),
     (
-        "pub const YOUR_BLOOD: u16 = Input::MIDDLE",
-        "A binding, not a magnitude: which button is the Blood mage's your-blood click.",
+        "pub const SPIKES: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Blood mage's spikes click.",
     ),
     (
         "pub const SCYTHE: u16 = Input::RIGHT",
-        "A binding, not a magnitude: which button is the Blood mage's right click (Command and the Summon).",
+        "A binding, not a magnitude: which button is the Blood mage's right click (the Sweep and the Reap).",
     ),
     (
         "pub const SPIKE_FIELD: i32 = 2",
@@ -275,8 +281,8 @@ const EXEMPT: &[(&str, &str)] = &[
         "A code, not a magnitude: what `Effect::life` says a stain that is not lit is.",
     ),
     (
-        "pub const RAISE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Blood mage's Summon.",
+        "pub const PLANT: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button plants the Blood mage's heart.",
     ),
     (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",

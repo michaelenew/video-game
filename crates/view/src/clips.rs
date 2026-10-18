@@ -371,8 +371,6 @@ clips! {
     // spike and the sweep the Rising reap. See `moves::blood`. The scythe
     // itself is not in any clip -- `crate::scythe` hangs the blade off the
     // grip when the Rising reap has the hands on a haft.
-    BloodPoke, "blood_poke", Moves, "blood", Length::Move(Class::BloodMage, 4), false,
-        "Command: one arm thrown out to point at the floor where her thralls are to go, the other hand to the ribs.";
     BloodCommitted, "blood_committed", Moves, "blood", Length::Move(Class::BloodMage, 1), false,
         "Haemorrhage: one hand drawn in to the chest and thrust out flat, palm forward. The bolt leaves on the thrust.";
     BloodSpecial, "blood_special", Moves, "blood", Length::Move(Class::BloodMage, 2), false,
@@ -381,8 +379,6 @@ clips! {
         "Black spike: a downward stabbing gesture that plants something in the ground.";
     BloodSweep, "blood_sweep", Moves, "blood", Length::Move(Class::BloodMage, 10), false,
         "Rising reap: both hands on the haft, swept up and out from low across the front.";
-    BloodCarpet, "blood_carpet", Moves, "blood", Length::Move(Class::BloodMage, 0), false,
-        "Carpet of blood: crouched, both palms pressed down and spreading outward along the floor as the pool grows.";
     BloodSummon, "blood_summon", Moves, "blood", Length::Move(Class::BloodMage, 5), false,
         "Summon: both arms swept up from low, palms up, calling what lies on the floor to stand.";
     BloodWings, "blood_wings", Moves, "blood", Length::Move(Class::BloodMage, 6), false,
@@ -397,8 +393,6 @@ clips! {
         "Black vines: both fists driven down into the floor and wrenched apart, the vines tearing outward.";
     BloodCascade, "blood_cascade", Moves, "blood", Length::Move(Class::BloodMage, 12), false,
         "Crimson cascade: a heavy two-handed stab into the floor and the body thrown back as the eruptions roll out.";
-    BloodGolem, "blood_golem", Moves, "blood", Length::Move(Class::BloodMage, 13), false,
-        "Blood golem: both arms raised high and dragged down, the body bowed, hauling the mass up out of the carpet.";
 
     // -- The Dual mage: two autos, two Lances, Judgement, Sweep -------------
     //

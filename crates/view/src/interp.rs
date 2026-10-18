@@ -91,6 +91,11 @@ pub struct PlayerView {
     /// travelling at a float's speed -- which is the same class of bug as an
     /// overlay that rebuilds the volume it illustrates.
     pub floating: bool,
+    /// **How far she is sunk into her ground**, nought to one: the Blood
+    /// mage swimming (2026-10-18, `sim::state::Player::swimming`), blended
+    /// between the two snapshots so she slides under and back up rather than
+    /// popping. Nought for everybody else, always.
+    pub sunk: f32,
     /// Which force she is carrying, for whatever is drawn in its colour. Only
     /// the Dual mage has one.
     pub force: Option<sim::class::Force>,
@@ -331,6 +336,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         clear,
         carried,
         floating: sim::state::floating(c),
+        sunk: lerp(p.swimming() as u8 as f32, c.swimming() as u8 as f32, a),
         force: match c.mechanic {
             sim::class::Mechanic::Meter { colour, .. } => Some(colour),
             _ => None,

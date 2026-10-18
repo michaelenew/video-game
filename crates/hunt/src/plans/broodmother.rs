@@ -482,7 +482,7 @@ fn auto_button(me: &Player) -> u16 {
 /// The auto's move, for its reach: the Blood mage's is her sweep.
 fn auto_slot(class: sim::Class) -> u8 {
     match class {
-        sim::Class::BloodMage => sim::moves::blood::HAEMORRHAGE,
+        sim::Class::BloodMage => sim::moves::blood::THORN_LASH,
         _ => 0,
     }
 }
