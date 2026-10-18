@@ -58,8 +58,10 @@ fi
 CARGO_ENV="${CARGO_HOME:-$HOME/.cargo}/env"
 [ -f "$CARGO_ENV" ] && . "$CARGO_ENV"
 
+# Asked of cargo, not rustup: Homebrew's rustup puts rustup on the PATH and
+# not cargo, and cargo is what is run.
 say 'Checking for Rust'
-if command -v rustup > /dev/null 2>&1; then
+if command -v cargo > /dev/null 2>&1; then
     echo '    already installed'
 else
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
