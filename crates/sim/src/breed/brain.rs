@@ -22,7 +22,7 @@
 //! [`HUMAN_REACTION_FRAMES`]: crate::tuning::HUMAN_REACTION_FRAMES
 
 use super::actor::{Actor, wrap_half};
-use super::build::{self, proportions};
+use super::build::{self, MoveKind, proportions};
 use super::strike::{Delivery, MOST_TURN};
 use super::verdict::{self, Extent, Lane, Reading};
 use super::{Rng, fx};
@@ -165,6 +165,9 @@ impl Brain {
 
     /// Decide, for this frame.
     pub fn think(&mut self, me: &Actor, now: i32) -> Choice {
+        if me.under() {
+            return self.under(me, now);
+        }
         if !me.idle() || now < self.rest_until {
             return Choice::Hold;
         }
@@ -184,7 +187,19 @@ impl Brain {
             let (Some(r), Some((spec, m))) = (reading, entry) else {
                 continue;
             };
-            if !r.damaging || r.lane == Lane::Aboard {
+            // Going under is a way to close on anybody not already at its
+            // nose -- a burrower's own way to approach -- weighed like a
+            // move.
+            if spec.kind == MoveKind::Burrow {
+                let len = proportions(&me.genome).len;
+                if dist > super::strike::mark_radius(len).mul(crate::tuning::breed_burrow_from()) {
+                    *w = spec.weight.max(fx(1, 20));
+                    total = total.add(*w);
+                    options += 1;
+                }
+                continue;
+            }
+            if !r.damaging || r.lane == Lane::Aboard || spec.kind == MoveKind::Erupt {
                 continue;
             }
             let far = if m.delivery == Delivery::Thrown {
@@ -212,9 +227,12 @@ impl Brain {
         } else {
             Fx::ZERO
         };
-        // Not the same move twice running, when there is another.
-        if options > 1
-            && let Some(last) = self.last
+        // Not the same move twice running, when there is another -- and
+        // when there is not, as often as not it moves to find one rather
+        // than throw the same thing again.
+        if let Some(last) = self.last
+            && weights[last] > Fx::ZERO
+            && (options > 1 || self.rng.chance(fx(1, 2)))
         {
             total = total.sub(weights[last]);
             weights[last] = Fx::ZERO;
@@ -252,6 +270,11 @@ impl Brain {
             Fx::ONE.neg()
         };
         if bearing.abs() > fx(1, 6) {
+            // A burrower turns the fastest way it has: under, and up
+            // facing you.
+            if let Some(k) = me.kind_at(MoveKind::Burrow) {
+                return self.commit(me, k, rel, Fx::ZERO, now);
+            }
             return Choice::Go {
                 share: fx(1, 10),
                 turn,
@@ -273,6 +296,53 @@ impl Brain {
             };
         };
         Choice::Go { share, turn }
+    }
+
+    /// Under the floor: steer toward where it believes the target is, and
+    /// come up under them once they are within its reach -- or when it
+    /// must, wherever it is.
+    fn under(&mut self, me: &Actor, now: i32) -> Choice {
+        let Some(k) = me.kind_at(MoveKind::Erupt) else {
+            return Choice::Hold;
+        };
+        let Some((spec, _)) = me.kit[k] else {
+            return Choice::Hold;
+        };
+        let frames = match me.act {
+            super::actor::Act::Under { frames, .. } => frames,
+            _ => 0,
+        };
+        let Some(target) = self.believes(now) else {
+            return Choice::Go {
+                share: Fx::ZERO,
+                turn: Fx::ZERO,
+            };
+        };
+        let rel = me.to_own(target);
+        let bearing = atan2_turns(rel.z, rel.x);
+        let flat = V3::new(rel.x, Fx::ZERO, rel.z).len();
+        let late = frames + spec.startup >= crate::tuning::breed_under_most();
+        if (flat <= spec.reach && bearing.abs() <= MOST_TURN) || late {
+            self.last = Some(k);
+            self.thrown[k] += 1;
+            self.rest_until = now + super::strike::frames(&spec);
+            return Choice::Strike {
+                index: k,
+                bearing,
+                distance: flat.max(Fx::ONE),
+            };
+        }
+        let turn = if bearing.abs() < fx(1, 64) {
+            Fx::ZERO
+        } else if bearing > Fx::ZERO {
+            Fx::ONE
+        } else {
+            Fx::ONE.neg()
+        };
+        Choice::Go {
+            share: Fx::ZERO,
+            turn,
+        }
     }
 
     fn commit(&mut self, me: &Actor, k: usize, rel: V3, bearing: Fx, now: i32) -> Choice {

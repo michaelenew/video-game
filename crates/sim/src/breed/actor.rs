@@ -14,7 +14,7 @@
 //! creature standing still or holding a pose costs nothing to draw again.
 //! Nothing here allocates: an actor is a value, its kit an array.
 
-use super::build::{self, Body, MoveSpec, proportions};
+use super::build::{self, Body, MoveKind, MoveSpec, proportions};
 use super::drive::Drive;
 use super::locomotion::{self, FPS, Gait};
 use super::posture::{self, Posture};
@@ -34,6 +34,14 @@ pub enum Act {
         phase: Fx,
         turn: Fx,
     },
+    /// Under the floor, travelling the way it faces and turning by a share
+    /// of its rate, for `frames` so far. It cannot be hit; the ground
+    /// churns over it; it has to come up within
+    /// [`crate::tuning::breed_under_most`].
+    Under {
+        frames: i32,
+        turn: Fx,
+    },
     /// Playing a move of its kit, turned to where it was aimed: `bearing`
     /// turns off its facing, and `distance` metres ahead for a throw.
     Strike {
@@ -42,6 +50,15 @@ pub enum Act {
         bearing: Fx,
         distance: Fx,
     },
+}
+
+/// Churning ground: where a body under the floor is, or is coming up.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Mark {
+    pub at: V3,
+    pub radius: Fx,
+    /// It is coming up here: an eruption's windup.
+    pub rising: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -107,7 +124,7 @@ impl Actor {
 
     /// Whether it is free to be told something new.
     pub fn idle(&self) -> bool {
-        !matches!(self.act, Act::Strike { .. })
+        matches!(self.act, Act::Stand | Act::Go { .. })
     }
 
     /// Stand still.
@@ -118,7 +135,13 @@ impl Actor {
     }
 
     /// Move at `share` of its top speed, turning by `turn` of its rate.
+    /// Under the floor it only steers.
     pub fn go(&mut self, share: Fx, turn: Fx) {
+        let turn = turn.max(Fx::ONE.neg()).min(Fx::ONE);
+        if let Act::Under { frames, .. } = self.act {
+            self.act = Act::Under { frames, turn };
+            return;
+        }
         if !self.idle() {
             return;
         }
@@ -127,7 +150,6 @@ impl Actor {
             Act::Go { phase, .. } => phase,
             _ => Fx::ZERO,
         };
-        let turn = turn.max(Fx::ONE.neg()).min(Fx::ONE);
         self.act = Act::Go { gait, phase, turn };
     }
 
@@ -140,10 +162,19 @@ impl Actor {
     /// [`Actor::strike`], a thrown move aimed to come down `distance`
     /// metres ahead.
     pub fn strike_at(&mut self, index: usize, bearing: Fx, distance: Fx) -> bool {
-        if !self.idle() || index >= self.kit_len {
+        if index >= self.kit_len {
             return false;
         }
-        if self.kit[index].is_none() {
+        let Some((spec, _)) = self.kit[index] else {
+            return false;
+        };
+        // Under, the only move is up; above, there is no coming up.
+        let under = self.under();
+        let allowed = match spec.kind {
+            MoveKind::Erupt => under,
+            _ => self.idle(),
+        };
+        if !allowed {
             return false;
         }
         self.act = Act::Strike {
@@ -153,6 +184,50 @@ impl Actor {
             distance,
         };
         true
+    }
+
+    /// Whether it is under the floor, travelling there.
+    pub fn under(&self) -> bool {
+        matches!(self.act, Act::Under { .. })
+    }
+
+    /// Whether anything can hit it: not under, not once a burrow has
+    /// taken it down, and not until an eruption breaks the floor.
+    pub fn exposed(&self) -> bool {
+        match self.striking() {
+            Some((spec, frame, _)) => match spec.kind {
+                MoveKind::Burrow => frame < spec.startup,
+                MoveKind::Erupt => frame >= spec.startup,
+                _ => true,
+            },
+            None => !self.under(),
+        }
+    }
+
+    /// The churning ground over a body that is under: where it is, and
+    /// how wide. Through an eruption's windup, where it will come up --
+    /// the floor marker that is its tell (bestiary §1.4) -- with `rising`.
+    pub fn mark(&self) -> Option<Mark> {
+        let len = proportions(&self.genome).len;
+        if let Some((spec, frame, m)) = self.striking()
+            && spec.kind == MoveKind::Erupt
+            && frame < spec.startup + spec.active
+        {
+            let up = spin(V3::new(m.struck.surge, Fx::ZERO, Fx::ZERO), m.struck.yaw);
+            return Some(Mark {
+                at: self.to_world(up),
+                radius: strike::mark_radius(len),
+                rising: true,
+            });
+        }
+        if self.under() {
+            return Some(Mark {
+                at: self.at,
+                radius: strike::mark_radius(len).mul(fx(1, 2)),
+                rising: false,
+            });
+        }
+        None
     }
 
     /// The move it is playing and how far in, if it is.
@@ -176,6 +251,22 @@ impl Actor {
         let rate = self.turn_rate();
         match &mut self.act {
             Act::Stand => {}
+            Act::Under { frames, turn } => {
+                *frames += 1;
+                self.facing = wrap_half(self.facing.add(turn.mul(rate)));
+                let ahead = spin(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO), self.facing);
+                let speed = locomotion::at(&self.genome, &self.posture, Fx::ONE)
+                    .speed
+                    .mul(crate::tuning::breed_under_speed());
+                self.at = self.at.add(ahead.scale(speed.div(Fx::from_int(FPS))));
+                // Under for as long as it may be, and no longer: up where
+                // it is.
+                if *frames >= crate::tuning::breed_under_most()
+                    && let Some(k) = self.kind_at(MoveKind::Erupt)
+                {
+                    self.strike_at(k, Fx::ZERO, Fx::ONE);
+                }
+            }
             Act::Go { gait, phase, turn } => {
                 self.facing = wrap_half(self.facing.add(turn.mul(rate)));
                 let ahead = spin(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO), self.facing);
@@ -196,7 +287,16 @@ impl Actor {
             } => {
                 let entry = self.kit[*index];
                 *frame += 1;
-                if let Some((spec, m)) = entry
+                // A burrow ends under the floor, not back on it.
+                if let Some((spec, _)) = entry
+                    && spec.kind == MoveKind::Burrow
+                    && *frame >= spec.startup + spec.active
+                {
+                    self.act = Act::Under {
+                        frames: 0,
+                        turn: Fx::ZERO,
+                    };
+                } else if let Some((spec, m)) = entry
                     && *frame >= strike::frames(&spec)
                 {
                     // Where the move carried it, facing the way it ended.
@@ -230,6 +330,8 @@ impl Actor {
     pub fn drive(&self) -> Drive {
         match self.act {
             Act::Stand => locomotion::rest(&self.genome),
+            Act::Under { .. } => locomotion::rest(&self.genome)
+                .plus(&strike::under_drive(&self.genome, &self.posture)),
             Act::Go { gait, phase, turn } => {
                 locomotion::drive(&self.genome, &self.posture, &gait, phase, turn)
             }
@@ -255,6 +357,11 @@ impl Actor {
         self.builds += 1;
         self.cache = Some((d, body));
         body
+    }
+
+    /// The kit index of a move it has.
+    pub fn kind_at(&self, kind: MoveKind) -> Option<usize> {
+        (0..self.kit_len).find(|&k| self.kit[k].is_some_and(|(s, _)| s.kind == kind))
     }
 
     /// A point of its body in the world.

@@ -4492,3 +4492,20 @@ pub fn breed_run_lengths() -> Fx {
 pub fn breed_run_at_least() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BreedRunAtLeast))
 }
+
+/// The most frames a burrowing body stays under before it has to come up:
+/// under, it cannot be hit, so it is never there for long.
+pub fn breed_under_most() -> i32 {
+    oven::scalar(Scalar::BreedUnderMost).max(1)
+}
+
+/// How fast it travels under, as a share of its top speed.
+pub fn breed_under_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreedUnderSpeed))
+}
+
+/// A burrower weighs going under to close on somebody further than this
+/// many of its marks' radii from its body.
+pub fn breed_burrow_from() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreedBurrowFrom))
+}

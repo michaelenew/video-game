@@ -737,3 +737,72 @@ are recommendations, not code; each says what it would take.
   the Pair -- and when it falls it is carried home rather than lost, so
   raising one is never a loss to a bad fight. It would use exactly this
   actor and brain, with its target the hunted creature.
+
+## 11 · Burrowing, as a trait that passes on (2026-10-18)
+
+The owner: *"The sandworm doesn't have a place in the system without it."*
+Before this, burrowing was a flag read off one fact -- a limbless stance --
+and nothing used it: the breach-dive sank the body for a pose and that was
+all. Worse, it could not really be inherited. A trophy can flip an egg's
+stance to limbless, but a body with legs on a limbless plan is repaired to
+low-slung (`plan::repair`) with its legs kept, so a legged line became a
+burrower only if mutation stripped every pair, which almost never happens.
+
+**The trait.** A new limb build, **`Build::Spade`**: short, broad, clawed,
+turned out to the side -- a mole's forelimbs. A body **burrows** when it is
+limbless (the worm's way) or when it stands on a pair of spades at its
+front half, is no bigger than three fifths on the size slider, is not
+upright, and its legs can lift it (`plan::digs`). The plan pushes back the
+way it does for every build: spades want a small, solid, level body, so a
+big one on spades strains, and past three fifths it keeps its spades as
+claws (it rakes with them) and does not go under. The Ridgeback on spades
+rakes; the Hornback on spades burrows.
+
+**How it passes.**
+- **By trophy:** a trophy from a burrower turns the egg's front walking pair
+  to spades, at the major rate times the trophy's say on limbs and plan
+  together. A Sandmaw's plates on a Hornback, a trophy a generation: 29 of
+  40 lineages dig within thirty generations, every one of them on legs
+  (`tests/burrow.rs`).
+- **By breeding:** spades are a limb build like any other, so a pair goes
+  over from the digging parent about half the time.
+- **By mutation:** a build can flip to spades at the major rate, and a body
+  can still become a worm by losing every pair.
+
+**How it fights.** Two new moves for anything that burrows, and an
+underground state in the actor:
+- **Burrow** -- nose down, forefeet scrabbling, then under. Answered by
+  hitting it first: it is open while it digs. It ends *under*; it does not
+  climb back out.
+- **Under** (`actor::Act::Under`) -- travelling below the floor at half its
+  top speed, steered toward where it believes you are. **It cannot be
+  hit**, and so it is never there long: it has to come up within the
+  Oven's `BreedUnderMost` (four seconds), wherever it is. The ground churns
+  over it (`Actor::mark`), so you always know where it is.
+- **Erupt** -- the windup starts under the floor and travels to where it was
+  aimed; the ground there churns as **the mark** (orange on the sheets)
+  for the whole windup, which is the tell drawn on the floor (§1.4). Then a
+  column the width of the mark (a quarter of its length, never more than
+  three metres) and too tall to jump bursts up, and the body after it,
+  front first, open through a full punish window. **Answered by stepping
+  off the mark**, which is a new answer: its windup is a reaction plus the
+  time it takes to run out of the widest mark (`strike::lead`), and the aim
+  locks when the windup starts, so moving after you see it always works.
+- The breach-dive stays: it is the Sandmaw's own short dive through the
+  sand, and a different question.
+
+**The brain** treats going under as one of a burrower's ways to close in:
+weighed among its moves whenever you are more than two mark-widths away,
+and its fastest way to turn round when you are at its side. Under, it
+steers toward its belief of you (a reaction old, as always) and comes up
+once you are in reach -- or when its time is up.
+
+**Tested by playing it** (`tests/duel.rs`): the Sandmaw goes under and
+comes up under a fighter who stands still, and is never exposed while
+under nor under longer than allowed; a fighter who steps off the mark a
+reaction after it appears is never hit by an eruption, over five fights. A
+Hornback on spades does the same, and is answered the same way. The kit
+measure holds for a Hornback grafted thirty generations with a Sandmaw's
+plates. On the sheets: `moves_sandmaw.png` and `moves_hornback_spades.png`
+(the mole); parts below the floor are not drawn, and the churning ground
+over them is the brown ring.

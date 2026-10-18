@@ -251,7 +251,7 @@ pub const WING_PLANT: Fx = fx(3, 10);
 /// spindle or a stub, or on any low-slung body (the Siegeshell's pillars
 /// go out eleven metres before they come down).
 pub fn splayed(stance: Stance, build: Build) -> bool {
-    stance == Stance::Lowslung || matches!(build, Build::Spindle | Build::Stub)
+    stance == Stance::Lowslung || matches!(build, Build::Spindle | Build::Stub | Build::Spade)
 }
 
 /// A limb's standing length: a column or a sprung leg stands on its whole
@@ -288,6 +288,7 @@ fn natural_extension(stance: Stance, build: Build, wing_walks: bool) -> Fx {
         Build::Spindle => fx(4, 5),
         Build::Stub => fx(7, 10),
         Build::Wing => fx(4, 5),
+        Build::Spade => fx(3, 4),
     }
 }
 

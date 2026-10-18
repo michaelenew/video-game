@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 648] = [
+pub const SCALARS: [i32; 651] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -656,6 +656,9 @@ pub const SCALARS: [i32; 648] = [
               40, // breeding.waits_between_moves,_at_no_aggression = 40
           131072, // breeding.runs_to_close_beyond_(body_lengths) = 2
           524288, // breeding.runs_to_close_beyond,_at_least_(m) = 8
+             240, // breeding.stays_under_at_most = 240
+           32768, // breeding.travels_under_at_(x_top_speed) = 0.5
+          131072, // breeding.goes_under_to_close_beyond_(mark_widths) = 2
 ];
 
 #[rustfmt::skip]

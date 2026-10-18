@@ -8,7 +8,7 @@
 //! cargo run -p sim --bin breedcheck -- drift [seed]      # every creature, forty generations alone
 //! cargo run -p sim --bin breedcheck -- herd [seed]       # breeding the biggest Ridgebacks
 //! cargo run -p sim --bin breedcheck -- moves [name]      # every move measured against the contract
-//! cargo run -p sim --bin breedcheck -- film <name> [move|all] # every move's frames and hits, for a sheet
+//! cargo run -p sim --bin breedcheck -- film <name>[+spades] [move|all] # every move's frames and hits, for a sheet
 //! cargo run -p sim --bin breedcheck -- strides <name>     # every gait's cycle and footfalls, for a sheet
 //! cargo run -p sim --bin breedcheck -- gaits             # every creature's gaits by speed
 //! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens> [phase [fly]]
@@ -372,11 +372,7 @@ fn print_boxes(body: &build::Body) {
 /// ```
 fn film(args: &[String]) {
     use sim::breed::{posture, strike, verdict};
-    let g = args
-        .first()
-        .and_then(|n| by_name(n))
-        .copied()
-        .unwrap_or(RIDGEBACK);
+    let g = args.first().and_then(|n| named(n)).unwrap_or(RIDGEBACK);
     let only = args.get(1).map(|s| s.replace('_', " "));
     let q = posture::posture(&g);
     let rest = build::body_in(&g, &q);
@@ -455,11 +451,7 @@ fn film(args: &[String]) {
 /// ```
 fn strides(args: &[String]) {
     use sim::breed::{locomotion, posture};
-    let g = args
-        .first()
-        .and_then(|n| by_name(n))
-        .copied()
-        .unwrap_or(RIDGEBACK);
+    let g = args.first().and_then(|n| named(n)).unwrap_or(RIDGEBACK);
     let q = posture::posture(&g);
     for gait in locomotion::repertoire(&g, &q).into_iter().flatten() {
         println!(
@@ -485,6 +477,21 @@ fn strides(args: &[String]) {
             print_boxes(&build::body_driven(&g, &q, &d));
         }
     }
+}
+
+/// A creature by name, and `<name>+spades` for it with its front walking
+/// pair turned to a digger's -- a mole made of it.
+fn named(name: &str) -> Option<Genome> {
+    let (base, spades) = match name.strip_suffix("+spades") {
+        Some(b) => (b, true),
+        None => (name, false),
+    };
+    let mut g = *by_name(base)?;
+    if spades && let Some(p) = g.limbs.iter_mut().flatten().find(|p| p.role.grounded()) {
+        p.build = sim::breed::Build::Spade;
+        p.tip = sim::breed::Tip::Claw;
+    }
+    Some(g)
 }
 
 /// A creature by name, for the sheet's arguments.

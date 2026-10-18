@@ -223,6 +223,13 @@ impl Build {
                 out.push(Slider::Mass, fx(1, 5), w);
                 out.push(Slider::Speed, fx(3, 5), w);
             }
+            // A digger is small and low and solid: a big body on spades
+            // strains, and its burrowing goes (`Caps::burrows`).
+            Build::Spade => {
+                out.push(Slider::Size, fx(3, 10), w);
+                out.push(Slider::Mass, fx(3, 5), w);
+                out.push(Slider::Pitch, fx(0, 1), w);
+            }
         }
         if role == Role::Strike {
             out.push(Slider::Aggression, fx(7, 10), w);
@@ -263,6 +270,11 @@ impl Build {
                 girth: fx(1, 4),
                 weight: w,
             },
+            Build::Spade => LimbWant {
+                length: fx(1, 5),
+                girth: fx(3, 5),
+                weight: w,
+            },
         }
     }
 
@@ -270,7 +282,7 @@ impl Build {
     pub const fn natural_role(self) -> Role {
         match self {
             Build::Column | Build::Stub | Build::Spindle => Role::Walk,
-            Build::Sprung => Role::Both,
+            Build::Sprung | Build::Spade => Role::Both,
             Build::Raptorial => Role::Strike,
             Build::Wing => Role::Wing,
         }
@@ -621,6 +633,22 @@ pub struct Assessment {
     pub tier: u8,
 }
 
+/// A legged body that burrows: it stands on a pair of spades at its front
+/// half, it is small enough to go under (size to three fifths), it is not
+/// upright, and its legs can lift it. Too big a body on spades keeps them
+/// and loses the burrowing -- the plan's push back.
+pub fn digs(g: &Genome, weak: bool) -> bool {
+    g.stance != Stance::Upright
+        && g.stance != Stance::Limbless
+        && !weak
+        && g.sliders.size <= fx(3, 5)
+        && g.pairs().any(|(st, p)| {
+            p.build == Build::Spade
+                && p.role.grounded()
+                && matches!(st, super::Station::Fore | super::Station::MidFore)
+        })
+}
+
 /// Lift against weight, as a margin: above zero it flies. The wing's
 /// length (as a share of the body) is lift; mass and size are weight.
 pub fn flight_margin(g: &Genome) -> Fx {
@@ -656,7 +684,7 @@ pub fn assess(g: &Genome) -> Assessment {
         guards: s.guard >= fx(1, 2)
             || g.pairs()
                 .any(|(_, p)| p.build == Build::Raptorial && p.role != Role::Walk),
-        burrows: g.stance == Stance::Limbless,
+        burrows: g.stance == Stance::Limbless || digs(g, weak),
         mountable: s.size >= fx(2, 5) && g.stance != Stance::Upright,
         swallows: g.minors.jaw == Jaw::Maw && s.size >= fx(1, 2),
     };

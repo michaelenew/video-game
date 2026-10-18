@@ -1558,6 +1558,11 @@ pub enum MoveKind {
     /// A run at you along a line: what any body that walks has when
     /// nothing else in its kit reaches past a few strides (bestiary §1.3).
     Rush,
+    /// Down into the ground: the way under, for a body that burrows.
+    Burrow,
+    /// Up out of it, under where it was aimed: the floor churns there
+    /// through the whole windup, and that is the tell.
+    Erupt,
     // the back and hide
     SpikeSpray,
     QuillFling,
@@ -1622,6 +1627,8 @@ impl MoveKind {
             Ambush => (28, 150, Pace::Even),
             Shoulder => (18, 60, Pace::Even),
             Rush => (32, 110, Pace::Heavy),
+            Burrow => (36, 0, Pace::Heavy),
+            Erupt => (44, 170, Pace::Heavy),
             SpikeSpray => (34, 60, Pace::Even),
             QuillFling => (20, 50, Pace::Quick),
             WebShot => (32, 20, Pace::Even),
@@ -1675,6 +1682,8 @@ impl MoveKind {
             Ambush => "ambush",
             Shoulder => "shoulder",
             Rush => "rush",
+            Burrow => "burrow",
+            Erupt => "erupt",
             SpikeSpray => "spike spray",
             QuillFling => "quill fling",
             WebShot => "web shot",
@@ -1895,6 +1904,8 @@ pub fn moves(g: &Genome) -> MoveSet {
             (_, Build::Spindle) => d.add(MoveKind::LegStab, reach),
             (_, Build::Stub) => {}
             (_, Build::Wing) => d.add(MoveKind::WingFlare, reach),
+            // A digger's claws rake as they dig.
+            (_, Build::Spade) => d.add(MoveKind::Rake, reach),
         }
     }
     if d.caps.pounces {
@@ -1926,6 +1937,10 @@ pub fn moves(g: &Genome) -> MoveSet {
         if g.segments.tail != Tail::None {
             d.add(MoveKind::Lash, len.mul(fx(1, 2)));
         }
+    }
+    if d.caps.burrows {
+        d.add(MoveKind::Burrow, Fx::ZERO);
+        d.add(MoveKind::Erupt, len.mul(fx(3, 2)).max(Fx::from_int(4)));
     }
     if d.caps.mountable {
         d.add(MoveKind::Shake, Fx::ZERO);

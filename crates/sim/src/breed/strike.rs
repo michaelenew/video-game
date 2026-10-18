@@ -54,6 +54,8 @@ pub enum Answer {
     Flank,
     /// Stop swinging: it only hurts the one who hits it.
     Hold,
+    /// Off the churning ground: it is coming up there.
+    OffTheMark,
 }
 
 impl Answer {
@@ -70,6 +72,7 @@ impl Answer {
             Answer::BackOff => "back off",
             Answer::Flank => "flank",
             Answer::Hold => "hold",
+            Answer::OffTheMark => "step off the mark",
         }
     }
 
@@ -112,6 +115,9 @@ pub struct Motion {
     /// How far the body rises at the middle of the strike, metres: the
     /// top of a leap's arc.
     pub arc: Fx,
+    /// Where the windup starts from, over the body's rest: nothing for a
+    /// move begun standing; lying under the floor for one begun there.
+    pub from: Drive,
     /// For a thrown move, how far ahead it was aimed: the shot comes down
     /// to chest height there and on to the floor past it. Nought is its
     /// full reach.
@@ -175,8 +181,51 @@ pub fn lead(answer: Answer) -> i32 {
             let t = v.sub(under.sqrt()).div(g);
             t.mul(Fx::from_int(super::locomotion::FPS)).to_int() + 1
         }
+        // Out of the widest mark at a run.
+        Answer::OffTheMark => {
+            let out = MARK_MOST.add(crate::tuning::body_radius());
+            out.div(crate::tuning::move_speed().max(fx(1, 10)))
+                .mul(Fx::from_int(super::locomotion::FPS))
+                .to_int()
+                + 1
+        }
         _ => 0,
     }
+}
+
+/// The widest an eruption's mark is: a body bigger than twelve metres
+/// comes up no wider, so stepping off it is always a few strides.
+pub const MARK_MOST: Fx = fx(3, 1);
+
+/// How tall an eruption's column is: no jump clears it.
+pub const ERUPT_HEIGHT: Fx = fx(5, 2);
+
+/// The radius of the ground that churns where a body will come up.
+pub fn mark_radius(len: Fx) -> Fx {
+    len.mul(fx(1, 4)).min(MARK_MOST).max(Fx::ONE)
+}
+
+/// How deep a body that burrows lies, over its rest: its top under the
+/// floor.
+pub fn under_drive(g: &Genome, q: &Posture) -> Drive {
+    let p = proportions(g);
+    let mut d = Drive::STILL;
+    d.lift = q
+        .root
+        .add(p.half_h.mul(Fx::from_int(3)))
+        .add(fx(1, 2))
+        .neg();
+    d.pitch = fx(-1, 40);
+    if g.stance == super::Stance::Limbless {
+        d.rise = fx(-1, 40);
+    }
+    d
+}
+
+/// How far an eruption comes up from where the body lies: half again its
+/// length, and never less than four metres.
+pub fn erupt_reach(len: Fx) -> Fx {
+    len.mul(fx(3, 2)).max(Fx::from_int(4))
 }
 
 /// The height between a crouched fighter's head and a standing one's: a
@@ -230,6 +279,8 @@ pub const fn answer(kind: MoveKind) -> Answer {
         Ambush => Answer::LeaveLane,
         Shoulder => Answer::BackOff,
         Rush => Answer::LeaveLane,
+        Burrow => Answer::HitFirst,
+        Erupt => Answer::OffTheMark,
         SpikeSpray => Answer::Cover,
         QuillFling => Answer::Sidestep,
         WebShot => Answer::Jump,
@@ -255,6 +306,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
     let mut aim: Option<Aim> = None;
     // How high the body arcs through the strike, at its middle: a leap.
     let mut arc = Fx::ZERO;
+    let mut from = Drive::STILL;
     let delivery;
     // A limb that swings on the floor (it walks too) is driven by its
     // feet; one held up off it, by its arms.
@@ -794,6 +846,40 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             strikers = ["head", "shoulders", "horns", limb_prefix(0)];
             delivery = Delivery::Swept;
         }
+        Burrow => {
+            // Nose down and digging, the forefeet scrabbling: then under.
+            c.pitch = fx(-1, 12);
+            c.lift = h.mul(fx(-1, 4));
+            c.neck_pitch = fx(-1, 10);
+            for side in 0..2 {
+                swing_foot(&mut c, 0, side, fx(2, 5), fx(1, 4));
+            }
+            if g.stance == super::Stance::Limbless {
+                c.rise = fx(-1, 30);
+                c.wave = Some((Fx::ZERO, fx(1, 12)));
+            }
+            s = under_drive(g, q);
+            delivery = Delivery::None;
+        }
+        Erupt => {
+            // Starts under the floor and travels there, under where it was
+            // aimed, through the windup -- the floor churning over it is
+            // the tell -- then bursts up, front first.
+            from = under_drive(g, q);
+            c = from;
+            let reach = erupt_reach(len);
+            c.surge = reach;
+            s.surge = reach;
+            s.lift = h.mul(fx(1, 4));
+            s.pitch = fx(1, 12);
+            s.neck_pitch = fx(1, 12);
+            s.jaw = Fx::ONE;
+            if g.stance == super::Stance::Limbless {
+                s.rise = fx(1, 12);
+            }
+            strikers = ["head", "jaw", "neck", "shoulders"];
+            delivery = Delivery::Area(fx(1, 4));
+        }
         SpikeSpray => {
             c.pitch = fx(-1, 40);
             c.tail_pitch = fx(1, 12);
@@ -906,6 +992,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
         answer: answer(kind),
         arc,
         aim_at: Fx::ZERO,
+        from,
     }
 }
 
@@ -1048,6 +1135,12 @@ pub fn aimed(m: &Motion, bearing: Fx, distance: Fx) -> Motion {
     let b = bearing.max(MOST_TURN.neg()).min(MOST_TURN);
     let mut out = *m;
     out.aim_at = distance;
+    // An eruption comes up where it was aimed, as far as it reaches.
+    if m.kind == MoveKind::Erupt && distance > Fx::ZERO {
+        let reach = m.struck.surge;
+        out.cocked.surge = distance.min(reach);
+        out.struck.surge = distance.min(reach);
+    }
     out.cocked.yaw = out.cocked.yaw.add(b);
     out.struck.yaw = out.struck.yaw.add(b);
     out
@@ -1121,7 +1214,7 @@ pub fn drive_at(g: &Genome, m: &Motion, spec: &MoveSpec, frame: i32) -> Drive {
     let over = match beat(spec, frame) {
         Beat::Windup => {
             let t = Fx::ratio(frame, spec.startup.max(1));
-            Drive::lerp(&Drive::STILL, &m.cocked, ease_out(t))
+            Drive::lerp(&m.from, &m.cocked, ease_out(t))
         }
         Beat::Strike => {
             let t = Fx::ratio(frame - spec.startup + 1, spec.active.max(1));
@@ -1130,6 +1223,9 @@ pub fn drive_at(g: &Genome, m: &Motion, spec: &MoveSpec, frame: i32) -> Drive {
             d
         }
         Beat::Stuck => m.struck,
+        // A burrow's recovery is spent under the floor: it does not come
+        // back up the way it went down (the actor is under by then).
+        Beat::Recover | Beat::Done if m.kind == MoveKind::Burrow => m.struck,
         Beat::Recover | Beat::Done => {
             let stuck = spec.recovery / 3;
             let into = frame - spec.startup - spec.active - stuck;
@@ -1279,6 +1375,14 @@ pub fn hit_on(g: &Genome, body: &Body, m: &Motion, spec: &MoveSpec, frame: i32) 
     let len = proportions(g).len;
     match m.delivery {
         Delivery::Swept => striking_spheres(body, &m.strikers, &mut hit),
+        // An eruption: a column the width of its mark, on the mark, every
+        // strike frame -- what comes up comes up there.
+        Delivery::Area(_) if m.kind == MoveKind::Erupt => {
+            let d = drive_at(g, m, spec, frame);
+            let at = super::actor::spin(V3::new(d.surge, Fx::ZERO, Fx::ZERO), d.yaw);
+            hit.push(at, mark_radius(len));
+            hit.spheres[hit.count - 1].height = ERUPT_HEIGHT;
+        }
         Delivery::Area(share) => {
             // On the last strike frame, where the parts came down.
             if frame == spec.startup + spec.active - 1 {

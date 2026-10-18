@@ -396,6 +396,21 @@ pub fn graft(egg: &Genome, trophy: &Trophy, rates: &Rates, rng: &mut Rng) -> Out
         g.stance = d.stance;
         moved.stance = true;
     }
+    // Burrowing, from a burrower to a body that keeps its legs: its front
+    // walking pair becomes spades, as rarely as a major moves, pulled by
+    // the trophy's say on the limbs and on the plan together. (A body can
+    // still become limbless -- the worm's way -- by its stance, above.)
+    if g.stance != Stance::Limbless
+        && super::plan::assess(d).caps.burrows
+        && !super::plan::assess(&g).caps.burrows
+        && rng.chance(rates.graft_major.mul(pull.limbs.add(pull.plan)))
+        && let Some(i) = (0..STATIONS).find(|&i| g.limbs[i].is_some_and(|p| p.role.grounded()))
+        && let Some(p) = g.limbs[i].as_mut()
+    {
+        p.build = Build::Spade;
+        p.tip = Tip::Claw;
+        moved.limbs[i] = true;
+    }
     if d.head != g.head && rng.chance(rates.graft_major.mul(pull.head)) {
         g.head = d.head;
         moved.head = true;

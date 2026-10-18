@@ -127,10 +127,22 @@ def draw_cell(frame, scale, centre, cell_w, cell_h, step, marks=(), extent=None)
     for (x, z, r) in marks:
         ring(td, origin, scale, x, z, r, (235, 150, 40))
     for cc in cs:
+        if max(c[1] for c in cc) < 0:
+            continue
         poly = hull([(round(iso(x, 0, z)[0], 4), round(iso(x, 0, z)[1], 4)) for (x, _, z) in cc])
         if len(poly) >= 3:
             td.polygon([(origin[0] + px * scale, origin[1] + py * scale) for px, py in poly], fill=(205, 200, 184))
+    # Under the floor is out of sight: a part wholly below it is not drawn,
+    # and the ground over a buried body churns.
+    buried = [b for b, cc in zip(frame["boxes"], cs) if max(c[1] for c in cc) < 0]
+    if buried and len(buried) * 2 > len(frame["boxes"]):
+        xs = [c[0] for b, cc in zip(frame["boxes"], cs) for c in cc]
+        zs = [c[2] for b, cc in zip(frame["boxes"], cs) for c in cc]
+        ring(td, origin, scale, (min(xs) + max(xs)) / 2, (min(zs) + max(zs)) / 2,
+             max(1.0, (max(xs) - min(xs)) / 4), (150, 120, 80), 3)
     for b in sorted(frame["boxes"], key=lambda b: (b[2] + b[4] + b[3] * 0.5)):
+        if any(b is x for x in buried):
+            continue
         draw_obox(td, b, COL.get(b[0], (100, 100, 100)), origin, scale)
     if frame["hits"]:
         over = Image.new("RGBA", tile.size, (0, 0, 0, 0))
@@ -291,10 +303,10 @@ def main():
     for name in names:
         if gaits:
             im = gait_sheet(name, parse_strides(run("strides", name)))
-            path = os.path.join(outdir, f"gaits_{name.lower()}.png")
+            path = os.path.join(outdir, f"gaits_{name.lower().replace('+', '_')}.png")
         else:
             im = move_sheet(name, parse_film(run("film", name)))
-            path = os.path.join(outdir, f"moves_{name.lower()}.png")
+            path = os.path.join(outdir, f"moves_{name.lower().replace('+', '_')}.png")
         im.save(path)
         print(path, im.size)
 

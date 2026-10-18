@@ -104,6 +104,10 @@ impl Fighter {
 #[derive(Default, Debug)]
 struct Tally {
     thrown: Vec<MoveKind>,
+    /// The longest it stayed under the floor, and whether it was ever
+    /// exposed while it was.
+    under_most: i32,
+    hit_while_under: bool,
     /// Moves that landed, and how they are answered.
     hits: Vec<(MoveKind, Answer)>,
 }
@@ -112,15 +116,25 @@ struct Tally {
 fn reactive(a: Answer) -> bool {
     matches!(
         a,
-        Answer::Sidestep | Answer::Dodge | Answer::LeaveLane | Answer::Jump | Answer::Crouch
+        Answer::Sidestep
+            | Answer::Dodge
+            | Answer::LeaveLane
+            | Answer::Jump
+            | Answer::Crouch
+            | Answer::OffTheMark
     )
 }
 
 fn fight(g: &Genome, answering: bool, frames: i32, seed: u64) -> Tally {
+    fight_from(g, answering, frames, seed, Fx::from_int(2))
+}
+
+/// A fight with the fighter standing `ahead` metres in front of its nose.
+fn fight_from(g: &Genome, answering: bool, frames: i32, seed: u64, ahead: Fx) -> Tally {
     let mut me = Actor::new(g, V3::ZERO, Fx::ZERO);
     let rest = build::body_in(g, &me.posture);
     let e = verdict::extent(&rest, g.stance == sim::breed::Stance::Limbless);
-    let mut you = Fighter::new(V3::new(e.nose.add(Fx::from_int(2)), Fx::ZERO, Fx::ZERO));
+    let mut you = Fighter::new(V3::new(e.nose.add(ahead), Fx::ZERO, Fx::ZERO));
     let mut brain = Brain::new(&me, seed);
     let mut tally = Tally::default();
     let mut landed_this_move = false;
@@ -175,6 +189,21 @@ fn fight(g: &Genome, answering: bool, frames: i32, seed: u64) -> Tally {
                         you.jump_at = jump;
                     }
                     Answer::Crouch => you.crouch = true,
+                    // Straight off the churning ground, at a run.
+                    Answer::OffTheMark => {
+                        if let Some(mark) = me.mark() {
+                            let away =
+                                V3::new(you.at.x.sub(mark.at.x), Fx::ZERO, you.at.z.sub(mark.at.z));
+                            let len = away.len();
+                            let away = if len > fx(1, 100) {
+                                away.scale(Fx::ONE.div(len))
+                            } else {
+                                V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE)
+                            };
+                            you.run = away.scale(per_frame(t::move_speed()));
+                            you.run_until = strike_at + spec.active;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -187,6 +216,10 @@ fn fight(g: &Genome, answering: bool, frames: i32, seed: u64) -> Tally {
             you.at.y = fx(1, 100);
         }
         you.step(now);
+        if let Act::Under { frames, .. } = me.act {
+            tally.under_most = tally.under_most.max(frames);
+            tally.hit_while_under |= me.exposed();
+        }
         if !landed_this_move {
             let hit = me.hit();
             if hit.iter().any(|s| you.touched_by(s, now))
@@ -398,6 +431,82 @@ fn a_move_turns_to_where_it_was_aimed() {
         assert!(
             landed.sub(aim).abs() < fx(1, 40),
             "aimed {aim:?}, landed {landed:?}"
+        );
+    }
+}
+
+fn sandworm() -> &'static Genome {
+    CAST.iter().find(|c| c.1 == "Sandmaw").unwrap().2
+}
+
+#[test]
+fn the_sandworm_goes_under_and_comes_up_under_you() {
+    // Twenty metres off: going under is one of its ways in.
+    let tally = fight_from(sandworm(), false, 1800, 5, Fx::from_int(20));
+    assert!(
+        tally.thrown.contains(&MoveKind::Burrow),
+        "threw {:?}",
+        tally.thrown
+    );
+    assert!(
+        tally.thrown.contains(&MoveKind::Erupt),
+        "threw {:?}",
+        tally.thrown
+    );
+    assert!(
+        tally.hits.iter().any(|(k, _)| *k == MoveKind::Erupt),
+        "it never came up under somebody standing still: {tally:?}"
+    );
+    assert!(!tally.hit_while_under, "it could be hit while under");
+    assert!(
+        tally.under_most <= t::breed_under_most(),
+        "under for {} frames",
+        tally.under_most
+    );
+}
+
+#[test]
+fn stepping_off_the_mark_answers_an_eruption() {
+    for seed in 1..6 {
+        let tally = fight_from(sandworm(), true, 1800, seed, Fx::from_int(20));
+        assert!(
+            tally.thrown.contains(&MoveKind::Erupt),
+            "seed {seed}: threw {:?}",
+            tally.thrown
+        );
+        let bad: Vec<_> = tally.hits.iter().filter(|(_, a)| reactive(*a)).collect();
+        assert!(
+            bad.is_empty(),
+            "seed {seed}: hit through its answer by {bad:?}"
+        );
+    }
+}
+
+#[test]
+fn a_mole_goes_under_and_can_be_answered() {
+    use sim::breed::{Build, Tip};
+    let mut mole = *CAST.iter().find(|c| c.1 == "Hornback").unwrap().2;
+    let p = mole.limbs[0].as_mut().unwrap();
+    p.build = Build::Spade;
+    p.tip = Tip::Claw;
+    let standing = fight_from(&mole, false, 1800, 2, Fx::from_int(20));
+    assert!(
+        standing.thrown.contains(&MoveKind::Burrow),
+        "threw {:?}",
+        standing.thrown
+    );
+    assert!(
+        standing.thrown.contains(&MoveKind::Erupt),
+        "threw {:?}",
+        standing.thrown
+    );
+    assert!(!standing.hit_while_under);
+    for seed in 1..4 {
+        let tally = fight_from(&mole, true, 1800, seed, Fx::from_int(20));
+        let bad: Vec<_> = tally.hits.iter().filter(|(_, a)| reactive(*a)).collect();
+        assert!(
+            bad.is_empty(),
+            "seed {seed}: hit through its answer by {bad:?}"
         );
     }
 }

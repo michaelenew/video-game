@@ -223,16 +223,22 @@ pub enum Build {
     Stub,
     /// A wing: the Galewing's.
     Wing,
+    /// Short, broad and clawed, turned out to the side: a digger's, a
+    /// mole's. A body that stands on a pair of these **burrows**, as a
+    /// limbless one does -- the way the trait passes to a body that keeps
+    /// its legs.
+    Spade,
 }
 
 impl Build {
-    pub const ALL: [Build; 6] = [
+    pub const ALL: [Build; 7] = [
         Build::Column,
         Build::Sprung,
         Build::Raptorial,
         Build::Spindle,
         Build::Stub,
         Build::Wing,
+        Build::Spade,
     ];
 }
 

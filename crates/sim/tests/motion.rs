@@ -84,6 +84,8 @@ fn crossbred_generations_answer_the_contract() {
         ("Broodmother", Some((TrophyKind::Horn, "Hornback")), 4),
         ("Sandmaw", None, 0),
         ("Gnawers", Some((TrophyKind::Feather, "Galewing")), 1),
+        // A Sandmaw's plates on a Hornback: it grows spades and burrows.
+        ("Hornback", Some((TrophyKind::Plate, "Sandmaw")), 1),
     ];
     for (k, (egg, trophy, every)) in lines.into_iter().enumerate() {
         let mut rng = Rng::new(17 + k as u64);

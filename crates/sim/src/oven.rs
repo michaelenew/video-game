@@ -1078,6 +1078,13 @@ scalars! {
     BreedPause,           "Breeding", "Waits between moves, at no aggression",               Frames, 0, 240;
     BreedRunLengths,      "Breeding", "Runs to close beyond (body lengths)",                 Fixed, 0, fx(10,1);
     BreedRunAtLeast,      "Breeding", "Runs to close beyond, at least (m)",                  Fixed, 0, fx(40,1);
+    // **Burrowing** (2026-10-18): how long a body may stay under before it
+    // has to come up (bestiary §1.9: nowhere free, and under is where it
+    // cannot be hit), and how fast it travels there, as a share of its
+    // top speed.
+    BreedUnderMost,       "Breeding", "Stays under at most",                                 Frames, 30, 1200;
+    BreedUnderSpeed,      "Breeding", "Travels under at (x top speed)",                      Fixed, fx(1,10), fx(1,1);
+    BreedBurrowFrom,      "Breeding", "Goes under to close beyond (mark widths)",            Fixed, 0, fx(10,1);
 }
 
 // ---------------------------------------------------------------------------
