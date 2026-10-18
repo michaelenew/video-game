@@ -355,7 +355,29 @@ pub fn body(g: &Genome) -> Body {
 
 /// Build the body in a given posture.
 pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
+    build(g, q, None)
+}
+
+/// A moment of its walk: `phase` is where in the stride cycle, nought to
+/// one. Diagonal pairs swing in antiphase whatever the leg count, a foot
+/// lifts through the middle of its swing, the head turns a little toward
+/// the viewer, the tail sways, wings that fly beat and wings that do not
+/// fold back along the body, a limbless body throws a wave down its
+/// length. The same genome at phase nought is not the rest pose: a walk
+/// is never still.
+pub fn body_posed(g: &Genome, q: &super::posture::Posture, phase: Fx) -> Body {
+    build(g, q, Some(phase))
+}
+
+/// The walk's shape, as shares of a limb's standing length.
+const STRIDE: Fx = fx(1, 4);
+const LIFT: Fx = fx(1, 5);
+
+fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
     let mut r = Rig::new();
+    // sin and cos of the stride cycle, and a second harmonic for the bob.
+    let phase = gait.unwrap_or(Fx::ZERO);
+    let flies = super::plan::assess(g).caps.flies;
     let p = proportions(g);
     let (len, torso, half_w, half_h) = (p.len, p.torso, p.half_w, p.half_h);
     let pitch = q.pitch;
@@ -365,10 +387,25 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
     r.body.half_width = half_w;
     r.body.pitch = pitch;
 
-    let root = r.bone("root", NO_PARENT, v3(Fx::ZERO, q.root, Fx::ZERO), 0);
+    // Walking, the body bobs twice a stride.
+    let bob = if gait.is_some() {
+        len.mul(fx(1, 100))
+            .mul(sin_turns(phase.mul(Fx::from_int(2))))
+    } else {
+        Fx::ZERO
+    };
+    let root = r.bone(
+        "root",
+        NO_PARENT,
+        v3(Fx::ZERO, q.root.add(bob), Fx::ZERO),
+        0,
+    );
 
     // The torso and its segments.
     let (fore_bone, fore_at) = if g.stance == Stance::Limbless {
+        // A limbless body in motion throws a wave down its length: each
+        // segment yaws a little further round than the last, and the
+        // front of it lifts.
         let seg = along.scale(torso);
         let mut parent = root;
         r.boxed(
@@ -377,8 +414,22 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
             V3::ZERO,
             v3(torso.mul(fx(1, 2)), half_w, half_w),
         );
-        for name in ["neck1", "neck2", "neck3", "neck4", "neck5"] {
-            parent = r.bone(name, parent, seg, 0);
+        for (k, name) in ["neck1", "neck2", "neck3", "neck4", "neck5"]
+            .into_iter()
+            .enumerate()
+        {
+            let seg_k = if gait.is_some() {
+                let yaw = sin_turns(phase.add(Fx::ratio(k as i32, 5))).mul(fx(1, 12));
+                let rise = fx(1, 40).mul(Fx::from_int(k as i32 + 1));
+                v3(
+                    torso.mul(cos_turns(yaw)).mul(cos_turns(rise)),
+                    torso.mul(sin_turns(rise)),
+                    torso.mul(sin_turns(yaw)),
+                )
+            } else {
+                seg
+            };
+            parent = r.bone(name, parent, seg_k, 0);
             r.boxed(
                 name,
                 parent,
@@ -500,10 +551,21 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
     // The head, on a neck raised as the posture says.
     let head_half = p.head_half;
     let neck_len = p.neck_len;
+    // Walking, the head turns a little toward the viewer's side and
+    // dips with the stride.
+    let (neck_yaw, neck_dip) = if gait.is_some() {
+        (
+            fx(1, 16),
+            sin_turns(phase.mul(Fx::from_int(2))).mul(fx(1, 50)),
+        )
+    } else {
+        (Fx::ZERO, Fx::ZERO)
+    };
+    let neck_pitch = pitch.add(q.neck_rise).add(neck_dip);
     let neck_dir = v3(
-        cos_turns(pitch.add(q.neck_rise)),
-        sin_turns(pitch.add(q.neck_rise)),
-        Fx::ZERO,
+        cos_turns(neck_pitch).mul(cos_turns(neck_yaw)),
+        sin_turns(neck_pitch),
+        cos_turns(neck_pitch).mul(sin_turns(neck_yaw)),
     );
     let head = if g.head == HeadKind::Merged {
         // The front of the body is the head: as wide and as deep as the
@@ -579,7 +641,20 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
     if g.stance == Stance::Limbless {
         let seg = along.scale(torso.neg());
         let mut parent = root;
-        for name in ["tail1", "tail2", "tail3", "tail4", "tail5"] {
+        for (k, name) in ["tail1", "tail2", "tail3", "tail4", "tail5"]
+            .into_iter()
+            .enumerate()
+        {
+            let seg = if gait.is_some() {
+                let yaw = sin_turns(phase.sub(Fx::ratio(k as i32 + 1, 5))).mul(fx(1, 12));
+                v3(
+                    torso.neg().mul(cos_turns(yaw)),
+                    Fx::ZERO,
+                    torso.neg().mul(sin_turns(yaw)),
+                )
+            } else {
+                seg
+            };
             parent = r.bone(name, parent, seg, 0);
             r.boxed(
                 name,
@@ -598,11 +673,25 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
             Tail::Raised => fx(1, 6),
             _ => Fx::ZERO,
         };
-        let dir = v3(cos_turns(droop).neg(), sin_turns(droop), Fx::ZERO);
-        let seg = dir.scale(tail_len.mul(fx(1, 3)));
-        let t1 = r.bone("tail1", root, seg, 0);
-        let t2 = r.bone("tail2", t1, seg, 0);
-        let t3 = r.bone("tail3", t2, seg, 0);
+        // Walking, the tail sways: each segment a little further round.
+        let seg_at = |k: i32| {
+            let yaw = if gait.is_some() {
+                sin_turns(phase.add(Fx::ratio(k, 4)))
+                    .mul(fx(1, 16))
+                    .mul(Fx::from_int(k + 1))
+            } else {
+                Fx::ZERO
+            };
+            let l = tail_len.mul(fx(1, 3));
+            v3(
+                l.neg().mul(cos_turns(droop)).mul(cos_turns(yaw)),
+                l.mul(sin_turns(droop)),
+                l.neg().mul(cos_turns(droop)).mul(sin_turns(yaw)),
+            )
+        };
+        let t1 = r.bone("tail1", root, seg_at(0), 0);
+        let t2 = r.bone("tail2", t1, seg_at(1), 0);
+        let t3 = r.bone("tail3", t2, seg_at(2), 0);
         let th = half_h.mul(fx(1, 2));
         r.boxed("tail", t1, V3::ZERO, v3(tail_len.mul(fx(1, 6)), th, th));
         r.boxed(
@@ -655,7 +744,25 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
                 // rising a little, each a broad thin plane whose chord
                 // narrows toward the tip.
                 let seg = limb.mul(fx(1, 3));
-                let sweep = v3(limb.mul(fx(-1, 10)), limb.mul(fx(1, 15)), seg.mul(sd));
+                let sweep = match gait {
+                    // Flying, a beat: the wing rises and falls through the
+                    // stride. Not flying, folded: swept hard back along
+                    // the body, barely out from it.
+                    Some(_) if flies => {
+                        let a = sin_turns(phase).mul(fx(1, 8));
+                        v3(
+                            limb.mul(fx(-1, 10)),
+                            seg.mul(sin_turns(a)).add(limb.mul(fx(1, 15))),
+                            seg.mul(cos_turns(a)).mul(sd),
+                        )
+                    }
+                    Some(_) => v3(
+                        seg.mul(fx(-9, 10)),
+                        seg.mul(fx(1, 8)),
+                        seg.mul(fx(1, 4)).mul(sd),
+                    ),
+                    None => v3(limb.mul(fx(-1, 10)), limb.mul(fx(1, 15)), seg.mul(sd)),
+                };
                 let thick = len.mul(fx(3, 200)).max(girth.mul(fx(1, 4)));
                 let arm = r.bone(names[1], hip, sweep, side);
                 let hand = r.bone(names[2], arm, sweep, side);
@@ -721,8 +828,26 @@ pub fn body_in(g: &Genome, q: &super::posture::Posture) -> Body {
             let splay = super::posture::splayed(g.stance, pair.build);
             let standing =
                 super::posture::standing_length(g.stance, pair.build, pose.wing_walks, limb);
-            let mut down = hip_y;
-            let mut reach = pose.reach;
+            // Walking, the foot swings fore and aft of its resting place
+            // and lifts through the middle of its swing; diagonal pairs
+            // move together, whatever the number of legs.
+            let (swing, lift) = match gait {
+                Some(_) => {
+                    let offset = if (station.index() + side_i) % 2 == 0 {
+                        Fx::ZERO
+                    } else {
+                        fx(1, 2)
+                    };
+                    let theta = phase.add(offset);
+                    (
+                        standing.mul(STRIDE).mul(cos_turns(theta)),
+                        standing.mul(LIFT).mul(sin_turns(theta).max(Fx::ZERO)),
+                    )
+                }
+                None => (Fx::ZERO, Fx::ZERO),
+            };
+            let mut down = hip_y.sub(lift);
+            let mut reach = pose.reach.add(swing);
             let mut d = down.mul(down).add(reach.mul(reach)).sqrt();
             if d > standing {
                 // It cannot reach: it hangs toward the floor.

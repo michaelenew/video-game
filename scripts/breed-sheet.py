@@ -11,6 +11,8 @@ import sys, os, glob
 from PIL import Image, ImageDraw, ImageFont
 
 S = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+# --posed reads lines_posed/ (bodies mid-stride) and writes *_posed sheets.
+POSED = "--posed" in sys.argv
 FONT = ImageFont.load_default()
 try:
     FONT = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 13)
@@ -203,16 +205,17 @@ def draw_strip(name, gens, cell_w=300, cell_h=300):
 
 
 def main():
-    files = sorted(glob.glob(os.path.join(S, "lines", "*.txt")))
+    files = sorted(glob.glob(os.path.join(S, "lines_posed" if POSED else "lines", "*.txt")))
     groups = {"low": [], "med": [], "high": []}
     for f in files:
         base = os.path.basename(f)[:-4]
         strip = draw_strip(base, parse(f))
         groups[base.split("_")[0]].append(strip)
     legend_h = 30
-    for key, title in [("low", "Low: drift alone, no trophies, 60 generations"),
-                       ("med", "Medium: one trophy every four generations, 60 generations"),
-                       ("high", "High: a trophy every generation, 40 generations")]:
+    posed = " -- posed mid-stride" if POSED else " -- at rest"
+    for key, title in [("low", "Low: drift alone, no trophies, 60 generations" + posed),
+                       ("med", "Medium: one trophy every four generations, 60 generations" + posed),
+                       ("high", "High: a trophy every generation, 40 generations" + posed)]:
         strips = groups[key]
         W = max(s.width for s in strips)
         H = sum(s.height for s in strips) + 40 + legend_h
@@ -229,7 +232,7 @@ def main():
         for s in strips:
             sheet.paste(s, (0, y))
             y += s.height
-        out = os.path.join(S, f"lineages_{key}.png")
+        out = os.path.join(S, f"lineages_{key}{'_posed' if POSED else ''}.png")
         sheet.save(out)
         print(out, sheet.size)
 

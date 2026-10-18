@@ -7,7 +7,7 @@
 //! cargo run -p sim --bin breedcheck -- mantis [seed]     # a Ridgeback given a Mantis's claw
 //! cargo run -p sim --bin breedcheck -- drift [seed]      # every creature, forty generations alone
 //! cargo run -p sim --bin breedcheck -- herd [seed]       # breeding the biggest Ridgebacks
-//! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens>
+//! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens> [phase]
 //!                                            # every generation's body as side-view boxes, for a sheet
 //! ```
 
@@ -295,6 +295,11 @@ fn boxes(args: &[String]) {
     let every: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
     let seed: u64 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
     let gens: u32 = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(40);
+    // A seventh argument poses every body at that point of its stride.
+    let phase: Option<Fx> = args
+        .get(6)
+        .and_then(|s| s.parse::<f32>().ok())
+        .map(|f| Fx::ratio((f * 1000.0) as i32, 1000));
     let mut rng = Rng::new(seed);
     let mut g = egg;
     for generation in 0..=gens {
@@ -320,7 +325,10 @@ fn boxes(args: &[String]) {
                 .trim_end_matches(']'),
             describe(&g)
         );
-        let body = build::body(&g);
+        let body = match phase {
+            Some(ph) => build::body_posed(&g, &sim::breed::posture::posture(&g), ph),
+            None => build::body(&g),
+        };
         for part in body.parts() {
             let at = body.at(part.shape.bone);
             let name = part.name;
