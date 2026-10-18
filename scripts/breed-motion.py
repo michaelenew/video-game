@@ -57,7 +57,9 @@ def parse_film(lines):
             moves[-1]["frames"][-1]["boxes"].append(obox(line))
         elif line.startswith("hit "):
             p = line.split()
-            moves[-1]["frames"][-1]["hits"].append((*[float(x) for x in p[1:5]], p[5] == "1"))
+            # x y z radius height this-frame: a height is an upright disc
+            # on the floor (a shockwave), nought a ball.
+            moves[-1]["frames"][-1]["hits"].append((*[float(x) for x in p[1:6]], p[6] == "1"))
     return moves
 
 
@@ -133,13 +135,23 @@ def draw_cell(frame, scale, centre, cell_w, cell_h, step, marks=(), extent=None)
     if frame["hits"]:
         over = Image.new("RGBA", tile.size, (0, 0, 0, 0))
         od = ImageDraw.Draw(over)
-        for (x, y, z, r, now) in frame["hits"]:
+        for (x, y, z, r, hgt, now) in frame["hits"]:
+            fill = (220, 40, 40, 110) if now else (220, 40, 40, 30)
+            edge = (170, 20, 20, 220) if now else None
+            if hgt > 0:
+                # A disc on the floor: its rim at the bottom and the top.
+                for yy in (y, y + hgt):
+                    pts = []
+                    for k in range(32):
+                        a = 2 * math.pi * k / 32
+                        qx, qy = iso(x + r * math.cos(a), yy, z + r * math.sin(a))
+                        pts.append((origin[0] + qx * scale, origin[1] + qy * scale))
+                    od.polygon(pts, fill=fill, outline=edge)
+                continue
             px, py = iso(x, y, z)
             px, py = origin[0] + px * scale, origin[1] + py * scale
             rr = max(2.0, r * scale)
-            fill = (220, 40, 40, 110) if now else (220, 40, 40, 30)
-            od.ellipse([px - rr, py - rr, px + rr, py + rr], fill=fill,
-                       outline=(170, 20, 20, 220) if now else None)
+            od.ellipse([px - rr, py - rr, px + rr, py + rr], fill=fill, outline=edge)
         tile = Image.alpha_composite(tile.convert("RGBA"), over).convert("RGB")
     return tile
 
@@ -177,7 +189,7 @@ def move_sheet(name, moves, cell_w=230, cell_h=230):
         step = 5.0 if size > 12 else 1.0
         # Where it will land: the last strike frame's spheres, on the floor.
         strike = [fr for fr in frames if fr["beat"] == "Strike"]
-        marks = [(x, z, r) for (x, y, z, r, now) in (strike[-1]["hits"] if strike else []) if now]
+        marks = [(x, z, r) for (x, y, z, r, hgt, now) in (strike[-1]["hits"] if strike else []) if now]
         head_h, foot_h = 40, 20
         im = Image.new("RGB", (cell_w * len(frames), head_h + cell_h + foot_h), BG)
         d = ImageDraw.Draw(im)

@@ -648,28 +648,92 @@ orange rings through the windup: where it will land, the floor marker
 drawn from the hit itself) and the held punish window to recovered;
 `gaits_<name>.png` is every gait's cycle with its footfall diagram.
 
-### What this is not yet
+### The opens, closed (2026-10-18, later)
 
-- **BREED-15 · Facing and turning in a move.** A drive has no body yaw: a
-  tail sweep swings the tail, not the body round behind it, and nothing
-  tracks a target that moves during the windup. The aim locks where it
-  was aimed (§1.5) -- which is right -- but *where* is today always
-  straight ahead. Adding a yaw to `Drive` and an aim point to `motion` is
-  the next step, and the verdict would then measure lanes against the aim.
-- **BREED-16 · Moves are poses, not physics.** A charge's travel and a
-  pounce's arc are drawn, not simulated; the real creature's step (the
-  `World` and its frame budget) would carry them. Nothing here allocates,
-  but a body is built from scratch per frame; a fight would cache the rest
-  body and rebuild only on a drive change.
-- **BREED-17 · A brain.** Which move when -- the weights, the range each
-  covers, what it reacts to -- is the species brains' job (`crates/sim/src/species`);
-  the verdict gives a brain the measured lane and range of every move it
-  has, which is what it needs to choose.
-- **BREED-18 · Range gaps are reported, not filled.** A crossbred kit that
-  loses its only long move has a gap; the verdict says so but nothing
-  grows a move to fill it. Whether breeding should be allowed to make a
-  creature you can backpedal from forever is a design question (§1.3 says
-  no).
-- The lineage sheets in `gallery/breed/` were drawn before this; their
-  `_posed` frames are the old fixed walk, not the gait the body would now
-  choose.
+What §10 first left open, built:
+
+- **BREED-15 · Facing and turning -- built.** A drive has a **yaw**: the
+  whole body turned about the point it stands on, its travel going the way
+  it faces. A tail sweep, a tail trip and a lash now turn the body with
+  the tail to wind it and spin it through. `strike::aimed` turns a move to
+  face a bearing -- as far as a windup can turn, an eighth -- and a thrown
+  move comes down to chest height **at the distance it was aimed** and on
+  to the floor past it, so a web spat at somebody close no longer passes
+  four metres over them. The aim is decided when the move starts and
+  never again: a fighter who steps off the line after the tell is missed
+  (tested: `a_move_turns_to_where_it_was_aimed`).
+- **BREED-16 · Moves in time -- built** as `actor.rs`. An actor has a
+  place, a facing and an act (standing, going at a gait, or a move of its
+  kit). Walking carries it at its gait's speed and turns it no faster than
+  its size allows (the Oven's `BreedTurn`, over the root of its length: a
+  giant turns three times slower than a gnawer, which is what makes
+  getting to its side an answer). A move plays from where it stood and,
+  when it ends, **the actor is where the move carried it, facing the way
+  it ended** -- a charge leaves the Ridgeback forty metres on. The body is
+  cached and rebuilt only when the drive changes; a still body is built
+  once. Nothing allocates. Still not simulated: collision with terrain and
+  with other bodies, which is the `World`'s job when this goes in it.
+- **BREED-17 · A brain -- built** as `brain.rs`. It **glances** every few
+  frames (the Oven's `BreedGlance`) and decides on the newest glance at
+  least `HUMAN_REACTION_FRAMES` old, carried forward along the velocity it
+  saw -- so it reacts to what it saw a reaction ago, never to a button.
+  It throws **only moves that can land**: the target in the move's lane
+  and between the near and far reach the verdict measured. It picks by
+  appetite, never the same move twice running when there is another,
+  closes in when it has moves that reach less far (more often the more
+  aggressive it is), turns to face, circles when too close, and waits a
+  beat between moves that aggression shortens. Its four numbers are Oven
+  knobs (`Breeding` family).
+- **BREED-18 · Range gaps -- filled.** `strike::kit` measures the kit and,
+  when nothing threatens mid and long, adds a **rush** (a new move: head
+  down, weight back, a run along a line of three body lengths and never
+  less than twelve metres, answered by leaving the lane); when nothing is
+  close, a shoulder (a stomp for a big body). Every cast member and every
+  bred generation tested now threatens close, mid and long.
+- **The stale lineage sheets -- redrawn**, so the `_posed` ones show the
+  gait each body now chooses.
+
+**The contract, played.** `tests/duel.rs` puts each creature's actor and
+brain against a fighter for thirty seconds, twice. Standing still in front
+of it, the fighter is hit -- 51 times across the cast by moves answered by
+reacting. Answering every move a reaction (15 frames) after its tell
+starts, with the game's own dodge (its i-frames and speed), jump (its
+takeoff speed and gravity) and crouch (its hurtbox), timed as a player who
+has learned the move, the fighter is hit by **none** of them -- for the
+cast and for three lineages grafted thirty generations. It found four
+things the measure alone had not, all fixed:
+
+| Found by playing it | Fix |
+| --- | --- |
+| A stomp's shockwave was a ball 4.5 m tall: no jump clears it | Shockwaves are discs half a metre high along the floor (`strike::shockwave`) |
+| Thrown shots moved two metres a frame and passed between frames | A shot is tested along its whole path each frame |
+| A 15-frame jump-answered tell gives a jump no time to rise | A move's tell is a reaction **plus the time its answer takes** (`strike::lead`: a jump's rise to a metre, from the game's own jump numbers) |
+| A trip swept from hip height down, catching a jumper; a crouch-answered talon pass came in at half a metre | Low sweeps are low from the windup (half the tell); a crouch-answered move passes between a crouched head and a standing one (`strike::crouch_line`) |
+
+### The owner's opens, with a recommendation each
+
+These are decisions about the game rather than the creatures, so they
+are recommendations, not code; each says what it would take.
+
+- **BREED-8 · Pace.** Recommended: **one egg is one generation, and an
+  egg takes up to three trophies before it hatches**, applied in the order
+  given. The "medium" lineages (a trophy every fourth generation) are then
+  a player who feeds an egg one trophy; the "high" ones a player who feeds
+  three. Hatching in a day of play, breeding at full size a few days
+  after, puts a visibly different creature about a week in -- the drift
+  sheets' pace. It costs a field on the egg and nothing in the breeder.
+- **BREED-9 · What a built body looks like -- half closed.** How it moves
+  is answered: procedural gaits and moves from the same body, with no
+  baked clips (§10). How it is *drawn* waits on where it slots in: the
+  renderer draws species by their tables, and a built body would be drawn
+  part by part from its boxes' tags (`torso`, `limb`, `feathered`...) by
+  the same forms the town's props use.
+- **BREED-10 · Food by tier.** Recommended: **keep tier as the one
+  currency**, but take it from the plan's size *or* its reaction,
+  whichever is higher -- a quick duellist is as hard to keep as a big
+  hill. One line in `rear.rs`.
+- **BREED-11 · The hatchling in a fight.** Recommended: **it fights only
+  where there is a free creature slot** -- a hunt of one creature, never
+  the Pair -- and when it falls it is carried home rather than lost, so
+  raising one is never a loss to a bad fight. It would use exactly this
+  actor and brain, with its target the hunted creature.

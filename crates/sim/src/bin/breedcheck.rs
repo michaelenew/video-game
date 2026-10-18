@@ -368,7 +368,7 @@ fn print_boxes(body: &build::Body) {
 /// move <kind> <startup> <active> <recovery> <answer> <lane> <range> <beyond> <tell-ok> | <name>
 /// frame <n> <beat>
 /// obox ...
-/// hit <x> <y> <z> <radius>
+/// hit <x> <y> <z> <radius> <height> <this-frame>
 /// ```
 fn film(args: &[String]) {
     use sim::breed::{posture, strike, verdict};
@@ -429,11 +429,12 @@ fn film(args: &[String]) {
                 for sf in spec.startup..=fr {
                     for h in strike::hit_at(&g, &q, m, spec, sf).iter() {
                         println!(
-                            "hit {:.3} {:.3} {:.3} {:.3} {}",
+                            "hit {:.3} {:.3} {:.3} {:.3} {:.3} {}",
                             f(h.at.x),
                             f(h.at.y),
                             f(h.at.z),
                             f(h.radius),
+                            f(h.height),
                             if sf == fr { 1 } else { 0 }
                         );
                     }

@@ -1069,6 +1069,15 @@ scalars! {
     LedgeShuffle,         "Ledge",    "Hand over hand at (m/s)",                             Fixed, 0, fx(5,1);
     LedgeLetGo,           "Ledge",    "Let go, pushed off at (m/s)",                         Fixed, 0, fx(10,1);
     LedgeRegrab,          "Ledge",    "Not caught again for",                                Frames, 0, 120;
+    // **A crossbred creature in a fight** (2026-10-18, `sim::breed::actor`
+    // and `brain`). Appended, as every knob above is. How fast a built body
+    // turns, how often its brain glances, how long it waits between moves
+    // when calm, and when it runs rather than walks to close.
+    BreedTurn,            "Breeding", "Turns a second, times the root of its length",        Fixed, fx(1,20), fx(4,1);
+    BreedGlance,          "Breeding", "Glances every",                                       Frames, 1, 60;
+    BreedPause,           "Breeding", "Waits between moves, at no aggression",               Frames, 0, 240;
+    BreedRunLengths,      "Breeding", "Runs to close beyond (body lengths)",                 Fixed, 0, fx(10,1);
+    BreedRunAtLeast,      "Breeding", "Runs to close beyond, at least (m)",                  Fixed, 0, fx(40,1);
 }
 
 // ---------------------------------------------------------------------------

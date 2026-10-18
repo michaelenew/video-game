@@ -1355,7 +1355,24 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         }
     }
     r.body.span = span;
+    if d.yaw != Fx::ZERO {
+        turn(&mut r.body, d.yaw);
+    }
     r.body
+}
+
+/// The whole body turned about the point it stands on by `yaw` turns,
+/// toward `+z`: every bone's offset and every part's axis, so a turned
+/// body is the same body facing elsewhere.
+fn turn(body: &mut Body, yaw: Fx) {
+    let (c, s) = (cos_turns(yaw), sin_turns(yaw));
+    let spin = |v: V3| v3(v.x.mul(c).sub(v.z.mul(s)), v.y, v.x.mul(s).add(v.z.mul(c)));
+    for b in body.bones[..body.bone_count].iter_mut() {
+        b.rest = spin(b.rest);
+    }
+    for a in body.axes[..body.part_count].iter_mut() {
+        *a = spin(*a);
+    }
 }
 
 /// A striking arm's two bones at `a` (`-1` cocked, nought folded, one
@@ -1538,6 +1555,9 @@ pub enum MoveKind {
     Inflate,
     Ambush,
     Shoulder,
+    /// A run at you along a line: what any body that walks has when
+    /// nothing else in its kit reaches past a few strides (bestiary §1.3).
+    Rush,
     // the back and hide
     SpikeSpray,
     QuillFling,
@@ -1601,6 +1621,7 @@ impl MoveKind {
             Inflate => (30, 40, Pace::Heavy),
             Ambush => (28, 150, Pace::Even),
             Shoulder => (18, 60, Pace::Even),
+            Rush => (32, 110, Pace::Heavy),
             SpikeSpray => (34, 60, Pace::Even),
             QuillFling => (20, 50, Pace::Quick),
             WebShot => (32, 20, Pace::Even),
@@ -1653,6 +1674,7 @@ impl MoveKind {
             Inflate => "inflate",
             Ambush => "ambush",
             Shoulder => "shoulder",
+            Rush => "rush",
             SpikeSpray => "spike spray",
             QuillFling => "quill fling",
             WebShot => "web shot",
@@ -1700,6 +1722,14 @@ impl MoveSet {
     pub fn get(&self, kind: MoveKind) -> Option<&MoveSpec> {
         self.iter().find(|m| m.kind == kind)
     }
+
+    /// Add a move, if it is not there and there is room.
+    pub fn push(&mut self, spec: MoveSpec) {
+        if !self.has(spec.kind) && self.count < MAX_MOVES {
+            self.items[self.count] = Some(spec);
+            self.count += 1;
+        }
+    }
 }
 
 struct Deriver<'a> {
@@ -1713,48 +1743,58 @@ impl Deriver<'_> {
         if self.set.has(kind) || self.set.count >= MAX_MOVES {
             return;
         }
-        let s = &self.g.sliders;
-        let (startup, damage, pace) = kind.base();
-        // Bigger and heavier is slower; a quick tempo trims it.
-        let slow = Fx::ONE
-            .add(s.mass.sub(fx(1, 2)).mul(fx(3, 5)))
-            .add(s.size.sub(fx(1, 2)).mul(fx(1, 2)))
-            .mul(fx(13, 10).sub(s.tempo.mul(fx(3, 5))));
-        let mut startup = Fx::from_int(startup).mul(slow).to_int().max(1);
-        // A move answered by reacting to it is never faster than a
-        // reaction (bestiary §1.4); only one answered by where you stand
-        // may be, and a small quick body's bite is slowed to it.
-        if damage > 0 && !super::strike::answer(kind).positional() {
-            startup = startup.max(HUMAN_REACTION_FRAMES as i32);
-        }
-        let active = (startup / 3).max(2);
-        // Every move holds still long enough after it to be punished
-        // (§1.9): a third of its recovery, never under eight frames.
-        let recovery = Fx::from_int(startup).mul(fx(3, 2)).to_int().max(24);
-        // Bigger and heavier hits harder.
-        let hard = fx(1, 4)
-            .add(s.size.mul(s.size).mul(Fx::from_int(2)))
-            .mul(fx(3, 5).add(s.mass.mul(fx(4, 5))));
-        let damage = Fx::from_int(damage).mul(hard).to_int();
-        let mut weight = fx(1, 2).add(s.aggression.mul(fx(1, 2)));
-        weight = match pace {
-            Pace::Quick => weight.mul(fx(1, 2).add(s.tempo)),
-            Pace::Heavy => weight.mul(fx(3, 2).sub(s.tempo)),
-            Pace::Even => weight,
-        };
-        if matches!(kind, MoveKind::Guard | MoveKind::Parry) {
-            weight = s.guard;
-        }
-        self.set.items[self.set.count] = Some(MoveSpec {
-            kind,
-            startup,
-            active,
-            recovery,
-            damage,
-            reach,
-            weight: super::unit(weight),
-        });
+        self.set.items[self.set.count] = Some(spec_for(self.g, kind, reach));
         self.set.count += 1;
+    }
+}
+
+/// One move's numbers for this body: slower and harder the bigger and
+/// heavier it is, quicker for a quick tempo, never faster than a reaction
+/// unless where you stand answers it, and always with a window to punish.
+pub fn spec_for(g: &Genome, kind: MoveKind, reach: Fx) -> MoveSpec {
+    let s = &g.sliders;
+    let (startup, damage, pace) = kind.base();
+    // Bigger and heavier is slower; a quick tempo trims it.
+    let slow = Fx::ONE
+        .add(s.mass.sub(fx(1, 2)).mul(fx(3, 5)))
+        .add(s.size.sub(fx(1, 2)).mul(fx(1, 2)))
+        .mul(fx(13, 10).sub(s.tempo.mul(fx(3, 5))));
+    let mut startup = Fx::from_int(startup).mul(slow).to_int().max(1);
+    // A move answered by reacting to it is never faster than a
+    // reaction (bestiary §1.4); only one answered by where you stand
+    // may be, and a small quick body's bite is slowed to it.
+    // An answer that takes time to do -- a jump has to rise clear --
+    // needs that much more tell.
+    let answer = super::strike::answer(kind);
+    if damage > 0 && !answer.positional() {
+        startup = startup.max(HUMAN_REACTION_FRAMES as i32 + super::strike::lead(answer));
+    }
+    let active = (startup / 3).max(2);
+    // Every move holds still long enough after it to be punished
+    // (§1.9): a third of its recovery, never under eight frames.
+    let recovery = Fx::from_int(startup).mul(fx(3, 2)).to_int().max(24);
+    // Bigger and heavier hits harder.
+    let hard = fx(1, 4)
+        .add(s.size.mul(s.size).mul(Fx::from_int(2)))
+        .mul(fx(3, 5).add(s.mass.mul(fx(4, 5))));
+    let damage = Fx::from_int(damage).mul(hard).to_int();
+    let mut weight = fx(1, 2).add(s.aggression.mul(fx(1, 2)));
+    weight = match pace {
+        Pace::Quick => weight.mul(fx(1, 2).add(s.tempo)),
+        Pace::Heavy => weight.mul(fx(3, 2).sub(s.tempo)),
+        Pace::Even => weight,
+    };
+    if matches!(kind, MoveKind::Guard | MoveKind::Parry) {
+        weight = s.guard;
+    }
+    MoveSpec {
+        kind,
+        startup,
+        active,
+        recovery,
+        damage,
+        reach,
+        weight: super::unit(weight),
     }
 }
 

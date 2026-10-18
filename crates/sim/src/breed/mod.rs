@@ -60,7 +60,9 @@
 //! `cargo run -p sim --bin breedcheck`. The design is
 //! `docs/design/exploration/0021_crossbreeding.md`.
 
+pub mod actor;
 pub mod archetypes;
+pub mod brain;
 pub mod build;
 pub mod cross;
 pub mod drive;

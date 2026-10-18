@@ -49,6 +49,10 @@ pub struct Drive {
     pub surge: Fx,
     /// The torso's pitch over its posture's, turns, nose up.
     pub pitch: Fx,
+    /// The whole body turned about its root, turns, toward `+z`: a move
+    /// that faces where it was aimed, or spins its tail round. The root's
+    /// travel ([`Drive::surge`]) goes the way it faces.
+    pub yaw: Fx,
     /// The neck's pitch and yaw over the posture's, turns.
     pub neck_pitch: Fx,
     pub neck_yaw: Fx,
@@ -86,6 +90,7 @@ impl Drive {
         lift: Fx::ZERO,
         surge: Fx::ZERO,
         pitch: Fx::ZERO,
+        yaw: Fx::ZERO,
         neck_pitch: Fx::ZERO,
         neck_yaw: Fx::ZERO,
         neck_reach: Fx::ZERO,
@@ -112,6 +117,7 @@ impl Drive {
         out.lift = out.lift.add(other.lift);
         out.surge = out.surge.add(other.surge);
         out.pitch = out.pitch.add(other.pitch);
+        out.yaw = out.yaw.add(other.yaw);
         out.neck_pitch = out.neck_pitch.add(other.neck_pitch);
         out.neck_yaw = out.neck_yaw.add(other.neck_yaw);
         out.neck_reach = out.neck_reach.add(other.neck_reach);
@@ -149,6 +155,7 @@ impl Drive {
         out.lift = s(self.lift);
         out.surge = s(self.surge);
         out.pitch = s(self.pitch);
+        out.yaw = s(self.yaw);
         out.neck_pitch = s(self.neck_pitch);
         out.neck_yaw = s(self.neck_yaw);
         out.neck_reach = s(self.neck_reach);

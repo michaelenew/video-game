@@ -45,6 +45,14 @@ fn holds(g: &Genome) -> Result<(), String> {
     if v.lookalikes > 0 {
         return Err(format!("windups alike: {:?}", v.lookalike[0]));
     }
+    // A threat at every range a fighter stands at (§1.3): what the body
+    // grew, or the rush and the shoulder the kit fills a gap with.
+    if !(v.close && v.mid && v.long) {
+        return Err(format!(
+            "ranges: close {}, mid {}, long {}",
+            v.close, v.mid, v.long
+        ));
+    }
     Ok(())
 }
 
@@ -61,7 +69,6 @@ fn the_cast_answers_the_contract() {
             "{name} asks only {} questions",
             v.questions
         );
-        assert!(v.close, "{name} has nothing up close");
     }
 }
 

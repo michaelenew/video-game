@@ -4458,3 +4458,37 @@ pub fn cascade_power() -> Fx {
 pub fn finisher_repays() -> i32 {
     oven::scalar(Scalar::FinisherRepays).max(0)
 }
+
+// ---------------------------------------------------------------------------
+// A crossbred creature in a fight (`sim::breed::actor`, `sim::breed::brain`)
+// ---------------------------------------------------------------------------
+
+/// How fast a built body turns, in turns a second times the square root of
+/// its length in metres: a body four metres long at a half turns a quarter
+/// turn a second, one sixteen metres long an eighth. A giant turns slowly,
+/// which is what makes getting round to its side an answer.
+pub fn breed_turn() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreedTurn))
+}
+
+/// Frames between a creature's glances at its target (bestiary §1.5: it
+/// samples, it does not watch).
+pub fn breed_glance() -> i32 {
+    oven::scalar(Scalar::BreedGlance).max(1)
+}
+
+/// Frames it waits between moves when it has no aggression at all; its
+/// aggression shortens it to nothing.
+pub fn breed_pause() -> i32 {
+    oven::scalar(Scalar::BreedPause).max(0)
+}
+
+/// It runs flat out to close when further than this many of its own body
+/// lengths, or [`breed_run_at_least`] metres, whichever is more.
+pub fn breed_run_lengths() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreedRunLengths))
+}
+
+pub fn breed_run_at_least() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreedRunAtLeast))
+}

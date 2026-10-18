@@ -37,9 +37,11 @@ use super::{Genome, fx};
 use crate::fixed::Fx;
 use crate::tuning::HUMAN_REACTION_FRAMES;
 
-/// How tall somebody standing is, near enough: a hit whose lowest point
-/// is above this passes over their head.
-pub const STANDING: Fx = fx(9, 5);
+/// How tall somebody standing is -- a fighter's hurtbox: a hit whose
+/// lowest point is above this passes over their head.
+pub fn standing() -> Fx {
+    crate::tuning::body_height()
+}
 
 /// Where a move's hit goes, against the body.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
@@ -134,6 +136,18 @@ impl Reading {
         self.damaging && !self.answer.positional() && (!self.reactable() || !self.legible(len))
     }
 
+    /// Which ranges it threatens -- close, mid, long: every one between
+    /// how near it comes and how far it goes.
+    pub fn ranges(&self) -> (bool, bool, bool) {
+        let three = Fx::from_int(3);
+        let ten = Fx::from_int(10);
+        (
+            self.near <= three,
+            self.near <= ten && self.beyond > three,
+            self.beyond > ten,
+        )
+    }
+
     /// Its question: the answer, the lane, the range.
     pub fn question(&self) -> (Answer, Lane, Range) {
         (self.answer, self.lane, self.range)
@@ -197,18 +211,19 @@ pub fn apart(a: &Body, b: &Body) -> Fx {
 }
 
 /// The body's extent at rest: nose, rump, half its width, its top.
-struct Extent {
-    nose: Fx,
-    rump: Fx,
-    half: Fx,
-    top: Fx,
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Extent {
+    pub nose: Fx,
+    pub rump: Fx,
+    pub half: Fx,
+    pub top: Fx,
 }
 
 /// Measured off the trunk and the legs it stands on, not the neck, head,
 /// tail and wings: those are what reach, and somebody standing beside a
 /// tail is standing beside the body, not inside it. A limbless body is all
 /// trunk.
-fn extent(body: &Body, limbless: bool) -> Extent {
+pub fn extent(body: &Body, limbless: bool) -> Extent {
     const REACHING: [&str; 7] = ["tail", "head", "jaw", "horns", "crest", "neck", "wing_"];
     let mut e = Extent {
         nose: Fx::from_int(-1000),
@@ -262,7 +277,7 @@ pub fn read(g: &Genome, q: &Posture, rest: &Body, spec: &MoveSpec, m: &Motion) -
             let inside = forward < Fx::ZERO && behind < Fx::ZERO;
             let l = if s.radius >= len.mul(fx(1, 2)) {
                 Lane::Around
-            } else if inside && s.at.y.sub(s.radius) > e.top.mul(fx(9, 10)) {
+            } else if inside && s.bottom() > e.top.mul(fx(9, 10)) {
                 Lane::Aboard
             } else if inside || side >= forward.max(behind) {
                 Lane::Side
@@ -271,7 +286,7 @@ pub fn read(g: &Genome, q: &Posture, rest: &Body, spec: &MoveSpec, m: &Motion) -
             } else {
                 Lane::Rear
             };
-            let low = s.at.y.sub(s.radius) < STANDING;
+            let low = s.bottom() < standing();
             if low {
                 near = near.min(forward.max(behind).max(side).sub(s.radius).max(Fx::ZERO));
             }
@@ -318,6 +333,23 @@ pub fn read(g: &Genome, q: &Posture, rest: &Body, spec: &MoveSpec, m: &Motion) -
     }
 }
 
+/// Which ranges a move set threatens between them, on the ground.
+pub fn coverage(g: &Genome, q: &Posture, rest: &Body, set: &build::MoveSet) -> (bool, bool, bool) {
+    let (mut close, mut mid, mut long) = (false, false, false);
+    for spec in set.iter() {
+        let m = strike::motion(g, q, spec.kind);
+        let r = read(g, q, rest, spec, &m);
+        if !r.damaging || r.lane == Lane::Aboard {
+            continue;
+        }
+        let (c, mi, l) = r.ranges();
+        close |= c;
+        mid |= mi;
+        long |= l;
+    }
+    (close, mid, long)
+}
+
 /// The whole kit, measured.
 pub fn judge(g: &Genome, q: &Posture) -> Verdict {
     let rest = build::body_in(g, q);
@@ -361,13 +393,11 @@ pub fn judge(g: &Genome, q: &Posture) -> Verdict {
                     *a = true;
                 }
             }
-            // Every range between how near it comes and how far it goes.
             _ => {
-                let three = Fx::from_int(3);
-                let ten = Fx::from_int(10);
-                v.close |= r.near <= three;
-                v.mid |= r.near <= ten && r.beyond > three;
-                v.long |= r.beyond > ten;
+                let (c, m, l) = r.ranges();
+                v.close |= c;
+                v.mid |= m;
+                v.long |= l;
             }
         }
         if r.stuck < 8 || r.recovery < HUMAN_REACTION_FRAMES as i32 {

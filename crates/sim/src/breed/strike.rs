@@ -112,6 +112,10 @@ pub struct Motion {
     /// How far the body rises at the middle of the strike, metres: the
     /// top of a leap's arc.
     pub arc: Fx,
+    /// For a thrown move, how far ahead it was aimed: the shot comes down
+    /// to chest height there and on to the floor past it. Nought is its
+    /// full reach.
+    pub aim_at: Fx,
 }
 
 const NONE: Strikers = ["", "", "", ""];
@@ -149,6 +153,38 @@ fn station_where(g: &Genome, want: impl Fn(Station, Role, Build) -> bool) -> Opt
 
 fn fore(st: Station) -> bool {
     matches!(st, Station::Fore | Station::MidFore)
+}
+
+/// How high a jump has to rise to clear a low strike: a tail swept at the
+/// shins, a shockwave along the floor.
+pub const JUMP_CLEAR: Fx = fx(1, 1);
+
+/// Frames an answer takes to work once a fighter starts it: a jump's rise
+/// to [`JUMP_CLEAR`] at the game's own jump speed and gravity; nothing for
+/// a dodge, whose invulnerability starts at once, or a crouch.
+pub fn lead(answer: Answer) -> i32 {
+    match answer {
+        Answer::Jump => {
+            // Solve h = v t - g t^2 / 2 for the first t.
+            let v = crate::tuning::jump_speed();
+            let g = crate::tuning::gravity().abs().max(fx(1, 10));
+            let under = v
+                .mul(v)
+                .sub(g.mul(JUMP_CLEAR).mul(Fx::from_int(2)))
+                .max(Fx::ZERO);
+            let t = v.sub(under.sqrt()).div(g);
+            t.mul(Fx::from_int(super::locomotion::FPS)).to_int() + 1
+        }
+        _ => 0,
+    }
+}
+
+/// The height between a crouched fighter's head and a standing one's: a
+/// strike that passes here is ducked, and hits anybody who does not.
+pub fn crouch_line() -> Fx {
+    let standing = crate::tuning::body_height();
+    let crouched = standing.mul(crate::tuning::crouch_height_scale());
+    standing.add(crouched).mul(fx(1, 2))
 }
 
 /// How each move is answered.
@@ -193,6 +229,7 @@ pub const fn answer(kind: MoveKind) -> Answer {
         Inflate => Answer::BackOff,
         Ambush => Answer::LeaveLane,
         Shoulder => Answer::BackOff,
+        Rush => Answer::LeaveLane,
         SpikeSpray => Answer::Cover,
         QuillFling => Answer::Sidestep,
         WebShot => Answer::Jump,
@@ -330,6 +367,11 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             c.neck_yaw = fx(1, 12);
             c.lift = h.mul(fx(-1, 20));
             s.tail_yaw = fx(1, 12);
+            // The body turns with the tail to wind it, then spins through:
+            // a turn of the body toward `+z` swings the tail to `-z`, the
+            // same way as the tail's own yaw.
+            c.yaw = fx(-1, 16);
+            s.yaw = fx(1, 8);
             s.neck_yaw = fx(-1, 24);
             aim = Some(Aim::Tail(Fx::ONE));
             strikers = ["tail", "", "", ""];
@@ -365,8 +407,12 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             c.tail_yaw = fx(-1, 30);
             c.lift = h.mul(fx(-1, 10));
             s.tail_yaw = fx(1, 15);
+            c.yaw = fx(-1, 24);
+            s.yaw = fx(1, 12);
             aim = Some(Aim::Tail(fx(1, 2)));
-            strikers = ["tail", "", "", ""];
+            // The low end of it: what sweeps the shins, and what a jump
+            // clears.
+            strikers = ["tail tip", "tail, middle", "", ""];
             delivery = Delivery::Swept;
         }
         Stomp => {
@@ -530,7 +576,8 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
                 }
             }
             s.surge = len;
-            aim = Some(Aim::Body(fx(1, 2)));
+            // Between a crouch and a standing head: the crouch is the answer.
+            aim = Some(Aim::Body(crouch_line()));
             strikers = ["hind.", "midhind.", "fore.", ""];
             delivery = Delivery::Swept;
         }
@@ -655,6 +702,8 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             c.wave = Some((fx(1, 4), fx(1, 10)));
             c.neck_yaw = fx(1, 10);
             s.wave = Some((fx(3, 4), fx(1, 6)));
+            c.yaw = fx(-1, 20);
+            s.yaw = fx(1, 10);
             strikers = ["tail", "", "", ""];
             delivery = Delivery::Swept;
         }
@@ -723,6 +772,26 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             s.surge = len.mul(fx(1, 5));
             s.neck_yaw = fx(-1, 8);
             strikers = ["shoulders", "thorax", "", ""];
+            delivery = Delivery::Swept;
+        }
+        Rush => {
+            // Head down, weight back on the haunches, then a run along a
+            // line: through every range between it and you.
+            c.neck_pitch = fx(-1, 12);
+            c.lift = h.mul(fx(-1, 8));
+            c.surge = len.mul(fx(-1, 12));
+            c.tail_pitch = fx(1, 24);
+            for side in 0..2 {
+                swing_foot(&mut c, STATIONS - 1, side, fx(1, 5), Fx::ZERO);
+            }
+            if g.stance == super::Stance::Limbless {
+                c.wave = Some((Fx::ZERO, fx(1, 10)));
+                s.wave = Some((fx(1, 2), fx(1, 16)));
+            }
+            s.neck_pitch = fx(-1, 12);
+            s.surge = rush_length(len);
+            aim = Some(Aim::Head(Fx::ONE));
+            strikers = ["head", "shoulders", "horns", limb_prefix(0)];
             delivery = Delivery::Swept;
         }
         SpikeSpray => {
@@ -821,6 +890,12 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
     }
     if let Some(a) = aim {
         aim_at(g, q, &mut s, &strikers, a);
+        // A sweep is at its height before it swings -- the tail drops to
+        // the shins in the windup, which is half its tell -- so its first
+        // strike frames are as low as its last.
+        if matches!(a, Aim::Tail(_)) {
+            aim_at(g, q, &mut c, &strikers, a);
+        }
     }
     Motion {
         kind,
@@ -830,6 +905,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
         delivery,
         answer: answer(kind),
         arc,
+        aim_at: Fx::ZERO,
     }
 }
 
@@ -948,6 +1024,48 @@ fn lowest(body: &Body, strikers: &Strikers) -> Option<Fx> {
     low
 }
 
+/// How far a rush runs: three body lengths, and never less than twelve
+/// metres, so it is a long-range threat whatever the body.
+pub fn rush_length(len: Fx) -> Fx {
+    len.mul(Fx::from_int(3)).max(Fx::from_int(12))
+}
+
+/// The most a move turns to face where it was aimed, during its windup.
+/// Past that, the body turns on its feet first.
+pub const MOST_TURN: Fx = fx(1, 8);
+
+/// This motion turned to face `bearing` (turns, toward `+z`), as far as a
+/// windup can turn: the cocked pose faces it, and the strike keeps it. The
+/// aim locks when the move starts -- whatever the target does after, the
+/// hit goes where the move was pointed (bestiary §1.5).
+pub fn toward(m: &Motion, bearing: Fx) -> Motion {
+    aimed(m, bearing, Fx::ZERO)
+}
+
+/// [`toward`], and a thrown move aimed to come down `distance` metres
+/// ahead (nought: its full reach).
+pub fn aimed(m: &Motion, bearing: Fx, distance: Fx) -> Motion {
+    let b = bearing.max(MOST_TURN.neg()).min(MOST_TURN);
+    let mut out = *m;
+    out.aim_at = distance;
+    out.cocked.yaw = out.cocked.yaw.add(b);
+    out.struck.yaw = out.struck.yaw.add(b);
+    out
+}
+
+/// A move whose area is a shockwave along the floor, answered by being off
+/// it.
+pub const fn shockwave(kind: MoveKind) -> bool {
+    matches!(
+        kind,
+        MoveKind::Stomp
+            | MoveKind::RearSlam
+            | MoveKind::BellyFlop
+            | MoveKind::SacSlam
+            | MoveKind::BreachDive
+    )
+}
+
 /// Where in a move a frame is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Beat {
@@ -1016,9 +1134,11 @@ pub fn drive_at(g: &Genome, m: &Motion, spec: &MoveSpec, frame: i32) -> Drive {
             let stuck = spec.recovery / 3;
             let into = frame - spec.startup - spec.active - stuck;
             let t = Fx::ratio(into, (spec.recovery - stuck).max(1));
-            // The body stays where the strike carried it.
+            // The body stays where the strike carried it, facing the way
+            // it ended.
             let mut back = Drive::lerp(&m.struck, &Drive::STILL, smooth(t));
             back.surge = m.struck.surge;
+            back.yaw = m.struck.yaw;
             back
         }
     };
@@ -1046,7 +1166,32 @@ pub fn body_at(g: &Genome, q: &Posture, m: &Motion, spec: &MoveSpec, frame: i32)
 pub struct Sphere {
     pub at: V3,
     pub radius: Fx,
+    /// Nought for a ball round `at`; otherwise an upright disc this tall
+    /// standing on `at` -- a shockwave along the floor, which a jump
+    /// clears and a ball of the same width would not let it.
+    pub height: Fx,
 }
+
+impl Sphere {
+    pub fn bottom(&self) -> Fx {
+        if self.height > Fx::ZERO {
+            self.at.y
+        } else {
+            self.at.y.sub(self.radius)
+        }
+    }
+
+    pub fn top(&self) -> Fx {
+        if self.height > Fx::ZERO {
+            self.at.y.add(self.height)
+        } else {
+            self.at.y.add(self.radius)
+        }
+    }
+}
+
+/// How tall a shockwave along the floor is.
+pub const SHOCK_HEIGHT: Fx = fx(1, 2);
 
 /// The most spheres one frame's hit is made of.
 pub const MAX_SPHERES: usize = 48;
@@ -1063,13 +1208,18 @@ impl Hit {
         spheres: [Sphere {
             at: V3::ZERO,
             radius: Fx::ZERO,
+            height: Fx::ZERO,
         }; MAX_SPHERES],
         count: 0,
     };
 
     fn push(&mut self, at: V3, radius: Fx) {
         if self.count < MAX_SPHERES {
-            self.spheres[self.count] = Sphere { at, radius };
+            self.spheres[self.count] = Sphere {
+                at,
+                radius,
+                height: Fx::ZERO,
+            };
             self.count += 1;
         }
     }
@@ -1113,19 +1263,27 @@ fn striking_spheres(body: &Body, strikers: &Strikers, out: &mut Hit) {
 /// swept hit, an area round where they come down, or a line of shot out
 /// to the move's reach.
 pub fn hit_at(g: &Genome, q: &Posture, m: &Motion, spec: &MoveSpec, frame: i32) -> Hit {
+    if beat(spec, frame) != Beat::Strike || m.delivery == Delivery::None {
+        return Hit::EMPTY;
+    }
+    let body = body_at(g, q, m, spec, frame);
+    hit_on(g, &body, m, spec, frame)
+}
+
+/// What a move hits at a frame, on a body already built for that frame.
+pub fn hit_on(g: &Genome, body: &Body, m: &Motion, spec: &MoveSpec, frame: i32) -> Hit {
     let mut hit = Hit::EMPTY;
     if beat(spec, frame) != Beat::Strike || m.delivery == Delivery::None {
         return hit;
     }
-    let body = body_at(g, q, m, spec, frame);
     let len = proportions(g).len;
     match m.delivery {
-        Delivery::Swept => striking_spheres(&body, &m.strikers, &mut hit),
+        Delivery::Swept => striking_spheres(body, &m.strikers, &mut hit),
         Delivery::Area(share) => {
             // On the last strike frame, where the parts came down.
             if frame == spec.startup + spec.active - 1 {
                 let mut parts = Hit::EMPTY;
-                striking_spheres(&body, &m.strikers, &mut parts);
+                striking_spheres(body, &m.strikers, &mut parts);
                 let (mut sum, mut low) = (V3::ZERO, Fx::from_int(1000));
                 for s in parts.iter() {
                     sum = sum.add(s.at);
@@ -1138,33 +1296,87 @@ pub fn hit_at(g: &Genome, q: &Posture, m: &Motion, spec: &MoveSpec, frame: i32) 
                 } else {
                     Fx::ZERO.max(low.min(c.y)).min(len.mul(fx(1, 4)))
                 };
-                hit.push(V3::new(c.x, floor, c.z), len.mul(share));
+                if shockwave(m.kind) {
+                    // A ring along the floor from where it came down.
+                    hit.push(V3::new(c.x, Fx::ZERO, c.z), len.mul(share));
+                    hit.spheres[hit.count - 1].height = SHOCK_HEIGHT;
+                } else {
+                    hit.push(V3::new(c.x, floor, c.z), len.mul(share));
+                }
             } else {
-                striking_spheres(&body, &m.strikers, &mut hit);
+                striking_spheres(body, &m.strikers, &mut hit);
             }
         }
         Delivery::Thrown => {
             // A line from the striking parts out to the reach, spread
             // through the strike frames: a shot's flight is its strike.
             let mut parts = Hit::EMPTY;
-            striking_spheres(&body, &m.strikers, &mut parts);
+            striking_spheres(body, &m.strikers, &mut parts);
             let from = parts.iter().map(|s| s.at).fold(V3::ZERO, |a, b| a.add(b));
             let from = from.scale(Fx::ratio(1, parts.count.max(1) as i32));
-            let t = Fx::ratio(frame - spec.startup + 1, spec.active.max(1));
-            let far = from.x.max(Fx::ZERO).add(spec.reach.mul(t));
+            // Along the way the move faces, from this frame's start of
+            // its flight to its end, strung close enough that nothing
+            // passes between: a shot is tested along its path, not where
+            // it happens to be each frame.
+            let dir = super::actor::spin(
+                V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+                drive_at(g, m, spec, frame).yaw,
+            );
+            let r = len.mul(fx(1, 12)).max(fx(3, 10));
+            let t0 = Fx::ratio(frame - spec.startup, spec.active.max(1));
+            let t1 = Fx::ratio(frame - spec.startup + 1, spec.active.max(1));
+            let (d0, d1) = (spec.reach.mul(t0), spec.reach.mul(t1));
+            let start = V3::new(from.x, Fx::ZERO, from.z);
             // Aimed at chest height on the ground ahead: about a metre.
             let to_y = Fx::ONE;
-            let y = from.y.add(to_y.sub(from.y).mul(t));
-            hit.push(V3::new(far, y, Fx::ZERO), len.mul(fx(1, 12)).max(fx(3, 10)));
+            let aim = if m.aim_at > Fx::ZERO {
+                m.aim_at.min(spec.reach)
+            } else {
+                spec.reach
+            };
+            let mut dist = d0;
+            loop {
+                // Down to chest height where it was aimed, and on down to
+                // the floor past it.
+                let t = dist.div(aim.max(fx(1, 10)));
+                let y = from.y.add(to_y.sub(from.y).mul(t)).max(Fx::ZERO);
+                hit.push(
+                    start
+                        .add(dir.scale(dist))
+                        .add(V3::new(Fx::ZERO, y, Fx::ZERO)),
+                    r,
+                );
+                if dist >= d1 || hit.count >= MAX_SPHERES {
+                    break;
+                }
+                dist = dist.add(r).min(d1);
+            }
         }
         Delivery::None => {}
     }
     hit
 }
 
-/// Every move this body has, with its motion.
+/// Every move this body has, with its motion -- and, when nothing in it
+/// threatens a range a fighter can stand at (bestiary §1.3), the move that
+/// covers it: a rush for mid and long, which runs through both, and a
+/// shoulder or a stomp up close.
 pub fn kit(g: &Genome, q: &Posture) -> ([Option<(MoveSpec, Motion)>; build::MAX_MOVES], usize) {
-    let set = build::moves(g);
+    let mut set = build::moves(g);
+    let len = proportions(g).len;
+    let rest = build::body_in(g, q);
+    let (close, mid, long) = super::verdict::coverage(g, q, &rest, &set);
+    if !(mid && long) {
+        set.push(build::spec_for(g, MoveKind::Rush, rush_length(len)));
+    }
+    if !close {
+        let kind = if g.sliders.size < fx(1, 2) || g.stance == super::Stance::Limbless {
+            MoveKind::Shoulder
+        } else {
+            MoveKind::Stomp
+        };
+        set.push(build::spec_for(g, kind, len.mul(fx(1, 3))));
+    }
     let mut out = [None; build::MAX_MOVES];
     let mut n = 0;
     for spec in set.iter() {
