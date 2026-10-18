@@ -931,6 +931,10 @@ pub const SECTIONS: &[Section] = &[
                 "./scripts/setup-tools.sh web|shot|browser|all",
                 "Install, once, the tools a fresh machine lacks: wasm-bindgen for the web build, Xvfb and a software GPU for screenshots, Playwright for the smoke test. The one place those steps are written; start it in the background.",
             ),
+            e(
+                "scripts\\play-windows.cmd",
+                "Windows, from nothing: double-click it. Installs the C++ build tools, Git and Rust if missing, clones the game into %USERPROFILE%\\video-game (or pulls the latest) and plays it in release mode. Inside a checkout it plays that checkout and leaves git alone.",
+            ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),
         ],

@@ -3,6 +3,12 @@
 Design notes live in [`docs/`](docs/README.md) — current design in [`docs/design/`](docs/design/README.md),
 with the original Google Drive export archived alongside it.
 
+On Windows with nothing installed, download
+[`scripts/play-windows.cmd`](https://github.com/michaelenew/video-game/raw/main/scripts/play-windows.cmd)
+and double-click it: it installs the C++ build tools, Git and Rust if they are
+missing, clones the game into `%USERPROFILE%\video-game` (or updates it), and
+runs it. Run it again to update and play.
+
 Run it with `cargo run -p game`; `cargo run -p game -- --help` lists everything
 you can type. `--hunt` starts a hunt (`--hunt <creature>` for any creature that
 is built, in its own arena, and `H` / `Shift+H` switch in game; a creature's
