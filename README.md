@@ -4,8 +4,9 @@ Design notes live in [`docs/`](docs/README.md) — current design in [`docs/desi
 with the original Google Drive export archived alongside it.
 
 On Windows with nothing installed, download
-[`scripts/play-windows.cmd`](https://github.com/michaelenew/video-game/raw/main/scripts/play-windows.cmd)
-and double-click it: it installs the C++ build tools, Git and Rust if they are
+[`play-windows.cmd`](https://github.com/michaelenew/video-game/releases/download/launcher/play-windows.cmd)
+(the release `.github/workflows/launcher.yml` keeps current with
+`scripts/play-windows.cmd`) and double-click it: it installs the C++ build tools, Git and Rust if they are
 missing, clones the game into `%USERPROFILE%\video-game` (or updates it), and
 runs it. Run it again to update and play.
 

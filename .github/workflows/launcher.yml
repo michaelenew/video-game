@@ -1,0 +1,54 @@
+# Keep the Windows launcher downloadable in one click.
+#
+# A file in the repository is served by GitHub as plain text, so a browser
+# shows scripts/play-windows.cmd rather than saving it. A release asset is
+# served as a download. This keeps one release, tagged `launcher`, whose one
+# asset is the launcher as it is on main, so this link always saves the
+# current one:
+#
+#   https://github.com/michaelenew/video-game/releases/download/launcher/play-windows.cmd
+#
+# The tag is fixed, not `latest`, so a release of anything else later does not
+# move the link. The tag itself is never moved; only the asset is replaced.
+# The launcher pulls the game every time it runs, so the release only needs
+# refreshing when the launcher changes.
+name: Launcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/play-windows.cmd
+      - .github/workflows/launcher.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: launcher
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # `.gitattributes` marks *.cmd -text, so the checkout is the committed
+      # bytes, CRLF and all: what cmd.exe needs.
+      - uses: actions/checkout@v4
+
+      - name: Create the release if it is not there
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view launcher > /dev/null 2>&1; then
+            gh release create launcher \
+              --target "$GITHUB_SHA" \
+              --title "Windows launcher" \
+              --notes "Download play-windows.cmd and double-click it. It installs the C++ build tools, Git and Rust if they are missing, fetches the game and plays it; run it again to update. This release is refreshed automatically whenever the launcher changes on main."
+          fi
+
+      - name: Upload the launcher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload launcher scripts/play-windows.cmd --clobber
