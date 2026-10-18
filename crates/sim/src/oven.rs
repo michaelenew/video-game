@@ -1093,6 +1093,8 @@ scalars! {
     ReapGroundStep,       "Blood mage", "Reap, lunges further on her ground (x)",           Fixed, fx(1,1), fx(4,1);
     SweepThird,           "Blood mage", "Sweep, the third of a string hits (x)",            Fixed, fx(1,1), fx(4,1);
     HarvestReach,         "Blood mage", "Harvest, reaches all round (m)",                   Fixed, fx(1,1), fx(12,1);
+    // **A heart is earned** (2026-10-18): what she has to deal to plant one.
+    HeartMeterFull,       "Blood mage", "Heart, earned by dealing",                         Int, 1, 5000;
 }
 
 // ---------------------------------------------------------------------------

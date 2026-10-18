@@ -1033,6 +1033,9 @@ fn one_press_can_never_lock_more_than_one_move() {
     for class in ALL_CLASSES {
         let mut p = sim::state::Player::new(class);
         let out = [false; moves::MAX_SLOTS];
+        // The Blood mage's heart is earned, not locked: earned here, so the
+        // count is about the lockout alone.
+        p.heart_meter = sim::tuning::heart_meter_full() as u16;
         p.repeat_lock[SLOT_POKE as usize] = 240;
         let available = (0..moves::table(class).len())
             .filter(|slot| p.can_throw(*slot as u8, &out))

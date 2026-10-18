@@ -606,6 +606,8 @@ fn casting_costs_the_blood_mage_health() {
         // Cast it at nothing, so the only thing that can move the bar is the
         // price of pressing the button.
         let mut w = as_class(Class::BloodMage);
+        // A heart is earned: her meter full, so `E` is a heart.
+        w.players[0].heart_meter = sim::tuning::heart_meter_full() as u16;
         if airborne {
             w.players[0].pos.y = Fx::from_int(3);
             w.players[0].grounded = false;

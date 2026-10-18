@@ -882,6 +882,11 @@ pub struct Player {
     /// anybody moves (`World::mark_the_blood`), because the input, the
     /// thralls and the renderer all ask it. False for everybody else.
     pub on_blood: bool,
+    /// **What she has dealt toward a heart** (2026-10-18): every point of
+    /// damage she lands -- a blow, an eruption, a bite, a bleed -- up to
+    /// `tuning::heart_meter_full`. Full, `E` plants a heart, and planting
+    /// empties it. Nought for everybody else.
+    pub heart_meter: u16,
     /// **Swimming in her ground** (2026-10-18): [`SWIM_UNDER`] while sunk
     /// into it with `shift` held, fast and short; [`SWIM_SPENT`] once she
     /// has come up with `shift` still down, until it comes up -- a held
@@ -992,6 +997,10 @@ impl Player {
     /// Can this class act right now given its mechanic? Gated moves need the
     /// mechanic in a particular state; ungated ones never do.
     pub fn mechanic_ready(&self, kind: u8) -> bool {
+        // **A heart is earned** (2026-10-18): only with her meter full.
+        if self.class == Class::BloodMage && kind == moves::blood::HEART {
+            return self.heart_ready();
+        }
         if !moves::get(self.class, kind).needs_mechanic {
             return match self.mechanic {
                 // The Bulwark's ordinary moves need the shield in hand.
@@ -1344,6 +1353,11 @@ impl Player {
     }
 
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
+    /// Has she dealt enough to plant a heart?
+    pub fn heart_ready(&self) -> bool {
+        self.heart_meter as i32 >= t::heart_meter_full()
+    }
+
     /// Is she sunk in her ground, swimming?
     pub const fn swimming(&self) -> bool {
         self.swim == SWIM_UNDER
@@ -1546,6 +1560,7 @@ impl Default for Player {
             fuel: 0,
             owed: 0,
             on_blood: false,
+            heart_meter: 0,
             swim: SWIM_NONE,
             string: 0,
             curse: 0,
@@ -3299,7 +3314,7 @@ impl World {
             let lift = V3::new(at.x, at.y.add(Fx::ONE), at.z);
             let floor = V3::new(at.x, self.terrain().ground_under(lift), at.z);
             self.players[i].paid = 0;
-            self.spill(i as u8, p.class, kind, floor, p.paid as i32);
+            self.pool_blood(i as u8, p.class, kind, floor, p.paid as i32);
         }
 
         // The Elementalist's auto and her heavy: two different beams, the same
@@ -10788,6 +10803,7 @@ fn hash_player(h: &mut Fnv, p: &Player) {
         p.owed as i32,
         // Her territory (2026-10-18): nought for every other class.
         p.on_blood as i32,
+        p.heart_meter as i32,
         p.swim as i32,
         p.string as i32,
     ];
@@ -13847,6 +13863,9 @@ impl World {
             }
             if !effect.spills_nothing() {
                 self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
+            } else {
+                // An eruption spills nothing, but it was her blow.
+                self.credit(effect.owner, dealt);
             }
         }
         dealt
@@ -13937,6 +13956,9 @@ impl World {
                 Fx::ZERO,
                 Fx::ZERO,
             );
+            if dealt > 0 && effect.spills_nothing() {
+                self.credit(effect.owner, dealt);
+            }
             if dealt > 0 && !effect.spills_nothing() {
                 let m = effect.source();
                 self.drink_over(effect.owner as usize, &m, from, from, None, effect.age);
@@ -14048,6 +14070,9 @@ impl World {
         // **Every hit on a creature leaves a stain** (2026-10-12), sized by
         // what the blow was worth rather than by what its hide let through:
         // a hit on a plate still opens it.
+        if dealt > 0 && effect.spills_nothing() {
+            self.credit(effect.owner, dealt);
+        }
         if (dealt > 0 || (raw > 0 && !guarded.turned())) && !effect.spills_nothing() {
             self.spill(
                 effect.owner,
@@ -14215,6 +14240,29 @@ impl World {
     /// a cost is paid into the ability, not onto the floor, or every cast
     /// would leave a free heal at her own feet.
     fn spill(&mut self, owner: u8, class: Class, slot: u8, at: V3, volume: i32) {
+        // Every hit she lands spills, and what it spills is what it was
+        // worth: the one place her damage is counted toward a heart.
+        self.credit(owner, volume);
+        self.pool_blood(owner, class, slot, at, volume);
+    }
+
+    /// **Damage she dealt, counted toward a heart** (2026-10-18), up to
+    /// `tuning::heart_meter_full`.
+    fn credit(&mut self, owner: u8, dealt: i32) {
+        let Some(p) = self.players.get_mut(owner as usize) else {
+            return;
+        };
+        if p.class != Class::BloodMage || dealt <= 0 {
+            return;
+        }
+        let full = t::heart_meter_full().clamp(0, u16::MAX as i32);
+        p.heart_meter = (p.heart_meter as i32 + dealt).min(full) as u16;
+    }
+
+    /// Put `volume` of blood on the floor at `at` as [`Self::spill`] does,
+    /// without counting it as damage dealt: what a cast cost her, and what a
+    /// thrall had left when it was killed.
+    fn pool_blood(&mut self, owner: u8, class: Class, slot: u8, at: V3, volume: i32) {
         if volume <= 0 || !class.wounds_go_grey() {
             return;
         }
@@ -16068,6 +16116,7 @@ impl World {
         let at = self.floor_at_aim(i);
         let paid = p.paid as i32;
         self.players[i].paid = 0;
+        self.players[i].heart_meter = 0;
         let blood = Fx::from_int(paid)
             .mul(t::heart_from_paid())
             .to_int()
@@ -16860,7 +16909,7 @@ impl World {
                 self.effects[slot] = None;
                 let left = th.banked - blow;
                 if left > 0 {
-                    self.spill(th.owner, th.class, th.slot, th.pos, left);
+                    self.pool_blood(th.owner, th.class, th.slot, th.pos, left);
                 }
                 continue;
             }

@@ -201,3 +201,14 @@ Everything above is in the game ([../kits/blood-mage.md](../kits/blood-mage.md) 
 - **Her movement envelope grew** (`tests/fixtures/envelope.txt`, re-searched): the Reap's
   lunge from her own ground carries her further than anything in the old kit.
 - **The creature turns on a heart** in its way, as it does on a thrall nearer it than she is.
+
+**From the owner's first look, the same day:**
+
+- **A heart is earned.** A meter fills with every point of damage she deals and `E` plants a
+  heart only when it is full, emptying it (`Heart, earned by dealing`, 400). Her own costs fill
+  nothing.
+- **A heart looks like a heart** -- reminiscent, not anatomical: two lobes over a point and two
+  short vessels, in a crimson burning from inside, beating and turning at head height with a
+  ring of light round it. The first one read as a bloodstain.
+- **Her ground is one surface**, the union of its discs draped on the floor, so overlaps are no
+  darker and nothing covers it.

@@ -110,8 +110,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // a stain's column goes to it, and a finisher pays back its grey.
     // Moved 2026-10-18, deliberately: her territory -- the class layer
     // sweeps the scythe in reach, plants a heart rather than raising stains,
-    // and everything she throws lays her ground. See feel-log.md.
-    (Class::BloodMage, 83, 0xdccab2fc7f6d1bfb),
+    // and everything she throws lays her ground. See feel-log.md. Again the
+    // same day: a heart is earned by the damage she deals.
+    (Class::BloodMage, 83, 0x96d7db0ea767a217),
 ];
 
 #[test]

@@ -105,6 +105,8 @@ fn a_cast_at_full_health_opens_grey_by_its_cost() {
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
+        // A heart is earned: her meter full, so `E` is a heart.
+        w.players[0].heart_meter = sim::tuning::heart_meter_full() as u16;
         if airborne {
             w.players[0].pos.y = Fx::from_int(3);
             w.players[0].grounded = false;

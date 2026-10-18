@@ -8967,3 +8967,29 @@ swim carry her further than the old kit did.
 the arena in a long fight (the touch's 2.5 s and the bridge's 2 m are the levers), whether
 the swim's 0.6 m is short enough that a fighter has to read it rather than swing at it,
 and whether hearts are worth protecting -- the owner's own "not sure yet".
+
+### 2026-10-18 — her territory, from the owner's first look: an earned heart, a heart that reads, ground drawn as one
+
+**What changed**
+
+- **A heart is earned** (`Player::heart_meter`, `Heart, earned by dealing` 400): every point
+  of damage she deals -- counted where each hit spills (`World::spill`), with what a cast
+  cost her and what a dead thrall had left spilled around it (`World::pool_blood`), and the
+  eruptions, which spill nothing, counted where they land -- fills it; `E` plants a heart only
+  when it is full, and empties it. A thin bar under the Well, bright when full.
+- **A heart is drawn as a heart's shape** -- two lobes over a point and two short vessels --
+  in a crimson burning from inside, beating and turning at head height, with a ring of
+  essence round it and a faint pillar of light through it. The first one, a knot with a flame
+  and roots, read as a bloodstain.
+- **Her ground is one surface** (`game::claimed`): the union of every disc, marched on a
+  0.3 m grid and draped 6 cm over the floor the simulation stands on. Drawn a disc each,
+  every overlap was darker, and a flat disc on a town's flagstones (3 cm proud of the
+  floor the simulation knows) or on a slope was partly under them.
+- `SHOT_PRESS` (with `DEMO=1`) presses scripted keys for player one, so every move can be
+  captured on the frame it is out; `SHOT_BLOOD=ground` stages her ground and a full meter.
+
+**Moved deliberately**: her two pinned hunts again -- her random presses and the scripted
+hunter plant fewer hearts now that they are earned.
+
+**Verdict** Unplayed. 400 is about eight Sweeps or four spikes: a heart a fight's opening
+exchange, not one every few seconds. Too slow or too fast is the first thing to say.

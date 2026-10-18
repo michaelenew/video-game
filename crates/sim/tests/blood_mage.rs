@@ -150,6 +150,8 @@ fn on_the_floor_a_tap_is_the_quick_thing_and_q_and_e_gather_and_plant() {
         (keys::PLANT, b::HEART),
     ] {
         let mut w = mage();
+        // A heart is earned: her meter full, so `E` is a heart.
+        w.players[0].heart_meter = t::heart_meter_full() as u16;
         step(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} on the floor");
     }

@@ -437,8 +437,14 @@ fn a_blow_brings_her_up() {
 // ---------------------------------------------------------------------------
 
 /// Plant a heart a few metres ahead and let it come out.
+/// Her heart meter, full.
+fn earned(w: &mut World) {
+    w.players[0].heart_meter = t::heart_meter_full() as u16;
+}
+
 fn planted() -> World {
     let mut w = mage();
+    earned(&mut w);
     step_looking(&mut w, keys::PLANT, -2500);
     run(&mut w, 30, 0);
     w
@@ -502,6 +508,7 @@ fn a_heart_takes_more_than_one_blow() {
 fn no_more_hearts_than_the_cap() {
     let mut w = mage();
     for _ in 0..(t::hearts_most() + 1) {
+        earned(&mut w);
         step_looking(&mut w, keys::PLANT, -2500);
         run(&mut w, 60, 0);
     }
@@ -570,4 +577,60 @@ fn on_her_ground_a_thrall_bites_harder() {
     let (off, on) = (bite(false), bite(true));
     assert!(off > 0, "it bit off her ground");
     assert!(on > off, "and harder on it: {off} then {on}");
+}
+
+// ---------------------------------------------------------------------------
+// The heart meter
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_heart_is_refused_until_she_has_dealt_enough() {
+    let mut w = mage();
+    step_looking(&mut w, keys::PLANT, -2500);
+    run(&mut w, 30, 0);
+    assert!(
+        effects_of(&w, EffectKind::Heart).is_empty(),
+        "an empty meter plants nothing"
+    );
+    assert_ne!(
+        w.players[0].action.attack_kind(),
+        Some(b::HEART),
+        "and throws nothing"
+    );
+}
+
+#[test]
+fn the_meter_fills_with_the_damage_she_deals() {
+    let mut w = mage();
+    w.players[1].pos = at(-4.2, 0.0, 8.0);
+    let his = w.players[1].health;
+    step(&mut w, keys::SCYTHE);
+    for _ in 0..30 {
+        w.players[1].pos = at(-4.2, 0.0, 8.0);
+        step(&mut w, 0);
+    }
+    let dealt = his - w.players[1].health;
+    assert!(dealt > 0, "the Sweep landed");
+    assert_eq!(
+        w.players[0].heart_meter as i32,
+        dealt.min(t::heart_meter_full()),
+        "every point of it counts toward a heart"
+    );
+}
+
+#[test]
+fn her_own_costs_fill_nothing() {
+    let mut w = mage();
+    step_looking(&mut w, keys::SPIKES, -2500);
+    run(&mut w, 60, 0);
+    assert!(w.players[0].grey > 0, "fixture: it cost her");
+    assert_eq!(w.players[0].heart_meter, 0, "a miss deals nothing");
+}
+
+#[test]
+fn planting_a_heart_empties_the_meter() {
+    let w = planted();
+    assert_eq!(effects_of(&w, EffectKind::Heart).len(), 1);
+    assert_eq!(w.players[0].heart_meter, 0, "spent on the heart");
+    assert!(!w.players[0].heart_ready());
 }

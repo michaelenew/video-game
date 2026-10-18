@@ -93,6 +93,11 @@ patch touching another of hers -- or a stain or a heart -- loses a frame of life
 far apart they go out. A patch laid mostly on one of hers merges into it, up to `Ground, widest
 patch` (4 m); past the table, the patch with least life left makes way, hers first.
 
+**Drawn as one surface** (`game::claimed`): the union of every patch, stain and heart disc,
+rebuilt every frame on a 0.3 m grid with its edge found by marching squares, so overlaps are
+never darker, and every vertex draped 6 cm over the floor the simulation stands on, so slopes and
+a town's flagstones never cover it.
+
 **On her ground** is worked out once a frame before anybody moves (`World::mark_the_blood`,
 `Player::on_blood`): her feet on the floor, or swimming, inside a patch, a stain or a heart's
 reach, within `Ground, counts this far above or below it` (0.6 m).
@@ -145,13 +150,23 @@ it, it drains as its stain would. It goes for the nearest enemy within its seek 
 ground or within `Thrall, leaves her ground by` (3 m) of it**; with none, off her ground, it walks
 back to the nearest of it. Drawn a fifth bigger and burning brighter on it. Command is gone.
 
+**A heart is earned** (`Player::heart_meter`): every point of damage she deals -- a blow, an
+eruption, a bite, a bleed's tick; counted where each hit spills (`World::spill`), not what a
+cast cost her -- fills it, up to `Heart, earned by dealing` (400). Full, `E` plants a heart and
+empties it; empty, `E` throws nothing. The HUD shows it as a thin bar under the Well, burning
+bright when full.
+
 **A heart** (`E`) is planted at the crosshair's floor (grounded, 15 m). It holds `Heart, holds
 what she paid (x)` (×3) what she paid for it (10% of red), never less than `Heart, holds at
 least` (150) -- what she paid goes into it, not onto the floor. Blows come off its blood (a
 swing's frames count once), it bleeds away as a stain does, and every `Heart, sends a thrall
 every` (240) frames, while she has room for a thrall, it spends `Heart, a thrall costs it` (60)
 on one at its foot. `Hearts at once` (2): a third replaces the oldest. A creature turns on a heart
-or a thrall nearer it than she is.
+or a thrall nearer it than she is. Drawn as a heart's shape, not its anatomy -- two lobes over a
+point, two short vessels out of its top -- in a crimson that burns from inside, hung at head
+height, beating (a heavy beat and a light one), turning, with a ring of essence round it, a
+faint pillar of light through it and roots into the floor; smaller the less blood is left in
+it.
 
 ### What it did not change
 

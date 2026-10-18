@@ -471,7 +471,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E: a heart",
-                "Plants a heart at the crosshair's spot on the floor: a knot of your blood that holds what you paid for it three times over, holds your ground round itself, and every four seconds sends out a thrall made of its own blood. It takes several blows to kill and bleeds slowly away; two at a time, and a third replaces the oldest. Leave one and push forward so nothing can reach it.",
+                "A heart is earned: the thin bar under your Well fills with every point of damage you deal, and when it is full it burns bright and E plants a heart at the crosshair's spot on the floor, emptying it. A heart is a glowing crimson heart beating over the floor, with a ring of light turning round it: it holds what you paid for it three times over, holds your ground round itself, and every four seconds sends out a thrall made of its own blood. It takes several blows to kill and bleeds slowly away; two at a time, and a third replaces the oldest. Leave one and push forward so nothing can reach it.",
             ),
             e(
                 "Thralls",
@@ -986,8 +986,12 @@ pub const SECTIONS: &[Section] = &[
                 "Start a hunt with the creature winding up that move at player one (the Ridgeback's bite, stomp, sweep, charge, slam, kick, spray; the Mireback's spew, flop, tongue, belch, backwash, inflate, wallow, a lob aimed at player one; the Sandmaw's rise, breach, undertow, spit, lash, swallow, sound, from under the sand or standing as the move is thrown; the Pair's pounce, rake, swat, feint, ambush, trip, twin -- both cats, either side of you; the Broodmother's stab, lunge, slam, screech, web shot, web line; the Mantis's scythe, second slash, lunge, guard, leap, dive, flare, pivot, prayer, ready; the Veilstalker's lunge, spear, rake, pounce -- off a trunk top -- quill, smoke, mimic; the Galewing's stoop, talon, downwash, volley -- from its cruising height -- screech, buffet, hop -- on the plateau; the Siegeshell's footfall, stamp and drag on a foot in front of you, shed off its flank, plough down the valley behind you, shrug, shiver, and the beam at the siege line), so a capture can look at its floor marker. A pack puts one body of a kind that throws it there instead, and --hunt gnawers with SHOT_MOVE=pile calls a pile-on on a ring of them; --hunt hornback lays each of the herd's moves out (charge at a boulder, best with SHOT_YAW=1.57; bellow, hook, guard, trample, shoulder, kick, buck). Pair it with SHOT_FRAME and DEMO=0.",
             ),
             e(
+                "SHOT_PRESS=R:20,_:2,R:3",
+                "With DEMO=1, press keys for player one from the first frame, a step at a time -- keys joined with + (L, M, R, E, Q, SPACE, SHIFT, W, A, S, D; _ is nothing), a colon, and how many frames -- and then nothing, so a capture can land on any move held or tapped. SHOT_LOOK is the pitch to look at, in the wire's units (negative looks down). Pair it with SHOT_FRAME.",
+            ),
+            e(
                 "SHOT_BLOOD=1",
-                "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0.",
+                "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0; SHOT_BLOOD=ground stages nothing but her ground under her and her heart meter full.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

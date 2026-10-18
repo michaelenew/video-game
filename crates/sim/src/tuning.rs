@@ -4546,3 +4546,9 @@ pub fn sweep_third() -> Fx {
 pub fn harvest_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HarvestReach).max(0))
 }
+
+/// Heart, earned by dealing: the damage she has to land to fill her heart
+/// meter, which `E` empties to plant one.
+pub fn heart_meter_full() -> i32 {
+    oven::scalar(Scalar::HeartMeterFull).max(1)
+}
