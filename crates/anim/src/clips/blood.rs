@@ -24,18 +24,22 @@
 //! - **Nothing is athletic.** `build_for(BloodMage)` is ordinary proportions
 //!   carrying more bulk than they should, and the poses are built for that
 //!   body. Nothing on the floor goes past the ear, no lunge is long, and the
-//!   knees give at the end of everything. The three exceptions go overhead
-//!   because their contracts say so -- the Stake, thrown from the air, and the
-//!   Blood golem, a finisher -- and they are the only frames in the file where
-//!   a hand is above the head, which is what makes them read as the big ones.
+//!   knees give at the end of everything. The exception goes overhead because
+//!   its contract says so -- the Stake, thrown from the air -- and it is the
+//!   only clip in the file where a hand is above the head, which is what
+//!   makes it read as a big one.
 //!
-//! ## Fourteen shapes, told apart by where the hands go
+//! ## Eleven shapes, told apart by where the hands go
+//!
+//! Named for the moves they were drawn for; since her territory
+//! (2026-10-18) the Haemorrhage's is the Thorn lash's, the Hemoplague's the
+//! Bramble's, the Summon's a heart planted, the wings' Thornfall's, and the
+//! Rising reap's is borrowed by the Sweep, the Reap and the Harvest
+//! (`view::play`). The Carpet, Command and the golem went with their moves.
 //!
 //! ```text
-//!   Command        one arm thrown out, pointing down at a spot   -- over there
 //!   Haemorrhage    one hand drawn in to the chest, then out flat -- at you
 //!   Hemoplague     both hands spread palm-down over the floor    -- that floor
-//!   Carpet         crouched, both palms on the boards            -- this floor
 //!   Black spike    one hand climbing to the ear, then the floor  -- under you
 //!   Summon         both arms swept up from low, palms up         -- stand up
 //!   Coagulate      both arms reaching out, then hauled in        -- come here
@@ -45,7 +49,6 @@
 //!   Rising reap    both hands on a haft, low left to high right
 //!   Black vines    fists together, driven down, wrenched apart
 //!   Crimson cascade two hands clasped at the ear, stabbed down, thrown back
-//!   Blood golem    both arms high, dragged down, the body bowed
 //! ```
 //!
 //! The one-armed moves are thrown with the **left** hand, which is the hand
@@ -60,19 +63,19 @@
 //! are placed rather than posed: a grip that wandered off the haft would be a
 //! blade drawn from the wrong place.
 //!
-//! ## The two fields are held on their first frame
+//! ## The field is held on its first frame
 //!
-//! The Hemoplague and the Carpet are held clicks: the tap's startup plays (the
-//! Haemorrhage's, Command's), and then for as long as the button is down the
+//! The Hemoplague (the Bramble) is a held click: the tap's startup plays (the
+//! Haemorrhage's), and then for as long as the button is down the
 //! renderer holds **frame zero** of the field's clip (`view::play::attack`,
 //! `Action::Channel`), and on the release it cuts straight to the field's
 //! first recovery frame, with no fade, because a channel and its recovery are
-//! one shape. So in these two clips frame zero is *the hold* -- the hands
-//! spread over the floor, the palms on it -- and the first recovery frame is
-//! the same pose a shade on, so the cut is not a pop. Their startups are a
+//! one shape. So in this clip frame zero is *the hold* -- the hands spread
+//! over the floor -- and the first recovery frame is the same pose a shade
+//! on, so the cut is not a pop. Its startup is a
 //! lift and a press back down, which is the move as it would be thrown without
 //! a hold and is what the tests read the three phases off. The finisher a hold
-//! becomes (the vines, the golem) is a different move and fades in, and its
+//! becomes (the vines) is a different move and fades in, and its
 //! frame zero is that hold again so the fade has nothing to cover.
 //!
 //! ## Three of them leave the floor
@@ -121,12 +124,10 @@ use view::skeleton::Joint;
 
 pub fn clips() -> Vec<Recipe> {
     vec![
-        command(),
         haemorrhage(),
         hemoplague(),
         black_spike(),
         sweep(),
-        carpet(),
         summon(),
         wings(),
         upheaval(),
@@ -134,7 +135,6 @@ pub fn clips() -> Vec<Recipe> {
         coagulate(),
         vines(),
         cascade(),
-        golem(),
     ]
 }
 
@@ -259,9 +259,7 @@ fn gripping(pose: Pose, lead: V3, rear: V3, cock: f32) -> Pose {
 /// bleed. Twelve frames of startup is under the reaction threshold, so it owes
 /// the opponent a shape rather than a telegraph -- and the shape is the hand
 /// coming **in** before it goes out, to the chest with the palm turned
-/// forward, then thrust out level. Command throws the same arm down at the
-/// floor; same arm, two lines, and the angle is the difference between "you"
-/// and "there".
+/// forward, then thrust out level.
 ///
 /// The thrust is LINEAR across its eight frames for the reason the sweep's
 /// crossing is: a shaped ease would put half the reach of an arm into one
@@ -871,110 +869,6 @@ fn aloft(pose: Pose, tuck: f32) -> Pose {
 }
 
 // ---------------------------------------------------------------------------
-// Command
-// ---------------------------------------------------------------------------
-
-/// A tapped right click: every thrall she has sent to the spot on the floor
-/// under the crosshair.
-///
-/// One frame of startup, one active, ten back. There is nothing for an
-/// opponent to read in a frame, so what it owes is *where*: the arm is thrown
-/// straight out and down at the floor, a long way off, the way a person
-/// points a dog at something -- and the thralls going there are the rest of
-/// the sentence. It is the left arm, the hand `ready` holds open, and the
-/// right stays in at the ribs throughout: the only cost of this move is a
-/// moment of attention, so it is the only one in the file where the
-/// punctuation is there from the start rather than paid at the end.
-///
-/// It points *down*, where the Haemorrhage thrusts level: the same arm on two
-/// lines, and the angle is the difference between "you" and "there".
-fn command() -> Recipe {
-    let clip = Clip::BloodPoke;
-    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
-    let end = clip.length() - 1;
-    let held = (recover + (end - recover) / 5).max(recover + 1);
-    let paid = (recover + (end - recover) / 2).max(held + 2);
-    let home = end.saturating_sub(2).max(paid + 1);
-
-    Recipe {
-        clip,
-        looseness: Looseness::CRISP,
-        notes: "A one-frame startup, so the point is the contact pose: the \
-                left arm straight out and down at a spot on the floor several \
-                metres off, the chest turned in behind it and the head \
-                following the line. It holds there for two frames -- an order \
-                is given and then seen to -- and lets the arm down heavier \
-                than it threw it, knees giving, before the open hand comes \
-                back to `ready`. The right hand never leaves the ribs. CRISP \
-                because the whole gesture has to arrive on frame one; any lag \
-                and the contact frame is a body halfway to pointing."
-            .into(),
-        keys: vec![
-            Key::eased(0, ready(), Ease::LINEAR),
-            Key::eased(contact, pointing(), Ease::OUT),
-            Key::eased(held, pointing_on(), Ease::SMOOTH),
-            Key::eased(paid, lowering(), Ease::SMOOTH),
-            Key::eased(home, ready(), Ease::SMOOTH),
-        ],
-    }
-}
-
-/// The point: the left arm straight out and down along a line that meets the
-/// floor four or five metres ahead, the hand flat and in line with it.
-fn pointing() -> Pose {
-    footing(
-        ribs_r(
-            ready()
-                .hips(-0.012, -0.100, 0.034)
-                .root(9.0, 0.0, 4.0)
-                .spine(12.0, 0.0, 10.0)
-                .chest(8.0, 0.0, 14.0)
-                .head(6.0, 0.0, -8.0),
-        )
-        .reach_l([-0.15, 0.98, 0.78])
-        .wrist_l(8.0, 0.0, 0.0),
-        0.0,
-        0.014,
-    )
-}
-
-/// Two frames on: still pointing, the weight settled onto the front foot.
-fn pointing_on() -> Pose {
-    footing(
-        ribs_r(
-            ready()
-                .hips(-0.014, -0.112, 0.040)
-                .root(10.0, 0.0, 4.0)
-                .spine(14.0, 0.0, 10.0)
-                .chest(9.0, 0.0, 14.0)
-                .head(8.0, 0.0, -8.0),
-        )
-        .reach_l([-0.15, 0.94, 0.78])
-        .wrist_l(10.0, 0.0, 0.0),
-        0.0,
-        0.016,
-    )
-}
-
-/// The arm let down, the knees giving under it. Heavier than the point.
-fn lowering() -> Pose {
-    footing(
-        ribs_r(
-            ready()
-                .hips(0.000, -0.128, 0.006)
-                .root(9.0, 0.0, -6.0)
-                .spine(18.0, 0.0, 6.0)
-                .chest(11.0, 0.0, 8.0)
-                .head(-14.0, 0.0, 2.0),
-        )
-        .reach_l([-0.24, 0.92, 0.30])
-        .wrist_l(-12.0, 0.0, 0.0),
-        0.0,
-        0.010,
-    )
-}
-
-// ---------------------------------------------------------------------------
 // Hemoplague
 // ---------------------------------------------------------------------------
 
@@ -1108,159 +1002,6 @@ fn pressed_over() -> Pose {
 }
 
 // ---------------------------------------------------------------------------
-// Carpet of blood
-// ---------------------------------------------------------------------------
-
-/// Right click held: a disc of her blood spreading from where she aimed.
-///
-/// The Hemoplague's hands are held *over* the floor; these are *on* it. She
-/// goes all the way down into a crouch with both palms pressed flat to the
-/// boards in front of her feet -- paying into the floor, which is what the
-/// carpet is, her red going out of her as it spreads. It is the lowest held
-/// shape anyone has, and a body that low is a body that is not about to do
-/// anything else, which is the honest read of a hold that costs her as she
-/// keeps it.
-///
-/// Frame zero is the hold, as the Hemoplague's is. The startup lifts the
-/// hands to the knees and slaps them back down wider; the recovery slides them
-/// out along the floor -- the pool spreading under her hands -- and then
-/// stands her up out of it, slowly, a hand to the ribs.
-fn carpet() -> Recipe {
-    let clip = Clip::BloodCarpet;
-    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
-    let end = clip.length() - 1;
-    let lift = (contact * 2 / 5).max(2);
-    let up = contact.saturating_sub(1).max(lift + 1);
-    let slide = recover + (end - recover) / 4;
-    let paid = recover + (end - recover) * 3 / 5;
-    let home = end.saturating_sub(3);
-
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "Held on frame zero, so frame zero is the move: a deep crouch, \
-                both palms flat on the floor in front of the feet, the head up \
-                to watch the pool. The lowest held pose in the game, and that \
-                is the point -- a body this low is committed to the floor. The \
-                hips sit back rather than over the toes, for the reason the \
-                spike's do: a squat this deep with the weight forward asks the \
-                ankles for more than they have. The startup is a lift to the \
-                knees and a slap back down; the first recovery frame is the \
-                press again, so the cut from the hold lands where it left. \
-                Then the hands slide outward along the boards -- the carpet \
-                spreading -- and the body stands up out of it, the slowest \
-                part of the clip, right hand to the ribs."
-            .into(),
-        keys: vec![
-            Key::eased(0, palms_down(), Ease::SMOOTH),
-            Key::eased(lift, lifting_off(), Ease::SMOOTH),
-            Key::eased(up, lifted_off(), Ease::LINEAR),
-            Key::eased(contact, slapped(), Ease::STRIKE),
-            Key::eased(recover, palms_down_wide(), Ease::OUT),
-            Key::eased(slide, spreading(), Ease::SMOOTH),
-            Key::eased(paid, stooped(), Ease::SMOOTH),
-            Key::eased(home, ready(), Ease::SMOOTH),
-        ],
-    }
-}
-
-/// The crouch every carpet pose is built on: hips down and back, the body
-/// folded over the knees, the head up.
-fn crouched(drop: f32, fold: f32) -> Pose {
-    ready()
-        .hips(0.004, -drop, -0.040)
-        .root(10.0 + fold * 0.3, 0.0, -6.0)
-        .spine(fold, 0.0, 4.0)
-        .chest(fold * 0.45, 0.0, 4.0)
-        .head(-fold * 1.05, 0.0, 4.0)
-}
-
-/// The hold: both palms on the floor in front of the feet.
-fn palms_down() -> Pose {
-    footing(
-        hands(
-            crouched(0.300, 38.0),
-            [-0.34, 0.40, 0.58],
-            [0.30, 0.40, 0.56],
-        )
-        .wrists(-40.0, 0.0, 0.0),
-        0.0,
-        0.050,
-    )
-}
-
-/// The first recovery frame: the press, the hands a little wider.
-fn palms_down_wide() -> Pose {
-    footing(
-        hands(
-            crouched(0.306, 39.0),
-            [-0.42, 0.39, 0.56],
-            [0.38, 0.39, 0.54],
-        )
-        .wrists(-42.0, 0.0, 0.0),
-        0.0,
-        0.050,
-    )
-}
-
-/// The hands sliding out along the boards, wider still, the body starting to
-/// come up behind them.
-fn spreading() -> Pose {
-    footing(
-        hands(
-            crouched(0.270, 36.0),
-            [-0.56, 0.42, 0.44],
-            [0.52, 0.42, 0.42],
-        )
-        .wrists(-34.0, 0.0, 0.0),
-        0.0,
-        0.044,
-    )
-}
-
-/// A third of the way into the startup: the hands coming up off the floor.
-fn lifting_off() -> Pose {
-    footing(
-        hands(
-            crouched(0.256, 32.0),
-            [-0.32, 0.58, 0.52],
-            [0.28, 0.58, 0.50],
-        )
-        .wrists(-10.0, 0.0, 0.0),
-        0.0,
-        0.044,
-    )
-}
-
-/// The top of the lift, the frame before the slap: hands at the knees.
-fn lifted_off() -> Pose {
-    footing(
-        hands(
-            crouched(0.236, 26.0),
-            [-0.30, 0.70, 0.46],
-            [0.26, 0.70, 0.44],
-        )
-        .wrists(0.0, 0.0, 0.0),
-        0.0,
-        0.040,
-    )
-}
-
-/// Contact: the palms slapped back down, wider than the hold.
-fn slapped() -> Pose {
-    footing(
-        hands(
-            crouched(0.310, 40.0),
-            [-0.40, 0.38, 0.58],
-            [0.36, 0.38, 0.56],
-        )
-        .wrists(-44.0, 0.0, 0.0),
-        0.0,
-        0.052,
-    )
-}
-
-// ---------------------------------------------------------------------------
 // Summon
 // ---------------------------------------------------------------------------
 
@@ -1271,8 +1012,8 @@ fn slapped() -> Pose {
 /// lying on the floor -- and then swept up together, out in front, to the
 /// height of the shoulders and no higher, the body straightening and the head
 /// coming up with them: *stand*. The one move in the kit where the hands rise
-/// palm-up, so it cannot be mistaken for the Hemoplague's palms-down or the
-/// Golem's haul, which goes the other way.
+/// palm-up, so it cannot be mistaken for the Hemoplague's palms-down. Since
+/// 2026-10-18 it is a heart planted: what she raises is the knot of her blood.
 fn summon() -> Recipe {
     let clip = Clip::BloodSummon;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
@@ -2460,175 +2201,5 @@ fn reeled() -> Pose {
         .wrists(0.0, 0.0, 0.0),
         0.0,
         0.006,
-    )
-}
-
-// ---------------------------------------------------------------------------
-// Blood golem
-// ---------------------------------------------------------------------------
-
-/// The Carpet held to its end: everything the carpet covers, and all her grey,
-/// fused into one thrall.
-///
-/// A haul up out of the floor. She comes up out of the carpet's crouch with
-/// both arms going high -- higher than anything else she does on the floor,
-/// because this is the most she has -- takes hold of something over her head,
-/// and drags it down, both fists coming down to her belly while the body bows
-/// over them, the knees giving, the head going down. The opposite of the
-/// Summon's sweep: that brings the arms up to stand a thing up; this brings
-/// them down, the body under it, because what stands up here is heavier than
-/// she is.
-fn golem() -> Recipe {
-    let clip = Clip::BloodGolem;
-    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
-    let end = clip.length() - 1;
-    let rise = (contact / 4).max(2);
-    let high = (contact / 2).max(rise + 2);
-    let grip = (contact * 4 / 5).max(high + 1);
-    let bowed = recover + (end - recover) / 3;
-    let paid = recover + (end - recover) * 2 / 3;
-    let home = end.saturating_sub(3);
-
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "Starts in the Carpet's crouch, palms on the floor, because the \
-                golem only comes out of a carpet held to its end. The rise is \
-                slow -- up out of the crouch, hands lifting palm-up -- and the \
-                arms keep going until they are over the head and wide, the one \
-                floor pose in the file with the hands above the ear, kept for \
-                the finisher so it reads as the biggest thing she does. The \
-                hands close at the top and hang there, then the drag comes \
-                down LINEAR through contact: fists to the face, to the chest, \
-                to the belly, the spine bowing over them and the knees giving, \
-                so the deepest frame is a third of the way into the thirty of \
-                recovery. Then she straightens and pays the bill."
-            .into(),
-        keys: vec![
-            Key::eased(0, palms_down(), Ease::SMOOTH),
-            Key::eased(rise, rising_from_carpet(), Ease::SMOOTH),
-            Key::eased(high, arms_high(), Ease::SMOOTH),
-            Key::eased(grip, gripped_high(), Ease::LINEAR),
-            Key::eased(contact, dragging(), Ease::LINEAR),
-            Key::eased(recover, dragged(), Ease::OUT),
-            Key::eased(bowed, bowed_over(), Ease::SMOOTH),
-            Key::eased(paid, stooped(), Ease::SMOOTH),
-            Key::eased(home, ready(), Ease::SMOOTH),
-        ],
-    }
-}
-
-/// Coming up out of the crouch, the hands lifting palm-up off the floor.
-fn rising_from_carpet() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.004, -0.190, -0.040)
-                .root(9.0, 0.0, -6.0)
-                .spine(18.0, 0.0, 4.0)
-                .chest(6.0, 0.0, 4.0)
-                .head(-16.0, 0.0, 4.0),
-            [-0.34, 0.80, 0.34],
-            [0.30, 0.80, 0.32],
-        )
-        .wrists(-30.0, 0.0, 0.0),
-        0.0,
-        0.030,
-    )
-}
-
-/// Arms high and wide over the head, the body tall, the chest open.
-fn arms_high() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.006, -0.040, -0.030)
-                .root(-3.0, 0.0, -6.0)
-                .spine(-6.0, 0.0, 4.0)
-                .chest(-8.0, 0.0, 4.0)
-                .head(-16.0, 0.0, 4.0),
-            [-0.34, 1.84, 0.16],
-            [0.30, 1.84, 0.14],
-        )
-        .wrists(-10.0, 0.0, 0.0),
-        0.0,
-        0.024,
-    )
-}
-
-/// The top, the frame the hands close: a shade higher, up on the rear toe.
-fn gripped_high() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.008, -0.030, -0.040)
-                .root(-5.0, 0.0, -6.0)
-                .spine(-9.0, 0.0, 4.0)
-                .chest(-9.0, 0.0, 4.0)
-                .head(-18.0, 0.0, 4.0),
-            [-0.30, 1.90, 0.12],
-            [0.26, 1.90, 0.10],
-        )
-        .wrists(-34.0, 0.0, 0.0),
-        0.008,
-        0.034,
-    )
-}
-
-/// Contact: dragging down, the fists at the face, the body starting to bow.
-fn dragging() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.006, -0.090, -0.030)
-                .root(4.0, 0.0, -6.0)
-                .spine(8.0, 0.0, 4.0)
-                .chest(2.0, 0.0, 4.0)
-                .head(-6.0, 0.0, 4.0),
-            [-0.24, 1.50, 0.30],
-            [0.20, 1.50, 0.28],
-        )
-        .wrists(-34.0, 0.0, 0.0),
-        0.0,
-        0.020,
-    )
-}
-
-/// The first recovery frame: fists at the chest, bowing.
-fn dragged() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.004, -0.170, -0.040)
-                .root(9.0, 0.0, -6.0)
-                .spine(22.0, 0.0, 4.0)
-                .chest(12.0, 0.0, 4.0)
-                .head(8.0, 0.0, 4.0),
-            [-0.18, 1.10, 0.34],
-            [0.14, 1.10, 0.32],
-        )
-        .wrists(-34.0, 0.0, 0.0),
-        0.0,
-        0.012,
-    )
-}
-
-/// Bowed over: fists at the belly, the spine rounded, knees given, head down.
-/// The deepest frame, ten frames after the golem is up.
-fn bowed_over() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.004, -0.240, -0.060)
-                .root(14.0, 0.0, -6.0)
-                .spine(34.0, 0.0, 4.0)
-                .chest(18.0, 0.0, 4.0)
-                .head(14.0, 0.0, 4.0),
-            [-0.10, 0.84, 0.30],
-            [0.08, 0.84, 0.28],
-        )
-        .wrists(-30.0, 0.0, 0.0),
-        0.0,
-        0.020,
     )
 }

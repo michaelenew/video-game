@@ -685,11 +685,14 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Elementalist, 13) => Clip::ElementalistFireCarpet,
         (Class::Elementalist, 14) => Clip::ElementalistFireFountain,
         (Class::Elementalist, _) => Clip::ElementalistEarthJump,
-        (Class::BloodMage, 0) => Clip::BloodCarpet,
+        // Her territory (2026-10-18): the Sweep, the Reap and the Harvest
+        // are the scythe swung, the haft clip drawn for the Rising reap; a
+        // heart is planted with the summoning lift.
+        (Class::BloodMage, 0) => Clip::BloodSweep,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,
         (Class::BloodMage, 3) => Clip::BloodMechanic,
-        (Class::BloodMage, 4) => Clip::BloodPoke,
+        (Class::BloodMage, 4) => Clip::BloodSweep,
         (Class::BloodMage, 5) => Clip::BloodSummon,
         (Class::BloodMage, 6) => Clip::BloodWings,
         (Class::BloodMage, 7) => Clip::BloodUpheaval,
@@ -698,7 +701,7 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, 10) => Clip::BloodSweep,
         (Class::BloodMage, 11) => Clip::BloodVines,
         (Class::BloodMage, 12) => Clip::BloodCascade,
-        (Class::BloodMage, _) => Clip::BloodGolem,
+        (Class::BloodMage, _) => Clip::BloodSweep,
         // A clip per move since 2026-10-14. The Dual mage's spellbook
         // (2026-10-12) came after the clips drawn for her old kit, so hers
         // are the clips she has, by what each move does with her arms.

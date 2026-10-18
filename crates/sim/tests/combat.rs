@@ -540,14 +540,14 @@ fn releasing_a_direction_still_stops_you_crisply() {
 /// the whole reason the distinction exists -- so a test about attack volumes
 /// has to be pointed at a move that has one.
 fn swings_with(class: sim::class::Class) -> u16 {
+    // The Blood mage's left click is the Thorn lash, a bolt that does the
+    // hitting. Her volume is the scythe's Sweep, tapped: a cut across her
+    // front (2026-10-18).
+    if class == sim::class::Class::BloodMage {
+        return sim::moves::blood::keys::SCYTHE;
+    }
     if sim::moves::get(class, sim::state::SLOT_POKE).strikes() {
         return L;
-    }
-    // The Blood mage's poke does not: the Carpet is a field, and her
-    // Haemorrhage a bolt that does the hitting. Her volume is the Black spike,
-    // tapped: a disc out of the floor where she aims.
-    if class == sim::class::Class::BloodMage {
-        return sim::moves::blood::keys::YOUR_BLOOD;
     }
     // Nor the Dual mage's, whose every move is a spell: `E` is Judgement, a
     // real volume where it lands.
@@ -637,7 +637,7 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
     // The Haemorrhage, tapped: a bolt from her hand, which does the hitting.
     for i in 0..40 {
         let bits = if i < 2 {
-            sim::moves::blood::keys::MY_BLOOD
+            sim::moves::blood::keys::THORNS
         } else {
             0
         };

@@ -48,7 +48,7 @@ fn bolts(w: &World) -> usize {
 
 /// A pitch that points the bolt at the other fighter's middle.
 fn pitch_at(w: &World, target: V3) -> i16 {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     let stones = sim::stones::gather(&w.players);
     let players = w.players;
     let effects = w.effects;
@@ -87,10 +87,10 @@ fn aloft(w: &mut World) {
 /// Cast the bolt from the air along `pitch`, with the other fighter pressing
 /// `b`: held up through the press and the wind-up, then let fall.
 fn cast_bolt(w: &mut World, pitch: i16, b: u16) {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     for f in 0..m.startup as u32 + 2 {
         aloft(w);
-        let mine = if f < 2 { keys::MY_BLOOD } else { 0 };
+        let mine = if f < 2 { keys::THORNS } else { 0 };
         looking(w, 1, mine, pitch, b);
         if bolts(w) > 0 {
             break;
@@ -116,7 +116,7 @@ fn bolt_the_dummy(w: &mut World, away: i32) -> i32 {
 
 #[test]
 fn left_click_in_the_air_throws_a_bolt_that_cuts_and_opens_a_bleed() {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     let mut w = mage();
     let paid = w.players[0].cost_of(m.cost);
     let dealt = bolt_the_dummy(&mut w, 4);
@@ -308,7 +308,7 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             .expect("the scan is not empty")
     };
     let health = w.players[1].health;
-    looking(&mut w, 2, keys::YOUR_BLOOD, pitch, Input::A);
+    looking(&mut w, 2, keys::SPIKES, pitch, Input::A);
     // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
     let mut eruptions = 0;
     for _ in 0..m.startup as u32 + 4 * t::chain_delay() as u32 + 2 {
@@ -345,7 +345,7 @@ fn the_bolt_is_the_easier_thing_to_land() {
         t::haemorrhage_radius().raw() > t::bloodletter_radius().raw(),
         "the bolt is no wider than the blade"
     );
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     assert!(m.drink > 0, "the bolt collects nothing");
     assert!(m.cost > 0);
 }
@@ -385,12 +385,12 @@ fn the_bleed_does_not_kill() {
 
 #[test]
 fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     let mut w = mage();
     w.players[0].health = t::max_health() - 300;
     w.players[0].grey = 300;
     let at = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
-    let mut pool = Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 200);
+    let mut pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 200);
     // Settled: a stain is drunk only once it has (`tuning::stain_settles`).
     pool.age = t::stain_settles();
     w.effects[0] = Some(pool);

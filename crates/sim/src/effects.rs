@@ -323,19 +323,18 @@ pub enum EffectKind {
     /// line, pierces whoever is on it and pins them, and waits where it
     /// stopped for him to arrive and tear it out.
     Javelin,
-    /// Blood mage, **the Hemoplague** (2026-10-12): a cloud at the crosshair,
-    /// `reach` across and `tuning::plague_height` tall, for
-    /// `tuning::plague_lasts`. It hurts everyone inside on its tick -- not a
-    /// hit: no stun, no shove, so it holds nobody -- and what it spills goes
-    /// to one stain at its centre. See `state::World::step_the_plague`.
+    /// Blood mage, **the Bramble** (2026-10-18; the Hemoplague before it): a
+    /// field of thorns at the crosshair, `reach` across and
+    /// `tuning::plague_height` tall, for `tuning::plague_lasts`. It hurts
+    /// everyone inside on its tick -- not a hit: no stun, no shove, so it
+    /// holds nobody -- what it spills goes to one stain at its centre, and it
+    /// lays her ground across itself. See `state::World::step_the_plague`.
     Plague,
-    /// Blood mage, **the Carpet of blood** (2026-10-13): a disc of blood on
-    /// the floor where she aimed, `reach` across and growing for as long as
-    /// she holds the click. It slows and hurts what is inside on a tick, and
-    /// `banked` is the blood in it -- what she paid and what it spilled --
-    /// which it breaks into as stains when she lets go. See
-    /// `state::World::step_carpets`.
-    Carpet,
+    /// Blood mage, **a Heart** (2026-10-18; the Carpet's slot): a knot of her
+    /// blood planted on the floor. `banked` is the blood in it -- blows come
+    /// off it, and so does every thrall it sends out -- and it holds her
+    /// ground round itself while it stands. See `state::World::step_hearts`.
+    Heart,
     /// Blood mage, **a thrall** (2026-10-13): a stain on legs. `banked` is
     /// its essence, exactly a stain's, draining as a stain's would; `home` is
     /// where she sent it. It bites what it reaches, and each bite deals what
@@ -349,11 +348,6 @@ pub enum EffectKind {
     /// the front passes, then standing for `vines_lasts`, bleeding and
     /// slowing what enters. A finisher. See `state::World::step_the_vines`.
     Vines,
-    /// Blood mage, **the Blood golem** (2026-10-13): a thrall that takes
-    /// blows off its health instead of dying to one. `banked` is its health;
-    /// `home` is where she sent it. It drains as a stain does, and every
-    /// punch costs it a share of what it dealt. A finisher.
-    Golem,
     /// Blood mage, **the Crimson cascade** (2026-10-13): rings of eruptions
     /// going out from `pos`, one every `tuning::cascade_every`, each
     /// `reach` further out; the first ring's blow is `banked` and each after
@@ -490,10 +484,9 @@ impl EffectKind {
             EffectKind::Cuts => "thousand cuts",
             EffectKind::Javelin => "javelin",
             EffectKind::Plague => "hemoplague",
-            EffectKind::Carpet => "carpet of blood",
+            EffectKind::Heart => "heart",
             EffectKind::Thrall => "thrall",
             EffectKind::Vines => "black vines",
-            EffectKind::Golem => "blood golem",
             EffectKind::Cascade => "crimson cascade",
         }
     }
@@ -574,10 +567,9 @@ impl EffectKind {
             // A cloud standing on the floor where she aimed it, and the rest
             // of hers on the floor too -- the cone is drawn from her feet.
             EffectKind::Plague
-            | EffectKind::Carpet
+            | EffectKind::Heart
             | EffectKind::Thrall
             | EffectKind::Vines
-            | EffectKind::Golem
             | EffectKind::Cascade => true,
         }
     }
@@ -726,10 +718,10 @@ impl EffectKind {
             32 => Some(EffectKind::Plague),
             // The rest of hers are put in the world by the move that makes
             // them; listed so the numbering is complete.
-            33 => Some(EffectKind::Carpet),
+            33 => Some(EffectKind::Heart),
             34 => Some(EffectKind::Thrall),
             35 => Some(EffectKind::Vines),
-            36 => Some(EffectKind::Golem),
+            // 36 was the Blood golem, retired 2026-10-18.
             37 => Some(EffectKind::Cascade),
             _ => None,
         }
@@ -822,7 +814,7 @@ impl EffectKind {
             // The carpet, a thrall and the golem have no clock: the carpet
             // breaks when she lets go, the other two are gone when they run
             // dry -- see `state::World::step_carpets` and `step_thralls`.
-            EffectKind::Carpet | EffectKind::Thrall | EffectKind::Golem => u16::MAX,
+            EffectKind::Heart | EffectKind::Thrall => u16::MAX,
             EffectKind::Vines => t::vines_lasts(),
             EffectKind::Cascade => t::spell_flash().saturating_mul(2),
         }
@@ -902,13 +894,11 @@ impl EffectKind {
             EffectKind::Javelin => m.damage,
             // The move's own number, on every tick.
             EffectKind::Plague => m.damage,
-            // The move's own number: the carpet's tick, the thorns' tick, the
-            // golem's punch, the cone's blow. A thrall's bite is what it
-            // spends, not a number of its own.
-            EffectKind::Carpet | EffectKind::Vines | EffectKind::Golem | EffectKind::Cascade => {
-                m.damage
-            }
-            EffectKind::Thrall => 0,
+            // The move's own number: the thorns' tick, the cone's blow. A
+            // thrall's bite is what it spends, not a number of its own, and a
+            // heart hits nobody.
+            EffectKind::Vines | EffectKind::Cascade => m.damage,
+            EffectKind::Thrall | EffectKind::Heart => 0,
         }
     }
 }
@@ -1095,7 +1085,7 @@ impl Effect {
     /// pay back the grey the finisher burned (`Player::owed`)?
     pub const fn finishes(&self) -> bool {
         matches!(self.class, Class::BloodMage)
-            && (matches!(self.kind, EffectKind::Vines | EffectKind::Golem)
+            && (matches!(self.kind, EffectKind::Vines)
                 || (matches!(self.kind, EffectKind::BlackSpike)
                     && self.banked >= crate::state::SPIKE_SCALED))
     }
@@ -1232,6 +1222,9 @@ impl Effect {
             EffectKind::Abyss | EffectKind::JudgementField => crate::dual::major_size(self.power),
             // A burst is made the size it is: its `power` is what it deals.
             EffectKind::Burst => Fx::ONE,
+            // The Blood mage's strong version hits harder, never wider: her
+            // `power` is what her ground was worth when she cast it.
+            _ if matches!(self.class, crate::class::Class::BloodMage) => Fx::ONE,
             _ => self.power,
         };
         self.own_radius().mul(size)
@@ -1318,8 +1311,9 @@ impl Effect {
             EffectKind::Cuts => t::cuts_radius(),
             EffectKind::Javelin => self.source().radius,
             EffectKind::Plague => self.reach,
-            EffectKind::Carpet | EffectKind::Vines | EffectKind::Cascade => self.reach,
-            EffectKind::Thrall | EffectKind::Golem => self.thrall_radius(),
+            EffectKind::Vines | EffectKind::Cascade => self.reach,
+            EffectKind::Thrall => self.thrall_radius(),
+            EffectKind::Heart => t::heart_ground(),
         }
     }
 
@@ -1867,31 +1861,45 @@ impl Effect {
         }
     }
 
-    /// Is this a thrall or the golem -- blood on legs?
+    /// Is this a thrall -- blood on legs?
     pub const fn is_a_thrall(&self) -> bool {
-        matches!(self.kind, EffectKind::Thrall | EffectKind::Golem)
+        matches!(self.kind, EffectKind::Thrall)
     }
 
-    /// How wide a thrall stands: its stain's width, and the golem
-    /// `tuning::golem_size` times that.
+    /// **Does this lay the Blood mage's ground where it is put?** What she
+    /// puts on the floor -- a spike or an eruption, a Stake's landing, a
+    /// field of thorns, the vines, a burst of thorns -- does, on its first
+    /// frame; the moves that drag or plant ground do not
+    /// (`moves::blood::lays_ground`). See `state::World::lay_touch`.
+    pub fn touches_the_floor(&self) -> bool {
+        matches!(self.class, crate::class::Class::BloodMage)
+            && (self.owner as usize) < crate::state::MAX_PLAYERS
+            && crate::moves::blood::lays_ground(self.slot)
+            && matches!(
+                self.kind,
+                EffectKind::BlackSpike | EffectKind::Nova | EffectKind::Plague | EffectKind::Vines
+            )
+    }
+
+    /// Is this one of her hearts?
+    pub const fn is_a_heart(&self) -> bool {
+        matches!(self.kind, EffectKind::Heart)
+    }
+
+    /// How wide a thrall stands: its stain's width.
     pub fn thrall_radius(&self) -> Fx {
-        let r = t::body_radius().mul(self.pool_share());
-        if matches!(self.kind, EffectKind::Golem) {
-            r.mul(t::golem_size())
-        } else {
-            r
-        }
+        t::body_radius().mul(self.pool_share())
     }
 
-    /// How tall it stands: its stain's height, and the golem
-    /// `tuning::golem_size` times that.
+    /// How tall it stands: its stain's height.
     pub fn thrall_height(&self) -> Fx {
-        let h = t::body_height().mul(self.pool_share());
-        if matches!(self.kind, EffectKind::Golem) {
-            h.mul(t::golem_size())
-        } else {
-            h
-        }
+        t::body_height().mul(self.pool_share())
+    }
+
+    /// How much of her ground a stain standing holds: its own column and
+    /// `tuning::ground_stain_spread` round it.
+    pub fn stain_ground(&self) -> Fx {
+        self.pool_radius().add(t::ground_stain_spread())
     }
 
     /// Does a blow of this spill nothing? **An eruption out of a stain** --

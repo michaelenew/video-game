@@ -206,7 +206,7 @@ fn auto_button(me: &sim::state::Player) -> u16 {
 /// (`sim::moves::blood`).
 fn auto_slot(class: sim::Class) -> u8 {
     match class {
-        sim::Class::BloodMage => sim::moves::blood::HAEMORRHAGE,
+        sim::Class::BloodMage => sim::moves::blood::THORN_LASH,
         _ => 0,
     }
 }

@@ -168,11 +168,18 @@ pub fn scythe(p: &Player, left: V3, right: V3) -> Option<Scythe> {
         [crate::fx(p.facing.x), 0.0, crate::fx(p.facing.z)],
         [1.0, 0.0, 0.0],
     );
-    let sweep = sim::moves::get(p.class, sim::moves::blood::RISING_REAP);
+    // The swing in hand, or the Sweep's row when she is not swinging: the
+    // Sweep, the Reap and the Harvest each reach their own length.
+    let row = p
+        .action
+        .attack_kind()
+        .filter(|k| sim::moves::blood::scythe(*k) && *k != sim::moves::blood::RISING_REAP)
+        .unwrap_or(sim::moves::blood::SWEEP);
+    let sweep = sim::moves::get(p.class, row);
     // The weapon's own length, off the row: it does not grow. What grows is
     // the volume, drawn separately -- see `swing_volume`.
     let reach = crate::fx(sweep.reach);
-    let live = crate::fx(state::scythe_reach(p));
+    let live = crate::fx(state::live_reach(p, &sweep));
     let width = crate::fx(sweep.radius);
     let breadth = BREADTH;
     let in_a_swing = p
