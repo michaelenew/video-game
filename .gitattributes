@@ -1,1 +1,2 @@
 scripts/*.cmd -text
+scripts/*.command text eol=lf

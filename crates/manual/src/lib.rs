@@ -932,8 +932,12 @@ pub const SECTIONS: &[Section] = &[
                 "Install, once, the tools a fresh machine lacks: wasm-bindgen for the web build, Xvfb and a software GPU for screenshots, Playwright for the smoke test. The one place those steps are written; start it in the background.",
             ),
             e(
-                "scripts\\play-windows.cmd",
-                "Windows, from nothing: double-click it. Installs the C++ build tools, Git and Rust if missing, clones the game into %USERPROFILE%\\video-game (or pulls the latest) and plays it in release mode. Inside a checkout it plays that checkout and leaves git alone.",
+                "scripts\\play-windows.cmd [args]",
+                "Windows, from nothing: double-click it. Installs the C++ build tools, Git and Rust if missing, clones the game into %USERPROFILE%\\video-game (or pulls the latest) and plays it in release mode, passing on its arguments. Inside a checkout it plays that checkout and leaves git alone.",
+            ),
+            e(
+                "scripts/play-macos.command [args]",
+                "macOS, from nothing: double-click it. Installs Apple's Command Line Tools and Rust if missing, clones the game into ~/video-game (or pulls the latest) and plays it in release mode, passing on its arguments. Inside a checkout it plays that checkout and leaves git alone.",
             ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),

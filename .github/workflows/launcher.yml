@@ -1,17 +1,22 @@
-# Keep the Windows launcher downloadable in one click.
+# Keep the launchers downloadable in one click.
 #
 # A file in the repository is served by GitHub as plain text, so a browser
-# shows scripts/play-windows.cmd rather than saving it. A release asset is
-# served as a download. This keeps one release, tagged `launcher`, whose one
-# asset is the launcher as it is on main, so this link always saves the
-# current one:
+# shows it rather than saving it. A release asset is served as a download.
+# This keeps one release, tagged `launcher`, whose assets are the launchers as
+# they are on main, so these links always save the current ones:
 #
 #   https://github.com/michaelenew/video-game/releases/download/launcher/play-windows.cmd
+#   https://github.com/michaelenew/video-game/releases/download/launcher/play-macos.zip
+#
+# The Mac launcher goes out zipped: a browser drops the permission that lets a
+# downloaded .command run, and a zip keeps it (Safari unzips it on arrival,
+# and a double-click does it anywhere else). It also goes out bare, for the
+# Terminal one-liner in its header, which needs no permission.
 #
 # The tag is fixed, not `latest`, so a release of anything else later does not
-# move the link. The tag itself is never moved; only the asset is replaced.
-# The launcher pulls the game every time it runs, so the release only needs
-# refreshing when the launcher changes.
+# move the links. The tag itself is never moved; only the assets are replaced.
+# The launchers pull the game every time they run, so the release only needs
+# refreshing when a launcher changes.
 name: Launcher
 
 on:
@@ -19,6 +24,7 @@ on:
     branches: [main]
     paths:
       - scripts/play-windows.cmd
+      - scripts/play-macos.command
       - .github/workflows/launcher.yml
   workflow_dispatch:
 
@@ -37,18 +43,37 @@ jobs:
       # bytes, CRLF and all: what cmd.exe needs.
       - uses: actions/checkout@v4
 
-      - name: Create the release if it is not there
+      # The notes are written every run, so they say what the assets are now.
+      - name: Create or refresh the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view launcher > /dev/null 2>&1; then
-            gh release create launcher \
-              --target "$GITHUB_SHA" \
-              --title "Windows launcher" \
-              --notes "Download play-windows.cmd and double-click it. It installs the C++ build tools, Git and Rust if they are missing, fetches the game and plays it; run it again to update. This release is refreshed automatically whenever the launcher changes on main."
+          notes=$(cat <<'EOF'
+          **Windows:** download `play-windows.cmd` and double-click it. If Windows says it protected your PC, click More info, then Run anyway.
+
+          **Mac:** download `play-macos.zip`, open it if your browser did not, and double-click `play-macos.command`. The first time, macOS refuses because it is not from the App Store: open System Settings, Privacy & Security, scroll down and click Open Anyway (on older macOS, Control-click the file and choose Open). Or skip all that and paste this into Terminal:
+
+          ```
+          bash -c "$(curl -fsSL https://github.com/michaelenew/video-game/releases/download/launcher/play-macos.command)"
+          ```
+
+          Each one installs the tools the game needs if they are missing, fetches the game into your home folder, builds it and plays it. Run it again to update. The first build takes 10 to 30 minutes.
+
+          This release is refreshed automatically whenever a launcher changes on main.
+          EOF
+          )
+          if gh release view launcher > /dev/null 2>&1; then
+            gh release edit launcher --title "Launchers" --notes "$notes"
+          else
+            gh release create launcher --target "$GITHUB_SHA" --title "Launchers" --notes "$notes"
           fi
 
-      - name: Upload the launcher
+      # zip keeps the file's permissions; macOS's Archive Utility restores them.
+      - name: Upload the launchers
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload launcher scripts/play-windows.cmd --clobber
+        run: |
+          chmod +x scripts/play-macos.command
+          (cd scripts && zip -q ../play-macos.zip play-macos.command)
+          gh release upload launcher \
+            scripts/play-windows.cmd scripts/play-macos.command play-macos.zip --clobber
