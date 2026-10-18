@@ -10,7 +10,7 @@ sheets in docs/design/gallery/breed/ were made this way."""
 import sys, os, glob
 from PIL import Image, ImageDraw, ImageFont
 
-S = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+S = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else os.getcwd()
 # --posed reads lines_posed/ (bodies mid-stride) and writes *_posed sheets.
 POSED = "--posed" in sys.argv
 # --flight reads lines_flight/ (wings spread, airborne if it flies) and
@@ -337,4 +337,5 @@ def main():
         print(out, sheet.size)
 
 
-main()
+if __name__ == "__main__":
+    main()

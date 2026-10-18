@@ -542,3 +542,134 @@ generation  39: Upright fore=Strike/Raptorial pitch 0.68 mass 0.32 size 0.61 mar
 - **BREED-11 · The hatchling in a fight.** It follows, helps, can die. It
   is a creature slot; the world has two. A hunt with a hatchling and the
   Pair is three.
+
+## 10 · Motion: how it walks, how a move looks, and the contract measured (2026-10-18)
+
+The owner's ask: *"real creatures that can engage in real fights, be
+readable and learnable, and be fun and challenging to fight."* Where an
+egg slots into the game is left open; this is the core underneath it. Four
+modules, all in `sim::breed`, all deterministic and float-free like the
+rest:
+
+- **`drive.rs` -- one frame of motion.** Everything that bends a body for
+  one frame: how high the root rides and how far it has travelled, the
+  torso's pitch, the neck's pitch, turn and reach, the jaw, the tail's
+  swing and curl, a limbless body's wave and rise, the abdomen's tilt, a
+  swell (an inflation, a bristle), each foot's place in its stride, a
+  striking arm cocked or thrust, the wings folded, flared or aloft and
+  their beat. The builder (`build::body_driven`) reads only this, so
+  standing, walking, every move and flight are the same body under
+  different drives -- and a move's hit can be read off the very bones the
+  drive swung. The old rest, walk and flight poses are now three drives.
+- **`locomotion.rs` -- the gait.** The **Froude number** (speed squared
+  over gravity times hip height: a speed with the body's size taken out)
+  picks the gait, because animals of every size change gait at about the
+  same values of it -- walk below a half, trot to about two and a half,
+  gallop or bound above (Alexander and Jayes, 1983). Stride follows
+  Alexander's law, about `2.3 h Fr^0.3`, held to what the shortest leg can
+  cover while its foot is down -- past that the body takes more, quicker
+  steps rather than let a planted foot slide. The **order the feet fall in
+  is the leg count's**, from the animals that have it: a lateral-sequence
+  walk and diagonal trot on four legs, a rotary gallop or a bound on sprung
+  legs, a back-to-front wave and a tripod on six, a wave and alternating
+  tetrapod on eight, a slither with none. A planted foot stays where it was
+  put while the body passes over it; the body bobs twice a cycle in a
+  walk, rocks nose to tail in a gallop; the head is held steady against
+  the rock; the tail swings against the body. A big body takes long slow
+  strides and a small one short quick ones at the same Froude number,
+  which is what makes a giant read as heavy.
+- **`strike.rs` -- how a move looks.** Every move is three poses -- rest,
+  **cocked** and **struck** -- and its frames (`MoveSpec`) say how long
+  between them. The **windup** goes from rest to cocked fast at first and
+  settling, so the silhouette has changed most of the way by a third of
+  it: the tell arrives early, not at the last frame. The **strike**
+  accelerates from cocked to struck (with an arc for a leap). The
+  **recovery** holds the struck pose for its first third -- the punish
+  window -- then eases back, and a body that travelled stays where it got
+  to. Each move names its strikers (head and jaw for a bite, one forefoot
+  for a stomp, the tail for a sweep), and **what it hits is those parts
+  where they are on each strike frame**, strung as spheres down each box;
+  an area move hits round where they come down, a thrown one flies from
+  them out to its reach. Strikes are **aimed**: a bite brings the head to
+  chest height on the ground ahead, a tail sweep its tail to a metre, a
+  talon pass its feet to half a metre, by a few rounds of build and
+  correct (the head first, the body sinking and pitching when the neck
+  runs out) -- so a giant's bite comes down to you instead of passing over
+  your head. Every move carries the **answer** the bestiary asks for (§1.2:
+  sidestep, dodge, jump, crouch, back off, flank, leave the lane, get
+  behind a solid, hit it first, leave its back, hold).
+- **`verdict.rs` -- the contract, measured.** Nothing a move declares is
+  trusted. Its **lane** (front, side, rear, all round, aboard, or *above*:
+  never low enough to touch somebody standing) and **range** (close to
+  3 m, mid to 10, long beyond) are read off where its hit actually goes;
+  its tell is how far its silhouette moves and how early. Then: a damaging
+  move is **unanswerable** if its tell is under the fifteen frames of
+  `HUMAN_REACTION_FRAMES` or its silhouette changes too little (an eighth
+  of the body) or too late (half by a third of the windup) -- *unless its
+  answer is where you stand* (back off, flank, leave the lane, leave its
+  back, hold), which is §1.4's exemption exactly. It counts **questions**
+  (answer, lane, range: two moves are the same question only if all three
+  match), **lookalikes** (two moves whose cocked silhouettes are within a
+  tenth of the body: same windup, different answer is the cruellest kind
+  of unlearnable), **safe** moves (no punish window of eight frames), and
+  which **ranges** the kit threatens.
+
+### What the measure found, and what changed because of it
+
+Run on the cast as first written, it found exactly the things that make a
+fight unfair or unreadable, and every one was a real fix:
+
+| Found | Fix |
+| --- | --- |
+| Every gnawer, Pair and Veilstalker bite, and the Galewing's peck, had a tell of 11-14 frames | A move answered by reacting is never faster than a reaction: startup floored at `HUMAN_REACTION_FRAMES` unless its answer is positional (the Mantis's scythe stays fast -- you answer it by standing out of its reach) |
+| Recovery as short as 4 frames: nothing to punish | Recovery at least 24 frames, a third of it held still |
+| The Ridgeback's bite, charge and tail sweep, and the Galewing's talon pass, passed over a standing head | Strikes aimed at the ground ahead |
+| Bites barely moved the silhouette (a few percent of the body) | Bites draw back and up, the jaw gaping; a snake coils into an S |
+| Mireback's inflate and spew, Hornback's gore and charge, Siegeshell's shrug and shed, the Sandmaw's bite and rise-bite all cocked alike | Each given its own silhouette: spew leans in low, inflate rises; gore sinks with the head hooked aside, charge stands tall pawing with the tail up; shed rises with the plates lifting, shrug crouches |
+| A big body given a scorpion's sting arced it over its back nine metres up | Past six metres long, a sting stabs down behind |
+| The four-legged walk and the spider's wave put their feet down in reverse order | Fixed; the footfall diagrams on the gait sheets are how it was seen |
+
+As it stands: **every one of the eleven has no unanswerable move, no safe
+move, no two windups alike, every hit able to reach somebody standing, a
+threat up close, and three questions or more.** All but the two pack
+creatures (the Pair, the gnawers) threaten close, mid and long; a pack's
+long range is its other members. `tests/motion.rs` holds that, and holds it
+for **seven lineages bred thirty generations each** -- drift, a Mantis's
+claw on a Ridgeback every generation, feathers every generation, a fang, a
+horn on a spider -- so whatever a body becomes, its moves can still be read
+and answered. It also holds the gaits' order, that a planted foot does not
+slide, and that a big body walks with a slower cadence.
+
+`cargo run -p sim --bin breedcheck -- moves [name]` prints every move
+against the contract; `-- gaits` every gait by speed. The sheets are
+`scripts/breed-motion.py`: `gallery/breed/motion/moves_<name>.png` is every
+move from rest through the tell, the strike (red spheres: what it hits;
+orange rings through the windup: where it will land, the floor marker
+drawn from the hit itself) and the held punish window to recovered;
+`gaits_<name>.png` is every gait's cycle with its footfall diagram.
+
+### What this is not yet
+
+- **BREED-15 · Facing and turning in a move.** A drive has no body yaw: a
+  tail sweep swings the tail, not the body round behind it, and nothing
+  tracks a target that moves during the windup. The aim locks where it
+  was aimed (§1.5) -- which is right -- but *where* is today always
+  straight ahead. Adding a yaw to `Drive` and an aim point to `motion` is
+  the next step, and the verdict would then measure lanes against the aim.
+- **BREED-16 · Moves are poses, not physics.** A charge's travel and a
+  pounce's arc are drawn, not simulated; the real creature's step (the
+  `World` and its frame budget) would carry them. Nothing here allocates,
+  but a body is built from scratch per frame; a fight would cache the rest
+  body and rebuild only on a drive change.
+- **BREED-17 · A brain.** Which move when -- the weights, the range each
+  covers, what it reacts to -- is the species brains' job (`crates/sim/src/species`);
+  the verdict gives a brain the measured lane and range of every move it
+  has, which is what it needs to choose.
+- **BREED-18 · Range gaps are reported, not filled.** A crossbred kit that
+  loses its only long move has a gap; the verdict says so but nothing
+  grows a move to fill it. Whether breeding should be allowed to make a
+  creature you can backpedal from forever is a design question (§1.3 says
+  no).
+- The lineage sheets in `gallery/breed/` were drawn before this; their
+  `_posed` frames are the old fixed walk, not the gait the body would now
+  choose.

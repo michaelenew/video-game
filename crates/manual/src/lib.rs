@@ -854,7 +854,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p sim --bin breedcheck",
-                "What the creature builder makes of the cast: every creature rebuilt from its genome beside its hand-written table (legs, hips, length, span, every move with its frames and damage, what it drops), and the verdict on each. `feathers <seed>` watches a Ridgeback given a Galewing's feathers generation by generation, `mantis <seed>` one given a Mantis's claw, `drift <seed>` every creature forty generations alone, `herd <seed>` the biggest Ridgebacks bred to each other.",
+                "What the creature builder makes of the cast: every creature rebuilt from its genome beside its hand-written table (legs, hips, length, span, every move with its frames and damage, what it drops), and the verdict on each. `feathers <seed>` watches a Ridgeback given a Galewing's feathers generation by generation, `mantis <seed>` one given a Mantis's claw, `drift <seed>` every creature forty generations alone, `herd <seed>` the biggest Ridgebacks bred to each other. `moves [name]` measures every move against the bestiary contract (its tell, how much and how early the silhouette moves, the lane and range its hit reaches, its answer, and the kit's totals: unanswerable, safe, lookalike windups, ranges covered); `gaits` lists every creature's gaits by speed.",
+            ),
+            e(
+                "python3 scripts/breed-motion.py [--gaits] <outdir> <name>...",
+                "Draw how crossbred creatures move: moves_<name>.png is every move from rest through its tell, the strike (red spheres: what it hits; orange rings: where it will land) and the held punish window to recovered; with --gaits, gaits_<name>.png is every gait's cycle with its footfall diagram. Runs `breedcheck -- film` and `-- strides` itself. Needs Pillow.",
             ),
             e(
                 "python3 scripts/breed-sheet.py <dir>",

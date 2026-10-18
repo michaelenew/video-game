@@ -63,9 +63,13 @@
 pub mod archetypes;
 pub mod build;
 pub mod cross;
+pub mod drive;
+pub mod locomotion;
 pub mod plan;
 pub mod posture;
 pub mod rear;
+pub mod strike;
+pub mod verdict;
 
 use crate::fixed::Fx;
 

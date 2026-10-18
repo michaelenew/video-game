@@ -7,6 +7,10 @@
 //! cargo run -p sim --bin breedcheck -- mantis [seed]     # a Ridgeback given a Mantis's claw
 //! cargo run -p sim --bin breedcheck -- drift [seed]      # every creature, forty generations alone
 //! cargo run -p sim --bin breedcheck -- herd [seed]       # breeding the biggest Ridgebacks
+//! cargo run -p sim --bin breedcheck -- moves [name]      # every move measured against the contract
+//! cargo run -p sim --bin breedcheck -- film <name> [move|all] # every move's frames and hits, for a sheet
+//! cargo run -p sim --bin breedcheck -- strides <name>     # every gait's cycle and footfalls, for a sheet
+//! cargo run -p sim --bin breedcheck -- gaits             # every creature's gaits by speed
 //! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens> [phase [fly]]
 //!                                            # every generation's body as side-view boxes, for a sheet
 //! ```
@@ -305,6 +309,183 @@ fn herd(seed: u64) {
     }
 }
 
+/// Every part of a body as an oriented box, one line each.
+fn print_boxes(body: &build::Body) {
+    // Every part as an oriented box: `obox <tag> <name> <cx> <cy> <cz>
+    // <ux> <uy> <uz> <along> <across> <up>` -- its centre, the unit
+    // axis its box runs along, and its half-extents in the axis's
+    // frame (`build::frame`). The sheet draws these as the game would
+    // draw the part in its bone's frame.
+    for (i, part) in body.parts().iter().enumerate() {
+        let name = part.name;
+        let tag = if name.starts_with("wing_feather") {
+            "feathered"
+        } else if name.starts_with("wing_membrane") {
+            "membrane"
+        } else if name.starts_with("wing_fur") {
+            "furred"
+        } else if name.contains("foot") {
+            "foot"
+        } else if name.starts_with("fore") || name.starts_with("hind") || name.starts_with("mid") {
+            "limb"
+        } else if name.starts_with("head")
+            || name == "jaw"
+            || name == "horns"
+            || name == "crest"
+            || name == "neck"
+        {
+            "head"
+        } else if name.starts_with("tail") {
+            "tail"
+        } else {
+            "torso"
+        };
+        let c = body.centre(i);
+        let u = body.axes[i];
+        let h = part.shape.max.sub(part.shape.min).scale(Fx::ratio(1, 2));
+        println!(
+            "obox {tag} {} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3}",
+            name.replace(' ', "_"),
+            f(c.x),
+            f(c.y),
+            f(c.z),
+            f(u.x),
+            f(u.y),
+            f(u.z),
+            f(h.x),
+            f(h.y),
+            f(h.z)
+        );
+    }
+}
+
+/// Every move of a creature (or the one named) as a strip of frames, for
+/// `scripts/breed-motion.py`: rest, a third into the windup, the cocked
+/// pose, the strike's middle and end, the end of the stuck window, and
+/// recovered. Each frame's hit spheres are printed with it.
+///
+/// ```text
+/// move <kind> <startup> <active> <recovery> <answer> <lane> <range> <beyond> <tell-ok> | <name>
+/// frame <n> <beat>
+/// obox ...
+/// hit <x> <y> <z> <radius>
+/// ```
+fn film(args: &[String]) {
+    use sim::breed::{posture, strike, verdict};
+    let g = args
+        .first()
+        .and_then(|n| by_name(n))
+        .copied()
+        .unwrap_or(RIDGEBACK);
+    let only = args.get(1).map(|s| s.replace('_', " "));
+    let q = posture::posture(&g);
+    let rest = build::body_in(&g, &q);
+    let len = build::proportions(&g).len;
+    let (kit, n) = strike::kit(&g, &q);
+    for (spec, m) in kit[..n].iter().flatten() {
+        if only
+            .as_deref()
+            .is_some_and(|o| o != "all" && o != spec.kind.name())
+        {
+            continue;
+        }
+        let r = verdict::read(&g, &q, &rest, spec, m);
+        println!(
+            "move {} {} {} {} {} {} {} {:.1} {} | {}",
+            spec.kind.name().replace(' ', "_"),
+            spec.startup,
+            spec.active,
+            spec.recovery,
+            r.answer.name().replace(' ', "_"),
+            r.lane.name(),
+            r.range.name(),
+            f(r.beyond),
+            if r.unanswerable(len) {
+                "UNANSWERABLE"
+            } else if r.damaging {
+                "ok"
+            } else {
+                "no-hit"
+            },
+            spec.kind.name()
+        );
+        let stuck = spec.recovery / 3;
+        let end = strike::frames(spec);
+        let frames = [
+            0,
+            spec.startup / 3,
+            spec.startup - 1,
+            spec.startup + spec.active / 2,
+            spec.startup + spec.active - 1,
+            spec.startup + spec.active + stuck - 1,
+            end - 1,
+        ];
+        for fr in frames {
+            println!("frame {fr} {:?}", strike::beat(spec, fr));
+            print_boxes(&strike::body_at(&g, &q, m, spec, fr));
+            // Every strike frame's spheres, drawn on the strike's frames so
+            // the whole sweep shows.
+            if matches!(strike::beat(spec, fr), strike::Beat::Strike) {
+                for sf in spec.startup..=fr {
+                    for h in strike::hit_at(&g, &q, m, spec, sf).iter() {
+                        println!(
+                            "hit {:.3} {:.3} {:.3} {:.3} {}",
+                            f(h.at.x),
+                            f(h.at.y),
+                            f(h.at.z),
+                            f(h.radius),
+                            if sf == fr { 1 } else { 0 }
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Every gait of a creature as eight moments of its cycle, and its
+/// footfall pattern, for `scripts/breed-motion.py --gaits`.
+///
+/// ```text
+/// gait <kind> <froude> <speed> <stride> <cycle> <duty>
+/// foot <station> <side> <offset>
+/// frame <phase>
+/// obox ...
+/// ```
+fn strides(args: &[String]) {
+    use sim::breed::{locomotion, posture};
+    let g = args
+        .first()
+        .and_then(|n| by_name(n))
+        .copied()
+        .unwrap_or(RIDGEBACK);
+    let q = posture::posture(&g);
+    for gait in locomotion::repertoire(&g, &q).into_iter().flatten() {
+        println!(
+            "gait {} {:.2} {:.1} {:.2} {} {:.2}",
+            gait.kind.name(),
+            f(gait.froude),
+            f(gait.speed),
+            f(gait.stride),
+            gait.cycle,
+            f(gait.duty)
+        );
+        for (i, walks) in gait.walks.iter().enumerate() {
+            if *walks {
+                for side in 0..2 {
+                    println!("foot {i} {side} {:.3}", f(gait.offset[i][side]));
+                }
+            }
+        }
+        for k in 0..8 {
+            let phase = Fx::ratio(k, 8);
+            println!("frame {:.3}", f(phase));
+            let d = locomotion::drive(&g, &q, &gait, phase, Fx::ZERO);
+            print_boxes(&build::body_driven(&g, &q, &d));
+        }
+    }
+}
+
 /// A creature by name, for the sheet's arguments.
 fn by_name(name: &str) -> Option<&'static Genome> {
     CAST.iter()
@@ -377,55 +558,92 @@ fn boxes(args: &[String]) {
             Some(ph) => build::body_posed(&g, &q, ph),
             None => build::body(&g),
         };
-        // Every part as an oriented box: `obox <tag> <name> <cx> <cy> <cz>
-        // <ux> <uy> <uz> <along> <across> <up>` -- its centre, the unit
-        // axis its box runs along, and its half-extents in the axis's
-        // frame (`build::frame`). The sheet draws these as the game would
-        // draw the part in its bone's frame.
-        for (i, part) in body.parts().iter().enumerate() {
-            let name = part.name;
-            let tag = if name.starts_with("wing_feather") {
-                "feathered"
-            } else if name.starts_with("wing_membrane") {
-                "membrane"
-            } else if name.starts_with("wing_fur") {
-                "furred"
-            } else if name.contains("foot") {
-                "foot"
-            } else if name.starts_with("fore")
-                || name.starts_with("hind")
-                || name.starts_with("mid")
-            {
-                "limb"
-            } else if name.starts_with("head")
-                || name == "jaw"
-                || name == "horns"
-                || name == "crest"
-                || name == "neck"
-            {
-                "head"
-            } else if name.starts_with("tail") {
-                "tail"
+        print_boxes(&body);
+    }
+}
+
+/// Every move of a cast member (or all of them), measured against the
+/// bestiary contract: its tell, how much and how early the silhouette
+/// moves, the lane and range its hit reaches, its answer, and the kit's
+/// totals.
+fn moves_report(only: Option<&str>) {
+    use sim::breed::{posture, verdict};
+    for (_, name, g, _) in CAST {
+        if only.is_some_and(|o| !name.to_lowercase().starts_with(&o.to_lowercase())) {
+            continue;
+        }
+        let q = posture::posture(g);
+        let v = verdict::judge(g, &q);
+        let len = build::proportions(g).len;
+        println!("== {name} (length {:.1} m)", f(len));
+        for r in v.iter() {
+            let flag = if r.unanswerable(len) {
+                "  UNANSWERABLE"
+            } else if !r.damaging {
+                "  (no hit)"
             } else {
-                "torso"
+                ""
             };
-            let c = body.centre(i);
-            let u = body.axes[i];
-            let h = part.shape.max.sub(part.shape.min).scale(Fx::ratio(1, 2));
             println!(
-                "obox {tag} {} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3}",
-                name.replace(' ', "_"),
-                f(c.x),
-                f(c.y),
-                f(c.z),
-                f(u.x),
-                f(u.y),
-                f(u.z),
-                f(h.x),
-                f(h.y),
-                f(h.z)
+                "   {:<15} tell {:>3} f  moves {:>5.2} m ({:>3}% by a third)  {:<6} {:<5} {:>5.1} m  swing {:>5.2} m  stuck {:>2}/{:>3} f  -> {}{flag}",
+                r.kind.name(),
+                r.tell,
+                f(r.change),
+                (r.early.raw() as i64 * 100) >> 16,
+                r.lane.name(),
+                r.range.name(),
+                f(r.beyond),
+                f(r.swing),
+                r.stuck,
+                r.recovery,
+                r.answer.name()
             );
         }
+        println!(
+            "   {} damaging, {} questions, {} answers, {} lookalike pairs, {} unanswerable, {} safe; ranges {}{}{}{}",
+            v.damaging,
+            v.questions,
+            v.answers,
+            v.lookalikes,
+            v.unanswerable,
+            v.safe,
+            if v.close { "close " } else { "" },
+            if v.mid { "mid " } else { "" },
+            if v.long { "long " } else { "" },
+            match v.aboard {
+                Some(true) => "aboard",
+                Some(false) => "(nothing aboard)",
+                None => "",
+            }
+        );
+        for (a, b) in v.lookalike.iter().flatten() {
+            println!("   lookalike: {} and {} cock the same", a.name(), b.name());
+        }
+    }
+}
+
+/// Every cast member's gaits, slowest first: what it changes up to as it
+/// goes faster, at what Froude number and speed, its stride and cadence.
+fn gaits() {
+    use sim::breed::{locomotion, posture};
+    for (_, name, g, _) in CAST {
+        let q = posture::posture(g);
+        print!(
+            "{name:<14} hips {:.2} m, top Fr {:.2}:",
+            f(q.root),
+            f(locomotion::top_froude(g, &q))
+        );
+        for gait in locomotion::repertoire(g, &q).into_iter().flatten() {
+            print!(
+                "  {} (Fr {:.2}, {:.1} m/s, stride {:.2} m, {} f)",
+                gait.kind.name(),
+                f(gait.froude),
+                f(gait.speed),
+                f(gait.stride),
+                gait.cycle
+            );
+        }
+        println!();
     }
 }
 
@@ -457,6 +675,10 @@ fn main() {
         Some("drift") => drift(seed),
         Some("herd") => herd(seed),
         Some("boxes") => boxes(&args[1..]),
+        Some("gaits") => gaits(),
+        Some("film") => film(&args[1..]),
+        Some("strides") => strides(&args[1..]),
+        Some("moves") => moves_report(args.get(1).map(String::as_str)),
         Some(other) => println!("unknown: {other}"),
     }
 }

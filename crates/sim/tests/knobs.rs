@@ -72,6 +72,15 @@ const LEVEL_DATA: &[&str] = &[
     "plan.rs",
     "posture.rs",
     "rear.rs",
+    // How a body moves (`drive.rs`, `locomotion.rs`, `strike.rs`,
+    // `verdict.rs`): gait thresholds, stride laws and duty factors are
+    // measured off animals (Alexander, Hildebrand), not felt; how a move
+    // bends a body is its shape; the bestiary contract its judge measures
+    // against is `HUMAN_REACTION_FRAMES`, already a tuning constant.
+    "drive.rs",
+    "locomotion.rs",
+    "strike.rs",
+    "verdict.rs",
     "land.rs",
     "layout.rs",
     "rim.rs",
