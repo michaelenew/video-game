@@ -46,7 +46,9 @@ every one of them is a function in `aim.rs`:**
 The rest of `aim.rs` -- twenty-seven functions as of 2026-10-02 -- are **not**
 lines of effect. `aim::sight` and `aim::sight_for_attack` are the one raycast
 itself, `aim::origin` and `aim::hand_origin` where a cast leaves the body, and
-`aim::first_along` what a path runs into. `aim::pointing_at`
+`aim::first_along` what a path runs into, and `aim::every_along` everything it runs
+into up to a wall -- the Elementalist's two pushes, along a line `aim::through`
+carries on to their reach (2026-10-18). `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an

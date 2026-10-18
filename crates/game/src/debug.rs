@@ -293,6 +293,19 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
+            // Fissure's surge: the column its front reaches, where it is now.
+            EffectKind::Surge => {
+                cylinder(
+                    &mut gizmos,
+                    crate::fx3(effect.surge_front()),
+                    effect
+                        .field_radius()
+                        .add(sim::tuning::body_radius())
+                        .to_f32_for_render(),
+                    sim::tuning::structure_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
             // The cascade and the reap: a line out along `dir`, as far as `reach`.
             EffectKind::Cascade => {
                 gizmos.line(

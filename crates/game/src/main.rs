@@ -2920,8 +2920,17 @@ fn place_gusts(
 /// leading and trailing edges sit vertically, by less than the body height the
 /// test already spans. Step aside and you are clear, stand above it and you are
 /// clear -- before and after.
-fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut Visibility)>) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+fn place_discs(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &DiscMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
@@ -2931,6 +2940,11 @@ fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut
             continue;
         }
         *vis = Visibility::Inherited;
+        // A Gale flown through fire is drawn as fire, as the bolts are.
+        let want = if shot.lit { &look.fire } else { &look.beam };
+        if skin.0 != *want {
+            skin.0 = want.clone();
+        }
         let radius = shot.girth().to_f32_for_render();
         let dir = fx3(shot.dir).normalize_or_zero();
         // Thrown straight up or straight down there is no vertical left to take
@@ -4101,6 +4115,13 @@ enum Shape {
     Head,
 }
 
+/// The Elementalist's wind -- the Air ball and the two drafts -- in air, or
+/// in fire once it has touched some (`sim::effects::Effect::lit`): what a
+/// burning ball is worth has to be readable before it reaches you.
+fn wind_skin(effect: &sim::effects::Effect) -> Skin {
+    if effect.lit { Skin::Fire } else { Skin::Air }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Skin {
     Fire,
@@ -4372,7 +4393,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let slab = effect.draft_volume();
             Some(standing(
                 Shape::Column,
-                Skin::Air,
+                wind_skin(effect),
                 at,
                 slab.radius.to_f32_for_render(),
                 slab.bottom.to_f32_for_render(),
@@ -4396,6 +4417,16 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 + Vec3::Y * sim::tuning::fire_ring_width().to_f32_for_render(),
             sim::tuning::fire_ring_width().to_f32_for_render(),
         )),
+        // Fissure's surge: broken ground heaving at its front, at the width it
+        // reaches -- the stone it carries is drawn as a stone.
+        EffectKind::Surge if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Stone,
+            fx3(effect.surge_front()) + Vec3::X * ((effect.age % 3) as f32 - 1.0) * QUAKE_SHIVER,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT * 2.0,
+        )),
         // Rough terrain: a row of low slabs along the line the crack ran, at
         // the half-width the slow reads. See `Effect::rough_bead`.
         EffectKind::Rough if part < sim::effects::ROUGH_BEADS => Some(standing(
@@ -4417,7 +4448,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // The Air ball: the ball the carry reads, at the size it is now --
         // growing while she holds it, shrinking as it rolls.
         EffectKind::AirBall if part == 0 => Some(floating_in(
-            Skin::Air,
+            wind_skin(effect),
             fx3(effect.ball_middle()),
             effect.field_radius().to_f32_for_render(),
         )),

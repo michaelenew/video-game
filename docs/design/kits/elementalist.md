@@ -109,11 +109,66 @@ What the person reported from three replays, what the replays showed, and what c
   decided from play on 2026-10-04.
 - **The Air ball rolls off edges**: past one it keeps going and sinks at
   `Air ball, sinks off an edge` (2.5 m/s), holding up whoever is in it, until it meets the floor.
-  **She steers it** by walking sideways in it — A and D, looking where it goes; the sideways
-  share of her walk bends its heading (`Air ball, steered by her walk`). **A wall or a stone
+  **She steers it** with A and D while she rides it (since 2026-10-18 they turn it at a
+  steady rate and no longer walk her; see §"The QoL pass"). **A wall or a stone
   knocks it off** rather than stopping it: it turns off the surface and keeps
   `Air ball, size kept off a wall` (0.7) of its size, so of its speed and what is left of its
   life.
+
+### The QoL pass — 2026-10-18
+
+From play, the person's list, and what each became. `tests/elementalist_qol.rs`
+holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
+
+- **Fire on a stone, on every contact.** Every fire she makes lights every stone
+  it touches, for as long as they touch (`World::fire_lights_the_stones`): the
+  pillar's base and column, a tornado where it has got to, a cloud of embers,
+  the fountain's wash, the carpet's strip, the ring of fire as it races out. A
+  fire bolt lights the stone that stops it, a lit shot the stones it passes, and
+  burning wind (below) what it touches. It was only the pillar's footprint, on
+  the frame it was cast.
+- **The pillar is half again as big and stands twice as long.** The Strike's
+  worth was halved with it, so a full Strike is the hit it was.
+- **`Q` and `E` act on everything on their line at once.** The Bolt and
+  Cataclysm run on through the point the crosshair is on to their whole reach
+  (`aim::through`) and act on every stone and every fire on that line
+  (`aim::every_along`), nearest first; a wall, or a Bulwark's planted shield,
+  still ends the line. Two stones one behind the other used to be useless: the
+  near one took the shot meant for the far one, and the far one stopped the
+  near one's kick.
+- **Fissure's stone comes up while it slides** (`EffectKind::Surge`). On the
+  release the stone she held churning erupts where it was held and travels
+  along the line the hold bought at `Fissure surge, speed`, rising out of the
+  floor on its own clock as it goes, to a standing stone at the end. Whoever
+  stands at its front is carried -- on their feet moved with it, off them given
+  its speed along the line -- and that includes her: held at her own feet, the
+  stone erupts under her and runs, and a jump timed out of the eruption leaves
+  with the stone's climb *and* the surge's run. Anybody else it reaches is
+  struck once and carried on: the row's damage at a tap, `1 +` `damage at a
+  full hold` times it at a full one, and the same for knockback and the throw
+  up. It no longer stops at the first body. The line is still rough terrain.
+- **Wind through fire is fire.** A Gale or an Air bolt flown through fire is
+  drawn in the fire material and deals double (`Lit shot, damage bonus` 100%).
+  An Air ball, an Updraft or a Downdraft that touches fire -- any fire of hers,
+  or a lit stone -- catches (`Effect::lit`), is drawn as fire, lights stones it
+  touches, and burns: the ball whoever it holds, on the tick; a draft each body
+  in it, once.
+- **The Air ball lasts two and a half times as long, and she steers it with A
+  and D.** While she rides her own ball A and D turn it left and right at `Air
+  ball, turns while she rides`, and her walk is taken off her, so she stays in
+  it however she steers; a jump still leaves it. The old steering bent it by
+  the sideways share of her walk, which walked her out of the side before it
+  turned. Anybody else in it walks as they like. *This replaces the steering
+  described under "After the second playtest" below.*
+- **Half off a stone, the earth jump pushes off it.** Walking off a stone's edge
+  through the jump's short wind-up put her feet past the stone when the jump
+  came out, and it raised a new stone in the air. The rise now remembers the
+  stone her feet were last on (`Rise::stone`), and the jump uses it while she is
+  still at its top and no further past its side than the wind-up's walk.
+- **The Updraft takeoff goes half again as high, and steers.** From the floor
+  and in the air. While her column blows and she is off the floor, the
+  direction she holds pushes her that way (`Updraft, steered by her walk`, up
+  to `Updraft, steered up to`).
 
 **Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
 along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and
@@ -334,6 +389,10 @@ than over the place the crosshair was on, and the shot sailed over everybody.
 The rule was always meant to be a lift measured from the ground the ray met; the
 code says so now and so does this.
 
+> **Since 2026-10-18 it acts on everything on its line**, not only the first thing: every
+> stone and every fire up to a wall, at once, and the line runs on past the crosshair's point
+> to the move's reach. Cataclysm the same. See §"The QoL pass".
+>
 > **Implemented** (`L`). What the line reaches **first** is the whole move,
 > checked every active frame and spending the move's one hit on whatever it
 > finds:
@@ -425,6 +484,9 @@ at the point of impact
 A skillshot that races forward through the ground and stops at the first enemy hit,
 staggering them. Leaves a slowing field along its path for several seconds.
 
+> **Since 2026-10-18 the stone comes up while it slides** and carries whoever is at its front;
+> it no longer stops at the first body, and a longer hold strikes harder. See §"The QoL pass".
+>
 > **Built 2026-09-30, on a hold.** `E` tapped is Raise; `E` held past the stone's churn keeps
 > it churning and becomes the crack's hold, and letting go races the crack out from the stone
 > toward the crosshair's spot on the ground (along her facing until 2026-10-08) — two metres for a tap of a hold, ten for the full second — and the stone
@@ -761,7 +823,8 @@ her three metres. `R` in the air is nothing yet; Hover is the candidate and wait
 
 ### Fire on a stone
 
-A stone is lit by a pillar whose footprint takes in its base (since 2026-10-02 a pillar aimed
+*Since 2026-10-18 any fire touching a stone lights it, for as long as they touch -- see §"The
+QoL pass".* A stone is lit by a pillar whose footprint takes in its base (since 2026-10-02 a pillar aimed
 at a stone goes through it to the floor beyond, so light one by aiming at the floor beside it), by an ember bursting beside it, or by a lit shot passing
 it, and burns for five seconds. A **lit stone burns whoever stands on it** — her terrain denied
 to the opponent as cover, which is the one ruling in [../elementalist.md](../elementalist.md)

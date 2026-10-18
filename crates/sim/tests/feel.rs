@@ -433,7 +433,11 @@ fn best_case(m: &Move) -> i32 {
             | EffectKind::ShadowWhirl
             | EffectKind::ShadowBurst
             | EffectKind::ShadowFan
-            | EffectKind::ShadowRing,
+            | EffectKind::ShadowRing
+            // Fissure's surge, 2026-10-18: placed by the world on the move's
+            // first active frame, never by a row's code. Its blow is the
+            // move's own, at a tap.
+            | EffectKind::Surge,
         )
         | None => m.damage * swings,
     }

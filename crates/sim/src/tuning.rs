@@ -3450,8 +3450,50 @@ pub fn air_ball_sink() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallSink)).max(Fx::ZERO)
 }
 
-/// How much of her sideways walk inside her Air ball turns it.
-pub fn air_ball_steer() -> Fx {
+/// How hard the direction she holds pushes her while her Updraft blows, in
+/// metres a second, a second.
+pub fn updraft_steer() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftSteer)).max(Fx::ZERO)
+}
+
+/// The most speed that push gives her along the way she holds.
+pub fn updraft_steer_cap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftSteerCap)).max(Fx::ZERO)
+}
+
+/// How fast Fissure's surge runs along its line, in metres a second.
+pub fn surge_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeSpeed)).max(Fx::ONE)
+}
+
+/// How much more than the move's own damage a full hold's surge deals: a
+/// tap is the move's number, a full hold `1 +` this times it.
+pub fn surge_damage_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeDamageGain)).max(Fx::ZERO)
+}
+
+/// The same for its knockback and its throw.
+pub fn surge_knock_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeKnockGain)).max(Fx::ZERO)
+}
+
+/// How hard the surge throws somebody it strikes up, at a tap.
+pub fn surge_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeLift)).max(Fx::ZERO)
+}
+
+/// What a burning Air ball deals whoever it holds, on the tick.
+pub fn wind_fire_burn() -> i32 {
+    oven::scalar(Scalar::WindFireBurn).max(0)
+}
+
+/// What a burning Updraft or Downdraft deals each body in it, once.
+pub fn draft_fire_burn() -> i32 {
+    oven::scalar(Scalar::DraftFireBurn).max(0)
+}
+
+/// How fast A and D turn the Air ball she is riding, in turns a second.
+pub fn air_ball_turn() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallSteer)).max(Fx::ZERO)
 }
 
