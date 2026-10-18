@@ -276,64 +276,125 @@ fn the_plunges_ring_reaches_past_the_blade() {
     );
 }
 
-#[test]
-fn gallows_sends_the_shadow_up_blinks_to_it_and_slams_down_slowly() {
-    let mut w = facing(2.0);
-    step(&mut w, SPACE | keys::FINISHER);
-    assert_eq!(doing(&w), Some(r::GALLOWS));
-    // The shadow goes first, and she is still standing.
-    run(&mut w, 3, 0, down(30));
-    assert!(
-        matches!(shadow(&w).doing, Ghost::Casting { .. }),
-        "the shadow went first"
-    );
-    let mut highest = Fx::ZERO;
-    let mut burst = false;
-    for _ in 0..16 {
-        run(&mut w, 1, 0, down(30));
-        highest = highest.max(w.players[0].pos.y);
-        burst |= effects_of(&w, EffectKind::ShadowBurst) > 0;
-    }
-    assert!(
-        highest.raw() > metres(2.0).raw(),
-        "she blinked up to it: {}",
-        as_f(highest)
-    );
-    assert!(burst, "collecting it up there is a burst");
-    let mut landed_recovering = 0;
-    for _ in 0..90 {
-        run(&mut w, 1, 0, down(30));
-        if w.players[0].grounded
-            && matches!(w.players[0].action, Action::Recovery { kind, .. } if kind == r::GALLOWS)
-        {
-            landed_recovering += 1;
+/// Throw Gallows with the camera at `pitch` and follow it to the frame its
+/// drive ends: where she went from, and to.
+fn gallows_drive(w: &mut World, pitch: i16) -> (V3, V3) {
+    let from = w.players[0].pos;
+    run(w, 1, SPACE | keys::FINISHER, pitch);
+    assert_eq!(doing(w), Some(r::GALLOWS));
+    let mut to = w.players[0].pos;
+    for _ in 0..40 {
+        run(w, 1, 0, pitch);
+        if shadow(w).rising == 0 {
+            break;
         }
+        to = w.players[0].pos;
     }
-    assert!(hurt(&w) > 0, "the slam landed");
+    (from, to)
+}
+
+fn climb_of(from: V3, to: V3) -> (f32, f32) {
+    let d = to.sub(from);
+    (as_f(V3::new(d.x, Fx::ZERO, d.z).flat_len()), as_f(d.y))
+}
+
+#[test]
+fn gallows_drives_her_up_at_an_angle_with_the_crosshair_level_or_low() {
+    // 2026-10-18: "a mid length drive upwards and at an angle (if cursor is
+    // down or around neutral)". Level and well down both climb at the
+    // floor's angle, forward along the crosshair's bearing.
+    for pitch in [0, down(40)] {
+        let mut w = alone();
+        let (from, to) = gallows_drive(&mut w, pitch);
+        let (along, up) = climb_of(from, to);
+        let gone = (along * along + up * up).sqrt();
+        let want = as_f(t::gallows_drive());
+        assert!(
+            (gone - want).abs() < 1.0,
+            "pitch {pitch}: drove {gone:.2} m, not {want:.1}"
+        );
+        assert!(
+            (up - along).abs() < 0.5,
+            "pitch {pitch}: up {up:.2} and along {along:.2} is not the floor's 45 degrees"
+        );
+        assert!(
+            to.x.raw() > from.x.raw(),
+            "pitch {pitch}: forward, the way she faces"
+        );
+    }
+}
+
+#[test]
+fn gallows_drives_exactly_where_the_crosshair_points_when_it_points_up() {
+    // "... or to where the cursor is pointing precisely (if cursor is
+    // pointing up)". Steeper than the floor, it is steeper than the floor.
+    let mut w = alone();
+    let (from, to) = gallows_drive(&mut w, down(-70));
+    let (along, up) = climb_of(from, to);
     assert!(
-        landed_recovering >= 28,
-        "a long recovery on the floor: {landed_recovering} frames"
+        up > along * 2.0,
+        "looking well up, it went up {up:.2} and along {along:.2}"
     );
+    // And where it ends is where the crosshair was: the reticle's point at
+    // the drive's length, from her chest.
+    let mut w = alone();
+    let look = Input::looking_at(0, 0, down(-70));
+    let reach = t::gallows_drive();
+    let aimed = {
+        let stones = sim::stones::gather(&w.players);
+        let players = w.players;
+        let effects = w.effects;
+        let scene = sim::aim::Scene {
+            stones: &stones,
+            players: &players,
+            effects: &effects,
+            quarry: &w.monsters,
+            critters: &sim::critter::Critters::NONE,
+            arena: &w.terrain(),
+        };
+        sim::aim::sight(0, look, reach, &scene).at
+    };
+    let chest = sim::aim::origin(w.players[0].pos);
+    let (_, to) = gallows_drive(&mut w, down(-70));
+    let ended = sim::aim::origin(to);
+    assert!(
+        ended.sub(aimed).len().raw() < metres(1.0).raw(),
+        "ended {:.2} m off the crosshair's point (from {:.2} m away)",
+        as_f(ended.sub(aimed).len()),
+        as_f(aimed.sub(chest).len())
+    );
+}
+
+#[test]
+fn gallows_cuts_on_the_way_up() {
+    // A Bulwark up and ahead of her, where the drive goes: the finisher
+    // lands on him on the way, rather than waiting for a floor.
+    let mut w = facing(4.0);
+    w.players[1].pos.y = metres(3.0);
+    w.players[1].grounded = false;
+    let mut struck = false;
+    run(&mut w, 1, SPACE | keys::FINISHER, 0);
+    for _ in 0..20 {
+        w.players[1].pos.y = metres(3.0);
+        w.players[1].vel = V3::ZERO;
+        run(&mut w, 1, 0, 0);
+        struck |= hurt(&w) > 0;
+    }
+    assert!(struck, "the cut at the top of the drive landed");
 }
 
 #[test]
 fn gallows_works_in_the_air() {
     let mut w = alone();
     aloft(&mut w, 2.0);
-    let low = w.players[0].pos.y;
-    step(&mut w, SPACE | keys::FINISHER);
-    assert_eq!(doing(&w), Some(r::GALLOWS));
-    let mut highest = Fx::ZERO;
-    for _ in 0..20 {
-        step(&mut w, 0);
-        highest = highest.max(w.players[0].pos.y);
-    }
+    let (from, to) = gallows_drive(&mut w, 0);
     assert!(
-        highest.raw() > low.add(metres(2.0)).raw(),
-        "she blinked up from the air: {}",
-        as_f(highest)
+        to.y.sub(from.y).raw() > metres(3.0).raw(),
+        "she drove up from the air: {}",
+        as_f(to.y.sub(from.y))
     );
 }
+
 // ---------------------------------------------------------------------------
 // The neutral blades
 // ---------------------------------------------------------------------------
@@ -386,6 +447,38 @@ fn the_fan_is_level_and_holds_her_in_the_air() {
         as_f(start.sub(w.players[0].pos.y))
     );
 }
+#[test]
+fn the_fan_hangs_her_less_each_time_she_keeps_throwing_it() {
+    // 2026-10-18, from play: "the shuriken air stall needs to diminish the
+    // more often it's used consecutively". Each Fan's hang is worth less than
+    // the last, and a landing between them does not give it back -- only
+    // going a while without one does.
+    let mut w = alone();
+    let mut hangs = Vec::new();
+    for _ in 0..3 {
+        aloft(&mut w, 3.0);
+        w.players[0].vel.y = Fx::ZERO;
+        step(&mut w, keys::NEUTRAL);
+        assert_eq!(doing(&w), Some(r::FAN));
+        hangs.push(w.players[0].air_stall);
+        // Down, and stood on the floor, and up again: a fresh airtime.
+        w.players[0].pos.y = Fx::ZERO;
+        run(&mut w, 40, 0, 0);
+        assert!(w.players[0].grounded, "she landed between throws");
+    }
+    assert!(
+        hangs[0] > hangs[1] && hangs[1] > hangs[2],
+        "the hang wore down: {hangs:?}"
+    );
+    run(&mut w, t::fan_forget() as u32, 0, 0);
+    aloft(&mut w, 3.0);
+    step(&mut w, keys::NEUTRAL);
+    assert_eq!(
+        w.players[0].air_stall, hangs[0],
+        "after a rest the next Fan hangs in full"
+    );
+}
+
 #[test]
 fn the_tumble_is_a_double_jump_once_a_trip() {
     let mut w = alone();
@@ -692,12 +785,17 @@ fn the_dash_jump_flips_and_hops() {
         }
     }
     let up = leaving.expect("a dash jump flips her");
+    // Her jump and the flip's hop, cut to three quarters with the carry since
+    // 2026-10-18 ("shadow dash jump speeds nerfed to 75% of current values
+    // across the board") -- which puts it under an ordinary jump's rise.
     let jump = t::jump_speed().mul(Class::ShadowReaver.mobility().jump);
+    let want = jump.add(t::dash_jump_hop()).mul(t::dash_jump_rise());
     assert!(
-        up.raw() > jump.raw(),
-        "and hops higher than her jump: {} against {}",
+        // A frame of held gravity has already been taken off it.
+        up.sub(want).abs().raw() < metres(1.0).raw(),
+        "and hops at its share of a jump and the hop: {} against {}",
         as_f(up),
-        as_f(jump)
+        as_f(want)
     );
 }
 

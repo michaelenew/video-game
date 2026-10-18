@@ -962,9 +962,9 @@ pub mod reaver {
     /// whirls, cutting. One set of blades: pressed again it moves them and
     /// starts their clock again.
     pub const WHIRL: u8 = 6;
-    /// Space and left click, off the floor or once in the air: the shadow goes
-    /// up, she is where it is -- collecting it -- and plunges as the Plunge
-    /// does, heavier. A finisher.
+    /// Space and left click, off the floor or once in the air: a drive up,
+    /// at an angle with the crosshair level or low and straight at it when
+    /// it is higher, cutting at the top (2026-10-18). A finisher.
     pub const GALLOWS: u8 = 7;
     /// Space and middle click, off the floor or once in the air: a tumbling
     /// double jump, throwing a fan of blades forward and down.
@@ -997,10 +997,11 @@ pub mod reaver {
         matches!(kind, GALLOWS | TUMBLE | RISING_WHIRL)
     }
 
-    /// Does this move put the shadow somewhere? The three on right click, and
-    /// Gallows, which sends it up to be followed.
+    /// Does this move put the shadow somewhere? The three on right click.
+    /// Gallows sent it up to be followed until 2026-10-18; it is a drive of
+    /// her own now.
     pub const fn places_the_shadow(kind: u8) -> bool {
-        matches!(kind, SEND | WHIRL | RISING_WHIRL | GALLOWS)
+        matches!(kind, SEND | WHIRL | RISING_WHIRL)
     }
 
     /// Does this move spend the marks on what it hits? The three finishers on

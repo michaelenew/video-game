@@ -144,10 +144,14 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **The Reaver's again the same day, deliberately: the step a body walks up
 /// is a knee, 0.5 m, not 0.45 m.** Her random walk now walks up something it
 /// used to stop at; with the step put back, every pin holds.
+/// **And the Reaver's on 2026-10-18, deliberately**: Gallows became a drive
+/// up, the dash jump was cut to three quarters, the Fan's hang wears down and
+/// the shadow rests after a dash collects it -- the random presses throw all
+/// four. See `docs/design/feel-log.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
     (Class::Bulwark, 0xd12b055c26db8afb),
-    (Class::ShadowReaver, 0x0b07d31d8c4ff345),
+    (Class::ShadowReaver, 0xf62e51af6026ca5e),
     (Class::BloodMage, 0x8aa1ac49e9445901),
     (Class::DualMage, 0x810a930f65195268),
     (Class::Elementalist, 0xa2d1095986bff1d9),
