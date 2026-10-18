@@ -286,8 +286,7 @@ pub enum EffectKind {
     /// (2026-10-12). Its first cut on a body marks it.
     ShadowWhirl,
     /// Shadow Reaver, **the burst** (2026-10-12): blades thrown round her as
-    /// she collects her shadow -- the dash's arrival, standing on it, Gallows'
-    /// blink. A thin disc round her waist, `reach` across and
+    /// she collects her shadow -- the dash's arrival, standing on it. A thin disc round her waist, `reach` across and
     /// `tuning::disc_thickness` above and below, under her live; it cuts each
     /// body once, and marks it. What the Blade ring and the Blade spin were,
     /// made a consequence of going and getting the shadow rather than an

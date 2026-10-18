@@ -716,11 +716,14 @@ scalars! {
     // flip out of the dash and the tally's curve. See
     // `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
     PlungeDive,           "Shadow Reaver", "Plunge, dives at (m/s)", Fixed, 0, fx(60,1);
-    PlungeCone,           "Shadow Reaver", "Plunge and Gallows, cone round straight down (turns)", Fixed, 0, fx(1,4);
-    GallowsBlink,         "Shadow Reaver", "Gallows, the shadow goes up (m)", Fixed, 0, fx(10,1);
-    GallowsAhead,         "Shadow Reaver", "Gallows, the shadow goes ahead (m)", Fixed, 0, fx(10,1);
-    GallowsHang,          "Shadow Reaver", "Gallows, hangs after the blink", Frames, 0, 60;
-    GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
+    PlungeCone,           "Shadow Reaver", "Plunge, cone round straight down (turns)", Fixed, 0, fx(1,4);
+    // These four were Gallows' blink to the shadow and its dive until
+    // 2026-10-18, when it became a drive upward; the slots are kept, because
+    // `tuned::SCALARS` is read by this enum's own discriminant.
+    GallowsDrive,         "Shadow Reaver", "Gallows, drives (m)", Fixed, 0, fx(15,1);
+    GallowsClimb,         "Shadow Reaver", "Gallows, climbs at least (turns)", Fixed, 0, fx(1,4);
+    GallowsKept,          "Shadow Reaver", "Gallows, keeps of the drive after it (%)", Percent, 0, 100;
+    SendAfterDash,        "Shadow Reaver", "Send, waits after a dash collects the shadow", Frames, 0, 180;
     ShadowReturn,         "Shadow Reaver", "Shadow, comes home after a send", Frames, 1, 900;
     ShadowCollectWithin,  "Shadow Reaver", "Shadow, collected standing within (m)", Fixed, 0, fx(5,1);
     BurstDamage,          "Shadow Reaver", "Burst, damage", Int, 0, 300;
@@ -1108,6 +1111,12 @@ scalars! {
     SurgeDamageGain,      "Elementalist", "Fissure surge, damage at a full hold (+x)",       Fixed, 0, fx(5,1);
     SurgeKnockGain,       "Elementalist", "Fissure surge, knockback at a full hold (+x)",    Fixed, 0, fx(5,1);
     SurgeLift,            "Elementalist", "Fissure surge, throws up at (m/s)",               Fixed, 0, fx(30,1);
+    // **The Reaver's tweaks**, 2026-10-18: the dash jump's rise cut with its
+    // carry, and the Fan's hang worn down by throwing it again. See
+    // `docs/design/kits/shadow-reaver.md`.
+    DashJumpRise,         "Shadow Reaver", "Dash jump, keeps of the rise (%)",   Percent, 0, 100;
+    FanFalloff,           "Shadow Reaver", "Fan, hang each one after (x)",       Fixed, 0, fx(1,1);
+    FanForget,            "Shadow Reaver", "Fan, the run forgotten after",       Frames, 1, 600;
 }
 
 // ---------------------------------------------------------------------------

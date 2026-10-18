@@ -2634,15 +2634,33 @@ pub fn walk_toward(from: V3, to: V3, scene: &Scene) -> Option<V3> {
     })
 }
 
-/// **Where Gallows sends the shadow up** (2026-10-12; the Shadow arc's,
-/// retired, before it): `ahead` along her flat facing and `up` above her feet. Nobody aims it -- the move is a
-/// throw forward and up, the way Landfall's slab is a fixed distance ahead
-/// ([`planted_ahead`]) -- so it is a facing and two lengths, and it lives
-/// here for the reason that one does.
-pub fn hung_ahead(pos: V3, facing: V3, ahead: Fx, up: Fx) -> V3 {
-    let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
-    pos.add(flat.scale(ahead))
-        .add(V3::new(Fx::ZERO, up, Fx::ZERO))
+/// **Which way Gallows drives her** (2026-10-18): from her chest to the
+/// point the crosshair is on within `reach` -- the drive's own length, so
+/// pointed at open sky it is the point she ends on -- held at least `climb`
+/// turns above level. Pointed up, steeper than that, it goes exactly where
+/// the crosshair is; pointed level or down, it climbs at the floor's angle on
+/// the crosshair's bearing. Her facing's bearing when there is none.
+///
+/// The owner's brief: "a mid length drive upwards and at an angle (if cursor
+/// is down or around neutral) or to where the cursor is pointing precisely
+/// (if cursor is pointing up)". [`plunge_dir`] turned over, and aimed off
+/// [`sight`] rather than the look, so it converges on the reticle.
+pub fn rise_dir(who: usize, look: Input, reach: Fx, climb: Fx, scene: &Scene) -> V3 {
+    let caster = &scene.players[who];
+    let from = origin(caster.pos);
+    let dir = sight(who, look, reach, scene).at.sub(from).normalized();
+    let floor = crate::fixed::sin_turns(climb);
+    if dir.y.raw() >= floor.raw() {
+        return dir;
+    }
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z);
+    let flat = if flat.len().raw() > 0 {
+        flat.normalized()
+    } else {
+        V3::new(caster.facing.x, Fx::ZERO, caster.facing.z).normalized()
+    };
+    flat.scale(crate::fixed::cos_turns(climb))
+        .add(V3::new(Fx::ZERO, floor, Fx::ZERO))
 }
 
 /// **Which way a plunge goes** (2026-10-12): along `dir` -- the swing's line,
@@ -2651,7 +2669,7 @@ pub fn hung_ahead(pos: V3, facing: V3, ahead: Fx, up: Fx) -> V3 {
 /// the crosshair is; pointed shallower, it goes down the cone's edge on the
 /// same bearing. Straight down when there is no bearing at all.
 ///
-/// The Reaver's Plunge and Gallows. The owner's brief: the aerial left click
+/// The Reaver's Plunge. The owner's brief: the aerial left click
 /// lets you choose a direction, but not "outside of a 45 degree cone
 /// downward" -- a dive along the look with no limit would be a dash, which is
 /// the Reave's.

@@ -153,10 +153,14 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// pillar bigger and longer, the two pushes act on everything on their line,
 /// Fissure's stone slides, wind burns and the Updraft lifts higher -- her
 /// random hunt plays differently, and nobody else's moved.
+/// **And the Reaver's on 2026-10-18, deliberately**: Gallows became a drive
+/// up, the dash jump was cut to three quarters, the Fan's hang wears down and
+/// the shadow rests after a dash collects it -- the random presses throw all
+/// four. See `docs/design/feel-log.md`.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
     (Class::Bulwark, 0xd12b055c26db8afb),
-    (Class::ShadowReaver, 0x0b07d31d8c4ff345),
+    (Class::ShadowReaver, 0xf62e51af6026ca5e),
     (Class::BloodMage, 0x6c94d14d4f5ec81d),
     (Class::DualMage, 0x810a930f65195268),
     (Class::Elementalist, 0x405a4e207b063bea),

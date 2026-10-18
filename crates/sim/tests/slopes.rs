@@ -322,6 +322,12 @@ fn dash_jump(w: &mut World, dir: V3) -> Fx {
             unreachable!()
         };
         if pressing && s.dash == 0 {
+            // Only the dash jump's own flight: three quarters of the dash
+            // since 2026-10-18 brings her down on an uphill inside the window,
+            // and the jump still held then is an ordinary one.
+            if w.players[0].grounded && fastest.raw() > 0 {
+                break;
+            }
             fastest = fastest.max(w.players[0].vel.y);
         }
     }

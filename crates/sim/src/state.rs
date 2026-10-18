@@ -1106,6 +1106,14 @@ impl Player {
         if !self.mechanic_ready(kind) {
             return false;
         }
+        // The Reaver's shadow, just collected by a dash, rests before anything
+        // on right click sends it again (2026-10-18). See `Shadow::rest`.
+        if self.class == Class::ShadowReaver
+            && moves::reaver::places_the_shadow(kind)
+            && shadow::resting(self)
+        {
+            return false;
+        }
         match out.get(kind as usize) {
             Some(true) if moves::reactivates(self.class, kind) => self
                 .reactivate_lock
@@ -6260,7 +6268,6 @@ fn step_player(
     // the swing comes out on this frame rather than a slide's length later.
     // See `shadow::swing_out_of_the_carry`.
     shadow::swing_out_of_the_carry(p, input);
-    gallows_blinks(p);
     // The Dual mage's hop out of a finished auto, before the countdown so the
     // recovery it shortens is the one counted down this frame.
     hop_after_the_auto(p, input, scene);
@@ -6603,6 +6610,9 @@ fn step_player(
     let flurry_arrived = flurry_run.filter(|_| !hauling && p.haul == 0);
 
     let dashing = shadow::dash_drive(p);
+    // Gallows' drive up (2026-10-18). Its clock runs here, once a frame, and
+    // on the frame it ends her speed is cut to what she keeps of it.
+    let rising = shadow::rise_drive(p);
     if hauling {
         // Ahead of the dash and of everything below it, and it ignores the
         // stick outright: the arms have hold of a wall and she is on the end of
@@ -6634,6 +6644,10 @@ fn step_player(
         // mid-jump is not immediately steered out of.
         p.vel.x = p.vel.x.mul(t::stun_decay());
         p.vel.z = p.vel.z.mul(t::stun_decay());
+    } else if let Some(drive) = rising {
+        // **Gallows** holds its line, all three axes, with gravity off below
+        // and the arena on: a ceiling or a wall stops the rise.
+        p.vel = drive;
     } else if let Some(drive) = ramming(p) {
         // **The Battering ram** holds its line for its active frames, on the
         // floor and off it: he goes along the ground, not up, and whoever the
@@ -6805,11 +6819,14 @@ fn step_player(
         // And a little more than a jump: the hop of the forward flip she
         // throws out of it (2026-10-10). The flip is drawn off
         // `Shadow::flip`.
-        p.vel.y = p
-            .vel
-            .y
-            .add(t::jump_speed().mul(mob.jump))
-            .add(t::dash_jump_hop());
+        // Both cut to `tuning::dash_jump_rise` since 2026-10-18, with the
+        // carry (`tuning::dash_jump_keep`).
+        p.vel.y = p.vel.y.add(
+            t::jump_speed()
+                .mul(mob.jump)
+                .add(t::dash_jump_hop())
+                .mul(t::dash_jump_rise()),
+        );
         shadow::begin_flip(p);
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
@@ -6846,7 +6863,7 @@ fn step_player(
     if nailed {
         p.vel = V3::ZERO;
     }
-    if !p.grounded && dashing.is_none() && !hauling && !nailed {
+    if !p.grounded && dashing.is_none() && rising.is_none() && !hauling && !nailed {
         if plunging(p) {
             // **The descent.** Driven rather than fallen: gravity would make
             // the plunge take longer the lower she started, which is backwards
@@ -6864,11 +6881,7 @@ fn step_player(
             // (`aim::plunge_dir`), at their own speed -- the whole velocity,
             // so the line she picked is the line she flies.
             if p.class == Class::ShadowReaver {
-                let speed = match p.action.attack_kind() {
-                    Some(moves::reaver::PLUNGE) => t::plunge_dive(),
-                    _ => t::gallows_dive(),
-                };
-                p.vel = aim::plunge_dir(p.aim_dir(), t::plunge_cone()).scale(speed);
+                p.vel = aim::plunge_dir(p.aim_dir(), t::plunge_cone()).scale(t::plunge_dive());
             } else if p.class == Class::DualMage {
                 // **Descent** (2026-10-12): the Plunge's cone and its rule --
                 // the line she picked is the line she flies -- at its own
@@ -7011,13 +7024,7 @@ fn step_player(
         // make my slowest move instant" is "hop first".
         if let Action::Startup { kind, left } = p.action {
             let slam_from_the_air = !was_grounded && p.class == Class::Bulwark && left == 0;
-            // Gallows the same way (2026-10-12): its wind-up is the shadow
-            // going up and her blinking to it, so a landing before that --
-            // the takeoff put back on the floor it left -- is not its slam.
-            let gallows_early =
-                p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS && left > 0;
             if lands_on_the_floor(p.class, kind)
-                && !gallows_early
                 && (matches!(
                     p.class,
                     Class::Elementalist | Class::ShadowReaver | Class::Champion
@@ -7799,8 +7806,7 @@ fn plunging(p: &Player) -> bool {
     !p.grounded
         && p.air_stall == 0
         && ((p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
-            || (p.class == Class::ShadowReaver
-                && matches!(kind, moves::reaver::GALLOWS | moves::reaver::PLUNGE))
+            || (p.class == Class::ShadowReaver && kind == moves::reaver::PLUNGE)
             || (p.class == Class::DualMage && kind == moves::dual::DESCENT))
 }
 
@@ -7821,8 +7827,7 @@ fn lands_on_the_floor(class: Class, kind: u8) -> bool {
         && matches!(kind, moves::champion::METEOR | moves::champion::SHOCKWAVE))
         || (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
         || (class == Class::Bulwark && kind == SLOT_COMMITTED)
-        || (class == Class::ShadowReaver
-            && matches!(kind, moves::reaver::GALLOWS | moves::reaver::PLUNGE))
+        || (class == Class::ShadowReaver && kind == moves::reaver::PLUNGE)
         || (class == Class::DualMage && kind == moves::dual::DESCENT)
 }
 
@@ -9254,30 +9259,6 @@ fn queue_the_shadow(p: &mut Player, input: Input) {
     }
 }
 
-/// **Gallows' blink** (2026-10-12): in its wind-up, the moment the shadow it
-/// sent up has arrived -- or the wind-up is about to run out, whichever is
-/// first -- she is where the shadow is, collecting it (and so bursting), and
-/// hangs a beat (`tuning::gallows_hang`) before `plunging` drives her down.
-fn gallows_blinks(p: &mut Player) {
-    let Action::Startup { kind, left } = p.action else {
-        return;
-    };
-    if p.class != Class::ShadowReaver || kind != moves::reaver::GALLOWS {
-        return;
-    }
-    let Some(sh) = shadow::of(p) else { return };
-    let arrived = matches!(sh.doing, crate::class::Ghost::Waiting);
-    let flying = matches!(sh.doing, crate::class::Ghost::Casting { .. });
-    if !(arrived || (flying && left <= 1)) {
-        return;
-    }
-    p.pos = sh.pos;
-    p.vel = V3::ZERO;
-    p.grounded = false;
-    p.air_stall = t::gallows_hang();
-    shadow::collect(p);
-}
-
 /// **Following the shadow out** (2026-10-10): a forward dodge while the
 /// shadow she just threw is still flying cuts the throw's remaining frames
 /// short, so the dodge below is the dash, chasing it. Only once it has left
@@ -9379,16 +9360,17 @@ fn begin_move(
         return Action::Channel { kind, held: 0 };
     }
     lock_aim(p, who, kind, input, scene);
-    // **Gallows** (2026-10-12): the shadow goes first, up and a little
-    // ahead, and she holds still while it flies -- in the air too, where the
-    // move's own hang holds her. When it is there she is where it is
-    // (`gallows_blinks`), and then she plunges as the Plunge does. Her source
-    // material's "blink upward, then slash down", with the blink made of her
-    // shadow.
+    // **Gallows** (2026-10-18): a drive up, `tuning::gallows_drive` long,
+    // through its wind-up and its cut -- at an angle when the crosshair is
+    // level or low, exactly at it when it is higher (`aim::rise_dir`). From
+    // the floor and in the air the same. It replaced the shadow thrown up,
+    // the blink to it and the dive out of it.
     if p.class == Class::ShadowReaver && kind == moves::reaver::GALLOWS {
-        let to = aim::hung_ahead(p.pos, p.facing, t::gallows_ahead(), t::gallows_blink());
-        shadow::throw(p, to, t::shadow_return());
-        p.vel = V3::ZERO;
+        let dir = aim::rise_dir(who, input, t::gallows_drive(), t::gallows_climb(), scene);
+        let m = moves::get(p.class, kind);
+        shadow::begin_rise(p, dir, m.startup.saturating_add(m.active));
+        p.grounded = false;
+        p.air_stall = 0;
     }
     // **The Plunge**: straight into the dive, along the line she picked. Her
     // drift is spent; `plunging` drives it from the next frame.
@@ -9982,6 +9964,11 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
         let mut worth = Fx::from_int(full as i32);
         for _ in 0..p.air_stalls {
             worth = worth.mul(t::air_stall_falloff());
+        }
+        // And the Reaver's Fan wears down on its own as she keeps throwing it,
+        // landing or not. See `shadow::fan_hang`.
+        if p.class == Class::ShadowReaver && kind == moves::reaver::FAN {
+            worth = shadow::fan_hang(p, worth);
         }
         p.air_stall = worth.to_int().max(0) as u16;
         p.air_stalls = p.air_stalls.saturating_add(1);
@@ -10667,6 +10654,14 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                 h.write_u32(shadow.hang as u32);
                 h.write_u32(shadow.flip as u32);
                 h.write_u32(shadow.collected as u32);
+            }
+            // The same, for the clocks of 2026-10-18.
+            if shadow.rest != 0 || shadow.rising != 0 || shadow.fans != 0 || shadow.fan_clock != 0 {
+                h.write_u32(shadow.rest as u32);
+                hash_v3(h, &shadow.rise);
+                h.write_u32(shadow.rising as u32);
+                h.write_u32(shadow.fans as u32);
+                h.write_u32(shadow.fan_clock as u32);
             }
         }
         Mechanic::Structures(slots) => {

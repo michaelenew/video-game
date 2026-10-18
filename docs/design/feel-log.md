@@ -9024,3 +9024,57 @@ hunter plant fewer hearts now that they are earned.
 
 **Verdict** Unplayed. 400 is about eight Sweeps or four spikes: a heart a fight's opening
 exchange, not one every few seconds. Too slow or too fast is the first thing to say.
+
+### 2026-10-18 — the Reaver: Gallows a drive up, a rest after the dash, the dash jump and the Fan cut
+
+**Changed** Four things, from the owner's Reaver thread.
+
+- **Gallows** (space + left click, floor or air) is a drive up, `Gallows,
+  drives` 7 m over its wind-up and cut (16 frames, about 26 m/s), at least
+  `Gallows, climbs at least` an eighth of a turn (45°) above level: with the
+  crosshair level or low it climbs at that angle on the crosshair's bearing,
+  pointed higher it goes exactly at the crosshair's point (`aim::rise_dir`,
+  which reads `aim::sight` at the drive's length). Gravity is off and the
+  arena on for the drive; after it she keeps `Gallows, keeps of the drive
+  after it` 30% of its speed. It no longer throws the shadow up, blinks to it,
+  bursts or dives; its hang went 12 → 0. The four Gallows knobs were
+  repurposed in place (the blink's height, its reach ahead, its hang and the
+  dive's speed).
+- **The shadow rests after a dash collects it**: `Send, waits after a dash
+  collects the shadow`, 60 frames, gates the send, the Whirl and the Rising
+  whirl (`Shadow::rest`).
+- **The dash jump at three quarters, both ways**: `Dash jump, keeps of the
+  dash speed` 100 → 75%, and a new `Dash jump, keeps of the rise` 75% of the
+  jump and the flip's hop together (about 21.8 → 16.4 m/s up). That is under
+  a plain jump's 17.8; `reaver_clicks::the_dash_jump_flips_and_hops` used to
+  insist on more and now pins the share.
+- **The Fan wears down**: each Fan's hang is `Fan, hang each one after` 0.5 of
+  the one before, on top of the airtime's own `Aerial hang, each one after`,
+  and a landing does not reset it -- only `Fan, the run forgotten after` 90
+  frames without one does (`shadow::fan_hang`).
+
+**Why** The owner: "After a player dashes and collects the shadow, I need
+there to be a 1 second cooldown until they can send the shadow again ... I
+also want the shadow dash jump speeds nerfed to 75% of current values across
+the board ... The shuriken air stall needs to diminish the more often it's
+used consecutively ... And I want his jump left click in the air and on ground
+to be a mid length drive upwards and at an angle (if cursor is down or around
+neutral) or to where the cursor is pointing precisely (if cursor is pointing
+up)". "Across the board" was read as every speed the dash jump has, the rise
+included; if the rise should stay above a jump, `Dash jump, keeps of the rise`
+back to 100 does it. The Reaver's pinned hunt (`tests/ridgeback_pin.rs`) was
+re-pinned for it.
+
+**The movement search moved the other way.** Re-run for the Reaver
+(`tests/fixtures/envelope.txt`, her lines only), her best gaps moved
+both ways: with the shared tools alone they went up on every lane (lane 0 27
+to 39 m, lane 1 34 to 71), and with her whole kit some went down (lane 0 61
+to 39, lane 6 89 to 66, the dash jump's cut) and some up (lane 1 42 to 77).
+A 7 m drive at 45° forward, once a trip off the floor, is a lot of air
+reach. Worth watching on the courses; `Gallows, drives` and `Gallows, climbs
+at least` are the knobs.
+
+**Verdict** Unplayed. Gallows' animation is still the old heave, hang and
+drop (`anim/src/clips/reaver.rs`), so it will look wrong until it is redrawn
+as a rising cut.
+

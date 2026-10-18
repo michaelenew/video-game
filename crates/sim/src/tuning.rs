@@ -1238,7 +1238,9 @@ pub fn health_of(class: crate::class::Class) -> i32 {
 /// an ordinary jump. The dash still stops on the shadow (that part of
 /// 2026-09-23 was for precise fighting and stays); the speed is banked for the
 /// jump and bled by the dodge's decay through the carry, as the old slide was,
-/// so the earlier the press the further she goes.
+/// so the earlier the press the further she goes. Three quarters since
+/// 2026-10-18, with the rise cut the same ([`dash_jump_rise`]): "shadow dash
+/// jump speeds nerfed to 75% of current values across the board".
 pub fn dash_jump_keep() -> Fx {
     Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
 }
@@ -3573,29 +3575,55 @@ pub fn plunge_dive() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PlungeDive)).max(Fx::ZERO)
 }
 
-/// How far off straight down, in turns, the Plunge and Gallows may be aimed: the edge of the cone `aim::plunge_dir` holds them in.
+/// How far off straight down, in turns, the Plunge may be aimed: the edge of the cone `aim::plunge_dir` holds them in.
 pub fn plunge_cone() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PlungeCone)).max(Fx::ZERO)
 }
 
-/// How far up Gallows sends the shadow she then blinks to.
-pub fn gallows_blink() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GallowsBlink)).max(Fx::ZERO)
+/// How far Gallows drives her, in metres (2026-10-18): the length of the
+/// rise, and the reach the crosshair is read to (`aim::rise_dir`).
+pub fn gallows_drive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsDrive)).max(Fx::ZERO)
 }
 
-/// How far ahead, along her facing, Gallows sends the shadow.
-pub fn gallows_ahead() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GallowsAhead)).max(Fx::ZERO)
+/// The shallowest Gallows climbs, in turns above level: pointed level or
+/// down, it drives up at this angle; pointed up steeper, where it points.
+pub fn gallows_climb() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsClimb)).max(Fx::ZERO)
 }
 
-/// How long Gallows holds her where the shadow was before the plunge: the beat the defender reads.
-pub fn gallows_hang() -> u16 {
-    oven::scalar(Scalar::GallowsHang).max(0) as u16
+/// What she keeps of the drive's speed once it is over, so a rise is a rise
+/// of the drive's length rather than a launch that carries on past it.
+pub fn gallows_kept() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::GallowsKept).clamp(0, 100), 100)
 }
 
-/// How fast Gallows comes down its line.
-pub fn gallows_dive() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GallowsDive)).max(Fx::ZERO)
+/// How long after a dash collects the shadow before she may send it again
+/// (2026-10-18): the three moves on right click wait for it. Collecting it
+/// any other way is the ordinary lockout's.
+pub fn send_after_dash() -> u16 {
+    oven::scalar(Scalar::SendAfterDash).max(0) as u16
+}
+
+/// What a dash jump keeps of the rise an ordinary jump and its hop would
+/// give (2026-10-18): the dash jump nerfed with its carry,
+/// [`dash_jump_keep`].
+pub fn dash_jump_rise() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::DashJumpRise).clamp(0, 100), 100)
+}
+
+/// What each Fan's hang is worth against the one before it, compounding,
+/// while she keeps throwing them (2026-10-18): on top of
+/// [`air_stall_falloff`], and not reset by landing -- only by
+/// [`fan_forget`] frames without one.
+pub fn fan_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FanFalloff)).clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// How long without throwing a Fan before the run of them is forgotten and
+/// the next hangs in full.
+pub fn fan_forget() -> u16 {
+    oven::scalar(Scalar::FanForget).max(1) as u16
 }
 
 /// How long a sent shadow waits before it comes home on its own, from when it arrives. Every send starts it over (2026-10-12).

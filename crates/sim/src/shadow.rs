@@ -76,6 +76,11 @@ fn heel(p: &Player) -> V3 {
 pub fn step(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.refused = shadow.refused.saturating_sub(1);
+    shadow.rest = shadow.rest.saturating_sub(1);
+    shadow.fan_clock = shadow.fan_clock.saturating_sub(1);
+    if shadow.fan_clock == 0 {
+        shadow.fans = 0;
+    }
 
     // It turns the way she turns. It is her shadow: it does what she does, and
     // that includes which way it is pointed, which is what makes its copy of a
@@ -461,19 +466,6 @@ pub fn throw(p: &mut Player, to: V3, hang: u16) {
     put(p, shadow);
 }
 
-/// **She has the shadow back because she went and got it**: it is at her
-/// shoulder from this frame, and the burst is owed (`take_collected`). The
-/// dash's arrival, standing on it, and Gallows' blink to it all come here.
-pub fn collect(p: &mut Player) {
-    let Some(mut shadow) = of(p) else { return };
-    if shadow.is_out() {
-        shadow.doing = Ghost::Attending;
-        shadow.hang = 0;
-        shadow.collected = true;
-    }
-    put(p, shadow);
-}
-
 /// Was the shadow collected this frame? Answers once: the burst is spent by
 /// asking. See `state::World::burst_the_collected`.
 pub fn take_collected(p: &mut Player) -> bool {
@@ -704,7 +696,63 @@ pub fn broken_by_a_hit(p: &mut Player) {
     shadow.dash = 0;
     shadow.carry = 0;
     shadow.jump_banked = false;
+    shadow.rising = 0;
     put(p, shadow);
+}
+
+/// Is the shadow still resting from the dash that collected it? While it is,
+/// nothing on right click sends it. See [`Shadow::rest`].
+pub fn resting(p: &Player) -> bool {
+    of(p).is_some_and(|shadow| shadow.rest > 0)
+}
+
+/// **Gallows' drive** (2026-10-18): along `dir` for `frames` frames, covering
+/// `tuning::gallows_drive`, then the speed is cut to `tuning::gallows_kept`
+/// of itself. Which way is `aim::rise_dir`'s.
+pub fn begin_rise(p: &mut Player, dir: V3, frames: u16) {
+    let Some(mut shadow) = of(p) else { return };
+    let frames = frames.clamp(1, u8::MAX as u16 - 1);
+    let speed = t::gallows_drive().div(DT.mul(Fx::from_int(frames as i32)));
+    shadow.rise = dir.scale(speed);
+    // One more than the drive: the last is the frame its speed is cut.
+    shadow.rising = frames as u8 + 1;
+    put(p, shadow);
+}
+
+/// The velocity Gallows' drive holds this frame, if it is driving -- and run
+/// its clock. The frame it ends on, her speed is cut to what she keeps of it
+/// and the ordinary air takes her back.
+pub fn rise_drive(p: &mut Player) -> Option<V3> {
+    let mut shadow = of(p)?;
+    if shadow.rising == 0 {
+        return None;
+    }
+    shadow.rising -= 1;
+    let drive = shadow.rise;
+    put(p, shadow);
+    if shadow.rising == 0 {
+        p.vel = drive.scale(t::gallows_kept());
+        return None;
+    }
+    Some(drive)
+}
+
+/// How long this Fan hangs her, out of its own `full`: worth
+/// `tuning::fan_falloff` of the one before for every Fan in the run, and the
+/// run goes on until she has gone `tuning::fan_forget` frames without one
+/// (2026-10-18, from play: "the shuriken air stall needs to diminish the
+/// more often it's used consecutively"). Landing does not forget it, or a
+/// hop between throws would be a fresh hang every time. Counts this one.
+pub fn fan_hang(p: &mut Player, full: Fx) -> Fx {
+    let Some(mut shadow) = of(p) else { return full };
+    let mut worth = full;
+    for _ in 0..shadow.fans {
+        worth = worth.mul(t::fan_falloff());
+    }
+    shadow.fans = shadow.fans.saturating_add(1);
+    shadow.fan_clock = t::fan_forget();
+    put(p, shadow);
+    worth
 }
 
 /// Count the dash down, and end it on arrival.
@@ -782,6 +830,11 @@ fn step_her_dash(p: &mut Player) {
             shadow.doing = Ghost::Attending;
             shadow.hang = 0;
             shadow.collected = true;
+            // **And it is not sent again at once** (2026-10-18, from play:
+            // "after a player dashes and collects the shadow, I need there to
+            // be a 1 second cooldown until they can send the shadow again").
+            // See `resting`.
+            shadow.rest = t::send_after_dash();
         }
     }
     put(p, shadow);

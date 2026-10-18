@@ -361,15 +361,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Left click",
-                "The finishers -- the only moves that cash the marks, and each mark is worth more than the last: five of them is four times the hit. On the floor, the Reave: a short dash forward and a cut, and the tip of the blade at the end of the dash is a sweet spot that hits half again as hard. In the air, the Plunge: you stop and dive where you point, never more than forty-five degrees off straight down, and a ring of shadow runs out from where you land. Space and left click is the Gallows, from the floor or the air: the shadow goes up first, you blink to it, and you plunge from there in the same cone for the biggest hit you have -- and the longest recovery.",
+                "The finishers -- the only moves that cash the marks, and each mark is worth more than the last: five of them is four times the hit. On the floor, the Reave: a short dash forward and a cut, and the tip of the blade at the end of the dash is a sweet spot that hits half again as hard. In the air, the Plunge: you stop and dive where you point, never more than forty-five degrees off straight down, and a ring of shadow runs out from where you land. Space and left click is the Gallows, from the floor or the air: a drive up, about seven metres -- at forty-five degrees if you are looking level or down, straight where you point if you are looking higher -- that cuts at the top for the biggest hit you have, and the longest recovery.",
             ),
             e(
                 "Middle click",
-                "The throws. On the floor, the Shuriken: a blade straight to the crosshair -- and the shadow throws one too, from wherever it is, at the same spot. In the air, the Fan: five blades level across your front, and you stall a moment. Space and middle click is the Tumble: a flipping jump that throws three blades forward and down -- and in the air, once a jump, it is your double jump. Every one of those blades marks what it cuts.",
+                "The throws. On the floor, the Shuriken: a blade straight to the crosshair -- and the shadow throws one too, from wherever it is, at the same spot. In the air, the Fan: five blades level across your front, and you stall a moment -- half as long for each Fan thrown again soon after, landing or not. Space and middle click is the Tumble: a flipping jump that throws three blades forward and down -- and in the air, once a jump, it is your double jump. Every one of those blades marks what it cuts.",
             ),
             e(
                 "Right click",
-                "The shadow. On the floor, send it where you are pointing, fast, and it stops there -- but only onto ground you could walk to: never up a ledge or over a drop. Press again and it moves from where it is to where you point now, dragging an open Guillotine lotus with it. In the air it is the Whirl: the shadow goes where you point, as far as the send, and spins, cutting and marking everything round it; another Whirl moves it. Space and right click is the Rising whirl: a jump and a Whirl. Every send comes home on its own three seconds after it arrives, unless you send it again first. Right click answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
+                "The shadow. On the floor, send it where you are pointing, fast, and it stops there -- but only onto ground you could walk to: never up a ledge or over a drop. Press again and it moves from where it is to where you point now, dragging an open Guillotine lotus with it. In the air it is the Whirl: the shadow goes where you point, as far as the send, and spins, cutting and marking everything round it; another Whirl moves it. Space and right click is the Rising whirl: a jump and a Whirl. Every send comes home on its own three seconds after it arrives, unless you send it again first; after the dash collects it, it rests for a second before right click sends it again. Right click answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
             ),
             e(
                 "Q",
@@ -385,7 +385,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Space, as a dash lands",
-                "The dash jump. Pressed in the dash's last few frames, you leave the shadow with all of the dash's speed, in a forward flip with a little more height than a jump.",
+                "The dash jump. Pressed in the dash's last few frames, you leave the shadow with three quarters of the dash's speed, in a forward flip a little lower than a jump.",
             ),
             e(
                 "Picking it up",

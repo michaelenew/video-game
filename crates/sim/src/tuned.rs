@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 669] = [
+pub const SCALARS: [i32; 672] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -244,7 +244,7 @@ pub const SCALARS: [i32; 669] = [
            65536, // health.blood_mage_(x) = 1
            65536, // health.dual_mage_(x) = 1
                1, // reaver.shadow_turns_its_copy_to_a_body = on
-             100, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 100
+              75, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 75
              400, // bulwark.weight,_the_most_the_shield_holds = 400
              600, // bulwark.weight,_a_full_shield_empties_in = 600
           131072, // bulwark.weight,_a_parry_loads_(x_its_damage) = 2
@@ -393,11 +393,11 @@ pub const SCALARS: [i32; 669] = [
           917504, // dual_mage.shadowstep,_reaches_a_cursed_body_(m) = 14
           655360, // dual_mage.equinox,_lift_at_both_full_(m/s) = 10
          1703936, // shadow_reaver.plunge,_dives_at_(m/s) = 26
-            8192, // shadow_reaver.plunge_and_gallows,_cone_round_straight_down_(turns) = 0.125
-          196608, // shadow_reaver.gallows,_the_shadow_goes_up_(m) = 3
-           65536, // shadow_reaver.gallows,_the_shadow_goes_ahead_(m) = 1
-               6, // shadow_reaver.gallows,_hangs_after_the_blink = 6
-         1703936, // shadow_reaver.gallows,_dives_at_(m/s) = 26
+            8192, // shadow_reaver.plunge,_cone_round_straight_down_(turns) = 0.125
+          458752, // shadow_reaver.gallows,_drives_(m) = 7
+            8192, // shadow_reaver.gallows,_climbs_at_least_(turns) = 0.125
+              30, // shadow_reaver.gallows,_keeps_of_the_drive_after_it_(%) = 30
+              60, // shadow_reaver.send,_waits_after_a_dash_collects_the_shadow = 60
              180, // shadow_reaver.shadow,_comes_home_after_a_send = 180
            78643, // shadow_reaver.shadow,_collected_standing_within_(m) = 1.2
               45, // shadow_reaver.burst,_damage = 45
@@ -677,6 +677,9 @@ pub const SCALARS: [i32; 669] = [
            98304, // elementalist.fissure_surge,_damage_at_a_full_hold_(+x) = 1.5
            65536, // elementalist.fissure_surge,_knockback_at_a_full_hold_(+x) = 1
           393216, // elementalist.fissure_surge,_throws_up_at_(m/s) = 6
+              75, // shadow_reaver.dash_jump,_keeps_of_the_rise_(%) = 75
+           32768, // shadow_reaver.fan,_hang_each_one_after_(x) = 0.5
+              90, // shadow_reaver.fan,_the_run_forgotten_after = 90
 ];
 
 #[rustfmt::skip]
@@ -1889,7 +1892,7 @@ pub const MOVES: [i32; 2730] = [
               16, // move.shadow_reaver.gallows.blockstun = 16
          1310720, // move.shadow_reaver.gallows.knockback = 20
               40, // move.shadow_reaver.gallows.mobility_(%) = 40
-              12, // move.shadow_reaver.gallows.aerial_hang = 12
+               0, // move.shadow_reaver.gallows.aerial_hang = 0
                0, // move.shadow_reaver.gallows.unblockable = off
                0, // move.shadow_reaver.gallows.hits_crouching = off
                0, // move.shadow_reaver.gallows.needs_mechanic = off
