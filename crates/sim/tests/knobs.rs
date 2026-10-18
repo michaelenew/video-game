@@ -87,6 +87,13 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "sum.sub(Fx::from_int(2)).mul(fx(1732, 1000)).mul(sigma)",
+        "Arithmetic, not a magnitude: the sum of four uniform rolls has a mean of two and a \
+         standard deviation of the square root of a third, so subtracting two and scaling by \
+         the square root of three is what makes `breed::Rng::normal` a bell of the given \
+         width. The width itself is the caller's, `cross::Rates::mutation_sigma`.",
+    ),
+    (
         "pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1",
         "Presentation, and a bit width: where the Champion's liquid weapon's \
          `Quicksilver::forged` clock stops counting in its packed four bytes. No rule reads \
