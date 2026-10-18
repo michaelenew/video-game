@@ -3418,8 +3418,12 @@ fn place_essence_swings(
         }
         *vis = Visibility::Inherited;
         // More solid the more grey she carries, and fading with the ghost.
+        // Never fainter than the second step while it is live: at the
+        // faintest, over a warm floor, it read as a pale log rather than
+        // her essence.
         let solid = p.grey_share().to_f32_for_render() * volume.fade;
-        let step = (solid * (ESSENCE_STEPS - 1) as f32).round() as u8;
+        let floor = if volume.fade > 0.5 { 2 } else { 0 };
+        let step = ((solid * (ESSENCE_STEPS - 1) as f32).round() as u8).max(floor);
         let want = look.material(Skin::Essence(step));
         if mat.0 != want {
             mat.0 = want;
@@ -6216,7 +6220,9 @@ fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
 /// way she started. `SHOT_PRESS=R:20,_:2,R:3` holds right click twenty frames,
 /// lets go for two, and taps it.
 fn shot_press(w: &sim::World) -> Option<SimInput> {
-    static PLAN: std::sync::OnceLock<Option<(Vec<(u16, u32)>, i16)>> = std::sync::OnceLock::new();
+    /// The steps (keys held, for how many frames) and the pitch.
+    type Plan = Option<(Vec<(u16, u32)>, i16)>;
+    static PLAN: std::sync::OnceLock<Plan> = std::sync::OnceLock::new();
     let (steps, pitch) = PLAN
         .get_or_init(|| {
             let spec = platform::env("SHOT_PRESS")?;
