@@ -45,7 +45,7 @@ fn pool_ahead(w: &mut World, far: i32) -> V3 {
     let at = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(far)));
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 200));
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 200));
     at
 }
 
@@ -186,7 +186,7 @@ fn nobody_else_blinks_to_her_pools() {
     let at = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(8)));
-    w.effects[0] = Some(Effect::pool(1, Class::BloodMage, b::HAEMORRHAGE, at, 200));
+    w.effects[0] = Some(Effect::pool(1, Class::BloodMage, b::THORN_LASH, at, 200));
     let start = w.players[0].pos;
     dodge_at(&mut w, at);
     assert!(
@@ -200,7 +200,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     // Where the spike lands with the crosshair level: find it once.
-    looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, 0, 0);
     let mut where_ = None;
     for _ in 0..spike.startup as u32 + 4 {
         run(&mut w, 1, 0, 0);
@@ -221,7 +221,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let mut w = mage();
     w.players[0].health = t::max_health() - 500;
     w.players[0].grey = 500;
-    let pool = Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 300);
+    let pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 300);
     w.effects[0] = Some(pool);
     let radius = t::erupt_radius().mul(Fx::from_int(300).sqrt());
     assert!(
@@ -232,7 +232,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let full = w.players[1].health;
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(spike.cost);
-    looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     let erupted = w
         .effects
@@ -276,7 +276,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     w.players[0].health = t::max_health() - 500;
     w.players[0].grey = 500;
     // Find where it lands, then stand the dummy there.
-    looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, 0, 0);
     let mut at = None;
     for _ in 0..spike.startup as u32 + 4 {
         run(&mut w, 1, 0, 0);
@@ -297,7 +297,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     w.players[1].pos = V3::new(at.x, Fx::ZERO, at.z);
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(spike.cost);
-    looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     assert!(
         w.players[1].health < w.players[1].full_health(),
@@ -324,7 +324,7 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     // cashes them in at once.
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, 0, 0);
     let mut at = None;
     for _ in 0..spike.startup as u32 + 4 {
         run(&mut w, 1, 0, 0);
@@ -346,18 +346,18 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     // Three pools: one under the spike, one a stride away, one further still
     // -- inside the second's eruption but outside the first's.
     let first = t::erupt_radius().mul(Fx::from_int(300).sqrt());
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, at, 300));
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 300));
     w.effects[1] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::HAEMORRHAGE,
+        b::THORN_LASH,
         V3::new(at.x, Fx::ZERO, at.z.add(first.sub(Fx::ratio(1, 2)))),
         300,
     ));
     w.effects[2] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::HAEMORRHAGE,
+        b::THORN_LASH,
         V3::new(
             at.x,
             Fx::ZERO,
@@ -366,7 +366,7 @@ fn an_eruption_sets_off_every_pool_it_covers() {
         100,
     ));
     let before = w.players[0].health;
-    looking(&mut w, 2, keys::YOUR_BLOOD, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, 0, 0);
     // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
     let mut eruptions = 0;
     for _ in 0..spike.startup as u32 + 4 * t::chain_delay() as u32 + 4 {

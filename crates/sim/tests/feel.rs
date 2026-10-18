@@ -413,14 +413,13 @@ fn best_case(m: &Move) -> i32 {
             // move, and are the move's own one hit.
             | EffectKind::Nova
             | EffectKind::Nail
-            // Hers of 2026-10-13 are placed by the world too, never by a
-            // row's code: the carpet and the thorns are fields the world
-            // ticks, a thrall and the golem bite with what they hold, and the
+            // Hers of 2026-10-13 and 2026-10-18 are placed by the world too,
+            // never by a row's code: the vines are a field the world ticks, a
+            // thrall bites with what it holds, a heart hits nobody, and the
             // cone is the picture of a blow already landed.
-            | EffectKind::Carpet
+            | EffectKind::Heart
             | EffectKind::Thrall
             | EffectKind::Vines
-            | EffectKind::Golem
             | EffectKind::Cascade
             // The Dual mage's bursts are placed by the world from the move --
             // a Shadowstep's arrival, Judgement's ring of columns, Apotheosis
@@ -1038,6 +1037,9 @@ fn one_press_can_never_lock_more_than_one_move() {
     for class in ALL_CLASSES {
         let mut p = sim::state::Player::new(class);
         let out = [false; moves::MAX_SLOTS];
+        // The Blood mage's heart is earned, not locked: earned here, so the
+        // count is about the lockout alone.
+        p.heart_meter = sim::tuning::heart_meter_full() as u16;
         p.repeat_lock[SLOT_POKE as usize] = 240;
         let available = (0..moves::table(class).len())
             .filter(|slot| p.can_throw(*slot as u8, &out))
@@ -1383,7 +1385,7 @@ fn every_class_has_a_move_that_carries_the_body() {
                 w.effects[0] = Some(sim::effects::Effect::pool(
                     0,
                     Class::BloodMage,
-                    moves::blood::HAEMORRHAGE,
+                    moves::blood::THORN_LASH,
                     at,
                     200,
                 ));

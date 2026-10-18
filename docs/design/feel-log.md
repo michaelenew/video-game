@@ -8952,3 +8952,75 @@ instinct, the gully will feel impossible and the slide rule wants a look; the
 Needle's stair is 78 catches for the Bulwark; and a dome's ring rim is not
 caught from inside its hole (`Terrain::ledge_near` reads a ring's top as
 its outer disc), which the lip stone works round rather than fixes.
+
+### 2026-10-18 — the Blood mage's territory: ground, the swim, hearts, thorns and the scythe
+
+**What changed** The owner's new direction for her: controlling territory and building
+forward (`docs/design/exploration/0021_blood_mage_territory.md`, after two rounds of
+options in conversation). Built in one pass:
+
+- **Ground** (`sim::ground`, `World::ground`): patches of floor that are hers, laid by
+  every move of hers where it touches, by her stains while they stand and as they fade,
+  and by hearts. Patches within 2 m of each other bridge; a joined patch fades at a third
+  of the rate; a lone touch is gone in 2.5 s.
+- **Strong and weak**: a move started on her ground hits ×1.3 (never wider); off it, what
+  it lays is ×1.5 wider and longer. An aura of essence shows she is on it.
+- **The swim** on `shift` on her ground; the teleport to a stain still comes first.
+- **Thralls** stronger on her ground (×1.5 bite, ×1.4 run, no drain), keeping to it;
+  **Command, the Carpet, the Summon and the Blood golem are cut**.
+- **Hearts** on `E`: 3× what she paid, never under 150, a thrall every 4 s for 60 of it,
+  two at a time.
+- The clicks are **thorns / spikes / scythe**: Thorn lash and Bramble (the Haemorrhage's
+  and the Hemoplague's rows), the spikes untouched, the **Sweep** strung to three, the
+  **Reap** lunge held, the **Harvest** held to its end; **Thornfall** (the wings' row)
+  lands in a ring of thorns.
+
+**Numbers moved to keep `feel.rs` true** -- each was a first guess that a property caught:
+
+- The Reap is the table's slot 0, which `feel.rs` reads as the class's poke: its damage went
+  70 → 55 (the Harvest must pay more than twice it), its mobility 30 → 60 (the committed
+  move must hinder more than the poke), its hitstun 20 → 24 (no move is minus on hit).
+- The Sweep's hitstun 16 → 18 (it was −2 on hit) and its reach 2.4 → 2.6 m: at 2.4 a
+  fighter at 3 m was caught by the blade's thickness and a knee-high gnat was not
+  (`critters.rs`, `every_move_touches_a_gnat_wherever_it_touches_a_fighter`).
+- The Harvest: knockback 8 → 12 m/s (a heavy hit has to move them 1.5 m), hitstun 24 → 32,
+  and a 1% cost, because every move of hers costs.
+- **A swing's cost lands at the blade's end**, not at her feet: at her feet she walked it
+  straight back up, and the Sweep cost nothing (`essence.rs`,
+  `every_cost_she_pays_is_a_stain`).
+
+**Moved deliberately**: her pinned hunt (`ridgeback_pin.rs`), the scripted hunter's
+(`hunt/tests/pin.rs`) -- the class layer now sweeps in reach and plants a heart -- and her
+movement envelope, re-searched (`tests/fixtures/envelope.txt`): the Reap's lunge and the
+swim carry her further than the old kit did.
+
+**Verdict** Unplayed. The first things to look at: whether her ground covers too much of
+the arena in a long fight (the touch's 2.5 s and the bridge's 2 m are the levers), whether
+the swim's 0.6 m is short enough that a fighter has to read it rather than swing at it,
+and whether hearts are worth protecting -- the owner's own "not sure yet".
+
+### 2026-10-18 — her territory, from the owner's first look: an earned heart, a heart that reads, ground drawn as one
+
+**What changed**
+
+- **A heart is earned** (`Player::heart_meter`, `Heart, earned by dealing` 400): every point
+  of damage she deals -- counted where each hit spills (`World::spill`), with what a cast
+  cost her and what a dead thrall had left spilled around it (`World::pool_blood`), and the
+  eruptions, which spill nothing, counted where they land -- fills it; `E` plants a heart only
+  when it is full, and empties it. A thin bar under the Well, bright when full.
+- **A heart is drawn as a heart's shape** -- two lobes over a point and two short vessels --
+  in a crimson burning from inside, beating and turning at head height, with a ring of
+  essence round it and a faint pillar of light through it. The first one, a knot with a flame
+  and roots, read as a bloodstain.
+- **Her ground is one surface** (`game::claimed`): the union of every disc, marched on a
+  0.3 m grid and draped 6 cm over the floor the simulation stands on. Drawn a disc each,
+  every overlap was darker, and a flat disc on a town's flagstones (3 cm proud of the
+  floor the simulation knows) or on a slope was partly under them.
+- `SHOT_PRESS` (with `DEMO=1`) presses scripted keys for player one, so every move can be
+  captured on the frame it is out; `SHOT_BLOOD=ground` stages her ground and a full meter.
+
+**Moved deliberately**: her two pinned hunts again -- her random presses and the scripted
+hunter plant fewer hearts now that they are earned.
+
+**Verdict** Unplayed. 400 is about eight Sweeps or four spikes: a heart a fight's opening
+exchange, not one every few seconds. Too slow or too fast is the first thing to say.

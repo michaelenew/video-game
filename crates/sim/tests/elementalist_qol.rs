@@ -417,7 +417,7 @@ fn an_air_ball_rolled_through_fire_burns_whoever_it_holds() {
     let mut lit = false;
     for _ in 0..90 {
         run(&mut w, 1, 0);
-        lit |= of_kind(&w, EffectKind::AirBall).iter().any(|b| b.lit);
+        lit |= of_kind(&w, EffectKind::AirBall).iter().any(|b| b.lit());
     }
     assert!(lit, "the ball caught fire in the pillar");
     // The pillar burns nobody past it, so whatever he lost was the ball.

@@ -258,9 +258,9 @@ impl Uses {
             Class::BloodMage => vec![
                 ("spikes", self.spikes, "Black spikes thrown"),
                 ("on a pool", self.erupted, "of those, at a pool under it"),
-                ("charges", self.charges, "Summons held to raise her stains"),
-                ("plagues", self.plagues, "Hemoplagues on it"),
-                ("cuts", self.cuts, "Haemorrhages from range"),
+                ("hearts", self.charges, "Hearts planted"),
+                ("brambles", self.plagues, "Brambles on it"),
+                ("lashes", self.cuts, "Thorn lashes from range"),
                 ("blinks", self.blinks, "to a pool, in or out"),
             ],
             Class::DualMage => vec![
@@ -393,7 +393,7 @@ impl Hands {
         let standing = match (me.class, kind) {
             (Class::Elementalist, SLOT_SPECIAL) => Some(EffectKind::FirePillar),
             (Class::ShadowReaver, SLOT_SPECIAL) => Some(EffectKind::GuillotineLotus),
-            (Class::BloodMage, moves::blood::HEMOPLAGUE) => Some(EffectKind::Plague),
+            (Class::BloodMage, moves::blood::BRAMBLE) => Some(EffectKind::Plague),
             _ => None,
         };
         standing.is_none_or(|k| {
@@ -432,13 +432,13 @@ impl Hands {
 
     /// **How far from what it is hitting this class hits it from.** The poke's
     /// reach -- the bolt's nine metres, for the Elementalist -- and for the
-    /// Blood mage half her Haemorrhage's: she has no blade since 2026-10-13,
-    /// and a plan that walks to "in reach" walks this far, near enough for
-    /// her stains to land where she can reach them.
+    /// Blood mage half her Thorn lash's: a plan that walks to "in reach"
+    /// walks this far, near enough for her stains to land where she can
+    /// reach them, and she closes to the scythe from there.
     pub fn reach(&self, me: &Player) -> Fx {
         let poke = moves::get(me.class, SLOT_POKE);
         match me.class {
-            Class::BloodMage => moves::get(me.class, moves::blood::HAEMORRHAGE)
+            Class::BloodMage => moves::get(me.class, moves::blood::THORN_LASH)
                 .reach
                 .mul(Fx::ratio(1, 2)),
             _ => sim::state::live_reach(me, &poke),
@@ -564,10 +564,9 @@ impl Hands {
     }
 
     /// The Blood mage: **the spike on a pool under it**, which drinks the pool
-    /// whole and comes up half again as hard; **the Hemoplague** on it in a
-    /// long window; **the Summon** when her stains are round her; **the cut**
-    /// from range; **Command** onto it when she has thralls standing; and the
-    /// Haemorrhage in reach.
+    /// whole and comes up half again as hard; **the Bramble** on it in a
+    /// long window; **a Heart** when she has none standing; **the Thorn
+    /// lash** from range; and **the Sweep** in the scythe's reach.
     fn bleed(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let red = me.health * 100 / me.full_health().max(1);
         let far = flat(at.sub(me.pos)).flat_len();
@@ -584,12 +583,12 @@ impl Hands {
             self.uses.erupted += 1;
             return self.look_keeping(me, plan, pool, b);
         }
-        let plague = moves::get(me.class, moves::blood::HEMOPLAGUE);
+        let plague = moves::get(me.class, moves::blood::BRAMBLE);
         if red >= RED_CHARGE
             && window >= (plague.startup + plague.active) as i32 + LONG_WINDOW
             && far.raw() < plague.reach.sub(Fx::ratio(5, 10)).raw()
-            && self.ready(w, me, moves::blood::HEMOPLAGUE)
-            && let Some(b) = self.button(me, moves::blood::HEMOPLAGUE)
+            && self.ready(w, me, moves::blood::BRAMBLE)
+            && let Some(b) = self.button(me, moves::blood::BRAMBLE)
         {
             self.uses.plagues += 1;
             return self.look_keeping(me, plan, at, b);
@@ -598,36 +597,30 @@ impl Hands {
         if let Some(input) = self.charge(w, me, at, plan, window, red) {
             return input;
         }
-        let cut = moves::get(me.class, moves::blood::HAEMORRHAGE);
+        let cut = moves::get(me.class, moves::blood::THORN_LASH);
         if red >= RED_CUT
             && far.raw() > sweep.add(Fx::ratio(5, 10)).raw()
             && far.raw() < cut.reach.raw()
             && window >= (cut.startup + cut.active) as i32 + SPARE
-            && self.ready(w, me, moves::blood::HAEMORRHAGE)
-            && let Some(b) = self.button(me, moves::blood::HAEMORRHAGE)
+            && self.ready(w, me, moves::blood::THORN_LASH)
+            && let Some(b) = self.button(me, moves::blood::THORN_LASH)
         {
             self.uses.cuts += 1;
             return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
         }
-        // **Her thralls, sent onto it**, when she has any standing: a tap
-        // of Command on where it is.
-        let thralls = w
-            .effects
-            .iter()
-            .flatten()
-            .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
-            .count();
-        if thralls > 0
-            && self.ready(w, me, moves::blood::COMMAND)
-            && let Some(b) = self.button(me, moves::blood::COMMAND)
-            && plan.bits & ATTACKS != b
+        // In the scythe's reach, the Sweep rather than the plan's own press:
+        // she advances to where they bled (2026-10-18).
+        let scythe = sim::state::scythe_reach(me);
+        if far.raw() < scythe.add(Fx::ratio(5, 10)).raw()
+            && self.ready(w, me, moves::blood::SWEEP)
+            && let Some(b) = self.button(me, moves::blood::SWEEP)
         {
             return self.look_keeping(me, plan, at, b);
         }
-        // In reach, the Haemorrhage rather than the plan's own press.
+        // Near enough, the Thorn lash rather than the plan's own press.
         if far.raw() < sweep.add(Fx::ratio(5, 10)).raw()
             && red >= RED_CUT
-            && let Some(b) = self.button(me, moves::blood::HAEMORRHAGE)
+            && let Some(b) = self.button(me, moves::blood::THORN_LASH)
         {
             return self.look_keeping(me, plan, at, b);
         }
@@ -637,43 +630,37 @@ impl Hands {
         plan
     }
 
-    /// **The Summon** on `E`, if there are stains of hers near her to raise
-    /// and room for more thralls.
+    /// **A Heart** on `E`, if she has none standing: planted halfway to
+    /// `at`, where her thralls come out of it toward what she is fighting
+    /// (2026-10-18).
     fn charge(
         &mut self,
         w: &World,
         me: &Player,
-        _at: V3,
+        at: V3,
         plan: Input,
         window: i32,
         red: i32,
     ) -> Option<Input> {
-        let near = self
-            .pools_of(w, 1)
-            .filter(|p| flat(p.sub(me.pos)).flat_len().raw() <= sim::tuning::summon_reach().raw())
-            .count();
-        let standing = w
+        let hearts = w
             .effects
             .iter()
             .flatten()
-            .filter(|e| e.is_a_thrall() && e.owner == self.who as u8)
-            .count() as i32;
-        let m = moves::get(me.class, moves::blood::SUMMON);
+            .filter(|e| e.is_a_heart() && e.owner == self.who as u8)
+            .count();
+        let m = moves::get(me.class, moves::blood::HEART);
         if red < RED_CUT
-            || near == 0
-            || standing >= sim::tuning::thrall_cap()
+            || hearts > 0
             || window < (m.startup + m.active) as i32 + SPARE
-            || !self.ready(w, me, moves::blood::SUMMON)
+            || !self.ready(w, me, moves::blood::HEART)
         {
             return None;
         }
-        let b = self.button(me, moves::blood::SUMMON)?;
+        let b = self.button(me, moves::blood::HEART)?;
         self.uses.charges += 1;
-        Some(Input::looking_at(
-            plan.bits & !ATTACKS | b,
-            plan.aim,
-            plan.pitch,
-        ))
+        let half = Fx::ratio(1, 2);
+        let mid = me.pos.add(flat(at.sub(me.pos)).scale(half));
+        Some(self.look_keeping(me, plan, mid, b))
     }
 
     /// The nearest of her pools to `at`, if one lies under it.
@@ -939,12 +926,12 @@ impl Hands {
             self.rest();
             return Some(self.look(me, pool, b));
         }
-        let cut = moves::get(me.class, moves::blood::HAEMORRHAGE);
+        let cut = moves::get(me.class, moves::blood::THORN_LASH);
         if red >= RED_CUT + 10
             && safe > (cut.startup + cut.active + cut.recovery) as i32
             && far.raw() < cut.reach.sub(Fx::ONE).raw()
-            && self.ready(w, me, moves::blood::HAEMORRHAGE)
-            && let Some(b) = self.button(me, moves::blood::HAEMORRHAGE)
+            && self.ready(w, me, moves::blood::THORN_LASH)
+            && let Some(b) = self.button(me, moves::blood::THORN_LASH)
         {
             self.uses.cuts += 1;
             self.rest();
