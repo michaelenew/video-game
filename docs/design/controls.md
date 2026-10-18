@@ -1178,7 +1178,17 @@ actually lives.
 
 ### Blood mage
 
-> **Revised 2026-10-13 from play.** Left: the Haemorrhage tapped, the Hemoplague held (growing),
+> **Her territory, 2026-10-18.** Thorns, spikes and the scythe. Left: the Thorn lash tapped, the
+> Bramble held (growing), the Black vines held to the end. Middle: one to seven Black spikes by the
+> hold (the Stake in the air), the Crimson cascade held to the end. Right: the Sweep tapped -- and
+> pressed again in its recovery, a string of three -- the Reap held, the Harvest held to the end.
+> Space and a click is a takeoff (Thornfall, Upheaval, Rising reap); `Q` Coagulate, `E` a heart;
+> `shift` with a stain under the crosshair teleports, otherwise **on her ground it is the swim**,
+> otherwise an ordinary dodge. Everything she throws lays her ground; on it her moves hit harder.
+> The design is [exploration/0021](exploration/0021_blood_mage_territory.md), the table
+> [kits/blood-mage.md](kits/blood-mage.md) §"Territory".
+>
+> **Superseded 2026-10-18: her territory.** **Revised 2026-10-13 from play.** Left: the Haemorrhage tapped, the Hemoplague held (growing),
 > the Black vines held to the end. Middle: one to seven Black spikes by the hold (the Stake in the
 > air), the Crimson cascade held to the end. Right: Command tapped, the Carpet of blood held, the
 > Blood golem held to the end. Space and a click is a takeoff (Blood wings, Upheaval, Rising reap);

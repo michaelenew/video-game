@@ -52,9 +52,9 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
     // blood, which must not heal her either.
     let script = [
         (keys::SCYTHE, 30u32),
-        (keys::MY_BLOOD, 60),
-        (keys::MY_BLOOD, 30),
-        (keys::YOUR_BLOOD, 70),
+        (keys::THORNS, 60),
+        (keys::THORNS, 30),
+        (keys::SPIKES, 70),
         (keys::SCYTHE, 30),
     ];
     for (button, then) in script {
@@ -96,12 +96,12 @@ fn a_cast_at_full_health_opens_grey_by_its_cost() {
     // Every press she makes is paid in red, in the air and on the floor
     // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
     for (slot, button, airborne) in [
-        (b::HAEMORRHAGE, keys::MY_BLOOD, true),
-        (b::HAEMORRHAGE, keys::MY_BLOOD, false),
-        (b::COMMAND, keys::SCYTHE, false),
+        (b::THORN_LASH, keys::THORNS, true),
+        (b::THORN_LASH, keys::THORNS, false),
+        (b::SWEEP, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),
-        (b::SUMMON, keys::RAISE, false),
-        (b::BLACK_SPIKE, keys::YOUR_BLOOD, false),
+        (b::HEART, keys::PLANT, false),
+        (b::BLACK_SPIKE, keys::SPIKES, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
@@ -181,7 +181,7 @@ fn a_committed_casts_worth_of_grey_survives_one_exchange() {
     let mut w = mage();
     let paid = w.players[0].cost_of(spike.cost);
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    run(&mut w, 2, keys::YOUR_BLOOD, 0);
+    run(&mut w, 2, keys::SPIKES, 0);
     let opened = w.players[0].grey;
     assert_eq!(opened, paid);
     run(&mut w, exchange, 0, 0);
@@ -223,15 +223,15 @@ fn a_tap_is_the_quick_thing_and_a_hold_is_the_field() {
     let mut w = mage();
     w.players[0].pos.y = Fx::from_int(3);
     w.players[0].grounded = false;
-    run(&mut w, 1, keys::MY_BLOOD, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::HAEMORRHAGE));
+    run(&mut w, 1, keys::THORNS, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::THORN_LASH));
     let mut w = mage();
     run(&mut w, 1, keys::SCYTHE, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::COMMAND));
-    let start = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE).startup as u32;
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::SWEEP));
+    let start = sim::moves::get(Class::BloodMage, b::THORN_LASH).startup as u32;
     let mut w = mage();
-    run(&mut w, start + 2, keys::MY_BLOOD, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::HEMOPLAGUE));
+    run(&mut w, start + 2, keys::THORNS, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::BRAMBLE));
     assert!(matches!(w.players[0].action, Action::Channel { .. }));
 }
 
@@ -246,7 +246,7 @@ fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
         let mut w = mage();
         w.players[0].health = health;
         w.players[0].grey = 0;
-        run(&mut w, 2, keys::YOUR_BLOOD, 0);
+        run(&mut w, 2, keys::SPIKES, 0);
         health - w.players[0].health
     };
     let full = at(t::max_health());

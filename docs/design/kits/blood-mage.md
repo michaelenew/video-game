@@ -1,18 +1,20 @@
 ---
-status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), then thralls and the Well (2026-10-13); unplayed
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18); unplayed
 decided: 2026-09-09
 revised: 2026-09-23
 revised: 2026-10-12
 revised: 2026-10-13
-sources: ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
+revised: 2026-10-18
+sources: ../exploration/0021_blood_mage_territory.md, ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
 ---
 
 # Blood mage — kit
 
-**Identity.** Her blood goes out, and theirs comes back. Every cast is a cut she makes in
-herself; every hit spills the other fighter onto the floor; and the only way to close her own
-wounds is to put an ability through the blood she spilled. A war scythe, a reaper's reach that
-grows with how open she has left herself, and a floor she wants to fight on.
+**Identity.** Her blood spreads like a sickness, and she fights from inside it. Every cast is a
+cut she makes in herself; every hit spills the other fighter onto the floor; everything she
+throws claims the floor it touches; and the only way to close her own wounds is to put an
+ability through the blood she spilled. A war scythe, a reaper's reach that grows with how open
+she has left herself, and a floor that is hers.
 
 > **Rebuilt 2026-09-23.** This is the v1 kit of [../blood-mage.md](../blood-mage.md), built
 > along [../plans/blood-mage-v1.md](../plans/blood-mage-v1.md): grey health, essence pools,
@@ -42,7 +44,121 @@ grows with how open she has left herself, and a floor she wants to fight on.
 > nine combos and the answers are
 > [../exploration/0016_blood_mage_thralls_and_the_well.md](../exploration/0016_blood_mage_thralls_and_the_well.md).
 
-## Thralls and grey — built 2026-10-13, revised from play the same day
+> **Her territory, 2026-10-18 — built, unplayed.** The owner's new direction: controlling
+> territory and building forward. §"Territory" below is what is in the game now; **where
+> anything after it disagrees, it wins.** The direction and the options weighed are
+> [../exploration/0021_blood_mage_territory.md](../exploration/0021_blood_mage_territory.md).
+
+## Territory — built 2026-10-18
+
+| | Left: thorns | Middle: the spikes | Right: the scythe |
+| --- | --- | --- | --- |
+| **Tapped** | **Thorn lash** (floor and air) | **Black spike**, one | **Sweep**, strung to three |
+| **Held** | **Bramble**, growing | **Black spike**, one to seven (air: **Stake**) | **Reap** |
+| **Held to the end** | **Black vines** | **Crimson cascade** | **Harvest** |
+| **Space + click**, floor or once in the air | **Thornfall** | **Upheaval** | **Rising reap** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | **Coagulate** |
+| `E` | **Heart** |
+| `shift` | The **teleport** to a stain under the crosshair (12 m); otherwise, on her ground, **swim**; otherwise an ordinary dodge |
+
+**The rows were retuned, not renumbered** (`sim::moves::blood`): the Haemorrhage's row is the
+Thorn lash, the Hemoplague's the Bramble, Command's the Sweep, the Carpet's the Reap, the
+Summon's the Heart, the wings' Thornfall, the golem's the Harvest. **Cut: the Carpet, Command,
+the Summon and the Blood golem.** `tests/territory.rs` holds the ground, the strong version, the
+swim, hearts and her thralls on her ground; `tests/blood_mage.rs` the clicks.
+
+### Her ground
+
+**One substance, in patches** (`sim::ground`, `World::ground`): discs on the floor with an owner
+and the frames each has left -- forty-eight of sixteen bytes, a table of its own in the snapshot
+so a fight's effects do not make room for it. It comes from three places:
+
+- **Her moves, where they touch** (`World::lay_touch`): every spike and eruption, the Stake's
+  landing, the Bramble on every tick, the vines, Thornfall's ring, the Upheaval and the Thorn
+  lash where it lands, hit or miss -- a patch the size of what touched, never under `Ground, a
+  touch lays at least` (1 m), for `Ground, a touch lasts` (150 frames).
+- **Stains**: a stain standing is her ground, its column and `Ground, a stain spreads round it`
+  (0.8 m); one that **drains away** -- not drunk, not set off -- leaves a patch where it stood
+  for `Ground, a faded stain lasts` (360). The bleed's stains make the trail of a bleeding body
+  hers.
+- **Hearts**: `Heart, holds ground round it` (3 m) while it stands.
+
+**Patches bridge** (`ground::step`): every `Ground, bridges are laid every` (8) frames, two of
+hers whose edges are within `Ground, bridges a gap of` (2 m) get a patch laid over the gap, and a
+patch touching another of hers -- or a stain or a heart -- loses a frame of life only every
+`Ground, joined loses a frame of life every` (3). Scattered close, sparks join into a field;
+far apart they go out. A patch laid mostly on one of hers merges into it, up to `Ground, widest
+patch` (4 m); past the table, the patch with least life left makes way, hers first.
+
+**On her ground** is worked out once a frame before anybody moves (`World::mark_the_blood`,
+`Player::on_blood`): her feet on the floor, or swimming, inside a patch, a stain or a heart's
+reach, within `Ground, counts this far above or below it` (0.6 m).
+
+### Strong and weak
+
+**A move she starts on her ground hits `Ground, her moves hit (x)` (×1.3) harder** -- decided on
+the press (`Player::thrown_at`, the slot the Dual mage's depth uses), so a swing that carries her
+off it keeps what it started as. **Never wider**: `Effect::field_radius` does not grow for her.
+**Off her ground a move seeds more**: what it lays is `Ground, thrown off her ground seeds (x)`
+(×1.5) wider and longer. Drawn: a ring of essence at her feet and a faint flame off her body
+while she stands on it.
+
+### The swim
+
+`shift` on her ground, on the floor, with no stain under the crosshair: she sinks
+(`Player::swim`). Under, she walks at `Swim, speed (x walk)` (×1.8) and stands `Swim, stands this
+tall` (0.6 m) -- most blows thrown at a standing body pass over. Letting go, a jump, a hit, or any
+move brings her up; a click comes up as its move, the strong one. **Off the edge she pops out**,
+hauled along the way she was going at `Swim, pops out at the edge at` (9 m/s), and a `shift`
+still held from it is not a dodge until it is let go. Drawn sunk, a hump of her showing, with a
+ripple over her.
+
+### The scythe
+
+- **Sweep** (right, tapped): the scythe across her front, 2.6 m, 45. Right click again inside its
+  recovery strings the next (`Player::string`), up to three: the second comes back the other way,
+  the third hits `Sweep, the third of a string hits` (×1.5).
+- **Reap** (right, held past the Champion's window): a lunge into a heavier swing. It steps
+  half its row's 3.5 m for no hold and all of it for the longest, and `Reap, lunges further on her
+  ground` (×1.6) from her ground.
+- **Harvest** (the Reap held to its end, a finisher): one great turning reap, a whole turn,
+  worth the row and `finisher_per_grey` for every point of grey and Well it spent, paying back
+  what it burned as every finisher does -- and every stain of hers within `Harvest, reaches all
+  round` (5 m) is drunk as it comes out.
+- A swing's cost lands as a stain **at the blade's end**, not at her feet, where she would walk
+  it straight back up.
+
+### Thornfall
+
+The wings' burst along her aim, stopped at the first wall or stone, and where it ends she lands
+in **a ring of thorns** (`World::land_the_thornfall`): Thornfall's row, 60 in 2.5 m, and the
+floor under it is hers. The teleport to a stain arrives in the same ring.
+
+### Thralls and hearts
+
+**A thrall on her ground** (`state::ON_GROUND` on its `struck`) runs at `Thrall, on her ground
+runs (x)` (×1.4), bites `Thrall, on her ground bites (x)` (×1.5) harder and does not drain; off
+it, it drains as its stain would. It goes for the nearest enemy within its seek **that is on her
+ground or within `Thrall, leaves her ground by` (3 m) of it**; with none, off her ground, it walks
+back to the nearest of it. Drawn a fifth bigger and burning brighter on it. Command is gone.
+
+**A heart** (`E`) is planted at the crosshair's floor (grounded, 15 m). It holds `Heart, holds
+what she paid (x)` (×3) what she paid for it (10% of red), never less than `Heart, holds at
+least` (150) -- what she paid goes into it, not onto the floor. Blows come off its blood (a
+swing's frames count once), it bleeds away as a stain does, and every `Heart, sends a thrall
+every` (240) frames, while she has room for a thrall, it spends `Heart, a thrall costs it` (60)
+on one at its foot. `Hearts at once` (2): a third replaces the oldest. A creature turns on a heart
+or a thrall nearer it than she is.
+
+### What it did not change
+
+The grey and the Well, every stain one kind, Coagulate, the spikes and their chains, the
+teleport, the Stake and the Upheaval, the vines and the cascade.
+
+## Thralls and grey — built 2026-10-13, revised from play the same day (superseded 2026-10-18)
 
 | | Left: the area | Middle: the spikes | Right: the thralls |
 | --- | --- | --- | --- |

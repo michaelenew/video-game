@@ -291,6 +291,7 @@ impl World {
             e.pos = e.pos.add(d);
             e.home = e.home.add(d);
         }
+        crate::ground::shift(&mut self.ground, d);
         for b in self.bolts.iter_mut().flatten() {
             b.pos = b.pos.add(d);
         }

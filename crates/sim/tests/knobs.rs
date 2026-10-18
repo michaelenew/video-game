@@ -198,16 +198,16 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Bulwark's guard click.",
     ),
     (
-        "pub const MY_BLOOD: u16 = Input::LEFT",
-        "A binding, not a magnitude: which button is the Blood mage's my-blood click.",
+        "pub const THORNS: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Blood mage's thorns click.",
     ),
     (
-        "pub const YOUR_BLOOD: u16 = Input::MIDDLE",
-        "A binding, not a magnitude: which button is the Blood mage's your-blood click.",
+        "pub const SPIKES: u16 = Input::MIDDLE",
+        "A binding, not a magnitude: which button is the Blood mage's spikes click.",
     ),
     (
         "pub const SCYTHE: u16 = Input::RIGHT",
-        "A binding, not a magnitude: which button is the Blood mage's right click (Command and the Summon).",
+        "A binding, not a magnitude: which button is the Blood mage's right click (the Sweep and the Reap).",
     ),
     (
         "pub const SPIKE_FIELD: i32 = 2",
@@ -275,8 +275,8 @@ const EXEMPT: &[(&str, &str)] = &[
         "A code, not a magnitude: what `Effect::life` says a stain that is not lit is.",
     ),
     (
-        "pub const RAISE: u16 = Input::MECHANIC",
-        "A binding, not a magnitude: which button is the Blood mage's Summon.",
+        "pub const PLANT: u16 = Input::MECHANIC",
+        "A binding, not a magnitude: which button plants the Blood mage's heart.",
     ),
     (
         "r.run().add(Fx::from_int(16)).mul(Fx::from_int(2))",

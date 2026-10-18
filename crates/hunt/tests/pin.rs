@@ -108,7 +108,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // deliberately: the spike on the floor winds up in 16 frames rather
     // than 30, Command waits on the Champion's window, a spike aimed through
     // a stain's column goes to it, and a finisher pays back its grey.
-    (Class::BloodMage, 83, 0x3b827a750eae8f08),
+    // Moved 2026-10-18, deliberately: her territory -- the class layer
+    // sweeps the scythe in reach, plants a heart rather than raising stains,
+    // and everything she throws lays her ground. See feel-log.md.
+    (Class::BloodMage, 83, 0xdccab2fc7f6d1bfb),
 ];
 
 #[test]
