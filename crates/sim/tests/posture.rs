@@ -195,9 +195,9 @@ fn fore_limbs_alone_drag_the_rear() {
     let rump = body
         .parts()
         .iter()
-        .find(|p| p.name == "rump")
+        .position(|p| p.name == "rump")
         .expect("a rump to drag");
-    let bottom = f(body.at(rump.shape.bone).y) + f(rump.shape.min.y);
+    let bottom = f(body.lowest(rump));
     assert!(
         bottom.abs() < 0.05,
         "the rump is {bottom:.2} m off the floor"

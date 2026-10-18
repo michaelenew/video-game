@@ -273,7 +273,7 @@ fn natural_extension(stance: Stance, build: Build, wing_walks: bool) -> Fx {
                 fx(9, 10)
             }
         }
-        Build::Sprung => fx(3, 4),
+        Build::Sprung => fx(5, 6),
         Build::Raptorial => fx(7, 10),
         Build::Spindle => fx(1, 2),
         Build::Stub => fx(7, 10),

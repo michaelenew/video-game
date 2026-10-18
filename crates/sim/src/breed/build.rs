@@ -83,6 +83,57 @@ pub struct Body {
     pub span: Fx,
     /// The pitch of the torso, in turns above level.
     pub pitch: Fx,
+    /// Each part's axis: the unit direction its box runs along, in the
+    /// body's frame. A part's box is authored in the frame this axis
+    /// makes ([`frame`]): `shape.min`/`max` are along (axis, across,
+    /// up), centred where the part sits. The game draws a part in its
+    /// bone's rotated frame; this is that frame, written down.
+    pub axes: [V3; MAX_PARTS],
+}
+
+/// Vector arithmetic the builder needs and `V3` does not carry.
+fn dot(a: V3, b: V3) -> Fx {
+    a.x.mul(b.x).add(a.y.mul(b.y)).add(a.z.mul(b.z))
+}
+
+fn cross(a: V3, b: V3) -> V3 {
+    V3::new(
+        a.y.mul(b.z).sub(a.z.mul(b.y)),
+        a.z.mul(b.x).sub(a.x.mul(b.z)),
+        a.x.mul(b.y).sub(a.y.mul(b.x)),
+    )
+}
+
+fn vlen(a: V3) -> Fx {
+    dot(a, a).sqrt()
+}
+
+/// `a` made unit length; `+x` for a zero vector.
+pub fn unit(a: V3) -> V3 {
+    let l = vlen(a);
+    if l < fx(1, 1000) {
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
+    } else {
+        a.scale(Fx::ONE.div(l))
+    }
+}
+
+/// The frame an axis makes: `(across, up)`, both unit and perpendicular to
+/// it. `up` is the world's up turned perpendicular to the axis (or `+x`
+/// turned, for a vertical axis), and `across` is `up × axis`, so for an
+/// axis along `+x` the frame is (`-z`, `+y`): a box's (along, across, up)
+/// extents are its (x, z, y) ones. The sheet derives the same frame.
+pub fn frame(axis: V3) -> (V3, V3) {
+    let u = unit(axis);
+    let up = V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO);
+    let mut w = up.sub(u.scale(dot(u, up)));
+    if vlen(w) < fx(1, 100) {
+        let x = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+        w = x.sub(u.scale(dot(u, x)));
+    }
+    let w = unit(w);
+    let v = cross(w, u);
+    (v, w)
 }
 
 impl Body {
@@ -110,14 +161,53 @@ impl Body {
         }
         p
     }
+    /// A part's centre in the body's frame, metres.
+    pub fn centre(&self, i: usize) -> V3 {
+        let p = &self.parts[i];
+        let u = self.axes[i];
+        let (v, w) = frame(u);
+        let c = p.shape.min.add(p.shape.max).scale(fx(1, 2));
+        self.at(p.shape.bone)
+            .add(u.scale(c.x))
+            .add(v.scale(c.y))
+            .add(w.scale(c.z))
+    }
+
+    /// A part's eight corners in the body's frame, metres.
+    pub fn corners(&self, i: usize) -> [V3; 8] {
+        let p = &self.parts[i];
+        let u = self.axes[i];
+        let (v, w) = frame(u);
+        let h = p.shape.max.sub(p.shape.min).scale(fx(1, 2));
+        let c = self.centre(i);
+        let mut out = [c; 8];
+        for (k, corner) in out.iter_mut().enumerate() {
+            let sa = if k & 1 == 0 { h.x } else { h.x.neg() };
+            let sv = if k & 2 == 0 { h.y } else { h.y.neg() };
+            let sw = if k & 4 == 0 { h.z } else { h.z.neg() };
+            *corner = c.add(u.scale(sa)).add(v.scale(sv)).add(w.scale(sw));
+        }
+        out
+    }
+
     /// The highest point of any part, metres.
     pub fn top(&self) -> Fx {
         let mut top = Fx::ZERO;
-        for p in self.parts() {
-            let y = self.at(p.shape.bone).y.add(p.shape.max.y);
-            top = top.max(y);
+        for i in 0..self.part_count {
+            for c in self.corners(i) {
+                top = top.max(c.y);
+            }
         }
         top
+    }
+
+    /// The lowest point of one part, metres.
+    pub fn lowest(&self, i: usize) -> Fx {
+        let mut low = Fx::from_int(1_000);
+        for c in self.corners(i) {
+            low = low.min(c.y);
+        }
+        low
     }
 }
 
@@ -151,6 +241,7 @@ impl Rig {
                 half_width: Fx::ZERO,
                 span: Fx::ZERO,
                 pitch: Fx::ZERO,
+                axes: [V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO); MAX_PARTS],
             },
         }
     }
@@ -174,8 +265,53 @@ impl Rig {
     }
 
     /// A box centred on a point, half-sizes given.
+    /// A box centred `at` (an offset from the bone, in the body's frame)
+    /// running along `axis`, with half-extents `half` given as (along,
+    /// up, across) -- the same order a box along `+x` would give them as
+    /// (x, y, z). Stored in the axis's frame ([`frame`]) as the species
+    /// tables store theirs in a bone's.
+    fn along(&mut self, name: &'static str, bone: usize, at: V3, axis: V3, half: V3) -> usize {
+        let u = unit(axis);
+        let (v, w) = frame(u);
+        let c = v3(dot(at, u), dot(at, v), dot(at, w));
+        let h = v3(half.x, half.z, half.y);
+        let i = self.part(name, bone, c.sub(h), c.add(h));
+        self.body.axes[i] = u;
+        i
+    }
+
+    /// Lift a part so its lowest corner rests on the floor.
+    fn rest_on_floor(&mut self, i: usize) {
+        let low = self.body.lowest(i);
+        if low >= Fx::ZERO {
+            return;
+        }
+        let u = self.body.axes[i];
+        let (v, w) = frame(u);
+        let up = V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO);
+        let lift = v3(dot(up, u), dot(up, v), dot(up, w)).scale(low.neg());
+        let p = &mut self.body.parts[i];
+        p.shape.min = p.shape.min.add(lift);
+        p.shape.max = p.shape.max.add(lift);
+    }
+
+    /// A box along the body's `+x`: `half` is (x, y, z).
     fn boxed(&mut self, name: &'static str, bone: usize, at: V3, half: V3) -> usize {
-        self.part(name, bone, at.sub(half), at.add(half))
+        self.along(name, bone, at, V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO), half)
+    }
+
+    /// A limb segment: a box from the bone's origin along `seg`, as thick
+    /// as `girth`, reaching half a girth past either end so it meets what
+    /// it joins.
+    fn segment(&mut self, name: &'static str, bone: usize, seg: V3, girth: Fx) -> usize {
+        let l = vlen(seg);
+        self.along(
+            name,
+            bone,
+            seg.scale(fx(1, 2)),
+            seg,
+            v3(l.mul(fx(1, 2)).add(girth.mul(fx(1, 2))), girth, girth),
+        )
     }
 
     fn leg(&mut self, upper: usize, foot: usize, hip: usize, knee: usize, front: bool, side: i32) {
@@ -493,10 +629,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         // front of it lifts.
         let seg = along.scale(torso);
         let mut parent = root;
-        r.boxed(
+        r.along(
             "segment",
             root,
             V3::ZERO,
+            along,
             v3(torso.mul(fx(1, 2)), half_w, half_w),
         );
         for (k, name) in ["neck1", "neck2", "neck3", "neck4", "neck5"]
@@ -515,11 +652,12 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 seg
             };
             parent = r.bone(name, parent, seg_k, 0);
-            r.boxed(
+            r.along(
                 name,
                 parent,
                 V3::ZERO,
-                v3(torso.mul(fx(1, 2)), half_w, half_w),
+                seg_k,
+                v3(torso.mul(fx(11, 20)), half_w, half_w),
             );
         }
         (parent, seg)
@@ -527,32 +665,36 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         let third = along.scale(torso.mul(fx(1, 3)));
         let spine = r.bone("spine", root, third, 0);
         let chest = r.bone("chest", spine, third, 0);
-        r.boxed(
+        r.along(
             "haunch",
             root,
             V3::ZERO,
+            along,
             v3(torso.mul(fx(1, 6)), half_h, half_w),
         );
-        r.boxed(
+        r.along(
             "barrel",
             spine,
             V3::ZERO,
+            along,
             v3(torso.mul(fx(1, 6)), half_h, half_w),
         );
-        r.boxed(
+        r.along(
             "shoulders",
             chest,
             V3::ZERO,
+            along,
             v3(torso.mul(fx(1, 6)), half_h, half_w),
         );
         (chest, third)
     };
     let thorax = if g.segments.thorax {
         let t = r.bone("thorax", fore_bone, fore_at, 0);
-        r.boxed(
+        r.along(
             "thorax",
             t,
             V3::ZERO,
+            along,
             v3(
                 torso.mul(fx(1, 6)),
                 half_h.mul(fx(3, 2)),
@@ -566,10 +708,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
     if g.segments.abdomen {
         let back = along.scale(torso.neg());
         let a = r.bone("abdomen", root, back, 0);
-        r.boxed(
+        r.along(
             "abdomen",
             a,
             v3(torso.mul(fx(-1, 2)), half_h.mul(fx(1, 2)), Fx::ZERO),
+            along,
             v3(
                 torso.mul(fx(3, 4)),
                 half_h.mul(fx(3, 2)),
@@ -577,10 +720,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             ),
         );
         if g.minors.back == Back::Sacs {
-            r.boxed(
+            r.along(
                 "sacs",
                 a,
                 v3(torso.mul(fx(-1, 2)), half_h.mul(fx(2, 1)), Fx::ZERO),
+                along,
                 v3(
                     torso.mul(fx(1, 2)),
                     half_h.mul(fx(1, 2)),
@@ -592,24 +736,22 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
     if q.drags {
         // The rear rests on the floor and trails: a rump from the haunch's
         // underside down to the ground behind it.
-        let bottom = q.root.sub(half_h).max(Fx::ZERO);
-        r.part(
+        // A sloping segment from the haunch's underside to the floor.
+        let th = half_h.mul(fx(1, 2));
+        let start = v3(p.rear, half_h.neg().mul(fx(3, 5)), Fx::ZERO);
+        let end = v3(p.rear.sub(q.drag_len), q.root.neg().add(th), Fx::ZERO);
+        let run = end.sub(start);
+        let rump = r.along(
             "rump",
             root,
-            v3(
-                p.rear.sub(q.drag_len),
-                q.root.neg(),
-                half_w.neg().mul(fx(4, 5)),
-            ),
-            v3(
-                p.rear.add(torso.mul(fx(1, 12))),
-                bottom.sub(q.root).add(half_h.mul(fx(1, 2))),
-                half_w.mul(fx(4, 5)),
-            ),
+            start.add(run.scale(fx(1, 2))),
+            run,
+            v3(vlen(run).mul(fx(1, 2)).add(th), th, half_w.mul(fx(4, 5))),
         );
+        r.rest_on_floor(rump);
     }
     if g.minors.back == Back::Ridge {
-        r.boxed(
+        r.along(
             "ridge",
             root,
             v3(
@@ -617,6 +759,7 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 half_h.add(half_h.mul(fx(1, 3))),
                 Fx::ZERO,
             ),
+            along,
             v3(
                 torso.mul(fx(1, 2)),
                 half_h.mul(fx(1, 3)),
@@ -625,10 +768,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         );
     }
     if p.shell {
-        r.boxed(
+        r.along(
             "shell",
             root,
             v3(torso.mul(fx(1, 3)), half_h.mul(fx(3, 2)), Fx::ZERO),
+            along,
             v3(torso.mul(fx(3, 4)), half_h, half_w.mul(fx(11, 10))),
         );
     }
@@ -661,44 +805,61 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         } else {
             half_h
         };
-        r.boxed("head", h, V3::ZERO, v3(head_half, deep, half_w));
+        r.along("head", h, V3::ZERO, along, v3(head_half, deep, half_w));
         h
     } else {
         let n = r.bone("neck", thorax, neck_dir.scale(neck_len.mul(fx(1, 2))), 0);
         let n2 = r.bone("neck2", n, neck_dir.scale(neck_len.mul(fx(1, 2))), 0);
         let h = r.bone("head", n2, neck_dir.scale(head_half), 0);
-        r.boxed(
+        // The neck runs the whole way from the body to the head, in two
+        // overlapping pieces.
+        r.along(
             "neck",
-            n2,
-            V3::ZERO,
+            n,
+            neck_dir.scale(neck_len.mul(fx(1, 4))),
+            neck_dir,
             v3(
-                neck_len.mul(fx(1, 4)),
+                neck_len.mul(fx(3, 10)),
                 head_half.mul(fx(3, 5)),
                 head_half.mul(fx(3, 5)),
             ),
         );
-        r.boxed(
+        r.along(
+            "neck",
+            n2,
+            neck_dir.scale(neck_len.mul(fx(1, 4))),
+            neck_dir,
+            v3(
+                neck_len.mul(fx(3, 10)),
+                head_half.mul(fx(3, 5)),
+                head_half.mul(fx(3, 5)),
+            ),
+        );
+        r.along(
             "head",
             h,
             V3::ZERO,
+            neck_dir,
             v3(head_half, head_half.mul(fx(4, 5)), head_half.mul(fx(4, 5))),
         );
         h
     };
     match g.minors.crown {
         Crown::Horns => {
-            r.boxed(
+            r.along(
                 "horns",
                 head,
                 v3(head_half.mul(fx(1, 2)), head_half, Fx::ZERO),
+                neck_dir,
                 v3(head_half.mul(fx(1, 2)), head_half.mul(fx(1, 2)), head_half),
             );
         }
         Crown::Crest => {
-            r.boxed(
+            r.along(
                 "crest",
                 head,
                 v3(Fx::ZERO, head_half, Fx::ZERO),
+                neck_dir,
                 v3(
                     head_half.mul(fx(3, 5)),
                     head_half.mul(fx(1, 2)),
@@ -709,10 +870,11 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         Crown::Feelers | Crown::None => {}
     }
     if g.minors.jaw != Jaw::Grinder {
-        r.boxed(
+        r.along(
             "jaw",
             head,
             v3(head_half.mul(fx(1, 2)), head_half.mul(fx(-3, 5)), Fx::ZERO),
+            neck_dir,
             v3(
                 head_half.mul(fx(3, 5)),
                 head_half.mul(fx(1, 4)),
@@ -741,12 +903,13 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 seg
             };
             parent = r.bone(name, parent, seg, 0);
-            r.boxed(
+            r.along(
                 name,
                 parent,
                 V3::ZERO,
+                seg,
                 v3(
-                    torso.mul(fx(1, 2)),
+                    torso.mul(fx(11, 20)),
                     half_w.mul(fx(4, 5)),
                     half_w.mul(fx(4, 5)),
                 ),
@@ -778,23 +941,34 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
         let t2 = r.bone("tail2", t1, seg_at(1), 0);
         let t3 = r.bone("tail3", t2, seg_at(2), 0);
         let th = half_h.mul(fx(1, 2));
-        r.boxed("tail", t1, V3::ZERO, v3(tail_len.mul(fx(1, 6)), th, th));
-        r.boxed(
+        // Each piece runs from its joint to the next, a little past, so
+        // the tail is one curve and not three sticks.
+        let piece = tail_len.mul(fx(1, 6)).add(th.mul(fx(1, 2)));
+        r.along(
+            "tail",
+            t1,
+            seg_at(1).scale(fx(1, 2)),
+            seg_at(1),
+            v3(piece, th, th),
+        );
+        r.along(
             "tail, middle",
             t2,
-            V3::ZERO,
-            v3(tail_len.mul(fx(1, 6)), th.mul(fx(4, 5)), th.mul(fx(4, 5))),
+            seg_at(2).scale(fx(1, 2)),
+            seg_at(2),
+            v3(piece, th.mul(fx(4, 5)), th.mul(fx(4, 5))),
         );
         let tip_half = match g.minors.tail_tip {
             TailTip::Club => th,
             TailTip::Blade => th.mul(fx(1, 2)),
             TailTip::Sting | TailTip::Plain => th.mul(fx(3, 5)),
         };
-        r.boxed(
+        r.along(
             "tail tip",
             t3,
-            V3::ZERO,
-            v3(tail_len.mul(fx(1, 6)), tip_half, tip_half),
+            seg_at(3).scale(fx(1, 2)),
+            seg_at(3),
+            v3(piece, tip_half, tip_half),
         );
     }
 
@@ -862,43 +1036,37 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 let bones = [hip, arm, hand];
                 for k in 0..3 {
                     let chord = len.mul(fx(chords[k].0, chords[k].1));
-                    for half in 0..2 {
-                        let at = sweep.scale(fx(2 * half + 1, 4));
-                        // Behind the leading edge, since a wing's area is
-                        // aft of its bone.
-                        let at = v3(at.x.sub(chord.mul(fx(1, 4))), at.y, at.z);
-                        r.boxed(
-                            wnames[k],
-                            bones[k],
-                            at,
-                            v3(
-                                chord.mul(fx(1, 2)),
-                                // Thin at any size: a steep beat is layered
-                                // plates, never a block.
-                                thick
-                                    .max(sweep.y.abs().mul(fx(1, 4)))
-                                    .min(len.mul(fx(1, 50)).max(thick)),
-                                sweep.z.abs().mul(fx(7, 20)).max(thick),
-                            ),
-                        );
-                    }
+                    // One plane along the segment, a little past either
+                    // end so the segments meet, its area aft of the bone.
+                    let at =
+                        sweep
+                            .scale(fx(1, 2))
+                            .add(v3(chord.mul(fx(-1, 4)), Fx::ZERO, Fx::ZERO));
+                    r.along(
+                        wnames[k],
+                        bones[k],
+                        at,
+                        sweep,
+                        v3(seg.mul(fx(1, 2)).add(thick), thick, chord.mul(fx(1, 2))),
+                    );
                     if look == WingLook::Membrane {
                         // The finger along the leading edge.
-                        r.boxed(
+                        r.along(
                             wnames[k],
                             bones[k],
                             sweep.scale(fx(1, 2)),
+                            sweep,
                             v3(
+                                seg.mul(fx(1, 2)),
                                 thick.mul(Fx::from_int(2)),
                                 thick.mul(Fx::from_int(2)),
-                                sweep.z.abs().mul(fx(1, 2)),
                             ),
                         );
                     }
                 }
                 if look == WingLook::Feathered {
                     // Primaries: a fan trailing behind the tip.
-                    r.boxed(
+                    r.along(
                         wnames[2],
                         hand,
                         v3(
@@ -906,7 +1074,8 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                             sweep.y,
                             sweep.z.mul(fx(4, 5)),
                         ),
-                        v3(len.mul(fx(1, 6)), thick, seg.mul(fx(1, 4))),
+                        sweep,
+                        v3(seg.mul(fx(1, 4)), thick, len.mul(fx(1, 6))),
                     );
                 }
                 span = limb.add(half_w).mul(Fx::from_int(2));
@@ -942,18 +1111,8 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 };
                 let knee = r.bone(names[1], hip, upper, side);
                 let foot = r.bone(names[2], knee, lower, side);
-                r.boxed(
-                    names[0],
-                    hip,
-                    upper.scale(fx(1, 2)),
-                    limb_half(upper, girth),
-                );
-                r.boxed(
-                    names[1],
-                    knee,
-                    lower.scale(fx(1, 2)),
-                    limb_half(lower, girth),
-                );
+                r.segment(names[0], hip, upper, girth);
+                r.segment(names[1], knee, lower, girth);
                 let tip_half = match pair.tip {
                     Tip::Blade => v3(
                         girth.mul(fx(3, 1)),
@@ -962,7 +1121,7 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                     ),
                     _ => v3(girth.mul(fx(3, 2)), girth, girth),
                 };
-                r.boxed(names[2], foot, V3::ZERO, tip_half);
+                r.along(names[2], foot, V3::ZERO, lower, tip_half);
                 continue;
             }
             // A standing limb: hip to foot is a straight line of length d,
@@ -1060,18 +1219,8 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
             };
             let knee = r.bone(names[1], hip, upper, side);
             let foot_bone = r.bone(names[2], knee, lower, side);
-            let up = r.boxed(
-                names[0],
-                hip,
-                upper.scale(fx(1, 2)),
-                limb_half(upper, girth),
-            );
-            let lo = r.boxed(
-                names[1],
-                knee,
-                lower.scale(fx(1, 2)),
-                limb_half(lower, girth),
-            );
+            let up = r.segment(names[0], hip, upper, girth);
+            let lo = r.segment(names[1], knee, lower, girth);
             // The foot sits on the floor: its box rises from the sole.
             let foot_half = v3(girth.mul(fx(3, 2)), girth.mul(fx(1, 2)), girth);
             r.boxed(
@@ -1084,19 +1233,18 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
                 // The hand folds up and back from the wrist, a long thin
                 // plane along the body, in the wing's own look.
                 let seg = limb.mul(fx(1, 3));
-                let fold = v3(seg.mul(fx(-3, 5)), seg.mul(fx(4, 5)), Fx::ZERO);
+                let fold = v3(seg.mul(fx(-9, 20)), seg.mul(fx(3, 5)), Fx::ZERO);
                 let thick = len.mul(fx(1, 100)).max(girth.mul(fx(1, 2)));
                 // Slim: a folded wing lies along its finger, two plates
                 // following the fold, thin across the body.
                 let wnames = look.names(side_i);
-                for half in 0..2 {
-                    r.boxed(
-                        wnames[2],
-                        foot_bone,
-                        fold.scale(fx(2 * half + 1, 4)),
-                        v3(seg.mul(fx(1, 10)), fold.y.abs().mul(fx(1, 4)), thick),
-                    );
-                }
+                r.along(
+                    wnames[2],
+                    foot_bone,
+                    fold.scale(fx(1, 2)),
+                    fold,
+                    v3(vlen(fold).mul(fx(1, 2)), seg.mul(fx(1, 10)), thick),
+                );
             }
             r.leg(up, lo, hip, knee, fore, side);
         }
@@ -1109,13 +1257,6 @@ fn build(g: &Genome, q: &super::posture::Posture, gait: Option<Fx>) -> Body {
 /// or a third of what the leg would be, whichever is more.
 pub fn walking_wing_girth(len: Fx, girth: Fx) -> Fx {
     len.mul(fx(1, 60)).max(girth.mul(fx(1, 3)))
-}
-
-/// A limb segment's half-size: along its own direction half its length,
-/// across it its girth.
-fn limb_half(seg: V3, girth: Fx) -> V3 {
-    let along = |c: Fx| c.abs().mul(fx(1, 2)).max(girth);
-    v3(along(seg.x), along(seg.y), along(seg.z))
 }
 
 // ---------------------------------------------------------------------------

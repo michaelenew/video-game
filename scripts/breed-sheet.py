@@ -36,6 +36,8 @@ BG = (250, 249, 245)
 
 
 def parse(path):
+    """`gen` lines and `obox` lines: every part as an oriented box -- centre,
+    unit axis, half-extents (along, across, up) in the axis's frame."""
     gens = []
     for line in open(path):
         if line.startswith("gen "):
@@ -44,15 +46,48 @@ def parse(path):
             caps = " ".join(parts[5:]).strip()
             gens.append({
                 "n": int(parts[1]), "stance": parts[2], "plaus": float(parts[3]),
-                "tier": parts[4], "caps": caps, "desc": desc.strip(), "parts": [],
+                "tier": parts[4], "caps": caps, "desc": desc.strip(), "boxes": [],
             })
         elif line.startswith("obox "):
-            _, tag, name, cx, cy, cz, ux, uy, uz, hl, r = line.split()
-            gens[-1].setdefault("oboxes", []).append((tag, name, float(cx), float(cy), float(cz), float(ux), float(uy), float(uz), float(hl), float(r)))
-        elif line.startswith("part "):
-            _, tag, name, x0, y0, x1, y1, z0, z1 = line.split()
-            gens[-1]["parts"].append((tag, name, float(x0), float(y0), float(x1), float(y1), float(z0), float(z1)))
+            f = line.split()
+            tag, name = f[1], f[2]
+            nums = [float(x) for x in f[3:12]]
+            gens[-1]["boxes"].append((tag, name, *nums))
+    for g in gens:
+        g["corners"] = [corners(b) for b in g["boxes"]]
     return gens
+
+
+def frame(u):
+    """The frame an axis makes, as the builder makes it: up turned
+    perpendicular to the axis (or +x turned, for a vertical axis), and
+    across = up x axis."""
+    ux, uy, uz = u
+    d = uy
+    w = (0.0 - ux * d, 1.0 - uy * d, 0.0 - uz * d)
+    if math.sqrt(w[0] ** 2 + w[1] ** 2 + w[2] ** 2) < 0.01:
+        d = ux
+        w = (1.0 - ux * d, 0.0 - uy * d, 0.0 - uz * d)
+    l = math.sqrt(w[0] ** 2 + w[1] ** 2 + w[2] ** 2) or 1.0
+    w = (w[0] / l, w[1] / l, w[2] / l)
+    v = (w[1] * uz - w[2] * uy, w[2] * ux - w[0] * uz, w[0] * uy - w[1] * ux)
+    return v, w
+
+
+def corners(b):
+    tag, name, cx, cy, cz, ux, uy, uz, ha, hv, hw = b
+    u = (ux, uy, uz)
+    v, w = frame(u)
+    out = []
+    for sa in (-1, 1):
+        for sv in (-1, 1):
+            for sw in (-1, 1):
+                out.append((
+                    cx + u[0] * ha * sa + v[0] * hv * sv + w[0] * hw * sw,
+                    cy + u[1] * ha * sa + v[1] * hv * sv + w[1] * hw * sw,
+                    cz + u[2] * ha * sa + v[2] * hv * sv + w[2] * hw * sw,
+                ))
+    return out
 
 
 def majors(desc):
@@ -128,48 +163,62 @@ def draw_box(d, box, col, origin, scale):
     d.polygon(top, fill=shade(col, 1.15), outline=edge)
 
 
-def draw_obox(d, ob, col, origin, scale):
-    """An oriented cuboid: centre, unit axis, half-length, radius. Its six
-    faces, far to near."""
-    tag, name, cx, cy, cz, ux, uy, uz, hl, r = ob
-    # two perpendiculars to the axis
-    ax = (ux, uy, uz)
-    ref = (0.0, 1.0, 0.0) if abs(uy) < 0.9 else (1.0, 0.0, 0.0)
-    def cross(a, b):
-        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
-    def norm(a):
-        l = math.sqrt(a[0] ** 2 + a[1] ** 2 + a[2] ** 2) or 1.0
-        return (a[0] / l, a[1] / l, a[2] / l)
-    v = norm(cross(ax, ref))
-    w = norm(cross(ax, v))
+def draw_obox(d, b, col, origin, scale):
+    """An oriented cuboid, its six faces far to near, lit by which way
+    each faces."""
+    tag, name, cx, cy, cz, ux, uy, uz, ha, hv, hw = b
+    u = (ux, uy, uz)
+    v, w = frame(u)
     ox, oy = origin
-    def corner(sa, sv, sw):
-        x = cx + ax[0] * hl * sa + v[0] * r * sv + w[0] * r * sw
-        y = cy + ax[1] * hl * sa + v[1] * r * sv + w[1] * r * sw
-        z = cz + ax[2] * hl * sa + v[2] * r * sv + w[2] * r * sw
+    halves = (ha, hv, hw)
+    basis = (u, v, w)
+
+    def corner(s):
+        x = cx + sum(basis[i][0] * halves[i] * s[i] for i in range(3))
+        y = cy + sum(basis[i][1] * halves[i] * s[i] for i in range(3))
+        z = cz + sum(basis[i][2] * halves[i] * s[i] for i in range(3))
         px, py = iso(x, y, z)
         return (ox + px * scale, oy + py * scale, x + z + y * 0.5)
+
     faces = []
     for fixed in range(3):
         for sign in (-1, 1):
             quad = []
-            for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            for a, bb in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
                 s = [0, 0, 0]
                 s[fixed] = sign
                 others = [i for i in range(3) if i != fixed]
                 s[others[0]] = a
-                s[others[1]] = b
-                quad.append(corner(*s))
+                s[others[1]] = bb
+                quad.append(corner(s))
             depth = sum(q[2] for q in quad) / 4
-            # shade by which way the face points, roughly: up brightest
-            n = [0.0, 0.0, 0.0]
-            basis = (ax, v, w)
             n = tuple(basis[fixed][i] * sign for i in range(3))
-            k = 0.75 + 0.4 * max(0.0, n[1]) + 0.12 * max(0.0, n[0]) + 0.08 * max(0.0, n[2])
+            # lit from above and a little from the front-right
+            k = 0.72 + 0.42 * max(0.0, n[1]) + 0.14 * max(0.0, n[0]) + 0.1 * max(0.0, n[2])
             faces.append((depth, [(q[0], q[1]) for q in quad], shade(col, k)))
     faces.sort(key=lambda f: f[0])
     for _, quad, c in faces:
         d.polygon(quad, fill=c, outline=shade(col, 0.5))
+
+
+def hull(points):
+    """The convex hull of 2D points (monotone chain), for a shadow."""
+    pts = sorted(set(points))
+    if len(pts) < 3:
+        return pts
+    def cross2(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower = []
+    for p in pts:
+        while len(lower) >= 2 and cross2(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross2(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
 
 
 def draw_ground(d, origin, scale, extent, step):
@@ -194,18 +243,14 @@ def draw_strip(name, gens, cell_w=300, cell_h=300):
     # One scale for the row, from the largest picture any frame makes.
     biggest = 1.0
     for i in frames:
-        pts = []
-        for (_, _, x0, y0, x1, y1, z0, z1) in gens[i]["parts"]:
-            for x in (x0, x1):
-                for y in (0, y0, y1):
-                    for z in (z0, z1):
-                        pts.append(iso(x, y, z))
+        pts = [iso(x, y, z) for cs in gens[i]["corners"] for (x, y, z) in cs]
+        pts += [iso(x, 0, z) for cs in gens[i]["corners"] for (x, y, z) in cs]
         w = max(p[0] for p in pts) - min(p[0] for p in pts)
         h = max(p[1] for p in pts) - min(p[1] for p in pts)
         biggest = max(biggest, w, h)
     scale = (min(cell_w, cell_h) - 70) / biggest
-    row_extent = max(max(x1 for (_, _, _, _, x1, _, _, _) in gens[i]["parts"]) -
-                     min(x0 for (_, _, x0, _, _, _, _, _) in gens[i]["parts"]) for i in frames)
+    row_extent = max(max(x for cs in gens[i]["corners"] for (x, _, _) in cs) -
+                     min(x for cs in gens[i]["corners"] for (x, _, _) in cs) for i in frames)
     step = 5.0 if row_extent > 12 else 1.0
     head_h = 34
     foot_h = 30
@@ -222,42 +267,28 @@ def draw_strip(name, gens, cell_w=300, cell_h=300):
         top = 44
         outline = (200, 60, 60) if g["n"] in moved else (220, 218, 210)
         d.rectangle([ox + 2, top, ox + cell_w - 2, top + total_h - 2], outline=outline, width=2 if g["n"] in moved else 1)
-        # the picture: clip to the cell by drawing on a tile and pasting
         tile = Image.new("RGB", (cell_w - 6, cell_h), BG)
         td = ImageDraw.Draw(tile)
-        parts = g["parts"]
-        xs = [x for (_, _, x0, _, x1, _, _, _) in parts for x in (x0, x1)]
-        zs = [z for (_, _, _, _, _, _, z0, z1) in parts for z in (z0, z1)]
+        allc = [c for cs in g["corners"] for c in cs]
+        xs = [c[0] for c in allc]
+        zs = [c[2] for c in allc]
         cx = (min(xs) + max(xs)) / 2
         cz = (min(zs) + max(zs)) / 2
-        ys = max(y1 for (_, _, _, _, _, y1, _, _) in parts)
-        # centre the body's middle, half its height up, in the tile
+        ys = max(c[1] for c in allc)
         mx, my = iso(cx, ys / 2, cz)
         origin = (tile.width / 2 - mx * scale, cell_h / 2 - my * scale + 10)
         extent = max(max(xs) - min(xs), max(zs) - min(zs)) * 0.9 + 2
         draw_ground(td, (origin[0] - iso(cx, 0, cz)[0] * scale + iso(0, 0, 0)[0], origin[1] - iso(cx, 0, cz)[1] * scale), scale, extent, step)
         # shadows: each box's footprint on the ground
-        for (_, _, x0, y0, x1, y1, z0, z1) in parts:
-            pts = [iso(x0, 0, z0), iso(x1, 0, z0), iso(x1, 0, z1), iso(x0, 0, z1)]
-            td.polygon([(origin[0] + px * scale, origin[1] + py * scale) for px, py in pts], fill=(205, 200, 184))
-        # the boxes, far to near; a limb segment with an oriented box is
-        # drawn as that instead of its bounding box
-        oboxes = g.get("oboxes", [])
-        oriented = {ob[1] for ob in oboxes}
-        items = []
-        for p in parts:
-            if p[1] in oriented:
-                continue
-            items.append((p[2] + p[6] + p[3] * 0.5, "box", p))
-        for ob in oboxes:
-            items.append((ob[2] + ob[4] + ob[3] * 0.5, "obox", ob))
-        items.sort(key=lambda it: it[0])
-        for _, kind, it in items:
-            if kind == "box":
-                tag, pname, x0, y0, x1, y1, z0, z1 = it
-                draw_box(td, (x0, y0, x1, y1, z0, z1), COL.get(tag, (100, 100, 100)), origin, scale)
-            else:
-                draw_obox(td, it, COL.get(it[0], (100, 100, 100)), origin, scale)
+        for cs in g["corners"]:
+            foot = [iso(x, 0, z) for (x, _, z) in cs]
+            poly = hull([(round(px, 4), round(py, 4)) for px, py in foot])
+            if len(poly) >= 3:
+                td.polygon([(origin[0] + px * scale, origin[1] + py * scale) for px, py in poly], fill=(205, 200, 184))
+        # the boxes, far to near
+        order = sorted(g["boxes"], key=lambda b: (b[2] + b[4] + b[3] * 0.5))
+        for b in order:
+            draw_obox(td, b, COL.get(b[0], (100, 100, 100)), origin, scale)
         im.paste(tile, (ox + 3, top + head_h))
         d.text((ox + 8, top + 4), f"gen {g['n']}  {g['stance']}  p={g['plaus']:.2f}  tier {g['tier']}", fill=(30, 30, 30), font=FONT)
         d.text((ox + 8, top + 20), g["caps"][:52], fill=(90, 90, 90), font=SMALL)

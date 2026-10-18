@@ -248,10 +248,8 @@ Three more things the posed sheets asked for:
 - **Wings** are drawn by what they are made of (`build::WingLook`, from
   the hide): *feathered* keeps its chord to the tip and fans primaries
   behind it; a *membrane* tapers to a point along a leading-edge finger;
-  a *furred* wing is a thick fringed plane. Each segment is two slabs
-  along it, so a swept or rising wing is a staircase of overlapping planes
-  rather than boxes floating apart; a beat is shallow because a box round
-  a steep plane is a wall. A wing that walks is drawn as a wing's bone,
+  a *furred* wing is a thick fringed plane, one plane per segment along
+  its bone. A wing that walks is drawn as a wing's bone,
   thin, and its wrist lands clear ahead of the hind feet by a pair's
   spacing -- a wing is not a leg among the legs. The raptorial arm is a
   mantis's Z: up and forward from the shoulder, the blade folded back
@@ -264,13 +262,15 @@ Three more things the posed sheets asked for:
   Walking adds the stride, the lift, the bob, the turned head, the
   swaying tail, the beat or the fold.
 
-- **A bent limb is drawn along its bone.** The builder's parts are boxes
-  in a bone's frame, as the species tables' are, and a segment that slants
-  every way has a bounding box that is a block -- which is what made every
-  walking wing look like a fat leg. `breedcheck -- boxes` now also prints
-  each limb segment as an oriented box along its bone with the pair's own
-  girth, and the sheet draws that; the game will draw the same thing
-  through a rotated bone, as it does for every creature already.
+- **Every part is a box in its bone's frame** (`Body::axes`,
+  `build::frame`), as the species tables' parts are: authored along the
+  bone's direction with (along, across, up) extents, reaching half a girth
+  past either joint so a limb, a tail or a wing is one connected thing and
+  not three sticks. The first sheets drew every box square to the world --
+  a bent segment as its bounding block, a swept wing as a staircase of
+  slabs -- which is a renderer's shortcut the game never takes: it draws a
+  part through its rotated bone. `breedcheck -- boxes` prints every part
+  as its centre, its axis and its extents, and the sheet draws that.
 
 - **BREED-13 · The band is capped.** The mass has to sit a fifth of the
   stance in from either end, but never more than a fifth of the torso:
