@@ -74,6 +74,12 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "const WIND_LIT: i32 = 1 << 30",
+        "A bit position, not a magnitude: which bit of `Effect::banked` says the \
+         Elementalist's wind has caught fire, set well above the Downdraft's one bit \
+         per stone.",
+    ),
+    (
         "pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1",
         "Presentation, and a bit width: where the Champion's liquid weapon's \
          `Quicksilver::forged` clock stops counting in its packed four bytes. No rule reads \
