@@ -2245,9 +2245,9 @@ fn setup(
         heart: materials.add(StandardMaterial {
             // Lit only a little from inside: brighter, the bloom washed it
             // out to a pink that read as a sweet rather than a heart.
-            base_color: Color::srgba(0.62, 0.02, 0.09, 0.97),
-            emissive: LinearRgba::rgb(0.9, 0.02, 0.10),
-            perceptual_roughness: 0.45,
+            base_color: Color::srgba(0.55, 0.01, 0.06, 0.97),
+            emissive: LinearRgba::rgb(0.6, 0.0, 0.05),
+            perceptual_roughness: 0.75,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
@@ -4147,7 +4147,11 @@ fn place_effects(
             if e.kind == sim::effects::EffectKind::Heart && tag.part < HEART_FACES {
                 let centre = heart_centre(fx3(e.pos));
                 let to = cam.translation() - centre;
-                let face = Quat::from_rotation_y(to.x.atan2(to.z));
+                // Tilted up at the camera as well: seen from over the
+                // shoulder, a heart standing upright had its point squashed.
+                let flat = (to.x * to.x + to.z * to.z).sqrt();
+                let face = Quat::from_rotation_y(to.x.atan2(to.z))
+                    * Quat::from_rotation_x(-to.y.atan2(flat));
                 piece.at = centre + face * (piece.at - centre);
                 piece.turn = face * piece.turn;
             }
