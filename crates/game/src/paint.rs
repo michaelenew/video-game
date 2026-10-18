@@ -288,7 +288,7 @@ fn strokes_image() -> Image {
         Extent3d {
             width: 1,
             height: 1,
-            depth_or_array_layers: look::strokes::LAYERS as u32,
+            depth_or_array_layers: layers(),
         },
         TextureDimension::D2,
         &[128, 128, 128, 255],
@@ -316,13 +316,47 @@ fn baked_strokes() -> Image {
         RenderAssetUsages::RENDER_WORLD,
     )
     .expect("the strokes are a png the build script drew");
-    image.reinterpret_stacked_2d_as_array(look::strokes::LAYERS as u32);
+    // The spare sheet, blank, under the drawn ones.
+    let spare = layers() as usize - look::strokes::LAYERS;
+    let sheet = look::strokes::SIZE * look::strokes::SIZE * 4;
+    if let Some(data) = image.data.as_mut() {
+        data.extend(std::iter::repeat_n(128, spare * sheet));
+    }
+    image.texture_descriptor.size.height += (spare * look::strokes::SIZE) as u32;
+    image.reinterpret_stacked_2d_as_array(layers());
     image
+}
+
+/// **How many layers the strokes texture has**: the sheets, and one blank
+/// one more when their count is a multiple of six.
+///
+/// wgpu's WebGL backend has to pick a texture's kind when it is made, and
+/// guesses: square layers in a multiple of six are a cube map. Twenty-four
+/// square sheets were made as a cube-map array, which WebGL2 does not have,
+/// so every upload and every bind of them was an `INVALID_ENUM` -- thousands
+/// a second, on every frame of the browser build (2026-10-18). The spare
+/// layer is never read.
+fn layers() -> u32 {
+    let n = look::strokes::LAYERS as u32;
+    if n % 6 == 0 { n + 1 } else { n }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Square layers in a multiple of six are made as a cube map by the
+    /// browser's backend, which cannot then bind them as an array.
+    #[test]
+    fn the_strokes_are_not_a_cube_map() {
+        for image in [baked_strokes(), strokes_image()] {
+            let size = image.texture_descriptor.size;
+            assert!(
+                size.width != size.height || size.depth_or_array_layers % 6 != 0,
+                "{size:?} reads as a cube map to WebGL"
+            );
+        }
+    }
 
     /// The sheets have to arrive as square layers, not one tall image: read
     /// as one, every stroke is stretched along the sheet.
@@ -332,7 +366,7 @@ mod tests {
         let size = image.texture_descriptor.size;
         assert_eq!(size.width, look::strokes::SIZE as u32);
         assert_eq!(size.height, look::strokes::SIZE as u32);
-        assert_eq!(size.depth_or_array_layers, look::strokes::LAYERS as u32);
+        assert_eq!(size.depth_or_array_layers, layers());
         // And a texel of the first sheet is the generator's.
         let want = look::strokes::sheet(0.0, 0.0)[7 * look::strokes::SIZE + 11];
         let data = image.data.as_ref().expect("texels");
