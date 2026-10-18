@@ -191,6 +191,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [sound.md](sound.md) | **Sound, derived**: a sound is an excitation shaped by a resonator, and the simulation's own numbers decide both -- a blow's weight is its impact freeze, a telegraph is as long as its startup, a footfall is the floor's material, a struck thing rings by its size. Nothing recorded; a sheet of every sound in a second; one frame sounded once under rollback | **Built 2026-10-08**, unheard |
 | [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness. Online, the tape keeps the link a second at a time, and the judgement says where a match got laggy and why (§6) | **Built 2026-10-08**, link 2026-10-10 |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
+| [exploration/0021](exploration/0021_crossbreeding.md) | **Crossbreeding**: a creature as a genome (majors, minors, sliders), the deterministic builder that derives its body and moves, what every major wants of the rest, trophies grafted onto eggs, breeding, mutation, rearing -- and the litmus test that rebuilds the cast | **Built 2026-10-18** as `sim::breed`; not in the world yet |
 
 ## 4 · Open
 

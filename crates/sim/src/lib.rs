@@ -12,6 +12,7 @@ pub mod atlas;
 pub mod beast;
 pub mod bits;
 pub mod bolt;
+pub mod breed;
 pub mod bulwark;
 pub mod camera;
 pub mod class;

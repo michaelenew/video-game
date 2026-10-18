@@ -56,6 +56,19 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// against the wall jump on the bench and judged by `tests/heights.rs`
 /// kicking across them.
 const LEVEL_DATA: &[&str] = &[
+    // **Creature data, crossbred** (`src/breed/`): the eleven creatures as
+    // genomes are species tables in another notation, judged the way the
+    // species tables are -- by `tests/breed.rs` rebuilding the cast from
+    // them -- and what each body plan wants of the rest is the shape of an
+    // animal, not a feel. The rates a lineage moves at (`cross::Rates`, the
+    // rearing's growth per meal) are the one part that is tuning, and they
+    // become Oven knobs with the first egg in the game; until then the
+    // generations in `tests/breed.rs` are what they are judged by.
+    "archetypes.rs",
+    "build.rs",
+    "cross.rs",
+    "plan.rs",
+    "rear.rs",
     "land.rs",
     "layout.rs",
     "rim.rs",
