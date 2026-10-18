@@ -66,3 +66,8 @@ The plan beside them is `cargo run -p look --example valley`.
 | ![](valley-ring.jpg) **The Ring**, through Hearth's north door: the proving ground in sand, the one place you can fight each other. | ![](valley-mouth.jpg) **The Mouth**: the road out of the gate, the river on the left, the scree rising to the Step. |
 | ![](valley-bank.jpg) **The Bank**: the den's mouth at the foot, the ten-shelf stair up the face, the vine at its south end (since removed). | ![](valley-shelves.jpg) **The Shelves**: on the first terrace, the traverse's ledge along the right-hand wall. |
 | ![](valley-pinewood.jpg) **The Pinewood**: the trunks, the Highlands' stair up the left wall, the chimney's ledges between the giant trunks ahead. | ![](valley-saddle.jpg) **The Saddle**: on the west platform's turf, the ridge running out ahead to the spires. |
+
+
+## Crossbreeding lineages (`breed/`)
+
+Nine lineages from `sim::breed` ([exploration/0021](../exploration/0021_crossbreeding.md)), drawn by `scripts/breed-sheet.py`: `lineages_low.png` is drift alone (no trophies, 60 generations), `lineages_med.png` one trophy every four generations, `lineages_high.png` a trophy every generation. Each frame is the built body in side and top view, its limb plan and minors; a red frame is a generation a major moved.

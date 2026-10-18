@@ -407,8 +407,15 @@ pub fn body(g: &Genome) -> Body {
         Fx::ZERO,
     );
     let head = if g.head == HeadKind::Merged {
+        // The front of the body is the head: as wide and as deep as the
+        // body, a head's length long.
         let h = r.bone("head", thorax, along.scale(torso.mul(fx(1, 2))), 0);
-        r.boxed("head", h, V3::ZERO, v3(head_half, half_w, half_w));
+        let deep = if g.stance == Stance::Limbless {
+            half_w
+        } else {
+            half_h
+        };
+        r.boxed("head", h, V3::ZERO, v3(head_half, deep, half_w));
         h
     } else {
         let n = r.bone("neck", thorax, neck_dir.scale(neck_len.mul(fx(1, 2))), 0);
@@ -539,7 +546,14 @@ pub fn body(g: &Genome) -> Body {
             Station::MidHind => (root, torso.mul(fx(1, 6))),
             Station::Hind => (root, torso.mul(fx(-1, 6))),
         };
-        let girth = half_w.mul(fx(1, 5)).add(limb.mul(p.girth).mul(fx(1, 6)));
+        // A limb's half-thickness: an eighth of the body's half-width plus
+        // a fourteenth of its length times its girth, and never thinner
+        // than a twentieth of its length. The Ridgeback's legs come out
+        // half a metre across, the cats' a hand.
+        let girth = half_w
+            .mul(fx(1, 8))
+            .add(limb.mul(p.girth).mul(fx(1, 14)))
+            .max(limb.mul(fx(1, 20)));
         for (side_i, side) in [-1, 1].into_iter().enumerate() {
             let names = LIMB_NAMES[station.index()][side_i];
             let z = half_w.mul(Fx::from_int(side));

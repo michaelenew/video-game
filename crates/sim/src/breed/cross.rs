@@ -563,16 +563,17 @@ fn mutate_in_place(g: &mut Genome, rates: &Rates, rng: &mut Rng, moved: &mut Mov
                     }
                 }
                 None => {
-                    // A limb buds where there was none, copying a neighbour
-                    // if there is one.
+                    // A limb buds where there was none: a nub, a stub that
+                    // walks, half as long as a neighbour. What it becomes
+                    // is later generations' business.
                     let model = g.limbs.iter().flatten().next().copied();
-                    g.limbs[i] = Some(model.unwrap_or(LimbPair {
+                    g.limbs[i] = Some(LimbPair {
                         role: Role::Walk,
                         build: Build::Stub,
                         tip: Tip::Pad,
-                        length: fx(1, 5),
-                        girth: fx(1, 2),
-                    }));
+                        length: model.map_or(fx(1, 5), |m| m.length.mul(fx(1, 2))),
+                        girth: model.map_or(fx(1, 2), |m| m.girth),
+                    });
                 }
             }
         }

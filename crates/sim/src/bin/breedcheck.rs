@@ -7,6 +7,8 @@
 //! cargo run -p sim --bin breedcheck -- mantis [seed]     # a Ridgeback given a Mantis's claw
 //! cargo run -p sim --bin breedcheck -- drift [seed]      # every creature, forty generations alone
 //! cargo run -p sim --bin breedcheck -- herd [seed]       # breeding the biggest Ridgebacks
+//! cargo run -p sim --bin breedcheck -- boxes <egg> <donor|none> <trophy|none> <every> <seed> <gens>
+//!                                            # every generation's body as side-view boxes, for a sheet
 //! ```
 
 use sim::breed::archetypes::{self, CAST, GALEWING, MANTIS, RIDGEBACK};
@@ -256,6 +258,114 @@ fn herd(seed: u64) {
     }
 }
 
+/// A creature by name, for the sheet's arguments.
+fn by_name(name: &str) -> Option<&'static Genome> {
+    CAST.iter()
+        .find(|(id, n, _, _)| {
+            n.eq_ignore_ascii_case(name) || id.get().name.eq_ignore_ascii_case(name)
+        })
+        .map(|(_, _, g, _)| *g)
+}
+
+/// Every generation of a lineage as its body's boxes in side view, one
+/// line per part, for a sheet drawn outside the simulation.
+///
+/// ```text
+/// gen <n> <stance> <plausibility> <tier> <caps...> | <genome>
+/// part <tag> <name> <x0> <y0> <x1> <y1> <z0> <z1>
+/// ```
+///
+/// A trophy of `kind` from `donor` is given every `every` generations;
+/// `none` or `every` of zero is drift alone.
+fn boxes(args: &[String]) {
+    let egg = args
+        .first()
+        .and_then(|n| by_name(n))
+        .copied()
+        .unwrap_or(RIDGEBACK);
+    let donor = args.get(1).and_then(|n| by_name(n)).copied();
+    let kind = args
+        .get(2)
+        .and_then(|k| {
+            TrophyKind::ALL
+                .iter()
+                .find(|t| t.name().replace(' ', "_") == *k)
+        })
+        .copied();
+    let every: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let seed: u64 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let gens: u32 = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(40);
+    let mut rng = Rng::new(seed);
+    let mut g = egg;
+    for generation in 0..=gens {
+        if generation > 0 {
+            let graft = every > 0 && generation % every == 0;
+            g = match (graft, donor, kind) {
+                (true, Some(donor), Some(kind)) => {
+                    cross::graft(&g, &Trophy { kind, donor }, &Rates::DEFAULT, &mut rng).genome
+                }
+                _ => cross::mutate(&g, &Rates::DEFAULT, &mut rng).genome,
+            };
+        }
+        let a = plan::assess(&g);
+        println!(
+            "gen {generation} {:?} {:.2} {} {} | {}",
+            g.stance,
+            f(a.plausibility),
+            a.tier,
+            verdict(&g)
+                .split('[')
+                .nth(1)
+                .unwrap_or("")
+                .trim_end_matches(']'),
+            describe(&g)
+        );
+        let body = build::body(&g);
+        for part in body.parts() {
+            let at = body.at(part.shape.bone);
+            let name = part.name;
+            let tag = if name.contains("foot") {
+                "foot"
+            } else if name.starts_with("fore")
+                || name.starts_with("hind")
+                || name.starts_with("mid")
+            {
+                let wing = g.pairs().any(|(st, p)| {
+                    p.role == Role::Wing
+                        && name.starts_with(match st {
+                            sim::breed::Station::Fore => "fore",
+                            sim::breed::Station::MidFore => "midfore",
+                            sim::breed::Station::MidHind => "midhind",
+                            sim::breed::Station::Hind => "hind",
+                        })
+                });
+                if wing { "wing" } else { "limb" }
+            } else if name.starts_with("head")
+                || name == "jaw"
+                || name == "horns"
+                || name == "crest"
+                || name == "neck"
+            {
+                "head"
+            } else if name.starts_with("tail") {
+                "tail"
+            } else {
+                "torso"
+            };
+            println!(
+                "part {tag} {} {:.3} {:.3} {:.3} {:.3} {:.3} {:.3}",
+                name.replace(' ', "_"),
+                f(at.x.add(part.shape.min.x)),
+                f(at.y.add(part.shape.min.y)),
+                f(at.x.add(part.shape.max.x)),
+                f(at.y.add(part.shape.max.y)),
+                f(at.z.add(part.shape.min.z)),
+                f(at.z.add(part.shape.max.z))
+            );
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let seed = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(1u64);
@@ -283,6 +393,7 @@ fn main() {
         ),
         Some("drift") => drift(seed),
         Some("herd") => herd(seed),
+        Some("boxes") => boxes(&args[1..]),
         Some(other) => println!("unknown: {other}"),
     }
 }
