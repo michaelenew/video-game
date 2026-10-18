@@ -288,7 +288,9 @@ are small and can follow any time after.
   and the harness both argue against for now.
 - **A story.** The world has a premise (a town at the mouth of a valley full of
   things, and something walking toward it) and no more. Writing is expensive and
-  the art thesis says spend it last.
+  the art thesis says spend it last. Since 2026-10-17 it is also the owner's
+  open invitation to a storyteller ([intent.md](intent.md) §5): there is no
+  sense of "forward" yet.
 - **Open terrain between places.** Trails are arenas-without-creatures on
   purpose. An open world is the thing the combat kernel's closed arena was chosen
   to avoid.

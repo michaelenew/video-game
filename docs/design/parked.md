@@ -9,6 +9,11 @@ Deferred until the core classes are built. Nothing here is decided. It is record
 reasoning does not have to be re-derived, and because two conclusions below are
 load-bearing enough that reopening them later should be deliberate.
 
+**2026-10-17:** the owner's current thinking on progression -- the three shapes, a leaning
+toward unlocking parts of the character as weapons that change the clicks, and a gear ramp
+whose ceiling comes early -- is in [intent.md](intent.md) §4, with how it meets the two
+conclusions below.
+
 ## Why parked
 
 The classes are the product. Until the six of them exist and play well, a build system has
