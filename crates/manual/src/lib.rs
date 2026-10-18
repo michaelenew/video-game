@@ -933,11 +933,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "scripts\\play-windows.cmd [args]",
-                "Windows, from nothing: double-click it. Installs the C++ build tools, Git and Rust if missing, clones the game into %USERPROFILE%\\video-game (or pulls the latest) and plays it in release mode, passing on its arguments. Inside a checkout it plays that checkout and leaves git alone.",
+                "Windows, from nothing: double-click it. Installs the C++ build tools, Git and Rust if missing, clones the game into %USERPROFILE%\\video-game (or pulls the latest), then hands over to the launcher in that version, which plays it in release mode, passing on its arguments. Inside a checkout it plays that checkout and leaves git alone.",
             ),
             e(
                 "scripts/play-macos.command [args]",
-                "macOS, from nothing: double-click it. Installs Apple's Command Line Tools and Rust if missing, clones the game into ~/video-game (or pulls the latest) and plays it in release mode, passing on its arguments. Inside a checkout it plays that checkout and leaves git alone.",
+                "macOS, from nothing: double-click it. Installs Apple's Command Line Tools and Rust if missing, clones the game into ~/video-game (or pulls the latest), then hands over to the launcher in that version, which plays it in release mode, passing on its arguments. Inside a checkout it plays that checkout and leaves git alone.",
             ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),

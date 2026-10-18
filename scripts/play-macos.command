@@ -12,7 +12,9 @@
 # to the game.
 #
 # Run it again any time: what is installed is skipped, and only what changed
-# since last time is rebuilt. If this file sits inside a checkout (as it does
+# since last time is rebuilt. Once the game is fetched, this hands over to the
+# launcher that came with it, so the newest launcher always does the rest and
+# this file never needs downloading again. If this file sits inside a checkout (as it does
 # in the repository's scripts folder), it plays that checkout instead and
 # leaves its git state alone.
 #
@@ -88,6 +90,15 @@ else
         say "Downloading the game into $CHECKOUT"
         git clone "$REPO" "$CHECKOUT" \
             || fail 'git clone did not work. Check the internet connection and run this again.'
+    fi
+    # The copy in the checkout is the newest launcher: whatever it installs or
+    # does differently happens on this run. It is inside a checkout, so it
+    # plays rather than handing over again; the flag makes sure of it.
+    FRESH="$CHECKOUT/scripts/play-macos.command"
+    if [ -f "$FRESH" ] && [ -z "${LAUNCHER_HANDED_OFF:-}" ]; then
+        say 'Handing over to the launcher that came with this version'
+        export LAUNCHER_HANDED_OFF=1
+        exec bash "$FRESH" "$@"
     fi
 fi
 
