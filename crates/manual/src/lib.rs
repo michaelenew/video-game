@@ -858,7 +858,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "python3 scripts/breed-sheet.py <dir>",
-                "Draw the sheets in docs/design/gallery/breed/ from `breedcheck -- boxes` dumps in <dir>/lines/: one row per lineage, the generations across, each body in side and top view, a red frame where a major moved. Needs Pillow.",
+                "Draw the sheets in docs/design/gallery/breed/ from `breedcheck -- boxes` dumps in <dir>/lines/: one row per lineage, the generations across, each body isometric on a gridded ground, a red frame where a major moved. Needs Pillow.",
             ),
             e(
                 "cargo run -p sim --bin critcheck",

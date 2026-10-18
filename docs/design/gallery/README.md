@@ -70,4 +70,4 @@ The plan beside them is `cargo run -p look --example valley`.
 
 ## Crossbreeding lineages (`breed/`)
 
-Nine lineages from `sim::breed` ([exploration/0021](../exploration/0021_crossbreeding.md)), drawn by `scripts/breed-sheet.py`: `lineages_low.png` is drift alone (no trophies, 60 generations), `lineages_med.png` one trophy every four generations, `lineages_high.png` a trophy every generation. Each frame is the built body in side and top view, its limb plan and minors; a red frame is a generation a major moved.
+Nine lineages from `sim::breed` ([exploration/0021](../exploration/0021_crossbreeding.md)), drawn by `scripts/breed-sheet.py`: `lineages_low.png` is drift alone (no trophies, 60 generations), `lineages_med.png` one trophy every four generations, `lineages_high.png` a trophy every generation. Each frame is the built body isometric on a gridded ground, its limb plan and minors; a red frame is a generation a major moved.

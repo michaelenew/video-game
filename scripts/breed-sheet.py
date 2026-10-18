@@ -4,7 +4,7 @@
     python3 scripts/breed-sheet.py <dir with lines/>
 
 One row per lineage, the generations across (always the ones where a major
-moved), each body in side view and top view at one scale down the row. The
+moved), each body isometric on a gridded ground, one scale down the row. The
 file name's first word (low, med, high) picks which sheet it goes on. The
 sheets in docs/design/gallery/breed/ were made this way."""
 import sys, os, glob
@@ -88,59 +88,117 @@ def short_limbs(limbs):
     return "  ".join(out)
 
 
-def draw_strip(name, gens, cell_w=250, side_h=150, top_h=70):
+import math
+C30 = math.cos(math.radians(30))
+S30 = math.sin(math.radians(30))
+
+
+def iso(x, y, z):
+    """World (x along the body, y up, z across) to the picture plane, metres."""
+    return (x - z) * C30, (x + z) * S30 - y
+
+
+def shade(col, k):
+    return tuple(max(0, min(255, int(c * k))) for c in col)
+
+
+def draw_box(d, box, col, origin, scale):
+    """A cuboid as its three visible faces: top, the +x end, the +z side."""
+    x0, y0, x1, y1, z0, z1 = box
+    ox, oy = origin
+
+    def P(x, y, z):
+        px, py = iso(x, y, z)
+        return (ox + px * scale, oy + py * scale)
+
+    top = [P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)]
+    front = [P(x1, y0, z0), P(x1, y0, z1), P(x1, y1, z1), P(x1, y1, z0)]
+    side = [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)]
+    edge = shade(col, 0.55)
+    d.polygon(side, fill=shade(col, 0.78), outline=edge)
+    d.polygon(front, fill=shade(col, 0.92), outline=edge)
+    d.polygon(top, fill=shade(col, 1.15), outline=edge)
+
+
+def draw_ground(d, origin, scale, extent, step):
+    ox, oy = origin
+    lo = -extent
+    hi = extent
+
+    def P(x, z):
+        px, py = iso(x, 0, z)
+        return (ox + px * scale, oy + py * scale)
+
+    d.polygon([P(lo, lo), P(hi, lo), P(hi, hi), P(lo, hi)], fill=(232, 228, 214))
+    n = int((hi - lo) / step)
+    for i in range(n + 1):
+        v = lo + i * step
+        d.line([P(v, lo), P(v, hi)], fill=(214, 209, 192))
+        d.line([P(lo, v), P(hi, v)], fill=(214, 209, 192))
+
+
+def draw_strip(name, gens, cell_w=300, cell_h=300):
     frames, moved = pick_frames(gens)
-    xs = [x for i in frames for (_, _, x0, _, x1, _, _, _) in gens[i]["parts"] for x in (x0, x1)]
-    span = max(xs) - min(xs)
-    tallest = max(y1 for i in frames for (_, _, _, _, _, y1, _, _) in gens[i]["parts"])
-    widest = max(z1 - z0 for i in frames for (_, _, _, _, _, _, z0, z1) in gens[i]["parts"])
-    zspan = max(max(z1 for (_, _, _, _, _, _, _, z1) in gens[i]["parts"]) -
-                min(z0 for (_, _, _, _, _, _, z0, _) in gens[i]["parts"]) for i in frames)
-    scale = min((cell_w - 16) / max(span, 1.0), (side_h - 8) / max(tallest, 1.0))
-    tscale = min(scale, (top_h - 8) / max(zspan, 1.0))
+    # One scale for the row, from the largest picture any frame makes.
+    biggest = 1.0
+    for i in frames:
+        pts = []
+        for (_, _, x0, y0, x1, y1, z0, z1) in gens[i]["parts"]:
+            for x in (x0, x1):
+                for y in (0, y0, y1):
+                    for z in (z0, z1):
+                        pts.append(iso(x, y, z))
+        w = max(p[0] for p in pts) - min(p[0] for p in pts)
+        h = max(p[1] for p in pts) - min(p[1] for p in pts)
+        biggest = max(biggest, w, h)
+    scale = (min(cell_w, cell_h) - 70) / biggest
+    row_extent = max(max(x1 for (_, _, _, _, x1, _, _, _) in gens[i]["parts"]) -
+                     min(x0 for (_, _, x0, _, _, _, _, _) in gens[i]["parts"]) for i in frames)
+    step = 5.0 if row_extent > 12 else 1.0
     head_h = 34
     foot_h = 30
-    cell_h = head_h + side_h + top_h + foot_h
+    total_h = head_h + cell_h + foot_h
     W = cell_w * len(frames)
-    H = cell_h + 44
+    H = total_h + 44
     im = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(im)
     d.text((8, 6), name.replace("_", " "), fill=(30, 30, 30), font=BOLD)
-    d.text((8, 24), gens[0]["desc"][:230], fill=(90, 90, 90), font=SMALL)
-    order = {"tail": 0, "limb": 1, "foot": 1, "torso": 2, "wing": 3, "head": 4}
+    d.text((8, 24), gens[0]["desc"][:260], fill=(90, 90, 90), font=SMALL)
     for k, i in enumerate(frames):
         g = gens[i]
         ox = k * cell_w
         top = 44
-        ground = top + head_h + side_h
-        tmid = ground + top_h / 2 + 2
         outline = (200, 60, 60) if g["n"] in moved else (220, 218, 210)
-        d.rectangle([ox + 2, top, ox + cell_w - 2, top + cell_h - 2], outline=outline, width=2 if g["n"] in moved else 1)
-        d.line([ox + 6, ground, ox + cell_w - 6, ground], fill=(150, 150, 150))
-        d.line([ox + 6, ground + top_h + 2, ox + cell_w - 6, ground + top_h + 2], fill=(225, 223, 215))
-        px = [x for (_, _, x0, _, x1, _, _, _) in g["parts"] for x in (x0, x1)]
-        cx = (min(px) + max(px)) / 2
-        parts = sorted(g["parts"], key=lambda p: order.get(p[0], 2))
-        for tag, pname, x0, y0, x1, y1, z0, z1 in parts:
-            col = COL.get(tag, (100, 100, 100))
-            edge = tuple(max(0, c - 50) for c in col)
-            X0 = ox + cell_w / 2 + (x0 - cx) * scale
-            X1 = ox + cell_w / 2 + (x1 - cx) * scale
-            d.rectangle([X0, ground - y1 * scale, X1, ground - y0 * scale], fill=col, outline=edge)
-        for tag, pname, x0, y0, x1, y1, z0, z1 in parts:
-            col = tuple(min(255, c + 35) for c in COL.get(tag, (100, 100, 100)))
-            X0 = ox + cell_w / 2 + (x0 - cx) * tscale
-            X1 = ox + cell_w / 2 + (x1 - cx) * tscale
-            d.rectangle([X0, tmid + z0 * tscale, X1, tmid + z1 * tscale], fill=col)
-        bar = 5.0 if span > 14 else 1.0
-        d.line([ox + 10, ground - 6, ox + 10 + bar * scale, ground - 6], fill=(60, 60, 60), width=2)
-        d.text((ox + 10, ground - 20), f"{bar:g} m", fill=(60, 60, 60), font=SMALL)
+        d.rectangle([ox + 2, top, ox + cell_w - 2, top + total_h - 2], outline=outline, width=2 if g["n"] in moved else 1)
+        # the picture: clip to the cell by drawing on a tile and pasting
+        tile = Image.new("RGB", (cell_w - 6, cell_h), BG)
+        td = ImageDraw.Draw(tile)
+        parts = g["parts"]
+        xs = [x for (_, _, x0, _, x1, _, _, _) in parts for x in (x0, x1)]
+        zs = [z for (_, _, _, _, _, _, z0, z1) in parts for z in (z0, z1)]
+        cx = (min(xs) + max(xs)) / 2
+        cz = (min(zs) + max(zs)) / 2
+        ys = max(y1 for (_, _, _, _, _, y1, _, _) in parts)
+        # centre the body's middle, half its height up, in the tile
+        mx, my = iso(cx, ys / 2, cz)
+        origin = (tile.width / 2 - mx * scale, cell_h / 2 - my * scale + 10)
+        extent = max(max(xs) - min(xs), max(zs) - min(zs)) * 0.9 + 2
+        draw_ground(td, (origin[0] - iso(cx, 0, cz)[0] * scale + iso(0, 0, 0)[0], origin[1] - iso(cx, 0, cz)[1] * scale), scale, extent, step)
+        # shadows: each box's footprint on the ground
+        for (_, _, x0, y0, x1, y1, z0, z1) in parts:
+            pts = [iso(x0, 0, z0), iso(x1, 0, z0), iso(x1, 0, z1), iso(x0, 0, z1)]
+            td.polygon([(origin[0] + px * scale, origin[1] + py * scale) for px, py in pts], fill=(205, 200, 184))
+        # the boxes, far to near
+        order = sorted(parts, key=lambda p: (p[2] + p[6] + p[3] * 0.5))
+        for tag, pname, x0, y0, x1, y1, z0, z1 in order:
+            draw_box(td, (x0, y0, x1, y1, z0, z1), COL.get(tag, (100, 100, 100)), origin, scale)
+        im.paste(tile, (ox + 3, top + head_h))
         d.text((ox + 8, top + 4), f"gen {g['n']}  {g['stance']}  p={g['plaus']:.2f}  tier {g['tier']}", fill=(30, 30, 30), font=FONT)
-        d.text((ox + 8, top + 20), g["caps"][:44], fill=(90, 90, 90), font=SMALL)
-        d.text((ox + 8, ground + 4), "top view", fill=(170, 170, 170), font=SMALL)
+        d.text((ox + 8, top + 20), g["caps"][:52], fill=(90, 90, 90), font=SMALL)
+        d.text((ox + 8, top + head_h + cell_h - 14), f"grid {step:g} m", fill=(150, 150, 150), font=SMALL)
         st, limbs, minors = majors(g["desc"])
-        d.text((ox + 8, ground + top_h + 6), short_limbs(limbs)[:46], fill=(60, 80, 120), font=SMALL)
-        d.text((ox + 8, ground + top_h + 18), minors[:46], fill=(120, 100, 60), font=SMALL)
+        d.text((ox + 8, top + head_h + cell_h + 2), short_limbs(limbs)[:56], fill=(60, 80, 120), font=SMALL)
+        d.text((ox + 8, top + head_h + cell_h + 14), minors[:56], fill=(120, 100, 60), font=SMALL)
     return im
 
 
