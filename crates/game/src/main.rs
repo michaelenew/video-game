@@ -2243,8 +2243,10 @@ fn setup(
         // essence, nearly solid and burning from inside, so it is the one
         // thing of hers that reads as an object rather than a stain.
         heart: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.80, 0.07, 0.22, 0.95),
-            emissive: LinearRgba::rgb(2.4, 0.12, 0.55),
+            // Lit only a little from inside: brighter, the bloom washed it
+            // out to a pink that read as a sweet rather than a heart.
+            base_color: Color::srgba(0.62, 0.02, 0.09, 0.97),
+            emissive: LinearRgba::rgb(0.9, 0.02, 0.10),
             perceptual_roughness: 0.45,
             alpha_mode: AlphaMode::Blend,
             ..default()
@@ -4116,6 +4118,7 @@ fn mark_piece(p: &sim::state::Player) -> Option<Piece> {
 fn place_effects(
     sim: Res<Sim>,
     look: Res<EffectLook>,
+    camera: Query<&GlobalTransform, With<MainCamera>>,
     mut meshes: Query<(
         &EffectMesh,
         &mut Transform,
@@ -4125,8 +4128,9 @@ fn place_effects(
     )>,
 ) {
     for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
-        let piece = sim.cur.effects[tag.slot].and_then(|e| effect_piece(&e, tag.part));
-        let Some(piece) = piece else {
+        let effect = sim.cur.effects[tag.slot];
+        let piece = effect.and_then(|e| effect_piece(&e, tag.part));
+        let Some(mut piece) = piece else {
             *vis = Visibility::Hidden;
             continue;
         };
@@ -4137,6 +4141,16 @@ fn place_effects(
         }
         if mat.0 != want_skin {
             mat.0 = want_skin;
+        }
+        // A heart faces the camera, turned about its own centre.
+        if let (Some(e), Ok(cam)) = (effect, camera.single()) {
+            if e.kind == sim::effects::EffectKind::Heart && tag.part < HEART_FACES {
+                let centre = heart_centre(fx3(e.pos));
+                let to = cam.translation() - centre;
+                let face = Quat::from_rotation_y(to.x.atan2(to.z));
+                piece.at = centre + face * (piece.at - centre);
+                piece.turn = face * piece.turn;
+            }
         }
         tf.translation = piece.at;
         tf.scale = piece.scale;
@@ -5318,6 +5332,19 @@ const HEART_PARTS: usize = 10;
 /// from across a fight and never mistaken for a stain. Roots run down from
 /// it into the floor. It is smaller the less blood is left in it: how long it
 /// will stand, and how many thralls it has left in it, read off its size.
+/// How much bigger than its first draft a heart is drawn: at the other end
+/// of an arena it has to read as a heart, not a speck.
+const HEART_SIZE: f32 = 1.35;
+
+/// Where a heart standing at `at` hangs.
+fn heart_centre(at: Vec3) -> Vec3 {
+    at + Vec3::Y * 1.75
+}
+
+/// Of a heart's parts, the ones that are the heart itself (the lobes, the
+/// point and the vessels) and are turned to face the camera.
+const HEART_FACES: usize = 5;
+
 fn heart_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
     let full = sim::tuning::heart_least().max(1) as f32 * 3.0;
     let worth = 0.6 + 0.4 * (effect.banked.max(0) as f32 / full).clamp(0.0, 1.0);
@@ -5327,9 +5354,13 @@ fn heart_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
     let lub = (-((phase - 0.05) * 22.0).powi(2)).exp();
     let dub = (-((phase - 0.3) * 22.0).powi(2)).exp() * 0.5;
     let beat = 1.0 + 0.16 * (lub + dub);
-    let size = worth * beat;
-    let centre = at + Vec3::Y * 1.65;
-    let turn = Quat::from_rotation_y(t * 0.6 + wobble(seed_of(effect.pos)) * 6.0);
+    let size = HEART_SIZE * worth * beat;
+    let centre = heart_centre(at);
+    // Its lobes lie along x and its face looks along z; `place_effects`
+    // turns it to face the camera, so the outline is a heart from wherever
+    // it is seen (turning freely, it was two balls one behind the other as
+    // often as not). A slow sway keeps it alive.
+    let turn = Quat::from_rotation_y((t * 0.7 + wobble(seed_of(effect.pos)) * 6.0).sin() * 0.25);
     let side = turn * Vec3::X;
     let lobe_r = 0.24 * size;
     match part {
