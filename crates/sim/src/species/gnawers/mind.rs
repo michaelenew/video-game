@@ -54,8 +54,12 @@ pub mod word {
     pub const PILE_Z: usize = 4;
     /// The Big One's strain: recent damage, bled each frame.
     pub const STRAIN: usize = 5;
-    /// Free: how long each fighter has been treed is in [`super::per`].
-    pub const _FREE_6: usize = 6;
+    /// **Its den's floor plane in the world's frame**, raw fixed point
+    /// (`arena::Den::off`'s height): zero at home, and moved by a change of
+    /// frame (`rules::shift`). Every height it judges -- up a tree, up on a
+    /// top -- is over this. (It was free: how long each fighter has been
+    /// treed is in [`super::per`].)
+    pub const FRAME_Y: usize = 6;
     /// The stone being gnawed, as its index in the stone field plus one, or
     /// zero.
     pub const GNAW_STONE: usize = 7;
@@ -209,6 +213,27 @@ pub fn treed_now(pack: &Pack, who: usize) -> bool {
 }
 
 /// The fighter a critter is after, clamped to a real index.
+/// Its den's floor plane in the world's frame ([`word::FRAME_Y`]).
+pub(super) fn plane(pack: &Pack) -> Fx {
+    Fx::from_raw(pack.memo[word::FRAME_Y])
+}
+
+/// **Every solid of its den**: what `Terrain::solids` is of the place the
+/// world is in, but of the hunt's home wherever the world's frame is
+/// (`arena::Den`) -- the same boxes, in the same order, at home.
+fn den_solids(ground: &crate::arena::Terrain) -> crate::arena::Solids<'_> {
+    match ground.atlas().and_then(|a| a.placed(ground.den.arena.id)) {
+        Some(p) => {
+            let pad = Fx::from_int(crate::atlas::TILE_M);
+            ground.near(
+                V3::new(p.lo.0.sub(pad), Fx::ZERO, p.lo.1.sub(pad)).sub(ground.origin()),
+                V3::new(p.hi.0.add(pad), Fx::ZERO, p.hi.1.add(pad)).sub(ground.origin()),
+            )
+        }
+        None => ground.solids(),
+    }
+}
+
 fn target_of(c: &Critter) -> usize {
     (c.target as usize).min(MAX_PLAYERS - 1)
 }
@@ -222,12 +247,13 @@ fn set_up(pack: &Pack, who: usize) -> bool {
 /// The arena solid a fighter at `at` is standing on top of, if one is and it
 /// is low enough to scramble up.
 fn scramble_top(look: &Look, at: V3) -> Option<crate::arena::Solid> {
-    if at.y.raw() < Fx::ratio(1, 2).raw() || at.y.raw() > knob_fx(Knob::ScrambleTop).raw() {
+    let up = at.y.sub(look.arena.den.off.y);
+    if up.raw() < Fx::ratio(1, 2).raw() || up.raw() > knob_fx(Knob::ScrambleTop).raw() {
         return None;
     }
     // Standing on it: the resolve holds a body a skin off a top.
     let skin = crate::arena::SKIN.add(crate::arena::SKIN);
-    look.arena.solids().find(|s| {
+    den_solids(look.arena).find(|s| {
         at.x.raw() >= s.min.x.raw()
             && at.x.raw() <= s.max.x.raw()
             && at.z.raw() >= s.min.z.raw()
@@ -292,7 +318,7 @@ impl PackMind for Mind {
                 let Some(top) = scramble_top(look, seen.pos) else {
                     return 0;
                 };
-                if c.pos.y.raw() > Fx::ratio(1, 2).raw()
+                if c.pos.y.sub(look.arena.den.off.y).raw() > Fx::ratio(1, 2).raw()
                     || off_footprint(&top, c.pos).raw() > knob_fx(Knob::ScrambleFrom).raw()
                 {
                     return 0;
@@ -337,7 +363,7 @@ impl PackMind for Mind {
         let reach = knob_fx(Knob::LeapReach);
         for who in 0..MAX_PLAYERS {
             let s = pack.seen[who];
-            let up = s.alive && s.pos.y.raw() > reach.raw();
+            let up = s.alive && s.pos.y.sub(plane(pack)).raw() > reach.raw();
             let was = of(pack, who, per::TREED);
             set_of(pack, who, per::TREED, if up { was + 1 } else { 0 });
         }
@@ -540,7 +566,7 @@ impl PackMind for Mind {
         // Up on a platform with its target: straight for it.
         if pack.mood == mood::HUNTING
             && seen.alive
-            && c.pos.y.raw() > Fx::ratio(1, 2).raw()
+            && c.pos.y.sub(look.arena.den.off.y).raw() > Fx::ratio(1, 2).raw()
             && same_level(c, seen.pos)
         {
             return Steer {

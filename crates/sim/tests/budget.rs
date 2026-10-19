@@ -298,7 +298,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 19] {
+fn scenarios() -> [Scenario; 20] {
     [
         // The valley, one map of eighteen places: the Saddle, with every
         // other place's boxes in tiles around it, and a creature's room in it.
@@ -421,7 +421,53 @@ fn scenarios() -> [Scenario; 19] {
         ("the valley, at the wall", |c| {
             siege_full(World::hunt_of([c; 2], SpeciesId::SIEGESHELL))
         }),
+        // **A chase far from home** (exploration 0023): the Upper Meadow's
+        // two Ridgebacks after their egg, out on the Bank's road a long way
+        // from their range -- every step looked ahead for a way, the land's
+        // slopes and the boxes round it asked, the world framed in another
+        // place's coordinates.
+        ("chase far from home", |c| far_from_home(c)),
     ]
+}
+
+/// The Upper Meadow's Ridgebacks out on the road after their egg, which
+/// fighter one carries: [`scenarios`]'.
+fn far_from_home(c: Class) -> World {
+    let r = sim::valley::ranges::RANGES
+        .iter()
+        .find(|r| r.name == "Upper Meadow")
+        .unwrap();
+    let mut w = World::arrive(
+        [c; 2],
+        sim::valley::Journey::default(),
+        r.arena,
+        Some(0),
+        MAX_PLAYERS as u8,
+    );
+    w.valley.keep.satchel[0][0] = Some(sim::keep::Item::Egg(SpeciesId::RIDGEBACK));
+    // The road through the Bank, a hundred metres and more from the range;
+    // the creatures thirty metres back along it.
+    let o = w.map_origin();
+    let ground = w.terrain();
+    let at = |x: i32, z: i32| {
+        let p = sim::V3::new(
+            sim::arena::cm(x).sub(o.x),
+            sim::Fx::from_int(1000),
+            sim::arena::cm(z).sub(o.z),
+        );
+        sim::V3::new(p.x, ground.floor_below(p), p.z)
+    };
+    for (i, p) in w.players.iter_mut().enumerate() {
+        p.pos = at(25500 - 150 * i as i32, 300);
+    }
+    for (k, m) in w.monsters.iter_mut().flatten().enumerate() {
+        m.pos = at(28500 + 300 * k as i32, 900);
+    }
+    for _ in 0..3 {
+        w.advance([Input::default(); 2]);
+    }
+    assert!(w.den().out(), "the creatures are not out of their range");
+    w
 }
 
 /// The Siegeshell at the siege line with everything in it: [`scenarios`]'.

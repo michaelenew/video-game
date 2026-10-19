@@ -169,8 +169,37 @@ pub static FIGHT: FightDecl = FightDecl {
     presence: Some(presence),
     shown: Some(shown),
     repose: Some(super::legs::repose),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
+
+/// **Her own points, moved with the world** (`FightDecl::shift`): where the
+/// web line under way set off from. Her sacs' clocks and the fighters she
+/// holds are not points; her webs and strands are hazards, her brood
+/// critters and their den the pack's, moved with every other.
+fn shift(w: &mut World, d: V3) {
+    let from = w.lore.word(word::LINE_FROM);
+    w.lore
+        .set_word(word::LINE_FROM, crate::lore::moved_halves(from, d));
+    // Her brood think with the gnawer's mind, which keeps two points in its
+    // pack's memo, raw fixed point: the pile-on's lane, and the stone being
+    // gnawed while there is one.
+    use crate::species::gnawers::memo;
+    let Some(pack) = w.pack.as_mut().filter(|p| p.species == SPECIES.id) else {
+        return;
+    };
+    let gnawing = pack.memo[memo::GNAW_STONE] > 0;
+    let mut moved = |x: usize, z: usize| {
+        pack.memo[x] = Fx::from_raw(pack.memo[x]).add(d.x).raw();
+        pack.memo[z] = Fx::from_raw(pack.memo[z]).add(d.z).raw();
+    };
+    moved(memo::PILE_X, memo::PILE_Z);
+    if gnawing {
+        moved(memo::GNAW_X, memo::GNAW_Z);
+    }
+    // And the floor plane its treed count is measured from.
+    pack.memo[memo::FRAME_Y] = pack.memo[memo::FRAME_Y].wrapping_add(d.y.raw());
+}
 
 // ---------------------------------------------------------------------------
 // Reading her
@@ -249,14 +278,16 @@ pub fn sac_middle(m: &Monster, i: usize) -> V3 {
 
 /// **Where a sac's brood land**: the floor under it, kept inside the arena.
 /// The ring drawn under a red sac is this point, and the burst spawns here --
-/// one function, so what is drawn is where they land.
-pub fn landing(w: &World, m: &Monster, i: usize) -> V3 {
+/// one function, so what is drawn is where they land. Read through her
+/// den (`World::den`): kept where she is kept this frame, on her own cave's
+/// floor wherever the world's frame is.
+pub fn landing(den: &crate::arena::Den, m: &Monster, i: usize) -> V3 {
     let at = sac_middle(m, i);
-    let b = w.arena().bounds;
+    let b = &den.kept;
     let keep = crate::tuning::body_radius();
     V3::new(
         at.x.clamp(b.lo_x.add(keep), b.hi_x.sub(keep)),
-        Fx::ZERO,
+        den.off.y,
         at.z.clamp(b.lo_z.add(keep), b.hi_z.sub(keep)),
     )
 }
@@ -573,7 +604,7 @@ fn burst(w: &mut World, m: &mut Monster, i: usize) -> bool {
     if brood(w) + per > cap || free < per {
         return false;
     }
-    let at = landing(w, m, i);
+    let at = landing(&w.den(), m, i);
     let Some(pack) = w.pack.as_mut() else {
         return false;
     };
@@ -607,7 +638,7 @@ fn splash(w: &mut World, at: V3) {
         let away = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z));
         let gap = math::wide_flat_len(away);
         if gap.raw() > a.hit_radius.add(crate::tuning::body_radius()).raw()
-            || p.pos.y.raw() > a.hit_high.raw()
+            || p.pos.y.sub(at.y).raw() > a.hit_high.raw()
         {
             continue;
         }
@@ -684,12 +715,18 @@ fn arc(w: &mut World, m: &mut Monster) {
         m.speed = Fx::ZERO;
         m.yaw_rate = Fx::ZERO;
         m.strain = 0;
-        // They scatter for the far wall, away from her.
-        let b = w.arena().bounds;
-        let x = if m.pos.x.raw() > 0 { b.lo_x } else { b.hi_x };
+        // They scatter for the far wall of her own cave, away from her,
+        // wherever the world's frame is (`arena::Den`).
+        let den = w.den();
+        let b = den.home;
+        let x = if m.pos.x.raw() > den.off.x.raw() {
+            b.lo_x
+        } else {
+            b.hi_x
+        };
         if let Some(pack) = w.pack.as_mut() {
             pack.mood = crate::pack::mood::BROKEN;
-            pack.home = V3::new(x, Fx::ZERO, m.pos.z);
+            pack.home = V3::new(x, den.off.y, m.pos.z);
         }
         return;
     }
@@ -798,6 +835,8 @@ fn web_shot(w: &mut World, m: &mut Monster) {
     }
     let at = glob_lands(w, m);
     m.aim_at(at);
+    // On her own cave's floor, wherever the world's frame is.
+    let at = V3::new(at.x, w.den().off.y, at.z);
     crate::hazard::place(
         &mut w.lore,
         crate::hazard::Hazard::disc(PATCH, at, Knob::PatchRadius.fx()),
@@ -843,7 +882,7 @@ fn webbed(w: &mut World, m: &mut Monster) {
                 held &= !(1 << who);
                 let mut g = crate::hazard::Hazard::disc(
                     GLOB,
-                    V3::new(p.pos.x, Fx::ZERO, p.pos.z),
+                    V3::new(p.pos.x, w.den().off.y, p.pos.z),
                     crate::tuning::body_radius(),
                 );
                 g.state = who as u8 + 1;
@@ -876,17 +915,24 @@ fn webbed(w: &mut World, m: &mut Monster) {
 /// cannot cross. Kept on her body for the brain (`mind::anchor_for`).
 fn anchors_clear(w: &World, m: &mut Monster) {
     let reach = Knob::LineReach.fx();
-    let from = V3::new(m.pos.x, crate::tuning::body_height(), m.pos.z);
+    // Her own cave's anchors, wherever the world's frame is (`arena::Den`),
+    // and her spinnerets' height over its floor.
+    let den = w.den();
+    let from = V3::new(
+        m.pos.x,
+        crate::tuning::body_height().add(den.off.y),
+        m.pos.z,
+    );
     let mut bits = 0u32;
-    for (k, site) in w
-        .arena()
+    for (k, site) in den
+        .arena
         .sites
         .iter()
         .filter(|s| s.name == "anchor")
         .take(8)
         .enumerate()
     {
-        let (at, _) = site.at(Fx::ZERO);
+        let at = den.at(site.at(Fx::ZERO).0);
         let to = V3::new(at.x, from.y, at.z);
         let near = math::wide_flat_dist(at, m.pos).raw() <= reach.raw();
         if near && scene_of(w, |scene| crate::aim::line_clear(from, to, scene)) {
@@ -961,13 +1007,16 @@ fn line_strikes(w: &mut World, m: &Monster, from: V3) {
     let a = m.sp().attack(super::WEB_LINE);
     let lane = Knob::LineLane.fx().add(crate::tuning::body_radius());
     let mut struck = w.lore.word(word::LINE_STRUCK);
+    // Heights over her own cave's floor, wherever the world's frame is.
+    let floor = w.den().off.y;
     for i in 0..MAX_PLAYERS {
         let p = w.players[i];
         if struck & 1 << i != 0 || p.health <= 0 || p.untouchable() {
             continue;
         }
         let gap = math::flat_segment_gap(p.pos, from, m.pos);
-        if gap.raw() > lane.raw() || p.pos.y.raw() > a.hit_high.raw().max(m.sp().scale().raw()) {
+        let up = p.pos.y.sub(floor);
+        if gap.raw() > lane.raw() || up.raw() > a.hit_high.raw().max(m.sp().scale().raw()) {
             continue;
         }
         struck |= 1 << i;
@@ -1003,6 +1052,10 @@ fn line_strikes(w: &mut World, m: &Monster, from: V3) {
 /// Two strands along the line she crossed, `StrandApart` apart, from where
 /// she set off to where she stopped.
 fn lay_strands(w: &mut World, from: V3, to: V3) {
+    // On her own cave's floor, wherever the world's frame is.
+    let floor = w.den().off.y;
+    let from = V3::new(from.x, floor, from.z);
+    let to = V3::new(to.x, floor, to.z);
     let along = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
     if math::wide_flat_len(along).raw() <= 0 {
         return;
@@ -1022,7 +1075,9 @@ fn lay_strands(w: &mut World, from: V3, to: V3) {
 /// crouched, trips you; any blow cuts one.
 fn strands(w: &mut World) {
     let sp = &SPECIES;
-    let high = crate::hazard::stat_fx(sp, STRAND, crate::hazard::HazardField::Height);
+    // Over her own cave's floor, wherever the world's frame is.
+    let high =
+        crate::hazard::stat_fx(sp, STRAND, crate::hazard::HazardField::Height).add(w.den().off.y);
     let lines: [Option<(usize, V3, V3)>; crate::hazard::MAX_HAZARDS] = {
         let mut out = [None; crate::hazard::MAX_HAZARDS];
         for (k, (i, h)) in crate::hazard::all(&w.lore)
@@ -1219,13 +1274,16 @@ pub fn signs(w: &World, out: &mut crate::sign::Signs) {
         let r = ripen(w);
         let red_for = Knob::SacRed.raw().max(1);
         let splash = m.sp().attack(super::HATCH).hit_radius;
+        let den = w.den();
         for i in 0..SAC_COUNT {
             if !red(w, i) {
                 continue;
             }
             let (_, clock) = site(w, i);
             let fill = Fx::ratio((clock - (r - red_for)).clamp(0, red_for), red_for);
-            out.push(Sign::ring(Says::Coming, landing(w, &m, i), splash.add(splash)).filled(fill));
+            out.push(
+                Sign::ring(Says::Coming, landing(&den, &m, i), splash.add(splash)).filled(fill),
+            );
         }
     }
     // A shadow line under every strand.

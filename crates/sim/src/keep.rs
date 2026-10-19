@@ -289,9 +289,16 @@ impl World {
         // carrying it.
         if let Some((i, _)) = self.egg_carrier() {
             self.valley.roused = true;
+            // Further off than it fights from, it knows where its egg is:
+            // nothing it cannot see hides that (exploration 0023).
+            let carrier = self.players[i].pos;
+            let engage = t::roam_engage();
             for m in self.monsters.iter_mut().flatten() {
                 m.brain.grace = 0;
                 m.brain.target = i as u8;
+                if crate::math::wide_flat_dist(carrier, m.pos).raw() > engage.raw() {
+                    m.brain.seen = carrier;
+                }
             }
             if let Some(pack) = self.pack.as_mut() {
                 pack.grace = 0;

@@ -1153,6 +1153,23 @@ scalars! {
     KeepFeedCool,         "Keep",     "Eats again after",                                    Frames, 1, 240;
     KeepCatchUp,          "Keep",     "The morph, left further than this, catches up (m)",   Fixed, fx(2,1), fx(200,1);
     KeepHurry,            "Keep",     "The morph hurries at most (x its walk)",              Fixed, fx(1,1), fx(5,1);
+    // **Roaming** (2026-10-19, exploration 0023, `valley::roam`): a creature
+    // after somebody leaves its bounds and follows them over the map; with
+    // no egg to get back it gives up in time and walks home.
+    RoamFar,              "Roam",     "Far from home past its edge (m)",                     Fixed, 0, fx(100,1);
+    RoamGiveUpTime,       "Roam",     "Gives up after this long far from home (s)",          Int, 1, 600;
+    RoamGiveUpDistance,   "Roam",     "Gives up at once this far past its edge (m)",         Fixed, fx(10,1), fx(2000,1);
+    RoamTerritorial,      "Roam",     "A territorial one keeps at it (%)",                   Percent, 0, 300;
+    RoamPeaceful,         "Roam",     "A peaceful one keeps at it (%)",                      Percent, 0, 300;
+    RoamPace,             "Roam",     "Travelling, at (x its gallop)",                       Fixed, fx(1,4), fx(2,1);
+    RoamHomePace,         "Roam",     "Walking home, at (x its gallop) -- the pull of home",  Fixed, fx(1,10), fx(2,1);
+    RoamEngage,           "Roam",     "Fights as at home within (m)",                        Fixed, fx(2,1), fx(60,1);
+    RoamReach,            "Roam",     "Walking home, gone once nobody is within (m)",        Fixed, fx(10,1), fx(400,1);
+    RoamProbe,            "Roam",     "Looks ahead for a way this far (m)",                  Fixed, fx(1,1), fx(20,1);
+    RoamStep,             "Roam",     "Steps up at most (m)",                                Fixed, 0, fx(3,1);
+    RoamDrop,             "Roam",     "Steps down at most (m)",                              Fixed, 0, fx(10,1);
+    RoamDoor,             "Roam",     "Through a doorway once within (m)",                   Fixed, fx(1,2), fx(10,1);
+    RoamReframe,          "Roam",     "Out, the world moves to a nearer place by (m)",       Fixed, fx(1,1), fx(200,1);
 }
 
 // ---------------------------------------------------------------------------

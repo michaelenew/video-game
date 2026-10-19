@@ -145,6 +145,16 @@ pub fn heard_here(lore: &Lore) -> bool {
     !lore.noise_cells().is_empty()
 }
 
+/// **Every noise in the ring moved by `d`** (`World::shift`).
+pub fn shift(lore: &mut Lore, d: crate::math::V3) {
+    for c in lore.noise_cells_mut() {
+        if let Some(mut n) = Noise::from_cell(*c) {
+            n.at = lore::moved_point(n.at, d);
+            *c = n.to_cell();
+        }
+    }
+}
+
 /// **Make a noise**: into an empty cell, or over the oldest. Nothing in a fight
 /// whose layout has no ring.
 pub fn make(lore: &mut Lore, kind: NoiseKind, at: V3, who: u8, amount: u8, frame: u32) {

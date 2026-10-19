@@ -1673,8 +1673,9 @@ fn move_body(
 /// creature ends its frame.
 fn finish(c: &mut Critter, mut pos: V3, half_wid: Fx, w: &World) {
     let arena = w.scene.arena;
-    // And kept inside the arena's bounds, less its own width.
-    let b = &arena.bounds;
+    // And kept inside the arena's bounds, less its own width -- or the
+    // map's, once the hunt is out of them (`arena::Den`).
+    let b = &arena.den.kept;
     pos.x = pos.x.clamp(b.lo_x.add(half_wid), b.hi_x.sub(half_wid));
     pos.z = pos.z.clamp(b.lo_z.add(half_wid), b.hi_z.sub(half_wid));
     // Stones are solids too.

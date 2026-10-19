@@ -986,6 +986,10 @@ pub const SECTIONS: &[Section] = &[
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
             ),
             e(
+                "SHOT_CHASE=1",
+                "With --range <name>, start a chase far from home: player one carries the range's egg out on the road nearest it, and its creatures are out of their range after them. Pair it with DEMO=0, an early SHOT_FRAME, and SHOT_YAW to look back at them.",
+            ),
+            e(
                 "SHOT_MOMENTUM=<n>",
                 "Start every Champion with n momentum, so a capture can look at the meter and the glow on his weapon without landing his way up to them. It holds two seconds and then drains, so pair it with an early SHOT_FRAME.",
             ),

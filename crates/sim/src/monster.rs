@@ -2565,12 +2565,14 @@ impl Monster {
 
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
     /// that could strafe would make its turn limit decorative.
-    fn walk(&mut self, arena: &Terrain, prowl: Option<V3>) {
-        let bounds = &arena.arena.bounds;
+    fn walk(&mut self, arena: &Terrain, prowl: Option<V3>, pace: Option<Fx>, homing: bool) {
+        // Where it is kept: its own bounds, or the map once it is out of them
+        // (`arena::Den`).
+        let bounds = &arena.den.kept;
         let want = match self.doing {
             _ if self.rooted > 0 => Fx::ZERO,
             // Noticing you: it stands its ground and turns to face you.
-            Doing::Prowl if self.brain.grace > 0 => Fx::ZERO,
+            Doing::Prowl if self.brain.grace > 0 && !homing => Fx::ZERO,
             Doing::Active { kind, .. } => self.sp().attack(kind).advance,
             Doing::Prowl => {
                 let goal = prowl.unwrap_or(self.brain.seen);
@@ -2603,11 +2605,16 @@ impl Monster {
                 } else {
                     self.sp().prowl_range()
                 };
+                // Travelling, or walking home, at its own pace.
+                let top = match pace {
+                    Some(p) => self.sp().gallop().mul(p),
+                    None => self.sp().gallop(),
+                };
                 let want = range
                     .sub(stand_off)
                     .mul(self.sp().approach_gain())
                     .add(fleeing)
-                    .clamp(self.sp().back().neg(), self.sp().gallop());
+                    .clamp(self.sp().back().neg(), top);
                 // **It turns before it runs.** Forward speed is scaled by how
                 // squarely it is facing the target, so a creature that has
                 // been got behind comes about on the spot rather than
@@ -2833,7 +2840,17 @@ impl Monster {
         if let Some(next) = chained.filter(|_| self.doing.free()) {
             self.begin(next, &mind);
         }
-        if self.doing.free() && !noticing {
+        // **Out of its bounds** (exploration 0023, `valley::roam`): walking
+        // home it starts nothing, and far from whoever it is after it
+        // travels -- its own brain only has the say within `roam_engage`.
+        let den = arena.den;
+        let out = den.out() && !self.sp().fight.keeps_height;
+        let homing = out && den.homing;
+        let travel = out
+            && !homing
+            && crate::math::wide_flat_dist(self.brain.seen, self.pos).raw()
+                > crate::tuning::roam_engage().raw();
+        if self.doing.free() && !noticing && !homing {
             if self.brain.think_left > 0 {
                 self.brain.think_left -= 1;
             } else {
@@ -2849,9 +2866,62 @@ impl Monster {
             Some(hook) if self.doing.free() => hook(self, &mind),
             _ => None,
         };
+        let (prowl, pace) = if homing {
+            let to = crate::valley::roam::way_toward(
+                arena,
+                self.pos,
+                den.middle(),
+                self.yaw,
+                self.roam_radius(),
+            );
+            (Some(to), Some(crate::tuning::roam_home_pace()))
+        } else if travel && self.doing.free() {
+            let to = crate::valley::roam::way_toward(
+                arena,
+                self.pos,
+                self.brain.seen,
+                self.yaw,
+                self.roam_radius(),
+            );
+            (Some(to), Some(crate::tuning::roam_pace()))
+        } else if out && self.doing.free() {
+            // Close, and something in the way: round it, and its own brain
+            // has the say again on the other side.
+            let goal = prowl.unwrap_or(self.brain.seen);
+            match crate::valley::roam::detour(arena, self.pos, goal, self.yaw, self.roam_radius()) {
+                Some(to) => (Some(to), Some(crate::tuning::roam_pace())),
+                None => (prowl, None),
+            }
+        } else {
+            (prowl, None)
+        };
+        let was = self.pos;
         self.steer(prowl);
-        self.walk(arena, prowl);
+        self.walk(arena, prowl, pace, homing);
         self.fence(arena);
+        // Out, it walks only where a body can: it slides along what stands
+        // in its way, and never goes up land too steep to climb, or up a step
+        // or off a drop past its knobs.
+        if out && self.pos != was {
+            if !self.sp().fight.collides {
+                let (at, _) = arena.fence(self.pos, self.roam_radius(), crate::tuning::roam_step());
+                self.pos = V3::new(at.x, self.pos.y, at.z);
+            }
+            let from = V3::new(was.x, arena.relief_at(was.x, was.z), was.z);
+            match crate::valley::roam::ground_step(arena, from, self.pos) {
+                Some(y) => self.pos.y = y,
+                None => {
+                    self.pos = was;
+                    self.speed = Fx::ZERO;
+                }
+            }
+        }
+    }
+
+    /// How wide it is to the ground it walks over out of its bounds: its
+    /// margin, held to what a doorway lets through.
+    fn roam_radius(&self) -> Fx {
+        self.sp().margin().min(Fx::from_int(2)).max(Fx::ratio(1, 2))
     }
 
     /// **Walk into the arena's solids**, for a species that `collides`: pushed

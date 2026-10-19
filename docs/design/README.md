@@ -192,6 +192,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness. Online, the tape keeps the link a second at a time, and the judgement says where a match got laggy and why (§6) | **Built 2026-10-08**, link 2026-10-10 |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 | [exploration/0022](exploration/0022_crossbreeding.md) | **Crossbreeding**: a creature as a genome (majors, minors, sliders), the deterministic builder that derives its body and moves, what every major wants of the rest, trophies grafted onto eggs, breeding, mutation, rearing -- and the litmus test that rebuilds the cast | **Built 2026-10-18** as `sim::breed`; not in the world yet |
+| [exploration/0023](exploration/0023_roaming.md) | **Creatures that leave their range**: hunts that survive a change of place, a creature's den, travelling across the map, giving up and walking home, the egg chase that never stops | **Built 2026-10-19**, unplayed: [valley.md](valley.md) §1e |
 
 ## 4 · Open
 

@@ -216,11 +216,16 @@ fn cruise(m: &Monster, base: Fx) -> Fx {
 fn drift(w: &mut World, m: &Monster, home: V3) -> V3 {
     let r = Knob::CircleRadius.fx();
     let was = w.lore.word(word::CIRCLE_AT);
-    let now = if was == 0 { home } else { fight::point(was) };
+    let now = if was == 0 {
+        home
+    } else {
+        fight::point(was, &w.lore)
+    };
     let target = V3::new(m.brain.seen.x, Fx::ZERO, m.brain.seen.z);
     // Inside the bounds by its radius and a little: the circle stays over
     // the arena.
-    let b = w.arena().bounds;
+    // Its den's own bounds, wherever the world's frame is (`arena::Den`).
+    let b = w.den().home;
     let keep = r.add(Knob::CircleKeep.fx());
     let clamp = |v: Fx, lo: Fx, hi: Fx| {
         let lo = lo.add(keep);
@@ -259,7 +264,8 @@ fn drift(w: &mut World, m: &Monster, home: V3) -> V3 {
     } else {
         now
     };
-    w.lore.set_word(word::CIRCLE_AT, fight::word_of(next));
+    w.lore
+        .set_word(word::CIRCLE_AT, fight::word_in(next, &w.lore));
     next
 }
 
@@ -404,7 +410,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
             };
             match kind {
                 STOOP => {
-                    let aim = m.aimed_at();
+                    let aim = fight::aimed(m, &w.lore);
                     let at = V3::new(aim.x, fight::aim_height(m), aim.z);
                     if phase == 0 {
                         f.arrive(at, left.saturating_add(1), arrive_turn());
@@ -639,7 +645,8 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
             f.vy = Fx::ZERO;
         }
     }
-    let b = w.arena().bounds;
+    // Where it is kept: its den's bounds, or the map once it is out of them.
+    let b = w.den().kept;
     f.pos.x = f.pos.x.clamp(b.lo_x, b.hi_x);
     f.pos.z = f.pos.z.clamp(b.lo_z, b.hi_z);
     finish(w, m, f, aloft, beating, bank_list);
@@ -693,7 +700,7 @@ fn hop(w: &World, m: &mut Monster, f: &mut Flight, kind: u8) {
     if let Doing::Startup { left, .. } = m.doing {
         let flight = (a.startup / 2).max(1);
         if left <= flight {
-            let aim = m.aimed_at();
+            let aim = fight::aimed(m, &w.lore);
             let at = V3::new(aim.x, fight::ground_at(w, aim), aim.z);
             f.arrive(at, left.saturating_add(1), arrive_turn());
         }

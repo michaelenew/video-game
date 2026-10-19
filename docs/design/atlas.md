@@ -230,8 +230,10 @@ gate only.
   room` (15 m) of its edge**; when nobody is, the hunt is over, unwon, and the
   creature is gone. The margin is since 2026-10-12, from play: stepping back
   out of the door mid-fight ended the hunt, and stepping in again met a fresh
-  creature at full health while the fighters kept their wounds. The creature
-  keeps inside its own bounds, so it waits at the door. The margin is less
+  creature at full health while the fighters kept their wounds. Since 2026-10-19 a
+  creature after somebody follows them out (exploration 0023), and the world
+  moves with the hunt in it -- into the nearest place with an origin of its
+  own, so the hunt's points stay small. The margin is less
   than any room's distance to its road junction (`tests/valley.rs`), so back
   on the road is out of the hunt. Won, the room goes quiet; lost, you wake outside
   its door, as before.

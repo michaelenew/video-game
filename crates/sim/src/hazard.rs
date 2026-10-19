@@ -463,6 +463,34 @@ pub fn place(lore: &mut Lore, h: Hazard) -> Option<usize> {
     Some(slot)
 }
 
+/// **Every hazard on the floor moved by `d`** (`World::shift`): its centre,
+/// and a strand's other end. One that lives on a creature part is in that
+/// part's frame and goes with it.
+pub fn shift(lore: &mut Lore, d: V3) {
+    let Some(sp) = lore.owner.map(|s| s.get()) else {
+        return;
+    };
+    for i in 0..room(lore) {
+        let mut h = get(lore, i);
+        if !h.present() || h.anchor != NO_ANCHOR {
+            continue;
+        }
+        h.at = lore::moved_point(h.at, d);
+        let strand = sp
+            .fight
+            .hazards
+            .get(h.index() as usize)
+            .is_some_and(|k| k.shape == Shape::Strand);
+        if strand {
+            h.to = [
+                lore::moved_cm(h.to[0], lore::cm_of(d.x)),
+                lore::moved_cm(h.to[1], lore::cm_of(d.z)),
+            ];
+        }
+        set(lore, i, h);
+    }
+}
+
 /// Clear a slot.
 pub fn clear(lore: &mut Lore, i: usize) {
     set(lore, i, Hazard::default());

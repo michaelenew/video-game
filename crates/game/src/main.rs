@@ -629,6 +629,7 @@ impl Default for Sim {
         shot_at(&mut w);
         shot_move(&mut w);
         shot_blood(&mut w);
+        shot_chase(&mut w);
         // `--replay <file>`: the fight is the tape's, from its own start.
         let playing = platform::value("--replay").and_then(|path| {
             let text = platform::load_replay(path)?;
@@ -1360,6 +1361,61 @@ fn shot_weight(w: &mut World) {
         if let sim::Mechanic::Shield(s) = p.mechanic {
             p.mechanic = sim::Mechanic::Shield(s.with_weight(sim::Fx::from_int(weight)));
         }
+    }
+}
+
+/// `SHOT_CHASE=1`, with `--range <name>`, starts a chase far from home
+/// (exploration 0023): fighter one carries the range's egg, out on the road
+/// nearest it, and its creatures are out of their range after them, a little
+/// way back toward it. Pair it with `DEMO=0` and a `SHOT_FRAME` of a second or
+/// two, to land on them closing.
+fn shot_chase(w: &mut World) {
+    if platform::env("SHOT_CHASE").is_none() || !w.valley.on || !w.hunting() {
+        return;
+    }
+    let Some(s) = w.hunted().into_iter().flatten().next() else {
+        return;
+    };
+    w.valley.keep.satchel[0][0] = Some(sim::keep::Item::Egg(s));
+    for l in w.loose.iter_mut() {
+        if l.is_some_and(|l| l.item == sim::keep::Item::Egg(s)) {
+            *l = None;
+        }
+    }
+    let o = w.map_origin();
+    let mid = w.den().middle().add(o);
+    let road = &sim::valley::layout::road()[0];
+    let Some(&(x, z)) = road.iter().min_by_key(|(x, z)| {
+        sim::math::wide_flat_dist(mid, sim::V3::new(*x, sim::Fx::ZERO, *z)).raw()
+    }) else {
+        return;
+    };
+    let ground = w.terrain();
+    let at = |x: sim::Fx, z: sim::Fx| {
+        let up = sim::V3::new(x.sub(o.x), sim::Fx::from_int(1000), z.sub(o.z));
+        sim::V3::new(up.x, ground.floor_below(up), up.z)
+    };
+    let back = sim::math::wide_normalized(sim::V3::new(mid.x.sub(x), sim::Fx::ZERO, mid.z.sub(z)));
+    for (i, f) in w.players.iter_mut().enumerate().take(2) {
+        f.pos = at(x.sub(sim::Fx::from_int(2 * i as i32)), z);
+        f.facing = back;
+        f.vel = sim::V3::ZERO;
+        if let sim::Mechanic::Shadow(_) = f.mechanic {
+            f.mechanic = sim::Mechanic::Shadow(sim::class::Shadow::attending(f.pos, f.facing));
+        }
+    }
+    for (k, m) in w.monsters.iter_mut().flatten().enumerate() {
+        let d = sim::Fx::from_int(22 + 4 * k as i32);
+        let q = sim::V3::new(x, sim::Fx::ZERO, z).add(back.scale(d));
+        m.pos = at(q.x, q.z.add(sim::Fx::from_int(3 * k as i32)));
+        m.brain.seen = w.players[0].pos;
+    }
+    for (k, c) in w.critters.iter_mut().enumerate() {
+        let q = sim::V3::new(x, sim::Fx::ZERO, z).add(back.scale(sim::Fx::from_int(20)));
+        c.pos = at(
+            q.x.add(sim::Fx::from_int(k as i32 % 4)),
+            q.z.add(sim::Fx::from_int(k as i32 / 4)),
+        );
     }
 }
 

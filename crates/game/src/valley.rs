@@ -305,11 +305,33 @@ pub fn text(w: &sim::World) -> String {
     if !w.valley.on {
         return String::new();
     }
-    let Some(place) = valley::place(w.arena) else {
+    // Where the first fighter stands: during a chase the world's frame is
+    // the nearest place with an origin of its own, not always the one you
+    // are in (exploration 0023).
+    let feet = w.players[0].pos.add(w.map_origin());
+    let here = sim::atlas::valley()
+        .place_for(feet)
+        .map_or(w.arena, |p| p.arena);
+    let Some(place) = valley::place(here).or(valley::place(w.arena)) else {
         return String::new();
     };
-    let name = w.arena().name;
+    let name = place.arena.get().name;
+    let den = w.den_id();
     let mut out = match place.kind {
+        _ if w.hunting() && den != place.arena => {
+            let who = w
+                .hunted()
+                .into_iter()
+                .flatten()
+                .next()
+                .map_or("", |s| s.get().name);
+            let from = den.get().name;
+            if w.valley.homing {
+                format!("The {name} -- the {who} of the {from} gave up, and is going home")
+            } else {
+                format!("The {name} -- the {who} of the {from} is after you")
+            }
+        }
         Kind::Town => format!("{name} -- the valley's town. Nobody fights here."),
         Kind::Ring => format!("The {name} -- fight each other here."),
         Kind::Reach => format!("The {name}"),

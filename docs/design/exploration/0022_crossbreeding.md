@@ -824,7 +824,9 @@ trophy makes a clear difference."*
 - **Carry its egg and it does not stop.** It is roused at once, held by
   nothing, on the one carrying it; and the hunt cannot be walked away from
   -- it ends when the creature is beaten. Fall, and the egg drops where you
-  fell; lose the hunt, and it took its egg back.
+  fell; lose the hunt, and it took its egg back. Since 2026-10-19 it follows
+  the carrier out of its range and across the whole map
+  ([0023](0023_roaming.md)).
 - **Beaten, it drops trophies**: two of what its parts are
   (`archetypes::drops`, `KeepTrophies`), a different two each time, picked
   up the same way.

@@ -221,6 +221,34 @@ ruins wakes the Galewing (`tests/spire.rs`).
 
 ![The Upper Meadow's two Ridgebacks, watching](gallery/valley-upper-meadow.jpg)
 
+### 1e · Creatures that leave their range (2026-10-19)
+
+From [exploration/0023](exploration/0023_roaming.md), `sim::valley::roam`,
+`tests/roam.rs`. **A creature is no longer kept in its range or room once it
+has a reason to leave**: after its egg it follows the carrier anywhere on the
+map, and never stops until it is beaten or the egg is dropped or taken back;
+roused, or a hunter, it follows whoever walks off -- for `Roam, gives up after
+this long far from home` (20 s) once it is 15 m out, or until it is 160 m out,
+less for a territorial (60%) or peaceful (35%) one -- then gives up and walks
+home at half its gallop, starting nothing. Home with somebody near, it
+settles; home with nobody near, or out of everyone's reach on the way, its hunt
+is over. Out of its bounds it travels by a short look-ahead that will not climb
+land too steep to climb or a step over 0.6 m, goes round trees and crags and
+through a room's doorway, and fights as at home within 18 m of whoever it is
+after.
+
+**The world moves with a hunt in it** now: `World::shift` moves creatures,
+critters, packs and their lore, and the hunt remembers its home (`Journey::den`)
+and reads its arena through it (`arena::Den`). While a hunt is out, the world
+runs in the coordinates of the nearest place with an origin of its own -- a
+room, a range, the town -- rather than a reach's, which is the map's: a
+creature's lore keeps points in sixteen-bit centimetres, and the Saddle is
+900 m from the map's origin. **One live hunt**: a chase through another range
+does not wake it; once the chase is over, a range somebody is standing in
+wakes. Beaten far away, a creature's trophies drop where it fell and its home
+range rests; lost far away, everybody stands up on their last cairn and it
+took its egg back.
+
 ### 1c · The Deep (2026-10-15)
 
 `sim::arena::deep`, `tests/deep.rs`, `--arena deep`. The ask: "ways down
@@ -368,8 +396,9 @@ hashes as it did.
 - **A room starts its hunt** when anybody walks into it. Win it and the
   place goes quiet: the round does not restart, and you walk out the way you
   came. Lose it and you wake outside, at the seam you went in by. You can
-  run: when nobody on their feet is left in the room, the hunt is over,
-  unwon, and the creature is gone; walk back in and it starts again.
+  run, but since 2026-10-19 its creature follows you out of the door (§1e)
+  until it gives up and goes home; only then is the hunt over, unwon, and a
+  walk back in starts it again.
 - **A room has ground round it.** Most rooms are walled with low walls,
   which ended the world when a room was all there was. On one map a room has
   six metres of ground round its walls and a cliff round that.
