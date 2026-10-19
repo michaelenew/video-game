@@ -162,13 +162,20 @@ pub fn drape(
 fn gather(w: &sim::World, discs: &mut Vec<Disc>) {
     discs.clear();
     let f = |v: sim::Fx| v.to_f32_for_render();
-    for p in w.ground.iter().filter(|p| p.live()) {
+    for (k, p) in w.ground.iter().enumerate().filter(|(_, p)| p.live()) {
+        // A patch a heart holds stands at its last frame for as long as the
+        // heart does: drawn whole, not faded to nothing.
+        let fade = if sim::ground::is_held(w.ground_held, k) {
+            1.0
+        } else {
+            (p.life as f32 / FADE).min(1.0)
+        };
         discs.push(Disc {
             x: f(p.at.x),
             y: f(p.at.y),
             z: f(p.at.z),
             r: f(p.radius()),
-            fade: (p.life as f32 / FADE).min(1.0),
+            fade,
         });
     }
     for e in w.effects.iter().flatten() {

@@ -1581,6 +1581,10 @@ pub struct World {
     /// **The Blood mage's ground** (2026-10-18): the patches of floor her
     /// blood has claimed. See [`crate::ground`].
     pub ground: crate::ground::Ground,
+    /// Which of `ground`'s patches a heart holds (2026-10-19), as the last
+    /// frame's `ground::step` found them: drawn whole, and never made way
+    /// with when the table is full. See [`crate::ground::Held`].
+    pub ground_held: crate::ground::Held,
     /// Fire bolts in flight. The only projectile a fighter throws that is not
     /// part of somebody's mechanic -- see [`crate::bolt`].
     pub bolts: Flight,
@@ -1708,6 +1712,7 @@ impl World {
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
             ground: crate::ground::NONE,
+            ground_held: 0,
             bolts: [None; MAX_BOLTS],
             debris: [None; MAX_DEBRIS],
             gusts: [None; MAX_GUSTS],
@@ -2266,6 +2271,7 @@ impl World {
         self.lore = Lore::NONE;
         self.effects = [None; MAX_EFFECTS];
         self.ground = crate::ground::NONE;
+        self.ground_held = 0;
         self.bolts = [None; MAX_BOLTS];
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
@@ -2373,6 +2379,7 @@ impl World {
         self.bolts = [None; MAX_BOLTS];
         // Nor does her ground: a round starts on clean floor.
         self.ground = crate::ground::NONE;
+        self.ground_held = 0;
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
         // A course's runs start again with the round, clock and all.
@@ -4052,6 +4059,8 @@ impl World {
                 h.write_i32(g.radius().raw());
                 h.write_u32(g.life as u32 | (g.owner as u32) << 16);
             }
+            h.write_u32(self.ground_held as u32);
+            h.write_u32((self.ground_held >> 32) as u32);
         }
         for p in &self.players {
             hash_player(&mut h, p);
@@ -12148,8 +12157,9 @@ impl World {
                 // drained away, rather than drunk or set off, it leaves a
                 // patch of her ground where it stood.
                 if effect.is_a_pool() && (effect.owner as usize) < MAX_PLAYERS {
-                    crate::ground::lay(
+                    crate::ground::lay_sparing(
                         &mut self.ground,
+                        self.ground_held,
                         effect.owner,
                         effect.pos,
                         effect.stain_ground(),
@@ -16389,7 +16399,14 @@ impl World {
                     .clamp(1, u16::MAX as i32) as u16,
             )
         };
-        crate::ground::lay(&mut self.ground, owner as u8, at, radius, life);
+        crate::ground::lay_sparing(
+            &mut self.ground,
+            self.ground_held,
+            owner as u8,
+            at,
+            radius,
+            life,
+        );
     }
 
     /// Every disc of ground that is not a patch, of every owner's: her stains
@@ -16441,7 +16458,7 @@ impl World {
     /// **The ground, one frame** (`crate::ground::step`).
     fn step_ground(&mut self) {
         let (discs, n) = self.blood_discs();
-        crate::ground::step(&mut self.ground, &discs[..n], self.frame);
+        self.ground_held = crate::ground::step(&mut self.ground, &discs[..n], self.frame);
     }
 
     /// **Who is on her own ground** (2026-10-18), once a frame before anybody

@@ -9163,3 +9163,19 @@ a little before the spike reaches it). A bleed and one spike on a parked Ridgeba
 health off her ground, 2.2% on it** (was 4.3% and 6.4%). The width is unchanged. Test:
 `territory::an_eruption_is_worth_the_blood_in_its_stain`; `haemorrhage`'s chain test now weighs
 the chain against the same frames without the spike, since a tick's eruption is a tick's worth.
+
+### 2026-10-19 — the Blood mage: a heart's ground looked gone, and could be pushed out
+
+From the owner: "hearts aren't keeping all territory connected to them from fading -- an
+important part of the game: a home base you protect by pushing your territory forward." In the
+simulation the hold worked: patches joined to a heart stopped at their last frame and stood.
+**Two things undid it.** The renderer fades a patch over its last 60 frames, so a held patch at
+its last frame was drawn at a sixtieth of its colour -- there, and invisible. And a full table
+makes way with the patch with least life left, which a held one always was, so in a busy fight
+the home base was the first ground to go.
+
+Now the world keeps which patches are held (`World::ground_held`, a bit a slot, in the
+snapshot and its hash): the renderer draws a held patch whole, and a full table makes way only
+with a patch nobody holds -- with every patch held, a new one is refused. Test:
+`territory::a_full_table_never_pushes_out_what_a_heart_holds`. The Ridgeback and hunt pins moved
+for the hash.

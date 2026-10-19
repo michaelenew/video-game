@@ -116,8 +116,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // and everything she throws lays her ground. See feel-log.md. Again the
     // same day: a heart is earned by the damage she deals. Moved 2026-10-19,
     // deliberately: the spike leaves no stain and erupts out of its blow,
-    // eruptions spread, her ground hits harder, and the Well is gone.
-    (Class::BloodMage, 83, 0xf0d3727e58e642c6),
+    // eruptions spread, her ground hits harder, and the Well is gone. Again
+    // the same day: which patches a heart holds is kept in the snapshot.
+    (Class::BloodMage, 83, 0x330640fd3b0eaec6),
 ];
 
 #[test]
