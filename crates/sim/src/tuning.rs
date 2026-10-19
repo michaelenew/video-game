@@ -4835,3 +4835,11 @@ pub fn spike_hit_erupts() -> Fx {
 pub fn erupt_spread() -> u16 {
     oven::scalar(Scalar::EruptSpread).max(1) as u16
 }
+
+/// **An eruption out of a stain is worth the blood in it** (2026-10-19),
+/// times this: a bleed tick's small stain is a small blast, a big pool a big
+/// one. Before, every stain erupted for the spike's row whatever its size,
+/// and a bleed's scattered ticks went up as a minefield.
+pub fn stain_erupts() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StainErupts).max(0))
+}

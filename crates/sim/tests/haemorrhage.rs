@@ -308,7 +308,10 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             .expect("the scan is not empty")
     };
     let health = w.players[1].health;
+    // The same frames with no spike, for what the bleed alone takes.
+    let mut alone = w.clone();
     looking(&mut w, 2, keys::SPIKES, pitch, Input::A);
+    looking(&mut alone, 2, 0, pitch, Input::A);
     // Link by link since 2026-10-13: each waits `tuning::chain_delay`, and
     // since 2026-10-19 an eruption reaches the next only as it spreads.
     let link = t::chain_delay() as u32 + t::erupt_spread() as u32;
@@ -329,11 +332,20 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
         "a spike on the trail set off only {eruptions} eruptions"
     );
     // The chain reached them: an eruption's blow, not just the bleed's ticks.
+    // Since 2026-10-19 an eruption is worth its stain, and the bleed's are
+    // small, so it is weighed against the same frames without the spike.
+    looking(
+        &mut alone,
+        m.startup as u32 + 4 * link + 2,
+        0,
+        pitch,
+        Input::A,
+    );
     let took = health - w.players[1].health;
-    let ticks = (m.startup as i32 + 4 * link as i32 + 4) / t::bleed_tick() as i32 + 1;
+    let bled = health - alone.players[1].health;
     assert!(
-        took > ticks * t::bleed_damage(),
-        "the chain ran but never reached the bleeding fighter: they took {took}"
+        took > bled,
+        "the chain ran but never reached the bleeding fighter: they took {took}, the bleed alone {bled}"
     );
     assert!(
         launched,
