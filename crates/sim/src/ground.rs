@@ -17,11 +17,13 @@ use crate::math::V3;
 use crate::tuning as t;
 
 /// How many patches the world holds, every fighter's together. Past it the
-/// patch with least life left makes way (`lay`). Forty-eight of sixteen bytes
-/// is what the snapshot's cap had room for (`tests/budget.rs`).
-pub const MAX_PATCHES: usize = 48;
+/// patch with least life left makes way (`lay`). A hundred and twenty-eight
+/// of sixteen bytes since 2026-10-19: forty-eight, what the snapshot's cap
+/// had room for, was full within a minute of play, and a long fight was
+/// trading old ground for new on every touch (`tests/budget.rs`).
+pub const MAX_PATCHES: usize = 128;
 // A heart's hold is worked out in masks of patches (`held_by_hearts`).
-const _: () = assert!(MAX_PATCHES <= 64);
+const _: () = assert!(MAX_PATCHES <= 128);
 
 /// A patch's radius is kept in this many bits of fraction -- thirty-seconds
 /// of a metre, in a byte, so the widest is just under eight metres.
@@ -66,11 +68,11 @@ pub type Ground = [Patch; MAX_PATCHES];
 /// Which patches a heart holds this frame, a bit a slot (`step` answers it,
 /// `World::ground_held` keeps it): what the renderer draws whole however
 /// little life is left in it, and what a full table never makes way with.
-pub type Held = u64;
+pub type Held = u128;
 
 /// Is the patch in slot `k` held?
 pub const fn is_held(held: Held, k: usize) -> bool {
-    held & (1 << k) != 0
+    held & (1u128 << k) != 0
 }
 
 /// No ground at all.
@@ -118,13 +120,23 @@ fn apart(a: V3, b: V3) -> Fx {
 /// the table's size the patch with least life left makes way -- hers first,
 /// so one fighter's ground never pushes out another's while she has any.
 pub fn lay(ground: &mut Ground, owner: u8, at: V3, radius: Fx, life: u16) {
-    lay_sparing(ground, 0, owner, at, radius, life);
+    lay_sparing(ground, 0, &[], owner, at, radius, life);
 }
 
-/// [`lay`], making way past the table's size only with a patch no heart
-/// `held` (2026-10-19): a home base is never pushed out by a spark laid
-/// somewhere else. With every patch held, nothing new is laid.
-pub fn lay_sparing(ground: &mut Ground, held: Held, owner: u8, at: V3, radius: Fx, life: u16) {
+/// [`lay`], making way past the table's size with a patch no heart `held`
+/// first (2026-10-19): a home base is not pushed out by a spark laid
+/// somewhere else. With every patch of hers held, the one **furthest from
+/// any heart** of hers in `discs` makes way -- the edge of what her hearts
+/// hold, not the base -- so new ground still goes down where she fights.
+pub fn lay_sparing(
+    ground: &mut Ground,
+    held: Held,
+    discs: &[Disc],
+    owner: u8,
+    at: V3,
+    radius: Fx,
+    life: u16,
+) {
     if life == 0 || radius.raw() <= 0 {
         return;
     }
@@ -134,9 +146,20 @@ pub fn lay_sparing(ground: &mut Ground, held: Held, owner: u8, at: V3, radius: F
             continue;
         }
         let far = apart(p.at, at);
-        // Mostly inside it: its middle within half of the bigger of the two.
-        if far.raw() * 2 <= p.radius().max(radius).raw() {
-            p.set_radius(p.radius().max(far.add(radius)).min(t::ground_widest()));
+        // Wholly inside it: nothing new, only the longer life.
+        if far.add(radius).raw() <= p.radius().raw() {
+            p.life = p.life.max(life);
+            return;
+        }
+        // Mostly inside it -- its middle within half of the bigger of the
+        // two -- or its middle inside it and the two together no wider than
+        // the widest patch (2026-10-19: patches laid over one another used
+        // to pile up, and a heart held the pile for good).
+        let grown = far.add(radius);
+        if far.raw() * 2 <= p.radius().max(radius).raw()
+            || (far.raw() <= p.radius().raw() && grown.raw() <= t::ground_widest().raw())
+        {
+            p.set_radius(p.radius().max(grown).min(t::ground_widest()));
             p.life = p.life.max(life);
             return;
         }
@@ -163,9 +186,32 @@ pub fn lay_sparing(ground: &mut Ground, held: Held, owner: u8, at: V3, radius: F
             .min_by_key(|(_, p)| p.life)
             .map(|(k, p)| (k, p.life))
     };
-    if let Some((k, left)) = weakest(true).or_else(|| weakest(false))
-        && left < life
-    {
+    if let Some((k, left)) = weakest(true).or_else(|| weakest(false)) {
+        if left < life {
+            ground[k] = born;
+        }
+        return;
+    }
+    // Every patch held: the one of hers furthest from her nearest heart.
+    let from_hearts = |p: &Patch| {
+        discs
+            .iter()
+            .filter(|d| d.holds && d.owner == owner)
+            .map(|d| {
+                let dx = (p.at.x.raw() - d.at.x.raw()) as i64;
+                let dz = (p.at.z.raw() - d.at.z.raw()) as i64;
+                dx * dx + dz * dz
+            })
+            .min()
+    };
+    let furthest = ground
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.owner == owner)
+        .filter_map(|(k, p)| from_hearts(p).map(|d| (k, d)))
+        .max_by_key(|(_, d)| *d)
+        .map(|(k, _)| k);
+    if let Some(k) = furthest {
         ground[k] = born;
     }
 }
@@ -223,6 +269,7 @@ pub fn nearest(ground: &Ground, discs: &[Disc], owner: u8, at: V3) -> Option<V3>
 /// Gives back which patches are held, for the world to keep.
 pub fn step(ground: &mut Ground, discs: &[Disc], frame: u32) -> Held {
     let every = t::ground_joined_every().max(1) as u32;
+    tidy(ground);
     let snapshot = *ground;
     let held = held_by_hearts(&snapshot, discs);
     for (k, p) in ground.iter_mut().enumerate() {
@@ -230,22 +277,56 @@ pub fn step(ground: &mut Ground, discs: &[Disc], frame: u32) -> Held {
             continue;
         }
         let joined = snapshot.iter().enumerate().any(|(j, o)| {
-            j != k
-                && o.live()
-                && o.owner == p.owner
-                && apart(o.at, p.at).raw() <= o.radius().add(p.radius()).raw()
-        }) || discs.iter().any(|d| {
-            d.owner == p.owner && apart(d.at, p.at).raw() <= d.radius.add(p.radius()).raw()
-        });
+            j != k && o.live() && o.owner == p.owner && touching(o.at, o.radius(), p.at, p.radius())
+        }) || discs
+            .iter()
+            .any(|d| d.owner == p.owner && touching(d.at, d.radius, p.at, p.radius()));
         if (!joined || frame % every == 0) && !(is_held(held, k) && p.life <= 1) {
             p.life -= 1;
         }
     }
     let bridge_every = t::ground_bridge_every().max(1) as u32;
     if frame % bridge_every == 0 {
-        bridge(ground, held);
+        bridge(ground, held, discs);
     }
     held
+}
+
+/// **A patch wholly inside another of its owner's goes** (2026-10-19), and
+/// the one round it keeps the longer life of the two: it covered nothing the
+/// other did not, and a heart holding a pile of them filled the table.
+fn tidy(ground: &mut Ground) {
+    for k in 0..MAX_PATCHES {
+        let p = ground[k];
+        if !p.live() {
+            continue;
+        }
+        let around = (0..MAX_PATCHES).find(|&o| {
+            let q = ground[o];
+            o != k
+                && q.live()
+                && q.owner == p.owner
+                && (q.radius().raw() > p.radius().raw() || (q.radius() == p.radius() && o < k))
+                && within_disc(q.at, q.radius(), p.at, p.radius())
+                && p.at.y.sub(q.at.y).abs().raw() <= t::ground_slack().raw()
+        });
+        if let Some(o) = around {
+            ground[o].life = ground[o].life.max(p.life);
+            ground[k].life = 0;
+        }
+    }
+}
+
+/// Is the disc `b` of `rb` wholly inside the disc `a` of `ra`, flat?
+/// Squared, as `touching` is.
+fn within_disc(a: V3, ra: Fx, b: V3, rb: Fx) -> bool {
+    let room = (ra.raw() - rb.raw()) as i64;
+    if room < 0 {
+        return false;
+    }
+    let dx = (a.x.raw() - b.x.raw()) as i64;
+    let dz = (a.z.raw() - b.z.raw()) as i64;
+    dx * dx + dz * dz <= room * room
 }
 
 /// Do two discs touch, flat? Squared, so no root is taken: it is asked
@@ -269,27 +350,27 @@ fn held_by_hearts(ground: &Ground, discs: &[Disc]) -> Held {
     const MOST_DISCS: usize = crate::effects::MAX_EFFECTS;
     let discs = &discs[..discs.len().min(MOST_DISCS)];
     // Each patch's neighbours, and each disc's, as masks of patches.
-    let mut next = [0u64; MAX_PATCHES];
+    let mut next = [0u128; MAX_PATCHES];
     for (k, p) in ground.iter().enumerate() {
         if !p.live() {
             continue;
         }
         for (o, q) in ground.iter().enumerate().skip(k + 1) {
             if q.live() && q.owner == p.owner && touching(p.at, p.radius(), q.at, q.radius()) {
-                next[k] |= 1 << o;
-                next[o] |= 1 << k;
+                next[k] |= 1u128 << o;
+                next[o] |= 1u128 << k;
             }
         }
     }
-    let mut on = [0u64; MOST_DISCS];
+    let mut on = [0u128; MOST_DISCS];
     for (j, d) in discs.iter().enumerate() {
         for (k, p) in ground.iter().enumerate() {
             if p.live() && p.owner == d.owner && touching(d.at, d.radius, p.at, p.radius()) {
-                on[j] |= 1 << k;
+                on[j] |= 1u128 << k;
             }
         }
     }
-    let mut held = 0u64;
+    let mut held = 0u128;
     let mut reached = [false; MOST_DISCS];
     for (j, d) in discs.iter().enumerate() {
         if d.holds {
@@ -300,7 +381,7 @@ fn held_by_hearts(ground: &Ground, discs: &[Disc]) -> Held {
     loop {
         let mut grown = held;
         for (k, n) in next.iter().enumerate() {
-            if held & (1 << k) != 0 {
+            if held & (1u128 << k) != 0 {
                 grown |= n;
             }
         }
@@ -320,7 +401,7 @@ fn held_by_hearts(ground: &Ground, discs: &[Disc]) -> Held {
 
 /// Lay a bridge over every gap of `tuning::ground_bridge` or less between
 /// two patches of one owner's, as long-lived as the shorter-lived of the two.
-fn bridge(ground: &mut Ground, held: Held) {
+fn bridge(ground: &mut Ground, held: Held, discs: &[Disc]) {
     let gap_most = t::ground_bridge();
     let snapshot = *ground;
     for (i, a) in snapshot.iter().enumerate() {
@@ -345,7 +426,7 @@ fn bridge(ground: &mut Ground, held: Held) {
             let at = V3::new(mid.x, y, mid.z);
             // A little past both edges, so the three are one.
             let radius = half.add(t::ground_bridge_overlap());
-            lay_sparing(ground, held, a.owner, at, radius, a.life.min(b.life));
+            lay_sparing(ground, held, discs, a.owner, at, radius, a.life.min(b.life));
         }
     }
 }

@@ -843,10 +843,48 @@ fn a_full_table_never_pushes_out_what_a_heart_holds() {
     // Fill the table with sparks far from anything, longer-lived than it.
     for k in 0..sim::ground::MAX_PATCHES as i32 + 8 {
         let at = V3::new(h.x.sub(metres(40.0)), h.y, h.z.add(Fx::from_int(3 * k)));
-        sim::ground::lay_sparing(&mut w.ground, w.ground_held, 0, at, metres(1.0), 150);
+        sim::ground::lay_sparing(&mut w.ground, w.ground_held, &[], 0, at, metres(1.0), 150);
     }
     assert!(
         held(&w),
         "a spark laid elsewhere pushed out what the heart holds"
+    );
+}
+
+#[test]
+fn with_every_patch_held_the_one_furthest_from_her_hearts_makes_way() {
+    // 2026-10-19: what her hearts hold never runs out, so a long fight can
+    // fill the table with it; new ground must still go down where she
+    // fights. The edge of the held field goes, not the base.
+    let mut ground = sim::ground::NONE;
+    for k in 0..sim::ground::MAX_PATCHES {
+        let at = V3::new(Fx::from_int(3 * k as i32), Fx::ZERO, Fx::ZERO);
+        sim::ground::lay(&mut ground, 0, at, metres(1.0), 100);
+    }
+    let held: sim::ground::Held = !0;
+    let heart = sim::ground::Disc {
+        at: V3::ZERO,
+        radius: t::heart_ground(),
+        owner: 0,
+        holds: true,
+    };
+    let fresh = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(-30));
+    sim::ground::lay_sparing(&mut ground, held, &[heart], 0, fresh, metres(1.0), 100);
+    let far_end = V3::new(
+        Fx::from_int(3 * (sim::ground::MAX_PATCHES as i32 - 1)),
+        Fx::ZERO,
+        Fx::ZERO,
+    );
+    assert!(
+        ground.iter().any(|p| p.covers(fresh)),
+        "the new ground was refused"
+    );
+    assert!(
+        !ground.iter().any(|p| p.covers(far_end)),
+        "the furthest held patch is still there"
+    );
+    assert!(
+        ground.iter().any(|p| p.covers(V3::ZERO)),
+        "and the base was not touched"
     );
 }

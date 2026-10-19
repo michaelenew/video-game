@@ -69,8 +69,14 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
 /// morphs** (2026-10-18, the owner's call): what each of four seats carries,
 /// its morph and where it stands, and what lies on the floor -- about 640
 /// bytes -- arrived as the Blood mage's territory took the last of the room.
-/// A ring of nine is still under 190 KiB.
-const SNAPSHOT_CAP: usize = 21 * 1024;
+/// A ring of nine is still under 190 KiB. **Twenty-two since the Blood
+/// mage's ground grew** (2026-10-19, the owner's call): forty-eight patches
+/// of her territory were full within a minute of play, so a long fight
+/// traded old ground for new on every touch; a hundred and twenty-eight is
+/// 1,280 bytes more. None of it goes over the network -- a peer is sent
+/// inputs -- so its only cost is the copy, and a ring of nine is under 200
+/// KiB.
+const SNAPSHOT_CAP: usize = 22 * 1024;
 
 /// Frames per timed run. Ten seconds of play, so a move's whole lifecycle --
 /// startup, active, recovery, and whatever it leaves on the field -- is inside

@@ -118,7 +118,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // deliberately: the spike leaves no stain and erupts out of its blow,
     // eruptions spread, her ground hits harder, and the Well is gone. Again
     // the same day: which patches a heart holds is kept in the snapshot.
-    (Class::BloodMage, 83, 0x330640fd3b0eaec6),
+    // And again: her oldest stain makes way past a cap of 32, and her ground
+    // holds 128 patches, merging what is laid over it.
+    (Class::BloodMage, 83, 0x05305ad374ce6cea),
 ];
 
 #[test]

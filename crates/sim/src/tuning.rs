@@ -2418,9 +2418,9 @@ pub fn pool_drain() -> i32 {
     oven::scalar(Scalar::PoolDrain)
 }
 
-/// How many pools one Blood mage can have on the floor. A further one merges
-/// into the newest. The Elementalist's cap, for the Elementalist's reason:
-/// readability in third person matters more than the combo ceiling.
+/// How many pools one Blood mage can have on the floor. Past it her oldest
+/// makes way (2026-10-19; it used to be the new blood that merged into her
+/// newest, so a long fight stopped making stains where blood was spilled).
 pub fn pool_cap() -> usize {
     oven::scalar(Scalar::PoolCap).clamp(1, crate::effects::MAX_EFFECTS as i32) as usize
 }

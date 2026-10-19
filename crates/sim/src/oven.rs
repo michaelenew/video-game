@@ -505,7 +505,7 @@ scalars! {
     SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
     SweepTipDamage,   "Blood mage", "Sweep, tip damage (x)",                  Fixed, fx(1,1),  fx(4,1);
     PoolDrain,        "Blood mage", "Pool drains (volume per second)",        Int,   0,        600;
-    PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        8;
+    PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        64;
     PoolLock,         "Blood mage", "Crosshair lock on a pool",               Fixed, 0,        fx(6,1);
     SpikeErupt,       "Blood mage", "Black spike, eruption lasts",            Frames, 1,       120;
     // A pool is a shadowy figure the size of the body it came out of, and it

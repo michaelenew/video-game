@@ -203,16 +203,20 @@ fn hits_that_land_on_one_spot_make_one_pool() {
 }
 
 #[test]
-fn a_fifth_pool_merges_into_the_newest() {
+fn past_the_cap_her_oldest_stain_makes_way() {
+    // 2026-10-19: it used to be the new blood that gave way, poured into her
+    // newest stain wherever that was -- so a long fight filled the cap and
+    // stopped making stains where blood was spilled. Now her oldest stain
+    // goes, into her ground where it stood, and the new one is where it hit.
     let mut w = mage();
-    let far = |i: i32| V3::new(Fx::from_int(-12 + i * 3), Fx::ZERO, Fx::from_int(6));
+    let far = |i: i32| V3::new(Fx::from_int(-40 + i * 2), Fx::ZERO, Fx::from_int(-20));
     for i in 0..t::pool_cap() as i32 {
         let mut pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, far(i), 100);
-        // Older the lower the index, so the newest is the last one placed.
-        pool.age = (t::pool_cap() as i32 - i) as u16 * 10;
+        // Older the lower the index.
+        pool.age = (t::pool_cap() as i32 - i) as u16 * 10 + 30;
         w.effects[i as usize] = Some(pool);
     }
-    let newest = w.effects[t::pool_cap() - 1].expect("placed").pool_volume();
+    let oldest = far(0);
     in_reach(&mut w);
     bolt_at_him(&mut w);
     let made = pools(&w);
@@ -222,12 +226,20 @@ fn a_fifth_pool_merges_into_the_newest() {
         "the cap did not hold: {} pools",
         made.len()
     );
-    let grown = w.effects[t::pool_cap() - 1]
-        .expect("still there")
-        .pool_volume();
+    let him = w.players[1].pos;
     assert!(
-        grown > newest - 10,
-        "the fifth hit did not merge into the newest pool ({newest} -> {grown})"
+        made.iter()
+            .any(|p| p.pos.sub(him).flat_len().raw() < Fx::from_int(2).raw()),
+        "no stain where the blood was spilled"
+    );
+    assert!(
+        made.iter()
+            .all(|p| p.pos.sub(oldest).flat_len().raw() > Fx::ONE.raw()),
+        "her oldest stain is still there"
+    );
+    assert!(
+        w.on_blood(0, oldest),
+        "and it left her ground where it stood"
     );
 }
 
@@ -356,6 +368,6 @@ fn a_pool_is_an_effect_and_the_world_still_fits_its_budget() {
     // The plan's measured criterion: nothing allocates and the snapshot is
     // under its cap. `budget.rs` holds both; this only says which change is
     // being asked about.
-    assert!(std::mem::size_of::<World>() <= 21 * 1024);
+    assert!(std::mem::size_of::<World>() <= 22 * 1024);
     assert_eq!(EffectKind::Pool.name(), "essence pool");
 }

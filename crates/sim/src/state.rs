@@ -4059,8 +4059,9 @@ impl World {
                 h.write_i32(g.radius().raw());
                 h.write_u32(g.life as u32 | (g.owner as u32) << 16);
             }
-            h.write_u32(self.ground_held as u32);
-            h.write_u32((self.ground_held >> 32) as u32);
+            for word in 0..4 {
+                h.write_u32((self.ground_held >> (32 * word)) as u32);
+            }
         }
         for p in &self.players {
             hash_player(&mut h, p);
@@ -12157,9 +12158,7 @@ impl World {
                 // drained away, rather than drunk or set off, it leaves a
                 // patch of her ground where it stood.
                 if effect.is_a_pool() && (effect.owner as usize) < MAX_PLAYERS {
-                    crate::ground::lay_sparing(
-                        &mut self.ground,
-                        self.ground_held,
+                    self.lay_ground(
                         effect.owner,
                         effect.pos,
                         effect.stain_ground(),
@@ -14468,26 +14467,36 @@ impl World {
             }
             return;
         }
-        // Past the cap: into the newest.
+        // **Past the cap, her oldest stain makes way** (2026-10-19), and
+        // bleeds into her ground where it stood as a stain that fades does.
+        // It used to be the new blood that gave way, poured into her newest
+        // stain wherever that was, so once the cap filled no new stain ever
+        // appeared where blood was spilled. A lit stain is going up and is
+        // left to.
         let mut count = 0;
-        let mut newest: Option<(usize, u16)> = None;
+        let mut oldest: Option<(usize, u16)> = None;
         for (i, e) in self.effects.iter().enumerate() {
             let Some(e) = e else { continue };
             if !e.is_a_pool() || e.owner != owner {
                 continue;
             }
             count += 1;
-            if newest.is_none_or(|(_, age)| e.age < age) {
-                newest = Some((i, e.age));
+            if e.life == UNLIT && oldest.is_none_or(|(_, age)| e.age > age) {
+                oldest = Some((i, e.age));
             }
         }
         if count >= t::pool_cap() {
-            if let Some((i, _)) = newest {
-                if let Some(pool) = self.effects[i].as_mut() {
-                    pool.banked += volume;
-                }
+            let Some((i, _)) = oldest else {
+                return;
+            };
+            if let Some(gone) = self.effects[i].take() {
+                self.lay_ground(
+                    gone.owner,
+                    gone.pos,
+                    gone.stain_ground(),
+                    t::ground_stain_lasts(),
+                );
             }
-            return;
         }
         spawn_effect(&mut self.effects, born);
     }
@@ -16399,14 +16408,7 @@ impl World {
                     .clamp(1, u16::MAX as i32) as u16,
             )
         };
-        crate::ground::lay_sparing(
-            &mut self.ground,
-            self.ground_held,
-            owner as u8,
-            at,
-            radius,
-            life,
-        );
+        self.lay_ground(owner as u8, at, radius, life);
     }
 
     /// Every disc of ground that is not a patch, of every owner's: her stains
@@ -16453,6 +16455,15 @@ impl World {
     fn nearest_blood(&self, owner: usize, at: V3) -> Option<V3> {
         let (discs, n) = self.blood_discs();
         crate::ground::nearest(&self.ground, &discs[..n], owner as u8, at)
+    }
+
+    /// Lay a patch of `owner`'s ground (`crate::ground::lay_sparing`), with
+    /// what her hearts hold spared and, at the cap, the held patch furthest
+    /// from them making way.
+    fn lay_ground(&mut self, owner: u8, at: V3, radius: Fx, life: u16) {
+        let (discs, n) = self.blood_discs();
+        let held = self.ground_held;
+        crate::ground::lay_sparing(&mut self.ground, held, &discs[..n], owner, at, radius, life);
     }
 
     /// **The ground, one frame** (`crate::ground::step`).
