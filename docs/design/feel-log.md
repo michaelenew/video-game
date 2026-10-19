@@ -9113,7 +9113,13 @@ What changed, all in `tests/territory.rs`, `blink.rs`, `essence.rs`, `effects.rs
   same hour:** an eruption setting off stains only on touch (`erupt_chain` 2.5 → 0.5 m) broke
   the core combo -- a bleeding body walking lays its stains about 3.5 m apart, and a chain no
   longer crossed the gap (`haemorrhage::a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart`).
-  Back to 2.5 m; the spreading is what makes it read as one blast setting off the next.
+  Back to 2.5 m, but grown into with the eruption (nought past its edge on its first frame,
+  2.5 m on its last): at the full reach from the first frame, five stains a stride apart all
+  went up inside seven frames, which read as one carpet again. Seen in a capture
+  (`SHOT_BLOOD=trail`).
+- **A spike sets off any stain its disc touches**, the nearest. Caught in the same capture: a
+  spike landed a metre short of the stain it was aimed at, drank it in passing and started no
+  chain (`territory::a_spike_a_stride_short_of_a_stain_sets_it_off`).
 - **A thrall killed leaves a stain of all it had** (was: what it had less the blow, usually
   nothing, since thralls died before they bit).
 - **Her ground ×1.3 → ×1.5**, and now in a bleed's ticks and the eruptions she sets off as well

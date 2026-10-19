@@ -743,3 +743,41 @@ fn on_her_ground_her_bleeds_bite_harder() {
     assert!(off > 0, "fixture: the bleed never ticked");
     assert!(on > off, "on her ground {on}, off it {off}");
 }
+
+#[test]
+fn a_spike_a_stride_short_of_a_stain_sets_it_off() {
+    // The spike's disc touching a stain is enough (2026-10-19): one that
+    // landed short of the stain it was aimed at used to drink it in passing
+    // and start no chain.
+    let mut w = mage();
+    step_looking(&mut w, keys::SPIKES, -3500);
+    let mut landed = None;
+    for _ in 0..40 {
+        step_looking(&mut w, 0, -3500);
+        if let Some(e) = effects_of(&w, EffectKind::BlackSpike).first() {
+            landed = Some(e.pos);
+            break;
+        }
+    }
+    let landed = landed.expect("fixture: the spike came up");
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let mut w = mage();
+    let stain = Effect::pool(0, Class::BloodMage, b::THORN_LASH, landed, 50);
+    // Off to the side, its edge just inside the spike's disc and its middle
+    // well outside what it covers.
+    let off = stain.pool_radius().add(spike.radius).sub(metres(0.2));
+    let at = V3::new(landed.x, landed.y, landed.z.add(off));
+    place(
+        &mut w,
+        Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 50),
+    );
+    step_looking(&mut w, keys::SPIKES, -3500);
+    let mut erupted = false;
+    for _ in 0..40 {
+        step_looking(&mut w, 0, -3500);
+        erupted |= effects_of(&w, EffectKind::BlackSpike)
+            .iter()
+            .any(|e| e.banked == sim::state::SPIKE_ERUPTION);
+    }
+    assert!(erupted, "the stain it touched did not go up");
+}

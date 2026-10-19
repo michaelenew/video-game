@@ -1015,7 +1015,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_BLOOD=1",
-                "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0; SHOT_BLOOD=ground stages nothing but her ground under her and her heart meter full. SHOT_BLOOD=trail stages a bleed's trail instead -- five stains a stride apart running out ahead of her, the other fighter at its end -- for a spike setting off the chain.",
+                "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0; SHOT_BLOOD=ground stages nothing but her ground under her and her heart meter full. SHOT_BLOOD=trail stages a bleed's trail instead -- five stains a stride apart across her view six metres out, the other fighter at its end -- for a spike setting off the chain.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

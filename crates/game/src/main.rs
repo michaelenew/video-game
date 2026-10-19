@@ -826,28 +826,26 @@ fn shot_blood(w: &mut World) {
         return;
     }
     // `SHOT_BLOOD=trail`: the trail a bleeding body leaves -- five stains a
-    // stride apart running out ahead of her -- and the other fighter at its
-    // end, for a capture of a spike setting the chain off.
+    // stride apart across her view -- and the other fighter at its end, for
+    // a capture of a spike setting the chain off.
     if platform::env("SHOT_BLOOD").as_deref() == Some("trail") {
+        // Across her view, six metres out, so the whole of it is on screen.
         let f = p.facing;
-        for k in 0..5 {
-            let ahead = sim::Fx::from_int(5 + 3 * k);
-            let at = sim::V3::new(
-                p.pos.x.add(f.x.mul(ahead)),
+        let spot = |ahead: i32, side: i32| {
+            let (a, s) = (sim::Fx::from_int(ahead), sim::Fx::from_int(side));
+            sim::V3::new(
+                p.pos.x.add(f.x.mul(a)).sub(f.z.mul(s)),
                 p.pos.y,
-                p.pos.z.add(f.z.mul(ahead)),
-            );
-            let stain = Effect::pool(0, p.class, b::THORN_LASH, at, 50);
+                p.pos.z.add(f.z.mul(a)).add(f.x.mul(s)),
+            )
+        };
+        for k in 0..5 {
+            let stain = Effect::pool(0, p.class, b::THORN_LASH, spot(6, 3 * k - 6), 50);
             if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
                 *slot = Some(stain);
             }
         }
-        let end = sim::Fx::from_int(5 + 3 * 4 + 1);
-        w.players[1].pos = sim::V3::new(
-            p.pos.x.add(f.x.mul(end)),
-            p.pos.y,
-            p.pos.z.add(f.z.mul(end)),
-        );
+        w.players[1].pos = spot(6, 8);
         return;
     }
     let ahead = |forward: i32, side: i32| {

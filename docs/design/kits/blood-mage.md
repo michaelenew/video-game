@@ -76,10 +76,14 @@ spike sets them off.
 - **An eruption spreads.** It comes up small and reaches its full size over `Black spike, an
   eruption spreads out over` (8 frames) (`Effect::spike_volume`), hitting what its edge reaches
   as it goes. Every stain of hers its edge comes within `Black spike, an eruption sets off
-  stains this far past its edge` (2.5 m) of is lit, and goes up `Stain, a chained eruption
-  waits` (2) frames later, spreading in its turn: a chain of blasts, each setting off the
+  stains this far past its edge` (2.5 m, grown into with the eruption, so the reach past its
+  edge is nought on its first frame and whole on its last) of is lit, and goes up `Stain, a
+  chained eruption waits` (2) frames later, spreading in its turn: a chain of blasts, each setting off the
   next, not a carpet appearing at once. Drawn as the spike in its middle, at full size from
   the first frame, with its skirt spreading out round it.
+- **A spike sets off any stain its disc touches** (`World::pool_touching`), the nearest, not
+  only one under its middle: one landed a stride short used to drink the stain in passing and
+  start no chain.
 - **A thrall leaves a stain of all it had** when it is killed, not what the blow left over. What
   it has is what it was not drained of, so one that reached them across her ground leaves a
   bigger stain: new ground, and something for a spike.

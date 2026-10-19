@@ -12620,7 +12620,17 @@ impl World {
                     // **An eruption sets off what its edge reaches**, as it
                     // spreads (2026-10-19): each stain it touches lights.
                     if spreading && (effect.owner as usize) < MAX_PLAYERS {
-                        self.light_round(effect.owner as usize, effect.pos, volume.radius);
+                        // What it sets off past its edge grows with it, so
+                        // each blast reaches the next as it spreads rather
+                        // than on its first frame.
+                        let spread = t::erupt_spread().max(1) as i32;
+                        let grown = Fx::ratio((effect.age as i32).clamp(1, spread), spread);
+                        let past = t::erupt_chain().mul(grown).sub(t::erupt_chain());
+                        self.light_round(
+                            effect.owner as usize,
+                            effect.pos,
+                            volume.radius.add(past),
+                        );
                     }
                     let mut landed = 0;
                     for i in 0..MAX_PLAYERS {
@@ -14442,6 +14452,29 @@ impl World {
         self.effects
             .iter()
             .position(|e| e.is_some_and(|e| e.is_a_pool() && e.owner == owner && e.covers(at)))
+    }
+
+    /// The nearest unlit stain of `owner`'s that a spike's disc of `reach` at
+    /// `at` touches -- not only one under its middle (2026-10-19): the spike
+    /// is the finisher of what a bleed laid, and one that lands a stride
+    /// short of a stain sets it off rather than drinking it in passing.
+    fn pool_touching(&self, owner: u8, at: V3, reach: Fx) -> Option<usize> {
+        let mut best: Option<(usize, i32)> = None;
+        for (slot, e) in self.effects.iter().enumerate() {
+            let Some(e) = e else { continue };
+            if !e.is_a_pool() || e.owner != owner || e.life != UNLIT {
+                continue;
+            }
+            let far = V3::new(at.x.sub(e.pos.x), Fx::ZERO, at.z.sub(e.pos.z)).flat_len();
+            let level = at.y.sub(e.pos.y).abs().raw() <= e.pool_height().raw();
+            if level
+                && far.raw() <= e.pool_radius().add(reach).raw()
+                && best.is_none_or(|(_, b)| far.raw() < b)
+            {
+                best = Some((slot, far.raw()));
+            }
+        }
+        best.map(|(slot, _)| slot)
     }
 
     /// A move of `owner`'s landed with its volume between `from` and `to`,
@@ -17208,7 +17241,8 @@ impl World {
                 );
                 V3::new(flat.x, self.terrain().ground_under(flat), flat.z)
             };
-            if let Some(slot) = self.pool_covering(i as u8, at) {
+            let reach = moves::get(p.class, moves::blood::BLACK_SPIKE).radius;
+            if let Some(slot) = self.pool_touching(i as u8, at, reach) {
                 self.erupt_from(i, moves::blood::BLACK_SPIKE, slot);
                 continue;
             }
