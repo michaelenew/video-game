@@ -319,7 +319,12 @@ pub fn text(w: &sim::World) -> String {
     let den = w.den_id();
     let mut out = match place.kind {
         _ if w.hunting() && den != place.arena => {
-            let who = w.hunted().into_iter().flatten().next().map_or("", |s| s.get().name);
+            let who = w
+                .hunted()
+                .into_iter()
+                .flatten()
+                .next()
+                .map_or("", |s| s.get().name);
             let from = den.get().name;
             if w.valley.homing {
                 format!("The {name} -- the {who} of the {from} gave up, and is going home")

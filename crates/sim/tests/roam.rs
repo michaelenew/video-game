@@ -5,6 +5,7 @@
 //! range rests; a chase that crosses another creature's range does not wake
 //! it until the chase is over; and a long chase is deterministic.
 
+use sim::Class;
 use sim::arena::ArenaId;
 use sim::atlas::{self, Placed};
 use sim::fixed::Fx;
@@ -14,7 +15,6 @@ use sim::math::V3;
 use sim::species::SpeciesId;
 use sim::state::{Phase, World};
 use sim::valley::{self, ranges};
-use sim::Class;
 
 fn on_map(w: &World, i: usize) -> V3 {
     w.players[i].pos.add(w.map_origin())
@@ -22,7 +22,9 @@ fn on_map(w: &World, i: usize) -> V3 {
 
 /// The place of the map a point is in, a reach for the road.
 fn place_of(p: V3) -> ArenaId {
-    atlas::valley().place_for(p).map_or(ArenaId::HEARTH, |p| p.arena)
+    atlas::valley()
+        .place_for(p)
+        .map_or(ArenaId::HEARTH, |p| p.arena)
 }
 
 fn range(name: &str) -> &'static ranges::Range {
@@ -50,8 +52,12 @@ fn road_home_from(from: V3) -> Vec<(Fx, Fx)> {
     let road = &sim::valley::layout::road()[0];
     let k = (0..road.len())
         .min_by_key(|&k| {
-            sim::math::wide_len(V3::new(road[k].0.sub(from.x), Fx::ZERO, road[k].1.sub(from.z)))
-                .raw()
+            sim::math::wide_len(V3::new(
+                road[k].0.sub(from.x),
+                Fx::ZERO,
+                road[k].1.sub(from.z),
+            ))
+            .raw()
         })
         .unwrap();
     road[..=k].iter().rev().copied().collect()
@@ -60,7 +66,13 @@ fn road_home_from(from: V3) -> Vec<(Fx, Fx)> {
 /// Upper Meadow's two Ridgebacks, walked in, and their egg picked up.
 fn carrying_the_meadows_egg() -> World {
     let r = range("Upper Meadow");
-    let mut w = World::arrive([Class::Champion], valley::Journey::default(), r.arena, Some(0), 1);
+    let mut w = World::arrive(
+        [Class::Champion],
+        valley::Journey::default(),
+        r.arena,
+        Some(0),
+        1,
+    );
     assert!(w.hunting());
     let egg = w
         .loose
@@ -130,17 +142,25 @@ fn an_egg_carrier_is_chased_through_two_places_and_hit_in_each() {
     );
     // And the world ran in coordinates near the fighters all the way: a
     // place with an origin of its own, not a reach's.
-    assert!(ranges::of(w.arena).is_some() || w.arena == valley::START || {
-        let p = placed(w.arena);
-        p.at != V3::ZERO
-    });
+    assert!(
+        ranges::of(w.arena).is_some() || w.arena == valley::START || {
+            let p = placed(w.arena);
+            p.at != V3::ZERO
+        }
+    );
 }
 
 #[test]
 fn without_its_egg_it_gives_up_and_walks_home() {
     // The Snowfield's Ridgeback hunts whoever walks in.
     let r = range("Snowfield");
-    let mut w = World::arrive([Class::Champion], valley::Journey::default(), r.arena, Some(0), 1);
+    let mut w = World::arrive(
+        [Class::Champion],
+        valley::Journey::default(),
+        r.arena,
+        Some(0),
+        1,
+    );
     assert!(w.hunting() && w.pursuing());
     assert!(w.egg_carrier().is_none());
     let home = placed(r.arena);
@@ -189,7 +209,10 @@ fn without_its_egg_it_gives_up_and_walks_home() {
         "its hunt calmed {} m from home: it did not walk home",
         last.to_f32_for_render()
     );
-    assert!(!w.hunting(), "home, with nobody near, its hunt did not calm");
+    assert!(
+        !w.hunting(),
+        "home, with nobody near, its hunt did not calm"
+    );
     assert!(!w.valley.homing && w.valley.den.is_none());
 }
 
@@ -256,7 +279,10 @@ fn lost_far_from_home_it_takes_its_egg_back() {
         "lost, and still carrying its egg"
     );
     assert!(
-        !w.loose.iter().flatten().any(|l| l.item == Item::Egg(SpeciesId::RIDGEBACK)),
+        !w.loose
+            .iter()
+            .flatten()
+            .any(|l| l.item == Item::Egg(SpeciesId::RIDGEBACK)),
         "lost, and its egg lies about"
     );
     assert!(w.players[0].health > 0, "nobody stood back up");
@@ -286,7 +312,10 @@ fn a_chase_through_another_range_does_not_wake_it_until_it_is_over() {
     }
     assert_eq!(w.valley.den, Some(range("Upper Meadow").arena));
     assert!(
-        w.monsters.iter().flatten().all(|m| m.species == SpeciesId::RIDGEBACK),
+        w.monsters
+            .iter()
+            .flatten()
+            .all(|m| m.species == SpeciesId::RIDGEBACK),
         "another creature joined the chase"
     );
     assert!(w.pack.is_none(), "the South Bank's pack woke mid-chase");
@@ -297,7 +326,10 @@ fn a_chase_through_another_range_does_not_wake_it_until_it_is_over() {
     for _ in 0..sim::tuning::round_over_frames() + 4 {
         w.advance([Input::new(0)]);
     }
-    assert_eq!(w.arena, other.arena, "the world is not in the range they stand in");
+    assert_eq!(
+        w.arena, other.arena,
+        "the world is not in the range they stand in"
+    );
     assert!(w.hunting(), "the range they stand in did not wake");
     assert_eq!(w.valley.den, Some(other.arena));
     assert_eq!(w.pack.map(|p| p.species), Some(SpeciesId::GNAWERS));

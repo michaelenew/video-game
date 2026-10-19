@@ -1412,7 +1412,10 @@ fn shot_chase(w: &mut World) {
     }
     for (k, c) in w.critters.iter_mut().enumerate() {
         let q = sim::V3::new(x, sim::Fx::ZERO, z).add(back.scale(sim::Fx::from_int(20)));
-        c.pos = at(q.x.add(sim::Fx::from_int(k as i32 % 4)), q.z.add(sim::Fx::from_int(k as i32 / 4)));
+        c.pos = at(
+            q.x.add(sim::Fx::from_int(k as i32 % 4)),
+            q.z.add(sim::Fx::from_int(k as i32 / 4)),
+        );
     }
 }
 

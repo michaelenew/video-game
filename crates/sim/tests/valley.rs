@@ -509,8 +509,14 @@ fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_is_followed() {
         !room.holds_within(feet.x, feet.z, sim::tuning::hunt_held_past()),
         "the road is within the hunt's margin: a hunt would hold a body back on the road"
     );
-    assert!(w.hunting(), "walking away ended the hunt of a creature that hunts");
-    assert!(came_out, "the creature never came out of its room after them");
+    assert!(
+        w.hunting(),
+        "walking away ended the hunt of a creature that hunts"
+    );
+    assert!(
+        came_out,
+        "the creature never came out of its room after them"
+    );
     assert!(!w.valley.has_beaten(SpeciesId::RIDGEBACK));
 }
 
@@ -656,7 +662,11 @@ fn a_change_of_frame_changes_nothing_in_a_hunt() {
         }
         let _ = ok;
     }
-    assert!(failed.is_empty(), "a hunt moved and back came out different:\n{}", failed.join("\n"));
+    assert!(
+        failed.is_empty(),
+        "a hunt moved and back came out different:\n{}",
+        failed.join("\n")
+    );
 }
 
 /// What of two worlds differs, roughly.
@@ -676,16 +686,28 @@ fn differs(a: &World, b: &World) -> String {
             .join(" ")
     };
     if a.monsters != b.monsters {
-        out.push(format!("monsters {}", fields(format!("{:?}", a.monsters), format!("{:?}", b.monsters))));
+        out.push(format!(
+            "monsters {}",
+            fields(format!("{:?}", a.monsters), format!("{:?}", b.monsters))
+        ));
     }
     if a.critters != b.critters {
-        out.push(format!("critters {}", fields(format!("{:?}", a.critters), format!("{:?}", b.critters))));
+        out.push(format!(
+            "critters {}",
+            fields(format!("{:?}", a.critters), format!("{:?}", b.critters))
+        ));
     }
     if a.pack != b.pack {
-        out.push(format!("pack {}", fields(format!("{:?}", a.pack), format!("{:?}", b.pack))));
+        out.push(format!(
+            "pack {}",
+            fields(format!("{:?}", a.pack), format!("{:?}", b.pack))
+        ));
     }
     if a.players != b.players {
-        out.push(format!("players {}", fields(format!("{:?}", a.players), format!("{:?}", b.players))));
+        out.push(format!(
+            "players {}",
+            fields(format!("{:?}", a.players), format!("{:?}", b.players))
+        ));
     }
     if a.lore != b.lore {
         let (x, y) = (a.lore.cells(), b.lore.cells());
@@ -696,7 +718,23 @@ fn differs(a: &World, b: &World) -> String {
         }
     }
     if a.valley != b.valley {
-        out.push(format!("journey {:?} / {:?}", (a.valley.den, a.valley.away, a.valley.homing, a.valley.roused, a.valley.stock), (b.valley.den, b.valley.away, b.valley.homing, b.valley.roused, b.valley.stock)));
+        out.push(format!(
+            "journey {:?} / {:?}",
+            (
+                a.valley.den,
+                a.valley.away,
+                a.valley.homing,
+                a.valley.roused,
+                a.valley.stock
+            ),
+            (
+                b.valley.den,
+                b.valley.away,
+                b.valley.homing,
+                b.valley.roused,
+                b.valley.stock
+            )
+        ));
     }
     if a.effects != b.effects || a.bolts != b.bolts || a.debris != b.debris {
         out.push("effects/bolts/debris".into());

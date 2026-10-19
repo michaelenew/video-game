@@ -450,7 +450,11 @@ fn far_from_home(c: Class) -> World {
     let o = w.map_origin();
     let ground = w.terrain();
     let at = |x: i32, z: i32| {
-        let p = sim::V3::new(sim::arena::cm(x).sub(o.x), sim::Fx::from_int(1000), sim::arena::cm(z).sub(o.z));
+        let p = sim::V3::new(
+            sim::arena::cm(x).sub(o.x),
+            sim::Fx::from_int(1000),
+            sim::arena::cm(z).sub(o.z),
+        );
         sim::V3::new(p.x, ground.floor_below(p), p.z)
     };
     for (i, p) in w.players.iter_mut().enumerate() {
@@ -783,4 +787,3 @@ fn input_script(frames: u32) -> Vec<[Input; 2]> {
         })
         .collect()
 }
-

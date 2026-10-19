@@ -2908,7 +2908,7 @@ impl Monster {
                 self.pos = V3::new(at.x, self.pos.y, at.z);
             }
             let from = V3::new(was.x, arena.relief_at(was.x, was.z), was.z);
-                match crate::valley::roam::ground_step(arena, from, self.pos) {
+            match crate::valley::roam::ground_step(arena, from, self.pos) {
                 Some(y) => self.pos.y = y,
                 None => {
                     self.pos = was;

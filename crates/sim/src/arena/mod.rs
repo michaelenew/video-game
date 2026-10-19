@@ -1001,9 +1001,10 @@ impl Den {
         p.add(self.off)
     }
 
-    /// Its middle on the floor plane, in the world's coordinates.
+    /// Its middle, at its origin's height, in the world's coordinates.
     pub fn middle(&self) -> V3 {
-        self.home.middle()
+        let m = self.home.middle();
+        V3::new(m.x, self.off.y, m.z)
     }
 
     /// Is the creature out -- free of its bounds, on the map?

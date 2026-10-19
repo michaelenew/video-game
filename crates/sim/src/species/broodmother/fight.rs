@@ -197,6 +197,8 @@ fn shift(w: &mut World, d: V3) {
     if gnawing {
         moved(memo::GNAW_X, memo::GNAW_Z);
     }
+    // And the floor plane its treed count is measured from.
+    pack.memo[memo::FRAME_Y] = pack.memo[memo::FRAME_Y].wrapping_add(d.y.raw());
 }
 
 // ---------------------------------------------------------------------------
