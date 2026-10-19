@@ -843,6 +843,11 @@ trophy makes a clear difference."*
   frame on both machines. An egg starts it over as that creature's young
   -- not while the egg's creature still hunts you for it, and the bag says
   so (`World::can_feed`, `Refusal`). A trophy is a generation.
+- **With `--dev`, any item** (2026-10-19): a second window beside the bag
+  lists every egg and every trophy a creature drops, under a search box;
+  "Add" puts one in your bag, if it has room. It is on the wire too
+  (`Travel::grant`, `Destination::Grant`: a credit's byte with the item in
+  the high byte), so a dev's bag agrees on both machines.
 
 **One step at a time, in an order you can learn** (`cross::feed`,
 `tests/morph.rs`; rewritten 2026-10-19). The first version was a graft at
@@ -855,12 +860,22 @@ evolution path."* So a feeding now rolls nothing:
   the head, a plate the hide), front to back, ties to the plan first. The
   next feeding of the same takes the next one. A step the repair would
   undo (a limbless stance on a legged body) is passed over for the next.
-- **Its proportions move a fixed share** of the way to the donor's (the
-  pull, the inertia, `MorphSliderGain`), and **size and mass only ever
-  close on the donor's**: the settle after a feeding wants what the body
-  plan wants, and a plan between two creatures can want less than either,
-  which was the grow-shrink-grow. When size is the step, it goes half the
-  way, all of it when close.
+- **From the body as it is now.** A feeding reads the morph's genome as
+  it stands after every feeding before it, and nothing else: no ancestor,
+  and no shape it should be. Every body is as natural as any other. The
+  first version broke that without meaning to: after a feeding it settled
+  the sliders toward what the body plan "wants" (`plan::settle`, a table
+  of what each stance and build should be -- right for a lineage, wrong
+  here), so every feeding was pulled back toward that table as well as on
+  toward the donor, which was the grow-shrink-grow. A morph's feeding now
+  only repairs (it has to stand), and never settles
+  (`cross::stand`; `tests/morph.rs`,
+  `a_feeding_starts_from_the_body_as_it_is_now`).
+- **Its proportions move a fixed share** of the way from where they are to
+  the donor's (the pull, the inertia, `MorphSliderGain`), so fed the same
+  thing they only close on it
+  (`fed_the_same_thing_its_size_only_closes_on_the_donors`). When size is
+  the step, it goes half the way, all of it when close.
 - **No mutation.** A morph changes by what it eats.
 
 Six Galewing beaks walk a Hornback: head raised, beak and crest, front
@@ -886,7 +901,15 @@ body chooses. **Unformed, it is a blob** (2026-10-19; the owner: *"like
 Morph from Treasure Planet ... a floating blob that doesn't look like
 anything"*): glossy pink, two big eyes and a mouth, floating at shoulder
 height, wobbling; fed an egg it melts into the creature, the blob shrinking
-away as the body grows in where it hung. A few lines at the bottom left say what you carry, what your
+away as the body grows in where it hung. The first blob read as a
+blobfish -- squat, tipped nose-down, its face slid to the bottom -- so it
+is round and upright, its face high: big eyes close together with a
+highlight in each, a small smile, pink cheeks, nubs, and a tapering tail.
+**Moving, it leaves a trail of puffs** off that tail, like a cartoon's
+propulsion: a quarter of its size, a little lumpy, left where they were
+made (shifted with the world at a crossing) and shrinking evenly to
+nothing in a second. Only the blob: once fed, it moves as its creature
+does, and leaves none. A few lines at the bottom left say what you carry, what your
 morph is, what the last feeding changed, and -- when it is so -- that the
 creature wants its egg back.
 

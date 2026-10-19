@@ -523,6 +523,9 @@ pub fn graft(egg: &Genome, trophy: &Trophy, rates: &Rates, rng: &mut Rng) -> Out
 /// fed the same thing twice it grew and then shrank, and its body plan
 /// wandered. So a feeding is a walk toward the donor in a fixed order:
 ///
+/// - **From where it stands.** `body` is the morph's body now, after
+///   every feeding before this one; nothing else is remembered, and there
+///   is no shape it is pulled back toward (`stand`).
 /// - **Its proportions** move a fixed share of the way -- the trophy's
 ///   pull on the channel, the slider's inertia, the morph's gain -- never a
 ///   rolled one, so they only ever close on the donor's.
@@ -535,11 +538,11 @@ pub fn graft(egg: &Genome, trophy: &Trophy, rates: &Rates, rng: &mut Rng) -> Out
 ///
 /// So a handful of one creature's trophies walk it, a visible step at a
 /// time, toward that creature, in an order a player can learn.
-pub fn feed(egg: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
+pub fn feed(body: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
     let d = &trophy.donor;
     let pull = trophy.kind.pull();
     let gain = crate::tuning::morph_slider_gain();
-    let mut g = *egg;
+    let mut g = *body;
     for s in Slider::ALL {
         let channel = match s {
             Slider::Size | Slider::Mass => pull.bulk,
@@ -568,32 +571,27 @@ pub fn feed(egg: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
             break;
         };
         tried |= 1 << which;
-        let size = next.sliders.size;
-        let mut out = finish(next, m);
-        if which == 11 {
-            // The size it was given stands: the settle would pull it back
-            // under what can be seen, and the feeding would show nothing.
-            out.genome.sliders.size = size;
-        }
-        hold_bulk(egg, d, &mut out.genome);
-        if visible(egg, &out.genome) {
+        let out = stand(next, m);
+        if visible(body, &out.genome) {
             return out;
         }
     }
-    let mut out = finish(g, moved);
-    hold_bulk(egg, d, &mut out.genome);
-    out
+    stand(g, moved)
 }
 
-/// A morph's size and mass only ever close on the donor's: the settle
-/// after a feeding wants what the body plan wants, and a plan between two
-/// creatures can want less than either, so without this a body fed the
-/// same thing grew, shrank and grew again.
-fn hold_bulk(egg: &Genome, d: &Genome, g: &mut Genome) {
-    for s in [Slider::Size, Slider::Mass] {
-        let (from, to, now) = (egg.sliders.get(s), d.sliders.get(s), g.sliders.get(s));
-        let (lo, hi) = if from < to { (from, to) } else { (to, from) };
-        g.sliders.set(s, now.max(lo).min(hi));
+/// A fed body made to stand, and nothing else. A lineage's crossing also
+/// settles its sliders toward what its plan wants (`plan::settle`), and a
+/// morph's must not: those wants are a table of what each stance and
+/// build "should" be, a fixed point every feeding would be pulled back
+/// toward. A morph has no such point. Every body is as natural as any
+/// other, and a trophy moves the one it is fed to from where it stands
+/// -- so only the repair, which makes it a body at all.
+fn stand(mut g: Genome, moved: Moved) -> Outcome {
+    let fixes = repair(&mut g);
+    Outcome {
+        genome: g,
+        fixes,
+        moved,
     }
 }
 

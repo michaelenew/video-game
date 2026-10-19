@@ -678,7 +678,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "B",
-                "In the valley: open or shut your bag. Click an egg or a trophy, then Feed to morph. An egg makes your morph that creature's young; a trophy grows it a generation. The bag says why when it will not eat something. Esc shuts it too.",
+                "In the valley: open or shut your bag. Click an egg or a trophy, then Feed to morph. An egg makes your morph that creature's young; a trophy grows it a generation. The bag says why when it will not eat something. Esc shuts it too. With --dev, a second window beside it lists every item in the game under a search box, and Add puts one in your bag.",
             ),
             e(
                 "Backspace",

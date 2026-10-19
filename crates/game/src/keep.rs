@@ -20,6 +20,14 @@
 //! there underneath, walking (the snapshot's heel), so it melts into a
 //! creature already in step.
 //!
+//! **Moving, the blob leaves a trail of puffs** off its tail, like a
+//! cartoon's propulsion: each a quarter of its size, a little lumpy, left
+//! where it was made and shrinking to nothing in a second. A creature
+//! leaves none -- once fed, it moves as that creature does.
+//!
+//! **With `--dev`**, a second window beside the bag lists every item in
+//! the game under a search box; "Add" puts one in the bag (`Travel::grant`).
+//!
 //! **The bag** (B) is an egui window of what you carry: click an item, then
 //! "Feed to morph". Feeding is a trip on the wire (`Travel::feed`), so it
 //! lands on the same frame on both machines.
@@ -63,17 +71,111 @@ pub struct BlobPiece(pub usize, pub usize);
 
 /// The blob's pieces: where each sits on the body, in the body's frame
 /// (`+z` forward, a unit body), how big it is, and what it is drawn in --
-/// 0 the body's pink, 1 white, 2 black, 3 the mouth.
-const BLOB: [([f32; 3], [f32; 3], usize); 8] = [
-    ([0.0, 0.0, 0.0], [1.0, 0.86, 0.92], 0),
-    ([-0.19, 0.12, 0.36], [0.30, 0.34, 0.22], 1),
-    ([0.19, 0.12, 0.36], [0.30, 0.34, 0.22], 1),
-    ([-0.18, 0.11, 0.46], [0.13, 0.15, 0.08], 2),
-    ([0.18, 0.11, 0.46], [0.13, 0.15, 0.08], 2),
-    ([0.0, -0.16, 0.43], [0.16, 0.09, 0.06], 3),
-    ([-0.46, -0.12, 0.02], [0.24, 0.2, 0.22], 0),
-    ([0.46, -0.12, 0.02], [0.24, 0.2, 0.22], 0),
+/// 0 the body's pink, 1 white, 2 black, 3 the mouth, 4 a blush.
+///
+/// **Cute, not a blobfish** (2026-10-19). What read as a blobfish was a
+/// squat body tipped nose-down, its face slid to the bottom. So it is a
+/// little taller than wide and upright, its face high on it: big eyes
+/// close together, big pupils each with a highlight, a small smile, pink
+/// cheeks, short nubs for arms, and a tail tapering behind it that the
+/// puffs come off.
+const BLOB: [([f32; 3], [f32; 3], usize); 15] = [
+    ([0.0, 0.0, 0.0], [0.92, 1.0, 0.9], 0),
+    // The tail, tapering back and a little down.
+    ([0.0, -0.1, -0.4], [0.52, 0.48, 0.56], 0),
+    ([0.0, -0.18, -0.66], [0.28, 0.26, 0.34], 0),
+    // Eyes, pupils, and a highlight in each.
+    ([-0.17, 0.1, 0.36], [0.3, 0.36, 0.2], 1),
+    ([0.17, 0.1, 0.36], [0.3, 0.36, 0.2], 1),
+    ([-0.16, 0.08, 0.44], [0.2, 0.25, 0.1], 2),
+    ([0.16, 0.08, 0.44], [0.2, 0.25, 0.1], 2),
+    ([-0.2, 0.14, 0.5], [0.07, 0.08, 0.04], 1),
+    ([0.12, 0.14, 0.5], [0.07, 0.08, 0.04], 1),
+    // A small smile.
+    ([0.0, -0.12, 0.45], [0.1, 0.05, 0.04], 3),
+    // Cheeks.
+    ([-0.31, -0.06, 0.33], [0.13, 0.08, 0.06], 4),
+    ([0.31, -0.06, 0.33], [0.13, 0.08, 0.06], 4),
+    // Nubs.
+    ([-0.44, -0.04, 0.02], [0.18, 0.16, 0.18], 0),
+    ([0.44, -0.04, 0.02], [0.18, 0.16, 0.18], 0),
+    // Where the puffs leave from: the tail's tip, never drawn.
+    ([0.0, -0.22, -0.84], [0.0, 0.0, 0.0], 0),
 ];
+
+/// The tail's tip, in `BLOB`.
+const TAIL_TIP: usize = 14;
+
+/// The puffs a moving blob leaves (2026-10-19, the owner's spec): off its
+/// tail, a quarter of its size, a little irregular, fixed where they were
+/// left, shrinking evenly to nothing in a second. The renderer's own: a
+/// puff decides nothing.
+const PUFF_LIFE: f32 = 1.0;
+const PUFF_SHARE: f32 = 0.25;
+/// One every this many seconds while it moves faster than `PUFF_SPEED`
+/// (m/s); a jump further than `PUFF_JUMP` (m) in a frame is a catch-up,
+/// not a flight, and leaves nothing between.
+const PUFF_EVERY: f32 = 0.06;
+const PUFF_SPEED: f32 = 0.4;
+const PUFF_JUMP: f32 = 3.0;
+/// As many as a second of them, a seat.
+const PUFFS: usize = 20;
+/// Differently lumpy puff meshes.
+const PUFF_SHAPES: usize = 4;
+
+#[derive(Clone, Copy)]
+struct Puff {
+    at: Vec3,
+    born: f32,
+    /// Its size at birth, a scale a side, and a turn: the irregularity.
+    scale: Vec3,
+    turn: Quat,
+}
+
+/// The puffs, a seat's ring of them, and where each tail was last frame.
+#[derive(Resource, Default)]
+pub struct Puffs {
+    ring: [[Option<Puff>; PUFFS]; MAX_PLAYERS],
+    next: [usize; MAX_PLAYERS],
+    last: [Option<(Vec3, f32)>; MAX_PLAYERS],
+    left_at: [f32; MAX_PLAYERS],
+    origin: Option<Vec3>,
+    dice: u32,
+}
+
+impl Puffs {
+    /// Nought to one, cheaply: the irregularity needs no more.
+    fn roll(&mut self) -> f32 {
+        self.dice = self
+            .dice
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        (self.dice >> 8) as f32 / (1u32 << 24) as f32
+    }
+}
+
+/// One puff on screen: a seat's, a slot in its ring.
+#[derive(Component)]
+pub struct PuffPiece(pub usize, pub usize);
+
+/// A ball pushed in and out by a few bumps: a puff, `k` of them.
+fn lumpy(k: usize) -> Mesh {
+    let mut mesh = Sphere::new(0.5).mesh().ico(2).unwrap();
+    let f = k as f32 * 1.91 + 0.37;
+    if let Some(bevy::render::mesh::VertexAttributeValues::Float32x3(ps)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for p in ps.iter_mut() {
+            let v = Vec3::from(*p);
+            let d = v.normalize_or_zero();
+            let bump =
+                (d.x * 3.1 + f).sin() * (d.y * 2.7 + f * 1.3).sin() + 0.6 * (d.z * 4.3 - f).sin();
+            *p = (v * (1.0 + 0.14 * bump)).to_array();
+        }
+    }
+    mesh.compute_smooth_normals();
+    mesh
+}
 
 /// How wide the blob is (m), and how high its middle floats.
 const BLOB_SIZE: f32 = 0.85;
@@ -97,6 +199,8 @@ pub struct Melt {
 pub struct Bag {
     pub open: bool,
     chosen: Option<usize>,
+    /// The `--dev` item panel's search.
+    search: String,
     /// A feeding chosen while another trip was on the wire, sent next.
     pending: Option<u8>,
 }
@@ -122,8 +226,8 @@ pub struct Kit {
     gold: Handle<StandardMaterial>,
     beam_egg: Handle<StandardMaterial>,
     beam_trophy: Handle<StandardMaterial>,
-    /// The blob's pink, its eyes' white and black, its mouth.
-    blob: [Handle<StandardMaterial>; 4],
+    /// The blob's pink, its eyes' white and black, its mouth, its blush.
+    blob: [Handle<StandardMaterial>; 5],
 }
 
 fn paint(
@@ -204,8 +308,8 @@ pub fn setup(
         beam_trophy: beam(&mut materials, [1.0, 0.8, 0.3]),
         blob: [
             materials.add(StandardMaterial {
-                base_color: Color::srgb(1.0, 0.5, 0.74),
-                emissive: LinearRgba::rgb(0.18, 0.04, 0.1),
+                base_color: Color::srgb(1.0, 0.62, 0.82),
+                emissive: LinearRgba::rgb(0.2, 0.07, 0.13),
                 perceptual_roughness: 0.12,
                 reflectance: 0.8,
                 clearcoat: 1.0,
@@ -227,10 +331,29 @@ pub fn setup(
                 perceptual_roughness: 0.6,
                 ..default()
             }),
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(1.0, 0.36, 0.58),
+                emissive: LinearRgba::rgb(0.25, 0.04, 0.1),
+                perceptual_roughness: 0.5,
+                ..default()
+            }),
         ],
     };
+    let puff: Vec<Handle<Mesh>> = (0..PUFF_SHAPES).map(|k| meshes.add(lumpy(k))).collect();
     for seat in 0..MAX_PLAYERS {
-        for (piece, (_, _, m)) in BLOB.iter().enumerate() {
+        for i in 0..PUFFS {
+            commands.spawn((
+                Mesh3d(puff[i % PUFF_SHAPES].clone()),
+                MeshMaterial3d(kit.blob[0].clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                bevy::pbr::NotShadowCaster,
+                PuffPiece(seat, i),
+            ));
+        }
+    }
+    for seat in 0..MAX_PLAYERS {
+        for (piece, (_, _, m)) in BLOB.iter().enumerate().take(TAIL_TIP) {
             commands.spawn((
                 Mesh3d(kit.egg.clone()),
                 MeshMaterial3d(kit.blob[*m].clone()),
@@ -431,54 +554,138 @@ pub fn place_morphs(
 }
 
 /// Each seat's blob: floating, bobbing, wobbling, turned the way its heel
-/// faces, and shrinking away as it melts into a creature.
+/// faces, and shrinking away as it melts into a creature; and, while it is
+/// a blob and moving, the puffs off its tail.
+#[allow(clippy::type_complexity)]
 pub fn place_blobs(
     sim: Res<crate::Sim>,
     time: Res<Time>,
     melt: Res<Melt>,
-    mut pieces: Query<(&BlobPiece, &mut Transform, &mut Visibility)>,
+    mut puffs: ResMut<Puffs>,
+    mut pieces: Query<(&BlobPiece, &mut Transform, &mut Visibility), Without<PuffPiece>>,
+    mut drawn: Query<(&PuffPiece, &mut Transform, &mut Visibility), Without<BlobPiece>>,
 ) {
     let w = &sim.cur;
     let seats = (w.seats as usize).clamp(1, MAX_PLAYERS);
     let t = time.elapsed_secs();
-    for (piece, mut transform, mut visible) in pieces.iter_mut() {
-        let (seat, k) = (piece.0, piece.1);
+    // The world moved into the next place's coordinates: the puffs, which
+    // stay where they were left, move with it.
+    let o = fx3(w.map_origin());
+    if let Some(last) = puffs.origin.replace(o)
+        && last != o
+    {
+        let by = last - o;
+        for p in puffs.ring.iter_mut().flatten().flatten() {
+            p.at += by;
+        }
+        for l in puffs.last.iter_mut().flatten() {
+            l.0 += by;
+        }
+    }
+    // Where each blob is this frame, worked out once a seat.
+    let mut frames: [Option<(Vec3, Quat, Vec3, f32)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    for (seat, frame) in frames.iter_mut().enumerate().take(seats) {
         let heel = w.heel[seat];
         let left = melt.blob[seat];
-        if !w.valley.on || seat >= seats || !heel.placed || left <= 0.0 {
-            *visible = Visibility::Hidden;
+        if !w.valley.on || !heel.placed || left <= 0.0 {
             continue;
         }
         let phase = t + seat as f32 * 1.7;
-        // A slow bob, a breathing squash and stretch, and a lean into its
-        // going.
+        // A slow bob, a breathing squash and stretch, a little sway, and,
+        // going, a tilt back as if it swam -- never nose-down, which was
+        // the blobfish.
         let bob = (phase * 1.9).sin() * 0.14;
-        let squash = (phase * 3.1).sin() * 0.07;
-        let sway = (phase * 2.3).cos() * 0.05;
+        let squash = (phase * 3.1).sin() * 0.06;
+        let sway = (phase * 2.3).cos() * 0.04;
         let size = BLOB_SIZE * left;
         let body = Vec3::new(1.0 + squash, 1.0 - squash, 1.0 + squash * 0.5) * size;
         let yaw = heel.facing.to_f32_for_render() * std::f32::consts::TAU;
-        let lean = if heel.going { 0.18 } else { 0.0 };
-        let turn = Quat::from_rotation_y(-yaw) * Quat::from_rotation_x(lean + sway);
+        let tilt = if heel.going { -0.12 } else { 0.0 };
+        let turn = Quat::from_rotation_y(-yaw) * Quat::from_rotation_x(tilt + sway);
         let centre = fx3(heel.at) + Vec3::Y * (BLOB_FLOAT + bob);
+        *frame = Some((centre, turn, body, size));
+    }
+    for (piece, mut transform, mut visible) in pieces.iter_mut() {
+        let (seat, k) = (piece.0, piece.1);
+        let Some((centre, turn, body, size)) = frames[seat] else {
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        let phase = t + seat as f32 * 1.7;
         let (at, scale, _) = BLOB[k];
         let mut at = Vec3::from(at) * body;
         let mut scale = Vec3::from(scale) * size;
-        if k >= 6 {
+        if k == 12 || k == 13 {
             // The nubs either side wave, out of step with each other.
             let wave = (phase * 4.0 + k as f32 * 2.1).sin();
             at.y += wave * 0.06 * size;
             scale *= 1.0 + wave * 0.15;
         }
-        if (1..=4).contains(&k) {
+        if (3..=8).contains(&k) {
             // A blink every few seconds.
             let blink = ((phase * 0.45).fract() > 0.97) as u8 as f32;
             scale.y *= 1.0 - blink * 0.85;
+        }
+        if k == 1 || k == 2 {
+            // The tail swishes.
+            at.x += (phase * 3.4 - k as f32).sin() * 0.05 * k as f32 * size;
         }
         *transform = Transform {
             translation: centre + turn * at,
             rotation: turn,
             scale: scale.max(Vec3::splat(0.001)),
+        };
+        *visible = Visibility::Inherited;
+    }
+    // New puffs: only off a blob that is all blob -- once it has eaten an
+    // egg it moves as its creature does, and a creature leaves none.
+    for (seat, frame) in frames.iter().enumerate() {
+        let frame = frame.filter(|_| melt.blob[seat] >= 1.0);
+        let Some((centre, turn, body, size)) = frame else {
+            puffs.last[seat] = None;
+            continue;
+        };
+        let tip = centre + turn * (Vec3::from(BLOB[TAIL_TIP].0) * body);
+        let moving = puffs.last[seat].is_some_and(|(was, then)| {
+            let d = tip.distance(was);
+            d < PUFF_JUMP && d > PUFF_SPEED * (t - then).max(1e-3)
+        });
+        puffs.last[seat] = Some((tip, t));
+        if !moving || t - puffs.left_at[seat] < PUFF_EVERY {
+            continue;
+        }
+        puffs.left_at[seat] = t;
+        let jitter = Vec3::new(puffs.roll(), puffs.roll(), puffs.roll()) - Vec3::splat(0.5);
+        let lump = Vec3::new(puffs.roll(), puffs.roll(), puffs.roll()) * 0.4 + Vec3::splat(0.8);
+        let spin = Quat::from_euler(
+            EulerRot::YXZ,
+            puffs.roll() * std::f32::consts::TAU,
+            puffs.roll() * std::f32::consts::TAU,
+            0.0,
+        );
+        let i = puffs.next[seat];
+        puffs.next[seat] = (i + 1) % PUFFS;
+        puffs.ring[seat][i] = Some(Puff {
+            at: tip + jitter * 0.1 * size,
+            born: t,
+            scale: lump * PUFF_SHARE * size,
+            turn: spin,
+        });
+    }
+    for (piece, mut transform, mut visible) in drawn.iter_mut() {
+        let (seat, i) = (piece.0, piece.1);
+        let live = puffs.ring[seat][i].filter(|p| w.valley.on && t - p.born < PUFF_LIFE);
+        let Some(p) = live else {
+            puffs.ring[seat][i] = None;
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        // Evenly to nothing over its life.
+        let share = 1.0 - (t - p.born) / PUFF_LIFE;
+        *transform = Transform {
+            translation: p.at,
+            rotation: p.turn,
+            scale: (p.scale * share).max(Vec3::splat(0.001)),
         };
         *visible = Visibility::Inherited;
     }
@@ -836,6 +1043,12 @@ pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMu
             ui.separator();
             ui.weak("B or Esc to close.");
         });
+    if crate::dev_mode()
+        && let Some(item) = draw_items(ctx, &mut bag.search, satchel.iter().all(|s| s.is_some()))
+        && sim.travel == sim::input::Travel::NONE
+    {
+        sim.travel = sim::input::Travel::grant(item);
+    }
     if let Some(k) = feed {
         bag.chosen = None;
         if sim.travel == sim::input::Travel::NONE {
@@ -847,4 +1060,51 @@ pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMu
     if !open {
         bag.open = false;
     }
+}
+
+/// Every item there is: each creature's egg and the trophies it drops.
+fn every_item() -> impl Iterator<Item = Item> {
+    (0..sim::species::COUNT).flat_map(|id| {
+        let s = SpeciesId(id as u8);
+        let drops = sim::breed::archetypes::of_species(s)
+            .map(sim::breed::archetypes::drops)
+            .unwrap_or_default();
+        std::iter::once(Item::Egg(s))
+            .chain(drops.into_iter().flatten().map(move |k| Item::Trophy(k, s)))
+    })
+}
+
+/// `--dev`: beside the bag, every item in the game under a search box;
+/// "Add" puts one in the bag. Which one was asked for, if any.
+fn draw_items(ctx: &egui::Context, search: &mut String, full: bool) -> Option<Item> {
+    let mut asked = None;
+    egui::Window::new("Items (dev)")
+        .anchor(egui::Align2::RIGHT_CENTER, egui::vec2(-18.0, 0.0))
+        .collapsible(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.set_min_width(260.0);
+            ui.add(egui::TextEdit::singleline(search).hint_text("Search items"));
+            if full {
+                ui.weak("The bag is full: feed or drop something first.");
+            }
+            let wanted = search.to_lowercase();
+            egui::ScrollArea::vertical()
+                .max_height(420.0)
+                .show(ui, |ui| {
+                    for item in every_item() {
+                        let name = item_name(&item);
+                        if !name.to_lowercase().contains(&wanted) {
+                            continue;
+                        }
+                        ui.horizontal(|ui| {
+                            if ui.add_enabled(!full, egui::Button::new("Add")).clicked() {
+                                asked = Some(item);
+                            }
+                            ui.label(name);
+                        });
+                    }
+                });
+        });
+    asked
 }

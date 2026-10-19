@@ -123,6 +123,10 @@ pub enum Destination {
     /// (`crate::keep`): chosen from the bag, on the wire so both machines
     /// feed it on the same frame.
     Feed(u8),
+    /// **A dev's grant**: this item put straight into the sender's satchel,
+    /// if it has room. Sent only by the game's `--dev` item panel; on the
+    /// wire like a feeding so both machines' bags agree.
+    Grant(crate::keep::Item),
 }
 
 const _: () = assert!(
@@ -145,6 +149,7 @@ impl Travel {
     /// `0000 0111`, the slot in the high byte: see [`Destination::Feed`].
     const FEED: u16 = 7;
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
+    /// With a high byte, that creature's item granted ([`Travel::grant`]).
     const CREDIT: u16 = 8;
     const HUNT: u16 = 0x80;
     /// `01aa aaaa`: no creature, in arena `a`.
@@ -227,10 +232,40 @@ impl Travel {
         Travel(Travel::FEED | (slot as u16) << 8)
     }
 
+    /// Put `item` in the sender's satchel (`--dev`): the creature's credit
+    /// byte, and in the high byte one for its egg, two and up for a trophy
+    /// by its kind. A creature past what the byte holds is no request.
+    pub const fn grant(item: crate::keep::Item) -> Travel {
+        let (s, what) = match item {
+            crate::keep::Item::Egg(s) => (s, 1u16),
+            crate::keep::Item::Trophy(k, s) => (s, 2 + k as u16),
+        };
+        match Travel::credit(s) {
+            Travel::NONE => Travel::NONE,
+            Travel(b) => Travel(b | what << 8),
+        }
+    }
+
     pub const fn destination(self) -> Option<Destination> {
         // A feeding carries its slot in the high byte.
         if self.0 & Travel::LOW == Travel::FEED {
             return Some(Destination::Feed((self.0 >> 8) as u8));
+        }
+        // A grant is a credit's byte with the item in the high byte.
+        let low = self.0 & Travel::LOW;
+        if self.0 >> 8 != 0 && low >= Travel::CREDIT && low < Travel::CLASS {
+            let s = SpeciesId((low - Travel::CREDIT) as u8);
+            let what = (self.0 >> 8) as usize;
+            return match what {
+                1 => Some(Destination::Grant(crate::keep::Item::Egg(s))),
+                k if k - 2 < crate::breed::cross::TrophyKind::ALL.len() => {
+                    Some(Destination::Grant(crate::keep::Item::Trophy(
+                        crate::breed::cross::TrophyKind::ALL[k - 2],
+                        s,
+                    )))
+                }
+                _ => None,
+            };
         }
         // A high byte on anything but a class change is no request at all.
         let high = self.0 >> 8;

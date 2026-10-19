@@ -231,6 +231,7 @@ fn main() {
         .init_resource::<menu::Menu>()
         .init_resource::<keep::Bag>()
         .init_resource::<keep::Melt>()
+        .init_resource::<keep::Puffs>()
         .init_resource::<sound::Soundscape>()
         .init_resource::<Joints>()
         .add_plugins(bevy_egui::EguiPlugin {

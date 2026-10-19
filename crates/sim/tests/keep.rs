@@ -216,3 +216,27 @@ fn in_a_fight_the_morph_keeps_back_on_the_far_side() {
     // Further from the creature than you are: behind you, not between.
     assert!(flat(h, m) > flat(p, m));
 }
+
+#[test]
+fn a_dev_grant_rides_the_wire_and_lands_in_the_bag() {
+    use sim::breed::cross::TrophyKind;
+    for item in [
+        Item::Egg(SpeciesId::MANTIS),
+        Item::Trophy(TrophyKind::Feather, SpeciesId::MANTIS),
+        Item::Trophy(TrophyKind::Tooth, SpeciesId(0)),
+    ] {
+        assert_eq!(
+            Travel::grant(item).destination(),
+            Some(Destination::Grant(item))
+        );
+    }
+    // In the valley: into the first empty slot, and no further than the
+    // bag holds.
+    let mut w = World::arrive(CLASSES, valley::Journey::default(), valley::START, None, 1);
+    let feather = Item::Trophy(TrophyKind::Feather, SpeciesId::MANTIS);
+    for _ in 0..6 {
+        w.advance([Input::new(0).travelling(Travel::grant(feather))]);
+    }
+    let bag = w.valley.keep.satchel[0];
+    assert!(bag.iter().all(|s| *s == Some(feather)), "{bag:?}");
+}

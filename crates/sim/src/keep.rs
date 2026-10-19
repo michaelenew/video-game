@@ -111,7 +111,8 @@ impl Keep {
             .any(|it| *it == Item::Egg(s))
     }
 
-    fn take(&mut self, i: usize, item: Item) -> bool {
+    /// `item` into seat `i`'s first empty slot; false if it has none.
+    pub(crate) fn take(&mut self, i: usize, item: Item) -> bool {
         match self.satchel[i].iter_mut().find(|s| s.is_none()) {
             Some(slot) => {
                 *slot = Some(item);
