@@ -89,6 +89,10 @@ pub const SECTIONS: &[Section] = &[
                 "Fight in another arena: proving_ground (the default), a jump course (stair, causeway, spiral, falls, slalom, fork, spire, gulf, reach), lab (a dev arena for measuring movement: cargo run -p sim --bin envelope plays every class in it), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
+                "cargo run -p game -- --range <name>",
+                "Start in the valley, walked into one of its creature ranges by name (Wood's Edge, Sky Shrine, ...: crates/sim/src/valley/ranges.rs): its hunt begun and its egg lying behind it. Walk into the egg to pick it up -- the creature then will not stop until you beat it -- walk into the trophies a beaten creature drops, and crouch beside your morph (the small thing at your heel) to feed it: an egg makes it that creature's young, a trophy grows it a generation. The lines at the bottom left say what you carry and what your morph just became.",
+            ),
+            e(
                 "cargo run -p game -- --hunt <creature> --temper <n>",
                 "Start the hunt at a temper, 0 to 3, whatever you have earned, and let T offer every temper. A temper is the same creature cleverer: it glances more often, leads you further, picks its best move more surely, and stays methodical as it tires. Its health and its hide do not change.",
             ),
@@ -855,6 +859,18 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "cargo run -p sim --bin beastcheck",
                 "What a creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry. --species <name> for a creature other than the Ridgeback; everything it prints is read off the species' table.",
+            ),
+            e(
+                "cargo run -p sim --bin breedcheck",
+                "What the creature builder makes of the cast: every creature rebuilt from its genome beside its hand-written table (legs, hips, length, span, every move with its frames and damage, what it drops), and the verdict on each. `feathers <seed>` watches a Ridgeback given a Galewing's feathers generation by generation, `mantis <seed>` one given a Mantis's claw, `drift <seed>` every creature forty generations alone, `herd <seed>` the biggest Ridgebacks bred to each other. `moves [name]` measures every move against the bestiary contract (its tell, how much and how early the silhouette moves, the lane and range its hit reaches, its answer, and the kit's totals: unanswerable, safe, lookalike windups, ranges covered); `gaits` lists every creature's gaits by speed. `film` and `strides` take a creature by name, or `<name>+spades` for it standing on a digger's forelimbs (a burrower).",
+            ),
+            e(
+                "python3 scripts/breed-motion.py [--gaits] <outdir> <name>...",
+                "Draw how crossbred creatures move: moves_<name>.png is every move from rest through its tell, the strike (red spheres: what it hits; orange rings: where it will land) and the held punish window to recovered; with --gaits, gaits_<name>.png is every gait's cycle with its footfall diagram. Runs `breedcheck -- film` and `-- strides` itself. Needs Pillow.",
+            ),
+            e(
+                "python3 scripts/breed-sheet.py <dir>",
+                "Draw the sheets in docs/design/gallery/breed/ from `breedcheck -- boxes` dumps in <dir>/lines/: one row per lineage, the generations across, each body isometric on a gridded ground, a red frame where a major moved. Needs Pillow.",
             ),
             e(
                 "cargo run -p sim --bin critcheck",

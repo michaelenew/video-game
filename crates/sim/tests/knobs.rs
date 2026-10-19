@@ -56,6 +56,31 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// against the wall jump on the bench and judged by `tests/heights.rs`
 /// kicking across them.
 const LEVEL_DATA: &[&str] = &[
+    // **Creature data, crossbred** (`src/breed/`): the eleven creatures as
+    // genomes are species tables in another notation, judged the way the
+    // species tables are -- by `tests/breed.rs` rebuilding the cast from
+    // them -- and what each body plan wants of the rest is the shape of an
+    // animal, not a feel; how a body stands (`posture.rs`: where limbs hang
+    // on the flank, how far a limb leans, how straight a pillar stands) the
+    // same. The rates a lineage moves at (`cross::Rates`, the
+    // rearing's growth per meal) are the one part that is tuning, and they
+    // become Oven knobs with the first egg in the game; until then the
+    // generations in `tests/breed.rs` are what they are judged by.
+    "archetypes.rs",
+    "build.rs",
+    "cross.rs",
+    "plan.rs",
+    "posture.rs",
+    "rear.rs",
+    // How a body moves (`drive.rs`, `locomotion.rs`, `strike.rs`,
+    // `verdict.rs`): gait thresholds, stride laws and duty factors are
+    // measured off animals (Alexander, Hildebrand), not felt; how a move
+    // bends a body is its shape; the bestiary contract its judge measures
+    // against is `HUMAN_REACTION_FRAMES`, already a tuning constant.
+    "drive.rs",
+    "locomotion.rs",
+    "strike.rs",
+    "verdict.rs",
     "land.rs",
     "layout.rs",
     "rim.rs",
@@ -78,6 +103,13 @@ const EXEMPT: &[(&str, &str)] = &[
         "A bit position, not a magnitude: which bit of `Effect::banked` says the \
          Elementalist's wind has caught fire, set well above the Downdraft's one bit \
          per stone.",
+    ),
+    (
+        "sum.sub(Fx::from_int(2)).mul(fx(1732, 1000)).mul(sigma)",
+        "Arithmetic, not a magnitude: the sum of four uniform rolls has a mean of two and a \
+         standard deviation of the square root of a third, so subtracting two and scaling by \
+         the square root of three is what makes `breed::Rng::normal` a bell of the given \
+         width. The width itself is the caller's, `cross::Rates::mutation_sigma`.",
     ),
     (
         "pub const FORGED_MAX: u16 = (1 << FORGED_BITS) - 1",

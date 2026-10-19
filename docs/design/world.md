@@ -142,6 +142,16 @@ the Siegeshell's anchor). Trophies are the gate count and nothing else. They are
 also the one reward that costs almost nothing to build and that every player
 understands at once.
 
+**Eggs, trophies you carry, and the morph (v1, 2026-10-18).** Alongside the
+count, a beaten creature now drops trophies you *pick up* -- a few of its
+parts, by its genome -- and every creature has an egg lying behind it when its
+hunt begins. Carry its egg and it will not stop until you beat it. Each player
+has a **morph** at heel: feed it an egg and it starts over as that creature's
+young; feed it a trophy and it grows a generation, a change you can see at
+once. The count above is unchanged; these trophies are things in the world,
+and they *are* spent (fed). The rules, the numbers and why are
+[exploration/0022](exploration/0022_crossbreeding.md) §12.
+
 ### Sidegrades — ⚠️ parked, 2026-09-30
 
 *Not being built. Kept as the shape the parked system would take if it is
@@ -294,7 +304,8 @@ are small and can follow any time after.
 - **Open terrain between places.** Trails are arenas-without-creatures on
   purpose. An open world is the thing the combat kernel's closed arena was chosen
   to avoid.
-- **Economy.** No currency, no crafting. A trophy is not spent.
+- **Economy.** No currency, no crafting. A trophy on the count is not spent;
+  one picked up is fed to your morph (§4, 2026-10-18).
 
 ## 8 · Questions still open
 

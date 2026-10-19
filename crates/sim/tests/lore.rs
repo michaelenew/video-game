@@ -2,7 +2,7 @@
 //! largest fight, that each fight lays out differently.
 //!
 //! What is pinned: every registered species' layout fits it; the `World`
-//! with every cell of it full still fits the 20 KiB snapshot, with room left
+//! with every cell of it full still fits the 21 KiB snapshot, with room left
 //! over; a species' own words round-trip and never spill into the generic
 //! lists; and a fight that uses none of it hashes as before there was any.
 
@@ -12,7 +12,7 @@ use sim::species::{self, SpeciesId, sentinel};
 use sim::{Class, Input, World};
 
 /// The snapshot's cap: see `tests/budget.rs`.
-const SNAPSHOT_CAP: usize = 20 * 1024;
+const SNAPSHOT_CAP: usize = 21 * 1024;
 
 #[test]
 fn every_species_layout_fits_the_region() {

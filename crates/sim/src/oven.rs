@@ -1117,6 +1117,42 @@ scalars! {
     DashJumpRise,         "Shadow Reaver", "Dash jump, keeps of the rise (%)",   Percent, 0, 100;
     FanFalloff,           "Shadow Reaver", "Fan, hang each one after (x)",       Fixed, 0, fx(1,1);
     FanForget,            "Shadow Reaver", "Fan, the run forgotten after",       Frames, 1, 600;
+    // **A crossbred creature in a fight** (2026-10-18, `sim::breed::actor`
+    // and `brain`). Appended, as every knob above is. How fast a built body
+    // turns, how often its brain glances, how long it waits between moves
+    // when calm, and when it runs rather than walks to close.
+    BreedTurn,            "Breeding", "Turns a second, times the root of its length",        Fixed, fx(1,20), fx(4,1);
+    BreedGlance,          "Breeding", "Glances every",                                       Frames, 1, 60;
+    BreedPause,           "Breeding", "Waits between moves, at no aggression",               Frames, 0, 240;
+    BreedRunLengths,      "Breeding", "Runs to close beyond (body lengths)",                 Fixed, 0, fx(10,1);
+    BreedRunAtLeast,      "Breeding", "Runs to close beyond, at least (m)",                  Fixed, 0, fx(40,1);
+    // **Burrowing** (2026-10-18): how long a body may stay under before it
+    // has to come up (bestiary §1.9: nowhere free, and under is where it
+    // cannot be hit), and how fast it travels there, as a share of its
+    // top speed.
+    BreedUnderMost,       "Breeding", "Stays under at most",                                 Frames, 30, 1200;
+    BreedUnderSpeed,      "Breeding", "Travels under at (x top speed)",                      Fixed, fx(1,10), fx(1,1);
+    BreedBurrowFrom,      "Breeding", "Goes under to close beyond (mark widths)",            Fixed, 0, fx(10,1);
+    // **The morph** (2026-10-18): an egg fed to it makes it that
+    // creature's young; every trophy fed to it is a generation, at rates
+    // far above a lineage's so each one shows (`breed::cross::feed`), and
+    // it grows as it eats.
+    MorphMajor,           "Morph",    "A major goes over, at full pull (chance)",            Fixed, 0, fx(1,1);
+    MorphMinor,           "Morph",    "A minor goes over, at full pull (chance)",            Fixed, 0, fx(1,1);
+    MorphNewLimb,         "Morph",    "A limb it lacks buds, at full pull (chance)",         Fixed, 0, fx(1,1);
+    MorphSliderGain,      "Morph",    "Sliders pulled (x a lineage's)",                      Fixed, fx(1,1), fx(10,1);
+    MorphBorn,            "Morph",    "Hatched at (share of grown)",                         Fixed, fx(1,10), fx(1,1);
+    MorphGrows,           "Morph",    "Grows a trophy (share of grown)",                     Fixed, 0, fx(1,1);
+    // **What you carry** (2026-10-18, `crate::keep`): eggs and trophies,
+    // picked up by walking into them, and the morph at heel.
+    KeepPickup,           "Keep",     "Picked up within (m)",                                Fixed, fx(1,4), fx(4,1);
+    KeepEggBehind,        "Keep",     "An egg lies behind its creature by (m)",              Fixed, 0, fx(30,1);
+    KeepTrophies,         "Keep",     "Trophies a beaten creature drops",                    Int, 1, 5;
+    KeepFollow,           "Keep",     "The morph follows past (m)",                          Fixed, fx(1,2), fx(10,1);
+    KeepFeedReach,        "Keep",     "Fed by a crouch within (m)",                          Fixed, fx(1,2), fx(6,1);
+    KeepFeedCool,         "Keep",     "Eats again after",                                    Frames, 1, 240;
+    KeepCatchUp,          "Keep",     "The morph, left further than this, catches up (m)",   Fixed, fx(2,1), fx(200,1);
+    KeepHurry,            "Keep",     "The morph hurries at most (x its walk)",              Fixed, fx(1,1), fx(5,1);
 }
 
 // ---------------------------------------------------------------------------

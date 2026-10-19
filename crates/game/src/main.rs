@@ -32,6 +32,7 @@ mod ground;
 mod grove;
 mod hub;
 mod hud;
+mod keep;
 mod land;
 mod menu;
 mod online;
@@ -166,6 +167,23 @@ pub fn chosen_players(opts: &platform::Options) -> u8 {
 /// both, which is what makes the world two clients build from one link the
 /// same world.
 fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
+    // `--range <name>`: walked into one of the valley's creature ranges, its
+    // hunt begun and its egg lying behind it (`sim::keep`).
+    if let Some(r) = opts.value("--range").and_then(|name| {
+        let wanted = name.to_lowercase().replace(['-', ' ', '\''], "_");
+        sim::valley::ranges::RANGES
+            .iter()
+            .find(|r| r.name.to_lowercase().replace(['-', ' ', '\''], "_") == wanted)
+    }) {
+        let w = World::arrive(
+            chosen_classes(opts),
+            sim::valley::Journey::default(),
+            r.arena,
+            Some(0),
+            2,
+        );
+        return seated(w, dummy);
+    }
     let w = picker::world(chosen_start(opts), chosen_classes(opts));
     match chosen_players(opts) {
         n if n > 2 => w.seated(n),
@@ -259,6 +277,7 @@ fn main() {
                 crosshair::setup,
                 glint::setup,
                 veil::setup,
+                keep::setup,
             ),
         )
         .add_systems(
@@ -356,6 +375,8 @@ fn main() {
                 hide_empty_seats,
                 menu::show_progress,
                 menu::draw,
+                // What you carry and your morph (`sim::keep`).
+                (keep::place_morphs, keep::place_loose, keep::update_text),
             )
                 .chain()
                 .after(beast::signs)

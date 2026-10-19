@@ -1685,6 +1685,10 @@ pub struct World {
     /// something: a fight that has not hashes as it did before there was a
     /// field.
     pub crowd: crate::crowd::Field,
+    /// Eggs and trophies on the floor of this place (`crate::keep`).
+    pub loose: crate::keep::Loose,
+    /// Where each seat's morph stands, in this place (`crate::keep`).
+    pub heel: [crate::keep::Heel; MAX_PLAYERS],
 }
 
 impl World {
@@ -1732,6 +1736,8 @@ impl World {
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
             crowd: crate::crowd::Field::NONE,
+            loose: [None; crate::keep::LOOSE],
+            heel: [crate::keep::Heel::default(); MAX_PLAYERS],
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1875,6 +1881,7 @@ impl World {
         w.valley = crate::valley::Journey {
             on: true,
             beaten: journey.beaten,
+            keep: journey.keep,
             came: at.map_or(crate::valley::NONE, |k| k + 1),
             ..crate::valley::Journey::default()
         };
@@ -2204,6 +2211,7 @@ impl World {
         }
         self.reframe();
         self.tend_range();
+        self.step_keep();
         None
     }
 
@@ -2220,6 +2228,17 @@ impl World {
     /// **A hunt in the valley, lost**: you wake outside, at the seam you went
     /// in by -- or in Hearth, for a room the world started in.
     fn woke_outside(&self) -> World {
+        let mut w = self.woke_outside_as_was();
+        // The creature took its egg back.
+        for s in self.hunted().into_iter().flatten() {
+            for i in 0..MAX_PLAYERS {
+                w.valley.keep.lose_eggs(i, s);
+            }
+        }
+        w
+    }
+
+    fn woke_outside_as_was(&self) -> World {
         let back = crate::valley::place(self.arena)
             .and_then(|p| self.valley.came.checked_sub(1).and_then(|k| p.seam(k)));
         match back {
@@ -3780,6 +3799,7 @@ impl World {
                 for p in self.players.iter_mut().filter(|p| p.health > 0) {
                     p.rounds_won += 1;
                 }
+                self.drop_trophies();
                 if self.valley.on {
                     for species in self.hunted().into_iter().flatten() {
                         self.valley.credit(species);
@@ -4051,6 +4071,13 @@ impl World {
                 }
                 h.write_u32(v.roused as u32);
                 h.write_u32(v.stock as u32);
+            }
+            // What is carried, fed and lying about, and where the morphs
+            // stand -- only once anything has been: every journey before
+            // there were eggs hashes as it did.
+            if self.keep_touched() {
+                h.write_u32(0xE66);
+                self.hash_keep(&mut h);
             }
         }
         // Who has left, only when somebody has: every match with everybody
@@ -11290,18 +11317,18 @@ fn separate_bodies(players: &mut [Player; MAX_PLAYERS], present: usize) {
 
 /// FNV-1a. Chosen because it is trivially portable and has no platform-varying
 /// behaviour -- the hash itself must be deterministic or desync detection lies.
-struct Fnv(u64);
+pub(crate) struct Fnv(u64);
 
 impl Fnv {
     fn new() -> Fnv {
         Fnv(0xcbf2_9ce4_8422_2325)
     }
-    fn write_u64(&mut self, v: u64) {
+    pub(crate) fn write_u64(&mut self, v: u64) {
         self.write_u32(v as u32);
         self.write_u32((v >> 32) as u32);
     }
 
-    fn write_u32(&mut self, v: u32) {
+    pub(crate) fn write_u32(&mut self, v: u32) {
         for b in v.to_le_bytes() {
             self.0 ^= b as u64;
             self.0 = self.0.wrapping_mul(0x100_0000_01b3);

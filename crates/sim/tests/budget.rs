@@ -65,8 +65,12 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
 /// 160 KiB, which still sits in the L2 of anything that runs the game.
 /// Raising this is a real decision -- it means every frame and every rollback
 /// got heavier -- so change it deliberately, the way `knobs.rs` wants a
-/// reason, rather than to make a red test green.
-const SNAPSHOT_CAP: usize = 20 * 1024;
+/// reason, rather than to make a red test green. **Twenty-one since eggs and
+/// morphs** (2026-10-18, the owner's call): what each of four seats carries,
+/// its morph and where it stands, and what lies on the floor -- about 640
+/// bytes -- arrived as the Blood mage's territory took the last of the room.
+/// A ring of nine is still under 190 KiB.
+const SNAPSHOT_CAP: usize = 21 * 1024;
 
 /// Frames per timed run. Ten seconds of play, so a move's whole lifecycle --
 /// startup, active, recovery, and whatever it leaves on the field -- is inside
