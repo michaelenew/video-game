@@ -445,6 +445,54 @@ fn role(name: &str) -> usize {
     }
 }
 
+/// A built body as it is drawn: each part's centre, turn and size.
+struct Drawn {
+    parts: [(Vec3, Quat, Vec3); PARTS],
+    names: [&'static str; PARTS],
+    count: usize,
+}
+
+impl Drawn {
+    fn of(body: &Body) -> Drawn {
+        let mut d = Drawn {
+            parts: [(Vec3::ZERO, Quat::IDENTITY, Vec3::ZERO); PARTS],
+            names: [""; PARTS],
+            count: body.part_count.min(PARTS),
+        };
+        for i in 0..d.count {
+            let shape = body.parts[i].shape;
+            let u = body.axes[i];
+            let (v, _) = build::frame(u);
+            d.parts[i] = (
+                fx3(body.centre(i)),
+                orient(fx3(u), fx3(v)),
+                fx3(shape.max.sub(shape.min)),
+            );
+            d.names[i] = body.parts[i].name;
+        }
+        d
+    }
+
+    /// `share` of the way from `before` to this: each part from the part
+    /// of the same name (the same one of several) in the body before, or
+    /// grown in from nothing where that body had none.
+    fn blend_from(&mut self, before: &Drawn, share: f32) {
+        for i in 0..self.count {
+            let name = self.names[i];
+            let nth = self.names[..i].iter().filter(|n| **n == name).count();
+            let was = (0..before.count)
+                .filter(|j| before.names[*j] == name)
+                .nth(nth)
+                .map(|j| before.parts[j]);
+            let (c, q, s) = self.parts[i];
+            self.parts[i] = match was {
+                Some((wc, wq, ws)) => (wc.lerp(c, share), wq.slerp(q, share), ws.lerp(s, share)),
+                None => (c, q, s * share),
+            };
+        }
+    }
+}
+
 /// Each seat's morph posed: a body built once per frame per seat, grown
 /// in as its blob melts away.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
@@ -465,7 +513,7 @@ pub fn place_morphs(
 ) {
     let w = &sim.cur;
     let seats = (w.seats as usize).clamp(1, MAX_PLAYERS);
-    let mut bodies: [Option<Body>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    let mut bodies: [Option<Drawn>; MAX_PLAYERS] = Default::default();
     let clock = time.elapsed_secs();
     for seat in 0..MAX_PLAYERS {
         let of = keeping.held().morphs[seat].of;
@@ -502,22 +550,33 @@ pub fn place_morphs(
                     q
                 }
             };
-            let d = if heel.going {
-                let gait = locomotion::at(&g, &q, sim::Fx::ratio(1, 2));
-                locomotion::drive(&g, &q, &gait, crate::heel::phase(&heel), sim::Fx::ZERO)
-            } else {
-                locomotion::rest(&g)
+            let pose = |g: &sim::breed::Genome, q: &posture::Posture| {
+                let d = if heel.going {
+                    let gait = locomotion::at(g, q, sim::Fx::ratio(1, 2));
+                    locomotion::drive(g, q, &gait, crate::heel::phase(&heel), sim::Fx::ZERO)
+                } else {
+                    locomotion::rest(g)
+                };
+                build::body_driven(g, q, &d)
             };
-            bodies[seat] = Some(build::body_driven(&g, &q, &d));
+            let body = pose(&g, &q);
+            let mut drawn = Drawn::of(&body);
+            // A stance coming over: drawn between the body as it stood and
+            // as it stands, at the same point of its stride.
+            if let Some((was, share)) = m.stance_blend() {
+                let before = Drawn::of(&pose(&was, &posture::posture(&was)));
+                drawn.blend_from(&before, share.to_f32_for_render());
+            }
+            bodies[seat] = Some(drawn);
         }
     }
     for (part, mut transform, mut visible, mut material) in parts.iter_mut() {
         let (seat, i) = (part.0, part.1);
-        let Some(body) = bodies.get(seat).copied().flatten() else {
+        let Some(body) = bodies.get(seat).and_then(|b| b.as_ref()) else {
             *visible = Visibility::Hidden;
             continue;
         };
-        if i >= body.part_count {
+        if i >= body.count {
             *visible = Visibility::Hidden;
             continue;
         }
@@ -526,21 +585,19 @@ pub fn place_morphs(
         // The builder's frame turned toward `+z` by the facing; Bevy's turn
         // about `y` goes the other way.
         let turn = Quat::from_rotation_y(-yaw);
-        let shape = body.parts[i].shape;
-        let u = body.axes[i];
-        let (v, _) = build::frame(u);
+        let (centre, turned, size) = body.parts[i];
         // Grown in from where the blob hung as it melts.
         let grown = 1.0 - melt.blob[seat];
         let hung = heel.at + Vec3::Y * BLOB_FLOAT;
-        let at = heel.at + turn * fx3(body.centre(i));
+        let at = heel.at + turn * centre;
         *transform = Transform {
             translation: hung.lerp(at, grown),
-            rotation: turn * orient(fx3(u), fx3(v)),
-            scale: fx3(shape.max.sub(shape.min)).max(Vec3::splat(0.02)) * grown,
+            rotation: turn * turned,
+            scale: size.max(Vec3::splat(0.02)) * grown,
         };
         *visible = Visibility::Inherited;
         let m = &keeping.held().morphs[seat];
-        let r = role(body.parts[i].name);
+        let r = role(body.names[i]);
         let wanted = if m.of == Morph::UNFORMED {
             &kit.plain[r]
         } else {

@@ -86,11 +86,22 @@ pub struct Morph {
     /// Whose it is: its dice are its seat's, its genome's and its
     /// generation's, so two morphs fed alike still differ.
     pub seat: u8,
+    /// **A stance changing over** (2026-10-19): the stance it is coming
+    /// from, and how many of [`Morph::SETTLING`] feedings it has stood the
+    /// new one for. A stance is one switch -- a body's legs sprawled out or
+    /// under it -- and flipped in one feeding it read as the whole creature
+    /// shrinking or growing at once; drawn between the two, it comes over a
+    /// third a feeding ([`Morph::stance_blend`]).
+    pub stance_was: Stance,
+    pub settled: u8,
 }
 
 impl Morph {
     /// What a morph that has eaten no egg is of.
     pub const UNFORMED: u8 = u8::MAX;
+
+    /// Feedings a new stance takes to come all the way over.
+    pub const SETTLING: u8 = 3;
 
     /// An egg, hatched: the creature's young.
     pub fn hatch(egg: &Genome, seat: u8) -> Morph {
@@ -100,6 +111,8 @@ impl Morph {
             generation: 0,
             of: Morph::UNFORMED,
             seat,
+            stance_was: egg.stance,
+            settled: Morph::SETTLING,
         }
     }
 
@@ -130,9 +143,34 @@ impl Morph {
         let mut rng = self.rng();
         let out = cross::feed(&before, &trophy, &mut rng);
         self.genome = out.genome;
+        if self.genome.stance != before.stance {
+            // From where it stood: a stance still coming over starts the
+            // next from the one it came from, at the share it had reached
+            // -- near enough, and never a jump the other way.
+            if self.settled * 2 >= Morph::SETTLING {
+                self.stance_was = before.stance;
+            }
+            self.settled = 1;
+        } else if self.settled < Morph::SETTLING {
+            self.settled += 1;
+        }
         self.generation = self.generation.saturating_add(1);
         self.growth = self.growth.add(crate::tuning::morph_grows()).min(Fx::ONE);
         changes(&before, &self.genome, Some(kind))
+    }
+
+    /// While a stance is coming over: the body as it stood before -- the
+    /// genome it is drawn as, in its old stance, made to stand -- and the
+    /// share of the way to the new one, a third a feeding. None once it
+    /// has come all the way.
+    pub fn stance_blend(&self) -> Option<(Genome, Fx)> {
+        if self.settled >= Morph::SETTLING || self.stance_was == self.genome.stance {
+            return None;
+        }
+        let mut was = self.shown();
+        was.stance = self.stance_was;
+        super::plan::repair(&mut was);
+        Some((was, Fx::ratio(self.settled as i32, Morph::SETTLING as i32)))
     }
 
     /// The genome it is drawn and moves as: its size scaled by how grown

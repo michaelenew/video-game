@@ -944,11 +944,19 @@ session; a morph carried in from another session would need sending.
   mostly pairs closer together than they are thick (the Siegeshell's
   front two) and spider legs fanning across another kind of leg.
 
-**What still jumps: a stance.** Size only closes on the donor's, but the
-stance is one major that flips at once: a body that took the Broodmother's
-sprawl and is then fed the Ridgeback stands its legs under it in one
-feeding, and across it goes from about 14.5 m to 10.5 m while its length
-keeps growing. That reads as "it got small again". Open.
+**A stance comes over in thirds** (2026-10-19). Size only closes on the
+donor's, but the stance is one major that flipped at once: a body that took
+the Broodmother's sprawl and was then fed the Ridgeback stood its legs
+under it in one feeding, and across it went from about 14.5 m to 10.5 m
+while its length kept growing -- "it got small again". The morph now
+remembers the stance it came from (`Morph::stance_was`) and how many
+feedings it has stood the new one (`settled`, of `Morph::SETTLING`, three);
+until it is all the way over, the game draws each part between the body as
+it stood and as it stands, at the same point of its stride, a third more a
+feeding (`Morph::stance_blend`, `game::keep::Drawn`). A part the old body
+had none of grows in. It is the morph's alone -- a lineage's crossing has
+nobody watching -- and, the morph being each game's own, it costs the
+shared world nothing.
 
 **On screen** (`game::keep`): an egg is big, pale and glowing in its
 creature's colour, bobbing and turning under a column of light you can see
