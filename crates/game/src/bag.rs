@@ -60,6 +60,10 @@ pub struct Held {
     pub morphs: [Morph; MAX_PLAYERS],
     /// The frame each seat's morph last ate on.
     pub fed_at: [Option<u32>; MAX_PLAYERS],
+    /// Everything each seat's morph has eaten, in order: with the egg, it
+    /// rebuilds the morph exactly (a feeding rolls no dice), which is how
+    /// one is shared to be looked at.
+    pub eaten: [Vec<Item>; MAX_PLAYERS],
 }
 
 impl Default for Held {
@@ -73,6 +77,7 @@ impl Default for Held {
             bag: Vec::new(),
             morphs: core::array::from_fn(|i| Morph::hatch(&base, i as u8)),
             fed_at: [None; MAX_PLAYERS],
+            eaten: Default::default(),
         }
     }
 }
@@ -103,6 +108,7 @@ impl Held {
                 }
             }
             self.fed_at[i] = Some(frame);
+            self.eaten[i].push(item);
         }
     }
 }

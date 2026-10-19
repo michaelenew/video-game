@@ -38,11 +38,20 @@ pub struct Menu {
     copied_at: Option<f64>,
     /// The same, for the connection details.
     details_copied_at: Option<f64>,
+    /// The last replay saved, and when: shown on the screen for a moment
+    /// whether or not the menu is open.
+    told: Option<(String, f64)>,
 }
 
-/// The Oven and the hub own the screen while they are open; the menu waits.
-fn visible(menu: &Menu, palette: &crate::palette::Palette, hub: &crate::hub::Hub) -> bool {
-    menu.open && !palette.open && !hub.open
+/// How long "replay saved" stays on the screen (s).
+const SAVED_FOR: f64 = 6.0;
+
+/// The hub owns the screen while it is open; the menu waits. **Not the
+/// Oven** (2026-10-19): `--dev` opens the Oven from the start, and with the
+/// menu waiting on it there was no menu, and so no "Save replay", in dev
+/// mode at all. Beside the Oven it goes to the right of the screen.
+fn visible(menu: &Menu, hub: &crate::hub::Hub) -> bool {
+    menu.open && !hub.open
 }
 
 pub fn draw(
@@ -53,17 +62,42 @@ pub fn draw(
     hub: Res<crate::hub::Hub>,
     time: Res<Time<Real>>,
 ) {
-    if !visible(&menu, &palette, &hub) {
-        return;
-    }
     let now = time.elapsed_secs_f64();
     // None as the window closes: the frame the context is gone and the
     // menu still runs (the panic on quit, 2026-10-16).
     let Some(ctx) = contexts.try_ctx_mut() else {
         return;
     };
+    // **A save says so on the screen**, from `Y` or the button, menu or no
+    // menu: it went only to the terminal and the menu, and with the menu
+    // hidden a save looked like nothing at all.
+    if let Some(at) = &sim.saved
+        && menu.told.as_ref().is_none_or(|(was, _)| was != at)
+    {
+        menu.told = Some((at.clone(), now));
+    }
+    if let Some((at, when)) = &menu.told
+        && now - when < SAVED_FOR
+    {
+        egui::Area::new(egui::Id::new("replay saved"))
+            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 140.0))
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.label(format!("Replay saved: {at}"));
+                });
+            });
+    }
+    if !visible(&menu, &hub) {
+        return;
+    }
+    let (corner, offset) = if palette.open {
+        (egui::Align2::RIGHT_TOP, egui::vec2(-18.0, 150.0))
+    } else {
+        (egui::Align2::LEFT_TOP, egui::vec2(18.0, 150.0))
+    };
     egui::Window::new("Menu")
-        .anchor(egui::Align2::LEFT_TOP, egui::vec2(18.0, 150.0))
+        .anchor(corner, offset)
         .resizable(false)
         .collapsible(false)
         .default_width(380.0)
@@ -215,7 +249,6 @@ fn details(ui: &mut egui::Ui, menu: &mut Menu, sim: &crate::Sim, now: f64) {
 /// menu says the same thing, and the line would sit across the list.
 pub fn show_progress(
     menu: Res<Menu>,
-    palette: Res<crate::palette::Palette>,
     hub: Res<crate::hub::Hub>,
     mut progress: Query<
         &mut Visibility,
@@ -226,7 +259,7 @@ pub fn show_progress(
     >,
     mut online: Query<&mut Visibility, With<crate::hud::OnlineText>>,
 ) {
-    let up = visible(&menu, &palette, &hub);
+    let up = visible(&menu, &hub);
     let shown = |yes: bool| {
         if yes {
             Visibility::Inherited

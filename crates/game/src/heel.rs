@@ -30,9 +30,8 @@ pub struct Heel {
 #[derive(Resource, Default)]
 pub struct Heels {
     pub seat: [Heel; MAX_PLAYERS],
-    /// Each seat's walk -- metres a second, seconds a stride -- and the
-    /// body it was worked out for.
-    walk: [Option<(u64, f32, f32)>; MAX_PLAYERS],
+    /// Each seat's walk and size, and the body they were worked out for.
+    walk: [Option<(u64, Walk)>; MAX_PLAYERS],
     /// Where the world's coordinates were last frame.
     origin: Option<Vec3>,
 }
@@ -93,15 +92,12 @@ pub fn follow(
         // Its walk, worked out once each time its body changes.
         let m = &keeping.held().morphs[i];
         let key = m.genome.fingerprint() ^ (m.growth.raw() as u64) << 40;
-        let (speed, stride) = match walk[i] {
-            Some((k, speed, stride)) if k == key => (speed, stride),
+        let gait = match walk[i] {
+            Some((k, gait)) if k == key => gait,
             _ => {
-                let g = m.shown();
-                let gait = locomotion::at(&g, &posture::posture(&g), sim::Fx::ratio(1, 2));
-                let speed = gait.speed.to_f32_for_render().max(1.0);
-                let stride = gait.cycle.clamp(8, 240) as f32 / locomotion::FPS as f32;
-                walk[i] = Some((key, speed, stride));
-                (speed, stride)
+                let gait = Walk::of(m);
+                walk[i] = Some((key, gait));
+                gait
             }
         };
         // **Out of the way in a fight**: the creature nearest you.
@@ -114,7 +110,14 @@ pub fn follow(
                 .chain(w.critters.iter().filter(|c| c.alive()).map(|c| v3(c.pos)))
                 .min_by(|a, b| a.distance(pos).total_cmp(&b.distance(pos)))
         });
-        h.step(pos, near.flatten(), (speed, stride), dt, &Knobs::tuned());
+        let ahead = Vec3::new(
+            p.facing.x.to_f32_for_render(),
+            0.0,
+            p.facing.z.to_f32_for_render(),
+        )
+        .try_normalize()
+        .unwrap_or(Vec3::Z);
+        h.step(pos, ahead, near.flatten(), gait, dt, &Knobs::tuned());
         // On the floor.
         h.at.y = terrain
             .ground_under(sim::V3::new(fx(h.at.x), fx(h.at.y), fx(h.at.z)))
@@ -147,30 +150,74 @@ impl Knobs {
     }
 }
 
+/// How a morph walks, and how much room it takes.
+#[derive(Clone, Copy, Debug)]
+pub struct Walk {
+    /// Metres a second.
+    speed: f32,
+    /// Seconds a stride.
+    stride: f32,
+    /// How far its body reaches from where it stands, on the flat, metres.
+    radius: f32,
+}
+
+impl Walk {
+    fn of(m: &sim::breed::morph::Morph) -> Walk {
+        let g = m.shown();
+        let q = posture::posture(&g);
+        let gait = locomotion::at(&g, &q, sim::Fx::ratio(1, 2));
+        let body = sim::breed::build::body_in(&g, &q);
+        let radius = (0..body.part_count)
+            .map(|i| {
+                let c = body.centre(i);
+                let d = body.parts[i].shape.max.sub(body.parts[i].shape.min);
+                let half = d.x.max(d.y).max(d.z).to_f32_for_render() / 2.0;
+                Vec2::new(c.x.to_f32_for_render(), c.z.to_f32_for_render()).length() + half
+            })
+            .fold(0.0, f32::max);
+        Walk {
+            speed: gait.speed.to_f32_for_render().max(1.0),
+            stride: gait.cycle.clamp(8, 240) as f32 / locomotion::FPS as f32,
+            radius,
+        }
+    }
+}
+
 impl Heel {
-    /// One frame of following a player at `pos`, the creature nearest
-    /// them at `near` if they are in a fight, at its `walk` (metres a
-    /// second, seconds a stride). On the flat: the floor is the caller's.
-    fn step(&mut self, pos: Vec3, near: Option<Vec3>, walk: (f32, f32), dt: f32, k: &Knobs) {
-        let (speed, stride) = walk;
+    /// One frame of following a player at `pos`, facing `ahead` (flat), the
+    /// creature nearest them at `near` if they are in a fight. On the flat:
+    /// the floor is the caller's.
+    ///
+    /// **It keeps to your side, and further the bigger it is** (2026-10-19:
+    /// grown, it stood between the camera and you and you could not see
+    /// your fighter). The camera is behind you, so behind you is the one
+    /// place a big body hides you: it keeps to whichever side of you it is
+    /// on, its own reach plus the follow distance out. In a fight it goes
+    /// back and to that side, away from the creature nearest you.
+    fn step(&mut self, pos: Vec3, ahead: Vec3, near: Option<Vec3>, walk: Walk, dt: f32, k: &Knobs) {
         let to = Vec3::new(pos.x - self.at.x, 0.0, pos.z - self.at.z);
         // Left a long way behind (a jump, a fall, a seam): it catches up.
-        if to.length() > k.catch_up {
+        if to.length() > k.catch_up + walk.radius {
             self.at = beside(pos);
             self.going = false;
             return;
         }
-        // **Out of the way in a fight**: well back, on the far side of you
-        // from the creature nearest you -- never between you, never where
-        // you are swinging. At peace it comes to heel.
+        // Its side of you: the one it is on.
+        let right = Vec3::new(-ahead.z, 0.0, ahead.x);
+        let side = if (self.at - pos).dot(right) < 0.0 {
+            -right
+        } else {
+            right
+        };
         let (goal, slack) = match near {
             Some(c) => {
                 let away = Vec3::new(pos.x - c.x, 0.0, pos.z - c.z)
                     .try_normalize()
-                    .unwrap_or(Vec3::X);
-                (pos + away * k.fight, 1.0)
+                    .unwrap_or(-ahead);
+                let out = (away + side).try_normalize().unwrap_or(side);
+                (pos + out * (k.fight + walk.radius), 1.0)
             }
-            None => (pos, k.follow),
+            None => (pos + side * (k.follow + walk.radius), k.follow * 0.5),
         };
         let to_goal = Vec3::new(goal.x - self.at.x, 0.0, goal.z - self.at.z);
         let gap = to_goal.length();
@@ -179,9 +226,9 @@ impl Heel {
             // Faster the further off it is, up to its hurry.
             let urge = (1.0 + (gap - slack) / k.follow.max(0.1)).min(k.hurry);
             let dir = to_goal / gap;
-            self.at += dir * (speed * urge * dt).min(gap);
+            self.at += dir * (walk.speed * urge * dt).min(gap);
             self.facing = turns(dir);
-            self.phase = (self.phase + dt / stride * urge).fract();
+            self.phase = (self.phase + dt / walk.stride * urge).fract();
         } else if to.length() > 0.0 {
             // Standing, it watches you.
             self.facing = turns(to);
@@ -198,7 +245,13 @@ pub fn phase(h: &Heel) -> sim::Fx {
 mod tests {
     use super::*;
 
-    fn run(near: Option<Vec3>) -> (Heel, Vec3) {
+    const SMALL: Walk = Walk {
+        speed: 2.0,
+        stride: 0.5,
+        radius: 0.3,
+    };
+
+    fn run(near: Option<Vec3>, walk: Walk) -> (Heel, Vec3) {
         let k = Knobs::tuned();
         let pos = Vec3::new(10.0, 0.0, 0.0);
         let mut h = Heel {
@@ -206,30 +259,45 @@ mod tests {
             placed: true,
             ..default()
         };
-        for _ in 0..600 {
-            h.step(pos, near, (2.0, 0.5), 1.0 / 60.0, &k);
+        for _ in 0..1200 {
+            h.step(pos, Vec3::X, near, walk, 1.0 / 60.0, &k);
         }
         (h, pos)
     }
 
     #[test]
-    fn at_peace_it_comes_to_heel() {
-        let (h, pos) = run(None);
+    fn at_peace_it_comes_to_your_side() {
+        let k = Knobs::tuned();
+        let (h, pos) = run(None, SMALL);
         let gap = h.at.distance(pos);
-        assert!(gap <= Knobs::tuned().follow + 0.1, "it is {gap} behind");
+        assert!(gap <= k.follow + SMALL.radius + k.follow, "it is {gap} off");
+        // Beside you, not behind you where the camera looks past you.
+        let behind = (pos - h.at).dot(Vec3::X);
+        assert!(behind < gap * 0.5, "it is {behind} behind you of {gap}");
     }
 
     #[test]
     fn in_a_fight_it_keeps_back_on_the_far_side() {
+        let k = Knobs::tuned();
         let creature = Vec3::new(20.0, 0.0, 0.0);
-        let (h, pos) = run(Some(creature));
+        let (h, pos) = run(Some(creature), SMALL);
         let gap = h.at.distance(pos);
-        assert!(
-            gap >= Knobs::tuned().fight - 2.0,
-            "it is {gap} from you in a fight"
-        );
+        assert!(gap >= k.fight - 2.0, "it is {gap} from you in a fight");
         // Further from the creature than you are: behind you, not between.
         assert!(h.at.distance(creature) > pos.distance(creature));
+    }
+
+    #[test]
+    fn a_big_one_keeps_further_off() {
+        let big = Walk {
+            radius: 6.0,
+            ..SMALL
+        };
+        let (small, pos) = run(None, SMALL);
+        let (large, _) = run(None, big);
+        assert!(large.at.distance(pos) > small.at.distance(pos) + 4.0);
+        // And clear of you: its body does not reach you.
+        assert!(large.at.distance(pos) > big.radius);
     }
 
     #[test]
@@ -241,7 +309,7 @@ mod tests {
             ..default()
         };
         let far = Vec3::new(k.catch_up + 5.0, 0.0, 0.0);
-        h.step(far, None, (2.0, 0.5), 1.0 / 60.0, &k);
+        h.step(far, Vec3::X, None, SMALL, 1.0 / 60.0, &k);
         assert!(h.at.distance(far) < 2.0);
     }
 }
