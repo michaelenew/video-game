@@ -43,7 +43,18 @@ fact -- **the world runs in the coordinates of one place at a time** (atlas.md)
   hunt arrived in had no den; a fighter's last floor height (`Rise::floor`)
   and wall sentinels were not shifted; unplayed seats were parked under the
   *current* place's middle (now its den's); and then eight species' own
-  points and arena reads.
+  points and arena reads. It passes for every creature now.
+- **Two ways a species' own point survives**, both used: moved by the hook,
+  or **written relative to its den's origin** and read back by adding it --
+  the Pair's perches, the Mantis's glimpses, the Galewing's lanes, the
+  Veilstalker's footprints, whose encodings (half-metre halves, nine-bit
+  prints) could not take a shift of hundreds of metres. And heights: every
+  species measured "on the floor" from zero, which is its den's floor only at
+  home; they measure from `Den::off.y` now.
+- **A centimetre decodes rounded up** (`lore::from_cm`), where it truncated
+  toward zero: a point decoded either side of zero then moves by exactly a
+  whole-metre shift, and `to_cm(from_cm(c)) == c`. Every pinned fight hashes
+  as it did.
 
 ## 2 · Where the world runs while a hunt is out
 
