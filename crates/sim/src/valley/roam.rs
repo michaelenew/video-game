@@ -166,8 +166,10 @@ impl World {
         let den = self.den();
         let past = self.past_home(&den);
         if self.valley.homing {
-            if past == Fx::ZERO {
-                // Home: it settles, and its temperament has it again.
+            // Home, with somebody near it: it settles, and its temperament has
+            // it again. Home with nobody near, its hunt is over
+            // (`valley::open`, next frame).
+            if past == Fx::ZERO && self.near_home(&den) {
                 self.valley.homing = false;
                 self.valley.away = 0;
                 self.valley.roused = false;
@@ -197,6 +199,22 @@ impl World {
         if self.valley.away as u32 > frames || past.raw() > far.raw() {
             self.go_home(&den);
         }
+    }
+
+    /// Is anybody on their feet in the hunt's home, or within
+    /// `hunt_held_past` of it?
+    fn near_home(&self, den: &Den) -> bool {
+        let m = t::hunt_held_past();
+        let b = &den.home;
+        let seats = (self.seats as usize).clamp(1, crate::state::MAX_PLAYERS);
+        (0..seats).any(|i| {
+            let p = self.players[i].pos;
+            self.players[i].health > 0
+                && p.x.raw() >= b.lo_x.sub(m).raw()
+                && p.x.raw() <= b.hi_x.add(m).raw()
+                && p.z.raw() >= b.lo_z.sub(m).raw()
+                && p.z.raw() <= b.hi_z.add(m).raw()
+        })
     }
 
     /// **It gives up**: it walks home, and starts nothing on the way.
@@ -257,15 +275,25 @@ fn door_of(atlas: &atlas::Atlas, id: crate::arena::ArenaId) -> Option<V3> {
 /// next `roam_probe` metres are walkable for a body of `radius`. The goal
 /// itself if nothing is (and the walk refuses what is not walkable).
 pub fn way_toward(ground: &Terrain, from: V3, goal: V3, yaw: Fx, radius: Fx) -> V3 {
-    let goal = match ground.atlas() {
-        Some(atlas) => through_doors(atlas, ground.origin(), from, goal),
-        None => goal,
+    detour(ground, from, goal, yaw, radius).unwrap_or(goal)
+}
+
+/// [`way_toward`], or `None` when the way is straight at `goal`: nothing
+/// walked round and no doorway in it. What a creature close to whoever it is
+/// after asks, so its own brain keeps the say unless something is in the way.
+pub fn detour(ground: &Terrain, from: V3, goal: V3, yaw: Fx, radius: Fx) -> Option<V3> {
+    let (goal, door) = match ground.atlas() {
+        Some(atlas) => {
+            let via = through_doors(atlas, ground.origin(), from, goal);
+            (via, via != goal)
+        }
+        None => (goal, false),
     };
     let to = V3::new(goal.x.sub(from.x), Fx::ZERO, goal.z.sub(from.z));
     let dist = math::wide_flat_len(to);
     let probe = t::roam_probe();
     if dist.raw() <= radius.raw() {
-        return goal;
+        return door.then_some(goal);
     }
     let base = math::atan2_turns(to.z, to.x);
     let floor = ground.relief_at(from.x, from.z);
@@ -288,15 +316,15 @@ pub fn way_toward(ground: &Terrain, from: V3, goal: V3, yaw: Fx, radius: Fx) -> 
             }
             let dir = V3::from_turns(heading);
             if open_along(ground, start, dir, reach, radius) {
-                return if n == 0 && dist.raw() <= probe.raw() {
-                    goal
+                return if n == 0 {
+                    door.then_some(goal)
                 } else {
-                    from.add(dir.scale(probe))
+                    Some(from.add(dir.scale(probe)))
                 };
             }
         }
     }
-    goal
+    door.then_some(goal)
 }
 
 /// Is the way `length` along `dir` from `start` (on the floor) walkable, in
@@ -315,7 +343,8 @@ fn open_along(ground: &Terrain, start: V3, dir: V3, length: Fx, radius: Fx) -> b
 
 /// **Can a body on the floor at `from` walk to `to`, the ground alone** --
 /// the floor's height there, or `None`: off the map, a step up past
-/// `roam_step` or down past `roam_drop`, or up land too steep to climb. What
+/// `roam_step` or down past `roam_drop`, or a climb of land steeper than
+/// `terrain_steepest`, rise over run. What
 /// a roaming creature's walk refuses (solids it slides along, as a fighter
 /// does: `Terrain::fence`). Only a climb is refused on a steep slope, so a
 /// body a charge left on one can always walk off it.
@@ -328,10 +357,22 @@ pub fn ground_step(ground: &Terrain, from: V3, to: V3) -> Option<Fx> {
     if rise.raw() > t::roam_step().raw() || rise.neg().raw() > t::roam_drop().raw() {
         return None;
     }
-    if rise.raw() > 0 && ground.on_land(to.x, to.z) && ground.downhill(to.x, to.z).is_some() {
+    // Up land steeper than a body can climb: the step's own slope, rise
+    // over run, so walking along a steep bank or out of a dip is never a
+    // climb it is refused.
+    if rise.raw() > 0 && ground.on_land(to.x, to.z) && steeper(rise, to.sub(from)) {
         return None;
     }
     Some(y)
+}
+
+/// **Is a rise over a flat run steeper than `terrain_steepest`?** In whole
+/// integers squared: a frame's step is millimetres, which a fixed-point length
+/// squares to nothing.
+fn steeper(rise: Fx, run: V3) -> bool {
+    let (r, x, z) = (rise.raw() as i128, run.x.raw() as i128, run.z.raw() as i128);
+    let k = t::terrain_steepest().raw() as i128;
+    r * r * (1 << 32) > (x * x + z * z) * k * k
 }
 
 /// **Is `to` somewhere a body of `radius` could walk to from `from`**: the

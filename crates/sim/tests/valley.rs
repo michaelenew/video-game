@@ -421,7 +421,7 @@ fn a_dark_waystone_shuts_its_pass_and_a_trophy_opens_it() {
 /// margin is less than the nearest road junction's distance from any room
 /// (16 m), so a hunt never holds somebody who is back on the road.
 #[test]
-fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_ends_it() {
+fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_is_followed() {
     let r = sim::valley::layout::ROOMS
         .iter()
         .find(|r| r.arena == ArenaId::HIGHLANDS)
@@ -475,17 +475,42 @@ fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_ends_it() {
     walk_to(&mut w, door, 1200).unwrap();
     assert!(w.hunting());
     assert!(w.monster().unwrap().health <= hurt, "a fresh creature");
-    // Away, all the way back to the road: the hunt is over, unwon.
+    // Away, all the way back to the road: since 2026-10-19 (exploration
+    // 0023) a creature that hunts follows, out of its room by its door --
+    // it is no longer kept in its room -- and gives up only in time.
+    let mut came_out = false;
     for &to in way.iter().rev().skip(1) {
-        walk_to(&mut w, to, 1200).unwrap();
+        for _ in 0..1200 {
+            for p in w.players.iter_mut() {
+                p.health = p.health.max(1);
+            }
+            if walk_to(&mut w, to, 1).is_ok() {
+                break;
+            }
+            if let Some(m) = w.monster() {
+                let at = m.pos.add(w.map_origin());
+                came_out |= !room.holds(at.x, at.z);
+            }
+        }
+    }
+    // And stood on the road a while.
+    for _ in 0..900 {
+        for p in w.players.iter_mut() {
+            p.health = p.health.max(1);
+        }
+        w.advance(idle());
+        if let Some(m) = w.monster() {
+            let at = m.pos.add(w.map_origin());
+            came_out |= !room.holds(at.x, at.z);
+        }
     }
     let feet = on_map(&w, 0);
     assert!(
         !room.holds_within(feet.x, feet.z, sim::tuning::hunt_held_past()),
         "the road is within the hunt's margin: a hunt would hold a body back on the road"
     );
-    assert_eq!(w.arena, ArenaId::PINEWOOD);
-    assert!(!w.hunting() && w.peaceful());
+    assert!(w.hunting(), "walking away ended the hunt of a creature that hunts");
+    assert!(came_out, "the creature never came out of its room after them");
     assert!(!w.valley.has_beaten(SpeciesId::RIDGEBACK));
 }
 
