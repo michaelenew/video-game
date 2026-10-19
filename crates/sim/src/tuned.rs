@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 694] = [
+pub const SCALARS: [i32; 708] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -702,6 +702,20 @@ pub const SCALARS: [i32; 694] = [
               30, // keep.eats_again_after = 30
          1572864, // keep.the_morph,_left_further_than_this,_catches_up_(m) = 24
           131072, // keep.the_morph_hurries_at_most_(x_its_walk) = 2
+         1966080, // roam.far_from_home_past_its_edge_(m) = 30
+              20, // roam.gives_up_after_this_long_far_from_home_(s) = 20
+        10485760, // roam.gives_up_at_once_this_far_past_its_edge_(m) = 160
+              60, // roam.a_territorial_one_keeps_at_it_(%) = 60
+              35, // roam.a_peaceful_one_keeps_at_it_(%) = 35
+           65536, // roam.travelling,_at_(x_its_gallop) = 1
+           32768, // roam.walking_home,_at_(x_its_gallop)_--_the_pull_of_home = 0.5
+         1179648, // roam.fights_as_at_home_within_(m) = 18
+         5898240, // roam.walking_home,_gone_once_nobody_is_within_(m) = 90
+          327680, // roam.looks_ahead_for_a_way_this_far_(m) = 5
+           39322, // roam.steps_up_at_most_(m) = 0.6
+          196608, // roam.steps_down_at_most_(m) = 3
+          131072, // roam.through_a_doorway_once_within_(m) = 2
+         1966080, // roam.out,_the_world_moves_to_a_nearer_place_by_(m) = 30
 ];
 
 #[rustfmt::skip]

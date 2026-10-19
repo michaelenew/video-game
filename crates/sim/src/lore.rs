@@ -301,3 +301,32 @@ pub fn point_cm(p: crate::math::V3) -> [i16; 3] {
 pub const fn cm_point(p: [i16; 3]) -> crate::math::V3 {
     crate::math::V3::new(from_cm(p[0]), from_cm(p[1]), from_cm(p[2]))
 }
+
+/// **A length as whole centimetres, for moving a point kept in them**:
+/// rounded to the nearest, halves away from zero, so a shift by `-d` undoes
+/// a shift by `d` exactly (`World::shift`).
+pub fn cm_of(v: crate::fixed::Fx) -> i32 {
+    let n = v.raw() as i64 * 100;
+    let r = (n.abs() + (1 << 15)) >> 16;
+    (if n < 0 { -r } else { r }) as i32
+}
+
+/// A centimetre coordinate moved by `by` centimetres, held to what it fits in.
+pub fn moved_cm(c: i16, by: i32) -> i16 {
+    (c as i32 + by).clamp(i16::MIN as i32, i16::MAX as i32) as i16
+}
+
+/// A point kept in centimetres, moved by `d`.
+pub fn moved_point(p: [i16; 3], d: crate::math::V3) -> [i16; 3] {
+    [
+        moved_cm(p[0], cm_of(d.x)),
+        moved_cm(p[1], cm_of(d.y)),
+        moved_cm(p[2], cm_of(d.z)),
+    ]
+}
+
+/// A word holding a floor point as two halves, x low and z high
+/// ([`halves`]), moved by `d`.
+pub fn moved_halves(w: u32, d: crate::math::V3) -> u32 {
+    halves(moved_cm(lo(w), cm_of(d.x)), moved_cm(hi(w), cm_of(d.z)))
+}

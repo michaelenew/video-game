@@ -4753,3 +4753,88 @@ pub fn morph_catch_up() -> Fx {
 pub fn morph_hurry() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::KeepHurry))
 }
+
+// ---------------------------------------------------------------------------
+// Roaming (exploration 0023, `valley::roam`)
+// ---------------------------------------------------------------------------
+
+/// **How far past its own edge a creature is far from home**: what giving up
+/// counts the time spent beyond.
+pub fn roam_far() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamFar)).max(Fx::ZERO)
+}
+
+/// **How long a creature after somebody, with no egg to get back, keeps at it
+/// far from home** before it gives up and walks home, in frames -- for one
+/// that hunts; [`roam_keeps_at_it`] scales it by temperament.
+pub fn roam_give_up_frames() -> u32 {
+    (oven::scalar(Scalar::RoamGiveUpTime).max(1) as u32).saturating_mul(crate::TICK_HZ)
+}
+
+/// **How far past its edge it gives up at once**, however long it has been.
+pub fn roam_give_up_distance() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamGiveUpDistance)).max(Fx::ONE)
+}
+
+/// **How much of a hunting creature's persistence one of this temperament
+/// has**, in percent: territorial and peaceful ones give up sooner.
+pub fn roam_keeps_at_it(t: crate::valley::ranges::Temperament) -> i32 {
+    use crate::valley::ranges::Temperament as T;
+    match t {
+        T::Hunting => 100,
+        T::Territorial { .. } => oven::scalar(Scalar::RoamTerritorial).max(0),
+        T::Peaceful => oven::scalar(Scalar::RoamPeaceful).max(0),
+        T::Skittish => 0,
+    }
+}
+
+/// **Its pace travelling after somebody**, times its gallop.
+pub fn roam_pace() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamPace)).max(Fx::ratio(1, 10))
+}
+
+/// **The pull of home**: its pace walking back, times its gallop.
+pub fn roam_home_pace() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamHomePace)).max(Fx::ratio(1, 20))
+}
+
+/// **Within this of whoever it is after, it fights as it does at home**:
+/// its own brain picks where to stand. Further, it travels.
+pub fn roam_engage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamEngage)).max(Fx::ONE)
+}
+
+/// **Walking home, it is gone once nobody is within this**: its hunt calms.
+pub fn roam_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamReach)).max(Fx::ONE)
+}
+
+/// **How far ahead it looks for a way through**: the probe its steering
+/// tries each heading with.
+pub fn roam_probe() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamProbe)).max(Fx::ONE)
+}
+
+/// **The highest step it walks up**, out of its bounds, between two points
+/// its probe tries.
+pub fn roam_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamStep)).max(Fx::ZERO)
+}
+
+/// **The deepest drop it walks down.**
+pub fn roam_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamDrop)).max(Fx::ZERO)
+}
+
+/// **Within this of a doorway it is going through, it is through**: it
+/// heads for the far side.
+pub fn roam_door() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamDoor)).max(Fx::ratio(1, 4))
+}
+
+/// **Out of its home, the world moves into a place nearer the fighters only
+/// once it is this much nearer** than the one it is in: so it does not move
+/// back and forth on a line between two.
+pub fn roam_reframe() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoamReframe)).max(Fx::ONE)
+}

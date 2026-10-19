@@ -926,6 +926,92 @@ impl Bounds {
     }
 }
 
+impl Bounds {
+    /// The same bounds, moved by `d` (its x and z).
+    pub fn moved(&self, d: V3) -> Bounds {
+        Bounds {
+            lo_x: self.lo_x.add(d.x),
+            hi_x: self.hi_x.add(d.x),
+            lo_z: self.lo_z.add(d.z),
+            hi_z: self.hi_z.add(d.z),
+        }
+    }
+
+    /// Is (x, z) inside, edges counting?
+    pub fn holds(&self, x: Fx, z: Fx) -> bool {
+        x.raw() >= self.lo_x.raw()
+            && x.raw() <= self.hi_x.raw()
+            && z.raw() >= self.lo_z.raw()
+            && z.raw() <= self.hi_z.raw()
+    }
+
+    /// Its middle, on the floor plane.
+    pub fn middle(&self) -> V3 {
+        V3::new(
+            Fx::from_raw(self.lo_x.raw() / 2 + self.hi_x.raw() / 2),
+            Fx::ZERO,
+            Fx::from_raw(self.lo_z.raw() / 2 + self.hi_z.raw() / 2),
+        )
+    }
+}
+
+/// **A hunt's home, seen from wherever the world is** (exploration 0023).
+///
+/// A creature's fight is written in its own arena's coordinates: its bounds,
+/// its sites (a perch, a wall, braziers), its marks. In the valley the world
+/// may move into another place's coordinates while its hunt goes on -- a
+/// creature after its egg follows the carrier across the map -- so everything
+/// a creature reads of its arena it reads through this: its own arena, and
+/// how far its origin is from the world's. At home, and in every fight that
+/// is not the valley, the offset is zero and `kept` is its own bounds, which
+/// is every fight exactly as it was.
+#[derive(Clone, Copy, Debug)]
+pub struct Den {
+    /// The hunt's own arena.
+    pub arena: &'static Arena,
+    /// Where its origin is in the world's coordinates: a point of the den is
+    /// that point plus this.
+    pub off: V3,
+    /// Its own bounds, in the world's coordinates.
+    pub home: Bounds,
+    /// **Where its creatures are kept this frame**: its own bounds, or --
+    /// while one is out of them or after somebody who is -- the whole map.
+    pub kept: Bounds,
+    /// It may leave its bounds: it is after somebody (`valley::roam`).
+    pub roam: bool,
+    /// It has given up and is walking home: it starts nothing.
+    pub homing: bool,
+}
+
+impl Den {
+    /// An arena's own: no offset, kept in its bounds.
+    pub const fn of(arena: &'static Arena) -> Den {
+        Den {
+            arena,
+            off: V3::ZERO,
+            home: arena.bounds,
+            kept: arena.bounds,
+            roam: false,
+            homing: false,
+        }
+    }
+
+    /// A point written in the den's coordinates, in the world's.
+    pub fn at(&self, p: V3) -> V3 {
+        p.add(self.off)
+    }
+
+    /// Its middle on the floor plane, in the world's coordinates.
+    pub fn middle(&self) -> V3 {
+        self.home.middle()
+    }
+
+    /// Is the creature out -- free of its bounds, on the map?
+    pub fn out(&self) -> bool {
+        self.kept != self.home
+    }
+}
+
 /// One arena.
 #[derive(Debug)]
 pub struct Arena {
@@ -1576,6 +1662,10 @@ pub struct Terrain {
     raised_len: u8,
     /// The floor hazards, placed: `crate::hazard`.
     pub floor: crate::hazard::Floor,
+    /// **The hunt's home**, as seen from here: what a creature reads of its
+    /// own arena -- its bounds, its sites -- through. [`Den::of`] the arena
+    /// itself everywhere but a valley hunt that has left home.
+    pub den: Den,
 }
 
 impl std::ops::Deref for Terrain {
@@ -1650,6 +1740,7 @@ impl Terrain {
             raised: [Solid::new(V3::ZERO, V3::ZERO); MAX_RAISED],
             raised_len: 0,
             floor: crate::hazard::Floor::NONE,
+            den: Den::of(arena),
         }
     }
 

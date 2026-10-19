@@ -43,6 +43,7 @@ pub mod land;
 pub mod layout;
 pub mod open;
 pub mod ranges;
+pub mod roam;
 pub mod trees;
 
 /// A box of the world a body's feet can be in.
@@ -420,6 +421,18 @@ pub struct Journey {
     pub stock: i32,
     /// What every seat carries, and its morph (`crate::keep`).
     pub keep: crate::keep::Keep,
+    /// **The live hunt's home** (`valley::roam`): the room or range it began
+    /// in, which the world may have left since -- a creature after its egg
+    /// follows the carrier across the map. `None` with no hunt.
+    pub den: Option<ArenaId>,
+    /// Frames its creature has been far from home with nobody carrying its
+    /// egg: what giving up counts.
+    pub away: u16,
+    /// It has given up and is walking home.
+    pub homing: bool,
+    /// A hunt ended away from home, in somebody else's room or range: that
+    /// one wakes on the next frame, as if it had just been walked into.
+    pub wake: bool,
 }
 
 impl Journey {

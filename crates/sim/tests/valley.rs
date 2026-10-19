@@ -550,6 +550,138 @@ fn a_change_of_frame_changes_nothing() {
     }
 }
 
+/// **A change of frame changes nothing, in a hunt** (exploration 0023): a
+/// hunt goes on when the world moves into another place's coordinates, so
+/// every creature's every point -- its bodies, its critters, its pack, its
+/// lore, and whatever its species keeps of its own -- moves with it, and
+/// everything it reads of its own arena it reads through its den. Every
+/// creature in the valley, at home, fought for a while; then over and over
+/// moved into the coordinates of the nearest other place and played on (the
+/// world comes back home on the frame, as it does when somebody walks back
+/// in), and checked against the same fight never moved.
+#[test]
+fn a_change_of_frame_changes_nothing_in_a_hunt() {
+    let atlas = sim::atlas::valley();
+    let mut dens: Vec<ArenaId> = valley::all()
+        .filter(|p| matches!(p.kind, Kind::Room(_)))
+        .map(|p| p.arena)
+        .collect();
+    dens.sort_by_key(|a| a.0);
+    dens.dedup();
+    let mut failed = Vec::new();
+    for den in dens {
+        let Some(home) = atlas.placed(den).copied() else {
+            continue;
+        };
+        // The nearest other place with its own origin: points stay in reach
+        // of a centimetre's sixteen bits.
+        let other = atlas
+            .places
+            .iter()
+            .filter(|p| p.arena != den && p.at != V3::ZERO)
+            .min_by_key(|p| sim::math::wide_len(p.at.sub(home.at)).raw())
+            .copied()
+            .unwrap();
+        let mut w = World::arrive(
+            [Class::Champion, Class::DualMage],
+            open_journey(),
+            den,
+            Some(0),
+            2,
+        );
+        if !w.hunting() {
+            continue;
+        }
+        let script = |f: u32| {
+            let bits = match f % 80 {
+                0..=9 => Input::LEFT,
+                10..=29 => Input::W | Input::LEFT,
+                30..=34 => Input::SPECIAL,
+                35..=49 => Input::W | Input::RIGHT,
+                _ => Input::A | Input::LEFT,
+            };
+            Input::looking_at(bits, (f * 131) as u16, -1500)
+        };
+        for f in 0..240 {
+            w.advance([script(f), script(f + 40)]);
+        }
+        let mut moved = w.clone();
+        let mut ok = true;
+        for round in 0..24u32 {
+            if moved.hunting() {
+                moved.shift(home.at.sub(other.at));
+                moved.arena = other.arena;
+            }
+            for f in 0..10 {
+                let f = 240 + round * 10 + f;
+                w.advance([script(f), script(f + 40)]);
+                moved.advance([script(f), script(f + 40)]);
+            }
+            moved.valley.came = w.valley.came;
+            if moved != w {
+                failed.push(format!(
+                    "{} (round {round}, framed in {}): {}",
+                    den.get().name,
+                    other.get().name,
+                    differs(&w, &moved)
+                ));
+                ok = false;
+                break;
+            }
+        }
+        let _ = ok;
+    }
+    assert!(failed.is_empty(), "a hunt moved and back came out different:\n{}", failed.join("\n"));
+}
+
+/// What of two worlds differs, roughly.
+fn differs(a: &World, b: &World) -> String {
+    let mut out = Vec::new();
+    if a.arena != b.arena {
+        out.push(format!("arena {:?} / {:?}", a.arena, b.arena));
+    }
+    let fields = |x: String, y: String| -> String {
+        let (x, y): (Vec<&str>, Vec<&str>) = (x.split(", ").collect(), y.split(", ").collect());
+        x.iter()
+            .zip(y.iter())
+            .filter(|(p, q)| p != q)
+            .take(6)
+            .map(|(p, q)| format!("[{p} | {q}]"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    if a.monsters != b.monsters {
+        out.push(format!("monsters {}", fields(format!("{:?}", a.monsters), format!("{:?}", b.monsters))));
+    }
+    if a.critters != b.critters {
+        out.push(format!("critters {}", fields(format!("{:?}", a.critters), format!("{:?}", b.critters))));
+    }
+    if a.pack != b.pack {
+        out.push(format!("pack {}", fields(format!("{:?}", a.pack), format!("{:?}", b.pack))));
+    }
+    if a.players != b.players {
+        out.push(format!("players {}", fields(format!("{:?}", a.players), format!("{:?}", b.players))));
+    }
+    if a.lore != b.lore {
+        let (x, y) = (a.lore.cells(), b.lore.cells());
+        for k in 0..x.len() {
+            if x[k] != y[k] {
+                out.push(format!("lore cell {k}: {:?} / {:?}", x[k], y[k]));
+            }
+        }
+    }
+    if a.valley != b.valley {
+        out.push(format!("journey {:?} / {:?}", (a.valley.den, a.valley.away, a.valley.homing, a.valley.roused, a.valley.stock), (b.valley.den, b.valley.away, b.valley.homing, b.valley.roused, b.valley.stock)));
+    }
+    if a.effects != b.effects || a.bolts != b.bolts || a.debris != b.debris {
+        out.push("effects/bolts/debris".into());
+    }
+    if out.is_empty() {
+        out.push("something else".into());
+    }
+    out.join("; ")
+}
+
 #[test]
 fn the_valley_is_deterministic_across_a_crossing() {
     let run = || {

@@ -1900,6 +1900,10 @@ impl World {
             }
         }
         let mut w = w.seated(seats);
+        // A room arrived in is its hunt's home (exploration 0023).
+        if w.hunting() {
+            w.valley.den = Some(to);
+        }
         // **Arriving on a range** wakes it as walking into it does, unless
         // it is resting: its herd, its temper, its temperament.
         w.valley.rested = journey.rested;
@@ -1996,10 +2000,13 @@ impl World {
         if present >= MAX_PLAYERS && !self.away.any() {
             return;
         }
-        let b = self.arena().bounds;
+        // Under the hunt's home, wherever the world's frame is: the same
+        // place whichever coordinates it is written in (exploration 0023).
+        let den = self.den();
+        let b = den.home;
         let under = V3::new(
             Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
-            Fx::from_int(-1000),
+            den.off.y.add(Fx::from_int(-1000)),
             Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
         );
         let away = self.away;
@@ -2064,7 +2071,9 @@ impl World {
     pub fn terrain(&self) -> Terrain {
         // In the valley the place is on a map, and the map is around it.
         let mut ground = if self.valley.on {
-            self.valley_ground()
+            let mut g = self.valley_ground();
+            g.den = self.den();
+            g
         } else {
             Terrain::bare(self.arena.get())
         };
@@ -2212,6 +2221,7 @@ impl World {
         self.reframe();
         self.tend_range();
         self.step_keep();
+        self.step_roam();
         None
     }
 
@@ -2261,6 +2271,7 @@ impl World {
     /// no pack, nothing on the floor -- and the hunters are rested where they
     /// stand, to walk out the way they came.
     fn quiet(&mut self) {
+        self.home_gone();
         self.monsters = [None; MAX_MONSTERS];
         self.pack = None;
         self.critters = Critters::NONE;
@@ -2646,7 +2657,9 @@ impl World {
             // goes quiet and you walk out the way you came; lost, you wake
             // outside, at the seam you went in by.
             if self.valley.on && self.hunting() {
-                let range = crate::valley::ranges::index(self.arena);
+                // Its home's, wherever the hunt has got to (exploration 0023).
+                let den = self.den_id();
+                let range = crate::valley::ranges::index(den);
                 if self.hunt_won().is_some() {
                     self.quiet();
                     self.phase = Phase::Fighting;
@@ -2654,10 +2667,16 @@ impl World {
                     if let Some(k) = range {
                         self.valley.rested[k] = self.frame.max(1);
                     }
-                } else if range.is_some() {
-                    // **Lost on a range**: nothing to wake outside of. The
-                    // creature goes back to its grazing and everybody stands
+                } else if range.is_some() || den != self.arena {
+                    // **Lost on a range**, or far from the room it began in:
+                    // nothing to wake outside of. The creature goes back to
+                    // its grazing, it took its egg back, and everybody stands
                     // up on their last cairn, as a death in a reach does.
+                    for s in self.hunted().into_iter().flatten() {
+                        for i in 0..MAX_PLAYERS {
+                            self.valley.keep.lose_eggs(i, s);
+                        }
+                    }
                     self.calm();
                     self.valley.roused = false;
                     self.valley.stock = 0;

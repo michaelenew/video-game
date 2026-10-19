@@ -531,6 +531,16 @@ pub struct FightDecl {
     /// every frame; `None` from the hook keeps the old sample, and `None`
     /// here is the glance, as every other creature has.
     pub sight: Option<fn(&crate::monster::Monster, &crate::lore::Lore) -> Option<Sight>>,
+
+    // ---- a hunt that leaves home (exploration 0023) ----
+    /// **Move every position it keeps of its own by `d`**: its lore's own
+    /// cells, its bodies' `own` words, its pack's memo -- whatever of it is
+    /// a point in the world's coordinates. Called by `World::shift` after the
+    /// shared state (bodies, critters, the pack's home and sight, hazards,
+    /// noises) has moved, so a hunt goes on unchanged when the world moves
+    /// into another place's coordinates. `None` is a species that keeps no
+    /// point of its own.
+    pub shift: Option<fn(&mut crate::state::World, V3)>,
 }
 
 /// [`FightDecl::guard`]: the creature, the part the blow reaches, the blow.
@@ -681,6 +691,7 @@ impl FightDecl {
         guard: None,
         covers: None,
         sight: None,
+        shift: None,
     };
 }
 
