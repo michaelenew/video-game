@@ -198,11 +198,11 @@ pub struct Melt {
 #[derive(Resource, Default)]
 pub struct Bag {
     pub open: bool,
-    chosen: Option<usize>,
+    chosen: Option<Item>,
     /// The `--dev` item panel's search.
     search: String,
     /// A feeding chosen while another trip was on the wire, sent next.
-    pending: Option<u8>,
+    pending: Option<Item>,
 }
 
 /// The lines about what you carry.
@@ -445,9 +445,11 @@ fn role(name: &str) -> usize {
 
 /// Each seat's morph posed: a body built once per frame per seat, grown
 /// in as its blob melts away.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 pub fn place_morphs(
     sim: Res<crate::Sim>,
+    keeping: Res<crate::bag::Keeping>,
+    heels: Res<crate::heel::Heels>,
     kit: Res<Kit>,
     time: Res<Time>,
     mut melt: ResMut<Melt>,
@@ -464,7 +466,7 @@ pub fn place_morphs(
     let mut bodies: [Option<Body>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     let clock = time.elapsed_secs();
     for seat in 0..MAX_PLAYERS {
-        let of = w.valley.keep.morphs[seat].of;
+        let of = keeping.held().morphs[seat].of;
         // A change of what it is of -- an egg eaten -- melts it again; the
         // first sight of a morph does not.
         match melt.of[seat] {
@@ -483,8 +485,8 @@ pub fn place_morphs(
     }
     if w.valley.on {
         for seat in 0..seats {
-            let m: &Morph = &w.valley.keep.morphs[seat];
-            let heel = w.heel[seat];
+            let m: &Morph = &keeping.held().morphs[seat];
+            let heel = heels.seat[seat];
             if !heel.placed || melt.blob[seat] >= 1.0 {
                 continue;
             }
@@ -500,7 +502,7 @@ pub fn place_morphs(
             };
             let d = if heel.going {
                 let gait = locomotion::at(&g, &q, sim::Fx::ratio(1, 2));
-                locomotion::drive(&g, &q, &gait, heel.phase, sim::Fx::ZERO)
+                locomotion::drive(&g, &q, &gait, crate::heel::phase(&heel), sim::Fx::ZERO)
             } else {
                 locomotion::rest(&g)
             };
@@ -517,8 +519,8 @@ pub fn place_morphs(
             *visible = Visibility::Hidden;
             continue;
         }
-        let heel = w.heel[seat];
-        let yaw = heel.facing.to_f32_for_render() * std::f32::consts::TAU;
+        let heel = heels.seat[seat];
+        let yaw = heel.facing * std::f32::consts::TAU;
         // The builder's frame turned toward `+z` by the facing; Bevy's turn
         // about `y` goes the other way.
         let turn = Quat::from_rotation_y(-yaw);
@@ -527,15 +529,15 @@ pub fn place_morphs(
         let (v, _) = build::frame(u);
         // Grown in from where the blob hung as it melts.
         let grown = 1.0 - melt.blob[seat];
-        let hung = fx3(heel.at) + Vec3::Y * BLOB_FLOAT;
-        let at = fx3(heel.at) + turn * fx3(body.centre(i));
+        let hung = heel.at + Vec3::Y * BLOB_FLOAT;
+        let at = heel.at + turn * fx3(body.centre(i));
         *transform = Transform {
             translation: hung.lerp(at, grown),
             rotation: turn * orient(fx3(u), fx3(v)),
             scale: fx3(shape.max.sub(shape.min)).max(Vec3::splat(0.02)) * grown,
         };
         *visible = Visibility::Inherited;
-        let m = &w.valley.keep.morphs[seat];
+        let m = &keeping.held().morphs[seat];
         let r = role(body.parts[i].name);
         let wanted = if m.of == Morph::UNFORMED {
             &kit.plain[r]
@@ -559,6 +561,7 @@ pub fn place_morphs(
 #[allow(clippy::type_complexity)]
 pub fn place_blobs(
     sim: Res<crate::Sim>,
+    heels: Res<crate::heel::Heels>,
     time: Res<Time>,
     melt: Res<Melt>,
     mut puffs: ResMut<Puffs>,
@@ -585,7 +588,7 @@ pub fn place_blobs(
     // Where each blob is this frame, worked out once a seat.
     let mut frames: [Option<(Vec3, Quat, Vec3, f32)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     for (seat, frame) in frames.iter_mut().enumerate().take(seats) {
-        let heel = w.heel[seat];
+        let heel = heels.seat[seat];
         let left = melt.blob[seat];
         if !w.valley.on || !heel.placed || left <= 0.0 {
             continue;
@@ -599,10 +602,10 @@ pub fn place_blobs(
         let sway = (phase * 2.3).cos() * 0.04;
         let size = BLOB_SIZE * left;
         let body = Vec3::new(1.0 + squash, 1.0 - squash, 1.0 + squash * 0.5) * size;
-        let yaw = heel.facing.to_f32_for_render() * std::f32::consts::TAU;
+        let yaw = heel.facing * std::f32::consts::TAU;
         let tilt = if heel.going { -0.12 } else { 0.0 };
         let turn = Quat::from_rotation_y(-yaw) * Quat::from_rotation_x(tilt + sway);
-        let centre = fx3(heel.at) + Vec3::Y * (BLOB_FLOAT + bob);
+        let centre = heel.at + Vec3::Y * (BLOB_FLOAT + bob);
         *frame = Some((centre, turn, body, size));
     }
     for (piece, mut transform, mut visible) in pieces.iter_mut() {
@@ -833,6 +836,7 @@ pub struct Told {
 pub fn update_text(
     sim: Res<crate::Sim>,
     time: Res<Time>,
+    keeping: Res<crate::bag::Keeping>,
     mut text: Query<&mut Text, With<KeepText>>,
     mut told: Local<Told>,
     mut prev: Local<Option<Morph>>,
@@ -849,7 +853,8 @@ pub fn update_text(
         return;
     }
     let me = sim.local_player().min(MAX_PLAYERS - 1);
-    let m = w.valley.keep.morphs[me];
+    let m = keeping.held().morphs[me];
+    let carried = carried(w, &keeping, me);
     let now_key = (m.genome.fingerprint(), m.generation, m.of);
     let clock = time.elapsed_secs();
     if told.last != Some(now_key) {
@@ -878,11 +883,10 @@ pub fn update_text(
     // morph, the chase, and whether the news is still up.
     let carrier = w.egg_carrier();
     let mut key = now_key.0 ^ (now_key.1 as u64) << 48 ^ (now_key.2 as u64) << 40;
-    for (k, it) in w.valley.keep.satchel[me].iter().enumerate() {
+    for (k, it) in carried.iter().enumerate() {
         let code = match it {
-            None => 0u64,
-            Some(Item::Egg(s)) => 1 + s.0 as u64,
-            Some(Item::Trophy(t, s)) => 0x100 + (*t as u64) * 0x40 + s.0 as u64,
+            Item::Egg(s) => 1 + s.0 as u64,
+            Item::Trophy(t, s) => 0x100 + (*t as u64) * 0x40 + s.0 as u64,
         };
         key = key.rotate_left(7) ^ code ^ (k as u64) << 20;
     }
@@ -901,11 +905,7 @@ pub fn update_text(
             ));
         }
     }
-    let bag: Vec<String> = w.valley.keep.satchel[me]
-        .iter()
-        .flatten()
-        .map(item_name)
-        .collect();
+    let bag: Vec<String> = carried.iter().map(item_name).collect();
     if !bag.is_empty() {
         lines.push(format!("Carrying: {}", bag.join(", ")));
     }
@@ -954,21 +954,60 @@ pub fn toggle_bag(
 /// Why an item cannot be fed now, in words.
 fn refusal(r: Refusal) -> String {
     match r {
-        Refusal::Empty => "Nothing there.".into(),
+        Refusal::Empty => "You do not have it.".into(),
         Refusal::Down => "You are down.".into(),
         Refusal::Eating => "It is still eating.".into(),
         Refusal::Chased(s) => format!("The {} wants it back -- beat it first.", species_name(s)),
     }
 }
 
+/// What seat `me` carries: the eggs the world says it has, then the
+/// trophies in its own bag.
+fn carried(w: &sim::World, keeping: &crate::bag::Keeping, me: usize) -> Vec<Item> {
+    w.valley
+        .keep
+        .eggs_of(me)
+        .map(Item::Egg)
+        .chain(keeping.held().bag.iter().copied())
+        .collect()
+}
+
+/// Why seat `me` cannot feed its morph `item` now: what the world says
+/// (down, an egg not carried or still hunted for), then what only this
+/// game knows (a trophy not in the bag, a morph still eating).
+fn why_not(
+    w: &sim::World,
+    keeping: &crate::bag::Keeping,
+    me: usize,
+    item: Item,
+) -> Option<Refusal> {
+    if let Some(r) = w.refusal(me, item) {
+        return Some(r);
+    }
+    let held = keeping.held();
+    if matches!(item, Item::Trophy(..)) && !held.bag.contains(&item) {
+        return Some(Refusal::Empty);
+    }
+    let cool = sim::tuning::feed_cool().max(0) as u32;
+    if held.fed_at[me].is_some_and(|f| w.frame >= f && w.frame - f < cool) {
+        return Some(Refusal::Eating);
+    }
+    None
+}
+
 /// The bag's window: what the local seat carries, one button an item;
 /// click one, then feed it to the morph.
-pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMut<crate::Sim>) {
+pub fn draw_bag(
+    mut contexts: EguiContexts,
+    mut bag: ResMut<Bag>,
+    mut sim: ResMut<crate::Sim>,
+    keeping: Res<crate::bag::Keeping>,
+) {
     // A feeding waiting on another trip goes as soon as the wire is free.
-    if let Some(k) = bag.pending
+    if let Some(item) = bag.pending
         && sim.travel == sim::input::Travel::NONE
     {
-        sim.travel = sim::input::Travel::feed(k);
+        sim.travel = sim::input::Travel::feed(item);
         bag.pending = None;
     }
     if !bag.open {
@@ -979,8 +1018,8 @@ pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMu
     };
     let me = sim.local_player().min(MAX_PLAYERS - 1);
     let w = &sim.cur;
-    let m = w.valley.keep.morphs[me];
-    let satchel = w.valley.keep.satchel[me];
+    let m = keeping.held().morphs[me];
+    let items = carried(w, &keeping, me);
     let mut open = true;
     let mut feed = None;
     egui::Window::new("Bag")
@@ -1001,16 +1040,15 @@ pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMu
             };
             ui.label(what);
             ui.separator();
-            if satchel.iter().all(|s| s.is_none()) {
+            if items.is_empty() {
                 ui.label("Empty. Eggs lie by their creatures; trophies drop when you beat one.");
             }
-            for (k, it) in satchel.iter().enumerate() {
-                let Some(it) = it else {
-                    continue;
-                };
-                let picked = bag.chosen == Some(k);
+            for (k, it) in items.iter().enumerate() {
+                // Two of the same are one choice: either feeds the same.
+                let picked =
+                    bag.chosen == Some(*it) && items.iter().position(|x| x == it) == Some(k);
                 if ui.selectable_label(picked, item_name(it)).clicked() {
-                    bag.chosen = if picked { None } else { Some(k) };
+                    bag.chosen = if picked { None } else { Some(*it) };
                 }
                 if picked {
                     ui.indent(k, |ui| {
@@ -1021,18 +1059,18 @@ pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMu
                             Item::Trophy(..) => "A trophy grows your morph a generation.",
                         };
                         ui.label(why);
-                        match w.can_feed(me, k) {
-                            Ok(_) => {
+                        match why_not(w, &keeping, me, *it) {
+                            None => {
                                 ui.horizontal(|ui| {
                                     if ui.button("Feed to morph").clicked() {
-                                        feed = Some(k);
+                                        feed = Some(*it);
                                     }
                                     if ui.button("Cancel").clicked() {
                                         bag.chosen = None;
                                     }
                                 });
                             }
-                            Err(r) => {
+                            Some(r) => {
                                 ui.add_enabled(false, egui::Button::new("Feed to morph"));
                                 ui.label(refusal(r));
                             }
@@ -1044,17 +1082,17 @@ pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMu
             ui.weak("B or Esc to close.");
         });
     if crate::dev_mode()
-        && let Some(item) = draw_items(ctx, &mut bag.search, satchel.iter().all(|s| s.is_some()))
+        && let Some(item) = draw_items(ctx, &mut bag.search)
         && sim.travel == sim::input::Travel::NONE
     {
         sim.travel = sim::input::Travel::grant(item);
     }
-    if let Some(k) = feed {
+    if let Some(item) = feed {
         bag.chosen = None;
         if sim.travel == sim::input::Travel::NONE {
-            sim.travel = sim::input::Travel::feed(k as u8);
+            sim.travel = sim::input::Travel::feed(item);
         } else {
-            bag.pending = Some(k as u8);
+            bag.pending = Some(item);
         }
     }
     if !open {
@@ -1076,7 +1114,7 @@ fn every_item() -> impl Iterator<Item = Item> {
 
 /// `--dev`: beside the bag, every item in the game under a search box;
 /// "Add" puts one in the bag. Which one was asked for, if any.
-fn draw_items(ctx: &egui::Context, search: &mut String, full: bool) -> Option<Item> {
+fn draw_items(ctx: &egui::Context, search: &mut String) -> Option<Item> {
     let mut asked = None;
     egui::Window::new("Items (dev)")
         .anchor(egui::Align2::RIGHT_CENTER, egui::vec2(-18.0, 0.0))
@@ -1085,9 +1123,6 @@ fn draw_items(ctx: &egui::Context, search: &mut String, full: bool) -> Option<It
         .show(ctx, |ui| {
             ui.set_min_width(260.0);
             ui.add(egui::TextEdit::singleline(search).hint_text("Search items"));
-            if full {
-                ui.weak("The bag is full: feed or drop something first.");
-            }
             let wanted = search.to_lowercase();
             egui::ScrollArea::vertical()
                 .max_height(420.0)
@@ -1098,7 +1133,7 @@ fn draw_items(ctx: &egui::Context, search: &mut String, full: bool) -> Option<It
                             continue;
                         }
                         ui.horizontal(|ui| {
-                            if ui.add_enabled(!full, egui::Button::new("Add")).clicked() {
+                            if ui.button("Add").clicked() {
                                 asked = Some(item);
                             }
                             ui.label(name);

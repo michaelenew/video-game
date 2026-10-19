@@ -838,16 +838,14 @@ trophy makes a clear difference."*
   it was "annoyingly right in the way").
 - **Feed it from the bag** (B, 2026-10-19; it was a crouch beside it,
   which fed whatever came first). The bag is a window of what you carry:
-  click an item, then "Feed to morph". Choosing is a trip on the wire
-  (`Travel::feed(slot)`, `Destination::Feed`), so it lands on the same
-  frame on both machines. An egg starts it over as that creature's young
-  -- not while the egg's creature still hunts you for it, and the bag says
-  so (`World::can_feed`, `Refusal`). A trophy is a generation.
+  click an item, then "Feed to morph". An egg starts it over as that
+  creature's young -- not while the egg's creature still hunts you for it,
+  and the bag says so (`World::refusal`, `Refusal`). A trophy is a
+  generation. The bag holds as much as you pick up.
 - **With `--dev`, any item** (2026-10-19): a second window beside the bag
   lists every egg and every trophy a creature drops, under a search box;
-  "Add" puts one in your bag, if it has room. It is on the wire too
-  (`Travel::grant`, `Destination::Grant`: a credit's byte with the item in
-  the high byte), so a dev's bag agrees on both machines.
+  "Add" puts one in your bag (`Travel::grant`: an egg carried, a trophy
+  handed over through `World::picked` like one picked up).
 
 **One step at a time, in an order you can learn** (`cross::feed`,
 `tests/morph.rs`; rewritten 2026-10-19). The first version was a graft at
@@ -885,13 +883,40 @@ definition, `morph::changes`, which writes the line the game shows. The
 morph grows as it eats: hatched at two fifths of its size, more each
 trophy. (The three chance knobs the dice used are gone.)
 
-**Where it lives.** What you carry and your morph are the journey's
-(`Journey::keep`): they go with you through seams and survive a won hunt,
-which rebuilds the fighters. What lies on the floor and where the morphs
-stand are the place's (`World::loose`, `World::heel`), shifted with it.
-The whole thing is about 640 bytes of snapshot, inside the 20 KiB cap with
-room to spare, and hashed only once anything has been picked up, fed or
-dropped, so every checksum pinned before it still holds.
+**Where it lives: as little as possible in the world** (2026-10-19). The
+owner: *"inventory doesn't need to be shared game state ... using an item
+is something we can treat like a move / input. It just happens when the
+user clicks the key, and then both players agree that the item was used
+rather than needing to agree that the item was always there ... I want to
+avoid bloat in the state the players need to agree on."* So the world
+keeps only what the fight reads:
+- **What lies on the floor** (`World::loose`), in the place's coordinates.
+- **Which eggs each player carries** (`Keep::eggs`, a bit a creature, the
+  journey's): a creature hunts whoever carries its egg, so both machines
+  have to agree who.
+- **What each player picked up this frame** (`World::picked`), emptied
+  every frame: how a game hears of a trophy for its bag.
+
+Everything else is each game's own. **The bag and every seat's morph**
+(`game::bag`) are kept from what the world says happened: a trophy in
+`picked` goes in this player's bag, and a feeding -- an input naming the
+item, `Travel::feed(item)`, not a slot, since the other machine does not
+know your bag -- is eaten by that seat's morph on every machine, so every
+game draws every morph the same. **A rollback is a correction**: the game
+sees every frame it advances, predicted or not, so what happened is kept by
+frame number, the last word on a frame standing (as the replay's tape keeps
+inputs), and settled only once it is older than a rollback can reach
+(`game/src/bag.rs` tests a pickup undone by a rollback). **Where each morph
+stands** (`game::heel`) is worked out every frame from where the fighters
+are, by the same rules and the same Oven knobs; nothing in a fight reads it.
+
+That took the keep from about 640 bytes of the snapshot to 16 for the eggs
+and 8 for `picked` (the world: 20,876 bytes to 20,340). What it gives up,
+for now: a machine cannot check a trophy fed was ever carried -- a feeding
+is taken at its word, as the owner chose; one day verifying offline play
+would sign the bag, outside the world's checksum. And both games build the
+morphs from the feedings they have seen, so they agree from the start of a
+session; a morph carried in from another session would need sending.
 
 **On screen** (`game::keep`): an egg is big, pale and glowing in its
 creature's colour, bobbing and turning under a column of light you can see

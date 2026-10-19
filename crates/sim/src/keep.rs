@@ -8,32 +8,31 @@
 //! beaten, or when the carrier falls and drops the egg. A beaten creature
 //! drops its **trophies**, picked up the same way.
 //!
-//! Each seat has a **morph**, a companion that follows at heel. Crouch
-//! beside it and it eats the last thing you picked up: an egg makes it
-//! that creature's young (an egg whose creature still hunts you will not be
-//! eaten -- beat it first), and a trophy is a generation, a change you can
-//! see at once (`breed::cross::feed`).
+//! Each seat has a **morph** at heel that eats what you carry -- but the
+//! morph, and what you carry besides eggs, are **not here** (2026-10-19).
+//! They are each player's own, kept by their game (`game::bag`), and
+//! using an item is an input like a move: both machines see "fed it a
+//! Mantis feather" on the frame it was sent and agree it was eaten, never
+//! having had to agree it was carried. The owner: *"I want to avoid bloat
+//! in the state the players need to agree on since we're on a budget for
+//! that."*
 //!
-//! **What is kept where.** What a seat carries and its morph are the
-//! journey's ([`Keep`], in `valley::Journey`): they go with you through a
-//! seam and survive a won hunt, which rebuilds the fighters. What lies on
-//! the floor and where each morph stands are the place's ([`Loose`],
-//! [`Heel`], on the `World`): they are in its coordinates, shift with it,
-//! and are left behind when you go through a seam (a morph catches up).
+//! **What is here** is what the fight itself reads. What lies on the floor
+//! ([`Loose`], on the `World`, in the place's coordinates). Which eggs each
+//! seat carries ([`Keep`], the journey's: a bit a creature, because a
+//! creature hunts whoever carries its egg, and both machines have to agree
+//! who that is). And what each seat picked up this frame
+//! ([`World::picked`]), which is how the game hears of a trophy to put in
+//! its bag -- read by frame number, so a rollback that undoes a pickup
+//! undoes it in the bag too.
 
 use crate::breed::archetypes;
 use crate::breed::cross::TrophyKind;
-use crate::breed::locomotion;
-use crate::breed::morph::Morph;
-use crate::breed::posture;
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::species::SpeciesId;
 use crate::state::{MAX_PLAYERS, World};
 use crate::tuning as t;
-
-/// Things one seat can carry.
-pub const SATCHEL: usize = 4;
 
 /// Things that can lie on the floor of a place at once.
 pub const LOOSE: usize = 5;
@@ -57,81 +56,43 @@ pub struct Lying {
 
 pub type Loose = [Option<Lying>; LOOSE];
 
-/// Where a seat's morph stands, and how it walks.
+/// Which creatures' eggs each seat carries: the journey's, so they go with
+/// you through a seam and survive a won hunt, which rebuilds the fighters.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub struct Heel {
-    /// On the floor, in the place's coordinates.
-    pub at: V3,
-    /// Turns from `+x` toward `+z`.
-    pub facing: Fx,
-    /// Where in its stride, nought to one.
-    pub phase: Fx,
-    /// Its walk: metres a second, and frames a stride -- worked out once
-    /// each time it changes, not every frame.
-    pub speed: Fx,
-    pub cycle: u16,
-    /// Moving this frame.
-    pub going: bool,
-    /// Put in the place yet: false after a seam, until it catches up.
-    pub placed: bool,
-    /// Frames before it will eat again.
-    pub cool: u8,
-    /// The generation its walk was worked out for, plus one.
-    pub walk_of: u16,
-}
-
-/// What every seat carries, and its morph: the journey's.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Keep {
-    /// Each seat's satchel, in the order things were picked up.
-    pub satchel: [[Option<Item>; SATCHEL]; MAX_PLAYERS],
-    pub morphs: [Morph; MAX_PLAYERS],
-}
-
-impl Default for Keep {
-    fn default() -> Keep {
-        // A morph that has eaten no egg is a small, plain thing: the
-        // smallest body there is, young.
-        let base = archetypes::of_species(SpeciesId::GNAWERS)
-            .copied()
-            .unwrap_or(archetypes::RIDGEBACK);
-        Keep {
-            satchel: [[None; SATCHEL]; MAX_PLAYERS],
-            morphs: core::array::from_fn(|i| Morph::hatch(&base, i as u8)),
-        }
-    }
+    /// A bit a species, by its id.
+    pub eggs: [u32; MAX_PLAYERS],
 }
 
 impl Keep {
     /// Whether seat `i` carries the egg of `s`.
     pub fn carries_egg(&self, i: usize, s: SpeciesId) -> bool {
-        self.satchel[i]
-            .iter()
-            .flatten()
-            .any(|it| *it == Item::Egg(s))
+        s.0 < 32 && self.eggs.get(i).is_some_and(|e| e & 1 << s.0 != 0)
     }
 
-    /// `item` into seat `i`'s first empty slot; false if it has none.
-    pub(crate) fn take(&mut self, i: usize, item: Item) -> bool {
-        match self.satchel[i].iter_mut().find(|s| s.is_none()) {
-            Some(slot) => {
-                *slot = Some(item);
-                true
-            }
-            None => false,
+    /// Seat `i` has the egg of `s` now.
+    pub fn carry_egg(&mut self, i: usize, s: SpeciesId) {
+        if s.0 < 32
+            && let Some(e) = self.eggs.get_mut(i)
+        {
+            *e |= 1 << s.0;
         }
     }
 
-    /// Every egg of `s` seat `i` carries, taken out.
-    pub(crate) fn lose_eggs(&mut self, i: usize, s: SpeciesId) -> usize {
-        let mut n = 0;
-        for slot in self.satchel[i].iter_mut() {
-            if *slot == Some(Item::Egg(s)) {
-                *slot = None;
-                n += 1;
-            }
+    /// The egg of `s` out of seat `i`'s hands; whether it had it.
+    pub fn lose_eggs(&mut self, i: usize, s: SpeciesId) -> bool {
+        let had = self.carries_egg(i, s);
+        if had {
+            self.eggs[i] &= !(1 << s.0);
         }
-        n
+        had
+    }
+
+    /// Every egg seat `i` carries.
+    pub fn eggs_of(&self, i: usize) -> impl Iterator<Item = SpeciesId> + '_ {
+        (0..32u8)
+            .map(SpeciesId)
+            .filter(move |s| self.carries_egg(i, *s))
     }
 }
 
@@ -249,8 +210,8 @@ impl World {
         None
     }
 
-    /// **Once a frame, in the valley**: pick up what is underfoot, the
-    /// creature after its egg, the morphs at heel, and feeding.
+    /// **Once a frame, in the valley**: eggs dropped by the fallen, what is
+    /// underfoot picked up, and the creature after its egg.
     pub(crate) fn step_keep(&mut self) {
         if !self.valley.on {
             return;
@@ -263,17 +224,18 @@ impl World {
                     continue;
                 }
                 for s in self.hunted().into_iter().flatten() {
-                    if self.valley.keep.lose_eggs(i, s) > 0 {
+                    if self.valley.keep.lose_eggs(i, s) {
                         let at = self.players[i].pos;
                         self.lay(Item::Egg(s), at);
                     }
                 }
             }
         }
-        // Underfoot: anything in reach goes in the satchel, if there is room.
+        // Underfoot: one thing a seat a frame. An egg is carried; a
+        // trophy is the game's to keep (`picked`).
         let reach = t::pickup_reach();
         for i in 0..seats {
-            if self.players[i].health <= 0 {
+            if self.players[i].health <= 0 || self.picked[i].is_some() {
                 continue;
             }
             let p = self.players[i].pos;
@@ -281,8 +243,13 @@ impl World {
                 let Some(l) = self.loose[k] else { continue };
                 let flat = V3::new(l.at.x.sub(p.x), Fx::ZERO, l.at.z.sub(p.z)).len();
                 let up = l.at.y.sub(p.y).abs();
-                if flat <= reach && up <= t::body_height() && self.valley.keep.take(i, l.item) {
+                if flat <= reach && up <= t::body_height() {
                     self.loose[k] = None;
+                    self.picked[i] = Some(l.item);
+                    if let Item::Egg(s) = l.item {
+                        self.valley.keep.carry_egg(i, s);
+                    }
+                    break;
                 }
             }
         }
@@ -306,161 +273,56 @@ impl World {
                 pack.mood = crate::pack::mood::HUNTING;
             }
         }
-        // In a hunt: for each seat, the way away from the creature nearest
-        // them, which their morph keeps to.
-        let mut fight_from = [None; MAX_PLAYERS];
-        if self.hunting() {
-            for (i, away) in fight_from.iter_mut().enumerate().take(seats) {
-                let p = self.players[i].pos;
-                let near = self
-                    .monsters
-                    .iter()
-                    .flatten()
-                    .filter(|m| m.alive())
-                    .map(|m| m.pos)
-                    .chain(self.critters.iter().filter(|c| c.alive()).map(|c| c.pos))
-                    .min_by_key(|c| V3::new(c.x.sub(p.x), Fx::ZERO, c.z.sub(p.z)).len().raw());
-                if let Some(c) = near {
-                    let off = V3::new(p.x.sub(c.x), Fx::ZERO, p.z.sub(c.z));
-                    let len = off.len();
-                    *away = Some(if len.raw() > 0 {
-                        off.scale(Fx::ONE.div(len))
-                    } else {
-                        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
-                    });
-                }
-            }
-        }
-        for i in 0..seats {
-            self.heel(i, &fight_from);
-        }
     }
 
-    /// Seat `i`'s morph: put beside them if it is not here yet, and kept
-    /// at heel -- following when they are further than its follow
-    /// distance, at the gait that distance asks for.
-    fn heel(&mut self, i: usize, fight_from: &[Option<V3>; MAX_PLAYERS]) {
-        let p = self.players[i];
-        let morph = self.valley.keep.morphs[i];
-        let h = &mut self.heel[i];
-        if !h.placed {
-            h.at = V3::new(p.pos.x.sub(Fx::ONE), p.pos.y, p.pos.z.sub(Fx::ONE));
-            h.facing = crate::math::atan2_turns(p.facing.z, p.facing.x);
-            h.placed = true;
-        }
-        if h.walk_of != morph.generation.wrapping_add(1) || h.speed == Fx::ZERO {
-            let g = morph.shown();
-            let q = posture::posture(&g);
-            let gait = locomotion::at(&g, &q, Fx::ratio(1, 2));
-            h.speed = gait.speed.max(Fx::ONE);
-            h.cycle = gait.cycle.clamp(8, 240) as u16;
-            h.walk_of = morph.generation.wrapping_add(1);
-        }
-        h.cool = h.cool.saturating_sub(1);
-        let to = V3::new(p.pos.x.sub(h.at.x), Fx::ZERO, p.pos.z.sub(h.at.z));
-        let dist = to.len();
-        let follow = t::morph_follow();
-        // Left a long way behind (a jump, a fall, a seam): it catches up.
-        if dist > t::morph_catch_up() {
-            h.at = V3::new(p.pos.x.sub(Fx::ONE), p.pos.y, p.pos.z.sub(Fx::ONE));
-            h.going = false;
-            return;
-        }
-        // **Out of the way in a fight**: it keeps well back, on the far side
-        // of you from the creature nearest you -- never between you, never
-        // where you are swinging. At peace it comes to heel.
-        let (goal, slack) = match fight_from[i] {
-            Some(away) => (p.pos.add(away.scale(t::morph_follow_fight())), Fx::ONE),
-            None => (p.pos, follow),
-        };
-        let to_goal = V3::new(goal.x.sub(h.at.x), Fx::ZERO, goal.z.sub(h.at.z));
-        let gap = to_goal.len();
-        h.going = gap > slack;
-        if h.going {
-            // Faster the further off it is, up to its hurry.
-            let urge = Fx::ONE
-                .add(gap.sub(slack).div(follow))
-                .min(t::morph_hurry());
-            let step = h
-                .speed
-                .mul(urge)
-                .div(Fx::from_int(locomotion::FPS))
-                .min(gap);
-            let dir = to_goal.scale(Fx::ONE.div(gap));
-            h.at = h.at.add(dir.scale(step));
-            h.facing = crate::math::atan2_turns(dir.z, dir.x);
-            let next = h
-                .phase
-                .add(Fx::ONE.div(Fx::from_int(h.cycle as i32)).mul(urge));
-            h.phase = if next >= Fx::ONE {
-                next.sub(Fx::ONE)
-            } else {
-                next
-            };
-        } else if dist.raw() > 0 {
-            // Standing, it watches you.
-            h.facing = crate::math::atan2_turns(to.z, to.x);
-        }
-        // On the floor.
-        let at = h.at;
-        self.heel[i].at.y = self.terrain().ground_under(at);
-    }
-
-    /// Whether seat `i` could feed its morph what is in slot `k` now, and
-    /// if not, why: what the bag shows beside an item.
-    pub fn can_feed(&self, i: usize, k: usize) -> Result<Item, Refusal> {
-        let item = self
-            .valley
-            .keep
-            .satchel
-            .get(i)
-            .and_then(|bag| bag.get(k))
-            .copied()
-            .flatten()
-            .ok_or(Refusal::Empty)?;
-        if self.players[i].health <= 0 {
-            return Err(Refusal::Down);
-        }
+    /// Seat `i` used an item (`Destination::Feed`): fed it to its morph.
+    /// A trophy was the sender's own, and nothing here changes -- the
+    /// games that draw the morph read the input. An egg is let go of here
+    /// too, unless its creature is still hunting them for it, when it is
+    /// not eaten at all (and the games, seeing it still carried, agree).
+    pub(crate) fn fed(&mut self, i: usize, item: Item) {
         if let Item::Egg(s) = item
-            && self.egg_carrier().is_some_and(|(_, c)| c == s)
+            && self.refusal(i, item).is_none()
         {
-            return Err(Refusal::Chased(s));
+            self.valley.keep.lose_eggs(i, s);
         }
-        if self.heel[i].cool > 0 {
-            return Err(Refusal::Eating);
-        }
-        Ok(item)
     }
 
-    /// Seat `i` feeds its morph what is in slot `k` of its satchel, chosen
-    /// from the bag ([`crate::input::Destination::Feed`]). An egg makes it
-    /// that creature's young -- not while its creature still hunts them for
-    /// it -- and a trophy grows it a generation.
-    pub(crate) fn feed_slot(&mut self, i: usize, k: usize) {
-        let Ok(item) = self.can_feed(i, k) else {
-            return;
-        };
-        self.valley.keep.satchel[i][k] = None;
-        match item {
-            Item::Egg(s) => {
-                if let Some(g) = archetypes::of_species(s) {
-                    self.valley.keep.morphs[i].eat_egg(g, s.0);
-                }
+    /// Seat `i` was given an item from the `--dev` panel: an egg carried,
+    /// a trophy put in `picked` for its game to keep.
+    pub(crate) fn granted(&mut self, i: usize, item: Item) {
+        if let Item::Egg(s) = item {
+            self.valley.keep.carry_egg(i, s);
+        }
+        if let Some(p) = self.picked.get_mut(i) {
+            *p = Some(item);
+        }
+    }
+
+    /// Why seat `i` cannot feed its morph `item` now, as far as the world
+    /// knows: down, an egg it does not carry, or an egg whose creature is
+    /// after it. Whether it has a trophy, and whether its morph is still
+    /// eating, are its game's to know.
+    pub fn refusal(&self, i: usize, item: Item) -> Option<Refusal> {
+        if self.players.get(i).is_none_or(|p| p.health <= 0) {
+            return Some(Refusal::Down);
+        }
+        if let Item::Egg(s) = item {
+            if !self.valley.keep.carries_egg(i, s) {
+                return Some(Refusal::Empty);
             }
-            Item::Trophy(kind, s) => {
-                if let Some(g) = archetypes::of_species(s) {
-                    self.valley.keep.morphs[i].eat(kind, g);
-                }
+            if self.egg_carrier().is_some_and(|(_, c)| c == s) {
+                return Some(Refusal::Chased(s));
             }
         }
-        self.heel[i].cool = t::feed_cool().clamp(1, 250) as u8;
+        None
     }
 }
 
 /// Why a morph will not eat something.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Refusal {
-    /// Nothing in that slot.
+    /// It is not carried.
     Empty,
     /// The one feeding it is down.
     Down,
@@ -471,51 +333,29 @@ pub enum Refusal {
 }
 
 impl World {
-    /// Whether anything has been carried, fed or laid down yet.
+    /// Whether anything has been carried or laid down yet.
     pub(crate) fn keep_touched(&self) -> bool {
-        let k = &self.valley.keep;
-        self.loose.iter().any(|l| l.is_some())
-            || k.satchel.iter().flatten().any(|s| s.is_some())
-            || k.morphs
-                .iter()
-                .any(|m| m.generation > 0 || m.of != Morph::UNFORMED)
+        self.loose.iter().any(|l| l.is_some()) || self.valley.keep.eggs.iter().any(|e| *e != 0)
     }
 
-    /// The satchels, the morphs, what lies on the floor and the morphs'
-    /// places, into the world's checksum.
+    /// The eggs carried and what lies on the floor, into the world's
+    /// checksum.
     pub(crate) fn hash_keep(&self, h: &mut crate::state::Fnv) {
-        let item = |it: Option<Item>| -> u32 {
-            match it {
-                None => 0,
-                Some(Item::Egg(s)) => 1 | (s.0 as u32) << 8,
-                Some(Item::Trophy(k, s)) => 2 | (k as u32) << 8 | (s.0 as u32) << 16,
-            }
-        };
-        let k = &self.valley.keep;
-        for bag in &k.satchel {
-            for it in bag {
-                h.write_u32(item(*it));
-            }
-        }
-        for m in &k.morphs {
-            h.write_u64(m.genome.fingerprint());
-            h.write_u32(m.growth.raw() as u32);
-            h.write_u32(m.generation as u32 | (m.of as u32) << 16);
+        for e in &self.valley.keep.eggs {
+            h.write_u32(*e);
         }
         for l in &self.loose {
             match l {
                 Some(l) => {
-                    h.write_u32(item(Some(l.item)));
+                    h.write_u32(match l.item {
+                        Item::Egg(s) => 1 | (s.0 as u32) << 8,
+                        Item::Trophy(k, s) => 2 | (k as u32) << 8 | (s.0 as u32) << 16,
+                    });
                     for c in [l.at.x, l.at.y, l.at.z] {
                         h.write_u32(c.raw() as u32);
                     }
                 }
                 None => h.write_u32(0),
-            }
-        }
-        for heel in &self.heel {
-            for c in [heel.at.x, heel.at.y, heel.at.z, heel.facing, heel.phase] {
-                h.write_u32(c.raw() as u32);
             }
         }
     }

@@ -1,8 +1,9 @@
-//! Eggs, trophies and the morph, in the valley: an egg lies by its
-//! creature, picking it up sets the creature on you until it is beaten,
-//! a beaten creature drops trophies, and the bag feeds them to your morph.
+//! Eggs and trophies, in the valley: an egg lies by its creature, picking
+//! it up sets the creature on you until it is beaten, and a beaten creature
+//! drops trophies. What the world keeps of it is only what the fight reads
+//! -- what lies on the floor and who carries which egg; a trophy picked up
+//! is handed to the game (`World::picked`), and the morph is the game's.
 
-use sim::breed::morph::Morph;
 use sim::class::Class;
 use sim::fixed::Fx;
 use sim::input::{Destination, Input, Travel};
@@ -27,9 +28,9 @@ fn idle() -> [Input; 1] {
     [Input::new(0)]
 }
 
-/// Seat 0 choosing "feed" on slot `k` of its bag.
-fn feed(k: u8) -> [Input; 1] {
-    [Input::new(0).travelling(Travel::feed(k))]
+/// Seat 0 feeding its morph `item`.
+fn feed(item: Item) -> [Input; 1] {
+    [Input::new(0).travelling(Travel::feed(item))]
 }
 
 fn egg_here(w: &World) -> Option<V3> {
@@ -81,11 +82,12 @@ fn carrying_its_egg_it_hunts_you_and_does_not_stop() {
         step_onto(&mut w, far);
     }
     assert!(w.hunting(), "the hunt ended with its egg still carried");
-    // Its egg will not be eaten while it hunts you: the bag says why.
-    assert_eq!(w.can_feed(0, 0), Err(Refusal::Chased(SpeciesId::MANTIS)));
-    w.advance(feed(0));
+    // Its egg will not be eaten while it hunts you: the bag says why, and
+    // a feeding sent anyway leaves it carried.
+    let egg = Item::Egg(SpeciesId::MANTIS);
+    assert_eq!(w.refusal(0, egg), Some(Refusal::Chased(SpeciesId::MANTIS)));
+    w.advance(feed(egg));
     assert!(w.valley.keep.carries_egg(0, SpeciesId::MANTIS));
-    assert_eq!(w.valley.keep.morphs[0].of, Morph::UNFORMED);
 }
 
 #[test]
@@ -118,26 +120,31 @@ fn beaten_it_drops_trophies_and_the_morph_eats_them() {
     }
     assert!(!w.hunting());
     assert!(w.valley.keep.carries_egg(0, SpeciesId::MANTIS));
+    // Walked into, each is handed to the game on the frame it is picked
+    // up, and gone from the floor.
     for t in &trophies {
         step_onto(&mut w, *t);
+        assert!(
+            matches!(w.picked[0], Some(Item::Trophy(_, s)) if s == SpeciesId::MANTIS),
+            "{:?}",
+            w.picked[0]
+        );
+        w.advance(idle());
+        assert_eq!(w.picked[0], None, "a pickup is that frame's alone");
     }
-    let carried = w.valley.keep.satchel[0].iter().flatten().count();
-    assert_eq!(carried, 1 + trophies.len());
-    // From the bag: the egg (slot nought) first -- a young Mantis -- then
-    // each trophy, a generation each, a feeding's pause apart.
-    let mut most = 0;
-    for k in 0..1 + trophies.len() {
-        w.advance(feed(k as u8));
-        for _ in 0..40 {
-            w.advance(idle());
-        }
-        most = most.max(w.valley.keep.morphs[0].generation);
-    }
-    let after = w.valley.keep.morphs[0];
-    assert_eq!(most, trophies.len() as u16, "it did not eat every trophy");
-    assert_eq!(after.of, SpeciesId::MANTIS.0, "it never ate the egg");
-    assert_eq!(after.generation, trophies.len() as u16);
-    assert!(w.valley.keep.satchel[0].iter().all(|s| s.is_none()));
+    assert!(
+        w.loose
+            .iter()
+            .flatten()
+            .all(|l| !matches!(l.item, Item::Trophy(..)))
+    );
+    // The egg, beaten for, is eaten: let go of on the frame it is fed.
+    let egg = Item::Egg(SpeciesId::MANTIS);
+    assert_eq!(w.refusal(0, egg), None);
+    w.advance(feed(egg));
+    assert!(!w.valley.keep.carries_egg(0, SpeciesId::MANTIS));
+    // An egg not carried is not eaten again.
+    assert_eq!(w.refusal(0, egg), Some(Refusal::Empty));
 }
 
 #[test]
@@ -156,27 +163,6 @@ fn losing_the_hunt_loses_the_egg() {
 }
 
 #[test]
-fn the_morph_keeps_at_heel() {
-    // At peace, in Hearth: it comes to heel.
-    let mut w = World::arrive(CLASSES, valley::Journey::default(), valley::START, None, 1);
-    w.advance(idle());
-    let start = w.players[0].pos;
-    // Walk ten metres off; it follows to within its follow distance.
-    let to = V3::new(start.x.add(Fx::from_int(10)), start.y, start.z);
-    for _ in 0..240 {
-        w.players[0].pos = V3::new(to.x, w.players[0].pos.y, to.z);
-        w.advance(idle());
-    }
-    let h = w.heel[0].at;
-    let p = w.players[0].pos;
-    let gap = V3::new(h.x.sub(p.x), Fx::ZERO, h.z.sub(p.z)).len();
-    assert!(
-        gap <= sim::tuning::morph_follow().add(Fx::ONE),
-        "it is {gap:?} behind"
-    );
-}
-
-#[test]
 fn it_is_the_same_every_time() {
     let run = || {
         let mut w = at_the_mantis();
@@ -191,34 +177,7 @@ fn it_is_the_same_every_time() {
 }
 
 #[test]
-fn a_feeding_rides_the_wire() {
-    for k in 0..4u8 {
-        assert_eq!(Travel::feed(k).destination(), Some(Destination::Feed(k)));
-    }
-}
-
-#[test]
-fn in_a_fight_the_morph_keeps_back_on_the_far_side() {
-    let mut w = at_the_mantis();
-    for _ in 0..400 {
-        w.advance(idle());
-    }
-    assert!(w.hunting());
-    let p = w.players[0].pos;
-    let h = w.heel[0].at;
-    let m = w.monsters[0].unwrap().pos;
-    let flat = |a: V3, b: V3| V3::new(a.x.sub(b.x), Fx::ZERO, a.z.sub(b.z)).len();
-    let gap = flat(h, p);
-    assert!(
-        gap >= sim::tuning::morph_follow_fight().sub(Fx::from_int(2)),
-        "it is {gap:?} from you in a fight"
-    );
-    // Further from the creature than you are: behind you, not between.
-    assert!(flat(h, m) > flat(p, m));
-}
-
-#[test]
-fn a_dev_grant_rides_the_wire_and_lands_in_the_bag() {
+fn an_item_rides_the_wire_by_what_it_is() {
     use sim::breed::cross::TrophyKind;
     for item in [
         Item::Egg(SpeciesId::MANTIS),
@@ -226,17 +185,24 @@ fn a_dev_grant_rides_the_wire_and_lands_in_the_bag() {
         Item::Trophy(TrophyKind::Tooth, SpeciesId(0)),
     ] {
         assert_eq!(
+            Travel::feed(item).destination(),
+            Some(Destination::Feed(item))
+        );
+        assert_eq!(
             Travel::grant(item).destination(),
             Some(Destination::Grant(item))
         );
     }
-    // In the valley: into the first empty slot, and no further than the
-    // bag holds.
+}
+
+#[test]
+fn a_dev_grant_carries_an_egg_and_hands_over_a_trophy() {
+    use sim::breed::cross::TrophyKind;
     let mut w = World::arrive(CLASSES, valley::Journey::default(), valley::START, None, 1);
     let feather = Item::Trophy(TrophyKind::Feather, SpeciesId::MANTIS);
-    for _ in 0..6 {
-        w.advance([Input::new(0).travelling(Travel::grant(feather))]);
-    }
-    let bag = w.valley.keep.satchel[0];
-    assert!(bag.iter().all(|s| *s == Some(feather)), "{bag:?}");
+    w.advance([Input::new(0).travelling(Travel::grant(feather))]);
+    assert_eq!(w.picked[0], Some(feather));
+    let egg = Item::Egg(SpeciesId::MANTIS);
+    w.advance([Input::new(0).travelling(Travel::grant(egg))]);
+    assert!(w.valley.keep.carries_egg(0, SpeciesId::MANTIS));
 }

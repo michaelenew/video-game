@@ -19,6 +19,7 @@
 //! elementalist, blood, dual.
 
 mod arenas;
+mod bag;
 mod bake;
 mod beast;
 mod claimed;
@@ -30,6 +31,7 @@ mod forms;
 mod glint;
 mod ground;
 mod grove;
+mod heel;
 mod hub;
 mod hud;
 mod keep;
@@ -232,6 +234,8 @@ fn main() {
         .init_resource::<keep::Bag>()
         .init_resource::<keep::Melt>()
         .init_resource::<keep::Puffs>()
+        .init_resource::<bag::Keeping>()
+        .init_resource::<heel::Heels>()
         .init_resource::<sound::Soundscape>()
         .init_resource::<Joints>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -380,6 +384,7 @@ fn main() {
                 menu::draw,
                 // What you carry and your morph (`sim::keep`).
                 (
+                    heel::follow,
                     keep::place_morphs,
                     keep::place_blobs,
                     keep::place_loose,
@@ -1388,7 +1393,7 @@ fn shot_chase(w: &mut World) {
     let Some(s) = w.hunted().into_iter().flatten().next() else {
         return;
     };
-    w.valley.keep.satchel[0][0] = Some(sim::keep::Item::Egg(s));
+    w.valley.keep.carry_egg(0, s);
     for l in w.loose.iter_mut() {
         if l.is_some_and(|l| l.item == sim::keep::Item::Egg(s)) {
             *l = None;
@@ -5828,6 +5833,7 @@ fn tick_sim(
     mut sparring: ResMut<Sparring>,
     mut trophies: ResMut<trophies::Trophies>,
     mut scape: ResMut<sound::Soundscape>,
+    mut keeping: ResMut<bag::Keeping>,
 ) {
     // A won hunt is the player's trophy (world W1), whoever's machine it was
     // won on: each peer writes its own. Read from the world as it stands at
@@ -5901,6 +5907,7 @@ fn tick_sim(
             sim.prev = back.clone();
             sim.tape.rewind_to(back.frame);
             scape.rewound_to(back.frame);
+            keeping.rewound_to(back.frame);
             sim.cur = back;
             // A rewind past the start of a rehearsal is a rewind out of it.
             if sim.rehearsing.is_some_and(|from| sim.cur.frame < from) {
@@ -5922,6 +5929,7 @@ fn tick_sim(
         sim.prev = w.clone();
         sim.tape = sim::replay::Tape::begin(&w, build());
         scape.restart(w.frame);
+        keeping.restart();
         sim.cur = w;
         sim.history.clear();
         sim.rehearsing = Some(0);
@@ -6155,6 +6163,9 @@ fn tick_sim(
                 ledger.confirm_through(cur.frame, cur);
             }
             scape.observe(&sim.prev, &sim.cur);
+            // What was picked up and fed, for this game's bag and morphs.
+            let me = sim.local_player();
+            keeping.record(&sim.prev, &pair, &sim.cur, me);
             if travel != sim::input::Travel::NONE {
                 // A new fight: nothing to interpolate from. (Player two sits
                 // a hunt out unless a person has their keys -- the
@@ -6172,7 +6183,7 @@ fn tick_sim(
             let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
             let travel = std::mem::take(&mut sim.travel);
             let local = scripted_or(scripted, held).travelling(travel);
-            online::step(&mut sim, local, &mut scape);
+            online::step(&mut sim, local, &mut scape, &mut keeping);
         }
         record_round_end(&mut sim);
         say_region_findings(&mut sim);

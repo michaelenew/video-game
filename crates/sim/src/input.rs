@@ -119,13 +119,12 @@ pub enum Destination {
     /// is how two players who have each beaten different things share a
     /// valley that is open as far as the more travelled of them has been.
     Credit(SpeciesId),
-    /// **Feed the morph** what is in this slot of the sender's satchel
-    /// (`crate::keep`): chosen from the bag, on the wire so both machines
-    /// feed it on the same frame.
-    Feed(u8),
-    /// **A dev's grant**: this item put straight into the sender's satchel,
-    /// if it has room. Sent only by the game's `--dev` item panel; on the
-    /// wire like a feeding so both machines' bags agree.
+    /// **Feed the morph this item** (`crate::keep`), chosen from the bag.
+    /// It names the item, not where it was in a bag: the bag is the
+    /// sender's own, and the other machine only has to agree it was used.
+    Feed(crate::keep::Item),
+    /// **A dev's grant** from the `--dev` item panel: an egg carried, a
+    /// trophy handed to the sender's game through `World::picked`.
     Grant(crate::keep::Item),
 }
 
@@ -146,11 +145,13 @@ impl Travel {
     pub const VALLEY: Travel = Travel(5);
     /// See [`Destination::Left`].
     pub const LEFT: Travel = Travel(6);
-    /// `0000 0111`, the slot in the high byte: see [`Destination::Feed`].
-    const FEED: u16 = 7;
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
-    /// With a high byte, that creature's item granted ([`Travel::grant`]).
+    /// With a high byte, one of that creature's items: `0iii iiii` granted
+    /// ([`Travel::grant`]), `1iii iiii` fed ([`Travel::feed`]) -- one for
+    /// its egg, two and up for a trophy by its kind.
     const CREDIT: u16 = 8;
+    /// The high byte's mark of a feeding.
+    const FED: u16 = 0x80;
     const HUNT: u16 = 0x80;
     /// `01aa aaaa`: no creature, in arena `a`.
     const ARENA: u16 = 0x40;
@@ -227,45 +228,49 @@ impl Travel {
         }
     }
 
-    /// Feed the morph what is in slot `slot` of the sender's satchel.
-    pub const fn feed(slot: u8) -> Travel {
-        Travel(Travel::FEED | (slot as u16) << 8)
+    /// Feed the morph `item` from the sender's bag.
+    pub const fn feed(item: crate::keep::Item) -> Travel {
+        Travel::item(item, Travel::FED)
     }
 
-    /// Put `item` in the sender's satchel (`--dev`): the creature's credit
-    /// byte, and in the high byte one for its egg, two and up for a trophy
-    /// by its kind. A creature past what the byte holds is no request.
+    /// Give the sender `item` (`--dev`).
     pub const fn grant(item: crate::keep::Item) -> Travel {
+        Travel::item(item, 0)
+    }
+
+    /// An item on the wire: the creature's credit byte, and in the high
+    /// byte one for its egg, two and up for a trophy by its kind, under
+    /// `mark`. A creature past what the byte holds is no request.
+    const fn item(item: crate::keep::Item, mark: u16) -> Travel {
         let (s, what) = match item {
             crate::keep::Item::Egg(s) => (s, 1u16),
             crate::keep::Item::Trophy(k, s) => (s, 2 + k as u16),
         };
         match Travel::credit(s) {
             Travel::NONE => Travel::NONE,
-            Travel(b) => Travel(b | what << 8),
+            Travel(b) => Travel(b | (what | mark) << 8),
         }
     }
 
     pub const fn destination(self) -> Option<Destination> {
-        // A feeding carries its slot in the high byte.
-        if self.0 & Travel::LOW == Travel::FEED {
-            return Some(Destination::Feed((self.0 >> 8) as u8));
-        }
-        // A grant is a credit's byte with the item in the high byte.
+        // An item, fed or granted: a credit's byte with the item in the
+        // high byte.
         let low = self.0 & Travel::LOW;
         if self.0 >> 8 != 0 && low >= Travel::CREDIT && low < Travel::CLASS {
             let s = SpeciesId((low - Travel::CREDIT) as u8);
-            let what = (self.0 >> 8) as usize;
-            return match what {
-                1 => Some(Destination::Grant(crate::keep::Item::Egg(s))),
-                k if k - 2 < crate::breed::cross::TrophyKind::ALL.len() => {
-                    Some(Destination::Grant(crate::keep::Item::Trophy(
-                        crate::breed::cross::TrophyKind::ALL[k - 2],
-                        s,
-                    )))
+            let high = self.0 >> 8;
+            let item = match (high & !Travel::FED) as usize {
+                1 => crate::keep::Item::Egg(s),
+                k if k >= 2 && k - 2 < crate::breed::cross::TrophyKind::ALL.len() => {
+                    crate::keep::Item::Trophy(crate::breed::cross::TrophyKind::ALL[k - 2], s)
                 }
-                _ => None,
+                _ => return None,
             };
+            return Some(if high & Travel::FED != 0 {
+                Destination::Feed(item)
+            } else {
+                Destination::Grant(item)
+            });
         }
         // A high byte on anything but a class change is no request at all.
         let high = self.0 >> 8;

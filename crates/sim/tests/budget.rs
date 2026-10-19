@@ -444,7 +444,7 @@ fn far_from_home(c: Class) -> World {
         Some(0),
         MAX_PLAYERS as u8,
     );
-    w.valley.keep.satchel[0][0] = Some(sim::keep::Item::Egg(SpeciesId::RIDGEBACK));
+    w.valley.keep.carry_egg(0, SpeciesId::RIDGEBACK);
     // The road through the Bank, a hundred metres and more from the range;
     // the creatures thirty metres back along it.
     let o = w.map_origin();
