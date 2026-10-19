@@ -97,6 +97,9 @@ spike sets them off.
 - **A heart holds the ground joined to it** (`ground::step`): a patch joined to one of her
   hearts, through any run of patches and stains, still ages but never runs out. When the heart
   goes, what had run out goes on the next frame; the rest keeps what it had left.
+  Which patches are held is kept on the world (`World::ground_held`): a held patch is **drawn
+  whole** however little life it has left, and a full table **never makes way with one** -- a
+  spark laid anywhere else is refused before a home base is pushed out.
 - **The Well is gone.** Her finishers spend her grey alone. A stain she walks through gives her
   only what her grey can hold and stays on the floor with the rest, so at full health she
   walks through her stains and leaves them as ground and as spike fodder.

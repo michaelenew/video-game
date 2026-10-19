@@ -825,3 +825,28 @@ fn run_looking(w: &mut World, frames: u32, pitch: i16) {
         step_looking(w, 0, pitch);
     }
 }
+
+#[test]
+fn a_full_table_never_pushes_out_what_a_heart_holds() {
+    // 2026-10-19: a held patch stands at its last frame, so it was the
+    // weakest on the table and the first to make way when it filled -- the
+    // home base pushed out by sparks laid anywhere else.
+    let mut w = planted();
+    let h = effects_of(&w, EffectKind::Heart)[0].pos;
+    let ring = as_f(t::heart_ground());
+    let home = V3::new(h.x, h.y, h.z.add(metres(ring + 0.8)));
+    claim(&mut w, home, 1.0, 30);
+    run(&mut w, 30 * t::ground_joined_every() as u32 + 10, 0);
+    let held = |w: &World| w.ground.iter().any(|p| p.live() && p.covers(home));
+    assert!(held(&w), "fixture: the heart holds it");
+    assert!(w.ground_held != 0, "and the world knows it is held");
+    // Fill the table with sparks far from anything, longer-lived than it.
+    for k in 0..sim::ground::MAX_PATCHES as i32 + 8 {
+        let at = V3::new(h.x.sub(metres(40.0)), h.y, h.z.add(Fx::from_int(3 * k)));
+        sim::ground::lay_sparing(&mut w.ground, w.ground_held, 0, at, metres(1.0), 150);
+    }
+    assert!(
+        held(&w),
+        "a spark laid elsewhere pushed out what the heart holds"
+    );
+}
