@@ -150,7 +150,7 @@ has a **morph** at heel: feed it an egg and it starts over as that creature's
 young; feed it a trophy and it grows a generation, a change you can see at
 once. The count above is unchanged; these trophies are things in the world,
 and they *are* spent (fed). The rules, the numbers and why are
-[exploration/0021](exploration/0021_crossbreeding.md) §12.
+[exploration/0022](exploration/0022_crossbreeding.md) §12.
 
 ### Sidegrades — ⚠️ parked, 2026-09-30
 

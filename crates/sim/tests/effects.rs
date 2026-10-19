@@ -22,7 +22,7 @@ const E: u16 = Input::MECHANIC;
 // since the blaster (docs/design/exploration/0015_blood_mage_blaster.md) -- a
 // tap is its first tier.
 /// The Black spike: a tap of the middle click on the floor.
-const SPIKE: u16 = sim::moves::blood::keys::YOUR_BLOOD;
+const SPIKE: u16 = sim::moves::blood::keys::SPIKES;
 
 // The Elementalist's buttons, by what they do. Her three clicks are earth,
 // fire and wind since 2026-10-09 (docs/design/kits/elementalist.md, "On three
@@ -317,7 +317,7 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
     w.effects[0] = Some(sim::effects::Effect::pool(
         1,
         Class::BloodMage,
-        sim::moves::blood::HAEMORRHAGE,
+        sim::moves::blood::THORN_LASH,
         // Off her feet: she drinks a stain she stands in.
         w.players[1]
             .pos
@@ -593,11 +593,11 @@ fn casting_costs_the_blood_mage_health() {
     use sim::moves::blood as b;
     use sim::moves::blood::keys;
     for (slot, button, airborne) in [
-        (b::HAEMORRHAGE, keys::MY_BLOOD, false),
-        (b::HAEMORRHAGE, keys::MY_BLOOD, true),
-        (b::SUMMON, keys::RAISE, false),
-        (b::BLACK_SPIKE, keys::YOUR_BLOOD, false),
-        (b::COMMAND, keys::SCYTHE, false),
+        (b::THORN_LASH, keys::THORNS, false),
+        (b::THORN_LASH, keys::THORNS, true),
+        (b::HEART, keys::PLANT, false),
+        (b::BLACK_SPIKE, keys::SPIKES, false),
+        (b::SWEEP, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
@@ -606,6 +606,8 @@ fn casting_costs_the_blood_mage_health() {
         // Cast it at nothing, so the only thing that can move the bar is the
         // price of pressing the button.
         let mut w = as_class(Class::BloodMage);
+        // A heart is earned: her meter full, so `E` is a heart.
+        w.players[0].heart_meter = sim::tuning::heart_meter_full() as u16;
         if airborne {
             w.players[0].pos.y = Fx::from_int(3);
             w.players[0].grounded = false;

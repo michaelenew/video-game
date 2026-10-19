@@ -58,7 +58,7 @@
 //! Nothing here touches the `World` yet. It is the builder and the evaluator
 //! the rest will be made from, measured by `tests/breed.rs` and printed by
 //! `cargo run -p sim --bin breedcheck`. The design is
-//! `docs/design/exploration/0021_crossbreeding.md`.
+//! `docs/design/exploration/0022_crossbreeding.md`.
 
 pub mod actor;
 pub mod archetypes;

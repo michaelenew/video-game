@@ -691,7 +691,7 @@ scalars! {
     // the Air ball off an edge, steered and knocked off a wall.
     PlacementDrop,        "Elementalist", "Placed, at most below her (m)", Fixed, 0, fx(20,1);
     AirBallSink,          "Elementalist", "Air ball, sinks off an edge (m/s)", Fixed, 0, fx(20,1);
-    AirBallSteer,         "Elementalist", "Air ball, steered by her walk (x)", Fixed, 0, fx(4,1);
+    AirBallSteer,         "Elementalist", "Air ball, turns while she rides (turns/s)", Fixed, 0, fx(2,1);
     AirBallKnock,         "Elementalist", "Air ball, size kept off a wall (x)", Fixed, 0, fx(1,1);
     // **The Dual mage, every move a spell**, 2026-10-09, re-cast in place for
     // her spellbook, 2026-10-12: the curse and its purge, the stars, the black
@@ -716,11 +716,14 @@ scalars! {
     // flip out of the dash and the tally's curve. See
     // `docs/design/exploration/0014_shadow_reaver_marks_and_throws.md`.
     PlungeDive,           "Shadow Reaver", "Plunge, dives at (m/s)", Fixed, 0, fx(60,1);
-    PlungeCone,           "Shadow Reaver", "Plunge and Gallows, cone round straight down (turns)", Fixed, 0, fx(1,4);
-    GallowsBlink,         "Shadow Reaver", "Gallows, the shadow goes up (m)", Fixed, 0, fx(10,1);
-    GallowsAhead,         "Shadow Reaver", "Gallows, the shadow goes ahead (m)", Fixed, 0, fx(10,1);
-    GallowsHang,          "Shadow Reaver", "Gallows, hangs after the blink", Frames, 0, 60;
-    GallowsDive,          "Shadow Reaver", "Gallows, dives at (m/s)", Fixed, 0, fx(60,1);
+    PlungeCone,           "Shadow Reaver", "Plunge, cone round straight down (turns)", Fixed, 0, fx(1,4);
+    // These four were Gallows' blink to the shadow and its dive until
+    // 2026-10-18, when it became a drive upward; the slots are kept, because
+    // `tuned::SCALARS` is read by this enum's own discriminant.
+    GallowsDrive,         "Shadow Reaver", "Gallows, drives (m)", Fixed, 0, fx(15,1);
+    GallowsClimb,         "Shadow Reaver", "Gallows, climbs at least (turns)", Fixed, 0, fx(1,4);
+    GallowsKept,          "Shadow Reaver", "Gallows, keeps of the drive after it (%)", Percent, 0, 100;
+    SendAfterDash,        "Shadow Reaver", "Send, waits after a dash collects the shadow", Frames, 0, 180;
     ShadowReturn,         "Shadow Reaver", "Shadow, comes home after a send", Frames, 1, 900;
     ShadowCollectWithin,  "Shadow Reaver", "Shadow, collected standing within (m)", Fixed, 0, fx(5,1);
     BurstDamage,          "Shadow Reaver", "Burst, damage", Int, 0, 300;
@@ -889,13 +892,17 @@ scalars! {
     // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
     WellFull, "Blood mage", "Well, full at", Int, 1, 2000;
     StainSettles, "Blood mage", "Stain, settles before it can be drunk", Frames, 0, 60;
-    CarpetFrom, "Blood mage", "Carpet, starts at radius", Fixed, fx(1,2), fx(6,1);
-    CarpetTo, "Blood mage", "Carpet, grows to radius", Fixed, fx(1,1), fx(12,1);
-    CarpetPaysEvery, "Blood mage", "Carpet, 1% of red every", Frames, 1, 60;
-    CarpetTick, "Blood mage", "Carpet, hurts every", Frames, 1, 120;
+    // **Renamed rather than removed** (2026-10-18): the Carpet and the golem
+    // are gone, and their slots carry her ground -- `tuned::SCALARS` is read
+    // by this enum's own discriminant. See
+    // `docs/design/exploration/0021_blood_mage_territory.md`.
+    GroundStainSpread, "Blood mage", "Ground, a stain spreads round it (m)", Fixed, 0, fx(4,1);
+    GroundWidest, "Blood mage", "Ground, widest patch (m)", Fixed, fx(1,1), fx(15,2);
+    GroundTouchLasts, "Blood mage", "Ground, a touch lasts", Frames, 1, 900;
+    GroundStainLasts, "Blood mage", "Ground, a faded stain lasts", Frames, 1, 1800;
     CoagulateReach, "Blood mage", "Coagulate, gathers stains within (m)", Fixed, fx(1,1), fx(30,1);
     CoagulateSpeed, "Blood mage", "Coagulate, stains slide at (m/s)", Fixed, fx(1,1), fx(60,1);
-    SummonReach, "Blood mage", "Summon, raises stains within (m)", Fixed, fx(1,1), fx(20,1);
+    GroundBridge, "Blood mage", "Ground, bridges a gap of (m)", Fixed, 0, fx(8,1);
     ThrallCap, "Blood mage", "Thralls at once", Int, 1, 8;
     ThrallSpeed, "Blood mage", "Thrall, runs at (m/s)", Fixed, fx(1,1), fx(20,1);
     ThrallSeek, "Blood mage", "Thrall, goes for a body within (m)", Fixed, 0, fx(40,1);
@@ -906,10 +913,10 @@ scalars! {
     ReapCone, "Blood mage", "Rising reap, cone half-width (cos)", Fixed, 0, fx(1,1);
     ReapHurl, "Blood mage", "Rising reap, hurls thralls at (m/s)", Fixed, 0, fx(40,1);
     ReapHurlFor, "Blood mage", "Rising reap, hurls thralls for", Frames, 1, 90;
-    GolemSpeed, "Blood mage", "Golem, walks at (m/s)", Fixed, fx(1,2), fx(15,1);
-    GolemPunchEvery, "Blood mage", "Golem, punches every", Frames, 1, 180;
-    GolemReach, "Blood mage", "Golem, punches within (m)", Fixed, fx(1,2), fx(8,1);
-    GolemSize, "Blood mage", "Golem, stands this many thralls tall (x)", Fixed, fx(1,1), fx(4,1);
+    SwimSpeed, "Blood mage", "Swim, speed (x walk)", Fixed, fx(1,2), fx(4,1);
+    HeartEvery, "Blood mage", "Heart, sends a thrall every", Frames, 1, 900;
+    HeartGround, "Blood mage", "Heart, holds ground round it (m)", Fixed, fx(1,2), fx(15,2);
+    GroundPower, "Blood mage", "Ground, her moves hit (x)", Fixed, fx(1,1), fx(3,1);
     PlagueFrom, "Blood mage", "Hemoplague, starts at radius", Fixed, fx(1,4), fx(8,1);
     PlagueTo, "Blood mage", "Hemoplague, grows to radius", Fixed, fx(1,1), fx(16,1);
     PlagueSlow, "Blood mage", "Hemoplague, slows to (x)", Fixed, 0, fx(1,1);
@@ -931,7 +938,7 @@ scalars! {
     FinisherRepays, "Blood mage", "Finisher, pays back her spent grey per point dealt (%)", Int, 0, 400;
     SpikeSpreadMost, "Blood mage", "Black spike, widest ring at a full hold (m)", Fixed, 0, fx(10,1);
     SpikesMost, "Blood mage", "Black spike, spikes at a full hold", Int, 1, 7;
-    GolemSelfHurt, "Blood mage", "Golem, hurts itself per blow dealt (x)", Fixed, 0, fx(2,1);
+    GroundSeedOff, "Blood mage", "Ground, thrown off her ground seeds (x)", Fixed, fx(1,1), fx(3,1);
     // **The Champion's Rush, braced** (2026-10-12, exploration 0015 C1).
     // Appended, as every scalar is. A hit taken through most of the run costs
     // a share of its damage and does not stop him; one taken in its last few
@@ -1069,6 +1076,47 @@ scalars! {
     LedgeShuffle,         "Ledge",    "Hand over hand at (m/s)",                             Fixed, 0, fx(5,1);
     LedgeLetGo,           "Ledge",    "Let go, pushed off at (m/s)",                         Fixed, 0, fx(10,1);
     LedgeRegrab,          "Ledge",    "Not caught again for",                                Frames, 0, 120;
+    // **The Blood mage's territory** (2026-10-18): her ground, swimming in
+    // it, her thralls stronger on it, hearts, and the scythe's three moves.
+    // See `docs/design/exploration/0021_blood_mage_territory.md`.
+    GroundSlack,          "Blood mage", "Ground, counts this far above or below it (m)",    Fixed, 0, fx(3,1);
+    GroundJoinedEvery,    "Blood mage", "Ground, joined loses a frame of life every",       Frames, 1, 20;
+    GroundBridgeEvery,    "Blood mage", "Ground, bridges are laid every",                   Frames, 1, 60;
+    GroundBridgeOverlap,  "Blood mage", "Ground, a bridge reaches past both edges (m)",     Fixed, 0, fx(2,1);
+    GroundTouchLeast,     "Blood mage", "Ground, a touch lays at least (m)",                Fixed, 0, fx(4,1);
+    SwimHeight,           "Blood mage", "Swim, stands this tall (m)",                       Fixed, fx(1,10), fx(2,1);
+    SwimPop,              "Blood mage", "Swim, pops out at the edge at (m/s)",              Fixed, 0, fx(30,1);
+    ThrallGroundBite,     "Blood mage", "Thrall, on her ground bites (x)",                  Fixed, fx(1,1), fx(4,1);
+    ThrallGroundSpeed,    "Blood mage", "Thrall, on her ground runs (x)",                   Fixed, fx(1,1), fx(4,1);
+    ThrallLeash,          "Blood mage", "Thrall, leaves her ground by (m)",                 Fixed, 0, fx(20,1);
+    HeartFromPaid,        "Blood mage", "Heart, holds what she paid (x)",                   Fixed, 0, fx(10,1);
+    HeartLeast,           "Blood mage", "Heart, holds at least",                            Int, 1, 2000;
+    HeartThrall,          "Blood mage", "Heart, a thrall costs it",                         Int, 1, 500;
+    HeartsMost,           "Blood mage", "Hearts at once",                                   Int, 1, 4;
+    ReapGroundStep,       "Blood mage", "Reap, lunges further on her ground (x)",           Fixed, fx(1,1), fx(4,1);
+    SweepThird,           "Blood mage", "Sweep, the third of a string hits (x)",            Fixed, fx(1,1), fx(4,1);
+    HarvestReach,         "Blood mage", "Harvest, reaches all round (m)",                   Fixed, fx(1,1), fx(12,1);
+    // **A heart is earned** (2026-10-18): what she has to deal to plant one.
+    HeartMeterFull,       "Blood mage", "Heart, earned by dealing",                         Int, 1, 5000;
+    // **The Elementalist's QoL pass**, 2026-10-18, appended for the reason
+    // everything above is. Wind that has caught fire burns.
+    WindFireBurn,         "Elementalist", "Wind on fire, Air ball burns per tick",           Int, 0, 300;
+    DraftFireBurn,        "Elementalist", "Wind on fire, a draft burns each body for",        Int, 0, 400;
+    // Her Updraft steers: the direction she holds pushes her while it blows.
+    UpdraftSteer,         "Elementalist", "Updraft, steered by her walk (m/s per s)",        Fixed, 0, fx(120,1);
+    UpdraftSteerCap,      "Elementalist", "Updraft, steered up to (m/s)",                    Fixed, 0, fx(30,1);
+    // Fissure's surge: the stone comes up while it slides, carrying whoever
+    // stands at its front and striking the rest harder the longer it was held.
+    SurgeSpeed,           "Elementalist", "Fissure surge, speed (m/s)",                      Fixed, fx(1,1), fx(60,1);
+    SurgeDamageGain,      "Elementalist", "Fissure surge, damage at a full hold (+x)",       Fixed, 0, fx(5,1);
+    SurgeKnockGain,       "Elementalist", "Fissure surge, knockback at a full hold (+x)",    Fixed, 0, fx(5,1);
+    SurgeLift,            "Elementalist", "Fissure surge, throws up at (m/s)",               Fixed, 0, fx(30,1);
+    // **The Reaver's tweaks**, 2026-10-18: the dash jump's rise cut with its
+    // carry, and the Fan's hang worn down by throwing it again. See
+    // `docs/design/kits/shadow-reaver.md`.
+    DashJumpRise,         "Shadow Reaver", "Dash jump, keeps of the rise (%)",   Percent, 0, 100;
+    FanFalloff,           "Shadow Reaver", "Fan, hang each one after (x)",       Fixed, 0, fx(1,1);
+    FanForget,            "Shadow Reaver", "Fan, the run forgotten after",       Frames, 1, 600;
     // **A crossbred creature in a fight** (2026-10-18, `sim::breed::actor`
     // and `brain`). Appended, as every knob above is. How fast a built body
     // turns, how often its brain glances, how long it waits between moves

@@ -386,7 +386,11 @@ can be seen, and points nothing anywhere: twenty-seven functions as of
 2026-10-01, beside the five lines. The raycast itself is `aim::sight` (and
 `aim::sight_for_attack`, below); where a cast leaves the body is `aim::origin`
 and, for a one-armed move, `aim::hand_origin`; what a path runs into is
-`aim::first_along` (§"What the path runs into"). The rest, one question each:
+`aim::first_along` (§"What the path runs into"), and everything it runs
+into, nearest first and up to the first wall, `aim::every_along` -- the
+Elementalist's two pushes, which act on every stone and fire on their line
+(2026-10-18), along a line `aim::through` carries on past the crosshair's
+point to the move's reach. The rest, one question each:
 
 **Is the crosshair on the shadow?** `aim::pointing_at` answers it, and the
 Reaver's forward dodge reads the answer to decide whether it is a dodge or the
@@ -508,15 +512,15 @@ exists to prevent. It replaced `aim::footing_toward` (2026-10-04), a forgiveness
 of three metres back that asked only about pits, so a send pointed up a ledge
 put the shadow on top of it.
 
-**Where does a thing go that is thrown forward and up?** `aim::hung_ahead` —
-where the Reaver's Gallows sends the shadow before she blinks to it (the Shadow
-arc's, until 2026-10-12), a fixed distance ahead along her flat facing and a
-fixed height up, the way `planted_ahead` is a fixed distance ahead. Nobody aims
-it.
+**Which way does a drive up go?** `aim::rise_dir` (2026-10-18) — the Reaver's
+Gallows: from her chest to the crosshair's point within the drive's length
+(`aim::sight`, so it converges on the reticle), held at least an angle above
+level. Pointed up steeper than that, exactly at the crosshair; level or low, at
+that angle on the crosshair's bearing. It replaced `aim::hung_ahead`, where
+Gallows threw the shadow up to blink to it.
 
 **Which way does a dive go?** `aim::plunge_dir` (2026-10-12) — the swing's line,
-held inside a cone round straight down: the Reaver's Plunge and the dive out of
-Gallows. Pointed inside the cone it goes where the crosshair is; shallower, down
+held inside a cone round straight down: the Reaver's Plunge. Pointed inside the cone it goes where the crosshair is; shallower, down
 the cone's edge on the same bearing. It points a body rather than an ability,
 but it is a look direction turned into where something goes, which is what
 this file is for.

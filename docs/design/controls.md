@@ -1057,8 +1057,8 @@ shadow out for high impact, closing gaps with strong finishers. The design is
 | | Left: finishers (cash the marks) | Middle: throws | Right: the shadow |
 | --- | --- | --- | --- |
 | **On foot** | Reave — a short dash and a cut, a sweet spot at the tip | Shuriken — a line to the crosshair, and the shadow throws one too, from wherever it is | Send — and pressed again it **moves** the shadow; only onto ground she could walk to |
-| **In the air** | Plunge — a dive along the crosshair, held inside 45° of straight down, and a ring of shadow from the landing | Fan — five level blades, and she stalls a moment | Whirl — the shadow as far as the send, spinning and cutting; a second one moves it |
-| **`space` + click** | Gallows — the shadow up first, she blinks to it, and plunges in the same cone; heavy, long recovery | Tumble — a flipping jump that throws three blades forward and down; **in the air, once a jump, the double jump** | Rising whirl — a jump and a Whirl |
+| **In the air** | Plunge — a dive along the crosshair, held inside 45° of straight down, and a ring of shadow from the landing | Fan — five level blades, and she stalls a moment, half as long for each Fan thrown again soon after | Whirl — the shadow as far as the send, spinning and cutting; a second one moves it |
+| **`space` + click** | Gallows — a drive up, 7 m: at 45° with the crosshair level or low, straight at it pointed higher; cuts at the top, long recovery (2026-10-18) | Tumble — a flipping jump that throws three blades forward and down; **in the air, once a jump, the double jump** | Rising whirl — a jump and a Whirl |
 
 | Input | Result |
 | --- | --- |
@@ -1067,12 +1067,12 @@ shadow out for high impact, closing gaps with strong finishers. The design is
 | `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow — which bursts. Airborne, it is the airdodge that does it, and it spends the airdodge |
 | walking onto a waiting shadow | **Collects it**, as the dash does, and it bursts |
 | `shift` + forward, while a throw's shadow is still flying | **The dash after it**, cancelling the rest of the throw — no need to point at it |
-| `space`, in the dash's last frames | **The dash jump.** It launches her the frame she arrives with the dash's whole speed, in a forward flip with a little more height than a jump |
+| `space`, in the dash's last frames | **The dash jump.** It launches her the frame she arrives with three quarters of the dash's speed, in a forward flip with three quarters of a jump and its hop (2026-10-18) |
 | `shift` + forward, anywhere else | The ordinary dodge |
 
-Every send — the send, the Whirl, the Rising whirl, Gallows — brings the shadow home three
+Every send — the send, the Whirl, the Rising whirl — brings the shadow home three
 seconds after it arrives, unless another send moves it first. Nothing brings it home for
-distance any more.
+distance any more. After a dash collects it, none of them sends it for a second (2026-10-18).
 
 Right click still cuts any recovery short and is still remembered for a few frames — what
 follows is that rule's history, and it holds for the Whirl as well as the send.
@@ -1178,7 +1178,17 @@ actually lives.
 
 ### Blood mage
 
-> **Revised 2026-10-13 from play.** Left: the Haemorrhage tapped, the Hemoplague held (growing),
+> **Her territory, 2026-10-18.** Thorns, spikes and the scythe. Left: the Thorn lash tapped, the
+> Bramble held (growing), the Black vines held to the end. Middle: one to seven Black spikes by the
+> hold (the Stake in the air), the Crimson cascade held to the end. Right: the Sweep tapped -- and
+> pressed again in its recovery, a string of three -- the Reap held, the Harvest held to the end.
+> Space and a click is a takeoff (Thornfall, Upheaval, Rising reap); `Q` Coagulate, `E` a heart;
+> `shift` with a stain under the crosshair teleports, otherwise **on her ground it is the swim**,
+> otherwise an ordinary dodge. Everything she throws lays her ground; on it her moves hit harder.
+> The design is [exploration/0021](exploration/0021_blood_mage_territory.md), the table
+> [kits/blood-mage.md](kits/blood-mage.md) §"Territory".
+>
+> **Superseded 2026-10-18: her territory.** **Revised 2026-10-13 from play.** Left: the Haemorrhage tapped, the Hemoplague held (growing),
 > the Black vines held to the end. Middle: one to seven Black spikes by the hold (the Stake in the
 > air), the Crimson cascade held to the end. Right: Command tapped, the Carpet of blood held, the
 > Blood golem held to the end. Space and a click is a takeoff (Blood wings, Upheaval, Rising reap);

@@ -52,7 +52,7 @@ fn in_reach(w: &mut World) {
 /// land.
 fn bolt_at_him(w: &mut World) {
     let pitch = pitch_at(w, w.players[1].pos);
-    looking(w, 2, keys::MY_BLOOD, pitch, 0);
+    looking(w, 2, keys::THORNS, pitch, 0);
     looking(w, 30, 0, pitch, 0);
 }
 
@@ -64,7 +64,7 @@ fn wounded(w: &mut World, grey: i32) {
 
 /// A pitch that points the Bloodletter at the other fighter's middle.
 fn pitch_at(w: &World, target: V3) -> i16 {
-    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
     let stones = sim::stones::gather(&w.players);
     let players = w.players;
     let effects = w.effects;
@@ -131,7 +131,7 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
         w.effects[0] = Some(Effect::pool(
             0,
             Class::BloodMage,
-            b::HAEMORRHAGE,
+            b::THORN_LASH,
             V3::ZERO,
             volume,
         ));
@@ -172,13 +172,13 @@ fn hits_that_land_on_one_spot_make_one_pool() {
         .pos
         .add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
     w.players[1].pos = spot;
-    let plague = sim::moves::get(Class::BloodMage, b::HEMOPLAGUE);
+    let plague = sim::moves::get(Class::BloodMage, b::BRAMBLE);
     let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
     w.effects[slot] = Some(Effect::cast(
         EffectKind::Plague,
         0,
         Class::BloodMage,
-        b::HEMOPLAGUE,
+        b::BRAMBLE,
         spot,
         V3::ZERO,
         plague.radius,
@@ -207,7 +207,7 @@ fn a_fifth_pool_merges_into_the_newest() {
     let mut w = mage();
     let far = |i: i32| V3::new(Fx::from_int(-12 + i * 3), Fx::ZERO, Fx::from_int(6));
     for i in 0..t::pool_cap() as i32 {
-        let mut pool = Effect::pool(0, Class::BloodMage, b::HAEMORRHAGE, far(i), 100);
+        let mut pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, far(i), 100);
         // Older the lower the index, so the newest is the last one placed.
         pool.age = (t::pool_cap() as i32 - i) as u16 * 10;
         w.effects[i as usize] = Some(pool);
@@ -238,9 +238,9 @@ fn every_cost_she_pays_is_a_stain() {
     // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
     for (button, airborne) in [
         (keys::SCYTHE, false),
-        (keys::MY_BLOOD, true),
-        (keys::MY_BLOOD, false),
-        (keys::YOUR_BLOOD, false),
+        (keys::THORNS, true),
+        (keys::THORNS, false),
+        (keys::SPIKES, false),
     ] {
         let mut w = mage();
         w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
@@ -296,7 +296,7 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // and landed over a pool of its own making it returns more than it cost.
     // The first cast makes the pool; the second, thrown as soon as she is
     // free, is the one measured.
-    let cases = [(b::HAEMORRHAGE, keys::MY_BLOOD)];
+    let cases = [(b::THORN_LASH, keys::THORNS)];
     for (slot, button) in cases {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
@@ -349,6 +349,6 @@ fn a_pool_is_an_effect_and_the_world_still_fits_its_budget() {
     // The plan's measured criterion: nothing allocates and the snapshot is
     // under its cap. `budget.rs` holds both; this only says which change is
     // being asked about.
-    assert!(std::mem::size_of::<World>() <= 20 * 1024);
+    assert!(std::mem::size_of::<World>() <= 21 * 1024);
     assert_eq!(EffectKind::Pool.name(), "essence pool");
 }

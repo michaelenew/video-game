@@ -1,5 +1,5 @@
 //! **What you carry, and the morph** (the world's first use of breeding,
-//! `docs/design/exploration/0021` §12).
+//! `docs/design/exploration/0022` §12).
 //!
 //! Every creature has an **egg**: it lies near the creature when its hunt
 //! begins, and walking into it picks it up. A creature whose egg you carry

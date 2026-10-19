@@ -273,8 +273,8 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            // The Carpet and the Black vines: the discs they hurt in.
-            EffectKind::Carpet | EffectKind::Vines => {
+            // The Black vines: the disc they hurt in.
+            EffectKind::Vines => {
                 cylinder(
                     &mut gizmos,
                     at,
@@ -283,13 +283,36 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
-            // A thrall and the golem: the column a blow has to touch.
-            EffectKind::Thrall | EffectKind::Golem => {
+            // A heart: the ground it holds.
+            EffectKind::Heart => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    sim::tuning::heart_ground().to_f32_for_render(),
+                    sim::tuning::body_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // A thrall: the column a blow has to touch.
+            EffectKind::Thrall => {
                 cylinder(
                     &mut gizmos,
                     at,
                     effect.thrall_radius().to_f32_for_render(),
                     effect.thrall_height().to_f32_for_render(),
+                    PILLAR,
+                );
+            }
+            // Fissure's surge: the column its front reaches, where it is now.
+            EffectKind::Surge => {
+                cylinder(
+                    &mut gizmos,
+                    crate::fx3(effect.surge_front()),
+                    effect
+                        .field_radius()
+                        .add(sim::tuning::body_radius())
+                        .to_f32_for_render(),
+                    sim::tuning::structure_height().to_f32_for_render(),
                     PILLAR,
                 );
             }

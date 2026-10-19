@@ -665,7 +665,11 @@ pub fn drive_down(players: &mut [Player; MAX_PLAYERS], index: usize, speed: Fx) 
 /// By the same skin the body resolve uses to say a body is grounded on one:
 /// over its top, and within the arena's skin of it.
 pub fn under(players: &[Player; MAX_PLAYERS], feet: V3) -> Option<usize> {
-    let field = gather(players);
+    under_in(&gather(players), feet)
+}
+
+/// [`under`], asked of a field already gathered.
+pub fn under_in(field: &Field, feet: V3) -> Option<usize> {
     field.iter().enumerate().find_map(|(index, stone)| {
         let stone = (*stone)?;
         let apart = V3::new(stone.at.x.sub(feet.x), Fx::ZERO, stone.at.z.sub(feet.z));
@@ -762,6 +766,41 @@ pub fn light_within(players: &mut [Player; MAX_PLAYERS], at: V3, radius: Fx) {
     }
 }
 
+/// Set fire to every stone a column of fire touches: `radius` wide, from
+/// `foot` up `height`, against each stone's own column as it stands now.
+///
+/// What "fire on a stone lights it" means since 2026-10-18, from play:
+/// **every** contact, for as long as the fire and the stone share space --
+/// not only the pillar's footprint on the frame it was cast. A stone raised
+/// into a standing pillar, or one a tornado runs over, catches.
+pub fn light_touching(players: &mut [Player; MAX_PLAYERS], foot: V3, radius: Fx, height: Fx) {
+    let field = gather(players);
+    for (index, slot) in field.iter().enumerate() {
+        let Some(s) = slot else { continue };
+        let apart = V3::new(s.at.x.sub(foot.x), Fx::ZERO, s.at.z.sub(foot.z));
+        let touches = crate::math::wide_flat_len(apart).raw() <= radius.add(s.radius()).raw()
+            && foot.y.raw() <= s.top().raw()
+            && foot.y.add(height).raw() >= s.at.y.raw();
+        if touches {
+            light(players, index);
+        }
+    }
+}
+
+/// [`light_touching`] for a strip of fire: every stone the segment from `a`
+/// to `b`, `radius` thick, touches.
+pub fn light_along(players: &mut [Player; MAX_PLAYERS], a: V3, b: V3, radius: Fx) {
+    let field = gather(players);
+    for (index, slot) in field.iter().enumerate() {
+        let Some(s) = slot else { continue };
+        let base = V3::new(s.at.x, s.at.y.sub(radius), s.at.z);
+        let tall = s.standing_height().add(radius).add(radius);
+        if crate::math::segment_meets_column(a, b, base, s.radius().add(radius), tall) {
+            light(players, index);
+        }
+    }
+}
+
 /// Is the stone at `index` on fire?
 pub fn is_lit(players: &[Player; MAX_PLAYERS], index: usize) -> bool {
     gather(players)[index].is_some_and(|s| s.lit > 0)
@@ -832,6 +871,21 @@ pub fn relocate_and_erupt(
         while stone.phase() == Phase::Churning && stone.age < stone.rise {
             stone.age += 1;
         }
+    }
+    scatter(players, &field);
+}
+
+/// Carry the stone at `index` to `to`, settled on what is under it, without
+/// touching its rise: Fissure's surge brings it up out of the ground *while*
+/// it slides, so it keeps erupting on its own clock as it goes.
+pub fn slide_to(players: &mut [Player; MAX_PLAYERS], index: usize, to: V3, arena: &Terrain) {
+    let mut field = gather(players);
+    let mut others = field;
+    others[index] = None;
+    let settled = crate::aim::settle(to, &others, arena);
+    if let Some(stone) = field[index].as_mut() {
+        stone.at = settled;
+        stone.vel = V3::ZERO;
     }
     scatter(players, &field);
 }

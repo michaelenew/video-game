@@ -46,7 +46,9 @@ every one of them is a function in `aim.rs`:**
 The rest of `aim.rs` -- twenty-seven functions as of 2026-10-02 -- are **not**
 lines of effect. `aim::sight` and `aim::sight_for_attack` are the one raycast
 itself, `aim::origin` and `aim::hand_origin` where a cast leaves the body, and
-`aim::first_along` what a path runs into. `aim::pointing_at`
+`aim::first_along` what a path runs into, and `aim::every_along` everything it runs
+into up to a wall -- the Elementalist's two pushes, along a line `aim::through`
+carries on to their reach (2026-10-18). `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
@@ -111,11 +113,11 @@ line (`column_meets_quarry`), and along it as Phase goes with nobody there
 (2026-10-12). `aim::standable` asks *is that footing* (not a
 course's drop), and `aim::walk_toward` *how far toward it could she walk*: the
 Reaver's send goes no further than that -- up no ledge, over no gap -- and is
-refused if not one step is walkable (2026-10-10). `aim::chain_next` answers *where does a chain of lightning go next* -- the body nearest a point, within a reach, with nothing solid between, not yet struck -- which the Dual mage's Chain lightning asks from the cloud over her head (`aim::overhead`) and then from each body it struck (2026-10-12). `aim::hop_to` answers *where does the hop after one of the Dual mage's autos land her* -- a blink along the held direction, short of a wall, land she could not stand on or the place's own bounds, lifted by her lower bar (2026-10-12). `aim::flurry_dash_to` answers *where does the Flurry dash's run stop her* -- straight to the disk her blows struck, up or down, short of the first solid thing, inside the bounds (2026-10-13). `aim::hung_ahead` answers
-*where does a thing thrown forward and up go* -- where Gallows sends the shadow,
-a facing and two lengths, `planted_ahead`'s reason -- and `aim::plunge_dir`
+refused if not one step is walkable (2026-10-10). `aim::chain_next` answers *where does a chain of lightning go next* -- the body nearest a point, within a reach, with nothing solid between, not yet struck -- which the Dual mage's Chain lightning asks from the cloud over her head (`aim::overhead`) and then from each body it struck (2026-10-12). `aim::hop_to` answers *where does the hop after one of the Dual mage's autos land her* -- a blink along the held direction, short of a wall, land she could not stand on or the place's own bounds, lifted by her lower bar (2026-10-12). `aim::flurry_dash_to` answers *where does the Flurry dash's run stop her* -- straight to the disk her blows struck, up or down, short of the first solid thing, inside the bounds (2026-10-13). `aim::rise_dir` answers
+*which way does a drive up go* -- Gallows: to the crosshair's point within the
+drive's length, held at least an angle above level (2026-10-18) -- and `aim::plunge_dir`
 *which way does a dive go*: the look, held inside a cone round straight down
-(the Plunge and Gallows, 2026-10-12). **Every eye `aim.rs` starts
+(the Plunge, 2026-10-12). **Every eye `aim.rs` starts
 from is `camera::eye_under`**: the eye held under a cave's vault, which the
 drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 
@@ -222,7 +224,7 @@ is already struggling. One rollback burst gets a quarter of the frame, one
 **Add to the `no floats, no deps, no I/O` list: no allocation.** A simulation
 frame, and the whole path from snapshot to screen in `view`, must not touch the
 heap — an allocator is a lock with a tail, and it is what turns one frame in a
-thousand into a millisecond. That check and the 20 KiB cap on `World` are the
+thousand into a millisecond. That check and the 21 KiB cap on `World` are the
 ones that matter: they give the same answer on every machine, whereas the three
 timing budgets run at 5–40x the measured cost and will only catch a change of
 *kind* — an accidental quadratic, an unbounded scan, a blocking call.

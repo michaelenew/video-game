@@ -778,6 +778,50 @@ fn the_dash_stops_on_the_shadow() {
 }
 
 #[test]
+fn the_shadow_rests_a_second_after_a_dash_collects_it() {
+    // 2026-10-18, from play: "after a player dashes and collects the shadow,
+    // I need there to be a 1 second cooldown until they can send the shadow
+    // again". Right click is tapped every other frame from the moment she
+    // lands on it; the send must not come before the rest is over, and must
+    // come soon after.
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    run(&mut w, 1, SHIFT | W, pitch);
+    let mut landed = None;
+    for frame in 0..60u32 {
+        run(&mut w, 1, 0, pitch);
+        if !shadow(&w).is_out() {
+            landed = Some(frame);
+            break;
+        }
+    }
+    landed.expect("the dash never collected the shadow");
+    assert!(shadow(&w).rest > 0, "collecting it by the dash rests it");
+    let mut sent_after = None;
+    for frame in 0..(t::send_after_dash() as u32 + 30) {
+        let bits = if frame % 2 == 0 { R } else { 0 };
+        run(&mut w, 1, bits, 0);
+        if w.players[0].action.attack_kind() == Some(sim::moves::reaver::SEND) {
+            sent_after = Some(frame + 1);
+            break;
+        }
+    }
+    let sent_after = sent_after.expect("the send never came back");
+    assert!(
+        sent_after >= t::send_after_dash() as u32,
+        "sent {sent_after} frames after the dash collected it, inside the rest"
+    );
+    assert!(
+        sent_after <= t::send_after_dash() as u32 + 3,
+        "sent {sent_after} frames after: the rest outlasted itself"
+    );
+}
+
+#[test]
 fn the_dash_jump_launches_her() {
     // Six metres of dash, the jump pressed as she closes on the shadow and
     // held: it is her launch, and it should carry her well past half the

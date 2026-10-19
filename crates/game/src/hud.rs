@@ -242,6 +242,7 @@ pub fn setup(mut commands: Commands) {
                         spawn_bar(column, seat);
                         spawn_momentum(column, seat);
                         spawn_well(column, seat);
+                        spawn_heart(column, seat);
                     });
                 }
             });
@@ -290,6 +291,19 @@ pub fn setup(mut commands: Commands) {
             .with_children(|row| {
                 spawn_well(row, 0);
                 spawn_well(row, 1);
+            });
+            // Her heart meter under it, the same way.
+            root.spawn(Node {
+                width: Val::Percent(100.0),
+                column_gap: Val::Px(18.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                margin: UiRect::top(Val::Px(3.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                spawn_heart(row, 0);
+                spawn_heart(row, 1);
             });
 
             // The creature's bars, under the fighters' own. Hidden entirely in
@@ -810,6 +824,75 @@ fn spawn_well(parent: &mut ChildSpawnerCommands, who: usize) {
                 WellFill(who),
             ));
         });
+}
+
+/// **The Blood mage's heart meter** (2026-10-18): what she has dealt toward
+/// a heart, against `sim::tuning::heart_meter_full`. Full, it burns bright --
+/// `E` plants a heart. Hidden for every other class.
+#[derive(Component)]
+pub struct HeartRow(pub usize);
+
+/// The heart meter's fill.
+#[derive(Component)]
+pub struct HeartFill(pub usize);
+
+/// Filling: her essence's crimson-violet. Full: a heart's own burning red.
+const HEART_FILLING: Color = Color::srgb(0.42, 0.05, 0.32);
+const HEART_FULL: Color = Color::srgb(1.0, 0.18, 0.36);
+
+fn spawn_heart(parent: &mut ChildSpawnerCommands, who: usize) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(34.0),
+                height: Val::Px(6.0),
+                border: UiRect::all(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            HeartRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(HEART_FILLING),
+                HeartFill(who),
+            ));
+        });
+}
+
+/// The heart meter: shown for the Blood mage, filled to what she has dealt,
+/// and bright when a heart is hers to plant.
+pub fn update_heart(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&HeartRow, &mut Visibility, &mut BorderColor)>,
+    mut fills: Query<(&HeartFill, &mut Node, &mut BackgroundColor)>,
+) {
+    for (row, mut visible, mut border) in rows.iter_mut() {
+        let p = &sim.cur.players[row.0];
+        *visible = if p.class == sim::Class::BloodMage {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        border.0 = if p.heart_ready() { HEART_FULL } else { DIM };
+    }
+    let full = sim::tuning::heart_meter_full().max(1) as f32;
+    for (fill, mut node, mut colour) in fills.iter_mut() {
+        let p = &sim.cur.players[fill.0];
+        node.width = Val::Percent(100.0 * (p.heart_meter as f32 / full).clamp(0.0, 1.0));
+        colour.0 = if p.heart_ready() {
+            HEART_FULL
+        } else {
+            HEART_FILLING
+        };
+    }
 }
 
 /// The Well's bar: shown for the class that has one, filled to how full it

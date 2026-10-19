@@ -628,13 +628,28 @@ pub struct Shadow {
     /// send starts it at `tuning::shadow_return` (2026-10-12), another send
     /// starts it over, and collecting the shadow clears it.
     pub hang: u16,
-    /// She collected the shadow this frame -- the dash, standing on it,
-    /// Gallows -- and the burst is owed. Spent by `shadow::take_collected`.
+    /// She collected the shadow this frame -- the dash, standing on it --
+    /// and the burst is owed. Spent by `shadow::take_collected`.
     pub collected: bool,
     /// Frames left of the forward flip out of a dash jump (2026-10-10). The
     /// renderer turns her body over by it; in the snapshot, like every other
     /// clock a picture is drawn from, so a rollback does not pop it.
     pub flip: u8,
+    /// Frames left before the shadow may be sent again after a dash collected
+    /// it (2026-10-18): the three moves on right click wait for it. See
+    /// `tuning::send_after_dash`.
+    pub rest: u16,
+    /// Gallows' drive (2026-10-18): the velocity it holds, and frames left of
+    /// holding it, plus the frame its speed is cut to what she keeps. A
+    /// velocity rather than a target, so a change of frame does not move it.
+    /// See `shadow::begin_rise`.
+    pub rise: V3,
+    pub rising: u8,
+    /// The run of Fans thrown without a break of `tuning::fan_forget` frames,
+    /// and frames left before it is forgotten (2026-10-18): each one's hang is
+    /// worth `tuning::fan_falloff` of the last. See `shadow::fan_hang`.
+    pub fans: u8,
+    pub fan_clock: u16,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -684,6 +699,11 @@ impl Shadow {
             hang: 0,
             flip: 0,
             collected: false,
+            rest: 0,
+            rise: V3::ZERO,
+            rising: 0,
+            fans: 0,
+            fan_clock: 0,
         }
     }
 

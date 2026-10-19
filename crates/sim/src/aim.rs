@@ -2205,7 +2205,9 @@ pub enum Contact {
         index: usize,
         dist: Fx,
     },
+    /// Which slot of the effects array, and where along the path.
     Fire {
+        effect: usize,
         dist: Fx,
     },
     /// A part of a creature: which slot of `World::monsters`, which part.
@@ -2232,7 +2234,7 @@ impl Contact {
         match self {
             Contact::Fighter { dist, .. }
             | Contact::Stone { dist, .. }
-            | Contact::Fire { dist }
+            | Contact::Fire { dist, .. }
             | Contact::Quarry { dist, .. }
             | Contact::Critter { dist, .. }
             | Contact::Terrain { dist } => dist,
@@ -2270,15 +2272,128 @@ pub fn first_along(
     scene: &Scene,
     targets: Targets,
 ) -> Option<Contact> {
-    let (from, dir, limit) = (path.from, path.dir(), path.length());
+    let limit = path.length();
     let mut best: Option<Contact> = None;
-    let mut keep = |found: Contact| {
+    each_along(path, girth, owner, scene, targets, &mut |found: Contact| {
         if found.dist().raw() <= limit.raw()
             && best.is_none_or(|b| found.dist().raw() < b.dist().raw())
         {
             best = Some(found);
         }
-    };
+    });
+    best
+}
+
+/// **A line carried on past the point it was aimed at**, to `reach` from where
+/// it leaves: the same direction, so the crosshair still picks the line, and
+/// the whole of the move's range along it. For the Elementalist's two pushes,
+/// which act on everything on their line ([`every_along`]): a line that ended
+/// on the near stone the crosshair was on could never reach the one behind it.
+pub fn through(path: Path, reach: Fx) -> Path {
+    if path.length().raw() >= reach.raw() {
+        return path;
+    }
+    Path {
+        from: path.from,
+        to: path.from.add(path.dir().scale(reach)),
+    }
+}
+
+/// The most things [`every_along`] reports on one path.
+pub const MAX_ALONG: usize = 24;
+
+/// **Everything** a straight path runs into, nearest first, up to the first
+/// wall -- [`first_along`]'s question asked without stopping at the answer.
+///
+/// For the Elementalist's two pushes (2026-10-18, from play): two stones one
+/// behind the other made both useless, because the near one took the shot
+/// meant for the far one and the far one stopped the near one's kick. Both
+/// now act on every stone and every fire on their line at once. A thing met
+/// twice -- a pillar's base and its column -- is reported once, where the
+/// path first meets it. A wall ends the list and is its last entry.
+pub fn every_along(
+    path: Path,
+    girth: Fx,
+    owner: u8,
+    scene: &Scene,
+    targets: Targets,
+) -> ([Option<Contact>; MAX_ALONG], usize) {
+    let limit = path.length();
+    let mut out: [Option<Contact>; MAX_ALONG] = [None; MAX_ALONG];
+    let mut n = 0;
+    each_along(path, girth, owner, scene, targets, &mut |found: Contact| {
+        if found.dist().raw() > limit.raw() {
+            return;
+        }
+        // The same thing met again keeps only its nearer meeting.
+        for c in out[..n].iter_mut().flatten() {
+            if same_thing(*c, found) {
+                if found.dist().raw() < c.dist().raw() {
+                    *c = found;
+                }
+                return;
+            }
+        }
+        if n < MAX_ALONG {
+            out[n] = Some(found);
+            n += 1;
+        }
+    });
+    // Nearest first: an insertion sort over a handful.
+    for a in 1..n {
+        let mut b = a;
+        while b > 0 && dist_of(out[b]).raw() < dist_of(out[b - 1]).raw() {
+            out.swap(b, b - 1);
+            b -= 1;
+        }
+    }
+    // Nothing past the first wall.
+    if let Some(wall) = out[..n]
+        .iter()
+        .position(|c| matches!(c, Some(Contact::Terrain { .. })))
+    {
+        for c in out[wall + 1..n].iter_mut() {
+            *c = None;
+        }
+        n = wall + 1;
+    }
+    (out, n)
+}
+
+fn dist_of(c: Option<Contact>) -> Fx {
+    c.map_or(Fx::ZERO, Contact::dist)
+}
+
+/// Are these two meetings the same thing met twice?
+fn same_thing(a: Contact, b: Contact) -> bool {
+    match (a, b) {
+        (Contact::Stone { index: x, .. }, Contact::Stone { index: y, .. })
+        | (Contact::Fighter { index: x, .. }, Contact::Fighter { index: y, .. })
+        | (Contact::Critter { index: x, .. }, Contact::Critter { index: y, .. })
+        | (Contact::Fire { effect: x, .. }, Contact::Fire { effect: y, .. }) => x == y,
+        (
+            Contact::Quarry {
+                slot: x, part: px, ..
+            },
+            Contact::Quarry {
+                slot: y, part: py, ..
+            },
+        ) => x == y && px == py,
+        _ => false,
+    }
+}
+
+/// What [`first_along`] and [`every_along`] both walk: every meeting of the
+/// path with what `targets` asks for, in no order, each handed to `keep`.
+fn each_along(
+    path: Path,
+    girth: Fx,
+    owner: u8,
+    scene: &Scene,
+    targets: Targets,
+    keep: &mut dyn FnMut(Contact),
+) {
+    let (from, dir, limit) = (path.from, path.dir(), path.length());
 
     if targets.fighters {
         for (index, p) in scene.players.iter().enumerate() {
@@ -2305,7 +2420,7 @@ pub fn first_along(
         }
     }
     if targets.fire {
-        for slot in scene.effects.iter() {
+        for (effect, slot) in scene.effects.iter().enumerate() {
             let Some(e) = slot else { continue };
             // A cloud of embers is fire too -- the one fire with no foot on
             // the floor, so its slab is measured about its centre. What
@@ -2320,7 +2435,7 @@ pub fn first_along(
                     slab.radius.add(girth),
                     slab.top.sub(slab.bottom),
                 ) {
-                    keep(Contact::Fire { dist });
+                    keep(Contact::Fire { effect, dist });
                 }
                 continue;
             }
@@ -2336,7 +2451,7 @@ pub fn first_along(
                     b,
                     e.field_radius().add(girth),
                 ) {
-                    keep(Contact::Fire { dist });
+                    keep(Contact::Fire { effect, dist });
                 }
                 continue;
             }
@@ -2349,7 +2464,7 @@ pub fn first_along(
                     slab.radius.add(girth),
                     slab.top,
                 ) {
-                    keep(Contact::Fire { dist });
+                    keep(Contact::Fire { effect, dist });
                 }
                 continue;
             }
@@ -2368,7 +2483,7 @@ pub fn first_along(
                     slab.radius.add(girth),
                     slab.top.sub(slab.bottom),
                 ) {
-                    keep(Contact::Fire { dist });
+                    keep(Contact::Fire { effect, dist });
                 }
             }
         }
@@ -2422,7 +2537,6 @@ pub fn first_along(
             }
         }
     }
-    best
 }
 
 /// [`settle`], with the creatures' backs as floors too: the highest of the
@@ -2520,15 +2634,33 @@ pub fn walk_toward(from: V3, to: V3, scene: &Scene) -> Option<V3> {
     })
 }
 
-/// **Where Gallows sends the shadow up** (2026-10-12; the Shadow arc's,
-/// retired, before it): `ahead` along her flat facing and `up` above her feet. Nobody aims it -- the move is a
-/// throw forward and up, the way Landfall's slab is a fixed distance ahead
-/// ([`planted_ahead`]) -- so it is a facing and two lengths, and it lives
-/// here for the reason that one does.
-pub fn hung_ahead(pos: V3, facing: V3, ahead: Fx, up: Fx) -> V3 {
-    let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
-    pos.add(flat.scale(ahead))
-        .add(V3::new(Fx::ZERO, up, Fx::ZERO))
+/// **Which way Gallows drives her** (2026-10-18): from her chest to the
+/// point the crosshair is on within `reach` -- the drive's own length, so
+/// pointed at open sky it is the point she ends on -- held at least `climb`
+/// turns above level. Pointed up, steeper than that, it goes exactly where
+/// the crosshair is; pointed level or down, it climbs at the floor's angle on
+/// the crosshair's bearing. Her facing's bearing when there is none.
+///
+/// The owner's brief: "a mid length drive upwards and at an angle (if cursor
+/// is down or around neutral) or to where the cursor is pointing precisely
+/// (if cursor is pointing up)". [`plunge_dir`] turned over, and aimed off
+/// [`sight`] rather than the look, so it converges on the reticle.
+pub fn rise_dir(who: usize, look: Input, reach: Fx, climb: Fx, scene: &Scene) -> V3 {
+    let caster = &scene.players[who];
+    let from = origin(caster.pos);
+    let dir = sight(who, look, reach, scene).at.sub(from).normalized();
+    let floor = crate::fixed::sin_turns(climb);
+    if dir.y.raw() >= floor.raw() {
+        return dir;
+    }
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z);
+    let flat = if flat.len().raw() > 0 {
+        flat.normalized()
+    } else {
+        V3::new(caster.facing.x, Fx::ZERO, caster.facing.z).normalized()
+    };
+    flat.scale(crate::fixed::cos_turns(climb))
+        .add(V3::new(Fx::ZERO, floor, Fx::ZERO))
 }
 
 /// **Which way a plunge goes** (2026-10-12): along `dir` -- the swing's line,
@@ -2537,7 +2669,7 @@ pub fn hung_ahead(pos: V3, facing: V3, ahead: Fx, up: Fx) -> V3 {
 /// the crosshair is; pointed shallower, it goes down the cone's edge on the
 /// same bearing. Straight down when there is no bearing at all.
 ///
-/// The Reaver's Plunge and Gallows. The owner's brief: the aerial left click
+/// The Reaver's Plunge. The owner's brief: the aerial left click
 /// lets you choose a direction, but not "outside of a 45 degree cone
 /// downward" -- a dive along the look with no limit would be a dash, which is
 /// the Reave's.

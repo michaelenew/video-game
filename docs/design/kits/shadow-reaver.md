@@ -7,11 +7,25 @@ sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat
 
 # Shadow Reaver — kit
 
+> **Four tweaks, 2026-10-18, built and unplayed** — from the owner's Reaver thread.
+> **Gallows is a drive up** (`Gallows, drives`, 7 m, through its wind-up and its cut): with the
+> crosshair level or low it climbs at 45° (`Gallows, climbs at least`, an eighth of a turn) on
+> the crosshair's bearing; pointed higher than that, it goes exactly at the crosshair's point
+> (`aim::rise_dir`). It cuts at the top, keeps 30% of the drive's speed after it, and touches
+> the shadow no more — the blink, the shadow thrown up and the dive are gone. **The shadow
+> rests a second after a dash collects it** (`Send, waits after a dash collects the shadow`,
+> 60 frames): nothing on right click sends it until then. **The dash jump is three quarters
+> of what it was**, both ways — the carry (`Dash jump, keeps of the dash speed`, 100 → 75%) and
+> the rise, a jump and the flip's hop together (`Dash jump, keeps of the rise`, 75%), which now
+> rises a little less than a plain jump. **Each Fan hangs her for half the one before**
+> (`Fan, hang each one after`), landing or not, until she goes a second and a half without one
+> (`Fan, the run forgotten after`) — on top of the airtime's own falloff.
+
 > **Third pass, 2026-10-12, built and unplayed** — see
 > [../exploration/0014_shadow_reaver_marks_and_throws.md](../exploration/0014_shadow_reaver_marks_and_throws.md),
 > which supersedes 0013 where they differ. Middle click is three throws (the Shuriken — and the
 > shadow throws one too; the Tumble; the Fan, with a stall); the Plunge aims inside 45° of
-> straight down and Gallows blinks to the shadow it sent up; the Whirl reaches as far as the
+> straight down and Gallows blinks to the shadow it sent up (a drive up since 2026-10-18); the Whirl reaches as far as the
 > send and is one set; `space` + right is the Rising whirl. **Every shadow blade marks and only
 > the finishers cash** (Reave, Plunge, Gallows), each mark worth more than the last, on one
 > two-second clock. Every send comes home after three seconds; **the leash below is gone**;
@@ -179,6 +193,12 @@ the combination the kit is built around — see below. Until 2026-10-10 the seco
 it home, dashing back through anything between, damaging and slowing it; from play, "limiting
 and annoying to have to keep bringing the shadow back". The way home still cuts that way when
 the send's three-second clock (since 2026-10-12) or the Whirl's end sends it.
+
+**And it rests after a dash — since 2026-10-18.** For a second after the dash to the shadow
+collects it (`Send, waits after a dash collects the shadow`), nothing on right click sends it:
+the send, the Whirl and the Rising whirl all wait. From play: "after a player dashes and
+collects the shadow, I need there to be a 1 second cooldown until they can send the shadow
+again". Walking onto it and the shadow coming home on its own are the ordinary lockout's.
 
 #### The press answers whatever else she is doing — added 2026-09-14
 
@@ -365,7 +385,11 @@ does not throw a second dodge on landing.
 the dash's last frames (`Dash jump, press kept before arrival`, six) is kept, and on the frame
 she lands on the shadow she launches with **all of the dash's speed** in the direction she
 crossed (`Dash jump, keeps of the dash speed`, 100%): about 50 m past a shadow sent 9 m on the
-flat. There is no pause on the shadow. A press after landing is an ordinary jump. Briefly on
+flat. There is no pause on the shadow. A press after landing is an ordinary jump.
+**Since 2026-10-18 both of its speeds are three quarters of that**: the carry keeps 75% of the
+dash, and the rise is 75% of a jump and the flip's hop together (`Dash jump, keeps of the
+rise`) — from play, "shadow dash jump speeds nerfed to 75% of current values across the
+board". That puts the rise a little under a plain jump's. Briefly on
 2026-10-04 the press could also come in a ten-frame window after landing, with the speed bled
 for each frame of it; from play that read as a stall followed by a launch, and it went.
 
@@ -388,7 +412,8 @@ the class's answer to a turtle.
 
 On `E` again since the second pass (2026-10-10); it was on middle click for a day, and on `E`
 from 2026-09-14 before that. The "blink upward" half of this description is its own move,
-**Gallows** (space + left click since 2026-10-10).
+**Gallows** (space + left click since 2026-10-10) — a drive up of its own since 2026-10-18, see
+the note at the top.
 
 ### Deadly mistake — retired 2026-10-10
 **Startup** fast · **Recovery** long on whiff · **Range** self · **Mechanic** requires the

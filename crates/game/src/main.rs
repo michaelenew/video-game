@@ -21,6 +21,7 @@
 mod arenas;
 mod bake;
 mod beast;
+mod claimed;
 mod critters;
 mod crosshair;
 mod debug;
@@ -268,6 +269,7 @@ fn main() {
                 critters::setup,
                 signs::setup,
                 ground::setup,
+                claimed::setup,
                 hud::setup,
                 hud::setup_regions,
                 hud::setup_picker,
@@ -331,13 +333,15 @@ fn main() {
                     place_pips,
                     place_curses,
                     place_spells,
+                    claimed::drape,
+                    place_auras,
                 ),
                 beast::place,
                 drive_camera,
                 fade_own_body,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
-                (hud::update, hud::update_well),
+                (hud::update, hud::update_well, hud::update_heart),
                 hud::update_class_buttons,
                 crosshair::update,
                 debug::draw,
@@ -800,9 +804,10 @@ pub fn build() -> &'static str {
 }
 
 /// `SHOT_BLOOD=1` starts a Blood mage in front of her own work, so a capture
-/// can look at what 0016 draws without playing up to it: three thralls and a
-/// golem out in front, the Black vines to the side, stains of a few sizes
-/// (one lit), and the Well half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
+/// can look at what 0016 and 0021 draw without playing up to it: three
+/// thralls and a heart out in front, the Black vines to the side, stains of a
+/// few sizes (one lit), her ground under her and out to the heart, and the
+/// Well half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
 /// class, and read once at start.
 fn shot_blood(w: &mut World) {
     use sim::effects::{Effect, EffectKind};
@@ -811,6 +816,14 @@ fn shot_blood(w: &mut World) {
         return;
     }
     let p = w.players[0];
+    // `SHOT_BLOOD=ground`: only her ground under her and her heart meter
+    // full -- for a capture of a move from her ground, a heart planted, or
+    // the swim -- and nothing else staged.
+    if platform::env("SHOT_BLOOD").as_deref() == Some("ground") {
+        w.players[0].heart_meter = sim::tuning::heart_meter_full().max(0) as u16;
+        sim::ground::lay(&mut w.ground, 0, p.pos, sim::Fx::from_int(4), u16::MAX);
+        return;
+    }
     let ahead = |forward: i32, side: i32| {
         let f = p.facing;
         sim::V3::new(
@@ -833,21 +846,21 @@ fn shot_blood(w: &mut World) {
     let at =
         |kind, slot, pos, reach| Effect::cast(kind, 0, p.class, slot, pos, sim::V3::ZERO, reach);
     for (k, side) in [-2, 0, 2].into_iter().enumerate() {
-        let mut thrall = Effect::pool(0, p.class, b::SUMMON, ahead(9, side), 60 + 30 * k as i32);
+        let mut thrall = Effect::pool(0, p.class, b::HEART, ahead(9, side), 60 + 30 * k as i32);
         thrall.kind = EffectKind::Thrall;
         thrall.life = u16::MAX;
         // Turned to her, so the capture sees their faces.
         thrall.dir = sim::V3::ZERO.sub(p.facing);
         put(thrall);
     }
-    let mut golem = Effect::pool(0, p.class, b::GOLEM, ahead(13, 0), 600);
-    golem.kind = EffectKind::Golem;
-    golem.life = u16::MAX;
-    golem.dir =
-        sim::V3::ZERO
-            .sub(p.facing)
-            .add(sim::V3::new(sim::Fx::ZERO, sim::Fx::ZERO, sim::Fx::ONE));
-    put(golem);
+    let mut heart = at(
+        EffectKind::Heart,
+        b::HEART,
+        ahead(13, 0),
+        sim::tuning::heart_ground(),
+    );
+    heart.banked = 600;
+    put(heart);
     put(at(
         EffectKind::Vines,
         b::VINES,
@@ -860,7 +873,7 @@ fn shot_blood(w: &mut World) {
         .into_iter()
         .enumerate()
     {
-        let mut stain = Effect::pool(0, p.class, b::HAEMORRHAGE, ahead(forward, side), volume);
+        let mut stain = Effect::pool(0, p.class, b::THORN_LASH, ahead(forward, side), volume);
         if k == 2 {
             stain.life = 30;
         }
@@ -868,6 +881,21 @@ fn shot_blood(w: &mut World) {
     }
     // And the Well half full, so its bar shows.
     w.players[0].well = (sim::tuning::well_full() / 2).max(0) as u16;
+    // `SHOT_BLOOD=swim`: and her sunk in it, for `SHOT_FRAME=0` -- the first
+    // step brings her up, with no `shift` held.
+    if platform::env("SHOT_BLOOD").as_deref() == Some("swim") {
+        w.players[0].swim = sim::state::SWIM_UNDER;
+    }
+    // Her ground: under her, and a field out to the heart.
+    for (forward, side, radius) in [(0, 0, 3), (4, 1, 2), (8, -1, 3)] {
+        sim::ground::lay(
+            &mut w.ground,
+            0,
+            ahead(forward, side),
+            sim::Fx::from_int(radius),
+            u16::MAX,
+        );
+    }
 }
 
 /// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
@@ -1665,6 +1693,11 @@ const EFFECT_PARTS: usize = {
         most
     };
     let most = if VINE_PARTS > most { VINE_PARTS } else { most };
+    let most = if HEART_PARTS > most {
+        HEART_PARTS
+    } else {
+        most
+    };
     let most = if STAIN_PARTS > most {
         STAIN_PARTS
     } else {
@@ -1672,6 +1705,18 @@ const EFFECT_PARTS: usize = {
     };
     if ring > most { ring } else { most }
 };
+
+/// **The glow off a Blood mage on her own ground** (2026-10-18), or the
+/// ripple of her swimming in it: `part` 0 is the ring at her feet, 1 the
+/// flame rising off her.
+#[derive(Component)]
+struct AuraMesh {
+    owner: usize,
+    part: usize,
+}
+
+/// How many pieces the aura is drawn in.
+const AURA_PARTS: usize = 2;
 
 /// One of the Elementalist's structures.
 #[derive(Component)]
@@ -1869,6 +1914,8 @@ const SWING_PIECES: usize = 3;
 /// because a material is shared by everything wearing it and the solidity is
 /// per pool. Six is enough to watch one fade and few enough to make once.
 const ESSENCE_STEPS: usize = 6;
+/// How much bigger a thrall is drawn on her ground: presentation.
+const THRALL_ON_GROUND: f32 = 1.2;
 
 /// One of the Reaver's marks on a body, drawn as a pip over its head.
 ///
@@ -1931,6 +1978,8 @@ struct EffectLook {
     /// A pool of essence, from faint to nearly solid: the more essence is
     /// left in it, the more solid the figure.
     essence: [Handle<StandardMaterial>; ESSENCE_STEPS],
+    /// A heart of hers.
+    heart: Handle<StandardMaterial>,
     /// The Dual mage's two forces. Opposites on purpose -- one burns white and
     /// the other drinks the light -- because the whole class is which of the
     /// two you are holding.
@@ -2212,6 +2261,18 @@ fn setup(
                 ..default()
             })
         }),
+        // **A heart** (2026-10-18): a crimson brighter and warmer than her
+        // essence, nearly solid and burning from inside, so it is the one
+        // thing of hers that reads as an object rather than a stain.
+        heart: materials.add(StandardMaterial {
+            // Lit only a little from inside: brighter, the bloom washed it
+            // out to a pink that read as a sweet rather than a heart.
+            base_color: Color::srgba(0.55, 0.01, 0.06, 0.97),
+            emissive: LinearRgba::rgb(0.6, 0.0, 0.05),
+            perceptual_roughness: 0.75,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
         // Hot white with a violet edge: a detonation and the ground it leaves.
         // Bright enough to read as *the* thing on screen, which is what a
         // finisher at full depth is supposed to be.
@@ -2323,6 +2384,22 @@ fn setup(
                 EffectMesh { slot, part },
                 // Light and smoke and magic: a bolt's or a cloud's shadow on
                 // the floor reads as a solid thing standing in the air.
+                bevy::pbr::NotShadowCaster,
+            ));
+        }
+    }
+
+    // The glow off her on her ground: a pool of its own, because it is a
+    // reading of her body rather than an effect. Her ground itself is one
+    // surface (`claimed`).
+    for owner in 0..MAX_PLAYERS {
+        for part in 0..AURA_PARTS {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.fire.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                AuraMesh { owner, part },
                 bevy::pbr::NotShadowCaster,
             ));
         }
@@ -2499,6 +2576,9 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 EssenceSwing { owner, piece },
+                // A see-through volume: its shadow on the floor read as a
+                // solid log lying beside her.
+                bevy::pbr::NotShadowCaster,
             ));
         }
     }
@@ -2941,8 +3021,17 @@ fn place_gusts(
 /// leading and trailing edges sit vertically, by less than the body height the
 /// test already spans. Step aside and you are clear, stand above it and you are
 /// clear -- before and after.
-fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut Visibility)>) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+fn place_discs(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &DiscMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
@@ -2952,6 +3041,11 @@ fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut
             continue;
         }
         *vis = Visibility::Inherited;
+        // A Gale flown through fire is drawn as fire, as the bolts are.
+        let want = if shot.lit { &look.fire } else { &look.beam };
+        if skin.0 != *want {
+            skin.0 = want.clone();
+        }
         let radius = shot.girth().to_f32_for_render();
         let dir = fx3(shot.dir).normalize_or_zero();
         // Thrown straight up or straight down there is no vertical left to take
@@ -3362,8 +3456,12 @@ fn place_essence_swings(
         }
         *vis = Visibility::Inherited;
         // More solid the more grey she carries, and fading with the ghost.
+        // Never fainter than the second step while it is live: at the
+        // faintest, over a warm floor, it read as a pale log rather than
+        // her essence.
         let solid = p.grey_share().to_f32_for_render() * volume.fade;
-        let step = (solid * (ESSENCE_STEPS - 1) as f32).round() as u8;
+        let floor = if volume.fade > 0.5 { 2 } else { 0 };
+        let step = ((solid * (ESSENCE_STEPS - 1) as f32).round() as u8).max(floor);
         let want = look.material(Skin::Essence(step));
         if mat.0 != want {
             mat.0 = want;
@@ -4056,6 +4154,7 @@ fn mark_piece(p: &sim::state::Player) -> Option<Piece> {
 fn place_effects(
     sim: Res<Sim>,
     look: Res<EffectLook>,
+    camera: Query<&GlobalTransform, With<MainCamera>>,
     mut meshes: Query<(
         &EffectMesh,
         &mut Transform,
@@ -4065,8 +4164,9 @@ fn place_effects(
     )>,
 ) {
     for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
-        let piece = sim.cur.effects[tag.slot].and_then(|e| effect_piece(&e, tag.part));
-        let Some(piece) = piece else {
+        let effect = sim.cur.effects[tag.slot];
+        let piece = effect.and_then(|e| effect_piece(&e, tag.part));
+        let Some(mut piece) = piece else {
             *vis = Visibility::Hidden;
             continue;
         };
@@ -4078,9 +4178,117 @@ fn place_effects(
         if mat.0 != want_skin {
             mat.0 = want_skin;
         }
+        // A heart faces the camera, turned about its own centre.
+        if let (Some(e), Ok(cam)) = (effect, camera.single()) {
+            if e.kind == sim::effects::EffectKind::Heart && tag.part < HEART_FACES {
+                let centre = heart_centre(fx3(e.pos));
+                let to = cam.translation() - centre;
+                // Tilted up at the camera as well: seen from over the
+                // shoulder, a heart standing upright had its point squashed.
+                let flat = (to.x * to.x + to.z * to.z).sqrt();
+                let face = Quat::from_rotation_y(to.x.atan2(to.z))
+                    * Quat::from_rotation_x(-to.y.atan2(flat));
+                piece.at = centre + face * (piece.at - centre);
+                piece.turn = face * piece.turn;
+            }
+        }
         tf.translation = piece.at;
         tf.scale = piece.scale;
         tf.rotation = piece.turn;
+    }
+}
+
+type AuraPieces<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static AuraMesh,
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut Mesh3d,
+        &'static mut MeshMaterial3d<StandardMaterial>,
+    ),
+>;
+
+/// Put a piece's mesh, material and place on an entity.
+fn show_piece(
+    look: &EffectLook,
+    piece: Piece,
+    tf: &mut Transform,
+    vis: &mut Visibility,
+    mesh: &mut Mesh3d,
+    mat: &mut MeshMaterial3d<StandardMaterial>,
+) {
+    let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+    *vis = Visibility::Inherited;
+    if mesh.0 != want_mesh {
+        mesh.0 = want_mesh;
+    }
+    if mat.0 != want_skin {
+        mat.0 = want_skin;
+    }
+    tf.translation = piece.at;
+    tf.scale = piece.scale;
+    tf.rotation = piece.turn;
+}
+
+/// **Draw the glow off a Blood mage on her ground** (2026-10-18): the strong
+/// version, seen. A ring of essence at her feet and a faint flame rising off
+/// her body while she stands on it; swimming, a wider ripple on the surface
+/// over her, and no flame.
+fn place_auras(sim: Res<Sim>, look: Res<EffectLook>, mut meshes: AuraPieces) {
+    for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let Some(piece) = aura_piece(p, sim.cur.frame, tag.part) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        show_piece(&look, piece, &mut tf, &mut vis, &mut mesh, &mut mat);
+    }
+}
+
+fn aura_piece(p: &sim::state::Player, frame: u32, part: usize) -> Option<Piece> {
+    if !p.on_blood || p.health <= 0 {
+        return None;
+    }
+    let feet = fx3(p.pos);
+    let body = sim::tuning::body_radius().to_f32_for_render();
+    let t = frame as f32 / 60.0;
+    if p.swimming() {
+        let swell = 1.0 + 0.12 * (t * 5.0).sin();
+        return (part == 0).then(|| {
+            standing(
+                Shape::Column,
+                Skin::Essence(4),
+                feet,
+                body * 2.2 * swell,
+                0.09,
+                0.13,
+            )
+        });
+    }
+    let tall = sim::tuning::body_height().to_f32_for_render();
+    match part {
+        0 => Some(standing(
+            Shape::Column,
+            Skin::Essence(3),
+            feet,
+            body * 1.6,
+            0.09,
+            0.11,
+        )),
+        _ => {
+            let sway = Vec3::new((t * 1.3).sin(), 0.0, (t * 1.7).cos()) * 0.08;
+            let mut flame = limb(
+                Shape::Spike,
+                feet + Vec3::Y * 0.05,
+                feet + sway + Vec3::Y * tall * 1.15,
+                body * 1.5,
+                Vec3::X,
+            );
+            flame.skin = Skin::Essence(2);
+            Some(flame)
+        }
     }
 }
 
@@ -4122,6 +4330,13 @@ enum Shape {
     Head,
 }
 
+/// The Elementalist's wind -- the Air ball and the two drafts -- in air, or
+/// in fire once it has touched some (`sim::effects::Effect::lit`): what a
+/// burning ball is worth has to be readable before it reaches you.
+fn wind_skin(effect: &sim::effects::Effect) -> Skin {
+    if effect.lit() { Skin::Fire } else { Skin::Air }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Skin {
     Fire,
@@ -4130,6 +4345,8 @@ enum Skin {
     Thrall,
     /// The Black vines: translucent black.
     Vines,
+    /// A heart of hers: crimson burning from inside.
+    Heart,
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
@@ -4178,6 +4395,7 @@ impl EffectLook {
             Skin::Blood => self.blood.clone(),
             Skin::Thrall => self.thrall.clone(),
             Skin::Vines => self.vines.clone(),
+            Skin::Heart => self.heart.clone(),
             Skin::Shade => self.shade.clone(),
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
@@ -4393,7 +4611,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let slab = effect.draft_volume();
             Some(standing(
                 Shape::Column,
-                Skin::Air,
+                wind_skin(effect),
                 at,
                 slab.radius.to_f32_for_render(),
                 slab.bottom.to_f32_for_render(),
@@ -4417,6 +4635,16 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 + Vec3::Y * sim::tuning::fire_ring_width().to_f32_for_render(),
             sim::tuning::fire_ring_width().to_f32_for_render(),
         )),
+        // Fissure's surge: broken ground heaving at its front, at the width it
+        // reaches -- the stone it carries is drawn as a stone.
+        EffectKind::Surge if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Stone,
+            fx3(effect.surge_front()) + Vec3::X * ((effect.age % 3) as f32 - 1.0) * QUAKE_SHIVER,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT * 2.0,
+        )),
         // Rough terrain: a row of low slabs along the line the crack ran, at
         // the half-width the slow reads. See `Effect::rough_bead`.
         EffectKind::Rough if part < sim::effects::ROUGH_BEADS => Some(standing(
@@ -4438,7 +4666,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // The Air ball: the ball the carry reads, at the size it is now --
         // growing while she holds it, shrinking as it rolls.
         EffectKind::AirBall if part == 0 => Some(floating_in(
-            Skin::Air,
+            wind_skin(effect),
             fx3(effect.ball_middle()),
             effect.field_radius().to_f32_for_render(),
         )),
@@ -4471,13 +4699,31 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         EffectKind::Fountain if part == 1 && effect.age <= sim::tuning::fountain_burst() => Some(
             floating_in(Skin::Fire, at, effect.source().radius.to_f32_for_render()),
         ),
-        // The Blood nova's burst: the sphere the hit test reads, round where
-        // she stood, for the moment it is there.
-        EffectKind::Nova if part == 0 => Some(floating_in(
-            Skin::Blood,
-            at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5,
-            effect.field_radius().to_f32_for_render(),
-        )),
+        // **A ring of thorns** (2026-10-18): Thornfall's landing, and the
+        // burst she arrives in from a teleport. Thorns burst out of the
+        // floor round the edge of what it hits, leaning outward, over a
+        // faint disc as wide as the hit -- a ball the size of the hit swallowed
+        // the camera that had just landed in the middle of it. They are up by
+        // the frame it hits and sink back over the rest of its life.
+        EffectKind::Nova if part < THORN_RING => {
+            let r = effect.field_radius().to_f32_for_render();
+            let life = effect.life.max(1) as f32;
+            let t = effect.age as f32 / life;
+            let up = (effect.age as f32 / 2.0).min(1.0) * (1.0 - t * t);
+            if part == 0 {
+                return Some(standing(Shape::Column, Skin::Essence(2), at, r, 0.09, 0.11));
+            }
+            let k = part - 1;
+            let a = k as f32 / (THORN_RING - 1) as f32 * std::f32::consts::TAU
+                + wobble(seed_of(effect.pos)) * 6.0;
+            let out = Vec3::new(a.cos(), 0.0, a.sin());
+            let long = (0.7 + 0.5 * wobble(seed_of(effect.pos).wrapping_add(k as u32 * 13))) * up;
+            let foot = at + out * (r * 0.8) + Vec3::Y * 0.05;
+            let tip = foot + (out * 0.45 + Vec3::Y).normalize() * (1.5 * long).max(0.01);
+            let mut thorn = limb(Shape::Spike, foot, tip, 0.3 * up.max(0.1), out);
+            thorn.skin = Skin::Blood;
+            Some(thorn)
+        }
         // The Nail: a ball where its hit test is, in the Reaver's near-black,
         // because a nail is black.
         EffectKind::Nail if part == 0 => Some(floating_in(
@@ -4717,17 +4963,12 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // the more essence is left in it -- so the figure on the floor is
         // the heal it is worth.
         EffectKind::Pool if part < STAIN_PARTS => Some(stain_piece(effect, at, part)),
-        // The Blood mage's 0016 (2026-10-13). The Carpet: a disc of blood
-        // on the floor at the radius it hurts in, growing while she holds
-        // it.
-        EffectKind::Carpet if part == 0 => Some(standing(
-            Shape::Column,
-            Skin::Essence(2),
-            at,
-            effect.reach.to_f32_for_render(),
-            0.0,
-            0.08,
-        )),
+        // **A heart** (2026-10-18): a knot of essence beating at waist
+        // height over the ground it holds, a flame of it standing up through
+        // the knot, and roots of it running down and out into the floor --
+        // all of it swelling with each beat and smaller the less blood is
+        // left in it.
+        EffectKind::Heart if part < HEART_PARTS => Some(heart_piece(effect, at, part)),
         // A thrall: a little hulking gremlin of translucent blood -- a
         // hunched barrel of a body, a low head pushed forward with two horns
         // swept back, heavy shoulders, long bent arms ending in claws near
@@ -4735,8 +4976,20 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // shrinking as it bites and drains; the golem the same, bigger. It
         // faces the way it last went (`Effect::dir`), and its arms and legs
         // swing as it goes.
-        EffectKind::Thrall | EffectKind::Golem if part < GREMLIN_PARTS => {
-            Some(gremlin_piece(effect, at, part))
+        // **On her ground it is bigger and burns brighter** (2026-10-18):
+        // the thrall that hits harder there is seen to.
+        EffectKind::Thrall if part < GREMLIN_PARTS => {
+            let piece = gremlin_piece(effect, at, part);
+            Some(if effect.struck.has(sim::state::ON_GROUND) {
+                Piece {
+                    at: at + (piece.at - at) * THRALL_ON_GROUND,
+                    scale: piece.scale * THRALL_ON_GROUND,
+                    skin: Skin::Essence((ESSENCE_STEPS - 1) as u8),
+                    ..piece
+                }
+            } else {
+                piece
+            })
         }
         // The Black vines: a tangle of twisting vines arching out of the
         // floor from the middle to the front, barbs standing off them, over
@@ -4975,7 +5228,8 @@ fn stain_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
     let flat = |centre: Vec3, w: f32, d: f32, yaw: f32| Piece {
         shape: Shape::Ball,
         skin,
-        at: centre + Vec3::Y * 0.02,
+        // Over her ground's surface (`claimed::LIFT`), or it hides them.
+        at: centre + Vec3::Y * 0.09,
         scale: Vec3::new(w, 0.04, d),
         turn: Quat::from_rotation_y(yaw),
     };
@@ -5076,7 +5330,7 @@ fn vine_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
     let reach = effect.reach.to_f32_for_render().max(0.5) * grow.max(0.05);
     let seed = seed_of(effect.pos);
     if part == 0 {
-        return standing(Shape::Column, Skin::Vines, at, reach, 0.0, 0.03);
+        return standing(Shape::Column, Skin::Vines, at, reach, 0.07, 0.1);
     }
     let length = reach / SEGMENTS as f32;
     let vine_at = |vine: usize, segment: usize| {
@@ -5117,6 +5371,110 @@ fn vine_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
     let mut piece = limb(Shape::Spike, along, tip, 0.13, dir);
     piece.skin = Skin::Vines;
     piece
+}
+
+/// How many pieces a ring of thorns is drawn in: the disc and its thorns.
+const THORN_RING: usize = 13;
+
+/// How many pieces a heart is drawn in: two lobes and a point, two vessels,
+/// the ring round it, the pillar of light and three roots.
+const HEART_PARTS: usize = 10;
+
+/// **A piece of a heart** (2026-10-18): a heart's shape, not a heart's
+/// anatomy -- two lobes over a point, and two short vessels rising out of
+/// its top -- in a crimson that burns from inside, hung over the ground it
+/// holds. It beats twice a second (a heavy beat and a light one), turns
+/// slowly so its shape reads from every side, and has a ring of essence
+/// turning round it and a faint pillar of light through it, so it is seen
+/// from across a fight and never mistaken for a stain. Roots run down from
+/// it into the floor. It is smaller the less blood is left in it: how long it
+/// will stand, and how many thralls it has left in it, read off its size.
+/// How much bigger than its first draft a heart is drawn: at the other end
+/// of an arena it has to read as a heart, not a speck.
+const HEART_SIZE: f32 = 1.35;
+
+/// Where a heart standing at `at` hangs.
+fn heart_centre(at: Vec3) -> Vec3 {
+    at + Vec3::Y * 1.75
+}
+
+/// Of a heart's parts, the ones that are the heart itself (the lobes, the
+/// point and the vessels) and are turned to face the camera.
+const HEART_FACES: usize = 5;
+
+fn heart_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
+    let full = sim::tuning::heart_least().max(1) as f32 * 3.0;
+    let worth = 0.6 + 0.4 * (effect.banked.max(0) as f32 / full).clamp(0.0, 1.0);
+    let t = effect.age as f32 / 60.0;
+    // Lub-dub: a heavy beat, a light one, a rest.
+    let phase = (t * 1.1).fract();
+    let lub = (-((phase - 0.05) * 22.0).powi(2)).exp();
+    let dub = (-((phase - 0.3) * 22.0).powi(2)).exp() * 0.5;
+    let beat = 1.0 + 0.16 * (lub + dub);
+    let size = HEART_SIZE * worth * beat;
+    let centre = heart_centre(at);
+    // Its lobes lie along x and its face looks along z; `place_effects`
+    // turns it to face the camera, so the outline is a heart from wherever
+    // it is seen (turning freely, it was two balls one behind the other as
+    // often as not). A slow sway keeps it alive.
+    let turn = Quat::from_rotation_y((t * 0.7 + wobble(seed_of(effect.pos)) * 6.0).sin() * 0.25);
+    let side = turn * Vec3::X;
+    let lobe_r = 0.24 * size;
+    match part {
+        // The lobes, side by side and a little up.
+        0 | 1 => {
+            let s = if part == 0 { -1.0 } else { 1.0 };
+            floating_in(
+                Skin::Heart,
+                centre + side * (0.19 * size * s) + Vec3::Y * (0.08 * size),
+                lobe_r,
+            )
+        }
+        // The point, a cone hung tip down under the lobes.
+        2 => Piece {
+            shape: Shape::Spike,
+            skin: Skin::Heart,
+            at: centre - Vec3::Y * (0.16 * size),
+            scale: Vec3::new(0.78 * size, 0.62 * size, 0.42 * size),
+            turn: turn * Quat::from_rotation_x(std::f32::consts::PI),
+        },
+        // Two vessels out of its top, leaning apart.
+        3 | 4 => {
+            let s = if part == 3 { -1.0 } else { 1.0 };
+            let foot = centre + side * (0.07 * size * s) + Vec3::Y * (0.22 * size);
+            let tip = foot + side * (0.09 * size * s) + Vec3::Y * (0.24 * size);
+            let mut vessel = rod(Skin::Heart, foot, tip, 0.05 * size);
+            vessel.skin = Skin::Heart;
+            vessel
+        }
+        // A ring of essence turning round it, tilted, pulsing with the beat.
+        5 => {
+            let tilt = Quat::from_rotation_y(t * 1.4) * Quat::from_rotation_x(0.35);
+            hoop(
+                Skin::Essence((ESSENCE_STEPS - 1) as u8),
+                centre,
+                tilt * Vec3::Y,
+                0.62 * size,
+            )
+        }
+        // A faint pillar of light through it, floor to well over it.
+        6 => standing(Shape::Column, Skin::Essence(0), at, 0.18 * worth, 0.09, 3.4),
+        // Roots down into the floor it holds.
+        k => {
+            let a = (k - 7) as f32 / 3.0 * std::f32::consts::TAU + t * 0.1;
+            let out = Vec3::new(a.cos(), 0.0, a.sin());
+            let reach = sim::tuning::heart_ground().to_f32_for_render() * 0.45;
+            let mut root = limb(
+                Shape::Spike,
+                centre - Vec3::Y * (0.5 * size),
+                at + out * reach + Vec3::Y * 0.09,
+                0.06 * size,
+                out,
+            );
+            root.skin = Skin::Essence(3);
+            root
+        }
+    }
 }
 
 /// How many pieces a thrall's gremlin is drawn in.
@@ -5922,6 +6280,9 @@ fn aim_toward(v: sim::V3) -> u16 {
 /// posing and framing. Against a creature it is the real hunter, because a
 /// fixed beat played at a monster would be a demonstration of nothing.
 fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
+    if let Some(input) = shot_press(w) {
+        return input;
+    }
     if let Some(beast) = w.monster() {
         // A plan is for one creature. Against another, the plan for that one,
         // if it has one; otherwise the fixed beat below.
@@ -5935,6 +6296,63 @@ fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
         return hunter.act(w);
     }
     demo_input(w, w.frame)
+}
+
+/// `SHOT_PRESS=keys:frames,keys:frames,...` (with `DEMO=1`) presses those
+/// keys for player one for that many frames, one after another from the
+/// first frame, and then nothing -- so a capture can land on a move of any
+/// class at the frame it wants, held or tapped, without a person at the
+/// controls. Keys are `L`, `M`, `R`, `E`, `Q`, `SPACE`, `SHIFT`, `W`, `A`,
+/// `S` and `D`, joined with `+`; `_` is nothing. `SHOT_LOOK=<pitch>` is the
+/// pitch to look at (the wire's own units; negative looks down), facing the
+/// way she started. `SHOT_PRESS=R:20,_:2,R:3` holds right click twenty frames,
+/// lets go for two, and taps it.
+fn shot_press(w: &sim::World) -> Option<SimInput> {
+    /// The steps (keys held, for how many frames) and the pitch.
+    type Plan = Option<(Vec<(u16, u32)>, i16)>;
+    static PLAN: std::sync::OnceLock<Plan> = std::sync::OnceLock::new();
+    let (steps, pitch) = PLAN
+        .get_or_init(|| {
+            let spec = platform::env("SHOT_PRESS")?;
+            let steps = spec
+                .split(',')
+                .filter_map(|step| {
+                    let (keys, frames) = step.trim().split_once(':')?;
+                    let bits = keys.split('+').fold(0u16, |bits, key| {
+                        bits | match key.trim().to_uppercase().as_str() {
+                            "L" => SimInput::LEFT,
+                            "M" => SimInput::MIDDLE,
+                            "R" => SimInput::RIGHT,
+                            "E" => SimInput::MECHANIC,
+                            "Q" => SimInput::SPECIAL,
+                            "SPACE" => SimInput::SPACE,
+                            "SHIFT" => SimInput::SHIFT,
+                            "W" => SimInput::W,
+                            "A" => SimInput::A,
+                            "S" => SimInput::S,
+                            "D" => SimInput::D,
+                            _ => 0,
+                        }
+                    });
+                    Some((bits, frames.trim().parse().ok()?))
+                })
+                .collect();
+            let pitch = platform::env("SHOT_LOOK")
+                .and_then(|p| p.trim().parse().ok())
+                .unwrap_or(0);
+            Some((steps, pitch))
+        })
+        .as_ref()?;
+    let mut left = w.frame;
+    let mut bits = 0;
+    for &(keys, frames) in steps {
+        if left < frames {
+            bits = keys;
+            break;
+        }
+        left -= frames;
+    }
+    Some(SimInput::new(bits).looking(aim_toward(w.players[0].facing), *pitch))
 }
 
 fn demo_input(w: &sim::World, frame: u32) -> SimInput {
@@ -6518,7 +6936,8 @@ fn drive_camera(
 /// rather than cartwheeling off its own toes. Everything carried on the body
 /// is placed through this, so a blade in hand flips with the hand.
 fn body_frame(p: &view::PlayerView) -> (Vec3, Quat) {
-    let feet = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
+    // Swimming, she is drawn sunk into her ground, a hump of her showing.
+    let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY, p.pos[2]);
     let turn = body_turn(p.facing);
     if p.roll == [0.0, 0.0] {
         return (feet, turn);
@@ -6531,6 +6950,11 @@ fn body_frame(p: &view::PlayerView) -> (Vec3, Quat) {
 /// How high above the feet a flip turns the body over: about the hips.
 /// Presentation, not a rule.
 const ROLL_PIVOT: f32 = 0.95;
+
+/// How far under her ground a swimming Blood mage is drawn: her shoulders
+/// and head still above it. Presentation, not a rule -- her hurt volume is
+/// `sim::tuning::swim_height`.
+const SUNK_BY: f32 = 1.2;
 
 fn body_turn(facing: [f32; 3]) -> Quat {
     let q = view::body_turn([facing[0], facing[2]]).0;

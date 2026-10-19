@@ -1,6 +1,6 @@
 //! The morph: a companion that becomes what it is fed.
 //!
-//! The world's first use of breeding (`docs/design/exploration/0021`
+//! The world's first use of breeding (`docs/design/exploration/0022`
 //! §12), built for short sessions: the reward has to land at once. Feed it
 //! an **egg** and it starts over as that creature's young -- the egg's
 //! genome, small. Feed it a **trophy** and that is a **generation**: the

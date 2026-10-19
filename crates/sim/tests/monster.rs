@@ -1095,7 +1095,7 @@ fn a_hazard_never_touches_a_hunting_partner() {
     let mut w = parked();
     // The Hemoplague: her left click held past the bolt's wind-up, and let
     // go a little later.
-    let start = sim::moves::get(Class::BloodMage, sim::moves::blood::HAEMORRHAGE).startup;
+    let start = sim::moves::get(Class::BloodMage, sim::moves::blood::THORN_LASH).startup;
     for _ in 0..start + 20 {
         w.advance([Input::new(Input::LEFT), Input::default()]);
     }

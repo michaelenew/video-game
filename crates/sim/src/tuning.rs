@@ -1238,7 +1238,9 @@ pub fn health_of(class: crate::class::Class) -> i32 {
 /// an ordinary jump. The dash still stops on the shadow (that part of
 /// 2026-09-23 was for precise fighting and stays); the speed is banked for the
 /// jump and bled by the dodge's decay through the carry, as the old slide was,
-/// so the earlier the press the further she goes.
+/// so the earlier the press the further she goes. Three quarters since
+/// 2026-10-18, with the rise cut the same ([`dash_jump_rise`]): "shadow dash
+/// jump speeds nerfed to 75% of current values across the board".
 pub fn dash_jump_keep() -> Fx {
     Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
 }
@@ -3450,8 +3452,50 @@ pub fn air_ball_sink() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallSink)).max(Fx::ZERO)
 }
 
-/// How much of her sideways walk inside her Air ball turns it.
-pub fn air_ball_steer() -> Fx {
+/// How hard the direction she holds pushes her while her Updraft blows, in
+/// metres a second, a second.
+pub fn updraft_steer() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftSteer)).max(Fx::ZERO)
+}
+
+/// The most speed that push gives her along the way she holds.
+pub fn updraft_steer_cap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftSteerCap)).max(Fx::ZERO)
+}
+
+/// How fast Fissure's surge runs along its line, in metres a second.
+pub fn surge_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeSpeed)).max(Fx::ONE)
+}
+
+/// How much more than the move's own damage a full hold's surge deals: a
+/// tap is the move's number, a full hold `1 +` this times it.
+pub fn surge_damage_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeDamageGain)).max(Fx::ZERO)
+}
+
+/// The same for its knockback and its throw.
+pub fn surge_knock_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeKnockGain)).max(Fx::ZERO)
+}
+
+/// How hard the surge throws somebody it strikes up, at a tap.
+pub fn surge_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SurgeLift)).max(Fx::ZERO)
+}
+
+/// What a burning Air ball deals whoever it holds, on the tick.
+pub fn wind_fire_burn() -> i32 {
+    oven::scalar(Scalar::WindFireBurn).max(0)
+}
+
+/// What a burning Updraft or Downdraft deals each body in it, once.
+pub fn draft_fire_burn() -> i32 {
+    oven::scalar(Scalar::DraftFireBurn).max(0)
+}
+
+/// How fast A and D turn the Air ball she is riding, in turns a second.
+pub fn air_ball_turn() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallSteer)).max(Fx::ZERO)
 }
 
@@ -3531,29 +3575,55 @@ pub fn plunge_dive() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PlungeDive)).max(Fx::ZERO)
 }
 
-/// How far off straight down, in turns, the Plunge and Gallows may be aimed: the edge of the cone `aim::plunge_dir` holds them in.
+/// How far off straight down, in turns, the Plunge may be aimed: the edge of the cone `aim::plunge_dir` holds them in.
 pub fn plunge_cone() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PlungeCone)).max(Fx::ZERO)
 }
 
-/// How far up Gallows sends the shadow she then blinks to.
-pub fn gallows_blink() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GallowsBlink)).max(Fx::ZERO)
+/// How far Gallows drives her, in metres (2026-10-18): the length of the
+/// rise, and the reach the crosshair is read to (`aim::rise_dir`).
+pub fn gallows_drive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsDrive)).max(Fx::ZERO)
 }
 
-/// How far ahead, along her facing, Gallows sends the shadow.
-pub fn gallows_ahead() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GallowsAhead)).max(Fx::ZERO)
+/// The shallowest Gallows climbs, in turns above level: pointed level or
+/// down, it drives up at this angle; pointed up steeper, where it points.
+pub fn gallows_climb() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallowsClimb)).max(Fx::ZERO)
 }
 
-/// How long Gallows holds her where the shadow was before the plunge: the beat the defender reads.
-pub fn gallows_hang() -> u16 {
-    oven::scalar(Scalar::GallowsHang).max(0) as u16
+/// What she keeps of the drive's speed once it is over, so a rise is a rise
+/// of the drive's length rather than a launch that carries on past it.
+pub fn gallows_kept() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::GallowsKept).clamp(0, 100), 100)
 }
 
-/// How fast Gallows comes down its line.
-pub fn gallows_dive() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GallowsDive)).max(Fx::ZERO)
+/// How long after a dash collects the shadow before she may send it again
+/// (2026-10-18): the three moves on right click wait for it. Collecting it
+/// any other way is the ordinary lockout's.
+pub fn send_after_dash() -> u16 {
+    oven::scalar(Scalar::SendAfterDash).max(0) as u16
+}
+
+/// What a dash jump keeps of the rise an ordinary jump and its hop would
+/// give (2026-10-18): the dash jump nerfed with its carry,
+/// [`dash_jump_keep`].
+pub fn dash_jump_rise() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::DashJumpRise).clamp(0, 100), 100)
+}
+
+/// What each Fan's hang is worth against the one before it, compounding,
+/// while she keeps throwing them (2026-10-18): on top of
+/// [`air_stall_falloff`], and not reset by landing -- only by
+/// [`fan_forget`] frames without one.
+pub fn fan_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FanFalloff)).clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// How long without throwing a Fan before the run of them is forgotten and
+/// the next hangs in full.
+pub fn fan_forget() -> u16 {
+    oven::scalar(Scalar::FanForget).max(1) as u16
 }
 
 /// How long a sent shadow waits before it comes home on its own, from when it arrives. Every send starts it over (2026-10-12).
@@ -4106,26 +4176,6 @@ pub fn stain_settles() -> u16 {
     oven::scalar(Scalar::StainSettles).max(0) as u16
 }
 
-/// Carpet, starts at radius.
-pub fn carpet_from() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CarpetFrom).max(0))
-}
-
-/// Carpet, grows to radius.
-pub fn carpet_to() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CarpetTo).max(0))
-}
-
-/// Carpet, 1% of red every.
-pub fn carpet_pays_every() -> u16 {
-    oven::scalar(Scalar::CarpetPaysEvery).max(0) as u16
-}
-
-/// Carpet, hurts every.
-pub fn carpet_tick() -> u16 {
-    oven::scalar(Scalar::CarpetTick).max(0) as u16
-}
-
 /// Coagulate, gathers stains within (m).
 pub fn coagulate_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CoagulateReach).max(0))
@@ -4134,11 +4184,6 @@ pub fn coagulate_reach() -> Fx {
 /// Coagulate, stains slide at (m/s).
 pub fn coagulate_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CoagulateSpeed).max(0))
-}
-
-/// Summon, raises stains within (m).
-pub fn summon_reach() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SummonReach).max(0))
 }
 
 /// Thralls at once.
@@ -4189,27 +4234,6 @@ pub fn reap_hurl() -> Fx {
 /// Rising reap, hurls thralls for.
 pub fn reap_hurl_for() -> u16 {
     oven::scalar(Scalar::ReapHurlFor).max(0) as u16
-}
-
-/// Golem, walks at (m/s).
-pub fn golem_speed() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GolemSpeed).max(0))
-}
-
-/// Golem, punches every.
-pub fn golem_punch_every() -> u16 {
-    oven::scalar(Scalar::GolemPunchEvery).max(0) as u16
-}
-
-/// Golem, punches within (m).
-pub fn golem_reach() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GolemReach).max(0))
-}
-
-/// Golem, stands this many thralls tall (x): how much wider and taller than
-/// a thrall of the same essence the golem is.
-pub fn golem_size() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GolemSize).max(0))
 }
 
 /// Grey, holds before it fades: the frames after grey last opened before the fade starts.
@@ -4270,11 +4294,6 @@ pub fn spike_spread_most() -> Fx {
 /// Black spike, spikes at a full hold: how many a hold to the end raises.
 pub fn spikes_most() -> i32 {
     oven::scalar(Scalar::SpikesMost).max(0)
-}
-
-/// Golem, hurts itself per blow dealt (x): what each punch costs the golem, as a share of what it dealt.
-pub fn golem_self_hurt() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::GolemSelfHurt).max(0))
 }
 
 // Momentum (exploration 0015, C4): the Champion's meter. See
@@ -4457,6 +4476,151 @@ pub fn cascade_power() -> Fx {
 /// permanent loss; one that whiffs still is.
 pub fn finisher_repays() -> i32 {
     oven::scalar(Scalar::FinisherRepays).max(0)
+}
+
+// **The Blood mage's territory** (2026-10-18): her ground, swimming in
+// it, thralls and hearts on it, and the scythe. See `crate::ground` and
+// `docs/design/exploration/0021_blood_mage_territory.md`.
+
+/// Ground, a stain spreads round it (m): how far past its own column a standing stain counts as her ground.
+pub fn ground_stain_spread() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundStainSpread).max(0))
+}
+
+/// Ground, widest patch (m): a patch merged into grows no wider.
+pub fn ground_widest() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundWidest).max(0))
+}
+
+/// Ground, a touch lasts: the life of the patch a move of hers lays where it touches.
+pub fn ground_touch_lasts() -> u16 {
+    oven::scalar(Scalar::GroundTouchLasts).max(0) as u16
+}
+
+/// Ground, a faded stain lasts: the life of the patch a stain leaves when it drains away.
+pub fn ground_stain_lasts() -> u16 {
+    oven::scalar(Scalar::GroundStainLasts).max(0) as u16
+}
+
+/// Ground, bridges a gap of (m): two patches of hers this close, edge to edge, grow a bridge.
+pub fn ground_bridge() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundBridge).max(0))
+}
+
+/// Ground, her moves hit (x): the strong version -- what a move she started on her ground deals, as a share of the weak one.
+pub fn ground_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundPower).max(0))
+}
+
+/// Ground, thrown off her ground seeds (x): a touch from a move started off her ground lays this much wider and longer a patch.
+pub fn ground_seed_off() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundSeedOff).max(0))
+}
+
+/// Ground, counts this far above or below it (m): how near a patch's height a body is still standing on it.
+pub fn ground_slack() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundSlack).max(0))
+}
+
+/// Ground, joined loses a frame of life every: how much slower a patch touching another of hers fades.
+pub fn ground_joined_every() -> u16 {
+    oven::scalar(Scalar::GroundJoinedEvery).max(0) as u16
+}
+
+/// Ground, bridges are laid every: how often the gaps are looked for.
+pub fn ground_bridge_every() -> u16 {
+    oven::scalar(Scalar::GroundBridgeEvery).max(0) as u16
+}
+
+/// Ground, a bridge reaches past both edges (m).
+pub fn ground_bridge_overlap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundBridgeOverlap).max(0))
+}
+
+/// Ground, a touch lays at least (m): the smallest patch a touch lays, however thin the thing that touched.
+pub fn ground_touch_least() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GroundTouchLeast).max(0))
+}
+
+/// Swim, speed (x walk): how fast she moves sunk in her ground.
+pub fn swim_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwimSpeed).max(0))
+}
+
+/// Swim, stands this tall (m): her hurt volume while she swims.
+pub fn swim_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwimHeight).max(0))
+}
+
+/// Swim, pops out at the edge at (m/s): the burst she leaves her ground with when she swims off it.
+pub fn swim_pop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwimPop).max(0))
+}
+
+/// Thrall, on her ground bites (x).
+pub fn thrall_ground_bite() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallGroundBite).max(0))
+}
+
+/// Thrall, on her ground runs (x).
+pub fn thrall_ground_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallGroundSpeed).max(0))
+}
+
+/// Thrall, leaves her ground by (m): it goes for a body this near her ground, and no further.
+pub fn thrall_leash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrallLeash).max(0))
+}
+
+/// Heart, holds what she paid (x).
+pub fn heart_from_paid() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HeartFromPaid).max(0))
+}
+
+/// Heart, holds at least.
+pub fn heart_least() -> i32 {
+    oven::scalar(Scalar::HeartLeast).max(0)
+}
+
+/// Heart, a thrall costs it: the blood a heart spends on each thrall it sends out.
+pub fn heart_thrall() -> i32 {
+    oven::scalar(Scalar::HeartThrall).max(0)
+}
+
+/// Heart, sends a thrall every.
+pub fn heart_every() -> u16 {
+    oven::scalar(Scalar::HeartEvery).max(0) as u16
+}
+
+/// Heart, holds ground round it (m).
+pub fn heart_ground() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HeartGround).max(0))
+}
+
+/// Hearts at once: a heart past this replaces her oldest.
+pub fn hearts_most() -> i32 {
+    oven::scalar(Scalar::HeartsMost).max(0)
+}
+
+/// Reap, lunges further on her ground (x).
+pub fn reap_ground_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReapGroundStep).max(0))
+}
+
+/// Sweep, the third of a string hits (x).
+pub fn sweep_third() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepThird).max(0))
+}
+
+/// Harvest, reaches all round (m): the stains it drinks, as far as its blade goes.
+pub fn harvest_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HarvestReach).max(0))
+}
+
+/// Heart, earned by dealing: the damage she has to land to fill her heart
+/// meter, which `E` empties to plant one.
+pub fn heart_meter_full() -> i32 {
+    oven::scalar(Scalar::HeartMeterFull).max(1)
 }
 
 // ---------------------------------------------------------------------------

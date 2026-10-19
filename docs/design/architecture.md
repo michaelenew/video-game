@@ -94,13 +94,16 @@ What catches drift is the pair of checks that give the same answer on every mach
   allocator is shared mutable state with a lock and a tail, and it is the classic source of
   the one frame in a thousand that takes a millisecond. The path from snapshot to screen in
   `view` is held to the same rule.
-- **A `World` stays under 20 KiB.** Rollback copies one every frame and keeps a ring of nine,
+- **A `World` stays under 21 KiB.** Rollback copies one every frame and keeps a ring of nine,
   so the snapshot is the one structure whose *size* is a running cost rather than a one-off.
   The cap keeps the ring inside L2. Raising it means every frame and every rollback got
   heavier, so it wants a reason the way an Oven exemption does. It was 4 KiB until four
   fighters (2026-10-14, §"Four fighters" below): two more fighters and everything they throw,
   and an effect pool of 128 where there were twelve. Nine copies are about 160 KiB, which is
-  still inside the L2 of anything that runs the game.
+  still inside the L2 of anything that runs the game. **21 KiB since 2026-10-18**, the
+  owner's call: eggs, trophies and each seat's morph (`sim::keep`, about 640 bytes)
+  arrived as the Blood mage's territory took the last of the room; nine copies are under
+  190 KiB.
 
 ### Where the 20 KiB goes (measured 2026-10-14, with `size_of`)
 

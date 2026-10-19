@@ -59,7 +59,7 @@ fn a_critter_is_fifty_six_bytes_and_a_full_pack_fits_the_snapshot() {
     // the mount names any creature slot in two bytes rather than four in one.
     assert_eq!(std::mem::size_of::<Critter>(), 56);
     let world = std::mem::size_of::<World>();
-    assert!(world <= 20 * 1024, "a World is {world} bytes");
+    assert!(world <= 21 * 1024, "a World is {world} bytes");
     // Every slot full: the Gnawers' coop pack is ten, the most there is.
     let mut w = gnats(Class::Champion);
     for i in 0..MAX_CRITTERS {
@@ -570,10 +570,6 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         // knee-high body, by its own design -- the shadow is thrown forward
         // and up (2026-10-10).
         ("Shadow Reaver", "Shadow arc"),
-        // The golem goes for bodies -- a fighter, the creature -- and not a
-        // pack's critters, as her thralls do not: written down as the first
-        // thing to look at in play, 0016 §10 (2026-10-13).
-        ("Blood mage", "Blood golem"),
     ];
     let rows = sim::critcheck::table(SpeciesId::GNATS, gnats::GNAT);
     let mut over = Vec::new();
@@ -598,10 +594,10 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         if class == sim::class::Class::Elementalist {
             continue;
         }
-        // The Blood mage's slot zero is the Carpet, a hold; her tapped left
-        // click is the Haemorrhage (2026-10-13).
+        // The Blood mage's slot zero is the Reap, a hold; her tapped left
+        // click is the Thorn lash (2026-10-18).
         let kind = if class == sim::class::Class::BloodMage {
-            sim::moves::blood::HAEMORRHAGE
+            sim::moves::blood::THORN_LASH
         } else {
             0
         };
