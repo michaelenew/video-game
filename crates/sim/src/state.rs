@@ -12669,8 +12669,30 @@ impl World {
                     }
                     let share = spike_share(effect);
                     let each = self.gore_each(effect, 0, effect.pos, volume.radius, share);
+                    // **A spreading eruption hits a creature once** (2026-10-19):
+                    // a spike is not a pass the creature path keeps books on,
+                    // which did not matter while it hit only on its first
+                    // frame. A spread asks on every frame of it, and without
+                    // this a Ridgeback took the eruption on each of them.
+                    for (slot, &got) in each.iter().enumerate() {
+                        if got > 0 {
+                            effect.take_hit(0, quarry_victim(slot));
+                        }
+                    }
+                    // The small bodies have no such book on an effect but
+                    // their own searing, so a spread meets them once, at its
+                    // full size.
+                    let critters_now = if effect.spreads() {
+                        effect.age == t::erupt_spread()
+                    } else {
+                        effect.age == 1 || wave
+                    };
                     let dealt = each.iter().sum::<i32>()
-                        + self.gore_critters(effect, effect.pos, volume.radius, share);
+                        + if critters_now {
+                            self.gore_critters(effect, effect.pos, volume.radius, share)
+                        } else {
+                            0
+                        };
                     let owed = effect.leeched(dealt);
                     self.players[effect.owner as usize].heal(owed);
                     landed += dealt;
