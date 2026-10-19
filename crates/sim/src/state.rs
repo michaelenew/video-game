@@ -2676,6 +2676,11 @@ impl World {
                         for i in 0..MAX_PLAYERS {
                             self.valley.keep.lose_eggs(i, s);
                         }
+                        for l in self.loose.iter_mut() {
+                            if l.is_some_and(|l| l.item == crate::keep::Item::Egg(s)) {
+                                *l = None;
+                            }
+                        }
                     }
                     self.calm();
                     self.valley.roused = false;
@@ -4090,6 +4095,15 @@ impl World {
                 }
                 h.write_u32(v.roused as u32);
                 h.write_u32(v.stock as u32);
+            }
+            // A hunt out of its home (exploration 0023), only once one has
+            // left it: every journey before creatures roamed hashes as it
+            // did.
+            let out = v.den.is_some_and(|d| d != self.arena);
+            if out || v.away != 0 || v.homing || v.wake {
+                h.write_u32(0x2A3);
+                h.write_u32(v.den.map_or(0, |d| d.0 as u32 + 1));
+                h.write_u32(v.away as u32 | (v.homing as u32) << 16 | (v.wake as u32) << 17);
             }
             // What is carried, fed and lying about, and where the morphs
             // stand -- only once anything has been: every journey before

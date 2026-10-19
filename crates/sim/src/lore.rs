@@ -289,7 +289,12 @@ pub fn to_cm(v: crate::fixed::Fx) -> i16 {
 
 /// Centimetres back to fixed point.
 pub const fn from_cm(cm: i16) -> crate::fixed::Fx {
-    crate::fixed::Fx::ratio(cm as i32, 100)
+    // Rounded up, not toward zero, for two reasons. Either side of zero a
+    // centimetre then decodes the same way, so moving a point by a whole
+    // number of metres moves what it decodes to by exactly that
+    // (`World::shift`, exploration 0023). And [`to_cm`], which rounds down,
+    // gives back the same centimetre: the two are a pair.
+    crate::fixed::Fx::from_raw((cm as i64 * 65536 + 99).div_euclid(100) as i32)
 }
 
 /// A point to three centimetre halves.

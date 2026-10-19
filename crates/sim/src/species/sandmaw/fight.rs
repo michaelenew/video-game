@@ -211,8 +211,36 @@ pub static FIGHT: FightDecl = FightDecl {
     hearing: Some(hearing),
     from_inside: Some(from_inside),
     radius: Some(radius),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
+
+/// **Its own points, moved with the world** (`FightDecl::shift`): the spine
+/// as far as it is filled, what it attended and what its move from below
+/// acted on (each only when there is one: an empty word stays empty), where
+/// a rise left from, and where it circles. Its noises and its sinkhole are
+/// the shared lists', moved with every other.
+fn shift(w: &mut World, d: V3) {
+    let moved = |lore: &mut Lore, i: usize| {
+        let v = lore.word(i);
+        lore.set_word(i, lore::moved_halves(v, d));
+    };
+    let lore = &mut w.lore;
+    let fill = (lore.word(word::SPINE_FILL) as usize).min(word::SPINE_LEN);
+    for i in 0..fill {
+        moved(lore, word::SPINE + i);
+    }
+    if lore.word(word::ATTEND) & 0xFF != 0 {
+        moved(lore, word::ATTEND_AT);
+    }
+    if lore.word(word::ACTED) & 0xFF != 0 {
+        moved(lore, word::ACTED_AT);
+    }
+    if lore.word(word::FLAGS) & 1 != 0 {
+        moved(lore, word::GRACE_AT);
+        moved(lore, word::RISE_FROM);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Reading it
@@ -448,7 +476,8 @@ pub fn fit(m: &Monster, ground: &Terrain, at: V3) -> Option<V3> {
     }
     let moved = math::wide_flat_dist(p, at);
     let inside = rise_radius(m).sub(m.sp().fight_fx(FightField::StepOver));
-    let b = ground.bounds;
+    // Where it is kept this frame (`arena::Den`).
+    let b = ground.den.kept;
     let room = m.sp().margin();
     let in_bounds = p.x.raw() >= b.lo_x.add(room).raw()
         && p.x.raw() <= b.hi_x.sub(room).raw()
@@ -1024,7 +1053,10 @@ fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {
             left,
         } if left == sp.attack(UNDERTOW).active => {
             let r = hazard::stat_fx(&SPECIES, SINKHOLE, HazardField::Radius);
-            hazard::place(&mut w.lore, Hazard::disc(SINKHOLE, m.aimed_at(), r));
+            // On its own arena's floor, wherever the world's frame is.
+            let at = m.aimed_at();
+            let at = V3::new(at.x, w.den().off.y, at.z);
+            hazard::place(&mut w.lore, Hazard::disc(SINKHOLE, at, r));
         }
         Doing::Recovery { kind: UNDERTOW, .. } => {
             m.doing = Doing::Startup {
@@ -1319,9 +1351,11 @@ fn own_hits(w: &mut World, m: &mut Monster, ground: &Terrain) {
                     )
             }
             _ => {
+                // Over its own arena's floor, wherever the world's frame is.
+                let up = p.pos.y.sub(ground.den.off.y);
                 in_discs(&lash_discs(m), p.pos)
-                    && p.pos.y.add(p.hurt_height()).raw() >= Knob::LashLow.fx().raw()
-                    && p.pos.y.raw() <= Knob::LashHigh.fx().raw()
+                    && up.add(p.hurt_height()).raw() >= Knob::LashLow.fx().raw()
+                    && up.raw() <= Knob::LashHigh.fx().raw()
             }
         };
         if !reached {

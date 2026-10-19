@@ -2884,6 +2884,14 @@ impl Monster {
                 self.roam_radius(),
             );
             (Some(to), Some(crate::tuning::roam_pace()))
+        } else if out && self.doing.free() {
+            // Close, and something in the way: round it, and its own brain
+            // has the say again on the other side.
+            let goal = prowl.unwrap_or(self.brain.seen);
+            match crate::valley::roam::detour(arena, self.pos, goal, self.yaw, self.roam_radius()) {
+                Some(to) => (Some(to), Some(crate::tuning::roam_pace())),
+                None => (prowl, None),
+            }
         } else {
             (prowl, None)
         };
@@ -2900,7 +2908,7 @@ impl Monster {
                 self.pos = V3::new(at.x, self.pos.y, at.z);
             }
             let from = V3::new(was.x, arena.relief_at(was.x, was.z), was.z);
-            match crate::valley::roam::ground_step(arena, from, self.pos) {
+                match crate::valley::roam::ground_step(arena, from, self.pos) {
                 Some(y) => self.pos.y = y,
                 None => {
                     self.pos = was;

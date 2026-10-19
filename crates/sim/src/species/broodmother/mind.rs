@@ -73,7 +73,10 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         SCREECH => score.max(0) + recall(m),
         WEB_SHOT => {
             let q = mind.quarry.get(m.brain.target as usize);
-            let aloft = q.is_some_and(|q| q.pos.y.raw() > crate::tuning::body_radius().raw());
+            // Off her own cave's floor, wherever the world's frame is.
+            let floor = mind.ground.den.off.y;
+            let aloft =
+                q.is_some_and(|q| q.pos.y.sub(floor).raw() > crate::tuning::body_radius().raw());
             let up = if aloft { Knob::AloftAppetite.raw() } else { 0 };
             score + rooted(m, score) + up
         }
@@ -182,14 +185,16 @@ pub fn anchor_for(m: &Monster, mind: &Mind) -> Option<V3> {
     let near = math::wide_flat_dist(target, m.pos);
     // Which anchors her frame found a clear line to (`fight::anchors_clear`).
     let clear = (m.own[body::STAB] as u32) >> 24;
-    mind.ground
+    // Her own cave's anchors, wherever the world's frame is (`arena::Den`).
+    let den = &mind.ground.den;
+    den.arena
         .sites
         .iter()
         .filter(|s| s.name == "anchor")
         .take(8)
         .enumerate()
         .filter(|(k, _)| clear & 1 << k != 0)
-        .map(|(_, s)| s.at(Fx::ZERO).0)
+        .map(|(_, s)| den.at(s.at(Fx::ZERO).0))
         .filter(|a| {
             let len = math::wide_flat_dist(*a, m.pos);
             let gap = math::flat_segment_gap(target, m.pos, *a);

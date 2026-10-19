@@ -180,8 +180,17 @@ pub static FIGHT: FightDecl = FightDecl {
     struck: Some(struck),
     landed: Some(landed),
     marks: Some(marks),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
+
+/// **Its own points, moved with the world** (`FightDecl::shift`): where a
+/// belly flop left from. The swallow, the braziers' clocks and the counters
+/// are not points; its pools are hazards, moved with every other.
+fn shift(w: &mut World, d: V3) {
+    let leap = w.lore.word(word::LEAP);
+    w.lore.set_word(word::LEAP, lore::moved_halves(leap, d));
+}
 
 // ---------------------------------------------------------------------------
 // Reading it
@@ -474,7 +483,8 @@ fn landed(w: &mut World, slot: usize, victim: usize, kind: u8, guarded: bool) {
                     && math::wide_flat_dist(h.centre(), at).raw() <= h.radius().raw()
                 {
                     let mut moved = h;
-                    moved.at = lore::point_cm(V3::new(front.x, Fx::ZERO, front.z));
+                    let floor = w.den().off.y;
+                    moved.at = lore::point_cm(V3::new(front.x, floor, front.z));
                     hazard::set(&mut w.lore, i, moved);
                 }
             }
@@ -503,10 +513,16 @@ pub fn swallowing(lore: &Lore) -> Option<(usize, u32)> {
 /// up to `PoolMost`), into the nearest pool if the list is full, or in a free
 /// slot. A pool that lands over a slag mound coats it. Returns its slot.
 pub fn lay_pool(lore: &mut Lore, at: V3, radius: Fx) -> Option<usize> {
+    lay_pool_on(lore, at, radius, Fx::ZERO)
+}
+
+/// [`lay_pool`] on a floor at height `floor`: its own arena's, in the
+/// world's coordinates (`arena::Den::off`), wherever the world's frame is.
+pub fn lay_pool_on(lore: &mut Lore, at: V3, radius: Fx, floor: Fx) -> Option<usize> {
     if radius.raw() <= 0 {
         return None;
     }
-    let at = V3::new(at.x, Fx::ZERO, at.z);
+    let at = V3::new(at.x, floor, at.z);
     let most = Knob::PoolMost.fx();
     let tar_kind = TAR + 1;
     // Coat any slag it lands on.
@@ -618,18 +634,20 @@ fn count_half(lore: &mut Lore, word: usize, high: bool, by: u32) {
 // ---------------------------------------------------------------------------
 
 /// The arena's braziers: its sites called "brazier", in order, at most four.
-/// Each stands on the plinth its site's box describes.
+/// Each stands on the plinth its site's box describes. Its own arena's,
+/// wherever the world's frame is (`arena::Den`).
 pub fn braziers(w: &World) -> impl Iterator<Item = (usize, V3)> + '_ {
-    w.arena()
+    let den = w.den();
+    den.arena
         .sites
         .iter()
         .filter(|s| s.name == "brazier")
         .take(word::BRAZIERS)
         .enumerate()
-        .map(|(i, s)| {
+        .map(move |(i, s)| {
             let (x, z) = s.route.first().copied().unwrap_or((0, 0));
             let y = lore::from_cm(s.size.1 as i16);
-            (i, V3::new(Fx::ratio(x, 100), y, Fx::ratio(z, 100)))
+            (i, den.at(V3::new(Fx::ratio(x, 100), y, Fx::ratio(z, 100))))
         })
 }
 
@@ -647,7 +665,8 @@ fn tip(w: &mut World, i: usize, at: V3, away: V3) {
     } else {
         V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
     };
-    let a = V3::new(at.x, Fx::ZERO, at.z);
+    // On its own arena's floor, wherever the world's frame is.
+    let a = V3::new(at.x, w.den().off.y, at.z);
     let b = a.add(along.scale(Knob::CoalLength.fx()));
     hazard::place(
         &mut w.lore,
@@ -902,10 +921,12 @@ fn act(w: &mut World, _slot: usize, m: &mut Monster) {
             w.lore.set_word(word::SECOND, 0);
         }
         Doing::Active { kind: SPEW, left } if left == m.sp().attack(SPEW).active => {
-            lay_pool(
+            let floor = w.den().off.y;
+            lay_pool_on(
                 &mut w.lore,
                 m.aimed_at(),
                 by_area(Knob::PoolSpew.fx(), share),
+                floor,
             );
         }
         Doing::Recovery { kind: SPEW, left }
@@ -937,19 +958,21 @@ fn act(w: &mut World, _slot: usize, m: &mut Monster) {
                 let t = Fx::from_int((air - left) as i32).div(Fx::from_int(air as i32));
                 let to = m.aimed_at();
                 let at = math::lerp3(from, to, t);
-                let rise = Knob::FlopHeight.fx().mul(math::hump(t));
+                // Over its own arena's floor, wherever the world's frame is.
+                let rise = Knob::FlopHeight.fx().mul(math::hump(t)).add(w.den().off.y);
                 m.pos = V3::new(at.x, rise, at.z);
                 m.speed = Fx::ZERO;
             }
         }
         Doing::Active { kind: FLOP, left } if left == m.sp().attack(FLOP).active => {
             let at = m.aimed_at();
-            m.pos = V3::new(at.x, Fx::ZERO, at.z);
+            let floor = w.den().off.y;
+            m.pos = V3::new(at.x, floor, at.z);
             let a = m.sp().attack(FLOP);
             shatter(&mut w.lore, at, a.hit_radius);
             let (points, n, r) = ring(m, at, share.max(Fx::ZERO).max(coop_only(w)));
             for p in points.iter().take(n) {
-                lay_pool(&mut w.lore, *p, r);
+                lay_pool_on(&mut w.lore, *p, r, floor);
             }
         }
 
@@ -1000,7 +1023,13 @@ fn act(w: &mut World, _slot: usize, m: &mut Monster) {
         } if left == m.sp().attack(BACKWASH).active => {
             let a = m.sp().attack(BACKWASH);
             let behind = m.pos.add(V3::from_turns(m.yaw).scale(a.hit_x));
-            lay_pool(&mut w.lore, behind, by_area(Knob::PoolBackwash.fx(), share));
+            let floor = w.den().off.y;
+            lay_pool_on(
+                &mut w.lore,
+                behind,
+                by_area(Knob::PoolBackwash.fx(), share),
+                floor,
+            );
         }
 
         // ---- the belch: every pool it marked ----
@@ -1193,7 +1222,13 @@ fn release(w: &mut World, _slot: usize, m: &mut Monster, spit: bool) {
     );
     tar(p);
     let share = tar_share(w, m);
-    lay_pool(&mut w.lore, land, by_area(Knob::PoolSpew.fx(), share));
+    let floor = w.den().off.y;
+    lay_pool_on(
+        &mut w.lore,
+        land,
+        by_area(Knob::PoolSpew.fx(), share),
+        floor,
+    );
     if matches!(m.doing, Doing::Active { kind: SWALLOW, .. }) {
         m.doing = Doing::Recovery {
             kind: SWALLOW,

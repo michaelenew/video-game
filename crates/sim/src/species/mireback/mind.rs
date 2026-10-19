@@ -229,7 +229,8 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
         }
     }
     if matches!(kind, SPEW | FLOP) {
-        let b = mind.ground.bounds;
+        // Where it is kept this frame (`arena::Den`).
+        let b = mind.ground.den.kept;
         let keep = if kind == FLOP {
             m.sp().margin()
         } else {

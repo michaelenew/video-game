@@ -6,7 +6,8 @@
 //!
 //! **A range is a room without walls.** It is a place of the map like a room
 //! -- an arena of its own, so the creature fights in its own coordinates and
-//! is kept inside its own bounds -- but its floor is the land, not a pad, and
+//! is kept inside its own bounds until it is after somebody who has left them
+//! ([`super::roam`]) -- but its floor is the land, not a pad, and
 //! nothing rings it: a pocket of meadow beside the road, a clearing in the
 //! Wood, the top of the Needle's dome. Walking into it wakes it, exactly as
 //! walking into a room does (`valley::open`), and walking well away puts it

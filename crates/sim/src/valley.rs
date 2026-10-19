@@ -23,8 +23,8 @@
 //!   The Ring is the one place for that, and plays as versus does.
 //! - **A room** is a creature's own arena, and walking into it starts the
 //!   hunt. Win it and the place goes quiet: walk out the way you came. Lose it
-//!   and you wake outside, at the seam you went in by. Leave it and the hunt
-//!   is over.
+//!   and you wake outside, at the seam you went in by. Leave it and its
+//!   creature follows you, until it gives up and goes home ([`roam`]).
 //!
 //! The journey -- [`Journey`] -- is a few bytes of the snapshot: whether the
 //! world is the valley at all, which creatures have been beaten (from fights

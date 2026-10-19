@@ -61,7 +61,8 @@ pub fn breach_at(m: &Monster, mind: &Mind) -> Option<V3> {
     let (last, vel) = fight::trail(mind.lore, a.who)?;
     let lead = Fx::from_int(Knob::TrailLead.raw()).mul(crate::DT);
     let at = last.add(vel.scale(lead));
-    let b = mind.ground.bounds;
+    // Where it is kept this frame (`arena::Den`).
+    let b = mind.ground.den.kept;
     let room = m.sp().margin();
     let inside = at.x.raw() >= b.lo_x.add(room).raw()
         && at.x.raw() <= b.hi_x.sub(room).raw()
@@ -290,7 +291,8 @@ fn spiral(m: &Monster, mind: &Mind, centre: V3) -> V3 {
     let wider = r
         .add(Knob::SearchPitch.fx().mul(look))
         .max(Knob::CircleRadius.fx());
-    let b = mind.ground.bounds;
+    // Its own arena, wherever the world's frame is (`arena::Den`).
+    let b = mind.ground.den.home;
     let reach = math::half(b.hi_x.sub(b.lo_x)).min(math::half(b.hi_z.sub(b.lo_z)));
     if wider.raw() > reach.raw() {
         let middle = V3::new(

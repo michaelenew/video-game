@@ -247,7 +247,7 @@ fn set_up(pack: &Pack, who: usize) -> bool {
 /// The arena solid a fighter at `at` is standing on top of, if one is and it
 /// is low enough to scramble up.
 fn scramble_top(look: &Look, at: V3) -> Option<crate::arena::Solid> {
-    let up = at.y.sub(plane(look.pack));
+    let up = at.y.sub(look.arena.den.off.y);
     if up.raw() < Fx::ratio(1, 2).raw() || up.raw() > knob_fx(Knob::ScrambleTop).raw() {
         return None;
     }
@@ -318,7 +318,7 @@ impl PackMind for Mind {
                 let Some(top) = scramble_top(look, seen.pos) else {
                     return 0;
                 };
-                if c.pos.y.sub(plane(pack)).raw() > Fx::ratio(1, 2).raw()
+                if c.pos.y.sub(look.arena.den.off.y).raw() > Fx::ratio(1, 2).raw()
                     || off_footprint(&top, c.pos).raw() > knob_fx(Knob::ScrambleFrom).raw()
                 {
                     return 0;
@@ -566,7 +566,7 @@ impl PackMind for Mind {
         // Up on a platform with its target: straight for it.
         if pack.mood == mood::HUNTING
             && seen.alive
-            && c.pos.y.sub(plane(pack)).raw() > Fx::ratio(1, 2).raw()
+            && c.pos.y.sub(look.arena.den.off.y).raw() > Fx::ratio(1, 2).raw()
             && same_level(c, seen.pos)
         {
             return Steer {

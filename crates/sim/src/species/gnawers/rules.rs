@@ -17,7 +17,7 @@
 //! - **The scramble.** A gnawer whose scramble comes out is put on top of the
 //!   platform it clung to, just inside the edge.
 
-use super::mind::{plane, role, settle, word};
+use super::mind::{role, settle, word};
 use super::{GNAW, HAMSTRING, Knob, SCRAMBLE, knob, knob_fx};
 use crate::class::{MAX_STRUCTURES, Mechanic};
 use crate::critter::{CritterField, MAX_CRITTERS, flag, is, stat, stat_fx};
@@ -38,6 +38,8 @@ pub fn frame(w: &mut World) {
     for c in w.critters.iter_mut() {
         settle(c);
     }
+    // Its den, wherever the world's frame is (`arena::Den`).
+    let den = w.den();
 
     // ---- the latch ----
     for i in 0..MAX_CRITTERS {
@@ -73,7 +75,7 @@ pub fn frame(w: &mut World) {
         let behind =
             t::body_radius().add(stat_fx(sp, body.kind, CritterField::Length).mul(Fx::ratio(1, 2)));
         let heel = p.pos.sub(p.facing.scale(behind));
-        body.pos = V3::new(heel.x, p.pos.y.max(plane(&pack)), heel.z);
+        body.pos = V3::new(heel.x, p.pos.y.max(den.off.y), heel.z);
         body.vel = p.vel;
         body.yaw = crate::pack::yaw_of(p.facing);
         body.state = is::RECOVERY;
@@ -93,9 +95,8 @@ pub fn frame(w: &mut World) {
     }
 
     // ---- the scramble ----
-    // Its den's tops, wherever the world's frame is (`arena::Den`): its own
-    // table, judged in its own heights and put where its origin is now.
-    let den = w.den();
+    // Its den's tops: its own table, judged in its own heights and put where
+    // its origin is now.
     for c in w.critters.iter_mut() {
         if !(c.alive() && c.state == is::ACTIVE && c.act == SCRAMBLE) || c.has(flag::HIT_USED) {
             continue;
