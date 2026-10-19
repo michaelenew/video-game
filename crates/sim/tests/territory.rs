@@ -505,6 +505,15 @@ fn a_heart_takes_more_than_one_blow() {
 }
 
 #[test]
+fn a_heart_nobody_beats_down_stands_for_good() {
+    // Half an hour: no bleed, and well past where its clock's counter tops
+    // out (2026-10-19).
+    let mut w = planted();
+    run(&mut w, 30 * 60 * 60, 0);
+    assert_eq!(effects_of(&w, EffectKind::Heart).len(), 1, "still standing");
+}
+
+#[test]
 fn no_more_hearts_than_the_cap() {
     let mut w = mage();
     for _ in 0..(t::hearts_most() + 1) {

@@ -9078,3 +9078,16 @@ at least` are the knobs.
 drop (`anim/src/clips/reaver.rs`), so it will look wrong until it is redrawn
 as a rising cut.
 
+### 2026-10-19 — the Blood mage: hearts stand for good, three of them; a longer teleport
+
+From the owner, after the screenshots. **A heart has no time limit**: it used to bleed away as
+a stain does (0021 §10 gave the reason: ground nobody could take back, and a frame counter that
+would overflow). The owner wants it to stand, so it now goes only when it is beaten down or
+replaced. The counter is dealt with instead: every effect's age now stops at the top of its
+counter rather than overflowing, and a heart's age is held a whole beat under the top, so its
+thralls keep their rhythm and it still counts as the oldest. `Hearts at once` went 2 → 3 (a fourth
+replaces the oldest). **The teleport to a stain** (`Teleport, to a stain within`) went 12 → 18 m:
+it felt too short. Test: `territory::a_heart_nobody_beats_down_stands_for_good` (half an hour of
+frames). That test also showed that a thrall standing on her ground forever would have crashed
+the same counter.
+

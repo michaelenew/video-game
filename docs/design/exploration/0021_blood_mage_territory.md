@@ -212,3 +212,9 @@ Everything above is in the game ([../kits/blood-mage.md](../kits/blood-mage.md) 
   ring of light round it. The first one read as a bloodstain.
 - **Her ground is one surface**, the union of its discs draped on the floor, so overlaps are no
   darker and nothing covers it.
+
+**From the owner's second look, 2026-10-19:**
+
+- **A heart has no time limit.** It no longer bleeds away; it stands until it is beaten down.
+  `Hearts at once` went from 2 to 3, and a fourth replaces the oldest.
+- **The teleport to a stain reaches 18 m** (`Teleport, to a stain within`, from 12 m, ×1.5).

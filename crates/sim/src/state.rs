@@ -12016,7 +12016,9 @@ impl World {
                     c.sear(effect.owner, effect.slot, false);
                 }
             }
-            effect.age += 1;
+            // Held at the top of its counter: a heart, or a thrall on her
+            // ground, can stand longer than it counts.
+            effect.age = effect.age.saturating_add(1);
             // **Her moves claim the floor they touch** (2026-10-18): what she
             // puts on the floor lays her ground there, on its first frame.
             if effect.age == 1 && effect.touches_the_floor() {
@@ -12116,12 +12118,10 @@ impl World {
             // dry. The drain is taken here, before the frame's drinks, so a
             // pool that is about to vanish cannot be drunk from on the frame
             // it does.
-            // A heart bleeds as a stain does, so it does not stand forever.
-            // A thrall standing on her ground does not (`step_thralls`).
-            if effect.is_a_pool()
-                || effect.is_a_heart()
-                || (effect.is_a_thrall() && !effect.struck.has(ON_GROUND))
-            {
+            // A thrall standing on her ground does not (`step_thralls`), and
+            // a heart never does: it stands until it is beaten down or a
+            // newer one takes its place (2026-10-19).
+            if effect.is_a_pool() || (effect.is_a_thrall() && !effect.struck.has(ON_GROUND)) {
                 effect.banked -= effect.pool_drained_this_frame();
             }
             let expired = if effect.kind == EffectKind::FireTornado {
@@ -16434,6 +16434,12 @@ impl World {
                 continue;
             }
             let every = t::heart_every().max(1);
+            // It stands as long as nobody beats it down, so its clock is
+            // held under the top of its counter, a whole beat at a time, so
+            // its thralls keep their rhythm and it stays the oldest.
+            if heart.age > u16::MAX - 2 * every {
+                heart.age -= every;
+            }
             let cost = t::heart_thrall();
             if (heart.age + 1) % every == 0
                 && heart.banked > cost

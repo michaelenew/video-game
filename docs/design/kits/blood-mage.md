@@ -62,7 +62,7 @@ she has left herself, and a floor that is hers.
 | --- | --- |
 | `Q` | **Coagulate** |
 | `E` | **Heart** |
-| `shift` | The **teleport** to a stain under the crosshair (12 m); otherwise, on her ground, **swim**; otherwise an ordinary dodge |
+| `shift` | The **teleport** to a stain under the crosshair (18 m); otherwise, on her ground, **swim**; otherwise an ordinary dodge |
 
 **The rows were retuned, not renumbered** (`sim::moves::blood`): the Haemorrhage's row is the
 Thorn lash, the Hemoplague's the Bramble, Command's the Sweep, the Carpet's the Reap, the
@@ -159,9 +159,10 @@ bright when full.
 **A heart** (`E`) is planted at the crosshair's floor (grounded, 15 m). It holds `Heart, holds
 what she paid (x)` (×3) what she paid for it (10% of red), never less than `Heart, holds at
 least` (150) -- what she paid goes into it, not onto the floor. Blows come off its blood (a
-swing's frames count once), it bleeds away as a stain does, and every `Heart, sends a thrall
-every` (240) frames, while she has room for a thrall, it spends `Heart, a thrall costs it` (60)
-on one at its foot. `Hearts at once` (2): a third replaces the oldest. A creature turns on a heart
+swing's frames count once), it has **no time limit** -- it stands until it is beaten down --
+and every `Heart, sends a thrall every` (240) frames, while she has room for a thrall and it has
+the blood, it spends `Heart, a thrall costs it` (60) on one at its foot. `Hearts at once` (3): a
+fourth replaces the oldest. A creature turns on a heart
 or a thrall nearer it than she is. Drawn as a heart's shape, not its anatomy -- two lobes over a
 point, two short vessels out of its top -- in a crimson that burns from inside, hung at head
 height, beating (a heavy beat and a light one), turning, with a ring of essence round it, a
@@ -251,7 +252,7 @@ throwing from the air and pinning a body there.
   **Well**, the bar under her health.
 - **A chain runs link by link**: a stain set off by an eruption beside it waits `chain_delay`
   (three frames) -- fast enough not to react to, slow enough to see where it started.
-- **The dodge** is an ordinary dodge unless the crosshair is on a stain within 12 m; it throws
+- **The dodge** is an ordinary dodge unless the crosshair is on a stain within 18 m; it throws
   nothing.
 
 ### The fields

@@ -475,7 +475,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E: a heart",
-                "A heart is earned: the thin bar under your Well fills with every point of damage you deal, and when it is full it burns bright and E plants a heart at the crosshair's spot on the floor, emptying it. A heart is a glowing crimson heart beating over the floor, with a ring of light turning round it: it holds what you paid for it three times over, holds your ground round itself, and every four seconds sends out a thrall made of its own blood. It takes several blows to kill and bleeds slowly away; two at a time, and a third replaces the oldest. Leave one and push forward so nothing can reach it.",
+                "A heart is earned: the thin bar under your Well fills with every point of damage you deal, and when it is full it burns bright and E plants a heart at the crosshair's spot on the floor, emptying it. A heart is a glowing crimson heart beating over the floor, with a ring of light turning round it: it holds what you paid for it three times over, holds your ground round itself, and every four seconds sends out a thrall made of its own blood. It takes several blows to kill and never fades on its own; three at a time, and a fourth replaces the oldest. Leave one and push forward so nothing can reach it.",
             ),
             e(
                 "Thralls",
@@ -487,7 +487,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift, crosshair on a stain",
-                "The teleport, up to twelve metres: you are at the stain, you drink it, and you arrive in a burst of thorns -- from the air too. It comes first, wherever you stand.",
+                "The teleport, up to eighteen metres: you are at the stain, you drink it, and you arrive in a burst of thorns -- from the air too. It comes first, wherever you stand.",
             ),
             e(
                 "Shift, on your ground",
