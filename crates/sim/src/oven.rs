@@ -1136,12 +1136,10 @@ scalars! {
     BreedUnderSpeed,      "Breeding", "Travels under at (x top speed)",                      Fixed, fx(1,10), fx(1,1);
     BreedBurrowFrom,      "Breeding", "Goes under to close beyond (mark widths)",            Fixed, 0, fx(10,1);
     // **The morph** (2026-10-18): an egg fed to it makes it that
-    // creature's young; every trophy fed to it is a generation, at rates
-    // far above a lineage's so each one shows (`breed::cross::feed`), and
-    // it grows as it eats.
-    MorphMajor,           "Morph",    "A major goes over, at full pull (chance)",            Fixed, 0, fx(1,1);
-    MorphMinor,           "Morph",    "A minor goes over, at full pull (chance)",            Fixed, 0, fx(1,1);
-    MorphNewLimb,         "Morph",    "A limb it lacks buds, at full pull (chance)",         Fixed, 0, fx(1,1);
+    // creature's young; every trophy fed to it is a generation, one part
+    // of the donor in a fixed order and its sliders a fixed share of the
+    // way (`breed::cross::feed`, 2026-10-19: no dice), and it grows as it
+    // eats.
     MorphSliderGain,      "Morph",    "Sliders pulled (x a lineage's)",                      Fixed, fx(1,1), fx(10,1);
     MorphBorn,            "Morph",    "Hatched at (share of grown)",                         Fixed, fx(1,10), fx(1,1);
     MorphGrows,           "Morph",    "Grows a trophy (share of grown)",                     Fixed, 0, fx(1,1);
@@ -1151,7 +1149,7 @@ scalars! {
     KeepEggBehind,        "Keep",     "An egg lies behind its creature by (m)",              Fixed, 0, fx(30,1);
     KeepTrophies,         "Keep",     "Trophies a beaten creature drops",                    Int, 1, 5;
     KeepFollow,           "Keep",     "The morph follows past (m)",                          Fixed, fx(1,2), fx(10,1);
-    KeepFeedReach,        "Keep",     "Fed by a crouch within (m)",                          Fixed, fx(1,2), fx(6,1);
+    KeepFollowFight,      "Keep",     "The morph keeps back in a fight (m)",                 Fixed, fx(2,1), fx(30,1);
     KeepFeedCool,         "Keep",     "Eats again after",                                    Frames, 1, 240;
     KeepCatchUp,          "Keep",     "The morph, left further than this, catches up (m)",   Fixed, fx(2,1), fx(200,1);
     KeepHurry,            "Keep",     "The morph hurries at most (x its walk)",              Fixed, fx(1,1), fx(5,1);

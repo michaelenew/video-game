@@ -830,41 +830,111 @@ trophy makes a clear difference."*
 - **Beaten, it drops trophies**: two of what its parts are
   (`archetypes::drops`, `KeepTrophies`), a different two each time, picked
   up the same way.
-- **Each player has a morph at heel**, a small plain thing until it eats an
+- **Each player has a morph at heel**, a floating blob until it eats an
   egg. It follows past three metres (`KeepFollow`), hurrying when it is far
-  behind, and is put back beside you after a seam or a fall.
-- **Crouch beside it to feed it.** It eats an egg first -- it starts over as
-  that creature's young -- unless the egg's creature is still hunting you
-  for it (beat it first). Then the last trophy you picked up: a generation.
+  behind, and is put back beside you after a seam or a fall. **In a fight
+  it keeps back** ten metres (`KeepFollowFight`), on your far side from the
+  nearest creature, out from under your swings (2026-10-19: at three metres
+  it was "annoyingly right in the way").
+- **Feed it from the bag** (B, 2026-10-19; it was a crouch beside it,
+  which fed whatever came first). The bag is a window of what you carry:
+  click an item, then "Feed to morph". An egg starts it over as that
+  creature's young -- not while the egg's creature still hunts you for it,
+  and the bag says so (`World::refusal`, `Refusal`). A trophy is a
+  generation. The bag holds as much as you pick up.
+- **With `--dev`, any item** (2026-10-19): a second window beside the bag
+  lists every egg and every trophy a creature drops, under a search box;
+  "Add" puts one in your bag (`Travel::grant`: an egg carried, a trophy
+  handed over through `World::picked` like one picked up).
 
-**Fast, and always visible** (`cross::feed`, `tests/morph.rs`). A morph's
-rates are the Oven's `Morph` family, far above a lineage's: a major goes
-over at half the trophy's pull (a lineage: an eighth), a minor always does,
-a missing limb buds at half, the sliders are pulled three times as hard. And
-**every trophy shows**: if the graft moved nothing you would see, one
-difference between the morph and the donor goes over anyway, picked by the
-trophy's pull -- a horn moves the head, a feather the limbs -- and it has to
-survive the repair (a limbless stance on a legged body is repaired back, so
-something else is tried). "Something you can see" is one definition,
-`morph::changes`, which also writes the line the game shows: "Generation 3:
-front limbs: wing (wing), hide: feathers." Six Galewing feathers give most
-Hornback morphs wings; six Sandmaw plates give most of them spades. The
-morph grows as it eats: hatched at two fifths of its size, a seventh more
-each trophy.
+**One step at a time, in an order you can learn** (`cross::feed`,
+`tests/morph.rs`; rewritten 2026-10-19). The first version was a graft at
+high rates with dice on every part, and in play it read as noise: fed the
+same thing twice the morph grew and then shrank, and its plan wandered.
+The owner: *"needs to be much more consistent and a much more intelligible
+evolution path."* So a feeding now rolls nothing:
+- **One part of the donor goes over** -- of the parts they differ in, the
+  one the trophy pulls hardest on (a feather the limbs, a horn or a tooth
+  the head, a plate the hide), front to back, ties to the plan first. The
+  next feeding of the same takes the next one. A step the repair would
+  undo (a limbless stance on a legged body) is passed over for the next.
+- **From the body as it is now.** A feeding reads the morph's genome as
+  it stands after every feeding before it, and nothing else: no ancestor,
+  and no shape it should be. Every body is as natural as any other. The
+  first version broke that without meaning to: after a feeding it settled
+  the sliders toward what the body plan "wants" (`plan::settle`, a table
+  of what each stance and build should be -- right for a lineage, wrong
+  here), so every feeding was pulled back toward that table as well as on
+  toward the donor, which was the grow-shrink-grow. A morph's feeding now
+  only repairs (it has to stand), and never settles
+  (`cross::stand`; `tests/morph.rs`,
+  `a_feeding_starts_from_the_body_as_it_is_now`).
+- **Its proportions move a fixed share** of the way from where they are to
+  the donor's (the pull, the inertia, `MorphSliderGain`), so fed the same
+  thing they only close on it
+  (`fed_the_same_thing_its_size_only_closes_on_the_donors`). When size is
+  the step, it goes half the way, all of it when close.
+- **No mutation.** A morph changes by what it eats.
 
-**Where it lives.** What you carry and your morph are the journey's
-(`Journey::keep`): they go with you through seams and survive a won hunt,
-which rebuilds the fighters. What lies on the floor and where the morphs
-stand are the place's (`World::loose`, `World::heel`), shifted with it.
-The whole thing is about 640 bytes of snapshot, inside the 20 KiB cap with
-room to spare, and hashed only once anything has been picked up, fed or
-dropped, so every checksum pinned before it still holds.
+Six Galewing beaks walk a Hornback: head raised, beak and crest, front
+limbs to wings, back limbs sprung (it flies), tail level, feathers -- the
+same six, in that order, every time. "Something you can see" is still one
+definition, `morph::changes`, which writes the line the game shows. The
+morph grows as it eats: hatched at two fifths of its size, more each
+trophy. (The three chance knobs the dice used are gone.)
+
+**Where it lives: as little as possible in the world** (2026-10-19). The
+owner: *"inventory doesn't need to be shared game state ... using an item
+is something we can treat like a move / input. It just happens when the
+user clicks the key, and then both players agree that the item was used
+rather than needing to agree that the item was always there ... I want to
+avoid bloat in the state the players need to agree on."* So the world
+keeps only what the fight reads:
+- **What lies on the floor** (`World::loose`), in the place's coordinates.
+- **Which eggs each player carries** (`Keep::eggs`, a bit a creature, the
+  journey's): a creature hunts whoever carries its egg, so both machines
+  have to agree who.
+- **What each player picked up this frame** (`World::picked`), emptied
+  every frame: how a game hears of a trophy for its bag.
+
+Everything else is each game's own. **The bag and every seat's morph**
+(`game::bag`) are kept from what the world says happened: a trophy in
+`picked` goes in this player's bag, and a feeding -- an input naming the
+item, `Travel::feed(item)`, not a slot, since the other machine does not
+know your bag -- is eaten by that seat's morph on every machine, so every
+game draws every morph the same. **A rollback is a correction**: the game
+sees every frame it advances, predicted or not, so what happened is kept by
+frame number, the last word on a frame standing (as the replay's tape keeps
+inputs), and settled only once it is older than a rollback can reach
+(`game/src/bag.rs` tests a pickup undone by a rollback). **Where each morph
+stands** (`game::heel`) is worked out every frame from where the fighters
+are, by the same rules and the same Oven knobs; nothing in a fight reads it.
+
+That took the keep from about 640 bytes of the snapshot to 16 for the eggs
+and 8 for `picked` (the world: 20,876 bytes to 20,340). What it gives up,
+for now: a machine cannot check a trophy fed was ever carried -- a feeding
+is taken at its word, as the owner chose; one day verifying offline play
+would sign the bag, outside the world's checksum. And both games build the
+morphs from the feedings they have seen, so they agree from the start of a
+session; a morph carried in from another session would need sending.
 
 **On screen** (`game::keep`): an egg is big, pale and glowing in its
 creature's colour, bobbing and turning under a column of light you can see
 across a range; a trophy is the same, small and gold. The morph is the
 builder's own body, in its egg-creature's colours, walking at the gait its
-body chooses. A few lines at the bottom left say what you carry, what your
+body chooses. **Unformed, it is a blob** (2026-10-19; the owner: *"like
+Morph from Treasure Planet ... a floating blob that doesn't look like
+anything"*): glossy pink, two big eyes and a mouth, floating at shoulder
+height, wobbling; fed an egg it melts into the creature, the blob shrinking
+away as the body grows in where it hung. The first blob read as a
+blobfish -- squat, tipped nose-down, its face slid to the bottom -- so it
+is round and upright, its face high: big eyes close together with a
+highlight in each, a small smile, pink cheeks, nubs, and a tapering tail.
+**Moving, it leaves a trail of puffs** off that tail, like a cartoon's
+propulsion: a quarter of its size, a little lumpy, left where they were
+made (shifted with the world at a crossing) and shrinking evenly to
+nothing in a second. Only the blob: once fed, it moves as its creature
+does, and leaves none. A few lines at the bottom left say what you carry, what your
 morph is, what the last feeding changed, and -- when it is so -- that the
 creature wants its egg back.
 

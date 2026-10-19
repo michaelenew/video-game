@@ -493,7 +493,12 @@ const FAR_AHEAD: i32 = 3;
 /// GGRS decides when to save, load and advance; `handle_requests` services
 /// those against the simulation. Rollbacks land here as a load followed by
 /// several advances, all inside one call.
-pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Soundscape) {
+pub fn step(
+    sim: &mut crate::Sim,
+    local: SimInput,
+    scape: &mut crate::sound::Soundscape,
+    keeping: &mut crate::bag::Keeping,
+) {
     let crate::Sim {
         driver,
         cur,
@@ -594,10 +599,14 @@ pub fn step(sim: &mut crate::Sim, local: SimInput, scape: &mut crate::sound::Sou
             // Kept on the region ledger -- its tape, and the crowd field's
             // due aggregates fed off it -- a re-advance overwriting its
             // prediction the same way the replay's does.
+            let me = (*handle).min(sim::state::MAX_PLAYERS - 1);
             net::handle_requests_kept(cur, requests, ledger, |before, inputs, after| {
                 tape.record(before.frame, inputs);
                 // And sounded, the first time each frame is simulated.
                 scape.observe(before, after);
+                // And kept: what was picked up and fed, by frame, so a
+                // re-advance corrects what a prediction got wrong.
+                keeping.record(before, &inputs, after, me);
             });
             // The books are kept for confirmed frames only: what both
             // machines have agreed on, which is what a region's checksum

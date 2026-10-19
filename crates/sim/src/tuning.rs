@@ -4673,22 +4673,8 @@ pub fn breed_burrow_from() -> Fx {
 // The morph (`sim::breed::morph`, `sim::breed::cross::feed`)
 // ---------------------------------------------------------------------------
 
-/// A trophy fed to a morph: the chance at full pull that a major goes over.
-pub fn morph_major() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::MorphMajor))
-}
-
-/// ... that a minor does.
-pub fn morph_minor() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::MorphMinor))
-}
-
-/// ... that a limb the morph lacks buds.
-pub fn morph_new_limb() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::MorphNewLimb))
-}
-
-/// How much harder than a lineage's a trophy pulls a morph's sliders.
+/// How far one trophy pulls a morph's sliders toward its donor, against a
+/// lineage's graft: a fixed share, the trophy's pull times this.
 pub fn morph_slider_gain() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MorphSliderGain))
 }
@@ -4728,12 +4714,14 @@ pub fn morph_follow() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::KeepFollow))
 }
 
-/// Crouching within this of your morph feeds it.
-pub fn feed_reach() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::KeepFeedReach))
+/// In a hunt, a morph keeps this far back from its seat, on the far side
+/// from the nearest creature: out of the fight.
+pub fn morph_follow_fight() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::KeepFollowFight))
 }
 
-/// Frames before a morph eats again, so one crouch is one feeding.
+/// Frames before a morph eats again, so one choice in the bag is one
+/// feeding.
 pub fn feed_cool() -> i32 {
     oven::scalar(Scalar::KeepFeedCool)
 }

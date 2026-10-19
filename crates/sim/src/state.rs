@@ -1672,8 +1672,9 @@ pub struct World {
     pub crowd: crate::crowd::Field,
     /// Eggs and trophies on the floor of this place (`crate::keep`).
     pub loose: crate::keep::Loose,
-    /// Where each seat's morph stands, in this place (`crate::keep`).
-    pub heel: [crate::keep::Heel; MAX_PLAYERS],
+    /// What each seat picked up this frame, or was given (`crate::keep`):
+    /// how a game hears of a trophy for its bag. Emptied every frame.
+    pub picked: [Option<crate::keep::Item>; MAX_PLAYERS],
 }
 
 impl World {
@@ -1722,7 +1723,7 @@ impl World {
             away: Fighters::EMPTY,
             crowd: crate::crowd::Field::NONE,
             loose: [None; crate::keep::LOOSE],
-            heel: [crate::keep::Heel::default(); MAX_PLAYERS],
+            picked: [None; MAX_PLAYERS],
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -2095,7 +2096,9 @@ impl World {
             | Destination::Pause
             | Destination::Step
             | Destination::Left
-            | Destination::Credit(_) => return None,
+            | Destination::Credit(_)
+            | Destination::Feed(_)
+            | Destination::Grant(_) => return None,
             Destination::Valley => {
                 World::arrive_all(classes, self.valley, crate::valley::START, None, self.seats)
             }
@@ -2568,6 +2571,7 @@ impl World {
 
     fn step(&mut self, wire: [Input; MAX_PLAYERS]) {
         self.frame = self.frame.wrapping_add(1);
+        self.picked = [None; MAX_PLAYERS];
 
         // A creature credited to the valley's journey from somebody's
         // trophies (`Destination::Credit`): a bit, on the frame it arrives,
@@ -2576,6 +2580,15 @@ impl World {
             for input in &wire {
                 if let Some(Destination::Credit(species)) = input.travel.destination() {
                     self.valley.credit(species);
+                }
+            }
+            // An item used from a bag, or a dev's grant (`crate::keep`),
+            // seat by seat.
+            for (i, input) in wire.iter().enumerate() {
+                match input.travel.destination() {
+                    Some(Destination::Feed(item)) => self.fed(i, item),
+                    Some(Destination::Grant(item)) => self.granted(i, item),
+                    _ => {}
                 }
             }
         }

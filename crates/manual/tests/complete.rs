@@ -36,6 +36,7 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "ControlLeft" => vec!["Ctrl"],
         "ControlRight" => vec!["Right Ctrl"],
         "KeyC" => vec!["Ctrl or C", " C"],
+        "KeyB" => vec!["B"],
         "Space" => vec!["Space"],
         "Escape" => vec!["Esc"],
         "Tab" => vec!["Tab"],

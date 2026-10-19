@@ -383,9 +383,6 @@ impl World {
         for l in self.loose.iter_mut().flatten() {
             l.at = l.at.add(d);
         }
-        for h in self.heel.iter_mut() {
-            h.at = h.at.add(d);
-        }
         for g in self.gusts.iter_mut().flatten() {
             g.pos = g.pos.add(d);
         }

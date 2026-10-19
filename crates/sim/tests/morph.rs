@@ -119,3 +119,46 @@ fn a_morph_grows_as_it_eats_and_stays_a_creature() {
     assert!(born < Fx::ONE);
     assert_eq!(m.generation, 15);
 }
+
+#[test]
+fn a_feeding_starts_from_the_body_as_it_is_now() {
+    // Two morphs that came to the same body by different roads: one
+    // hatched a Ridgeback and fed, the other hatched straight into what
+    // the first became. Fed the same trophy, they become the same thing --
+    // there is no ancestor, and no shape, a feeding remembers.
+    let galewing = cast("Galewing");
+    let mut fed = Morph::hatch(&cast("Ridgeback"), 2);
+    fed.eat(TrophyKind::Feather, &galewing);
+    fed.eat(TrophyKind::Feather, &galewing);
+    let mut born = Morph::hatch(&fed.genome, 2);
+    born.generation = fed.generation;
+    let a = fed.eat(TrophyKind::Horn, &cast("Hornback"));
+    let b = born.eat(TrophyKind::Horn, &cast("Hornback"));
+    assert_eq!(fed.genome, born.genome);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn fed_the_same_thing_its_size_only_closes_on_the_donors() {
+    // From every creature toward every other: each feeding of the same
+    // trophy moves the size toward the donor's or leaves it, never back.
+    for (_, egg, eg, _) in CAST {
+        for (_, donor, dg, _) in CAST {
+            let Some(kind) = archetypes::drops(dg).into_iter().flatten().next() else {
+                continue;
+            };
+            let mut m = Morph::hatch(eg, 0);
+            let target = dg.sliders.size;
+            for feed in 1..=8 {
+                let gap = target.sub(m.genome.sliders.size).abs();
+                m.eat(kind, dg);
+                let now = target.sub(m.genome.sliders.size).abs();
+                assert!(
+                    now <= gap,
+                    "{egg} fed {donor}'s {kind:?}, feeding {feed}: size went from \
+                     {gap:?} to {now:?} off the donor's"
+                );
+            }
+        }
+    }
+}

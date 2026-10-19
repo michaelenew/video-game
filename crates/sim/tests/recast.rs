@@ -35,13 +35,27 @@ fn no_two_kinds_of_trip_share_a_byte() {
         };
         assert_eq!(Travel::class(seat, class), Travel(b), "word {b:#06x}");
     }
-    // A high byte on anything but a class change asks for nothing: a byte
-    // that meant a trip still means exactly that trip, and nothing else.
+    // An item, fed or granted: the item in the high byte of a credit's.
+    for b in 0..=u16::MAX {
+        match Travel(b).destination() {
+            Some(Destination::Feed(item)) => {
+                assert_eq!(Travel::feed(item), Travel(b), "word {b:#06x}")
+            }
+            Some(Destination::Grant(item)) => {
+                assert_eq!(Travel::grant(item), Travel(b), "word {b:#06x}")
+            }
+            _ => {}
+        }
+    }
+    // A high byte on anything else asks for nothing: a byte that meant a
+    // trip still means exactly that trip, and nothing else.
     for b in 0..=255u16 {
-        if Travel(b)
-            .destination()
-            .is_some_and(|d| !matches!(d, Destination::Class { .. }))
-        {
+        if Travel(b).destination().is_some_and(|d| {
+            !matches!(
+                d,
+                Destination::Class { .. } | Destination::Feed(_) | Destination::Credit(_)
+            )
+        }) {
             assert_eq!(
                 Travel(b | 0x100).destination(),
                 None,
