@@ -66,8 +66,65 @@ pub static FIGHT: FightDecl = FightDecl {
     pace: Some(pace),
     presence: Some(presence),
     lob_height: Some(lob_height),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
+
+/// **Its own points, moved with the world** (`FightDecl::shift`): where
+/// each hunter stood at the last glance, the ghost and where it would play,
+/// the quills in flight, the perch it would climb to, the leap under way,
+/// the fire it keeps clear of, and the height of its pounce's mark -- each
+/// only while there is one, so an empty word stays empty. Its prints are
+/// kept from its own arena's origin and do not move; its coals and its
+/// cloud are hazards, moved with every other.
+fn shift(w: &mut World, d: V3) {
+    let up = lore::cm_of(d.y);
+    let moved = |lore: &mut Lore, i: usize| {
+        let v = lore.word(i);
+        lore.set_word(i, lore::moved_halves(v, d));
+    };
+    let lore = &mut w.lore;
+    for i in 0..MAX_PLAYERS {
+        if lore.word(word::glanced_at(i)) != 0 || lore.word(word::glanced_yaws(i)) != 0 {
+            moved(lore, word::glanced_at(i));
+        }
+    }
+    if lore.word(word::GHOST_LOOK) != 0 {
+        moved(lore, word::GHOST);
+    }
+    if (0..MAX_PLAYERS).any(|i| lore.word(word::view(i)) & view::GHOST_OK != 0) {
+        moved(lore, word::GHOST_AT);
+    }
+    if lore.word(word::QUILL_LIVE) != 0 {
+        moved(lore, word::QUILL_AT);
+        let v = lore.word(word::QUILL_UP);
+        lore.set_word(
+            word::QUILL_UP,
+            lore::halves(lore::moved_cm(lore::lo(v), up), lore::hi(v)),
+        );
+    }
+    // Its top is kept from its arena's origin (`perch_spots`): only where.
+    if lore.int(word::PERCH_TOP) != 0 {
+        moved(lore, word::PERCH_AT);
+    }
+    if lore.word(word::LEAP_FROM) != 0 || lore.word(word::LEAP_UP) != 0 {
+        moved(lore, word::LEAP_FROM);
+        let v = lore.word(word::LEAP_UP);
+        lore.set_word(
+            word::LEAP_UP,
+            lore::halves(lore::moved_cm(lore::lo(v), up), lore::hi(v)),
+        );
+    }
+    if lore.word(word::FIRE_NEAR) != 0 {
+        moved(lore, word::FIRE_AT);
+    }
+    for m in w.monsters.iter_mut().flatten() {
+        if m.species == SpeciesId::VEILSTALKER {
+            let steps = mark_steps(m).saturating_add(steps_of(up));
+            put_mark_steps(m, steps);
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // The floor's kinds
@@ -367,15 +424,27 @@ fn print_of(w: u32, now: u32) -> Option<Print> {
     })
 }
 
-/// Every print in the ring, with how old it is.
+/// Every print in the ring, with how old it is. **A print is kept from its
+/// own arena's origin** (`arena::Den`), not the world's: its nine bits a
+/// side reach 32 m either way, so a print moved with the world into another
+/// place's coordinates would be pressed against the end of them.
 pub fn prints(w: &World) -> impl Iterator<Item = Print> + '_ {
     let now = w.frame;
-    (0..PRINTS).filter_map(move |i| print_of(w.lore.word(word::PRINTS + i), now))
+    let off = w.den().off;
+    (0..PRINTS).filter_map(move |i| {
+        print_of(w.lore.word(word::PRINTS + i), now).map(|p| Print {
+            at: p.at.add(off),
+            ..p
+        })
+    })
 }
 
-/// How long a print lasts where it lies: half as long in ash.
+/// How long a print lasts where it lies: half as long in ash. Its own
+/// arena's floor, wherever the world's frame is.
 pub fn print_life(w: &World, p: &Print) -> u32 {
-    match w.arena().floor_at(p.at.x, p.at.z) {
+    let den = w.den();
+    let at = p.at.sub(den.off);
+    match den.arena.floor_at(at.x, at.z) {
         Material::Ash => Knob::PrintsAsh.raw().max(0) as u32,
         _ => Knob::PrintsSnow.raw().max(0) as u32,
     }
@@ -667,9 +736,12 @@ pub fn any_shown(w: &World, slot: usize) -> bool {
 /// doing.
 fn outlined(w: &World, m: &Monster, part: usize) -> bool {
     let at = part_rest_world(m, part);
-    let floor = w.arena().ground_under(at);
-    if at.y.sub(floor).raw() < Knob::OutlineHigh.fx().raw()
-        && w.arena().floor_at(at.x, at.z) == Material::Water
+    // Its own arena's stream, wherever the world's frame is (`arena::Den`).
+    let den = w.den();
+    let own = at.sub(den.off);
+    let floor = den.arena.ground_under(own);
+    if own.y.sub(floor).raw() < Knob::OutlineHigh.fx().raw()
+        && den.arena.floor_at(own.x, own.z) == Material::Water
         && floor.raw() <= Fx::ZERO.raw()
     {
         return true;
@@ -848,14 +920,33 @@ fn presence(m: &Monster, _rig: &crate::beast::Rig) -> crate::beast::Presence {
 
 /// How high the pounce's circle is drawn: the floor it lands on.
 pub fn lob_height(m: &Monster) -> Fx {
-    let steps = (m.own[body::FLAGS] >> flag::MARK_SHIFT) & 0xFF;
-    lore::from_cm((steps * MARK_STEP) as i16)
+    Fx::ratio(mark_steps(m) * MARK_STEP, 100)
 }
 
-fn set_mark_height(m: &mut Monster, y: Fx) {
-    let steps = (lore::to_cm(y) as i32 / MARK_STEP).clamp(0, 0xFF);
-    m.own[body::FLAGS] =
-        (m.own[body::FLAGS] & !(0xFF << flag::MARK_SHIFT)) | (steps << flag::MARK_SHIFT);
+/// The mark's height over its own arena's floor -- `up` is that floor in
+/// the world's coordinates -- as it was always held, then carried to
+/// wherever the world's frame is.
+fn set_mark_height(m: &mut Monster, y: Fx, up: Fx) {
+    let steps = (lore::to_cm(y.sub(up)) as i32 / MARK_STEP).clamp(0, 0xFF);
+    put_mark_steps(m, steps + steps_of(lore::cm_of(up)));
+}
+
+/// The mark's height, in its steps: the top half of the body's flags,
+/// signed, so a frame whose floor is below its arena's holds it too.
+fn mark_steps(m: &Monster) -> i32 {
+    (m.own[body::FLAGS] >> flag::MARK_SHIFT) as i16 as i32
+}
+
+fn put_mark_steps(m: &mut Monster, steps: i32) {
+    let steps = steps.clamp(i16::MIN as i32, i16::MAX as i32);
+    m.own[body::FLAGS] = (m.own[body::FLAGS] & 0xFFFF) | (steps as u16 as i32) << flag::MARK_SHIFT;
+}
+
+/// Centimetres to whole mark steps, rounded alike either side of zero: a
+/// move by `-d` undoes a move by `d`.
+fn steps_of(cm: i32) -> i32 {
+    let r = (cm.abs() + MARK_STEP / 2) / MARK_STEP;
+    if cm < 0 { -r } else { r }
 }
 
 /// **A hit has landed.** Its region keeps the damage (past `MottleDamage` it
@@ -897,25 +988,27 @@ pub fn frame(w: &mut World) {
     glance_looks(w, slot);
     let mut m = w.monsters[slot].expect("found above");
     let now = w.frame;
+    // Its own arena, wherever the world's frame is (`arena::Den`).
+    let den = w.den();
 
     hits_and_paint(w, &mut m, now);
     note_bait(w, &m);
     if m.alive() {
         leave(w, &mut m);
-        chains(w, &mut m);
+        chains(&mut m, &den);
         spear_lock(w, &mut m);
-        perch_spots(w, &m);
-        fly(w, &mut m);
-        quills(w, &mut m, slot);
-        smoke(w, &m, now);
+        perch_spots(w, &m, &den);
+        fly(w, &mut m, &den);
+        quills(w, &mut m, slot, &den);
+        smoke(w, &m, now, &den);
         mimic(w, &mut m, now);
-        panic(w, &mut m, now);
+        panic(w, &mut m, now, &den);
     }
     let exposed = paints(w).next().is_some() || mottled_count(&m) > 0;
     set_flag(&mut m, flag::EXPOSED, exposed);
-    trail(w, &m, now);
-    braziers(w);
-    veil_clock(w, &mut m);
+    trail(w, &m, now, &den);
+    braziers(w, &den);
+    veil_clock(w, &mut m, &den);
     sense(w, &m, slot);
     w.lore.set_word(word::NOW, now);
     w.monsters[slot] = Some(m);
@@ -1130,9 +1223,9 @@ fn leave(w: &mut World, m: &mut Monster) {
 /// The moves that run into each other: the rake's second swipe, the getting
 /// up after a panic and the bound that follows it, and the retreat turning
 /// away as its recoil ends.
-fn chains(w: &mut World, m: &mut Monster) {
-    let bounds = w.arena().bounds;
-    let away = |m: &Monster| open_way(m.pos, m.brain.seen, Knob::RetreatFar.fx(), &bounds);
+fn chains(m: &mut Monster, den: &crate::arena::Den) {
+    let bounds = den.kept;
+    let away = |m: &Monster| open_way(m.pos, m.brain.seen, Knob::RetreatFar.fx(), &bounds, den.off);
     match m.doing {
         Doing::Recovery {
             kind: RAKE,
@@ -1184,7 +1277,7 @@ fn chains(w: &mut World, m: &mut Monster) {
     // The bound away is aimed off the arena's walls: along them rather than
     // into them.
     if let Doing::Active { kind: RETREAT, .. } = m.doing {
-        let b = w.arena().bounds;
+        let b = den.kept;
         let f = V3::from_turns(m.yaw);
         let ahead = m.pos.add(f.scale(Knob::WallLook.fx()));
         let room = SPECIES.margin().add(Fx::ONE);
@@ -1193,7 +1286,7 @@ fn chains(w: &mut World, m: &mut Monster) {
             || ahead.z.raw() < b.lo_z.add(room).raw()
             || ahead.z.raw() > b.hi_z.sub(room).raw();
         if out {
-            let middle = flat(V3::ZERO.sub(m.pos));
+            let middle = flat(den.off.sub(m.pos));
             if middle.flat_len().raw() > 0 {
                 let want = math::atan2_turns(middle.z, middle.x);
                 let error = math::wrap_turns(want.sub(m.yaw));
@@ -1207,8 +1300,9 @@ fn chains(w: &mut World, m: &mut Monster) {
 /// **The way away from `from` with the most floor in it**: straight away if
 /// a run of `far` that way stays inside the walls, otherwise turned toward
 /// the middle of the arena an eighth at a time until it does -- a retreat
-/// into a corner is a retreat to be cornered in.
-pub fn open_way(at: V3, from: V3, far: Fx, b: &crate::arena::Bounds) -> Fx {
+/// into a corner is a retreat to be cornered in. `mid` is its arena's
+/// origin in the world's coordinates (`arena::Den::off`): what it turns to.
+pub fn open_way(at: V3, from: V3, far: Fx, b: &crate::arena::Bounds, mid: V3) -> Fx {
     let off = flat(at.sub(from));
     let straight = if off.flat_len().raw() > 0 {
         math::atan2_turns(off.z, off.x)
@@ -1223,7 +1317,7 @@ pub fn open_way(at: V3, from: V3, far: Fx, b: &crate::arena::Bounds) -> Fx {
             && end.z.raw() > b.lo_z.add(room).raw()
             && end.z.raw() < b.hi_z.sub(room).raw()
     };
-    let middle = flat(V3::ZERO.sub(at));
+    let middle = flat(mid.sub(at));
     let toward = if middle.flat_len().raw() > 0 {
         math::wrap_turns(math::atan2_turns(middle.z, middle.x).sub(straight))
     } else {
@@ -1271,7 +1365,7 @@ fn spear_lock(w: &mut World, m: &mut Monster) {
 /// **Where it would perch**: a top within its reach that is wide enough and
 /// between `PerchLowest` and `PerchHighest` -- a trunk's broken top, the
 /// wall's ledge -- the one nearest the target, so the pounce from it reaches.
-fn perch_spots(w: &mut World, m: &Monster) {
+fn perch_spots(w: &mut World, m: &Monster, den: &crate::arena::Den) {
     w.lore.set_word(word::PERCH_TOP, 0);
     if perched(m) {
         return;
@@ -1282,11 +1376,18 @@ fn perch_spots(w: &mut World, m: &Monster) {
     let reach = Knob::PerchReach.fx();
     let target = m.brain.seen;
     let mut best: Option<(V3, Fx, Fx)> = None;
-    for solid in ground.solids() {
-        if solid.hangs() {
+    // The boxes in its reach, asked of the terrain near it: on the map,
+    // every box of the whole place is the place the world is in, which need
+    // not be its own.
+    for solid in ground.around(m.pos, reach.add(wide)) {
+        // Hanging over its own arena's floor, wherever the world's frame is
+        // (what `Solid::hangs` asks of a floor at zero).
+        if solid.min.y.sub(den.off.y).raw() > 0 {
             continue;
         }
-        let top = solid.max.y;
+        // How high over its own arena's floor: what the knobs are, and what
+        // is kept (`shift` leaves it be).
+        let top = solid.max.y.sub(den.off.y);
         if top.raw() < Knob::PerchLowest.fx().raw() || top.raw() > Knob::PerchHighest.fx().raw() {
             continue;
         }
@@ -1356,7 +1457,7 @@ pub fn airborne(m: &Monster) -> bool {
 pub fn mark_pounce(m: &mut Monster, at: V3, ground: &crate::arena::Terrain) {
     let at = V3::new(at.x, Fx::ZERO, at.z);
     m.aim_at(at);
-    set_mark_height(m, ground.ground_under(at));
+    set_mark_height(m, ground.ground_under(at), ground.den.off.y);
 }
 
 /// **Fly a leap**: the climb from where it stood onto its perch's top, the
@@ -1364,7 +1465,7 @@ pub fn mark_pounce(m: &mut Monster, at: V3, ground: &crate::arena::Terrain) {
 /// carried from where it left to where it lands with an arc over it. Out of
 /// a leap it stands on whatever is under it, perched or on the floor, and
 /// comes down off an edge.
-fn fly(w: &mut World, m: &mut Monster) {
+fn fly(w: &mut World, m: &mut Monster, den: &crate::arena::Den) {
     let ground = w.terrain();
     let under = ground.ground_under(m.pos);
     let in_leap = elapsed(m).filter(|(k, _)| {
@@ -1464,7 +1565,7 @@ fn fly(w: &mut World, m: &mut Monster) {
     m.speed = Fx::ZERO;
     if kind == CLIMB && t >= air {
         // Up: perched if it landed on a top, on the floor if it came down.
-        let top = land_y.raw() > Fx::ONE.raw();
+        let top = land_y.sub(den.off.y).raw() > Fx::ONE.raw();
         set_flag(m, flag::PERCHED, top);
         w.lore
             .set_word(word::LEAP_UP, lore::halves(lore::to_cm(land_y), 0));
@@ -1501,11 +1602,14 @@ fn quill_bearing(i: usize) -> Fx {
 /// **Where a fling goes**: from the tail, at the target's chest where it is
 /// led to -- the place it leaves, the fan's middle bearing, and the fall (or
 /// rise) per metre. What the throw uses and what the floor shows.
-pub fn quill_fan(m: &Monster) -> (V3, Fx, Fx) {
+///
+/// `floor` is its own arena's floor in the world's coordinates
+/// (`arena::Den::off`): the height is over it.
+pub fn quill_fan(m: &Monster, floor: Fx) -> (V3, Fx, Fx) {
     let a = SPECIES.attack(QUILLS);
     let tip = m.rig().bone[super::bones::TAIL4].at;
     let from = V3::new(tip.x, Fx::ZERO, tip.z);
-    let height = Knob::QuillHeight.fx();
+    let height = Knob::QuillHeight.fx().add(floor);
     let target = m.lead_point(a.startup);
     let chest = aim::standing_middle(target, crate::tuning::body_height());
     let to = flat(chest.sub(from));
@@ -1538,7 +1642,7 @@ fn signs(w: &World, out: &mut crate::sign::Signs) {
             let a = SPECIES.attack(QUILLS);
             let progress = Fx::from_int((a.startup - left.min(a.startup)) as i32)
                 .div(Fx::from_int(a.startup.max(1) as i32));
-            let (from, middle, _) = quill_fan(m);
+            let (from, middle, _) = quill_fan(m, w.den().off.y);
             for i in 0..QUILL_COUNT {
                 let along = V3::from_turns(middle.add(quill_bearing(i)));
                 out.push(Sign::strip(Says::Coming, from, along, reach, width).filled(progress));
@@ -1592,14 +1696,14 @@ pub fn quills_in_flight(w: &World) -> impl Iterator<Item = Quill> + '_ {
 /// the target's chest, then fly on at `QuillSpeed`; each stops at the first
 /// solid on its line -- a trunk, a stone, a planted shield -- or the first
 /// body it meets, or at `QuillReach`.
-fn quills(w: &mut World, m: &mut Monster, slot: usize) {
+fn quills(w: &mut World, m: &mut Monster, slot: usize, den: &crate::arena::Den) {
     if let Doing::Active { kind: QUILLS, left } = m.doing {
         let a = SPECIES.attack(QUILLS);
         if left == a.active {
             // Thrown: from its tail, raised over its head, at where it led
             // you to.
-            let (from, middle, slope) = quill_fan(m);
-            let height = Knob::QuillHeight.fx();
+            let (from, middle, slope) = quill_fan(m, den.off.y);
+            let height = Knob::QuillHeight.fx().add(den.off.y);
             w.lore.set_word(word::QUILL_AT, word_of(from));
             w.lore.set_word(
                 word::QUILL_UP,
@@ -1700,10 +1804,11 @@ fn quills(w: &mut World, m: &mut Monster, slot: usize) {
 /// **The cloud**: placed as the vent begins, grown from a point to
 /// `SmokeRadius` over the vent's startup, and left standing its life. Fire
 /// burns it off (the shared floor: it ignites into the flash).
-fn smoke(w: &mut World, m: &Monster, now: u32) {
+fn smoke(w: &mut World, m: &Monster, now: u32, den: &crate::arena::Den) {
     if let Doing::Startup { kind: SMOKE, left } = m.doing {
         let a = SPECIES.attack(SMOKE);
-        let at = V3::new(m.pos.x, Fx::ZERO, m.pos.z);
+        // On its own arena's floor, wherever the world's frame is.
+        let at = V3::new(m.pos.x, den.off.y, m.pos.z);
         if left == a.startup {
             // A fresh cloud replaces its last.
             let old = w.lore.word(word::SMOKE_SLOT);
@@ -1893,7 +1998,9 @@ pub fn ghost(w: &World) -> Option<Monster> {
     let total = SPECIES.attack(plays).startup as i32;
     let mut g = *m;
     g.pos = point(w.lore.word(word::GHOST));
-    g.pos.y = w.arena().ground_under(g.pos);
+    // On its own arena's floor, wherever the world's frame is.
+    let den = w.den();
+    g.pos.y = den.arena.ground_under(g.pos.sub(den.off)).add(den.off.y);
     g.yaw = Fx::from_raw((look & 0xFFFF) as i32);
     g.yaw_rate = Fx::ZERO;
     g.speed = Fx::ZERO;
@@ -1912,7 +2019,7 @@ pub fn ghost(w: &World) -> Option<Monster> {
 /// Fully visible, down in the snow for `PanicFrames`, throwing nothing; then
 /// up, visible a moment more, and away. A panic locks the next one out for
 /// `PanicLockout`, halved when it is desperate.
-fn panic(w: &mut World, m: &mut Monster, now: u32) {
+fn panic(w: &mut World, m: &mut Monster, now: u32, den: &crate::arena::Den) {
     let _ = now;
     let fire = w.lore.word(word::FIRE);
     let (mut burning, mut lock) = (fire & 0xFFFF, fire >> 16);
@@ -1921,7 +2028,7 @@ fn panic(w: &mut World, m: &mut Monster, now: u32) {
     if !airborne(m) && !perched(m) {
         for part in 0..PART_COUNT {
             let at = part_rest_world(m, part);
-            if at.y.raw() > Knob::FireHeight.fx().raw() {
+            if at.y.sub(den.off.y).raw() > Knob::FireHeight.fx().raw() {
                 continue;
             }
             if let Some(from) = in_fire_at(w, at, Fx::ZERO) {
@@ -1998,7 +2105,7 @@ fn count_byte(lore: &mut Lore, word: usize, byte: u32, by: u32) {
 /// decloak's first frame. A mimic stamps nothing, and the real animal stands
 /// still through it. Prints past their life are cleared, so the ring's clock
 /// never reads an old print as new.
-fn trail(w: &mut World, m: &Monster, now: u32) {
+fn trail(w: &mut World, m: &Monster, now: u32, den: &crate::arena::Den) {
     let ground = w.terrain();
     let stride_word = w.lore.word(word::STRIDE);
     let was = (stride_word & 0xFFFF) as u16;
@@ -2017,8 +2124,10 @@ fn trail(w: &mut World, m: &Monster, now: u32) {
         if !on_floor || !ground.floor_at(at.x, at.z).takes_prints() {
             return;
         }
-        w.lore
-            .set_word(word::PRINTS + next, print_word(at, foot as u8, red, now));
+        w.lore.set_word(
+            word::PRINTS + next,
+            print_word(at.sub(den.off), foot as u8, red, now),
+        );
         next = (next + 1) % PRINTS;
     };
     // The decloak's first frame: every foot sets.
@@ -2083,16 +2192,24 @@ fn trail(w: &mut World, m: &Monster, now: u32) {
 // ---------------------------------------------------------------------------
 
 /// The arena's braziers: its sites called "brazier", in order, at most four.
+/// Its own arena's, wherever the world's frame is (`arena::Den`).
 pub fn braziers_of(w: &World) -> impl Iterator<Item = (usize, V3)> + '_ {
-    w.arena()
+    braziers_in(w.den())
+}
+
+fn braziers_in(den: crate::arena::Den) -> impl Iterator<Item = (usize, V3)> {
+    den.arena
         .sites
         .iter()
         .filter(|s| s.name == "brazier")
         .take(4)
         .enumerate()
-        .map(|(i, s)| {
+        .map(move |(i, s)| {
             let (x, z) = s.route.first().copied().unwrap_or((0, 0));
-            (i, V3::new(Fx::ratio(x, 100), Fx::ZERO, Fx::ratio(z, 100)))
+            (
+                i,
+                den.at(V3::new(Fx::ratio(x, 100), Fx::ZERO, Fx::ratio(z, 100))),
+            )
         })
 }
 
@@ -2105,9 +2222,9 @@ pub fn brazier_standing(lore: &Lore, i: usize) -> bool {
 /// or the creature's own body going through it -- which is both a trace and
 /// a waste of a fire somebody was saving (§4). Its coals spill on the floor
 /// beside it, away from what tipped it: a burning patch for the coals' life.
-fn braziers(w: &mut World) {
+fn braziers(w: &mut World, den: &crate::arena::Den) {
     let mut found = [(V3::ZERO, false); 4];
-    for (i, at) in braziers_of(w) {
+    for (i, at) in braziers_in(*den) {
         found[i] = (at, brazier_standing(&w.lore, i));
     }
     let size = Knob::BrazierSize.fx();
@@ -2170,7 +2287,7 @@ fn braziers(w: &mut World) {
 /// view the fade is full; out of it, it runs down over `Recloak` frames, and
 /// when it is gone the engagement is over -- its hits forgotten, and a stalk
 /// begins before the next.
-fn veil_clock(w: &mut World, m: &mut Monster) {
+fn veil_clock(w: &mut World, m: &mut Monster, den: &crate::arena::Den) {
     let full = Knob::Recloak.raw().max(1) as u32;
     let was = w.lore.word(word::FADE);
     let now = if veil(m).raw() >= Fx::ONE.raw() {
@@ -2196,7 +2313,7 @@ fn veil_clock(w: &mut World, m: &mut Monster) {
     } else if stalk > 0 && m.doing.free() {
         // **Cornered**: seen, the target close, and a wall at its back --
         // the stalk is over, and it fights.
-        let b = w.arena().bounds;
+        let b = den.kept;
         let room = Knob::WallLook.fx().add(SPECIES.margin());
         let walled = m.pos.x.raw() < b.lo_x.add(room).raw()
             || m.pos.x.raw() > b.hi_x.sub(room).raw()

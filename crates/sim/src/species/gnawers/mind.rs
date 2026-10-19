@@ -292,7 +292,7 @@ impl PackMind for Mind {
                 let Some(top) = scramble_top(look, seen.pos) else {
                     return 0;
                 };
-                if c.pos.y.raw() > Fx::ratio(1, 2).raw()
+                if c.pos.y.sub(look.arena.den.off.y).raw() > Fx::ratio(1, 2).raw()
                     || off_footprint(&top, c.pos).raw() > knob_fx(Knob::ScrambleFrom).raw()
                 {
                     return 0;
@@ -540,7 +540,7 @@ impl PackMind for Mind {
         // Up on a platform with its target: straight for it.
         if pack.mood == mood::HUNTING
             && seen.alive
-            && c.pos.y.raw() > Fx::ratio(1, 2).raw()
+            && c.pos.y.sub(look.arena.den.off.y).raw() > Fx::ratio(1, 2).raw()
             && same_level(c, seen.pos)
         {
             return Steer {
