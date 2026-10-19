@@ -162,3 +162,40 @@ fn fed_the_same_thing_its_size_only_closes_on_the_donors() {
         }
     }
 }
+
+#[test]
+fn a_new_stance_comes_over_a_third_a_feeding() {
+    // Broodmother sacs, then Ridgeback trophies: the sprawl gives way to
+    // legs under the body, which flipped in one feeding and read as the
+    // whole creature shrinking. Now it is drawn between the two.
+    let (brood, ridge) = (cast("Broodmother"), cast("Ridgeback"));
+    let kinds: Vec<_> = archetypes::drops(&ridge).into_iter().flatten().collect();
+    let mut m = Morph::hatch(&cast("Ridgeback"), 0);
+    for _ in 0..6 {
+        m.eat(TrophyKind::Sac, &brood);
+    }
+    let mut shares = Vec::new();
+    let mut from = None;
+    for k in 0..12 {
+        let before = m.genome.stance;
+        m.eat(kinds[k % kinds.len()], &ridge);
+        if m.genome.stance != before {
+            from = Some(before);
+            shares.clear();
+        }
+        if let Some(from) = from {
+            shares.push(m.stance_blend().map(|(was, share)| {
+                // Drawn from the body as it stood before the flip.
+                assert_eq!(was.stance, from);
+                share
+            }));
+        }
+    }
+    let flipped = from.is_some();
+    assert!(flipped, "the Ridgeback's stance never came over");
+    assert_eq!(
+        &shares[..3],
+        &[Some(Fx::ratio(1, 3)), Some(Fx::ratio(2, 3)), None],
+        "{shares:?}"
+    );
+}

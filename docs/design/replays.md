@@ -57,6 +57,13 @@ saves on its own at the end of every round. On a desktop a replay is a file in
 is a download — the one addition to `platform.rs`, where a difference between
 the two goes.
 
+**A save says so on the screen** (2026-10-19): "Replay saved: <where>" for
+a few seconds, menu or no menu. It went only to the terminal and the menu,
+and in `--dev` the menu was hidden behind the Oven, which `--dev` opens from
+the start -- so `Y` saved and looked like it had done nothing, and there was
+no menu to press *Save replay* in. The menu now stands beside the Oven, at
+the right of the screen.
+
 **The tape describes exactly the world on screen.** It begins again whenever
 the world is replaced outside a tick (a match starting from an agreed world,
 the rehearsal), and it is cut back when `[` rewinds. Everything else that
