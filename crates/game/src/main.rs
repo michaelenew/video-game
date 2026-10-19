@@ -832,14 +832,22 @@ fn shot_blood(w: &mut World) {
         let f = p.facing;
         for k in 0..5 {
             let ahead = sim::Fx::from_int(5 + 3 * k);
-            let at = sim::V3::new(p.pos.x.add(f.x.mul(ahead)), p.pos.y, p.pos.z.add(f.z.mul(ahead)));
+            let at = sim::V3::new(
+                p.pos.x.add(f.x.mul(ahead)),
+                p.pos.y,
+                p.pos.z.add(f.z.mul(ahead)),
+            );
             let stain = Effect::pool(0, p.class, b::THORN_LASH, at, 50);
             if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
                 *slot = Some(stain);
             }
         }
         let end = sim::Fx::from_int(5 + 3 * 4 + 1);
-        w.players[1].pos = sim::V3::new(p.pos.x.add(f.x.mul(end)), p.pos.y, p.pos.z.add(f.z.mul(end)));
+        w.players[1].pos = sim::V3::new(
+            p.pos.x.add(f.x.mul(end)),
+            p.pos.y,
+            p.pos.z.add(f.z.mul(end)),
+        );
         return;
     }
     let ahead = |forward: i32, side: i32| {
@@ -7119,8 +7127,10 @@ mod tests {
             effect_piece(&effect, 0).is_none(),
             "a bare spike is drawn with a skirt"
         );
-        // Erupted from a pool, it has the skirt: the disc it hit across.
+        // Erupted from a pool, it has the skirt: the disc it hit across,
+        // once it has spread out to it (2026-10-19).
         effect.banked = 1;
+        effect.age = sim::tuning::erupt_spread();
         let field = effect_piece(&effect, 0).expect("the field is drawn");
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert_eq!(field.shape, Shape::Column);
