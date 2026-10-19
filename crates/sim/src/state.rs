@@ -3447,6 +3447,12 @@ impl World {
                     }
                     if staggers {
                         stagger_the_cashed(&mut self.players[defender]);
+                        reap(
+                            &mut self.effects,
+                            &snapshot[attacker],
+                            attacker,
+                            snapshot[defender].pos,
+                        );
                     }
                     let owed = snapshot[attacker]
                         .action
@@ -11982,6 +11988,33 @@ fn marks_once(effect: &mut Effect, victim: usize) -> bool {
     first
 }
 
+/// **The Reaping** (2026-10-19): put the picture of a cash-in at a full tally
+/// in the world, standing at `at` -- the feet of whoever the blow spent the
+/// marks on -- and facing the way the blow went, from her to them. Nothing
+/// but a picture (`EffectKind::Reaping`); in the snapshot because its clock
+/// must survive a rollback like any animation's.
+fn reap(effects: &mut [Option<Effect>; MAX_EFFECTS], attacker: &Player, who: usize, at: V3) {
+    let away = V3::new(at.x.sub(attacker.pos.x), Fx::ZERO, at.z.sub(attacker.pos.z));
+    let facing = V3::new(attacker.facing.x, Fx::ZERO, attacker.facing.z);
+    let dir = if away.flat_len().raw() > 0 {
+        away.normalized()
+    } else {
+        facing.normalized()
+    };
+    spawn_effect(
+        effects,
+        Effect::cast(
+            EffectKind::Reaping,
+            who as u8,
+            attacker.class,
+            attacker.action.attack_kind().unwrap_or(0),
+            at,
+            dir,
+            Fx::ZERO,
+        ),
+    );
+}
+
 /// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
 /// own hitstun, and only if it is longer.
 fn stagger_the_cashed(p: &mut Player) {
@@ -12723,6 +12756,9 @@ impl World {
             // A thrall and a heart are stepped in passes of their own
             // (`step_thralls`, `step_hearts`).
             EffectKind::Thrall | EffectKind::Heart => {}
+            // The Reaping is only to look at: the blow that cashed the tally
+            // already did everything it does.
+            EffectKind::Reaping => {}
 
             // The blade. One pass out, one back, and it cuts each victim once
             // per pass. What it takes is banked rather than paid, and arrives
@@ -19226,6 +19262,7 @@ impl World {
             // and poise rules' business -- a hit three times the size is
             // already the thing those read.
             let finisher = attacker.class == Class::ShadowReaver && moves::reaver::cashes(kind);
+            let full = finisher && shadow::full_tally(beast.marks);
             let cash = if finisher {
                 shadow::cash_multiple(beast.marks)
             } else {
@@ -19278,6 +19315,10 @@ impl World {
             // turned spends nothing.
             if finisher && !guarded.turned() {
                 beast.spend_marks();
+                if full {
+                    let under = floor_under(self.arena(), box_out.centre());
+                    reap(&mut self.effects, &attacker, i, under);
+                }
             }
             // Her double duty, against the creature: drink over the pool the
             // blade passes through, then spill under the part it struck.

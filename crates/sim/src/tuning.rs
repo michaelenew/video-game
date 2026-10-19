@@ -1204,6 +1204,14 @@ pub fn cash_stagger() -> u16 {
     oven::scalar(Scalar::CashStagger).max(0) as u16
 }
 
+/// **The Reaping** (2026-10-19): how long the picture of a cash-in at a full
+/// tally plays -- the marks driven home, and her shadow standing up behind
+/// him as a reaper to take the cut. Longer than the stagger it rides on, so
+/// the reaper is still fading as he gets his feet back.
+pub fn reaping_life() -> u16 {
+    oven::scalar(Scalar::ReapingLife).max(1) as u16
+}
+
 // ---------------------------------------------------------------------------
 // Health, per class
 // ---------------------------------------------------------------------------

@@ -365,6 +365,15 @@ pub enum EffectKind {
     /// `banked` is the stone it carries, as `aim::Contact::Stone` counts
     /// them, plus one. See `state::World::step_the_surge`.
     Surge,
+    /// Shadow Reaver, **the Reaping** (2026-10-19): the picture of a cash-in
+    /// at a full tally, and nothing else. It hits nobody, marks nobody and
+    /// moves nothing -- the blow that spent the marks already did all of
+    /// that. `pos` is the victim's feet when the blow landed, `dir` the flat
+    /// line from her to him, and it lives `tuning::reaping_life`. The reward
+    /// for executing the whole pattern, made something both players see: the
+    /// five marks driven into him, and a reaper of her shadow standing up
+    /// behind him to take the cut. See `docs/design/shadow-reaver-v2.md`.
+    Reaping,
 }
 
 /// The bit of `Effect::banked` that says wind has caught fire.
@@ -502,6 +511,7 @@ impl EffectKind {
             EffectKind::Vines => "black vines",
             EffectKind::Cascade => "crimson cascade",
             EffectKind::Surge => "surge",
+            EffectKind::Reaping => "reaping",
         }
     }
 
@@ -586,6 +596,8 @@ impl EffectKind {
             | EffectKind::Thrall
             | EffectKind::Vines
             | EffectKind::Cascade => true,
+            // Stood up on the floor behind whoever took the cut.
+            EffectKind::Reaping => true,
         }
     }
 
@@ -836,6 +848,7 @@ impl EffectKind {
             // Set where it is made: as long as its run takes
             // (`Effect::surge`).
             EffectKind::Surge => 1,
+            EffectKind::Reaping => t::reaping_life(),
         }
     }
 
@@ -917,7 +930,8 @@ impl EffectKind {
             // surge's strike at a tap. A thrall's bite is what it spends, not
             // a number of its own, and a heart hits nobody.
             EffectKind::Vines | EffectKind::Cascade | EffectKind::Surge => m.damage,
-            EffectKind::Thrall | EffectKind::Heart => 0,
+            // The Reaping is a picture: the blow that cashed did the damage.
+            EffectKind::Thrall | EffectKind::Heart | EffectKind::Reaping => 0,
         }
     }
 }
@@ -1345,6 +1359,9 @@ impl Effect {
             EffectKind::Thrall => self.thrall_radius(),
             EffectKind::Heart => t::heart_ground(),
             EffectKind::Surge => self.source().radius,
+            // Nothing is tested against it; the reaper stands this far
+            // behind the one it cuts.
+            EffectKind::Reaping => self.reach,
         }
     }
 

@@ -148,6 +148,18 @@ swing is not a hit and spends nothing: the tally stays on him.
 the jump out of it does, and turns her to the crosshair, so arriving and striking are one
 motion. It buys no safety: a blocked Slash is still −5. See the feel log.
 
+**A full tally cashed is reaped** (2026-10-19). The Reaping is the picture of it, both players
+see it, and it does nothing else — the blow that spent the marks already did all of that. The
+marks over his head come back as blades of shadow and plunge into his chest; then her shadow
+stands up out of the floor behind him, hooded, twice his height and in the shadow's own grey
+see-through, winds a scythe back and cuts down through him on a slant. The cut hangs in the air
+as a violet slash while thorns of shadow break out of the floor round him, and the reaper thins
+away as he gets his feet back. Under it, a knell: one low bell and the biggest whoosh a fighter
+makes. A reward for executing the whole pattern, and the thing that tells a new player the
+pattern exists. A sim effect (`EffectKind::Reaping`, so its clock survives a rollback) with no
+hit test; `reaping_piece` in the game draws it, `Reaver: Cash-in, the Reaping plays for` is how
+long, and `SHOT_REAP=1` stages one for a capture.
+
 The rhythm: **send, mark, cross, cash, send.** After the cash the target is clean and the
 shadow is at her shoulder marking nothing; staying is her own swings and a small copy against a
 body with more health than hers. Sending it away and dashing to it is the exit, and it starts

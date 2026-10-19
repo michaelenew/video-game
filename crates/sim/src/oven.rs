@@ -1177,6 +1177,10 @@ scalars! {
     // reaches as it goes. See `docs/design/kits/blood-mage.md`.
     SpikeHitErupts,       "Blood mage", "Black spike, a hit erupts for (x what it dealt)",  Fixed, 0, fx(2,1);
     EruptSpread,          "Blood mage", "Black spike, an eruption spreads out over",        Frames, 1, 30;
+    // **The Reaping** (2026-10-19): how long the picture of a cash-in at a
+    // full tally plays. Presentation that lives in the snapshot, because its
+    // clock has to survive a rollback.
+    ReapingLife,          "Reaver",   "Cash-in, the Reaping plays for",                       Frames, 20, 180;
 }
 
 // ---------------------------------------------------------------------------

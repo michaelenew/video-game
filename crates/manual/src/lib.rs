@@ -1021,6 +1021,10 @@ pub const SECTIONS: &[Section] = &[
                 "SHOT_BLOOD=1",
                 "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0; SHOT_BLOOD=ground stages nothing but her ground under her and her heart meter full. SHOT_BLOOD=trail stages a bleed's trail instead -- five stains a stride apart across her view six metres out, the other fighter at its end -- for a spike setting off the chain.",
             ),
+            e(
+                "SHOT_REAP=1",
+                "Start with player two six metres in front of player one and the Reaping just begun on him -- the picture of a Shadow Reaver's cash-in at a full tally -- so a capture can look at it without playing a whole tally up. SHOT_FRAME picks the moment; pair it with DEMO=0.",
+            ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(

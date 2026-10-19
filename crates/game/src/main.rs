@@ -646,6 +646,7 @@ impl Default for Sim {
         shot_at(&mut w);
         shot_move(&mut w);
         shot_blood(&mut w);
+        shot_reap(&mut w);
         shot_chase(&mut w);
         // `--replay <file>`: the fight is the tape's, from its own start.
         let playing = platform::value("--replay").and_then(|path| {
@@ -936,6 +937,40 @@ fn shot_blood(w: &mut World) {
             sim::Fx::from_int(radius),
             u16::MAX,
         );
+    }
+}
+
+/// `SHOT_REAP=1` starts with player two six metres in front of player one
+/// and **the Reaping** just begun on him -- the picture of a Reaver's cash-in
+/// at a full tally -- so a capture can look at it without playing a whole
+/// tally up. `SHOT_FRAME` picks the moment (it lives `reaping_life`); pair it
+/// with `DEMO=0`. Read once at start.
+fn shot_reap(w: &mut World) {
+    use sim::effects::{Effect, EffectKind};
+    if platform::env("SHOT_REAP").is_none() {
+        return;
+    }
+    let p = w.players[0];
+    let six = sim::Fx::from_int(6);
+    let at = sim::V3::new(
+        p.pos.x.add(p.facing.x.mul(six)),
+        p.pos.y,
+        p.pos.z.add(p.facing.z.mul(six)),
+    );
+    w.players[1].pos = at;
+    w.players[1].facing = sim::V3::ZERO.sub(p.facing);
+    let dir = sim::V3::new(p.facing.x, sim::Fx::ZERO, p.facing.z).normalized();
+    let reaping = Effect::cast(
+        EffectKind::Reaping,
+        0,
+        sim::Class::ShadowReaver,
+        0,
+        at,
+        dir,
+        sim::Fx::ZERO,
+    );
+    if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
+        *slot = Some(reaping);
     }
 }
 
@@ -2071,6 +2106,12 @@ struct EffectLook {
     /// Her Black vines: barbed black you can see through.
     vines: Handle<StandardMaterial>,
     shade: Handle<StandardMaterial>,
+    /// The Reaper of a full tally's cash-in (`EffectKind::Reaping`): her
+    /// shadow's own grey see-through, at a step of solidity from faint to
+    /// the shadow's own, so it can come up out of the floor and thin away;
+    /// and the two cold points it looks out of its hood with.
+    wraith: [Handle<StandardMaterial>; WRAITH_STEPS],
+    wraith_eye: Handle<StandardMaterial>,
     /// A pool of essence, from faint to nearly solid: the more essence is
     /// left in it, the more solid the figure.
     essence: [Handle<StandardMaterial>; ESSENCE_STEPS],
@@ -2341,6 +2382,26 @@ fn setup(
             base_color: Color::srgba(0.10, 0.09, 0.16, 0.80),
             emissive: LinearRgba::rgb(0.12, 0.10, 0.30),
             perceptual_roughness: 0.85,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
+        wraith: std::array::from_fn(|step| {
+            // The shadow body's grey (`ShadowRoot`'s material) at its
+            // solidity on the last step, and lit from inside with the violet
+            // her shadow-work glows: the same thing as the shadow, grown.
+            let solid = 0.12 + 0.48 * step as f32 / (WRAITH_STEPS - 1) as f32;
+            materials.add(StandardMaterial {
+                base_color: Color::srgba(0.20, 0.21, 0.26, solid),
+                emissive: LinearRgba::rgb(0.10 * solid, 0.08 * solid, 0.26 * solid),
+                perceptual_roughness: 0.9,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            })
+        }),
+        wraith_eye: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.80, 0.75, 1.0, 0.9),
+            emissive: LinearRgba::rgb(2.2, 1.6, 4.0),
+            unlit: true,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
@@ -4446,6 +4507,11 @@ enum Skin {
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
+    /// The Reaper (`EffectKind::Reaping`): the shadow's grey see-through, at
+    /// a step of solidity from faint to the shadow's own.
+    Wraith(u8),
+    /// The Reaper's eyes.
+    WraithEye,
     /// A pool of essence, at a step of solidity from faint to nearly solid.
     Essence(u8),
     /// The Dual mage's two forces, and the only pair of skins in the game that
@@ -4493,6 +4559,8 @@ impl EffectLook {
             Skin::Vines => self.vines.clone(),
             Skin::Heart => self.heart.clone(),
             Skin::Shade => self.shade.clone(),
+            Skin::Wraith(step) => self.wraith[(step as usize).min(WRAITH_STEPS - 1)].clone(),
+            Skin::WraithEye => self.wraith_eye.clone(),
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
@@ -5216,6 +5284,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
             Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
         }
+        EffectKind::Reaping => reaping_piece(effect, part),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             turn: Quat::IDENTITY,
             shape: Shape::Column,
@@ -5593,6 +5662,271 @@ fn framed(shape: Shape, centre: Vec3, up: Vec3, ahead: Vec3, size: Vec3) -> Piec
         at: centre,
         scale: size,
         turn: Quat::from_mat3(&Mat3::from_cols(x, y, z)),
+    }
+}
+
+/// How many steps of solidity the Reaper fades through.
+const WRAITH_STEPS: usize = 5;
+
+/// How many of the marks the Reaping drives home, at most: one blade each.
+const REAP_MARKS: usize = 6;
+
+/// The Reaper's height, as a share of a fighter's: it towers over the one it
+/// stands behind.
+const REAPER_TALL: f32 = 1.9;
+
+/// How far behind the one it cuts the Reaper stands, in metres: far enough
+/// that its blade, swung, comes down through him.
+const REAPER_BEHIND: f32 = 2.1;
+
+/// The Reaping's beats, as shares of its life: the marks are driven home by
+/// `REAP_DRIVEN`, the Reaper has stood up by `REAP_RISEN`, winds back until
+/// `REAP_SWING`, has cut through him by `REAP_CUT`, and starts to thin away
+/// at `REAP_FADE`.
+const REAP_DRIVEN: f32 = 0.2;
+const REAP_RISEN: f32 = 0.3;
+const REAP_SWING: f32 = 0.42;
+const REAP_CUT: f32 = 0.5;
+const REAP_FADE: f32 = 0.6;
+
+/// 0 below `a`, 1 above `b`, and smooth between.
+fn smooth(a: f32, b: f32, x: f32) -> f32 {
+    let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// **The Reaping** (2026-10-19): the picture of a cash-in at a full tally
+/// (`EffectKind::Reaping`). Nothing in it is a hit test -- the blow that spent
+/// the marks did all of that -- so every number here is presentation.
+///
+/// Three things, one after the other, all in her shadow's own see-through:
+///
+/// - **The marks driven home.** The pips that were over his head come back as
+///   blades of shadow and plunge into his chest: the tally, spent, seen.
+/// - **The Reaper.** Her shadow stands up out of the floor behind him, hooded
+///   and twice his height, a scythe raised. It winds back and cuts down
+///   through him on a slant, and the cut is left hanging in the air as a
+///   violet slash while shadow thorns break out of the floor round him.
+/// - **The thinning.** It fades back to nothing as he gets his feet back.
+///
+/// The Reaper faces back along `dir` -- toward her -- so from behind her
+/// shoulder it is seen from the front, over the one it is cutting.
+fn reaping_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    let u = effect.age as f32 / effect.life.max(1) as f32;
+    let feet = fx3(effect.pos);
+    let tall = sim::tuning::body_height().to_f32_for_render();
+    let fwd = {
+        let d = fx3(effect.dir);
+        let flat = Vec3::new(d.x, 0.0, d.z);
+        flat.try_normalize().unwrap_or(Vec3::Z)
+    };
+    // The Reaper's own frame: it looks back at her, over him.
+    let ahead = -fwd;
+    let side = Vec3::Y.cross(ahead).normalize_or(Vec3::X);
+    let chest = feet + Vec3::Y * tall * 0.6;
+
+    // How solid it is: up out of the floor, held, thinned away.
+    let risen = smooth(0.0, REAP_RISEN, u);
+    let left = 1.0 - smooth(REAP_FADE, 1.0, u);
+    let solid = risen.min(left);
+    let wraith = Skin::Wraith((solid * (WRAITH_STEPS - 1) as f32).round() as u8);
+
+    let marks = (sim::tuning::mark_cap() as usize).min(REAP_MARKS);
+    if part < REAP_MARKS {
+        // Each mark, from the ring the pips were drawn in, turning, and then
+        // down into him all at once -- slow to start and fast to land.
+        if part >= marks || u >= REAP_DRIVEN {
+            return None;
+        }
+        let k = u / REAP_DRIVEN;
+        let turn = part as f32 / marks as f32 * std::f32::consts::TAU + k * 2.0;
+        let from = feet + Vec3::Y * (tall + 0.9) + Vec3::new(turn.cos(), 0.0, turn.sin()) * 0.75;
+        let tip = from.lerp(chest, k * k);
+        let back = (from - chest).normalize_or(Vec3::Y);
+        let mut blade = limb(Shape::Spike, tip + back * 0.75, tip, 0.16, side);
+        blade.skin = Skin::Shade;
+        return Some(blade);
+    }
+    let part = part - REAP_MARKS;
+
+    // The Reaper, standing behind him and rising out of the floor.
+    let h = tall * REAPER_TALL;
+    let base = feet + fwd * REAPER_BEHIND - Vec3::Y * (1.0 - risen) * h * 0.9
+        + Vec3::Y * smooth(REAP_FADE, 1.0, u) * h * 0.25;
+    let at = |a: f32, s: f32, y: f32| base + ahead * a * h + side * s * h + Vec3::Y * y * h;
+
+    // The scythe turns about the hands in a plane through its line of sight
+    // to him, slanted across its body: raised high to one side, wound back,
+    // then cut down and across through him.
+    let slant = (side * 0.65 + Vec3::Y * 0.76).normalize();
+    let raised = 1.9;
+    let wound = 2.25;
+    let through = -0.75;
+    let angle_at = |u: f32| {
+        if u < REAP_SWING {
+            raised + (wound - raised) * smooth(REAP_RISEN * 0.5, REAP_SWING, u)
+        } else {
+            let k = smooth(REAP_SWING, REAP_CUT, u);
+            let k = 1.0 - (1.0 - k) * (1.0 - k);
+            wound + (through - wound) * k
+        }
+    };
+    let pivot = at(0.22, 0.1, 0.5);
+    let length = h * 0.85;
+    let snath = |angle: f32| ahead * angle.cos() + slant * angle.sin();
+    // The blade leaves the top of the snath at a right angle, on the side
+    // the cut is going, and curls back toward the hands.
+    let edge = |angle: f32, k: f32| {
+        let d = snath(angle);
+        let top = pivot + d * length * 0.7;
+        let lead = -(ahead * -angle.sin() + slant * angle.cos());
+        let curl = k * 1.9;
+        top + (lead * curl.sin() - d * (1.0 - curl.cos())) * h * 0.4
+    };
+    let angle = angle_at(u);
+    let d = snath(angle);
+    let grip_low = pivot - d * length * 0.05;
+    let grip_high = pivot + d * length * 0.2;
+
+    let body = |mut p: Piece| {
+        p.skin = wraith;
+        (solid > 0.02).then_some(p)
+    };
+    const BLADE: usize = 6;
+    const FIGURE: usize = 9;
+    match part {
+        // A robe, hanging from the shoulders to the floor.
+        0 => body(standing(
+            Shape::Spike,
+            wraith,
+            base,
+            h * 0.25,
+            0.0,
+            h * 0.82,
+        )),
+        1 => body(framed(
+            Shape::Block,
+            at(0.0, 0.0, 0.7),
+            Vec3::Y,
+            ahead,
+            Vec3::new(h * 0.38, h * 0.13, h * 0.17),
+        )),
+        // The hood, and the point it falls back to.
+        2 => body(framed(
+            Shape::Head,
+            at(0.02, 0.0, 0.84),
+            Vec3::Y,
+            ahead,
+            Vec3::new(h * 0.15, h * 0.17, h * 0.17),
+        )),
+        3 => body(limb(
+            Shape::Spike,
+            at(-0.03, 0.0, 0.87),
+            at(-0.2, 0.0, 0.95),
+            h * 0.13,
+            ahead,
+        )),
+        // Two cold points looking out of it.
+        4 | 5 => {
+            let s = if part == 4 { -0.035 } else { 0.035 };
+            (solid > 0.3).then(|| floating_in(Skin::WraithEye, at(0.095, s, 0.845), h * 0.016))
+        }
+        // The arms, to the two hands on the snath.
+        6 => body(limb(
+            Shape::Limb,
+            at(0.0, -0.17, 0.71),
+            grip_low,
+            h * 0.07,
+            ahead,
+        )),
+        7 => body(limb(
+            Shape::Limb,
+            at(0.0, 0.17, 0.71),
+            grip_high,
+            h * 0.07,
+            ahead,
+        )),
+        8 => body(limb(
+            Shape::Limb,
+            pivot - d * length * 0.3,
+            pivot + d * length * 0.7,
+            h * 0.035,
+            side,
+        )),
+        // The blade: a crescent of the shadow's darkest, thinning to its point.
+        p if p < FIGURE + BLADE => {
+            let k = (p - FIGURE) as f32;
+            let (a, b) = (
+                edge(angle, k / BLADE as f32),
+                edge(angle, (k + 1.0) / BLADE as f32),
+            );
+            let wide = h * 0.075 * (1.0 - 0.75 * k / BLADE as f32);
+            let normal = slant.cross(ahead);
+            let mut seg = framed(
+                Shape::Block,
+                (a + b) * 0.5,
+                b - a,
+                normal,
+                Vec3::new(wide, (b - a).length() * 1.15, h * 0.03),
+            );
+            seg.skin = if solid > 0.7 { Skin::Shade } else { wraith };
+            (solid > 0.02).then_some(seg)
+        }
+        // Its after-image through the cut: the outer half of the blade, where
+        // it was a frame and two frames ago, thinner each.
+        p if p < FIGURE + BLADE + 4 => {
+            if !(REAP_SWING..REAP_CUT + 0.08).contains(&u) {
+                return None;
+            }
+            let k = p - FIGURE - BLADE;
+            let behind = 1.0 + (k / 2) as f32;
+            let was = angle + (wound - through) * 0.08 * behind;
+            let (from, to) = if k % 2 == 0 { (0.35, 0.7) } else { (0.7, 1.0) };
+            let (a, b) = (edge(was, from), edge(was, to));
+            let mut seg = limb(Shape::Limb, a, b, h * 0.05, side);
+            seg.skin = Skin::Wraith((2.0 - behind) as u8);
+            Some(seg)
+        }
+        // The cut, left hanging across him: a violet slash, opening and
+        // closing again.
+        p if p == FIGURE + BLADE + 4 => {
+            let open = smooth(REAP_CUT - 0.06, REAP_CUT, u) * (1.0 - smooth(REAP_CUT, 0.8, u));
+            if open <= 0.0 {
+                return None;
+            }
+            let across = (side * 0.75 - Vec3::Y * 0.66).normalize();
+            let mut slash = framed(
+                Shape::Block,
+                chest,
+                across,
+                fwd,
+                Vec3::new(0.16 * open, tall * 1.6 * (0.6 + 0.4 * open), 0.02),
+            );
+            slash.skin = Skin::WraithEye;
+            Some(slash)
+        }
+        // Thorns of shadow breaking out of the floor round him, and sinking
+        // back.
+        p if p < FIGURE + BLADE + 5 + 5 => {
+            let k = (p - FIGURE - BLADE - 5) as f32;
+            let grow = smooth(REAP_CUT - 0.04, REAP_CUT + 0.06, u) * (1.0 - smooth(0.7, 0.95, u));
+            if grow <= 0.0 {
+                return None;
+            }
+            let turn = k / 5.0 * std::f32::consts::TAU + 0.4;
+            let out = Vec3::new(turn.cos(), 0.0, turn.sin());
+            let root = feet + out * (0.75 + 0.35 * grow);
+            let mut thorn = limb(
+                Shape::Spike,
+                root,
+                root + (Vec3::Y + out * 0.45) * tall * 0.7 * grow,
+                0.32 * grow.max(0.1),
+                out,
+            );
+            thorn.skin = Skin::Shade;
+            Some(thorn)
+        }
+        _ => None,
     }
 }
 
