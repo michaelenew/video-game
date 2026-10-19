@@ -9131,3 +9131,35 @@ What changed, all in `tests/territory.rs`, `blink.rs`, `essence.rs`, `effects.rs
   grey holds and leaves the rest -- without the Well, eating a stain at full health would have
   thrown away ground and a spike's target.
 
+
+### 2026-10-19 — the Blood mage: a spreading eruption hit a creature on every frame
+
+From the owner's play, with a replay: "any bleed into middle click on empowered ground chunks the
+Ridgeback for a quarter", stronger than before the spike was reworked. **A bug, not a number.**
+The creature path keeps a book of which effect struck it only for effects that are "a pass"
+(`EffectKind::once_a_pass`), and a Black spike is not one. That cost nothing while an eruption
+hit only on its first frame; once eruptions spread over 8 frames and asked what they reached on
+every one of them, a Ridgeback took the eruption on each. Measured on a parked Ridgeback (7000
+health), a bleed and one spike: **24.8% of its health off her ground, 35.3% on it; after the fix
+4.3% and 6.4%.** The replay's own summary showed it too: twelve spikes thrown, forty landed.
+
+The fix: an eruption marks each creature it struck, and meets the small bodies once, at its full
+size (`monster::a_spreading_eruption_hits_the_creature_once`, which fails without it: one
+eruption, six frames, 1018). **No number was changed**: with each eruption hitting once, a
+bleed into a spike is back to what it did before the rework. If it is still too much in play,
+the knob is the spike row's damage (100), which every eruption is a share of.
+
+### 2026-10-19 — the Blood mage: an eruption is worth the blood in its stain
+
+From the owner, after the fix above: "still too strong -- like detonating a minefield; the
+individual spikes need to be weaker. First, confirm the damage is lower for a small pool." **It
+was not.** Measured, a stain of 25, 50, 100, 200 or 400 erupted for 150 every time (the spike's
+row of 100 times `erupt_damage` 1.5); only the width grew with it. A bleed tick deals 25 and leaves
+a stain of 25, which a spike turned into 150 -- six times what laid it -- and a bleed lays several.
+
+Now the blow is the blood in the stain times `Black spike, a stain erupts for (x its blood)`
+(1, the owner's call): measured, 25 → 23, 50 → 48, 100 → 98, 200 → 198, 400 → 398 (a stain drains
+a little before the spike reaches it). A bleed and one spike on a parked Ridgeback: **1.3% of its
+health off her ground, 2.2% on it** (was 4.3% and 6.4%). The width is unchanged. Test:
+`territory::an_eruption_is_worth_the_blood_in_its_stain`; `haemorrhage`'s chain test now weighs
+the chain against the same frames without the spike, since a tick's eruption is a tick's worth.

@@ -781,3 +781,47 @@ fn a_spike_a_stride_short_of_a_stain_sets_it_off() {
     }
     assert!(erupted, "the stain it touched did not go up");
 }
+
+#[test]
+fn an_eruption_is_worth_the_blood_in_its_stain() {
+    // 2026-10-19: every stain used to erupt for the spike's row whatever its
+    // size, so a bleed's scattered ticks went up as a minefield. Now the blow
+    // is the blood that was in it.
+    let landed = {
+        let mut w = mage();
+        step_looking(&mut w, keys::SPIKES, -3500);
+        let mut at = None;
+        for _ in 0..40 {
+            step_looking(&mut w, 0, -3500);
+            if let Some(e) = effects_of(&w, EffectKind::BlackSpike).first() {
+                at = Some(e.pos);
+                break;
+            }
+        }
+        at.expect("fixture: the spike came up")
+    };
+    let dealt = |volume: i32| {
+        let mut w = mage();
+        let stain = Effect::pool(0, Class::BloodMage, b::THORN_LASH, landed, volume);
+        let edge = stain.pool_radius().max(metres(1.0));
+        place(&mut w, stain);
+        w.players[1].pos = V3::new(landed.x, landed.y, landed.z.add(edge));
+        let full = w.players[1].health;
+        step_looking(&mut w, keys::SPIKES, -3500);
+        run_looking(&mut w, 60, -3500);
+        full - w.players[1].health
+    };
+    for volume in [50, 200] {
+        let got = dealt(volume);
+        assert!(
+            got <= volume && got >= volume - 2 * t::pool_drain(),
+            "a stain of {volume} erupted for {got}"
+        );
+    }
+}
+
+fn run_looking(w: &mut World, frames: u32, pitch: i16) {
+    for _ in 0..frames {
+        step_looking(w, 0, pitch);
+    }
+}

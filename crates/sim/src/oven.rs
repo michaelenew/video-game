@@ -1177,6 +1177,10 @@ scalars! {
     // reaches as it goes. See `docs/design/kits/blood-mage.md`.
     SpikeHitErupts,       "Blood mage", "Black spike, a hit erupts for (x what it dealt)",  Fixed, 0, fx(2,1);
     EruptSpread,          "Blood mage", "Black spike, an eruption spreads out over",        Frames, 1, 30;
+    // **An eruption is worth its stain** (2026-10-19): its blow is the blood
+    // in the stain times this, not the spike's row -- a bleed tick's small
+    // stain is a small blast, a big pool a big one.
+    StainErupts,          "Blood mage", "Black spike, a stain erupts for (x its blood)",    Fixed, 0, fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

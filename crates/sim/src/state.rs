@@ -12669,8 +12669,30 @@ impl World {
                     }
                     let share = spike_share(effect);
                     let each = self.gore_each(effect, 0, effect.pos, volume.radius, share);
+                    // **A spreading eruption hits a creature once** (2026-10-19):
+                    // a spike is not a pass the creature path keeps books on,
+                    // which did not matter while it hit only on its first
+                    // frame. A spread asks on every frame of it, and without
+                    // this a Ridgeback took the eruption on each of them.
+                    for (slot, &got) in each.iter().enumerate() {
+                        if got > 0 {
+                            effect.take_hit(0, quarry_victim(slot));
+                        }
+                    }
+                    // The small bodies have no such book on an effect but
+                    // their own searing, so a spread meets them once, at its
+                    // full size.
+                    let critters_now = if effect.spreads() {
+                        effect.age == t::erupt_spread()
+                    } else {
+                        effect.age == 1 || wave
+                    };
                     let dealt = each.iter().sum::<i32>()
-                        + self.gore_critters(effect, effect.pos, volume.radius, share);
+                        + if critters_now {
+                            self.gore_critters(effect, effect.pos, volume.radius, share)
+                        } else {
+                            0
+                        };
                     let owed = effect.leeched(dealt);
                     self.players[effect.owner as usize].heal(owed);
                     landed += dealt;
@@ -17124,6 +17146,14 @@ impl World {
         // her blow (2026-10-19). What it sets off, it sets off as it spreads
         // (`Effect::spreads`).
         born.power = worth_of(&self.players[owner], None);
+        // **Worth its stain** (2026-10-19): the blow is the blood that was in
+        // it, `tuning::stain_erupts` to the point, rather than the row's --
+        // carried on the power, which every hit an effect lands is scaled by.
+        if !cascade {
+            let row = Fx::from_int(m.damage.max(1)).mul(t::erupt_damage());
+            let worth = Fx::from_int(pool.pool_volume().max(0)).mul(t::stain_erupts());
+            born.power = born.power.mul(worth.div(row.max(Fx::ONE)));
+        }
         spawn_effect(&mut self.effects, born);
         if cascade {
             let generation = pool.power.to_int();

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 707] = [
+pub const SCALARS: [i32; 708] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -715,6 +715,7 @@ pub const SCALARS: [i32; 707] = [
          1966080, // roam.out,_the_world_moves_to_a_nearer_place_by_(m) = 30
            32768, // blood_mage.black_spike,_a_hit_erupts_for_(x_what_it_dealt) = 0.5
                8, // blood_mage.black_spike,_an_eruption_spreads_out_over = 8
+           65536, // blood_mage.black_spike,_a_stain_erupts_for_(x_its_blood) = 1
 ];
 
 #[rustfmt::skip]
