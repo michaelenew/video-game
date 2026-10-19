@@ -227,7 +227,12 @@ impl World {
                     && math::wide_flat_dist(self.players[i].pos, p).raw() <= reach.raw()
             })
         };
-        let bodies = self.monsters.iter().flatten().filter(|m| m.alive()).map(|m| m.pos);
+        let bodies = self
+            .monsters
+            .iter()
+            .flatten()
+            .filter(|m| m.alive())
+            .map(|m| m.pos);
         let small = self.critters.iter().filter(|c| c.alive()).map(|c| c.pos);
         !bodies.chain(small).any(near)
     }
@@ -236,8 +241,7 @@ impl World {
 /// **A room with walls** -- one of the creatures' own arenas, not a range,
 /// which is open land -- that the map has.
 fn walled(id: crate::arena::ArenaId) -> bool {
-    ranges::of(id).is_none()
-        && matches!(super::place(id).map(|p| p.kind), Some(Kind::Room(_)))
+    ranges::of(id).is_none() && matches!(super::place(id).map(|p| p.kind), Some(Kind::Room(_)))
 }
 
 /// The doorway of a walled room on the map: its middle, on the map.
@@ -368,7 +372,11 @@ fn through_doors(atlas: &'static atlas::Atlas, origin: V3, from: V3, goal: V3) -
         && let Some(door) = door_of(atlas, room)
         && let Some(p) = atlas.placed(room)
     {
-        let mid = V3::new(math::half(p.lo.0.add(p.hi.0)), Fx::ZERO, math::half(p.lo.1.add(p.hi.1)));
+        let mid = V3::new(
+            math::half(p.lo.0.add(p.hi.0)),
+            Fx::ZERO,
+            math::half(p.lo.1.add(p.hi.1)),
+        );
         let out = math::wide_normalized(V3::new(door.x.sub(mid.x), Fx::ZERO, door.z.sub(mid.z)));
         let at_door = math::wide_flat_dist(door, fm).raw() <= near.raw();
         let beyond = door.add(out.scale(near.add(near)));

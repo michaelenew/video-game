@@ -229,13 +229,16 @@ pub fn record(w: &mut World) {
             if aloft {
                 flags |= flag::ALOFT;
             }
+            // In its den's frame (`fight::word::FRAME`): a glimpse is the
+            // same word wherever the world is.
+            let off = super::fight::frame_off(&lore);
             lore.set_word(
                 sample_word(who, slot, 0),
-                lore::halves(lore::to_cm(p.pos.x), lore::to_cm(p.pos.z)),
+                super::fight::to_den(p.pos, &lore),
             );
             lore.set_word(
                 sample_word(who, slot, 1),
-                (lore::to_cm(p.pos.y) as u16 as u32) | flags,
+                (lore::to_cm(p.pos.y.sub(off.y)) as u16 as u32) | flags,
             );
             lore.set_word(sample_word(who, slot, 2), stamp);
         }
@@ -318,10 +321,11 @@ fn samples(lore: &Lore, who: usize, upto: u32) -> Option<(usize, Option<usize>)>
 fn read(lore: &Lore, who: usize, slot: usize) -> (V3, u32, u32) {
     let at = lore.word(sample_word(who, slot, 0));
     let hf = lore.word(sample_word(who, slot, 1));
+    let floor = super::fight::from_den(at, lore);
     let pos = V3::new(
-        lore::from_cm(lore::lo(at)),
-        lore::from_cm(hf as u16 as i16),
-        lore::from_cm(lore::hi(at)),
+        floor.x,
+        floor.y.add(lore::from_cm(hf as u16 as i16)),
+        floor.z,
     );
     (pos, hf, lore.word(sample_word(who, slot, 2)))
 }

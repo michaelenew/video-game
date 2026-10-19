@@ -175,6 +175,7 @@ pub fn knob_fx(k: Knob) -> crate::fixed::Fx {
 pub static FIGHT: FightDecl = FightDecl {
     layout: Layout::NONE,
     frame: Some(rules::frame),
+    shift: Some(rules::shift),
     ..FightDecl::PLAIN
 };
 

@@ -72,7 +72,7 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         if st & state::GUARD == 0 {
             return 0;
         }
-        let mate = fight::pos_of(lore, 1 - slot);
+        let mate = fight::pos_of(lore, 1 - slot, &mind.ground.den);
         let near = math::wide_flat_dist(target, mate).raw() <= Knob::InterposeNear.fx().raw();
         // Not if it is already standing on the line, or there is no room on
         // it.
@@ -96,7 +96,7 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
     let role = fight::role(m);
     let mut score = score;
     if kind == PERCH {
-        let Some((at, _)) = fight::perch_of(lore, slot) else {
+        let Some((at, _)) = fight::perch_of(lore, slot, &mind.ground.den) else {
             return 0;
         };
         let beyond = range.raw() > Knob::PerchFar.fx().raw();
@@ -118,7 +118,7 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
     // the target from its partner, all it throws is the tail at whoever
     // comes close -- or the ambush at a body it saw move fast.
     if role == flag::STRIKER && st & state::PARTNER != 0 && !matches!(kind, TRIP | PERCH) {
-        let mate = fight::pos_of(lore, 1 - slot);
+        let mate = fight::pos_of(lore, 1 - slot, &mind.ground.den);
         let round = fight::cos_between(
             fight::flat(m.pos.sub(target)),
             fight::flat(mate.sub(target)),
@@ -185,7 +185,7 @@ fn in_reach(m: &Monster, kind: u8) -> bool {
 /// walks into its line; it is not a way to hit you where you stand.
 pub fn interpose_point(m: &Monster, mind: &Mind) -> Option<V3> {
     let slot = fight::slot_of(m);
-    let mate = fight::pos_of(mind.lore, 1 - slot);
+    let mate = fight::pos_of(mind.lore, 1 - slot, &mind.ground.den);
     let to = fight::flat(m.brain.seen.sub(mate));
     let gap = math::wide_flat_len(to);
     let a = SPECIES.attack(INTERPOSE);
@@ -219,7 +219,7 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
         return Some(m.pos);
     }
     let target = m.brain.seen;
-    let mate = fight::pos_of(lore, 1 - slot);
+    let mate = fight::pos_of(lore, 1 - slot, &mind.ground.den);
 
     // The scar's habit.
     let side = fight::scar(m);
@@ -336,7 +336,7 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
         // mark on one before anything is live.
         fight::mark_at(
             m,
-            m.aimed_at(),
+            fight::aimed(m, &mind.ground.den),
             mind.ground,
             &[None; crate::stones::MAX_STONES],
         );
@@ -363,7 +363,7 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
             }
         }
         PERCH => {
-            if let Some((at, _)) = fight::perch_of(lore, slot) {
+            if let Some((at, _)) = fight::perch_of(lore, slot, &mind.ground.den) {
                 m.aim_at(at);
             }
         }

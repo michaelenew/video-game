@@ -17,7 +17,7 @@
 //! - **The scramble.** A gnawer whose scramble comes out is put on top of the
 //!   platform it clung to, just inside the edge.
 
-use super::mind::{role, settle, word};
+use super::mind::{plane, role, settle, word};
 use super::{GNAW, HAMSTRING, Knob, SCRAMBLE, knob, knob_fx};
 use crate::class::{MAX_STRUCTURES, Mechanic};
 use crate::critter::{CritterField, MAX_CRITTERS, flag, is, stat, stat_fx};
@@ -73,7 +73,7 @@ pub fn frame(w: &mut World) {
         let behind =
             t::body_radius().add(stat_fx(sp, body.kind, CritterField::Length).mul(Fx::ratio(1, 2)));
         let heel = p.pos.sub(p.facing.scale(behind));
-        body.pos = V3::new(heel.x, p.pos.y.max(Fx::ZERO), heel.z);
+        body.pos = V3::new(heel.x, p.pos.y.max(plane(&pack)), heel.z);
         body.vel = p.vel;
         body.yaw = crate::pack::yaw_of(p.facing);
         body.state = is::RECOVERY;
@@ -93,6 +93,9 @@ pub fn frame(w: &mut World) {
     }
 
     // ---- the scramble ----
+    // Its den's tops, wherever the world's frame is (`arena::Den`): its own
+    // table, judged in its own heights and put where its origin is now.
+    let den = w.den();
     for c in w.critters.iter_mut() {
         if !(c.alive() && c.state == is::ACTIVE && c.act == SCRAMBLE) || c.has(flag::HIT_USED) {
             continue;
@@ -100,9 +103,8 @@ pub fn frame(w: &mut World) {
         c.set(flag::HIT_USED, true);
         let half_wid = stat_fx(sp, c.kind, CritterField::Width).mul(Fx::ratio(1, 2));
         let inset = half_wid.add(crate::arena::SKIN);
-        let top = w
+        let top = den
             .arena
-            .get()
             .solids()
             .iter()
             .filter(|s| {
@@ -112,8 +114,12 @@ pub fn frame(w: &mut World) {
                     && s.max.x.sub(s.min.x).raw() > inset.add(inset).raw()
                     && s.max.z.sub(s.min.z).raw() > inset.add(inset).raw()
             })
-            .min_by_key(|s| super::mind::off_footprint(s, c.pos).raw())
-            .copied();
+            .map(|s| crate::arena::Solid {
+                min: s.min.add(den.off),
+                max: s.max.add(den.off),
+                ..*s
+            })
+            .min_by_key(|s| super::mind::off_footprint(s, c.pos).raw());
         let Some(s) = top else { continue };
         if super::mind::off_footprint(&s, c.pos).raw() > knob_fx(Knob::ScrambleFrom).raw() {
             continue;
@@ -277,5 +283,31 @@ fn gnaw(w: &mut World, pack: &mut crate::pack::Pack) {
             p.grounded = false;
         }
         release(w, pack);
+    }
+}
+
+/// **Move what the Gnawers keep of their own** by `d` (`FightDecl::shift`):
+/// the points in the pack's memo -- the pile-on's lane and the stone being
+/// gnawed, raw fixed point -- and the floor plane its heights are judged
+/// over. A brood of gnawers in another species' pack is that species' to
+/// move ([`shift_memo`]).
+pub fn shift(w: &mut World, d: V3) {
+    if let Some(pack) = w.pack.as_mut().filter(|p| p.species == super::SPECIES.id) {
+        shift_memo(pack, d);
+    }
+}
+
+/// [`shift`], for any pack whose mind is the Gnawers': the memo's points and
+/// its floor plane. A stone's lane and place are kept whether or not one is
+/// under way, so a frame that starts or ends one moves the same words back.
+pub fn shift_memo(pack: &mut crate::pack::Pack, d: V3) {
+    for (i, by) in [
+        (word::PILE_X, d.x),
+        (word::PILE_Z, d.z),
+        (word::GNAW_X, d.x),
+        (word::GNAW_Z, d.z),
+        (word::FRAME_Y, d.y),
+    ] {
+        pack.memo[i] = pack.memo[i].wrapping_add(by.raw());
     }
 }

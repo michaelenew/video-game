@@ -62,6 +62,7 @@ pub static FIGHT: FightDecl = FightDecl {
     guard: Some(guard),
     covers: Some(covers),
     sight: Some(sight::sight),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
 
@@ -167,7 +168,14 @@ pub mod word {
     /// longest it holds it, and the rest it takes before raising it again.
     pub const GUARD_UP: usize = HABIT_META + 5;
     pub const GUARD_DOWN: usize = HABIT_META + 6;
-    pub const END: usize = HABIT_META + 7;
+    /// **Where its den's origin is in the world's frame**, in centimetres,
+    /// a word an axis (`arena::Den::off`): zero at home, and moved by a
+    /// change of frame (`FightDecl::shift`). Every point it keeps of its own
+    /// -- its glimpses, where a leap left, where the dive lands -- is kept
+    /// in its den's frame and read back through this, so nothing else of it
+    /// moves when the world does.
+    pub const FRAME: usize = HABIT_META + 7;
+    pub const END: usize = HABIT_META + 10;
 }
 
 /// A valid bit at the top of a word.
@@ -240,11 +248,54 @@ pub fn quiet(lore: &Lore) -> u32 {
 
 /// Where the dive will land: chosen as the leap leaves the floor.
 pub fn dive_at(lore: &Lore) -> V3 {
-    let w = lore.word(word::DIVE_AT);
+    from_den(lore.word(word::DIVE_AT), lore)
+}
+
+/// **Where its den's origin is in the world's frame** ([`word::FRAME`]).
+pub fn frame_off(lore: &Lore) -> V3 {
+    let axis = |k: usize| Fx::ratio(lore.int(word::FRAME + k), 100);
+    V3::new(axis(0), axis(1), axis(2))
+}
+
+/// **Move what the Mantis keeps of its own** by `d` (`FightDecl::shift`):
+/// only where its den is, since every point of its own is kept in its den's
+/// frame ([`word::FRAME`]).
+fn shift(w: &mut World, d: V3) {
+    for (k, by) in [d.x, d.y, d.z].into_iter().enumerate() {
+        let at = w.lore.int(word::FRAME + k);
+        w.lore
+            .set_int(word::FRAME + k, at.saturating_add(lore::cm_of(by)));
+    }
+}
+
+/// A floor point as a word in its den's frame (`lore::halves`, centimetres).
+pub fn to_den(p: V3, lore: &Lore) -> u32 {
+    let off = frame_off(lore);
+    lore::halves(lore::to_cm(p.x.sub(off.x)), lore::to_cm(p.z.sub(off.z)))
+}
+
+/// A word [`to_den`] wrote, back in the world's frame, on its den's floor
+/// plane.
+pub fn from_den(w: u32, lore: &Lore) -> V3 {
+    let off = frame_off(lore);
     V3::new(
-        lore::from_cm(lore::lo(w)),
+        lore::from_cm(lore::lo(w)).add(off.x),
+        off.y,
+        lore::from_cm(lore::hi(w)).add(off.z),
+    )
+}
+
+/// **Where its brain aims, read in its den's frame**: `Monster::aimed_at`
+/// at home. `lore::from_cm` rounds toward zero, so read where the world is
+/// it would come out a hair different wherever the frame's shift carries a
+/// coordinate across zero.
+pub fn aimed(m: &Monster, lore: &Lore) -> V3 {
+    let off = frame_off(lore);
+    let axis = |c: i16, o: Fx| lore::from_cm(lore::moved_cm(c, -lore::cm_of(o))).add(o);
+    V3::new(
+        axis(m.brain.aim[0], off.x),
         Fx::ZERO,
-        lore::from_cm(lore::hi(w)),
+        axis(m.brain.aim[1], off.z),
     )
 }
 
@@ -961,10 +1012,10 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
 
 /// The lunge on its way: into a solid -- one in the lane as it ran -- it
 /// stops dead and staggers. A lane with nothing in it runs its length.
-fn lunge_runs(m: &mut Monster, scene: &crate::aim::Scene) {
-    if aim_lane(m, scene) {
+fn lunge_runs(m: &mut Monster, lore: &Lore, scene: &crate::aim::Scene) {
+    if aim_lane(m, lore, scene) {
         let along = V3::from_turns(m.yaw);
-        let left_to_go = m.aimed_at().sub(m.pos).dot(along);
+        let left_to_go = aimed(m, lore).sub(m.pos).dot(along);
         if left_to_go.raw() <= 0 {
             stagger(m, STAGGER, Knob::LungeStagger.frames());
         }
@@ -988,22 +1039,23 @@ fn body_moves(m: &mut Monster, lore: &mut Lore, t: u32, scene: &crate::aim::Scen
                 m.yaw = yaw_to(m, at);
                 m.yaw_rate = Fx::ZERO;
             }
-            aim_lane(m, scene);
+            aim_lane(m, lore, scene);
         }
-        Doing::Active { kind: LUNGE, .. } => lunge_runs(m, scene),
+        Doing::Active { kind: LUNGE, .. } => lunge_runs(m, lore, scene),
         _ => {}
     }
 
     // ---- the leap and the dive ----
     let height = Knob::LeapHeight.fx();
+    // Its floor is its den's (`word::FRAME`).
+    let floor = frame_off(lore).y;
     match m.doing {
         Doing::Active { kind: LEAP, left } => {
             let a = SPECIES.attack(LEAP);
             if left == a.active {
                 // Off the floor: where from, and where the dive will land --
                 // where it sees you now, led to the landing. Drawn from now.
-                m.own[body::LEAP_FROM] =
-                    lore::halves(lore::to_cm(m.pos.x), lore::to_cm(m.pos.z)) as i32;
+                m.own[body::LEAP_FROM] = to_den(m.pos, lore) as i32;
                 let dive = SPECIES.attack(DIVE);
                 let frames =
                     left as i32 + a.recovery as i32 + dive.startup as i32 + dive.active as i32;
@@ -1017,29 +1069,23 @@ fn body_moves(m: &mut Monster, lore: &mut Lore, t: u32, scene: &crate::aim::Scen
                     V3::from_turns(m.yaw)
                 };
                 let land = m.pos.add(dir.scale(far));
-                lore.set_word(
-                    word::DIVE_AT,
-                    lore::halves(lore::to_cm(land.x), lore::to_cm(land.z)),
-                );
+                lore.set_word(word::DIVE_AT, to_den(land, lore));
                 m.aim_at(land);
             }
             let u = Fx::from_int(a.active as i32 - left as i32 + 1)
                 .div(Fx::from_int(a.active.max(1) as i32));
-            m.pos.y = height.mul(math::ease_out(u.clamp(Fx::ZERO, Fx::ONE)));
+            m.pos.y = floor.add(height.mul(math::ease_out(u.clamp(Fx::ZERO, Fx::ONE))));
             m.speed = Fx::ZERO;
         }
         Doing::Recovery { kind: LEAP, .. } | Doing::Startup { kind: DIVE, .. } => {
-            m.pos.y = height;
+            m.pos.y = floor.add(height);
             m.speed = Fx::ZERO;
             m.aim_at(dive_at(lore));
         }
         Doing::Active { kind: DIVE, left } => {
             let a = SPECIES.attack(DIVE);
-            let from = V3::new(
-                lore::from_cm(lore::lo(m.own[body::LEAP_FROM] as u32)),
-                height,
-                lore::from_cm(lore::hi(m.own[body::LEAP_FROM] as u32)),
-            );
+            let left_at = from_den(m.own[body::LEAP_FROM] as u32, lore);
+            let from = V3::new(left_at.x, floor.add(height), left_at.z);
             let to = dive_at(lore);
             m.aim_at(to);
             let u = Fx::from_int(a.active as i32 - left as i32 + 1)
@@ -1050,7 +1096,7 @@ fn body_moves(m: &mut Monster, lore: &mut Lore, t: u32, scene: &crate::aim::Scen
             m.speed = Fx::ZERO;
         }
         _ => {
-            m.pos.y = Fx::ZERO;
+            m.pos.y = floor;
         }
     }
 
@@ -1102,7 +1148,8 @@ fn step_to(m: &mut Monster, next: V3, scene: &crate::aim::Scene) {
     let radius = SPECIES.fight_fx(FightField::BodyRadius);
     let step = SPECIES.fight_fx(FightField::StepOver);
     let (at, _) = scene.arena.fence(next, radius, step);
-    let b = scene.arena.bounds;
+    // Where it is kept: its den's bounds, or the map once it is out of them.
+    let b = scene.arena.den.kept;
     let margin = SPECIES.margin();
     m.pos = V3::new(
         at.x.clamp(b.lo_x.add(margin), b.hi_x.sub(margin)),
@@ -1117,9 +1164,9 @@ fn step_to(m: &mut Monster, next: V3, scene: &crate::aim::Scene) {
 /// floor is the lane it will run (`MoveDecl::stops_at_aim`).
 ///
 /// True when the lane ends at a solid rather than at its length.
-fn aim_lane(m: &mut Monster, scene: &crate::aim::Scene) -> bool {
+fn aim_lane(m: &mut Monster, lore: &Lore, scene: &crate::aim::Scene) -> bool {
     let along = V3::from_turns(m.yaw);
-    let chest = Knob::GuardChest.fx();
+    let chest = frame_off(lore).y.add(Knob::GuardChest.fx());
     let from = V3::new(m.pos.x, chest, m.pos.z);
     let radius = SPECIES.fight_fx(FightField::BodyRadius);
     let most = Knob::LungeTravel.fx();

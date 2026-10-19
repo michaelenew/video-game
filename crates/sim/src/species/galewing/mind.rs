@@ -60,10 +60,10 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         // eighteen-metre wingspan, the only thing it throws there is a lane
         // of feathers along it (§3).
         if kind != VOLLEY {
-            let floor = mind.ground.ground_under(V3::new(lead.x, Fx::ZERO, lead.z));
-            let plateau = mind
-                .ground
-                .ground_under(V3::new(m.pos.x, Fx::ZERO, m.pos.z));
+            // Probed from its den's floor plane, as `fight::ground_at` is.
+            let low = mind.ground.den.off.y;
+            let floor = mind.ground.ground_under(V3::new(lead.x, low, lead.z));
+            let plateau = mind.ground.ground_under(V3::new(m.pos.x, low, m.pos.z));
             let circle = fight::base_of(mind.ground);
             if floor.raw() < circle.min(plateau).sub(crate::tuning::fall_free()).raw() {
                 return 0;
@@ -145,8 +145,9 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
 /// lands on (the rig has no world to ask).
 pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
     if kind == STOOP || kind == HOP {
-        let aim = m.aimed_at();
-        let h = mind.ground.ground_under(V3::new(aim.x, Fx::ZERO, aim.z));
-        fight::set_aim_height(m, h);
+        let aim = fight::aimed(m, mind.lore);
+        let low = mind.ground.den.off.y;
+        let h = mind.ground.ground_under(V3::new(aim.x, low, aim.z));
+        fight::set_aim_height_in(m, h, mind.lore);
     }
 }

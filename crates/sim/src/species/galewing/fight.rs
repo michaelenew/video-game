@@ -54,6 +54,7 @@ pub static FIGHT: FightDecl = FightDecl {
     repose: Some(flight::repose),
     lob_height: Some(lob_height),
     glance: Some(glance),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
 
@@ -98,8 +99,13 @@ pub mod word {
     /// The volley's lane: where it starts (cm), its heading (raw turns).
     pub const RAKE_AT: usize = 15;
     pub const RAKE_YAW: usize = 16;
-    /// Free: the volley's feathers per fighter are [`RAKE_HITS`], a run.
-    pub const _FREE_17: usize = 17;
+    /// **Where its den's origin is in the world's frame** (`arena::Den::off`),
+    /// x low and z high, in half metres -- every place's origin on the map is
+    /// a whole number of them: zero at home, and moved by a change of frame
+    /// (`FightDecl::shift`). Every point it keeps in centimetres is kept in
+    /// its den's frame and read back through this. (It was free: the
+    /// volley's feathers per fighter are [`RAKE_HITS`], a run.)
+    pub const FRAME_XZ: usize = 17;
     /// Who the Screech and the buffet have reached this move: a bit each.
     pub const STRUCK: usize = 18;
     /// **The ride**: the lap (low byte), the phase ([`ride`], byte 1), and
@@ -107,8 +113,9 @@ pub mod word {
     pub const RIDE: usize = 19;
     /// Frames of the clipped glide left.
     pub const GLIDE: usize = 20;
-    /// Free: what the frame hook saw per hunter is [`SEEN`], a run.
-    pub const _FREE_21: usize = 21;
+    /// The same origin's height, in centimetres. (It was free: what the
+    /// frame hook saw per hunter is [`SEEN`], a run.)
+    pub const FRAME_Y: usize = 21;
     /// The frame the hook last ran on.
     pub const NOW: usize = 22;
     /// The height it fell from when a crash began (raw fixed point), for
@@ -325,16 +332,91 @@ pub fn below(m: &Monster, share: Fx) -> bool {
 // Small helpers over the lore
 // ---------------------------------------------------------------------------
 
+/// A floor point as a word, in centimetres: at home, where its den's frame
+/// is the world's ([`word_in`] anywhere else).
 pub fn word_of(p: V3) -> u32 {
     lore::halves(lore::to_cm(p.x), lore::to_cm(p.z))
 }
 
-pub fn point(w: u32) -> V3 {
+/// A floor point as a word, in centimetres in its den's frame
+/// ([`word::FRAME_XZ`]): the same word wherever the world is.
+pub fn word_in(p: V3, lore: &Lore) -> u32 {
+    let off = frame_off(lore);
+    lore::halves(lore::to_cm(p.x.sub(off.x)), lore::to_cm(p.z.sub(off.z)))
+}
+
+/// A word [`word_in`] wrote, in the world's frame, on its den's floor plane.
+pub fn point(w: u32, lore: &Lore) -> V3 {
+    let off = frame_off(lore);
     V3::new(
-        lore::from_cm(lore::lo(w)),
-        Fx::ZERO,
-        lore::from_cm(lore::hi(w)),
+        lore::from_cm(lore::lo(w)).add(off.x),
+        off.y,
+        lore::from_cm(lore::hi(w)).add(off.z),
     )
+}
+
+/// Half a metre, the unit of [`word::FRAME_XZ`] and of the plane of the aim
+/// height (`set_aim_height_in`): an encoding, not a length.
+const HALF_METRE: i32 = 1 << 15;
+
+/// **Where its den's origin is in the world's frame** ([`word::FRAME_XZ`]):
+/// zero at home.
+pub fn frame_off(lore: &Lore) -> V3 {
+    let xz = lore.word(word::FRAME_XZ);
+    V3::new(
+        Fx::from_raw(lore::lo(xz) as i32 * HALF_METRE),
+        Fx::ratio(lore.int(word::FRAME_Y), 100),
+        Fx::from_raw(lore::hi(xz) as i32 * HALF_METRE),
+    )
+}
+
+/// **Where its brain aims, read in its den's frame**: `Monster::aimed_at` at
+/// home. `lore::from_cm` rounds toward zero, so read where the world is it
+/// would come out a hair different wherever the frame's shift carries a
+/// coordinate across zero.
+pub fn aimed(m: &Monster, lore: &Lore) -> V3 {
+    let off = frame_off(lore);
+    let axis = |c: i16, o: Fx| lore::from_cm(lore::moved_cm(c, -lore::cm_of(o))).add(o);
+    V3::new(
+        axis(m.brain.aim[0], off.x),
+        Fx::ZERO,
+        axis(m.brain.aim[1], off.z),
+    )
+}
+
+/// **Move what the Galewing keeps of its own** by `d` (`FightDecl::shift`):
+/// where its den is ([`word::FRAME_XZ`], which every centimetre point it
+/// keeps is read through), its flight's position, the height it fell from,
+/// and the plane of the aim height on its body.
+fn shift(w: &mut World, d: V3) {
+    let half = |v: Fx| v.raw() / HALF_METRE;
+    let xz = w.lore.word(word::FRAME_XZ);
+    let x = (lore::lo(xz) as i32 + half(d.x)).clamp(i16::MIN as i32, i16::MAX as i32);
+    let z = (lore::hi(xz) as i32 + half(d.z)).clamp(i16::MIN as i32, i16::MAX as i32);
+    w.lore
+        .set_word(word::FRAME_XZ, lore::halves(x as i16, z as i16));
+    let y = w.lore.int(word::FRAME_Y);
+    w.lore
+        .set_int(word::FRAME_Y, y.saturating_add(lore::cm_of(d.y)));
+    // The flight's position is raw fixed point: moved once it is set up.
+    if w.lore.word(word::FLAGS) & 1 != 0 {
+        for (k, by) in [d.x, d.y, d.z].into_iter().enumerate() {
+            let at = w.lore.int(word::POS + k);
+            w.lore.set_int(word::POS + k, at.wrapping_add(by.raw()));
+        }
+    }
+    let fell = w.lore.int(word::FELL_FROM);
+    w.lore
+        .set_int(word::FELL_FROM, fell.wrapping_add(d.y.raw()));
+    for m in w.monsters.iter_mut().flatten() {
+        if m.species != SpeciesId::GALEWING || matches!(m.doing.attacking(), Some(CARRY)) {
+            continue;
+        }
+        // Not carrying, the legs' word is the aim height (`set_aim_height_in`).
+        let rel = m.own[body::LEGS] as i16 as i32;
+        let plane = (m.own[body::LEGS] - rel) >> 16;
+        m.own[body::LEGS] = rel + ((plane + half(d.y)) << 16);
+    }
 }
 
 pub fn fx_word(lore: &Lore, i: usize) -> Fx {
@@ -408,11 +490,15 @@ pub fn slot_of(w: &World) -> Option<usize> {
 
 /// **The middle of its circle**: the arena's `circle` site, or the middle
 /// of the arena.
+///
+/// Its den's (`arena::Den`), wherever the world's frame is: the site is its
+/// own arena's, in its own coordinates, put where its origin is now.
 pub fn circle_centre(w: &World) -> V3 {
-    let a = w.arena();
+    let off = frame_off(&w.lore);
+    let a = home_arena(w);
     if let Some(s) = a.sites.iter().find(|s| s.name == "circle") {
         let (x, z) = s.route[0];
-        return V3::new(crate::arena::cm(x), Fx::ZERO, crate::arena::cm(z));
+        return V3::new(crate::arena::cm(x), Fx::ZERO, crate::arena::cm(z)).add(flat(off));
     }
     let b = a.bounds;
     V3::new(
@@ -420,14 +506,25 @@ pub fn circle_centre(w: &World) -> V3 {
         Fx::ZERO,
         math::half(b.lo_z.add(b.hi_z)),
     )
+    .add(flat(off))
+}
+
+/// **Its own arena**: its den's, wherever the world is.
+fn home_arena(w: &World) -> &'static crate::arena::Arena {
+    w.den_id().get()
+}
+
+fn flat(v: V3) -> V3 {
+    V3::new(v.x, Fx::ZERO, v.z)
 }
 
 /// **Its perch**: the top of the arena's `perch` site, if it has one.
 pub fn perch_top(w: &World) -> Option<V3> {
-    let a = w.arena();
+    let a = home_arena(w);
     let s = a.sites.iter().find(|s| s.name == "perch")?;
     let (x, z) = s.route[0];
-    let at = V3::new(crate::arena::cm(x), Fx::ZERO, crate::arena::cm(z));
+    let at =
+        V3::new(crate::arena::cm(x), Fx::ZERO, crate::arena::cm(z)).add(flat(frame_off(&w.lore)));
     Some(V3::new(at.x, ground_at(w, at), at.z))
 }
 
@@ -435,9 +532,11 @@ pub fn perch_top(w: &World) -> Option<V3> {
 /// `circle` site says it in its height; with no such site, the ground at the
 /// middle of the arena.
 pub fn base_of(ground: &crate::arena::Terrain) -> Fx {
-    let a: &crate::arena::Arena = ground;
+    // Its den's (`arena::Den`), wherever the world's frame is.
+    let den = &ground.den;
+    let a = den.arena;
     if let Some(s) = a.sites.iter().find(|s| s.name == "circle") {
-        return crate::arena::cm(s.size.2);
+        return crate::arena::cm(s.size.2).add(den.off.y);
     }
     let b = a.bounds;
     let c = V3::new(
@@ -445,7 +544,7 @@ pub fn base_of(ground: &crate::arena::Terrain) -> Fx {
         Fx::ZERO,
         math::half(b.lo_z.add(b.hi_z)),
     );
-    ground.ground_under(c)
+    ground.ground_under(den.at(c))
 }
 
 /// **The level it measures its heights from**: the plateau, in the Cliffs --
@@ -457,7 +556,9 @@ pub fn base(w: &World) -> Fx {
 /// The ground under a point: the top of whatever stands under it, however
 /// high the point is. What it flies over -- the tower counts.
 pub fn ground_at(w: &World, at: V3) -> Fx {
-    w.terrain().ground_under(V3::new(at.x, Fx::ZERO, at.z))
+    // From its den's floor plane: what hangs is asked against that.
+    let low = frame_off(&w.lore).y;
+    w.terrain().ground_under(V3::new(at.x, low, at.z))
 }
 
 /// **The floor a marker or a push lies on** at a point: the highest top
@@ -624,9 +725,9 @@ fn committed(w: &mut World, m: &mut Monster) {
     match kind {
         TALON => {
             let start = lead.sub(dir.scale(Knob::LaneLead.fx()));
-            w.lore.set_word(word::LANE_AT, word_of(start));
+            w.lore.set_word(word::LANE_AT, word_in(start, &w.lore));
             w.lore.set_int(word::LANE_YAW, yaw.raw());
-            w.lore.set_word(word::LANE_PIVOT, word_of(lead));
+            w.lore.set_word(word::LANE_PIVOT, word_in(lead, &w.lore));
             bump_half(&mut w.lore, word::PASSES, false);
         }
         STOOP => {
@@ -634,12 +735,13 @@ fn committed(w: &mut World, m: &mut Monster) {
         }
         DOWNWASH => {
             let back = dir.scale(Knob::WashBeside.fx().neg());
-            w.lore.set_word(word::WASH_AT, word_of(lead.add(back)));
+            w.lore
+                .set_word(word::WASH_AT, word_in(lead.add(back), &w.lore));
         }
         VOLLEY => {
             let heading = V3::from_turns(m.yaw);
             let start = lead.sub(heading.scale(math::half(Knob::VolleyLength.fx())));
-            w.lore.set_word(word::RAKE_AT, word_of(start));
+            w.lore.set_word(word::RAKE_AT, word_in(start, &w.lore));
             w.lore.set_int(word::RAKE_YAW, m.yaw.raw());
             clear_rake(w);
         }
@@ -655,7 +757,7 @@ fn track(w: &mut World, m: &mut Monster) {
         Doing::Startup { kind: STOOP, left } if left as i32 > Knob::StoopLock.raw() => {
             let a = SPECIES.attack(STOOP);
             let want = m.lead_point(left);
-            let aim = m.aimed_at();
+            let aim = aimed(m, &w.lore);
             let gap = V3::new(want.x.sub(aim.x), Fx::ZERO, want.z.sub(aim.z));
             let far = math::wide_flat_len(gap);
             let step = Knob::StoopTrack.fx().mul(DT).min(far);
@@ -671,12 +773,12 @@ fn track(w: &mut World, m: &mut Monster) {
                     next
                 };
                 m.aim_at(next);
-                set_aim_height(m, ground_at(w, next));
+                set_aim_height_in(m, ground_at(w, next), &w.lore);
             }
         }
         Doing::Startup { kind: TALON, left } if left as i32 > Knob::LaneLock.raw() => {
             let want = m.lead_point(left);
-            let pivot = point(w.lore.word(word::LANE_PIVOT));
+            let pivot = point(w.lore.word(word::LANE_PIVOT), &w.lore);
             let gap = V3::new(want.x.sub(pivot.x), Fx::ZERO, want.z.sub(pivot.z));
             let far = math::wide_flat_len(gap);
             if far.raw() > 0 {
@@ -684,8 +786,8 @@ fn track(w: &mut World, m: &mut Monster) {
                 let next = pivot.add(math::wide_normalized(gap).scale(step));
                 let yaw = Fx::from_raw(w.lore.int(word::LANE_YAW));
                 let start = next.sub(V3::from_turns(yaw).scale(Knob::LaneLead.fx()));
-                w.lore.set_word(word::LANE_PIVOT, word_of(next));
-                w.lore.set_word(word::LANE_AT, word_of(start));
+                w.lore.set_word(word::LANE_PIVOT, word_in(next, &w.lore));
+                w.lore.set_word(word::LANE_AT, word_in(start, &w.lore));
             }
         }
         _ => {}
@@ -1050,15 +1152,29 @@ pub fn lob_height(m: &Monster) -> Fx {
 /// a carry.
 pub fn aim_height(m: &Monster) -> Fx {
     if matches!(m.doing.attacking(), Some(STOOP) | Some(HOP)) {
-        lore::from_cm(m.own[body::LEGS] as i16)
+        let rel = m.own[body::LEGS] as i16;
+        let plane = (m.own[body::LEGS] - rel as i32) >> 16;
+        lore::from_cm(rel).add(Fx::from_raw(plane * HALF_METRE))
     } else {
         Fx::ZERO
     }
 }
 
-/// Keep the ground height at its aim point on the body.
+/// Keep the ground height at its aim point on the body, at home -- where
+/// its den's frame is the world's ([`set_aim_height_in`] anywhere else).
 pub fn set_aim_height(m: &mut Monster, h: Fx) {
     m.own[body::LEGS] = lore::to_cm(h) as i32;
+}
+
+/// Keep the ground height at its aim point on the body: in centimetres over
+/// its den's floor plane, and that plane's own height, in half metres, in
+/// the high half (`word::FRAME_Y`) -- zero at home, where the word is the
+/// height in centimetres it always was.
+pub fn set_aim_height_in(m: &mut Monster, h: Fx, lore: &Lore) {
+    let y = frame_off(lore).y;
+    let plane = y.raw() / HALF_METRE;
+    let rel = lore::to_cm(h.sub(Fx::from_raw(plane * HALF_METRE))) as i32;
+    m.own[body::LEGS] = rel + (plane << 16);
 }
 
 /// Two hunters: it glances a fifth sooner.
@@ -1077,7 +1193,7 @@ pub fn glance(m: &Monster) -> u16 {
 
 /// The talon lane: where it starts, which way it runs, how long and wide.
 pub fn lane(lore: &Lore) -> (V3, V3, Fx, Fx) {
-    let at = point(lore.word(word::LANE_AT));
+    let at = point(lore.word(word::LANE_AT), lore);
     let yaw = Fx::from_raw(lore.int(word::LANE_YAW));
     (
         at,
@@ -1262,7 +1378,7 @@ fn drop_carried(w: &mut World, m: &Monster) {
 
 /// The point under the hovering bird, on the ground.
 pub fn wash_point(w: &World) -> V3 {
-    let at = point(w.lore.word(word::WASH_AT));
+    let at = point(w.lore.word(word::WASH_AT), &w.lore);
     V3::new(at.x, floor_at(w, at), at.z)
 }
 
@@ -1333,7 +1449,7 @@ fn downwash(w: &mut World, m: &Monster) {
 
 /// The volley's lane: start, direction, length, width.
 pub fn rake_lane(lore: &Lore) -> (V3, V3, Fx, Fx) {
-    let at = point(lore.word(word::RAKE_AT));
+    let at = point(lore.word(word::RAKE_AT), lore);
     let yaw = Fx::from_raw(lore.int(word::RAKE_YAW));
     (
         at,
@@ -1910,7 +2026,7 @@ pub fn ready_for(w: &mut World, kind: u8) {
         left: mv.startup + 1,
     };
     // A lobbed move lands on the ground its aim is on, as `mind::commit` keeps.
-    set_aim_height(m, me.y);
+    set_aim_height_in(m, me.y, &w.lore);
     m.hit_used = false;
     m.brain.last_move = kind;
 }

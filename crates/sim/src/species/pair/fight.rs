@@ -21,6 +21,7 @@
 
 use crate::DT;
 use crate::aim::Scene;
+use crate::arena::Den;
 use crate::fixed::Fx;
 use crate::lore::{self, Layout, Lore};
 use crate::math::{self, V3};
@@ -56,6 +57,7 @@ pub static FIGHT: FightDecl = FightDecl {
     glance: Some(glance),
     presence: Some(presence),
     lob_height: Some(lob_height),
+    shift: Some(shift),
     ..FightDecl::PLAIN
 };
 
@@ -101,8 +103,13 @@ pub mod flag {
     pub const SLOT_SHIFT: Bits = 12;
     /// Two hunters: it glances quicker.
     pub const COOP: Bits = 1 << 14;
-    /// How high its mark is, in units of [`MARK_STEP`], eight bits from here.
+    /// How high its mark is over its den's floor plane, in units of
+    /// [`MARK_STEP`], eight bits from here.
     pub const MARK_SHIFT: Bits = 16;
+    /// How high that plane is in the world's frame (`arena::Den`), in
+    /// [`PLANE_STEP`]s, the eight signed bits from here: zero at home, and
+    /// moved with everything else by a change of frame.
+    pub const PLANE_SHIFT: Bits = 24;
 }
 
 /// The height of a mark, in centimetres a step: eight bits of five
@@ -110,21 +117,34 @@ pub mod flag {
 /// word's encoding, not a height.
 const MARK_STEP: flag::Bits = 5;
 
+/// The unit of a mark's floor plane: half a metre, which every place's origin
+/// on the map is a whole number of. The word's encoding, not a height.
+const PLANE_STEP: Fx = Fx::from_raw(1 << 15);
+
 /// The smallest number 16.16 can hold, guarding a division by a knob
 /// retuned to zero.
 const SMALLEST: Fx = Fx::from_raw(1);
 
 /// How high the mark of the leap in progress is: the top under its aim.
 pub fn lob_height(m: &Monster) -> Fx {
-    let steps = (m.own[body::FLAGS] >> flag::MARK_SHIFT) & 0xFF;
-    lore::from_cm((steps * MARK_STEP) as i16)
+    let f = m.own[body::FLAGS];
+    let steps = (f >> flag::MARK_SHIFT) & 0xFF;
+    let plane = f >> flag::PLANE_SHIFT;
+    lore::from_cm((steps * MARK_STEP) as i16).add(Fx::from_raw(plane * PLANE_STEP.raw()))
 }
 
-/// Set the mark's height.
-fn set_mark_height(m: &mut Monster, y: Fx) {
-    let steps = (lore::to_cm(y) as i32 / MARK_STEP).clamp(0, 0xFF);
+/// Set the mark's height: in steps over its den's floor plane, held to what
+/// eight bits of them reach, and the plane's own height beside it.
+fn set_mark_height(m: &mut Monster, y: Fx, den: &crate::arena::Den) {
+    let steps = (lore::to_cm(y.sub(den.off.y)) as i32 / MARK_STEP).clamp(0, 0xFF);
+    let plane = den.off.y.raw() / PLANE_STEP.raw();
+    set_mark_fields(m, steps, plane);
+}
+
+fn set_mark_fields(m: &mut Monster, steps: i32, plane: i32) {
+    let plane = plane.clamp(i8::MIN as i32, i8::MAX as i32);
     m.own[body::FLAGS] =
-        (m.own[body::FLAGS] & !(0xFF << flag::MARK_SHIFT)) | (steps << flag::MARK_SHIFT);
+        (m.own[body::FLAGS] & 0xFFFF) | (steps << flag::MARK_SHIFT) | (plane << flag::PLANE_SHIFT);
 }
 
 /// Put a leap's mark at `at`, on open floor or the top it is on, and
@@ -137,7 +157,7 @@ pub fn mark_at(
 ) {
     let at = on_open_floor(at, m.brain.seen.y, ground);
     m.aim_at(at);
-    set_mark_height(m, ground_at(at, ground, field));
+    set_mark_height(m, ground_at(at, ground, field), &ground.den);
 }
 
 /// The pair brain's words in the hunt's lore (`Lore::word`): the shared
@@ -287,20 +307,20 @@ pub fn state_of(lore: &Lore, slot: usize) -> u32 {
 }
 
 /// Where a cat was, as the pair brain wrote it.
-pub fn pos_of(lore: &Lore, slot: usize) -> V3 {
-    point(lore.word(word::of(slot, word::POS)))
+pub fn pos_of(lore: &Lore, slot: usize, den: &Den) -> V3 {
+    point(lore.word(word::of(slot, word::POS)), den)
 }
 
 /// The top a cat would perch on, if there is one in reach: where, and how
 /// high.
-pub fn perch_of(lore: &Lore, slot: usize) -> Option<(V3, Fx)> {
+pub fn perch_of(lore: &Lore, slot: usize, den: &Den) -> Option<(V3, Fx)> {
     let top = lore.int(word::of(slot, word::PERCH_TOP));
     if top <= 0 {
         return None;
     }
     Some((
-        point(lore.word(word::of(slot, word::PERCH_AT))),
-        lore::from_cm(top as i16),
+        point(lore.word(word::of(slot, word::PERCH_AT)), den),
+        lore::from_cm(top as i16).add(den.off.y),
     ))
 }
 
@@ -317,11 +337,29 @@ pub fn live_of(lore: &Lore, slot: usize) -> Option<(u32, u32)> {
     (from != 0).then_some((from, to))
 }
 
-fn point(w: u32) -> V3 {
+fn point(w: u32, den: &Den) -> V3 {
     V3::new(
-        lore::from_cm(lore::lo(w)),
+        in_den(lore::lo(w), den.off.x),
         Fx::ZERO,
-        lore::from_cm(lore::hi(w)),
+        in_den(lore::hi(w), den.off.z),
+    )
+}
+
+/// **A centimetre coordinate read in its den's frame**, then put in the
+/// world's: `lore::from_cm` rounds toward zero, so read where the world is it
+/// would come out a hair different wherever the frame's shift carries a
+/// coordinate across zero. Exactly `from_cm` at home.
+fn in_den(c: i16, off: Fx) -> Fx {
+    lore::from_cm(lore::moved_cm(c, -lore::cm_of(off))).add(off)
+}
+
+/// Where its brain aims, read in its den's frame (`in_den`): what
+/// `Monster::aimed_at` is at home.
+pub fn aimed(m: &Monster, den: &Den) -> V3 {
+    V3::new(
+        in_den(m.brain.aim[0], den.off.x),
+        Fx::ZERO,
+        in_den(m.brain.aim[1], den.off.z),
     )
 }
 
@@ -863,12 +901,15 @@ fn perch_spots(
     let highest = Knob::PerchHighest.fx();
     let reach = Knob::PerchReach.fx();
     let inset = math::half(wide);
+    // Heights are its den's: over the floor plane it was built on, wherever
+    // the world's frame is (`arena::Den`).
+    let base = ground.den.off.y;
     for &s in living {
         let m = herd[s].expect("living");
         let target = m.brain.seen;
         let mut best: Option<(V3, Fx, Fx)> = None;
         let mut consider = |at: V3, top: Fx| {
-            if top.raw() <= m.pos.y.raw() || top.raw() > highest.raw() {
+            if top.raw() <= m.pos.y.raw() || top.sub(base).raw() > highest.raw() {
                 return;
             }
             if math::wide_flat_dist(at, m.pos).raw() > reach.raw() {
@@ -879,8 +920,8 @@ fn perch_spots(
                 best = Some((at, top, score));
             }
         };
-        for solid in ground.solids() {
-            if solid.hangs() {
+        for solid in den_solids(ground) {
+            if hangs(&solid, ground) {
                 continue;
             }
             let w = solid.max.x.sub(solid.min.x);
@@ -908,8 +949,64 @@ fn perch_spots(
         }
         if let Some((at, top, _)) = best {
             lore.set_word(word::of(s, word::PERCH_AT), word_of(at));
-            lore.set_int(word::of(s, word::PERCH_TOP), lore::to_cm(top) as i32);
+            // Over its den's floor plane: a top is a top whatever frame the
+            // world is in, and zero stays none.
+            lore.set_int(
+                word::of(s, word::PERCH_TOP),
+                lore::to_cm(top.sub(base)) as i32,
+            );
         }
+    }
+}
+
+/// **Every solid of its den**: what `Terrain::solids` is of the place the
+/// world is in, but of the hunt's home wherever the world's frame is
+/// (`arena::Den`) -- the same boxes, in the same order, at home.
+fn den_solids(ground: &crate::arena::Terrain) -> crate::arena::Solids<'_> {
+    match ground.atlas().and_then(|a| a.placed(ground.den.arena.id)) {
+        Some(p) => {
+            let pad = Fx::from_int(crate::atlas::TILE_M);
+            ground.near(
+                V3::new(p.lo.0.sub(pad), Fx::ZERO, p.lo.1.sub(pad)).sub(ground.origin()),
+                V3::new(p.hi.0.add(pad), Fx::ZERO, p.hi.1.add(pad)).sub(ground.origin()),
+            )
+        }
+        None => ground.solids(),
+    }
+}
+
+/// `Solid::hangs`, over its den's floor plane rather than the world's zero.
+fn hangs(s: &crate::arena::Solid, ground: &crate::arena::Terrain) -> bool {
+    s.min.y.raw() > ground.den.off.y.raw()
+}
+
+/// **Move what the Pair keeps of its own** by `d` (`FightDecl::shift`): each
+/// cat's place and perch in the lore, and the floor plane its mark's height
+/// is over. Where a leap left from is kept in its den's frame and needs
+/// nothing; a perch's height is over its den's floor plane, and a cat's
+/// clocks are not points. Nothing written as none is moved.
+fn shift(w: &mut World, d: V3) {
+    let (cx, cz) = (lore::cm_of(d.x), lore::cm_of(d.z));
+    let moved = |v: u32| {
+        lore::halves(
+            lore::moved_cm(lore::lo(v), cx),
+            lore::moved_cm(lore::hi(v), cz),
+        )
+    };
+    for s in 0..MAX_MONSTERS {
+        let Some(m) = w.monsters[s].as_mut().filter(|m| m.species == SPECIES.id) else {
+            continue;
+        };
+        let pos = word::of(s, word::POS);
+        w.lore.set_word(pos, moved(w.lore.word(pos)));
+        if w.lore.int(word::of(s, word::PERCH_TOP)) > 0 {
+            let at = word::of(s, word::PERCH_AT);
+            w.lore.set_word(at, moved(w.lore.word(at)));
+        }
+        // The mark's height carries the frame's own (`set_mark_height`).
+        let f = m.own[body::FLAGS];
+        let plane = (f >> flag::PLANE_SHIFT) + d.y.raw() / PLANE_STEP.raw();
+        set_mark_fields(m, (f >> flag::MARK_SHIFT) & 0xFF, plane);
     }
 }
 
@@ -963,8 +1060,8 @@ pub fn aim_leap(m: &mut Monster, kind: u8, horizon: u16) {
 pub fn on_open_floor(at: V3, stands: Fx, ground: &crate::arena::Terrain) -> V3 {
     let mut at = V3::new(at.x, Fx::ZERO, at.z);
     let clear = Knob::LandShort.fx();
-    for solid in ground.solids() {
-        if solid.hangs() || solid.max.y.raw() <= stands.add(clear).raw() {
+    for solid in den_solids(ground) {
+        if hangs(&solid, ground) || solid.max.y.raw() <= stands.add(clear).raw() {
             continue;
         }
         if !solid.over(at.x, at.z, Fx::ZERO) {
@@ -995,7 +1092,7 @@ fn aim_leap_on(
     field: &crate::stones::Field,
 ) {
     aim_leap(m, kind, horizon);
-    mark_at(m, m.aimed_at(), ground, field);
+    mark_at(m, aimed(m, &ground.den), ground, field);
 }
 
 /// A xorshift step on a cat's own generator, for the draws made for it: the
@@ -1105,7 +1202,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
     // it: a lane that swung onto you halfway through its tell would be a
     // marker that arrived late.
     if let Doing::Startup { kind: AMBUSH, .. } = m.doing {
-        let to = flat(m.aimed_at().sub(m.pos));
+        let to = flat(aimed(m, &ground.den).sub(m.pos));
         if to.flat_len().raw() > 0 {
             m.yaw = math::atan2_turns(to.z, to.x);
             m.yaw_rate = Fx::ZERO;
@@ -1125,7 +1222,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
             kind: INTERPOSE,
             left: 0,
         } => {
-            let to = flat(m.aimed_at().sub(m.pos));
+            let to = flat(aimed(m, &ground.den).sub(m.pos));
             if to.flat_len().raw() > 0 {
                 m.yaw = math::atan2_turns(to.z, to.x);
                 m.yaw_rate = Fx::ZERO;
@@ -1135,7 +1232,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
             kind: INTERPOSE, ..
         } => {
             let along = V3::from_turns(m.yaw);
-            let to_go = m.aimed_at().sub(m.pos).dot(along);
+            let to_go = aimed(m, &ground.den).sub(m.pos).dot(along);
             if to_go.raw() <= Knob::LandShort.fx().raw() {
                 m.doing = Doing::Recovery {
                     kind: INTERPOSE,
@@ -1214,9 +1311,12 @@ fn fly(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones::F
     let a = SPECIES.attack(kind);
     if e == leave {
         // Off the ground: where from, how high, and facing the mark.
-        m.own[body::LEAP_FROM] = word_of(m.pos) as i32;
-        set_upper(m, lore::to_cm(m.pos.y) as i32);
-        let to = flat(m.aimed_at().sub(m.pos));
+        // In its den's frame, so a change of frame mid-leap moves nothing:
+        // the word is the same wherever the world is.
+        let off = ground.den.off;
+        m.own[body::LEAP_FROM] = word_of(m.pos.sub(off)) as i32;
+        set_upper(m, lore::to_cm(m.pos.y.sub(off.y)) as i32);
+        let to = flat(aimed(m, &ground.den).sub(m.pos));
         if to.flat_len().raw() > 0 {
             m.yaw = math::atan2_turns(to.z, to.x);
             m.yaw_rate = Fx::ZERO;
@@ -1235,9 +1335,15 @@ fn fly(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones::F
         });
         return;
     }
-    let from = point(m.own[body::LEAP_FROM] as u32);
-    let from_y = lore::from_cm(upper(m) as i16);
-    let mark = m.aimed_at();
+    let den = &ground.den;
+    let left = m.own[body::LEAP_FROM] as u32;
+    let from = V3::new(
+        lore::from_cm(lore::lo(left)).add(den.off.x),
+        Fx::ZERO,
+        lore::from_cm(lore::hi(left)).add(den.off.z),
+    );
+    let from_y = lore::from_cm(upper(m) as i16).add(den.off.y);
+    let mark = aimed(m, den);
     let to = flat(mark.sub(from));
     let dir = if to.flat_len().raw() > 0 {
         math::wide_normalized(to)
@@ -1318,7 +1424,7 @@ fn stuck(
                 .is_some_and(|g| math::wide_flat_dist(g, m.pos).raw() > Knob::StuckFar.fx().raw());
             // Getting nowhere is measured by where it got, not by how hard
             // it is walking: a cat leaning on a wall walks at a full run.
-            let moved = math::wide_flat_dist(m.pos, pos_of(lore, s));
+            let moved = math::wide_flat_dist(m.pos, pos_of(lore, s, &ground.den));
             let slow = moved.raw() < Knob::LandShort.fx().mul(crate::DT).raw();
             if far && slow {
                 count += 1;

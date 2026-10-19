@@ -481,6 +481,18 @@ const EXEMPT: &[(&str, &str)] = &[
          and tuning it would change how long a flourish lasts and nothing else.",
     ),
     (
+        "const PLANE_STEP: Fx = Fx::from_raw(1 << 15)",
+        "An encoding unit, not a quantity: the Pair keeps its den's floor plane in a \
+         word's spare byte in half metres, which every place's origin on the map is a \
+         whole number of (exploration 0023). Tuning it would only break the encoding.",
+    ),
+    (
+        "const HALF_METRE: i32 = 1 << 15",
+        "An encoding unit, not a quantity: the Galewing keeps its den's origin and the \
+         plane of its aim height in half metres, which every place's origin on the map \
+         is a whole number of (exploration 0023). Tuning it would only break the encoding.",
+    ),
+    (
         "const QUARTER_TURN: Fx = Fx::from_raw(1 << 14)",
         "An angle unit, not a quantity. A quarter of the u16 turn space, exact by construction.",
     ),
