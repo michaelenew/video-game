@@ -830,27 +830,45 @@ trophy makes a clear difference."*
 - **Beaten, it drops trophies**: two of what its parts are
   (`archetypes::drops`, `KeepTrophies`), a different two each time, picked
   up the same way.
-- **Each player has a morph at heel**, a small plain thing until it eats an
+- **Each player has a morph at heel**, a floating blob until it eats an
   egg. It follows past three metres (`KeepFollow`), hurrying when it is far
-  behind, and is put back beside you after a seam or a fall.
-- **Crouch beside it to feed it.** It eats an egg first -- it starts over as
-  that creature's young -- unless the egg's creature is still hunting you
-  for it (beat it first). Then the last trophy you picked up: a generation.
+  behind, and is put back beside you after a seam or a fall. **In a fight
+  it keeps back** ten metres (`KeepFollowFight`), on your far side from the
+  nearest creature, out from under your swings (2026-10-19: at three metres
+  it was "annoyingly right in the way").
+- **Feed it from the bag** (B, 2026-10-19; it was a crouch beside it,
+  which fed whatever came first). The bag is a window of what you carry:
+  click an item, then "Feed to morph". Choosing is a trip on the wire
+  (`Travel::feed(slot)`, `Destination::Feed`), so it lands on the same
+  frame on both machines. An egg starts it over as that creature's young
+  -- not while the egg's creature still hunts you for it, and the bag says
+  so (`World::can_feed`, `Refusal`). A trophy is a generation.
 
-**Fast, and always visible** (`cross::feed`, `tests/morph.rs`). A morph's
-rates are the Oven's `Morph` family, far above a lineage's: a major goes
-over at half the trophy's pull (a lineage: an eighth), a minor always does,
-a missing limb buds at half, the sliders are pulled three times as hard. And
-**every trophy shows**: if the graft moved nothing you would see, one
-difference between the morph and the donor goes over anyway, picked by the
-trophy's pull -- a horn moves the head, a feather the limbs -- and it has to
-survive the repair (a limbless stance on a legged body is repaired back, so
-something else is tried). "Something you can see" is one definition,
-`morph::changes`, which also writes the line the game shows: "Generation 3:
-front limbs: wing (wing), hide: feathers." Six Galewing feathers give most
-Hornback morphs wings; six Sandmaw plates give most of them spades. The
-morph grows as it eats: hatched at two fifths of its size, a seventh more
-each trophy.
+**One step at a time, in an order you can learn** (`cross::feed`,
+`tests/morph.rs`; rewritten 2026-10-19). The first version was a graft at
+high rates with dice on every part, and in play it read as noise: fed the
+same thing twice the morph grew and then shrank, and its plan wandered.
+The owner: *"needs to be much more consistent and a much more intelligible
+evolution path."* So a feeding now rolls nothing:
+- **One part of the donor goes over** -- of the parts they differ in, the
+  one the trophy pulls hardest on (a feather the limbs, a horn or a tooth
+  the head, a plate the hide), front to back, ties to the plan first. The
+  next feeding of the same takes the next one. A step the repair would
+  undo (a limbless stance on a legged body) is passed over for the next.
+- **Its proportions move a fixed share** of the way to the donor's (the
+  pull, the inertia, `MorphSliderGain`), and **size and mass only ever
+  close on the donor's**: the settle after a feeding wants what the body
+  plan wants, and a plan between two creatures can want less than either,
+  which was the grow-shrink-grow. When size is the step, it goes half the
+  way, all of it when close.
+- **No mutation.** A morph changes by what it eats.
+
+Six Galewing beaks walk a Hornback: head raised, beak and crest, front
+limbs to wings, back limbs sprung (it flies), tail level, feathers -- the
+same six, in that order, every time. "Something you can see" is still one
+definition, `morph::changes`, which writes the line the game shows. The
+morph grows as it eats: hatched at two fifths of its size, more each
+trophy. (The three chance knobs the dice used are gone.)
 
 **Where it lives.** What you carry and your morph are the journey's
 (`Journey::keep`): they go with you through seams and survive a won hunt,
@@ -864,7 +882,11 @@ dropped, so every checksum pinned before it still holds.
 creature's colour, bobbing and turning under a column of light you can see
 across a range; a trophy is the same, small and gold. The morph is the
 builder's own body, in its egg-creature's colours, walking at the gait its
-body chooses. A few lines at the bottom left say what you carry, what your
+body chooses. **Unformed, it is a blob** (2026-10-19; the owner: *"like
+Morph from Treasure Planet ... a floating blob that doesn't look like
+anything"*): glossy pink, two big eyes and a mouth, floating at shoulder
+height, wobbling; fed an egg it melts into the creature, the blob shrinking
+away as the body grows in where it hung. A few lines at the bottom left say what you carry, what your
 morph is, what the last feeding changed, and -- when it is so -- that the
 creature wants its egg back.
 

@@ -146,9 +146,10 @@ understands at once.
 count, a beaten creature now drops trophies you *pick up* -- a few of its
 parts, by its genome -- and every creature has an egg lying behind it when its
 hunt begins. Carry its egg and it will not stop until you beat it. Each player
-has a **morph** at heel: feed it an egg and it starts over as that creature's
-young; feed it a trophy and it grows a generation, a change you can see at
-once. The count above is unchanged; these trophies are things in the world,
+has a **morph** at heel, a floating blob until it is fed: open the bag (B)
+and feed it an egg and it starts over as that creature's
+young; feed it a trophy and it grows a generation, one step toward the
+trophy's creature you can see at once, in the same order every time. The count above is unchanged; these trophies are things in the world,
 and they *are* spent (fed). The rules, the numbers and why are
 [exploration/0022](exploration/0022_crossbreeding.md) §12.
 

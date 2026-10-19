@@ -305,16 +305,40 @@ impl World {
                 pack.mood = crate::pack::mood::HUNTING;
             }
         }
+        // In a hunt: for each seat, the way away from the creature nearest
+        // them, which their morph keeps to.
+        let mut fight_from = [None; MAX_PLAYERS];
+        if self.hunting() {
+            for (i, away) in fight_from.iter_mut().enumerate().take(seats) {
+                let p = self.players[i].pos;
+                let near = self
+                    .monsters
+                    .iter()
+                    .flatten()
+                    .filter(|m| m.alive())
+                    .map(|m| m.pos)
+                    .chain(self.critters.iter().filter(|c| c.alive()).map(|c| c.pos))
+                    .min_by_key(|c| V3::new(c.x.sub(p.x), Fx::ZERO, c.z.sub(p.z)).len().raw());
+                if let Some(c) = near {
+                    let off = V3::new(p.x.sub(c.x), Fx::ZERO, p.z.sub(c.z));
+                    let len = off.len();
+                    *away = Some(if len.raw() > 0 {
+                        off.scale(Fx::ONE.div(len))
+                    } else {
+                        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
+                    });
+                }
+            }
+        }
         for i in 0..seats {
-            self.heel(i);
-            self.feed(i);
+            self.heel(i, &fight_from);
         }
     }
 
     /// Seat `i`'s morph: put beside them if it is not here yet, and kept
     /// at heel -- following when they are further than its follow
     /// distance, at the gait that distance asks for.
-    fn heel(&mut self, i: usize) {
+    fn heel(&mut self, i: usize, fight_from: &[Option<V3>; MAX_PLAYERS]) {
         let p = self.players[i];
         let morph = self.valley.keep.morphs[i];
         let h = &mut self.heel[i];
@@ -341,18 +365,27 @@ impl World {
             h.going = false;
             return;
         }
-        h.going = dist > follow;
+        // **Out of the way in a fight**: it keeps well back, on the far side
+        // of you from the creature nearest you -- never between you, never
+        // where you are swinging. At peace it comes to heel.
+        let (goal, slack) = match fight_from[i] {
+            Some(away) => (p.pos.add(away.scale(t::morph_follow_fight())), Fx::ONE),
+            None => (p.pos, follow),
+        };
+        let to_goal = V3::new(goal.x.sub(h.at.x), Fx::ZERO, goal.z.sub(h.at.z));
+        let gap = to_goal.len();
+        h.going = gap > slack;
         if h.going {
-            // Faster the further behind it is, up to twice its walk.
+            // Faster the further off it is, up to its hurry.
             let urge = Fx::ONE
-                .add(dist.sub(follow).div(follow))
+                .add(gap.sub(slack).div(follow))
                 .min(t::morph_hurry());
             let step = h
                 .speed
                 .mul(urge)
                 .div(Fx::from_int(locomotion::FPS))
-                .min(dist);
-            let dir = to.scale(Fx::ONE.div(dist));
+                .min(gap);
+            let dir = to_goal.scale(Fx::ONE.div(gap));
             h.at = h.at.add(dir.scale(step));
             h.facing = crate::math::atan2_turns(dir.z, dir.x);
             let next = h
@@ -363,42 +396,50 @@ impl World {
             } else {
                 next
             };
+        } else if dist.raw() > 0 {
+            // Standing, it watches you.
+            h.facing = crate::math::atan2_turns(to.z, to.x);
         }
         // On the floor.
         let at = h.at;
         self.heel[i].at.y = self.terrain().ground_under(at);
     }
 
-    /// Seat `i` crouching beside their morph feeds it: an egg if they carry
-    /// one whose creature is not hunting them for it, else the last trophy
-    /// they picked up.
-    fn feed(&mut self, i: usize) {
-        let p = self.players[i];
-        let h = self.heel[i];
-        if !p.crouching || p.health <= 0 || h.cool > 0 {
-            return;
+    /// Whether seat `i` could feed its morph what is in slot `k` now, and
+    /// if not, why: what the bag shows beside an item.
+    pub fn can_feed(&self, i: usize, k: usize) -> Result<Item, Refusal> {
+        let item = self
+            .valley
+            .keep
+            .satchel
+            .get(i)
+            .and_then(|bag| bag.get(k))
+            .copied()
+            .flatten()
+            .ok_or(Refusal::Empty)?;
+        if self.players[i].health <= 0 {
+            return Err(Refusal::Down);
         }
-        let flat = V3::new(h.at.x.sub(p.pos.x), Fx::ZERO, h.at.z.sub(p.pos.z)).len();
-        if flat > t::feed_reach() {
-            return;
+        if let Item::Egg(s) = item
+            && self.egg_carrier().is_some_and(|(_, c)| c == s)
+        {
+            return Err(Refusal::Chased(s));
         }
-        // An egg first -- it makes the morph young, and the trophies after
-        // it grow that -- unless its creature still hunts you for it; then
-        // the last trophy picked up.
-        let hunted = self.egg_carrier().map(|(_, s)| s);
-        let bag = &mut self.valley.keep.satchel[i];
-        let egg = bag
-            .iter()
-            .position(|it| matches!(it, Some(Item::Egg(s)) if Some(*s) != hunted));
-        let trophy = bag
-            .iter()
-            .rposition(|it| matches!(it, Some(Item::Trophy(..))));
-        let Some(k) = egg.or(trophy) else {
+        if self.heel[i].cool > 0 {
+            return Err(Refusal::Eating);
+        }
+        Ok(item)
+    }
+
+    /// Seat `i` feeds its morph what is in slot `k` of its satchel, chosen
+    /// from the bag ([`crate::input::Destination::Feed`]). An egg makes it
+    /// that creature's young -- not while its creature still hunts them for
+    /// it -- and a trophy grows it a generation.
+    pub(crate) fn feed_slot(&mut self, i: usize, k: usize) {
+        let Ok(item) = self.can_feed(i, k) else {
             return;
         };
-        let Some(item) = bag[k].take() else {
-            return;
-        };
+        self.valley.keep.satchel[i][k] = None;
         match item {
             Item::Egg(s) => {
                 if let Some(g) = archetypes::of_species(s) {
@@ -413,6 +454,19 @@ impl World {
         }
         self.heel[i].cool = t::feed_cool().clamp(1, 250) as u8;
     }
+}
+
+/// Why a morph will not eat something.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Refusal {
+    /// Nothing in that slot.
+    Empty,
+    /// The one feeding it is down.
+    Down,
+    /// It is still eating the last thing.
+    Eating,
+    /// Its creature is hunting you for it: beat it first.
+    Chased(SpeciesId),
 }
 
 impl World {

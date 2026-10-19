@@ -108,9 +108,11 @@ pub fn sample_focus(
     // And the Esc menu, whose join box takes typing and whose buttons take
     // clicks that must not also be a punch or a grab of the mouse.
     menu: Res<crate::menu::Menu>,
+    // And the bag, whose items take clicks.
+    bag: Res<crate::keep::Bag>,
     mut focus: ResMut<UiFocus>,
 ) {
-    if !palette.open && !hub.open && !menu.open {
+    if !palette.open && !hub.open && !menu.open && !bag.open {
         *focus = UiFocus::default();
         return;
     }

@@ -12,12 +12,24 @@
 //! and turns, and a pink column of light stands over it that can be seen
 //! across a range; a trophy is the same, smaller, in gold. Nothing else in
 //! the valley moves like that.
+//!
+//! **An unformed morph is a blob**: pink, glossy, floating at shoulder
+//! height with two big eyes, a mouth and nothing else -- it is not
+//! anything yet. Fed an egg, it melts into that creature's young: the blob
+//! shrinks away as the body grows in where it hung. The body is still
+//! there underneath, walking (the snapshot's heel), so it melts into a
+//! creature already in step.
+//!
+//! **The bag** (B) is an egui window of what you carry: click an item, then
+//! "Feed to morph". Feeding is a trip on the wire (`Travel::feed`), so it
+//! lands on the same frame on both machines.
 
 use bevy::prelude::*;
+use bevy_egui::{EguiContexts, egui};
 use sim::breed::build::{self, Body};
 use sim::breed::morph::{self, Line, Morph};
 use sim::breed::{locomotion, posture};
-use sim::keep::{Item, LOOSE};
+use sim::keep::{Item, LOOSE, Refusal};
 use sim::species::SpeciesId;
 use sim::state::MAX_PLAYERS;
 
@@ -45,6 +57,50 @@ pub struct LooseItem(pub usize);
 #[derive(Component)]
 pub struct LooseBeam(pub usize);
 
+/// One piece of a seat's blob (`BLOB` names them).
+#[derive(Component)]
+pub struct BlobPiece(pub usize, pub usize);
+
+/// The blob's pieces: where each sits on the body, in the body's frame
+/// (`+z` forward, a unit body), how big it is, and what it is drawn in --
+/// 0 the body's pink, 1 white, 2 black, 3 the mouth.
+const BLOB: [([f32; 3], [f32; 3], usize); 8] = [
+    ([0.0, 0.0, 0.0], [1.0, 0.86, 0.92], 0),
+    ([-0.19, 0.12, 0.36], [0.30, 0.34, 0.22], 1),
+    ([0.19, 0.12, 0.36], [0.30, 0.34, 0.22], 1),
+    ([-0.18, 0.11, 0.46], [0.13, 0.15, 0.08], 2),
+    ([0.18, 0.11, 0.46], [0.13, 0.15, 0.08], 2),
+    ([0.0, -0.16, 0.43], [0.16, 0.09, 0.06], 3),
+    ([-0.46, -0.12, 0.02], [0.24, 0.2, 0.22], 0),
+    ([0.46, -0.12, 0.02], [0.24, 0.2, 0.22], 0),
+];
+
+/// How wide the blob is (m), and how high its middle floats.
+const BLOB_SIZE: f32 = 0.85;
+const BLOB_FLOAT: f32 = 1.5;
+
+/// How long it takes to melt from a blob into a creature (s).
+const MELT: f32 = 1.2;
+
+/// How far along each seat's melt is: 1 a blob, 0 the creature. The
+/// renderer's own, since it is how a change is shown, not what it is.
+#[derive(Resource, Default)]
+pub struct Melt {
+    blob: [f32; MAX_PLAYERS],
+    /// What each seat was of last frame, and when it last changed.
+    of: [Option<u8>; MAX_PLAYERS],
+    since: [f32; MAX_PLAYERS],
+}
+
+/// The bag: whether it is open and which item is picked.
+#[derive(Resource, Default)]
+pub struct Bag {
+    pub open: bool,
+    chosen: Option<usize>,
+    /// A feeding chosen while another trip was on the wire, sent next.
+    pending: Option<u8>,
+}
+
 /// The lines about what you carry.
 #[derive(Component)]
 pub struct KeepText;
@@ -66,6 +122,8 @@ pub struct Kit {
     gold: Handle<StandardMaterial>,
     beam_egg: Handle<StandardMaterial>,
     beam_trophy: Handle<StandardMaterial>,
+    /// The blob's pink, its eyes' white and black, its mouth.
+    blob: [Handle<StandardMaterial>; 4],
 }
 
 fn paint(
@@ -144,7 +202,44 @@ pub fn setup(
         ),
         beam_egg: beam(&mut materials, EGG_SHELL.rgb),
         beam_trophy: beam(&mut materials, [1.0, 0.8, 0.3]),
+        blob: [
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(1.0, 0.5, 0.74),
+                emissive: LinearRgba::rgb(0.18, 0.04, 0.1),
+                perceptual_roughness: 0.12,
+                reflectance: 0.8,
+                clearcoat: 1.0,
+                clearcoat_perceptual_roughness: 0.05,
+                ..default()
+            }),
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(0.98, 0.98, 0.98),
+                perceptual_roughness: 0.15,
+                ..default()
+            }),
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(0.02, 0.02, 0.03),
+                perceptual_roughness: 0.1,
+                ..default()
+            }),
+            materials.add(StandardMaterial {
+                base_color: Color::srgb(0.42, 0.06, 0.16),
+                perceptual_roughness: 0.6,
+                ..default()
+            }),
+        ],
     };
+    for seat in 0..MAX_PLAYERS {
+        for (piece, (_, _, m)) in BLOB.iter().enumerate() {
+            commands.spawn((
+                Mesh3d(kit.egg.clone()),
+                MeshMaterial3d(kit.blob[*m].clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                BlobPiece(seat, piece),
+            ));
+        }
+    }
     for seat in 0..MAX_PLAYERS {
         for part in 0..PARTS {
             commands.spawn((
@@ -225,10 +320,14 @@ fn role(name: &str) -> usize {
     }
 }
 
-/// Each seat's morph posed: a body built once per frame per seat.
+/// Each seat's morph posed: a body built once per frame per seat, grown
+/// in as its blob melts away.
+#[allow(clippy::type_complexity)]
 pub fn place_morphs(
     sim: Res<crate::Sim>,
     kit: Res<Kit>,
+    time: Res<Time>,
+    mut melt: ResMut<Melt>,
     mut parts: Query<(
         &MorphPart,
         &mut Transform,
@@ -240,11 +339,30 @@ pub fn place_morphs(
     let w = &sim.cur;
     let seats = (w.seats as usize).clamp(1, MAX_PLAYERS);
     let mut bodies: [Option<Body>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    let clock = time.elapsed_secs();
+    for seat in 0..MAX_PLAYERS {
+        let of = w.valley.keep.morphs[seat].of;
+        // A change of what it is of -- an egg eaten -- melts it again; the
+        // first sight of a morph does not.
+        match melt.of[seat] {
+            Some(was) if was != of => melt.since[seat] = clock,
+            None => melt.since[seat] = clock - MELT,
+            _ => {}
+        }
+        melt.of[seat] = Some(of);
+        melt.blob[seat] = if of == Morph::UNFORMED {
+            1.0
+        } else {
+            let t = ((clock - melt.since[seat]) / MELT).clamp(0.0, 1.0);
+            // Eased: it holds as a blob a moment, then goes.
+            1.0 - t * t * (3.0 - 2.0 * t)
+        };
+    }
     if w.valley.on {
         for seat in 0..seats {
             let m: &Morph = &w.valley.keep.morphs[seat];
             let heel = w.heel[seat];
-            if !heel.placed {
+            if !heel.placed || melt.blob[seat] >= 1.0 {
                 continue;
             }
             let g = m.shown();
@@ -284,11 +402,14 @@ pub fn place_morphs(
         let shape = body.parts[i].shape;
         let u = body.axes[i];
         let (v, _) = build::frame(u);
+        // Grown in from where the blob hung as it melts.
+        let grown = 1.0 - melt.blob[seat];
+        let hung = fx3(heel.at) + Vec3::Y * BLOB_FLOAT;
         let at = fx3(heel.at) + turn * fx3(body.centre(i));
         *transform = Transform {
-            translation: at,
+            translation: hung.lerp(at, grown),
             rotation: turn * orient(fx3(u), fx3(v)),
-            scale: fx3(shape.max.sub(shape.min)).max(Vec3::splat(0.02)),
+            scale: fx3(shape.max.sub(shape.min)).max(Vec3::splat(0.02)) * grown,
         };
         *visible = Visibility::Inherited;
         let m = &w.valley.keep.morphs[seat];
@@ -306,6 +427,60 @@ pub fn place_morphs(
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
+    }
+}
+
+/// Each seat's blob: floating, bobbing, wobbling, turned the way its heel
+/// faces, and shrinking away as it melts into a creature.
+pub fn place_blobs(
+    sim: Res<crate::Sim>,
+    time: Res<Time>,
+    melt: Res<Melt>,
+    mut pieces: Query<(&BlobPiece, &mut Transform, &mut Visibility)>,
+) {
+    let w = &sim.cur;
+    let seats = (w.seats as usize).clamp(1, MAX_PLAYERS);
+    let t = time.elapsed_secs();
+    for (piece, mut transform, mut visible) in pieces.iter_mut() {
+        let (seat, k) = (piece.0, piece.1);
+        let heel = w.heel[seat];
+        let left = melt.blob[seat];
+        if !w.valley.on || seat >= seats || !heel.placed || left <= 0.0 {
+            *visible = Visibility::Hidden;
+            continue;
+        }
+        let phase = t + seat as f32 * 1.7;
+        // A slow bob, a breathing squash and stretch, and a lean into its
+        // going.
+        let bob = (phase * 1.9).sin() * 0.14;
+        let squash = (phase * 3.1).sin() * 0.07;
+        let sway = (phase * 2.3).cos() * 0.05;
+        let size = BLOB_SIZE * left;
+        let body = Vec3::new(1.0 + squash, 1.0 - squash, 1.0 + squash * 0.5) * size;
+        let yaw = heel.facing.to_f32_for_render() * std::f32::consts::TAU;
+        let lean = if heel.going { 0.18 } else { 0.0 };
+        let turn = Quat::from_rotation_y(-yaw) * Quat::from_rotation_x(lean + sway);
+        let centre = fx3(heel.at) + Vec3::Y * (BLOB_FLOAT + bob);
+        let (at, scale, _) = BLOB[k];
+        let mut at = Vec3::from(at) * body;
+        let mut scale = Vec3::from(scale) * size;
+        if k >= 6 {
+            // The nubs either side wave, out of step with each other.
+            let wave = (phase * 4.0 + k as f32 * 2.1).sin();
+            at.y += wave * 0.06 * size;
+            scale *= 1.0 + wave * 0.15;
+        }
+        if (1..=4).contains(&k) {
+            // A blink every few seconds.
+            let blink = ((phase * 0.45).fract() > 0.97) as u8 as f32;
+            scale.y *= 1.0 - blink * 0.85;
+        }
+        *transform = Transform {
+            translation: centre + turn * at,
+            rotation: turn,
+            scale: scale.max(Vec3::splat(0.001)),
+        };
+        *visible = Visibility::Inherited;
     }
 }
 
@@ -539,11 +714,137 @@ pub fn update_text(
     let hint = if bag.is_empty() {
         "find an egg, beat its creature, collect trophies"
     } else {
-        "crouch beside it to feed it"
+        "B: open your bag to feed it"
     };
     lines.push(format!("Your morph: {what} -- {hint}"));
     if clock < told.until {
         lines.push(told.news.clone());
     }
     *t = Text::new(lines.join("\n"));
+}
+
+/// B opens and shuts the bag, in the valley. Opening it frees the cursor,
+/// as the Oven does, so the first click lands on an item.
+pub fn toggle_bag(
+    keys: Res<ButtonInput<KeyCode>>,
+    sim: Res<crate::Sim>,
+    mut bag: ResMut<Bag>,
+    mut focus: ResMut<crate::palette::UiFocus>,
+) {
+    if !sim.cur.valley.on {
+        bag.open = false;
+        return;
+    }
+    if keys.just_pressed(KeyCode::KeyB) && !focus.keyboard {
+        bag.open = !bag.open;
+        bag.chosen = None;
+        if bag.open {
+            focus.just_opened = true;
+        }
+    }
+}
+
+/// Why an item cannot be fed now, in words.
+fn refusal(r: Refusal) -> String {
+    match r {
+        Refusal::Empty => "Nothing there.".into(),
+        Refusal::Down => "You are down.".into(),
+        Refusal::Eating => "It is still eating.".into(),
+        Refusal::Chased(s) => format!("The {} wants it back -- beat it first.", species_name(s)),
+    }
+}
+
+/// The bag's window: what the local seat carries, one button an item;
+/// click one, then feed it to the morph.
+pub fn draw_bag(mut contexts: EguiContexts, mut bag: ResMut<Bag>, mut sim: ResMut<crate::Sim>) {
+    // A feeding waiting on another trip goes as soon as the wire is free.
+    if let Some(k) = bag.pending
+        && sim.travel == sim::input::Travel::NONE
+    {
+        sim.travel = sim::input::Travel::feed(k);
+        bag.pending = None;
+    }
+    if !bag.open {
+        return;
+    }
+    let Some(ctx) = contexts.try_ctx_mut() else {
+        return;
+    };
+    let me = sim.local_player().min(MAX_PLAYERS - 1);
+    let w = &sim.cur;
+    let m = w.valley.keep.morphs[me];
+    let satchel = w.valley.keep.satchel[me];
+    let mut open = true;
+    let mut feed = None;
+    egui::Window::new("Bag")
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .collapsible(false)
+        .resizable(false)
+        .open(&mut open)
+        .show(ctx, |ui| {
+            ui.set_min_width(300.0);
+            let what = if m.of == Morph::UNFORMED {
+                "Your morph has not taken a shape yet. Feed it an egg.".to_string()
+            } else {
+                format!(
+                    "Your morph: a {}, generation {}.",
+                    species_name(SpeciesId(m.of)),
+                    m.generation
+                )
+            };
+            ui.label(what);
+            ui.separator();
+            if satchel.iter().all(|s| s.is_none()) {
+                ui.label("Empty. Eggs lie by their creatures; trophies drop when you beat one.");
+            }
+            for (k, it) in satchel.iter().enumerate() {
+                let Some(it) = it else {
+                    continue;
+                };
+                let picked = bag.chosen == Some(k);
+                if ui.selectable_label(picked, item_name(it)).clicked() {
+                    bag.chosen = if picked { None } else { Some(k) };
+                }
+                if picked {
+                    ui.indent(k, |ui| {
+                        let why = match it {
+                            Item::Egg(_) => {
+                                "An egg starts your morph over as its creature's young."
+                            }
+                            Item::Trophy(..) => "A trophy grows your morph a generation.",
+                        };
+                        ui.label(why);
+                        match w.can_feed(me, k) {
+                            Ok(_) => {
+                                ui.horizontal(|ui| {
+                                    if ui.button("Feed to morph").clicked() {
+                                        feed = Some(k);
+                                    }
+                                    if ui.button("Cancel").clicked() {
+                                        bag.chosen = None;
+                                    }
+                                });
+                            }
+                            Err(r) => {
+                                ui.add_enabled(false, egui::Button::new("Feed to morph"));
+                                ui.label(refusal(r));
+                            }
+                        }
+                    });
+                }
+            }
+            ui.separator();
+            ui.weak("B or Esc to close.");
+        });
+    if let Some(k) = feed {
+        bag.chosen = None;
+        if sim.travel == sim::input::Travel::NONE {
+            sim.travel = sim::input::Travel::feed(k as u8);
+        } else {
+            bag.pending = Some(k as u8);
+        }
+    }
+    if !open {
+        bag.open = false;
+    }
 }

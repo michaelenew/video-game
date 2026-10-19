@@ -119,6 +119,10 @@ pub enum Destination {
     /// is how two players who have each beaten different things share a
     /// valley that is open as far as the more travelled of them has been.
     Credit(SpeciesId),
+    /// **Feed the morph** what is in this slot of the sender's satchel
+    /// (`crate::keep`): chosen from the bag, on the wire so both machines
+    /// feed it on the same frame.
+    Feed(u8),
 }
 
 const _: () = assert!(
@@ -138,6 +142,8 @@ impl Travel {
     pub const VALLEY: Travel = Travel(5);
     /// See [`Destination::Left`].
     pub const LEFT: Travel = Travel(6);
+    /// `0000 0111`, the slot in the high byte: see [`Destination::Feed`].
+    const FEED: u16 = 7;
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
     const CREDIT: u16 = 8;
     const HUNT: u16 = 0x80;
@@ -216,7 +222,16 @@ impl Travel {
         }
     }
 
+    /// Feed the morph what is in slot `slot` of the sender's satchel.
+    pub const fn feed(slot: u8) -> Travel {
+        Travel(Travel::FEED | (slot as u16) << 8)
+    }
+
     pub const fn destination(self) -> Option<Destination> {
+        // A feeding carries its slot in the high byte.
+        if self.0 & Travel::LOW == Travel::FEED {
+            return Some(Destination::Feed((self.0 >> 8) as u8));
+        }
         // A high byte on anything but a class change is no request at all.
         let high = self.0 >> 8;
         if high != 0 && self.0 & (Travel::HUNT | Travel::ARENA | Travel::CLASS) != Travel::CLASS {

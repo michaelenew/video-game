@@ -229,6 +229,8 @@ fn main() {
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .init_resource::<menu::Menu>()
+        .init_resource::<keep::Bag>()
+        .init_resource::<keep::Melt>()
         .init_resource::<sound::Soundscape>()
         .init_resource::<Joints>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -376,12 +378,21 @@ fn main() {
                 menu::show_progress,
                 menu::draw,
                 // What you carry and your morph (`sim::keep`).
-                (keep::place_morphs, keep::place_loose, keep::update_text),
+                (
+                    keep::place_morphs,
+                    keep::place_blobs,
+                    keep::place_loose,
+                    keep::update_text,
+                    keep::draw_bag,
+                ),
             )
                 .chain()
                 .after(beast::signs)
                 .before(palette::toggle),
         )
+        // The bag's key, before anything asks who owns the mouse: opening
+        // it is what frees the cursor.
+        .add_systems(Update, keep::toggle_bag.before(palette::sample_focus))
         // A second tuple only because Bevy's is full: the hub draws last, over
         // everything, and after the poses it is previewing have been placed.
         .add_systems(
@@ -6780,6 +6791,7 @@ fn mouse_look(
     mouse: Res<ButtonInput<MouseButton>>,
     mut focus: ResMut<palette::UiFocus>,
     mut menu: ResMut<menu::Menu>,
+    mut bag: ResMut<keep::Bag>,
     mut lock_seen: Local<bool>,
     mut windows: Query<&mut Window>,
 ) {
@@ -6858,7 +6870,10 @@ fn mouse_look(
     let escape = keys.just_pressed(KeyCode::Escape) || lost;
     // **The Esc menu** (`menu.rs`): Escape out of the fight brings it up, and
     // Escape again puts it away; taking the mouse back puts it away too.
-    if escape {
+    // Escape with the bag open shuts the bag, and only the bag.
+    if escape && bag.open && !look.grabbed {
+        bag.open = false;
+    } else if escape {
         menu.open = look.grabbed || !menu.open;
     }
     let want = cursor_should_be_captured(
@@ -6869,6 +6884,7 @@ fn mouse_look(
     );
     if want {
         menu.open = false;
+        bag.open = false;
     }
     if want != look.grabbed {
         look.grabbed = want;

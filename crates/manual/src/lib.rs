@@ -677,6 +677,10 @@ pub const SECTIONS: &[Section] = &[
                 "Hide or show the class pickers beside each health bar. On by default. Clicking one cycles that player's class -- against a person, only your own -- and it needs a free cursor: press Esc, or open the Oven.",
             ),
             e(
+                "B",
+                "In the valley: open or shut your bag. Click an egg or a trophy, then Feed to morph. An egg makes your morph that creature's young; a trophy grows it a generation. The bag says why when it will not eat something. Esc shuts it too.",
+            ),
+            e(
                 "Backspace",
                 "Reset the match. It was R, until R became an ability key. Against a person it resets both games, on the same frame.",
             ),

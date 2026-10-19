@@ -2110,7 +2110,8 @@ impl World {
             | Destination::Pause
             | Destination::Step
             | Destination::Left
-            | Destination::Credit(_) => return None,
+            | Destination::Credit(_)
+            | Destination::Feed(_) => return None,
             Destination::Valley => {
                 World::arrive_all(classes, self.valley, crate::valley::START, None, self.seats)
             }
@@ -2591,6 +2592,12 @@ impl World {
             for input in &wire {
                 if let Some(Destination::Credit(species)) = input.travel.destination() {
                     self.valley.credit(species);
+                }
+            }
+            // A morph fed from a bag (`crate::keep`), seat by seat.
+            for (i, input) in wire.iter().enumerate() {
+                if let Some(Destination::Feed(slot)) = input.travel.destination() {
+                    self.feed_slot(i, slot as usize);
                 }
             }
         }

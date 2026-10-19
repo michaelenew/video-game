@@ -61,20 +61,6 @@ impl Rates {
         mutation_major: fx(1, 400),
         slider_gain: Fx::ONE,
     };
-
-    /// A morph's: what it is fed shows at once (the Oven's `Morph`
-    /// family). Mutation stays the slow rate's -- a morph changes by what
-    /// it eats, not by chance.
-    pub fn morph() -> Rates {
-        use crate::tuning as t;
-        Rates {
-            graft_major: t::morph_major(),
-            graft_minor: t::morph_minor(),
-            graft_new_limb: t::morph_new_limb(),
-            slider_gain: t::morph_slider_gain(),
-            ..Rates::DEFAULT
-        }
-    }
 }
 
 impl Default for Rates {
@@ -530,36 +516,85 @@ pub fn graft(egg: &Genome, trophy: &Trophy, rates: &Rates, rng: &mut Rng) -> Out
 // Feeding a morph
 // ---------------------------------------------------------------------------
 
-/// A trophy fed to a morph: a graft at the morph's rates, and **always a
-/// change you can see**. If the graft moved nothing a player would notice
-/// -- no major, no minor, no limb, nothing it can now do or no longer can,
-/// the size by less than a tenth -- one difference between it and the
-/// donor goes over anyway, picked by the trophy's pull: a horn moves the
-/// head first, a feather the limbs. A body that is already the donor in
-/// every part has only its sliders left to move.
-pub fn feed(egg: &Genome, trophy: &Trophy, rng: &mut Rng) -> Outcome {
-    let out = graft(egg, trophy, &Rates::morph(), rng);
-    if visible(egg, &out.genome) {
-        return out;
+/// A trophy fed to a morph: **one step, the same step every time.**
+///
+/// A lineage's graft (above) rolls dice on every part, which is right for
+/// generations nobody watches and wrong for a morph somebody is feeding:
+/// fed the same thing twice it grew and then shrank, and its body plan
+/// wandered. So a feeding is a walk toward the donor in a fixed order:
+///
+/// - **Its proportions** move a fixed share of the way -- the trophy's
+///   pull on the channel, the slider's inertia, the morph's gain -- never a
+///   rolled one, so they only ever close on the donor's.
+/// - **One part** of the donor goes over: of the parts they differ in,
+///   the one the trophy pulls hardest on (a feather the limbs, a horn the
+///   head, a plate the hide), front to back, ties to the plan first. The
+///   next feeding of the same takes the next. A part that the repair would
+///   undo is passed over for the next.
+/// - **No mutation**: a morph changes by what it eats, not by chance.
+///
+/// So a handful of one creature's trophies walk it, a visible step at a
+/// time, toward that creature, in an order a player can learn.
+pub fn feed(egg: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
+    let d = &trophy.donor;
+    let pull = trophy.kind.pull();
+    let gain = crate::tuning::morph_slider_gain();
+    let mut g = *egg;
+    for s in Slider::ALL {
+        let channel = match s {
+            Slider::Size | Slider::Mass => pull.bulk,
+            Slider::Pitch => pull.plan,
+            _ => pull.temper,
+        };
+        let share = channel.mul(s.inertia()).mul(gain).min(Fx::ONE);
+        let v = g.sliders.get(s);
+        g.sliders.set(s, v.add(d.sliders.get(s).sub(v).mul(share)));
     }
-    // One difference at a time, until one survives the repair: turning a
-    // legged body limbless is repaired back to low-slung, which may be
-    // what it already was.
+    for i in 0..STATIONS {
+        if let (Some(mine), Some(theirs)) = (g.limbs[i].as_mut(), d.limbs[i])
+            && mine.build == theirs.build
+        {
+            let share = pull.limbs.mul(fx(1, 2));
+            mine.length = unit(mine.length.add(theirs.length.sub(mine.length).mul(share)));
+            mine.girth = unit(mine.girth.add(theirs.girth.sub(mine.girth).mul(share)));
+        }
+    }
+    let moved = Moved::default();
     let mut tried = 0u32;
     for _ in 0..16 {
-        let mut g = out.genome;
-        let mut moved = out.moved;
-        let pull = trophy.kind.pull();
-        let Some(which) = force_one(&mut g, &trophy.donor, &pull, rng, &mut moved, tried) else {
+        let mut next = g;
+        let mut m = moved;
+        let Some(which) = step_toward(&mut next, d, &pull, &mut m, tried) else {
             break;
         };
         tried |= 1 << which;
-        let forced = finish(g, moved);
-        if visible(egg, &forced.genome) {
-            return forced;
+        let size = next.sliders.size;
+        let mut out = finish(next, m);
+        if which == 11 {
+            // The size it was given stands: the settle would pull it back
+            // under what can be seen, and the feeding would show nothing.
+            out.genome.sliders.size = size;
+        }
+        hold_bulk(egg, d, &mut out.genome);
+        if visible(egg, &out.genome) {
+            return out;
         }
     }
+    let mut out = finish(g, moved);
+    hold_bulk(egg, d, &mut out.genome);
     out
+}
+
+/// A morph's size and mass only ever close on the donor's: the settle
+/// after a feeding wants what the body plan wants, and a plan between two
+/// creatures can want less than either, so without this a body fed the
+/// same thing grew, shrank and grew again.
+fn hold_bulk(egg: &Genome, d: &Genome, g: &mut Genome) {
+    for s in [Slider::Size, Slider::Mass] {
+        let (from, to, now) = (egg.sliders.get(s), d.sliders.get(s), g.sliders.get(s));
+        let (lo, hi) = if from < to { (from, to) } else { (to, from) };
+        g.sliders.set(s, now.max(lo).min(hi));
+    }
 }
 
 /// Whether a player would see that `a` became `b`: anything the morph's
@@ -568,22 +603,22 @@ pub fn visible(a: &Genome, b: &Genome) -> bool {
     !super::morph::changes(a, b, None).is_empty()
 }
 
-/// One part of the donor, onto the body: of the parts they differ in, one
-/// picked by the trophy's pull on its channel, skipping the ones in
-/// `skip` (a bit each). Which it moved, or none if nothing differs.
-fn force_one(
+/// One part of the donor, onto the body: of the parts they differ in, the
+/// one the trophy pulls hardest on -- the first offered, on a tie --
+/// skipping the ones in `skip` (a bit each). Which it moved, or none if
+/// nothing differs.
+fn step_toward(
     g: &mut Genome,
     d: &Genome,
     pull: &Pull,
-    rng: &mut Rng,
     moved: &mut Moved,
     skip: u32,
 ) -> Option<u8> {
     // (weight, which) for every difference.
     let mut options = [(Fx::ZERO, 0u8); 16];
     let mut n = 0;
-    // Every difference is on offer, the trophy's own channels most of all:
-    // a trophy carries a little of everything its donor is.
+    // Every difference is on offer, the trophy's own channels first: a
+    // trophy carries a little of everything its donor is.
     let mut offer = |w: Fx, which: u8| {
         let w = w.max(fx(1, 20));
         if n < options.len() && skip & (1 << which) == 0 {
@@ -625,22 +660,30 @@ fn force_one(
             offer(pull.limbs, 7 + i as u8);
         }
     }
-    if g.sliders.size.sub(d.sliders.size).abs() >= fx(1, 10) {
+    // Burrowing, from a burrower to a body that keeps its legs: its front
+    // walking pair turns to spades (a body can still go limbless -- the
+    // worm's way -- by its stance).
+    if g.stance != Stance::Limbless
+        && super::plan::assess(d).caps.burrows
+        && !super::plan::assess(g).caps.burrows
+        && g.limbs.iter().flatten().any(|p| p.role.grounded())
+    {
+        offer(pull.limbs.add(pull.plan), 12);
+    }
+    // Size from a twentieth off: the feeding's own pull has already closed
+    // some of the gap, and what is left may still be a tenth from the egg.
+    if g.sliders.size.sub(d.sliders.size).abs() >= fx(1, 20) {
         offer(pull.bulk, 11);
     }
-    let total = options[..n].iter().fold(Fx::ZERO, |a, (w, _)| a.add(*w));
-    if total == Fx::ZERO {
-        return None;
-    }
-    let mut pick = rng.unit().mul(total);
-    let mut which = options[n - 1].1;
+    let mut which = None;
+    let mut best = Fx::ZERO;
     for (w, k) in &options[..n] {
-        if pick < *w {
-            which = *k;
-            break;
+        if *w > best {
+            best = *w;
+            which = Some(*k);
         }
-        pick = pick.sub(*w);
     }
+    let which = which?;
     match which {
         0 => {
             g.stance = d.stance;
@@ -668,8 +711,22 @@ fn force_one(
             g.minors.hide = d.minors.hide;
             g.minors.back = d.minors.back;
         }
-        // The donor's size: the one thing left to take.
-        11 => g.sliders.size = d.sliders.size,
+        // Toward the donor's size: half the way, all of it when close, so
+        // a feeding of the same never overshoots and comes back.
+        11 => {
+            let gap = d.sliders.size.sub(g.sliders.size);
+            g.sliders.size = if gap.abs() < fx(1, 5) {
+                d.sliders.size
+            } else {
+                g.sliders.size.add(gap.mul(fx(1, 2)))
+            };
+        }
+        12 => {
+            if let Some(p) = g.limbs.iter_mut().flatten().find(|p| p.role.grounded()) {
+                p.build = Build::Spade;
+                p.tip = Tip::Claw;
+            }
+        }
         k => {
             let i = (k - 7) as usize;
             match (g.limbs[i].as_mut(), d.limbs[i]) {
