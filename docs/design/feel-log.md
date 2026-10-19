@@ -9131,3 +9131,20 @@ What changed, all in `tests/territory.rs`, `blink.rs`, `essence.rs`, `effects.rs
   grey holds and leaves the rest -- without the Well, eating a stain at full health would have
   thrown away ground and a spike's target.
 
+
+### 2026-10-19 — the Blood mage: a spreading eruption hit a creature on every frame
+
+From the owner's play, with a replay: "any bleed into middle click on empowered ground chunks the
+Ridgeback for a quarter", stronger than before the spike was reworked. **A bug, not a number.**
+The creature path keeps a book of which effect struck it only for effects that are "a pass"
+(`EffectKind::once_a_pass`), and a Black spike is not one. That cost nothing while an eruption
+hit only on its first frame; once eruptions spread over 8 frames and asked what they reached on
+every one of them, a Ridgeback took the eruption on each. Measured on a parked Ridgeback (7000
+health), a bleed and one spike: **24.8% of its health off her ground, 35.3% on it; after the fix
+4.3% and 6.4%.** The replay's own summary showed it too: twelve spikes thrown, forty landed.
+
+The fix: an eruption marks each creature it struck, and meets the small bodies once, at its full
+size (`monster::a_spreading_eruption_hits_the_creature_once`, which fails without it: one
+eruption, six frames, 1018). **No number was changed**: with each eruption hitting once, a
+bleed into a spike is back to what it did before the rework. If it is still too much in play,
+the knob is the spike row's damage (100), which every eruption is a share of.

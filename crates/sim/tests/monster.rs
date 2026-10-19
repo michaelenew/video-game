@@ -1454,3 +1454,50 @@ fn every_bone_in_the_rig_reaches_the_world_through_its_parents() {
         );
     }
 }
+
+#[test]
+fn a_spreading_eruption_hits_the_creature_once() {
+    // An eruption spreads over `erupt_spread` frames (2026-10-19), and asks
+    // what it reaches on each of them. The creature path kept no book on a
+    // spike, so a Ridgeback took the eruption on every frame of the spread:
+    // a bleed and one spike took a quarter of its health.
+    let mut w = parked();
+    let beast = w.monster().copied().expect("a hunt has a creature");
+    let under = V3::new(beast.pos.x, Fx::ZERO, beast.pos.z);
+    let stain = sim::effects::Effect::pool(
+        0,
+        Class::BloodMage,
+        sim::moves::blood::THORN_LASH,
+        under,
+        100,
+    );
+    let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
+    w.effects[slot] = Some(stain);
+    let before = beast_health(&w);
+    let mut hits = 0;
+    for pitch in [-3000, -4000, -5000] {
+        let mut t = w.clone();
+        for _ in 0..2 {
+            t.advance([Input::looking_at(Input::MIDDLE, 0, pitch), Input::default()]);
+        }
+        let mut last = beast_health(&t);
+        for _ in 0..60 {
+            t.advance([Input::looking_at(0, 0, pitch), Input::default()]);
+            let now = beast_health(&t);
+            if now < last {
+                hits += 1;
+            }
+            last = now;
+        }
+        if beast_health(&t) < before {
+            assert!(
+                hits <= 2,
+                "one eruption hit the creature on {hits} frames, for {}",
+                before - beast_health(&t)
+            );
+            return;
+        }
+        hits = 0;
+    }
+    panic!("fixture: the spike never reached the creature");
+}
