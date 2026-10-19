@@ -4166,11 +4166,6 @@ pub fn erupt_chain() -> Fx {
 // Stains, thralls and the Well (2026-10-13). See
 // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
 
-/// Well, full at.
-pub fn well_full() -> i32 {
-    oven::scalar(Scalar::WellFull).max(0)
-}
-
 /// Stain, settles before it can be drunk.
 pub fn stain_settles() -> u16 {
     oven::scalar(Scalar::StainSettles).max(0) as u16
@@ -4256,7 +4251,7 @@ pub fn plague_slow() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PlagueSlow).max(0))
 }
 
-/// Finisher, damage per grey spent (x): what each point of grey and Well a finisher spends adds to its blow.
+/// Finisher, damage per grey spent (x): what each point of grey a finisher spends adds to its blow.
 pub fn finisher_per_grey() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FinisherPerGrey).max(0))
 }
@@ -4837,4 +4832,18 @@ pub fn roam_door() -> Fx {
 /// back and forth on a line between two.
 pub fn roam_reframe() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::RoamReframe)).max(Fx::ONE)
+}
+
+/// **A Black spike that lands erupts out of the blow** (2026-10-19), worth
+/// this much of what the spike dealt: the finisher of a bleed starts its own
+/// chain, so it never needs a stain under it to begin one.
+pub fn spike_hit_erupts() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeHitErupts).max(0))
+}
+
+/// **An eruption spreads out over this many frames** (2026-10-19) rather than
+/// appearing whole, and sets off each stain its edge reaches on the way: a
+/// chain of blasts, one setting off the next.
+pub fn erupt_spread() -> u16 {
+    oven::scalar(Scalar::EruptSpread).max(1) as u16
 }

@@ -292,6 +292,11 @@ const EXEMPT: &[(&str, &str)] = &[
          of its own size, its share of the row in percent above it.",
     ),
     (
+        "pub const SPIKE_ECHO: i32 = 2000",
+        "A code, not a magnitude: from here up, `Effect::banked` on a Black spike is the eruption \
+         out of a spike's own blow, its share of the row in percent above it.",
+    ),
+    (
         "const PERCENT: i32 = 100",
         "A unit, not a magnitude: a whole in percent.",
     ),

@@ -478,18 +478,18 @@ fn walking_into_a_stain_drinks_it() {
 }
 
 #[test]
-fn what_she_cannot_hold_goes_to_the_well() {
+fn at_full_health_she_walks_through_a_stain_and_leaves_it() {
+    // No Well to pour it into (2026-10-19): what her grey cannot hold stays
+    // on the floor, her ground and a spike's.
     let mut w = mage();
     stain(&mut w, at(-4.0, 0.0, 8.0), 100);
     run(&mut w, 40, Input::W);
+    assert_eq!(pools(&w).len(), 1, "the stain is still there");
+    // Only what a stain drains of itself in the time is gone.
     assert!(
-        pools(&w).is_empty(),
-        "at full health the stain is still taken"
-    );
-    assert!(
-        w.players[0].well > 50,
-        "into the Well: {}",
-        w.players[0].well
+        pools(&w)[0].banked >= 100 - 2 * t::pool_drain(),
+        "nothing drunk: {}",
+        pools(&w)[0].banked
     );
 }
 
@@ -788,7 +788,7 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
 }
 
 #[test]
-fn a_bite_deals_what_it_spends_and_spills_it_and_fills_no_well() {
+fn a_bite_deals_what_it_spends_and_spills_it() {
     let mut w = mage();
     w.players[1].pos = at(4.0, 0.0, 8.0);
     // Her ground near him, so it goes for him, and not under it, so the
@@ -813,7 +813,6 @@ fn a_bite_deals_what_it_spends_and_spills_it_and_fills_no_well() {
     );
     let spilled: i32 = pools(&w).iter().map(|p| p.banked).sum();
     assert!(spilled >= took - 1, "and spilled it under him: {spilled}");
-    assert_eq!(w.players[0].well, 0, "a bite fills no Well");
 }
 
 #[test]
@@ -836,9 +835,11 @@ fn one_blow_kills_a_thrall_and_it_falls_back_into_a_stain() {
     }
     assert!(fell, "his swing killed it");
     let rest: i32 = pools(&w).iter().map(|p| p.banked).sum();
+    // All it had, not what the blow left over (2026-10-19): only what it
+    // drained in the moment it stood.
     assert!(
-        rest > 0 && rest < 400,
-        "a stain of what it had, less the blow: {rest}"
+        rest > 400 - 2 * t::pool_drain() && rest <= 400,
+        "a stain of all it had: {rest}"
     );
 }
 

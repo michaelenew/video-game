@@ -9078,3 +9078,56 @@ at least` are the knobs.
 drop (`anim/src/clips/reaver.rs`), so it will look wrong until it is redrawn
 as a rising cut.
 
+### 2026-10-19 — the Blood mage: hearts stand for good, three of them; a longer teleport
+
+From the owner, after the screenshots. **A heart has no time limit**: it used to bleed away as
+a stain does (0021 §10 gave the reason: ground nobody could take back, and a frame counter that
+would overflow). The owner wants it to stand, so it now goes only when it is beaten down or
+replaced. The counter is dealt with instead: every effect's age now stops at the top of its
+counter rather than overflowing, and a heart's age is held a whole beat under the top, so its
+thralls keep their rhythm and it still counts as the oldest. `Hearts at once` went 2 → 3 (a fourth
+replaces the oldest). **The teleport to a stain** (`Teleport, to a stain within`) went 12 → 18 m:
+it felt too short. Test: `territory::a_heart_nobody_beats_down_stands_for_good` (half an hour of
+frames). That test also showed that a thrall standing on her ground forever would have crashed
+the same counter.
+
+### 2026-10-19 — the Blood mage: the spike becomes the finisher of a bleed
+
+From the owner's first play of her territory. **The spike was the whole class.** It hurt and it
+healed, and against a Ridgeback the winning play was to stand still and spike one spot: each
+spike's hit (and its cost) left a stain there, the next spike on it erupted it for ×1.5, and
+every eruption drank its stain back into her health. A loop, zero skill, and it eclipsed the
+area-control kit she plays as without it (bleeds, Coagulate, hearts).
+
+What changed, all in `tests/territory.rs`, `blink.rs`, `essence.rs`, `effects.rs`:
+
+- **The spike spills nothing**: not its hits, not its cost. Her healing from it now comes only
+  from stains something else laid -- a bleed's ticks, a thrall's death.
+- **A spike that lands erupts out of its blow** (`Black spike, a hit erupts for`, ×0.5 of what
+  it dealt), sized as a stain of that much would be. The owner: an eruption has to be easy to hit
+  now it is a combo finisher, and spike-on-spike to make a stain to erupt was clunky anyway.
+- **A bleed (230) is worth more than a spike and its eruption (120)**, as a property
+  (`one_bleed_is_worth_more_than_one_spike`).
+- **Eruptions spread** over 8 frames (`Black spike, an eruption spreads out over`), lighting
+  stains as their edge reaches them; a lit one waits 2 frames (was 3). **Tried and reverted, the
+  same hour:** an eruption setting off stains only on touch (`erupt_chain` 2.5 → 0.5 m) broke
+  the core combo -- a bleeding body walking lays its stains about 3.5 m apart, and a chain no
+  longer crossed the gap (`haemorrhage::a_bleeding_fighter_walking_lays_a_trail_of_pools_a_stride_apart`).
+  Back to 2.5 m, but grown into with the eruption (nought past its edge on its first frame,
+  2.5 m on its last): at the full reach from the first frame, five stains a stride apart all
+  went up inside seven frames, which read as one carpet again. Seen in a capture
+  (`SHOT_BLOOD=trail`).
+- **A spike sets off any stain its disc touches**, the nearest. Caught in the same capture: a
+  spike landed a metre short of the stain it was aimed at, drank it in passing and started no
+  chain (`territory::a_spike_a_stride_short_of_a_stain_sets_it_off`).
+- **A thrall killed leaves a stain of all it had** (was: what it had less the blow, usually
+  nothing, since thralls died before they bit).
+- **Her ground ×1.3 → ×1.5**, and now in a bleed's ticks and the eruptions she sets off as well
+  as what she throws.
+- **A heart holds the ground joined to it**: a patch still ages, but does not run out while a
+  heart is joined to it through patches and stains; when the heart goes, what had run out goes
+  on the next frame.
+- **The Well is cut.** Finishers spend grey alone. Walking through a stain drinks only what her
+  grey holds and leaves the rest -- without the Well, eating a stain at full health would have
+  thrown away ground and a spike's target.
+

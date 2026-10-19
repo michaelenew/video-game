@@ -232,15 +232,16 @@ fn a_fifth_pool_merges_into_the_newest() {
 }
 
 #[test]
-fn every_cost_she_pays_is_a_stain() {
+fn every_cost_she_pays_is_a_stain_but_the_spikes() {
     // Since 2026-10-13 nothing she spends is lost: what a press costs lands
     // where she aimed it as a stain like any other, hers to take back
     // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
+    // **Except the Black spike** (2026-10-19), which leaves no stain at all:
+    // a spike on one spot no longer lays the stain the next one sets off.
     for (button, airborne) in [
         (keys::SCYTHE, false),
         (keys::THORNS, true),
         (keys::THORNS, false),
-        (keys::SPIKES, false),
     ] {
         let mut w = mage();
         w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
@@ -259,6 +260,12 @@ fn every_cost_she_pays_is_a_stain() {
             "{button:#x}: what it cost is not on the floor"
         );
     }
+    let mut w = mage();
+    w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
+    looking(&mut w, 2, keys::SPIKES, -2000, 0);
+    run(&mut w, 70, 0, 0);
+    assert!(w.players[0].grey > 0, "fixture: the spike cost her nothing");
+    assert!(pools(&w).is_empty(), "the spike's cost is on the floor");
 }
 
 #[test]

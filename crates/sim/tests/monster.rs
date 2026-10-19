@@ -940,12 +940,12 @@ fn beast_health(w: &World) -> i32 {
 }
 
 #[test]
-fn a_spike_on_bare_floor_hits_the_creature_and_spills_under_it() {
+fn a_spike_on_bare_floor_hits_the_creature_and_erupts() {
     // Effects used to be applied to fighters and nobody else, so a Blood mage
     // hunting alone put a spike in the ground and it did nothing. The spike
     // is one event now rather than a field, and the event has to reach the
-    // creature the same way it reaches a fighter: damage, and a pool of its
-    // blood on the floor under the part it struck.
+    // creature the same way it reaches a fighter: damage, and since
+    // 2026-10-19 no stain but an eruption out of the blow.
     // A tap of the middle click: the spike's first tier, aimed down at the
     // floor under the animal -- it reaches twenty metres since the blaster, so
     // a level crosshair puts it well past.
@@ -968,18 +968,8 @@ fn a_spike_on_bare_floor_hits_the_creature_and_spills_under_it() {
         beast_health(&w) < full,
         "the spike never touched the creature"
     );
-    let pools: Vec<_> = w
-        .effects
-        .iter()
-        .flatten()
-        .filter(|e| e.is_a_pool())
-        .collect();
-    assert_eq!(pools.len(), 1, "the hit left {} pools", pools.len());
-    assert_eq!(pools[0].owner, 0);
-    assert!(
-        pools[0].pos.y.raw() == 0,
-        "the creature's pool is not on the floor"
-    );
+    let pools = w.effects.iter().flatten().filter(|e| e.is_a_pool()).count();
+    assert_eq!(pools, 0, "the hit left {pools} stains");
 }
 
 #[test]
