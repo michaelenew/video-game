@@ -100,6 +100,11 @@ spike sets them off.
   Which patches are held is kept on the world (`World::ground_held`): a held patch is **drawn
   whole** however little life it has left, and a full table **never makes way with one** -- a
   spark laid anywhere else is refused before a home base is pushed out.
+- **Past `Pools at once` (32), her oldest stain makes way**, into her ground where it stood;
+  the new stain is where the blood was spilled. (It used to be the new blood that merged into
+  her newest stain, and a long fight stopped making stains.) Her ground holds 128 patches; one laid with its middle inside another of hers grows that one,
+  one wholly inside another goes, and with every patch held the one furthest from her hearts
+  makes way for new ground.
 - **The Well is gone.** Her finishers spend her grey alone. A stain she walks through gives her
   only what her grey can hold and stays on the floor with the rest, so at full health she
   walks through her stains and leaves them as ground and as spike fodder.
@@ -128,7 +133,7 @@ swim, hearts and her thralls on her ground; `tests/blood_mage.rs` the clicks.
 ### Her ground
 
 **One substance, in patches** (`sim::ground`, `World::ground`): discs on the floor with an owner
-and the frames each has left -- forty-eight of sixteen bytes, a table of its own in the snapshot
+and the frames each has left -- a hundred and twenty-eight of sixteen bytes (forty-eight until 2026-10-19), a table of its own in the snapshot
 so a fight's effects do not make room for it. It comes from three places:
 
 - **Her moves, where they touch** (`World::lay_touch`): every spike and eruption, the Stake's
