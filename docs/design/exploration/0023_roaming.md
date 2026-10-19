@@ -136,7 +136,9 @@ a table; nothing allocates; a chase far from home is the dearest scenario in
 `SHOT_CHASE=1` with `--range <name>` starts fighter one carrying the range's
 egg out on the road nearest it, with its creatures out of their range after
 them: `DEMO=0 SHOT_FRAME=90 SHOT_CHASE=1 GAME_ARGS="--range upper-meadow"
-./scripts/screenshot.sh`.
+./scripts/screenshot.sh` (with `SHOT_YAW=-1.57` to look back at them).
+
+![The Upper Meadow's two Ridgebacks out on the Bank, after their egg](../gallery/valley-chase.jpg)
 
 ## Open
 
