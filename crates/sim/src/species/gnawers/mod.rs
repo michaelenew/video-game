@@ -31,6 +31,9 @@ mod mind;
 pub mod rules;
 mod tuned;
 
+/// The pack's memo, word by word: what a pack that borrows the gnawer's mind
+/// (the Broodmother's brood) moves with the world (`FightDecl::shift`).
+pub use mind::word as memo;
 pub use mind::{Mind, gnawed, howling, latched, pile_on, piling, stumbling, treed_now};
 
 use crate::critter::{CritterKind, CritterMove, pose};

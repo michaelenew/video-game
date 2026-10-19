@@ -204,7 +204,8 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
             V3::from_turns(m.yaw)
         };
         let _ = dir;
-        let yaw = fight::open_way(m.pos, target, Knob::StalkRange.fx(), &mind.ground.bounds);
+        let den = &mind.ground.den;
+        let yaw = fight::open_way(m.pos, target, Knob::StalkRange.fx(), &den.kept, den.off);
         return avoid_fire(
             m,
             mind,
@@ -317,7 +318,8 @@ fn round_posts(m: &Monster, mind: &Mind, goal: V3) -> V3 {
 
 /// A goal kept inside the walls, a wall-look in from them.
 fn inside(p: V3, mind: &Mind) -> V3 {
-    let b = mind.ground.bounds;
+    // Where it is kept this frame (`arena::Den`).
+    let b = mind.ground.den.kept;
     let room = Knob::WallLook.fx().add(SPECIES.margin());
     V3::new(
         p.x.clamp(b.lo_x.add(room), b.hi_x.sub(room)),
