@@ -177,8 +177,10 @@ fn lumpy(k: usize) -> Mesh {
     mesh
 }
 
-/// How wide the blob is (m), and how high its middle floats.
-const BLOB_SIZE: f32 = 0.85;
+/// How wide the blob is (m) -- a guinea pig's size (2026-10-19; it was
+/// 0.85, half a fighter's width, and read as far too big) -- and how high
+/// its middle floats.
+const BLOB_SIZE: f32 = 0.25;
 const BLOB_FLOAT: f32 = 1.5;
 
 /// How long it takes to melt from a blob into a creature (s).
@@ -597,7 +599,7 @@ pub fn place_blobs(
         // A slow bob, a breathing squash and stretch, a little sway, and,
         // going, a tilt back as if it swam -- never nose-down, which was
         // the blobfish.
-        let bob = (phase * 1.9).sin() * 0.14;
+        let bob = (phase * 1.9).sin() * 0.16 * BLOB_SIZE;
         let squash = (phase * 3.1).sin() * 0.06;
         let sway = (phase * 2.3).cos() * 0.04;
         let size = BLOB_SIZE * left;

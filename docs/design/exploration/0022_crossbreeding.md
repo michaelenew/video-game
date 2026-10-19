@@ -928,7 +928,8 @@ anything"*): glossy pink, two big eyes and a mouth, floating at shoulder
 height, wobbling; fed an egg it melts into the creature, the blob shrinking
 away as the body grows in where it hung. The first blob read as a
 blobfish -- squat, tipped nose-down, its face slid to the bottom -- so it
-is round and upright, its face high: big eyes close together with a
+is round and upright, about a guinea pig's size (a quarter of a metre;
+it was 0.85 m and far too big), its face high: big eyes close together with a
 highlight in each, a small smile, pink cheeks, nubs, and a tapering tail.
 **Moving, it leaves a trail of puffs** off that tail, like a cartoon's
 propulsion: a quarter of its size, a little lumpy, left where they were
