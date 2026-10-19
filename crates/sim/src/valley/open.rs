@@ -16,8 +16,10 @@
 //!   moves to the room and its creature is put on its marks, noticing you as
 //!   it always has. A hunt holds the world in the room while anybody is in
 //!   it or near it (`tuning::hunt_held_past` past its edge, so a step out of
-//!   the door mid-fight changes nothing); when nobody is, it is over, unwon,
-//!   and the creature is gone.
+//!   the door mid-fight changes nothing). When nobody is, a creature after
+//!   somebody follows them and the world goes on following the fighters with
+//!   the hunt in it ([`super::roam`]); one after nobody is over, unwon, and
+//!   gone.
 //! - **A waystone's door is a wall** while the stone is dark: a box the
 //!   shape of the doorway, raised on the ground like a slag mound is, unless
 //!   somebody already stands on its far side.
