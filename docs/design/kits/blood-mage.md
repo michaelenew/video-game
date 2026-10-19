@@ -73,6 +73,10 @@ spike sets them off.
 - **A bleed is worth more than a spike.** The Thorn lash and its bleed are 30 + 8 × 25 = 230;
   a tapped spike and its eruption are 80 + 40 = 120. The bleed takes its time and the bolt
   has to land; the spike cashes it in (`territory::one_bleed_is_worth_more_than_one_spike`).
+- **An eruption is worth its stain** (`Black spike, a stain erupts for (x its blood)`, ×1,
+  since the same day): its blow is the blood that was in the stain, not the spike's row. A bleed
+  tick's stain of 25 erupts for 25 and a pool of 200 for 200; before, every stain erupted for 150
+  whatever its size, and a bleed's scattered ticks went up as a minefield.
 - **An eruption spreads.** It comes up small and reaches its full size over `Black spike, an
   eruption spreads out over` (8 frames) (`Effect::spike_volume`), hitting what its edge reaches
   as it goes. Every stain of hers its edge comes within `Black spike, an eruption sets off

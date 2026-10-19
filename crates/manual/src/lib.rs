@@ -459,7 +459,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Middle click: spikes",
-                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. It leaves no stain. A spike that lands erupts out of its own blow at once; on a stain the stain erupts instead. An eruption spreads out over a moment, and every stain its edge reaches goes up in turn, a chain of blasts -- an eruption spends its stain, and drinking it is how a spike heals you. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair, setting off every stain of yours they cross.",
+                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. It leaves no stain. A spike that lands erupts out of its own blow at once; on a stain the stain erupts instead. An eruption hits for the blood that was in its stain -- a big pool is a big blast, a bleed's little stains little ones -- and it spreads out over a moment, and every stain its edge reaches goes up in turn, a chain of blasts -- an eruption spends its stain, and drinking it is how a spike heals you. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair, setting off every stain of yours they cross.",
             ),
             e(
                 "Right click: the scythe",

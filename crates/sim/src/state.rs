@@ -17146,6 +17146,14 @@ impl World {
         // her blow (2026-10-19). What it sets off, it sets off as it spreads
         // (`Effect::spreads`).
         born.power = worth_of(&self.players[owner], None);
+        // **Worth its stain** (2026-10-19): the blow is the blood that was in
+        // it, `tuning::stain_erupts` to the point, rather than the row's --
+        // carried on the power, which every hit an effect lands is scaled by.
+        if !cascade {
+            let row = Fx::from_int(m.damage.max(1)).mul(t::erupt_damage());
+            let worth = Fx::from_int(pool.pool_volume().max(0)).mul(t::stain_erupts());
+            born.power = born.power.mul(worth.div(row.max(Fx::ONE)));
+        }
         spawn_effect(&mut self.effects, born);
         if cascade {
             let generation = pool.power.to_int();
