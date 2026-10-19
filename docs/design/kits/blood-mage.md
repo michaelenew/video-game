@@ -1,10 +1,11 @@
 ---
-status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18); unplayed
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19); played once
 decided: 2026-09-09
 revised: 2026-09-23
 revised: 2026-10-12
 revised: 2026-10-13
 revised: 2026-10-18
+revised: 2026-10-19
 sources: ../exploration/0021_blood_mage_territory.md, ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
 ---
 
@@ -49,6 +50,53 @@ she has left herself, and a floor that is hers.
 > anything after it disagrees, it wins.** The direction and the options weighed are
 > [../exploration/0021_blood_mage_territory.md](../exploration/0021_blood_mage_territory.md).
 
+> **The spike as a finisher, 2026-10-19 — built, unplayed.** The owner's first play of her
+> territory: the spike eclipsed everything. It did damage and healed her, and a Ridgeback could
+> be beaten by spiking one spot over and over, because each spike's stain fed the next one's
+> eruption and every eruption drank. Played without the spike she was an area-control mage --
+> bleeds, Coagulate, hearts -- and that is the class. §"The spike as a finisher" below wins
+> where it disagrees with §"Territory".
+
+## The spike as a finisher — built 2026-10-19
+
+**The combo is bleed, then spike.** The Thorn lash opens a bleed whose ticks lay stains; the
+spike sets them off.
+
+- **The Black spike leaves no stain** -- not its cost (only grey), not its hits
+  (`Effect::spills_nothing`). A spike on one spot no longer lays the stain the next one erupts,
+  so it cannot heal her on its own: what heals her is an eruption drinking a stain a bleed or a
+  thrall left.
+- **A spike that lands erupts out of its own blow** (`World::erupt_from_a_hit`): an eruption
+  where it struck, as wide as a stain of what it dealt would erupt, worth `Black spike, a hit
+  erupts for (x what it dealt)` (×0.5). It needs no stain under it, so the finisher always
+  starts a chain from what it hits. A stain under the spike still erupts at its own size.
+- **A bleed is worth more than a spike.** The Thorn lash and its bleed are 30 + 8 × 25 = 230;
+  a tapped spike and its eruption are 80 + 40 = 120. The bleed takes its time and the bolt
+  has to land; the spike cashes it in (`territory::one_bleed_is_worth_more_than_one_spike`).
+- **An eruption spreads.** It comes up small and reaches its full size over `Black spike, an
+  eruption spreads out over` (8 frames) (`Effect::spike_volume`), hitting what its edge reaches
+  as it goes. Every stain of hers its edge comes within `Black spike, an eruption sets off
+  stains this far past its edge` (2.5 m, grown into with the eruption, so the reach past its
+  edge is nought on its first frame and whole on its last) of is lit, and goes up `Stain, a
+  chained eruption waits` (2) frames later, spreading in its turn: a chain of blasts, each setting off the
+  next, not a carpet appearing at once. Drawn as the spike in its middle, at full size from
+  the first frame, with its skirt spreading out round it.
+- **A spike sets off any stain its disc touches** (`World::pool_touching`), the nearest, not
+  only one under its middle: one landed a stride short used to drink the stain in passing and
+  start no chain.
+- **A thrall leaves a stain of all it had** when it is killed, not what the blow left over. What
+  it has is what it was not drained of, so one that reached them across her ground leaves a
+  bigger stain: new ground, and something for a spike.
+- **Her ground is ×1.5** (`Ground, her moves hit (x)`, was ×1.3), and **it is in everything she
+  deals**: a bleed's tick is harder while she stands on her ground, and so is an eruption she
+  sets off from it.
+- **A heart holds the ground joined to it** (`ground::step`): a patch joined to one of her
+  hearts, through any run of patches and stains, still ages but never runs out. When the heart
+  goes, what had run out goes on the next frame; the rest keeps what it had left.
+- **The Well is gone.** Her finishers spend her grey alone. A stain she walks through gives her
+  only what her grey can hold and stays on the floor with the rest, so at full health she
+  walks through her stains and leaves them as ground and as spike fodder.
+
 ## Territory — built 2026-10-18
 
 | | Left: thorns | Middle: the spikes | Right: the scythe |
@@ -62,7 +110,7 @@ she has left herself, and a floor that is hers.
 | --- | --- |
 | `Q` | **Coagulate** |
 | `E` | **Heart** |
-| `shift` | The **teleport** to a stain under the crosshair (12 m); otherwise, on her ground, **swim**; otherwise an ordinary dodge |
+| `shift` | The **teleport** to a stain under the crosshair (18 m); otherwise, on her ground, **swim**; otherwise an ordinary dodge |
 
 **The rows were retuned, not renumbered** (`sim::moves::blood`): the Haemorrhage's row is the
 Thorn lash, the Hemoplague's the Bramble, Command's the Sweep, the Carpet's the Reap, the
@@ -104,7 +152,7 @@ reach, within `Ground, counts this far above or below it` (0.6 m).
 
 ### Strong and weak
 
-**A move she starts on her ground hits `Ground, her moves hit (x)` (×1.3) harder** -- decided on
+**A move she starts on her ground hits `Ground, her moves hit (x)` (×1.5 since 2026-10-19) harder** -- decided on
 the press (`Player::thrown_at`, the slot the Dual mage's depth uses), so a swing that carries her
 off it keeps what it started as. **Never wider**: `Effect::field_radius` does not grow for her.
 **Off her ground a move seeds more**: what it lays is `Ground, thrown off her ground seeds (x)`
@@ -130,7 +178,7 @@ ripple over her.
   half its row's 3.5 m for no hold and all of it for the longest, and `Reap, lunges further on her
   ground` (×1.6) from her ground.
 - **Harvest** (the Reap held to its end, a finisher): one great turning reap, a whole turn,
-  worth the row and `finisher_per_grey` for every point of grey and Well it spent, paying back
+  worth the row and `finisher_per_grey` for every point of grey it spent, paying back
   what it burned as every finisher does -- and every stain of hers within `Harvest, reaches all
   round` (5 m) is drunk as it comes out.
 - A swing's cost lands as a stain **at the blade's end**, not at her feet, where she would walk
@@ -153,15 +201,16 @@ back to the nearest of it. Drawn a fifth bigger and burning brighter on it. Comm
 **A heart is earned** (`Player::heart_meter`): every point of damage she deals -- a blow, an
 eruption, a bite, a bleed's tick; counted where each hit spills (`World::spill`), not what a
 cast cost her -- fills it, up to `Heart, earned by dealing` (400). Full, `E` plants a heart and
-empties it; empty, `E` throws nothing. The HUD shows it as a thin bar under the Well, burning
-bright when full.
+empties it; empty, `E` throws nothing. The HUD shows it as a thin bar under her health,
+burning bright when full.
 
 **A heart** (`E`) is planted at the crosshair's floor (grounded, 15 m). It holds `Heart, holds
 what she paid (x)` (×3) what she paid for it (10% of red), never less than `Heart, holds at
 least` (150) -- what she paid goes into it, not onto the floor. Blows come off its blood (a
-swing's frames count once), it bleeds away as a stain does, and every `Heart, sends a thrall
-every` (240) frames, while she has room for a thrall, it spends `Heart, a thrall costs it` (60)
-on one at its foot. `Hearts at once` (2): a third replaces the oldest. A creature turns on a heart
+swing's frames count once), it has **no time limit** -- it stands until it is beaten down --
+and every `Heart, sends a thrall every` (240) frames, while she has room for a thrall and it has
+the blood, it spends `Heart, a thrall costs it` (60) on one at its foot. `Hearts at once` (3): a
+fourth replaces the oldest. A creature turns on a heart
 or a thrall nearer it than she is. Drawn as a heart's shape, not its anatomy -- two lobes over a
 point, two short vessels out of its top -- in a crimson that burns from inside, hung at head
 height, beating (a heavy beat and a light one), turning, with a ring of essence round it, a
@@ -170,7 +219,7 @@ it.
 
 ### What it did not change
 
-The grey and the Well, every stain one kind, Coagulate, the spikes and their chains, the
+The grey and the Well (cut 2026-10-19), every stain one kind, Coagulate, the spikes and their chains, the
 teleport, the Stake and the Upheaval, the vines and the cascade.
 
 ## Thralls and grey — built 2026-10-13, revised from play the same day (superseded 2026-10-18)
@@ -251,7 +300,7 @@ throwing from the air and pinning a body there.
   **Well**, the bar under her health.
 - **A chain runs link by link**: a stain set off by an eruption beside it waits `chain_delay`
   (three frames) -- fast enough not to react to, slow enough to see where it started.
-- **The dodge** is an ordinary dodge unless the crosshair is on a stain within 12 m; it throws
+- **The dodge** is an ordinary dodge unless the crosshair is on a stain within 18 m; it throws
   nothing.
 
 ### The fields

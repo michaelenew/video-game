@@ -309,10 +309,14 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
     };
     let health = w.players[1].health;
     looking(&mut w, 2, keys::SPIKES, pitch, Input::A);
-    // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
+    // Link by link since 2026-10-13: each waits `tuning::chain_delay`, and
+    // since 2026-10-19 an eruption reaches the next only as it spreads.
+    let link = t::chain_delay() as u32 + t::erupt_spread() as u32;
     let mut eruptions = 0;
-    for _ in 0..m.startup as u32 + 4 * t::chain_delay() as u32 + 2 {
+    let mut launched = false;
+    for _ in 0..m.startup as u32 + 4 * link + 2 {
         looking(&mut w, 1, 0, pitch, Input::A);
+        launched |= !w.players[1].grounded || w.players[1].action.stunned();
         eruptions += w
             .effects
             .iter()
@@ -326,13 +330,13 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
     );
     // The chain reached them: an eruption's blow, not just the bleed's ticks.
     let took = health - w.players[1].health;
-    let ticks = (m.startup as i32 + 4 * t::chain_delay() as i32 + 4) / t::bleed_tick() as i32 + 1;
+    let ticks = (m.startup as i32 + 4 * link as i32 + 4) / t::bleed_tick() as i32 + 1;
     assert!(
         took > ticks * t::bleed_damage(),
         "the chain ran but never reached the bleeding fighter: they took {took}"
     );
     assert!(
-        !w.players[1].grounded || w.players[1].action.stunned(),
+        launched,
         "they were not launched by the eruption that reached them"
     );
 }

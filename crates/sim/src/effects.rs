@@ -1106,7 +1106,8 @@ impl Effect {
         matches!(self.class, Class::BloodMage)
             && (matches!(self.kind, EffectKind::Vines)
                 || (matches!(self.kind, EffectKind::BlackSpike)
-                    && self.banked >= crate::state::SPIKE_SCALED))
+                    && self.banked >= crate::state::SPIKE_SCALED
+                    && self.banked < crate::state::SPIKE_ECHO))
     }
 
     /// How far through its life, as a fraction.
@@ -1210,11 +1211,21 @@ impl Effect {
     /// it decides this, for the same reason: what you can see is a thing of a
     /// certain size, and the hit test should agree with your eyes.
     pub fn spike_volume(&self) -> Pillar {
+        // An eruption spreads out from its middle over `erupt_spread` frames
+        // (2026-10-19): what it reaches, and the stains it sets off, grow
+        // with it.
+        let radius = if self.spreads() {
+            let spread = t::erupt_spread().max(1) as i32;
+            let grown = Fx::ratio((self.age as i32).clamp(1, spread), spread);
+            self.reach.mul(grown)
+        } else {
+            self.reach
+        };
         Pillar {
             // The disc it came out of: the move's own radius on bare floor,
             // the eruption's when it came up out of a pool. See
             // `state::World::advance`.
-            radius: self.reach,
+            radius,
             bottom: Fx::ZERO,
             top: if self.erupted() {
                 t::erupt_height()
@@ -1976,9 +1987,25 @@ impl Effect {
     /// it spends the blood it came out of -- so the same spot hit again runs
     /// out rather than growing (2026-10-13). The critters' and the bleed's
     /// paths ask the same.
+    ///
+    /// **The Black spike spills nothing at all** (2026-10-19): it is the
+    /// finisher of a bleed, not a way to lay the stains it then sets off, so
+    /// a spike on one spot no longer feeds the next one there.
     pub const fn spills_nothing(&self) -> bool {
         matches!(self.kind, EffectKind::BlackSpike)
-            && (self.banked == 1 || self.banked >= crate::state::SPIKE_SCALED)
+            && (self.banked == 1
+                || self.banked >= crate::state::SPIKE_SCALED
+                || (matches!(self.class, Class::BloodMage)
+                    && self.slot == crate::moves::blood::BLACK_SPIKE))
+    }
+
+    /// Is this an eruption -- out of a stain, out of a spike's blow, or a
+    /// Crimson cascade's -- that **spreads out** over
+    /// `tuning::erupt_spread` frames rather than appearing whole?
+    pub const fn spreads(&self) -> bool {
+        matches!(self.kind, EffectKind::BlackSpike)
+            && (self.banked == crate::state::SPIKE_ERUPTION
+                || self.banked >= crate::state::SPIKE_SCALED)
     }
 
     pub const fn is_a_pool(&self) -> bool {

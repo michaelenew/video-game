@@ -890,7 +890,9 @@ scalars! {
     EruptChain, "Blood mage", "Black spike, an eruption sets off stains this far past its edge (m)", Fixed, 0, fx(8,1);
     // **The Blood mage: stains, thralls and the Well**, 2026-10-13. See
     // `docs/design/exploration/0016_blood_mage_thralls_and_the_well.md`.
-    WellFull, "Blood mage", "Well, full at", Int, 1, 2000;
+    // Retired 2026-10-19 with the Well itself; kept so the knobs after it
+    // keep their places.
+    WellFull, "Blood mage", "Well, full at (retired)", Int, 1, 2000;
     StainSettles, "Blood mage", "Stain, settles before it can be drunk", Frames, 0, 60;
     // **Renamed rather than removed** (2026-10-18): the Carpet and the golem
     // are gone, and their slots carry her ground -- `tuned::SCALARS` is read
@@ -1168,6 +1170,13 @@ scalars! {
     RoamDrop,             "Roam",     "Steps down at most (m)",                              Fixed, 0, fx(10,1);
     RoamDoor,             "Roam",     "Through a doorway once within (m)",                   Fixed, fx(1,2), fx(10,1);
     RoamReframe,          "Roam",     "Out, the world moves to a nearer place by (m)",       Fixed, fx(1,1), fx(200,1);
+    // **The Black spike as the finisher of a bleed** (2026-10-19): a spike
+    // that lands erupts out of the blow at once, sized by what it dealt and
+    // worth this much of it; and every eruption spreads out over a few
+    // frames rather than appearing whole, setting off the stains its edge
+    // reaches as it goes. See `docs/design/kits/blood-mage.md`.
+    SpikeHitErupts,       "Blood mage", "Black spike, a hit erupts for (x what it dealt)",  Fixed, 0, fx(2,1);
+    EruptSpread,          "Blood mage", "Black spike, an eruption spreads out over",        Frames, 1, 30;
 }
 
 // ---------------------------------------------------------------------------

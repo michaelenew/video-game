@@ -505,6 +505,51 @@ fn a_heart_takes_more_than_one_blow() {
 }
 
 #[test]
+fn a_heart_nobody_beats_down_stands_for_good() {
+    // Half an hour: no bleed, and well past where its clock's counter tops
+    // out (2026-10-19).
+    let mut w = planted();
+    run(&mut w, 30 * 60 * 60, 0);
+    assert_eq!(effects_of(&w, EffectKind::Heart).len(), 1, "still standing");
+}
+
+#[test]
+fn a_heart_holds_the_ground_joined_to_it_and_lets_it_go_when_it_falls() {
+    // 2026-10-19: ground joined to a heart, through any run of patches,
+    // still ages but does not run out; when the heart goes, what was overdue
+    // goes with it. Ground not joined to it fades as ever.
+    let mut w = planted();
+    let heart = effects_of(&w, EffectKind::Heart)[0];
+    let h = heart.pos;
+    let ring = as_f(t::heart_ground());
+    let near = V3::new(h.x, h.y, h.z.add(metres(ring + 0.8)));
+    let further = V3::new(h.x, h.y, h.z.add(metres(ring + 2.4)));
+    let lone = V3::new(h.x, h.y, h.z.sub(metres(ring + 12.0)));
+    claim(&mut w, near, 1.0, 60);
+    claim(&mut w, further, 1.0, 60);
+    claim(&mut w, lone, 1.0, 60);
+    let held = |w: &World, at: V3| w.ground.iter().any(|p| p.live() && p.covers(at));
+    run(&mut w, 60 * t::ground_joined_every() as u32 + 30, 0);
+    assert!(held(&w, near), "joined to the heart, it still stands");
+    assert!(
+        held(&w, further),
+        "joined through another patch, so does this"
+    );
+    assert!(!held(&w, lone), "and ground not joined to it went out");
+    let slot = w
+        .effects
+        .iter()
+        .position(|e| e.is_some_and(|e| e.is_a_heart()))
+        .expect("the heart");
+    w.effects[slot] = None;
+    run(&mut w, 2, 0);
+    assert!(
+        !held(&w, near) && !held(&w, further),
+        "with the heart gone, ground that had run out goes at once"
+    );
+}
+
+#[test]
 fn no_more_hearts_than_the_cap() {
     let mut w = mage();
     for _ in 0..(t::hearts_most() + 1) {
@@ -633,4 +678,106 @@ fn planting_a_heart_empties_the_meter() {
     assert_eq!(effects_of(&w, EffectKind::Heart).len(), 1);
     assert_eq!(w.players[0].heart_meter, 0, "spent on the heart");
     assert!(!w.players[0].heart_ready());
+}
+
+// ---------------------------------------------------------------------------
+// The spike as the finisher of a bleed (2026-10-19)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn one_bleed_is_worth_more_than_one_spike() {
+    // The bolt has to land and the bleed takes its time; the spike is what
+    // finishes it. So the bleed, start to end, is the bigger number than a
+    // tapped spike and the eruption out of its blow.
+    let lash = sim::moves::get(Class::BloodMage, b::THORN_LASH).damage;
+    let ticks = (t::bleed_lasts() / t::bleed_tick()) as i32;
+    let bleed = lash + ticks * t::bleed_damage();
+    let spike = Fx::from_int(sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).damage)
+        .mul(t::spike_two_power())
+        .to_int();
+    let erupts = Fx::from_int(spike).mul(t::spike_hit_erupts()).to_int();
+    assert!(
+        bleed > spike + erupts,
+        "a bleed is {bleed}, a spike and its eruption {}",
+        spike + erupts
+    );
+}
+
+#[test]
+fn an_eruption_spreads_out_rather_than_appearing_whole() {
+    let mut w = mage();
+    let pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, at(4.0, 0.0, 8.0), 300);
+    place(&mut w, pool);
+    let mut sizes = Vec::new();
+    step_looking(&mut w, keys::SPIKES, -3500);
+    for _ in 0..40 {
+        step_looking(&mut w, 0, -3500);
+        if let Some(e) = effects_of(&w, EffectKind::BlackSpike)
+            .into_iter()
+            .find(|e| e.erupted() && e.spreads())
+        {
+            sizes.push(e.spike_volume().radius);
+        }
+    }
+    assert!(sizes.len() > 2, "fixture: the spike missed the stain");
+    assert!(
+        sizes[0].raw() < sizes[sizes.len() - 1].raw(),
+        "it came up at its full size at once"
+    );
+}
+
+#[test]
+fn on_her_ground_her_bleeds_bite_harder() {
+    let ticked = |on: bool| {
+        let mut w = mage();
+        if on {
+            home(&mut w);
+        }
+        w.players[1].pos = at(0.0, 0.0, 8.0);
+        w.players[1].bleed(0, t::bleed_tick() + 1);
+        let before = w.players[1].health;
+        run(&mut w, t::bleed_tick() as u32 + 2, 0);
+        before - w.players[1].health
+    };
+    let (off, on) = (ticked(false), ticked(true));
+    assert!(off > 0, "fixture: the bleed never ticked");
+    assert!(on > off, "on her ground {on}, off it {off}");
+}
+
+#[test]
+fn a_spike_a_stride_short_of_a_stain_sets_it_off() {
+    // The spike's disc touching a stain is enough (2026-10-19): one that
+    // landed short of the stain it was aimed at used to drink it in passing
+    // and start no chain.
+    let mut w = mage();
+    step_looking(&mut w, keys::SPIKES, -3500);
+    let mut landed = None;
+    for _ in 0..40 {
+        step_looking(&mut w, 0, -3500);
+        if let Some(e) = effects_of(&w, EffectKind::BlackSpike).first() {
+            landed = Some(e.pos);
+            break;
+        }
+    }
+    let landed = landed.expect("fixture: the spike came up");
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let mut w = mage();
+    let stain = Effect::pool(0, Class::BloodMage, b::THORN_LASH, landed, 50);
+    // Off to the side, its edge just inside the spike's disc and its middle
+    // well outside what it covers.
+    let off = stain.pool_radius().add(spike.radius).sub(metres(0.2));
+    let at = V3::new(landed.x, landed.y, landed.z.add(off));
+    place(
+        &mut w,
+        Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 50),
+    );
+    step_looking(&mut w, keys::SPIKES, -3500);
+    let mut erupted = false;
+    for _ in 0..40 {
+        step_looking(&mut w, 0, -3500);
+        erupted |= effects_of(&w, EffectKind::BlackSpike)
+            .iter()
+            .any(|e| e.banked == sim::state::SPIKE_ERUPTION);
+    }
+    assert!(erupted, "the stain it touched did not go up");
 }
