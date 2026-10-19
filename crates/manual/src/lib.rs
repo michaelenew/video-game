@@ -451,7 +451,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Blood mage",
         in_browser: true,
-        blurb: "Her blood spreads like a sickness, and she fights from inside it. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land leaves a stain of the other body's blood. Everything you throw claims the floor it touches as your ground -- a dark violet stain across the floor -- and stains are your ground too, and bleed into it as they fade; patches of it near each other join up, and a field that is fed and joined lasts. On your ground you are strong: every move you start there hits harder, and you glow with it. Off it your moves leave more ground behind: throw from the edge, step in, hit. Lost health stays grey for two seconds and then drains fast: spend it. A tap is the quick thing, a hold the bigger one, and a hold kept to its end is a finisher that spends all your grey and the Well. Rebuilt 2026-10-18 and unplayed; docs/design/exploration/0021_blood_mage_territory.md is the design.",
+        blurb: "Her blood spreads like a sickness, and she fights from inside it. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land leaves a stain of the other body's blood -- except the Black spike, which leaves none and is how you set the stains off. Everything you throw claims the floor it touches as your ground -- a dark violet stain across the floor -- and stains are your ground too, and bleed into it as they fade; patches of it near each other join up, and a field that is fed and joined lasts. On your ground you are strong: every move you start there, and every bleed and eruption you set off standing on it, hits half again harder, and you glow with it. Off it your moves leave more ground behind: throw from the edge, step in, hit. Lost health stays grey for two seconds and then drains fast: spend it. A tap is the quick thing, a hold the bigger one, and a hold kept to its end is a finisher that spends all your grey. The combo is bleed, then spike: the Thorn lash's bleed lays stains as they walk, and a spike sets them off. Rebuilt 2026-10-18, the spike reworked 2026-10-19; docs/design/exploration/0021_blood_mage_territory.md is the design.",
         entries: &[
             e(
                 "Left click: thorns",
@@ -459,7 +459,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Middle click: spikes",
-                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. On a stain the stain erupts, and the stains round it go up one after another -- an eruption spends its stain and leaves nothing behind. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair, setting off every stain of yours they cross.",
+                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. It leaves no stain. A spike that lands erupts out of its own blow at once; on a stain the stain erupts instead. An eruption spreads out over a moment, and every stain its edge reaches goes up in turn, a chain of blasts -- an eruption spends its stain, and drinking it is how a spike heals you. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair, setting off every stain of yours they cross.",
             ),
             e(
                 "Right click: the scythe",
@@ -475,11 +475,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E: a heart",
-                "A heart is earned: the thin bar under your Well fills with every point of damage you deal, and when it is full it burns bright and E plants a heart at the crosshair's spot on the floor, emptying it. A heart is a glowing crimson heart beating over the floor, with a ring of light turning round it: it holds what you paid for it three times over, holds your ground round itself, and every four seconds sends out a thrall made of its own blood. It takes several blows to kill and never fades on its own; three at a time, and a fourth replaces the oldest. Leave one and push forward so nothing can reach it.",
+                "A heart is earned: the thin bar under your health fills with every point of damage you deal, and when it is full it burns bright and E plants a heart at the crosshair's spot on the floor, emptying it. A heart is a glowing crimson heart beating over the floor, with a ring of light turning round it: it holds what you paid for it three times over, holds your ground round itself, and every four seconds sends out a thrall made of its own blood. It takes several blows to kill and never fades on its own, and while it stands none of your ground joined to it runs out -- until it falls; three at a time, and a fourth replaces the oldest. Leave one and push forward so nothing can reach it.",
             ),
             e(
                 "Thralls",
-                "A thrall is a stain on legs, up to six. On your ground it is bigger, hits harder, runs faster and does not bleed out; off it, it drains like a stain. It goes for the nearest enemy on your ground or near it -- a fighter, the creature, a pack's critter -- walking round walls, and with nothing to bite it walks back to your ground. Any one blow kills a thrall, and it falls back into a stain of what it had left.",
+                "A thrall is a stain on legs, up to six. On your ground it is bigger, hits harder, runs faster and does not bleed out; off it, it drains like a stain. It goes for the nearest enemy on your ground or near it -- a fighter, the creature, a pack's critter -- walking round walls, and with nothing to bite it walks back to your ground. Any one blow kills a thrall, and it falls back into a stain of all the blood it had -- so one that kept its blood crossing your ground leaves a big one: new ground, and something for a spike.",
             ),
             e(
                 "Q",
@@ -495,7 +495,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Walking into a stain",
-                "Drinks it, whoever's blood it is. What your health cannot hold goes into the Well.",
+                "Drinks it, whoever's blood it is -- as much as your grey health can take back. The rest stays on the floor.",
             ),
         ],
     },
@@ -850,7 +850,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p sim --bin essence",
-                "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the Well. The first thing to run after touching the class.",
+                "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, and the grey bar over a scripted exchange. The first thing to run after touching the class.",
             ),
             e(
                 "cargo run -p sim --bin elemental",
@@ -1015,7 +1015,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_BLOOD=1",
-                "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0; SHOT_BLOOD=ground stages nothing but her ground under her and her heart meter full.",
+                "With the Blood mage as player one, start her in front of her own work -- three thralls and a heart out ahead on her ground, and the Black vines to one side -- so a capture can look at them without playing up to them. Pair it with SHOT_FRAME and DEMO=0. SHOT_BLOOD=swim starts her sunk in her ground too, for SHOT_FRAME=0; SHOT_BLOOD=ground stages nothing but her ground under her and her heart meter full. SHOT_BLOOD=trail stages a bleed's trail instead -- five stains a stride apart running out ahead of her, the other fighter at its end -- for a spike setting off the chain.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

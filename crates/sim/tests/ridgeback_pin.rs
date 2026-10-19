@@ -149,6 +149,9 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// presses now lay ground, swim in it, swing the scythe and plant hearts.
 /// And again the same day: a heart is earned by the damage she deals, so
 /// her random presses plant fewer.
+/// And again 2026-10-19: the Black spike leaves no stain and erupts out of
+/// its own blow, eruptions spread out over frames, her ground is stronger,
+/// a heart holds the ground joined to it, and the Well is gone.
 /// **The Elementalist's on 2026-10-18, deliberately**: her QoL pass made the
 /// pillar bigger and longer, the two pushes act on everything on their line,
 /// Fissure's stone slides, wind burns and the Updraft lifts higher -- her
@@ -161,7 +164,7 @@ const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xde36cc574ef51ff7),
     (Class::Bulwark, 0xd12b055c26db8afb),
     (Class::ShadowReaver, 0xf62e51af6026ca5e),
-    (Class::BloodMage, 0x6c94d14d4f5ec81d),
+    (Class::BloodMage, 0xcaa7f015177e023b),
     (Class::DualMage, 0x810a930f65195268),
     (Class::Elementalist, 0x405a4e207b063bea),
 ];

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 708] = [
+pub const SCALARS: [i32; 710] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -516,7 +516,7 @@ pub const SCALARS: [i32; 708] = [
           262144, // blood_mage.hemoplague,_cloud_height = 4
               35, // blood_mage.charge,_walk_while_holding_(%) = 35
           163840, // blood_mage.black_spike,_an_eruption_sets_off_stains_this_far_past_its_edge_(m) = 2.5
-             400, // blood_mage.well,_full_at = 400
+             400, // blood_mage.well,_full_at_(retired) = 400
               20, // blood_mage.stain,_settles_before_it_can_be_drunk = 20
            52429, // blood_mage.ground,_a_stain_spreads_round_it_(m) = 0.8
           262144, // blood_mage.ground,_widest_patch_(m) = 4
@@ -538,7 +538,7 @@ pub const SCALARS: [i32; 708] = [
           117965, // blood_mage.swim,_speed_(x_walk) = 1.8
              240, // blood_mage.heart,_sends_a_thrall_every = 240
           196608, // blood_mage.heart,_holds_ground_round_it_(m) = 3
-           85197, // blood_mage.ground,_her_moves_hit_(x) = 1.3
+           98304, // blood_mage.ground,_her_moves_hit_(x) = 1.5
            98304, // blood_mage.hemoplague,_starts_at_radius = 1.5
           393216, // blood_mage.hemoplague,_grows_to_radius = 6
            39322, // blood_mage.hemoplague,_slows_to_(x) = 0.6
@@ -547,7 +547,7 @@ pub const SCALARS: [i32; 708] = [
              300, // blood_mage.black_vines,_stand_for = 300
               20, // blood_mage.black_vines,_bleed_what_enters_every = 20
            81920, // blood_mage.black_vines,_radius_per_cloud_radius_(x) = 1.25
-               3, // blood_mage.stain,_a_chained_eruption_waits = 3
+               2, // blood_mage.stain,_a_chained_eruption_waits = 2
                6, // blood_mage.crimson_cascade,_pools_round_the_first_eruption = 6
                2, // blood_mage.crimson_cascade,_pools_each_eruption_spills = 2
                4, // blood_mage.crimson_cascade,_generations = 4
@@ -716,6 +716,8 @@ pub const SCALARS: [i32; 708] = [
           196608, // roam.steps_down_at_most_(m) = 3
           131072, // roam.through_a_doorway_once_within_(m) = 2
          1966080, // roam.out,_the_world_moves_to_a_nearer_place_by_(m) = 30
+           32768, // blood_mage.black_spike,_a_hit_erupts_for_(x_what_it_dealt) = 0.5
+               8, // blood_mage.black_spike,_an_eruption_spreads_out_over = 8
 ];
 
 #[rustfmt::skip]

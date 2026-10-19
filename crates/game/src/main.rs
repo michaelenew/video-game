@@ -341,7 +341,7 @@ fn main() {
                 fade_own_body,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
-                (hud::update, hud::update_well, hud::update_heart),
+                (hud::update, hud::update_heart),
                 hud::update_class_buttons,
                 crosshair::update,
                 debug::draw,
@@ -808,7 +808,7 @@ pub fn build() -> &'static str {
 /// can look at what 0016 and 0021 draw without playing up to it: three
 /// thralls and a heart out in front, the Black vines to the side, stains of a
 /// few sizes (one lit), her ground under her and out to the heart, and the
-/// Well half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
+/// heart meter half full. Pair it with `SHOT_FRAME=2` and `DEMO=0`. Ignored for any other
 /// class, and read once at start.
 fn shot_blood(w: &mut World) {
     use sim::effects::{Effect, EffectKind};
@@ -823,6 +823,23 @@ fn shot_blood(w: &mut World) {
     if platform::env("SHOT_BLOOD").as_deref() == Some("ground") {
         w.players[0].heart_meter = sim::tuning::heart_meter_full().max(0) as u16;
         sim::ground::lay(&mut w.ground, 0, p.pos, sim::Fx::from_int(4), u16::MAX);
+        return;
+    }
+    // `SHOT_BLOOD=trail`: the trail a bleeding body leaves -- five stains a
+    // stride apart running out ahead of her -- and the other fighter at its
+    // end, for a capture of a spike setting the chain off.
+    if platform::env("SHOT_BLOOD").as_deref() == Some("trail") {
+        let f = p.facing;
+        for k in 0..5 {
+            let ahead = sim::Fx::from_int(5 + 3 * k);
+            let at = sim::V3::new(p.pos.x.add(f.x.mul(ahead)), p.pos.y, p.pos.z.add(f.z.mul(ahead)));
+            let stain = Effect::pool(0, p.class, b::THORN_LASH, at, 50);
+            if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(stain);
+            }
+        }
+        let end = sim::Fx::from_int(5 + 3 * 4 + 1);
+        w.players[1].pos = sim::V3::new(p.pos.x.add(f.x.mul(end)), p.pos.y, p.pos.z.add(f.z.mul(end)));
         return;
     }
     let ahead = |forward: i32, side: i32| {
@@ -880,8 +897,8 @@ fn shot_blood(w: &mut World) {
         }
         put(stain);
     }
-    // And the Well half full, so its bar shows.
-    w.players[0].well = (sim::tuning::well_full() / 2).max(0) as u16;
+    // And her heart meter half full, so its bar shows.
+    w.players[0].heart_meter = (sim::tuning::heart_meter_full() / 2).max(0) as u16;
     // `SHOT_BLOOD=swim`: and her sunk in it, for `SHOT_FRAME=0` -- the first
     // step brings her up, with no `shift` held.
     if platform::env("SHOT_BLOOD").as_deref() == Some("swim") {
@@ -4603,6 +4620,11 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let volume = effect.spike_volume();
             let radius = volume.radius.to_f32_for_render();
             let height = volume.top.to_f32_for_render();
+            // An eruption's skirt spreads out from it (2026-10-19), as wide as
+            // what it reaches this frame; the spike in its middle is its full
+            // size from the first, so a chain reads as one blast setting off
+            // the next rather than a carpet appearing.
+            let full = effect.reach.to_f32_for_render();
             Some(if part == 0 {
                 standing(Shape::Column, Skin::Blood, at, radius, 0.0, 0.12)
             } else {
@@ -4610,7 +4632,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                     Shape::Spike,
                     Skin::Blood,
                     at,
-                    radius * SPIKE_WAIST,
+                    full * SPIKE_WAIST,
                     0.0,
                     height,
                 )

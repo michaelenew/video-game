@@ -241,7 +241,6 @@ pub fn setup(mut commands: Commands) {
                             });
                         spawn_bar(column, seat);
                         spawn_momentum(column, seat);
-                        spawn_well(column, seat);
                         spawn_heart(column, seat);
                     });
                 }
@@ -278,21 +277,8 @@ pub fn setup(mut commands: Commands) {
                 spawn_momentum(row, 1);
             });
 
-            // The Blood mage's Well, under whichever fighter has one: a bar,
-            // because a number is not read in a fight.
-            root.spawn(Node {
-                width: Val::Percent(100.0),
-                column_gap: Val::Px(18.0),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::SpaceBetween,
-                margin: UiRect::top(Val::Px(4.0)),
-                ..default()
-            })
-            .with_children(|row| {
-                spawn_well(row, 0);
-                spawn_well(row, 1);
-            });
-            // Her heart meter under it, the same way.
+            // The Blood mage's heart meter, under whichever fighter has one:
+            // a bar, because a number is not read in a fight.
             root.spawn(Node {
                 width: Val::Percent(100.0),
                 column_gap: Val::Px(18.0),
@@ -787,45 +773,6 @@ pub fn update_momentum(
     }
 }
 
-/// The Blood mage's Well: what she drank that her health could not hold,
-/// against `sim::tuning::well_full`. Hidden for every other class.
-#[derive(Component)]
-pub struct WellRow(pub usize);
-
-/// The Well's fill.
-#[derive(Component)]
-pub struct WellFill(pub usize);
-
-/// The Well's colour: deep blood, darker than her health.
-const WELL: Color = Color::srgb(0.55, 0.05, 0.12);
-
-fn spawn_well(parent: &mut ChildSpawnerCommands, who: usize) {
-    parent
-        .spawn((
-            Node {
-                width: Val::Percent(34.0),
-                height: Val::Px(8.0),
-                border: UiRect::all(Val::Px(1.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
-            BorderColor(DIM),
-            Visibility::Hidden,
-            WellRow(who),
-        ))
-        .with_children(|track| {
-            track.spawn((
-                Node {
-                    width: Val::Percent(0.0),
-                    height: Val::Percent(100.0),
-                    ..default()
-                },
-                BackgroundColor(WELL),
-                WellFill(who),
-            ));
-        });
-}
-
 /// **The Blood mage's heart meter** (2026-10-18): what she has dealt toward
 /// a heart, against `sim::tuning::heart_meter_full`. Full, it burns bright --
 /// `E` plants a heart. Hidden for every other class.
@@ -892,27 +839,6 @@ pub fn update_heart(
         } else {
             HEART_FILLING
         };
-    }
-}
-
-/// The Well's bar: shown for the class that has one, filled to how full it
-/// is.
-pub fn update_well(
-    sim: Res<crate::Sim>,
-    mut rows: Query<(&WellRow, &mut Visibility)>,
-    mut fills: Query<(&WellFill, &mut Node)>,
-) {
-    for (row, mut visible) in rows.iter_mut() {
-        *visible = if sim.cur.players[row.0].class.wounds_go_grey() {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-    }
-    let full = sim::tuning::well_full().max(1) as f32;
-    for (fill, mut node) in fills.iter_mut() {
-        let well = sim.cur.players[fill.0].well as f32;
-        node.width = Val::Percent(100.0 * (well / full).clamp(0.0, 1.0));
     }
 }
 
@@ -1627,8 +1553,8 @@ mod tests {
         system.initialize(&mut world);
         let mut buttons = IntoSystem::into_system(update_class_buttons);
         buttons.initialize(&mut world);
-        let mut well = IntoSystem::into_system(update_well);
-        well.initialize(&mut world);
+        let mut heart = IntoSystem::into_system(update_heart);
+        heart.initialize(&mut world);
     }
 
     #[test]

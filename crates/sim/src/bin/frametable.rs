@@ -41,8 +41,7 @@ fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<St
                 .unwrap_or("its weapon's, at its place in the string")
         ),
         moves::Charge::Field => format!(
-            "the field while held; with a full Well ({}), past {}f it is the finisher",
-            t::well_full(),
+            "the field while held; past {}f it is the finisher",
             m.channel
         ),
         moves::Charge::Tier => format!(

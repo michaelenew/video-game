@@ -233,7 +233,14 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(spike.cost);
     looking(&mut w, 2, keys::SPIKES, 0, 0);
-    run(&mut w, spike.startup as u32 + 4, 0, 0);
+    // Past the frames it spreads out over (2026-10-19), so it has reached
+    // its edge.
+    run(
+        &mut w,
+        spike.startup as u32 + 2 + t::erupt_spread() as u32,
+        0,
+        0,
+    );
     let erupted = w
         .effects
         .iter()
@@ -243,7 +250,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     assert!(erupted.erupted(), "the spike on a pool did not erupt");
     assert!(
         (erupted.spike_volume().radius.sub(radius)).abs().raw() < Fx::ratio(1, 10).raw(),
-        "erupted at {} m against {} m for a pool of 300",
+        "spread to {} m against {} m for a pool of 300",
         erupted.spike_volume().radius.to_f32_for_render(),
         radius.to_f32_for_render()
     );
@@ -270,7 +277,10 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
 }
 
 #[test]
-fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
+fn a_spike_on_bare_floor_leaves_no_stain_and_erupts_out_of_its_blow() {
+    // The Black spike spills nothing, its cost included (2026-10-19): the
+    // stain it would have dropped erupts at once instead, sized by what it
+    // dealt.
     let mut w = mage();
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     w.players[0].health = t::max_health() - 500;
@@ -309,11 +319,20 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
         "a spike on bare floor returned health"
     );
     assert!(w.players[1].slowed > 0, "the spike did not slow");
-    let made = pools(&w);
-    assert_eq!(made.len(), 1, "the spike left {} pools", made.len());
     assert!(
-        made[0].pos.sub(at).flat_len().raw() < Fx::from_int(1).raw(),
-        "the pool is not where the spike hit"
+        pools(&w).is_empty(),
+        "the spike left {} stains",
+        pools(&w).len()
+    );
+    let echo = w
+        .effects
+        .iter()
+        .flatten()
+        .find(|e| e.kind == EffectKind::BlackSpike && e.banked >= sim::state::SPIKE_ECHO)
+        .expect("its blow erupted");
+    assert!(
+        echo.pos.sub(at).flat_len().raw() < Fx::from_int(1).raw(),
+        "the eruption is not where the spike hit"
     );
 }
 
@@ -367,9 +386,11 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     ));
     let before = w.players[0].health;
     looking(&mut w, 2, keys::SPIKES, 0, 0);
-    // Link by link since 2026-10-13: each waits `tuning::chain_delay`.
+    // Link by link since 2026-10-13: each waits `tuning::chain_delay`, and
+    // since 2026-10-19 an eruption reaches the next only as it spreads.
+    let link = t::chain_delay() as u32 + t::erupt_spread() as u32;
     let mut eruptions = 0;
-    for _ in 0..spike.startup as u32 + 4 * t::chain_delay() as u32 + 4 {
+    for _ in 0..spike.startup as u32 + 4 * link + 4 {
         run(&mut w, 1, 0, 0);
         eruptions += w
             .effects
@@ -378,19 +399,14 @@ fn an_eruption_sets_off_every_pool_it_covers() {
             .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted() && e.age == 1)
             .count();
     }
-    // Three, and what the spike cost her, which lands among them and goes
-    // up with them.
+    // Three.
     assert!(
         eruptions >= 3,
         "three pools in a chain made {eruptions} eruptions"
     );
-    // What is on the floor now is only what the spike itself cost her, which
-    // lands where she aimed it as a fresh stain (2026-10-13).
-    let cost = spike.cost * t::max_health() / 100;
-    assert!(
-        pools(&w).iter().all(|p| p.banked <= cost),
-        "a pool survived the chain"
-    );
+    // Nothing is left on the floor: the spike leaves no stain of its own
+    // (2026-10-19).
+    assert!(pools(&w).is_empty(), "a pool survived the chain");
     assert!(
         w.players[0].health - before > 600 - 20,
         "the chain drank only {} of 700 across three pools",

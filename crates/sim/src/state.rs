@@ -862,10 +862,6 @@ pub struct Player {
     /// Has the click that stored it come up since? A stored charge lets go
     /// on a fresh press, never on the hold that charged it.
     pub vessel_ready: bool,
-    /// **The Blood mage's Well** (2026-10-13): what she has drunk that her
-    /// grey could not hold. Full at `tuning::well_full`, it is what a finisher
-    /// spends; nothing else fills it, and it does not drain.
-    pub well: u16,
     /// What the cast she has out cost her, owed to the floor: it lands as a
     /// stain where the cast does, on its first active frame. Nought when
     /// nothing is owed.
@@ -873,7 +869,7 @@ pub struct Player {
     /// Frames before the Blood mage's grey starts to fade: set to
     /// `tuning::grey_grace` every time grey opens, counted down after.
     pub grey_rest: u8,
-    /// What a finisher of hers is spending: all the grey and the Well she
+    /// What a finisher of hers is spending: all the grey she
     /// had when it began, held from the frame the hold ran out to the frame
     /// it lands. Nought otherwise.
     pub fuel: u16,
@@ -1327,21 +1323,11 @@ impl Player {
         took
     }
 
-    /// **Drink a stain**: up to `amount` of grey turned back into red, and
-    /// whatever her grey could not hold poured into the Well, which is full at
-    /// `tuning::well_full`. What came back as red is given back.
+    /// **Drink a stain**: up to `amount` of grey turned back into red. What
+    /// her grey could not hold is gone: the Well that kept it was cut
+    /// (2026-10-19). What came back as red is given back.
     pub fn absorb(&mut self, amount: i32) -> i32 {
-        let took = self.drink(amount);
-        let over = amount.max(0) - took;
-        if over > 0 && self.health > 0 && self.class.wounds_go_grey() {
-            self.well = (self.well as i32 + over).min(t::well_full()) as u16;
-        }
-        took
-    }
-
-    /// Is the Well full -- is a finisher hers to throw?
-    pub fn well_full(&self) -> bool {
-        self.well as i32 >= t::well_full()
+        self.drink(amount)
     }
 
     /// How much of the bar is grey, nought to one. What the scythe reads.
@@ -1568,7 +1554,6 @@ impl Default for Player {
             vessel: NO_VESSEL,
             vessel_tier: 0,
             vessel_ready: false,
-            well: 0,
             paid: 0,
             grey_rest: 0,
             fuel: 0,
@@ -3356,6 +3341,12 @@ impl World {
             };
             let m = moves::get(p.class, kind);
             if left != m.active {
+                continue;
+            }
+            // **The Black spike leaves no stain** (2026-10-19), its cost
+            // included: what she paid for it is only grey.
+            if p.class == Class::BloodMage && kind == moves::blood::BLACK_SPIKE {
+                self.players[i].paid = 0;
                 continue;
             }
             let at = match m.aim() {
@@ -9537,15 +9528,14 @@ fn step_channel(
     // ability they have already paid for.
     // **A finisher** (2026-10-13): held to the end of the hold, at any
     // time, the Hemoplague, the spike and the Carpet each become their
-    // finisher, and it spends all her grey and the Well on the frame it
+    // finisher, and it spends all her grey on the frame it
     // begins (`Player::fuel`): the more there was, the bigger it is.
     if held >= cap && input.has(channel_button(p.class, kind)) {
         if let Some(big) = moves::blood::finisher_of(kind).filter(|_| p.class == Class::BloodMage) {
-            p.fuel = (p.grey + p.well as i32).clamp(0, u16::MAX as i32) as u16;
+            p.fuel = p.grey.clamp(0, u16::MAX as i32) as u16;
             p.owed = p.grey.clamp(0, u16::MAX as i32) as u16;
             p.grey = 0;
             p.grey_rest = 0;
-            p.well = 0;
             p.tier = 0;
             lock_aim(p, who, big, input, scene);
             return throw_move(p, big, input, true);
@@ -9698,6 +9688,11 @@ pub const GROWING: i32 = 1;
 /// its own size** -- a Crimson cascade pool's, or the impact that starts one
 /// -- whose blow is `banked - SPIKE_SCALED` percent of the spike's row.
 pub const SPIKE_SCALED: i32 = 1000;
+/// `Effect::banked` on a Black spike at or past this is **an eruption out of
+/// a spike's own blow** (2026-10-19): `banked - SPIKE_ECHO` percent of the
+/// spike's row, the share `tuning::spike_hit_erupts` makes of what it dealt.
+/// Scaled as `SPIKE_SCALED` is, but no finisher.
+pub const SPIKE_ECHO: i32 = 2000;
 /// A whole, in percent: what `SPIKE_SCALED`'s share is counted in.
 const PERCENT: i32 = 100;
 /// `Effect::life` on a stain that is not lit: a lit stain's `life` counts the
@@ -9723,6 +9718,9 @@ pub const LEFT_HAND: usize = crate::effects::Struck::CAPACITY - 2;
 /// out of a stain is the bigger hit, a field's wave and the second tier's
 /// spikes their own share, and the Stake's landing its row's number.
 fn spike_share(effect: &Effect) -> Fx {
+    if effect.banked >= SPIKE_ECHO {
+        return Fx::ratio(effect.banked - SPIKE_ECHO, PERCENT);
+    }
     if effect.banked >= SPIKE_SCALED {
         return Fx::ratio(effect.banked - SPIKE_SCALED, PERCENT);
     }
@@ -10516,7 +10514,7 @@ fn string_place(p: &Player, kind: u8) -> Option<u8> {
 /// **What a swing of the Blood mage's is worth beside its row** (2026-10-18):
 /// the third Sweep of a string at `tuning::sweep_third`, and the Harvest at
 /// its finisher's blow -- the row and `finisher_per_grey` for every point of
-/// grey and Well it spent (`Player::fuel`). One for everything else.
+/// grey it spent (`Player::fuel`). One for everything else.
 fn blood_blow(p: &Player, kind: u8) -> Fx {
     if string_place(p, kind) == Some(2) {
         return t::sweep_third();
@@ -10887,13 +10885,12 @@ fn hash_player(h: &mut Fnv, p: &Player) {
             h.write_i32(v);
         }
     }
-    // The vessel, the Well and what a cast owes the floor, only while
+    // The vessel and what a cast owes the floor, only while
     // any holds something -- an empty vessel is nought like the rest.
     let blaster = [
         (p.vessel != NO_VESSEL) as i32 * (p.vessel as i32 + 1),
         p.vessel_tier as i32,
         p.vessel_ready as i32,
-        p.well as i32,
         p.paid as i32,
         p.grey_rest as i32,
         p.fuel as i32,
@@ -12191,6 +12188,16 @@ impl World {
         }
     }
 
+    /// A tick of a bleed `owner` opened: `tuning::bleed_damage`, and harder
+    /// while she stands on her ground (`worth_of`, 2026-10-19) -- her
+    /// territory's strength is in everything she deals, not only what she
+    /// throws from it.
+    fn bleed_tick_of(&self, owner: usize) -> i32 {
+        Fx::from_int(t::bleed_damage())
+            .mul(worth_of(&self.players[owner], None))
+            .to_int()
+    }
+
     /// Every bleed runs down a frame, and on its tick takes its damage and
     /// spills it under the victim -- wherever they have got to, which is the
     /// whole idea: a bleeding fighter who keeps moving lays a trail of her
@@ -12217,7 +12224,7 @@ impl World {
             if self.players[i].bleeding % t::bleed_tick() != 0 {
                 continue;
             }
-            let dealt = self.players[i].wound(t::bleed_damage());
+            let dealt = self.players[i].wound(self.bleed_tick_of(owner));
             let class = self.players[owner].class;
             self.spill_under(owner as u8, class, moves::blood::THORN_LASH, &p, dealt);
         }
@@ -12606,9 +12613,16 @@ impl World {
                 if wave {
                     effect.forget_hits();
                 }
-                if effect.erupted() && (effect.age == 1 || wave) {
+                let spreading = effect.spreads() && effect.age <= t::erupt_spread();
+                if effect.erupted() && (effect.age == 1 || wave || spreading) {
                     let volume = effect.spike_volume();
                     let m = effect.source();
+                    // **An eruption sets off what its edge reaches**, as it
+                    // spreads (2026-10-19): each stain it touches lights.
+                    if spreading && (effect.owner as usize) < MAX_PLAYERS {
+                        self.light_round(effect.owner as usize, effect.pos, volume.radius);
+                    }
+                    let mut landed = 0;
                     for i in 0..MAX_PLAYERS {
                         let p = self.players[i];
                         if !self.effects_reach(i, effect.owner)
@@ -12628,6 +12642,7 @@ impl World {
                         self.players[i].slow(t::slow_frames(), t::spike_slow());
                         let owed = effect.leeched(dealt);
                         self.players[effect.owner as usize].heal(owed);
+                        landed += dealt;
                     }
                     let share = spike_share(effect);
                     let each = self.gore_each(effect, 0, effect.pos, volume.radius, share);
@@ -12635,6 +12650,10 @@ impl World {
                         + self.gore_critters(effect, effect.pos, volume.radius, share);
                     let owed = effect.leeched(dealt);
                     self.players[effect.owner as usize].heal(owed);
+                    landed += dealt;
+                    if effect.age == 1 && landed > 0 {
+                        self.erupt_from_a_hit(effect, landed);
+                    }
                 }
             }
 
@@ -14527,8 +14546,17 @@ impl World {
                 {
                     continue;
                 }
-                self.players[i].absorb(e.banked * t::stain_walk_drinks() / 100);
-                self.effects[slot] = None;
+                // **Only what her grey can hold** (2026-10-19): with no Well to
+                // pour the rest into, a stain she walks through at full health
+                // stays on the floor -- her ground, and a spike's.
+                let share = t::stain_walk_drinks().max(1);
+                let want = e.banked * share / 100;
+                let took = self.players[i].absorb(want);
+                if took >= want {
+                    self.effects[slot] = None;
+                } else if let Some(pool) = self.effects[slot].as_mut() {
+                    pool.banked -= took * 100 / share;
+                }
             }
         }
     }
@@ -16317,6 +16345,7 @@ impl World {
                 at: e.pos,
                 radius,
                 owner: e.owner,
+                holds: e.is_a_heart(),
             };
             n += 1;
         }
@@ -16651,7 +16680,7 @@ impl World {
     }
 
     /// **A finisher's blow**: the row's own damage, and
-    /// `tuning::finisher_per_grey` for every point of grey and Well she spent
+    /// `tuning::finisher_per_grey` for every point of grey she spent
     /// on it (`Player::fuel`). Always more than the row; more the more she had.
     fn finisher_blow(&self, i: usize, kind: u8) -> i32 {
         let p = self.players[i];
@@ -16872,8 +16901,8 @@ impl World {
 
     /// **The Crimson cascade** (2026-10-14): the impact at the floor under
     /// the crosshair erupts for the finisher's blow, and spills
-    /// `tuning::cascade_first` pools round its edge holding all the grey and
-    /// Well she spent between them (`Player::fuel`). Each erupts
+    /// `tuning::cascade_first` pools round its edge holding all the grey
+    /// she spent between them (`Player::fuel`). Each erupts
     /// `cascade_fuse` frames later and spills `cascade_branch` smaller pools
     /// further out (`erupt_from`), for `cascade_generations`. Every pool it
     /// spills **reaches for her nearest stain** within `cascade_track`,
@@ -17045,8 +17074,11 @@ impl World {
         } else {
             SPIKE_ERUPTION
         };
+        // Her ground's strength as she stands now: a chain she set off is
+        // her blow (2026-10-19). What it sets off, it sets off as it spreads
+        // (`Effect::spreads`).
+        born.power = worth_of(&self.players[owner], None);
         spawn_effect(&mut self.effects, born);
-        self.light_round(owner, pool.pos, radius);
         if cascade {
             let generation = pool.power.to_int();
             let next = Fx::from_int(pool.banked).mul(t::cascade_share()).to_int();
@@ -17067,6 +17099,43 @@ impl World {
                 );
             }
         }
+    }
+
+    /// **A Black spike's blow erupts** (2026-10-19): a spike of the row
+    /// (`moves::blood::BLACK_SPIKE`, tapped or one of a held swarm or the
+    /// first wave of its field) that dealt `dealt` comes up again at once
+    /// as an eruption sized by that, worth `tuning::spike_hit_erupts` of it.
+    /// It needs no stain under it -- it is the stain it would have dropped,
+    /// set off -- and it spreads, setting off every stain of hers its edge
+    /// reaches: the bleed laid them, and this is what finishes them.
+    fn erupt_from_a_hit(&mut self, spike: &Effect, dealt: i32) {
+        if spike.class != Class::BloodMage
+            || spike.slot != moves::blood::BLACK_SPIKE
+            || !matches!(spike.banked, SPIKE_AREA | SPIKE_FIELD)
+            || (spike.owner as usize) >= MAX_PLAYERS
+        {
+            return;
+        }
+        let m = moves::get(spike.class, moves::blood::BLACK_SPIKE);
+        let worth = Fx::from_int(dealt).mul(t::spike_hit_erupts()).to_int();
+        if worth <= 0 {
+            return;
+        }
+        let radius = t::erupt_radius()
+            .mul(Fx::from_int(dealt).sqrt())
+            .max(m.radius);
+        let mut born = Effect::cast(
+            EffectKind::BlackSpike,
+            spike.owner,
+            spike.class,
+            moves::blood::BLACK_SPIKE,
+            spike.pos,
+            V3::ZERO,
+            radius,
+        );
+        // Out of what was dealt, which already carried her strength.
+        born.banked = SPIKE_ECHO + worth * PERCENT / m.damage.max(1);
+        spawn_effect(&mut self.effects, born);
     }
 
     /// **Lit stains erupt** when their fuse runs out: a stain set off by an
@@ -17162,7 +17231,7 @@ impl World {
     /// bite spends what it deals**, and spills exactly that under its prey.
     /// With nothing to bite, a thrall off her ground walks back to it. It
     /// walks round walls (`walk_round`). Any blow out on a thrall kills it,
-    /// back into a stain of what it had less the blow.
+    /// back into a stain of all it had.
     fn step_thralls(&mut self) {
         for slot in 0..MAX_EFFECTS {
             let Some(mut th) = self.effects[slot].filter(|e| e.is_a_thrall()) else {
@@ -17172,11 +17241,14 @@ impl World {
             let (radius, height) = (th.thrall_radius(), th.thrall_height());
             // Struck?
             let blow = self.blow_on_a_thrall(&th, radius, height);
+            // **Killed, it leaves a stain of all it had** (2026-10-19), not
+            // what the blow left over: what a thrall has is what it was not
+            // drained of, so one that reached them over her ground leaves a
+            // bigger stain -- new ground, and something for a spike.
             if blow > 0 {
                 self.effects[slot] = None;
-                let left = th.banked - blow;
-                if left > 0 {
-                    self.pool_blood(th.owner, th.class, th.slot, th.pos, left);
+                if th.banked > 0 {
+                    self.pool_blood(th.owner, th.class, th.slot, th.pos, th.banked);
                 }
                 continue;
             }
@@ -17981,8 +18053,9 @@ impl World {
             }
             beast.bleeding -= 1;
             let ticks = beast.bleeding % t::bleed_tick() == 0;
+            let tick = self.bleed_tick_of(owner);
             let dealt = if ticks {
-                let dealt = t::bleed_damage().min(beast.health).max(0);
+                let dealt = tick.min(beast.health).max(0);
                 beast.health -= dealt;
                 dealt
             } else {

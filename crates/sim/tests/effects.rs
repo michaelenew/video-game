@@ -554,19 +554,20 @@ fn the_spike_reaches_much_further_than_a_swing() {
 }
 
 #[test]
-fn the_black_spike_on_bare_floor_hits_slows_and_spills() {
+fn the_black_spike_on_bare_floor_hits_slows_and_erupts() {
     // Not a damage puddle and not a field any more: a spike. It hits once,
     // it slows what it hit -- leaving costs you time, which is what turns it
-    // into something you put between yourself and someone -- and it spills
-    // them, which is how she seeds a pool at range where no scythe reaches.
+    // into something you put between yourself and someone -- and since
+    // 2026-10-19 it spills nothing: its blow erupts at once instead, the
+    // finisher of a bleed rather than the thing that lays one.
     let mut w = as_class(Class::BloodMage);
     let before = w.players[1].health;
     spiked(&mut w);
     run(&mut w, 2, 0, 0);
     assert_eq!(
         effects_of(&w, EffectKind::BlackSpike).len(),
-        1,
-        "black spike left nothing standing"
+        2,
+        "the spike and the eruption out of its blow"
     );
     assert!(w.players[1].health < before, "the spike hit nobody");
     assert!(
@@ -575,8 +576,8 @@ fn the_black_spike_on_bare_floor_hits_slows_and_spills() {
     );
     assert_eq!(
         effects_of(&w, EffectKind::Pool).len(),
-        1,
-        "the spike spilled nobody"
+        0,
+        "the spike spilled somebody"
     );
 }
 

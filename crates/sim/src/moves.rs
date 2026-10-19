@@ -1272,8 +1272,8 @@ pub mod dual {
 ///
 /// Left makes ground by bleeding, middle is the damage, right is fast and
 /// sure up close, for walking into the blood she just spilled. **A finisher
-/// is a hold kept to its end**, at any time, and it spends all her grey and
-/// the Well: the more there was, the bigger it is.
+/// is a hold kept to its end**, at any time, and it spends all
+/// her grey: the more there was, the bigger it is.
 ///
 /// **Storage order is not button order.** The Oven's move store is packed in
 /// class order, so a slot appended to this class shifts every Dual mage index
@@ -2084,7 +2084,7 @@ pub enum Charge {
     /// The Blood mage's Carpet and Summon (2026-10-13): the hold is before
     /// the move, opened by holding the click past the tap's startup, and is
     /// the move happening -- the carpet spreading, the stains rising. Held on
-    /// past its end with a full Well it becomes the click's finisher.
+    /// past its end it becomes the click's finisher.
     Field,
     /// **The Champion's hold** (exploration 0015, C3), on all nine links of
     /// the chain: the hold comes **after** the startup, at the top of the

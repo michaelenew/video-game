@@ -20,6 +20,8 @@ use crate::tuning as t;
 /// patch with least life left makes way (`lay`). Forty-eight of sixteen bytes
 /// is what the snapshot's cap had room for (`tests/budget.rs`).
 pub const MAX_PATCHES: usize = 48;
+// A heart's hold is worked out in masks of patches (`held_by_hearts`).
+const _: () = assert!(MAX_PATCHES <= 64);
 
 /// A patch's radius is kept in this many bits of fraction -- thirty-seconds
 /// of a metre, in a byte, so the widest is just under eight metres.
@@ -76,6 +78,9 @@ pub struct Disc {
     pub at: V3,
     pub radius: Fx,
     pub owner: u8,
+    /// A heart: it **holds** every patch joined to it, however far through
+    /// other patches and stains, from running out (`held_by_hearts`).
+    pub holds: bool,
 }
 
 impl Disc {
@@ -189,9 +194,16 @@ pub fn nearest(ground: &Ground, discs: &[Disc], owner: u8, at: V3) -> Option<V3>
 /// a disc of theirs (`discs`: her stains and hearts) -- and every
 /// `tuning::ground_bridge_every` frames, two patches of one owner's whose
 /// edges are within `tuning::ground_bridge` get one laid over the gap.
+///
+/// **A heart holds the ground joined to it** (2026-10-19): a patch joined to
+/// one of its owner's hearts, through any run of patches and stains, still
+/// ages, but does not run out -- it stops a frame short. When the heart
+/// goes, what was overdue goes on the next frame, and the rest keeps what it
+/// had left.
 pub fn step(ground: &mut Ground, discs: &[Disc], frame: u32) {
     let every = t::ground_joined_every().max(1) as u32;
     let snapshot = *ground;
+    let held = held_by_hearts(&snapshot, discs);
     for (k, p) in ground.iter_mut().enumerate() {
         if !p.live() {
             continue;
@@ -204,7 +216,7 @@ pub fn step(ground: &mut Ground, discs: &[Disc], frame: u32) {
         }) || discs.iter().any(|d| {
             d.owner == p.owner && apart(d.at, p.at).raw() <= d.radius.add(p.radius()).raw()
         });
-        if !joined || frame % every == 0 {
+        if (!joined || frame % every == 0) && !(held[k] && p.life <= 1) {
             p.life -= 1;
         }
     }
@@ -212,6 +224,80 @@ pub fn step(ground: &mut Ground, discs: &[Disc], frame: u32) {
     if frame % bridge_every == 0 {
         bridge(ground);
     }
+}
+
+/// Do two discs touch, flat? Squared, so no root is taken: it is asked
+/// for every pair of patches each frame a heart stands.
+fn touching(a: V3, ra: Fx, b: V3, rb: Fx) -> bool {
+    let dx = (a.x.raw() - b.x.raw()) as i64;
+    let dz = (a.z.raw() - b.z.raw()) as i64;
+    let r = (ra.raw() + rb.raw()) as i64;
+    dx * dx + dz * dz <= r * r
+}
+
+/// Which patches a heart holds: joined to one of its owner's hearts in
+/// `discs`, through patches and the other discs (her stains). Who touches
+/// whom is worked out once, as a mask of patches for each patch and each
+/// disc, and the hold spreads through the masks until nothing more joins.
+/// Nothing at all when there is no heart, which is most frames.
+fn held_by_hearts(ground: &Ground, discs: &[Disc]) -> [bool; MAX_PATCHES] {
+    let mut out = [false; MAX_PATCHES];
+    if !discs.iter().any(|d| d.holds) {
+        return out;
+    }
+    const MOST_DISCS: usize = crate::effects::MAX_EFFECTS;
+    let discs = &discs[..discs.len().min(MOST_DISCS)];
+    // Each patch's neighbours, and each disc's, as masks of patches.
+    let mut next = [0u64; MAX_PATCHES];
+    for (k, p) in ground.iter().enumerate() {
+        if !p.live() {
+            continue;
+        }
+        for (o, q) in ground.iter().enumerate().skip(k + 1) {
+            if q.live() && q.owner == p.owner && touching(p.at, p.radius(), q.at, q.radius()) {
+                next[k] |= 1 << o;
+                next[o] |= 1 << k;
+            }
+        }
+    }
+    let mut on = [0u64; MOST_DISCS];
+    for (j, d) in discs.iter().enumerate() {
+        for (k, p) in ground.iter().enumerate() {
+            if p.live() && p.owner == d.owner && touching(d.at, d.radius, p.at, p.radius()) {
+                on[j] |= 1 << k;
+            }
+        }
+    }
+    let mut held = 0u64;
+    let mut reached = [false; MOST_DISCS];
+    for (j, d) in discs.iter().enumerate() {
+        if d.holds {
+            reached[j] = true;
+            held |= on[j];
+        }
+    }
+    loop {
+        let mut grown = held;
+        for (k, n) in next.iter().enumerate() {
+            if held & (1 << k) != 0 {
+                grown |= n;
+            }
+        }
+        for j in 0..discs.len() {
+            if !reached[j] && on[j] & grown != 0 {
+                reached[j] = true;
+                grown |= on[j];
+            }
+        }
+        if grown == held {
+            break;
+        }
+        held = grown;
+    }
+    for (k, o) in out.iter_mut().enumerate() {
+        *o = held & (1 << k) != 0;
+    }
+    out
 }
 
 /// Lay a bridge over every gap of `tuning::ground_bridge` or less between

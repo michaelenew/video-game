@@ -218,3 +218,20 @@ Everything above is in the game ([../kits/blood-mage.md](../kits/blood-mage.md) 
 - **A heart has no time limit.** It no longer bleeds away; it stands until it is beaten down.
   `Hearts at once` went from 2 to 3, and a fourth replaces the oldest.
 - **The teleport to a stain reaches 18 m** (`Teleport, to a stain within`, from 12 m, ×1.5).
+
+**From the owner's first play, 2026-10-19** (built the same day; kit §"The spike as a finisher"):
+
+- **The spike eclipsed the class.** It did damage and healed her, and spiking one spot over and
+  over beat a Ridgeback: each spike's stain fed the next one's eruption, and every eruption
+  drank. Without the spike she played as an area-control mage, which is the class.
+- **The spike leaves no stain** (neither its cost nor its hits) and **erupts out of its own
+  blow** at half of what it dealt. The combo is bleed, then spike; a bleed is worth more than a
+  spike (230 against 120).
+- **Eruptions spread out** over 8 frames and set off the stains their edge reaches, so a chain
+  reads as one blast setting off the next.
+- **A killed thrall leaves a stain of all it had**, so one that reached them over her ground
+  leaves a bigger stain.
+- **Her ground is ×1.5, in everything she deals**, bleeds and eruptions included.
+- **A heart holds the ground joined to it**: it ages, but never runs out while the heart stands.
+- **The Well is cut.** Walking through a stain takes only what her grey can hold.
+
