@@ -1081,6 +1081,10 @@ pub fn draw_bag(
                 }
             }
             ui.separator();
+            let eaten = &keeping.held().eaten[me];
+            if !eaten.is_empty() && ui.button("Copy feeding history").clicked() {
+                ui.ctx().copy_text(history(eaten));
+            }
             ui.weak("B or Esc to close.");
         });
     if crate::dev_mode()
@@ -1144,4 +1148,15 @@ fn draw_items(ctx: &egui::Context, search: &mut String) -> Option<Item> {
                 });
         });
     asked
+}
+
+/// What a morph has eaten, as a line to paste: one item a line, in order,
+/// e.g. `Broodmother sac`. With it its morph can be rebuilt exactly.
+fn history(eaten: &[Item]) -> String {
+    let mut out = String::from("morph feeding history\n");
+    for it in eaten {
+        out.push_str(&item_name(it));
+        out.push('\n');
+    }
+    out
 }
