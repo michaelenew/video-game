@@ -635,6 +635,16 @@ between it and the fighter, now lets go slowly (`view::camera`, `ARM_OUT`)
 instead of snapping back out; the pull-in stays immediate, since anything slower
 puts the eye inside the rock.
 
+**Only large things are ceilings, since 2026-10-20.** The ceiling, like the arm,
+reads `Terrain::seen_around`, which now holds only the boxes that
+`Solid::holds_the_camera` -- at least `Camera held off by a box this thick` on
+the thinnest side and `... this broad` on the middle one. A platform overhead
+held the eye under it and let go past its edge, and in a tight space the eye
+pumped up and down with the mouse. The eye now passes through it, and the
+renderer draws it see-through round the line to the fighter (`game::window`).
+The aim is untouched by an eye inside a small box: the ray ignores everything
+before the caster (`near_clip`).
+
 ## Small bodies: how tall "there" is
 
 **Added 2026-10-01, with the critters** ([critters.md](critters.md); bestiary §6

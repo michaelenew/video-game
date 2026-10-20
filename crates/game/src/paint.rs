@@ -116,7 +116,7 @@ impl Paint {
         }
     }
 
-    /// **The paint with a window in it**: [`Paint::white`], with [`Paint::cut`]
+    /// **The paint with a window in it**: this one, with [`Paint::cut`]
     /// cut through the depth prepass as well as the colour.
     ///
     /// A hole only in the colour is not a hole. The depth prepass draws
@@ -128,10 +128,10 @@ impl Paint {
     /// inside of the far wall seen through the hole, which is why a
     /// windowed paint culls back faces in the prepass as the colour does
     /// ([`Material::specialize`]).
-    pub fn window() -> Self {
+    pub fn window(self) -> Self {
         Self {
             windowed: true,
-            ..Self::white()
+            ..self
         }
     }
 
@@ -141,10 +141,10 @@ impl Paint {
     /// thinnest in the middle, solid at the rim where the window's own wood
     /// takes over (`cut.wgsl`). Without it the window was a clean hole, a
     /// bite out of the tree.
-    pub fn ghost() -> Self {
+    pub fn ghost(self) -> Self {
         Self {
             ghost: true,
-            ..Self::white()
+            ..self
         }
     }
 

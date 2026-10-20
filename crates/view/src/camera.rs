@@ -629,8 +629,9 @@ fn unobstructed_fraction(
 fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Terrain) -> bool {
     // On a map, only the tiles round the point: the arm is a few metres long.
     let at = sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2]));
-    // Not a grown tree, which is cut away round the line to the fighter
-    // instead (`Terrain::seen_around`).
+    // Only what is large enough to hold the camera off: not a grown tree,
+    // and not a platform, a post or a branch, which are cut away round the
+    // line to the fighter instead (`Terrain::seen_around`).
     arena.seen_around(at, fx_of(pad + 1.0)).any(|s| {
         let lo = [
             s.min.x.to_f32_for_render() - pad,

@@ -159,7 +159,9 @@ themselves went the same day, below):
   one two metres under the lip: climbed, you step in over it.
   `tests/wood.rs` climbs every one with every class.
 - **The camera passes through a tree** rather than being pulled in by every
-  branch (`Terrain::seen_around`), and the trees are drawn with a window cut
+  branch (`Terrain::seen_around`) -- as it does everything small in the
+  valley since 2026-10-20 (see "What holds the camera off" below) -- and the
+  trees are drawn with a window cut
   along the line from the eye to the fighter (`game::paint`'s `cut`), so
   nothing of a tree hides you. The window is cut in the depth prepass as
   well as the colour (`Paint::window`, `paint_prepass.wgsl`), and the
@@ -173,6 +175,20 @@ themselves went the same day, below):
   same window and draws no ring round it (`cut.wgsl`'s `by_window`): the
   window is the camera's, not a hole in the tree, and nothing about it
   should say otherwise.
+- **What holds the camera off** (2026-10-20, from play). Only a box at least
+  `Camera held off by a box this thick` (1 m) on its thinnest side and
+  `... this broad` (4 m) on its middle one keeps the camera out of it
+  (`Solid::holds_the_camera`): a wall, a crag, a terrace, a cliff -- and the
+  land, and the town's buildings and props, which the town draws whole.
+  Everything smaller -- a platform, a step, a post, a rail, a thin slab, a
+  trunk -- the camera passes through, and neither pulls the drawn arm in
+  nor holds the aimed-from eye under it as a ceiling. Each is drawn in the
+  same windowed paint as the trees, with its ghost shown while the line from
+  the eye to the fighter comes near it (`game::window`). Pushed by every
+  small thing, the camera jumped as you stepped on and off blocks, and
+  between something overhead and something underfoot it zoomed in and out
+  with every small turn of the mouse; what holds it off wants to be large
+  and plain, so that it moves rarely and smoothly when it does.
 
 ![The Great Wood, from the Great Tree's foot](gallery/valley-great-wood.jpg)
 

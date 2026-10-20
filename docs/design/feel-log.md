@@ -9210,3 +9210,19 @@ last rule: **with every patch of hers held, the one furthest from any heart of h
 -- the edge of the held field, never the base -- and new ground still goes down where she
 fights (`territory::with_every_patch_held_the_one_furthest_from_her_hearts_makes_way`). A
 spark laid where she already has ground merges, so this is rare.
+
+### 2026-10-20 — the camera keeps out of large things only
+
+**Changed** The camera used to keep out of every box: the drawn arm pulled in, and the
+aimed-from eye was held under anything hanging overhead. Now only a box at least
+`Camera held off by a box this thick` (1 m) on its thinnest side and `... this broad` (4 m) on
+its middle one does (`Solid::holds_the_camera`) -- walls, crags, terraces, cliffs, and the
+town's buildings and props. Platforms, steps, posts, rails, thin slabs and trunks are passed
+through and drawn see-through round the line to the fighter, the way the Wood's trees have been
+since 2026-10-16 (`game::window`).
+**Why** From the owner: the forest's camera felt right, and elsewhere it was still jerky --
+stepping on and off blocks threw it around, and in a tight space with something above and below,
+small mouse movements zoomed it in and out. Camera-affecting geometry should be convex, large
+and smooth. Of the valley's 1,607 drawn boxes, 1,156 are small by this rule.
+**Verdict** open -- to be played. Both thresholds are in the Oven (F7) to try.
+

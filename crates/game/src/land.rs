@@ -441,6 +441,8 @@ pub struct Trees {
     cone: Option<Handle<Mesh>>,
     crown: Option<Handle<Mesh>>,
     materials: HashMap<(ArenaId, u8), Handle<Paint>>,
+    /// A place's bark with a window in it, and its ghost (`crate::window`).
+    barks: HashMap<ArenaId, (Handle<Paint>, Handle<Paint>)>,
 }
 
 /// Is a box of the map a tree's trunk: timber, thin and tall?
@@ -478,6 +480,10 @@ impl Trees {
     /// **A tree round a trunk box**: the trunk, and a crown -- three cones up
     /// a pine, three balls on a broadleaf -- under `parent`, in map
     /// coordinates. Returns the tree's own entity.
+    ///
+    /// Given `windows`, the trunk is one the camera passes through
+    /// (`sim::arena::Solid::holds_the_camera`): it is drawn see-through round
+    /// the line to the fighter, with its ghost (`crate::window`).
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         &mut self,
@@ -488,6 +494,7 @@ impl Trees {
         id: ArenaId,
         palette: &look::Palette,
         parent: Entity,
+        windows: Option<&mut crate::window::Windows>,
     ) -> Entity {
         let trunk = self
             .trunk
@@ -502,7 +509,17 @@ impl Trees {
             .get_or_insert_with(|| meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap()))
             .clone();
         let pine = pines(id);
-        let bark = self.material(materials, id, 0, palette.bark());
+        let rgb = palette.bark();
+        let see = windows.map(|w| {
+            self.barks
+                .entry(id)
+                .or_insert_with(|| w.of(materials.paint, Paint::srgb(rgb)))
+                .clone()
+        });
+        let bark = match &see {
+            Some((window, _)) => window.clone(),
+            None => self.material(materials, id, 0, rgb),
+        };
         let leaves = self.material(
             materials,
             id,
@@ -535,12 +552,29 @@ impl Trees {
             0.35 + tall * 0.045
         };
         let bole = if pine { tall * 0.32 } else { tall * 0.42 };
-        commands.spawn((
-            Mesh3d(trunk),
-            MeshMaterial3d(bark),
-            Transform::from_xyz(0.0, bole * 0.5, 0.0).with_scale(Vec3::new(girth, bole, girth)),
-            ChildOf(tree),
-        ));
+        let stem = commands
+            .spawn((
+                Mesh3d(trunk.clone()),
+                MeshMaterial3d(bark),
+                Transform::from_xyz(0.0, bole * 0.5, 0.0).with_scale(Vec3::new(girth, bole, girth)),
+                ChildOf(tree),
+            ))
+            .id();
+        if let Some((_, ghost)) = see {
+            let (lo, hi) = (
+                Vec3::new(f(s.min.x), f(s.min.y), f(s.min.z)),
+                Vec3::new(f(s.max.x), f(s.max.y), f(s.max.z)),
+            );
+            commands.spawn((
+                Mesh3d(trunk),
+                MeshMaterial3d(ghost),
+                Transform::default(),
+                Visibility::Hidden,
+                bevy::pbr::NotShadowCaster,
+                crate::window::Ghost::over(lo, hi),
+                ChildOf(stem),
+            ));
+        }
         if pine {
             // Four tiers, each narrower and overlapping the last.
             let body = tall - bole * 0.6;
@@ -822,7 +856,7 @@ fn tree(
         material: Material::Wood,
         shape: sim::arena::Shape::Box,
     };
-    trees.spawn(commands, meshes, materials, &trunk, id, palette, root);
+    trees.spawn(commands, meshes, materials, &trunk, id, palette, root, None);
 }
 
 /// **The land far below a jump course**: hills and woods sixty metres and
