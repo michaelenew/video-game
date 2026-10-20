@@ -228,7 +228,7 @@ fn a_slide_down_every_shaft_s_wall_is_free() {
 #[test]
 fn every_class_climbs_every_shaft() {
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let mut w = World::arrive([class, class], journey(), ArenaId::DEEP, Some(0), 1);
         for (k, &(from, to)) in deep::SHAFTS.iter().enumerate() {
             let (x, z) = deep::cell_middle(HOLES[k]);

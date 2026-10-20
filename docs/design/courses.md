@@ -32,6 +32,13 @@ The owner's goal, as given on 2026-10-03:
 - **The main route is difficult and every class can finish it**, even if some
   find it easier. Only the *barely possible* routes may belong to a class.
 - **The Bulwark is out of this exercise** by the owner's choice. Five classes.
+  **Since 2026-10-20 that is true of every movement section in the game**, the
+  valley's included: "the bulwark is not to be considered for any mobility
+  sections" -- it is the least developed class and its movement is poor. No
+  hop is sized to its jump, and the tests that walk a route with every class
+  walk it with `sim::class::MOVERS`, the other five. Where this document or
+  [valley.md](valley.md) says a hop is "inside the Bulwark's catch", that is
+  how it was sized then, not a rule now.
 
 **Decided, 2026-10-03: a movement tool's reach is paid for in execution --
 timing, aim, precision -- never in waiting, and never free.** (Also in

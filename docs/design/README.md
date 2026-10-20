@@ -38,6 +38,12 @@ have I got" rather than "do I have anything". See
 [combat-kernel.md](combat-kernel.md) §"The repeat lockout" for why that is not the thing this
 line rules out.
 
+**Movement sections are for five classes** (2026-10-20). The Bulwark is not
+considered for any jump, climb, gully or course: none is sized to it and no test asks it
+to finish one (`sim::class::MOVERS`; [courses.md](courses.md) §0). **Tab steps through the
+classes Champion first and Bulwark last** (`sim::class::ROTATION`), and the Champion is who
+you are when no class is named.
+
 **Time to kill.** ~60 seconds versus. 1–20 minutes coop, by fight difficulty.
 
 **Defense splits into two verbs.** Dodge is universal and evasive. Block is shield-gated and

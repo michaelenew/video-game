@@ -150,7 +150,7 @@ fn no_plain_jump_crosses_a_gully() {
 #[test]
 fn every_class_climbs_the_hanging_stones_to_the_plane() {
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let j = Journey {
             beaten: u32::MAX,
             ..Journey::default()

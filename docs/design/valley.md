@@ -530,12 +530,13 @@ for a pair who does not.** The five reaches are 974 m end to end with about
 
 1. **Nobody has played it.** Every height, gap and hold is a first guess
    sized against the jump envelope. Record a pair's run (`Y`) and judge it.
-2. **The Bulwark sets the gaps.** Every required hop is within its plain
-   jump, which makes them easy for everyone else -- the Waterfall's too,
-   which is near the Bulwark's edge and nobody else's. The mechanics are the
-   shortcuts (a stone, a shadow, a Grasp over a bluff), but the gaps are not
-   yet wide enough to *need* one anywhere. Whether some climbs should have
-   only the slow way for some classes is the next tuning question.
+2. ~~**The Bulwark sets the gaps.**~~ **Not since 2026-10-20**: the Bulwark
+   is not considered for any movement section (the owner: it "is by far the
+   least developed class and has really poor mobility"). Until then every
+   required hop was within its plain jump, which made them easy for
+   everyone else. The gaps are now sized for the other five
+   (`sim::class::MOVERS`), and the hard sections are sized to *need* a
+   class's tools (§3, the Sky Road and after).
 3. **The Siegeshell does not come to you.** World.md §3 wanted the bells to
    ring in Hearth when the Shrine's waystone lights. It is walked to, by the
    fifth waystone, from either end.

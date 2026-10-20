@@ -1417,9 +1417,7 @@ fn locked(p: &sim::state::Player) -> Option<String> {
 /// Separated from the click handling so the rule can be tested without a
 /// window, a cursor, or a rendered frame.
 pub fn cycle_class<const N: usize>(mut classes: [sim::Class; N], who: usize) -> [sim::Class; N] {
-    let all = sim::class::ALL_CLASSES;
-    let next = (classes[who] as usize + 1) % all.len();
-    classes[who] = all[next];
+    classes[who] = classes[who].next_in_rotation();
     classes
 }
 
@@ -1589,6 +1587,27 @@ mod tests {
         }
         classes = cycle_class(classes, 0);
         assert_eq!(classes[0], start[0], "the cycle does not wrap");
+    }
+
+    #[test]
+    fn the_champion_comes_first_and_the_bulwark_last() {
+        // The owner's order (2026-10-20): `sim::class::ROTATION`.
+        let mut classes = [Class::Bulwark, Class::Bulwark];
+        classes = cycle_class(classes, 0);
+        assert_eq!(
+            classes[0],
+            Class::Champion,
+            "the Bulwark goes round to the Champion"
+        );
+        for _ in 2..ALL_CLASSES.len() {
+            classes = cycle_class(classes, 0);
+            assert_ne!(
+                classes[0],
+                Class::Bulwark,
+                "the Bulwark came before the end"
+            );
+        }
+        assert_eq!(cycle_class(classes, 0)[0], Class::Bulwark);
     }
 
     #[test]

@@ -28,6 +28,42 @@ pub const ALL_CLASSES: [Class; 6] = [
     Class::DualMage,
 ];
 
+/// **The order a player steps through the classes** -- Tab, and the class
+/// button under the scoreboard -- and the class a seat is given when none is
+/// named (2026-10-20, the owner: "Champion should be first", the Bulwark
+/// last). Not [`ALL_CLASSES`]'s order, which is the enum's and is what the
+/// wire, the Oven's tables and the move table are indexed by.
+pub const ROTATION: [Class; 6] = [
+    Class::Champion,
+    Class::ShadowReaver,
+    Class::Elementalist,
+    Class::BloodMage,
+    Class::DualMage,
+    Class::Bulwark,
+];
+
+/// **The classes a movement section is built for: every class but the
+/// Bulwark** (2026-10-20). The owner: the Bulwark "is by far the least
+/// developed class and has really poor mobility", so it "is not to be
+/// considered for any mobility sections" -- no jump, gully, climb or course
+/// is sized to its jump, and no test asks it to finish one. The tests that
+/// walk a route with every class walk it with these.
+pub const MOVERS: [Class; 5] = [
+    Class::Champion,
+    Class::ShadowReaver,
+    Class::Elementalist,
+    Class::BloodMage,
+    Class::DualMage,
+];
+
+impl Class {
+    /// The class after this one in [`ROTATION`], wrapping round.
+    pub fn next_in_rotation(self) -> Class {
+        let at = ROTATION.iter().position(|c| *c == self).unwrap_or(0);
+        ROTATION[(at + 1) % ROTATION.len()]
+    }
+}
+
 /// How a class moves through the air.
 ///
 /// Classes differ in the air before they differ anywhere else, the way they do

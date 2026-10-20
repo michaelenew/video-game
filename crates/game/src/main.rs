@@ -146,12 +146,13 @@ fn seats_of(dummy: Dummy) -> u8 {
     if dummy == Dummy::Human { 2 } else { 1 }
 }
 
-/// Every seat's class: `--p1` to `--p4`, a Bulwark where none is named.
+/// Every seat's class: `--p1` to `--p4`, the first of the rotation (the
+/// Champion) where none is named.
 fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
     std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
-            .unwrap_or(sim::Class::Bulwark)
+            .unwrap_or(sim::class::ROTATION[0])
     })
 }
 
@@ -6403,7 +6404,7 @@ fn tick_sim(
         // asked for on the wire rather than done here, like the picker below,
         // so against a person both machines restart on the same frame.
         let me = sim.local_player();
-        let next = ALL[(sim.cur.players[me].class as usize + 1) % ALL.len()];
+        let next = sim.cur.players[me].class.next_in_rotation();
         sim.travel = sim::input::Travel::class(me, next);
     }
     // A restart goes on the wire in training too, now that the simulation
