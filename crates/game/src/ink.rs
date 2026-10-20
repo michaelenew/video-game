@@ -61,7 +61,7 @@ impl Ink {
     pub fn shadow() -> Ink {
         Ink {
             look: InkLook {
-                body: Vec4::new(0.016, 0.014, 0.020, 0.42),
+                body: Vec4::new(0.016, 0.014, 0.020, 0.58),
                 glow: Vec4::new(0.50, 0.38, 0.72, 1100.0),
                 fade: Vec4::new(1.0, 1.0, 0.55, 0.0),
             },

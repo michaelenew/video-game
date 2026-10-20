@@ -31,7 +31,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // Her costume's own value, kept: the dark has her shape in it.
     let albedo = pbr_input.material.base_color.rgb;
     let lum = dot(albedo, LUMA);
-    pbr_input.material.base_color = vec4<f32>(ink.body.rgb * (0.6 + 2.5 * lum), 1.0);
+    pbr_input.material.base_color = vec4<f32>(ink.body.rgb * (0.7 + 1.2 * lum), 1.0);
     pbr_input.material.metallic = 0.0;
     pbr_input.material.perceptual_roughness = 0.75;
     pbr_input.material.reflectance = vec3<f32>(0.1);
