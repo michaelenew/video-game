@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 716] = [
+pub const SCALARS: [i32; 718] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -643,6 +643,8 @@ pub const SCALARS: [i32; 716] = [
            19661, // air.wall_slide,_grabs_of_a_faster_fall,_a_frame_(x) = 0.3
           393216, // air.wall_jump,_along_where_the_stick_points_at_(m/s) = 6
                6, // air.wall_jump,_pressed_before_the_wall_and_kept = 6
+          111411, // air.walls,_a_face_covers_the_body_at_least_(m) = 1.7
+           52429, // air.walls,_a_face_is_at_least_this_wide_(m) = 0.8
           131072, // ledge.caught_moving_away_from_it_at_up_to_(m/s) = 2
               20, // ledge.held_into_the_wall_from_the_catch,_climbs_after = 20
            98304, // ledge.caught,_top_over_the_feet_from_(m) = 1.5

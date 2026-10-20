@@ -278,7 +278,7 @@ also needs ALSA's headers** (`libasound2-dev` on Debian and Ubuntu; `./scripts/s
 desktop` installs them), since 2026-10-08 when the game got sound ([sound.md](sound.md)); an
 error from `alsa-sys` is that. The browser build does not: a page's audio is the browser's.
 
-**Working on it:** `./scripts/dev.sh` — hitbox wireframes, the Oven, and a class picker beside each health bar. Extra
+**Working on it:** `./scripts/dev.sh` — hitbox wireframes, the Oven, and a class picker beside your health bar. Extra
 arguments pass through, so `./scripts/dev.sh --p1 champion` works.
 
 **What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,

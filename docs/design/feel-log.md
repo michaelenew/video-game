@@ -9479,3 +9479,26 @@ as possible throw none (`champion_rework.rs`).
 **Verdict** open -- to be played. Watch whether 5 to 10 frames after he may act is a beat a
 hand finds, and whether the shorter window for landed links is felt.
 
+
+### 2026-10-20 — only enough wall is a wall
+
+From play, the day the slide got its pose: "Wall sliding needs to be limited to only places
+where there's actually enough wall to slide on. I am getting the slide animation on very thin
+platforms where I wouldn't be able to slide at all." Since the overhaul made touching a wall
+enough to start a slide, brushing the side of a floating stone or a slab started one.
+**Changed**: a face is a wall -- slid on, jumped off, drawn and heard as one -- only where
+the solids just behind the body cover at least 1.7 m of its 1.8 m height (`Walls, a face
+covers the body at least`), at its middle and 0.4 m either side along the face (`Walls, a
+face is at least this wide`, 0.8 m). Stacked boxes on one face count together
+(`Terrain::wall_face`). Anything less still stops the body as it always did. Pinned by
+`tests/wall_jump.rs` (`a_post_or_a_short_face_is_not_slid_on_or_jumped_off`: the range's
+wooden posts and its 1.5 m wall), which fails with both knobs at nought.
+**Consequences** to feel for: a slide now ends when the feet are within 1.7 m of a wall's
+bottom, a drop that short; the Sky Road's stones (1.2–1.5 m thick) and the courses' islands'
+sides are never walls; a slab 2 m thick is a wall for the 0.3 m the body is wholly beside it.
+**Verdict** open -- unplayed.
+**What it cost the search** (`tests/fixtures/envelope.txt`): four stored lines had been kicking
+off or sliding down the lab's ledges where the 3 m slab covered only part of the body; they were
+re-searched (`envelope search --class`) and replaced, every other line kept. The Elementalist's
+best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
+two moved by under a metre. One Blood mage line lost 2 cm.
