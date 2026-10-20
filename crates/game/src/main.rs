@@ -400,6 +400,7 @@ fn main() {
                 online::announce,
                 hud::update_online,
                 hud::update_seats,
+                hud::update_rival,
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
@@ -478,6 +479,10 @@ pub struct Sim {
     /// which is what turns "does this look right" into a repeatable comparison.
     stop_at: Option<u32>,
     dummy: Dummy,
+    /// **The dummy brought into a fight that would leave it out** -- a hunt,
+    /// the valley's peaceful places -- from the Esc menu (`menu::dummy`). A
+    /// duel has it whatever this says ([`World::present`]).
+    with_dummy: bool,
     driver: Driver,
     /// Show the skeleton at rest instead of animating it.
     ///
@@ -617,6 +622,43 @@ struct Fades([Crossfade; MAX_PLAYERS]);
 #[derive(Resource, Default)]
 struct ShadowFades([Crossfade; MAX_PLAYERS]);
 
+/// Seat player two for the next fresh fight from what this machine has
+/// asked for: a person on the second keys, or the dummy brought in from the
+/// Esc menu. Whether it is in is the simulation's to know, and the tape's:
+/// see `World::seats`.
+fn reseat(sim: &mut Sim) {
+    let seats = if sim.with_dummy {
+        2
+    } else {
+        seats_of(sim.dummy)
+    };
+    if seats != sim.cur.seats {
+        let frame = sim.cur.frame;
+        sim.tape.note(frame, sim::replay::Event::Seats(seats));
+        sim.cur.seats = seats;
+    }
+}
+
+/// **The Esc menu's dummy** (`menu::dummy`): bring it in or send it away,
+/// change what it does, or its class. Training only, as the dummy keys are.
+/// In or out restarts the fight, since a fighter is placed as a fight is
+/// built; a class change restarts it anyway, as Tab does; what it does
+/// changes on the spot.
+fn change_dummy(sim: &mut Sim, mode: Dummy, with: bool, class: sim::Class) {
+    if sim.driver.online() {
+        return;
+    }
+    sim.dummy = mode;
+    let moved = with != sim.with_dummy;
+    sim.with_dummy = with;
+    reseat(sim);
+    if class != sim.cur.players[1].class {
+        sim.travel = sim::input::Travel::class(1, class);
+    } else if moved {
+        sim.travel = sim::input::Travel::RESTART;
+    }
+}
+
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
 /// the second set of keys -- or until a sparring bot does.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -701,6 +743,7 @@ impl Default for Sim {
             paused: false,
             step_once: false,
             dummy,
+            with_dummy: false,
             driver,
             // `BIND_POSE=1` starts frozen, so the proportions of a build can be
             // captured without a keypress.
@@ -6634,14 +6677,7 @@ fn tick_sim(
         // the two worlds apart. Online, every seat is somebody.
         if training && keys.just_pressed(key) {
             sim.dummy = mode;
-            // Whether player two is in the next fresh fight is the
-            // simulation's to know, and the tape's: see `World::seats`.
-            let seats = seats_of(mode);
-            if seats != sim.cur.seats {
-                let frame = sim.cur.frame;
-                sim.tape.note(frame, sim::replay::Event::Seats(seats));
-                sim.cur.seats = seats;
-            }
+            reseat(&mut sim);
         }
     }
     // `Y`: save the fight so far as a replay. Any time, in any mode -- the
@@ -7336,7 +7372,10 @@ fn apply_poses(
     // is holding and how much of it you can see through.
     let mut shadow_skins: [Option<view::skeleton::Skin>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     for (mut seen, root) in shadow_seen.iter_mut() {
-        let Some(ghost) = frame.shadows[root.0] else {
+        // An empty seat's shadow goes with its body (`hide_empty_seats`):
+        // a fighter parked out of the world keeps the shadow it stood with.
+        let ghost = frame.shadows[root.0].filter(|_| sim.cur.is_present(root.0));
+        let Some(ghost) = ghost else {
             *seen = Visibility::Hidden;
             continue;
         };

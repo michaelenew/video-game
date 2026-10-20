@@ -220,27 +220,54 @@ pub fn setup(mut commands: Commands) {
             ..default()
         })
         .with_children(|root| {
-            // Top: health bars either side of the round counter.
+            // Top: your health, and the round counter beside it. There was a
+            // second player's set mirrored on the right once, for two people
+            // at one keyboard, which nobody does (2026-10-20): the other
+            // fighter -- the dummy, the bot, a person online -- has one bar in
+            // the middle, under the round counter, the way a creature does.
+            // One column, so the root's spacing does not push the two
+            // apart and the bar down onto the valley's line.
             root.spawn(Node {
                 width: Val::Percent(100.0),
-                column_gap: Val::Px(18.0),
-                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
                 ..default()
             })
-            .with_children(|top| {
-                spawn_class_button(top, 0, P1);
-                spawn_health(top, 0, P1);
-                top.spawn((
-                    Text::new("0 - 0"),
-                    TextFont {
-                        font_size: 26.0,
+            .with_children(|head| {
+                head.spawn(Node {
+                    width: Val::Percent(100.0),
+                    column_gap: Val::Px(18.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|top| {
+                    spawn_class_button(top, 0, P1);
+                    spawn_health(top, 0, P1);
+                    top.spawn((
+                        Text::new("0 - 0"),
+                        TextFont {
+                            font_size: 26.0,
+                            ..default()
+                        },
+                        TextColor(INK),
+                        RoundText,
+                    ));
+                });
+
+                // The other fighter's health, centred, the creature's shape.
+                head.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        margin: UiRect::top(Val::Px(4.0)),
                         ..default()
                     },
-                    TextColor(INK),
-                    RoundText,
-                ));
-                spawn_health(top, 1, P2);
-                spawn_class_button(top, 1, P2);
+                    Visibility::Hidden,
+                    RivalRow,
+                ))
+                .with_children(|row| {
+                    spawn_meter(row, 10.0, P2, RivalBar);
+                });
             });
 
             // The third and fourth fighters, when there are any: the same
@@ -304,7 +331,6 @@ pub fn setup(mut commands: Commands) {
             })
             .with_children(|row| {
                 spawn_bar(row, 0);
-                spawn_bar(row, 1);
             });
 
             // The Champion's momentum, under whichever fighter has it, the
@@ -320,18 +346,16 @@ pub fn setup(mut commands: Commands) {
             .with_children(|row| {
                 // His tempo just under it, in one column with it: the root
                 // spreads its rows out, and the two are read together.
-                for who in 0..2 {
-                    row.spawn(Node {
-                        width: Val::Percent(34.0),
-                        flex_direction: FlexDirection::Column,
-                        row_gap: Val::Px(3.0),
-                        ..default()
-                    })
-                    .with_children(|column| {
-                        spawn_momentum(column, who, 100.0);
-                        spawn_tempo(column, who, 100.0);
-                    });
-                }
+                row.spawn(Node {
+                    width: Val::Percent(34.0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(3.0),
+                    ..default()
+                })
+                .with_children(|column| {
+                    spawn_momentum(column, 0, 100.0);
+                    spawn_tempo(column, 0, 100.0);
+                });
             });
 
             // The Blood mage's heart meter, under whichever fighter has one:
@@ -346,7 +370,6 @@ pub fn setup(mut commands: Commands) {
             })
             .with_children(|row| {
                 spawn_heart(row, 0);
-                spawn_heart(row, 1);
             });
 
             // The creature's bars, under the fighters' own. Hidden entirely in
@@ -442,15 +465,6 @@ pub fn setup(mut commands: Commands) {
                     },
                     TextColor(STEP),
                     StepText,
-                ));
-                bottom.spawn((
-                    Text::new("free"),
-                    TextFont {
-                        font_size: 18.0,
-                        ..default()
-                    },
-                    TextColor(P2),
-                    StateText(1),
                 ));
             });
         });
@@ -811,7 +825,7 @@ pub fn update_momentum(
     mut fills: Query<(&MomentumFill, &mut Node, &mut BackgroundColor)>,
 ) {
     for (row, mut visible, mut border) in rows.iter_mut() {
-        let has = momentum_of(&sim.cur.players[row.0]);
+        let has = momentum_of(&sim.cur.players[seat(&sim, row.0)]);
         *visible = if has.is_some() {
             Visibility::Inherited
         } else {
@@ -823,7 +837,7 @@ pub fn update_momentum(
         };
     }
     for (fill, mut node, mut colour) in fills.iter_mut() {
-        let Some((share, tier)) = momentum_of(&sim.cur.players[fill.0]) else {
+        let Some((share, tier)) = momentum_of(&sim.cur.players[seat(&sim, fill.0)]) else {
             continue;
         };
         node.width = Val::Percent(100.0 * share);
@@ -945,7 +959,7 @@ pub fn update_tempo(
     >,
 ) {
     let shown = |who: usize| {
-        if sim::state::tempo(&sim.cur.players[who]).is_some() {
+        if sim::state::tempo(&sim.cur.players[seat(&sim, who)]).is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -958,7 +972,7 @@ pub fn update_tempo(
         *visible = shown(line.0);
     }
     for (pip, mut fill) in pips.iter_mut() {
-        let Some(t) = sim::state::tempo(&sim.cur.players[pip.0]) else {
+        let Some(t) = sim::state::tempo(&sim.cur.players[seat(&sim, pip.0)]) else {
             continue;
         };
         fill.0 = if t.landed & 1 << pip.1 != 0 {
@@ -968,7 +982,7 @@ pub fn update_tempo(
         };
     }
     for (fill, mut node, mut colour) in fills.iter_mut() {
-        match sim::state::tempo(&sim.cur.players[fill.0])
+        match sim::state::tempo(&sim.cur.players[seat(&sim, fill.0)])
             .as_ref()
             .and_then(tempo_bar)
         {
@@ -984,7 +998,7 @@ pub fn update_tempo(
         }
     }
     for (tick, mut node, mut colour) in ticks.iter_mut() {
-        let beat = sim::state::tempo(&sim.cur.players[tick.0])
+        let beat = sim::state::tempo(&sim.cur.players[seat(&sim, tick.0)])
             .as_ref()
             .and_then(tempo_bar)
             .and_then(|(_, beat, _)| beat);
@@ -1047,7 +1061,7 @@ pub fn update_heart(
     mut fills: Query<(&HeartFill, &mut Node, &mut BackgroundColor)>,
 ) {
     for (row, mut visible, mut border) in rows.iter_mut() {
-        let p = &sim.cur.players[row.0];
+        let p = &sim.cur.players[seat(&sim, row.0)];
         *visible = if p.class == sim::Class::BloodMage {
             Visibility::Inherited
         } else {
@@ -1057,7 +1071,7 @@ pub fn update_heart(
     }
     let full = sim::tuning::heart_meter_full().max(1) as f32;
     for (fill, mut node, mut colour) in fills.iter_mut() {
-        let p = &sim.cur.players[fill.0];
+        let p = &sim.cur.players[seat(&sim, fill.0)];
         node.width = Val::Percent(100.0 * (p.heart_meter as f32 / full).clamp(0.0, 1.0));
         colour.0 = if p.heart_ready() {
             HEART_FULL
@@ -1254,7 +1268,7 @@ pub fn update(
     for (bar, mut node) in bars.iter_mut() {
         // Against this fighter's own full bar, which is per class now -- see
         // `sim::tuning::health_of`.
-        let p = &sim.cur.players[bar.who];
+        let p = &sim.cur.players[seat(&sim, bar.who)];
         let share = if bar.grey { p.grey } else { p.health };
         node.width = Val::Percent(100.0 * share.max(0) as f32 / p.full_health().max(1) as f32);
     }
@@ -1263,7 +1277,7 @@ pub fn update(
     // question the player is asking constantly: how high are the two, how far
     // apart are they, and which force am I carrying.
     for (tag, mut visible) in meter_rows.iter_mut() {
-        let carrying = meter_of(&sim.cur.players[tag.0]);
+        let carrying = meter_of(&sim.cur.players[seat(&sim, tag.0)]);
         *visible = if carrying.is_some() {
             Visibility::Inherited
         } else {
@@ -1271,7 +1285,7 @@ pub fn update(
         };
     }
     for (tag, mut border) in meter_tracks.iter_mut() {
-        let Some((_, _, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
+        let Some((_, _, colour, ascending)) = meter_of(&sim.cur.players[seat(&sim, tag.0)]) else {
             continue;
         };
         // The border is which force she is *carrying*, which is not the same as
@@ -1288,7 +1302,8 @@ pub fn update(
         };
     }
     for (tag, mut node, mut fill) in meter_fills.iter_mut() {
-        let Some((dark, light, _, ascending)) = meter_of(&sim.cur.players[tag.who]) else {
+        let Some((dark, light, _, ascending)) = meter_of(&sim.cur.players[seat(&sim, tag.who)])
+        else {
             continue;
         };
         let bar = match tag.force {
@@ -1363,7 +1378,7 @@ pub fn update(
     }
 
     for (tag, mut text) in states.iter_mut() {
-        let p = &sim.cur.players[tag.0];
+        let p = &sim.cur.players[seat(&sim, tag.0)];
         set_text(
             &mut text,
             format!("{}\n{}\n{}", p.class.name(), describe(p), mechanic(p)),
@@ -1405,6 +1420,54 @@ pub fn update(
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         };
         set_text(&mut t, line);
+    }
+}
+
+/// **Which seat a line of the HUD shows.** The HUD is laid out for the
+/// player at this machine in the first place, so slot 0 is your seat --
+/// seat 0 offline, whichever seat the wire gave you online -- and the seat it
+/// displaced takes your slot.
+fn seat(sim: &crate::Sim, slot: usize) -> usize {
+    let you = sim.local_player();
+    if slot == 0 {
+        you
+    } else if slot == you {
+        0
+    } else {
+        slot
+    }
+}
+
+/// The other fighter's health, in the middle under the round counter: the
+/// dummy, the sparring bot, a person online. One bar, like a creature's,
+/// because it is somebody to hit rather than somebody you are playing.
+#[derive(Component)]
+pub struct RivalRow;
+
+#[derive(Component)]
+pub struct RivalBar;
+
+/// The other fighter's bar: shown while that seat is played, in its colour.
+pub fn update_rival(
+    sim: Res<crate::Sim>,
+    mut rows: Query<&mut Visibility, With<RivalRow>>,
+    mut bars: Query<(&mut Node, &mut BackgroundColor), With<RivalBar>>,
+) {
+    let who = seat(&sim, 1);
+    let want = if sim.cur.is_present(who) {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut seen in rows.iter_mut() {
+        if *seen != want {
+            *seen = want;
+        }
+    }
+    let p = &sim.cur.players[who];
+    for (mut node, mut colour) in bars.iter_mut() {
+        node.width = Val::Percent(100.0 * p.health.max(0) as f32 / p.full_health().max(1) as f32);
+        colour.0 = SEAT_COLOURS[who];
     }
 }
 
@@ -1684,14 +1747,15 @@ pub fn class_buttons(
     for (interaction, button, _) in buttons.iter() {
         // Against a person, only your own: their class is theirs to pick.
         if *interaction != Interaction::Pressed
-            || sim.driver.online() && button.0 != sim.local_player()
+            || sim.driver.online() && seat(&sim, button.0) != sim.local_player()
         {
             continue;
         }
         // Asked for on the wire, as Tab is, so a peer restarts on the same
         // frame.
-        let classes = cycle_class(sim.cur.players.map(|p| p.class), button.0);
-        sim.travel = sim::input::Travel::class(button.0, classes[button.0]);
+        let who = seat(&sim, button.0);
+        let classes = cycle_class(sim.cur.players.map(|p| p.class), who);
+        sim.travel = sim::input::Travel::class(who, classes[who]);
     }
 }
 
@@ -1723,7 +1787,7 @@ pub fn update_class_buttons(
         };
     }
     for (label, mut text) in labels.iter_mut() {
-        let name = sim.cur.players[label.0].class.name();
+        let name = sim.cur.players[seat(&sim, label.0)].class.name();
         if text.0 != name {
             *text = Text::new(name);
         }
@@ -1778,6 +1842,8 @@ mod tests {
         buttons.initialize(&mut world);
         let mut heart = IntoSystem::into_system(update_heart);
         heart.initialize(&mut world);
+        let mut rival = IntoSystem::into_system(update_rival);
+        rival.initialize(&mut world);
     }
 
     #[test]
