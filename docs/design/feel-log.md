@@ -9211,6 +9211,34 @@ last rule: **with every patch of hers held, the one furthest from any heart of h
 fights (`territory::with_every_patch_held_the_one_furthest_from_her_hearts_makes_way`). A
 spark laid where she already has ground merges, so this is rare.
 
+### 2026-10-20 — the camera on top of the Needle
+
+From the owner, with a replay: "camera bugged out once I got to the top of the needle.
+Wouldn't zoom out at all when facing a certain direction and when I fell it didn't follow me."
+**Two bugs, both an arena-alone assumption meeting the map.** Standing on a ledge just off the
+dome, looking out over the town, the arm was pulled into the back of the head: it was tested
+against each solid's box, and the dome's rings are round -- the ledge was in the corner of the
+top ring's box, which is air. And falling off the dome, the eye stopped at the dome's height
+and stayed there for the whole three-hundred-metre fall: the roost's floor is the dome's top,
+at zero in its coordinates, and the camera's floor was a plane at zero -- reached through the
+Galewing, whose "top under the eye" answered zero with no part of it there. Now the arm reads a
+solid's own shape, the floor under the eye is the terrain's, and a creature's back counts only
+where it is (`view/tests/needle.rs`, both of which fail on the old code). On an open floor
+nothing changes. One thing does elsewhere: a top no higher than the fighter's feet is floor to
+the eye now, so looking up from a box or a step the eye rests on it and rides along, where
+before it went into it and the arm was pulled in -- what architecture.md's "a surface to rest
+on" has always asked for.
+
+### 2026-10-20 — a cairn counts in a fight
+
+Same climb: "checkpoints aren't working at the top of the needle." The cairn by the chimney's
+mouth is on the dome's top, which is the roost, and stepping onto the ruins wakes the
+Galewing; a cairn counted only in peace, so that one never did, and the fall off the dome
+stood the fighter back up on the cairn 240 m up the stair. **Now a cairn is your checkpoint
+whatever is going on, and rests you (health back) only out of a fight** -- so it is still
+not a place to stand and heal against the bird
+(`ranges::the_needles_top_cairn_counts_while_the_roost_is_awake`, which fails on the old rule).
+
 ### 2026-10-20 — the camera keeps out of large things only
 
 **Changed** The camera used to keep out of every box: the drawn arm pulled in, and the
@@ -9225,4 +9253,3 @@ stepping on and off blocks threw it around, and in a tight space with something 
 small mouse movements zoomed it in and out. Camera-affecting geometry should be convex, large
 and smooth. Of the valley's 1,607 drawn boxes, 1,156 are small by this rule.
 **Verdict** open -- to be played. Both thresholds are in the Oven (F7) to try.
-

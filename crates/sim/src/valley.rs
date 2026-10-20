@@ -358,6 +358,34 @@ pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
         })
 }
 
+/// **Every cairn on the map**, by its index among the map's boxes, ascending:
+/// each snow top that [`cairn_at`] says is a cairn when stood on. What fast
+/// travel names a cairn by (`Destination::Cairn`, its place in this), and
+/// so the same on every machine with the same map. Worked out once, the
+/// first time it is asked, like the map itself.
+pub fn cairns() -> &'static [u32] {
+    static CAIRNS: std::sync::OnceLock<Vec<u32>> = std::sync::OnceLock::new();
+    CAIRNS.get_or_init(|| {
+        let atlas = crate::atlas::valley();
+        (0..atlas.solids.len())
+            .filter(|&i| {
+                let s = &atlas.solids[i];
+                s.material == crate::arena::Material::Snow && cairn_at(atlas, top_of(s)) == Some(i)
+            })
+            .map(|i| i as u32)
+            .collect()
+    })
+}
+
+/// The middle of a box's top, where a body stands on it.
+pub fn top_of(s: &Solid) -> V3 {
+    V3::new(
+        Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2),
+        s.max.y,
+        Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2),
+    )
+}
+
 /// The vent carrying a body, if any.
 pub fn vent_at(id: ArenaId, feet: V3) -> Option<&'static Vent> {
     vents(id).iter().find(|v| v.carries(feet))

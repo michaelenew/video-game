@@ -89,8 +89,7 @@
 /// cannot wobble the bearing.
 const SIGHT: f32 = 100.0;
 
-/// Arena floor height, and how far above it the eye may come.
-const GROUND: f32 = 0.0;
+/// How far above the floor under it the eye may come.
 const FLOOR_CLEARANCE: f32 = 0.3;
 
 /// Where to put the camera this frame.
@@ -454,14 +453,24 @@ impl CameraRig {
         // where it is no higher than the fighter's feet (and a step's slack, for
         // a back that tilts under a rider): a bird passing a few metres over the
         // eye is not a floor, and taking it for one put the camera on its back.
+        //
+        // **The floor is the terrain's, not a plane at zero.** A place's own
+        // floor is at zero only in its own coordinates: the roost's is the
+        // Needle's dome, and a fall off it took the eye down to nought and
+        // left it there while the fighter fell three hundred metres
+        // (2026-10-20, from play). So it is whatever is under the eye no
+        // higher than the fighter's feet -- the land, or a top they could be
+        // standing level with.
         let ceiling = fx_of(feet + body * 0.5);
-        let underfoot = beasts.iter().flatten().fold(GROUND, |floor, b| {
-            let eye = sim::V3::new(
-                fx_of(self.focus[0] + offset[0]),
-                sim::Fx::ZERO,
-                fx_of(self.focus[2] + offset[2]),
-            );
-            floor.max(b.top_under(eye, ceiling).to_f32_for_render())
+        let over = sim::V3::new(
+            fx_of(self.focus[0] + offset[0]),
+            fx_of(feet),
+            fx_of(self.focus[2] + offset[2]),
+        );
+        let ground = around.arena.floor_below(over).to_f32_for_render();
+        let underfoot = beasts.iter().flatten().fold(ground, |floor, b| {
+            b.top_under(over, ceiling)
+                .map_or(floor, |top| floor.max(top.to_f32_for_render()))
         });
         let lowest = underfoot + FLOOR_CLEARANCE;
         offset[1] = offset[1].max((lowest - self.focus[1]) * (1.0 - sky));
@@ -629,21 +638,19 @@ fn unobstructed_fraction(
 fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Terrain) -> bool {
     // On a map, only the tiles round the point: the arm is a few metres long.
     let at = sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2]));
+    let pad = fx_of(pad);
     // Only what is large enough to hold the camera off: not a grown tree,
     // and not a platform, a post or a branch, which are cut away round the
     // line to the fighter instead (`Terrain::seen_around`).
-    arena.seen_around(at, fx_of(pad + 1.0)).any(|s| {
-        let lo = [
-            s.min.x.to_f32_for_render() - pad,
-            s.min.y.to_f32_for_render() - pad,
-            s.min.z.to_f32_for_render() - pad,
-        ];
-        let hi = [
-            s.max.x.to_f32_for_render() + pad,
-            s.max.y.to_f32_for_render() + pad,
-            s.max.z.to_f32_for_render() + pad,
-        ];
-        (0..3).all(|i| p[i] > lo[i] && p[i] < hi[i])
+    arena.seen_around(at, pad.add(sim::Fx::ONE)).any(|s| {
+        // **The solid's own shape, not its box.** A round one is a disc in
+        // its box, and the box's corners are air: the Needle's dome is a
+        // stack of rings ninety metres across, and a fighter on a ledge in
+        // the corner of the top ring's box had the arm pulled to nothing
+        // whenever it swung back over the dome (2026-10-20, from play).
+        at.y.raw() > s.min.y.sub(pad).raw()
+            && at.y.raw() < s.max.y.add(pad).raw()
+            && s.covers_at(at.x, at.z, at.y.clamp(s.min.y, s.max.y), pad)
     })
 }
 
