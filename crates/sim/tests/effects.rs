@@ -1368,8 +1368,12 @@ fn every_hit_of_the_chain_is_a_free_choice_of_weapon() {
     let mut seen = Vec::new();
     let mut want = [LMB, RMB, MMB].into_iter().peekable();
     let mut button = want.next().unwrap();
-    for _ in 0..140 {
-        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    // Tapped: a held button throws one link and no more (2026-10-20).
+    for f in 0..140 {
+        w.advance([
+            Input::aimed(tapped(f, button), LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         if let Some(kind) = w.players[0].action.attack_kind() {
             if seen.last() != Some(&kind) {
                 seen.push(kind);
@@ -1665,7 +1669,10 @@ fn swapping_weapons_flows_faster_than_swinging_the_same_one_twice() {
         let mut w = engaged(Class::Champion);
         run(&mut w, 1, LMB, 0);
         for f in 1..60u32 {
-            w.advance([Input::aimed(second, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            w.advance([
+                Input::aimed(tapped(f, second), LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
             if w.players[0].action.attack_kind() == Some(kind) {
                 return f;
             }

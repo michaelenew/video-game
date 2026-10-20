@@ -338,6 +338,7 @@ fn main() {
                     place_champion_arms,
                     place_champion_trails,
                     place_champion_glow,
+                    place_third_flare,
                     place_pips,
                     place_curses,
                     place_spells,
@@ -373,6 +374,7 @@ fn main() {
                 ground::overlay,
                 hud::update_picker,
                 hud::update_momentum,
+                hud::update_tempo,
                 valley::update_text,
                 glint::update,
                 veil::place,
@@ -2099,7 +2101,11 @@ const TRAIL_STEPS: usize = 6;
 /// stepped fade per weapon for the trail. Made once.
 #[derive(Resource)]
 struct ArmsLook {
-    trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 3],
+    /// One stepped fade per weapon, and a fourth, gold, for the string's
+    /// third hit and the finishers, whatever weapon threw them.
+    trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 4],
+    /// The flare of the string's third hit. See `place_third_flare`.
+    flare: Handle<StandardMaterial>,
     /// **The glow at the head of the weapon in his hands** (exploration
     /// 0015): one per momentum tier, ember to white, the HUD bar's colours.
     glow: [Handle<StandardMaterial>; 4],
@@ -2108,6 +2114,12 @@ struct ArmsLook {
 /// The glow itself, one per fighter. See `place_champion_glow`.
 #[derive(Component)]
 struct GlowMesh {
+    owner: usize,
+}
+
+/// The third hit's flare, one per fighter. See `place_third_flare`.
+#[derive(Component)]
+struct FlareMesh {
     owner: usize,
 }
 
@@ -2954,6 +2966,13 @@ fn setup(
             Visibility::Hidden,
             GlowMesh { owner },
         ));
+        commands.spawn((
+            Mesh3d(look.ball.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            FlareMesh { owner },
+        ));
     }
     let glow = std::array::from_fn(|tier| {
         let c = hud::momentum_colour(tier as u8).to_linear();
@@ -2969,7 +2988,14 @@ fn setup(
     // well as the three silhouettes: the sword's cold and white, the hammer's
     // a hot ember, the spear's a thin blue streak. Unlit, so it reads the same
     // on either side of the arena.
-    let tints = [(0.88, 0.93, 1.0), (1.0, 0.55, 0.20), (0.45, 0.80, 1.0)];
+    // The fourth is the third hit's gold, the colour of the tempo bar's
+    // window into it.
+    let tints = [
+        (0.88, 0.93, 1.0),
+        (1.0, 0.55, 0.20),
+        (0.45, 0.80, 1.0),
+        (1.0, 0.78, 0.25),
+    ];
     let trail = std::array::from_fn(|weapon| {
         let (r, g, b) = tints[weapon];
         std::array::from_fn(|step| {
@@ -2985,7 +3011,16 @@ fn setup(
             })
         })
     });
-    commands.insert_resource(ArmsLook { trail, glow });
+    let flare = materials.add(StandardMaterial {
+        // Kept well under white: the tonemapper washes a bright gold out to
+        // the white the momentum glow already owns.
+        base_color: Color::LinearRgba(LinearRgba::new(1.0, 0.45, 0.0, 0.85)),
+        emissive: LinearRgba::rgb(2.6, 1.0, 0.0),
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        ..default()
+    });
+    commands.insert_resource(ArmsLook { trail, glow, flare });
     commands.insert_resource(look);
 }
 
@@ -3683,15 +3718,91 @@ fn place_champion_trails(
         *vis = Visibility::Inherited;
         tf.translation = (a0 + b0 + a1 + b1) * 0.25;
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
-        tf.scale = Vec3::new(0.015, band.length(), breadth);
+        // **One, two, three** (2026-10-20, from play): each hit of the string
+        // a thicker slab than the one before, and the third gold.
+        let thick = match t.place {
+            0 => 0.010,
+            1 => 0.022,
+            _ => 0.045,
+        };
+        tf.scale = Vec3::new(thick, band.length(), breadth);
         // Older segments fainter, and the whole of it fading with the ghost.
+        // The first hit's never quite solid.
         let age = (i + 1) as f32 / (t.count - 1) as f32;
-        let solid = (age * t.fade).clamp(0.0, 1.0);
+        let most = if t.place == 0 { 0.7 } else { 1.0 };
+        let solid = (age * t.fade * most).clamp(0.0, 1.0);
         let step = (solid * (TRAIL_STEPS - 1) as f32).round() as usize;
-        let want = &look.trail[(t.which as usize).min(2)][step];
+        let set = if t.place >= 2 {
+            3
+        } else {
+            (t.which as usize).min(2)
+        };
+        let want = &look.trail[set][step];
         if mat.0 != *want {
             mat.0 = want.clone();
         }
+    }
+}
+
+/// **The third hit's flare** (2026-10-20, from play): a gold light at the head
+/// of the weapon from the first frame of the string's third hit, swelling
+/// through its wind-up, burning through the swing and gone through the first
+/// frames of the recovery. So the hit the string is for is told from the two
+/// before it while it is still coming -- and its absence, when the count went
+/// wrong, is as plain as the tempo bar's empty third pip.
+fn place_third_flare(
+    sim: Res<Sim>,
+    look: Res<ArmsLook>,
+    hands: Res<Hands>,
+    torsos: Res<Torsos>,
+    mut meshes: Query<(
+        &FlareMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let size = third_flare_size(p);
+        let [left, right] = hands.0[tag.owner];
+        let torso = torso_of(&torsos, tag.owner);
+        let arms = view::arms::champion_arms(p, left.into(), right.into(), &torso);
+        let (Some(arms), true) = (arms, size > 0.0) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = Vec3::from(arms.head());
+        tf.scale = Vec3::splat(size);
+        if mat.0 != look.flare {
+            mat.0 = look.flare.clone();
+        }
+    }
+}
+
+/// How big the third hit's flare is this frame: nothing unless the move
+/// running is the string's third.
+fn third_flare_size(p: &sim::state::Player) -> f32 {
+    use sim::state::Action;
+    if p.class != sim::Class::Champion {
+        return 0.0;
+    }
+    let third =
+        |kind| sim::moves::champion::in_string(kind) && view::arms::place_in_string(p, kind) == 2;
+    match p.action {
+        Action::Startup { kind, left } if third(kind) => {
+            let startup = sim::moves::get(p.class, kind).startup.max(1) as f32;
+            0.3 + 0.5 * (1.0 - left as f32 / startup)
+        }
+        Action::Channel { kind, .. } if third(kind) => 0.8,
+        Action::Active { kind, .. } if third(kind) => 0.9,
+        Action::Recovery { kind, left } if third(kind) => {
+            let m = sim::moves::get(p.class, kind);
+            let gone = m.recovery.saturating_sub(left) as f32;
+            (0.9 * (1.0 - gone / view::arms::TRAIL_GHOST as f32)).max(0.0)
+        }
+        _ => 0.0,
     }
 }
 

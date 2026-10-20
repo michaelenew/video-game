@@ -1185,6 +1185,10 @@ scalars! {
     // full tally plays. Presentation that lives in the snapshot, because its
     // clock has to survive a rollback.
     ReapingLife,          "Reaver",   "Cash-in, the Reaping plays for",                       Frames, 20, 180;
+    // **Only a press throws a link** (2026-10-20): a held weapon button no
+    // longer runs the string. A press made a little before the next link may
+    // start is kept this long and comes out when it may.
+    PressKept,            "Champion", "Chain, a press waits for its link",                    Frames, 0, 30;
 }
 
 // ---------------------------------------------------------------------------

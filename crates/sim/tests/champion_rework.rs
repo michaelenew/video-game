@@ -855,3 +855,148 @@ fn the_rush_goes_where_the_crosshair_is_not_where_the_stick_is() {
         gone.z.to_f32_for_render()
     );
 }
+
+// -- Only a press throws a link (2026-10-20) ---------------------------------
+
+#[test]
+fn a_held_button_throws_one_move_and_no_more() {
+    // Held, a weapon is its finisher once, and then nothing: the string is
+    // three presses in rhythm, never a held button running itself.
+    for (button, opener, finisher) in [
+        (Input::LEFT, c::SWORD_GROUND, c::CRESCENT),
+        (Input::MIDDLE, c::HAMMER_GROUND, c::SHOCKWAVE),
+        (Input::RIGHT, c::SPEAR_GROUND, c::REPEL),
+    ] {
+        let (_, kinds) = held_swing(button, 300);
+        assert_eq!(
+            kinds,
+            [opener, finisher],
+            "{button:#x} held threw {kinds:?}"
+        );
+    }
+}
+
+/// Open with the sword and let it land; then one frame's press of the sword
+/// `early` frames before the first frame the second link may start. Whether
+/// the second link came out, and the frame it did, counted from the press.
+fn pressed_early(early: u16) -> Option<u32> {
+    let mut w = engaged();
+    step(&mut w, Input::LEFT);
+    // Run to the frame the tempo bar says the same weapon may come out on.
+    let mut f = 0;
+    loop {
+        let t = sim::state::tempo(&w.players[0]).unwrap();
+        if !t.swinging && t.end > 0 && t.now + early >= t.repeat {
+            break;
+        }
+        step(&mut w, 0);
+        f += 1;
+        assert!(f < 60, "the opener never landed");
+    }
+    step(&mut w, Input::LEFT);
+    for f in 0..60 {
+        if w.players[0].action.attack_kind() == Some(c::BACKCUT) {
+            return Some(f);
+        }
+        step(&mut w, 0);
+    }
+    None
+}
+
+#[test]
+fn a_press_a_little_early_comes_out_when_it_may() {
+    // A tap let go before the recovery may be cut is kept, and comes out on
+    // the frame it may.
+    let kept = sim::tuning::press_kept();
+    assert!(kept > 2, "the knob keeps a press for {kept} frames");
+    let at = pressed_early(kept - 2).expect("a press a little early was lost");
+    assert!(at <= kept as u32, "it came out {at} frames after the press");
+}
+
+#[test]
+fn a_press_far_too_early_is_lost() {
+    // Whiffed, the sword owes its whole recovery; a tap made in its wind-up
+    // is forgotten before the recovery ends, so it throws nothing -- it was
+    // made before the tempo bar's lost stretch was even over.
+    let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
+    step(&mut w, Input::LEFT);
+    step(&mut w, 0);
+    let t = sim::state::tempo(&w.players[0]).unwrap();
+    assert!(t.swinging && t.lost > t.now, "{t:?}");
+    let m = sim::moves::get(Class::Champion, c::SWORD_GROUND);
+    assert!(m.startup + m.active + m.recovery > 2 + sim::tuning::press_kept());
+    step(&mut w, Input::LEFT);
+    let mut kinds = Vec::new();
+    for _ in 0..80 {
+        step(&mut w, 0);
+        if let Some(k) = w.players[0].action.attack_kind() {
+            if kinds.last() != Some(&k) {
+                kinds.push(k);
+            }
+        }
+    }
+    assert_eq!(kinds, [c::SWORD_GROUND], "{kinds:?}");
+}
+
+#[test]
+fn the_tempo_bars_marks_are_where_the_chain_opens() {
+    // The bar draws the rule, never beside it: with the press held from the
+    // landing on, the second link starts on the frame the bar's mark for
+    // that weapon says it may -- swapped and repeated both.
+    for (second, kind) in [(Input::LEFT, c::BACKCUT), (Input::RIGHT, c::SKEWER)] {
+        let mut w = engaged();
+        step(&mut w, Input::LEFT);
+        let mut mark = None;
+        for f in 0..80 {
+            let t = sim::state::tempo(&w.players[0]).unwrap();
+            // Pressed fresh the frame after the freeze, so it is no beat.
+            let landed_and_thawed = !t.swinging && t.end > 0 && t.now >= t.beat;
+            if landed_and_thawed && mark.is_none() {
+                mark = Some(if second == Input::LEFT {
+                    t.repeat
+                } else {
+                    t.swap
+                });
+            }
+            let press = landed_and_thawed && (f % 3 == 0);
+            step(&mut w, if press { second } else { 0 });
+            if w.players[0].action.attack_kind() == Some(kind) {
+                break;
+            }
+            let after = sim::state::tempo(&w.players[0]).unwrap();
+            if after.end > 0 {
+                if let Some(m) = mark {
+                    assert!(
+                        after.now <= m,
+                        "the link was late: now {} past mark {m}",
+                        after.now
+                    );
+                }
+            }
+        }
+        assert_eq!(w.players[0].action.attack_kind(), Some(kind));
+    }
+}
+
+#[test]
+fn the_tempo_bar_counts_the_string() {
+    let mut w = engaged();
+    let mut seen = Vec::new();
+    for f in 0..90 {
+        step(&mut w, if f % 4 == 0 { Input::LEFT } else { 0 });
+        let t = sim::state::tempo(&w.players[0]).unwrap();
+        if seen.last() != Some(&t.thrown) {
+            seen.push(t.thrown);
+        }
+        if t.thrown == 3 {
+            assert!(
+                t.finishing || !w.players[0].action.attack_kind().is_some(),
+                "{t:?}"
+            );
+        }
+    }
+    assert!(
+        seen.starts_with(&[0, 1, 2, 3]) || seen.starts_with(&[1, 2, 3]),
+        "{seen:?}"
+    );
+}

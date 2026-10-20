@@ -9210,3 +9210,49 @@ last rule: **with every patch of hers held, the one furthest from any heart of h
 -- the edge of the held field, never the base -- and new ground still goes down where she
 fights (`territory::with_every_patch_held_the_one_furthest_from_her_hearts_makes_way`). A
 spark laid where she already has ground merges, so this is rare.
+
+### 2026-10-20 — the Champion: a press, not a held button; a tempo bar; one, two, three
+
+**Changed**
+- **Only a press throws a link.** A weapon button held down throws the one move it was
+  pressed for -- held, its finisher -- and nothing after it. It used to run the string by
+  itself: held, the sword threw Sword, Crescent, then Sword, Backcut, Upcut, Sword ... for as
+  long as the button was down. `Fury::fresh` is the press, kept for `Chain, a press waits for
+  its link` (new, 10 frames) after it whether or not the button is still down, and spent by
+  the move it throws.
+- **A tempo bar** under the momentum bar (`hud::update_tempo`, read off
+  `sim::state::tempo`): three numbered pips -- filled when that hit landed, a red edge when it
+  missed -- and a timeline per link from where it lands. On it, in order: the Beat (pale
+  gold, the sweet spot: pressed there, the next link is a true link, and it comes out at the
+  first frame it may), a red stretch where a press is forgotten before the link may come out,
+  a dim stretch where it is kept, and the open window until the string dies, cold white into
+  the second hit and **gold into the third**. A white tick is where the same weapon again may
+  come out; the gold-into-dim edge before it is where a different one may. While the third
+  hit or a finisher runs the whole bar is gold.
+- **The three hits look different.** The trail of the first is a thin outer band and never
+  quite solid; the second's is the weapon's own band; the third's -- and a finisher's -- is a
+  thick slab reaching further in, drawn **gold** whatever weapon threw it. A gold flare grows
+  at the weapon's head through the third hit's wind-up and burns through its swing
+  (`place_third_flare`).
+
+**Why** From play: the hold "ruins the rhythm of the playstyle and doesn't seem to build
+towards the third attacks ever", and the third hit "doesn't always feel fair -- I'll count my
+attacks but mistime a click and not get the third". Both are the same thing seen from two
+sides. A string a held button ran gave nothing to count; and with the string run on the
+button being *down*, a tap let go during the last link's recovery -- a perfectly good
+press, a few frames early -- was simply never seen, so the count in the player's head and the
+count in the game parted silently. A kept press closes the second gap for any press within
+ten frames of the frame the link may start; the bar shows the rest -- a press in the red
+stretch, a whiff that owed its whole recovery (the pip's red edge), a string that ran out of
+window -- so a missed third is something you can see the reason for.
+
+The Ridgeback hunt's pin moved for the Champion (`ridgeback_pin.rs`): its random presses held
+buttons, which now throw one move rather than a string. The movement search's Champion lines
+were searched again (`envelope --class Champion`): three of the old programs leaned on a held
+button and no longer land, and the new search reached further on every one of those lanes;
+each lane keeps whichever line crosses further.
+
+**Verdict** open -- to be played. The bar is a training aid; whether a version of it stays is
+the open question. Worth watching: whether ten frames of kept press makes clicking early
+feel like it "works anyway" so the Beat stops being learned (lower the knob), or whether the
+red stretch shows up often enough to feel like a trap (raise it).

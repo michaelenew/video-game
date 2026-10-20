@@ -898,6 +898,11 @@ fn spear(w: &Weapon, out: &mut [Piece; PIECES]) {
 pub struct Trail {
     /// Which weapon threw it, for its colour.
     pub which: u8,
+    /// Where in the string the swing stands: 0, 1 or 2 for its first, second
+    /// and third hit, [`FINISHER`] for a finisher. Each is drawn bigger than
+    /// the one before, and the third in gold (2026-10-20, from play): a
+    /// player counting to three should see the count, not only feel it.
+    pub place: u8,
     /// The inner and outer edge of the band on each remembered frame.
     pub inner: [V3; TRAIL],
     pub outer: [V3; TRAIL],
@@ -916,6 +921,37 @@ pub const fn band(which: u8) -> f32 {
         SWORD => 0.42,
         HAMMER => 0.62,
         _ => 0.82,
+    }
+}
+
+/// [`Trail::place`] for a finisher.
+pub const FINISHER: u8 = 3;
+
+/// The band at a place in the string: the first hit's is the outer half of
+/// the weapon's own, the second's the weapon's own, and the third's -- and a
+/// finisher's -- reaches further in, so the three read as a climb.
+pub fn band_at(which: u8, place: u8) -> f32 {
+    let own = band(which);
+    match place {
+        0 => own + (1.0 - own) * 0.5,
+        1 => own,
+        _ => own * 0.6,
+    }
+}
+
+/// Where a Champion's move stands in his string, for the trail and the
+/// third hit's flare: a link's own place, an aerial's or a takeoff's the one
+/// it was thrown at, [`FINISHER`] for a finisher, and 0 for a Rush move.
+pub fn place_in_string(p: &Player, kind: u8) -> u8 {
+    if champion::is_full(kind) {
+        return FINISHER;
+    }
+    if let Some(link) = champion::link_of(kind) {
+        return link;
+    }
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if champion::in_string(kind) => fury.place,
+        _ => 0,
     }
 }
 
@@ -938,9 +974,11 @@ pub fn trail(p: &Player) -> Option<Trail> {
     };
     let m = sim::moves::get(p.class, kind);
     let which = champion::weapon(kind);
-    let k = band(which);
+    let place = place_in_string(p, kind);
+    let k = band_at(which, place);
     let mut t = Trail {
         which,
+        place,
         inner: [math::ZERO; TRAIL],
         outer: [math::ZERO; TRAIL],
         count: 0,

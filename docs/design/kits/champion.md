@@ -6,6 +6,7 @@ chained: 2026-09-14
 shaped: 2026-09-15
 weighted: 2026-09-26
 reworked: 2026-10-12, and from play 2026-10-13 (exploration 0015)
+pressed: 2026-10-20
 formerly: Bellator, Shifter
 sources: docs/archive/combat-design/shifter-skills.md
 depends: ../champion.md
@@ -77,6 +78,23 @@ what was built, in one place:
 - **A hold is one press, held** (2026-10-13): let go of a link's button once
   and that link is a tap, so a click during a wind-up is the next hit and never
   this one held. And the meter does not drain while a hold winds up.
+- **Only a press throws a link** (2026-10-20, from play): a button held down
+  throws the one move it was pressed for -- held, its finisher -- and nothing
+  after it. It used to run the whole string by itself, over and over, which
+  left nothing to count and nothing in rhythm. A press is **kept** for
+  `Chain, a press waits for its link` (10 frames) whether or not the button is
+  still down, and comes out on the first frame its link may; a tap made
+  earlier than that is lost. (`Fury::fresh`, `state::champion_weapon`.)
+- **The tempo bar** (2026-10-20, a training aid): under the momentum bar, three
+  numbered pips -- the hits of the string, filled if they landed, red-edged if
+  they missed -- and the window for the next hit, drawn from where the last one
+  landed: the Beat first (the sweet spot), then a red stretch where a press is
+  lost, a dim one where it is kept, and the open window until the string dies --
+  cold white into the second hit, **gold into the third**, and all gold while
+  the third or a finisher runs. A tick marks where the same weapon again may
+  come out. Every mark is read off the rule it draws (`state::tempo`). And the
+  three hits look different: each swing's trail is bigger than the last's and
+  the third's is gold, with a gold flare at the weapon's head while it comes.
 - **The Rush goes toward the crosshair** (2026-10-13): flat along the floor
   toward the spot the crosshair is on (`aim::racing_path` from his feet), not
   where the stick is held.
@@ -631,9 +649,10 @@ fast, so they come down into an attack that is already waiting. That is what the
 drive, the vault, the fan's on-hit shove and the Rush slash's reposition are for. You do
 not chase them, you arrive first.
 
-Linear play — pick the weapon for the range, hold the button, take the whole string — is
-still meant to be strong, and it is: a held sword chain is 236 damage in seventy-seven frames
-and needs one button. Nonlinear play is the three loops above, and it is where the ceiling
+Linear play — pick the weapon for the range, tap it three times in rhythm, take the whole
+string — is still meant to be strong, and it is: a tapped sword chain is 236 damage in
+seventy-seven frames and needs one button. Holding the button is not linear play any more
+(2026-10-20): held, it is one finisher. Nonlinear play is the three loops above, and it is where the ceiling
 is.
 
 ## Still to build

@@ -1801,6 +1801,15 @@ pub fn chain_grace() -> u16 {
     oven::scalar(Scalar::ChainGrace) as u16
 }
 
+/// **Only a press throws a link** (2026-10-20, from play): how long a weapon
+/// press is kept for, waiting for the link it asked for to be allowed out.
+/// A press made this close before the recovery may be cut comes out on the
+/// frame it may; one made earlier than that is lost, and the tempo bar shows
+/// where (`state::tempo`). A held button is one press, never a string.
+pub fn press_kept() -> u16 {
+    oven::scalar(Scalar::PressKept).clamp(0, u8::MAX as i32) as u16
+}
+
 /// How much of a connected link's recovery you serve before the next link may
 /// start, when the next one is a **different** weapon. A percentage of that
 /// move's own recovery, so a heavy tail still costs more than a light one.

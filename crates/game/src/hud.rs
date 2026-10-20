@@ -77,6 +77,60 @@ pub struct MomentumRow(pub usize);
 #[derive(Component)]
 pub struct MomentumFill(pub usize);
 
+/// **The Champion's tempo bar** (2026-10-20, from play): under his momentum,
+/// how long he has to land the next hit of his string and where its sweet
+/// spot is, read off `sim::state::tempo`. Three numbered pips -- the hits
+/// thrown, lit if they landed -- and a timeline per link. A training aid for
+/// the beat the class is built on; hidden for every other class.
+#[derive(Component)]
+pub struct TempoRow(pub usize);
+
+/// One of the three pips: which fighter's, and which hit.
+#[derive(Component)]
+pub struct TempoPip(pub usize, pub u8);
+
+/// One stretch of the timeline. See [`Stretch`].
+#[derive(Component)]
+pub struct TempoStretch(pub usize, pub Stretch);
+
+/// The stretches of the tempo bar's timeline, in the order they are drawn.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Stretch {
+    /// The Beat: pressed here, the next link is a true link. The sweet spot.
+    Beat,
+    /// A press here is forgotten before the next link may start.
+    Lost,
+    /// A press here is kept and comes out at the mark.
+    Kept,
+    /// The next link comes out at once, swapped or repeated.
+    Open,
+    /// The mark where the same weapon again may come out.
+    Repeat,
+    /// What has already gone by, darkened.
+    Gone,
+    /// Now.
+    Cursor,
+}
+
+const STRETCHES: [Stretch; 7] = [
+    Stretch::Beat,
+    Stretch::Lost,
+    Stretch::Kept,
+    Stretch::Open,
+    Stretch::Repeat,
+    Stretch::Gone,
+    Stretch::Cursor,
+];
+
+/// The tempo bar's colours. The sweet spot is the one bright thing on it; the
+/// window into the third hit is gold, the window into the second a cold
+/// white, so which hit is coming is told at a glance.
+const BEAT: Color = Color::srgb(1.0, 0.95, 0.55);
+const LOST: Color = Color::srgb(0.45, 0.10, 0.10);
+const SECOND: Color = Color::srgb(0.62, 0.78, 0.95);
+const THIRD: Color = Color::srgb(1.0, 0.66, 0.12);
+const MISSED: Color = Color::srgb(0.85, 0.25, 0.22);
+
 #[derive(Component)]
 pub struct HealthBar {
     pub who: usize,
@@ -240,7 +294,8 @@ pub fn setup(mut commands: Commands) {
                                 spawn_health(line, seat, colour);
                             });
                         spawn_bar(column, seat);
-                        spawn_momentum(column, seat);
+                        spawn_momentum(column, seat, 34.0);
+                        spawn_tempo(column, seat, 34.0);
                         spawn_heart(column, seat);
                     });
                 }
@@ -273,8 +328,20 @@ pub fn setup(mut commands: Commands) {
                 ..default()
             })
             .with_children(|row| {
-                spawn_momentum(row, 0);
-                spawn_momentum(row, 1);
+                // His tempo just under it, in one column with it: the root
+                // spreads its rows out, and the two are read together.
+                for who in 0..2 {
+                    row.spawn(Node {
+                        width: Val::Percent(34.0),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(3.0),
+                        ..default()
+                    })
+                    .with_children(|column| {
+                        spawn_momentum(column, who, 100.0);
+                        spawn_tempo(column, who, 100.0);
+                    });
+                }
             });
 
             // The Blood mage's heart meter, under whichever fighter has one:
@@ -681,12 +748,13 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
         });
 }
 
-/// The momentum bar: a track, its fill, and a tick at each third.
-fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize) {
+/// The momentum bar: a track, its fill, and a tick at each third. `width`
+/// is the share of its parent it spans.
+fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
     parent
         .spawn((
             Node {
-                width: Val::Percent(34.0),
+                width: Val::Percent(width),
                 height: Val::Px(9.0),
                 border: UiRect::all(Val::Px(2.0)),
                 ..default()
@@ -770,6 +838,180 @@ pub fn update_momentum(
         };
         node.width = Val::Percent(100.0 * share);
         colour.0 = momentum_colour(tier);
+    }
+}
+
+/// The tempo bar: three numbered pips, then the timeline.
+fn spawn_tempo(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(width),
+                height: Val::Px(14.0),
+                column_gap: Val::Px(3.0),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            Visibility::Hidden,
+            TempoRow(who),
+        ))
+        .with_children(|row| {
+            for hit in 0..3u8 {
+                row.spawn((
+                    Node {
+                        width: Val::Px(14.0),
+                        height: Val::Px(14.0),
+                        border: UiRect::all(Val::Px(1.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    BorderColor(DIM),
+                    TempoPip(who, hit),
+                ))
+                .with_children(|pip| {
+                    pip.spawn((
+                        Text::new(["1", "2", "3"][hit as usize]),
+                        TextFont {
+                            font_size: 10.0,
+                            ..default()
+                        },
+                        TextColor(INK),
+                    ));
+                });
+            }
+            row.spawn((
+                Node {
+                    flex_grow: 1.0,
+                    height: Val::Px(9.0),
+                    margin: UiRect::left(Val::Px(3.0)),
+                    border: UiRect::all(Val::Px(1.0)),
+                    ..default()
+                },
+                BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+                BorderColor(DIM),
+            ))
+            .with_children(|track| {
+                for stretch in STRETCHES {
+                    track.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Percent(0.0),
+                            width: Val::Percent(0.0),
+                            height: Val::Percent(100.0),
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                        TempoStretch(who, stretch),
+                    ));
+                }
+            });
+        });
+}
+
+/// Where a stretch of the tempo bar runs, as percentages of the track, and
+/// its colour; `None` when it is not drawn. A pure function of the tempo, so
+/// the test below can read it without a window.
+pub fn stretch_of(t: &sim::state::Tempo, stretch: Stretch) -> Option<(f32, f32, Color)> {
+    // The third hit running, or a finisher: the whole bar is the payoff.
+    if t.finishing {
+        return (stretch == Stretch::Open).then_some((0.0, 100.0, THIRD));
+    }
+    if t.end == 0 {
+        return None;
+    }
+    let at = |f: u16| 100.0 * f.min(t.end) as f32 / t.end as f32;
+    let span = |a: u16, b: u16| (b > a).then(|| (at(a), at(b) - at(a)));
+    // The window into the third hit is gold; into the second, cold.
+    let next = if t.thrown + 1 >= sim::moves::champion::DEPTH {
+        THIRD
+    } else {
+        SECOND
+    };
+    let dim = |c: Color| c.with_alpha(0.45);
+    let (from, width, colour) = match stretch {
+        Stretch::Beat => {
+            let (a, w) = span(0, t.beat)?;
+            (a, w, if t.on_the_beat { ASCENDED } else { BEAT })
+        }
+        Stretch::Lost => {
+            let (a, w) = span(t.beat, t.lost)?;
+            (a, w, LOST)
+        }
+        Stretch::Kept => {
+            let (a, w) = span(t.lost, t.swap)?;
+            (a, w, dim(next))
+        }
+        Stretch::Open => {
+            let (a, w) = span(t.swap, t.end)?;
+            (a, w, next)
+        }
+        Stretch::Repeat => (at(t.repeat), 0.0, INK),
+        Stretch::Gone => (0.0, at(t.now), Color::srgba(0.0, 0.0, 0.0, 0.6)),
+        Stretch::Cursor => (at(t.now), 0.0, ASCENDED),
+    };
+    Some((from, width, colour))
+}
+
+/// The tempo bars: shown for a Champion, the pips counting his string and
+/// the timeline of the link he is in.
+pub fn update_tempo(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&TempoRow, &mut Visibility)>,
+    mut pips: Query<(&TempoPip, &mut BackgroundColor, &mut BorderColor), Without<TempoStretch>>,
+    mut stretches: Query<(&TempoStretch, &mut Node, &mut BackgroundColor), Without<TempoPip>>,
+) {
+    for (row, mut visible) in rows.iter_mut() {
+        *visible = if sim::state::tempo(&sim.cur.players[row.0]).is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    for (pip, mut fill, mut border) in pips.iter_mut() {
+        let Some(t) = sim::state::tempo(&sim.cur.players[pip.0]) else {
+            continue;
+        };
+        let hit = pip.1;
+        let third = hit + 1 == sim::moves::champion::DEPTH;
+        let lit = if third { THIRD } else { SECOND };
+        // The latest hit, still on its way, is not a miss yet.
+        let coming = t.swinging && hit + 1 == t.thrown;
+        let thrown = hit < t.thrown && !coming;
+        let landed = t.landed & 1 << hit != 0;
+        // Thrown and landed: filled. Thrown and missed: a red edge, empty --
+        // which is why the next one came late. The next to throw: outlined in
+        // its colour.
+        fill.0 = match (thrown, landed) {
+            (true, true) => lit,
+            (true, false) => Color::NONE,
+            _ => Color::NONE,
+        };
+        border.0 = match (thrown, landed) {
+            (true, false) => MISSED,
+            (true, true) => lit,
+            _ if coming || (hit == t.thrown && !t.finishing) => lit,
+            _ => DIM,
+        };
+    }
+    for (tag, mut node, mut colour) in stretches.iter_mut() {
+        let drawn = sim::state::tempo(&sim.cur.players[tag.0])
+            .as_ref()
+            .and_then(|t| stretch_of(t, tag.1));
+        let Some((from, width, c)) = drawn else {
+            node.width = Val::Percent(0.0);
+            colour.0 = Color::NONE;
+            continue;
+        };
+        node.left = Val::Percent(from);
+        // The two marks are lines rather than stretches.
+        node.width = if matches!(tag.1, Stretch::Repeat | Stretch::Cursor) {
+            Val::Px(2.0)
+        } else {
+            Val::Percent(width)
+        };
+        colour.0 = c;
     }
 }
 
@@ -1631,6 +1873,32 @@ mod tests {
             let p = sim::state::Player::new(class);
             assert_eq!(locked(&p), None, "{} starts locked", class.name());
         }
+    }
+
+    #[test]
+    fn the_tempo_bar_is_laid_out_in_order_inside_its_track() {
+        // A sword string, tapped: every frame's bar has its stretches in the
+        // order the timeline runs, inside the track, and the window into the
+        // third hit is gold.
+        let mut w = sim::World::with_classes([Class::Champion, Class::Bulwark]);
+        for _ in 0..90 {
+            w.advance([sim::Input::new(sim::Input::W), sim::Input::default()]);
+        }
+        let mut gold = false;
+        for f in 0..120 {
+            let tap = if f % 5 == 0 { sim::Input::LEFT } else { 0 };
+            w.advance([sim::Input::new(tap), sim::Input::default()]);
+            let t = sim::state::tempo(&w.players[0]).expect("a Champion has a tempo");
+            let mut edge = 0.0;
+            for stretch in [Stretch::Beat, Stretch::Lost, Stretch::Kept, Stretch::Open] {
+                if let Some((from, width, colour)) = stretch_of(&t, stretch) {
+                    assert!(from >= edge - 0.01 && from + width <= 100.01, "{t:?}");
+                    edge = from + width;
+                    gold |= stretch == Stretch::Open && colour == THIRD;
+                }
+            }
+        }
+        assert!(gold, "the window into the third hit was never gold");
     }
 
     #[test]

@@ -500,12 +500,18 @@ pub struct Fury {
     pub beat: u8,
     /// The move running now is a true link: it hits harder and sticks longer.
     pub true_link: bool,
-    /// Weapon buttons pressed and still down since, as `clicks` bits: a press
-    /// not yet spent on a move. A link whose button is in here when it starts
-    /// may be held; one thrown by a button held over from the link before it
-    /// may not, so holding a button down still runs the string as it always
-    /// did. See `state::find_the_beat`.
+    /// Weapon buttons pressed and not yet spent on a move, as `clicks` bits.
+    /// **Only a press throws a move** (2026-10-20, from play): a button held
+    /// down throws the one link it was pressed for and nothing after it, so
+    /// the string is three presses, in rhythm, and never a held button
+    /// running itself. A press is kept for `fresh_left` frames after it --
+    /// one made a little before the next link may start comes out when it
+    /// may -- and a link whose button is in here when it starts may be held
+    /// to its finisher. See `state::find_the_beat`.
     pub fresh: u8,
+    /// Frames the presses in `fresh` are kept for: `tuning::press_kept` from
+    /// the latest one, and when it runs out they are forgotten.
+    pub fresh_left: u8,
     /// The link running now was started by a fresh press of its button, and
     /// so held, it is that weapon's finisher.
     pub may_hold: bool,
@@ -529,6 +535,20 @@ pub struct Fury {
     /// The weapon of the last hit that landed, plus one, for the swap's
     /// extra; zero for none yet.
     pub last_weapon: u8,
+    /// The longest impact freeze the link running now has stuck for: the
+    /// Beat's whole window, so the HUD's tempo bar can draw it to scale. Zero
+    /// until it lands. See `state::tempo`.
+    pub beat_len: u8,
+    /// The active frames the link running now still had to swing when it
+    /// landed: the stretch of the tempo bar between the Beat and the
+    /// recovery.
+    pub tail: u8,
+    /// Which places of the string now running landed, as bits: the first hit
+    /// is bit 0. What the tempo bar's three pips read.
+    pub landed: u8,
+    /// The last move of the string he threw, kept past its recovery so the
+    /// tempo bar can still say how long it was. See `state::tempo`.
+    pub link: u8,
 }
 
 impl Fury {
