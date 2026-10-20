@@ -46,8 +46,9 @@ So there are two problems, and they are separate:
   (`sim::valley::trees`) are the one case: the map keeps each tree's skeleton
   (`Atlas::trees`), the renderer draws the skeleton (`game::grove`), and the
   boxes built from it are hidden. The camera does not keep out of a hidden
-  box (`Terrain::seen_around`); the renderer cuts it away round the line to
-  the fighter instead.
+  box (`Terrain::seen_around`), nor of any box too small to hold it off
+  (`Atlas::holds_the_camera`, valley.md "What holds the camera off"); the
+  renderer cuts it away round the line to the fighter instead.
 - **Tiles.** The map is cut into 16 m squares. Each tile lists the boxes that
   touch it, in map order, and the places whose footprint does. A query over a
   box reads the tiles under it and merges their lists in map order, each box

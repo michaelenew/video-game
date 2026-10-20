@@ -137,6 +137,7 @@ pub fn draw(
                 ArenaId::HEARTH,
                 palette,
                 root,
+                None,
             );
         }
     }
