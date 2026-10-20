@@ -56,6 +56,7 @@
 //! hit test without a renderer.
 
 use crate::math::{self, Quat, V3};
+use crate::trail;
 use sim::class::{Form, Mechanic, Quicksilver};
 use sim::moves::champion::{self, HAMMER, SPEAR, SWORD};
 use sim::state::{self, Action, Player};
@@ -84,32 +85,12 @@ pub const MELT: u16 = 80;
 /// The weapons, in button order: [`SWORD`], [`HAMMER`], [`SPEAR`].
 pub const WEAPONS: usize = 3;
 
-/// How many recovery frames the arc keeps being drawn from the blade for:
-/// long enough for what the cut drew to wear away behind it.
-pub const TRAIL_GHOST: u16 = 12;
-
-/// How many recovery frames the blade still lights the arc for: the end of
-/// the stroke, before the return to guard begins.
-pub const FOLLOW: f32 = 3.0;
+pub use crate::trail::{FOLLOW, TRAIL_GHOST, ghost};
 
 /// How many frames back along the blade's path the arc reaches. A sword's cut
 /// is three; this is the cut and the wind-up's last stretch into it, and it
 /// is what wears the arc away behind the weapon once the cut is done.
 pub const WINDOW: f32 = 6.0;
-
-/// How much of the arc's length, from its oldest end, it fades in over.
-pub const TAIL: f32 = 0.3;
-
-/// How many places the blade has been the arc remembers: a picture each,
-/// [`WINDOW`] frames of them at 240 pictures a second.
-pub const TRAIL: usize = 24;
-
-/// How many steps each stretch between two remembered places is cut into
-/// for drawing, so the arc bends through them rather than turning a corner.
-pub const SMOOTH: usize = 6;
-
-/// How many columns the drawn arc has at most.
-pub const RIBBON: usize = (TRAIL - 1) * SMOOTH + 1;
 
 /// What a piece is shaped like. The renderer holds one unit mesh of each.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -688,22 +669,13 @@ fn reach_of(p: &Player) -> Option<(V3, V3)> {
 /// rather than slid: each end keeps its distance from the hand, so the
 /// weapon does not shorten as it sweeps.
 fn turn_between(then: &Weapon, now: &Weapon, hand: V3, alpha: f32) -> Weapon {
-    let swing = |a: V3, b: V3| {
-        let (a, b) = (math::sub(a, hand), math::sub(b, hand));
-        let length = math::length(a) + (math::length(b) - math::length(a)) * alpha;
-        let way = math::normalize_or(
-            math::add(math::scale(a, 1.0 - alpha), math::scale(b, alpha)),
-            b,
-        );
-        math::add(hand, math::scale(way, length))
-    };
     let flat = math::add(
         math::scale(then.flat, 1.0 - alpha),
         math::scale(now.flat, alpha),
     );
     Weapon {
-        butt: swing(then.butt, now.butt),
-        tip: swing(then.tip, now.tip),
+        butt: math::turn_about(then.butt, now.butt, hand, alpha),
+        tip: math::turn_about(then.tip, now.tip, hand, alpha),
         flat: math::normalize_or(flat, now.flat),
     }
 }
@@ -984,44 +956,13 @@ pub struct Cut {
     pub glow: f32,
 }
 
-/// How many recovery frames the follow-through glows for: [`TRAIL_GHOST`],
-/// or a shorter recovery but its last frame, so it is gone before she is
-/// free rather than cut off at it.
-pub const fn ghost(recovery: u16) -> u16 {
-    let most = recovery.saturating_sub(1);
-    let ghost = if TRAIL_GHOST < most {
-        TRAIL_GHOST
-    } else {
-        most
-    };
-    if ghost == 0 { 1 } else { ghost }
-}
-
 /// The cut the Champion is in, `alpha` of the way on to the next frame, if
 /// the arc is being drawn from her blade.
 pub fn cut(p: &Player, alpha: f32) -> Option<Cut> {
     if p.class != sim::Class::Champion {
         return None;
     }
-    let (kind, glow) = match p.action {
-        Action::Startup { kind, .. } => (kind, 0.0),
-        Action::Active { kind, .. } => (kind, 1.0),
-        Action::Recovery { kind, left } => {
-            let m = sim::moves::get(p.class, kind);
-            let ghost = ghost(m.recovery) as f32;
-            let gone = m.recovery.saturating_sub(left) as f32 + alpha;
-            if gone >= ghost {
-                return None;
-            }
-            // Out over the first few frames, squared: bright through the
-            // end of the stroke and gone by the time the blade is lifted
-            // back to guard, so the return is not drawn as a second cut.
-            // What was drawn while the volume was out stays, wearing away.
-            let left = (1.0 - gone / FOLLOW).max(0.0);
-            (kind, left * left)
-        }
-        _ => return None,
-    };
+    let (kind, glow) = trail::strike(p, alpha)?;
     // A move with no volume (the vault) leaves no arc.
     if sim::moves::get(p.class, kind).active == 0 || kind == champion::POLE_VAULT {
         return None;
@@ -1043,173 +984,18 @@ pub const fn band(which: u8) -> f32 {
     }
 }
 
-/// One place the blade has been: the band's inner and outer edge, when (in
-/// frames, with the share between them), and how bright the arc is there.
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-pub struct Sample {
-    pub inner: V3,
-    pub outer: V3,
-    pub at: f32,
-    pub glow: f32,
-}
-
-impl Sample {
-    /// Where `arms`' weapon is drawn now.
-    pub fn of(arms: &Arms, cut: &Cut, at: f32) -> Sample {
-        let w = &arms.weapons[cut.which as usize];
-        Sample {
-            inner: math::add(
-                w.butt,
-                math::scale(math::sub(w.tip, w.butt), band(cut.which)),
-            ),
-            outer: w.tip,
-            at,
-            glow: cut.glow,
-        }
+/// Where `arms`' weapon is drawn now, as a place on the arc behind it.
+pub fn sample(arms: &Arms, cut: &Cut, at: f32) -> trail::Sample {
+    let w = &arms.weapons[cut.which as usize];
+    trail::Sample {
+        inner: math::add(
+            w.butt,
+            math::scale(math::sub(w.tip, w.butt), band(cut.which)),
+        ),
+        outer: w.tip,
+        at,
+        glow: cut.glow,
     }
-}
-
-/// **Where the blade has been**, oldest first: one place a picture, for the
-/// last [`WINDOW`] frames. It is the renderer's, like a cross-fade: the pose
-/// it is taken from runs on the renderer's clock, so it cannot be asked of
-/// a frame gone by.
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-pub struct Path {
-    samples: [Sample; TRAIL],
-    count: usize,
-}
-
-impl Path {
-    pub fn clear(&mut self) {
-        self.count = 0;
-    }
-
-    pub fn samples(&self) -> &[Sample] {
-        &self.samples[..self.count]
-    }
-
-    /// Add where the blade is now. A picture that went back in time (a
-    /// rollback, a step backwards) first forgets everything after it; two
-    /// pictures at the same moment are one place. What is older than
-    /// [`WINDOW`] goes, but for the one just past it, so the arc's tail
-    /// reaches all the way to nothing.
-    pub fn push(&mut self, s: Sample) {
-        while self.count > 0 && self.samples[self.count - 1].at > s.at + 1e-4 {
-            self.count -= 1;
-        }
-        if self.count > 0 && s.at - self.samples[self.count - 1].at < 0.02 {
-            self.samples[self.count - 1] = s;
-        } else {
-            if self.count == TRAIL {
-                self.samples.copy_within(1.., 0);
-                self.count -= 1;
-            }
-            self.samples[self.count] = s;
-            self.count += 1;
-        }
-        let mut stale = 0;
-        while stale + 1 < self.count && s.at - self.samples[stale + 1].at >= WINDOW {
-            stale += 1;
-        }
-        if stale > 0 {
-            self.samples.copy_within(stale..self.count, 0);
-            self.count -= stale;
-        }
-    }
-}
-
-/// **The arc as it is drawn**: the path joined by a curve, in columns from
-/// the oldest end to the blade, each a point on the inner edge and one on
-/// the outer; how far along it is in time (`life`: 1 at the blade, 0
-/// [`WINDOW`] frames back), and how bright.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Ribbon {
-    pub inner: [V3; RIBBON],
-    pub outer: [V3; RIBBON],
-    pub life: [f32; RIBBON],
-    pub glow: [f32; RIBBON],
-    pub count: usize,
-}
-
-/// One point of a Catmull-Rom curve through `b` and `c`, `t` of the way, with
-/// `a` and `d` the points either side: the curve the blade's places lie on,
-/// bending through them rather than turning a corner at each.
-fn catmull(a: V3, b: V3, c: V3, d: V3, t: f32) -> V3 {
-    let (t2, t3) = (t * t, t * t * t);
-    std::array::from_fn(|i| {
-        0.5 * (2.0 * b[i]
-            + (c[i] - a[i]) * t
-            + (2.0 * a[i] - 5.0 * b[i] + 4.0 * c[i] - d[i]) * t2
-            + (3.0 * b[i] - a[i] - 3.0 * c[i] + d[i]) * t3)
-    })
-}
-
-/// **The arc a path draws**, at the moment `now`. Its last column is the
-/// last place pushed -- the blade, this picture -- exactly.
-pub fn ribbon(path: &Path, now: f32) -> Ribbon {
-    let s = path.samples();
-    let n = s.len();
-    let mut r = Ribbon {
-        inner: [math::ZERO; RIBBON],
-        outer: [math::ZERO; RIBBON],
-        life: [0.0; RIBBON],
-        glow: [0.0; RIBBON],
-        count: 0,
-    };
-    if n < 2 {
-        return r;
-    }
-    // The ends carried on straight, so the curve has a neighbour beyond each.
-    let at = |edge: fn(&Sample) -> V3, i: isize| -> V3 {
-        if i < 0 {
-            math::sub(math::scale(edge(&s[0]), 2.0), edge(&s[1]))
-        } else if i as usize >= n {
-            math::sub(math::scale(edge(&s[n - 1]), 2.0), edge(&s[n - 2]))
-        } else {
-            edge(&s[i as usize])
-        }
-    };
-    let inner: fn(&Sample) -> V3 = |x| x.inner;
-    let outer: fn(&Sample) -> V3 = |x| x.outer;
-    let mut k = 0;
-    for seg in 0..n - 1 {
-        let i = seg as isize;
-        let steps = if seg == n - 2 { SMOOTH + 1 } else { SMOOTH };
-        for step in 0..steps {
-            let f = step as f32 / SMOOTH as f32;
-            r.inner[k] = catmull(
-                at(inner, i - 1),
-                at(inner, i),
-                at(inner, i + 1),
-                at(inner, i + 2),
-                f,
-            );
-            r.outer[k] = catmull(
-                at(outer, i - 1),
-                at(outer, i),
-                at(outer, i + 1),
-                at(outer, i + 2),
-                f,
-            );
-            let when = s[seg].at + (s[seg + 1].at - s[seg].at) * f;
-            r.life[k] = (1.0 - (now - when) / WINDOW).clamp(0.0, 1.0);
-            r.glow[k] = s[seg].glow + (s[seg + 1].glow - s[seg].glow) * f;
-            k += 1;
-        }
-    }
-    r.count = k;
-    // The oldest stretch fades in, so a young arc -- one whose tail is not yet
-    // old enough to have worn away -- starts from nothing rather than an edge.
-    let mut run = [0.0f32; RIBBON];
-    for j in 1..k {
-        run[j] = run[j - 1] + math::length(math::sub(r.outer[j], r.outer[j - 1]));
-    }
-    let total = run[k - 1].max(1e-4);
-    for (glow, run) in r.glow.iter_mut().zip(run).take(k) {
-        let x = (run / total / TAIL).clamp(0.0, 1.0);
-        *glow *= x * x * (3.0 - 2.0 * x);
-    }
-    r
 }
 
 /// The part of `v` square to `axis`, unit, or `None` if there is none.

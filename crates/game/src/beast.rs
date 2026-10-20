@@ -742,6 +742,8 @@ fn make_signs(
 pub fn signs(
     sim: Res<crate::Sim>,
     signs: Res<Signs>,
+    mut emits: ResMut<crate::swing::Emits>,
+    camera: Query<&GlobalTransform, With<crate::MainCamera>>,
     mut marks: Query<MarkParts, Without<Spike>>,
     mut spikes: Query<(&Spike, &Of, &mut Transform, &mut Visibility), Without<Mark>>,
 ) {
@@ -924,7 +926,16 @@ pub fn signs(
             // spikes rather than a wall, each pointing the way it is going.
             let along = fx3(t.along).with_y(0.0).normalize_or_zero();
             let across = Vec3::new(-along.z, 0.0, along.x);
-            let centre = fx3(t.anchor);
+            // Between the frame before and this one, as the bodies are, so
+            // the flight -- and the streak behind it -- moves every picture.
+            let then = (of.0 < MAX_MONSTERS && sim.prev.map_origin() == sim.cur.map_origin())
+                .then(|| sim.prev.monsters[of.0].and_then(|m| m.telegraph()))
+                .flatten()
+                .filter(|p| p.live && p.kind == t.kind);
+            let centre = match then {
+                Some(p) => fx3(p.anchor).lerp(fx3(t.anchor), sim.clock.alpha()),
+                None => fx3(t.anchor),
+            };
             let r = t.radius.to_f32_for_render();
             let (lo, hi) = (t.low.to_f32_for_render(), t.high.to_f32_for_render());
             let side = (u * 2.0 - 1.0) * r * 0.9;
@@ -936,6 +947,19 @@ pub fn signs(
                 rotation: Quat::from_rotation_arc(Vec3::Y, along),
                 scale: Vec3::new(1.4, FLIGHT, 1.4),
             };
+            // And the streak it leaves, from its point back along its flight.
+            let eye = camera.single().map(|c| c.translation()).unwrap_or(Vec3::Y);
+            let (inner, outer) =
+                crate::swing::across(point - along * FLIGHT * 0.3, along, eye, 0.07);
+            emits.add(crate::swing::Emit {
+                key: crate::swing::key(crate::swing::source::VOLLEY, of.0, i as u8),
+                inner,
+                outer,
+                glow: 0.8,
+                tint: crate::swing::linear(Color::srgb(0.92, 0.86, 0.72)),
+                window: 4.0,
+                style: crate::swing::Style::Streak,
+            });
         }
         *visible = Visibility::Inherited;
     }
@@ -953,7 +977,7 @@ const SPIKES: usize = 12;
 const SPIKE_RADIUS: f32 = 0.13;
 /// A spike standing on the tail at the top of the windup, and one in flight.
 const BRISTLE: f32 = 1.1;
-const FLIGHT: f32 = 1.5;
+const FLIGHT: f32 = 0.7;
 
 const MOUNTABLE: Color = Color::srgb(0.38, 0.85, 0.62);
 const HIT: Color = Color::srgb(1.0, 0.23, 0.31);

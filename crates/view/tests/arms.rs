@@ -14,6 +14,7 @@ use sim::moves::champion as c;
 use view::arms::{self, Torso};
 use view::math::{self, Quat, V3};
 use view::skeleton;
+use view::trail;
 
 fn v(p: sim::V3) -> V3 {
     [
@@ -465,7 +466,7 @@ fn the_cut_glows_while_the_volume_is_out_and_fades_through_the_follow_through() 
 /// behind, the last column is where the weapon is drawn this picture.
 #[test]
 fn the_arc_ends_on_the_blade_and_wears_away_behind_it() {
-    let mut path = arms::Path::default();
+    let mut path = trail::Path::default();
     let mut prev = None;
     let mut frame = 0.0;
     throw(c::SWORD_GROUND, |p, _| {
@@ -477,8 +478,8 @@ fn the_arc_ends_on_the_blade_and_wears_away_behind_it() {
                 .expect("she is armed");
             let cut = arms::cut(p, alpha).expect("a cut");
             let now = frame + alpha;
-            path.push(arms::Sample::of(&a, &cut, now));
-            let r = arms::ribbon(&path, now);
+            path.push(arms::sample(&a, &cut, now), arms::WINDOW);
+            let r = trail::ribbon(&path, now, arms::WINDOW);
             if path.samples().len() < 2 {
                 continue;
             }
@@ -490,7 +491,7 @@ fn the_arc_ends_on_the_blade_and_wears_away_behind_it() {
             );
             assert_eq!(r.life[head], 1.0);
             assert!(r.life[..r.count].windows(2).all(|w| w[0] <= w[1] + 1e-6));
-            assert!(r.count <= arms::RIBBON);
+            assert!(r.count <= trail::RIBBON);
         }
         frame += 1.0;
         prev = Some(*p);
@@ -498,16 +499,19 @@ fn the_arc_ends_on_the_blade_and_wears_away_behind_it() {
     // Long after, only the window's worth is kept.
     let last = *path.samples().last().expect("a path");
     for k in 1..40 {
-        path.push(arms::Sample {
-            at: last.at + k as f32 * 0.5,
-            ..last
-        });
+        path.push(
+            trail::Sample {
+                at: last.at + k as f32 * 0.5,
+                ..last
+            },
+            arms::WINDOW,
+        );
     }
     let s = path.samples();
     assert!(s.last().unwrap().at - s[1].at < arms::WINDOW);
     // And a picture back in time forgets what came after it.
     let back = s[2].at;
-    path.push(arms::Sample { at: back, ..last });
+    path.push(trail::Sample { at: back, ..last }, arms::WINDOW);
     assert!(path.samples().iter().all(|x| x.at <= back));
 }
 

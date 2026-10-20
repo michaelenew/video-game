@@ -485,15 +485,25 @@ is carried, off her right hand: the sword up and forward in a low guard, the ham
 floor at her side with the haft leaning up into her hand, the spear stood upright with its
 butt on the floor and its head well over hers.
 
-**The rod became a trail.** The capsule of each active frame so far is remembered, and a band
-across its outer part is drawn between each two of them — the arc of the cut — faint at the old
-end and solid at the new, lingering and fading through the first seven frames of the
-recovery. Each weapon has its own: a broad cold-white crescent for the sword, a short band at
-the head in a hot ember colour for the hammer, a thin blue streak at the point for the spear.
-The debug overlay (F1) still draws the capsule itself.
+**The rod became a trail, and the trail is the blade's path** (2026-10-20). Every picture,
+where the weapon is drawn is remembered (`view::trail::Path`), and the arc is that path joined
+by a curve (`view::trail::ribbon`) and painted by its own shader (`game::swing`,
+`swing.wgsl`): a crescent, full at the blade and drawn to a point behind it, a hot line where
+the edge passed, fine streaks fraying at the tail. So **the head of the arc is the blade on
+every picture**, through the wind-up, the cut and the follow-through. An arc taken from the hit
+volume, as the first one was, was somewhere the sword was not: the volume is out for three
+frames, it is not where the weapon is drawn through the wind-up and the recovery, and it moved
+once a frame while the picture moved between. Between two frames the weapon itself turns about
+her hand from where it pointed to where it points (`arms::champion_arms_between`), so a cut
+sweeps rather than ticking round in three jumps. The arc is dark through the wind-up (its
+lead-in), full while the volume is out, and out over three frames of the follow-through, so the
+lift back to guard is not drawn as a second cut; what the cut drew wears away behind the blade
+over six frames. Each weapon has its own colour: icy blue for the sword, a hot ember for the
+hammer, a thin blue streak for the spear. The debug overlay (F1) still draws the capsule itself.
 
 `crates/view/tests/arms.rs` holds all of this: the weapon whole, its tip on the volume's far
-end and the leading hand on it on every active frame of the chain; a change of shape inside
+end and the leading hand on it on every active frame of the chain; the arc's head on the
+blade and its glow through the cut; a change of shape inside
 `FORM_IN` frames with no liquid lost between the two; the shape kept for at least two seconds
 and melting over at least three quarters of one without a jump; the coil on the arm, both
 bones of it; the three silhouettes apart (the spear far the longest, the hammer's head

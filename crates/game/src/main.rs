@@ -326,7 +326,6 @@ fn main() {
                 // other anyway: each puts one pool of meshes where the
                 // simulation says its things are.
                 (
-                    place_effects,
                     place_structures,
                     place_beams,
                     place_bolts,
@@ -336,13 +335,20 @@ fn main() {
                     place_wingspans,
                     place_marks,
                     place_scythes,
-                    place_essence_swings,
                     place_champion_arms,
-                    swing::place,
+                    // The trails' emitters (`swing.rs`); the trails are laid
+                    // once the creatures' are in too, below.
+                    (
+                        swing::emit_champions,
+                        swing::emit_scythes,
+                        swing::emit_volume_swings,
+                        place_effects,
+                        place_spells,
+                    )
+                        .chain(),
                     place_champion_glow,
                     place_pips,
                     place_curses,
-                    place_spells,
                     claimed::drape,
                     place_auras,
                 ),
@@ -356,7 +362,9 @@ fn main() {
                 crosshair::update,
                 debug::draw,
                 beast::overlay,
-                beast::signs,
+                // The creatures' volleys are the last thing to say where a
+                // trail is; then the trails.
+                (beast::signs, swing::place).chain(),
                 palette::toggle,
                 palette::draw,
             )
@@ -2128,20 +2136,6 @@ struct GlowMesh {
     owner: usize,
 }
 
-/// The essence around the Blood mage's swing: the hit volume itself, drawn
-/// in the same stuff as her pools, because it is the life force doing the
-/// swinging. The weapon is iron and one size; this is what her grey buys,
-/// and it is drawn at exactly the capsule the hit test reads --
-/// `view::scythe::swing_volume`.
-#[derive(Component)]
-struct EssenceSwing {
-    owner: usize,
-    /// The capsule: a cylinder down its length and a ball at each end.
-    piece: usize,
-}
-
-const SWING_PIECES: usize = 3;
-
 /// How many steps of solidity a pool is drawn in: one material per step,
 /// because a material is shared by everything wearing it and the solidity is
 /// per pool. Six is enough to watch one fade and few enough to make once.
@@ -2848,23 +2842,6 @@ fn setup(
                 ScytheMesh { owner, piece },
             ));
         }
-        // And the essence her swing carries: the capsule the hit test reads.
-        for piece in 0..SWING_PIECES {
-            commands.spawn((
-                Mesh3d(if piece == 0 {
-                    unit.clone()
-                } else {
-                    look.ball.clone()
-                }),
-                MeshMaterial3d(look.essence[0].clone()),
-                Transform::default(),
-                Visibility::Hidden,
-                EssenceSwing { owner, piece },
-                // A see-through volume: its shadow on the floor read as a
-                // solid log lying beside her.
-                bevy::pbr::NotShadowCaster,
-            ));
-        }
     }
 
     // The Champion's three weapons. Each piece is a unit mesh of its shape,
@@ -3112,9 +3089,21 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
         // the width of the capsule on top of a sword was two drawings of one
         // thing, and the rod is the one that said nothing about the weapon.
         // The debug overlay still draws the capsule itself.
+        //
+        // And not a swing or a cascade of blows, anybody's: a blade brought
+        // round and a blow in flight leave trails (`swing.rs`), drawn from
+        // the weapon or the ball itself, and a rod along the volume on top of
+        // one was the box the trail replaced.
         let p = &sim.cur.players[tag.0];
-        let shot = sim::state::hitbox(p)
-            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && !orb_out(p));
+        let swung = p.action.attack_kind().is_some_and(|k| {
+            matches!(
+                sim::moves::get(p.class, k).shape,
+                sim::moves::Shape::Swing(_) | sim::moves::Shape::Cascade
+            )
+        });
+        let shot = sim::state::hitbox(p).filter(|hb| {
+            p.class != sim::Class::Champion && hb.is_a_beam() && !orb_out(p) && !swung
+        });
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -3420,10 +3409,7 @@ fn place_scythes(
     mut meshes: Query<(&ScytheMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let [left, right] = hands.0[tag.owner];
-        let Some(scythe) =
-            view::scythe::scythe(&sim.cur.players[tag.owner], left.into(), right.into())
-        else {
+        let Some(scythe) = drawn_scythe(&sim, &hands, tag.owner) else {
             *vis = Visibility::Hidden;
             continue;
         };
@@ -3520,6 +3506,21 @@ fn place_champion_arms(
 
 /// Where a fighter's chest, hips and weapon elbow are drawn, as `view::arms`
 /// reads them.
+/// **The Blood mage's scythe as it is drawn this picture**: on the drawn
+/// hands, between the last two simulated frames by the share the body is
+/// drawn at. The scythe itself and the trail behind it (`swing::emit_scythes`)
+/// both ask this, so the trail is on the blade.
+fn drawn_scythe(sim: &Sim, hands: &Hands, owner: usize) -> Option<view::scythe::Scythe> {
+    let [left, right] = hands.0[owner];
+    let cur = &sim.cur.players[owner];
+    let prev = if sim.prev.map_origin() == sim.cur.map_origin() {
+        &sim.prev.players[owner]
+    } else {
+        cur
+    };
+    view::scythe::scythe_between(prev, cur, sim.clock.alpha(), left.into(), right.into())
+}
+
 /// **The Champion's weapon as it is drawn this picture**: on the drawn hands
 /// and torso, and between the last two simulated frames by the share the
 /// body is drawn at, so the weapon sweeps with the body rather than ticking
@@ -3639,65 +3640,6 @@ fn quat(q: Quat) -> view::math::Quat {
     view::math::Quat([q.x, q.y, q.z, q.w])
 }
 
-/// Draw the essence of a scythe swing: the hit volume, as a capsule in the
-/// pools' own material, at the solidity her grey has earned and fading
-/// through the first frames of the recovery.
-fn place_essence_swings(
-    sim: Res<Sim>,
-    look: Res<EffectLook>,
-    mut meshes: Query<(
-        &EssenceSwing,
-        &mut Transform,
-        &mut Visibility,
-        &mut MeshMaterial3d<StandardMaterial>,
-    )>,
-) {
-    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
-        let p = &sim.cur.players[tag.owner];
-        let Some(volume) = view::scythe::swing_volume(p) else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        let (from, to) = (Vec3::from(volume.from), Vec3::from(volume.to));
-        let along = to - from;
-        let length = along.length();
-        if length < 0.01 {
-            *vis = Visibility::Hidden;
-            continue;
-        }
-        *vis = Visibility::Inherited;
-        // More solid the more grey she carries, and fading with the ghost.
-        // Never fainter than the second step while it is live: at the
-        // faintest, over a warm floor, it read as a pale log rather than
-        // her essence.
-        let solid = p.grey_share().to_f32_for_render() * volume.fade;
-        let floor = if volume.fade > 0.5 { 2 } else { 0 };
-        let step = ((solid * (ESSENCE_STEPS - 1) as f32).round() as u8).max(floor);
-        let want = look.material(Skin::Essence(step));
-        if mat.0 != want {
-            mat.0 = want;
-        }
-        let width = volume.radius * 2.0;
-        match tag.piece {
-            0 => {
-                tf.translation = from + along * 0.5;
-                tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
-                tf.scale = Vec3::new(width, length, width);
-            }
-            1 => {
-                tf.translation = from;
-                tf.rotation = Quat::IDENTITY;
-                tf.scale = Vec3::splat(width);
-            }
-            _ => {
-                tf.translation = to;
-                tf.rotation = Quat::IDENTITY;
-                tf.scale = Vec3::splat(width);
-            }
-        }
-    }
-}
-
 /// Put the Reaver's pips over whoever is carrying marks.
 fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut Visibility)>) {
     for (pip, mut tf, mut vis) in meshes.iter_mut() {
@@ -3756,6 +3698,8 @@ fn curse_spot(w: &World, body: usize, index: u8) -> Option<(Vec3, f32)> {
 fn place_spells(
     sim: Res<Sim>,
     look: Res<EffectLook>,
+    mut emits: ResMut<swing::Emits>,
+    camera: Query<&GlobalTransform, With<MainCamera>>,
     mut meshes: Query<(
         &SpellMesh,
         &mut Transform,
@@ -3764,11 +3708,31 @@ fn place_spells(
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
+    let alpha = sim.clock.alpha();
+    let eye = camera.single().map(|c| c.translation()).unwrap_or(Vec3::Y);
+    let same_frame = sim.prev.map_origin() == sim.cur.map_origin();
     for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
         let Some(piece) = spell_piece(&sim.cur, tag.owner, tag.part) else {
             *vis = Visibility::Hidden;
             continue;
         };
+        let then = same_frame
+            .then(|| spell_piece(&sim.prev, tag.owner, tag.part))
+            .flatten();
+        let moved = then.map(|t| piece.at - t.at);
+        let piece = between(then, piece, alpha);
+        if let Some(leaves) = piece.trail {
+            emits.add(leaves.emit(
+                swing::key(swing::source::SPELL, tag.owner, leaves.part),
+                &piece,
+                moved,
+                eye,
+            ));
+            if leaves.only {
+                *vis = Visibility::Hidden;
+                continue;
+            }
+        }
         let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
         *vis = Visibility::Inherited;
         if mesh.0 != want_mesh {
@@ -4070,7 +4034,6 @@ fn orb_piece(
     left: Option<u16>,
     grown: f32,
 ) -> Option<Piece> {
-    const TRAIL: usize = 12;
     let m = sim::moves::get(p.class, kind);
     let skin = if kind == sim::moves::dual::DARK_AUTO {
         Skin::Dark
@@ -4097,17 +4060,32 @@ fn orb_piece(
         let (_, now) = sim::moves::orb_progress(&m, left);
         (now.to_f32_for_render(), ball)
     };
-    match part {
-        0 => Some(floating_in(skin, at(now), size)),
-        k if k <= TRAIL => {
-            let back = k as f32 / TRAIL as f32;
-            Some(floating_in(
-                skin,
-                at(now * (1.0 - back)),
-                ball * (0.75 - 0.6 * back),
-            ))
-        }
-        _ => None,
+    // The ball, and the streak it leaves along its curve from her shoulder.
+    (part == 0).then(|| {
+        floating_in(skin, at(now), size).leaving(Leaves::streak(
+            0,
+            ball * 0.8,
+            orb_tint(kind),
+            ORB_TRAIL,
+        ))
+    })
+}
+
+/// How many frames back a Flurry dash blow's streak reaches: the whole of
+/// the dash and the run after it, so every blow's path stands until she has
+/// gone through them, the oldest faintest.
+const FLURRY_TRAIL: f32 = 30.0;
+
+/// How many frames back an auto's streak reaches: most of its flight.
+const ORB_TRAIL: f32 = 5.0;
+
+/// The colour of the streak behind a Dual mage's auto: violet behind the
+/// dark, pale gold behind the light, the two halves of her.
+fn orb_tint(kind: u8) -> Color {
+    if kind == sim::moves::dual::DARK_AUTO {
+        Color::srgb(0.55, 0.25, 0.95)
+    } else {
+        Color::srgb(1.0, 0.92, 0.70)
     }
 }
 
@@ -4115,8 +4093,8 @@ fn orb_piece(
 /// `sim::moves::flurry_line` draws -- each blow a ball flying its stretch with
 /// a trail, bowing to alternate sides, leaving its trail standing -- and the
 /// disk they strike at the end, as tall across as she is. `left` is the active
-/// frames remaining; `None` is the run, when the trails behind her scatter
-/// outward and fade as she goes through them. The blow in flight is the one
+/// frames remaining; `None` is the run, when the streaks behind her fade as
+/// she goes through them (they are trails, `swing.rs`, and linger on their own). The blow in flight is the one
 /// `sim::moves::flurry_blow` says is out, so what flies is what hits.
 fn flurry_piece(
     w: &World,
@@ -4145,7 +4123,6 @@ fn flurry_piece(
         _ => (n, 1.0),
     };
     let way = d - a;
-    let length = way.length().max(0.01);
     let flat = Vec3::new(way.x, 0.0, way.z).normalize_or(Vec3::Z);
     let side = Vec3::new(-flat.z, 0.0, flat.x);
     let path = |b: usize, u: f32| {
@@ -4155,44 +4132,30 @@ fn flurry_piece(
     };
     let skin_of = |b: usize| if b % 2 == 0 { Skin::Dark } else { Skin::Light };
     let ball = 0.6;
-    // How far through the line her run has carried her: what is behind it
-    // scatters.
-    let run = left
-        .is_none()
-        .then(|| ((fx3(p.pos) + Vec3::Y * 0.9 - a).dot(way) / (length * length)).clamp(0.0, 1.0));
     if part < SHOWN * PER {
         let (b, k) = (part / PER, part % PER);
         if b >= n || b > current {
             return None;
         }
         if b == current {
-            return Some(if k == 0 {
-                floating_in(skin_of(b), path(b, frac), ball)
+            // The blow in flight, and the streak it leaves along its bow.
+            let kind = if b % 2 == 0 {
+                sim::moves::dual::DARK_AUTO
             } else {
-                let back = k as f32 / PER as f32;
-                floating_in(
-                    skin_of(b),
-                    path(b, frac * (1.0 - back)),
-                    ball * (0.75 - 0.6 * back),
-                )
+                sim::moves::dual::LIGHT_AUTO
+            };
+            return (k == 0).then(|| {
+                floating_in(skin_of(b), path(b, frac), ball).leaving(Leaves::streak(
+                    b as u8,
+                    ball * 0.7,
+                    orb_tint(kind),
+                    FLURRY_TRAIL,
+                ))
             });
         }
-        // A landed blow's trail, standing where it flew.
-        let u = (k as f32 + 0.5) / PER as f32;
-        let mut at = path(b, u);
-        let mut size = ball * 0.45;
-        if let Some(run) = run {
-            let behind = ((run - (b as f32 + u) / n as f32) * length / 1.5).clamp(0.0, 1.0);
-            let hash = ((part as f32 * 12.9898).sin() * 43758.547).fract() - 0.5;
-            let sign = if b % 2 == 0 { 1.0 } else { -1.0 };
-            let outward = (side * (sign + hash) + Vec3::Y * (0.6 + hash)).normalize_or(Vec3::Y);
-            at += outward * behind * 2.5;
-            size *= 1.0 - behind;
-            if size <= 0.01 {
-                return None;
-            }
-        }
-        return Some(floating_in(skin_of(b), at, size));
+        // A landed blow's trail stays where it flew: the streak it left,
+        // lingering for the whole of the dash (`FLURRY_TRAIL`).
+        return None;
     }
     // The disk, swelling into being as the last blow flies at it.
     let grown = if current + 1 >= n {
@@ -4251,6 +4214,7 @@ fn hold_gathering(
                     at: over + Vec3::new(a.cos() * out * reach, heap, a.sin() * out * reach * 0.85),
                     scale: Vec3::new(size * 2.0, size * 1.1, size * 1.7),
                     turn: Quat::IDENTITY,
+                    trail: None,
                 });
             }
             if part < PUFFS + WISPS {
@@ -4264,6 +4228,7 @@ fn hold_gathering(
                     at: over + Vec3::new(a.cos() * r, 0.1 * sway, a.sin() * r),
                     scale: Vec3::new(reach * 0.5, reach * 0.06, reach * 0.16),
                     turn: Quat::from_rotation_y(-a + std::f32::consts::FRAC_PI_2),
+                    trail: None,
                 });
             }
             None
@@ -4365,6 +4330,7 @@ fn mark_piece(p: &sim::state::Player) -> Option<Piece> {
 fn place_effects(
     sim: Res<Sim>,
     look: Res<EffectLook>,
+    mut emits: ResMut<swing::Emits>,
     camera: Query<&GlobalTransform, With<MainCamera>>,
     mut meshes: Query<(
         &EffectMesh,
@@ -4374,6 +4340,9 @@ fn place_effects(
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
+    let alpha = sim.clock.alpha();
+    let eye = camera.single().map(|c| c.translation()).unwrap_or(Vec3::Y);
+    let same_frame = sim.prev.map_origin() == sim.cur.map_origin();
     for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
         let effect = sim.cur.effects[tag.slot];
         let piece = effect.and_then(|e| effect_piece(&e, tag.part));
@@ -4381,6 +4350,27 @@ fn place_effects(
             *vis = Visibility::Hidden;
             continue;
         };
+        // The same effect on the frame before, if it was there: one a frame
+        // younger, of the same kind.
+        let then = sim.prev.effects[tag.slot]
+            .filter(|t| {
+                same_frame && effect.is_some_and(|e| t.kind == e.kind && t.age + 1 == e.age)
+            })
+            .and_then(|t| effect_piece(&t, tag.part));
+        let moved = then.map(|t| piece.at - t.at);
+        piece = between(then, piece, alpha);
+        if let Some(leaves) = piece.trail {
+            emits.add(leaves.emit(
+                swing::key(swing::source::EFFECT, tag.slot, leaves.part),
+                &piece,
+                moved,
+                eye,
+            ));
+            if leaves.only {
+                *vis = Visibility::Hidden;
+                continue;
+            }
+        }
         let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
         *vis = Visibility::Inherited;
         if mesh.0 != want_mesh {
@@ -4521,6 +4511,113 @@ struct Piece {
     /// identity for everything that stands upright, a limb's direction for a
     /// thrall's arms and legs, and the way a disk faces or a bolt runs.
     turn: Quat,
+    /// The trail it leaves behind it as it moves, if it leaves one
+    /// (`swing.rs`): drawn from where the piece is drawn, so it is on it.
+    trail: Option<Leaves>,
+}
+
+/// **What a moving piece leaves behind it**: which trail of its owner's it
+/// is, how wide, how bright and what colour, how far back it reaches, and in
+/// which style. Where it is comes from the piece itself.
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct Leaves {
+    part: u8,
+    half: f32,
+    /// The band's half-width as a direction in the arena, where it is fixed
+    /// to the thing (a flat blade of light flying flat); `None` for a band
+    /// worked out from the piece (`emit`).
+    band: Option<Vec3>,
+    glow: f32,
+    tint: Color,
+    window: f32,
+    style: swing::Style,
+    /// The trail is the whole of it: the piece says where, and is not drawn
+    /// itself -- a blade spun so fast it is only its arc, a wave of light
+    /// that is only its sweep.
+    only: bool,
+}
+
+impl Leaves {
+    /// A streak `half` wide either side of the line of flight, in `tint`,
+    /// reaching `window` frames back: the trail behind something thrown.
+    /// The same, with its band fixed to `band` (half of it, either side).
+    fn flat(self, band: Vec3) -> Leaves {
+        Leaves {
+            band: Some(band),
+            ..self
+        }
+    }
+
+    fn streak(part: u8, half: f32, tint: Color, window: f32) -> Leaves {
+        Leaves {
+            part,
+            half,
+            band: None,
+            glow: 1.0,
+            tint,
+            window,
+            style: swing::Style::Streak,
+            only: false,
+        }
+    }
+
+    /// The same, drawn as its trail alone.
+    fn alone(self) -> Leaves {
+        Leaves { only: true, ..self }
+    }
+
+    /// Where `piece` is drawn, as the newest place on its trail. A blade's
+    /// band runs along its own long axis (the piece's `turn` of `Y`), half
+    /// out from the middle each way; a streak's lies across the way it moved,
+    /// square to the eye.
+    fn emit(&self, key: u32, piece: &Piece, moved: Option<Vec3>, eye: Vec3) -> swing::Emit {
+        let (inner, outer) = match (self.band, self.style) {
+            (Some(band), _) => (piece.at - band, piece.at + band),
+            (None, swing::Style::Blade) => {
+                let along = piece.turn * Vec3::Y * self.half;
+                (piece.at - along, piece.at + along)
+            }
+            (None, swing::Style::Streak) => {
+                swing::across(piece.at, moved.unwrap_or(Vec3::ZERO), eye, self.half)
+            }
+        };
+        swing::Emit {
+            key,
+            inner,
+            outer,
+            glow: self.glow,
+            tint: swing::linear(self.tint),
+            window: self.window,
+            style: self.style,
+        }
+    }
+}
+
+impl Piece {
+    /// The same piece, leaving `trail` behind it.
+    fn leaving(self, trail: Leaves) -> Piece {
+        Piece {
+            trail: Some(trail),
+            ..self
+        }
+    }
+}
+
+/// **A piece between two frames**: `then` (the frame before) blended `alpha`
+/// of the way into `now`, so a thing in flight moves every picture rather than
+/// once a frame -- and the trail it leaves, drawn from it, is smooth. Only
+/// for the same shape near enough to be the same thing; anything else is
+/// drawn where it is now.
+fn between(then: Option<Piece>, now: Piece, alpha: f32) -> Piece {
+    match then {
+        Some(t) if t.shape == now.shape && t.at.distance(now.at) < 6.0 => Piece {
+            at: t.at.lerp(now.at, alpha),
+            scale: t.scale.lerp(now.scale, alpha),
+            turn: t.turn.slerp(now.turn, alpha),
+            ..now
+        },
+        _ => now,
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -4631,6 +4728,7 @@ fn standing(shape: Shape, skin: Skin, at: Vec3, radius: f32, bottom: f32, top: f
         skin,
         at: at + Vec3::Y * (bottom + height * 0.5),
         scale: Vec3::new(radius * 2.0, height, radius * 2.0),
+        trail: None,
     }
 }
 
@@ -4642,6 +4740,7 @@ fn plate(skin: Skin, at: Vec3, facing: Vec3, radius: f32, thick: f32) -> Piece {
         at,
         scale: Vec3::new(radius * 2.0, thick, radius * 2.0),
         turn: Quat::from_rotation_arc(Vec3::Y, facing.normalize_or(Vec3::Y)),
+        trail: None,
     }
 }
 
@@ -4653,6 +4752,7 @@ fn hoop(skin: Skin, at: Vec3, facing: Vec3, radius: f32) -> Piece {
         at,
         scale: Vec3::splat(radius),
         turn: Quat::from_rotation_arc(Vec3::Y, facing.normalize_or(Vec3::Y)),
+        trail: None,
     }
 }
 
@@ -4666,6 +4766,7 @@ fn rod(skin: Skin, a: Vec3, b: Vec3, radius: f32) -> Piece {
         at: (a + b) * 0.5,
         scale: Vec3::new(radius * 2.0, length, radius * 2.0),
         turn: Quat::from_rotation_arc(Vec3::Y, along / length),
+        trail: None,
     }
 }
 
@@ -4683,6 +4784,7 @@ fn floating_in(skin: Skin, at: Vec3, radius: f32) -> Piece {
         skin,
         at,
         scale: Vec3::splat(radius * 2.0),
+        trail: None,
     }
 }
 
@@ -4952,18 +5054,22 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         //
         // **The twin stars**: one dark and one light at the size they strike,
         // each with a tail of smaller motes where it has just been.
-        EffectKind::Stars if part < 8 => {
-            let star = part % 2;
-            let back = (part / 2) as u16;
-            let mut then = *effect;
-            then.age = effect.age.saturating_sub(back * 3);
+        // Two stars on their orbits, each with the streak it leaves.
+        EffectKind::Stars if part < 2 => {
             let r = effect.field_radius().to_f32_for_render();
-            let skin = if star == 0 { Skin::Dark } else { Skin::Light };
-            Some(floating_in(
-                skin,
-                fx3(then.star_at(star)),
-                r * (1.0 - 0.22 * back as f32),
-            ))
+            let (skin, kind) = if part == 0 {
+                (Skin::Dark, sim::moves::dual::DARK_AUTO)
+            } else {
+                (Skin::Light, sim::moves::dual::LIGHT_AUTO)
+            };
+            Some(
+                floating_in(skin, fx3(effect.star_at(part)), r).leaving(Leaves::streak(
+                    part as u8,
+                    r * 0.8,
+                    orb_tint(kind),
+                    8.0,
+                )),
+            )
         }
         // The Hemoplague (2026-10-12): a faint disc of blood on the floor at
         // exactly the radius it hurts in, and wisps of it drifting round
@@ -5125,6 +5231,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                         at,
                         scale: Vec3::splat(r * 1.1 * (0.3 + 0.7 * left)),
                         turn: Quat::IDENTITY,
+                        trail: None,
                     }),
                     _ => None,
                 };
@@ -5156,6 +5263,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                             - Vec3::Y * out * out,
                         scale: Vec3::new(0.3, 0.7, 0.3) * (0.25 + 0.75 * left),
                         turn: Quat::from_rotation_arc(Vec3::Y, outward),
+                        trail: None,
                     }
                 });
             }
@@ -5264,6 +5372,10 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 skin: Skin::Shade,
                 at: mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
                 scale: Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE),
+                // Spun so fast it is only its arc.
+                trail: Some(
+                    Leaves::streak(part as u8, SPUN_BLADE * 0.5, SHADOW_TINT, SPUN_TRAIL).alone(),
+                ),
             })
         }
         EffectKind::ShadowFan if part < sim::moves::reaver::blades(effect.slot) => {
@@ -5274,6 +5386,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 skin: Skin::Shade,
                 at: fx3(effect.fan_blade_at(part)),
                 scale: Vec3::new(r * 2.0, r * 0.4, r * 2.0),
+                trail: Some(Leaves::streak(part as u8, r * 0.8, SHADOW_TINT, 4.0)),
             })
         }
         EffectKind::ShadowRing if part < sim::effects::RING_PIECES => Some(floating_in(
@@ -5283,18 +5396,21 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             sim::tuning::shadow_ring_width().to_f32_for_render(),
         )),
         // **The Champion's full charges** (exploration 0015). The crescent:
-        // a wide flat blade of light where the hit test is, and two fading
-        // after-images behind it on its line.
-        EffectKind::Crescent if part < 3 => {
+        // a wide flat sweep of light, as wide as the hit test where its head
+        // is, trailing back along its line.
+        EffectKind::Crescent if part == 0 => {
             let r = effect.field_radius().to_f32_for_render();
-            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
-            let shrink = 1.0 - part as f32 * 0.3;
+            // The trail lies flat across its width, square to its flight.
+            let side = fx3(effect.dir).cross(Vec3::Y).normalize_or(Vec3::X);
             Some(Piece {
                 shape: Shape::Column,
                 skin: Skin::Light,
-                at: fx3(effect.head()) - back,
-                scale: Vec3::new(r * 2.0 * shrink, 0.12, r * 2.0 * shrink),
+                at: fx3(effect.head()),
+                scale: Vec3::new(r * 2.0, 0.12, r * 2.0),
                 turn: Quat::IDENTITY,
+                // A wave of light that is only its sweep: the band across its
+                // width at the head, the hit test's, swept back along its flight.
+                trail: Some(Leaves::streak(0, r, LIGHT_TINT, 5.0).flat(side * r).alone()),
             })
         }
         // The shockwave: broken ground on its live radius, standing where
@@ -5324,13 +5440,14 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 at: at.lerp(end, t),
                 scale: Vec3::new(size * 2.0, 0.08, size * 2.0),
                 turn: Quat::IDENTITY,
+                trail: None,
             })
         }
         // The javelin: a line of light behind its head, a spear's length.
-        EffectKind::Javelin if part < 4 => {
-            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
-            Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
-        }
+        EffectKind::Javelin if part == 0 => Some(
+            floating_in(Skin::Light, fx3(effect.head()), 0.12)
+                .leaving(Leaves::streak(0, 0.1, LIGHT_TINT, 4.0)),
+        ),
         EffectKind::Reaping => reaping_cut(effect, part),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             turn: Quat::IDENTITY,
@@ -5342,10 +5459,26 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                 sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
                 effect.field_radius().to_f32_for_render() * 2.0,
             ),
+            trail: Some(Leaves::streak(
+                part as u8,
+                effect.field_radius().to_f32_for_render() * 0.8,
+                SHADOW_TINT,
+                4.0,
+            )),
         }),
         _ => None,
     }
 }
+
+/// The colour of the trail a shadow blade leaves: the Reaver's dusk violet.
+const SHADOW_TINT: Color = Color::srgb(0.48, 0.40, 0.90);
+
+/// The colour of the trail the Champion's light leaves: his finishers'.
+const LIGHT_TINT: Color = Color::srgb(1.0, 0.95, 0.80);
+
+/// How many frames back a spun blade's streak reaches: most of a turn's
+/// worth at the burst's speed, a third of one at the whirl's.
+const SPUN_TRAIL: f32 = 4.0;
 
 /// How many blades the Whirl and the arc's cut are drawn as, spinning round
 /// the shadow. Presentation, not a rule: the hit test is the ball they spin
@@ -5449,6 +5582,7 @@ fn stain_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
         at: centre + Vec3::Y * 0.09,
         scale: Vec3::new(w, 0.04, d),
         turn: Quat::from_rotation_y(yaw),
+        trail: None,
     };
     if part >= 12 {
         // The standing essence: a column of it, swaying, as tall as the
@@ -5654,6 +5788,7 @@ fn heart_piece(effect: &sim::effects::Effect, at: Vec3, part: usize) -> Piece {
             at: centre - Vec3::Y * (0.16 * size),
             scale: Vec3::new(0.78 * size, 0.62 * size, 0.42 * size),
             turn: turn * Quat::from_rotation_x(std::f32::consts::PI),
+            trail: None,
         },
         // Two vessels out of its top, leaning apart.
         3 | 4 => {
@@ -5709,6 +5844,7 @@ fn framed(shape: Shape, centre: Vec3, up: Vec3, ahead: Vec3, size: Vec3) -> Piec
         at: centre,
         scale: size,
         turn: Quat::from_mat3(&Mat3::from_cols(x, y, z)),
+        trail: None,
     }
 }
 

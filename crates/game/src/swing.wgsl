@@ -9,6 +9,9 @@
 // follow-through -- so the arc grows out of nothing and goes back into it,
 // and never parts from the blade.
 //
+// `uv_b.x` is the style (`swing::Style`): 0 a blade's, hot along the outer
+// edge; 1 a streak's, hot down the middle and soft at both edges.
+//
 // What it draws:
 // - **A crescent**: full width at the blade, drawn to a point at the tail, as
 //   a brush stroke is -- the shape every drawn sword arc has.
@@ -37,6 +40,10 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     var v = 1.0;
     var tint = vec3<f32>(1.0);
     var glow = 1.0;
+    var style = 0.0;
+#ifdef VERTEX_UVS_B
+    style = in.uv_b.x;
+#endif
 #ifdef VERTEX_UVS_A
     u = in.uv.x;
     v = in.uv.y;
@@ -48,8 +55,12 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     // How long ago, as a share of how far back the arc reaches.
     let life = u;
 
-    // How far in from the outer edge, 0 on it and 1 at the inner.
-    let depth = 1.0 - v;
+    // How far from the hot line, 0 on it and 1 at the far edge: a blade's is
+    // its outer edge, a streak's its middle.
+    var depth = 1.0 - v;
+    if (style > 0.5) {
+        depth = abs(v - 0.5) * 2.0;
+    }
 
     // The crescent: as wide as the band at the blade, a sliver at the tail.
     let width = mix(0.15, 1.0, pow(life, 0.5));
@@ -76,13 +87,14 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let along = smoothstep(0.0, 0.65, life);
     var a = ((body + edge) * along + 0.3 * lead) * inside * glow;
     // Never a hard line at the tail's very end or the inner edge.
-    a = a * smoothstep(0.0, 0.04, life) * smoothstep(0.0, 0.08, v);
+    a = a * smoothstep(0.0, 0.04, life) * smoothstep(0.0, 0.08, 1.0 - depth);
     a = clamp(a, 0.0, 1.0);
 
     // Deeper toward the inner edge, white where it is hot.
     let hot = clamp(edge * life * 1.2 + lead, 0.0, 1.0);
     let deep = mix(tint, tint * tint * 0.7, depth);
-    let colour = mix(deep, vec3<f32>(1.0), hot * 0.9) * (1.0 + 0.8 * hot);
+    // White only in the hottest line: the tint is what says whose it is.
+    let colour = mix(deep, vec3<f32>(1.0), hot * hot * 0.75) * (1.0 + 0.6 * hot);
 
     var pbr_input = pbr_input_new();
     pbr_input.world_position = in.world_position;
