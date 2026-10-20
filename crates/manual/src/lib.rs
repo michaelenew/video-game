@@ -982,6 +982,14 @@ pub const SECTIONS: &[Section] = &[
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
             e(
+                "SHOT_ALPHA=<a>",
+                "With SHOT_FRAME, draw the stopped frame a (0 to 1) of the way on from the one before it, the way a picture between two frames is drawn in play. Without it the share is wherever the clock stopped, usually 0.",
+            ),
+            e(
+                "SHOT_SWING=uv|alpha",
+                "Draw the arc of the Champion's cut solid: uv paints how far along it a point is in red and which edge it is near in green; alpha paints how opaque the shader made it. For seeing where the arc is and why it looks the way it does.",
+            ),
+            e(
                 "SHOT_BARS=<dark>,<light>",
                 "Start a Dual mage with her two bars there, so a capture can look at the wings without playing up to them. Ignored for any other class.",
             ),

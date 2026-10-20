@@ -53,6 +53,7 @@ mod species;
 mod splats;
 mod still;
 mod stream;
+mod swing;
 mod town;
 mod trophies;
 mod valley;
@@ -252,6 +253,7 @@ fn main() {
         .add_plugins(paint::PaintPlugin)
         .add_plugins(still::StillPlugin)
         .add_plugins(splats::SplatsPlugin)
+        .add_plugins(swing::SwingPlugin)
         .add_plugins(warm::WarmPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
@@ -336,7 +338,7 @@ fn main() {
                     place_scythes,
                     place_essence_swings,
                     place_champion_arms,
-                    place_champion_trails,
+                    swing::place,
                     place_champion_glow,
                     place_pips,
                     place_curses,
@@ -2084,22 +2086,10 @@ struct ArmsMesh {
 /// The [`ArmsMesh::weapon`] of a drop of the Champion's liquid.
 const BEAD: u8 = u8::MAX;
 
-/// One segment of the arc a Champion's cut leaves: the band between two
-/// remembered frames of the hit volume. See `view::arms::trail`.
-#[derive(Component)]
-struct TrailMesh {
-    owner: usize,
-    segment: usize,
-}
-
-/// How many steps of solidity a trail segment is drawn in, per weapon.
-const TRAIL_STEPS: usize = 6;
-
-/// The Champion's materials: one per stuff her weapons are made of, and a
-/// stepped fade per weapon for the trail. Made once.
+/// The Champion's materials beyond his weapons' own. Made once. The arc his
+/// cuts leave is `swing.rs`.
 #[derive(Resource)]
 struct ArmsLook {
-    trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 3],
     /// **The glow at the head of the weapon in his hands** (exploration
     /// 0015): one per momentum tier, ember to white, the HUD bar's colours.
     glow: [Handle<StandardMaterial>; 4],
@@ -2938,15 +2928,6 @@ fn setup(
                 },
             ));
         }
-        for segment in 0..view::arms::TRAIL - 1 {
-            commands.spawn((
-                Mesh3d(block.clone()),
-                MeshMaterial3d(look.beam.clone()),
-                Transform::default(),
-                Visibility::Hidden,
-                TrailMesh { owner, segment },
-            ));
-        }
         commands.spawn((
             Mesh3d(look.ball.clone()),
             MeshMaterial3d(look.beam.clone()),
@@ -2965,27 +2946,7 @@ fn setup(
             ..default()
         })
     });
-    // The trail, one colour per weapon so the three arcs are told apart as
-    // well as the three silhouettes: the sword's cold and white, the hammer's
-    // a hot ember, the spear's a thin blue streak. Unlit, so it reads the same
-    // on either side of the arena.
-    let tints = [(0.88, 0.93, 1.0), (1.0, 0.55, 0.20), (0.45, 0.80, 1.0)];
-    let trail = std::array::from_fn(|weapon| {
-        let (r, g, b) = tints[weapon];
-        std::array::from_fn(|step| {
-            let solid = 0.08 + 0.42 * step as f32 / (TRAIL_STEPS - 1) as f32;
-            materials.add(StandardMaterial {
-                base_color: Color::srgba(r, g, b, solid),
-                emissive: LinearRgba::rgb(r * 1.5 * solid, g * 1.5 * solid, b * 1.5 * solid),
-                alpha_mode: AlphaMode::Blend,
-                unlit: true,
-                double_sided: true,
-                cull_mode: None,
-                ..default()
-            })
-        })
-    });
-    commands.insert_resource(ArmsLook { trail, glow });
+    commands.insert_resource(ArmsLook { glow });
     commands.insert_resource(look);
 }
 
@@ -3120,7 +3081,7 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
         // covered this frame is not a rod.
         //
         // And not the Champion's: her weapons are drawn now, on the volume,
-        // and the arc of the cut is `place_champion_trails`. A glowing rod
+        // and the arc of the cut is `swing::place`. A glowing rod
         // the width of the capsule on top of a sword was two drawings of one
         // thing, and the rod is the one that said nothing about the weapon.
         // The debug overlay still draws the capsule itself.
@@ -3629,70 +3590,6 @@ fn place_champion_glow(
 
 fn quat(q: Quat) -> view::math::Quat {
     view::math::Quat([q.x, q.y, q.z, q.w])
-}
-
-/// Draw the arc of a Champion's cut: a band across the outer part of the hit
-/// volume between each two remembered active frames, faint at the old end and
-/// solid at the new one, fading out through the first frames of the recovery.
-fn place_champion_trails(
-    sim: Res<Sim>,
-    look: Res<ArmsLook>,
-    mut meshes: Query<(
-        &TrailMesh,
-        &mut Transform,
-        &mut Visibility,
-        &mut MeshMaterial3d<StandardMaterial>,
-    )>,
-) {
-    let trails: [Option<view::arms::Trail>; MAX_PLAYERS] =
-        std::array::from_fn(|owner| view::arms::trail(&sim.cur.players[owner]));
-    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
-        let Some(t) = trails[tag.owner].as_ref() else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        let i = tag.segment;
-        if i + 1 >= t.count {
-            *vis = Visibility::Hidden;
-            continue;
-        }
-        let (a0, b0) = (Vec3::from(t.inner[i]), Vec3::from(t.outer[i]));
-        let (a1, b1) = (Vec3::from(t.inner[i + 1]), Vec3::from(t.outer[i + 1]));
-        // Along the band: inner edge to outer, averaged over the two frames.
-        let band = ((b0 - a0) + (b1 - a1)) * 0.5;
-        let Some(y) = band.try_normalize() else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        // Along the arc: how the band moved between the two frames, square to
-        // it. A thrust barely moves sideways, and its trail is a thin streak.
-        let moved = ((a1 - a0) + (b1 - b0)) * 0.5;
-        let square = moved - y * moved.dot(y);
-        let (z, breadth) = match square.try_normalize() {
-            Some(z) if square.length() > 0.02 => (z, square.length() + 0.04),
-            _ => (
-                y.cross(Vec3::Y)
-                    .try_normalize()
-                    .map(|side| side.cross(y))
-                    .unwrap_or(Vec3::Z),
-                0.05,
-            ),
-        };
-        let x = y.cross(z).try_normalize().unwrap_or(Vec3::X);
-        let z = x.cross(y);
-        *vis = Visibility::Inherited;
-        tf.translation = (a0 + b0 + a1 + b1) * 0.25;
-        tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
-        tf.scale = Vec3::new(0.015, band.length(), breadth);
-        // Older segments fainter, and the whole of it fading with the ghost.
-        let age = (i + 1) as f32 / (t.count - 1) as f32;
-        let solid = (age * t.fade).clamp(0.0, 1.0);
-        let step = (solid * (TRAIL_STEPS - 1) as f32).round() as usize;
-        let want = &look.trail[(t.which as usize).min(2)][step];
-        if mat.0 != *want {
-            mat.0 = want.clone();
-        }
-    }
 }
 
 /// Draw the essence of a scythe swing: the hit volume, as a capsule in the
@@ -6512,6 +6409,13 @@ fn tick_sim(
         for _ in 0..ticks {
             if sim.stop_at.is_some_and(|n| sim.cur.frame >= n) {
                 sim.paused = true;
+                // `SHOT_ALPHA=a` draws the stopped frame `a` of the way on
+                // from the one before it, rather than wherever the clock
+                // happened to be: what is between two frames is on the
+                // screen too.
+                if let Some(alpha) = env_f32("SHOT_ALPHA") {
+                    sim.clock.hold(alpha);
+                }
                 break;
             }
             // **The region gate**: the next frame goes ahead only once every

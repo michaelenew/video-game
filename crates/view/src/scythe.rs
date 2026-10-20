@@ -62,6 +62,11 @@ pub const GHOST: u16 = 8;
 /// through the first frames of recovery. Nothing during the wind-up, because
 /// nothing is out.
 pub fn swing_volume(p: &Player) -> Option<Volume> {
+    // Her move numbers are every class's: the Champion's sword is a sweep
+    // by number, and drew her essence round it.
+    if p.class != sim::Class::BloodMage {
+        return None;
+    }
     match p.action {
         sim::state::Action::Active { kind, .. } if sim::moves::blood::scythe(kind) => {
             let hb = state::hitbox(p)?;

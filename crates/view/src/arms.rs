@@ -47,6 +47,9 @@
 //! [`trail`] is the arc of the cut, re-asked of the hit test for each active
 //! frame so far: a band across the outer part of the capsule, per frame, fading
 //! through the first frames of the recovery. It is what replaced the rod.
+//! [`ribbon`] joins those frames with a curve and cuts it fine, so the arc is
+//! drawn as one smooth strip rather than a box a frame; how it is painted is
+//! `game::swing` and its shader.
 //!
 //! Everything here is a pure function of simulation state plus the drawn hand
 //! and torso positions, allocation-free, so `tests/arms.rs` can hold it to the
@@ -84,8 +87,17 @@ pub const WEAPONS: usize = 3;
 /// How many active frames of a swing the trail remembers.
 pub const TRAIL: usize = 10;
 
-/// How many recovery frames the trail lingers for, fading.
-pub const TRAIL_GHOST: u16 = 7;
+/// How many recovery frames the trail lingers for, fading. Long enough to be
+/// seen go: the arc's tail runs up into its head as it thins.
+pub const TRAIL_GHOST: u16 = 12;
+
+/// How many steps each remembered frame of the arc is cut into for drawing.
+/// The volume is only known once a frame, and a swing crosses a quarter turn
+/// in three, so drawn straight between them the arc is a fan of flat blades.
+pub const SMOOTH: usize = 8;
+
+/// How many columns the drawn arc has at most: [`SMOOTH`] per frame, and one.
+pub const RIBBON: usize = (TRAIL - 1) * SMOOTH + 1;
 
 /// What a piece is shaped like. The renderer holds one unit mesh of each.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -906,6 +918,123 @@ pub struct Trail {
     /// One while the volume is out, running to nothing over the first
     /// [`TRAIL_GHOST`] frames of the recovery.
     pub fade: f32,
+    /// Whether the volume is still out: the head is still moving, so the
+    /// newest frame is reached a share of the way between pictures.
+    pub live: bool,
+    /// How many recovery frames the fade runs over: [`TRAIL_GHOST`], or the
+    /// whole of a shorter recovery but its last frame, so it is gone before
+    /// she is free rather than cut off at it.
+    pub ghost: u16,
+}
+
+/// The [`Trail::ghost`] of a move with `recovery` frames.
+pub const fn ghost(recovery: u16) -> u16 {
+    let most = recovery.saturating_sub(1);
+    let ghost = if TRAIL_GHOST < most {
+        TRAIL_GHOST
+    } else {
+        most
+    };
+    if ghost == 0 { 1 } else { ghost }
+}
+
+/// **The arc as it is drawn**: the trail's frames joined by a curve, in
+/// [`RIBBON`] columns from the oldest end to the head, each a point on the
+/// inner edge and one on the outer, and how far along the arc it is (0 at the
+/// tail, 1 at the head, by the length of the outer edge).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Ribbon {
+    pub inner: [V3; RIBBON],
+    pub outer: [V3; RIBBON],
+    pub along: [f32; RIBBON],
+    pub count: usize,
+    /// The trail's own fade, carried on between pictures: one while the
+    /// volume is out, to nothing through the ghost.
+    pub fade: f32,
+}
+
+/// One point of a Catmull-Rom curve through `b` and `c`, `t` of the way, with
+/// `a` and `d` the points either side: the curve every frame of the swing
+/// lies on, bending through them rather than turning a corner at each.
+fn catmull(a: V3, b: V3, c: V3, d: V3, t: f32) -> V3 {
+    let (t2, t3) = (t * t, t * t * t);
+    std::array::from_fn(|i| {
+        0.5 * (2.0 * b[i]
+            + (c[i] - a[i]) * t
+            + (2.0 * a[i] - 5.0 * b[i] + 4.0 * c[i] - d[i]) * t2
+            + (3.0 * b[i] - a[i] - 3.0 * c[i] + d[i]) * t3)
+    })
+}
+
+/// **The arc a trail draws**, `alpha` of the way from the last simulated
+/// frame to the next (the renderer's own share): while the volume is out the
+/// head is that far along its last step, where the weapon in the hands is
+/// drawn, and through the ghost the fade runs on by the same share.
+pub fn ribbon(t: &Trail, alpha: f32) -> Ribbon {
+    let alpha = alpha.clamp(0.0, 1.0);
+    let n = t.count;
+    let mut r = Ribbon {
+        inner: [math::ZERO; RIBBON],
+        outer: [math::ZERO; RIBBON],
+        along: [0.0; RIBBON],
+        count: 0,
+        fade: if t.live {
+            1.0
+        } else {
+            (t.fade - alpha / t.ghost as f32).max(0.0)
+        },
+    };
+    if n < 2 {
+        return r;
+    }
+    // The ends carried on straight, so the curve has a neighbour beyond each.
+    let at = |edge: &[V3; TRAIL], i: isize| -> V3 {
+        if i < 0 {
+            math::sub(math::scale(edge[0], 2.0), edge[1])
+        } else if i as usize >= n {
+            math::sub(math::scale(edge[n - 1], 2.0), edge[n - 2])
+        } else {
+            edge[i as usize]
+        }
+    };
+    // How far along the last step the head is: all of it once the volume
+    // is gone, `alpha` of it while it is still out.
+    let last = if t.live { alpha } else { 1.0 };
+    let span = (n - 2) as f32 + last;
+    let columns = ((span * SMOOTH as f32).ceil() as usize + 1).clamp(2, RIBBON);
+    for k in 0..columns {
+        // How many frames along the arc this column is, the last one exactly
+        // at the head.
+        let s = if k + 1 == columns {
+            span
+        } else {
+            k as f32 / SMOOTH as f32
+        };
+        let seg = (s as usize).min(n - 2);
+        let f = s - seg as f32;
+        let i = seg as isize;
+        for (edge, out) in [(&t.inner, &mut r.inner), (&t.outer, &mut r.outer)] {
+            out[k] = catmull(
+                at(edge, i - 1),
+                at(edge, i),
+                at(edge, i + 1),
+                at(edge, i + 2),
+                f,
+            );
+        }
+    }
+    r.count = columns;
+    let mut run = 0.0;
+    for k in 1..r.count {
+        run += math::length(math::sub(r.outer[k], r.outer[k - 1]));
+        r.along[k] = run;
+    }
+    if run > 1e-4 {
+        for a in r.along.iter_mut().take(r.count) {
+            *a /= run;
+        }
+    }
+    r
 }
 
 /// How far out along the capsule the trail's band starts, per weapon: a broad
@@ -929,10 +1058,11 @@ pub fn trail(p: &Player) -> Option<Trail> {
         Action::Recovery { kind, left } => {
             let m = sim::moves::get(p.class, kind);
             let gone = m.recovery.saturating_sub(left);
-            if gone >= TRAIL_GHOST {
+            let ghost = ghost(m.recovery);
+            if gone >= ghost {
                 return None;
             }
-            (kind, 1, 1.0 - gone as f32 / TRAIL_GHOST as f32)
+            (kind, 1, 1.0 - gone as f32 / ghost as f32)
         }
         _ => return None,
     };
@@ -945,6 +1075,8 @@ pub fn trail(p: &Player) -> Option<Trail> {
         outer: [math::ZERO; TRAIL],
         count: 0,
         fade,
+        live: matches!(p.action, Action::Active { .. }),
+        ghost: ghost(m.recovery),
     };
     // Active frames count `left` down from `m.active` to one. The newest
     // `TRAIL` of those already thrown, oldest first.

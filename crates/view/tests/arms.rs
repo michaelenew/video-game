@@ -455,6 +455,34 @@ fn the_trail_is_the_volume_and_fades() {
 }
 
 #[test]
+fn the_drawn_arc_runs_through_every_frame_to_the_weapon() {
+    throw(c::SWORD_GROUND, |p, _| {
+        let Some(t) = arms::trail(p) else {
+            return;
+        };
+        for alpha in [0.0, 0.3, 1.0] {
+            let r = arms::ribbon(&t, alpha);
+            assert!(r.count >= 2 && r.count <= arms::RIBBON);
+            // It starts at the oldest frame, passes through every one it
+            // has reached, and ends `alpha` of the way along its last step.
+            assert!(math::length(math::sub(r.outer[0], t.outer[0])) < 1e-4);
+            for k in 0..t.count - 1 {
+                let c = k * arms::SMOOTH;
+                assert!(math::length(math::sub(r.outer[c], t.outer[k])) < 1e-4);
+            }
+            if alpha == 1.0 {
+                let head = r.outer[r.count - 1];
+                assert!(math::length(math::sub(head, t.outer[t.count - 1])) < 1e-4);
+            }
+            assert_eq!(r.along[0], 0.0);
+            assert!((r.along[r.count - 1] - 1.0).abs() < 1e-4 || r.count == 2);
+            assert!(r.along[..r.count].windows(2).all(|w| w[0] <= w[1]));
+            assert_eq!(r.fade, 1.0);
+        }
+    });
+}
+
+#[test]
 fn nobody_else_carries_the_champions_weapons() {
     let identity = Quat::from_y(0.0);
     let t = Torso {

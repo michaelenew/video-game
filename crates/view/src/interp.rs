@@ -508,6 +508,14 @@ impl TickClock {
         ticks
     }
 
+    /// Hold the picture `alpha` of the way between the two snapshots, for a
+    /// clock that is no longer fed: a screenshot stopped on a frame
+    /// (`SHOT_ALPHA`), which would otherwise land wherever the last picture
+    /// left the accumulator.
+    pub fn hold(&mut self, alpha: f32) {
+        self.accumulator = alpha.clamp(0.0, 1.0) * crate::TICK_SECONDS;
+    }
+
     /// How far between the previous and current snapshot to draw, in 0..1.
     pub fn alpha(&self) -> f32 {
         (self.accumulator / crate::TICK_SECONDS).clamp(0.0, 1.0)
