@@ -9253,3 +9253,96 @@ stepping on and off blocks threw it around, and in a tight space with something 
 small mouse movements zoomed it in and out. Camera-affecting geometry should be convex, large
 and smooth. Of the valley's 1,607 drawn boxes, 1,156 are small by this rule.
 **Verdict** open -- to be played. Both thresholds are in the Oven (F7) to try.
+
+### 2026-10-20 — the Champion: a press, not a held button; a tempo bar; one, two, three
+
+**Changed**
+- **Only a press throws a link.** A weapon button held down throws the one move it was
+  pressed for -- held, its finisher -- and nothing after it. It used to run the string by
+  itself: held, the sword threw Sword, Crescent, then Sword, Backcut, Upcut, Sword ... for as
+  long as the button was down. `Fury::fresh` is the press, kept for `Chain, a press waits for
+  its link` (new, 10 frames) after it whether or not the button is still down, and spent by
+  the move it throws.
+- **A tempo bar** under the momentum bar (`hud::update_tempo`, read off
+  `sim::state::tempo`): three pips -- filled when that hit landed, a red edge when it
+  missed -- and a timeline per link from where it lands. On it, in order: the Beat (pale
+  gold, the sweet spot: pressed there, the next link is a true link, and it comes out at the
+  first frame it may), a red stretch where a press is forgotten before the link may come out,
+  a dim stretch where it is kept, a half-bright stretch where a different weapon comes out
+  at once (the same one is still kept), and the open window until the string dies, cold white
+  into the second hit and **gold into the third**. While the third hit or a finisher runs the
+  whole bar is gold. **The same day, from a first look**: the pips' numerals went (too small
+  to read, and odd), and the same weapon's mark stopped being a white tick inside the bright
+  window -- it read as a mark the colours did not line up with. It is the edge between the
+  half-bright and the bright stretch now, so every edge on the bar means something and the
+  only line is now.
+  **And simpler again, the same day**: the bar is one colour -- the colour of the hit the
+  next press throws, dull, warmer, vivid for the first, second and third -- the same size as
+  the momentum bar, emptying from the left, with two ticks round the Beat and nothing else.
+  The pips moved under it beside *Hit:*, each in its hit's colour and empty (the game shows
+  through) until that hit lands, so landing one moves the colour from the bar into the pip.
+  The lost, kept and swap stretches are gone: the owner's call -- early and late is a lot to
+  read off a bar, and the swing and the sound can reward it later.
+- **The three hits look different.** The trail of the first is a thin outer band and never
+  quite solid; the second's is the weapon's own band; the third's -- and a finisher's -- is a
+  thick slab reaching further in, drawn **gold** whatever weapon threw it. A gold flare grows
+  at the weapon's head through the third hit's wind-up and burns through its swing
+  (`place_third_flare`).
+
+**Why** From play: the hold "ruins the rhythm of the playstyle and doesn't seem to build
+towards the third attacks ever", and the third hit "doesn't always feel fair -- I'll count my
+attacks but mistime a click and not get the third". Both are the same thing seen from two
+sides. A string a held button ran gave nothing to count; and with the string run on the
+button being *down*, a tap let go during the last link's recovery -- a perfectly good
+press, a few frames early -- was simply never seen, so the count in the player's head and the
+count in the game parted silently. A kept press closes the second gap for any press within
+ten frames of the frame the link may start; the bar shows the rest -- a press in the red
+stretch, a whiff that owed its whole recovery (the pip's red edge), a string that ran out of
+window -- so a missed third is something you can see the reason for.
+
+The Ridgeback hunt's pin moved for the Champion (`ridgeback_pin.rs`): its random presses held
+buttons, which now throw one move rather than a string. The movement search's Champion lines
+were searched again (`envelope --class Champion`): three of the old programs leaned on a held
+button and no longer land, and the new search reached further on every one of those lanes;
+each lane keeps whichever line crosses further.
+
+**Verdict** open -- to be played. The bar is a training aid; whether a version of it stays is
+the open question. Worth watching: whether ten frames of kept press makes clicking early
+feel like it "works anyway" so the Beat stops being learned (lower the knob), or whether the
+red stretch shows up often enough to feel like a trap (raise it).
+
+### 2026-10-20 — the Champion: the Beat is a rhythm, not a race
+
+**Changed**
+- **The sweet spot moved off the impact freeze** to a fixed stretch of the window for the next
+  hit: `Beat, falls at` 33 % of the window, `Beat, lasts` 6 frames -- with the window at 26
+  frames, frames 5 to 10 after he may act again. The same frames for every weapon.
+- **The window counts from the moment he may act again** -- a landed link's earliest cancel
+  (the different-weapon one), a whiffed link's end -- rather than from the end of the
+  recovery. Before, a landed hammer link left 18 frames of recovery plus the 26, so the
+  window was a different length for every weapon; now it is 26 for all of them, and a bar
+  of it means the same thing whatever is in his hands. The cost: a landed link's string now
+  dies sooner if you wait, by whatever recovery was left after its cancel.
+- **Only the gap's first press counts**, judged when it is made: a press before the sweet
+  spot spends it (`Fury::early`), so the link it throws -- or the next one if it was lost --
+  is ordinary. The press made in the sweet spot is a true link even if its link comes out a
+  frame or two later (a repeated weapon may still owe a few frames of recovery).
+- **It carries through the third.** The window runs on after the third hit; a press throws
+  the next string's first hit, and on the beat that first hit is a true link. The tempo bar
+  drains in the first hit's colour there.
+- The press held through the freeze for him (`hold_the_beat`) is gone with the freeze beat.
+
+**Why** From play: "is the sweet spot just 'as soon as possible'? I think that's less of a
+rhythm challenge and more of a spamming challenge." It was: any press inside the freeze
+counted and earlier ones cost nothing, so clicking every four frames found the sword's three
+frames three times in four, and the hammer's every time. The owner's rules: the sweet spot
+about a third of the way through the timer; one rhythm for the class, counted from when he
+may act, not one per weapon -- "a hammer is slower by virtue of the swing being slower"; and
+the tempo kept through the third hit into the next first. Measured: pressing two frames into
+the sweet spot every gap throws a true link on every hit after the opener for all three
+weapons, the next string's first included; mashing every 2 to 5 frames and pressing as soon
+as possible throw none (`champion_rework.rs`).
+
+**Verdict** open -- to be played. Watch whether 5 to 10 frames after he may act is a beat a
+hand finds, and whether the shorter window for landed links is felt.
+

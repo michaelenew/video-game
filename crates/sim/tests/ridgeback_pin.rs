@@ -165,8 +165,14 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// up, the dash jump was cut to three quarters, the Fan's hang wears down and
 /// the shadow rests after a dash collects it -- the random presses throw all
 /// four. See `docs/design/feel-log.md`.
+/// **And the Champion's on 2026-10-20, deliberately**: only a press throws a
+/// link, kept a few frames, and a held button throws one move rather than
+/// the string over and over. His random presses hold buttons; his tempo
+/// bar's clocks went into the hash with the rest of `Fury`. And again the
+/// same day: the Beat is a rhythm a third of the way along a window counted
+/// from when he may act, and the window runs on past the third hit.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xde36cc574ef51ff7),
+    (Class::Champion, 0x3d362cef800f5f52),
     (Class::Bulwark, 0xd12b055c26db8afb),
     (Class::ShadowReaver, 0xf62e51af6026ca5e),
     (Class::BloodMage, 0x07c2f689e32197d2),

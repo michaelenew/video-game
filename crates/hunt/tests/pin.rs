@@ -52,9 +52,14 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // 10 frames: nothing hangs. The Dual mage's and the Reaver's again when the
 // ledge became one catch rule (a walk off an edge is no longer caught): no
 // hunter in any of these catches a ledge now.
+// The Champion's moved 2026-10-20, deliberately: only a press throws a
+// link, kept a few frames, so a weapon the plan holds throws one move rather
+// than a string; and his tempo bar's clocks are in `Fury`, so in the hash.
+// And again the same day: the Beat moved off the freeze to a third of the way
+// along a window counted from when he may act, which runs on past the third.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x1adf1c8e378c184f),
-    (Class::Champion, 7, 0x88775a823d760199),
+    (Class::Champion, 0x2545_F491, 0x264fa0c159c80a2b),
+    (Class::Champion, 7, 0xaacedb1675c0f9cb),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
