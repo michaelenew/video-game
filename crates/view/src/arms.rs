@@ -84,19 +84,31 @@ pub const MELT: u16 = 80;
 /// The weapons, in button order: [`SWORD`], [`HAMMER`], [`SPEAR`].
 pub const WEAPONS: usize = 3;
 
-/// How many active frames of a swing the trail remembers.
-pub const TRAIL: usize = 10;
-
-/// How many recovery frames the trail lingers for, fading. Long enough to be
-/// seen go: the arc's tail runs up into its head as it thins.
+/// How many recovery frames the arc keeps being drawn from the blade for:
+/// long enough for what the cut drew to wear away behind it.
 pub const TRAIL_GHOST: u16 = 12;
 
-/// How many steps each remembered frame of the arc is cut into for drawing.
-/// The volume is only known once a frame, and a swing crosses a quarter turn
-/// in three, so drawn straight between them the arc is a fan of flat blades.
-pub const SMOOTH: usize = 8;
+/// How many recovery frames the blade still lights the arc for: the end of
+/// the stroke, before the return to guard begins.
+pub const FOLLOW: f32 = 3.0;
 
-/// How many columns the drawn arc has at most: [`SMOOTH`] per frame, and one.
+/// How many frames back along the blade's path the arc reaches. A sword's cut
+/// is three; this is the cut and the wind-up's last stretch into it, and it
+/// is what wears the arc away behind the weapon once the cut is done.
+pub const WINDOW: f32 = 6.0;
+
+/// How much of the arc's length, from its oldest end, it fades in over.
+pub const TAIL: f32 = 0.3;
+
+/// How many places the blade has been the arc remembers: a picture each,
+/// [`WINDOW`] frames of them at 240 pictures a second.
+pub const TRAIL: usize = 24;
+
+/// How many steps each stretch between two remembered places is cut into
+/// for drawing, so the arc bends through them rather than turning a corner.
+pub const SMOOTH: usize = 6;
+
+/// How many columns the drawn arc has at most.
 pub const RIBBON: usize = (TRAIL - 1) * SMOOTH + 1;
 
 /// What a piece is shaped like. The renderer holds one unit mesh of each.
@@ -417,6 +429,22 @@ pub fn in_hand(p: &Player) -> Option<u8> {
 /// simulation does not. They decide where the weapon is held and where the
 /// coil winds, never how far a swing reaches.
 pub fn champion_arms(p: &Player, left: V3, right: V3, torso: &Torso) -> Option<Arms> {
+    champion_arms_between(p, p, 1.0, left, right, torso)
+}
+
+/// [`champion_arms`], drawn `alpha` of the way from the last simulated frame
+/// `prev` to the current one `p`, the way the body is. While the volume is out
+/// the weapon points at its far end, which the simulation moves once a frame;
+/// between pictures it turns from where it pointed on the frame before, so a
+/// cut sweeps rather than ticking round in three jumps.
+pub fn champion_arms_between(
+    prev: &Player,
+    p: &Player,
+    alpha: f32,
+    left: V3,
+    right: V3,
+    torso: &Torso,
+) -> Option<Arms> {
     let liquid = liquid(p)?;
     let held = liquid.weapon;
     let weight = liquid.weights();
@@ -431,7 +459,13 @@ pub fn champion_arms(p: &Player, left: V3, right: V3, torso: &Torso) -> Option<A
     }; WEAPONS];
     for (which, w) in weapons.iter_mut().enumerate() {
         if weight[which] > 0.0 || which == held as usize {
-            *w = in_the_hands(p, which as u8, left, right, facing);
+            let now = in_the_hands(p, which as u8, left, right, facing, reach_of(p));
+            *w = if alpha < 1.0 && p.action.attack_kind().is_some() {
+                let then = in_the_hands(p, which as u8, left, right, facing, reach_of(prev));
+                turn_between(&then, &now, right, alpha)
+            } else {
+                now
+            };
         }
     }
     let mut arms = Arms {
@@ -589,18 +623,22 @@ fn in_weapon(w: &Weapon, which: u8, t: f32) -> Piece {
 }
 
 /// The weapon in her hands.
-fn in_the_hands(p: &Player, which: u8, left: V3, right: V3, facing: V3) -> Weapon {
+///
+/// While the volume is out, the tip is its far end, `target`, and the weapon
+/// points at it from the leading hand.
+fn in_the_hands(
+    p: &Player,
+    which: u8,
+    left: V3,
+    right: V3,
+    facing: V3,
+    target: Option<(V3, V3)>,
+) -> Weapon {
     if p.action.attack_kind().is_none() {
         return carried(p, which, right, facing);
     }
     let apart = math::length(math::sub(right, left));
     let hands = math::normalize_or(math::sub(right, left), facing);
-    // While the volume is out, the tip is its far end and the weapon points at
-    // it from the leading hand. A volume that is a disc has no far end to
-    // point at, and the weapon stays in the hands.
-    let target = state::hitbox(p)
-        .map(|hb| (fx3(hb.from), fx3(hb.to)))
-        .filter(|(from, to)| math::length(math::sub(*to, *from)) > 0.05);
     let (butt, tip) = match which {
         SWORD => {
             let (axis, reach) = match target {
@@ -636,6 +674,38 @@ fn in_the_hands(p: &Player, which: u8, left: V3, right: V3, facing: V3) -> Weapo
     let axis = math::normalize_or(math::sub(tip, butt), facing);
     let flat = held_flat(p, which, axis, facing);
     Weapon { butt, tip, flat }
+}
+
+/// The ends of the volume a weapon points along, if it is out. A volume that
+/// is a disc has no far end to point at, and the weapon stays in the hands.
+fn reach_of(p: &Player) -> Option<(V3, V3)> {
+    state::hitbox(p)
+        .map(|hb| (fx3(hb.from), fx3(hb.to)))
+        .filter(|(from, to)| math::length(math::sub(*to, *from)) > 0.05)
+}
+
+/// A weapon `alpha` of the way from `then` to `now`, turned about the hand
+/// rather than slid: each end keeps its distance from the hand, so the
+/// weapon does not shorten as it sweeps.
+fn turn_between(then: &Weapon, now: &Weapon, hand: V3, alpha: f32) -> Weapon {
+    let swing = |a: V3, b: V3| {
+        let (a, b) = (math::sub(a, hand), math::sub(b, hand));
+        let length = math::length(a) + (math::length(b) - math::length(a)) * alpha;
+        let way = math::normalize_or(
+            math::add(math::scale(a, 1.0 - alpha), math::scale(b, alpha)),
+            b,
+        );
+        math::add(hand, math::scale(way, length))
+    };
+    let flat = math::add(
+        math::scale(then.flat, 1.0 - alpha),
+        math::scale(now.flat, alpha),
+    );
+    Weapon {
+        butt: swing(then.butt, now.butt),
+        tip: swing(then.tip, now.tip),
+        flat: math::normalize_or(flat, now.flat),
+    }
 }
 
 /// The weapon in her hand between moves, for the seconds it keeps its shape.
@@ -904,30 +974,19 @@ fn spear(w: &Weapon, out: &mut [Piece; PIECES]) {
     );
 }
 
-/// The arc of a swing: the outer part of the hit capsule on each active frame
-/// so far, oldest first, and how solid to draw it.
+/// **A cut being drawn**: which weapon, and how bright the arc is where the
+/// blade is now -- nothing through the wind-up (the arc's lead-in, so it
+/// starts from nothing rather than a hard edge), all of it while the volume is
+/// out, and running to nothing over the follow-through.
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Trail {
-    /// Which weapon threw it, for its colour.
+pub struct Cut {
     pub which: u8,
-    /// The inner and outer edge of the band on each remembered frame.
-    pub inner: [V3; TRAIL],
-    pub outer: [V3; TRAIL],
-    /// How many of the entries are real.
-    pub count: usize,
-    /// One while the volume is out, running to nothing over the first
-    /// [`TRAIL_GHOST`] frames of the recovery.
-    pub fade: f32,
-    /// Whether the volume is still out: the head is still moving, so the
-    /// newest frame is reached a share of the way between pictures.
-    pub live: bool,
-    /// How many recovery frames the fade runs over: [`TRAIL_GHOST`], or the
-    /// whole of a shorter recovery but its last frame, so it is gone before
-    /// she is free rather than cut off at it.
-    pub ghost: u16,
+    pub glow: f32,
 }
 
-/// The [`Trail::ghost`] of a move with `recovery` frames.
+/// How many recovery frames the follow-through glows for: [`TRAIL_GHOST`],
+/// or a shorter recovery but its last frame, so it is gone before she is
+/// free rather than cut off at it.
 pub const fn ghost(recovery: u16) -> u16 {
     let most = recovery.saturating_sub(1);
     let ghost = if TRAIL_GHOST < most {
@@ -938,24 +997,143 @@ pub const fn ghost(recovery: u16) -> u16 {
     if ghost == 0 { 1 } else { ghost }
 }
 
-/// **The arc as it is drawn**: the trail's frames joined by a curve, in
-/// [`RIBBON`] columns from the oldest end to the head, each a point on the
-/// inner edge and one on the outer, and how far along the arc it is (0 at the
-/// tail, 1 at the head, by the length of the outer edge).
+/// The cut the Champion is in, `alpha` of the way on to the next frame, if
+/// the arc is being drawn from her blade.
+pub fn cut(p: &Player, alpha: f32) -> Option<Cut> {
+    if p.class != sim::Class::Champion {
+        return None;
+    }
+    let (kind, glow) = match p.action {
+        Action::Startup { kind, .. } => (kind, 0.0),
+        Action::Active { kind, .. } => (kind, 1.0),
+        Action::Recovery { kind, left } => {
+            let m = sim::moves::get(p.class, kind);
+            let ghost = ghost(m.recovery) as f32;
+            let gone = m.recovery.saturating_sub(left) as f32 + alpha;
+            if gone >= ghost {
+                return None;
+            }
+            // Out over the first few frames, squared: bright through the
+            // end of the stroke and gone by the time the blade is lifted
+            // back to guard, so the return is not drawn as a second cut.
+            // What was drawn while the volume was out stays, wearing away.
+            let left = (1.0 - gone / FOLLOW).max(0.0);
+            (kind, left * left)
+        }
+        _ => return None,
+    };
+    // A move with no volume (the vault) leaves no arc.
+    if sim::moves::get(p.class, kind).active == 0 || kind == champion::POLE_VAULT {
+        return None;
+    }
+    Some(Cut {
+        which: champion::weapon(kind),
+        glow,
+    })
+}
+
+/// How far out along the weapon, butt to tip, the arc's band starts: a broad
+/// crescent off the sword's blade, a short heavy one at the head of the
+/// hammer, and a streak at the spear's point.
+pub const fn band(which: u8) -> f32 {
+    match which {
+        SWORD => 0.45,
+        HAMMER => 0.72,
+        _ => 0.84,
+    }
+}
+
+/// One place the blade has been: the band's inner and outer edge, when (in
+/// frames, with the share between them), and how bright the arc is there.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct Sample {
+    pub inner: V3,
+    pub outer: V3,
+    pub at: f32,
+    pub glow: f32,
+}
+
+impl Sample {
+    /// Where `arms`' weapon is drawn now.
+    pub fn of(arms: &Arms, cut: &Cut, at: f32) -> Sample {
+        let w = &arms.weapons[cut.which as usize];
+        Sample {
+            inner: math::add(
+                w.butt,
+                math::scale(math::sub(w.tip, w.butt), band(cut.which)),
+            ),
+            outer: w.tip,
+            at,
+            glow: cut.glow,
+        }
+    }
+}
+
+/// **Where the blade has been**, oldest first: one place a picture, for the
+/// last [`WINDOW`] frames. It is the renderer's, like a cross-fade: the pose
+/// it is taken from runs on the renderer's clock, so it cannot be asked of
+/// a frame gone by.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct Path {
+    samples: [Sample; TRAIL],
+    count: usize,
+}
+
+impl Path {
+    pub fn clear(&mut self) {
+        self.count = 0;
+    }
+
+    pub fn samples(&self) -> &[Sample] {
+        &self.samples[..self.count]
+    }
+
+    /// Add where the blade is now. A picture that went back in time (a
+    /// rollback, a step backwards) first forgets everything after it; two
+    /// pictures at the same moment are one place. What is older than
+    /// [`WINDOW`] goes, but for the one just past it, so the arc's tail
+    /// reaches all the way to nothing.
+    pub fn push(&mut self, s: Sample) {
+        while self.count > 0 && self.samples[self.count - 1].at > s.at + 1e-4 {
+            self.count -= 1;
+        }
+        if self.count > 0 && s.at - self.samples[self.count - 1].at < 0.02 {
+            self.samples[self.count - 1] = s;
+        } else {
+            if self.count == TRAIL {
+                self.samples.copy_within(1.., 0);
+                self.count -= 1;
+            }
+            self.samples[self.count] = s;
+            self.count += 1;
+        }
+        let mut stale = 0;
+        while stale + 1 < self.count && s.at - self.samples[stale + 1].at >= WINDOW {
+            stale += 1;
+        }
+        if stale > 0 {
+            self.samples.copy_within(stale..self.count, 0);
+            self.count -= stale;
+        }
+    }
+}
+
+/// **The arc as it is drawn**: the path joined by a curve, in columns from
+/// the oldest end to the blade, each a point on the inner edge and one on
+/// the outer; how far along it is in time (`life`: 1 at the blade, 0
+/// [`WINDOW`] frames back), and how bright.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Ribbon {
     pub inner: [V3; RIBBON],
     pub outer: [V3; RIBBON],
-    pub along: [f32; RIBBON],
+    pub life: [f32; RIBBON],
+    pub glow: [f32; RIBBON],
     pub count: usize,
-    /// The trail's own fade, carried on between pictures: one while the
-    /// volume is out, to nothing through the ghost.
-    pub fade: f32,
 }
 
 /// One point of a Catmull-Rom curve through `b` and `c`, `t` of the way, with
-/// `a` and `d` the points either side: the curve every frame of the swing
-/// lies on, bending through them rather than turning a corner at each.
+/// `a` and `d` the points either side: the curve the blade's places lie on,
+/// bending through them rather than turning a corner at each.
 fn catmull(a: V3, b: V3, c: V3, d: V3, t: f32) -> V3 {
     let (t2, t3) = (t * t, t * t * t);
     std::array::from_fn(|i| {
@@ -966,139 +1144,72 @@ fn catmull(a: V3, b: V3, c: V3, d: V3, t: f32) -> V3 {
     })
 }
 
-/// **The arc a trail draws**, `alpha` of the way from the last simulated
-/// frame to the next (the renderer's own share): while the volume is out the
-/// head is that far along its last step, where the weapon in the hands is
-/// drawn, and through the ghost the fade runs on by the same share.
-pub fn ribbon(t: &Trail, alpha: f32) -> Ribbon {
-    let alpha = alpha.clamp(0.0, 1.0);
-    let n = t.count;
+/// **The arc a path draws**, at the moment `now`. Its last column is the
+/// last place pushed -- the blade, this picture -- exactly.
+pub fn ribbon(path: &Path, now: f32) -> Ribbon {
+    let s = path.samples();
+    let n = s.len();
     let mut r = Ribbon {
         inner: [math::ZERO; RIBBON],
         outer: [math::ZERO; RIBBON],
-        along: [0.0; RIBBON],
+        life: [0.0; RIBBON],
+        glow: [0.0; RIBBON],
         count: 0,
-        fade: if t.live {
-            1.0
-        } else {
-            (t.fade - alpha / t.ghost as f32).max(0.0)
-        },
     };
     if n < 2 {
         return r;
     }
     // The ends carried on straight, so the curve has a neighbour beyond each.
-    let at = |edge: &[V3; TRAIL], i: isize| -> V3 {
+    let at = |edge: fn(&Sample) -> V3, i: isize| -> V3 {
         if i < 0 {
-            math::sub(math::scale(edge[0], 2.0), edge[1])
+            math::sub(math::scale(edge(&s[0]), 2.0), edge(&s[1]))
         } else if i as usize >= n {
-            math::sub(math::scale(edge[n - 1], 2.0), edge[n - 2])
+            math::sub(math::scale(edge(&s[n - 1]), 2.0), edge(&s[n - 2]))
         } else {
-            edge[i as usize]
+            edge(&s[i as usize])
         }
     };
-    // How far along the last step the head is: all of it once the volume
-    // is gone, `alpha` of it while it is still out.
-    let last = if t.live { alpha } else { 1.0 };
-    let span = (n - 2) as f32 + last;
-    let columns = ((span * SMOOTH as f32).ceil() as usize + 1).clamp(2, RIBBON);
-    for k in 0..columns {
-        // How many frames along the arc this column is, the last one exactly
-        // at the head.
-        let s = if k + 1 == columns {
-            span
-        } else {
-            k as f32 / SMOOTH as f32
-        };
-        let seg = (s as usize).min(n - 2);
-        let f = s - seg as f32;
+    let inner: fn(&Sample) -> V3 = |x| x.inner;
+    let outer: fn(&Sample) -> V3 = |x| x.outer;
+    let mut k = 0;
+    for seg in 0..n - 1 {
         let i = seg as isize;
-        for (edge, out) in [(&t.inner, &mut r.inner), (&t.outer, &mut r.outer)] {
-            out[k] = catmull(
-                at(edge, i - 1),
-                at(edge, i),
-                at(edge, i + 1),
-                at(edge, i + 2),
+        let steps = if seg == n - 2 { SMOOTH + 1 } else { SMOOTH };
+        for step in 0..steps {
+            let f = step as f32 / SMOOTH as f32;
+            r.inner[k] = catmull(
+                at(inner, i - 1),
+                at(inner, i),
+                at(inner, i + 1),
+                at(inner, i + 2),
                 f,
             );
+            r.outer[k] = catmull(
+                at(outer, i - 1),
+                at(outer, i),
+                at(outer, i + 1),
+                at(outer, i + 2),
+                f,
+            );
+            let when = s[seg].at + (s[seg + 1].at - s[seg].at) * f;
+            r.life[k] = (1.0 - (now - when) / WINDOW).clamp(0.0, 1.0);
+            r.glow[k] = s[seg].glow + (s[seg + 1].glow - s[seg].glow) * f;
+            k += 1;
         }
     }
-    r.count = columns;
-    let mut run = 0.0;
-    for k in 1..r.count {
-        run += math::length(math::sub(r.outer[k], r.outer[k - 1]));
-        r.along[k] = run;
+    r.count = k;
+    // The oldest stretch fades in, so a young arc -- one whose tail is not yet
+    // old enough to have worn away -- starts from nothing rather than an edge.
+    let mut run = [0.0f32; RIBBON];
+    for j in 1..k {
+        run[j] = run[j - 1] + math::length(math::sub(r.outer[j], r.outer[j - 1]));
     }
-    if run > 1e-4 {
-        for a in r.along.iter_mut().take(r.count) {
-            *a /= run;
-        }
+    let total = run[k - 1].max(1e-4);
+    for (glow, run) in r.glow.iter_mut().zip(run).take(k) {
+        let x = (run / total / TAIL).clamp(0.0, 1.0);
+        *glow *= x * x * (3.0 - 2.0 * x);
     }
     r
-}
-
-/// How far out along the capsule the trail's band starts, per weapon: a broad
-/// crescent for the sword, a short heavy one at the head of the hammer, and a
-/// streak at the spear's point.
-pub const fn band(which: u8) -> f32 {
-    match which {
-        SWORD => 0.42,
-        HAMMER => 0.62,
-        _ => 0.82,
-    }
-}
-
-/// The trail of the Champion's swing this frame, if there is one to draw.
-pub fn trail(p: &Player) -> Option<Trail> {
-    if p.class != sim::Class::Champion {
-        return None;
-    }
-    let (kind, now, fade) = match p.action {
-        Action::Active { kind, left } => (kind, left, 1.0),
-        Action::Recovery { kind, left } => {
-            let m = sim::moves::get(p.class, kind);
-            let gone = m.recovery.saturating_sub(left);
-            let ghost = ghost(m.recovery);
-            if gone >= ghost {
-                return None;
-            }
-            (kind, 1, 1.0 - gone as f32 / ghost as f32)
-        }
-        _ => return None,
-    };
-    let m = sim::moves::get(p.class, kind);
-    let which = champion::weapon(kind);
-    let k = band(which);
-    let mut t = Trail {
-        which,
-        inner: [math::ZERO; TRAIL],
-        outer: [math::ZERO; TRAIL],
-        count: 0,
-        fade,
-        live: matches!(p.action, Action::Active { .. }),
-        ghost: ghost(m.recovery),
-    };
-    // Active frames count `left` down from `m.active` to one. The newest
-    // `TRAIL` of those already thrown, oldest first.
-    let first = m.active.min(now.saturating_add(TRAIL as u16 - 1));
-    let mut left = first;
-    while left >= now.max(1) && t.count < TRAIL {
-        let mut then = *p;
-        then.action = Action::Active { kind, left };
-        if let Some(hb) = state::hitbox(&then) {
-            let (from, to) = (fx3(hb.from), fx3(hb.to));
-            if math::length(math::sub(to, from)) > 0.05 {
-                t.inner[t.count] = math::add(from, math::scale(math::sub(to, from), k));
-                t.outer[t.count] = to;
-                t.count += 1;
-            }
-        }
-        if left == 0 {
-            break;
-        }
-        left -= 1;
-    }
-    (t.count >= 2).then_some(t)
 }
 
 /// The part of `v` square to `axis`, unit, or `None` if there is none.

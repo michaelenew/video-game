@@ -1698,6 +1698,33 @@ impl Default for Scripted {
 }
 
 /// Start pitch override, for capturing the camera at a known angle.
+/// `SHOT_SLOW=n` (or `n,from`): one simulated frame every `n` pictures, each
+/// picture `1/n` further between them, whatever the machine's speed -- from
+/// frame `from` on, if it is given, and at the usual pace before it. So a
+/// capture on a renderer that draws three pictures a second still draws every
+/// moment between frames, as a fast machine would, and the things the
+/// renderer remembers from picture to picture (the arc of a cut) remember
+/// what they would in play.
+fn shot_slow(frame: u32) -> Option<u32> {
+    static SLOW: std::sync::OnceLock<Option<(u32, u32)>> = std::sync::OnceLock::new();
+    let (slow, from) = (*SLOW.get_or_init(|| {
+        let spec = platform::env("SHOT_SLOW")?;
+        let mut parts = spec.split(',').map(|x| x.trim().parse::<u32>().ok());
+        let slow = parts.next().flatten()?.max(1);
+        Some((slow, parts.next().flatten().unwrap_or(0)))
+    }))?;
+    (frame >= from).then_some(slow)
+}
+
+/// One picture of [`shot_slow`]: the ticks to run, and the clock held at
+/// the share between frames this picture is drawn at.
+fn slow_motion(clock: &mut TickClock, slow: u32) -> u32 {
+    static PICTURE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let k = PICTURE.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % slow;
+    clock.hold(k as f32 / slow as f32);
+    u32::from(k == 0)
+}
+
 fn env_f32(key: &str) -> Option<f32> {
     platform::env_parsed(key)
 }
@@ -3453,10 +3480,7 @@ fn place_champion_arms(
     let mut placed: [Option<view::arms::Arms>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     let mut pieces = [[None; view::arms::WEAPONS]; MAX_PLAYERS];
     for (owner, slot) in placed.iter_mut().enumerate() {
-        let [left, right] = hands.0[owner];
-        let torso = torso_of(&torsos, owner);
-        *slot =
-            view::arms::champion_arms(&sim.cur.players[owner], left.into(), right.into(), &torso);
+        *slot = drawn_arms(&sim, &hands, &torsos, owner);
         if let Some(arms) = slot.as_ref() {
             for (which, out) in pieces[owner].iter_mut().enumerate() {
                 *out = Some(view::arms::pieces(arms, which as u8));
@@ -3496,6 +3520,31 @@ fn place_champion_arms(
 
 /// Where a fighter's chest, hips and weapon elbow are drawn, as `view::arms`
 /// reads them.
+/// **The Champion's weapon as it is drawn this picture**: on the drawn hands
+/// and torso, and between the last two simulated frames by the share the
+/// body is drawn at, so the weapon sweeps with the body rather than ticking
+/// round once a frame. Everything drawn on the weapon -- its glow, the arc of
+/// its cut (`swing::place`) -- asks this, so they are all where it is.
+fn drawn_arms(sim: &Sim, hands: &Hands, torsos: &Torsos, owner: usize) -> Option<view::arms::Arms> {
+    let [left, right] = hands.0[owner];
+    let torso = torso_of(torsos, owner);
+    let cur = &sim.cur.players[owner];
+    // Across a change of the map's frame the frame before is somewhere else.
+    let prev = if sim.prev.map_origin() == sim.cur.map_origin() {
+        &sim.prev.players[owner]
+    } else {
+        cur
+    };
+    view::arms::champion_arms_between(
+        prev,
+        cur,
+        sim.clock.alpha(),
+        left.into(),
+        right.into(),
+        &torso,
+    )
+}
+
 fn torso_of(torsos: &Torsos, owner: usize) -> view::arms::Torso {
     let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[owner];
     view::arms::Torso {
@@ -3531,9 +3580,7 @@ fn place_champion_glow(
             *vis = Visibility::Hidden;
             continue;
         };
-        let [left, right] = hands.0[tag.owner];
-        let torso = torso_of(&torsos, tag.owner);
-        let Some(arms) = view::arms::champion_arms(p, left.into(), right.into(), &torso) else {
+        let Some(arms) = drawn_arms(&sim, &hands, &torsos, tag.owner) else {
             *vis = Visibility::Hidden;
             continue;
         };
@@ -6403,6 +6450,8 @@ fn tick_sim(
     if !sim.driver.online() {
         let ticks = if sim.paused {
             u32::from(std::mem::take(&mut sim.step_once))
+        } else if let Some(slow) = shot_slow(sim.cur.frame) {
+            slow_motion(&mut sim.clock, slow)
         } else {
             sim.clock.advance(time.delta_secs())
         };

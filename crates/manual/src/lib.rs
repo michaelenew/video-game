@@ -986,8 +986,12 @@ pub const SECTIONS: &[Section] = &[
                 "With SHOT_FRAME, draw the stopped frame a (0 to 1) of the way on from the one before it, the way a picture between two frames is drawn in play. Without it the share is wherever the clock stopped, usually 0.",
             ),
             e(
+                "SHOT_SLOW=<n>[,<from>]",
+                "Run one frame every n pictures, each picture a 1/n share further between frames, from frame from on (from the start without it). A slow renderer then still draws every moment between frames, and what the renderer remembers between pictures, like the arc behind the Champion's blade, comes out as it would on a fast machine.",
+            ),
+            e(
                 "SHOT_SWING=uv|alpha",
-                "Draw the arc of the Champion's cut solid: uv paints how far along it a point is in red and which edge it is near in green; alpha paints how opaque the shader made it. For seeing where the arc is and why it looks the way it does.",
+                "Draw the arc of the Champion's cut solid: uv paints how recently the blade was there in red and which edge it is near in green; alpha paints how opaque the shader made it. For seeing where the arc is and why it looks the way it does.",
             ),
             e(
                 "SHOT_BARS=<dark>,<light>",

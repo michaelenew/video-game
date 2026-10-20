@@ -426,59 +426,123 @@ fn the_weapon_out_is_the_one_last_thrown() {
 }
 
 #[test]
-fn the_trail_is_the_volume_and_fades() {
+fn the_cut_glows_while_the_volume_is_out_and_fades_through_the_follow_through() {
     let mut last = None;
     throw(c::SWORD_GROUND, |p, _| {
-        let t = arms::trail(p);
-        if let Some(t) = t {
-            let hb = sim::state::hitbox(p).expect("a volume");
-            assert!(math::length(math::sub(t.outer[t.count - 1], v(hb.to))) < 0.001);
-            assert_eq!(t.fade, 1.0);
-        }
+        let cut = arms::cut(p, 0.0).expect("a cut is drawn while the volume is out");
+        assert_eq!(cut.which, c::SWORD);
+        assert_eq!(cut.glow, 1.0);
         last = Some(*p);
     });
     let mut p = last.expect("the cut went out");
     let m = sim::moves::get(sim::Class::Champion, c::SWORD_GROUND);
+    p.action = sim::state::Action::Startup {
+        kind: c::SWORD_GROUND,
+        left: 1,
+    };
+    assert_eq!(
+        arms::cut(&p, 0.0).map(|c| c.glow),
+        Some(0.0),
+        "the lead-in is dark"
+    );
     p.action = sim::state::Action::Recovery {
         kind: c::SWORD_GROUND,
         left: m.recovery - 2,
     };
-    let ghost = arms::trail(&p).expect("the trail lingers");
-    assert!(ghost.fade > 0.0 && ghost.fade < 1.0);
+    let early = arms::cut(&p, 0.0).expect("the follow-through glows").glow;
+    let later = arms::cut(&p, 0.5).expect("and between frames").glow;
+    assert!(0.0 < later && later < early && early < 1.0);
     p.action = sim::state::Action::Recovery {
         kind: c::SWORD_GROUND,
         left: 1,
     };
-    assert!(arms::trail(&p).is_none());
+    assert!(arms::cut(&p, 0.0).is_none(), "gone before she is free");
     p.action = sim::state::Action::Free;
-    assert!(arms::trail(&p).is_none());
+    assert!(arms::cut(&p, 0.0).is_none());
 }
 
+/// The rule the arc keeps: **its head is the blade**. Whatever the path
+/// behind, the last column is where the weapon is drawn this picture.
 #[test]
-fn the_drawn_arc_runs_through_every_frame_to_the_weapon() {
+fn the_arc_ends_on_the_blade_and_wears_away_behind_it() {
+    let mut path = arms::Path::default();
+    let mut prev = None;
+    let mut frame = 0.0;
     throw(c::SWORD_GROUND, |p, _| {
-        let Some(t) = arms::trail(p) else {
+        let before = prev.unwrap_or(*p);
+        let t = torso(p);
+        let (left, right) = ([0.2, 1.1, -0.05], [0.35, 1.25, -0.05]);
+        for alpha in [0.0, 0.25, 0.5, 0.75] {
+            let a = arms::champion_arms_between(&before, p, alpha, left, right, &t)
+                .expect("she is armed");
+            let cut = arms::cut(p, alpha).expect("a cut");
+            let now = frame + alpha;
+            path.push(arms::Sample::of(&a, &cut, now));
+            let r = arms::ribbon(&path, now);
+            if path.samples().len() < 2 {
+                continue;
+            }
+            let head = r.count - 1;
+            let blade = a.weapons[c::SWORD as usize].tip;
+            assert!(
+                math::length(math::sub(r.outer[head], blade)) < 1e-4,
+                "the head is the tip"
+            );
+            assert_eq!(r.life[head], 1.0);
+            assert!(r.life[..r.count].windows(2).all(|w| w[0] <= w[1] + 1e-6));
+            assert!(r.count <= arms::RIBBON);
+        }
+        frame += 1.0;
+        prev = Some(*p);
+    });
+    // Long after, only the window's worth is kept.
+    let last = *path.samples().last().expect("a path");
+    for k in 1..40 {
+        path.push(arms::Sample {
+            at: last.at + k as f32 * 0.5,
+            ..last
+        });
+    }
+    let s = path.samples();
+    assert!(s.last().unwrap().at - s[1].at < arms::WINDOW);
+    // And a picture back in time forgets what came after it.
+    let back = s[2].at;
+    path.push(arms::Sample { at: back, ..last });
+    assert!(path.samples().iter().all(|x| x.at <= back));
+}
+
+/// Between two frames of a cut the sword turns from where it pointed to
+/// where it points, about the hand, keeping its length: no tick round in
+/// three jumps, and no shortening as it sweeps.
+#[test]
+fn the_sword_sweeps_between_frames() {
+    let mut prev: Option<sim::state::Player> = None;
+    let (left, right) = ([0.2, 1.1, -0.05], [0.35, 1.25, -0.05]);
+    throw(c::SWORD_GROUND, |p, _| {
+        let Some(before) = prev else {
+            prev = Some(*p);
             return;
         };
-        for alpha in [0.0, 0.3, 1.0] {
-            let r = arms::ribbon(&t, alpha);
-            assert!(r.count >= 2 && r.count <= arms::RIBBON);
-            // It starts at the oldest frame, passes through every one it
-            // has reached, and ends `alpha` of the way along its last step.
-            assert!(math::length(math::sub(r.outer[0], t.outer[0])) < 1e-4);
-            for k in 0..t.count - 1 {
-                let c = k * arms::SMOOTH;
-                assert!(math::length(math::sub(r.outer[c], t.outer[k])) < 1e-4);
-            }
-            if alpha == 1.0 {
-                let head = r.outer[r.count - 1];
-                assert!(math::length(math::sub(head, t.outer[t.count - 1])) < 1e-4);
-            }
-            assert_eq!(r.along[0], 0.0);
-            assert!((r.along[r.count - 1] - 1.0).abs() < 1e-4 || r.count == 2);
-            assert!(r.along[..r.count].windows(2).all(|w| w[0] <= w[1]));
-            assert_eq!(r.fade, 1.0);
+        let t = torso(p);
+        let tip = |alpha: f32| {
+            arms::champion_arms_between(&before, p, alpha, left, right, &t)
+                .expect("armed")
+                .weapons[c::SWORD as usize]
+                .tip
+        };
+        let now = arms::champion_arms(p, left, right, &t)
+            .expect("armed")
+            .weapons[c::SWORD as usize]
+            .tip;
+        assert!(math::length(math::sub(tip(1.0), now)) < 1e-5);
+        let (a, b, mid) = (tip(0.0), tip(1.0), tip(0.5));
+        let reach = |x: V3| math::length(math::sub(x, right));
+        assert!((reach(mid) - (reach(a) + reach(b)) * 0.5).abs() < 1e-3);
+        if math::length(math::sub(a, b)) > 0.05 {
+            let off = |x: V3| math::length(math::sub(x, a)) / math::length(math::sub(b, a));
+            assert!(off(mid) > 0.2 && off(mid) < 0.8, "half way is between");
         }
+        prev = Some(*p);
     });
 }
 
@@ -503,6 +567,6 @@ fn nobody_else_carries_the_champions_weapons() {
             "{} is drawn carrying the Champion's weapons",
             class.name()
         );
-        assert!(arms::trail(&p).is_none());
+        assert!(arms::cut(&p, 0.0).is_none());
     }
 }

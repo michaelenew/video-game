@@ -1,21 +1,21 @@
 // **The arc a Champion's cut leaves** (`swing.rs`): a strip laid along the
-// path the weapon's volume took, painted here from two numbers a vertex.
+// path the drawn blade took, painted here from two numbers a vertex.
 //
-// `uv.x` is how far along the arc a point is, 0 at the tail (where the cut
-// began) and 1 at the head (where the weapon is now); `uv.y` which edge it is
-// nearer, 0 the inner and 1 the outer, the one the blade's tip drew. The
-// vertex colour is the weapon's tint, and in its alpha the fade: one while the
-// cut is out, running to nothing through the recovery.
+// `uv.x` is how recently the blade was there: 1 where it is now, 0 as far
+// back as the arc reaches. `uv.y` is which edge a point is nearer, 0 the
+// inner and 1 the outer, the one the blade's tip drew. The vertex colour is
+// the weapon's tint, and in its alpha how bright the cut was there: dark
+// through the wind-up, full while the volume is out, fading through the
+// follow-through -- so the arc grows out of nothing and goes back into it,
+// and never parts from the blade.
 //
-// What it draws, in the order it is built:
-// - **Erosion**: as it fades, the tail is eaten up toward the head, so a cut
-//   goes the way it came rather than everywhere at once.
-// - **A crescent**: full width at the head, drawn to a point at the tail, as
+// What it draws:
+// - **A crescent**: full width at the blade, drawn to a point at the tail, as
 //   a brush stroke is -- the shape every drawn sword arc has.
 // - **Streaks**: the body is fine lanes running along the arc, each fraying
 //   off at its own place near the tail, so the end is wisps, not a cut line.
-// - **The edge**: a thin hot line where the tip passed, whitest at the head.
-// - **A flare** at the head, where the weapon is.
+// - **The edge**: a thin hot line where the tip passed, whitest at the blade.
+// - **A flare** at the blade.
 
 #import bevy_pbr::{
     forward_io::{VertexOutput, FragmentOutput},
@@ -36,27 +36,23 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     var u = 0.0;
     var v = 1.0;
     var tint = vec3<f32>(1.0);
-    var fade = 1.0;
+    var glow = 1.0;
 #ifdef VERTEX_UVS_A
     u = in.uv.x;
     v = in.uv.y;
 #endif
 #ifdef VERTEX_COLORS
     tint = in.color.rgb;
-    fade = in.color.a;
+    glow = in.color.a;
 #endif
-    let gone = 1.0 - fade;
-
-    // Erosion: `life` is how far along what is left of the arc a point is.
-    let tail = gone * 0.85;
-    let life = clamp((u - tail) / max(1.0 - tail, 1e-3), 0.0, 1.0);
+    // How long ago, as a share of how far back the arc reaches.
+    let life = u;
 
     // How far in from the outer edge, 0 on it and 1 at the inner.
     let depth = 1.0 - v;
 
-    // The crescent: as wide as the band at the head, a sliver at the tail,
-    // and thinner as it fades.
-    let width = mix(0.15, 1.0, pow(life, 0.5)) * mix(1.0, 0.55, gone);
+    // The crescent: as wide as the band at the blade, a sliver at the tail.
+    let width = mix(0.15, 1.0, pow(life, 0.5));
     let inside = 1.0 - smoothstep(width * 0.6, width, depth);
 
     // The streaks: each lane its own brightness and its own end.
@@ -73,17 +69,14 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let edge = exp(-(depth * depth) / (thick * thick)) * (0.35 + 0.65 * life);
 
     // The flare where the weapon is.
-    let lead = smoothstep(0.82, 1.0, life) * (1.0 - smoothstep(0.0, 0.6, depth));
+    let lead = smoothstep(0.85, 1.0, life) * (1.0 - smoothstep(0.0, 0.6, depth));
 
     // Older is fainter: solid through the newer part, thinning to nothing
     // over the oldest.
     let along = smoothstep(0.0, 0.65, life);
-    var a = ((body + edge) * along + 0.3 * lead) * inside * fade;
+    var a = ((body + edge) * along + 0.3 * lead) * inside * glow;
     // Never a hard line at the tail's very end or the inner edge.
-    // Nor at the head once the weapon has gone on: there the arc rounds off
-    // as it thins.
-    let cap = mix(0.995, 0.85, gone);
-    a = a * smoothstep(0.0, 0.04, life) * smoothstep(0.0, 0.08, v) * (1.0 - smoothstep(cap, 1.0, u) * gone);
+    a = a * smoothstep(0.0, 0.04, life) * smoothstep(0.0, 0.08, v);
     a = clamp(a, 0.0, 1.0);
 
     // Deeper toward the inner edge, white where it is hot.
@@ -100,7 +93,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     out.color = vec4<f32>(vec3<f32>(a), 1.0);
 #endif
 #ifdef SWING_UV
-    out.color = vec4<f32>(u, v, fade, 1.0);
+    out.color = vec4<f32>(u, v, glow, 1.0);
 #endif
     return out;
 }

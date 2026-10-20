@@ -1,22 +1,21 @@
 //! **The arc a Champion's cut leaves**, drawn as a ribbon and painted by its
 //! own shader.
 //!
-//! The simulation knows where the weapon's volume is once a frame, and a
-//! sword crosses a quarter turn in three of them, so the old trail -- a flat
-//! box between each two frames, at one of six fixed solidities -- read as a
-//! fan of glass blades. Here the frames are joined by a curve
-//! (`view::arms::ribbon`), cut into fine columns, and laid out as one strip of
-//! triangles a fighter: every column a point on the inner edge and one on the
-//! outer. Each vertex carries two numbers -- how far along the arc it is, tail
-//! to head, and which edge it is on -- and the weapon's tint and the fade, and
-//! `swing.wgsl` turns those into the look: a crescent, thick at the head and
-//! drawn to a point at the tail, a hot line where the blade's edge passed,
-//! fine streaks that fray at the tail rather than stopping, and a fade that
-//! eats the arc from its tail up into its head through the recovery.
+//! The arc is **the path the drawn blade took**: every picture, where the
+//! weapon is drawn (`crate::drawn_arms`, the same answer the weapon itself
+//! is placed by) is added to a short memory of where it has been
+//! (`view::arms::Path`), and the arc is that memory joined by a curve
+//! (`view::arms::ribbon`). Its head is the blade on every picture, through
+//! the wind-up, the cut and the follow-through alike; an arc taken from the
+//! hit volume instead was somewhere the sword was not, since the volume is
+//! only out for the cut and the sword goes on moving after it.
 //!
-//! Nothing here decides what the arc looks like but the shader; where it is
-//! comes from the hit volume, so the arc on the screen is where the cut could
-//! land.
+//! The strip is one mesh a fighter, a point on the inner edge and one on the
+//! outer per column. Each vertex carries how long ago the blade was there
+//! (`uv.x`, 1 now and 0 [`view::arms::WINDOW`] frames back), which edge it is
+//! (`uv.y`), the weapon's tint and how bright the cut was there (the colour's
+//! alpha: dark through the wind-up, full while the volume is out, fading
+//! over the follow-through). `swing.wgsl` turns those into the look.
 
 use bevy::asset::weak_handle;
 use bevy::pbr::{MaterialPipeline, MaterialPipelineKey, NotShadowCaster, NotShadowReceiver};
@@ -82,6 +81,7 @@ impl Plugin for SwingPlugin {
             Shader::from_wgsl(include_str!("swing.wgsl"), "game/src/swing.wgsl"),
         );
         app.add_plugins(MaterialPlugin::<SwingMaterial>::default())
+            .init_resource::<Paths>()
             .add_systems(Startup, spawn);
     }
 }
@@ -148,20 +148,42 @@ fn spawn(
     }
 }
 
-/// **Lay each Champion's arc where her cut has been**, this picture.
+/// Where each fighter's blade has been, for the arc behind it, and the frame
+/// the path's clock counts from (so its times stay small and exact however
+/// long the game has run). The renderer's own, like a cross-fade: see
+/// `view::arms::Path`.
+#[derive(Resource, Default)]
+pub struct Paths([(view::arms::Path, u32); MAX_PLAYERS]);
+
+/// **Lay each Champion's arc behind her blade**, this picture: where the
+/// blade is drawn now is added to where it has been, and the arc is that
+/// path, so its head is always on the weapon.
 pub fn place(
     sim: Res<Sim>,
+    hands: Res<crate::Hands>,
+    torsos: Res<crate::Torsos>,
+    mut paths: ResMut<Paths>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut arcs: Query<(&Cut, &mut Transform, &mut Visibility)>,
 ) {
     let alpha = sim.clock.alpha();
     for (arc, mut tf, mut vis) in arcs.iter_mut() {
-        let Some(trail) = view::arms::trail(&sim.cur.players[arc.owner]) else {
+        let (path, base) = &mut paths.0[arc.owner];
+        let cut = view::arms::cut(&sim.cur.players[arc.owner], alpha);
+        let arms = cut.and_then(|_| crate::drawn_arms(&sim, &hands, &torsos, arc.owner));
+        let (Some(cut), Some(arms)) = (cut, arms) else {
+            path.clear();
             *vis = Visibility::Hidden;
             continue;
         };
-        let r = view::arms::ribbon(&trail, alpha);
-        if r.fade <= 0.0 {
+        if path.samples().is_empty() || sim.cur.frame < *base {
+            path.clear();
+            *base = sim.cur.frame;
+        }
+        let now = (sim.cur.frame - *base) as f32 + alpha;
+        path.push(view::arms::Sample::of(&arms, &cut, now));
+        let r = view::arms::ribbon(path, now);
+        if r.count < 2 {
             *vis = Visibility::Hidden;
             continue;
         }
@@ -189,16 +211,20 @@ pub fn place(
         if let Some(VertexAttributeValues::Float32x2(uv)) = mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
         {
             for k in 0..RIBBON {
-                let u = r.along[k.min(head)];
-                uv[2 * k] = [u, 0.0];
-                uv[2 * k + 1] = [u, 1.0];
+                let life = r.life[k.min(head)];
+                uv[2 * k] = [life, 0.0];
+                uv[2 * k + 1] = [life, 1.0];
             }
         }
         if let Some(VertexAttributeValues::Float32x4(colour)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
         {
-            let [red, green, blue] = tint(trail.which);
-            colour.fill([red, green, blue, r.fade]);
+            let [red, green, blue] = tint(cut.which);
+            for k in 0..RIBBON {
+                let glow = r.glow[k.min(head)];
+                colour[2 * k] = [red, green, blue, glow];
+                colour[2 * k + 1] = [red, green, blue, glow];
+            }
         }
         *vis = Visibility::Inherited;
     }
