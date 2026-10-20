@@ -613,8 +613,11 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
 /// overlap by a couple of frames and are heard as one drag.
 const SCRAPE_SLOW: u16 = 10;
 const SCRAPE_FAST: u16 = 6;
-/// The speed down a wall at which the grains are at their shortest, m/s.
-const SCRAPE_PACE: f32 = 6.0;
+/// The speed down a wall at which the grains are at their shortest, m/s:
+/// the slide's own cap (`sim::tuning::wall_slide_speed`).
+fn scrape_pace() -> f32 {
+    sim::tuning::wall_slide_speed().to_f32_for_render().max(0.5)
+}
 
 /// **A wall slide and a wall jump, as sounds** (2026-10-20). Nothing was
 /// heard for either until then, and a slide you cannot hear is a slide you
@@ -663,7 +666,7 @@ fn wall(
     if sliding {
         let (at, material) = face_of(now.wall);
         let speed = (-now.vel.y.to_f32_for_render()).max(0.0);
-        let pace = (speed / SCRAPE_PACE).min(1.0);
+        let pace = (speed / scrape_pace()).min(1.0);
         let grain = SCRAPE_SLOW - ((SCRAPE_SLOW - SCRAPE_FAST) as f32 * pace) as u16;
         let every = grain.saturating_sub(2).max(2) as u32;
         let started = !was.sliding;

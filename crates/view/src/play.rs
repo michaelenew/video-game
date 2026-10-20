@@ -911,9 +911,12 @@ fn ledge(hold: crate::interp::Hold) -> Pose {
 pub const KICK_REACH: f32 = 1.2;
 
 /// How fast down a wall a slide has to be going for the stick and slip to
-/// play at full size, in metres a second. Slower, the body is more pressed
-/// and less shaken: a slide held almost still on the face is a still press.
-const SLIDE_FULL: f32 = 4.0;
+/// play at full size, in metres a second: the slide's own cap
+/// (`sim::tuning::wall_slide_speed`). Slower, the body is more pressed and
+/// less shaken: a slide held almost still on the face is a still press.
+fn slide_full() -> f32 {
+    sim::tuning::wall_slide_speed().to_f32_for_render().max(0.5)
+}
 
 /// **On a wall** (2026-10-20, `interp::OnWall`): pressed to it and dragging,
 /// or kicking off it.
@@ -929,7 +932,7 @@ const SLIDE_FULL: f32 = 4.0;
 fn on_the_wall(input: PoseInput, wall: crate::interp::OnWall) -> Pose {
     let pose = match wall.kick {
         None => {
-            let shaken = (wall.down / SLIDE_FULL).clamp(0.0, 1.0);
+            let shaken = (wall.down / slide_full()).clamp(0.0, 1.0);
             Clip::WallSlide
                 .at(0)
                 .blend(&Clip::WallSlide.at(input.sim_frame), shaken)

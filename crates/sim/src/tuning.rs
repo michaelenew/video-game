@@ -590,6 +590,14 @@ pub fn wall_slide_fall() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideFall))
 }
 
+/// **How fast a slide goes down a wall**, at its cap, in metres a second and
+/// positive: the universal fall cap times [`wall_slide_fall`]. What the
+/// drawn slide, its dust and its scrape count as going at full pace, so a
+/// slide tuned slower or faster is drawn and heard at its own pace.
+pub fn wall_slide_speed() -> Fx {
+    fall_cap().mul(wall_slide_fall()).abs()
+}
+
 /// How fast a slide holds a body into the wall it is on.
 ///
 /// The resolve only reports a wall it had to push a body out of, and a body

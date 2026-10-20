@@ -21,10 +21,13 @@ use sim::state::MAX_PLAYERS;
 /// How long a mote lasts, in seconds, shrinking evenly to nothing.
 const LIFE: f32 = 0.6;
 /// Seconds between motes off each contact at full pace, and the speed down
-/// the wall (m/s) that is full pace. Slower, fewer: a slide held nearly
+/// the wall (m/s) that is full pace: the slide's own cap
+/// (`sim::tuning::wall_slide_speed`). Slower, fewer: a slide held nearly
 /// still on the face leaves a mote now and then, not a stream.
 const EVERY: f32 = 0.04;
-const FULL: f32 = 5.0;
+fn full() -> f32 {
+    sim::tuning::wall_slide_speed().to_f32_for_render().max(0.5)
+}
 /// Below this speed down the face (m/s) nothing is scraped off at all.
 const STILL: f32 = 0.3;
 /// How wide a mote is at birth, in metres, and how hard it leaves the face
@@ -190,7 +193,7 @@ pub fn place(
         let on = view.wall.filter(|_| seat < present);
         // Due another mote: off a slide, as often as its pace says.
         let due = on.is_some_and(|wall| {
-            let pace = (wall.down / FULL).clamp(0.0, 1.0);
+            let pace = (wall.down / full()).clamp(0.0, 1.0);
             wall.kick.is_none()
                 && wall.down >= STILL
                 && t - dust.left_at[seat] >= EVERY / pace.max(0.1)
@@ -238,7 +241,7 @@ pub fn place(
         let Some(on) = on else {
             continue;
         };
-        let pace = (on.down / FULL).clamp(0.0, 1.0);
+        let pace = (on.down / full()).clamp(0.0, 1.0);
         dust.left_at[seat] = t;
         // Off the hand pressed to the face -- the drawn hand, so the dust
         // comes off it -- and off the foot under it, on the face.
