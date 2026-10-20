@@ -33,7 +33,7 @@ use sim::state::{Action, MAX_PLAYERS};
 /// How long a burst lasts, in seconds of simulation, and how many shards
 /// it throws.
 const LIFE: f32 = 17.0 / 60.0;
-const SHARDS: usize = 10;
+const SHARDS: usize = 14;
 /// Her violet, hot: the flash is nearly white at its heart.
 const FLASH: [f32; 3] = [1.6, 1.0, 2.6];
 const RING: [f32; 3] = [0.9, 0.45, 1.8];
@@ -318,12 +318,12 @@ fn draw(
         match *part {
             Part::Flash(_) => {
                 tf.translation = b.at;
-                tf.scale = Vec3::splat((0.15 + 0.55 * out.sqrt()) * b.size);
+                tf.scale = Vec3::splat((0.25 + 0.85 * out.sqrt()) * b.size);
             }
             Part::Ring(_) => {
                 tf.translation = b.at + b.dir * 0.1 * out * b.size;
                 tf.rotation = Quat::from_rotation_arc(Vec3::Y, b.dir);
-                let r = (0.2 + 1.4 * out) * b.size;
+                let r = (0.3 + 2.0 * out) * b.size;
                 tf.scale = Vec3::new(r, 0.15 * b.size, r);
             }
             Part::Shard(_, k) => {
@@ -341,7 +341,7 @@ fn draw(
                 let at = b.at + way * speed * b.age - Vec3::Y * 4.0 * b.age * b.age;
                 tf.translation = at;
                 tf.rotation = Quat::from_rotation_arc(Vec3::Y, way);
-                let size = (0.06 + 0.08 * w) * (1.0 - t * 0.8) * b.size;
+                let size = (0.09 + 0.12 * w) * (1.0 - t * 0.8) * b.size;
                 tf.scale = Vec3::new(size, size * 3.0, size);
             }
         }
