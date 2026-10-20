@@ -29,10 +29,10 @@ read.
 | Stage | File | What |
 | --- | --- | --- |
 | The body | `lib/mh.py` | MakeHuman's base mesh, its shape targets (sex, age, muscle, weight, proportions) and its rig's weights |
-| Fitted | `lib/fit.py` | the body moved onto the game's own skeleton (`view::skeleton`) in a bind pose chosen to suit it; MakeHuman's 160 bones folded into the game's sixteen; the hands closed round a grip |
+| Fitted | `lib/fit.py` | the body moved onto the game's own skeleton (`view::skeleton`) in a bind pose chosen to suit it; MakeHuman's 160 bones folded into the game's twenty-one; the hands closed round a grip |
 | Dressed | `lib/garment.py`, `reaver/outfit.py` | every piece cut from the body **inflated** by a distance field (so nothing it covers pokes out as a spike), bridged over hollows, trimmed by planes, its hems relaxed; made twice -- a high piece with its folds, and the game's piece; coat tails dropped under cloth simulation; hard things (blades) lofted in `lib/forge.py` |
 | Painted | `lib/paint.py` | occlusion, curvature, facing and position baked with Cycles (the folds from the high piece), and composed in numpy into a hand-painted colour: cool violet shade, warm edges, value falling toward the feet, hems trimmed and stitched, brushwork laid in 3D so it does not break at a seam |
-| Exported | `lib/glb.py` | one binary glTF, written by hand so its joints are exactly the game's sixteen (and the coat's eight) at their bind places |
+| Exported | `lib/glb.py` | one binary glTF, written by hand so its joints are exactly the game's twenty-one (and the coat's eight) at their bind places |
 
 `lib/stage.py` is a photo studio for looking at any of it without the game.
 

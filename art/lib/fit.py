@@ -32,13 +32,14 @@ import json
 
 import numpy as np
 
-# Joint order, exactly `view::skeleton::JOINTS`.
+# Joint order, exactly `view::skeleton::JOINTS` (twenty-one since
+# 2026-10-20: the neck, the collarbones and the toes).
 JOINTS = [
-    "root", "spine", "chest", "head",
-    "arm.l", "forearm.l", "hand.l",
-    "arm.r", "forearm.r", "hand.r",
-    "thigh.l", "shin.l", "foot.l",
-    "thigh.r", "shin.r", "foot.r",
+    "root", "spine", "chest", "neck", "head",
+    "clavicle.l", "arm.l", "forearm.l", "hand.l",
+    "clavicle.r", "arm.r", "forearm.r", "hand.r",
+    "thigh.l", "shin.l", "foot.l", "toe.l",
+    "thigh.r", "shin.r", "foot.r", "toe.r",
 ]
 J = {n: i for i, n in enumerate(JOINTS)}
 
@@ -46,8 +47,8 @@ J = {n: i for i, n in enumerate(JOINTS)}
 def our_bone(mh_bone):
     """Which game joint moves what a MakeHuman bone moved.
 
-    Returns ``[(joint, share)]``. The neck is split between the chest and the
-    head, because the game's head turns at the base of the neck.
+    Returns ``[(joint, share)]``. The base of the neck is shared between the
+    chest and the neck, so the skin there stretches rather than creases.
     """
     b = mh_bone
     side = None
@@ -64,10 +65,14 @@ def our_bone(mh_bone):
         return [("root", 1.0)]
     if b in ("spine04", "spine03"):
         return [("spine", 1.0)]
-    if b in ("spine02", "spine01") or b.startswith("clavicle") or b.startswith("breast"):
+    if b in ("spine02", "spine01") or b.startswith("breast"):
         return [("chest", 1.0)]
+    if side and b.startswith("clavicle"):
+        return [(s("clavicle"), 1.0)]
     if b == "neck01":
-        return [("chest", 0.5), ("head", 0.5)]
+        return [("chest", 0.4), ("neck", 0.6)]
+    if b in ("neck02", "neck03"):
+        return [("neck", 1.0)]
     if side and (b.startswith("shoulder") or b.startswith("upperarm")):
         return [(s("arm"), 1.0)]
     if side and b.startswith("lowerarm"):
@@ -78,7 +83,9 @@ def our_bone(mh_bone):
         return [(s("thigh"), 1.0)]
     if side and b.startswith("lowerleg"):
         return [(s("shin"), 1.0)]
-    if side and (b.startswith("foot") or b.startswith("toe")):
+    if side and b.startswith("toe"):
+        return [(s("toe"), 1.0)]
+    if side and b.startswith("foot"):
         return [(s("foot"), 1.0)]
     # Everything else is in the head: neck02-03, the jaw, the eyes, the face.
     return [("head", 1.0)]
@@ -158,16 +165,19 @@ class Skeleton:
 
     def solve(self, rots, root_shift=(0, 0, 0)):
         """Forward kinematics with each joint's *local* rotation given."""
-        origin = [None] * 16
-        rot = [None] * 16
-        for i in range(16):
+        origin = [None] * len(JOINTS)
+        rot = [None] * len(JOINTS)
+        for i in range(len(JOINTS)):
             p = self.parents[i]
             if p < 0:
                 origin[i] = self.offset[i] + np.asarray(root_shift) * self.scale
                 rot[i] = rots[i]
             else:
+                # An arm's angles are measured from the chest
+                # (`Joint::turns_with`); it hangs from its collarbone.
+                t = J["chest"] if JOINTS[i].startswith("arm.") else p
                 origin[i] = origin[p] + q_rot(rot[p], self.offset[i])
-                rot[i] = q_mul(rot[p], rots[i])
+                rot[i] = q_mul(rot[t], rots[i])
                 rot[i] /= np.linalg.norm(rot[i])
         return origin, rot
 
@@ -179,6 +189,11 @@ class Skeleton:
         twist = min(max(twist, t0), t1)
         mirror = -1.0 if JOINTS[i].endswith(".l") else 1.0
         r = np.radians
+        if JOINTS[i].startswith("clavicle"):
+            return q_mul(
+                q_mul(q_axis([0, 0, 1], r(spread * mirror)), q_axis([0, 1, 0], r(-swing * mirror))),
+                q_axis([1, 0, 0], r(twist)),
+            )
         return q_mul(
             q_mul(q_axis([0, 0, 1], r(spread * mirror)),
                   q_axis([1, 0, 0], r(swing * self.swing_sign[i]))),
@@ -188,7 +203,7 @@ class Skeleton:
     def pose(self, frame):
         """A baked frame (hips in mm, then three angles a joint) to joints."""
         shift = np.array(frame[0:3]) / 1000.0
-        rots = [self.local(i, *frame[3 + 3 * i: 6 + 3 * i]) for i in range(16)]
+        rots = [self.local(i, *frame[3 + 3 * i: 6 + 3 * i]) for i in range(len(JOINTS))]
         return self.solve(rots, shift)
 
     def tip(self, origin, rot, i):
@@ -226,7 +241,7 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
     """The body on the game's skeleton, in a bind pose chosen to suit it.
 
     Returns ``(verts, faces, face_uvs, uvs, weights, bind_origin, bind_rot)``
-    with ``weights`` an ``(n, 16)`` array summing to one per vertex, and only
+    with ``weights`` an ``(n, len(JOINTS))`` array summing to one per vertex, and only
     the skin's own vertices kept (renumbered).
 
     The joints are found on ``v``; the vertices moved are ``carried`` if
@@ -247,7 +262,7 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
 
     # One overall scale first, so the per-bone fit is only the residue: the
     # shoulders' height against the game's.
-    rest_o, rest_r = sk.solve([np.array([0, 0, 0, 1.0])] * 16)
+    rest_o, rest_r = sk.solve([np.array([0, 0, 0, 1.0])] * len(JOINTS))
     k = rest_o[J["arm.r"]][1] / (lm["arm.r"][1] - ground)
     shift = np.array([0.0, -ground, 0.0])
     pts = (pts + shift) * k
@@ -255,7 +270,7 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
         lm[key] = (lm[key] + shift) * k
 
     # The bind pose: every limb turned to point where MakeHuman's points.
-    rots = [np.array([0, 0, 0, 1.0])] * 16
+    rots = [np.array([0, 0, 0, 1.0])] * len(JOINTS)
     origin, rot = sk.solve(rots)
     chains = []
     for side in ("l", "r"):
@@ -272,9 +287,9 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
         want = lm[b] - lm[a]
         if a.startswith("foot"):
             want = np.array([want[0], 0.0, want[2]])  # a foot lies flat
-        p = sk.parents[i]
+        p = J["chest"] if a.startswith("arm.") else sk.parents[i]
         world = q_between(sk.axis[i], want)
-        # local = parent^-1 * world
+        # local = (the frame it turns with)^-1 * world
         pinv = rot[p] * np.array([-1, -1, -1, 1])
         rots[i] = q_mul(pinv, world)
         origin, rot = sk.solve(rots)
@@ -298,10 +313,18 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
     trunk = {
         "root": (hipmid_mh, lm["spine"], hipmid_us, origin[J["spine"]]),
         "spine": (lm["spine"], lm["chest"], origin[J["spine"]], origin[J["chest"]]),
-        "chest": (lm["chest"], lm["head"], origin[J["chest"]], origin[J["head"]]),
+        "chest": (lm["chest"], lm["head"], origin[J["chest"]], origin[J["neck"]]),
     }
 
     def bone_map(name, p):
+        # The collarbones are carried with the chest, the neck with the head
+        # (which is rigid from the base of the neck), the toes with the foot.
+        if name.startswith("clavicle"):
+            name = "chest"
+        elif name == "neck":
+            name = "head"
+        elif name.startswith("toe."):
+            name = "foot." + name[-1]
         g = girth.get(name, 1.0)
         if name in trunk:
             a, b, A, B = trunk[name]
@@ -313,7 +336,8 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
             out[:, 2] = A[2] + d[:, 2] * g
             return out
         if name == "head":
-            a, A = lm["head"], origin[J["head"]]
+            # Anchored at the base of the neck, where the game's neck joint is.
+            a, A = lm["head"], origin[J["neck"]]
             return A + (p - a) * head_scale
         a, b = seg_mh[name]
         A, B = seg_us[name]
@@ -331,7 +355,7 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
         return A + local @ q_mat(q).T
 
     # Weights folded into the game's joints.
-    W = np.zeros((len(keep), 16))
+    W = np.zeros((len(keep), len(JOINTS)))
     for bone, (idx, w) in rig.weights.items():
         for joint, share in our_bone(bone):
             for vi, wi in zip(idx, w):

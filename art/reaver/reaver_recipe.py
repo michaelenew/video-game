@@ -8,7 +8,15 @@ heroic ones a painted fantasy game draws people with.
 
 import mh
 
-BODY = mh.macro(gender="female", age="young", muscle=0.72, weight=0.32, proportions=1.0)
+BODY = mh.macro(gender="female", age="young", muscle=0.72, weight=0.32, proportions=1.0) + [
+    # Athletic, in a sports top (the owner, 2026-10-20): a small, firm,
+    # close-set bust, carried high -- one compressed shape under the clothes
+    # rather than two outlines out toward the arms.
+    ("breast/female-young-maxmuscle-minweight-mincup-maxfirmness.target", 0.55),
+    ("breast/breast-dist-decr.target", 0.85),
+    ("breast/breast-point-decr.target", 0.6),
+    ("breast/breast-volume-vert-up.target", 0.35),
+]
 
 # Thickness across each bone, against MakeHuman's: 1 keeps it.
 GIRTH = {}

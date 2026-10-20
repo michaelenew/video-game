@@ -44,28 +44,47 @@ imperceptible. Nothing that reads as gameplay may.
 
 ## The frame
 
-Sixteen joints. Two members per limb, as a body has: a thigh and a shin, an
+Twenty-one joints. Two members per limb, as a body has: a thigh and a shin, an
 upper arm and a forearm. The torso is two — a spine that bends at the waist and
 a chest that turns on top of it — because one rigid torso cannot both fold into
 a lunge and twist into a swing, and every melee animation wants both at once.
 Hands and feet are along for the ride: they cost three channels each and they
 are what makes a footfall land.
 
+Five more came with the first character drawn as art rather than as boxes
+(2026-10-20, [exploration/0024](exploration/0024_a_character_done_properly.md)):
+a body that looks real makes a stiff one more visible. A **neck** between the
+chest and the head; a **clavicle** each side, so a shoulder rises with a raised
+arm and comes forward with a reach; a **toe** each side, so a foot rolls over
+its ball instead of rocking on a flat sole. An arm hangs from its clavicle's end
+but **measures its angles from the chest** (`Joint::turns_with`), so a clip that
+says where an arm points is still exactly right when the shoulder moves under
+it.
+
 ```text
                   Head
                    |
-  Hand ─ Forearm ─ Arm ─ Chest ─ Arm ─ Forearm ─ Hand
-                          |
-                        Spine
-                          |
-            Thigh ────── Root ────── Thigh
-              |                        |
-            Shin                     Shin
-              |                        |
-            Foot                     Foot
+                  Neck
+                   |
+  Hand ─ Forearm ─ Arm ─ Clavicle ─ Chest ─ Clavicle ─ Arm ─ Forearm ─ Hand
+                                     |
+                                   Spine
+                                     |
+                 Thigh ─────────── Root ─────────── Thigh
+                   |                                  |
+                 Shin                               Shin
+                   |                                  |
+                 Foot ─ Toe                         Foot ─ Toe
 ```
 
-A pose is **fifty-one numbers**: three for where the hips are, and three per
+**The secondary layer** (`view::pose::secondary`) fills those five in on every
+drawn pose, from the rest, so no clip has to: the neck takes two-fifths of the
+head's turn; a clavicle lifts with the arm's height and comes forward with its
+reach; a toe bends up just enough to keep its tip off the floor. A clip may
+still set them -- the Reave's lunge drives its striking shoulder forward -- and
+what it sets is kept.
+
+A pose is **sixty-six numbers**: three for where the hips are, and three per
 joint. No positions anywhere else — an elbow cannot be anywhere except at the
 end of its upper arm, and saying so in the data structure is what lets one
 authored clip play on six differently-proportioned bodies.

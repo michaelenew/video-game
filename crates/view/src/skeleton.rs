@@ -65,24 +65,36 @@ pub enum Joint {
     Root,
     /// Bends at the waist.
     Spine,
-    /// Turns on top of the spine. The shoulders hang off this.
+    /// Turns on top of the spine. The collarbones hang off this.
     Chest,
+    /// The base of the neck, under the head: a turn of the head is shared
+    /// with it (2026-10-20), so a nod pivots low, as a neck does.
+    Neck,
     Head,
+    /// A collarbone: from the breastbone out to the shoulder. Lifts and rolls
+    /// forward as the arm rises or reaches (`pose::secondary`), which is how
+    /// a shoulder gets the last of its reach.
+    ClavicleL,
     ArmL,
     ForearmL,
     HandL,
+    ClavicleR,
     ArmR,
     ForearmR,
     HandR,
     ThighL,
     ShinL,
     FootL,
+    /// The ball of the foot to the toe tips: bends to keep the toes on the
+    /// floor when the heel lifts.
+    ToeL,
     ThighR,
     ShinR,
     FootR,
+    ToeR,
 }
 
-pub const JOINT_COUNT: usize = 16;
+pub const JOINT_COUNT: usize = 21;
 
 /// Parents always come before their children, so kinematics is one forward
 /// pass with no recursion and no sorting.
@@ -90,19 +102,24 @@ pub const JOINTS: [Joint; JOINT_COUNT] = [
     Joint::Root,
     Joint::Spine,
     Joint::Chest,
+    Joint::Neck,
     Joint::Head,
+    Joint::ClavicleL,
     Joint::ArmL,
     Joint::ForearmL,
     Joint::HandL,
+    Joint::ClavicleR,
     Joint::ArmR,
     Joint::ForearmR,
     Joint::HandR,
     Joint::ThighL,
     Joint::ShinL,
     Joint::FootL,
+    Joint::ToeL,
     Joint::ThighR,
     Joint::ShinR,
     Joint::FootR,
+    Joint::ToeR,
 ];
 
 impl Joint {
@@ -115,7 +132,12 @@ impl Joint {
             Joint::Root => "root",
             Joint::Spine => "spine",
             Joint::Chest => "chest",
+            Joint::Neck => "neck",
             Joint::Head => "head",
+            Joint::ClavicleL => "clavicle.l",
+            Joint::ClavicleR => "clavicle.r",
+            Joint::ToeL => "toe.l",
+            Joint::ToeR => "toe.r",
             Joint::ArmL => "arm.l",
             Joint::ForearmL => "forearm.l",
             Joint::HandL => "hand.l",
@@ -137,8 +159,11 @@ impl Joint {
             Joint::Root => None,
             Joint::Spine => Some(Joint::Root),
             Joint::Chest => Some(Joint::Spine),
-            Joint::Head => Some(Joint::Chest),
-            Joint::ArmL | Joint::ArmR => Some(Joint::Chest),
+            Joint::Neck => Some(Joint::Chest),
+            Joint::Head => Some(Joint::Neck),
+            Joint::ClavicleL | Joint::ClavicleR => Some(Joint::Chest),
+            Joint::ArmL => Some(Joint::ClavicleL),
+            Joint::ArmR => Some(Joint::ClavicleR),
             Joint::ForearmL => Some(Joint::ArmL),
             Joint::HandL => Some(Joint::ForearmL),
             Joint::ForearmR => Some(Joint::ArmR),
@@ -148,6 +173,21 @@ impl Joint {
             Joint::FootL => Some(Joint::ShinL),
             Joint::ShinR => Some(Joint::ThighR),
             Joint::FootR => Some(Joint::ShinR),
+            Joint::ToeL => Some(Joint::FootL),
+            Joint::ToeR => Some(Joint::FootR),
+        }
+    }
+
+    /// The joint whose turn this one's angles are measured from: its parent,
+    /// except an upper arm's, which are measured from the chest. The
+    /// collarbone carries the shoulder's *place* (2026-10-20), and a clip
+    /// written before there was a collarbone points the arm in the chest's
+    /// frame; measuring it there keeps every one of them pointing where it
+    /// was written, whatever the collarbone does.
+    pub const fn turns_with(self) -> Option<Joint> {
+        match self {
+            Joint::ArmL | Joint::ArmR => Some(Joint::Chest),
+            other => other.parent(),
         }
     }
 
@@ -157,12 +197,14 @@ impl Joint {
     pub const fn is_left(self) -> bool {
         matches!(
             self,
-            Joint::ArmL
+            Joint::ClavicleL
+                | Joint::ArmL
                 | Joint::ForearmL
                 | Joint::HandL
                 | Joint::ThighL
                 | Joint::ShinL
                 | Joint::FootL
+                | Joint::ToeL
         )
     }
 
@@ -181,6 +223,10 @@ impl Joint {
             Joint::ShinR => Joint::ShinL,
             Joint::FootL => Joint::FootR,
             Joint::FootR => Joint::FootL,
+            Joint::ClavicleL => Joint::ClavicleR,
+            Joint::ClavicleR => Joint::ClavicleL,
+            Joint::ToeL => Joint::ToeR,
+            Joint::ToeR => Joint::ToeL,
             other => other,
         }
     }
@@ -203,9 +249,9 @@ impl Joint {
             Joint::Root => Group::Root,
             Joint::Spine => Group::Spine,
             Joint::Chest => Group::Chest,
-            Joint::Head => Group::Head,
-            Joint::ArmL | Joint::ForearmL | Joint::HandL => Group::Arms,
-            Joint::ArmR | Joint::ForearmR | Joint::HandR => Group::Arms,
+            Joint::Neck | Joint::Head => Group::Head,
+            Joint::ClavicleL | Joint::ArmL | Joint::ForearmL | Joint::HandL => Group::Arms,
+            Joint::ClavicleR | Joint::ArmR | Joint::ForearmR | Joint::HandR => Group::Arms,
             _ => Group::Legs,
         }
     }
@@ -217,6 +263,7 @@ impl Joint {
         match self {
             Joint::ForearmL | Joint::ForearmR | Joint::ShinL | Joint::ShinR => 1,
             Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => 2,
+            Joint::ToeL | Joint::ToeR => 3,
             _ => 0,
         }
     }
@@ -443,29 +490,77 @@ impl Skeleton {
                 limits: limits((-20.0, 40.0), (-20.0, 20.0), (-45.0, 45.0)),
             },
         );
+        // The neck is the bottom of what was the head's bone, so the head
+        // ends exactly where it did and its box sits exactly where it was:
+        // a pose that leaves the neck alone draws as it always has.
+        let neck = 0.07 * scale;
+        set(
+            &mut bones,
+            Joint::Neck,
+            Bone {
+                offset: [0.0, 0.25 * scale, 0.0],
+                axis: [0.0, 1.0, 0.0],
+                length: neck,
+                half: [0.045, 0.035, 0.045].map(|v| v * scale * bulk.min(1.0)),
+                box_at: [0.0, 0.03 * scale, 0.0],
+                swing_sign: 1.0,
+                limits: limits((-30.0, 30.0), (-20.0, 20.0), (-40.0, 40.0)),
+            },
+        );
         set(
             &mut bones,
             Joint::Head,
             Bone {
-                offset: [0.0, 0.25 * scale, 0.0],
+                offset: [0.0, neck, 0.0],
                 axis: [0.0, 1.0, 0.0],
-                length: 0.23 * head * scale,
+                length: 0.23 * head * scale - neck,
                 half: [0.115 * head, 0.115 * head, 0.115 * head].map(|v| v * scale),
-                box_at: [0.0, 0.115 * head * scale, 0.0],
+                box_at: [0.0, 0.115 * head * scale - neck, 0.0],
                 swing_sign: 1.0,
                 limits: limits((-45.0, 45.0), (-35.0, 35.0), (-70.0, 70.0)),
             },
         );
 
-        for (arm, forearm_j, hand, side) in [
-            (Joint::ArmL, Joint::ForearmL, Joint::HandL, -1.0),
-            (Joint::ArmR, Joint::ForearmR, Joint::HandR, 1.0),
+        for (clavicle, arm, forearm_j, hand, side) in [
+            (
+                Joint::ClavicleL,
+                Joint::ArmL,
+                Joint::ForearmL,
+                Joint::HandL,
+                -1.0,
+            ),
+            (
+                Joint::ClavicleR,
+                Joint::ArmR,
+                Joint::ForearmR,
+                Joint::HandR,
+                1.0,
+            ),
         ] {
+            // From beside the breastbone to the shoulder, so the shoulder is
+            // exactly where it was when the collarbone is at rest.
+            let inner = 0.025 * scale;
+            let span = 0.185 * shoulders * scale - inner;
+            set(
+                &mut bones,
+                clavicle,
+                Bone {
+                    offset: [side * inner, 0.15 * scale, 0.0],
+                    axis: [side, 0.0, 0.0],
+                    length: span,
+                    half: [span * 0.5, 0.02 * scale, 0.02 * scale],
+                    box_at: [side * span * 0.5, 0.0, 0.0],
+                    swing_sign: 1.0,
+                    // Swing is the shoulder rolled forward (protraction),
+                    // spread is it lifted (elevation): `local_rotation`.
+                    limits: limits((-15.0, 30.0), (-10.0, 35.0), (-10.0, 10.0)),
+                },
+            );
             set(
                 &mut bones,
                 arm,
                 Bone {
-                    offset: [side * 0.185 * shoulders * scale, 0.15 * scale, 0.0],
+                    offset: [side * span, 0.0, 0.0],
                     axis: [0.0, -1.0, 0.0],
                     length: upper_arm,
                     half: [0.055 * bulk, upper_arm / (2.0 * scale), 0.055 * bulk]
@@ -507,9 +602,9 @@ impl Skeleton {
             );
         }
 
-        for (thigh_j, shin_j, foot, side) in [
-            (Joint::ThighL, Joint::ShinL, Joint::FootL, -1.0),
-            (Joint::ThighR, Joint::ShinR, Joint::FootR, 1.0),
+        for (thigh_j, shin_j, foot, toe, side) in [
+            (Joint::ThighL, Joint::ShinL, Joint::FootL, Joint::ToeL, -1.0),
+            (Joint::ThighR, Joint::ShinR, Joint::FootR, Joint::ToeR, 1.0),
         ] {
             set(
                 &mut bones,
@@ -556,11 +651,30 @@ impl Skeleton {
                     limits: limits((-30.0, 50.0), (-18.0, 18.0), (-20.0, 20.0)),
                 },
             );
+            // The toes hinge at the ball of the foot, a finger's width off
+            // the floor. Their box sits inside the foot's, so a mannequin
+            // looks as it did.
+            set(
+                &mut bones,
+                toe,
+                Bone {
+                    offset: [0.0, -0.045 * scale, 0.14 * scale],
+                    axis: [0.0, 0.0, 1.0],
+                    length: 0.07 * scale,
+                    half: [0.045 * bulk, 0.012, 0.025].map(|v| v * scale),
+                    box_at: [0.0, 0.0, 0.025 * scale],
+                    // Positive curls the toes down; negative is the bend a
+                    // lifted heel puts in them.
+                    swing_sign: 1.0,
+                    limits: limits((-60.0, 30.0), (-3.0, 3.0), (-3.0, 3.0)),
+                },
+            );
         }
 
         let head_top = hip
             + bones[Joint::Spine.index()].offset[1]
             + bones[Joint::Chest.index()].offset[1]
+            + bones[Joint::Neck.index()].offset[1]
             + bones[Joint::Head.index()].offset[1]
             + bones[Joint::Head.index()].length;
 
@@ -664,8 +778,9 @@ pub fn solve(skeleton: &Skeleton, pose: &crate::pose::Pose) -> Skin {
             }
             Some(p) => {
                 let pi = p.index();
+                let ti = j.turns_with().unwrap_or(p).index();
                 skin.origin[i] = math::add(skin.origin[pi], skin.rot[pi].rotate(bone.offset));
-                skin.rot[i] = skin.rot[pi].mul(local).normalized();
+                skin.rot[i] = skin.rot[ti].mul(local).normalized();
             }
         }
     }
@@ -676,6 +791,15 @@ pub fn solve(skeleton: &Skeleton, pose: &crate::pose::Pose) -> Skin {
 pub fn local_rotation(bone: &Bone, joint: Joint, angles: [f32; 3]) -> Quat {
     let (swing, spread, twist) = bone.limits.clamp(angles[0], angles[1], angles[2]);
     let mirror = if joint.is_left() { -1.0 } else { 1.0 };
+    // A collarbone lies across the body, so its three are about other axes:
+    // swing rolls the shoulder forward (about up), spread lifts it (about
+    // forward), twist turns it along itself. Positive forward and up on both
+    // sides, as everywhere.
+    if matches!(joint, Joint::ClavicleL | Joint::ClavicleR) {
+        return Quat::from_z(spread * mirror)
+            .mul(Quat::from_y(-swing * mirror))
+            .mul(Quat::from_x(twist));
+    }
     Quat::from_z(spread * mirror)
         .mul(Quat::from_x(swing * bone.swing_sign))
         .mul(Quat::from_y(twist * mirror))

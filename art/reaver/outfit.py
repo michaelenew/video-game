@@ -347,7 +347,7 @@ def daggers(body, r):
                                    smooth=name != "blade")
             g.material(ob, mat(m))
             # Held: the hand moves it and nothing else.
-            W = np.zeros((len(v), 16))
+            W = np.zeros((len(v), len(g.ALL)))
             W[:, J[f"hand.{s}"]] = 1.0
             g.set_weights(ob, W)
             if name == "blade":
@@ -498,7 +498,7 @@ def eyes(body, r):
         pupil = np.clip((front - 0.955) / 0.01, 0, 1)
         g.vertex_mask(ob, iris, pupil)
         g.material(ob, mat("eye"))
-        W = np.zeros((len(p), 16))
+        W = np.zeros((len(p), len(g.ALL)))
         W[:, J["head"]] = 1.0
         g.set_weights(ob, W)
         ob["rigid"] = True

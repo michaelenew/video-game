@@ -51,12 +51,12 @@ changes. `art/README.md` has the commands; the stages:
    a smaller head: the heroic figure painted fantasy draws). Plausible
    anatomy is the one thing a script cannot invent, and the reason the
    result is not uncanny: it is a measured human, stylised by proportion.
-2. **Fitted to the game's skeleton** (`art/lib/fit.py`). The game's sixteen
-   joints, at the Reaver's build (`view::skeleton::build_for`), in a bind
+2. **Fitted to the game's skeleton** (`art/lib/fit.py`). The game's twenty-one
+   joints (sixteen at first; §8), at the Reaver's build (`view::skeleton::build_for`), in a bind
    pose that bends the skeleton to the body rather than the body to the
    skeleton; each part of the body carried from MakeHuman's bone onto the
    game's, stretched along it, blended across joints by the weights that
-   will move it; MakeHuman's 160 bones folded into sixteen; the fingers
+   will move it; MakeHuman's 160 bones folded into the game's; the fingers
    closed round a grip, since the game's hand is one bone.
 3. **Dressed** (`art/lib/garment.py`, `art/reaver/outfit.py`). A garment is
    the part of the body it covers, **inflated** -- the surface a fixed
@@ -108,6 +108,10 @@ so the still world's shade falls on her; the sash is dyed the seat's colour.
   cloth instead of passing through it.
 - **The blades' edges** glow her violet (an emissive map from the honed
   bevel).
+- **Her thrown blades** (`blades.rs`, §8): a swept four-pointed star, a shard
+  out of the floor, a crescent for a cut left hanging.
+- **A blow landing** (`impact.rs`, §8): a flash, a ring and a spray of shards
+  at the blade.
 
 All three that move are renderer-local, which `animation.md` allows of
 cosmetic motion: none reads as gameplay and none can pop on a rollback.
@@ -120,7 +124,7 @@ cosmetic motion: none reads as gameplay and none can pop on a rollback.
 | Clothes that follow the inflated body exactly | a bodysuit: bust, navel and abdominals in leather | the closing bridges hollows; trousers and sleeves as their own garments |
 | The first palette, judged in Blender's studio | pale lavender and tan under the arena's sun -- three times too bright | a third of it, judged in the game (`SHOT_PORTRAIT`) |
 | Bevy's default reflectance on cloth | the sky's colour on every dark surface | 0.12 on cloth and skin |
-| Ink blended | her body and far arm through her clothes | masked, with the prepass's own discard |
+| Ink blended | her body and far arm through her clothes | masked, with the prepass's own discard; then see-through over the transmission copy (§8) |
 | The ink's prepass reading the clock at the main pass's binding | silently no pipeline, so the copies had no depth and the haze took their tops | the prepass view's binding (one) |
 | Pipeline warm-up priming a skinned mesh without its skin | a GPU validation error that took the game down | the primer carries the skin |
 | A mirrored body | the arena is right-handed and a drawn pose is reflected (`view::hand_joint`), so a mirrored import was her mirror image | imported as it is; MakeHuman's `.L` is the game's `.r` |
@@ -130,9 +134,9 @@ cosmetic motion: none reads as gameplay and none can pop on a rollback.
 
 | | |
 | --- | --- |
-| Triangles | about 69 000 (body 16 000, costume 50 500, sash 1 900) -- a hero's budget; the mannequin was 28 parts |
+| Triangles | about 72 500 (body 19 300, costume 51 300, sash 1 900) -- a hero's budget; the mannequin was 28 parts |
 | Textures | 2048² colour, normal and metal-roughness for the costume, 2048² for the body, an emissive for the blades |
-| The model | about 7.8 MB in the binary (`include_bytes!`), the browser build's too |
+| The model | about 8.1 MB in the binary (`include_bytes!`), the browser build's too |
 | A frame | seven skinned instances a seat, six of them hidden unless a Reaving is out; two ribbon meshes a seat rewritten in place during a cut; eight spring joints. Nothing in `sim` or `view` changed, so the simulation's budgets and determinism are untouched |
 
 ## 6. Where it stands against the brief
@@ -141,9 +145,10 @@ Honestly: a credible stylised hero at the game's camera distance, with a
 plausible body and face, garments that read as made, and a signature effect
 that is hers. Not yet Guild Wars 2's or FFXIV's bar. What stands between:
 
-1. **Animation.** The clips are the game's sixteen-joint procedural ones,
-   authored for a mannequin: no fingers, no spine twist detail, no
-   breathing, no follow-through in the head or the hood. A body that looks
+1. **Animation.** The clips are the game's procedural ones, authored for a
+   mannequin: no fingers, no breathing, no follow-through in the hood. The
+   second pass (§8) added a neck, clavicles and toes and a layer that moves
+   them, which is a start, not the bar. A body that looks
    real makes stiff motion more visible, not less. The single biggest gap.
 2. **The face at close range.** Plausible, not characterful: no hair, no
    painted detail beyond brows and kohl, no expression (there is no jaw or
@@ -156,9 +161,9 @@ that is hers. Not yet Guild Wars 2's or FFXIV's bar. What stands between:
    are many and small because the game pieces are decimated triangle soups.
    Cleaner low-poly topology (retopology rather than decimation) would fix
    both.
-5. **Her other effects** -- the Shuriken, the Fan, the Guillotine lotus's
-   twelve blades, the Executioner, the Plunge's ring -- are still the
-   game's primitive pools. Ink is the material they should all be made of.
+5. **Her other effects** -- made as blades in the second pass (§8), but
+   still single meshes in one material: no trail behind a thrown star, no
+   ink smoke off them.
 6. **Lighting.** The brushed look is where she reads best; under the plain
    look she is lit by a physically based model the painted world does not
    use. A character shader that shares the painted world's light model
@@ -179,3 +184,24 @@ that is hers. Not yet Guild Wars 2's or FFXIV's bar. What stands between:
   apart at range, or should the hood's trim carry it too?
 - **ART-4.** 7.8 MB a character in the browser build. Six of them is about
   45 MB. Acceptable, or should the models stream?
+
+## 8. The second pass (2026-10-20, the owner's notes)
+
+The owner looked at the first sample and asked for eight things. What each
+became:
+
+| Asked | Done |
+| --- | --- |
+| *The shadow transparent, not opaque -- keep the highlights and colours; her more purple, the shadow more grey* | The ink is now **see-through over a copy of the world** (`ink.rs`). A blended body shows its own insides (§4), so instead the ink asks for Bevy's *view transmission texture* -- a copy of everything solid, taken before anything see-through is drawn -- which puts it in a pass drawn after the solid world *with depth written as usual*. The nearest of her surfaces wins the depth test, and that surface mixes itself with the copy: 42% of her across her middle, all of her at the rim and where the smoke is eating her, so her edge light stays. Her body desaturated toward a smoky grey; the rim her violet gone greyer. Her own costume pushed toward purple (`build.py`'s palette). One cost: the depth the outline and the wash read (the prepass) no longer has her shadow in it, so it carries no ink line. |
+| *The left click: lunge all the way out, the stabbing hand all the way forward* | The Reave rewritten as a **lunge**: a gather, then the front foot driven a long stride out, the back leg straight behind, the striking shoulder brought forward by its new clavicle, and the arm on the hit line out to 97% of its reach (`anim::track::full_reach`, which does the same for the Plunge and Gallows). |
+| *A purple cylinder round her on the aerial left click*; *a visible hit volume on the jump left click* | Both the same thing: `place_beams` drew a rod for any attack whose hit volume is a line, which the Plunge's and Gallows' are. Her blows are drawn by her blades and their trail, so it no longer draws for her (nor the Champion, whose weapon is drawn). |
+| *A brief effect on impact, to sell the hit; look for other opportunities* | `impact.rs`: the frame her blow's `hit_used` comes up -- once a blow, on a fighter or a creature -- a violet flash at the tip of the blade that struck, a ring thrown out square to the blow, and ten ink shards flung on along it and falling, for seventeen frames of the simulation's clock (so it holds through the impact freeze). The same, at six-tenths the size, where any of her thrown blades catches somebody new. |
+| *The shurikens are still their old models -- everywhere they appear* | `blades.rs`: a four-pointed star with swept, diamond-section points, a raised hub and a faint ring where its points blur, in dark violet steel with her violet at the edges; spinning on the simulation's clock. Every throw and spin of hers draws it: the Shuriken, the Fan, the Tumble, the Whirl and the Rising whirl, the burst when her shadow comes home, the Guillotine's lotus. The Plunge's ring is shards rising out of the floor; the Reaping's cut a crescent. |
+| *More bones, to improve the animations* | Five joints: a **neck**, a **clavicle** each side, a **toe** each side -- twenty-one in all, sixty-six numbers a pose (`animation.md`). An arm hangs from its clavicle but measures its angles from the chest, so no clip had to change for its arm to point where it did. A **secondary layer** (`view::pose::secondary`) moves the new joints on every drawn pose, so every clip got them at once. The model was rebuilt on the new skeleton. |
+| *Her chest: athletic clothes, a sports bra -- not two outlines out to each side* | MakeHuman's breast targets on the body: small, firm, close-set and carried high (`reaver_recipe.py`), so the jerkin closes over one compressed shape. |
+
+What it did not do: the new joints carry no authored motion beyond the
+secondary layer and the Reave's shoulder; the rest of her clips still move
+them only by rule. A trail behind a thrown star, and the shadow's ink line,
+are the next two things the effects want.
+

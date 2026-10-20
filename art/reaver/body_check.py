@@ -34,7 +34,7 @@ verts, faces, face_uvs, uvs, W, bo, br, marks = fit.fit(base, rig, v, sk, GIRTH,
 if clip:
     po, pr = sk.pose(sk.clips[clip]["frames"][frame])
     posed = np.zeros_like(verts)
-    for j in range(16):
+    for j in range(len(fit.JOINTS)):
         m = W[:, j] > 0
         if not m.any():
             continue

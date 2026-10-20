@@ -357,7 +357,7 @@ reasoning is [`docs/design/sound.md`](docs/design/sound.md).
 The Shadow Reaver is drawn by a skinned model, `crates/game/assets/reaver.glb`,
 and **that file is built, never edited**: `art/reaver/build.py`, run under
 Blender as a Python module (`art/blender.sh`, `./scripts/setup-tools.sh art`),
-from MakeHuman's CC0 body. Its joints are the game's sixteen
+from MakeHuman's CC0 body. Its joints are the game's twenty-one
 (`view::skeleton`), named as `Joint::name` names them and set each frame from
 the skin `apply_poses` solves, so a change to the skeleton is a rebuild there.
 Judge her lit, in the game (`SHOT_PORTRAIT`). The reasoning, what failed and

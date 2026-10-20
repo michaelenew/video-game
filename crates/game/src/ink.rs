@@ -47,20 +47,23 @@ mod look {
         pub body: Vec4,
         /// The rim's colour, and how bright it is, in the emissive's units.
         pub glow: Vec4,
-        /// How much of her there is, 0 to 1 (a copy fading out), and how far
-        /// the smoke eats into her silhouette.
+        /// How much of her there is, 0 to 1 (a copy fading out); how far
+        /// the smoke eats into her silhouette; and how much of the light
+        /// behind her comes through where she is thin.
         pub fade: Vec4,
     }
 }
 
 impl Ink {
-    /// Her shadow: deep violet-black, its rim her violet.
+    /// Her shadow: a smoky grey, half there across her middle and solid
+    /// at her edges, its rim her violet gone toward grey -- the owner
+    /// (2026-10-20): her the purple one, her shadow the grey.
     pub fn shadow() -> Ink {
         Ink {
             look: InkLook {
-                body: Vec4::new(0.010, 0.005, 0.025, 1.0),
-                glow: Vec4::new(0.55, 0.25, 1.0, 1200.0),
-                fade: Vec4::new(1.0, 1.0, 0.0, 0.0),
+                body: Vec4::new(0.016, 0.014, 0.020, 0.42),
+                glow: Vec4::new(0.50, 0.38, 0.72, 1100.0),
+                fade: Vec4::new(1.0, 1.0, 0.55, 0.0),
             },
         }
     }
@@ -80,12 +83,18 @@ impl MaterialExtension for Ink {
 /// Ink over a standard material read from the model: its texture is what
 /// keeps the costume legible inside the dark.
 ///
-/// **Masked, not blended.** Blended, her body showed through her clothes and
-/// her far arm through her near one. Masked is what makes Bevy run a
-/// fragment shader in the depth prepass at all, so the smoke's holes go
-/// through the depth as well (as `paint::Paint` does for its window).
+/// **See-through, not blended.** Blended, her body showed through her
+/// clothes and her far arm through her near one, because a blended mesh
+/// does not write depth. Instead she reads the view's transmission
+/// texture -- a copy of everything solid, taken before she is drawn -- so
+/// Bevy draws her after it with depth written as usual: the nearest of her
+/// surfaces wins, and it mixes itself with the world behind (`ink.wgsl`).
+/// The specular transmission is what puts her in that pass; the shader
+/// turns its own light back off. Masked, so the smoke's holes cut her
+/// shadow on the floor too (`ink_prepass.wgsl`).
 pub fn ink(mut base: StandardMaterial, ink: Ink) -> InkMaterial {
     base.alpha_mode = AlphaMode::Mask(0.5);
+    base.specular_transmission = 0.01;
     base.double_sided = false;
     InkMaterial {
         base,

@@ -48,7 +48,8 @@ pub fn reach(pose: &mut Pose, skeleton: &Skeleton, upper: Joint, target: V3, pol
     // measured from the shoulder, and the shoulder has already been moved by
     // the spine and the chest.
     let skin = solve(skeleton, pose);
-    let parent = upper.parent().expect("a limb hangs off something");
+    // The frame its angles are measured in (`Joint::turns_with`).
+    let parent = upper.turns_with().expect("a limb hangs off something");
     let origin = skin.origin[upper.index()];
     let parent_rot = skin.rot[parent.index()];
 

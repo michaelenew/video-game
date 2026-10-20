@@ -54,22 +54,24 @@ def body():
 # The painter's colours: what each material is, before light. Brighter and
 # more saturated than the thing itself, as a painted figure's are, because
 # the painting and then the game's light both take value out.
+# Pushed toward purple on the owner's word (2026-10-20): plum leather, a
+# violet hood, cloth with violet in its black.
 # Linear albedo, judged lit in the game (CLAUDE.md, "Judge a palette lit"):
 # the first set, three times this, came out pale lavender and tan under the
 # arena's sun.
 COLOURS = {
-    "knit": (0.035, 0.032, 0.05),
+    "knit": (0.035, 0.024, 0.06),
     "knit/2": (0.50, 0.30, 0.22),      # skin, warm
     "knit/4": (0.06, 0.03, 0.05),      # brows and the smudge round her eyes
-    "knit/3": (0.08, 0.045, 0.04),     # glove
-    "leather": (0.11, 0.05, 0.035),
-    "leather_dark": (0.04, 0.03, 0.035),
-    "hood": (0.035, 0.022, 0.085),
-    "mask": (0.022, 0.018, 0.03),
+    "knit/3": (0.07, 0.035, 0.05),     # glove
+    "leather": (0.09, 0.035, 0.055),
+    "leather_dark": (0.045, 0.024, 0.05),
+    "hood": (0.05, 0.02, 0.11),
+    "mask": (0.03, 0.015, 0.045),
     "metal": (0.62, 0.64, 0.70),
     "metal_dark": (0.08, 0.075, 0.09),
     "wrap": (0.14, 0.09, 0.06),
-    "trousers": (0.03, 0.024, 0.03),
+    "trousers": (0.032, 0.018, 0.045),
     "eye": (0.70, 0.68, 0.66),
     "eye/2": (0.22, 0.14, 0.42),
     "eye/3": (0.01, 0.01, 0.015),
@@ -107,7 +109,6 @@ def finish(bo, br, size):
     for ob, name, res in ((body, "body", size), (costume, "costume", size), (team, "team", size // 4)):
         slot_names = [s.material.name for s in ob.material_slots]
         p = paint.passes(ob, res, COLOURS, high=high if ob is costume else None)
-        np.save(os.path.join(TEX, f"{name}_passes.npy"), {k: v for k, v in p.items()}, allow_pickle=True)
         col = paint.compose(p, paint.ART)
         images.append(paint.to_png(col, os.path.join(TEX, f"{name}.jpg"), quality=92))
         entry = {"color": len(images) - 1}

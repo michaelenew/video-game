@@ -20,11 +20,11 @@ import numpy as np
 from mathutils import Vector
 
 JOINTS = [
-    "root", "spine", "chest", "head",
-    "arm.l", "forearm.l", "hand.l",
-    "arm.r", "forearm.r", "hand.r",
-    "thigh.l", "shin.l", "foot.l",
-    "thigh.r", "shin.r", "foot.r",
+    "root", "spine", "chest", "neck", "head",
+    "clavicle.l", "arm.l", "forearm.l", "hand.l",
+    "clavicle.r", "arm.r", "forearm.r", "hand.r",
+    "thigh.l", "shin.l", "foot.l", "toe.l",
+    "thigh.r", "shin.r", "foot.r", "toe.r",
 ]
 
 # The coat's joints, after the skeleton's: two a panel, the top half and the

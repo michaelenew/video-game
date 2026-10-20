@@ -281,8 +281,14 @@ pub fn shadow_pose_and_shape(input: PoseInput, doing: Ghosting) -> (Pose, Shape)
     }
     match doing {
         Ghosting::Attending => pose_and_shape(input),
-        Ghosting::Dashing(frame) => (Clip::ShadowDash.at(frame as u32), 300),
-        Ghosting::Ready(since) => (Clip::ShadowReady.at(since as u32), 301),
+        Ghosting::Dashing(frame) => (
+            crate::pose::secondary(Clip::ShadowDash.at(frame as u32)),
+            300,
+        ),
+        Ghosting::Ready(since) => (
+            crate::pose::secondary(Clip::ShadowReady.at(since as u32)),
+            301,
+        ),
     }
 }
 
@@ -449,7 +455,8 @@ pub fn pose_for(input: PoseInput) -> Pose {
     if input.shudder != 0.0 {
         pose.channels[2] += input.shudder;
     }
-    pose
+    // Neck, collarbones and toes, which no clip is asked to write.
+    crate::pose::secondary(pose)
 }
 
 /// The pose the clips say, before anything is laid over it.

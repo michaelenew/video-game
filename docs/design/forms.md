@@ -5,7 +5,7 @@ status: proposed 2026-10-08; five passes built, the fifth for the Guild Wars loo
 # Forms — less box, same collision
 
 Everything in the game is drawn from the box the simulation collides against:
-a fighter's sixteen joints are scaled cubes, a creature's parts are boxes in
+a fighter's twenty-one joints are scaled cubes, a creature's parts are boxes in
 their bone's frame, an arena's solids are the boxes bodies stop at. That is
 the right source (if you can see it, you collide with it) and the wrong
 *look*: a meadow of crates, a cat made of bricks.

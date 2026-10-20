@@ -1242,7 +1242,7 @@ Everything below builds and passes today.
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
 | **Sound** | **Derived from the fight's own numbers, `crates/sound`; `cargo run -p sound --example sheet` renders every sound** — see [sound.md](sound.md) |
 | **Replays** | **`Y` / `--record` save the fight's inputs; `cargo run -p hunt --bin replay` judges them; `--replay` plays them back** — see [replays.md](replays.md) |
-| **Skeleton** | **Sixteen joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
+| **Skeleton** | **Twenty-one joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
 | **Animation factory** | **`cargo run -p anim --bin bake`**; `--bin preview` draws a clip as a PNG |
 | **Animation hub** | **F9** — every clip, live: timeline, spline editor, joint sliders, save and bake |
 | Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BIND_POSE=1` freezes the rig at rest |

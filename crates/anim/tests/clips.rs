@@ -168,6 +168,15 @@ fn baked_motion_is_continuous() {
                 // go there.
                 let ceiling = match (j.depth(), j.group()) {
                     (_, Group::Root | Group::Spine | Group::Chest) => 0.15,
+                    // The head's own joint has sat at the top of the neck
+                    // since the neck was given a joint of its own
+                    // (2026-10-20), seven centimetres further up the same
+                    // lever, so it sweeps a little further than the neck's.
+                    (_, Group::Head) if j == view::skeleton::Joint::Head => 0.36,
+                    // The ball of the foot, fifteen centimetres beyond the
+                    // ankle on the same lever: where the foot's own tip
+                    // always was, measured since the toes have a joint.
+                    (3, _) => 0.46,
                     (_, Group::Head) => 0.30,
                     (0, _) => 0.24,
                     // An elbow under a hand that is on the hit line goes where
@@ -644,6 +653,15 @@ fn report_discontinuous_clips() {
                 .sqrt();
                 let ceiling = match (j.depth(), j.group()) {
                     (_, Group::Root | Group::Spine | Group::Chest) => 0.15,
+                    // The head's own joint has sat at the top of the neck
+                    // since the neck was given a joint of its own
+                    // (2026-10-20), seven centimetres further up the same
+                    // lever, so it sweeps a little further than the neck's.
+                    (_, Group::Head) if j == view::skeleton::Joint::Head => 0.36,
+                    // The ball of the foot, fifteen centimetres beyond the
+                    // ankle on the same lever: where the foot's own tip
+                    // always was, measured since the toes have a joint.
+                    (3, _) => 0.46,
                     (_, Group::Head) => 0.30,
                     (0, _) => 0.24,
                     (1, _) => 0.30,

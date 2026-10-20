@@ -22,6 +22,7 @@ mod arenas;
 mod bag;
 mod bake;
 mod beast;
+mod blades;
 mod cairns;
 mod claimed;
 mod coat;
@@ -36,6 +37,7 @@ mod grove;
 mod heel;
 mod hub;
 mod hud;
+mod impact;
 mod ink;
 mod keep;
 mod land;
@@ -263,6 +265,7 @@ fn main() {
         .add_plugins(warm::WarmPlugin)
         .add_plugins(ink::InkPlugin)
         .add_plugins(reaver::ReaverPlugin)
+        .add_plugins(impact::ImpactPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
         // `platform::draws_outlines`. Registering it anyway would not fail
@@ -733,8 +736,14 @@ fn limb_form(joint: view::skeleton::Joint) -> Mesh {
         | Joint::ThighL
         | Joint::ThighR
         | Joint::ShinL
-        | Joint::ShinR => shapes::soft_cylinder(Vec3::ONE, 0.5, 10),
+        | Joint::ShinR
+        | Joint::Neck => shapes::soft_cylinder(Vec3::ONE, 0.5, 10),
         Joint::Head => shapes::soft_box(Vec3::ONE, 0.9, 12, None),
+        // Inside the chest and the foot: a mannequin looks as it did before
+        // they had joints.
+        Joint::ClavicleL | Joint::ClavicleR | Joint::ToeL | Joint::ToeR => {
+            shapes::soft_box(Vec3::ONE, 0.5, 6, None)
+        }
         Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => {
             shapes::soft_box(Vec3::ONE, 0.5, 8, None)
         }
@@ -2262,6 +2271,12 @@ struct EffectLook {
     limb: Handle<Mesh>,
     block: Handle<Mesh>,
     head: Handle<Mesh>,
+    /// The Reaver's blades (`blades`): a throwing star, a shard out of the
+    /// floor, a crescent cut, and the dark violet steel they are made of.
+    shuriken: Handle<Mesh>,
+    shard: Handle<Mesh>,
+    crescent: Handle<Mesh>,
+    steel: Handle<StandardMaterial>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2627,6 +2642,10 @@ fn setup(
         spike,
         ball,
         hoop: meshes.add(Torus::new(0.94, 1.0)),
+        shuriken: meshes.add(blades::shuriken()),
+        shard: meshes.add(blades::shard()),
+        crescent: meshes.add(blades::crescent()),
+        steel: materials.add(blades::steel()),
         sun: materials.add(StandardMaterial {
             base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
             emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
@@ -3279,9 +3298,16 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
         // the width of the capsule on top of a sword was two drawings of one
         // thing, and the rod is the one that said nothing about the weapon.
         // The debug overlay still draws the capsule itself.
+        //
+        // And not the Reaver's: the Plunge and Gallows are line-shaped cuts,
+        // and a glowing rod drawn down the line was the hit volume on
+        // screen; her blades and the arc they leave (`slash`) are the cut.
         let p = &sim.cur.players[tag.0];
-        let shot = sim::state::hitbox(p)
-            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && !orb_out(p));
+        let shot = sim::state::hitbox(p).filter(|hb| {
+            !matches!(p.class, sim::Class::Champion | sim::Class::ShadowReaver)
+                && hb.is_a_beam()
+                && !orb_out(p)
+        });
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -4750,6 +4776,10 @@ enum Shape {
     Limb,
     Block,
     Head,
+    /// The Reaver's blades (`blades`), unit-sized, scaled uniformly.
+    Shuriken,
+    Shard,
+    Crescent,
 }
 
 /// The Elementalist's wind -- the Air ball and the two drafts -- in air, or
@@ -4793,6 +4823,8 @@ enum Skin {
     /// Broken ground: the stones' own material, so rough terrain reads as
     /// earth rather than as an effect.
     Stone,
+    /// The Reaver's blades: dark violet steel, her violet at the edges.
+    Steel,
     /// Moving air: the beam's pale, barely-there material, so a draft or a
     /// ring of air is seen without hiding what is in it.
     Air,
@@ -4808,6 +4840,9 @@ impl EffectLook {
             Shape::Limb => self.limb.clone(),
             Shape::Block => self.block.clone(),
             Shape::Head => self.head.clone(),
+            Shape::Shuriken => self.shuriken.clone(),
+            Shape::Shard => self.shard.clone(),
+            Shape::Crescent => self.crescent.clone(),
         }
     }
 
@@ -4829,6 +4864,7 @@ impl EffectLook {
             Skin::Wisp => self.wisp.clone(),
             Skin::Stone => self.stone.clone(),
             Skin::Air => self.beam.clone(),
+            Skin::Steel => self.steel.clone(),
         }
     }
 }
@@ -5469,30 +5505,42 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let turn =
                 effect.age as f32 * fast + part as f32 * std::f32::consts::TAU / SPUN_BLADES as f32;
             let mid = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
-            Some(Piece {
-                turn: Quat::IDENTITY,
-                shape: Shape::Column,
-                skin: Skin::Shade,
-                at: mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
-                scale: Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE),
-            })
+            Some(shuriken(
+                mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
+                SPUN_BLADE,
+                effect.age,
+                part,
+            ))
         }
         EffectKind::ShadowFan if part < sim::moves::reaver::blades(effect.slot) => {
             let r = effect.field_radius().to_f32_for_render();
+            Some(shuriken(
+                fx3(effect.fan_blade_at(part)),
+                r * 2.0,
+                effect.age,
+                part,
+            ))
+        }
+        // Shards of shadow driven up out of the floor where the ring runs,
+        // each its own height and lean, as wide as the ring cuts.
+        EffectKind::ShadowRing if part < sim::effects::RING_PIECES => {
+            let width = sim::tuning::shadow_ring_width().to_f32_for_render();
+            let at = fx3(effect.ring_piece(part));
+            let seed = (part as f32 * 2.399).sin() * 0.5 + 0.5;
+            let rise = (effect.age as f32 / 4.0).min(1.0);
+            let tall = width * (2.2 + 1.6 * seed) * rise;
+            let out = (at - fx3(effect.pos)).with_y(0.0).normalize_or(Vec3::X);
             Some(Piece {
-                turn: Quat::IDENTITY,
-                shape: Shape::Column,
-                skin: Skin::Shade,
-                at: fx3(effect.fan_blade_at(part)),
-                scale: Vec3::new(r * 2.0, r * 0.4, r * 2.0),
+                shape: Shape::Shard,
+                skin: Skin::Steel,
+                at,
+                scale: Vec3::new(width * 1.6, tall, width * 1.6),
+                turn: Quat::from_rotation_arc(
+                    Vec3::Y,
+                    (Vec3::Y + out * (0.25 + 0.3 * seed)).normalize(),
+                ) * Quat::from_rotation_y(out.x.atan2(out.z) + std::f32::consts::FRAC_PI_2),
             })
         }
-        EffectKind::ShadowRing if part < sim::effects::RING_PIECES => Some(floating_in(
-            Skin::Shade,
-            fx3(effect.ring_piece(part))
-                + Vec3::Y * sim::tuning::shadow_ring_width().to_f32_for_render(),
-            sim::tuning::shadow_ring_width().to_f32_for_render(),
-        )),
         // **The Champion's full charges** (exploration 0015). The crescent:
         // a wide flat blade of light where the hit test is, and two fading
         // after-images behind it on its line.
@@ -5543,18 +5591,27 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
         }
         EffectKind::Reaping => reaping_cut(effect, part),
-        EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
-            turn: Quat::IDENTITY,
-            shape: Shape::Column,
-            skin: Skin::Shade,
-            at: fx3(effect.lotus_at(part, effect.pos)),
-            scale: Vec3::new(
-                effect.field_radius().to_f32_for_render() * 2.0,
-                sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
-                effect.field_radius().to_f32_for_render() * 2.0,
-            ),
-        }),
+        EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(shuriken(
+            fx3(effect.lotus_at(part, effect.pos)),
+            effect.field_radius().to_f32_for_render() * 2.0,
+            effect.age,
+            part,
+        )),
         _ => None,
+    }
+}
+
+/// One of the Reaver's throwing stars (`blades::shuriken`), `size` across
+/// its tips, lying flat and spinning on the simulation's clock: a turn every
+/// third of a second, each blade of a set started at its own angle.
+fn shuriken(at: Vec3, size: f32, age: u16, part: usize) -> Piece {
+    let spin = age as f32 * 0.33 + part as f32 * 1.3;
+    Piece {
+        shape: Shape::Shuriken,
+        skin: Skin::Steel,
+        at,
+        scale: Vec3::splat(size),
+        turn: Quat::from_rotation_y(-spin),
     }
 }
 
@@ -6058,14 +6115,15 @@ fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
     // line its overhead fell along.
     let at = fx3(effect.pos) - facing * 0.15 * copy_size(effect);
     let down = (Vec3::Y * 1.0 - facing * 0.35).normalize();
+    // A crescent of shadow, the length of the overhead that left it.
     let mut cut = framed(
-        Shape::Block,
+        Shape::Crescent,
         at,
         down,
         facing.cross(Vec3::Y).normalize_or(Vec3::X),
-        Vec3::new((0.05 + 0.1 * open) * tall / 1.8, tall * 0.5 * open, 0.04),
+        Vec3::new((0.6 + 0.6 * open) * tall / 1.8, tall * 0.55 * open, 1.0),
     );
-    cut.skin = Skin::Shade;
+    cut.skin = Skin::Steel;
     Some(cut)
 }
 

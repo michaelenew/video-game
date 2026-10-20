@@ -1553,21 +1553,24 @@ fn on_a_ledge(grip: sim::state::Grip, clock: u8, since: u8, along: f32) -> PoseI
 fn a_body_on_a_ledge_hangs_shuffles_and_climbs_rather_than_falls() {
     use sim::state::Grip;
     use view::clips::Clip;
+    // What is drawn is the clip with the body's own secondary motion over it
+    // (`pose::secondary`), as everything is.
+    let drawn = |clip: Clip, frame: u32| view::pose::secondary(clip.at(frame)).channels;
     let hang = pose_for(on_a_ledge(Grip::Hang, 30, 30, 0.0));
-    assert_eq!(hang.channels, Clip::LedgeHang.at(30).channels);
+    assert_eq!(hang.channels, drawn(Clip::LedgeHang, 30));
     // The catch's settle is the hang too.
     let catch = pose_for(on_a_ledge(Grip::Catch, 3, 3, 0.0));
-    assert_eq!(catch.channels, Clip::LedgeHang.at(3).channels);
+    assert_eq!(catch.channels, drawn(Clip::LedgeHang, 3));
     // Along the wall to her right plays the shuffle forward, to her left
     // backward.
     let right = pose_for(on_a_ledge(Grip::Hang, 30, 3, 1.5));
-    assert_eq!(right.channels, Clip::LedgeShuffle.at(3).channels);
+    assert_eq!(right.channels, drawn(Clip::LedgeShuffle, 3));
     let left = pose_for(on_a_ledge(Grip::Hang, 30, 3, -1.5));
     let len = Clip::LedgeShuffle.length() as u32;
-    assert_eq!(left.channels, Clip::LedgeShuffle.at(len - 3).channels);
+    assert_eq!(left.channels, drawn(Clip::LedgeShuffle, len - 3));
     // The climb is on the simulation's clock, which counts from one.
     let climb = pose_for(on_a_ledge(Grip::Climb, 10, 60, 0.0));
-    assert_eq!(climb.channels, Clip::LedgeClimb.at(9).channels);
+    assert_eq!(climb.channels, drawn(Clip::LedgeClimb, 9));
     assert_ne!(climb.channels, Clip::JumpFall.at(0).channels);
 }
 
