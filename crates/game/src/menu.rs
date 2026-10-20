@@ -14,6 +14,10 @@
 //!   -- as a file (a download, in a browser) that
 //!   `cargo run -p hunt --bin replay` judges and `--replay` plays back. `Y`
 //!   does the same without the menu. See `docs/design/replays.md`.
+//! - **Training dummy**, alone: bring it into a hunt or the valley's
+//!   peaceful places, send it away again, choose what it does and its class
+//!   ([`dummy`]). A duel always has it. The number keys still pick what it
+//!   does; this is where somebody who was never told finds it.
 //! - **Fast travel**, in the valley: to any cairn this player has touched
 //!   ([`crate::cairns`]) -- every one in dev mode -- out of a fight. A trip
 //!   on the wire, so the other player comes too.
@@ -183,6 +187,7 @@ pub fn draw(
                 }
             }
             details(ui, &mut menu, &sim, now);
+            dummy(ui, &mut sim);
             fast_travel(ui, &mut sim, &cairns);
             ui.separator();
             ui.heading("Replay");
@@ -212,6 +217,83 @@ pub fn draw(
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
         });
+}
+
+/// What the dummy does, as the menu names it: the number keys' modes, less
+/// the second set of keys, which is nobody's (2026-10-20).
+const DUMMY_MODES: [(crate::Dummy, &str); 6] = [
+    (crate::Dummy::Idle, "Stands still"),
+    (crate::Dummy::Block, "Blocks"),
+    (crate::Dummy::Attack, "Attacks now and then"),
+    (crate::Dummy::Bot(hunt::Level::Easy), "Sparring bot, easy"),
+    (
+        crate::Dummy::Bot(hunt::Level::Normal),
+        "Sparring bot, normal",
+    ),
+    (crate::Dummy::Bot(hunt::Level::Hard), "Sparring bot, hard"),
+];
+
+/// **The training dummy**: in or out, what it does, its class. Alone only --
+/// against a person the second seat is theirs. A duel always has it
+/// ([`sim::World::present`]), so there it can be changed but not sent away.
+fn dummy(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    if sim.driver.online() {
+        return;
+    }
+    ui.separator();
+    ui.heading("Training dummy");
+    ui.add_space(4.0);
+    let (mut mode, mut with) = (sim.dummy, sim.with_dummy);
+    let mut class = sim.cur.players[1].class;
+    if sim.cur.pvp() {
+        ui.label(egui::RichText::new("A duel always has its opponent.").weak());
+    } else {
+        let here = sim.cur.is_present(1);
+        ui.horizontal(|ui| {
+            if ui
+                .button(if here { "Remove dummy" } else { "Add dummy" })
+                .clicked()
+            {
+                with = !here;
+                if here && mode == crate::Dummy::Human {
+                    mode = crate::Dummy::Idle;
+                }
+            }
+            ui.label(egui::RichText::new("restarts this place").weak());
+        });
+    }
+    let named = DUMMY_MODES
+        .iter()
+        .find(|(m, _)| *m == mode)
+        .map_or("Player two's keys", |(_, name)| name);
+    ui.horizontal(|ui| {
+        ui.label("Does");
+        egui::ComboBox::from_id_salt("dummy mode")
+            .selected_text(named)
+            .show_ui(ui, |ui| {
+                for (m, name) in DUMMY_MODES {
+                    ui.selectable_value(&mut mode, m, name);
+                }
+            });
+    });
+    ui.horizontal(|ui| {
+        ui.label("Class");
+        egui::ComboBox::from_id_salt("dummy class")
+            .selected_text(class.name())
+            .show_ui(ui, |ui| {
+                for c in sim::class::ROTATION {
+                    ui.selectable_value(&mut class, c, c.name());
+                }
+            });
+    });
+    if matches!(mode, crate::Dummy::Bot(_)) && sim.cur.hunting() {
+        ui.label(
+            egui::RichText::new("The sparring bot fights only in a duel; here it stands.").weak(),
+        );
+    }
+    if (mode, with, class) != (sim.dummy, sim.with_dummy, sim.cur.players[1].class) {
+        crate::change_dummy(sim, mode, with, class);
+    }
 }
 
 /// **Fast travel**: a button for every cairn on offer, by place, from the
