@@ -14,16 +14,20 @@
 //! | Beat | What it is |
 //! | --- | --- |
 //! | The pool | Three mossy stones stepping up out of the pool on the right of the falls, to the first shelf (a cairn) |
-//! | The right side | Up the face: a ledge, a column standing out of the pool, a ledge -- two metres up each time, three to four along |
-//! | Behind the falls | Three level leaps of 4.7 m along ledges between the cliff and the falling water, to the second shelf (a cairn) on the left |
-//! | The left side | Three hops of 2.1 m up and about 4 m along, between ledges on the face and a column standing out from it, and 2.2 m onto the top |
+//! | The right side | Up the face: a ledge, a column standing out of the pool, a ledge -- two metres up each time, four and a half to six along |
+//! | Behind the falls | Three level leaps of 6 to 6.4 m along ledges between the cliff and the falling water, to the second shelf (a cairn) on the left |
+//! | The left side | Three hops of 2.1 m up and 5.3 to 5.6 m along, between ledges on the face and a column standing out from it, and 2.2 m onto the top |
 //! | The top | The cliff's top, where the river goes over |
 //!
-//! **Every hop is inside the Bulwark's plain running jump caught at the
-//! hands** (landed, until ledges caught: 2026-10-16), because the road is for
-//! everybody (`tests/waterfall.rs` reads the hops off this table and checks
-//! each class against `crate::envelope::widest_caught`). It is hard by its height and
-//! by the water, not by its gaps: a slip from the left side is a fall the
+//! **Every hop is inside every mover's plain running jump caught at the
+//! hands**, because the road is for everybody (`tests/waterfall.rs` reads the
+//! hops off this table and checks each of `crate::class::MOVERS` against
+//! `crate::envelope::widest_caught`). Until 2026-10-20 the Bulwark set the
+//! gaps; since then the tops are smaller -- 2.3 to 2.7 m along the face --
+//! and the gaps out to the edge of the shortest movers' catch, the Champion's
+//! and the Blood mage's, with half a metre to spare: the valley's main road
+//! at nearer the Sky Road's difficulty, and still a plain climb. It is hard
+//! by its height, its tops and the water: a slip from the left side is a fall the
 //! fall rule does not forgive, and **the falling water pushes down** anything
 //! in it (`tuning::falls_push`), so nobody jumps up through the curtain -- the
 //! way across is behind it.
@@ -74,37 +78,37 @@ pub const HEIGHT: i32 = 2200;
 /// is climbed on.
 pub const PIECES: [Piece; 25] = [
     // --- The pool: three stones up out of it, right of the falls ---
-    // 0: the first stone, 1.5 m off the shore and 1 m up
-    piece([-1250, -300, -800], [-1000, 100, -550], Grass),
-    // 1: the second, 2 m across and 1.5 m up
-    piece([-900, -300, -1250], [-650, 250, -1000], Grass),
-    // 2: the third, 2 m across and 1.7 m up
-    piece([-600, -300, -800], [-350, 420, -550], Grass),
-    // 3: the first shelf, a cairn: a metre on and 1.8 m up
+    // 0: the first stone, 2 m off the shore and 1 m up
+    piece([-1200, -300, -800], [-1000, 100, -620], Grass),
+    // 1: the second, 3.4 m across and 1.5 m up
+    piece([-900, -300, -1300], [-700, 250, -1120], Grass),
+    // 2: the third, 3.4 m back and 1.7 m up
+    piece([-550, -300, -820], [-370, 420, -640], Grass),
+    // 3: the first shelf, a cairn: 1.2 m on and 1.8 m up
     piece([-250, 450, -1600], [0, 600, -800], Snow),
     // --- The right side: up the face ---
-    // 4: a ledge, 3 m along and 2 m up
-    piece([-180, 650, -2200], [0, 800, -1900], Grass),
-    // 5: the cap of a column standing out of the pool, 2.6 m back and 2 m up
-    piece([-450, 950, -1650], [-250, 1000, -1430], Grass),
-    // 6: a ledge over the first shelf, 2.4 m and 2 m up
-    piece([-180, 1050, -1200], [0, 1200, -900], Grass),
+    // 4: a ledge, 4.5 m along and 2 m up
+    piece([-180, 650, -2250], [0, 800, -2050], Grass),
+    // 5: the cap of a column standing out of the pool, 4.1 m back and 2 m up
+    piece([-450, 950, -1650], [-280, 1000, -1480], Grass),
+    // 6: a ledge over the first shelf, 3.3 m and 2 m up
+    piece([-180, 1050, -1150], [0, 1200, -950], Grass),
     // --- Behind the falls: level leaps between the cliff and the water ---
-    // 7: 3.5 m and half a metre up, into the dark behind the water
-    piece([-280, 1100, -550], [0, 1250, -250], Grass),
-    // 8: 3.5 m and half a metre up, the falls' middle
-    piece([-280, 1150, 100], [0, 1300, 400], Grass),
-    // 9: the second shelf, a cairn: 3.5 m and half a metre up, out on the left
-    piece([-280, 1200, 750], [0, 1350, 1550], Snow),
+    // 7: 4.5 m and half a metre up, into the dark behind the water
+    piece([-260, 1100, -500], [0, 1250, -320], Grass),
+    // 8: 4.8 m and half a metre up, the falls' middle
+    piece([-260, 1150, 160], [0, 1300, 340], Grass),
+    // 9: the second shelf, a cairn: 4.8 m and half a metre up, out on the left
+    piece([-280, 1200, 820], [0, 1350, 1550], Snow),
     // --- The left side: up to the lip, 2.1 m a hop ---
-    // 10: a ledge, 3 m along
-    piece([-180, 1410, 1850], [0, 1560, 2150], Grass),
-    // 11: a ledge, 3 m on
-    piece([-180, 1620, 2450], [0, 1770, 2750], Grass),
-    // 12: the cap of a column standing out from the face, 2.9 m back
-    piece([-450, 1930, 1950], [-250, 1980, 2170], Grass),
+    // 10: a ledge, 4 m along
+    piece([-180, 1410, 1950], [0, 1560, 2130], Grass),
+    // 11: a ledge, 4.2 m on
+    piece([-180, 1620, 2550], [0, 1770, 2730], Grass),
+    // 12: the cap of a column standing out from the face, 4.2 m back
+    piece([-450, 1930, 1960], [-270, 1980, 2140], Grass),
     // --- The cliff: buttresses of rock side by side, its face at x = 0 ---
-    // 13: the top, 2.5 m in from the column and 2.2 m up -- the end of the climb
+    // 13: the top, 2.7 m in from the column and 2.2 m up -- the end of the climb
     piece([0, -300, 1500], [700, HEIGHT, 2300], Rock),
     piece([0, -300, -4400], [700, 2600, -2300], Rock),
     piece([0, -300, -2300], [700, 2350, -1300], Rock),
@@ -120,9 +124,9 @@ pub const PIECES: [Piece; 25] = [
     // water: what it falls from
     piece([-450, 1950, -450], [0, HEIGHT, 450], Rock),
     // 22: the right column, under its cap
-    piece([-440, -300, -1640], [-260, 950, -1440], Rock),
+    piece([-440, -300, -1640], [-290, 950, -1490], Rock),
     // 23: the left column, under its cap
-    piece([-440, -300, 1960], [-260, 1930, 2160], Rock),
+    piece([-440, -300, 1970], [-280, 1930, 2130], Rock),
     // 24: a boulder at the falls' foot, in the spray
     piece([-1100, -300, 300], [-800, 60, 650], Rock),
 ];

@@ -16,13 +16,36 @@
 //!   south-west corner. Gaps of seven to twenty-six metres, stones from a
 //!   metre and a half across to twenty; a cairn on every big island.
 //! - **The Hanging Stones** ([`LADDER`], [`SPAN`]) climb from the Bank's road:
-//!   a column of fifty stones round a square, each a ledge's catch above the
-//!   last (4.2 m: the plainest jump hangs from it and climbs, the best
-//!   jumpers land); then a span of stones north over the mountains, broken
-//!   four times by **a gully** -- twelve metres of drop between two walls,
-//!   crossed by jumping from wall to wall ([`super::gully`]). Until
-//!   2026-10-16 it was stones seven metres apart with vines between them,
-//!   which the owner found awful to get stuck in.
+//!   a column of forty hops round a square, then a span north over the
+//!   mountains broken three times by **a gully** -- twelve metres of drop
+//!   between two walls, crossed by jumping from wall to wall
+//!   ([`super::gully`]). Until 2026-10-16 it was stones seven metres apart
+//!   with vines between them, which the owner found awful to get stuck in;
+//!   until 2026-10-20, fifty stones each 4.2 m over the last and a span of
+//!   identical steps, sized for the Bulwark's catch.
+//!
+//! **Since 2026-10-20 the Hanging Stones are at the Sky Road's difficulty,
+//! and two routes are harder still.** The owner, on the Sky Road: "the only
+//! thing resembling challenging. I want more jump sections to be closer to
+//! that difficulty, and a few that are more difficult still than that. It's
+//! an actually fun challenge because there's variety in the jumps and it
+//! forces you to learn class's mobility tools." And the Bulwark is no longer
+//! a mover (`crate::class::MOVERS`), so nothing here is sized to it. Every
+//! route but the Sky Road is now a table of [`Hop`]s, each declaring what it
+//! asks ([`Need`]): a plain jump every mover makes -- most at the edge of
+//! the shortest jumpers' catch -- or a class's tool, past every plain jump.
+//! A rest with a cairn stands close before every tool hop of the Hanging
+//! Stones. Both harder routes are optional:
+//!
+//! - **The Crown** ([`CROWN`]): off the plane's floor to a turf island fifty
+//!   metres over it, the highest place in the valley: fifteen- to
+//!   twenty-two-metre hops onto one- and two-metre stones, and two rises of
+//!   ten, one rest halfway.
+//! - **The High Line** ([`high_line`]): a shortcut across the Sky Road's
+//!   middle, six stones a metre or two across, about twenty metres apart.
+//!
+//! The difficulty of every one of them is a guess, unplayed: sized against
+//! `crate::envelope`, which measures three of the classes' tools.
 //!
 //! The Sky Road's last stretch, over the mountains, is a place of its own
 //! (`ArenaId::SKY_ROAD`): the land under it is nobody's, and its cairns have
@@ -115,7 +138,7 @@ pub static SKY_ROAD_PLACE: Place = Place {
 };
 
 // ---------------------------------------------------------------------------
-// The Hanging Stones
+// A route of stones, as a table of hops
 // ---------------------------------------------------------------------------
 
 /// **A stone of a route**: its middle on the map, its top, half its side, and
@@ -129,139 +152,168 @@ pub struct Stone {
     pub grounded: bool,
 }
 
-/// Where the Hanging Stones' column stands, by the Bank's road, and its
-/// first top.
-pub const LADDER_AT: (i32, i32, i32) = (38000, 500, 4100);
-/// How far each stone of the column is above the last: past every class's
-/// landing but the best jumpers', inside the Bulwark's catch (2026-10-16,
-/// from 7 m with a vine between): the plainest jump hangs from each and
-/// climbs.
-pub const LADDER_RISE: i32 = 420;
-/// The column's stones go round a square this far across.
-const LADDER_STEP: i32 = 600;
-const LADDER_COUNT: usize = 50;
+/// **Which way a hop goes** on the map: `x` is east and `z` north.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Way {
+    N,
+    E,
+    S,
+    W,
+}
 
-const fn ladder(k: i32) -> Stone {
-    let (dx, dz) = match k % 4 {
-        0 => (0, 0),
-        1 => (LADDER_STEP, 0),
-        2 => (LADDER_STEP, LADDER_STEP),
-        _ => (0, LADDER_STEP),
-    };
-    Stone {
-        x: LADDER_AT.0 + dx,
-        z: LADDER_AT.1 + dz,
-        top: LADDER_AT.2 + LADDER_RISE * k,
-        half: if k % 10 == 9 { 250 } else { 150 },
-        grounded: k == 0,
+impl Way {
+    /// The flat axis it goes along.
+    pub const fn step(self) -> (i32, i32) {
+        match self {
+            Way::N => (0, 1),
+            Way::E => (1, 0),
+            Way::S => (0, -1),
+            Way::W => (-1, 0),
+        }
     }
 }
 
-/// Every tenth stone of the column is wider, with a cairn on it: the
-/// column's checkpoints, the last its top.
-pub const fn ladder_rests(k: usize) -> bool {
-    k % 10 == 9
+/// **What a hop asks** (2026-10-20): a plain running jump, landed or caught
+/// at the hands, that every class that moves makes (`crate::class::MOVERS`)
+/// -- or a class's tool, because no plain jump reaches it, airdodge and all.
+/// Declared in the table, so the tests hold each hop to what it was laid out
+/// to be (`tests/heights.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Need {
+    Jump,
+    Tool,
 }
 
-/// The column, foot to top.
-pub const LADDER: [Stone; LADDER_COUNT] = {
-    let mut out = [ladder(0); LADDER_COUNT];
-    let mut k = 0;
-    while k < LADDER_COUNT {
-        out[k] = ladder(k as i32);
-        k += 1;
-    }
-    out
-};
-
-/// **A hop of the span**: the next stone's half-side, the gap to it edge to
-/// edge along the span (north) and how far it is up from the last -- or
-/// [`GULLY`], a gully's drop between walls ([`super::gully`]) onto a landing
-/// with a cairn.
+/// **A hop of a route**: the next stone's half-side, which way it is, the gap
+/// to it edge to edge, how far its top is above the last's (less than
+/// nothing: below), and what it asks -- or a gully along a way: a drop
+/// between walls ([`super::gully`]) onto a landing with a cairn, crossed by
+/// kicking from wall to wall.
 #[derive(Clone, Copy, Debug)]
 pub enum Hop {
-    Stone { half: i32, gap: i32, rise: i32 },
-    Gully,
+    Stone {
+        half: i32,
+        gap: i32,
+        rise: i32,
+        way: Way,
+        need: Need,
+    },
+    Gully {
+        way: Way,
+    },
 }
 
-/// A gully hop.
-pub const GULLY: Hop = Hop::Gully;
-
-const fn up(gap: i32, rise: i32) -> Hop {
-    Hop::Stone {
-        half: 200,
-        gap,
-        rise,
+impl Hop {
+    /// What it asks: a gully asks the wall jump, which every class has.
+    pub const fn need(self) -> Option<Need> {
+        match self {
+            Hop::Stone { need, .. } => Some(need),
+            Hop::Gully { .. } => None,
+        }
     }
 }
+
+use Way::{E, N, S, W};
+
+/// A stone of the ordinary size, three metres across, a plain jump away.
+const fn on(way: Way, gap: i32, rise: i32) -> Hop {
+    Hop::Stone {
+        half: 150,
+        gap,
+        rise,
+        way,
+        need: Need::Jump,
+    }
+}
+
+/// **A precision stone**: a metre across, room for the feet and no more, a
+/// plain jump away.
+const fn pin(way: Way, gap: i32, rise: i32) -> Hop {
+    Hop::Stone {
+        half: 50,
+        gap,
+        rise,
+        way,
+        need: Need::Jump,
+    }
+}
+
+/// **A rest**: six metres across, a cairn on it, a plain jump away -- put in
+/// front of a hard hop, so a miss costs that hop and no more, and wide
+/// enough for any class to wind its tool up on.
+const fn rest(way: Way, gap: i32, rise: i32) -> Hop {
+    Hop::Stone {
+        half: REST,
+        gap,
+        rise,
+        way,
+        need: Need::Jump,
+    }
+}
+
+/// **A hop for a class's tool**, onto a stone `half` across: a gap or a rise
+/// no plain jump reaches.
+const fn tool(way: Way, half: i32, gap: i32, rise: i32) -> Hop {
+    Hop::Stone {
+        half,
+        gap,
+        rise,
+        way,
+        need: Need::Tool,
+    }
+}
+
+/// A gully along `way`.
+const fn gully(way: Way) -> Hop {
+    Hop::Gully { way }
+}
+
+/// **A stone this wide carries a cairn** (half its side, centimetres): a
+/// rest, a gully's landing, the Crown. The Sky Road's islands have their own
+/// rule ([`build`]).
+pub const REST: i32 = 300;
 
 /// How wide a gully's landing is: room to come down from a run of kicks
 /// still carrying it, and a checkpoint.
 pub const LANDING_HALF: i32 = 400;
 
-/// **The span**, from the column's top north over the mountains to the
-/// plane's south edge (2026-10-16, from eighteen stones ten metres apart
-/// and six up with a vine across each gap): four stretches of four stones
-/// stepping up, each ending in a gully, then seven steeper ones to the
-/// plane. Each step is inside the Bulwark's catch; each gully is crossed by
-/// kicking from wall to wall, which every class can and no class's plain
-/// jump does.
-pub const SPAN_HOPS: [Hop; 27] = [
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    GULLY,
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    GULLY,
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    GULLY,
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    up(420, 250),
-    GULLY,
-    up(300, 340),
-    up(300, 340),
-    up(300, 340),
-    up(300, 340),
-    up(300, 340),
-    up(300, 340),
-    up(300, 340),
-];
+/// Does a stone of the Hanging Stones or the Crown carry a cairn?
+pub const fn rests(s: &Stone) -> bool {
+    s.half >= REST
+}
 
-/// Where the span starts: over the column's last stone.
-pub const SPAN_FROM: (i32, i32) = (LADDER[LADDER_COUNT - 1].x, LADDER[LADDER_COUNT - 1].z);
-
-/// How many of the span's last stones stand on the land rather than float:
-/// the plane's rim holds the land up to its edge, so they are over it.
-const SPAN_GROUNDED: usize = 2;
-
-/// The span's stones, in order: each laid north of the last by its hop.
-pub const SPAN: [Stone; SPAN_HOPS.len()] = {
-    let mut out = [LADDER[LADDER_COUNT - 1]; SPAN_HOPS.len()];
-    let mut last = LADDER[LADDER_COUNT - 1];
+/// **The stones a table of hops lays**, from `from`: each the hop's gap past
+/// the last along its way, or a gully's landing past its drop. The last
+/// `grounded` stand on the land.
+pub const fn lay<const K: usize>(from: Stone, hops: &[Hop; K], grounded: usize) -> [Stone; K] {
+    let mut out = [from; K];
+    let mut last = from;
     let mut k = 0;
-    while k < SPAN_HOPS.len() {
-        let next = match SPAN_HOPS[k] {
-            Hop::Stone { half, gap, rise } => Stone {
-                x: last.x,
-                z: last.z + last.half + gap + half,
-                top: last.top + rise,
+    while k < K {
+        let next = match hops[k] {
+            Hop::Stone {
                 half,
-                grounded: k + SPAN_GROUNDED >= SPAN_HOPS.len(),
-            },
-            Hop::Gully => {
-                let to = super::gully::landing([last.x, last.top, last.z + last.half], (0, 1));
+                gap,
+                rise,
+                way,
+                ..
+            } => {
+                let (dx, dz) = way.step();
+                let d = last.half + gap + half;
                 Stone {
-                    x: to[0],
-                    z: to[2] + LANDING_HALF,
+                    x: last.x + dx * d,
+                    z: last.z + dz * d,
+                    top: last.top + rise,
+                    half,
+                    grounded: k + grounded >= K,
+                }
+            }
+            Hop::Gully { way } => {
+                let to = super::gully::landing(takeoff(&last, way), way.step());
+                let (dx, dz) = way.step();
+                Stone {
+                    x: to[0] + dx * LANDING_HALF,
+                    z: to[2] + dz * LANDING_HALF,
                     top: to[1],
                     half: LANDING_HALF,
                     grounded: false,
@@ -273,22 +325,293 @@ pub const SPAN: [Stone; SPAN_HOPS.len()] = {
         k += 1;
     }
     out
+}
+
+/// The middle of a stone's edge on `way`, at its top: where a gully leaves.
+const fn takeoff(s: &Stone, way: Way) -> [i32; 3] {
+    let (dx, dz) = way.step();
+    [s.x + dx * s.half, s.top, s.z + dz * s.half]
+}
+
+/// **A route's gullies**: for each, the hop it is (an index into the route's
+/// hops and stones) and its two walls, from the stone before it.
+pub fn gullies_of(
+    from: Stone,
+    hops: &'static [Hop],
+    stones: &'static [Stone],
+) -> impl Iterator<Item = (usize, [Solid; 2])> {
+    (0..hops.len()).filter_map(move |k| match hops[k] {
+        Hop::Gully { way } => {
+            let last = if k == 0 { from } else { stones[k - 1] };
+            Some((
+                k,
+                super::gully::walls(takeoff(&last, way), way.step(), Material::Rock),
+            ))
+        }
+        Hop::Stone { .. } => None,
+    })
+}
+
+/// **How far apart two stones are**, edge to edge on the flat, in
+/// centimetres: what a hop between them crosses.
+pub fn gap(a: &Stone, b: &Stone) -> i32 {
+    let apart = |p: i32, q: i32| ((p - q).abs() - a.half - b.half).max(0) as i64;
+    let (gx, gz) = (apart(a.x, b.x), apart(a.z, b.z));
+    crate::math::isqrt_wide((gx * gx + gz * gz) as u128) as i32
+}
+
+// ---------------------------------------------------------------------------
+// The Hanging Stones
+// ---------------------------------------------------------------------------
+
+/// **The column's foot**, by the Bank's road: a stone standing on the land.
+pub const FOOT: Stone = Stone {
+    x: 38000,
+    z: 500,
+    top: 4100,
+    half: 200,
+    grounded: true,
 };
 
-/// The span's gullies: for each, the stone it is jumped from (an index of
-/// [`SPAN`], or `None` for the column's top) and its walls.
+/// **The column** (2026-10-20, from fifty stones each 4.2 m over the last
+/// round a six-metre square): forty hops climbing round a square west of the
+/// foot, 41 m to 203 m. The owner, on the Sky Road: "the only thing
+/// resembling challenging ... there's variety in the jumps and it forces you
+/// to learn class's mobility tools." So no two stretches are alike:
+///
+/// - **plain catches** at the edge of the shortest jumper's reach -- three to
+///   five and a half metres out and three to five up, landed by the best
+///   jumpers and caught at the hands by the Champion and the Blood mage;
+/// - **precision stones** a metre across among them, a run of two now and
+///   then, and one drop of three metres;
+/// - **a rest** six metres across with a cairn in front of every tool hop,
+///   and the tool hops themselves: **high** -- nine metres up and two and a
+///   half out, which no plain jump catches (the best, the Dual mage's, hangs
+///   from 8.2) -- and **long**: twelve or thirteen metres, level or a little
+///   up, past the longest plain jump caught with its airdodge (10.5).
+///
+/// Every turn of the square is one loop, and no loop is the last over again.
+pub const LADDER_HOPS: [Hop; 40] = [
+    // The first turn: plain, then a rest and the first high hop.
+    on(W, 500, 400),
+    pin(W, 450, 300),
+    on(W, 550, 300),
+    rest(N, 300, 400),
+    tool(N, 200, 250, 900),
+    on(N, 450, 450),
+    pin(E, 500, 200),
+    pin(E, 450, 300),
+    on(E, 400, 450),
+    on(S, 550, 300),
+    pin(S, 400, 400),
+    // The second: the first long hop, and a high one.
+    rest(W, 300, 300),
+    tool(W, 200, 1300, 0),
+    on(W, 450, 450),
+    pin(N, 400, 350),
+    on(N, 300, 500),
+    rest(N, 300, 400),
+    tool(N, 200, 250, 900),
+    on(E, 500, 400),
+    pin(E, 450, 250),
+    pin(E, 400, 300),
+    on(S, 300, 500),
+    on(S, 500, -300),
+    // The third: two high hops back to back, then long and up.
+    rest(S, 300, 500),
+    tool(W, 200, 250, 900),
+    tool(W, 150, 250, 900),
+    pin(N, 450, 300),
+    on(N, 450, 450),
+    pin(N, 400, 300),
+    rest(E, 300, 300),
+    tool(E, 200, 1200, 200),
+    on(E, 500, 400),
+    pin(S, 450, 350),
+    on(S, 450, 450),
+    // The fourth: a high hop off a rest, a run of pins, the top.
+    rest(W, 300, 400),
+    tool(W, 150, 300, 900),
+    pin(W, 450, 350),
+    pin(N, 450, 300),
+    on(N, 450, 450),
+    rest(N, 300, 300),
+];
+
+/// The column, its foot first.
+pub const LADDER: [Stone; LADDER_HOPS.len()] = lay(FOOT, &LADDER_HOPS, 0);
+
+/// **The span** (2026-10-20, from four stretches of four stones stepping up
+/// 2.5 m with 4.2 m gaps, each ending in a gully, and seven steeper ones to
+/// the plane): north from the column's top over the mountains to the plane's
+/// south edge, 203 m to 305 m, in three stretches.
+///
+/// - **Over the low ground**: a gully straight off the column's top, a long
+///   hop east and up, three precision stones zig-zagging, a rest, seventeen
+///   metres and four up -- the longest of the Hanging Stones -- and a second
+///   gully.
+/// - **To the mountains' foot**: plain catches five up, a rest, fifteen
+///   metres and five up, a rest, the third gully.
+/// - **Up the mountainside**, where the land rises a metre for a metre under
+///   it: high hops of nine metres, a rest between them, plain catches of five
+///   up and precision stones, and three plain stones onto the plane's lip,
+///   the last two standing on the land the plane's rim holds up.
+pub const SPAN_HOPS: [Hop; 28] = [
+    // Over the low ground.
+    gully(N),
+    on(N, 500, 400),
+    tool(E, 150, 1400, 200),
+    pin(N, 500, 300),
+    pin(N, 500, 200),
+    pin(W, 550, 100),
+    rest(N, 450, 400),
+    tool(N, 200, 1700, 400),
+    on(N, 400, 500),
+    gully(N),
+    // To the mountains' foot.
+    on(W, 400, 500),
+    pin(N, 450, 400),
+    rest(N, 450, 500),
+    tool(N, 200, 1500, 500),
+    rest(E, 400, 400),
+    gully(N),
+    // Up the mountainside.
+    tool(N, 200, 300, 900),
+    on(N, 400, 500),
+    pin(N, 350, 400),
+    rest(E, 400, 500),
+    tool(N, 200, 350, 900),
+    rest(N, 300, 400),
+    tool(N, 200, 350, 900),
+    on(W, 350, 500),
+    pin(N, 350, 400),
+    on(N, 400, 300),
+    on(N, 400, 200),
+    on(N, 300, 100),
+];
+
+/// Where the span starts: over the column's last stone.
+pub const SPAN_FROM: (i32, i32) = (LADDER[LADDER.len() - 1].x, LADDER[LADDER.len() - 1].z);
+
+/// How many of the span's last stones stand on the land rather than float:
+/// the plane's rim holds the land up to its edge, so they are over it.
+const SPAN_GROUNDED: usize = 2;
+
+/// The span's stones, in order: each laid from the last by its hop.
+pub const SPAN: [Stone; SPAN_HOPS.len()] = lay(LADDER[LADDER.len() - 1], &SPAN_HOPS, SPAN_GROUNDED);
+
+/// The span's gullies: for each, the hop it is (an index into [`SPAN`]) and
+/// its walls.
 pub fn gullies() -> impl Iterator<Item = (usize, [Solid; 2])> {
-    (0..SPAN_HOPS.len())
-        .filter(|&k| matches!(SPAN_HOPS[k], Hop::Gully))
-        .map(|k| {
-            let from = if k == 0 {
-                LADDER[LADDER_COUNT - 1]
-            } else {
-                SPAN[k - 1]
-            };
-            let at = [from.x, from.top, from.z + from.half];
-            (k, super::gully::walls(at, (0, 1), Material::Rock))
-        })
+    gullies_of(LADDER[LADDER.len() - 1], &SPAN_HOPS, &SPAN)
+}
+
+// ---------------------------------------------------------------------------
+// Harder than the Sky Road: the Crown and the High Line
+// ---------------------------------------------------------------------------
+
+/// **The Crown's foot**: a pillar four metres tall standing on the plane,
+/// in its south-west quarter, clear of every range on it.
+pub const CROWN_FOOT: Stone = Stone {
+    x: PLANE_AT[0] - 9500,
+    z: PLANE_AT[2] - 7500,
+    top: PLANE_AT[1] + 400,
+    half: 200,
+    grounded: true,
+};
+
+/// **The Crown** (2026-10-20, the owner: "a few that are more difficult
+/// still than that"): an optional climb off the High Plane's floor to a turf
+/// island fifty metres over it, 354 m up -- the highest place in the valley,
+/// a hand over the Needle's dome, with a cairn on it and the whole valley
+/// under it. Harder than the Sky Road on every count: the Sky Road's worst,
+/// by its table, is eighteen metres and two up onto an island twenty metres
+/// across; here the long hops are fifteen to twenty-two metres, level to
+/// four up, onto stones one and two metres across, and two high ones ten
+/// up, past the Champion's vault. One rest, halfway. The plain hops between
+/// are at the very edge of the shortest jumpers' catch.
+pub const CROWN_HOPS: [Hop; 14] = [
+    pin(E, 550, 350),
+    tool(E, 50, 1700, 300),
+    pin(N, 600, 200),
+    tool(N, 100, 300, 1000),
+    rest(W, 400, 300),
+    tool(W, 100, 2000, 200),
+    pin(W, 600, 200),
+    pin(S, 600, 100),
+    tool(S, 50, 2200, 0),
+    tool(E, 100, 300, 1000),
+    pin(E, 550, 300),
+    tool(N, 50, 1800, 400),
+    on(N, 500, 400),
+    tool(W, 600, 1500, 300),
+];
+
+/// The Crown's stones, its foot first; the last the island.
+pub const CROWN: [Stone; CROWN_HOPS.len()] = lay(CROWN_FOOT, &CROWN_HOPS, 0);
+
+/// **The High Line** (2026-10-20): a harder way across the Sky Road's middle,
+/// off its sixth stone (its second island with a cairn) to its fourteenth
+/// (its fourth), past the seven between, bowed out thirty metres to the
+/// north-west of the road it cuts short. Seven hops, every one a class's
+/// tool: nineteen to twenty-two metres each, two of them rising two, onto
+/// stones one and two metres across -- where the stretch it skips, by its
+/// table, has one gap of twenty-one metres and three of thirteen to
+/// eighteen, onto stones one and a half to sixteen metres across, and a run
+/// of precision stones a plain jump apart. As the Sky Road's, the gaps are a
+/// pattern, stretched or squeezed alike to fit between the two islands and
+/// read off the map by the tests: for each stone, its half-side, the gap
+/// onto it and how far it is up from the last (less than nothing: down);
+/// and then the gap onto the island it joins, whose top is the Sky Road's.
+const HIGH_LINE_HOPS: [(i32, i32, i32); 6] = [
+    (50, 1750, 200),
+    (100, 2050, -300),
+    (50, 2300, -200),
+    (100, 2150, 200),
+    (50, 2200, -300),
+    (100, 2150, -300),
+];
+const HIGH_LINE_LAST: i32 = 1950;
+
+/// Which of the Sky Road's islands the High Line leaves and joins.
+pub const HIGH_LINE_FROM: usize = 5;
+pub const HIGH_LINE_TO: usize = 13;
+
+/// How far out of the road's line the High Line bows at its middle.
+const HIGH_LINE_BOW: i64 = 3000;
+
+/// **The High Line's stones**, from the first after the island it leaves to
+/// the last before the island it joins.
+pub fn high_line() -> Vec<Stone> {
+    let road = sky_road();
+    let (a, b) = (road[HIGH_LINE_FROM], road[HIGH_LINE_TO]);
+    let (dx, dz) = ((b.x - a.x) as i64, (b.z - a.z) as i64);
+    let len = crate::math::isqrt_wide((dx * dx + dz * dz) as u128) as i64;
+    // Along the line from middle to middle: the islands' halves, the
+    // stones, and the gaps stretched alike to fill the rest.
+    let stones: i64 = HIGH_LINE_HOPS.iter().map(|h| 2 * h.0 as i64).sum();
+    let gaps: i64 = HIGH_LINE_HOPS.iter().map(|h| h.1 as i64).sum::<i64>() + HIGH_LINE_LAST as i64;
+    let room = (len - a.half as i64 - b.half as i64 - stones).max(gaps / 2);
+    let mut along = a.half as i64;
+    let mut top = a.top;
+    let mut out = Vec::new();
+    for &(half, gap, rise) in &HIGH_LINE_HOPS {
+        along += gap as i64 * room / gaps + half as i64;
+        top += rise;
+        // Bowed out to the left of the line (north-west), most at the
+        // middle: four times t(1 - t), t in thousandths of the way.
+        let t = along * 1000 / len;
+        let bow = HIGH_LINE_BOW * 4 * t * (1000 - t) / 1_000_000;
+        out.push(Stone {
+            x: (a.x as i64 + (dx * along - dz * bow) / len) as i32,
+            z: (a.z as i64 + (dz * along + dx * bow) / len) as i32,
+            top,
+            half,
+            grounded: false,
+        });
+        along += half as i64;
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -405,16 +728,22 @@ pub fn sky_road() -> Vec<Stone> {
 }
 
 /// **The High Plane's solids, and its routes'**: the plane's own are its
-/// table; these are the stones of both routes up, and a cairn on every
-/// island.
+/// table; these are the stones of both routes up, the gullies' walls, the
+/// Crown and the High Line, and a cairn on every rest, every gully's
+/// landing, the Crown's island and every one of the Sky Road's islands.
 pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
-    for s in LADDER.iter().chain(SPAN.iter()) {
+    let hanging = core::iter::once(&FOOT)
+        .chain(LADDER.iter())
+        .chain(SPAN.iter());
+    let crown = core::iter::once(&CROWN_FOOT).chain(CROWN.iter());
+    for s in hanging.chain(crown) {
         stone(s, height(cm(s.x), cm(s.z)), out);
+        if rests(s) {
+            out.push(cairn_on(s.x, s.z, s.top));
+        }
     }
-    for (k, walls) in gullies() {
+    for (_, walls) in gullies() {
         out.extend(walls);
-        let s = SPAN[k];
-        out.push(cairn_on(s.x, s.z, s.top));
     }
     for s in sky_road() {
         stone(&s, Fx::ZERO, out);
@@ -422,10 +751,7 @@ pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
             out.push(cairn_on(s.x, s.z, s.top));
         }
     }
-    // A cairn on each of the column's wide stones.
-    for (k, t) in LADDER.iter().enumerate() {
-        if ladder_rests(k) {
-            out.push(cairn_on(t.x, t.z, t.top));
-        }
+    for s in high_line() {
+        stone(&s, Fx::ZERO, out);
     }
 }

@@ -169,10 +169,17 @@ cargo test -p sim --test waterfall
 
 | Beat | Hops |
 | --- | --- |
-| Out of the pool | Three mossy column tops: 1.5 m and +1.0, 2.9 m and +1.5, 2.7 m and +1.7, then the first shelf (a cairn) |
-| Up the right | A ledge 4 m along and +2.0; a column standing out of the pool, 3.4 m and +2.0; a ledge over the shelf, 3.1 m and +2.0 |
-| **Behind the falls** | Three level leaps of 4.7 m (+0.5 each) along ledges between the cliff and the water, under the lip, to the second shelf (a cairn) |
-| Up the left | Three hops of 4 m, 4 m and 3.8 m at +2.1, between face ledges and a column standing out; then 2.5 m and +2.2 onto the top |
+| Out of the pool | Three mossy column tops: 2.0 m and +1.0, 4.4 m and +1.5, 4.3 m and +1.7, then the first shelf (a cairn) |
+| Up the right | A ledge 6 m along and +2.0; a column standing out of the pool, 5.4 m and +2.0; a ledge over the shelf, 4.5 m and +2.0 |
+| **Behind the falls** | Three level leaps of 6, 6.4 and 6.4 m (+0.5 each) along ledges between the cliff and the water, under the lip, to the second shelf (a cairn) |
+| Up the left | Three hops of 5.3 m, 5.6 m and 5.5 m at +2.1, between face ledges and a column standing out; then 2.7 m and +2.2 onto the top |
+
+**Harder since 2026-10-20** (the owner wanted more of the valley at the
+Sky Road's difficulty, and the Bulwark is no longer a mover): every top is
+2.3 to 2.7 m along the face where it was 3 to 4, and the gaps grew with it,
+to the edge of the shortest movers' plain catch -- the Champion and the
+Blood mage catch 6.7 m at +2 -- with half a metre or more to spare. It is
+the main road, so every hop is still a plain jump for all five movers.
 
 **A third wider along the face since 2026-10-16** (`waterfall::piece`
 stretches the table's `z`; heights unchanged): the hops were inside the
@@ -180,14 +187,15 @@ Bulwark's plain landing, and with ledges catching they are inside its plain
 catch instead -- it lands the short ones and hangs from the long ones; every
 other class still lands them all.
 
-- **Every hop is inside the Bulwark's plain running jump, caught at the
-  hands** (apex 2.6 m; 5.3 m out at +2 caught, 4.1 landed), because the road
-  is for everybody and the Bulwark sets the valley's gaps (valley.md §3, §6).
-  For the Bulwark it is a climb of catches; for the Dual mage it is easy. `tests/waterfall.rs` reads every hop off the
-  table and checks each class against `sim::envelope`, and then **jumps
-  every hop with every class**, in the valley and in the course, by a
+- **Every hop is inside every mover's plain running jump, caught at the
+  hands**, because the road is for everybody (valley.md §3, §6). Until
+  2026-10-20 the Bulwark set its gaps (5.3 m out at +2 caught); now the
+  shortest movers do, and for them it is a climb of catches; for the Dual
+  mage it is still landings. `tests/waterfall.rs` reads every hop off the
+  table and checks each mover against `sim::envelope`, and then **jumps
+  every hop with every mover**, in the valley and in the course, by a
   stand-in player that tries a few run-ups.
-- **It is hard by its height and its water, not its gaps.** The cliff is 22 m:
+- **It is hard by its height, its small tops and its water.** The cliff is 22 m:
   a slip from the left side costs what the fall rule says, and in the valley
   that is a death and the last cairn. **The falling water pushes down** at
   9 m/s (`Waterfall, pushes down at` in the Oven): nobody jumps up through the
